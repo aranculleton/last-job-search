@@ -18,6 +18,8 @@ import subprocess
 import sys
 from pathlib import Path
 
+import pytest
+
 ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT / "tools"))
 
@@ -89,6 +91,56 @@ def test_a_pay_band_for_another_place_or_currency_is_asked_about():
     london = "Salary: £60,000 - £70,000 per annum for this role in London."
     prof = PP.read(_row(desc=london), london, rows=[], today=TODAY)
     assert prof["pay"]["where"] == "elsewhere: london"
+
+
+# The employer's money is never the pay. "Annual" is a pay cue, so a sentence about the
+# employer's revenue in another currency was read as the only pay stated, and staging asked
+# whether the pay was for another country, though the posting stated the person's own.
+REVENUE = ("Senior Data Scientist. Brannock Health was founded in 2009; our annual revenue "
+           "is in the hundreds of millions USD and we serve 1,200 hospital customers.")
+CANADA_PAY = REVENUE + " The base salary for this role in Canada is C$253,500 per year."
+
+
+@pytest.fixture
+def canada(monkeypatch):
+    """The market of a person in Toronto: dollars, CAD, and Canada as home."""
+    import re
+    import places
+    import text_screen as T
+    values, labelled = T.money_parser("$", "CAD")
+    for name, value in (("money_values", values), ("labelled_value", labelled), ("CUR", "$"),
+                        ("CODE", "CAD"), ("_BOUNDS", (30_000, 500_000)),
+                        ("FOREIGN_CURRENCY", re.compile(r"\b(usd|us\s?\$)\b|us\$", re.I))):
+        monkeypatch.setattr(T, name, value)
+    monkeypatch.setattr(places, "HOME_COUNTRY_RX", re.compile(r"\bcanad(?:a|ian)\b", re.I))
+    monkeypatch.setattr(places, "OTHER_COUNTRIES",
+                        tuple(c for c in places.OTHER_COUNTRIES if c != "canada"))
+    monkeypatch.setattr(places, "METRO", ("toronto", "mississauga"))
+
+
+def test_the_employers_revenue_is_not_read_as_pay():
+    prof = PP.read(_row(desc=REVENUE), REVENUE, rows=[], today=TODAY)
+    assert prof["pay"]["where"] == "" and prof["pay"]["low"] is None
+    assert "pay_elsewhere" not in [q["id"] for q in PP.questions(prof, _row(desc=REVENUE))]
+
+
+def test_the_pay_stated_for_their_own_country_is_read_past_the_revenue(canada):
+    row = _row(desc=CANADA_PAY, location="Toronto, Ontario, Canada")
+    prof = PP.read(row, CANADA_PAY, rows=[], today=TODAY)
+    assert (prof["pay"]["low"], prof["pay"]["high"], prof["pay"]["where"]) == \
+        (253_500, 253_500, "home")
+    assert "C$253,500" in prof["pay"]["quote"]
+    assert "pay_elsewhere" not in [q["id"] for q in PP.questions(prof, row)]
+    revenue_only = PP.read(_row(desc=REVENUE), REVENUE, rows=[], today=TODAY)
+    assert revenue_only["pay"]["where"] == ""
+
+
+def test_a_bonus_after_the_pay_label_is_still_not_the_pay(canada):
+    import text_screen as T
+    assert T.salary_range("Salary is competitive, plus a $40,000 signing bonus per year.")[:2] \
+        == (None, None)
+    assert T.salary_range("Compensation: C$253,500.")[:2] == (253_500, 253_500)
+    assert T.salary_range("Base salary up to CA$120,000 per year.")[:2] == (None, 120_000)
 
 
 # ------------------------------------------------------------------ staging holds what needs an answer
@@ -231,10 +283,14 @@ def test_a_ruling_above_the_fence_is_said_without_the_posting_sentence_it_quotes
     row = _row(desc=body, title="Demand Planning Analyst", location="Manchester")
     cut = text_screen.screen(row)
     assert cut["text_screen"] == "cut"
+    # A day after the newest screening version that re-screens: a ruling made before one
+    # lapses by design (tools/build_versions.py), which is not what this test is about.
+    import datetime as _dt
+    day = max(TODAY, _dt.date(2026, 10, 27))
     exclude.add_many([{"url": row["url"], "reason": "; ".join(cut["cuts"]), "title": row["title"],
                        "company": row["company"], "location": row["location"]}],
-                     today=TODAY.isoformat(), path=str(seen))
-    prof = PP.read(row, body, rows=[], today=TODAY)
+                     today=day.isoformat(), path=str(seen))
+    prof = PP.read(row, body, rows=[], today=day)
     above = [x for x in PP.lines(prof, quotes=False) if x.startswith("seen:")]
     assert above == ["seen: ruled out before (excluded in seen_jobs.json: Spanish stated as "
                      "a requirement)"]

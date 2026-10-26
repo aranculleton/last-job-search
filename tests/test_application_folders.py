@@ -38,11 +38,22 @@ class NoApplicationIsFiledTwice(unittest.TestCase):
         names = folders()
         if not names:
             self.skipTest("no applications on disk")
-        pairs = [(a, b) for a in names for b in names
-                 if b.startswith(a + "_") and "_" not in b[len(a) + 1:]]
+        # Since 2026-10-26 an application filed under the employer's plain name has no
+        # abbreviation in its folder name, so a second role there with the same title (its
+        # name carrying a role token) is a pair by name and two applications in fact: each
+        # holds its own posting, from its own address. Those are not flagged.
+        import sys
+        sys.path.insert(0, str(REPO / "tools"))
+        import docpaths
+        pairs =[(a, b) for a in names for b in names
+                 if b.startswith(a + "_") and "_" not in b[len(a) + 1:]
+                 and not (docpaths._source(APPLICATIONS / a) and docpaths._source(APPLICATIONS / b)
+                          and docpaths._source(APPLICATIONS / a)
+                          != docpaths._source(APPLICATIONS / b))]
         self.assertEqual(pairs, [], "\n".join(
-            "%s is %s with the abbreviation removed. Keep the one carrying the "
-            "abbreviation, which is what outreach.slug() writes, and delete the "
+            "%s is %s with the abbreviation removed. `python3 tools/docpaths.py "
+            "merge-twins` moves its files into the folder docpaths.app_folder() names "
+            "where they are one application; otherwise keep that one and delete the "
             "other after checking it holds nothing the survivor lacks." % (a, b)
             for a, b in pairs))
 

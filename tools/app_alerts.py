@@ -182,8 +182,19 @@ def _warm_suggest(ctx, item_id, company):
     c, name, on = got
     cid = str(c.get("contact_id") or "").strip()
     when = f" on {on}" if on else ""
-    return suggestion("warm", item_id, cid, f"{name} at {company} replied to you{when}: ask "
-                      f"{name} about this role before applying.",
+    # Their reply is not the last word when a message of the person's own went after it and
+    # has no answer: what goes next follows that message up (compose.thread_findings). Told
+    # only "replied on <a year ago>", a draft re-announced what an August note had said
+    # (2026-10-26).
+    from network import compose
+    waiting = compose.unanswered_ours(ctx.by_contact.get(cid) or [])
+    if waiting is not None:
+        title = (f"{name} at {company} replied to you{when}, and your message of "
+                 f"{waiting.get('date')} has no answer yet: follow it up about this role "
+                 "before applying.")
+    else:
+        title = f"{name} at {company} replied to you{when}: ask {name} about this role before applying."
+    return suggestion("warm", item_id, cid, title,
                       "A reply is what makes a route warm, and a cold application first "
                       "spends it.", work("reply", f"Write to {name}", f"Write to {name} at "
                                          f"{company}", {"contact": cid}, f"reply~{cid}"))
@@ -581,13 +592,12 @@ def offer(model: dict, today: dt.date, shown: dict | None = None) -> None:
 def shown_in(view: dict) -> dict:
     """{suggestion id: since} of every suggestion in the page's current view documents
     (`view/<section>` from the database), so tomorrow's cap counts what is already there."""
+    import page_db
     out = {}
     for name, _rows in CARDS:
-        doc = (view or {}).get(name) or {}
         # page_db.load: {doc id: {data: the document, version}}; the document holds the
-        # section under its own `data`.
-        held = (doc.get("data") if isinstance(doc, dict) else None) or {}
-        data = held.get("data") if isinstance(held, dict) else None
+        # section under its own `data`, or in parts when it was too big for one.
+        data = page_db.joined(view or {}, name)
         items = data.get("rows") if isinstance(data, dict) else data
         for item in items if isinstance(items, list) else []:
             s = item.get("suggest") if isinstance(item, dict) else None

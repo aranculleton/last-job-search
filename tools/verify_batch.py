@@ -166,7 +166,9 @@ def _record(entry: dict, flags: list, resume_pages, letter_pages, letter: bool) 
     try:
         import datetime as dt
         import outreach
-        folder = outreach.app_folder(entry["company"], entry["role"])
+        # With the abbreviation the documents were written under, as outreach.py names it:
+        # without it, before the tracker had a row, this was a second folder (2026-10-26).
+        folder = outreach.app_folder(entry["company"], entry["role"], entry.get("abbr") or "")
         os.makedirs(folder, exist_ok=True)
         with open(os.path.join(folder, "verify.json"), "w", encoding="utf-8", newline="\n") as fh:
             json.dump({"at": dt.datetime.now(dt.timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ"),

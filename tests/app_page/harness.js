@@ -306,7 +306,7 @@ function budgetProbe() {
   const cards = [...main.querySelectorAll("[data-card]")].filter(shown).map((c) => {
     const cs = controls(c, false);
     return {item: c.getAttribute("data-item"), words: wordsIn(c, false, true), controls: cs.length,
-      answers: cs.filter((b) => b.classList.contains("answer")).length, filled: cs.filter((b) => b.classList.contains("primary")).length,
+      answers: cs.filter((b) => b.classList.contains("answer")).length, icons: cs.filter((b) => b.classList.contains("icon-only")).length, filled: cs.filter((b) => b.classList.contains("primary")).length,
       alerts: c.querySelectorAll(".alert, .suggest").length};
   });
   return {chrome, screenWords: wordsIn(main, true), screenControls: controls(main, true).length, filled, cards};
@@ -413,7 +413,7 @@ function layoutMeasure() {
     return {item: c.getAttribute("data-item"), states: own(".state").length, alerts: own(".alert, .warm").length, suggests: own(".suggest").length,
       // A card's actions: its one alert or suggestion, a question's answers and the "What was
       // checked" target are parts of their own line, not actions.
-      buttons: own("button, a.btn").filter((b) => !b.closest("summary, .suggest, .alert, .warm") && !b.classList.contains("answer") && !b.classList.contains("q")).length,
+      buttons: own("button, a.btn").filter((b) => !b.closest("summary, .suggest, .alert, .warm") && !b.classList.contains("answer") && !b.classList.contains("q") && !b.classList.contains("icon-only")).length,
       links: own("a:not(.btn)").filter((x) => !x.closest(".suggest, .alert, .warm")).length, more: own("details.more, details.more-menu, summary.more-btn").length};
   });
   const named = [...main.querySelectorAll("button, a, input, select, summary")].filter(vis).map(name).filter(Boolean);
@@ -443,7 +443,7 @@ function frameMeasure() {
   const top = document.getElementById("top");
   const tabs = [...document.querySelectorAll("#tabs a.tab, #tabs button.tab")].filter(vis);
   const badges = [...document.querySelectorAll("#tabs .badge, #side .badge, #main .seg .badge")].filter(vis).map((b) => ({text: b.textContent.trim(), where: (b.closest("a, button") || b).textContent.replace(b.textContent, "").trim()}));
-  const navNumbers = [...document.querySelectorAll("#tabs a.tab, #side a, #main .seg button")].filter(vis).filter((e) => /\d/.test([...e.childNodes].filter((n) => !(n.classList && (n.classList.contains("badge") || n.classList.contains("sr-only")))).map((n) => n.textContent).join(""))).map((e) => e.textContent.trim());
+  const navNumbers = [...document.querySelectorAll("#tabs a.tab, #side a, #main .seg button")].filter(vis).filter((e) => /\d/.test([...e.childNodes].filter((n) => !(n.classList && (n.classList.contains("badge") || n.classList.contains("navcount") || n.classList.contains("sr-only")))).map((n) => n.textContent).join(""))).map((e) => e.textContent.trim());
   const topKids = [...top.querySelectorAll("#brand, #screen, #conn, #pulse, #pill, button, a")].filter(vis).map((e) => e.id || String(e.className));
   return {topH: Math.round(top.getBoundingClientRect().height), topKids, tabs: tabs.length, badges, navNumbers,
     pill: vis(document.getElementById("pill")) || vis(document.getElementById("pulse")), rail: vis(document.getElementById("rail"))};
@@ -632,8 +632,9 @@ S.action_receipt = async (a) => {
 S.undo = async (a) => {
   const o = await open({html: a.html, hash: "jobs", clock: "2026-10-25T09:00:00Z"});
   const {page, store} = o;
-  await openMore(page, "r12-1");
-  await clickText(page, "button", "Set aside: Harbourline Bank, Pricing Analyst");
+  // The bin asks what it is; "Not this role" is already chosen.
+  await clickText(page, "button", "Not for me: Harbourline Bank, Pricing Analyst");
+  await clickText(page, "button", "Take it off my list");
   await turn(page, 4);
   const before = store.list("actions/");
   const marked = await page.$eval('#main [data-item="r12-1"]', (x) => x.classList.contains("is-marked")).catch(() => false);
@@ -643,8 +644,8 @@ S.undo = async (a) => {
   await turn(page, 6);
   const after = store.list("actions/");
   const back = await T(page, "#main .card.job h3");
-  await openMore(page, "r12-3");
-  await clickText(page, "button", "Set aside: Copperleaf Pay, Data Analyst, Payments");
+  await clickText(page, "button", "Not for me: Copperleaf Pay, Data Analyst, Payments");
+  await clickText(page, "button", "Take it off my list");
   await turn(page, 4);
   // Why, if they like: the same action, now with a reason.
   await page.locator('#main [data-item="r12-3"]').getByRole("button", {name: "Pay", exact: true}).click();
@@ -755,7 +756,7 @@ S.stop = async (a) => {
   await turn(page, 6);
   r.running = store.get("work/search~1");
   r.runningCard = await bar(page, "search~1");
-  await page.locator(workSel("prep~int-larkspur-supply")).getByRole("button", {name: "Stop: Interview prep: Larkspur Retail"}).click();
+  await page.locator(workSel("prep~int-larkspur-supply")).getByRole("button", {name: "Don't do it: Interview prep: Larkspur Retail"}).click();
   await turn(page, 6);
   r.queued = store.get("work/prep~int-larkspur-supply");
   r.queuedCard = await bar(page, "prep~int-larkspur-supply");
@@ -1021,6 +1022,38 @@ S.alerts = async (a) => {
 
 // To do: bands by when, employers together inside a band, the kind on every item, chips by
 // kind, and each section opening with its own to-dos.
+// A busy week: checklists, the hidden line, counts, Progress's two periods, the bin.
+S.busy = async (a) => {
+  const o = await open({html: a.html, hash: "todo", clock: "2026-10-25T09:00:00Z"});
+  const {page} = o;
+  const r = await page.evaluate(() => {
+    const t = (e) => (e ? e.textContent.trim() : "");
+    const groups = Object.fromEntries([...document.querySelectorAll("#main .group-card")].map((c) => [c.getAttribute("data-item"), {
+      title: t(c.querySelector(".card-title")), rows: [...c.querySelectorAll(".g-row")].map((row) => ({buttons: [...row.querySelectorAll("button")].map(t)})),
+      actions: [...c.querySelectorAll(".card-actions button")].map(t)}]));
+    const counts = {};
+    for (const a of document.querySelectorAll('[data-k^="tab:"], [data-k^="side:"]')) {
+      const n = a.querySelector(".navcount");
+      if (n) counts[a.getAttribute("data-k").split(":")[1]] = n.firstChild.textContent;
+    }
+    return {groups, counts, hidden: t(document.querySelector("#main .hidden-note")), text: document.getElementById("main").innerText,
+      gauge: document.querySelectorAll("#main .cost .gauge").length};
+  });
+  await goto(page, "settings");
+  r.settings = await page.evaluate(() => document.getElementById("main").innerText);
+  await goto(page, "progress");
+  r.progress = {recent: await page.evaluate(() => document.querySelector("#main .sum").textContent)};
+  await page.click('[data-k="range:all"]');
+  await turn(page, 4);
+  r.progress.all = await page.evaluate(() => document.querySelector("#main .sum").textContent);
+  await goto(page, "jobs");
+  await clickText(page, "button", "Not for me: Harbourline Bank, Pricing Analyst");
+  r.bin = await page.evaluate(() => { const d = document.querySelector("dialog[open]"); return d ? {title: d.querySelector("#sheet-title").textContent, options: [...d.querySelectorAll("label")].map((l) => l.textContent)} : null; });
+  r.errors = o.errors;
+  await o.ctx.close();
+  return r;
+};
+
 S.todo = async (a) => {
   const o = await open({html: a.html, hash: "todo", viewport: a.viewport});
   const {page} = o;
@@ -1105,6 +1138,108 @@ S.chat_computer = async (a) => {
   r.work = store.list("work/").map((p) => store.get(p)).filter((w) => w.kind === "talk");
   r.waiting = await T(page, "#main .talk-msg.pending");
   r.rings = (await calls(page)).filter((c) => c.cap === "comments").length;
+  r.errors = o.errors;
+  await o.ctx.close();
+  return r;
+};
+
+// The chat from any section: a round button bottom right opens a panel with the same thread
+// as the Chat page, the same box and the same send. Data arriving and moving between sections
+// leave it open; Escape closes it and gives focus back; Open in Chat carries on there.
+S.chat_dock = async (a) => {
+  const at = (s) => new Date(Date.parse("2026-10-25T08:00:00Z") + s * 1000).toISOString();
+  const seed = {"talk/cloud-1": {to: "cloud", conv: "1", title: "Is Harbourline Bank hiring?", created_at: at(0)},
+    "talk/cloud-1/messages/m1": {from: "you", text: "Is Harbourline Bank hiring analysts?", at: at(1)},
+    "talk/cloud-1/messages/m2": {from: "cloud", text: "Yes: two analyst roles opened there this week.", at: at(2)}};
+  const o = await open({html: a.html, viewport: a.viewport, hash: "jobs", seed, fake: {canSend: "available", caps: ["user", "db", "comments", "room", "downloads", "assets"]}});
+  const {page, store} = o;
+  const vis = (sel) => visible(page, sel);
+  const focusK = () => page.evaluate(() => document.activeElement ? document.activeElement.getAttribute("data-k") : null);
+  const r = {fab: await vis("#chat-fab"), fabName: await page.getAttribute("#chat-fab", "aria-label"), dockBefore: await vis("#chat-dock")};
+  await page.click("#chat-fab");
+  await turn(page, 6);
+  r.open = {dock: await vis("#chat-dock"), fab: await vis("#chat-fab"), focus: await focusK(), box: await page.evaluate(() => !!document.querySelector("#chat-dock #talk-text")),
+    role: await page.getAttribute("#chat-dock", "role"), name: await one(page, "#h-dock"), msgs: await T(page, "#chat-dock .talk-msg .talk-text")};
+  r.geo = await page.evaluate(() => {
+    const d = document.getElementById("chat-dock").getBoundingClientRect();
+    const t = document.getElementById("tabs");
+    const tr = t && t.getClientRects().length ? t.getBoundingClientRect() : null;
+    return {top: d.top, bottom: d.bottom, left: d.left, right: d.right, vw: innerWidth, vh: innerHeight, tabsTop: tr ? tr.top : null};
+  });
+  r.a11y = await page.evaluate(a11yProbe);
+  await page.fill("#chat-dock #talk-text", "Can you check their careers page?");
+  await page.click("#chat-dock [data-k=talk-send]");
+  await turn(page, 10);
+  r.docs = store.list("talk/cloud-1/messages/").map((p) => store.get(p));
+  r.work = store.list("work/").map((p) => store.get(p)).filter((w) => w.kind === "talk");
+  r.sent = await T(page, "#chat-dock .talk-msg .talk-text");
+  // A chat answers while the person moves to another section: the panel stays open with it.
+  store.chat("talk/cloud-1/messages/m9", {from: "cloud", text: "Their careers page lists a Pricing Analyst role.", at: new Date(Date.now() + 1000).toISOString()});
+  await turn(page, 8);
+  await goto(page, "contacts");
+  r.moved = {dock: await vis("#chat-dock"), msgs: await T(page, "#chat-dock .talk-msg .talk-text")};
+  await page.focus("#chat-dock #talk-text");
+  await page.keyboard.press("Escape");
+  await turn(page, 4);
+  r.esc = {dock: await vis("#chat-dock"), fab: await vis("#chat-fab"), focus: await focusK()};
+  // Someone wrote to them: one line on Contacts opens the chat ready for it.
+  const got = page.getByRole("button", {name: /^Got a message\?/}).first();
+  r.got = {label: (await got.innerText()).trim()};
+  await got.click();
+  await turn(page, 6);
+  Object.assign(r.got, {dock: await vis("#chat-dock"), focus: await focusK(), value: await page.inputValue("#talk-text")});
+  await page.keyboard.press("Escape");
+  await turn(page, 4);
+  r.got.back = await focusK();
+  await page.click("#chat-fab");
+  await turn(page, 4);
+  await page.click("#chat-dock [data-k=dock-full]");
+  await turn(page, 6);
+  r.chat = {hash: await page.evaluate(() => location.hash), dock: await vis("#chat-dock"), fab: await vis("#chat-fab"), msgs: await T(page, "#main .talk-msg .talk-text"),
+    focus: await focusK(), value: await page.inputValue("#main #talk-text")};
+  r.errors = o.errors;
+  await o.ctx.close();
+  return r;
+};
+
+// Pictures in the chat: a screenshot pasted into the box goes to the page's file store, shows
+// in the box, and its id goes with the message. With no file store the button is not there.
+const PNG = Buffer.from("iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==", "base64");
+S.chat_pics = async (a) => {
+  const caps = ["user", "db", "comments", "room", "downloads"].concat(a.noAssets ? [] : ["assets"]);
+  const o = await open({html: a.html, viewport: a.viewport, hash: a.hash || "chat", fake: {canSend: "available", caps}});
+  const {page, store} = o;
+  if (a.hash && a.hash !== "chat") { await page.click("#chat-fab"); await turn(page, 6); }
+  const r = {add: await visible(page, ".talk-add"), placeholder: await page.getAttribute("#talk-text", "placeholder"), intro: await one(page, ".talk-intro"),
+    starters: await T(page, '[aria-label="Ways to start"] button'), asks: await T(page, '[aria-label="Questions you could ask"] button')};
+  if (a.noAssets) { r.errors = o.errors; await o.ctx.close(); return r; }
+  await page.evaluate((b64) => {
+    const bytes = Uint8Array.from(atob(b64), (c) => c.charCodeAt(0));
+    const dt = new DataTransfer();
+    dt.items.add(new File([bytes], "screenshot.png", {type: "image/png"}));
+    const ta = document.getElementById("talk-text");
+    ta.focus();
+    ta.dispatchEvent(new ClipboardEvent("paste", {clipboardData: dt, bubbles: true, cancelable: true}));
+  }, PNG.toString("base64"));
+  await turn(page, 8);
+  r.tray = await page.evaluate(() => [...document.querySelectorAll(".talk-attach .pic-chip")].map((c) => {
+    const img = c.querySelector("img.pic-thumb");
+    return {img: !!img, loaded: !!img && img.complete && img.naturalWidth > 0, state: c.querySelector(".pic-state").textContent, remove: (c.querySelector("button") || {}).textContent};
+  }));
+  r.uploaded = await page.evaluate(() => (window.__ljsAssets || []).slice());
+  r.typed = await page.inputValue("#talk-text");
+  await page.setInputFiles(".talk-form input[type=file]", {name: "photo.heic", mimeType: "image/heic", buffer: Buffer.from("not a png")});
+  await turn(page, 4);
+  r.note = await one(page, ".talk-attach .note");
+  r.trayCount = (await page.$$(".talk-attach .pic-chip")).length;
+  await page.fill("#talk-text", "Help me reply to this");
+  await page.click("[data-k=talk-send]");
+  await turn(page, 12);
+  r.docs = store.list("talk/").filter((p) => p.includes("/messages/")).map((p) => store.get(p));
+  r.work = store.list("work/").map((p) => store.get(p)).filter((w) => w.kind === "talk");
+  r.thread = await page.evaluate(() => [...document.querySelectorAll(".talk-msg .talk-pic")].map((e) => ({tag: e.tagName, alt: e.getAttribute("alt") || e.getAttribute("aria-label")})));
+  r.texts = await T(page, ".talk-msg .talk-text");
+  r.trayAfter = (await page.$$(".talk-attach .pic-chip")).length;
   r.errors = o.errors;
   await o.ctx.close();
   return r;
@@ -1332,7 +1467,7 @@ S.picker = async (a) => {
   await p1.reload();
   await settle(p1);
   r.reloaded = await p1.evaluate(() => ({bg: getComputedStyle(document.body).backgroundColor, checked: [...document.querySelectorAll(".look-row input:checked")].map((x) => x.value)}));
-  await p1.getByLabel("Match my device").check();
+  await p1.getByLabel("Auto").check();
   await turn(p1, 4);
   r.back = await p1.evaluate(() => ({bg: getComputedStyle(document.body).backgroundColor, look: document.documentElement.getAttribute("data-look"), stored: localStorage.getItem("ljs:look")}));
   r.errors = o.errors;

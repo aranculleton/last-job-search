@@ -58,10 +58,10 @@ def _page(tmp, name, env):
     return path
 
 
-def _seed(tmp, name, env):
+def _seed(tmp, name, env, now=NOW):
     """The view documents `app.py view` writes, as the page's database holds them."""
     out = os.path.join(tmp, name + "-view")
-    _app(env, "view", out, "--now", NOW)
+    _app(env, "view", out, "--now", now)
     seed = {}
     base = os.path.join(out, "files")
     for coll in ("view", "meta"):
@@ -204,7 +204,7 @@ def test_every_section_shows_the_engines_items_in_plain_words(run, built):
     assert "Reply to Juno at Larkspur Retail" in t["todo"] and "Not made yet" in t["todo"]
     assert "Brindle Hart Logistics · Manchester (hybrid)\n" in t["jobs"], "hybrid is said once"
     assert "Juno at Larkspur Retail replied to you" in t["jobs"] and "Write to Juno" in t["jobs"]
-    assert "Some Claude, about" in t["jobs"], "a suggestion's cost is the amount and its real time"
+    assert "Uses some of your Claude allowance, about" in t["jobs"], "a suggestion's cost is the amount and its real time"
     assert "Checked" in t["drafts"], "the check that passed is one word, its detail behind ?"
     fern = t["drafts"].split("Operations Analyst", 1)[1].split("Claims Forecasting Analyst", 1)[0]
     assert "Get the files" not in fern, "a file not made yet is not offered"
@@ -221,6 +221,37 @@ def test_finished_history_opens_from_the_database_and_related_things_link(run, b
     assert "Quayside Foods" in got["after"][0]["text"], "the rest of the list comes from view/list~applications~1"
     rel = got["after"][1]["text"]
     assert "Also at Kestrel Mutual" in rel and "your draft" in rel and "the note to Pell" in rel
+
+
+@pytest.fixture(scope="module")
+def many(built, tmp_path_factory):
+    """The example search's page, and the view documents a far longer search writes an hour
+    later: its jobs section is too big for one database document, so it goes in parts."""
+    tmp = str(tmp_path_factory.mktemp("many"))
+    state = app_state.many_jobs(os.path.join(tmp, "state"), n=400)
+    seed = _seed(tmp, "many", _env(app_state.EXAMPLE, state, "private"), now="2026-10-25T19:00:00Z")
+    return built["small"][0], seed
+
+
+def test_a_jobs_section_in_parts_reaches_the_page_whole(run, many):
+    html, seed = many
+    assert "data" not in seed["view/jobs"] and seed["view/jobs"]["in_parts"] >= 2
+    cards = '#main [data-card][data-item^="r9-"]'
+    got = run("engine", html=html, seed=seed, viewport=PHONE,
+              steps=[{"hash": "jobs", "count": cards, "read": "#main"}])
+    assert not got["errors"], got["errors"]
+    shown = got["after"][0]
+    assert shown["count"] == 400, "every role the search found is on the page"
+    assert "Forecasting Analyst 0" in shown["text"] and "Forecasting Analyst 399" in shown["text"]
+    # A part not there yet (a write still arriving) is never read as the section: the page
+    # keeps the jobs it already had.
+    partial = {k: v for k, v in seed.items() if k != "view/part~jobs~2"}
+    got = run("engine", html=html, seed=partial, viewport=PHONE,
+              steps=[{"hash": "jobs", "count": cards, "read": "#main"}])
+    assert not got["errors"], got["errors"]
+    assert "Forecasting Analyst 0" not in got["after"][0]["text"]
+    assert got["after"][0]["count"] < 10
+    assert "Brindle Hart Logistics" in got["after"][0]["text"]
 
 
 # ------------------------------------------------------------------ setup and the private copy

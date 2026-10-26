@@ -955,6 +955,17 @@ def claude_lines(b: dict) -> list[str]:
                    "lists %d; make each, then routines.py called <n>" % len(owed))
     if b["pack"]:
         out.append("wrote " + local_path.rel(b["pack"], person.state()).replace(os.sep, "/"))
+    try:
+        import bar
+        names = bar.unjudged_contacts()
+    except Exception:  # noqa: BLE001  no profile or no contact book: nothing to judge
+        names = []
+    if names:
+        # Judged once, an employer that clears nothing stops filling the person's To do.
+        out.append("judge each employer once, from what you know of it (pay, prestige, signal "
+                   "or none), with python3 tools/bar.py judge \"<employer>\" <verdict> \"<why>\": "
+                   + "; ".join(names[:8]) + ("; and %d more (bar.py unjudged --contacts)"
+                                              % (len(names) - 8) if len(names) > 8 else ""))
     return out
 
 

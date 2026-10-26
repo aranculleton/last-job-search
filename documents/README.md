@@ -62,6 +62,14 @@ title overwrite each other, and so do two titles long enough to agree for eighty
 characters. Both happen. A pair of folders holding the same posting under different names
 leaves nothing to say which one is live.
 
+An `<abbr>` that is only the employer's own name, or the start of it (`Kestrel` for
+Kestrel Mutual), is left off, since the name already starts with the employer:
+`kestrel_mutual_claims_analyst`, not `kestrel_mutual_claims_analyst_kestrel`. Only one
+application at an employer is filed under its plain name; every other one carries a role
+token, which stays. Folders written before 2026-10-26 keep the name they have, and
+`tools/docpaths.py` `app_folder()` finds them under it: every tool that writes into an
+application's folder or reads one asks it, given the abbreviation where it knows one.
+
 Each folder holds:
 
 - **`job_posting.md`** - the posting with its source URL, portal and retrieval date.

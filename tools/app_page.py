@@ -55,7 +55,8 @@ def capabilities() -> dict:
     nothing, and again on reach/, where each contact's address is kept for the owner; user: to know the owner; downloads: each document saved as a file; comments,
     full form: the doorbell that wakes a chat; room: a chat open beside the page; sample:
     quick answers on the page; assets: the documents' PDFs, uploaded by a chat and read
-    back by the page, and the LinkedIn download and a resume the person adds; mcp: Claude's
+    back by the page, the LinkedIn download and a resume the person adds, and the pictures
+    they add to the chat, which the chat that answers reads by id; mcp: Claude's
     own browser on the person's computer (host:claude_browser), which answers only when the
     page is open in the Claude desktop app, with the four tools reading a profile needs.
     """

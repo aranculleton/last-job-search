@@ -15,6 +15,7 @@ Screenshots are written only when LJS_SHOTS names a folder.
 """
 from __future__ import annotations
 
+import base64
 import json
 import os
 import queue
@@ -182,11 +183,36 @@ def pages(tmp_path_factory):
     # so the page asks before one goes.
     held = _sample()
     held["interviews"] = [i for i in held["interviews"] if i["id"] != "int-copperleaf-payments"]
+    # A busy week (the maintainer, 2026-10-26): follow-ups to several people, two notes that
+    # may have gone, the same warning on three messages, a question from an update, and
+    # follow-ups hidden at employers turned down.
+    busy = _sample()
+    ppl = busy["people"][:3]
+    nudge = next(d for d in busy["due"] if d["kind"] == "nudge")
+    busy["due"] = [d for d in busy["due"] if d["kind"] != "nudge"] + [
+        dict(nudge, id="due-nudge-%s" % p["id"], contact=p["id"], item=None, title="Follow up with %s at %s" % (p["first_name"], p["employer"]),
+             context="Analyst at %s" % p["employer"], work={"kind": "follow_up", "id": "follow_up~%s" % p["id"], "args": {"contact": p["id"]}},
+             rev="bn%d" % i) for i, p in enumerate(ppl)] + [
+        {"id": "due-hidden", "kind": "hidden", "sub": "hidden", "title": "4 follow-ups at employers you turned down not shown",
+         "context": "", "due": None, "company": "", "overdue_days": 0, "action": None, "item": None, "work": None,
+         "done": None, "snooze": None, "rev": "bh"}]
+    sent = next(n for n in busy["needs_you"] if n["id"].startswith("q-sent-"))
+    busy["needs_you"] = busy["needs_you"] + [
+        dict(sent, id="q-sent-%s" % ppl[1]["id"], title="Did your note to %s go?" % ppl[1]["first_name"],
+             about={"company": ppl[1]["employer"], "contact": ppl[1]["id"]}, rev="bs1"),
+        {"id": "q-upgrade-demo", "kind": "upgrade_ask", "title": "Turn on the new reading pace?", "body": "",
+         "options": [{"label": "Yes", "action": "upgrade.answer", "value": "yes"}, {"label": "Not now", "action": "upgrade.answer", "value": "no"}],
+         "about": {}, "rev": "bu"}]
+    for m in busy["messages"][:3]:
+        m["alerts"] = [{"id": "al-read-" + m["id"], "kind": "read_first", "level": 1, "text": "Written before their profile was read",
+                        "why": "A note written before their profile was read can get them wrong.", "action": {}, "cost": {"state": 0}}]
+    busy["done"] = dict(busy["done"], recent={"days": 30, "counts": {"applied": 1, "interviews": 0, "offers": 0, "replies": 2},
+                                              "funnel": [{"stage": "applied", "n": 1}, {"stage": "interview", "n": 0}, {"stage": "offer", "n": 0}]})
     # Set up, with nothing found yet: every list says what will appear there.
     nothing = dict(EMPTY, setup={"state": "done", "steps": []})
     return {"sample": _write(tmp, "sample", _sample()), "empty": _write(tmp, "empty", EMPTY), "nothing": _write(tmp, "nothing", nothing), "held": _write(tmp, "held", held),
             "big": _write(tmp, "big", big), "hostile": _write(tmp, "hostile", hostile),
-            "crowd": _write(tmp, "crowd", crowd), "kinds": _write(tmp, "kinds", kinds)}
+            "crowd": _write(tmp, "crowd", crowd), "kinds": _write(tmp, "kinds", kinds), "busy": _write(tmp, "busy", busy)}
 
 
 def _clean(r):
@@ -274,7 +300,7 @@ def test_every_section_full_shows_its_items_in_plain_words(run, pages):
     assert "Every application" in r["progress"]["text"] and "earlier, finished" in r["progress"]["text"]
     settings = r["settings"]["text"]
     assert "An update is waiting" in settings and "4.0.1" not in settings
-    assert "Where Claude works" in settings and "In the cloud" in settings and "Match my device" in settings
+    assert "Where Claude works" in settings and "In the cloud" in settings and "Auto" in settings
 
 
 def test_every_section_empty_says_what_will_appear_and_offers_one_step(run, pages):
@@ -350,7 +376,7 @@ def test_to_do_groups_by_when_then_by_employer_in_the_order_things_are_done(run,
     answer = r["bands"][0]["groups"]
     assert answer[0]["employer"] == "Fernhill Freight" and len(answer[0]["titles"]) == 2, "one employer's two questions together"
     late = r["bands"][1]["groups"]
-    assert late[0]["titles"][0].startswith("Nudge Fernhill Freight"), "the late thing first"
+    assert late[0]["titles"][0].startswith("Follow up with Fernhill Freight"), "the late thing first"
     titles = [t for b in r["bands"] for g in b["groups"] for t in g["titles"]]
     assert "Prepare for the Larkspur Retail phone screen" not in titles, "the interview's own card is its prep, never a second card"
     assert "Thank-you note after your Harbourline Bank first interview" in titles
@@ -484,7 +510,7 @@ def test_draft_this_asks_its_questions_first_says_what_it_costs_and_rings_with_n
     assert len(rings) == 1 and rings[0]["text"] == "[app] [work:draft~r12-1]"
     assert r["doorbell"]["ids"] == ["draft~r12-1"] and r["doorbell"]["thread"]
     assert r["chip"] == "Drafting", "a role being drafted stays in place, marked"
-    assert "1 running" in r["pill"], "running work is a pill in the header"
+    assert "1 waiting" in r["pill"], "work just asked for is a pill in the header, waiting until a chat takes it"
 
 
 def test_already_applied_is_recorded_and_nothing_is_drafted(run, pages):
@@ -501,7 +527,7 @@ def test_two_windows_pressing_draft_at_once_make_one_job_and_one_ring(run, pages
     assert r["rings"] == 1
     assert any("already on its way" in t for t in r["toasts"])
     assert r["tabs"][0] != r["tabs"][1], "each window has its own id for its actions"
-    assert all(s and "1 running" in s for s in r["seen"]), r["seen"]
+    assert all(s and "1 waiting" in s for s in r["seen"]), r["seen"]
     assert r["actions"] == ["actions/act~msg-juno-1~msg.sent"]
     assert r["otherWindow"] == {"chip": ["Marked as sent"], "buttons": 0}, "the other window cannot tick it again"
 
@@ -607,8 +633,8 @@ def test_copy_is_the_first_step_then_i_sent_it_and_it_falls_back_to_selecting(ru
 def test_chat_is_one_box_and_quick_answers_read_the_page(run, pages):
     r = run("talk", html=pages["sample"], shot="phone-talk" if SHOTS else "")
     _clean(r)
-    assert r["label"] == "Ask Claude anything" and r["placeholder"] == "Ask anything about your search"
-    assert "What is due this week?" in r["examples"]
+    assert r["label"] == "Ask Claude anything" and r["placeholder"] == "Ask anything, or paste a screenshot of a message you got"
+    assert "What is due this week?" in r["examples"] and "Someone sent me a job" in r["examples"]
     assert r["quick"][-1].startswith("Two things are due today")
     assert r["tools"] and r["tools"][0][0] == "read_section" and "Reply to Juno" in r["tools"][0][1]
     call = r["sampleCall"][0]
@@ -655,6 +681,79 @@ def test_where_claude_works_is_one_setting_and_says_so_only_when_it_matters(run,
     on = run("chat_computer", html=pages["sample"], listening=True)
     _clean(on)
     assert not any("open Claude on it" in t for t in on["waiting"]) and on["rings"] >= 1
+
+
+@pytest.mark.parametrize("vp", [PHONE, WIDE], ids=["phone", "wide"])
+def test_the_chat_opens_from_any_section_in_a_panel_with_the_same_thread(run, pages, vp):
+    """The person, 2026-10-26: a window for chatting bottom right, "the exact same chat as in
+    the window", so a question on any page needs no trip to Chat first."""
+    r = run("chat_dock", html=pages["sample"], viewport=vp)
+    _clean(r)
+    assert r["fab"] and r["fabName"] == "Chat with Claude" and not r["dockBefore"]
+    o = r["open"]
+    assert o["dock"] and not o["fab"] and o["role"] == "dialog" and o["name"] == "Chat"
+    assert o["focus"] == "talk-text" and o["box"], "focus moves into the panel's box"
+    assert o["msgs"][:2] == ["Is Harbourline Bank hiring analysts?", "Yes: two analyst roles opened there this week."]
+    g = r["geo"]
+    assert g["left"] >= 0 and g["right"] <= g["vw"] and g["top"] >= 0 and g["bottom"] <= g["vh"]
+    if vp is PHONE:
+        assert g["tabsTop"] is not None and g["bottom"] <= g["tabsTop"] + 1, "the tab bar stays uncovered"
+        assert g["left"] == 0 and g["right"] == g["vw"], "a full-width sheet on a phone"
+    else:
+        assert g["right"] < g["vw"] and g["bottom"] < g["vh"], "a panel bottom right"
+    assert not r["a11y"]["problems"] and r["a11y"]["checked"] > 0, r["a11y"]
+    mine = [d for d in r["docs"] if d["from"] == "you" and d["text"] == "Can you check their careers page?"]
+    assert len(mine) == 1 and mine[0]["work"].startswith("talk~cloud-1~"), "the panel sends as the Chat page sends"
+    assert len(r["work"]) == 1 and r["work"][0]["to"] == "cloud"
+    assert "Can you check their careers page?" in r["sent"]
+    assert r["moved"]["dock"], "data arriving and another section leave it open"
+    assert "Their careers page lists a Pricing Analyst role." in r["moved"]["msgs"]
+    assert r["esc"] == {"dock": False, "fab": True, "focus": "chat-fab"}, r["esc"]
+    assert r["got"]["label"] == "Got a message? Paste it or a screenshot"
+    assert r["got"]["dock"] and r["got"]["focus"] == "talk-text" and r["got"]["value"] == "Help me reply to this message: "
+    assert r["got"]["back"] == "got-msg", "Escape gives focus back to what opened it"
+    c = r["chat"]
+    assert c["hash"] == "#chat" and not c["dock"] and not c["fab"], c
+    assert c["msgs"][:2] == o["msgs"][:2] and "Their careers page lists a Pricing Analyst role." in c["msgs"], "the same thread"
+    assert c["focus"] == "talk-text" and c["value"] == "Help me reply to this message: ", "the same box and its words"
+
+
+# The one-pixel PNG the harness pastes (tests/app_page/harness.js, PNG).
+PNG = base64.b64decode("iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==")
+
+
+def test_a_pasted_screenshot_goes_with_the_message_as_its_id(run, pages):
+    r = run("chat_pics", html=pages["sample"])
+    _clean(r)
+    assert r["add"] and r["placeholder"] == "Ask anything, or paste a screenshot of a message you got"
+    assert r["intro"].startswith("Paste a screenshot or a link and say what you want: reply to someone, add a job someone sent you")
+    assert r["starters"][0] == "Someone sent me a job" and len(r["starters"]) == 3, r["starters"]
+    assert [t["img"] for t in r["tray"]] == [True] and r["tray"][0]["loaded"], "the screenshot shows in the box"
+    assert r["tray"][0]["state"].endswith("Ready to send") and r["tray"][0]["remove"] == "Remove"
+    assert [(u["name"], u["type"]) for u in r["uploaded"]] == [("screenshot.png", "image/png")]
+    assert r["typed"] == "", "a pasted picture is not pasted as words"
+    assert r["note"] == "That kind of picture cannot be added. A PNG or JPEG screenshot works." and r["trayCount"] == 1
+    sent = [d for d in r["docs"] if d.get("images")]
+    assert len(sent) == 1 and sent[0]["text"] == "Help me reply to this"
+    assert sent[0]["images"] == [{"id": r["uploaded"][0]["id"], "type": "image/png", "name": "screenshot.png", "bytes": len(PNG)}]
+    assert len(r["work"]) == 1 and r["work"][0]["kind"] == "talk", "a picture always goes to a chat, which can read it"
+    assert r["thread"] == [{"tag": "IMG", "alt": "Your picture"}] and "Help me reply to this" in r["texts"]
+    assert r["trayAfter"] == 0
+
+
+def test_the_panel_takes_a_screenshot_too(run, pages):
+    r = run("chat_pics", html=pages["sample"], hash="contacts", viewport=WIDE)
+    _clean(r)
+    assert r["add"] and [t["img"] for t in r["tray"]] == [True]
+    assert any(d.get("images") for d in r["docs"]) and r["thread"] == [{"tag": "IMG", "alt": "Your picture"}]
+
+
+def test_with_no_file_store_there_is_no_picture_button_and_no_promise_of_one(run, pages):
+    r = run("chat_pics", html=pages["sample"], noAssets=True)
+    _clean(r)
+    assert not r["add"]
+    assert r["placeholder"] == "Ask anything, or paste a message you got"
+    assert "screenshot" not in r["intro"] and r["intro"].startswith("Paste a message or a link")
 
 
 def test_practice_questions_run_on_the_page_as_an_interviewer(run, pages):
@@ -778,7 +877,7 @@ def test_light_or_dark_is_chosen_in_settings_kept_for_this_viewer_and_followed_b
     r = run("picker", html=pages["sample"])
     _clean(r)
     assert r["before"] == _rgb("light")
-    assert r["legends"] == ["Look"] and r["choices"] == ["Match my device", "Light", "Dark"]
+    assert r["legends"] == ["Look"] and r["choices"] == ["Auto", "Light", "Dark"]
     assert r["after"] == {"bg": _rgb("dark"), "look": "dark", "stored": "dark", "scheme": "dark"}
     assert r["actions"] == [], "a look is the viewer's own: nothing is asked of a chat"
     assert r["otherWindow"]["bg"] == _rgb("dark") and "dark" in r["otherWindow"]["checked"]
@@ -876,7 +975,9 @@ def test_every_screen_keeps_to_the_simplicity_budgets(run, pages, viewport, sche
         assert got["chrome"] <= BUDGET["chrome"], (sid, "words of header and footer", got["chrome"])
         assert got["filled"] <= BUDGET["filled"], (sid, "filled buttons in view", got["filled"])
         for c in got["cards"]:
-            others = c["controls"] - c["answers"]
+            # An icon tool on the card's row (Tweak's pencil, a job's bin: the maintainer,
+            # 2026-10-26) is not one of its actions, as an answer is not.
+            others = c["controls"] - c["answers"] - c.get("icons", 0)
             if not c["alerts"]:
                 assert others <= BUDGET["card_controls"], (sid, c)
             assert c["filled"] <= 1, (sid, c)
@@ -916,3 +1017,27 @@ def test_screenshots_for_a_person_to_judge(run, pages):
     ])
     first = run("shots", html=pages["empty"], list=[{"name": "phone-first-run", "viewport": PHONE, "hash": "todo", "seed": False}])
     assert all(os.path.isfile(f) for f in files + first)
+
+
+# ------------------------------------------------------------------ a busy week, calmly (2026-10-26)
+
+def test_a_busy_week_is_a_few_checklists_not_a_card_each(run, pages):
+    r = run("busy", html=pages["busy"])
+    _clean(r)
+    follow = r["groups"]["grp:follow:now"]
+    assert follow["title"] == "Follow up with 3 people" and len(follow["rows"]) == 3, follow
+    assert all(row["buttons"][:1] == ["Draft"] for row in follow["rows"]), follow
+    assert "Draft all 3" in follow["actions"], "one button drafts them all"
+    sent = r["groups"]["grp:sent"]
+    assert sent["title"].startswith("Did these notes go?") and len(sent["rows"]) == 2 and "They all went" in sent["actions"]
+    warn = [g for k, g in r["groups"].items() if k.startswith("grp:read_first")]
+    assert len(warn) == 1 and warn[0]["title"].startswith("Written before their profile was read"), r["groups"]
+    assert "4 follow-ups at employers you turned down not shown." in r["hidden"]
+    assert "Nudge" not in r["text"], "a follow-up is called a follow-up"
+    assert "Turn on the new reading pace?" not in r["text"], "questions from updates wait in Settings"
+    assert "Turn on the new reading pace?" in r["settings"]
+    assert r["counts"].get("drafts") and r["counts"].get("interviews"), r["counts"]
+    assert r["progress"]["recent"].startswith("In the last 30 days: 1 applied, 2 replies")
+    assert r["progress"]["all"].startswith("Since you started:")
+    assert r["bin"]["title"] == "Not for you?" and "No more roles from Harbourline Bank" in r["bin"]["options"]
+    assert r["gauge"] >= 1, "a cost is a gauge of bars, its words on hover"

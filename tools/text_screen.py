@@ -87,6 +87,35 @@ _LABELLED = re.compile(
     r"(?:(?:is|of|circa|c\.|approx\w*\.?|around|about|will be)\s*)*"
     r"(?:(?P<up>up to|max\w*\.?)\s*|(?P<from>from|starting (?:at|from)|min\w*\.?)\s*)?$",
     re.I)
+# A pay label a few plain words before the one figure a sentence states in the market's
+# currency: "The base salary for this role in Canada is C$253,500" (a country prefix on the
+# market's own symbol counts as the symbol). The words between hold no other money noun and
+# no "plus" or "and", so a bonus or an allowance after the label is still left alone. Read
+# only when the sentence holds that one figure.
+_LABELLED_LOOSE = re.compile(
+    r"\b(?:salary|base pay|base salary|pay|compensation|remuneration|rate)\b"
+    r"(?:(?!\b(?:plus|and|or|with|bonus\w*|allowance\w*|stipend|equity|sign(?:ing|-on)|"
+    r"relocation|commission\w*|benefits?|pension|401k|revenues?|turnover|funding)\b)"
+    r"[^.;\d$£€₹¥]){0,60}?"
+    r"(?:(?P<up>\bup to)|(?P<from>\bfrom|\bstarting (?:at|from)))?\s*[A-Za-z]{0,3}\s?$", re.I)
+# Money a posting states about the employer, never the pay: "annual revenue in the hundreds
+# of millions USD", "raised $40M in a Series B", "C$2B in assets under management".
+# RANGE_CUE reads "annual" as a pay cue, so a sentence about the employer's revenue was read
+# as its pay, and in another currency it asked whether the pay was for another country
+# (2026-10-26). Such a sentence is pay only when it also names the pay (PAY_WORDS).
+ABOUT_THE_COMPANY = re.compile(
+    r"\b(?:revenues?|turnover|funding|funded|valuation|valued at|raised|series [a-f]|"
+    r"seed round|arr|annual recurring|recurring revenue|customers|assets under management|"
+    r"aum|market cap\w*)\b", re.I)
+PAY_WORDS = re.compile(r"\b(?:salary|salaries|compensation|remuneration|base pay|pay range|"
+                       r"pay band|pay rate|rate of pay|pay|wages?|hiring range|ote|ctc)\b",
+                       re.I)
+
+
+def about_the_company(sentence: str) -> bool:
+    """Does this sentence state money about the employer (its revenue, funding, valuation,
+    customers or assets) rather than the pay? One that also names the pay is pay."""
+    return bool(ABOUT_THE_COMPANY.search(sentence or "")) and not PAY_WORDS.search(sentence or "")
 
 
 def _number(num: str) -> float:
@@ -138,20 +167,26 @@ def money_parser(cur: str, code: str = ""):
         """(low, high) for one figure introduced by a pay label, or (None, None).
         "up to" states only the top and "from" only the bottom; a bare label
         states both."""
+        hits = []
         for m in amount.finditer(sentence or ""):
             if not (m.group("pre") or m.group("post")):
                 continue
-            lab = _LABELLED.search(sentence[:m.start()])
-            if not lab:
-                continue
             v = int(round(_number(m.group("num")) * _SCALE.get((m.group("mult") or "").lower(), 1)))
             if not _BOUNDS[0] <= v <= _BOUNDS[1]:
+                continue
+            hits.append((m, v))
+            lab = _LABELLED.search(sentence[:m.start()])
+            if not lab:
                 continue
             if lab.group("up"):
                 return None, v
             if lab.group("from"):
                 return v, None
             return v, v
+        lab = _LABELLED_LOOSE.search(sentence[:hits[0][0].start()]) if len(hits) == 1 else None
+        if lab:
+            v = hits[0][1]
+            return (None, v) if lab.group("up") else (v, None) if lab.group("from") else (v, v)
         return None, None
 
     return values, labelled
@@ -1068,23 +1103,26 @@ def salary_range(text: str) -> tuple[int | None, int | None, str]:
     for the person's own city sat under their cut line was never cut.
     """
     bands = []
-    single = (None, None, "")
+    singles = []
     prev = ""
     for s in sentences(text):
         cue = RANGE_CUE.search(s) or HOURLY.search(s) or (
             prev and len(prev) <= 60 and RANGE_CUE.search(prev))
         heading, prev = prev, s
-        if not cue or FOREIGN_CURRENCY.search(s):
+        # Money about the employer (its revenue, funding, customers) is never the pay.
+        if not cue or FOREIGN_CURRENCY.search(s) or about_the_company(s):
             continue
         found = _bands(s, loose=True)
         for lo, hi, part in found:
             bands.append((lo, hi, s[:220], part, heading))
-        if not found and single[2] == "" and not HOURLY.search(s):
+        if not found and not HOURLY.search(s):
             one_lo, one_hi = labelled_value(s)
             if one_lo or one_hi:
-                single = (one_lo, one_hi, s[:220])
+                singles.append((one_lo, one_hi, s[:220]))
     if not bands:
-        return single
+        # The figure stated for the person's own place ("in Canada") first, else the first.
+        home = [x for x in singles if _home(x[2])]
+        return (home or singles or [(None, None, "")])[0]
     # A stated range wins; a single labelled figure is read only when there is none.
     home = [b for b in bands if _home(b[3])]
     lo, hi, quote = (home[0] if home else max(bands, key=lambda b: b[1]))[:3]

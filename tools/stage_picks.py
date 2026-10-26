@@ -30,7 +30,9 @@ belongs to a different application.
 **Every skill a posting names that the profile does not hold is asked about first.**
 `stage` prints one short question per pick (`bridges.unheld_asked`), and nothing is
 drafted until `consent` records each answer. A yes puts it on this resume's skills line,
-named as the posting spells it; a no keeps it off every document. Both travel with the
+named as the posting spells it, and lets the drafter name it in a few of this resume's
+bullets where the work plausibly used it (tools/bullet_rewording.py); a no keeps it off
+every document. Both travel with the
 draft and are written into the documents' own header, which `check_claims.py` reads. The
 app used to decide this alone, and left the tool off: only the person knows whether they
 use it and never said, learned it since, or judge they can back it up, and the word left
@@ -914,6 +916,8 @@ def assemble(round_dir: str, only=()) -> tuple[list[dict], list[str], list[str]]
         d.setdefault("company", p["company"])
         # The person's answers, kept with the draft (draft.json) and written into the
         # documents' header: the skills line prints each yes, check_claims reads both.
+        # A bullet reworded to name a yes (bullet_rewordings) is in `d` already, and the
+        # renderer checks it against these answers again.
         if p.get("skills_yes"):
             d["consented_skills"] = list(p["skills_yes"])
         if p.get("skills_no"):

@@ -537,6 +537,22 @@ def _job_dismiss(r: Run) -> dict:
     if not t.get("url"):
         raise Refused("This posting has no link to rule it out by.")
     why = r.words()
+    declined = ""
+    if r.value.get("scope") == "employer" and t.get("company"):
+        # "No more roles from them": the employer joins the ones turned down by name
+        # (profile/search.py BAR_DECLINED, which bar.py and every round read), and Bring
+        # back takes it off again (the maintainer, 2026-10-26).
+        import profile_set
+        try:
+            have = dict(profile_set.get("search.py", "BAR_DECLINED") or {})
+        except Exception:  # noqa: BLE001  no setting yet: start one
+            have = {}
+        # Keyed the way bar.py looks it up (company_key): "Acme Ltd" is "acme" there.
+        from company_key import key as _ckey
+        declined = _ckey(str(t["company"])) or str(t["company"])
+        if declined not in have:
+            have[declined] = f"turned down on the page, {r.day.isoformat()}" + (f": {why}" if why else "")
+            profile_set.set_line("search.py", "BAR_DECLINED", have)
     exclude.add(t["url"], why or "not for me (said on the page)", title=t.get("title", ""),
                 company=t.get("company", ""), basis="person", today=r.day.isoformat(),
                 location=t.get("place", ""), path=person.state("job_scraper", "seen_jobs.json"))
@@ -549,14 +565,24 @@ def _job_dismiss(r: Run) -> dict:
                            answers=False)
         except SystemExit:
             pass                        # no profile to learn in: the ruling still stands
-    return {"note": f"{t.get('title')} at {t.get('company')} will not be shown again.",
-            "undo": {"action": "job.bring_back", "target": dict(t, kind="job")},
+    note = (f"No more roles from {declined}." if declined
+            else f"{t.get('title')} at {t.get('company')} will not be shown again.")
+    return {"note": note,
+            "undo": {"action": "job.bring_back", "target": dict(t, kind="job", declined=declined)},
             "why": why}
 
 
 def _job_bring_back(r: Run) -> dict:
     import exclude
     t = r.target
+    if t.get("declined"):
+        import profile_set
+        try:
+            have = dict(profile_set.get("search.py", "BAR_DECLINED") or {})
+        except Exception:  # noqa: BLE001
+            have = {}
+        if have.pop(str(t["declined"]), None) is not None:
+            profile_set.set_line("search.py", "BAR_DECLINED", have)
     why = r.words() or "brought back on the page"
     if t["kind"] == "filtered_group" or t.get("many"):
         import filtered
@@ -685,13 +711,18 @@ def _job_add(r: Run) -> dict:
         return {"note": "Already on its way.", "undo": None}
     r.w.add("set", "work", wid, {
         "kind": "evaluate", "title": "Scoring the job you added", "to": "either",
-        "args": {"url": url, "text": text[:60000], "applied_on": applied[:10] if applied else ""},
+        "args": {"url": url, "text": text[:60000], "applied_on": applied[:10] if applied else "",
+                 # Who sent it (their referral route) and whether to draft once it is scored.
+                 "contact": str(r.value.get("contact") or "").strip(),
+                 "draft": bool(r.value.get("draft")) and not applied},
         "asked_at": app_model.stamp(r.at), "asked_from": {"tab": r.act.get("tab") or ""},
         "priority": 0, "status": "queued", "stage": 0,
         "stages": [{"name": x["name"], "est_s": x["est_s"]}
                    for x in page_db.progress("evaluate")["stages"]]},
         if_version=have["version"] if have else None)
     return {"note": "Claude scores it next" + (" and records it as applied." if applied
+                                              else ", then drafts your resume and cover letter."
+                                              if r.value.get("draft")
                                               else ", and it goes at the top of your jobs."),
             "undo": {"action": "work.stop", "target": {"kind": "work", "id": wid}}}
 

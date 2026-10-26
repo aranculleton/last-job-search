@@ -20,6 +20,81 @@ make sense to somebody whose repo just received it.
 
 ## [Unreleased]
 
+## [4.1.0] - 2026-10-26
+
+### Changed
+
+- **A skill you say yes to can show in your work, not only on the skills line.** For that one
+  application, up to three related bullets may name it, with the same facts and numbers; a
+  changed number, a swapped tool or unrelated work is refused, and your profile never changes.
+- **Chat from any page**: a Chat button bottom right opens the same conversation as the Chat
+  page, so a question never means leaving what you are looking at. Paste, drop or add a
+  screenshot ("someone sent me a job", "help me reply to this"), and the chat says what it
+  can do. Contacts has "Got a message? Paste it or a screenshot".
+- **To do is short again**: follow-ups to several people are one checklist with a Draft
+  button each and one to draft them all; "Did your note go?" questions are one checklist; the
+  same warning on many drafts is one line naming who it is about; long lists show the first
+  few with "Show more". Nudges are called follow-ups, and each says who the person is.
+- **Nobody at an employer you turned down fills your To do.** Follow-ups there are hidden,
+  with one quiet line saying how many; your brief judges employers nobody has yet, once each.
+- **Questions from updates live in Settings**, never in To do.
+- **What things cost is a small gauge** of one to three bars, its words on hover, in place of
+  "A lot of Claude"; reasons and explanations wait behind a question mark.
+- **Where to start is never a hunt**: Find jobs heads Jobs, Find people heads Contacts, and
+  Jobs, Drafts and Interviews show a quiet count.
+- **A bin on each job** asks what it is: this role, no more roles from that employer, already
+  applied, or closed.
+- **"They sent me a job"** on a contact, and "Did someone send it to you?" on Add a job: the
+  job is linked to them as your way in and your resume can be written straight after.
+- **Progress opens on the last 30 days**, with All time beside it, and counts a reply only
+  when someone answered you (an imported LinkedIn history had counted every old message).
+- **Jobs says whether you applied**: its first tab is "Not applied yet", and each job says
+  whether the posting was checked as still open.
+- **Drafts holds only what is still to send**; sent ones are in Progress.
+- **Message cards are calmer**: a short Copy, Tweak as a pencil on the card, and a waiting
+  "They replied" on the contact's own row.
+- **Work nobody has picked up says "waiting"**, not "running", and has "Don't do it" first.
+- **Your page is a little cooler and fits more on the screen**: half the warmth out of the
+  light background, rose kept as the accent, cards closer together, smaller text with a mouse.
+- **The morning brief is easier to read**: one line per item with a small dot, its extra lines
+  open in place, and the Tweak tip no longer sits inside it.
+- **The README shows your page properly**: sharper pictures, a short animation of the page,
+  and what you tap on it rather than what to type in a chat.
+
+### Fixed
+
+- **An update brings your page up to date by itself.** Saying "update", in any words, or the
+  daily check taking one, refreshes the page at once with no question; it was decided before
+  the update arrived, so a chat stopped to ask. The offer to pin the page is made once ever,
+  and a timer or background job that brings nothing is never mentioned.
+- **A note over its limit is refused, not shown as "287 of 280".** A follow-up was measured as
+  a first note; now each is held to its own limit and never cut for you.
+- **Every way of saying you moved is caught** when your profile says never to ("just moved",
+  "moved from", "relocated"), not only the exact phrases listed.
+- **A follow-up follows up your last message.** A draft answered someone's year-old offer and
+  repeated news your unanswered August message already gave; drafts now read the whole
+  thread and refer back to your latest message.
+
+- **Your page stopped updating once the job list grew past one record's size**; a big section
+  now goes in parts and arrives whole.
+- **One application, one folder.** Checks and notes for the same application went into two
+  folders, one with the employer's name twice. Profile upgrade: one-folder-each moves them
+  together, keeping both copies where they differ.
+- **An employer's revenue was read as the pay** ("annual revenue in the hundreds of millions
+  USD") and asked about as pay for another country, while the posting's own C$ figure was
+  missed. Money about the company is never pay now.
+- Detail views (an interview's prep, a conversation) showed as a bare browser box.
+- An application only drafted showed under Applied with "I heard back".
+- A connection request nobody accepted offered "Draft the follow-up".
+- A contact whose first note was already written showed no way to it.
+- The same follow-up read "due yesterday" in one place and "2 days late" in another.
+- Settings' icon looked like a sun; buttons all but vanished in the dark look.
+- Your page is always one tap away from a chat: ask for it in any words and it opens.
+- "To Juno at" with nothing after it when no employer is on file.
+- An interview's line read "Next: ... ()" and "[object Object]" for its format.
+- A contact's next step showed the app's own wording and a command ("state.py set ...").
+- "No more roles from this employer" saved the employer under a name the bar never matched.
+
 ## [4.0.0] - 2026-10-26
 
 ### Added

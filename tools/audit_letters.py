@@ -168,8 +168,10 @@ def resume_repeats(a, n=6):
     """[(label, run)] for each letter bullet that repeats a resume bullet the
     allocator chose for this draft. 06-cover-letter-templates.md cuts "any
     bullet duplicating the resume": the reader has both pages in front of them,
-    and a sentence read twice is a sentence wasted."""
-    chosen = [_words(R.BULLETS[b]) for j in a.get("jobs") or []
+    and a sentence read twice is a sentence wasted. A bullet reworded for this
+    application is read as it will be printed."""
+    reworded = R.reworded_bullets(a, warn=False)
+    chosen = [_words(R.bullet_text(a, b, reworded)) for j in a.get("jobs") or []
               for b in j.get("bullets") or [] if b in R.BULLETS]
     out = []
     for b in a.get("cl_bullets") or []:

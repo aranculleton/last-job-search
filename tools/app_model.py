@@ -190,6 +190,42 @@ def private_in(text) -> list[str]:
             + (["a phone number"] if _phones(text) else []))
 
 
+# The words the app writes into a contact's next step are also its own markers
+# (tools/network/state.py FOLLOW_UP_*), so they stay as written there; the page says them
+# plainly. "No more follow-ups: 2 messages with no reply, your rule's limit (14 days, at most 2
+# with no reply). If still silent by the date, close it: state.py set ..." was a To do title,
+# cut off mid-word (the maintainer, 2026-10-26).
+_STOPPED = re.compile(r"^(?:no more follow-ups: (\d+) messages with no reply\b.*|nudged: nothing more unless they reply\b.*)$", re.I | re.S)
+_FOLLOW = re.compile(r"^follow up if no reply \((\d+) of (\d+) sent\b.*$", re.I | re.S)
+_COMMAND = re.compile(r"[.:]?\s*(?:if still silent by the date, close it:\s*)?(?:python3 )?(?:tools/)?(?:network/)?state\.py\b.*$", re.I | re.S)
+
+
+_ROUTE_WORDS = {"alumni": "alumni", "referral": "referral", "recruiter": "recruiter",
+                "warm": "warm introduction", "intro": "introduction"}
+
+
+def plain_action(text) -> str:
+    """A contact's next step in plain words: the app's own wording turned into a short line,
+    never a command; anything the person wrote is shown as they wrote it."""
+    s = " ".join(str(text or "").split())
+    m = _STOPPED.match(s)
+    if m:
+        n = m.group(1) or "2"
+        return f"No reply to {n} messages: leave it unless they write back"
+    m = _FOLLOW.match(s)
+    if m:
+        return f"Follow up if they don't reply ({m.group(1)} of {m.group(2)} sent)"
+    return _COMMAND.sub("", s).strip()
+
+
+def short(text: str, limit: int = 120) -> str:
+    """Cut at a word, with an ellipsis, never mid-word."""
+    s = str(text or "")
+    if len(s) <= limit:
+        return s
+    return s[:limit].rsplit(" ", 1)[0].rstrip(",;:") + "\u2026"
+
+
 def scrub(text, names=()) -> str:
     """`text` with every contact detail taken out, and each full name in `names` (pairs of
     (full name, first name)) cut to the first name."""
@@ -1305,6 +1341,8 @@ def count_of(chars: int, limit, mtype: str) -> dict:
 
 # advise()'s rules, said the way the person would say them. Any other is said as its fix.
 _WARN_WORDS = {
+    "ignores_your_last_message": "it was written as if your last message to them never went: follow that one up instead",
+    "repeats_your_last_message": "it repeats news your last message already gave them",
     "employer_late": "it names their employer late",
     "buried_employer": "it names their employer late",
     "stacked_hedge": "it hedges twice in one sentence",
@@ -1346,6 +1384,14 @@ def message_warnings(text: str, mtype: str, contact: dict) -> list[dict]:
                                company=str(contact.get("company") or ""))
     except Exception:  # noqa: BLE001  a check that cannot run warns of nothing, never stops
         return []
+    # A draft written before the person's latest message, or one that repeats it, says so on
+    # the card (compose.thread_findings): a note made before this check is still caught.
+    cid = str(contact.get("contact_id") or "").strip()
+    if cid:
+        try:
+            found = list(found or ()) + list(compose.thread_findings(text, cid))
+        except Exception:  # noqa: BLE001
+            pass
     return plain_warnings(found)
 
 
@@ -1399,6 +1445,36 @@ def _limit(channel: str, kind: str):
     return None
 
 
+def turned_down(company) -> bool:
+    """Has the person's bar (tools/bar.py) turned this employer down, by a rule, by name, or
+    by a judgement on record, so nobody there is chased? An employer with no name is never."""
+    if not str(company or "").strip():
+        return False
+    try:
+        import bar
+        import profile_set  # noqa: F401  (a profile is there)
+        if bar.excluded_by_name(company):
+            return True
+        # Judged and found wanting; an employer nobody has judged yet is never hidden for
+        # it (bar.py UNLISTED), so the brief judges those (`bar.py unjudged --contacts`).
+        j = bar.judgement(company)
+        return bool(j and j.get("verdict") == bar.NONE)
+    except Exception:  # noqa: BLE001
+        return False
+
+
+def draft_limit(contact: dict, status: str, text: str = "") -> tuple[str, str, int | None]:
+    """(what a draft waiting for this contact is, the composer's kind it is checked as, the
+    most characters it may run to), read from their status now: the one answer the page
+    counts by and `reading.py draft` refuses by. A note to someone already written to is a
+    follow-up, held to the nudge's limit below the first note's: a 287-character follow-up
+    was saved against a first note's 300 and shown as "287 of 280 characters" (2026-10-26)."""
+    kind = _message_kind(status)
+    channel = _channel(contact or {}, kind)
+    mtype = message_type(kind, channel, contact or {}, text)
+    return mtype, COMPOSE_KIND.get(mtype, "reply"), _limit(channel, kind)
+
+
 def _messages(ctx: Ctx, targets: dict) -> list:
     files = sorted(glob.glob(person.state("documents", "network", "*", "draft.md")))
     if not files:
@@ -1419,6 +1495,8 @@ def _messages(ctx: Ctx, targets: dict) -> list:
         live = ctx.live.get(cid) or str(c.get("status") or "")
         if live in schema.TERMINAL:
             continue            # set aside or closed: a draft left in its folder is not shown
+        if live != "replied_needs_response" and turned_down(c.get("company")):
+            continue            # an employer the bar turns down is not written to
         kind = _message_kind(live)
         channel = _channel(c, kind)
         hold = None
@@ -1428,8 +1506,7 @@ def _messages(ctx: Ctx, targets: dict) -> list:
         from network import state as _st
         subject, body = _st.split_subject(text)
         body = body.strip()
-        mtype = message_type(kind, channel, c, body)
-        limit = _limit(channel, kind)
+        mtype, _ck, limit = draft_limit(c, live, body)
         item = {"id": mid, "contact": cid, "first_name": first_name(c.get("name")),
                 "employer": str(c.get("company") or ""), "channel": channel, "kind": kind,
                 "type": mtype, "subject": subject or None, "body": body,
@@ -1525,7 +1602,7 @@ def owed_button(cid: str, status: str, due: str, today: dt.date, has_draft: bool
     late = _date(due)
     if status in ("awaiting_reply", "connected_no_reply") and late and late <= today \
             and not has_draft:
-        return {"label": "Draft the nudge", "kind": "follow_up", "id": f"follow_up~{cid}",
+        return {"label": "Draft the follow-up", "kind": "follow_up", "id": f"follow_up~{cid}",
                 "args": {"contact": cid}}
     return None
 
@@ -1615,7 +1692,7 @@ def _people(ctx: Ctx, targets: dict) -> list:
     rest.sort(key=lambda x: (x[4] or "", x[1]), reverse=True)
     out, used = [], 2
     for n, (c, cid, status, due, last) in enumerate(live_rows + rest):
-        action = scrub(c.get("next_action"), ctx.names)
+        action = plain_action(scrub(c.get("next_action"), ctx.names))
         item = {"id": cid, "first_name": first_name(c.get("name")),
                 "employer": str(c.get("company") or ""), "status": status,
                 "status_word": STATUS_WORDS.get(status, status.replace("_", " ")),
@@ -1666,6 +1743,12 @@ def _due(ctx: Ctx, targets: dict) -> list:
     items = [i for i in items if i not in pending]
     items.sort(key=open_actions.urgency)
     book = {str(c.get("contact_id") or "").strip(): c for c in ctx.contacts}
+    # Nobody at an employer the person's bar turns down is chased (the maintainer,
+    # 2026-10-26: a charity and an accounting firm were filling To do). A reply they are
+    # owed still shows: someone wrote back.
+    kept = [i for i in items if i.get("half") != "contact" or i.get("kind") == "reply"
+            or not turned_down(book.get(i.get("contact_id") or "", {}).get("company"))]
+    hidden, items = len(items) - len(kept), kept
     app_ids = {(str(r.get("company") or ""), str(r.get("role") or "role not recorded")): rid
                for r, rid in zip(ctx.tracker, tracker_ids(ctx.tracker))}
     noun = str(person.get("documents.noun", "resume"))
@@ -1679,10 +1762,10 @@ def _due(ctx: Ctx, targets: dict) -> list:
             where = f" at {c.get('company')}" if c.get("company") else ""
             title = {"reply": f"Reply to {who}{where}",
                      "resume": f"Send your {noun} to {who}{where}",
-                     "nudge": f"Nudge {who}{where}",
+                     "nudge": f"Follow up with {who}{where}",
                      "request_pending": f"Your request to {who}{where} was not accepted",
                      "first_message": f"Write to {who}{where}: they accepted"}.get(
-                raw, f"{who}{where}: " + scrub(c.get("next_action"), ctx.names)[:120])
+                raw, f"{who}{where}: " + short(plain_action(scrub(c.get("next_action"), ctx.names))))
             key = i.get("contact_id") or ""
             action = "work:resume_for_contact" if raw == "resume" else _DUE_WORK[kind]
             about = key
@@ -1733,7 +1816,25 @@ def _due(ctx: Ctx, targets: dict) -> list:
         # with its words, and an interview by /outcome: those rows offer their work instead.
         doable = (i["half"] == "contact" and raw == "action_due") or (
             i["half"] == "application" and raw != "interview")
-        item = {"id": did, "kind": kind, "title": title, "due": i["due"],
+        context = ""
+        if i["half"] == "contact":
+            # One line on who they are, so a follow-up says which person it is (the maintainer,
+            # 2026-10-26): their role, how they were found, when you first wrote.
+            c = book.get(i.get("contact_id") or "", {})
+            co, role = str(c.get("company") or "").strip(), str(c.get("title") or "").strip()
+            bits = [role + (f" at {co}" if co and co not in title else "")] if role else (
+                [co] if co and co not in title else [])
+            how = str(c.get("route_detail") or "").strip() or _ROUTE_WORDS.get(
+                str(c.get("route") or "").strip().lower(), "")
+            if how:
+                bits.append(how)
+            import dates
+            first = dates.as_date(c.get("first_contacted"), iso_only=True)
+            if first:
+                bits.append("first wrote " + first.strftime("%-d %b") if os.name != "nt"
+                            else "first wrote " + first.strftime("%d %b").lstrip("0"))
+            context = scrub(" \u00b7 ".join(b for b in bits if b), ctx.names)
+        item = {"id": did, "kind": kind, "title": title, "context": context, "due": i["due"],
                 "company": (str(book.get(i.get("contact_id") or "", {}).get("company") or "")
                             if i["half"] == "contact" else i["who"].partition(" - ")[0]),
                 "overdue_days": max(int(i.get("late") or 0), 0), "action": action,
@@ -1768,6 +1869,13 @@ def _due(ctx: Ctx, targets: dict) -> list:
                 "snooze": None, "rev": rev_of(did, ids)}
         out.insert(0, item)
         targets[did] = {"kind": "due", "half": "requests", "contacts": ids, "rev": item["rev"]}
+    if hidden:
+        # Said once, quietly, so a shorter list is never a mystery.
+        out.append({"id": "due-hidden", "kind": "hidden", "sub": "hidden",
+                    "title": f"{hidden} follow-up{'s' if hidden != 1 else ''} at employers "
+                             "you turned down not shown", "context": "", "due": None,
+                    "company": "", "overdue_days": 0, "action": None, "item": None,
+                    "work": None, "done": None, "snooze": None, "rev": rev_of("due-hidden", hidden)})
     return out
 
 
@@ -2494,18 +2602,44 @@ def _done(ctx: Ctx, targets: dict) -> dict:
     sent = [(r, d) for r, d in sent if d]
     interviews = sum(1 for r in rows if _status(r) in throttle.REACHED_INTERVIEW)
     n_offers = sum(1 for r in rows if _status(r) in offers)
-    replied_on = []
-    replied = set()
+    # A reply is a message back after one of theirs: a LinkedIn history imported whole holds
+    # years of other conversations, and counting every inbound message said 359 replies
+    # (the maintainer, 2026-10-26).
+    book = {str(c.get("contact_id") or "").strip() for c in ctx.contacts}
+    by_contact: dict = {}
     for t in ctx.threads:
-        if state.said_something(t):
-            replied.add(str(t.get("contact_id") or ""))
-            d = _date(t.get("date"))
-            if d:
-                replied_on.append(d)
+        cid = str(t.get("contact_id") or "").strip()
+        if cid in book:
+            by_contact.setdefault(cid, []).append(t)
+    replied_on = []
+    replied: dict = {}
+    for cid, rows_ in by_contact.items():
+        wrote = False
+        for t in state._ordered(rows_):
+            if state.direction(t) == "out":
+                wrote = True
+            elif wrote and state.said_something(t):
+                d = _date(t.get("date"))
+                if d:
+                    replied_on.append(d)
+                    replied.setdefault(cid, d)
+                    replied[cid] = max(replied[cid], d)
+                elif cid not in replied:
+                    replied[cid] = None
     counts = {"applied": len(sent), "interviews": interviews, "offers": n_offers,
               "replies": len(replied)}
     funnel = [{"stage": "applied", "n": len(sent)},
               {"stage": "interview", "n": interviews}, {"stage": "offer", "n": n_offers}]
+    # The last 30 days, the page's first view: what was sent in them, how far those got, and
+    # the people who answered in them.
+    since = ctx.today - dt.timedelta(days=30)
+    recent = [r for r, d in sent if d >= since]
+    r_iv = sum(1 for r in recent if _status(r) in throttle.REACHED_INTERVIEW)
+    r_of = sum(1 for r in recent if _status(r) in offers)
+    window = {"days": 30, "counts": {"applied": len(recent), "interviews": r_iv, "offers": r_of,
+                                     "replies": sum(1 for d in replied.values() if d and d >= since)},
+              "funnel": [{"stage": "applied", "n": len(recent)}, {"stage": "interview", "n": r_iv},
+                         {"stage": "offer", "n": r_of}]}
     weeks = []
     start = ctx.today - dt.timedelta(days=ctx.today.weekday())
     for k in range(7, -1, -1):
@@ -2531,7 +2665,8 @@ def _done(ctx: Ctx, targets: dict) -> dict:
         if item["live"] or (quiet is not None and quiet <= fold):
             apps.append(item)
     _list(ctx, "applications", full, len(apps))
-    return {"counts": counts, "funnel": funnel, "weeks": weeks, "applications": apps}
+    return {"counts": counts, "funnel": funnel, "weeks": weeks, "applications": apps,
+            "recent": window}
 
 
 # ------------------------------------------------------------------ settings and brief
@@ -2718,7 +2853,11 @@ EMPTY = {
              "rows": [], "filtered": {"count": 0, "groups": []}},
     "done": {"counts": {"applied": 0, "interviews": 0, "offers": 0, "replies": 0},
              "funnel": [{"stage": "applied", "n": 0}, {"stage": "interview", "n": 0},
-                        {"stage": "offer", "n": 0}], "weeks": [], "applications": []},
+                        {"stage": "offer", "n": 0}], "weeks": [], "applications": [],
+             "recent": {"days": 30, "counts": {"applied": 0, "interviews": 0, "offers": 0,
+                                               "replies": 0},
+                        "funnel": [{"stage": "applied", "n": 0}, {"stage": "interview", "n": 0},
+                                   {"stage": "offer", "n": 0}]}},
 }
 
 
@@ -2786,7 +2925,7 @@ _ITEM_KEYS = {
               "outreach", "screening", "status", "alerts", "suggest", "rev"),
     "messages": ("id", "contact", "first_name", "employer", "channel", "kind", "text", "chars",
                  "limit", "why", "due", "alerts", "suggest", "rev"),
-    "due": ("id", "kind", "title", "due", "company", "overdue_days", "action", "done",
+    "due": ("id", "kind", "title", "context", "due", "company", "overdue_days", "action", "done",
             "rev"),
     "people": ("id", "first_name", "employer", "status", "last", "next_action", "due", "rev"),
     "interviews": ("id", "company", "role", "next_stage", "when", "prep", "questions",

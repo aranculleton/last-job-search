@@ -191,7 +191,7 @@ def test_a_rejection_stops_the_chase(run, tmp_path, vp):
 
 def test_the_prep_is_read_on_the_page_and_practice_uses_its_questions(run, tmp_path, vp):
     got = _go(run, tmp_path, [
-        {"hash": "interviews", "click": "Read before", "read": "dialog.detail"},
+        {"hash": "interviews", "click": "Read your prep", "read": "dialog.detail"},
         {"click": "Practice questions", "within": "dialog.detail", "read": "#main", "wait": 300, "calls": "sample"},
         {"eval": "(() => { const t = document.querySelector('#talk-text'); t.value = 'I have three years of store and supplier data behind me, turned into weekly plans.'; t.dispatchEvent(new Event('input', {bubbles: true})); return 1; })()"},
         {"click": "Send", "exact": True, "wait": 300, "read": "#main .talk-list"},
@@ -401,7 +401,8 @@ def test_links_are_the_model_s_own_so_spelling_differences_still_join(run, tmp_p
 
 def test_changing_your_mind_keeps_the_reason_and_brings_things_back(run, tmp_path, vp):
     got = _go(run, tmp_path, [
-        {"hash": "jobs", "more": "r12-1", "click": "Set aside: Harbourline Bank, Pricing Analyst"},
+        {"hash": "jobs", "click": "Not for me: Harbourline Bank, Pricing Analyst"},
+        {"click": "Take it off my list"},
         {"click": "Pay", "exact": True},
         {"click": "41 left out by the search", "exact": False},
         {"click": "Bring back Transport Planning Analyst at Fernhill Freight"},

@@ -152,7 +152,9 @@ def test_5_the_top_bar_is_small_and_the_pill_gives_way_to_the_rail(layouts, vp):
     assert not bad, bad
 
 
-def test_6_five_tabs_and_only_to_do_shows_a_number_the_summary_shares(layouts, vp):
+def test_6_five_tabs_and_only_to_do_shows_a_badge_the_summary_shares(layouts, vp):
+    # Other sections may carry a quiet count (.navcount, the maintainer 2026-10-26); only
+    # To do has the coloured badge, and no number sits in a label's own words.
     bad = []
     for m, s, _, f in _sections(layouts):
         if vp == "phone" and f["tabs"] != 5:
@@ -176,6 +178,8 @@ def test_7_at_most_one_primary_button_and_no_answer_is_primary(layouts):
 
 
 def test_8_a_closed_card_has_one_state_one_alert_two_buttons_one_link_and_more(layouts, vp):
+    # Icon tools (Tweak's pencil, a job's bin) are not counted as buttons (the maintainer,
+    # 2026-10-26: Tweak as an icon on the card, a bin at a job's corner).
     found = set()
     for _, s, v, _ in _sections(layouts):
         for c in v["cards"]:

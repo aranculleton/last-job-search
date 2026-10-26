@@ -1726,6 +1726,136 @@ def engaged(thread) -> bool:
     return any(state.said_something(r) or state.call_held(r) for r in thread or ())
 
 
+# ---------------------------------------------------------------------------
+# Where the thread stands
+# ---------------------------------------------------------------------------
+#
+# Every message logged to them, on every channel (network_threads.csv, which the LinkedIn
+# download is imported into), read before anything goes. When the person's own message is
+# the latest and nobody has answered it, what goes next is a follow-up to THAT message: it
+# says so, it never announces again what that message said, and it never writes as if the
+# last word were older. "Last year you kindly offered to refer me ... I've since moved to
+# Toronto" was drafted to someone told of the move in an August message they had not
+# answered, and read as if nobody had written since the offer (2026-10-26).
+REFERS_BACK = re.compile(
+    r"\bfollow(?:ing|ed)?[\s-]+up\b|\bmy\s+(?:last\s+|earlier\s+|previous\s+|recent\s+)?"
+    r"(?:note|message|email|e-mail|inmail|line)\b|\bI\s+(?:wrote|messaged|emailed|sent\s+you|"
+    r"reached\s+out|got\s+in\s+touch|mentioned)\b|\bas\s+I\s+(?:said|mentioned)\b", re.I)
+# Their earlier message answered as though it were still the last word.
+_ANSWERS_THEM = re.compile(
+    r"\byou\s+(?:very\s+|so\s+)?(?:kindly\s+|generously\s+)?(?:offered|said|mentioned|"
+    r"suggested|told\s+me)\b|\bthanks?\s+(?:you\s+)?(?:again\s+)?for\s+(?:your|the)\s+"
+    r"(?:kind\s+)?(?:reply|message|note|offer|response)\b|\byour\s+(?:kind\s+)?offer\b", re.I)
+_NUMBER = {"two": 2, "three": 3, "four": 4, "five": 5, "six": 6, "seven": 7, "eight": 8,
+           "nine": 9, "ten": 10, "eleven": 11, "twelve": 12, "a few": 3, "several": 4,
+           "many": 6}
+# When a draft places the last contact.
+_AGO = re.compile(
+    r"\b(?P<last>last\s+year)\b|\b(?P<year>a\s+year\s+ago|over\s+a\s+year|a\s+year\s+or\s+so)\b"
+    r"|\b(?P<n>\d+|two|three|four|five|six|seven|eight|nine|ten|eleven|twelve|a\s+few|several|"
+    r"many)\s+(?P<unit>months?|years?)\s+ago\b"
+    r"|\b(?P<gap>it(?:'s|’s|\s+has)\s+been\s+(?:a\s+(?:while|long\s+time|year)|ages|over\s+"
+    r"a\s+year)|long\s+time\s+no\s+(?:speak|see|chat|talk)|since\s+we\s+(?:last\s+)?(?:spoke|"
+    r"talked|chatted|were\s+in\s+touch))\b"
+    r"|\bback\s+in\s+(?P<in>\d{4})\b", re.I)
+_NEWS = re.compile(r"\b(?:moved|moving|relocat\w*|started|starting|joined|joining|finished|"
+                   r"passed|completed|arrived|settled|based|living|left|now\s+at)\b", re.I)
+
+
+def _thread_rows(thread) -> list:
+    """Their message rows on every channel: `thread` is their contact_id or the rows."""
+    import state
+    if isinstance(thread, str):
+        cid = thread.strip()
+        log = person.state("network_threads.csv")
+        return state.threads_for(state.load_threads(log), cid) \
+            if cid and os.path.exists(log) else []
+    return state._ordered([r for r in thread or () if isinstance(r, dict)])
+
+
+def unanswered_ours(thread) -> dict | None:
+    """The person's own message when it is the latest word on the thread, on any channel,
+    and nobody has answered it; else None. An acceptance or an automatic reply answers
+    nothing; their message, a call or a withdrawn request after it does."""
+    import state
+    spoken = [r for r in _thread_rows(thread) if state.direction(r)
+              and not state.is_acceptance(r) and not state.is_auto_reply(r)]
+    if not spoken:
+        return None
+    last = spoken[-1]
+    if state.direction(last) != "out" or state.is_call(last) or state.is_withdrawal(last):
+        return None
+    return last if str(last.get("full_text") or last.get("summary") or "").strip() else None
+
+
+def _older(m, on, today) -> bool:
+    """Does this time phrase put the last contact before `on`, the newest message's day?"""
+    if on is None:
+        return False
+    if m.group("gap"):
+        return True
+    if m.group("last"):
+        return on.year == today.year
+    if m.group("year"):
+        return (today - on).days < 300
+    if m.group("in"):
+        return int(m.group("in")) < on.year
+    n = m.group("n").lower()
+    n = int(n) if n.isdigit() else _NUMBER.get(" ".join(n.split()), 3)
+    days = n * (365 if m.group("unit").lower().startswith("year") else 30)
+    return (today - on).days < days - 20
+
+
+def _said_on(row) -> str:
+    import state
+    on = state.as_date(row.get("date"))
+    return f"{on.day} {on.strftime('%B %Y')}" if on else "your last message's date"
+
+
+def thread_findings(text, thread, today=None) -> list:
+    """What a draft gets wrong about where its thread stands, as tone.Violation: the
+    person's own message is the latest and unanswered, and the draft answers their older
+    message or dates the last contact before it (`ignores_your_last_message`), or announces
+    again what that message already said (`repeats_your_last_message`). [] when they spoke
+    last, or nothing was sent. `thread` is their contact_id or their message rows."""
+    import datetime
+    import learned
+    import state
+    last = unanswered_ours(thread)
+    if last is None:
+        return []
+    t = tone._visible(str(text or ""))
+    on = state.as_date(last.get("date"))
+    today = state.as_date(today) if today else datetime.date.today()
+    month = on.strftime("%B") if on else ""
+    when = _said_on(last)
+    ours = str(last.get("full_text") or last.get("summary") or "")
+    out = []
+    refers = bool(REFERS_BACK.search(t) or (month and re.search(r"\b%s\b" % month, t)))
+    if not refers:
+        older = next((m.group(0) for m in _AGO.finditer(t) if _older(m, on, today)), "")
+        answers = _ANSWERS_THEM.search(t)
+        if older or answers:
+            out.append(tone.Violation(
+                "ignores_your_last_message",
+                f"your message of {when} is the latest on this thread and has no answer, and "
+                f"this draft (\"{older or answers.group(0)}\") reads as if nobody had written "
+                "since: "
+                f"write a follow-up to that message (\"Following up on my note from {month}\"), "
+                "never as if you last spoke before it"))
+    mine = learned.content_words(ours)
+    for s in tone.sentences(t):
+        if REFERS_BACK.search(s) or not (_NEWS.search(s) or learned.moved_claims(s)):
+            continue
+        shared = learned.content_words(s) & mine
+        if len(shared) >= 2:
+            out.append(tone.Violation(
+                "repeats_your_last_message",
+                f"\"{s.strip()[:120]}\" tells them again what your message of {when} already "
+                "said: leave it out, and follow up on that message instead"))
+    return out
+
+
 def referral_ask(name, context, role, link, close=None, work_auth=None,
                  seniority="peer", thread=None) -> str:
     """The ask the first note exists to earn, sent once they have engaged.
@@ -1770,10 +1900,41 @@ def referral_ask(name, context, role, link, close=None, work_auth=None,
     high = KIND_LIMITS["referral_ask"]["words"][1]
     if words > high:
         raise TooLong("referral ask", words, high, unit="words")
+    _thread_gate(text, thread, "referral ask")
     return _gate("referral_ask", text, "referral ask", name=name, seniority=seniority)
 
 
-def nudge(name, reason, close=None, opener=None, their=()) -> str:
+def follow_up(name, thread, reason, close=None, today=None) -> str:
+    """A follow-up to the person's own last message, which nobody has answered: it opens on
+    that message by its month ("following up on my note from August"), then `reason`, the
+    one thing to answer now, never what that message already said. A nudge, held to a
+    nudge's length and gate. Raises ValueError when the last word on the thread is not
+    theirs: there is nothing to follow up. `thread` is their contact_id or their rows."""
+    import datetime
+    import state
+    last = unanswered_ours(thread)
+    if last is None:
+        raise ValueError("nothing of yours on this thread is waiting for an answer, so there "
+                         "is nothing to follow up: reply to their last message instead")
+    on = state.as_date(last.get("date"))
+    today = state.as_date(today) if today else datetime.date.today()
+    when = ""
+    if on:
+        when = on.strftime("%B") + ("" if on.year == today.year else
+                                    " last year" if on.year == today.year - 1 else f" {on.year}")
+    word = "email" if state.channel_of(last) == "email" else "note"
+    opener = f"following up on my {word}" + (f" from {when}" if when else "")
+    return nudge(name, reason, close=close, opener=opener, thread=thread)
+
+
+def _thread_gate(text, thread, what: str) -> None:
+    """Refuse a composed message that ignores where its thread stands (thread_findings)."""
+    found = thread_findings(text, thread) if thread else []
+    if found:
+        raise Refused(f"{what} is refused: " + "; ".join(v.text for v in found)[:500])
+
+
+def nudge(name, reason, close=None, opener=None, their=(), thread=None) -> str:
     """One short chase on a thread that went quiet, capped below the original.
 
     The cap is the argument: a message that was ignored at 300 characters is not
@@ -1787,7 +1948,9 @@ def nudge(name, reason, close=None, opener=None, their=()) -> str:
     argument `first_note` takes. A reason opening "Acme opened a
     role" is otherwise indistinguishable from one opening "Saw the role".
 
-    Raises TooLong, like everything else here, rather than trimming.
+    Raises TooLong, like everything else here, rather than trimming. Given `thread` (their
+    contact_id or their message rows), it follows up on the person's own last message
+    (thread_findings), or is refused.
     """
     _no_reaction_waiting("nudge")
     if not str(reason or "").strip():
@@ -1811,6 +1974,7 @@ def nudge(name, reason, close=None, opener=None, their=()) -> str:
     limit = schema.LIMITS["nudge_chars"]
     if len(text) > limit:
         raise TooLong("nudge", len(text), limit)
+    _thread_gate(text, thread, "nudge")
     return _gate("nudge", text, "nudge", name=name)
 
 
@@ -2415,7 +2579,8 @@ def book_names(contact: str = "", extra=()) -> list:
 
 def validate(message, kind, name=None, seniority="peer", employers=(),
              referrer=None, their_message=None, recruiter=False, reader=None, title="",
-             work_auth=None, subject=None, _all=False, contact="", card_only=False) -> list:
+             work_auth=None, subject=None, _all=False, contact="", card_only=False,
+             today=None) -> list:
     """Every reason this draft should not be sent, as (rule, offending_text).
 
     What the skill layer runs before showing the user anything. Returns instead
@@ -2425,7 +2590,8 @@ def validate(message, kind, name=None, seniority="peer", employers=(),
     What reads badly but may go is `advise()`'s, never this: a late employer (unless
     EMPLOYERS_FIRST is "refuse"), a hedge, an exit. A rule the person said outranks a
     check (`learned.py record --overrides <rule>`) drops that check from here; advise()
-    still mentions it. An InMail's subject is `subject=`, or the InMail's own.
+    still mentions it. An InMail's subject is `subject=`, or the InMail's own. Given
+    `contact=`, their whole thread is read too (`thread_findings`, as of `today`).
     """
     k = _KIND_ALIASES.get(str(kind or "").strip().lower())
     if k is None:
@@ -2502,6 +2668,8 @@ def validate(message, kind, name=None, seniority="peer", employers=(),
         out += _buried(text, employers)
     if referrer and not referrer_in_lead(text, referrer):
         out.append(tone.Violation("referrer_buried", str(referrer)))
+    if contact:
+        out += thread_findings(text, contact, today)
     if their_message:
         restated = tone.restate_ratio(text, their_message)
         if restated.flagged:

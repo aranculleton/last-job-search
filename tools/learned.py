@@ -540,8 +540,116 @@ def adopt_profile_rules(today: str | None = None) -> list[str]:
 
 
 def dislikes(text: str) -> list[str]:
-    """The phrases in `text` the person has said never to use."""
-    return [m.group(0) for _, rx in never_say() for m in rx.finditer(str(text or ""))]
+    """The phrases in `text` the person has said never to use: each never-say phrase, and,
+    where one of them says the person moved (`bans_the_move`), every other way of saying
+    that (`moved_claims`)."""
+    text = str(text or "")
+    rules = never_say()
+    hits = [(m.start(), m.end(), m.group(0)) for _, rx in rules for m in rx.finditer(text)]
+    if bans_the_move([p for p, _rx in rules]):
+        for a, b, said in moved_claims(text, spans=True):
+            if not any(x < b and a < y for x, y, _s in hits):
+                hits.append((a, b, said))
+    return [said for _a, _b, said in sorted(hits, key=lambda h: h[0])]
+
+
+# A ban on saying the person moved ("recently moved", "relocating", "moving to <City>") is a
+# ban on the claim, never on those few spellings of it: a note saying "just moved from London
+# to Toronto" passed every check of a person whose profile said never to write "moving to
+# Toronto", "relocating" or "recently moved", and reached their page as a ready draft
+# (2026-10-26). A never-say phrase that is one of these turns the whole family on. "Made the
+# move" is a person's own line in one profile, so it is caught only where it is banned itself,
+# and "just arrived" is another's (their answer to "how long have you been here?"), so arriving
+# is never in the family.
+_MOVE_BAN = re.compile(
+    r"\b(?:just|recently|newly|currently|finally)\s+(?:moved|moving|relocated|relocating|"
+    r"emigrated)\b|\brelocat(?:e|ed|es|ing|ion)\b|\bemigrat(?:e|ed|ing)\b"
+    r"|\b(?:moved|moving)\s+(?:over\s+|here\s+|back\s+|across\s+)?(?:to|from)\b"
+    r"|\bmade\s+the\s+move\b", re.I)
+# The family, as a draft says it. Each needs the person as the one moving: a verb with
+# nothing moved after it ("I moved our reporting to dbt" moved reporting), or a place the
+# profile knows after it ("moved to Snowflake", "moved to Brindle & Hart" are a tool and a job).
+_OBJ = (r"(?!\s+(?:it|them|this|that|these|those|our|the|a|an|his|her|their|its|my|"
+        r"everything|all|some|most|every|each)\b)")
+_MOVED_NEAR = re.compile(
+    r"\b(?:just|recently|newly|only\s+just|finally)\s+(?:moved|relocated|emigrated)"
+    r"%s(?=\s+(?:to|from|over|here|back|across|in|to\s+the)\b|\s*[.,;:!?)]|\s*$)" % _OBJ,
+    re.I)
+_RELOCATED = re.compile(r"\b(?:relocat(?:e|ed|ing)|emigrat(?:e|ed|ing))\b%s" % _OBJ, re.I)
+_SINCE_MOVING = re.compile(r"\b(?:since|after|before)\s+(?:moving|relocating|emigrating|"
+                           r"coming\s+over)\b", re.I)
+_CAME_OVER = re.compile(r"\b(?:came|come|coming)\s+over\s+(?:from|to|here)\b", re.I)
+_MOVED_TO = re.compile(r"\b(?:moved|moving|relocated|relocating)\s+(?:over\s+|here\s+|back\s+|"
+                       r"across\s+)?(?:to|from)\s+(?:the\s+)?", re.I)
+
+
+def bans_the_move(phrases=None) -> bool:
+    """Has the person said never to say they moved: a never-say phrase that is a way of
+    saying it ("recently moved", "relocating", "moving to Toronto")? `phrases` defaults to
+    every never-say phrase recorded."""
+    if phrases is None:
+        phrases = [p for p, _rx in never_say()]
+    return any(_MOVE_BAN.search(str(p)) for p in phrases)
+
+
+def _places() -> list[str]:
+    """Every place the profile names, longest first: where the person lives (and each of its
+    names), where each employer was told they are, and where each past role was."""
+    out = set()
+    try:
+        import told
+        out.update(n for n, _qual in told._known())
+    except Exception:  # noqa: BLE001  no profile, or none of it: no places
+        pass
+    try:
+        roles = person.module("roles") if person.exists("roles.py") else None
+    except Exception:  # noqa: BLE001
+        roles = None
+    for r in getattr(roles, "ROLES", None) or ():
+        loc = str((r or {}).get("loc") or "") if isinstance(r, dict) else ""
+        out.update(p.strip() for p in loc.split(",") if len(p.strip()) > 1)
+    return sorted(out, key=len, reverse=True)
+
+
+def moved_claims(text: str, spans: bool = False) -> list:
+    """Every way `text` says the person moved, is moving or relocated: "just moved",
+    "recently relocated", "relocating", "since moving", "came over from", and "moved from" or
+    "moving to" a place the profile knows. Never "just arrived" or "made the move", which
+    are people's own lines. With `spans`, (start, end, words) each."""
+    text = str(text or "")
+    if not _MOVE_BAN.search(text) and not _SINCE_MOVING.search(text) \
+            and not _CAME_OVER.search(text) and not _MOVED_NEAR.search(text):
+        return []
+    found = []
+    for rx in (_MOVED_NEAR, _RELOCATED, _SINCE_MOVING, _CAME_OVER):
+        found += [(m.start(), m.end()) for m in rx.finditer(text)]
+    places = _places()
+    for m in _MOVED_TO.finditer(text):
+        # The rest of the clause: "moved from London to Toronto" names the known one second.
+        rest = re.split(r"[.;:!?\n]", text[m.end():m.end() + 80], maxsplit=1)[0]
+        for p in places:
+            hit = re.search(r"(?<![\w-])%s(?![\w-])" % re.escape(p), rest, re.I)
+            if hit:
+                found.append((m.start(), m.end() + hit.end()))
+                break
+    # One claim a stretch: "just moved from London to Toronto" is one, said whole.
+    merged = []
+    for a, b in sorted(found):
+        if merged and a <= merged[-1][1]:
+            merged[-1] = (merged[-1][0], max(b, merged[-1][1]))
+        else:
+            merged.append((a, b))
+    out = []
+    for a, b in merged:
+        # Said whole, to the places it names: "just moved from London to Toronto".
+        tail = _PLACE_TAIL.match(text, b)
+        b = tail.end() if tail else b
+        out.append((a, b, text[a:b]) if spans else text[a:b])
+    return out
+
+
+_PLACE_TAIL = re.compile(r"(?:\s+(?:(?:from|to|over|in)\s+)*(?:the\s+)?[A-Z][\w'’-]*"
+                         r"(?:\s+[A-Z][\w'’-]*)*){1,2}")
 
 
 def entry_key(r: dict) -> tuple:

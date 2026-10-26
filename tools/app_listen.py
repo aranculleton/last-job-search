@@ -62,12 +62,26 @@ HELPER_PROMPT = ("You are the helper for my job search page: it wakes this chat 
                  "what it prints. Keep this chat small: anything longer than a couple of "
                  "minutes goes to a chat of its own.")
 REPUBLISH_TITLE = "Bringing your page up to date"
+# All the person hears about their page after an update: one line. A chat that took an
+# update (2026-10-26) asked whether to bring the page up, explained that a safety check had
+# blocked its first try, offered the pin again and reported a timer running out; the person
+# had asked for none of it.
+SAY_UPDATED = "Your page is updated."
+SAY_UPDATING = "Your page is being updated."
+SAY_NOT_UPDATED = "I couldn't update your page just now."
+SAY_HELPER = "Your page now has a small helper chat of its own; please keep it."
+# How every page step after an update is done: at once, unasked, one command at a time (a
+# chained command goes to the desktop app's safety check whole), with nothing left behind.
+NO_ASK = ("Do it now, before anything else, and never ask the person first: bringing their "
+          "page up to date after an update is always yes. Run each command on its own, never "
+          "chained, and set no timer or reminder for any of it.")
 # What start prints, as app_setup words it, so its publish steps can be told apart.
 _NUM = re.compile(r"^(\d+)\. ")
 _PUBLISH = ("The person's page is ", "Build the person's page", "Read the page first",
             "Publish it (Artifact")
 _WATCH = "Publishing makes this chat watch the page"
-_BEFORE = ("Setup carries on", "The page shows the updates", "Bring the page's data up to date")
+_BEFORE = ("Setup carries on", "The page shows the updates", "Bring the page's data up to date",
+           "Unless the update check above just did it")
 
 
 # ------------------------------------------------------------------ who this chat is
@@ -414,17 +428,30 @@ def privacy() -> str:
 
 
 def pin_asked() -> bool:
+    """Was the pin ever offered? Offered is enough: the offer is made at most once, answered
+    or not (profile/app.json `pin`, kept with the rest of the person's state)."""
     import app_setup
-    return bool((app_setup.page_record().get("pin") or {}).get("asked"))
+    pin = app_setup.page_record().get("pin") or {}
+    return bool(pin.get("asked") or pin.get("offered"))
 
 
 def record_pin(answer: str, today: dt.date | None = None) -> str:
     """Their answer to "pin it?", so it is asked once: profile/app.json `pin`."""
-    import app_setup
     if answer not in ("yes", "no"):
         raise ValueError("the answer is yes or no")
+    return _write_pin(asked=(today or dt.date.today()).isoformat(), answer=answer)
+
+
+def record_pin_offered(today: dt.date | None = None) -> str:
+    """The pin was offered (its line printed): it is never offered again, whether or not
+    the person answered or the chat recorded their answer."""
+    return _write_pin(offered=(today or dt.date.today()).isoformat())
+
+
+def _write_pin(**fields) -> str:
+    import app_setup
     got = app_setup.page_record()
-    got["pin"] = {"asked": (today or dt.date.today()).isoformat(), "answer": answer}
+    got["pin"] = dict(got.get("pin") or {}, **fields)
     path = os.path.join(app_setup.profile_dir(), app_setup.PAGE)
     os.makedirs(os.path.dirname(path), exist_ok=True)
     tmp = f"{path}.{os.getpid()}.tmp"
@@ -441,8 +468,8 @@ def pin_line(url: str, n: int | None = None) -> str:
     ask = claude_surfaces.entry("find-page")["ask"]
     head = f"{n}. " if n is not None else ""
     return (f"{head}Ask the person once, in these words: \"{ask}\" On a yes: Artifact, action "
-            f"pin, url {url}. Either way, then python3 tools/app.py pinned yes|no, so it is "
-            "never asked again.")
+            f"pin, url {url}. Either way, then python3 tools/app.py pinned yes|no. It is "
+            "offered this once and never again: never mention pinning otherwise.")
 
 
 # ------------------------------------------------------------------ start's steps
@@ -491,9 +518,9 @@ def _handover(chat: str, url: str, on: str) -> str:
             f", prompt \"{HELPER_PROMPT}\"; then python3 tools/app.py listen <your "
             f"scratchpad>/listen --chat {chat} --hand <the new session's id>, send its batch, "
             f"and stop this chat's watch (ArtifactComments, action watch, url {url}, on: "
-            "false). Tell the person one line: \"Your page has a helper chat of its own now, "
-            f"called {HELPER_TITLE.split(' (')[0]}. Keep it: it answers your page.\" Where this "
-            "chat cannot start one, carry on: it answers the page while it is open.")
+            f"false). Tell the person this one sentence, and nothing more about it: "
+            f"\"{SAY_HELPER}\" Where this chat cannot start one, carry on and say nothing: it "
+            "answers the page while it is open.")
 
 
 def _numbered(line: str) -> tuple[str, str] | None:
@@ -546,18 +573,19 @@ def shape(code: int, lines: list[str], chat: str = "", listen: bool = False,
             _save_seen(got)
         if behind:
             add.append("The page's own code changed: ask the chat that answers it to republish "
-                       "it. python3 tools/app.py republish <your scratchpad>/republish, then "
-                       f"send the batch it prints (ArtifactData batch, url {url}).")
+                       "it, now and without asking the person. python3 tools/app.py republish "
+                       "<your scratchpad>/republish, then send the batch it prints (ArtifactData "
+                       f"batch, url {url}); do not wait for it. Tell the person only: "
+                       f"\"{SAY_UPDATING}\"")
     else:
         add.append(_check_in(chat, url, who == "claim", listen, helper))
         if publish:
             add += [f"If that left this chat as the listener: {p[:1].lower()}{p[1:]}"
                     for p in publish]
             add.append("Otherwise: python3 tools/app.py republish <your scratchpad>/republish, "
-                       f"and send the batch it prints (ArtifactData batch, url {url}).")
-        elif not pin_asked():               # after a publish, the published step offers it
-            line = pin_line(url)
-            add.append(f"If that left this chat as the listener: {line[:1].lower()}{line[1:]}")
+                       f"send the batch it prints (ArtifactData batch, url {url}), and tell "
+                       f"the person only: \"{SAY_UPDATING}\"")
+        # The pin is offered by the publish step alone (`published_lines`), which records it.
         done = head.startswith("app start: set up") and "elsewhere" not in head
         if done and setup_done() and not helper and not (seen().get("listener") or {}).get("helper"):
             add.append(_handover(chat, url, on))
@@ -591,9 +619,74 @@ def published_lines(url: str, chat: str, first: bool, out_dir: str,
                    f"batch, url {url}): " + " ".join(got["batches"]))
     if not pin_asked():
         out.append("app: " + pin_line(url))
+        try:
+            record_pin_offered()
+        except OSError:
+            pass
     if first and chat and setup_done():
         out.append("app: " + _handover(chat, url, ""))
     return out
+
+
+# ------------------------------------------------------------------ after an update
+
+
+def _publish_now(url: str, n: int) -> list[str]:
+    """The republish itself, numbered from `n`: build, read, publish, keep, and one line."""
+    return [f"{n}. python3 tools/app.py page --out <your scratchpad>/page.html",
+            f"{n + 1}. Artifact, action read, url {url}. Then Artifact, action publish, "
+            f"file_path <your scratchpad>/page.html, url {url}, with the capabilities python3 "
+            "tools/app_page.py --capabilities prints. If the publish is refused, read the page "
+            "again and publish once more; only if that is refused too, tell the person this one "
+            f"line and stop: \"{SAY_NOT_UPDATED}\"",
+            f"{n + 2}. python3 tools/app.py published {url}, and do what it prints.",
+            f"{n + 3}. Tell the person this one line, and nothing else about the page or the "
+            f"update: \"{SAY_UPDATED}\""]
+
+
+def after_update(landed: bool = False, chat: str = "") -> list[str]:
+    """What this chat does about the person's page once an update is in: the day's sync,
+    `sync_app.py --if-stale`, or `--update` when the person said "update". The page's own
+    code changed: republish it now (the listener does; any other chat asks the listener, at
+    once). Only its data could have changed (`landed`): `app.py view`. Never a question, and
+    one line to the person. [] when there is no page yet (start publishes the first one) or
+    nothing changed for it."""
+    import app_setup
+    url = str(app_setup.page_record().get("url") or "")
+    if not url or not app_setup.set_up():
+        return []
+    behind = not app_setup._page_current()
+    if not behind and not landed:
+        return []
+    chat = this_chat(chat)
+    who = role(chat, False, url)
+    if not behind:
+        return [f"Claude: an update just landed. Bring the person's page up to date now. {NO_ASK}",
+                "1. ArtifactData query, once for each of the collections view, meta and reach "
+                f"(url {url}, out_dir <your scratchpad>/page-data, limit 1000).",
+                "2. python3 tools/app.py view <your scratchpad>/page-writes --dump <your "
+                "scratchpad>/page-data" + (f" --chat {chat}" if chat else ""),
+                f"3. Send each batch it prints, in order (ArtifactData batch, url {url}). If one "
+                "is refused, do steps 1 to 3 once more; only if it is refused again, tell the "
+                f"person this one line and stop: \"{SAY_NOT_UPDATED}\"",
+                "4. Tell the person this one line, and nothing else about the page or the "
+                f"update: \"{SAY_UPDATED}\""]
+    head = f"Claude: the update changed the person's page itself. {NO_ASK}"
+    ask = ("python3 tools/app.py republish <your scratchpad>/republish, then send the batch it "
+           f"prints (ArtifactData batch, url {url}); refused means the request is there "
+           "already. Do not wait for it: the page shows its progress. Tell the person this "
+           f"one line, and nothing else about the page or the update: \"{SAY_UPDATING}\"")
+    if who == "other":
+        return [head, "1. Another chat answers the page, so it republishes it: " + ask]
+    if who == "listener":
+        return [head + " Republish it:"] + _publish_now(url, 1)
+    return [head + " Republish it:",
+            f"1. Which chat answers the page: ArtifactData get (url {url}, collection meta, "
+            "doc_id listener, out_dir <your scratchpad>/listen), then python3 tools/app.py "
+            f"listen <your scratchpad>/listen --chat {chat or '<this chat id>'}, and send the "
+            "batch it prints.",
+            "2. If it says another chat answers the page: " + ask + " Then stop here."] + \
+        _publish_now(url, 3)
 
 
 def setup_done() -> bool:

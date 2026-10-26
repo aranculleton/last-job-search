@@ -194,6 +194,21 @@ FIRM = ("harrow", "kestrel", "lark", "moss", "quay", "rook", "sedge", "teal", "v
 KIND = ("freight", "mutual", "retail", "foods", "bank", "logistics", "health", "energy")
 
 
+def many_jobs(state: str, n: int = 400) -> str:
+    """The small state with a shortlist of `n` invented roles, every one scoring 60 or more,
+    so the page's jobs section is far bigger than one database document holds."""
+    small(state)
+    firms = [f"{a.title()} {b.title()}" for a in FIRM for b in KIND]
+    _json(os.path.join(state, "documents", "rounds", "r9.json"), [
+        {"priority": 90 - i % 30, "fit": 90 - i % 30, "title": f"Forecasting Analyst {i}",
+         "company": firms[i % len(firms)], "location": "Manchester (hybrid)",
+         "url": f"https://jobs.example/many/{i}", "portal": "linkedin",
+         "fit_why": "Forecasting in Python and SQL, demand planning and stakeholder work, "
+                    "all held in the profile."}
+        for i in range(n)])
+    return state
+
+
 def large(state: str, tracker_rows: int = 500, contacts: int = 2000,
           threads: int = 5000, seed: int = 7) -> str:
     """A big invented search: the sizes the budget test names."""

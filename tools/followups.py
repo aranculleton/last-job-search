@@ -277,19 +277,20 @@ def live_processes(rows: list[dict], closed: dict[int, dict]) -> dict[str, dict]
 def outreach_note(row: dict, docs: str = DOCS) -> str:
     """documents/applications/<slug>/outreach.md for this row, or "".
 
-    The folder name comes from `docpaths.slug`, the function that wrote it, with
-    the abbreviation read off the row's resume. Folders from before the
+    The folder names come from `docpaths.folder_names`, the rule that wrote them,
+    with the abbreviation read off the row's resume. Folders from before the
     abbreviation joined the name are tried without it.
     """
     m = _ABBR.search(str(row.get("cv_file") or ""))
     for abbr in ((m.group(1), "") if m else ("",)):
         try:
-            folder = docpaths.slug(row.get("company") or "", row.get("role") or "", abbr)
+            names = docpaths.folder_names(row.get("company") or "", row.get("role") or "", abbr)
         except ValueError:
             return ""
-        path = os.path.join(docs, folder, "outreach.md")
-        if os.path.isfile(path):
-            return path
+        for folder in names:
+            path = os.path.join(docs, folder, "outreach.md")
+            if os.path.isfile(path):
+                return path
     return ""
 
 

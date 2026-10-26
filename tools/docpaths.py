@@ -9,7 +9,8 @@ The prefix used to be a literal in about ten tools that had to agree, and the
 tracker stores these paths, so tools/doc_name.py matches against them: they
 come from here or they drift.
 
-    python3 tools/docpaths.py shell   # the batch check's profile values, as shell assignments
+    python3 tools/docpaths.py shell         # the batch check's profile values, as shell assignments
+    python3 tools/docpaths.py merge-twins   # one application in two folders, made one
 """
 
 from __future__ import annotations
@@ -197,11 +198,29 @@ def values() -> dict:
 # tool that only needed a folder (the brief, the due list, the follow-ups) loaded the whole
 # drafting toolchain to find one. outreach.py still offers them under the same names.
 
-def slug(company, role, abbr=""):
+def _abbr_text(abbr) -> str:
+    return re.sub(r"[^a-z0-9]+", "", str(abbr or "").lower())
+
+
+def only_the_employer(company, abbr) -> bool:
+    """Whether the abbreviation is only the employer's own name, or the start of it
+    ("Kestrel" or "KestrelMutual" for Kestrel Mutual). The folder name already starts with
+    the employer, so such a suffix said it twice: kestrel_mutual_analyst_kestrel. Only one
+    application at an employer is ever filed under its plain name (stage_picks.choose_abbr
+    gives every other one a role token), so leaving it off never joins two applications."""
+    a = _abbr_text(abbr)
+    words = re.findall(r"[a-z0-9]+", str(company or "").lower())
+    return bool(a) and any("".join(words[:k]) == a for k in range(1, len(words) + 1))
+
+
+def slug(company, role, abbr="", _always=False):
     """Directory name for one application. The abbreviation is part of it, so
     two roles at one employer with the same title (one employer posted "Senior
     Business Analyst" twice), or two long titles that agree for eighty
     characters (one role advertised in two cities), never overwrite each other.
+    An abbreviation that is only the employer's own name is left off
+    (only_the_employer): the name already starts with the employer. `_always` gives
+    the name every folder had before 2026-10-26, the abbreviation always appended.
 
     Raises ValueError when company and role together hold no letter or digit.
     The caller joins the result into a path, so returning "" wrote the
@@ -236,8 +255,8 @@ def slug(company, role, abbr=""):
             "no folder name can be derived from company=%r role=%r: between them "
             "they hold no letter or digit. Ask for a company or role that does, "
             "and do not create a file or directory." % (company, role))
-    if abbr:
-        s += "_" + re.sub(r"[^a-z0-9]+", "", abbr.lower())
+    if abbr and (_always or not only_the_employer(company, abbr)):
+        s += "_" + _abbr_text(abbr)
     return s
 
 
@@ -294,10 +313,30 @@ def without_ref(role) -> str:
     return doc_name.role_core(role) or str(role or "")
 
 
-def app_folder(company, role, abbr=""):
-    """The folder one application lives in (documents/README.md, Subfolder naming).
+def folder_names(company, role, abbr) -> list[str]:
+    """The names an application filed under `abbr` may have on disk, the one to look for
+    first first: the name every folder had before 2026-10-26 (the abbreviation always
+    appended, so kestrel_mutual_analyst_kestrel), then the name the rule gives now. Most
+    applications on disk are older than the change, and a folder written under the old
+    name stays that application's folder. Raises ValueError as slug() does."""
+    if not abbr:
+        return [slug(company, role)]
+    return list(dict.fromkeys((slug(company, role, abbr, _always=True),
+                               slug(company, role, abbr))))
 
-    The commands wrote `<company>_<role>/` while the tools wrote
+
+def app_folder(company, role, abbr=""):
+    """The folder one application lives in (documents/README.md, Subfolder naming). Every
+    tool that writes into an application's folder or reads one asks here, so one
+    application has one folder.
+
+    With `abbr`, the name its documents were written under, it is that application's own
+    folder: one already on disk under either name (folder_names), else the name the rule
+    gives. verify_batch.py named it without the abbreviation while outreach.py named it
+    with, so one application's checks and its note sat in two folders (2026-10-26).
+
+    Without one, the abbreviation is read off the tracker's row, and an older folder is
+    looked for as well. The commands wrote `<company>_<role>/` while the tools wrote
     `<company>_<role>_<abbr>/`, so /outcome and /interview missed the folder a
     batch had written and started a second one beside it. The folder already
     there wins: the full name, then the name without the abbreviation, then the
@@ -309,6 +348,7 @@ def app_folder(company, role, abbr=""):
     tracker, and the interview pack built itself from an empty folder.
     """
     base = person.state("documents", "applications")
+    given = bool(abbr)
     abbr = abbr or _abbr_on_file(company, role)
     try:
         stem = slug(company, role)
@@ -318,10 +358,17 @@ def app_folder(company, role, abbr=""):
         if not abbr:
             raise
         return os.path.join(base, slug(company, role, abbr))
-    full = slug(company, role, abbr) if abbr else stem
+    names = folder_names(company, role, abbr)
+    full = names[-1]
+    if given:
+        # Never another application's folder: the name without the abbreviation can be one.
+        for name in names:
+            if os.path.isdir(os.path.join(base, name)):
+                return os.path.join(base, name)
+        return os.path.join(base, full)
     bare = without_ref(role)
     plain = slug(company, bare) if bare != role else stem
-    for name in dict.fromkeys((full, stem, plain)):
+    for name in dict.fromkeys((*names, stem, plain)):
         if os.path.isdir(os.path.join(base, name)):
             return os.path.join(base, name)
     try:
@@ -331,6 +378,107 @@ def app_folder(company, role, abbr=""):
     except OSError:
         hits = []
     return os.path.join(base, hits[0] if len(hits) == 1 else full)
+
+
+# ------------------------------------------------------------ one application in two folders
+
+# The files that make a folder an application of its own: a folder holding neither is what
+# a tool that missed the abbreviation left beside the real one (verify_batch.py's verify.json).
+_OWN = ("draft.json", "job_posting.md")
+
+
+def _source(folder) -> str:
+    try:
+        with open(os.path.join(folder, "job_posting.md"), encoding="utf-8") as fh:
+            m = re.search(r"\*\*Source:\*\*\s*(\S+)", fh.read(4000))
+        return m.group(1) if m else ""
+    except OSError:
+        return ""
+
+
+def twin_folders(base=None) -> list[tuple[str, str]]:
+    """[(stray, home)]: a folder that is another folder's name without its abbreviation and
+    holds the same application, so its files belong in the other. It is the same
+    application when it holds no application of its own (no draft.json or job_posting.md)
+    or the same posting (the same Source line). Where several folders carry the name and
+    an abbreviation, the stray's verify.json names which one; otherwise it is left alone."""
+    base = base or person.state("documents", "applications")
+    try:
+        names = sorted(d for d in os.listdir(base) if os.path.isdir(os.path.join(base, d)))
+    except OSError:
+        return []
+    out = []
+    for a in names:
+        sibs = [b for b in names if b.startswith(a + "_") and "_" not in b[len(a) + 1:]]
+        if not sibs:
+            continue
+        stray = os.path.join(base, a)
+        home = sibs[0] if len(sibs) == 1 else None
+        try:
+            with open(os.path.join(stray, "verify.json"), encoding="utf-8") as fh:
+                named = a + "_" + _abbr_text(json.load(fh).get("abbr"))
+            home = named if named in sibs else home
+        except (OSError, ValueError, AttributeError):
+            pass
+        if home is None:
+            continue
+        own = any(os.path.exists(os.path.join(stray, f)) for f in _OWN)
+        if own and not (_source(stray) and _source(stray) == _source(os.path.join(base, home))):
+            continue
+        out.append((stray, os.path.join(base, home)))
+    return out
+
+
+def _stamp(path) -> str:
+    """When a file was made: a JSON record's own `at`, else its time on disk."""
+    try:
+        with open(path, encoding="utf-8") as fh:
+            at = json.load(fh).get("at")
+        if isinstance(at, str) and at:
+            return at
+    except (OSError, ValueError, AttributeError):
+        pass
+    import datetime as dt
+    return dt.datetime.fromtimestamp(os.path.getmtime(path), dt.timezone.utc) \
+        .strftime("%Y-%m-%dT%H:%M:%SZ")
+
+
+def merge_twins(base=None) -> list[str]:
+    """Each stray's files moved into its home, and the stray removed: a file the home
+    lacks is moved; the same file in both is kept once; two different copies keep the
+    newer under its own name and the older beside it as <name>.earlier<ext>, so nothing is
+    lost. Returns a line for each folder merged."""
+    import filecmp
+    import shutil
+    lines = []
+    for stray, home in twin_folders(base):
+        moved = 0
+        for root, _dirs, files in os.walk(stray):
+            # Below the stray itself, so on its drive: the same place below the home.
+            rel = root[len(stray):].lstrip("/\\")
+            for f in files:
+                src = os.path.join(root, f)
+                dst = os.path.normpath(os.path.join(home, rel, f))
+                os.makedirs(os.path.dirname(dst), exist_ok=True)
+                if not os.path.exists(dst):
+                    shutil.move(src, dst)
+                elif filecmp.cmp(src, dst, shallow=False):
+                    os.remove(src)
+                else:
+                    stem, ext = os.path.splitext(dst)
+                    older, n = stem + ".earlier" + ext, 2
+                    while os.path.exists(older):
+                        older, n = f"{stem}.earlier{n}{ext}", n + 1
+                    if _stamp(src) > _stamp(dst):
+                        shutil.move(dst, older)
+                        shutil.move(src, dst)
+                    else:
+                        shutil.move(src, older)
+                moved += 1
+        shutil.rmtree(stray, ignore_errors=True)
+        lines.append(f"{os.path.basename(stray)}: {moved} file(s) moved into "
+                     f"{os.path.basename(home)}")
+    return lines
 
 
 def employer_folders(company) -> list[str]:
@@ -346,6 +494,10 @@ def employer_folders(company) -> list[str]:
 if __name__ == "__main__":
     if sys.argv[1:] == ["shell"]:
         print(shell())
+    elif sys.argv[1:] == ["merge-twins"]:
+        # One application in two folders, made one (profile upgrade one-folder-each).
+        for line in merge_twins():
+            print(line)
     else:
         print(__doc__, file=sys.stderr)
         raise SystemExit(2)

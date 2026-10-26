@@ -1304,7 +1304,8 @@ def main(argv: list[str]) -> int:
     rc = sync() if a.update or updates() == "auto" else look()
     if rc == 0:
         _record_check()
-        if git("rev-parse", "HEAD", check=False).stdout.strip() != before:
+        landed = git("rev-parse", "HEAD", check=False).stdout.strip() != before
+        if landed:
             own_tests()
         app_watch()
         network_check()
@@ -1315,7 +1316,7 @@ def main(argv: list[str]) -> int:
         if n:
             print(f"sync_app: {n} file(s) on this computer given plain line endings, as the "
                   "app now keeps them; nothing in them changed")
-        upgrades("--after-sync")
+        upgrades("--after-sync", landed=landed)
         model_check(a.on)
         place_check(a.tools)
     return rc
@@ -1722,22 +1723,30 @@ def model_check(on: str) -> None:
         pass
 
 
-def upgrades(mode: str) -> None:
+# The word profile_upgrades.py reads (its own LANDED) for "this sync took an update".
+LANDED = "LJS_UPDATE_LANDED"
+
+
+def upgrades(mode: str, landed: bool = False) -> None:
     """The profile upgrades this repo still needs (tools/profile_upgrades.py).
 
     Run as its own process, from the file the merge just brought in: this
     sync_app is the copy that was on disk before the merge, so the registry it
     could import would be the old one. After a sync the instant upgrades run and
     commit on their own; a check only lists. Never changes the exit code: a
-    pending upgrade must not block anything.
+    pending upgrade must not block anything. `landed`: this run took an update, so
+    what it prints about the person's page brings the page's data up to date too.
     """
     script = os.path.join(ROOT, "tools", "profile_upgrades.py")
     if not os.path.isfile(script):
         return
+    env = {k: v for k, v in os.environ.items() if k != LANDED}
+    if landed:
+        env[LANDED] = "1"
     try:
         r = subprocess.run([sys.executable, script] + ([] if mode == "--list" else [mode]),
                            cwd=ROOT, text=True, capture_output=True, timeout=600,
-                           encoding="utf-8", errors="replace")
+                           encoding="utf-8", errors="replace", env=env)
         out = (r.stdout or "").rstrip()
         if out:
             print(out)

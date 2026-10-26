@@ -76,7 +76,11 @@ REQUIRED = ("company", "role", "summary", "tools", "p1", "p2", "lead", "cl_bulle
 # What the drafter returns beside the draft, which is not prose anyone reads.
 NOT_PROSE = {"claim_map", "stretches", "posting", "research", "check_output", "pack_hash",
              "corpus_hash", "residual_risks", "consented_skills", "declined_skills", "rulings",
-             "research_hash"}
+             "research_hash",
+             # The profile's own bullets with a yes named: held to the guard in
+             # tools/bullet_rewording.py (nothing but the yes and a linking word added), and
+             # read by check_claims with the resume (document_texts).
+             "bullet_rewordings"}
 # A sentence this short, with no figure, states no fact ("Where it maps:").
 MIN_FACT_WORDS = 4
 # Content words of a do_not_claim entry a sentence must share to be flagged.
@@ -402,6 +406,11 @@ def document_texts(d: dict, head: str = "") -> tuple[str, str]:
     check_claims reads it as one), each under the consent header."""
     import render_application as R
     resume = head + "\n\n".join(R.clean(str(d.get(k) or "")) for k in ("summary", "tools"))
+    # A bullet reworded for this application prints on the resume: read with it.
+    rw = d.get("bullet_rewordings")
+    for r in rw if isinstance(rw, list) else []:
+        if isinstance(r, dict) and str(r.get("text") or "").strip():
+            resume += "\n\n" + R.clean(plain(r["text"]))
     parts = [R.clean(str(d.get(k) or "")) for k in ("p1", "p2", "lead")]
     parts += [R.clean(f"{_bullet_label(b)}: {_bullet_text(b)}") for b in d.get("cl_bullets") or []]
     parts += [R.clean(str(d.get(k) or "")) for k in ("p4", "outreach_body")]
@@ -577,6 +586,10 @@ def rule_findings(d: dict, pick: dict, posting: str, corpus: dict | None = None,
         try:
             import render_application as R
             probe = dict(d, posting=posting)
+            # The person's answers, as assemble puts them on the draft, so a bullet
+            # reworded for a yes is read as it will print.
+            probe["consented_skills"] = list(pick.get("skills_yes") or d.get("consented_skills") or [])
+            probe["declined_skills"] = list(pick.get("skills_no") or d.get("declined_skills") or [])
             probe.pop("jobs", None)
             probe["jobs"] = R.jobs_for(probe)
             for lab, run in audit_letters.resume_repeats(probe):
@@ -618,6 +631,17 @@ def rule_findings(d: dict, pick: dict, posting: str, corpus: dict | None = None,
             findings.append(_finding("tools", "tools", item,
                                      "not in the skills inventory (skills.py ITEMS): leave it "
                                      "out, or ask the person"))
+    # A resume bullet reworded to name a yes: this application's answers only, the same
+    # facts and numbers, every tool the work used still named, nothing else added, and
+    # work the skill plausibly belonged to (tools/bullet_rewording.py, the one copy).
+    import bullet_rewording
+    for p in bullet_rewording.problems(
+            d.get(bullet_rewording.FIELD),
+            pick.get("skills_yes") or d.get("consented_skills") or [],
+            pick.get("skills_no") or d.get("declined_skills") or []):
+        findings.append(_finding("rewording:" + p["rule"],
+                                 f"bullet_rewordings ({p['id']})" if p["id"] else "bullet_rewordings",
+                                 p["text"], p["fix"]))
     # A skill the posting names that the profile does not hold, which the person was asked
     # about: a no is named nowhere (check_claims reads it too, as a warning only).
     rendered = " ".join(s for _f, s in field_sentences(d)) + " " + str(d.get("tools") or "")
@@ -925,6 +949,35 @@ def grounding_flags(d: dict, pick: dict, posting: str, research: dict | None,
     return out
 
 
+def rewording_flags(d: dict, pick: dict, findings=()) -> list[dict]:
+    """One question per bullet reworded for a yes that the guard accepts: code has checked
+    the numbers, the tools and the words, and that the skill's family, theme or bridge
+    touches the work; whether the work plausibly involved it is the model auditor's
+    ruling. One the guard refused is a finding already, and gets no flag."""
+    import bullet_rewording
+    rw = d.get(bullet_rewording.FIELD)
+    refused = {str(f.get("field") or "") for f in findings
+               if str(f.get("rule") or "").startswith("rewording:")}
+    out = []
+    yes = pick.get("skills_yes") or d.get("consented_skills") or []
+    for r in rw if isinstance(rw, list) else []:
+        if not isinstance(r, dict):
+            continue
+        bid = str(r.get("id") or "").strip()
+        if not bid or f"bullet_rewordings ({bid})" in refused or "bullet_rewordings" in refused:
+            continue
+        orig = bullet_rewording.original(bid) or ""
+        added = [y for y in bullet_rewording.clean_names(yes)
+                 if bullet_rewording.named(y, r.get("text")) and not bullet_rewording.named(y, orig)]
+        why = "; ".join(bullet_rewording.related(y, bid) for y in added)
+        out.append(_flag("reworded-bullet", f"bullet_rewordings ({bid})",
+                         plain(r.get("text")),
+                         f"the profile's {bid} at {bullet_rewording.employer(bid) or 'its employer'} "
+                         f"with {', '.join(added)} named for this application ({why}): rule "
+                         "whether that work plausibly involved it; if not, remove this rewording"))
+    return out
+
+
 def mechanical(d: dict, pick: dict, posting: str, research: dict | None,
                corpus: dict | None = None, batch=(), evidence=None, facts=None) -> dict:
     """The whole mechanical audit of one draft: findings, flags, notes, and the gate."""
@@ -935,6 +988,7 @@ def mechanical(d: dict, pick: dict, posting: str, research: dict | None,
     flags = [] if broken else grounding_flags(d, pick, posting, research, evidence, facts)
     if not broken:
         flags += near_ends(d, corpus if corpus is not None else letter_corpus())
+        flags += rewording_flags(d, pick, findings)
     if not broken:
         findings += research_findings(d, pick, research)
         if research_facts(research) and not str(d.get("research_hash") or "").strip():
@@ -1492,6 +1546,23 @@ def packet(round_dir: str, slug: str) -> str:
         lines.append(f"outreach_body: {plain(d['outreach_body'])}")
     lines.append(f"addressed to (contact_person): {str(d.get('contact_person') or '').strip() or 'the hiring team'}"
                  f" | the research's named contact: {str(research.get('named_contact') or '').strip() or 'none'}")
+    rw = d.get("bullet_rewordings")
+    if isinstance(rw, list) and rw:
+        import bullet_rewording
+        lines += ["", "== RESUME BULLETS REWORDED FOR A YES (this resume only; the profile's "
+                      "own text first, then what this draft prints) =="]
+        for r in rw:
+            if not isinstance(r, dict):
+                continue
+            bid = str(r.get("id") or "").strip()
+            lines.append(f"{bid} ({bullet_rewording.employer(bid) or 'no such bullet'}):")
+            lines.append(f"    profile: {plain(bullet_rewording.original(bid) or '')}")
+            lines.append(f"    reworded: {plain(r.get('text'))}")
+        lines.append("Code has checked each: the same numbers, every tool the work used still "
+                     "named, only the yes and linking words added, and a tie between the skill "
+                     "and the work. Rule on each one's reworded-bullet flag: supported only "
+                     "where that work plausibly involved the skill; otherwise remove it from "
+                     "bullet_rewordings in your draft, and the profile's own bullet prints.")
     lines += ["", "== THE DRAFT AS THE OBJECT YOU RETURN (in \"draft\": change only what you fix; "
               "a key you leave out is kept as it is here) ==",
               json_text({k: v for k, v in base.items() if k not in ("pack_hash", "research_hash")},

@@ -163,8 +163,8 @@ PAGE_TOUR = (
      "text": "What is due, most urgent first. Each card has one button; tap Done when it is "
              "done, or Not today."},
     {"key": "jobs", "tab": "jobs", "title": "Jobs",
-     "text": "New roles scored out of 100 against what you want, with why. Tap Draft this on "
-             "one you want, or Add a job for a link of your own."},
+     "text": "New roles scored out of 100 against what you want, with why. Find jobs searches "
+             "again; tap Draft this on one you want; the bin takes one off your list."},
     {"key": "drafts", "tab": "ready", "title": "Drafts",
      "text": "Your resume and letter for each role, checked. Get both files, apply on the "
              "employer's own site, then tap I have applied."},
@@ -173,9 +173,13 @@ PAGE_TOUR = (
              "tap I sent it."},
     {"key": "contacts", "tab": "people", "title": "Contacts",
      "text": "Everyone you are talking to, and what is owed. When someone writes back, tap "
-             "They replied and paste what they said."},
+             "They replied; if they sent you a job, tap They sent me a job. Find people "
+             "looks for more."},
     {"key": "interviews", "tab": "interviews", "title": "Interviews",
      "text": "Your prep for each interview, to read before it. Tap Prepare me to build it."},
+    {"key": "chat", "tab": "chat", "title": "Chat",
+     "text": "Ask anything, or paste a link, a message or a screenshot and say what you want. "
+             "Claude does the rest and it shows up here."},
 )
 PAGE_FIRST = {
     "search": "Your first search here, so the ranking won't be perfect yet. Say what's off "

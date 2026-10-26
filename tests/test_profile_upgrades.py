@@ -758,6 +758,26 @@ def test_a_process_folder_with_no_posting_is_given_one(profile, tmp_path, monkey
     assert U.by_id("process-postings").pending() == ""
 
 
+def test_one_application_in_two_folders_is_made_one(profile, tmp_path, monkeypatch):
+    """verify_batch.py kept an application's checks in a folder named without the
+    abbreviation its note and documents were filed under. Invented employer."""
+    st = tmp_path / "state"
+    base = st / "documents" / "applications"
+    (base / "ternmoor_foods_planner").mkdir(parents=True)
+    (base / "ternmoor_foods_planner_tm").mkdir()
+    (base / "ternmoor_foods_planner" / "verify.json").write_text(
+        json.dumps({"at": "2026-10-20T09:00:00Z", "abbr": "TM", "flags": []}), encoding="utf-8")
+    (base / "ternmoor_foods_planner_tm" / "draft.json").write_text("[]", encoding="utf-8")
+    monkeypatch.setenv(person.STATE_ENV, str(st))
+    assert "1 application(s) kept in two folders" in U.by_id("one-folder-each").pending()
+    r = subprocess.run(list(U.by_id("one-folder-each").command), cwd=ROOT, env=os.environ,
+                       capture_output=True, text=True, encoding="utf-8", errors="replace")
+    assert r.returncode == 0, r.stderr
+    assert sorted(os.listdir(base)) == ["ternmoor_foods_planner_tm"]
+    assert (base / "ternmoor_foods_planner_tm" / "verify.json").is_file()
+    assert U.by_id("one-folder-each").pending() == ""
+
+
 def test_hand_kept_notes_for_a_process_are_offered_once_to_fold_in(profile, tmp_path,
                                                                     monkeypatch):
     st, folder = _process_state(tmp_path, monkeypatch)

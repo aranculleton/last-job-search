@@ -1,14 +1,14 @@
 {
  "model": 1,
  "made_at": "2026-10-25T18:00:00Z",
- "rev": "934a8764f716",
+ "rev": "3cebd8c26407",
  "app": {
-  "version": "3.13.0",
+  "version": "4.0.0",
   "update_waiting": null,
   "news": [
-   "Every resume's text is black.",
-   "A message that needs no answer can be marked so.",
-   "A file can go on a message already logged."
+   "Everything happens on one page now.",
+   "The README and the start guide show your page.",
+   "One chat answers your page, so a tap never wakes them all."
   ],
   "privacy": "Only you can open this page unless you share it. It holds first names, employers, your drafts and your setup answers, so keep it unshared."
  },
@@ -44,7 +44,7 @@
  ],
  "jobs": {
   "round": "r9",
-  "made_at": "2026-10-26T00:38:39Z",
+  "made_at": "2026-10-26T10:51:55Z",
   "met": false,
   "summary": "4 roles on the shortlist, 4 scoring 60 or more and 2 scoring 75 or more. 3 left out, each with its reason.",
   "rows": [
@@ -552,6 +552,7 @@
    "id": "due-reply-larkspur_retail_castellan",
    "kind": "reply",
    "title": "Reply to Juno at Larkspur Retail",
+   "context": "Analytics Manager · University of Leeds alumni · first wrote 10 Sep",
    "due": "2026-10-20",
    "company": "Larkspur Retail",
    "overdue_days": 5,
@@ -586,7 +587,8 @@
   {
    "id": "due-nudge-fernhill_freight_halloway",
    "kind": "nudge",
-   "title": "Nudge Wren at Fernhill Freight",
+   "title": "Follow up with Wren at Fernhill Freight",
+   "context": "Head of Supply Chain Analytics · first wrote 21 Sep",
    "due": "2026-09-29",
    "company": "Fernhill Freight",
    "overdue_days": 26,
@@ -605,7 +607,7 @@
     "action": "due.snooze",
     "label": "Not today"
    },
-   "rev": "58d174b7d5a4",
+   "rev": "a53210a26b7e",
    "related": {
     "ready": [
      "app-fernhill_freight_operations_analyst"
@@ -685,7 +687,7 @@
    "status": "awaiting_reply",
    "status_word": "Sent",
    "owed": {
-    "label": "Draft the nudge",
+    "label": "Draft the follow-up",
     "kind": "follow_up",
     "id": "follow_up~fernhill_freight_halloway",
     "args": {
@@ -755,7 +757,7 @@
    "when": "2026-10-28",
    "prep": {
     "path": "documents/applications/thornbury_bank_risk_analyst_thornbury/interview_prep.md",
-    "updated": "2026-10-26T00:38:39Z"
+    "updated": "2026-10-26T10:51:55Z"
    },
    "questions": 2,
    "all_day": true,
@@ -916,7 +918,30 @@
     "last": "2026-09-08",
     "live": true
    }
-  ]
+  ],
+  "recent": {
+   "days": 30,
+   "counts": {
+    "applied": 1,
+    "interviews": 1,
+    "offers": 0,
+    "replies": 0
+   },
+   "funnel": [
+    {
+     "stage": "applied",
+     "n": 1
+    },
+    {
+     "stage": "interview",
+     "n": 1
+    },
+    {
+     "stage": "offer",
+     "n": 0
+    }
+   ]
+  }
  },
  "settings": [
   {
@@ -1078,11 +1103,23 @@
   ]
  },
  "updates": {
-  "version": "3.13.0",
-  "newest": "3.13.0",
+  "version": "4.0.0",
+  "newest": "4.0.0",
   "mode": "auto",
   "waiting": null,
   "changed": [
+   {
+    "version": "4.0.0",
+    "date": "2026-10-26",
+    "lines": [
+     "Everything happens on one page now.",
+     "The README and the start guide show your page.",
+     "One chat answers your page, so a tap never wakes them all.",
+     "Your brief lives on your page.",
+     "Move your brief or take a break, from your page.",
+     "Your page is easy to find again."
+    ]
+   },
    {
     "version": "3.13.0",
     "date": "2026-10-24",
@@ -1093,18 +1130,6 @@
      "How many people you write to at one employer is yours.",
      "An InMail is written only for someone who will get it.",
      "Saving your work runs the same in any shell."
-    ]
-   },
-   {
-    "version": "3.12.0",
-    "date": "2026-10-23",
-    "lines": [
-     "Nobody you have already written to is suggested again, on any channel.",
-     "Old connections are read before anyone writes to them.",
-     "Your own follow-up rule. (set up for you)",
-     "A new LinkedIn download every fortnight.",
-     "Applications are delivered one way.",
-     "The due list and the LinkedIn import are quicker, with the same answers."
     ]
    }
   ],
@@ -1346,7 +1371,7 @@
     "key": "jobs",
     "tab": "jobs",
     "title": "Jobs",
-    "text": "New roles scored out of 100 against what you want, with why. Tap Draft this on one you want, or Add a job for a link of your own."
+    "text": "New roles scored out of 100 against what you want, with why. Find jobs searches again; tap Draft this on one you want; the bin takes one off your list."
    },
    {
     "key": "drafts",
@@ -1364,13 +1389,19 @@
     "key": "contacts",
     "tab": "people",
     "title": "Contacts",
-    "text": "Everyone you are talking to, and what is owed. When someone writes back, tap They replied and paste what they said."
+    "text": "Everyone you are talking to, and what is owed. When someone writes back, tap They replied; if they sent you a job, tap They sent me a job. Find people looks for more."
    },
    {
     "key": "interviews",
     "tab": "interviews",
     "title": "Interviews",
     "text": "Your prep for each interview, to read before it. Tap Prepare me to build it."
+   },
+   {
+    "key": "chat",
+    "tab": "chat",
+    "title": "Chat",
+    "text": "Ask anything, or paste a link, a message or a screenshot and say what you want. Claude does the rest and it shows up here."
    }
   ],
   "off": false

@@ -2936,6 +2936,37 @@ def write_draft(contact_id: str, note: str, name: str = "", card_only: bool = Fa
     return p
 
 
+def _draft_limit(row: dict | None, status: str, body: str) -> tuple[str, str, int | None]:
+    """(what the draft is, the composer's kind it is checked as, its character limit), as
+    the page counts it (app_model.draft_limit). A first note, with no status, when the page
+    cannot be read."""
+    try:
+        import app_model
+        return app_model.draft_limit(row or {}, status, body)
+    except Exception:  # noqa: BLE001  the page model unreadable: a first note, as before
+        return "first_note", "connection", None
+
+
+def learned_dislikes(text: str) -> list[str]:
+    """What the person said never to say, found in `text` (learned.dislikes)."""
+    try:
+        import learned
+        return learned.dislikes(text)
+    except (ImportError, OSError, ValueError, person.NoProfile):
+        return []
+
+
+_MOVE_HINT = (" (you are based where you live: say that, never that you moved or are moving)")
+
+
+def _is_move(phrase: str) -> bool:
+    try:
+        import learned
+        return bool(learned.moved_claims(phrase)) or learned.bans_the_move([phrase])
+    except ImportError:
+        return False
+
+
 # A name or employer an approved example was written for, which the person says is this
 # reader's own: the referrer's employer, a past employer of theirs nothing read shows. The
 # example check refuses it (compose.example_facts) and no recorded rule lifts that check
@@ -4697,6 +4728,7 @@ def save_drafts(batch: dict, own_facts_why: dict | None = None) -> int:
     import state
     import tone
     contacts = state.load_contacts()
+    log_by = state.by_contact(state.load_threads())   # every channel, read once
     own_facts_why = own_facts_why or {}
     ready, added_lines, refused = {}, [], 0
     ctx_ = None                          # the one check's context, built once if needed
@@ -4748,11 +4780,42 @@ def save_drafts(batch: dict, own_facts_why: dict | None = None) -> int:
         # same length.
         kind = {"inmail": "inmail", "open_profile": "inmail", "message": "dm", "dm": "dm"}.get(
             str(row.get("channel") or "").strip().lower(), "connection")
-        long_ = compose.length_findings(note_body(note).strip(), kind)
+        # To someone already written to it is not a first note: what the page shows it as (a
+        # follow-up, a reply) and the length the page counts it against. A 287-character
+        # follow-up was saved against a first note's 300 and reached the page as a ready
+        # draft at "287 of 280 characters" (2026-10-26).
+        body = note_body(note).strip()
+        live = state.effective_status(row, list(log_by.get(cid, ()))) if row else ""
+        mtype, ckind, limit = _draft_limit(row, live, body)
+        if mtype != "first_note":
+            kind = ckind
+        long_ = compose.length_findings(body, kind)
+        if not long_ and limit and len(body) > limit:
+            long_ = [tone.Violation("too_long", f"{len(body)} characters, limit {limit}")]
         if long_:
-            as_ = {"connection": "a connection note", "dm": "a message", "inmail": "an InMail"}
-            print(f"reading: {cid}: not saved. As {as_[kind]} it is too long "
-                  f"({long_[0].text}): cut it and save it again.")
+            as_ = {"connection": "a connection note", "dm": "a message", "inmail": "an InMail",
+                   "nudge": "a follow-up", "reply": "a reply", "referral_ask": "a referral ask",
+                   "email": "an email"}
+            print(f"reading: {cid}: not saved. As {as_.get(kind, 'a message')} it is too long "
+                  f"({long_[0].text}): shorten it and save it again. Nothing is cut for you.")
+            refused += 1
+            continue
+        # What the person said never to say, in any of its words (learned.dislikes): a note
+        # saying they had "just moved" was saved for someone whose profile says never to
+        # write that they moved (2026-10-26).
+        said = learned_dislikes(body)
+        if said:
+            print(f"reading: {cid}: not saved. It says \"{said[0]}\", which you said never "
+                  f"to say{_MOVE_HINT if _is_move(said[0]) else ''}: rewrite it without it and "
+                  "save it again (python3 tools/learned.py brief messages).")
+            refused += 1
+            continue
+        # Where the thread stands, on every channel: a draft to someone whose last word is
+        # ours, unanswered, follows up on that message (compose.thread_findings).
+        stale = compose.thread_findings(body, list(log_by.get(cid, ()))) \
+            if mtype != "first_note" else []
+        if stale:
+            print(f"reading: {cid}: not saved. {stale[0].text}")
             refused += 1
             continue
         # The read-aloud pass, on every note: what nobody would say aloud is not saved.

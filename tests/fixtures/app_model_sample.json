@@ -924,7 +924,7 @@
     {
       "id": "due-fernhill-nudge",
       "kind": "nudge",
-      "title": "Nudge Fernhill Freight about the Operations Analyst role",
+      "title": "Follow up with Fernhill Freight about the Operations Analyst role",
       "due": "2026-10-23",
       "overdue_days": 2,
       "action": "work:follow_up",
