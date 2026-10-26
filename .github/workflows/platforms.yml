@@ -88,7 +88,11 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        os: [ubuntu-latest, macos-latest, windows-latest]
+        # Windows only when started by hand (Actions, Run workflow): it took 45 minutes a
+        # run and held a release for hours (the maintainer, 2026-10-26). Linux and Mac
+        # decide a change; Windows behaviour is checked against Microsoft's and Python's
+        # documentation and the tests that fake it.
+        os: ${{ github.event_name == 'workflow_dispatch' && fromJSON('["ubuntu-latest", "macos-latest", "windows-latest"]') || fromJSON('["ubuntu-latest", "macos-latest"]') }}
     defaults:
       run:
         shell: bash
@@ -150,7 +154,7 @@ jobs:
 
   windows-shell:
     name: windows (PowerShell 5.1, no Git yet)
-    if: ${{ !github.event.repository.private || github.event_name == 'workflow_dispatch' }}
+    if: ${{ github.event_name == 'workflow_dispatch' }}             # by hand only: see person's matrix
     runs-on: windows-latest
     timeout-minutes: 45
     defaults:
@@ -229,7 +233,7 @@ jobs:
 
   windows-chat:
     name: windows (a computer chat, Git Bash, cp1252)
-    if: ${{ !github.event.repository.private || github.event_name == 'workflow_dispatch' }}
+    if: ${{ github.event_name == 'workflow_dispatch' }}             # by hand only: see person's matrix
     runs-on: windows-latest
     timeout-minutes: 75
     defaults:
