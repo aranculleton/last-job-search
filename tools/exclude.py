@@ -252,7 +252,7 @@ def save_seen(data, path=SEEN) -> None:
     if folder:
         os.makedirs(folder, exist_ok=True)
     tmp = path + ".tmp"
-    with open(tmp, "w", encoding="utf-8") as fh:
+    with open(tmp, "w", encoding="utf-8", newline="\n") as fh:
         json.dump(data, fh, indent=INDENT, ensure_ascii=False)
         fh.write("\n")
     os.replace(tmp, path)

@@ -339,7 +339,7 @@ def main(argv=None) -> int:
             if isinstance(r, dict):
                 print(f"{r.get('company', '')} | {r.get('title', '')}: {line(r)}")
         if a.write:
-            with open(a.file, "w", encoding="utf-8") as fh:
+            with open(a.file, "w", encoding="utf-8", newline="\n") as fh:
                 json.dump(dict(doc, rows=out) if doc is not None else out, fh, indent=1,
                           ensure_ascii=False)
         return 0

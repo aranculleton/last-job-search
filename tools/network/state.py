@@ -4143,7 +4143,7 @@ def record_inmails(balance, contacts, threads, today) -> dict:
                              for c, s, r in inmail_refunds(threads))}
     path = _inmail_path()
     os.makedirs(os.path.dirname(path), exist_ok=True)
-    with open(path, "w", encoding="utf-8") as fh:
+    with open(path, "w", encoding="utf-8", newline="\n") as fh:
         json.dump(rec, fh, indent=1)
         fh.write("\n")
     return rec

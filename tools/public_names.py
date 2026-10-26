@@ -123,7 +123,7 @@ def snapshot(root: str = ROOT, write: bool = True) -> dict[str, list[str]]:
     False."""
     got = names(root)
     if write:
-        with open(os.path.join(root, SNAPSHOT), "w", encoding="utf-8") as fh:
+        with open(os.path.join(root, SNAPSHOT), "w", encoding="utf-8", newline="\n") as fh:
             fh.write(json.dumps(got, indent=1, sort_keys=True) + "\n")
     return got
 

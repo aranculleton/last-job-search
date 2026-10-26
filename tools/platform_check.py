@@ -215,7 +215,7 @@ def _batch(label: str, drafts: list, env: dict, name: str = "", root: str = ROOT
         senv = dict(env, LJS_STATE=here)
         ds = [dict(d, style=style) for d in drafts]
         path = os.path.join(here, "drafts.json")
-        with open(path, "w", encoding="utf-8") as fh:
+        with open(path, "w", encoding="utf-8", newline="\n") as fh:
             json.dump(ds, fh, ensure_ascii=False)
         code, out, took = run([PY, os.path.join(root, "tools", "fit_to_page.py"), path],
                               cwd=root, env=senv)
@@ -285,7 +285,7 @@ def _accented_profile() -> str:
     with open(p, encoding="utf-8") as fh:
         data = json.load(fh)
     data["identity"].update(ACCENTED)
-    with open(p, "w", encoding="utf-8") as fh:
+    with open(p, "w", encoding="utf-8", newline="\n") as fh:
         json.dump(data, fh, ensure_ascii=False, indent=2)
     return d
 
@@ -462,7 +462,7 @@ def step_networking(root: str = ROOT, env: dict | None = None) -> None:
     check("networking: the surfacing check", code in (0, 1) and "Traceback" not in out,
           out.strip()[:300], took)
     note = os.path.join(tempfile.mkdtemp(prefix="ljs_note_"), "note.txt")
-    with open(note, "w", encoding="utf-8") as fh:
+    with open(note, "w", encoding="utf-8", newline="\n") as fh:
         fh.write("Hi Juno, thanks for connecting. Zoë said you know the Leeds team well.\n")
     code, out, took = run([PY, os.path.join(root, "tools", "network", "state.py"), "message",
                            "larkspur_retail_castellan", "--text-file", note], cwd=root, env=env)

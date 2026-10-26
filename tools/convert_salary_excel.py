@@ -346,7 +346,7 @@ def main():
         "companies": all_companies,
     }
 
-    with open(output_path, "w", encoding="utf-8") as f:
+    with open(output_path, "w", encoding="utf-8", newline="\n") as f:
         json.dump(output, f, ensure_ascii=False, indent=2)
 
     print(f"\nDone! Wrote {len(all_companies)} company entries to {output_path}")

@@ -513,7 +513,7 @@ def _said(out: str) -> str:
 
 def _text_file(text: str) -> str:
     fd, path = tempfile.mkstemp(prefix="ljs_page_", suffix=".txt")
-    with os.fdopen(fd, "w", encoding="utf-8") as fh:
+    with os.fdopen(fd, "w", encoding="utf-8", newline="\n") as fh:
         fh.write(text)
     return path
 
@@ -713,7 +713,7 @@ def _job_keep(r: Run, keep: bool = True) -> dict:
         raise Refused("It was not kept.")
     path = _kept_path()
     os.makedirs(os.path.dirname(path), exist_ok=True)
-    with open(path, "w", encoding="utf-8") as fh:
+    with open(path, "w", encoding="utf-8", newline="\n") as fh:
         json.dump(got, fh, indent=1, ensure_ascii=False, sort_keys=True)
         fh.write("\n")
     return {"note": (f"Kept: {t.get('title')} stays on your list after the next search."
@@ -899,7 +899,7 @@ def _outcome_undo(r: Run) -> dict:
         if os.path.isfile(md):
             os.remove(md)
     else:
-        with open(md, "w", encoding="utf-8") as fh:
+        with open(md, "w", encoding="utf-8", newline="\n") as fh:
             fh.write(was)
     return {"note": "Taken back: it is as it was.", "undo": None}
 
@@ -1129,7 +1129,7 @@ def _app_followup_sent(r: Run) -> dict:
         os.makedirs(folder, exist_ok=True)
         kept = os.path.join(folder, f"followup_{day}.md")
         if not os.path.exists(kept):
-            with open(kept, "w", encoding="utf-8") as fh:
+            with open(kept, "w", encoding="utf-8", newline="\n") as fh:
                 fh.write(text + "\n")
         else:
             kept = ""
@@ -1514,7 +1514,7 @@ def _rule_lift(r: Run) -> dict:
             raise Refused("That employer is not left out any more.")
         keep = [e for e in rows if e not in gone]
         out = dict(data, entries=keep) if isinstance(data, dict) and "entries" in data else keep
-        with open(dnt, "w", encoding="utf-8") as fh:
+        with open(dnt, "w", encoding="utf-8", newline="\n") as fh:
             json.dump(out, fh, indent=2, ensure_ascii=False)
             fh.write("\n")
         return {"note": f"{t['company']} is searched again.",
@@ -1539,7 +1539,7 @@ def _rule_restore(r: Run) -> dict:
         rows = data.get("entries") if isinstance(data, dict) and "entries" in data else data
         rows = (rows if isinstance(rows, list) else []) + list(r.value["dnt"])
         out = dict(data, entries=rows) if isinstance(data, dict) and "entries" in data else rows
-        with open(dnt, "w", encoding="utf-8") as fh:
+        with open(dnt, "w", encoding="utf-8", newline="\n") as fh:
             json.dump(out, fh, indent=2, ensure_ascii=False)
             fh.write("\n")
         return {"note": "Left out again.", "undo": None}
@@ -1730,7 +1730,7 @@ def _page_reads_save(updates: dict) -> dict:
     got = dict(place.page_reads_record(), **updates)
     path = person.state(*place.PAGE_READS_FILE)
     os.makedirs(os.path.dirname(path), exist_ok=True)
-    with open(path, "w", encoding="utf-8") as fh:
+    with open(path, "w", encoding="utf-8", newline="\n") as fh:
         json.dump(got, fh, indent=1, sort_keys=True)
         fh.write("\n")
     return got
@@ -2646,7 +2646,7 @@ def apply_dir(dump_dir: str, chat: str = "chat", now: dt.datetime | None = None,
                 summary.setdefault("fetch", []).append({"action": aid, "assets": e.ids})
                 continue
             ledger[aid] = receipt
-            with open(ledger_path, "w", encoding="utf-8") as fh:
+            with open(ledger_path, "w", encoding="utf-8", newline="\n") as fh:
                 json.dump(ledger, fh, ensure_ascii=False, indent=1)
                 fh.write("\n")
             summary[receipt["result"]].append(aid)
@@ -2685,7 +2685,7 @@ def _amend_reasons(db, done, ledger, ledger_path, w, chat, zone, now, summary) -
             continue
         new = dict(rec, note=got["note"], **{field: said})
         ledger[aid] = new
-        with open(ledger_path, "w", encoding="utf-8") as fh:
+        with open(ledger_path, "w", encoding="utf-8", newline="\n") as fh:
             json.dump(ledger, fh, ensure_ascii=False, indent=1)
             fh.write("\n")
         w.add("set", "receipts", aid, new,

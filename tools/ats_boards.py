@@ -824,7 +824,7 @@ def main() -> int:
     for employer, why in sorted(notes.items()):
         print(f"  partial: {employer}: {why}")
     if a.out:
-        with open(a.out, "w", encoding="utf-8") as fh:
+        with open(a.out, "w", encoding="utf-8", newline="\n") as fh:
             json.dump(rows, fh, indent=1)
         print(f"  wrote {a.out}")
     return 0

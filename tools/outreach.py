@@ -284,7 +284,7 @@ def archive_posting(d, a, meta, today):
     if not posting.strip():
         return "none"
     url = meta.get("url", "")
-    with open(path, "w", encoding="utf-8") as f:
+    with open(path, "w", encoding="utf-8", newline="\n") as f:
         f.write(f"# {a['role']} - {a['company']}\n\n")
         f.write(f"- **Source:** {url}\n" if url else "")
         f.write(f"- **Retrieved:** {meta.get('date', today)} via {meta.get('portal', 'portal search')}\n")
@@ -375,19 +375,19 @@ def write(a, meta, today):
             kept[k] = meta[k]
     if os.path.exists(os.path.join(d, "job_posting.md")):
         kept["posting_from"] = "job_posting.md"
-    with open(os.path.join(d, "draft.json"), "w", encoding="utf-8") as f:
+    with open(os.path.join(d, "draft.json"), "w", encoding="utf-8", newline="\n") as f:
         json.dump([kept], f, indent=1, ensure_ascii=False)
         f.write("\n")
     cid = for_contact_of(a, meta)
     if cid:
-        with open(os.path.join(d, "outreach.md"), "w", encoding="utf-8") as f:
+        with open(os.path.join(d, "outreach.md"), "w", encoding="utf-8", newline="\n") as f:
             f.write(for_contact_md(dict(a, url=a.get("url") or meta.get("url", ""),
                                         **{k: v for k, v in kept.items()
                                            if k.startswith("for_contact")}), cid, today))
         return d
     known = _known_contacts(a["company"])
     replied = [p for p in known if p.get("status") not in SENT_NO_REPLY]
-    with open(os.path.join(d, "outreach.md"), "w", encoding="utf-8") as f:
+    with open(os.path.join(d, "outreach.md"), "w", encoding="utf-8", newline="\n") as f:
         f.write(f"# Outreach note - {a['company']}, {a['role']}\n\n")
         if replied:
             # Without this the note says "message the hiring manager" at an

@@ -63,7 +63,7 @@ def remember(kind: str, args: dict, text: str, default=None) -> str | None:
     try:
         os.makedirs(d, exist_ok=True)
         path = os.path.join(d, sha(text) + ".json")
-        with open(path, "w", encoding="utf-8") as fh:
+        with open(path, "w", encoding="utf-8", newline="\n") as fh:
             json.dump({"kind": kind, "args": keep, "text_sha": sha(text)}, fh,
                       ensure_ascii=False, indent=1, sort_keys=True)
         return path
@@ -150,7 +150,7 @@ def remember_record(record: dict, text: str) -> str | None:
     try:
         os.makedirs(d, exist_ok=True)
         path = os.path.join(d, sha(text) + ".json")
-        with open(path, "w", encoding="utf-8") as fh:
+        with open(path, "w", encoding="utf-8", newline="\n") as fh:
             json.dump(dict(record, text_sha=sha(text)), fh, ensure_ascii=False, indent=1,
                       sort_keys=True)
         return path
@@ -163,6 +163,6 @@ def save(contact_id: str, record: dict) -> str | None:
     if not p:
         return None
     os.makedirs(os.path.dirname(p), exist_ok=True)
-    with open(p, "w", encoding="utf-8") as fh:
+    with open(p, "w", encoding="utf-8", newline="\n") as fh:
         json.dump(record, fh, ensure_ascii=False, indent=1, sort_keys=True)
     return p

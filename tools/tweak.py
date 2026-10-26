@@ -488,7 +488,7 @@ def log(where: dict) -> dict:
 
 
 def _save_log(where: dict, data: dict) -> None:
-    with open(_log_path(where), "w", encoding="utf-8") as fh:
+    with open(_log_path(where), "w", encoding="utf-8", newline="\n") as fh:
         json.dump(data, fh, indent=1, ensure_ascii=False, sort_keys=True)
         fh.write("\n")
 
@@ -531,7 +531,9 @@ def run_step(step: str, path: str) -> tuple[int, str]:
     names another command to run instead (the tests' stand-in for LaTeX)."""
     stand_in = os.environ.get("LJS_TWEAK_RENDER")
     if stand_in:
-        cmd = shlex.split(stand_in) + [step, path]
+        # Windows paths carry backslashes, which a POSIX split reads as escapes.
+        cmd = [x[1:-1] if len(x) > 1 and x[0] == x[-1] and x[0] in "\"'" else x
+               for x in shlex.split(stand_in, posix=os.name != "nt")] + [step, path]
     else:
         cmd = [sys.executable, os.path.join(_HERE, {"fit": "fit_to_page.py",
                                                     "verify": "verify_batch.py"}[step]), path]
@@ -842,7 +844,7 @@ def _message(where: dict, changes: list) -> str:
     if problem:
         raise _nearest(cid, record, changes, problem)
     tmp = os.path.join(where["folder"], ".tweak_note.txt")
-    with open(tmp, "w", encoding="utf-8") as fh:
+    with open(tmp, "w", encoding="utf-8", newline="\n") as fh:
         fh.write(str(note) + "\n")
     # The note keeps the standing it was written with: written from the card alone, or
     # waiting on a read of their page (reading.py draft holds it to the same rules again).
@@ -904,7 +906,7 @@ def _message_register(where: dict, level: str) -> str:
         raise Refused("That would break a rule for this message: " + found[0])
     if body not in raw:
         raise Refused("The draft changed since: look again.")
-    with open(where["file"], "w", encoding="utf-8") as fh:
+    with open(where["file"], "w", encoding="utf-8", newline="\n") as fh:
         fh.write(raw.replace(body, new, 1))
     return f"the message made {level}"
 
@@ -1126,7 +1128,7 @@ def _set_routine(key: str, cron: str | None) -> dict:
         raise Refused("There is no brief set up yet to change: say \"set up my brief\" in a chat.")
     before = r.get("cron")
     r["cron"] = cron
-    with open(_routines_path(), "w", encoding="utf-8") as fh:
+    with open(_routines_path(), "w", encoding="utf-8", newline="\n") as fh:
         json.dump(reg, fh, indent=1, ensure_ascii=False)
         fh.write("\n")
     return {"routine": key, "before": before, "trigger_id": r.get("trigger_id")}
@@ -1487,16 +1489,16 @@ def stage_kept(where: dict, round_dir: str) -> dict:
     os.makedirs(round_dir, exist_ok=True)
     posting = d.pop("posting", "") or ""
     pfile = os.path.join(round_dir, f"posting_{slug}.md")
-    with open(pfile, "w", encoding="utf-8") as fh:
+    with open(pfile, "w", encoding="utf-8", newline="\n") as fh:
         fh.write(untrusted.fence(posting))
     pick = {"slug": slug, "company": d.get("company", ""), "role": d.get("role", ""),
             "abbr": d.get("abbr", ""), "file": pfile,
             "skills_yes": list(d.get("consented_skills") or []),
             "skills_no": list(d.get("declined_skills") or []), "ask_first": [], "hold": []}
-    with open(os.path.join(round_dir, "picks.json"), "w", encoding="utf-8") as fh:
+    with open(os.path.join(round_dir, "picks.json"), "w", encoding="utf-8", newline="\n") as fh:
         json.dump([pick], fh, indent=1, ensure_ascii=False)
     d.pop("posting_from", None)
-    with open(os.path.join(round_dir, f"draft_{slug}.json"), "w", encoding="utf-8") as fh:
+    with open(os.path.join(round_dir, f"draft_{slug}.json"), "w", encoding="utf-8", newline="\n") as fh:
         json.dump(d, fh, indent=1, ensure_ascii=False)
     research = person.state("company_research", f"{company_key(d.get('company', ''))}.json")
     if os.path.isfile(research):
@@ -1608,7 +1610,7 @@ def _stage_interview(work: dict, where: dict, p: dict) -> dict:
                      "minute)." + (f" Each starts with the line \"{_draft_mark()}\"." if drafts
                                    else "") + " Nothing else in the file changes.")}
     pfile = os.path.join(round_dir, "packet.json")
-    with open(pfile, "w", encoding="utf-8") as fh:
+    with open(pfile, "w", encoding="utf-8", newline="\n") as fh:
         json.dump(pkt, fh, indent=1, ensure_ascii=False)
     company = where["item"].get("company", "")
     return {"status": "needs_model", "key": p["key"], "round": round_dir, "packet": pfile,
@@ -1683,7 +1685,7 @@ def _stage_message(work: dict, where: dict, p: dict, why: str = "") -> dict:
                      "as they will be pasted into message.txt here, a first line \"Subject: "
                      "...\" only where it has a subject.")}
     pfile = os.path.join(round_dir, "packet.json")
-    with open(pfile, "w", encoding="utf-8") as fh:
+    with open(pfile, "w", encoding="utf-8", newline="\n") as fh:
         json.dump(pkt, fh, indent=1, ensure_ascii=False)
     return {"status": "needs_model", "key": p["key"], "round": round_dir, "packet": pfile,
             "summary": (why + " " if why else "") + "This needs rewriting: the session's own "
@@ -1719,7 +1721,7 @@ def _merge_message(work: dict, where: dict, p: dict, round_dir: str) -> dict:
     old = item.get("text") or ""
     if md5_file(where["file"]) != pkt.get("before_md5") or old not in raw:
         return {"status": "refused", "summary": "The draft changed since: look again."}
-    with open(where["file"], "w", encoding="utf-8") as fh:
+    with open(where["file"], "w", encoding="utf-8", newline="\n") as fh:
         fh.write(raw.replace(old, (f"Subject: {subject}\n\n" if subject else "") + body, 1))
     after = _snapshot(where)
     kept, _kept_said = keep(work, where, p)
@@ -1810,7 +1812,7 @@ def stage(work: dict, where: dict, p: dict, today: dt.date, why: str = "") -> di
     fields = [f for f in p["rewrites"] if f in TEXT_FIELDS]
     pkt = packet(staged["draft"], fields, p, p["words"])
     pfile = os.path.join(round_dir, "packet.json")
-    with open(pfile, "w", encoding="utf-8") as fh:
+    with open(pfile, "w", encoding="utf-8", newline="\n") as fh:
         json.dump(pkt, fh, indent=1, ensure_ascii=False)
     slug = staged["slug"]
     return {"status": "needs_model", "key": p["key"], "round": round_dir, "packet": pfile,
@@ -2037,7 +2039,7 @@ def _buttons_data() -> dict:
 def _save_buttons_data(data: dict) -> None:
     path = _buttons_path()
     os.makedirs(os.path.dirname(path), exist_ok=True)
-    with open(path, "w", encoding="utf-8") as fh:
+    with open(path, "w", encoding="utf-8", newline="\n") as fh:
         json.dump(data, fh, indent=1, ensure_ascii=False)
         fh.write("\n")
 

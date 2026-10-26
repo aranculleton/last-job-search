@@ -51,7 +51,7 @@ class Tweaks(Search):
 
     def env(self):
         env = dict(os.environ, LJS_PROFILE=self.profile, LJS_STATE=self.state, LJS_COPY="private",
-                   LJS_TWEAK_RENDER=f"{sys.executable} {self.fake}", FAKE_LOG=self.log)
+                   LJS_TWEAK_RENDER=f'"{sys.executable}" "{self.fake}"', FAKE_LOG=self.log)
         env.pop("LJS_TODAY", None)
         return env
 

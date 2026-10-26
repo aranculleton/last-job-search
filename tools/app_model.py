@@ -1006,7 +1006,7 @@ def record_assets(pairs) -> list:
         done.append(os.path.basename(rel_path))
     p = person.state(*ASSETS_FILE)
     os.makedirs(os.path.dirname(p), exist_ok=True)
-    with open(p, "w", encoding="utf-8") as fh:
+    with open(p, "w", encoding="utf-8", newline="\n") as fh:
         json.dump(got, fh, indent=1, sort_keys=True)
         fh.write("\n")
     return done

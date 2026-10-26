@@ -466,7 +466,7 @@ def _log_request(path: str | None, line: str) -> None:
     if not path:
         return
     try:
-        with _REQUESTS_LOCK, open(path, "a", encoding="utf-8") as fh:
+        with _REQUESTS_LOCK, open(path, "a", encoding="utf-8", newline="\n") as fh:
             fh.write(line + "\n")
     except OSError:
         pass
@@ -722,7 +722,7 @@ def _say(line: str, log=None) -> None:
     print(line, file=sys.stderr, flush=True)
     if log:
         try:
-            with open(log, "a", encoding="utf-8") as fh:
+            with open(log, "a", encoding="utf-8", newline="\n") as fh:
                 fh.write(line + "\n")
         except OSError:
             pass
@@ -1124,7 +1124,7 @@ def _write_cursor(state: dict) -> bool:
     new, old = _sweep_paths()
     try:
         os.makedirs(os.path.dirname(new), exist_ok=True)
-        with open(new, "w", encoding="utf-8") as fh:
+        with open(new, "w", encoding="utf-8", newline="\n") as fh:
             json.dump(state, fh, indent=1, sort_keys=True)
             fh.write("\n")
     except OSError:
@@ -1256,7 +1256,7 @@ def _write_partial(out: str, seen: dict) -> None:
     """Everything found so far, written over itself: what a killed stage leaves."""
     tmp = os.path.join(out, PARTIAL + ".tmp")
     try:
-        with open(tmp, "w", encoding="utf-8") as fh:
+        with open(tmp, "w", encoding="utf-8", newline="\n") as fh:
             json.dump(list(seen.values()), fh)
         os.replace(tmp, os.path.join(out, PARTIAL))
     except OSError:
@@ -1333,7 +1333,7 @@ def finish(out: str, seen: dict, today: dt.date, jobage: int, n_tasks: int,
     for j in rows:
         by_portal[j["portal"]] = by_portal.get(j["portal"], 0) + 1
 
-    json.dump(kept, open(f"{out}/kept.json", "w", encoding="utf-8"), indent=1)
+    json.dump(kept, open(f"{out}/kept.json", "w", encoding="utf-8", newline="\n"), indent=1)
     # LinkedIn's search endpoint returns no body, so `desc` is None for every
     # LinkedIn row here. Anything downstream that reads a posting - the text
     # screen, the knockout stage, the extractor - is blind until
@@ -1345,8 +1345,8 @@ def finish(out: str, seen: dict, today: dt.date, jobage: int, n_tasks: int,
               f"Run `python3 tools/hydrate.py {out}/kept.json --out "
               f"{out}/hydrated.json` before ranking, screening or extracting, "
               f"or every one of them reaches the model blind.")
-    json.dump(dropped, open(f"{out}/dropped.json", "w", encoding="utf-8"), indent=1)
-    json.dump(rows, open(f"{out}/scraped.json", "w", encoding="utf-8"), indent=1)
+    json.dump(dropped, open(f"{out}/dropped.json", "w", encoding="utf-8", newline="\n"), indent=1)
+    json.dump(rows, open(f"{out}/scraped.json", "w", encoding="utf-8", newline="\n"), indent=1)
     try:
         os.remove(os.path.join(out, PARTIAL))
     except OSError:
@@ -1499,7 +1499,7 @@ def main() -> int:
                     _say("Claude, not for them: " + note, a.log)
             json.dump({"portals_down": down, "detail": {k: v[1] for k, v in health.items()},
                        "not_searched": not_searched(health), "say": say},
-                      open(os.path.join(a.out, "00_portal_health.json"), "w", encoding="utf-8"), indent=1)
+                      open(os.path.join(a.out, "00_portal_health.json"), "w", encoding="utf-8", newline="\n"), indent=1)
     skipped = not_searched(health)
     for skill in [k for k, v in on.items() if v and portals.short(k) in skipped]:
         on[skill] = False
@@ -1600,7 +1600,7 @@ def main() -> int:
     boards.shutdown(wait=False)
     _, pool_tallies = pool(jobs, workers, budget=a.budget, cap=cap, tallies=tallies,
                            on_rows=landed, on_sent=answered_now, page_of=search_page)
-    with open(os.path.join(a.out, SENT), "w", encoding="utf-8") as fh:
+    with open(os.path.join(a.out, SENT), "w", encoding="utf-8", newline="\n") as fh:
         json.dump(sorted(sent_now), fh)
     if jobs:
         timing("LinkedIn and freehire finished after", searching)

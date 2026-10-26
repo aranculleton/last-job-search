@@ -243,7 +243,7 @@ def make(out_dir: str, role: str = "", style: str = "", summary: str = "",
     R.check_batch([a])
     (pages, lines), _letter = F.fit(a)
     drafts = os.path.join(out_dir, "drafts.json")
-    with open(drafts, "w", encoding="utf-8") as fh:
+    with open(drafts, "w", encoding="utf-8", newline="\n") as fh:
         json.dump([a], fh, indent=1, ensure_ascii=False)
         fh.write("\n")
     got = {"draft": a, "drafts": drafts, "pages": pages, "lines": lines, "verify": None,

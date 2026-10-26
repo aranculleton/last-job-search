@@ -168,7 +168,7 @@ def _record(entry: dict, flags: list, resume_pages, letter_pages, letter: bool) 
         import outreach
         folder = outreach.app_folder(entry["company"], entry["role"])
         os.makedirs(folder, exist_ok=True)
-        with open(os.path.join(folder, "verify.json"), "w", encoding="utf-8") as fh:
+        with open(os.path.join(folder, "verify.json"), "w", encoding="utf-8", newline="\n") as fh:
             json.dump({"at": dt.datetime.now(dt.timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ"),
                        "abbr": entry.get("abbr"), "flags": flags,
                        "pages": {"resume": resume_pages,

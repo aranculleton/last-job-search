@@ -217,7 +217,7 @@ def main() -> int:
 
     now = [evaluate(c) for c in cases()]
     if a.update:
-        with open(BASELINE, "w", encoding="utf-8") as fh:
+        with open(BASELINE, "w", encoding="utf-8", newline="\n") as fh:
             json.dump({r["stem"]: r for r in now}, fh, indent=1, sort_keys=True)
             fh.write("\n")
         print(f"score_eval: baseline re-recorded over {len(now)} postings")

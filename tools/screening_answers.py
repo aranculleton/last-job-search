@@ -171,7 +171,7 @@ def main() -> int:
     folder = person.state("documents", "applications", a.slug)
     os.makedirs(folder, exist_ok=True)
     path = os.path.join(folder, "screening_answers.md")
-    with open(path, "w", encoding="utf-8") as fh:
+    with open(path, "w", encoding="utf-8", newline="\n") as fh:
         fh.write(body)
     print(f"screening_answers: wrote {local_path.rel(path, ROOT)}")
     return 0

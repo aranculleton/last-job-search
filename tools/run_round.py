@@ -353,7 +353,7 @@ def write_summary(shortlist_path, out_dir, name, scraped_path=None):
            for r in kept]
     os.makedirs(out_dir, exist_ok=True)
     path = os.path.join(out_dir, "%s.json" % name)
-    with open(path, "w", encoding="utf-8") as fh:
+    with open(path, "w", encoding="utf-8", newline="\n") as fh:
         json.dump(out, fh, indent=1)
         fh.write("\n")
     return path
@@ -392,7 +392,7 @@ def slim(path):
     rows = rows if isinstance(rows, list) else list(rows.values())
     out = [{k: v for k, v in r.items() if k != BODY_FIELD} if isinstance(r, dict) else r
            for r in rows]
-    with open(path, "w", encoding="utf-8") as fh:
+    with open(path, "w", encoding="utf-8", newline="\n") as fh:
         json.dump(out, fh, indent=1)
         fh.write("\n")
     return max(0, before - os.path.getsize(path))
@@ -423,7 +423,7 @@ def trim(path, top=KEEP_TOP):
         except OSError:
             return 0
     rows = rows if isinstance(rows, list) else list(rows.values())
-    with open(path, "w", encoding="utf-8") as fh:
+    with open(path, "w", encoding="utf-8", newline="\n") as fh:
         json.dump(rows[:top], fh, indent=1)
         fh.write("\n")
     return max(0, before - os.path.getsize(path))
@@ -661,7 +661,7 @@ def main():
     a.workers = a.workers or workers
     os.makedirs(a.out, exist_ok=True)
     f = lambda n: os.path.join(a.out, n)
-    log = open(f("round.log"), "a", encoding="utf-8", errors="replace")
+    log = open(f("round.log"), "a", encoding="utf-8", errors="replace", newline="\n")
     # One monotonic ceiling for the whole round. Every stage gets the
     # smaller of its own budget and what is left of this.
     started = time.monotonic()

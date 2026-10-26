@@ -1052,7 +1052,7 @@ def write_note(round_dir: str, slug: str, note: dict) -> str:
             "claim_map": [c for c in note.get("claim_map") or [] if isinstance(c, dict)],
             "for_draft": md5(final)}
     path = os.path.join(round_dir, f"outreach_{slug}.json")
-    with open(path, "w", encoding="utf-8") as fh:
+    with open(path, "w", encoding="utf-8", newline="\n") as fh:
         fh.write(json_text(body, indent=1))
         fh.write("\n")
     return path
@@ -1087,7 +1087,7 @@ def write_verdict(round_dir: str, slug: str, verdict: dict) -> str:
                          f"({md5(d)}): the draft changed, so print the packet again and audit "
                          "that version")
     path = os.path.join(round_dir, f"model_audit_{slug}.json")
-    with open(path, "w", encoding="utf-8") as fh:
+    with open(path, "w", encoding="utf-8", newline="\n") as fh:
         fh.write(json_text(verdict, indent=1))
         fh.write("\n")
     return path
@@ -1214,7 +1214,7 @@ def _kept_edit(round_dir: str, slug: str, path: str, model) -> dict | None:
         rows = [c for c in edited.get("claim_map") or [] if isinstance(c, dict)]
         claims = [c for c in rows if _field_key(c.get("field")) == "outreach_body"]
         edited["claim_map"] = [c for c in rows if _field_key(c.get("field")) != "outreach_body"]
-    with open(model_path, "w", encoding="utf-8") as fh:
+    with open(model_path, "w", encoding="utf-8", newline="\n") as fh:
         fh.write(json_text(dict(model, draft=edited), indent=1))
         fh.write("\n")
     note = _note(round_dir, slug)
@@ -1263,7 +1263,7 @@ def audit_one(round_dir: str, pick: dict, corpus=None, batch=(), evidence=None,
         record = {"verdict": "stale", "draft": None, "changes": [], "residual_risks": [],
                   "stale": stale, "inputs": inputs(round_dir, slug), "mechanical": None,
                   "model": None}
-        with open(path, "w", encoding="utf-8") as fh:
+        with open(path, "w", encoding="utf-8", newline="\n") as fh:
             fh.write(json_text(record, indent=1))
             fh.write("\n")
         return {"slug": slug, "verdict": "stale", "why": stale, "path": path}
@@ -1310,7 +1310,7 @@ def audit_one(round_dir: str, pick: dict, corpus=None, batch=(), evidence=None,
               f"{mech['rules_hash']}", "drafter_md5": drafter_md5,
               "inputs": inputs(round_dir, slug), "mechanical": mech,
               "model": model if isinstance(model, dict) else None}
-    with open(path, "w", encoding="utf-8") as fh:
+    with open(path, "w", encoding="utf-8", newline="\n") as fh:
         fh.write(json_text(record, indent=1))
         fh.write("\n")
     return {"slug": slug, "verdict": verdict, "mechanical": mech, "path": path}

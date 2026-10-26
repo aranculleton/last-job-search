@@ -319,7 +319,7 @@ def update(change) -> dict:
         data = json.load(fh)
     change(data)
     tmp = p + ".tmp"
-    with open(tmp, "w", encoding="utf-8") as fh:
+    with open(tmp, "w", encoding="utf-8", newline="\n") as fh:
         json.dump(data, fh, indent=2, ensure_ascii=False)
         fh.write("\n")
     os.replace(tmp, p)

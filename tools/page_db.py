@@ -135,7 +135,7 @@ class Writes:
                 raise ValueError(f"page_db: {collection}/{doc_id} is over 256 KiB")
             path = os.path.join(self.out_dir, "files", collection, doc_id + ".json")
             os.makedirs(os.path.dirname(path), exist_ok=True)
-            with open(path, "w", encoding="utf-8") as fh:
+            with open(path, "w", encoding="utf-8", newline="\n") as fh:
                 fh.write(body + "\n")
             entry["file_path"] = os.path.abspath(path)
         if if_version is not None:
@@ -156,7 +156,7 @@ class Writes:
             part = self.entries[n:n + BATCH_MAX]
             suffix = "" if len(self.entries) <= BATCH_MAX else f"_{n // BATCH_MAX + 1}"
             path = os.path.join(self.out_dir, f"{name}{suffix}.json")
-            with open(path, "w", encoding="utf-8") as fh:
+            with open(path, "w", encoding="utf-8", newline="\n") as fh:
                 json.dump(part, fh, ensure_ascii=False, indent=1)
                 fh.write("\n")
             paths.append(os.path.abspath(path))

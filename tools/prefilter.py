@@ -723,9 +723,9 @@ def main() -> int:
                 for i, r in enumerate(items)}
 
     if a.out:
-        json.dump(shape(kept), open(a.out, "w", encoding="utf-8"), indent=1)
+        json.dump(shape(kept), open(a.out, "w", encoding="utf-8", newline="\n"), indent=1)
     if a.dropped:
-        json.dump(shape(dropped), open(a.dropped, "w", encoding="utf-8"), indent=1)
+        json.dump(shape(dropped), open(a.dropped, "w", encoding="utf-8", newline="\n"), indent=1)
     return 0
 
 

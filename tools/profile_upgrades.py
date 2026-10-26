@@ -192,7 +192,7 @@ def record_no(uid: str, today: dt.date | None = None) -> str:
     got = asked()
     got[uid] = {"no": (today or dt.date.today()).isoformat(), "version": u.ask_version}
     p = _asked_path()
-    with open(p, "w", encoding="utf-8") as fh:
+    with open(p, "w", encoding="utf-8", newline="\n") as fh:
         json.dump(got, fh, indent=2, sort_keys=True)
         fh.write("\n")
     return p
@@ -2047,7 +2047,7 @@ def claim(taken: bool = False) -> None:
     r = _git("log", "-1", "--format=%H", f"--grep={SYNC_SUBJECT}", "HEAD").stdout.strip()
     if r:
         try:
-            with open(_marker(), "w", encoding="utf-8") as f:
+            with open(_marker(), "w", encoding="utf-8", newline="\n") as f:
                 f.write(("taken " if taken else "") + r + "\n")
         except OSError:
             pass
@@ -2064,7 +2064,7 @@ def _listed_path() -> str:
 def remember_listed(rows: list[tuple[Upgrade, str]]) -> None:
     sha, _when, _app = _sync_head()
     try:
-        with open(_listed_path(), "w", encoding="utf-8") as fh:
+        with open(_listed_path(), "w", encoding="utf-8", newline="\n") as fh:
             json.dump({"sync": sha, "ids": [u.id for u, _ in rows]}, fh)
     except OSError:
         pass

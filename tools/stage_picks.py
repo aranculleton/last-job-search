@@ -527,7 +527,7 @@ def stage(round_dir: str, picks: list[str], rows: list[dict] | None = None,
         if cc:
             head.append(f"- research as: {cc}")
         head.append("")
-        with open(path, "w", encoding="utf-8") as fh:
+        with open(path, "w", encoding="utf-8", newline="\n") as fh:
             # The posting's fence first: every reader takes the first fenced block as the
             # posting (untrusted.unfence).
             fh.write("\n".join(head) + "\n" + untrusted.fence(r.get("desc") or "") + "\n"
@@ -551,7 +551,7 @@ def stage(round_dir: str, picks: list[str], rows: list[dict] | None = None,
                 "employer is the default. Which one should I draft? (Say both if you want both.)")})
     _write_picks(round_dir, [p for p in staged if not p["hold"]],
                  [dict(p, status="waiting") for p in staged if p["hold"]])
-    with open(os.path.join(round_dir, "apps_in.json"), "w", encoding="utf-8") as fh:
+    with open(os.path.join(round_dir, "apps_in.json"), "w", encoding="utf-8", newline="\n") as fh:
         json.dump(apps_in, fh, indent=1)
     return staged
 
@@ -577,7 +577,7 @@ def _read_roles(round_dir: str) -> dict:
 
 
 def _write_roles(round_dir: str, roles: dict) -> None:
-    with open(os.path.join(round_dir, ROLES), "w", encoding="utf-8") as fh:
+    with open(os.path.join(round_dir, ROLES), "w", encoding="utf-8", newline="\n") as fh:
         json.dump(roles, fh, indent=1, sort_keys=True)
 
 
@@ -642,11 +642,11 @@ def _research_country(row: dict) -> str:
 
 
 def _write_picks(round_dir: str, released: list[dict], held: list[dict]) -> None:
-    with open(os.path.join(round_dir, "picks.json"), "w", encoding="utf-8") as fh:
+    with open(os.path.join(round_dir, "picks.json"), "w", encoding="utf-8", newline="\n") as fh:
         json.dump(released, fh, indent=1)
     where = os.path.join(round_dir, "held.json")
     if held or os.path.exists(where):
-        with open(where, "w", encoding="utf-8") as fh:
+        with open(where, "w", encoding="utf-8", newline="\n") as fh:
             json.dump(held, fh, indent=1)
 
 
@@ -928,7 +928,7 @@ def assemble(round_dir: str, only=()) -> tuple[list[dict], list[str], list[str]]
                 # later render or outreach run still knows it goes to them.
                 d[k] = p[k]
         drafts.append(d)
-    with open(os.path.join(round_dir, "drafts.json"), "w", encoding="utf-8") as fh:
+    with open(os.path.join(round_dir, "drafts.json"), "w", encoding="utf-8", newline="\n") as fh:
         json.dump(drafts, fh, indent=1)
         fh.write("\n")
     return drafts, missing, rejected

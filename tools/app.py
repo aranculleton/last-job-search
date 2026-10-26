@@ -50,7 +50,7 @@ import person  # noqa: E402
 def _out(text: str, path: str | None) -> None:
     if path:
         os.makedirs(os.path.dirname(os.path.abspath(path)), exist_ok=True)
-        with open(path, "w", encoding="utf-8") as fh:
+        with open(path, "w", encoding="utf-8", newline="\n") as fh:
             fh.write(text)
         print(path)
     else:

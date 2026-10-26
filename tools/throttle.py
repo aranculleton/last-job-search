@@ -1340,7 +1340,7 @@ def write_back(path: str, data: dict, skipped: list[dict], today: str,
         if (e.get("status") or "new") in _ROUND_STATUSES:
             e["status"] = "surfaced"
         r["first_seen"] = e.get("first_seen") or today
-    tmp = tempfile.NamedTemporaryFile("w", dir=os.path.dirname(path) or ".",
+    tmp = tempfile.NamedTemporaryFile("w", newline="\n", dir=os.path.dirname(path) or ".",
                                       delete=False, encoding="utf-8", suffix=".tmp")
     with tmp:
         json.dump(data, tmp, indent=2, ensure_ascii=False)
@@ -1428,10 +1428,10 @@ def main() -> int:
     seen_on = first_seen(seen["seen"], a.today, index=index)
     for r in kept:
         r["first_seen"] = seen_on(r) or a.today
-    with open(a.out, "w", encoding="utf-8") as fh:
+    with open(a.out, "w", encoding="utf-8", newline="\n") as fh:
         json.dump(kept, fh, indent=1)
     if a.skipped:
-        with open(a.skipped, "w", encoding="utf-8") as fh:
+        with open(a.skipped, "w", encoding="utf-8", newline="\n") as fh:
             json.dump(skipped, fh, indent=1)
     written = 0 if a.no_write else write_back(a.seen, seen, skipped, a.today, kept,
                                               index=index)

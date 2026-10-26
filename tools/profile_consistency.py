@@ -321,7 +321,7 @@ def keep(where: list[str], today: str = "") -> list[str]:
                          "date": today or dt.date.today().isoformat()})
             said.append("%s: %s \"%s\" kept as it is." % (w, f["fact"], f["said"]))
     if len(rows) != len(reviewed()):
-        with open(person.path(REVIEWED_FILE), "w", encoding="utf-8") as fh:
+        with open(person.path(REVIEWED_FILE), "w", encoding="utf-8", newline="\n") as fh:
             json.dump({"reviewed": rows}, fh, indent=1)
             fh.write("\n")
     return said

@@ -1221,7 +1221,7 @@ def _write_file(rel: tuple, rec) -> None:
     path = person.state(*rel)
     try:
         os.makedirs(os.path.dirname(path), exist_ok=True)
-        with open(path, "w", encoding="utf-8") as fh:
+        with open(path, "w", encoding="utf-8", newline="\n") as fh:
             json.dump(rec, fh, indent=1)
     except OSError as e:
         raise SystemExit(f"reading: neither the ledger nor {path} could be written ({e}); "
@@ -1742,7 +1742,7 @@ def page_queue() -> list:
 def _save_queue(rows: list) -> None:
     p = person.state(*PAGE_QUEUE)
     os.makedirs(os.path.dirname(p), exist_ok=True)
-    with open(p, "w", encoding="utf-8") as fh:
+    with open(p, "w", encoding="utf-8", newline="\n") as fh:
         json.dump(rows, fh, indent=1, sort_keys=True)
         fh.write("\n")
 
@@ -1793,7 +1793,7 @@ def load(contact_id: str) -> dict | None:
 def save(contact_id: str, reading: dict) -> str:
     p = path(contact_id)
     os.makedirs(os.path.dirname(p), exist_ok=True)
-    with open(p, "w", encoding="utf-8") as fh:
+    with open(p, "w", encoding="utf-8", newline="\n") as fh:
         json.dump(reading, fh, ensure_ascii=False, indent=1)
         fh.write("\n")
     return p
@@ -1983,7 +1983,7 @@ def drop_retired() -> str:
             while first > 1 and lines[first - 2].lstrip().startswith("#"):
                 first -= 1
         del lines[first - 1:last]
-    with open(path, "w", encoding="utf-8") as fh:
+    with open(path, "w", encoding="utf-8", newline="\n") as fh:
         fh.write("\n".join(lines))
     names = ", ".join(n for n, _f, _l in found)
     return ("took out %s from profile/networking.py: the app sets no reading limit of its own "
@@ -2600,7 +2600,7 @@ def set_more_at(employer: str, said: str, up_to: int | None = None,
            "date": (today or datetime.date.today()).isoformat()}
     if not remove:
         rows.append(row)
-    with open(path, "w", encoding="utf-8") as fh:
+    with open(path, "w", encoding="utf-8", newline="\n") as fh:
         json.dump(sorted(rows, key=lambda r: r["employer"].lower()), fh, indent=2,
                   ensure_ascii=False)
         fh.write("\n")
@@ -2924,7 +2924,7 @@ def write_draft(contact_id: str, note: str, name: str = "", card_only: bool = Fa
     """Write documents/network/<contact_id>/draft.md (draft_text) and return its path."""
     p = draft_path(contact_id)
     os.makedirs(os.path.dirname(p), exist_ok=True)
-    with open(p, "w", encoding="utf-8") as fh:
+    with open(p, "w", encoding="utf-8", newline="\n") as fh:
         fh.write(draft_text(contact_id, note, name, card_only=card_only))
     try:
         # What the composer made it from, when it made exactly these words: a tweak on the
@@ -2980,7 +2980,7 @@ def keep_own_facts(contact_id: str, found, reason: str, today: str = "") -> str:
                          "date": today or datetime.date.today().isoformat()})
             have.add(what.lower())
     os.makedirs(os.path.dirname(p), exist_ok=True)
-    with open(p, "w", encoding="utf-8") as fh:
+    with open(p, "w", encoding="utf-8", newline="\n") as fh:
         json.dump({"kept": kept}, fh, indent=1, ensure_ascii=False)
         fh.write("\n")
     return p
@@ -5834,7 +5834,7 @@ def learn_search(address: str, company: str, place: str = "") -> dict:
         data.setdefault("places", {})[" ".join(place.lower().split())] = q["geoUrn"]
     p = person.state(*SEARCH_FILE)
     os.makedirs(os.path.dirname(p), exist_ok=True)
-    with open(p, "w", encoding="utf-8") as fh:
+    with open(p, "w", encoding="utf-8", newline="\n") as fh:
         json.dump(data, fh, indent=1)
         fh.write("\n")
     return {"currentCompany": q["currentCompany"], "geoUrn": q.get("geoUrn", ""), **shape}
@@ -5848,7 +5848,7 @@ def _employer_filter(company: str) -> dict:
 def _save_filters(data: dict) -> None:
     p = person.state(*SEARCH_FILE)
     os.makedirs(os.path.dirname(p), exist_ok=True)
-    with open(p, "w", encoding="utf-8") as fh:
+    with open(p, "w", encoding="utf-8", newline="\n") as fh:
         json.dump(data, fh, indent=1)
         fh.write("\n")
 

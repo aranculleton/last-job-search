@@ -32,6 +32,7 @@ import datetime as dt
 import json
 import os
 import re
+import shutil
 import subprocess
 import sys
 
@@ -87,7 +88,7 @@ _read_json = read_json  # the module's own name for it; other modules call read_
 def write_json(path: str, data) -> str:
     os.makedirs(os.path.dirname(path), exist_ok=True)
     tmp = path + ".tmp"
-    with open(tmp, "w", encoding="utf-8") as fh:
+    with open(tmp, "w", encoding="utf-8", newline="\n") as fh:
         json.dump(data, fh, indent=2, ensure_ascii=False, sort_keys=True)
         fh.write("\n")
     os.replace(tmp, path)
@@ -155,7 +156,9 @@ def origin() -> tuple[str, str]:
 def _gh(*args, timeout: int = 60, runner=None) -> tuple[int, str]:
     run = runner or subprocess.run
     try:
-        r = run(["gh", *args], capture_output=True, text=True, encoding="utf-8",
+        # Found the way the shell finds it: on Windows that includes a gh.cmd or gh.bat
+        # launcher, which a bare "gh" never reaches.
+        r = run([shutil.which("gh") or "gh", *args], capture_output=True, text=True, encoding="utf-8",
                 errors="replace", timeout=timeout, stdin=subprocess.DEVNULL)
     except (OSError, subprocess.TimeoutExpired):
         return 127, ""

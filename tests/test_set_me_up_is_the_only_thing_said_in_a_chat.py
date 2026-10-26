@@ -123,6 +123,19 @@ class Copy:
                      f'  api) echo "{"true" if private else "false"}" ;;\n'
                      "esac\n")
         os.chmod(script, os.stat(script).st_mode | stat.S_IEXEC)
+        if os.name == "nt":
+            # Windows runs no shell script by name: the same stand-in in Python, behind a
+            # gh.cmd launcher, which is how a command is put on a Windows PATH.
+            fake = os.path.join(bindir, "gh_fake.py")
+            with open(fake, "w", encoding="utf-8", newline="\n") as fh:
+                fh.write("import sys\n"
+                         f"open({log!r}, 'a', encoding='utf-8').write(' '.join(sys.argv[1:]) + '\\n')\n"
+                         "if sys.argv[1:2] == ['repo']:\n"
+                         "    print('https://github.com/someone/my-job-search')\n"
+                         "elif sys.argv[1:2] == ['api']:\n"
+                         f"    print({'true' if private else 'false'!r})\n")
+            with open(os.path.join(bindir, "gh.cmd"), "w", encoding="utf-8", newline="\r\n") as fh:
+                fh.write(f'@"{sys.executable}" "{fake}" %*\n')
         self.path = bindir + os.pathsep + os.environ.get("PATH", "")
         return log
 

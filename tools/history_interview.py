@@ -203,7 +203,7 @@ def main(argv=None) -> int:
         got = seed(a.src, a.paste, a.browser)
         text = json.dumps(got, indent=1, ensure_ascii=False)
         if a.out:
-            with open(a.out, "w", encoding="utf-8") as fh:
+            with open(a.out, "w", encoding="utf-8", newline="\n") as fh:
                 fh.write(text + "\n")
             print(f"seed: {len(got['jobs'])} jobs, {len(got['education'])} places studied, "
                   f"{len(got['certifications'])} certificates, in {a.out}")

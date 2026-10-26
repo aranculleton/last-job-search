@@ -351,7 +351,7 @@ def record(session: str, trigger: str, cron: str = "", path: str | None = None,
     if reg["setup"] == "chat_per_briefing":
         entry["chat"] = {"title": BRIEF_NAME, "session_id": session}
     reg["routines"] = [entry] + keep
-    with open(path, "w", encoding="utf-8") as fh:
+    with open(path, "w", encoding="utf-8", newline="\n") as fh:
         json.dump(reg, fh, indent=2, ensure_ascii=False)
         fh.write("\n")
     return path
@@ -445,7 +445,7 @@ def _path(path: str | None) -> str:
 
 def _save(reg: dict, path: str) -> str:
     tmp = f"{path}.{os.getpid()}.tmp"
-    with open(tmp, "w", encoding="utf-8") as fh:
+    with open(tmp, "w", encoding="utf-8", newline="\n") as fh:
         json.dump(reg, fh, indent=2, ensure_ascii=False)
         fh.write("\n")
     os.replace(tmp, path)

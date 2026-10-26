@@ -2273,12 +2273,12 @@ def render_prep(contact, company_research=None, application=None, profile_facts=
         if fresh == old:
             return path, "current"
         if not dry_run:
-            with open(path, "w", encoding="utf-8") as f:
+            with open(path, "w", encoding="utf-8", newline="\n") as f:
                 f.write(fresh)
         return path, "restamped"
     if not dry_run:
         os.makedirs(os.path.dirname(path), exist_ok=True)
-        with open(path, "w", encoding="utf-8") as f:
+        with open(path, "w", encoding="utf-8", newline="\n") as f:
             f.write(new)
     return path, "written"
 

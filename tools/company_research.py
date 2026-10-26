@@ -446,7 +446,7 @@ def _locked(name: str, wait: float = 20.0):
 def _write_json(target_path: str, data) -> None:
     os.makedirs(os.path.dirname(target_path), exist_ok=True)
     tmp = "%s.%d.tmp" % (target_path, os.getpid())
-    with open(tmp, "w", encoding="utf-8") as fh:
+    with open(tmp, "w", encoding="utf-8", newline="\n") as fh:
         json.dump(data, fh, indent=2, ensure_ascii=False)
         fh.write("\n")
     os.replace(tmp, target_path)
@@ -682,7 +682,7 @@ def stored_page(url, pages=None) -> dict | None:
 def _store_page(url, title, text, via, pages=None) -> str:
     where = _page_file(url, pages)
     os.makedirs(os.path.dirname(where), exist_ok=True)
-    with open(where + ".tmp", "w", encoding="utf-8") as fh:
+    with open(where + ".tmp", "w", encoding="utf-8", newline="\n") as fh:
         json.dump({"url": url, "title": title, "text": text, "via": via,
                    "stored": time.time()}, fh, ensure_ascii=False)
     os.replace(where + ".tmp", where)
@@ -999,7 +999,7 @@ class _Run:
                 nxt = 0.0
             now = time.time()
             start = max(now, nxt)
-            with open(where, "w", encoding="utf-8") as fh:
+            with open(where, "w", encoding="utf-8", newline="\n") as fh:
                 fh.write(repr(start + delay))
         if start > now:
             self.sleep(start - now)
@@ -1016,7 +1016,7 @@ class _Run:
             except (OSError, ValueError):
                 nxt = 0.0
             if when > nxt:
-                with open(where, "w", encoding="utf-8") as fh:
+                with open(where, "w", encoding="utf-8", newline="\n") as fh:
                     fh.write(repr(when))
 
     def get(self, url: str, headers: dict) -> tuple[int, dict, str] | None:

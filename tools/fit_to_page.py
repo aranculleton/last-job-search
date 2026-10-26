@@ -677,7 +677,7 @@ def save(path, apps, read_in):
     """Write the drafts back, never with a posting that arrived fenced."""
     out = [{k: v for k, v in a.items() if not (i in read_in and k == "posting")}
            for i, a in enumerate(apps)]
-    with open(path, "w", encoding="utf-8") as fh:
+    with open(path, "w", encoding="utf-8", newline="\n") as fh:
         json.dump(out, fh, indent=1, ensure_ascii=False)
         fh.write("\n")
 

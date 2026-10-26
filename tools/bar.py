@@ -189,7 +189,7 @@ def _one_writer(p: str):
     each wrote their own row over the other's, or crashed on the shared temporary file."""
     lock = os.path.join(tempfile.gettempdir(), "ljs-judged-%s.lock"
                         % hashlib.sha1(os.path.abspath(p).encode()).hexdigest()[:16])
-    with open(lock, "a+", encoding="utf-8") as fh:
+    with open(lock, "a+", encoding="utf-8", newline="\n") as fh:
         try:
             import fcntl
             fcntl.flock(fh, fcntl.LOCK_EX)
@@ -222,7 +222,7 @@ def judge(company: str, what: str, why: str, today: str | None = None) -> str:
                 if not (isinstance(r, dict) and own_name(r.get("name") or k) == name)}
         rows[name] = {"name": company, "verdict": what, "why": why,
                       "date": today or datetime.date.today().isoformat()}
-        tmp = tempfile.NamedTemporaryFile("w", dir=os.path.dirname(p) or ".", delete=False,
+        tmp = tempfile.NamedTemporaryFile("w", newline="\n", dir=os.path.dirname(p) or ".", delete=False,
                                           encoding="utf-8", suffix=".tmp")
         with tmp:
             json.dump(dict(sorted(rows.items())), tmp, indent=2, ensure_ascii=False)

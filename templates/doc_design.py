@@ -553,7 +553,7 @@ def record(spec_change, part="design", name=None) -> str:
         _apply(dict.fromkeys(SETTINGS), new, "the new design")
         table[name] = new
         where = f"the {name} {'kind' if part == 'kinds' else 'application'}s"
-    with open(path, "w", encoding="utf-8") as fh:
+    with open(path, "w", encoding="utf-8", newline="\n") as fh:
         json.dump(data, fh, indent=2, ensure_ascii=False)
         fh.write("\n")
     person.reset()

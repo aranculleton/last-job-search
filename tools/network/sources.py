@@ -362,7 +362,7 @@ def record_yield(company: str, query: str, kept: int, placed: int,
                                       "date": (today or datetime.date.today()).isoformat()}
     p = person.state(*TITLE_YIELD_FILE)
     os.makedirs(os.path.dirname(p), exist_ok=True)
-    with open(p, "w", encoding="utf-8") as fh:
+    with open(p, "w", encoding="utf-8", newline="\n") as fh:
         json.dump(got, fh, indent=1, sort_keys=True)
         fh.write("\n")
     return title
@@ -574,7 +574,7 @@ def _cli_harvest(argv: list) -> int:
                                        f"--where company=\"{company}\" --where status=dropped "
                                        "--reason ...)" if c["never_messaged"] else ""))
     if "--out" in opt:
-        with open(opt["--out"], "w", encoding="utf-8") as fh:
+        with open(opt["--out"], "w", encoding="utf-8", newline="\n") as fh:
             json.dump({**run, "dropped": [{"person": p, "why": w} for p, w in run["dropped"]]},
                       fh, indent=1, default=str)
     return 0

@@ -658,7 +658,7 @@ def main(argv: list[str]) -> int:
         print("build_app: no copy of the app's master here to compare with, so nothing was "
               "set aside (python3 tools/sync_app.py fetches it)")
     if a.tokens_out:
-        with open(a.tokens_out, "w", encoding="utf-8") as fh:
+        with open(a.tokens_out, "w", encoding="utf-8", newline="\n") as fh:
             fh.write("\n".join(t for t in when if t not in aside) + "\n")
     if findings:
         print("build_app: LEAK SCAN FAILED. Nothing from this tree may be pushed.", file=sys.stderr)

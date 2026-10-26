@@ -210,7 +210,7 @@ def probe_font(name, engine, workdir):
            f"\\setmainfont[{opts}]{{{stem}}}\n\\begin{{document}}\n{body}\n\n"
            f"{{\\bfseries {body}}}\n\n{{\\itshape {body}}}\n\\end{{document}}\n")
     job = f"probe_{name}_{engine}"
-    with open(os.path.join(workdir, job + ".tex"), "w", encoding="utf-8") as fh:
+    with open(os.path.join(workdir, job + ".tex"), "w", encoding="utf-8", newline="\n") as fh:
         fh.write(tex)
     subprocess.run([engine, "-interaction=nonstopmode", job + ".tex"], cwd=workdir,
                    capture_output=True, timeout=300)
@@ -290,7 +290,7 @@ def all_designs(out_dir=None):
         for name in doc_design.DESIGNS:
             d = dict(draft, design=name)
             path = os.path.join(tmp, f"drafts_{name}.json")
-            with open(path, "w", encoding="utf-8") as fh:
+            with open(path, "w", encoding="utf-8", newline="\n") as fh:
                 json.dump([d], fh, ensure_ascii=False)
             fit = subprocess.run([py, "tools/fit_to_page.py", path], cwd=app, env=env,
                                  capture_output=True, text=True, encoding="utf-8",

@@ -122,14 +122,28 @@ def seen() -> dict:
         return {}
 
 
+def _replace(tmp: str, path: str) -> None:
+    """os.replace, waiting out another chat's replace of the same file: Windows refuses a
+    replace while the other is mid-way (PermissionError), where POSIX lets both through."""
+    import time
+    for i in range(40):
+        try:
+            os.replace(tmp, path)
+            return
+        except PermissionError:
+            if os.name != "nt" or i == 39:
+                raise
+            time.sleep(0.05)
+
+
 def _save_seen(data: dict) -> None:
     path = _cache_path()
     os.makedirs(os.path.dirname(path), exist_ok=True)
     tmp = f"{path}.{os.getpid()}.tmp"     # two chats in one folder each write whole files
-    with open(tmp, "w", encoding="utf-8") as fh:
+    with open(tmp, "w", encoding="utf-8", newline="\n") as fh:
         json.dump(data, fh, indent=1, sort_keys=True)
         fh.write("\n")
-    os.replace(tmp, path)
+    _replace(tmp, path)
 
 
 def _remember(listener: dict | None, now: dt.datetime, confirmed: bool = True) -> None:
@@ -414,10 +428,10 @@ def record_pin(answer: str, today: dt.date | None = None) -> str:
     path = os.path.join(app_setup.profile_dir(), app_setup.PAGE)
     os.makedirs(os.path.dirname(path), exist_ok=True)
     tmp = f"{path}.{os.getpid()}.tmp"
-    with open(tmp, "w", encoding="utf-8") as fh:
+    with open(tmp, "w", encoding="utf-8", newline="\n") as fh:
         json.dump(got, fh, indent=2, ensure_ascii=False, sort_keys=True)
         fh.write("\n")
-    os.replace(tmp, path)
+    _replace(tmp, path)
     return path
 
 

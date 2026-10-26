@@ -76,7 +76,7 @@ def _save(rows: list) -> None:
     p = path()
     os.makedirs(os.path.dirname(p), exist_ok=True)
     tmp = p + ".tmp"
-    with open(tmp, "w", encoding="utf-8") as fh:
+    with open(tmp, "w", encoding="utf-8", newline="\n") as fh:
         json.dump(rows, fh, indent=1, ensure_ascii=False)
         fh.write("\n")
     os.replace(tmp, p)

@@ -360,7 +360,7 @@ def note_local(today: datetime.date | None = None) -> bool:
             return False
         got = dict(_place(), computer_chat=(today or datetime.date.today()).isoformat())
         path = _profile_file()
-        with open(path, "w", encoding="utf-8") as fh:
+        with open(path, "w", encoding="utf-8", newline="\n") as fh:
             json.dump(got, fh, indent=2)
             fh.write("\n")
         _commit_place(path)
@@ -399,7 +399,7 @@ def record(answer: str, today: datetime.date | None = None) -> str:
                          "the profile (Step 3)")
     p = _profile_file()
     got = dict(_place(), works_on=answer, asked=(today or datetime.date.today()).isoformat())
-    with open(p, "w", encoding="utf-8") as fh:
+    with open(p, "w", encoding="utf-8", newline="\n") as fh:
         json.dump(got, fh, indent=2)
         fh.write("\n")
     return p
@@ -554,7 +554,7 @@ def mark_setup(event: str, today: datetime.date | None = None) -> str:
         mark = dict(mark, finished=day)
     got["setup"] = mark
     p = _profile_file()
-    with open(p, "w", encoding="utf-8") as fh:
+    with open(p, "w", encoding="utf-8", newline="\n") as fh:
         json.dump(got, fh, indent=2)
         fh.write("\n")
     return p
@@ -694,7 +694,7 @@ def mark_told(chat: str, lines=(), today: datetime.date | None = None) -> None:
     said[chat] = {"digest": _digest(lines),
                   "on": (today or datetime.date.today()).isoformat()}
     try:
-        with open(p, "w", encoding="utf-8") as fh:
+        with open(p, "w", encoding="utf-8", newline="\n") as fh:
             json.dump({"said": said}, fh)
     except OSError:
         pass

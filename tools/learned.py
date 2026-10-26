@@ -140,7 +140,7 @@ def save_entries(rows: list[dict], offers_: list[dict] | None = None) -> None:
     path = _writable()
     data = _data()                       # what else the file keeps (the skips) stays
     data.update({"entries": rows, "offers": offers_ if offers_ is not None else all_offers()})
-    with open(path, "w", encoding="utf-8") as fh:
+    with open(path, "w", encoding="utf-8", newline="\n") as fh:
         json.dump(data, fh, indent=2, ensure_ascii=False)
         fh.write("\n")
 
@@ -650,7 +650,7 @@ def approve(said: str, text: str, channel: str = "", reader: str = "", contact_i
     data["approved"] = rows
     data.setdefault("entries", load())
     data.setdefault("offers", all_offers())
-    with open(path, "w", encoding="utf-8") as fh:
+    with open(path, "w", encoding="utf-8", newline="\n") as fh:
         json.dump(data, fh, indent=2, ensure_ascii=False)
         fh.write("\n")
     resolve_pending(row["said"])
@@ -971,7 +971,7 @@ def _save_pending(rows: list[dict]) -> None:
     if not p:
         return
     try:
-        with open(p, "w", encoding="utf-8") as fh:
+        with open(p, "w", encoding="utf-8", newline="\n") as fh:
             json.dump(rows, fh, ensure_ascii=False)
     except OSError:
         pass
@@ -1058,7 +1058,7 @@ def skip(said: str, why: str, today: str | None = None, via: str = "",
         data.setdefault("skipped", []).append(row)
         data.setdefault("entries", load())
         data.setdefault("offers", all_offers())
-        with open(path, "w", encoding="utf-8") as fh:
+        with open(path, "w", encoding="utf-8", newline="\n") as fh:
             json.dump(data, fh, indent=2, ensure_ascii=False)
             fh.write("\n")
     resolve_pending(said)

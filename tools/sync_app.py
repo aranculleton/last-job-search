@@ -626,7 +626,7 @@ def _record_check(root: str | None = None) -> None:
     p = _stamp_path(root)
     if p:
         try:
-            with open(p, "w", encoding="utf-8") as fh:
+            with open(p, "w", encoding="utf-8", newline="\n") as fh:
                 fh.write(_day_line() + "\n")
             # The commit the sync left this checkout on, and the app commit it took: an
             # /upgrade worktree made from an older commit lists the wrong upgrades, and
@@ -638,7 +638,7 @@ def _record_check(root: str | None = None) -> None:
             if app and run_git(root, "merge-base", "--is-ancestor", app, "HEAD").returncode:
                 app = ""
             if head:
-                with open(p + "-head", "w", encoding="utf-8") as fh:
+                with open(p + "-head", "w", encoding="utf-8", newline="\n") as fh:
                     fh.write(head + "\n" + (app + "\n" if app else ""))
         except OSError:
             pass
@@ -841,7 +841,7 @@ def say_waiting(sha: str, line: str, root: str | None = None) -> bool:
           "these words; the app updates only when they say so:")
     print(f"  {line}")
     try:
-        with open(p, "w", encoding="utf-8") as fh:
+        with open(p, "w", encoding="utf-8", newline="\n") as fh:
             fh.write(sha + "\n")
     except (OSError, TypeError):
         pass
@@ -1074,7 +1074,7 @@ def own_folder(now: float | None = None, chat: str | None = None) -> str:
                 "switch branches under each other.")
     if chat:
         try:
-            with open(path, "w", encoding="utf-8") as fh:
+            with open(path, "w", encoding="utf-8", newline="\n") as fh:
                 fh.write(f"{chat} {now:.0f}\n")
         except OSError:
             pass
@@ -1574,7 +1574,7 @@ def record_own_tests(root: str, failures) -> None:
                "failures": [[n, (m or "")[:300], _gone(root, m)] for n, m in failures]}
     try:
         with open(os.path.join(os.path.dirname(mark), OWN_TESTS_RECORD), "w",
-                  encoding="utf-8") as fh:
+                  encoding="utf-8", newline="\n") as fh:
             json.dump(out, fh)
     except OSError:
         pass
@@ -1609,7 +1609,7 @@ def own_tests(root: str | None = None) -> None:
     mark = _mark_path(root)
     if mark:
         try:
-            with open(mark, "w", encoding="utf-8") as fh:
+            with open(mark, "w", encoding="utf-8", newline="\n") as fh:
                 fh.write(_git_out(root, "rev-parse", "HEAD"))
         except OSError:
             pass

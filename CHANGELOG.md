@@ -142,6 +142,10 @@ make sense to somebody whose repo just received it.
 
 ### Fixed
 
+- **On Windows, a save no longer shows as unsaved work.** Every file the app writes has plain
+  line ends there too, so a settings file saved with nothing new in it is no longer a change,
+  two chats answering the page at once wait for each other, and GitHub's command is found
+  the way Windows finds it.
 - **Job postings read from employers' own hiring systems are cleaner** (openroles 0.4.0):
   text a posting hides from its readers is left out, Lever, Ashby and Gem postings are read
   from their full descriptions, and words beside bold or linked text no longer get a stray

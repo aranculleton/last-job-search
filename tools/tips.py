@@ -292,7 +292,7 @@ def save(state: dict) -> None:
     for the same reason (networking audit, 2026-10-25)."""
     if person.in_example(_path()):
         return
-    with open(_path(), "w", encoding="utf-8") as fh:
+    with open(_path(), "w", encoding="utf-8", newline="\n") as fh:
         json.dump(state, fh, indent=2, sort_keys=True)
         fh.write("\n")
 

@@ -110,7 +110,7 @@ def _load() -> dict:
 
 def _save(state: dict) -> None:
     try:
-        with open(_state_path(), "w", encoding="utf-8") as fh:
+        with open(_state_path(), "w", encoding="utf-8", newline="\n") as fh:
             json.dump(state, fh, indent=1, sort_keys=True)
     except OSError:
         pass
@@ -171,7 +171,7 @@ def _text_findings(label: str, text: str, tokens) -> list[str]:
         return []
     with tempfile.TemporaryDirectory() as d:
         path = os.path.join(d, label)
-        with open(path, "w", encoding="utf-8") as fh:
+        with open(path, "w", encoding="utf-8", newline="\n") as fh:
             fh.write(text)
         return leak_scan.scan_text([path], tokens, show=True)
 

@@ -864,7 +864,7 @@ def write_posting(folder, company, role, posting="", source="", today="") -> str
                      "--contact <who leads it> --role \"%s\" --posting <a file holding it>"
                      % (POSTING_NOT_HELD, company, role))
     os.makedirs(folder, exist_ok=True)
-    with open(path, "w", encoding="utf-8") as fh:
+    with open(path, "w", encoding="utf-8", newline="\n") as fh:
         fh.write("\n".join(lines).rstrip() + "\n")
     return "replaced" if had else "written"
 
@@ -970,7 +970,7 @@ def register_process(company, contact_id, role, stage="", date="", with_="", tod
                               today, name))
     if _text(stage):
         text = _with_stage(text, stage, date, with_, time)
-    with open(out, "w", encoding="utf-8") as fh:
+    with open(out, "w", encoding="utf-8", newline="\n") as fh:
         fh.write(text)
     return have, folder, added
 
@@ -1029,7 +1029,7 @@ def record_stage(folder, company, role, stage, date, with_="", today=None, time=
                 % (company, role, _text(today) or dt.date.today().isoformat(), stage, date))
     text = _with_stage(text, stage, date, with_, time)
     os.makedirs(folder, exist_ok=True)
-    with open(out, "w", encoding="utf-8") as fh:
+    with open(out, "w", encoding="utf-8", newline="\n") as fh:
         fh.write(text)
     m = re.search(r"^- \[ \] %s.*$" % re.escape(stage), text, re.M | re.I)
     return m.group(0) if m else ""
@@ -1072,7 +1072,7 @@ def record_result(folder, company, role, status, date, today=None) -> str:
             text = re.sub(r"^(\*\*Status:\*\*.*)$", r"\1\n**Date resolved:** %s" % day, text,
                           count=1, flags=re.M)
     os.makedirs(folder, exist_ok=True)
-    with open(out, "w", encoding="utf-8") as fh:
+    with open(out, "w", encoding="utf-8", newline="\n") as fh:
         fh.write(text)
     return text
 
@@ -3729,7 +3729,7 @@ def write_motive(question, answer, use_for=(), suits=(), not_for=(), path=None) 
         if ANSWERS_HEADING not in lines:
             lines += ["", ANSWERS_HEADING]
         lines += ["", '### "%s"' % question] + body
-    with open(path, "w", encoding="utf-8") as fh:
+    with open(path, "w", encoding="utf-8", newline="\n") as fh:
         fh.write("\n".join(lines).rstrip() + "\n")
     return path
 
@@ -3769,7 +3769,7 @@ def record_campaign(company, role, chat="", declined=False, today=None) -> str:
     day = _text(today) or dt.date.today().isoformat()
     body = {"declined": day} if declined else {"chat": _text(chat), "started": day}
     path = os.path.join(folder, CAMPAIGN_FILE)
-    with open(path, "w", encoding="utf-8") as fh:
+    with open(path, "w", encoding="utf-8", newline="\n") as fh:
         json.dump(body, fh, indent=1)
         fh.write("\n")
     return path
@@ -4360,13 +4360,13 @@ def write_pack(ctx, never_say=None) -> str:
     path = living_path(ctx)
     os.makedirs(ctx["folder"], exist_ok=True)
     text, leftovers, new = _rebuild(ctx, never_say)
-    with open(path, "w", encoding="utf-8") as fh:
+    with open(path, "w", encoding="utf-8", newline="\n") as fh:
         fh.write(text)
     # The stories the session chose (--map), kept for this round alone: a later round
     # chooses afresh, preferring one not yet told at this employer.
     mapped = {q: t for q, t in dict(ctx.get("kept_map") or {}, **(ctx.get("map") or {})).items()
               if _text(t)}
-    with open(built_path(ctx["folder"]), "w", encoding="utf-8") as fh:
+    with open(built_path(ctx["folder"]), "w", encoding="utf-8", newline="\n") as fh:
         json.dump({"generated": new, "stage": ctx["stage"], "mapped": mapped}, fh, indent=1,
                   ensure_ascii=False)
         fh.write("\n")
@@ -4437,7 +4437,7 @@ def add_rework(company, role, stage, question, note, date=None, where="mock") ->
         end = m.end() + (nxt.start() if nxt else len(body))
         kept = _rework_lines(text)
         text = text[:m.end()] + "\n\n" + "\n".join(kept + [line]) + "\n\n" + text[end:].lstrip()
-    with open(path, "w", encoding="utf-8") as fh:
+    with open(path, "w", encoding="utf-8", newline="\n") as fh:
         fh.write(text.rstrip() + "\n")
     return path
 
@@ -4672,7 +4672,7 @@ def remove_rework(company, role, stage, line) -> bool:
     rest = [k for k in kept if k != line]
     text = text[:m.end()] + "\n\n" + ("\n".join(rest) if rest else "- " + REWORK_EMPTY) + "\n\n" \
         + text[end:].lstrip()
-    with open(path, "w", encoding="utf-8") as fh:
+    with open(path, "w", encoding="utf-8", newline="\n") as fh:
         fh.write(text.rstrip() + "\n")
     return True
 

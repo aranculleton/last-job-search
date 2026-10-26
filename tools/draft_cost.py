@@ -105,7 +105,7 @@ def write(round_dir: str, result, usage=None) -> tuple[str, list[str], str]:
                      "the shared budget counter's movement while a stage ran, so concurrent "
                      "stages over-count it"}
     path = os.path.join(round_dir, "cost.json")
-    with open(path, "w", encoding="utf-8") as fh:
+    with open(path, "w", encoding="utf-8", newline="\n") as fh:
         json.dump(batch, fh, indent=1, ensure_ascii=False)
         fh.write("\n")
     kept = []
@@ -118,7 +118,7 @@ def write(round_dir: str, result, usage=None) -> tuple[str, list[str], str]:
             continue
         folder = docpaths.app_folder(r["company"], r.get("role") or "", r.get("abbr") or "")
         if os.path.isdir(folder):
-            with open(os.path.join(folder, "cost.json"), "w", encoding="utf-8") as fh:
+            with open(os.path.join(folder, "cost.json"), "w", encoding="utf-8", newline="\n") as fh:
                 json.dump(dict(r, slug=slug), fh, indent=1, ensure_ascii=False)
                 fh.write("\n")
             kept.append(local_path.rel(os.path.join(folder, "cost.json"), person.state()))

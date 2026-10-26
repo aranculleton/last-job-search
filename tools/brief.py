@@ -411,7 +411,7 @@ def start(argv: list[str], model: str) -> int:
                               "origin/claude/ops-*"], cwd=ROOT, text=True, capture_output=True,
                              encoding="utf-8", errors="replace")
     branches = " ".join(b.strip() for b in (earlier.stdout or "").splitlines() if b.strip())
-    with open(sync_log_path(), "w", encoding="utf-8") as fh:
+    with open(sync_log_path(), "w", encoding="utf-8", newline="\n") as fh:
         fh.write("date: %s\nexit: %d\nearlier: %s\nsetup: %s\n---\n%s%s"
                  % (today.isoformat(), r.returncode, branches, setup, r.stdout or "",
                     r.stderr or ""))

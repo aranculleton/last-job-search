@@ -567,7 +567,7 @@ def main() -> int:
     after = sum(1 for j in out if (j.get("desc") or "").strip())
     errors = [j for j in out if j.get("hydrate_error")]
     guarded_n = sum(1 for j in out if j.get("posting_guard"))
-    json.dump(out, open(a.out, "w", encoding="utf-8"), indent=1)
+    json.dump(out, open(a.out, "w", encoding="utf-8", newline="\n"), indent=1)
     frac = after / len(out) if out else 0.0
     print(f"{len(out)} postings: {before} had a description"
           + (f" ({reused} from the round before)" if reused else "")

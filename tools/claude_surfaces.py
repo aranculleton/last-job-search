@@ -239,7 +239,7 @@ def sync_docs(root: str = ROOT, reg=None) -> list:
         text = open(p, encoding="utf-8").read()
         new = BLOCK.sub(lambda m: block(m.group(2), m.group(1), reg), text)
         if new != text:
-            with open(p, "w", encoding="utf-8") as fh:
+            with open(p, "w", encoding="utf-8", newline="\n") as fh:
                 fh.write(new)
             changed.append(rel)
     return changed

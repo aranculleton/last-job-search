@@ -1736,9 +1736,9 @@ def main() -> int:
     # already cut for free - exactly what used to happen. Use
     # --out-all when the cut records are wanted too (to record why).
     if a.out:
-        json.dump(keep, open(a.out, "w", encoding="utf-8"), indent=1)
+        json.dump(keep, open(a.out, "w", encoding="utf-8", newline="\n"), indent=1)
     if a.out_all:
-        json.dump(out, open(a.out_all, "w", encoding="utf-8"), indent=1)
+        json.dump(out, open(a.out_all, "w", encoding="utf-8", newline="\n"), indent=1)
     for j in cut:
         print(f"CUT  {(j.get('company') or '')[:26]:26} {(j.get('title') or '')[:38]:38} {j['cuts'][0][:70]}")
     print(f"\n{len(jobs)} screened, {len(keep)} survive, {len(cut)} cut on a quoted stated fact "

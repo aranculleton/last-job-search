@@ -120,7 +120,7 @@ def write(round_dir: str, summary_dir: str, name: str) -> str | None:
     # third the size of an indented one and its changes readable.
     head = json.dumps({"round": name, "counts": dict(sorted(counts.items(), key=lambda kv: -kv[1]))},
                       ensure_ascii=False)
-    with open(path, "w", encoding="utf-8") as fh:
+    with open(path, "w", encoding="utf-8", newline="\n") as fh:
         fh.write(head[:-1] + ', "filtered": [\n'
                  + ",\n".join(json.dumps(e, ensure_ascii=False) for e in found) + "\n]}\n")
     return path
@@ -206,7 +206,7 @@ def back(name: str, picks, why: str = "", round_dir: str | None = None,
             if at is None:
                 rows.append(row)
                 at = len(rows) - 1
-            with open(path, "w", encoding="utf-8") as fh:
+            with open(path, "w", encoding="utf-8", newline="\n") as fh:
                 json.dump(rows, fh, indent=1, ensure_ascii=False)
                 fh.write("\n")
             rank = at + 1 if rank is None else rank

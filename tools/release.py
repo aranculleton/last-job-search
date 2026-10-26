@@ -171,7 +171,7 @@ def publish(sha: str | None = None) -> int:
         print(f"release: nothing to publish: {why}")
         return 0
     tag = "v" + newest["version"]
-    with tempfile.NamedTemporaryFile("w", suffix=".md", delete=False, encoding="utf-8") as fh:
+    with tempfile.NamedTemporaryFile("w", suffix=".md", delete=False, encoding="utf-8", newline="\n") as fh:
         fh.write(text + "\n")
         notes = fh.name
     r = _gh(["release", "create", tag, "--title", tag, "--notes-file", notes,
@@ -210,7 +210,7 @@ def refresh(tag: str, text: str) -> int:
     if view.stdout.strip() == text.strip():
         print(f"release: {tag}'s notes are current")
         return 0
-    with tempfile.NamedTemporaryFile("w", suffix=".md", delete=False, encoding="utf-8") as fh:
+    with tempfile.NamedTemporaryFile("w", suffix=".md", delete=False, encoding="utf-8", newline="\n") as fh:
         fh.write(text + "\n")
         notes = fh.name
     r = _gh(["release", "edit", tag, "--notes-file", notes])

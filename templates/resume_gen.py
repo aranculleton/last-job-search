@@ -310,7 +310,7 @@ def resume(a):
             .replace("%PARASTART%", design["para_start"])
             .replace("%ITEMSTART%", design["item_start"])
             + RESUME_END)
-    open(p, "w", encoding="utf-8").write(body)
+    open(p, "w", encoding="utf-8", newline="\n").write(body)
     return p
 
 
@@ -374,5 +374,5 @@ def letter(a):
                          salutation_prefix=_tex(_DOC.get("salutation_prefix", "Dear")),
                          p1=a["p1"], p2=a["p2"], lead=a["lead"], bullets=bl, p4=a["p4"],
                          **design, **_identity())
-    open(p, "w", encoding="utf-8").write(body)
+    open(p, "w", encoding="utf-8", newline="\n").write(body)
     return p

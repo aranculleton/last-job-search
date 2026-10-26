@@ -879,7 +879,7 @@ def _page_text(url: str, pages: str | None, transport=None) -> tuple[str | None,
     text = cr.read_page(body, url)["text"]
     if cached:
         os.makedirs(pages, exist_ok=True)
-        with open(cached, "w", encoding="utf-8") as fh:
+        with open(cached, "w", encoding="utf-8", newline="\n") as fh:
             fh.write(text)
     return text, ""
 
@@ -938,7 +938,7 @@ def verify(paths=None, write: bool = False, today: dt.date | None = None,
 
 def dump(path: str, table) -> None:
     """Write a table the one way: two-space indent, UTF-8, a final newline."""
-    with open(path, "w", encoding="utf-8") as fh:
+    with open(path, "w", encoding="utf-8", newline="\n") as fh:
         json.dump(table, fh, ensure_ascii=False, indent=2)
         fh.write("\n")
 

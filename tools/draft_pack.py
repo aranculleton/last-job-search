@@ -1040,7 +1040,7 @@ def build(round_dir: str, today: str = "") -> dict:
         # and Windows' text mode wrote "\r\n" (the suite on Windows, 2026-10-25).
         with open(path, "w", encoding="utf-8", newline="\n") as fh:
             fh.write(text)
-    with open(os.path.join(round_dir, "pack.json"), "w", encoding="utf-8") as fh:
+    with open(os.path.join(round_dir, "pack.json"), "w", encoding="utf-8", newline="\n") as fh:
         json.dump(meta, fh, indent=1, ensure_ascii=False)
         fh.write("\n")
     picks_path = os.path.join(round_dir, "picks.json")
@@ -1052,7 +1052,7 @@ def build(round_dir: str, today: str = "") -> dict:
     # What the drafter was given, kept under its hash: when the profile changes after a
     # draft, the model auditor is shown what changed rather than told that something did.
     with open(os.path.join(round_dir, f"rules_{meta['rules_hash']}.json"), "w",
-              encoding="utf-8") as fh:
+              encoding="utf-8", newline="\n") as fh:
         json.dump({"rules": rule_lines(), "facts": fact_lines()}, fh, indent=1,
                   ensure_ascii=False)
         fh.write("\n")
@@ -1060,7 +1060,7 @@ def build(round_dir: str, today: str = "") -> dict:
             "pack_hash": meta["rules_hash"], "corpus_hash": meta["corpus_hash"], "picks": staged}
     if today:
         args["today"] = today
-    with open(os.path.join(round_dir, "draft_args.json"), "w", encoding="utf-8") as fh:
+    with open(os.path.join(round_dir, "draft_args.json"), "w", encoding="utf-8", newline="\n") as fh:
         json.dump(args, fh, indent=1, ensure_ascii=False)
         fh.write("\n")
     meta["picks"] = len(staged)

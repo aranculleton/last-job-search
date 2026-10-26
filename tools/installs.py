@@ -267,7 +267,7 @@ def persist(dirs: list[str], home: str | None = None) -> list[str]:
         text = (text[:have.start()] + block + text[have.end():]) if have else \
             (text + ("" if not text or text.endswith("\n") else "\n") + block + "\n")
         os.makedirs(os.path.dirname(rc), exist_ok=True)
-        with open(rc, "w", encoding="utf-8") as fh:
+        with open(rc, "w", encoding="utf-8", newline="\n") as fh:
             fh.write(text)
         changed.append(rc)
     return changed
@@ -316,7 +316,7 @@ def claude_setting(name: str, value: str, settings: str | None = None) -> bool:
         return True
     data.setdefault("env", {})[name] = value
     os.makedirs(os.path.dirname(path), exist_ok=True)
-    with open(path, "w", encoding="utf-8") as fh:
+    with open(path, "w", encoding="utf-8", newline="\n") as fh:
         json.dump(data, fh, indent=2)
         fh.write("\n")
     return True
@@ -497,7 +497,7 @@ def fix_packages(base: str | None = None) -> str:
             if code != 0:
                 raise Failed("could not install pip for the packages: "
                              + (out.strip().splitlines() or ["no output"])[-1][:160])
-        open(os.path.join(venv, OURS), "w", encoding="utf-8").close()
+        open(os.path.join(venv, OURS), "w", encoding="utf-8", newline="\n").close()
     extra = ["--upgrade", "cffi", "cryptography"] if broken else []
     code, out = _run([venv_python(venv), "-m", "pip", "install", "--disable-pip-version-check",
                       "-q", "-r", os.path.join(ROOT, "requirements.txt"), *extra], timeout=900)

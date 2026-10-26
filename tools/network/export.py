@@ -543,7 +543,7 @@ def save_record(updates: dict) -> dict:
     got = dict(load_record(), **updates)
     path = record_path()
     os.makedirs(os.path.dirname(path), exist_ok=True)
-    with open(path, "w", encoding="utf-8") as fh:
+    with open(path, "w", encoding="utf-8", newline="\n") as fh:
         json.dump(got, fh, indent=1, sort_keys=True)
         fh.write("\n")
     return got
