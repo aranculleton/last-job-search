@@ -1,5 +1,5 @@
 ---
-framework_version: 1.1.3
+framework_version: 1.1.4
 ---
 
 # Application Form Fields
@@ -13,9 +13,12 @@ This file governs that third artifact. It is not a document you compile; it is t
 Before anything below, run:
 
 ```bash
-python3 tools/screening_answers.py --slug <company>_<role>_<abbr> \
+python3 tools/screening_answers.py --slug <folder> \
     --company "<Company>" --role "<Role>"
 ```
+
+where `<folder>` is the last part of what `python3 tools/outreach.py --folder "<Company>"
+"<Role>" <ABBR>` prints, the application's one folder.
 
 That writes `screening_answers.md` into the application folder: work
 authorization, sponsorship, citizenship, notice period, salary band, location,

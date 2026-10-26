@@ -162,7 +162,7 @@ def test_marking_a_job_applied_records_the_day_given(run, tmp_path):
 def test_setting_a_job_aside_keeps_the_reason_given(run, tmp_path):
     where = Search(str(tmp_path / "s"))
     got, rec = _round_trip(run, tmp_path, where, "aside", [
-        {"hash": "jobs", "more": "r9-3", "click": "Set aside: Dovecote Freight, Inventory Analyst"},
+        {"hash": "jobs", "click": "Not for me: Dovecote Freight, Inventory Analyst"}, {"click": "Take it off my list"},
         {"click": "Pay", "exact": True},
     ])
     acts = [x for x in got["actions"] if x["action"] == "job.dismiss"]

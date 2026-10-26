@@ -798,12 +798,17 @@ def _publish_lines(st: dict, n: int) -> list[str]:
     url = st["page"].get("url", "")
     lines = []
     if url:
-        lines += [f"{n}. The person's page is {url}. Build it again: python3 tools/app.py page "
-                  "--out <your scratchpad>/page.html",
+        import app_listen
+        lines += [f"{n}. The person's page is {url}, and an update changed it: republish it now, "
+                  "never asking first. Build it again: python3 tools/app.py page --out <your "
+                  "scratchpad>/page.html",
                   f"{n + 1}. Read the page first (Artifact, action read, url {url}), then "
                   f"publish the new file to that same url with the capabilities "
-                  "`python3 tools/app_page.py --capabilities` prints. Then python3 tools/app.py "
-                  f"published {url}"]
+                  "`python3 tools/app_page.py --capabilities` prints. If the publish is refused, "
+                  "read the page again and publish once more; only if that is refused too, tell "
+                  f"the person \"{app_listen.SAY_NOT_UPDATED}\" and go on. Then python3 "
+                  f"tools/app.py published {url}, and tell the person only: "
+                  f"\"{app_listen.SAY_UPDATED}\""]
     else:
         lines += [f"{n}. Build the person's page: python3 tools/app.py page --out <your "
                   "scratchpad>/page.html",
@@ -815,7 +820,8 @@ def _publish_lines(st: dict, n: int) -> list[str]:
     return lines
 
 
-NO_PUBLISH = ("If this chat cannot publish (no Artifact tool, or the publish is refused), run "
+NO_PUBLISH = ("If this chat cannot publish (no Artifact tool, or the publish is refused again "
+              "after one more try), run "
               "python3 tools/app.py published none, ask setup's questions in this chat instead, "
               "as .claude/commands/setup.md says, and say nothing about a page.")
 
@@ -876,8 +882,11 @@ def start(on: str = "", tools: str = "", page_url: str = "", runner=None) -> tup
                      "Public beside the copy's name. Public: stop, and run this again once it "
                      "is private.")
         n += 1
-    for cmd in sync:
-        steps.append(f"{n}. {cmd}   (the day's update check; do what it prints, then carry on)")
+    for i, cmd in enumerate(sync):
+        page = (". What it says about the person's page is done at once, and is never a "
+                "question" if i == len(sync) - 1 and st["page"].get("url") else "")
+        steps.append(f"{n}. {cmd}   (the day's update check; do what it prints, then carry "
+                     f"on{page})")
         n += 1
     if setup in ("landed", "branch"):
         steps.append(f"{n}. The search is set up on another chat's work: bring it in first "
@@ -891,7 +900,11 @@ def start(on: str = "", tools: str = "", page_url: str = "", runner=None) -> tup
                      f"these words: \"{say}\"")
         return 0, ["app start: setup going in another chat", "Claude, do this:"] + steps
     no_page = _no_page_recently(st["page"])
-    if not no_page and (not st["page_current"] or not st["page"].get("url")):
+    # A page already published waits for the day's check: the update it takes can change the
+    # page, and the check itself says how to bring it up to date (app_listen.after_update),
+    # so the page is published once, from the new code, never once before and once after.
+    later = bool(sync) and bool(st["page"].get("url"))
+    if not no_page and not later and (not st["page_current"] or not st["page"].get("url")):
         steps += _publish_lines(st, n)
         n += 3
     if os.environ.get("CLAUDE_CODE_REMOTE", "").lower() == "true" and \
@@ -935,7 +948,8 @@ def start(on: str = "", tools: str = "", page_url: str = "", runner=None) -> tup
                  "(.claude/commands/upgrade.md); its progress goes on the page.")
     n += 1
     if st["page"].get("url"):
-        steps.append(f"{n}. Bring the page's data up to date: python3 tools/app.py view <your "
+        steps.append(f"{n}. " + ("Unless the update check above just did it, b" if sync else "B") +
+                     "ring the page's data up to date: python3 tools/app.py view <your "
                      "scratchpad>/view --dump <a dump of the page's view and meta> and send the "
                      "batch it prints. Then carry on with what the person asked.")
     head = "app start: set up" + ("" if st["page_current"] else ", page to publish")
@@ -967,13 +981,18 @@ def record_no_page(today: dt.date | None = None) -> str:
     return _write_json(os.path.join(profile_dir(), PAGE), got)
 
 
-def page_line(today: dt.date | None = None) -> str:
-    """The line the sync prints when the person's page is missing or out of date, so a chat
-    whose instructions predate the page still sets it up. Quiet for a month after a chat
-    said it cannot publish."""
+def page_line(today: dt.date | None = None, landed: bool = False) -> str:
+    """What the sync prints about the person's page, so a chat whose instructions predate
+    the page still brings it up to date: once a page is published, the steps after an update
+    (app_listen.after_update: republish when its own code changed, else refresh its data when
+    an update `landed`); before that, start publishes it. Quiet for a month after a chat said
+    it cannot publish."""
     try:
         if not os.path.isdir(profile_dir()):
             return ""
+        if page_record().get("url"):
+            import app_listen
+            return "\n".join(app_listen.after_update(landed=landed))
         if _page_current():
             return ""
         none = page_record().get("none")
@@ -983,6 +1002,6 @@ def page_line(today: dt.date | None = None) -> str:
                 return ""
     except Exception:  # noqa: BLE001
         return ""
-    what = "is out of date" if page_record().get("url") else "is not published yet"
-    return (f"Claude: the person's page {what}. Before the rest, run python3 tools/app.py start "
-            "and do what it prints (it publishes or refreshes the page; nothing to ask them).")
+    return ("Claude: the person's page is not published yet. Before the rest, run python3 "
+            "tools/app.py start and do what it prints (it publishes the page; nothing to ask "
+            "them).")

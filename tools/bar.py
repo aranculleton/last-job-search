@@ -327,11 +327,38 @@ def unjudged(path: str | None = None) -> list[str]:
     return out
 
 
+def unjudged_contacts(today=None) -> list[str]:
+    """The employers of people with a follow-up owed (tools/open_actions.py) that no list
+    names and nobody has judged, each once: judged, an employer that clears nothing stops
+    filling the person's To do (the maintainer, 2026-10-26)."""
+    import csv_store
+    import open_actions
+    def rows(name):
+        p = person.state(name)
+        return csv_store.dict_rows(p) if os.path.isfile(p) else []
+    contacts = rows("network_contacts.csv")
+    threads = rows("network_threads.csv")
+    tracker = csv_store.tracker()
+    today = today or datetime.date.today()
+    book = {str(c.get("contact_id") or "").strip(): c for c in contacts}
+    out, seen = [], set()
+    for i in open_actions.due_items(contacts, threads, tracker, today):
+        if i.get("half") != "contact" or i.get("kind") == "reply":
+            continue
+        name = str(book.get(i.get("contact_id") or "", {}).get("company") or "").strip()
+        k = company_key(name)
+        if name and k not in seen and not listed(name):
+            seen.add(k)
+            out.append(name)
+    return out
+
+
 def main(argv: list[str]) -> int:
     if not argv or argv[0] in ("-h", "--help"):
         print('usage: python3 tools/bar.py "<company>" ["<company>" ...]\n'
               '       python3 tools/bar.py judge "<company>" <pay|prestige|signal|none> "<why>"\n'
-              '       python3 tools/bar.py unjudged [documents/rounds/<round>.json]\n\n'
+              '       python3 tools/bar.py unjudged [documents/rounds/<round>.json]\n'
+              '       python3 tools/bar.py unjudged --contacts\n\n'
               + __doc__.strip().split("\n\n")[0])
         return 0 if argv else 2
     if argv[0] == "judge":
@@ -343,6 +370,10 @@ def main(argv: list[str]) -> int:
         except ValueError as e:                  # Unreadable among them
             print(f"bar: {e}")
             return 2
+        return 0
+    if argv[0] == "unjudged" and argv[1:] == ["--contacts"]:
+        names = unjudged_contacts()
+        print("\n".join(names) if names else "every employer with a follow-up owed is on a list or judged")
         return 0
     if argv[0] == "unjudged":
         names = unjudged(argv[1] if len(argv) > 1 else None)

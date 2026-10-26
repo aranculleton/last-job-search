@@ -265,7 +265,8 @@ def record(drafts: list[dict], metas: dict[str, dict], today: str, round_name: s
 
 
 def screening(draft: dict) -> str:
-    slug = outreach.slug(draft["company"], draft["role"], draft["abbr"])
+    # The folder outreach.py wrote the note into, whichever name it has on disk.
+    slug = os.path.basename(outreach.app_folder(draft["company"], draft["role"], draft["abbr"]))
     out = subprocess.run([sys.executable, os.path.join(ROOT, "tools", "screening_answers.py"),
                           "--slug", slug, "--company", draft["company"], "--role", draft["role"]],
                          capture_output=True, text=True, encoding="utf-8", errors="replace")

@@ -208,7 +208,7 @@ def test_setup_and_the_place_check_carry_no_warning_or_consent_words():
         texts[rel] = open(os.path.join(ROOT, rel), encoding="utf-8").read()
     readme = open(os.path.join(ROOT, "README.md"), encoding="utf-8").read()
     texts["README get started"] = readme[readme.index("## Get started"):
-                                         readme.index("## What you can say to it")]
+                                         readme.index("## What it looks like")]
     found = [f"{k}: {m.group(0)}" for k, t in texts.items() for m in [BANNED.search(t)] if m]
     assert found == [], found
 

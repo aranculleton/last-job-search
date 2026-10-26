@@ -418,7 +418,9 @@ def pay(text: str) -> dict:
         return {"low": lo, "high": hi, "currency": cur, "quote": quote,
                 "where": ("elsewhere: " + place) if place else "home"}
     for s in _sentences(text):
-        if not ts.RANGE_CUE.search(s) or not _AMOUNT.search(s):
+        # "Our annual revenue is in the hundreds of millions USD" is the employer's money:
+        # read as pay, it asked whether the pay was for another country (2026-10-26).
+        if not ts.RANGE_CUE.search(s) or not _AMOUNT.search(s) or ts.about_the_company(s):
             continue
         other = _other_currency(s)
         if other:

@@ -58,8 +58,9 @@ book and threads, documents, research) is the person's; everything else is the a
   profile's data files, which the tools and these instructions already read, and they are
   followed exactly like the app's.
 - Updates come by themselves, unless the person asks to choose ("only update when I say"):
-  then write `"app_updates": "when_asked"` into `profile/person.json` for them, and when they
-  say "update", `python3 tools/sync_app.py --update` takes it.
+  then write `"app_updates": "when_asked"` into `profile/person.json` for them. Whenever they
+  say "update", in any words and whatever the setting, `python3 tools/sync_app.py --update`
+  takes it, and the page steps it prints are done at once, never asked about.
 
 ## Talking to the person: plain words, one recommendation, short
 
@@ -83,7 +84,8 @@ they cannot act on is one they did not get. Everything said to them, on the page
   local CI are always yes: never ask, never describe them, and never show a command, an
   option, a commit, a branch, a pull request, CI, master or a merge. Say the outcome in plain
   words ("Saved.", "Updated to the newest version.") or nothing at all. Lines a tool prints
-  for you (`sync_app:`, `Claude:`, file paths, counts of commits) are never repeated. The one
+  for you (`sync_app:`, `Claude:`, file paths, counts of commits) are never repeated, and a
+  timer or background job of yours that ends with nothing new for them is not mentioned. The one
   exception is the maintainer's own repo (its GitHub owner is the app's, which
   `sync_app.maintainers()` checks), and only when they ask.
 
@@ -108,6 +110,11 @@ question for the person goes on the page too, as a To do card, never left waitin
 Where no page can be published, the chat is the page: text they will send pasted in full,
 documents sent with the file-sending tool, and applications delivered the one way RUNBOOK.md,
 "Delivering in the chat", sets. A file path is the record, never the answer on its own.
+
+The page is always one tap away from a chat. When the person asks for it in any words
+("open the app", "where's my page"), open it at once with the Artifact tool's `open` action
+(its address is `url` in `profile/app.json`), and end every reply that changed something on
+it with one line: "Your page: <its link>".
 
 ## Learning the person
 
@@ -139,6 +146,7 @@ Record and persist, then land on master".
 |---|---|
 | What the start command prints: the day's update check, profile upgrades, the model check | RUNBOOK.md, "Start of a session" |
 | The page rang this chat (`[app]`, a work item) | the `app` skill |
+| A screenshot, message or link pasted in any chat (a reply, a job someone sent, a call) | the `app` skill, "A message in the chat": done end to end, never asked which command |
 | Which command or skill does what (`/prep` is a networking call; `/interview` a real interview, a recruiter screen included) | RUNBOOK.md, "Commands and skills: what routes where" |
 | A job search: run it end to end, rank down, the hard cuts, stop at the shortlist and ask | the job-scraper skill (`/scrape`), RUNBOOK.md step 1 |
 | An application: fit first, then the drafting pipeline, both audits and the checklist | `/apply`, RUNBOOK.md steps 2 to 4 |

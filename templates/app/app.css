@@ -21,7 +21,7 @@
   --tabs-h: 64px;
   --top-h: 60px;
   --target: 44px;
-  --gap: 16px;
+  --gap: 12px;
 }
 
 *, *::before, *::after { box-sizing: border-box; }
@@ -33,7 +33,7 @@ body {
   color: var(--ink);
   font-family: var(--font-ui);
   font-size: var(--t-md);
-  line-height: 1.5;
+  line-height: 1.45;
   padding-left: max(16px, env(safe-area-inset-left, 0px));
   padding-right: max(16px, env(safe-area-inset-right, 0px));
   overflow-wrap: break-word;
@@ -53,7 +53,8 @@ ul.plain, ol.plain { list-style: none; margin: 0; padding: 0; }
 .nowrap { white-space: nowrap; }
 bdi { unicode-bidi: isolate; }
 
-.skip { position: absolute; left: 12px; top: -48px; z-index: 50; background: var(--surface); color: var(--link); padding: 12px 16px; border-radius: var(--r-sm); box-shadow: var(--shadow); font-weight: 600; }
+.skip { position: absolute; left: 12px; top: -48px; z-index: 50; background: var(--surface); color: var(--link); padding: 12px 16px; border-radius: var(--r-sm); box-shadow: none; font-weight: 600; }
+.skip:focus { box-shadow: var(--shadow); }
 .skip:focus { top: calc(env(safe-area-inset-top, 0px) + 8px); }
 .opening { display: none; margin: 30vh auto 0; text-align: center; color: var(--muted); }
 .js .opening { display: block; }
@@ -122,6 +123,10 @@ bdi { unicode-bidi: isolate; }
 .ic { width: 22px; height: 22px; flex: none; }
 .badge { min-width: 20px; height: 20px; padding: 0 8px; border-radius: 10px; background: var(--accent); color: var(--accent-ink); font: 600 0.75rem/20px var(--font-data); text-align: center; }
 .tab .badge { position: absolute; top: 5px; left: calc(50% + 6px); }
+/* A quiet count: the section's own number, never a call to act. */
+.navcount { min-width: 20px; height: 20px; padding: 0 8px; border-radius: 10px; background: var(--sunk); color: var(--muted); font: 600 0.75rem/20px var(--font-data); text-align: center; }
+.side-list .navcount, .side-list .badge { margin-left: auto; }
+.tab .navcount { position: absolute; top: 5px; left: calc(50% + 6px); }
 
 @media (min-width: 760px) {
   .shell {
@@ -154,10 +159,7 @@ bdi { unicode-bidi: isolate; }
 .side-list a:hover .count, .side-list a[aria-current="page"] .count { color: var(--ink); }
 .side-label { margin-right: auto; }
 .count { font: 600 var(--t-sm) var(--font-data); color: var(--muted); }
-.side-foot { display: grid; gap: 0; padding-left: 12px; }
-.side-foot a { display: flex; align-items: center; min-height: 36px; font-size: var(--t-sm); color: var(--muted); text-decoration: none; }
-.side-foot a:hover { color: var(--ink); text-decoration: underline; text-decoration-color: var(--link-line); }
-.side-foot a[aria-current="page"] { color: var(--ink); font-weight: 600; }
+.side-foot { margin-top: 8px; padding-top: 8px; border-top: 1px solid var(--line); }
 
 /* ------------------------------------------------------------------ sections */
 .sec { display: grid; grid-template-columns: minmax(0, 1fr); gap: 20px; max-width: 760px; }
@@ -176,7 +178,7 @@ bdi { unicode-bidi: isolate; }
 .empty-title { color: var(--ink); font-weight: 600; font-size: var(--t-lg); }
 .so-far { color: var(--muted); }
 
-.card { background: var(--surface); border: 1px solid var(--line); border-radius: var(--r); padding: 20px; display: grid; gap: 12px; min-width: 0; box-shadow: var(--shadow); }
+.card { background: var(--surface); border: 1px solid var(--line); border-radius: var(--r); padding: 16px; display: grid; gap: 8px; min-width: 0; box-shadow: var(--shadow); }
 .card:focus { outline: none; }
 .card:focus-visible { outline: 3px solid var(--focus); outline-offset: 2px; }
 .card.flash { box-shadow: 0 0 0 3px var(--mark); }
@@ -188,6 +190,24 @@ bdi { unicode-bidi: isolate; }
 .card-actions, .opts, .wc-actions, .inline, .sheet-actions, .talk-row, .bulk-btns, .more-acts, .suggest-acts, .examples { display: flex; flex-wrap: wrap; gap: 12px; align-items: center; }
 .card-actions { margin-top: 4px; }
 .todo-top { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 8px 12px; }
+/* A checklist card: one row a person, their buttons at the row's end. */
+.g-rows { display: grid; margin-top: 8px; }
+.g-row { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 4px 12px; padding: 8px 0; border-top: 1px solid var(--line); }
+.g-row:first-child { border-top: 0; }
+.g-row.is-marked .g-name { color: var(--muted); }
+.g-main { min-width: 0; flex: 1 1 14rem; }
+.g-name { font-weight: 600; }
+.g-acts { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
+.hidden-note { margin-top: 12px; }
+.top-end { display: inline-flex; align-items: center; gap: 4px; margin-left: auto; }
+.head-tools { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
+.btn > .ic { width: 18px; height: 18px; margin-right: 8px; flex: none; }
+.btn.icon-only { padding-left: 12px; padding-right: 12px; }
+.btn.icon-only > .ic { margin-right: 0; }
+.btn.icon-only > span:not(.sr-only) { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
+/* A line with its "?" beside it; the reason opens on its own line below. */
+.hint-line { display: flex; flex-wrap: wrap; align-items: center; column-gap: 4px; }
+.hint-line > .q-hint { flex-basis: 100%; }
 .kind { display: inline-flex; align-items: center; gap: 8px; font-size: var(--t-sm); font-weight: 600; color: var(--muted); }
 .kind .ic { width: 18px; height: 18px; }
 .is-answered, .is-marked { background: var(--sunk); box-shadow: none; }
@@ -204,7 +224,7 @@ bdi { unicode-bidi: isolate; }
 .btn.small { min-height: 38px; padding: 8px 16px; font-size: var(--t-sm); }
 .btn.primary { background: var(--accent); color: var(--accent-ink); border-color: var(--accent); }
 .btn.primary:hover { background: var(--accent-hover); border-color: var(--accent-hover); color: var(--accent-ink); }
-.btn.secondary, .btn.answer { background: var(--raised); color: var(--ink); border-color: var(--raised); }
+.btn.secondary, .btn.answer { background: var(--raised); color: var(--ink); border-color: var(--line-strong); }
 .btn.secondary:hover, .btn.answer:hover { background: var(--raised-hover); border-color: var(--raised-hover); }
 .btn.answer[aria-pressed="true"] { background: var(--surface); border-color: var(--ink); box-shadow: inset 0 0 0 1px var(--ink); }
 .btn.answer[aria-pressed="true"]::before { content: "✓"; }
@@ -237,7 +257,11 @@ p.tone-bad, .note.tone-bad, .state.tone-bad { color: var(--st-failed); }
 .state.tone-muted, .note.tone-muted { color: var(--muted); }
 .state { font-size: var(--t-sm); display: flex; flex-wrap: wrap; align-items: center; gap: 4px 12px; }
 .note { font-size: var(--t-sm); }
-.cost { font-size: var(--t-sm); color: var(--muted); }
+.cost { font-size: var(--t-sm); color: var(--muted); display: inline-flex; align-items: center; gap: 4px; }
+.gauge { width: 14px; height: 12px; flex: none; }
+.gauge .on { fill: currentColor; }
+.gauge .off { fill: var(--line); }
+.sheet-cost .gauge { margin-right: 2px; vertical-align: -1px; }
 .fix { display: inline-flex; flex-wrap: wrap; align-items: center; gap: 8px 12px; }
 
 .pick input, .pick-all input, .choice input[type="checkbox"], .choice input[type="radio"] { width: 20px; height: 20px; accent-color: var(--mark); margin: 0; }
@@ -283,7 +307,7 @@ details.more[open] > .more-btn::after { transform: rotate(-135deg) translateY(-1
 .card.job { grid-template-columns: 56px minmax(0, 1fr); column-gap: 16px; row-gap: 8px; align-items: start; }
 .card.job.selecting { grid-template-columns: 28px 56px minmax(0, 1fr); }
 .card.job .score { display: flex; flex-direction: column; align-items: flex-start; gap: 8px; }
-.card.job .job-main { display: grid; gap: 8px; min-width: 0; }
+.card.job .job-main { display: grid; gap: 4px; min-width: 0; }
 .score-n { font: 600 1.75rem/1 var(--font-data); font-variant-numeric: tabular-nums; letter-spacing: -0.02em; }
 .score-band { font-size: var(--t-sm); font-weight: 600; padding: 2px 8px; border-radius: 999px; }
 .score-band.tone-ok { background: var(--st-done-bg); color: var(--st-done); }
@@ -332,7 +356,7 @@ p.count.tone-bad { color: var(--st-failed); }
 
 /* ------------------------------------------------------------------ contacts, interviews */
 .people { display: grid; gap: 12px; }
-.person { background: var(--surface); border: 1px solid var(--line); border-radius: var(--r); padding: 16px 20px; display: grid; grid-template-columns: 40px minmax(0, 1fr); gap: 16px; box-shadow: var(--shadow); }
+.person { background: var(--surface); border: 1px solid var(--line); border-radius: var(--r); padding: 12px 16px; display: grid; grid-template-columns: 40px minmax(0, 1fr); gap: 12px; box-shadow: var(--shadow); }
 .person:focus { outline: none; }
 .person:focus-visible { outline: 3px solid var(--focus); outline-offset: 2px; }
 .person h3 { font-size: var(--t-lg); }
@@ -468,6 +492,8 @@ textarea { width: 100%; resize: vertical; line-height: 1.45; }
 .sum-small { font-size: 0.875rem; color: var(--muted); }
 .sum-small .btn.link { font-size: inherit; }
 .summary.with-tool > :last-child { flex: none; }
+.summary.with-tool { flex-wrap: wrap; }
+.summary.with-tool > .head-tools { flex: 0 1 auto; }
 .band { gap: 12px; margin-top: 12px; }
 .band .group, .set-group .group, .apps-head .group { font-size: 1rem; font-weight: 600; }
 .todo-group { gap: 8px; }
@@ -607,6 +633,15 @@ dialog.work-sheet { position: fixed; inset: auto 0 0 0; margin: 0; width: 100%; 
 .talk-who { font-weight: 600; }
 
 /* Setup: one question a screen (4.12) */
+/* A detail view (an interview's prep, an application, a conversation): a screen of its own,
+   styled like a question screen, never the browser's bare dialog. */
+dialog.detail { position: fixed; inset: 0; margin: 0; width: 100%; max-width: 100%; height: 100dvh; max-height: 100dvh; padding: 0; border: 0; background: var(--surface); color: var(--ink); overflow: auto; }
+dialog.detail[open] { display: flex; flex-direction: column; }
+dialog.detail::backdrop { background: var(--bg); opacity: 0.85; }
+.detail-top { position: sticky; top: 0; z-index: 1; display: flex; align-items: center; padding: max(8px, env(safe-area-inset-top, 0px)) 16px 8px; background: var(--surface); border-bottom: 1px solid var(--line); }
+.detail-body { display: grid; gap: 16px; padding: 16px max(16px, env(safe-area-inset-left, 0px)) 32px; min-width: 0; overflow-wrap: anywhere; }
+.detail-title { font-size: 1.375rem; font-weight: 700; line-height: 1.25; }
+@media (min-width: 760px) { dialog.detail { margin: auto; width: 680px; height: auto; max-height: calc(100dvh - 64px); border: 1px solid var(--line); border-radius: var(--r); } }
 dialog.question-screen { position: fixed; inset: 0; margin: 0; width: 100%; max-width: 100%; height: 100dvh; max-height: 100dvh; padding: 0; border: 0; background: var(--surface); color: var(--ink); }
 dialog.question-screen[open] { display: flex; flex-direction: column; }
 @media (min-width: 760px) { dialog.question-screen { margin: auto; width: 560px; height: auto; max-height: calc(100dvh - 64px); border: 1px solid var(--line); border-radius: var(--r); } }
@@ -825,3 +860,108 @@ label.pick { display: flex; align-items: flex-start; justify-content: center; wi
   .browser-panel { border-radius: var(--r) var(--r) 0 0; padding-bottom: calc(12px + env(safe-area-inset-bottom, 0px)); }
 }
 .how > summary { min-height: 44px; display: flex; align-items: center; cursor: pointer; color: var(--link); text-decoration: underline; text-decoration-color: var(--link-line); }
+
+/* ------------------------------------------------------------------ the brief: a list to open, not a page of links
+   (the maintainer, 2026-10-26: "clunky looking and not formatted great"). Each line is a row with a small dot,
+   its link underlined lightly (links are the text colour, so the underline stays), and Tweak sits at the end. */
+.brief ul { list-style: none; padding: 0; gap: 0; }
+.brief li { display: flex; align-items: flex-start; gap: 12px; padding: 8px 0; border-top: 1px solid var(--line); }
+.brief li:first-child { border-top: 0; }
+.brief li::before { content: ""; flex: none; width: 6px; height: 6px; margin-top: 8px; border-radius: 50%; background: var(--mark); }
+.brief li a { text-decoration-thickness: 1px; text-underline-offset: 3px; }
+.brief .tweak-entry { justify-content: flex-end; }
+.brief-more > summary { cursor: pointer; color: var(--muted); font-size: var(--t-sm); padding: 4px 0; }
+.brief-more[open] > summary { margin-bottom: 4px; }
+/* A form in a sheet never runs past its edge: the longest choice in a list set the sheet's
+   width, and its own text and fields ran off the right (the maintainer, 2026-10-26). */
+dialog.work-sheet :is(form, div, label, fieldset) { min-width: 0; }
+dialog.work-sheet :is(select, input, textarea) { width: 100%; max-width: 100%; min-width: 0; text-overflow: ellipsis; }
+.band-more > summary { list-style: none; cursor: pointer; text-align: center; padding: 8px 16px; margin-top: 8px; min-height: var(--target); display: grid; place-items: center;
+  border: 1px solid var(--line-strong); border-radius: 999px; font-weight: 600; font-size: var(--t-sm); }
+.band-more > summary::-webkit-details-marker { display: none; }
+.band-more[open] > summary { margin-bottom: 12px; }
+
+/* An opened setting reads as inside its row, a shade deeper, and each item in it is a block:
+   its name and its state on one line, the state always at the right, the button under them.
+   Where one setting ended and the next began was hard to see (the maintainer, 2026-10-26). */
+.setting-row[open] > .set-sum { font-weight: 600; }
+.setting-row[open] > .set-body { background: var(--sunk); border-top: 1px solid var(--line); padding-top: 12px; }
+.where-list .task { display: grid; gap: 4px; justify-content: stretch; padding: 12px 0; }
+.where-list .task:first-child { border-top: 0; }
+.where-list .task-head { width: 100%; }
+.where-list .task > .btn { justify-self: start; }
+
+/* With a mouse the page's text is a step smaller than the browser's default, and still scales
+   with the person's own text-size setting: at 16px it read as zoomed in on a computer
+   (the maintainer, 2026-10-26). Touch screens keep the full size. */
+@media (pointer: fine) { html { font-size: 93.75%; } }
+
+/* ------------------------------------------------------------------ the chat from any section, and pictures in it
+   (the person, 2026-10-26). The conversation is one body: on the Chat page it lays out as part
+   of the section; from any other section it moves into a panel bottom right, a sheet above the
+   tab bar on a phone. The round button sits under toasts and the panel over them: a toast
+   repeats what its item already says. */
+.talk-body { display: contents; }
+/* How far Claude's browser panel pushes the button and the panel up, set by the script. */
+.chat-fab, .chat-dock { --dock-lift: 0px; }
+.talk-intro { color: var(--muted); max-width: 60ch; }
+.talk-examples .examples + .examples { margin-top: 4px; }
+/* The picture button, the box and Send stay on one line, the box taking what is left. */
+.talk-row { flex-wrap: nowrap; }
+.talk-add { display: inline-grid; place-items: center; flex: none; width: var(--target); height: var(--target); margin-left: -12px; border: 0; border-radius: 50%; background: none; color: var(--ink); cursor: pointer; }
+.talk-add:hover { background: var(--raised); }
+.talk-add[disabled] { color: var(--muted); cursor: not-allowed; }
+.talk-attach { display: flex; flex-wrap: wrap; gap: 8px; }
+.pic-chip { display: flex; align-items: center; gap: 8px; padding: 4px 8px 4px 4px; border: 1px solid var(--line-strong); border-radius: var(--r-sm); background: var(--surface); max-width: 100%; }
+.pic-chip.is-bad { border-color: var(--st-failed); }
+.pic-thumb { width: 56px; height: 56px; flex: none; border-radius: 8px; object-fit: cover; background: var(--sunk); }
+.pic-none { display: inline-grid; place-items: center; color: var(--muted); }
+.pic-state { font-size: var(--t-sm); min-width: 0; overflow-wrap: anywhere; }
+.pic-state.tone-bad { color: var(--st-failed); }
+.talk-attach .note { flex-basis: 100%; }
+.talk-pics { display: flex; flex-wrap: wrap; gap: 8px; }
+.talk-pic { display: block; width: 160px; height: auto; max-width: 100%; max-height: 240px; object-fit: contain; border-radius: var(--r-sm); background: var(--sunk); }
+.pic-gone { display: grid; place-items: center; height: 72px; padding: 8px; color: var(--muted); font-size: var(--t-sm); text-align: center; }
+.head-ask { font-size: var(--t-sm); }
+.head-ask .btn.link { font-size: inherit; padding-left: 0; }
+
+.chat-fab {
+  position: fixed; z-index: 29; right: max(16px, env(safe-area-inset-right, 0px));
+  bottom: calc(env(safe-area-inset-bottom, 0px) + 20px + var(--dock-lift, 0px));
+  display: inline-flex; align-items: center; gap: 8px; min-height: 48px; padding: 8px 20px 8px 16px;
+  border: 1px solid var(--accent); border-radius: 999px; background: var(--accent); color: var(--accent-ink);
+  font: inherit; font-weight: 600; box-shadow: var(--shadow); cursor: pointer;
+}
+.chat-fab:hover { background: var(--accent-hover); border-color: var(--accent-hover); }
+.chat-fab .ic { width: 20px; height: 20px; }
+/* On a phone the tab bar has Chat already: the button is a small round icon that covers
+   nothing, its name kept for a screen reader. */
+@media (max-width: 759px) { .chat-fab { width: 52px; height: 52px; min-height: 52px; padding: 0; justify-content: center; font-size: 0; gap: 0; } .chat-fab .ic { width: 24px; height: 24px; } }
+body.has-fab .shell { padding-bottom: calc(var(--tabs-h) + env(safe-area-inset-bottom, 0px) + 44px + 44px); }
+.chat-dock {
+  position: fixed; z-index: 31; right: max(16px, env(safe-area-inset-right, 0px));
+  bottom: calc(env(safe-area-inset-bottom, 0px) + 16px + var(--dock-lift, 0px));
+  width: min(420px, calc(100vw - 32px)); height: min(600px, calc(100dvh - var(--top-h) - env(safe-area-inset-top, 0px) - env(safe-area-inset-bottom, 0px) - 48px - var(--dock-lift, 0px)));
+  display: flex; flex-direction: column; overflow: hidden;
+  background: var(--surface); color: var(--ink); border: 1px solid var(--line-strong); border-radius: var(--r); box-shadow: var(--shadow);
+}
+.dock-top { display: flex; align-items: center; gap: 8px; padding: 8px 8px 8px 16px; border-bottom: 1px solid var(--line); flex: none; }
+.dock-title { margin: 0 auto 0 0; font-size: var(--t-lg); font-weight: 600; outline: none; }
+.dock-body { flex: 1 1 auto; min-height: 0; overflow-y: auto; overscroll-behavior: contain; padding: 0 16px; }
+.chat-dock .talk-body { display: flex; flex-direction: column; gap: 12px; min-height: 100%; padding-top: 12px; }
+.chat-dock .talk-form { position: sticky; bottom: 0; margin-top: auto; background: var(--surface); padding-block: 8px 12px; }
+.chat-dock .talk-msg { max-width: 100%; }
+.chat-dock .talk-msg.from-you { max-width: 92%; }
+.chat-dock .talk-row { background: var(--bg); }
+@media (min-width: 760px) {
+  body.has-fab .shell { padding-bottom: calc(env(safe-area-inset-bottom, 0px) + 44px + 44px); }
+}
+@media (max-width: 759px) {
+  .chat-fab { bottom: calc(var(--tabs-h) + env(safe-area-inset-bottom, 0px) + 12px + var(--dock-lift, 0px)); }
+  .chat-dock {
+    left: 0; right: 0; width: auto; border-radius: var(--r) var(--r) 0 0; border-bottom: 0;
+    bottom: max(calc(var(--tabs-h) + env(safe-area-inset-bottom, 0px)), var(--dock-lift, 0px));
+    height: min(72dvh, calc(100dvh - var(--tabs-h) - env(safe-area-inset-bottom, 0px) - env(safe-area-inset-top, 0px) - var(--top-h) - var(--dock-lift, 0px)));
+    padding-left: env(safe-area-inset-left, 0px); padding-right: env(safe-area-inset-right, 0px);
+  }
+}

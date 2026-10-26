@@ -11,14 +11,12 @@ stay in charge of what goes out.
 
 [![CI](https://github.com/aranculleton/last-job-search/actions/workflows/ci.yml/badge.svg)](https://github.com/aranculleton/last-job-search/actions/workflows/ci.yml)
 
-![Your page: what needs you, the jobs worth a look, your drafts and the people to talk to](docs/images/page-demo.gif)
-
-<p>
-  <img src="docs/images/page-todo.webp" alt="The To do list on a computer" width="68%">
-  <img src="docs/images/page-jobs-phone.webp" alt="Scored jobs on a phone, in the dark look" width="28%">
+<p align="center">
+  <img src="docs/images/page-demo.webp" width="720"
+       alt="Your page: what needs you, the jobs worth a look, your drafts, your contacts and your interviews">
+  <br>
+  <sub>Your page, with an invented search on it. Every name is made up.</sub>
 </p>
-
-<sub>Every name above is made up.</sub>
 
 ## What you need
 
@@ -43,20 +41,34 @@ stay in charge of what goes out.
 [START_HERE.md](START_HERE.md) has each step for a phone, a browser or a computer, and
 [HELP.md](HELP.md) what to do if something goes wrong.
 
-## What you can say to it
+## What it looks like
 
-| You say | You get |
+<p align="center">
+  <img src="docs/images/page-contacts.webp" width="62%"
+       alt="Contacts on a computer, in the dark look: who is waiting on whom, with Claude working in the background">
+  &nbsp;
+  <img src="docs/images/page-interviews-phone.webp" width="18%" alt="Interviews on a phone">
+  <br>
+  <sub><b>Contacts</b> on a computer: who is waiting on whom &nbsp;·&nbsp; <b>Interviews</b> on a phone: what is coming up</sub>
+</p>
+
+## What you do on your page
+
+Tap, or say it in any chat. Claude does the work in the background and shows its progress.
+
+| You do | You get |
 |---|---|
-| "Find me jobs" | A scored shortlist with links, then a question: which ones? |
-| "Build one with me", when you have no resume | A one-page resume made with you, one job at a time, checked |
-| A job posting, pasted or linked | A resume and cover letter written for that job, checked |
-| "Who should I talk to at Acme?" | People worth contacting there, found from any chat, ranked with the evidence for each, and a first note to send. Nothing is sent: you send it |
-| "What do I owe?" | Replies and follow-ups that are due |
-| "Prep me for my interview at Acme" | Likely questions, your best answers and questions to ask |
+| **Search again** | New jobs, each scored 0 to 100 against you, with the reasons |
+| **Draft** on a job you like | A resume and cover letter written for that job, checked |
+| **Add a job** (paste a link or the posting) | The same, for a job you found yourself |
+| **Prepare** on an interview | Likely questions, your best answers and questions to ask |
+| **Contacts** | People worth talking to at the employers you want, and a first note for each. You send it |
+| **To do** | Replies and follow-ups that are due, drafted for you |
+| **Tweak** on anything Claude made | A change of look, length or tone, before you approve it |
 | "They replied" or "I got an interview" | The record updated, and what to do next |
 
-It also says what to learn next and takes your own resume template. It never asks for your
-email: new jobs and what is due reach you on your page and in your brief.
+No resume yet? Say "build one with me". It never asks for your email: new jobs and what is
+due reach you on your page and in your twice-weekly brief.
 
 ## Why it works differently
 
@@ -106,7 +118,7 @@ You never need any of this to use it.
 
 Searching, filtering and scoring are plain Python and Bash, so a search reads thousands of
 postings without using the model. The model starts only when you pick what to write. The
-tests run in CI on Windows, macOS and Linux, and on any copy through `./tools/ci_local.sh`. The
+tests run in CI on macOS and Linux, and on any copy through `./tools/ci_local.sh`. The
 employer-board reader is also published as [openroles](https://github.com/aranculleton/openroles).
 
 ## Credits and licence

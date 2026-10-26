@@ -848,6 +848,17 @@ def _process_postings() -> str:
             "CI fails until each has one" % n) if n else ""
 
 
+def _twin_folders() -> str:
+    """One application in two folders: until 2026-10-26 verify_batch.py named the folder
+    without the abbreviation outreach.py named it with, so its verify.json sat apart from
+    the rest and the page never showed the checks that ran."""
+    found = _probe("import docpaths as d; print(len(d.twin_folders()))")
+    n = int(found) if found.isdigit() else 0
+    return ("%d application(s) kept in two folders: the checks that ran sit apart from the "
+            "note and documents, and the folder check in your own CI fails until each is "
+            "one" % n) if n else ""
+
+
 def _own_tests() -> str:
     """The person's own tests an update broke by changing what the app does, and the ones
     that read the app's source as text, which the next rewrite of that file breaks however
@@ -1393,6 +1404,11 @@ REGISTRY: tuple[Upgrade, ...] = (
             _process_postings, "python3 tools/interview_pack.py postings", "instant",
             command=("python3", "tools/interview_pack.py", "postings"),
             paths=("documents/applications/*/job_posting.md",), priority=1, conditional=True),
+    Upgrade("one-folder-each", "2026-10-26",
+            "each application's checks kept in its one folder, beside its note and documents",
+            _twin_folders, "python3 tools/docpaths.py merge-twins", "instant",
+            command=("python3", "tools/docpaths.py", "merge-twins"),
+            paths=("documents/applications/*",), priority=1, conditional=True),
     Upgrade("runtime-files", "2026-10-19",
             "the files that change on every profile read kept out of your copy on GitHub, so the "
             "day's update check never stops on them",
@@ -1565,10 +1581,23 @@ def _method_check(name: str):
         late = B.behind(name)
         if not late or not B.applies(name):
             return ""
+        if name == "page" and _page_published():
+            # The sync's own lines bring a published page up to date at once (say_page,
+            # app_listen.after_update). Listed here as well, it started a background agent
+            # that asked for a republish already done, and came back with nothing changed.
+            return ""
         # Said in the person's terms: what is better now. A version number means
         # nothing to them, and this line reaches them.
         return f"made the older way; now {late[-1][3]}"
     return check
+
+
+def _page_published() -> bool:
+    try:
+        import app_setup
+        return bool(app_setup.page_record().get("url"))
+    except Exception:  # noqa: BLE001  listed as before
+        return False
 
 
 def _method_upgrades() -> tuple:
@@ -2282,8 +2311,9 @@ def main(argv: list[str] | None = None) -> int:
                   f"{elsewhere}: {OWNER_WHY[why_theirs]}{done}. "
                   f"Claude: start nothing and ask nothing about them; merge master first "
                   f"({MERGE_MASTER}). After {elsewhere} the next sync hands what is still pending "
-                  "to this chat. If the person says no other chat is open, take them now: "
-                  "python3 tools/profile_upgrades.py --take")
+                  "to this chat, whenever it runs: set no timer or reminder for it, and say "
+                  "nothing about it to the person. If the person says no other chat is open, "
+                  "take them now: python3 tools/profile_upgrades.py --take")
         else:
             print("Profile upgrades: none pending.")
         say_page()
@@ -2320,13 +2350,18 @@ def main(argv: list[str] | None = None) -> int:
     return 0
 
 
+LANDED = "LJS_UPDATE_LANDED"     # set to "1" by sync_app.py when its run took an update
+
+
 def say_page() -> None:
     """The person's page, missing or out of date, said where every sync prints: this file is
     always the copy the sync just brought in, so a chat whose instructions predate the page
-    still publishes it (tools/app_setup.py page_line). Never breaks the sync."""
+    still publishes it (tools/app_setup.py page_line). `LANDED` in the environment is the
+    sync's word that this run took an update, so the page's data is refreshed too. Never
+    breaks the sync."""
     try:
         import app_setup
-        said = app_setup.page_line()
+        said = app_setup.page_line(landed=os.environ.get(LANDED) == "1")
     except Exception:  # noqa: BLE001
         said = ""
     if said:

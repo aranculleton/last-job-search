@@ -48,7 +48,20 @@ day's check is five steps, before anything else:
    nothing of the app; when a newer version is waiting it prints one line, once per version
    ("An update is waiting: ..."), which goes at the end of the reply in its words, and when
    they say "update" the same command with `--update` takes it. Never press them for it,
-   and nothing waits on it.
+   and nothing waits on it. "Update" from the person, in any words ("we should have a new
+   update now"), is enough on its own, whatever the setting: run `--update` and do what it
+   prints, with nothing asked first.
+   **Once an update is in, the page is brought up to date at once, never asked about.**
+   Whichever run took it (the day's check from `app.py start`, `--if-stale`, `--update`), it
+   ends with the page's steps (`app_listen.after_update`): the page's own code changed, so
+   the chat that answers the page republishes it (any other chat asks that one to, with
+   `app.py republish`), or only its data could have, so `app.py view`. Each command runs on
+   its own, never chained. A publish that is refused is read again and tried once more; only
+   a second refusal is said, in its one plain line. The person hears one line, "Your page is
+   updated.", and nothing about safety checks, listeners, timers or the steps. Pinning the
+   page is offered once ever, by `app.py published`, which records the offer in
+   `profile/app.json`. A timer, a reminder or a background job of this chat's that ends with
+   nothing new for the person is said to nobody; no step here sets one.
 3. **No `profile/`?** `app.py start` has already said where setup stands, before anything is
    asked, by the one detector (`place.setup_state`): another chat may hold the profile on
    master or on a branch it has not landed (`set up elsewhere`: it brings it in and the
@@ -78,7 +91,7 @@ day's check is five steps, before anything else:
      messages. Its progress shows on the page.
    - **At the end of your reply**, one plain line per change it made for them, and nothing
      about commits or commands: if they want one undone, undo it yourself (`git revert`);
-     the page offers the same Undo on each change.
+     the page offers the same Undo on each change. When it made none, say nothing about it.
    - **What needs the person** ("These need you", unconfirmed facts): ask at most three, at
      the end of the session, never at the start, **each as its short plain question first**,
      as the sync prints it (the page asks them as To do cards). Detail comes only after a yes
@@ -92,7 +105,8 @@ day's check is five steps, before anything else:
    If the sync printed nothing about upgrades (its first run after this arrived is the old
    copy), run `python3 tools/profile_upgrades.py` yourself and do the same.
    - **One chat per update.** When the sync says the upgrades belong to another chat, start
-     nothing and ask nothing about them, and follow what it prints; when the person says no
+     nothing and ask nothing about them, set no timer to look again (the next sync hands them
+     over by itself), and follow what it prints; when the person says no
      other chat is open, `python3 tools/profile_upgrades.py --take` hands them over. The chat
      that brought an update in lands that sync on master promptly, before its other work.
 
@@ -349,6 +363,17 @@ Do **not** write `jobs`. The allocator does that, scoring every bullet in the li
 against this posting on tenure, recency and relevance. Hand-picking from a fixed set is
 what produces a resume that looks the same for a pricing role and a model-governance
 role.
+
+**A yes can be named in the work that used it, on that resume only.** `bullet_rewordings`
+(optional, `[{"id", "skill", "text"}]`) rewords up to three of the bullets the allocator
+chose, each the profile's own bullet with a skill the person said yes to for this
+application added beside the tool the work used. The pack lists which bullets each yes may
+go in; `tools/bullet_rewording.py` is the guard, run by the code audit and again by the
+renderer: the same numbers, every tool still named (never "Redshift" turned into the yes),
+nothing added but the yes and a linking word, and work the skill's tool family, theme or
+the profile's bridge touches. The model auditor rules on whether the work plausibly used
+it. A rewording lives in the draft and its kept `draft.json`, and is never written back to
+`profile/bullets.py`; a refused one renders as the profile's own bullet.
 
 `concession` is a drafter's note for the record and is **never rendered**; if a
 concession is warranted at all, the sentence itself lives in `p2`. Every company fact in

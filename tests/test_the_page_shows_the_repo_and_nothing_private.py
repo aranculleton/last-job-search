@@ -254,3 +254,63 @@ def test_the_model_reaches_an_open_page_as_view_documents(small, tmp_path):
         assert json.load(fh)["rev"] == out["rev"] == model(small)["rev"]
     with open(by[("view", "ready")]["file_path"], encoding="utf-8") as fh:
         assert json.load(fh)["data"][0]["company"] == "Fernhill Freight"
+
+
+def _written(batches):
+    """{(collection, doc id): (op, the document or None)} from `app.py view`'s batch files."""
+    got = {}
+    for b in batches:
+        with open(b, encoding="utf-8") as fh:
+            for e in json.load(fh):
+                body = None
+                if e.get("file_path"):
+                    with open(e["file_path"], encoding="utf-8") as fh2:
+                        body = json.load(fh2)
+                got[(e["collection"], e["doc_id"])] = (e["op"], body)
+    return got
+
+
+def test_a_section_too_big_for_one_document_goes_in_parts_and_comes_back_whole(tmp_path):
+    """A long search's jobs section is far over the database's 256 KiB a document. `app.py
+    view` used to stop on it ("page_db: view/jobs is over 256 KiB"), so nothing new reached
+    the page. It now writes the section as parts, each under the cap, that join back to
+    exactly the model's section, and an earlier write's parts the section no longer fills
+    are deleted."""
+    state = app_state.many_jobs(str(tmp_path / "state"), n=400)
+    whole = model(state)["jobs"]
+    assert page_db.stored_size({"data": whole}) > page_db.DOC_MAX * 3 // 2
+    dump = tmp_path / "dump"
+    (dump / "view").mkdir(parents=True)
+    for doc_id in ("part~jobs~9", "part~people~1"):    # left by an earlier, bigger write
+        (dump / "view" / f"{doc_id}.json").write_text(
+            json.dumps({"rev": "old", "text": "[", "__version__": 2}), encoding="utf-8")
+    out = json.loads(_app(state, "view", str(tmp_path / "out"), "--dump", str(dump),
+                          "--now", app_state.NOW).stdout)
+    got = _written(out["batches"])
+    for (coll, doc_id), (_op, body) in got.items():
+        if body is not None:
+            assert page_db.stored_size(body) <= page_db.DOC_MAX, f"{coll}/{doc_id}"
+    assert got[("view", "part~jobs~9")][0] == got[("view", "part~people~1")][0] == "delete"
+    head = got[("view", "jobs")][1]
+    assert "data" not in head and head["in_parts"] >= 2 and head["rev"] == out["rev"]
+    view = {d: {"data": b, "version": None} for (c, d), (op, b) in got.items()
+            if c == "view" and op == "set"}
+    assert page_db.joined(view, "jobs") == whole
+    assert len(page_db.joined(view, "jobs")["rows"]) == 400
+    # A part missing, or from another write, is never read as the section.
+    view.pop("part~jobs~2")
+    assert page_db.joined(view, "jobs") is None
+
+
+def test_suggestions_on_a_section_in_parts_keep_their_day():
+    """The cap of three new suggestions a day reads the suggestions already on the page from
+    the view documents, whole or in parts alike."""
+    import app_alerts
+    rows = [{"id": f"r9-{i}", "suggest": {"id": f"s{i}", "since": "2026-10-20"},
+             "pad": "x" * 2000} for i in range(200)]
+    doc = {"rev": "abc", "made_at": "2026-10-25T18:00:00Z", "data": {"rows": rows}}
+    parts = page_db.split("jobs", doc)
+    assert len(parts) > 2
+    view = {d: {"data": b, "version": 1} for d, b in parts}
+    assert app_alerts.shown_in(view) == {f"s{i}": "2026-10-20" for i in range(200)}
+    assert app_alerts.shown_in({"jobs": {"data": doc, "version": 1}}) == app_alerts.shown_in(view)

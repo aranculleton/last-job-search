@@ -344,3 +344,146 @@ def test_every_page_version_republishes_a_wording_fix_too(monkeypatch):
     # Other methods keep the rule: a wording version asks nobody to redo anything.
     assert B.behind("upskill", {"upskill": 4}) == [v for v in B.METHODS["upskill"]["versions"]
                                                    if v[0] > 4 and v[2]]
+
+
+# ------------------------------------------------------------------ after an update
+#
+# A person's chat took a new version (2026-10-26) and left their page as it was. They had to
+# say there should be an update, then ask for the page, then ask why it had not just done
+# it; the chat said a safety check had blocked its first try, set up a helper chat, offered
+# the pin and reported a leftover timer. Whatever took the update (the day's check from
+# `app.py start`, `--if-stale`, `--update` when they said "update"), the sync now ends with
+# the page's own steps, printed by the code the update just brought in.
+
+def _after_sync(copy, chat, landed=False):
+    """What the sync prints after an update, from the file the update brought in: the same
+    process sync_app.upgrades() runs, with the word it passes when the run took one."""
+    import sync_app
+    env = copy.env(LJS_CHAT=chat, **({sync_app.LANDED: "1"} if landed else {}))
+    r = subprocess.run([sys.executable, os.path.join(ROOT, "tools", "profile_upgrades.py")],
+                       env=env, capture_output=True, encoding="utf-8", errors="replace",
+                       timeout=300)
+    assert r.returncode == 0, r.stdout + r.stderr
+    return r.stdout
+
+
+def _never_asks(said):
+    import app_listen
+    claude = said[said.index("Claude: "):]
+    assert "never ask the person first" in claude and "never chained" in claude
+    assert "set no timer or reminder" in claude
+    for word in ("Shall I", "Would you like", "Do you want", "pin"):
+        assert word not in claude, word
+    said_to_them = [ln for ln in claude.splitlines() if "Tell the person" in ln]
+    assert said_to_them and all(app_listen.SAY_UPDATED in ln or app_listen.SAY_UPDATING in ln
+                                for ln in said_to_them)
+
+
+def test_an_update_that_changed_the_page_republishes_it_at_once_and_never_asks(copy):
+    import app_listen
+    copy.page(current=False)
+    assert copy.send(copy.run("listen", copy.dump(), "--chat", "helper-1", "--listen"))
+    said = _after_sync(copy, "helper-1")
+    _never_asks(said)
+    assert "Republish it:" in said and "python3 tools/app.py page --out" in said
+    assert "Artifact, action publish" in said and f"published {PAGE}" in said
+    # A refusal is tried once more, and only a second one is said, in its one line.
+    assert "read the page again and publish once more" in said
+    assert app_listen.SAY_NOT_UPDATED in said
+    # The republish is the sync's own step, never also a background agent's: listed as an
+    # upgrade as well, it came back later with nothing changed.
+    assert "upgrade.md" not in said and "Profile upgrades: none pending." in said
+    # Any other chat asks the listener at once, and does not wait for it.
+    copy.run("listen", copy.dump(), "--chat", "big-chat")
+    other = _after_sync(copy, "big-chat")
+    _never_asks(other)
+    assert "python3 tools/app.py republish" in other and "Do not wait for it" in other
+    assert "Artifact, action publish" not in other and app_listen.SAY_UPDATING in other
+    # A chat on a new copy, which has seen no chat answer, asks the page which chat does, then
+    # does the one that applies: both are printed, neither is a question.
+    os.remove(os.path.join(copy.state, "." + app_listen.CACHE))
+    new = _after_sync(copy, "chat-new")
+    _never_asks(new)
+    assert "python3 tools/app.py listen" in new and "app.py republish" in new
+    assert "Artifact, action publish" in new
+    # Once published, the sync says nothing more about the page.
+    copy.page(current=True)
+    assert "Claude: " not in _after_sync(copy, "helper-1")
+
+
+def test_an_update_that_left_the_page_code_alone_refreshes_its_data(copy):
+    import app_listen
+    copy.page(current=True)
+    said = _after_sync(copy, "big-chat", landed=True)
+    _never_asks(said)
+    assert "python3 tools/app.py view" in said and app_listen.SAY_UPDATED in said
+    assert "Artifact, action publish" not in said and "republish" not in said
+    # A sync that took nothing says nothing about the page.
+    assert "update just landed" not in _after_sync(copy, "big-chat")
+
+
+def test_the_sync_tells_the_new_code_when_its_run_took_an_update(monkeypatch):
+    import sync_app
+    seen = []
+    monkeypatch.setattr(sync_app.subprocess, "run",
+                        lambda *a, **k: seen.append(k["env"]) or
+                        subprocess.CompletedProcess(a, 0, "", ""))
+    monkeypatch.setenv(sync_app.LANDED, "1")              # left over from an earlier run
+    sync_app.upgrades("--after-sync")
+    sync_app.upgrades("--after-sync", landed=True)
+    assert sync_app.LANDED not in seen[0] and seen[1][sync_app.LANDED] == "1"
+    import profile_upgrades
+    assert profile_upgrades.LANDED == sync_app.LANDED
+
+
+def test_a_start_before_the_days_check_leaves_the_page_to_it(copy, monkeypatch):
+    """The day's check runs after start has printed, and the update it takes can change the
+    page: publishing from start as well published the page twice, the old code first."""
+    import app_listen
+    import app_setup
+    copy.page(current=False)
+    env = copy.env()
+    for k in set(os.environ) - set(env):
+        monkeypatch.delenv(k)
+    for k, v in env.items():
+        monkeypatch.setenv(k, v)
+    monkeypatch.setattr(app_setup, "_sync_stale", lambda: True)
+    code, lines = app_setup.start(on="test", tools="none")
+    said = "\n".join(app_listen.shape(code, lines, chat="helper-1"))
+    assert not _publish_steps(said), said
+    check = [ln for ln in said.splitlines() if "sync_app.py --on" in ln]
+    assert check and "the person's page is done at once, and is never a question" in check[0]
+    # Not stale: start republishes it itself, unasked, and says the one line.
+    monkeypatch.setattr(app_setup, "_sync_stale", lambda: False)
+    code, lines = app_setup.start(on="test", tools="none")
+    said = "\n".join(lines)
+    assert _publish_steps(said) and "never asking first" in said
+    assert app_listen.SAY_UPDATED in said and "publish once more" in said
+
+
+def test_the_pin_is_offered_once_ever_even_when_nobody_answers(copy):
+    first = copy.run("published", PAGE, "--chat", "setup-chat")
+    assert "action pin" in first and "never mention pinning otherwise" in first
+    with open(os.path.join(copy.profile, "app.json"), encoding="utf-8") as fh:
+        assert json.load(fh)["pin"]["offered"]
+    # No answer recorded: still never offered again, by a publish or by start.
+    assert "action pin" not in copy.run("published", PAGE, "--chat", "setup-chat")
+    for chat in ("setup-chat", "another-chat"):
+        assert "action pin" not in copy.run("start", "--on", "test", "--tools", "none",
+                                            "--chat", chat)
+    # An answer given later is kept beside the offer.
+    copy.run("pinned", "yes")
+    with open(os.path.join(copy.profile, "app.json"), encoding="utf-8") as fh:
+        pin = json.load(fh)["pin"]
+    assert pin["answer"] == "yes" and pin["offered"] and pin["asked"]
+
+
+def test_the_helper_is_announced_in_one_short_sentence(copy):
+    import app_listen
+    copy.page()
+    assert copy.send(copy.run("listen", copy.dump(), "--chat", "big-chat"))
+    said = copy.run("start", "--on", "Opus 5.5", "--tools", "none", "--chat", "big-chat")
+    step = [ln for ln in said.splitlines() if "give the page a small chat of its own" in ln][0]
+    assert ("Tell the person this one sentence, and nothing more about it: "
+            f"\"{app_listen.SAY_HELPER}\"") in step
+    assert "Keep it: it answers your page" not in step

@@ -151,8 +151,12 @@ def test_the_folder_already_on_disk_is_the_one_used(tmp_path, monkeypatch):
     (apps / "larkspur_retail_senior_supply_chain_analyst_larkspur").mkdir()
     got = outreach.app_folder("Larkspur Retail", "Senior Supply Chain Analyst")
     assert got.endswith("_larkspur")
+    # Nothing on disk: the name the rule gives, which leaves off an abbreviation that is
+    # only the employer's name (2026-10-26) and keeps one carrying a role token.
     new = outreach.app_folder("Fernhill Freight", "Operations Analyst", "Fernhill")
-    assert new.endswith("fernhill_freight_operations_analyst_fernhill")
+    assert new.endswith(os.sep + "fernhill_freight_operations_analyst")
+    token = outreach.app_folder("Fernhill Freight", "Operations Analyst", "Fernhill_Ops")
+    assert token.endswith("fernhill_freight_operations_analyst_fernhillops")
 
 
 # ------------------------------------------------------------------ the docs match what runs

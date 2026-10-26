@@ -103,9 +103,9 @@ def cmd_model(a) -> int:
 
 
 def cmd_view(a) -> int:
-    """The model as one document a section (`view/<section>`) plus `meta/current`, so an open
-    page updates live with no republish. Sets on documents that exist are pinned to the
-    versions in `--dump`."""
+    """The model as one document a section (`view/<section>`, in parts when it is too big for
+    one: page_db.split) plus `meta/current`, so an open page updates live with no republish.
+    Sets on documents that exist are pinned to the versions in `--dump`."""
     import app_model
     import page_db
     import app_alerts
@@ -124,14 +124,20 @@ def cmd_view(a) -> int:
     for doc_id in app_lists.stale(full, db.get("view") or {}):
         w.add("delete", "view", doc_id, if_version=db["view"][doc_id]["version"])
     # The model builds `listener` and `schedule` itself now; each document is written once.
+    # A section too big for one document (a long search's jobs, a big contact book) goes as
+    # parts the page joins again (page_db.split), never cut short.
+    written = []
     for name in dict.fromkeys(tuple(app_model.SECTIONS) + ("people_count", "lists", "listener",
                                                            "schedule")):
         if name not in model:
             continue
-        old = (db.get("view") or {}).get(name) if db else None
-        w.add("set", "view", name, {"rev": model["rev"], "made_at": model["made_at"],
-                                    "data": model[name]},
-              if_version=old["version"] if old else None)
+        for doc_id, doc in page_db.split(name, {"rev": model["rev"], "made_at": model["made_at"],
+                                                "data": model[name]}):
+            old = (db.get("view") or {}).get(doc_id) if db else None
+            w.add("set", "view", doc_id, doc, if_version=old["version"] if old else None)
+            written.append(doc_id)
+    for doc_id in page_db.stale_parts(db.get("view") or {}, written):
+        w.add("delete", "view", doc_id, if_version=db["view"][doc_id]["version"])
     # Where each message goes (Open profile, Open in email): the address in an owner-only
     # document per contact, read by the page only for its owner and never embedded in it.
     ids = [m["contact"] for m in model.get("messages") or [] if m.get("contact")] + \

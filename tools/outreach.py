@@ -264,8 +264,9 @@ def _known_contacts(company):
 
 
 def folder(a):
-    """The folder this draft's files are written to."""
-    return person.state("documents", "applications", slug(a["company"], a["role"], a.get("abbr", "")))
+    """The folder this draft's files are written to: docpaths.app_folder, which every tool
+    that names an application's folder asks, so its checks and its note share one."""
+    return app_folder(a["company"], a["role"], a.get("abbr", ""))
 
 
 def archive_posting(d, a, meta, today):

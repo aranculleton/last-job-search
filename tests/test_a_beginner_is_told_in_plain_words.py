@@ -87,6 +87,20 @@ def test_every_message_the_place_check_says_unasked_is_plain():
         _plain(line)
 
 
+def test_what_a_person_hears_about_their_page_after_an_update_is_one_short_sentence():
+    """A chat that took an update (2026-10-26) asked whether to bring the page up, explained
+    a safety check, offered the pin again, set up a helper in two sentences and reported a
+    timer running out. Each of these is all the person hears about one of those, said whole."""
+    import app_listen
+    for line in (app_listen.SAY_UPDATED, app_listen.SAY_UPDATING, app_listen.SAY_NOT_UPDATED,
+                 app_listen.SAY_HELPER):
+        _plain(line)
+        assert line.endswith(".") and line.count(". ") == 0 and "?" not in line, line
+        assert len(line.split()) <= 15, line
+        for word in ("listener", "republish", "safety", "timer", "update check", "pin"):
+            assert word not in line.lower(), (word, line)
+
+
 def test_the_steps_a_beginner_follows_are_numbered_and_plain():
     for eid in ("cloud-internet", "cloud-setup-script", "make-copy", "connect-github",
                 "make-private", "local-chat", "routines-cloud"):
@@ -124,7 +138,8 @@ def test_the_pages_a_beginner_reads_first_are_short_and_plain():
     """The README's start, START_HERE and HELP are the first things a person reads: 1,870
     words, a repeated question and GitHub Desktop were in the way (2026-10-25)."""
     readme = _read("README.md")
-    start = readme[readme.index("## Get started"):readme.index("## What you can say to it")]
+    at = readme.index("## Get started")
+    start = readme[at:readme.index("\n## ", at)]                    # to the next section
     assert len(_prose(start).split()) <= 100
     for rel, cap in (("START_HERE.md", 600), ("HELP.md", 400)):
         said = _prose(_read(rel))

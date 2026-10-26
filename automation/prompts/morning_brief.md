@@ -22,6 +22,7 @@ the last one prints the message. Act on each FOR CLAUDE line:
 - an earlier run's work not saved: `_common.md` step 3;
 - `/upgrade 20`: run it; one plain line per change goes at the end of the message;
 - questions: at most three, as written, at the end of the message;
+- employers to judge: one `bar.py judge` each, from what you know (no search needed);
 - drafts this run can write: step 2;
 - the news searches: step 3.
 

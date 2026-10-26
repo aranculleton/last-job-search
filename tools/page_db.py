@@ -107,6 +107,93 @@ def safe_id(text: str) -> str:
     return _SAFE_ID.sub("_", str(text or "")).strip("_")[:200] or "x"
 
 
+# ------------------------------------------------------------------ a document too big for one
+
+# A document the database would refuse (over DOC_MAX as `Writes` stores it) goes as parts: a
+# head without the big field, naming how many parts (`in_parts`), then `part~<doc id>~<n>`,
+# each holding a piece of that field's JSON text under `text` and the head's `rev`. The page
+# joins them only when every part is there at the head's rev (templates/app/app.js joined()),
+# and `joined()` below reads them back the same way. Each part stays well under the cap.
+PART_BYTES = 200_000
+PART_PREFIX = "part~"
+
+
+def stored_size(doc) -> int:
+    """Its bytes as `Writes.add` stores it."""
+    return len(json.dumps(doc or {}, ensure_ascii=False, indent=1, sort_keys=True)
+               .encode("utf-8"))
+
+
+def part_id(doc_id: str, n: int) -> str:
+    return f"{PART_PREFIX}{doc_id}~{n}"
+
+
+def _pieces(text: str, limit: int) -> list[str]:
+    """`text` cut into pieces, in order, each under `limit` bytes as a stored JSON string.
+    Python cuts between code points, so a character is never split."""
+    out, start = [], 0
+    while start < len(text):
+        piece = text[start:start + limit]
+        while len(piece) > 1:
+            n = stored_size({"text": piece}) + 200
+            if n <= limit:
+                break
+            piece = piece[:max(1, int(len(piece) * limit / n) - 16)]
+        out.append(piece)
+        start += len(piece)
+    return out or [""]
+
+
+def split(doc_id: str, doc: dict, field: str = "data",
+          limit: int = PART_BYTES) -> list[tuple[str, dict]]:
+    """[(doc id, document)] to write for `doc`: itself when it fits in one document, else its
+    parts first and the head last, so a reader that sees the head finds its parts there."""
+    if stored_size(doc) <= DOC_MAX or field not in doc:
+        return [(doc_id, doc)]
+    text = json.dumps(doc[field], ensure_ascii=False, separators=(",", ":"), sort_keys=True)
+    pieces = _pieces(text, limit)
+    head = {k: v for k, v in doc.items() if k != field}
+    head["in_parts"] = len(pieces)
+    rev = doc.get("rev")
+    parts = [(part_id(doc_id, n), {"of": doc_id, "part": n, "rev": rev,
+                                   "made_at": doc.get("made_at"), "text": piece})
+             for n, piece in enumerate(pieces, 1)]
+    return parts + [(doc_id, head)]
+
+
+def joined(docs: dict, doc_id: str, field: str = "data"):
+    """The value of `field` in `docs[doc_id]`, whole or joined from its parts; None when it
+    is missing or a part is (or holds another rev). `docs` is one collection as `load()`
+    returns it: {doc id: {"data": the document, "version": n}}."""
+    def fields(i):
+        got = (docs or {}).get(i)
+        return got.get("data") if isinstance(got, dict) and isinstance(got.get("data"), dict) \
+            else {}
+    head = fields(doc_id)
+    if field in head:
+        return head[field]
+    n = head.get("in_parts")
+    if not isinstance(n, int) or n < 1:
+        return None
+    text = ""
+    for i in range(1, n + 1):
+        part = fields(part_id(doc_id, i))
+        if part.get("rev") != head.get("rev") or not isinstance(part.get("text"), str):
+            return None
+        text += part["text"]
+    try:
+        return json.loads(text)
+    except ValueError:
+        return None
+
+
+def stale_parts(docs: dict, written) -> list[str]:
+    """The part documents `docs` holds that this write does not fill again: a section that
+    shrank by a part, or one that fits in one document again."""
+    keep = set(written)
+    return sorted(d for d in (docs or {}) if d.startswith(PART_PREFIX) and d not in keep)
+
+
 # ------------------------------------------------------------------ writing a batch
 
 
@@ -132,7 +219,8 @@ class Writes:
         if op != "delete":
             body = json.dumps(data or {}, ensure_ascii=False, indent=1, sort_keys=True)
             if len(body.encode("utf-8")) > DOC_MAX:
-                raise ValueError(f"page_db: {collection}/{doc_id} is over 256 KiB")
+                raise ValueError(f"page_db: {collection}/{doc_id} is over 256 KiB"
+                                 " (page_db.split() writes it as parts)")
             path = os.path.join(self.out_dir, "files", collection, doc_id + ".json")
             os.makedirs(os.path.dirname(path), exist_ok=True)
             with open(path, "w", encoding="utf-8", newline="\n") as fh:

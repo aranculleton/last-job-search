@@ -206,6 +206,52 @@ def test_every_kind_of_answer_can_be_taken_back(search):
         assert note and not jargon.search(note), note
 
 
+def test_no_more_roles_from_an_employer_turns_it_down_by_name_until_brought_back(search):
+    """The bin's "No more roles from them" (the maintainer, 2026-10-26): the employer is
+    turned down the way bar.py reads it, by its company key, and Bring back lifts it."""
+    row = {r["id"]: r for r in search.model()["jobs"]["rows"]}["r9-1"]
+
+    def why():
+        env = dict(os.environ, LJS_PROFILE=search.profile, LJS_STATE=search.state)
+        code = "import sys; sys.path.insert(0, %r); import bar; print(bar.excluded_by_name(%r))" % (
+            os.path.join(ROOT, "tools"), row["company"])
+        return subprocess.run([sys.executable, "-c", code], env=env, capture_output=True,
+                              encoding="utf-8", timeout=60).stdout.strip()
+
+    assert not why()
+    a = search.act("job.dismiss", "r9-1", value={"why": "employer", "scope": "employer"})
+    assert search.apply()["ok"] == [a]
+    assert why(), "the employer is now turned down by name"
+    u = search.act("undo", undoes=a)
+    assert search.apply()["ok"] == [u]
+    assert not why(), "Bring back takes it off again"
+
+
+def test_follow_ups_at_an_employer_judged_wanting_leave_to_do_and_say_so(search):
+    """A charity or a small firm the person's bar clears for nothing does not fill To do (the
+    maintainer, 2026-10-26); the brief judges employers nobody has, and one line says how many."""
+    before = [d for d in search.model()["due"] if d["company"] == "Fernhill Freight" and d["kind"] != "reply"]
+    assert before, "the invented search owes a follow-up at Fernhill Freight"
+    env = dict(os.environ, LJS_PROFILE=search.profile, LJS_STATE=search.state)
+    bar = os.path.join(ROOT, "tools", "bar.py")
+    out = subprocess.run([sys.executable, bar, "unjudged", "--contacts"], env=env, capture_output=True,
+                         encoding="utf-8", timeout=60).stdout
+    assert "Fernhill Freight" in out, out
+    subprocess.run([sys.executable, bar, "judge", "Fernhill Freight", "none", "small firm, pay under the bar"],
+                   env=env, check=True, capture_output=True, timeout=60)
+    after = search.model()["due"]
+    assert not [d for d in after if d["company"] == "Fernhill Freight" and d["kind"] not in ("reply", "hidden")]
+    hidden = [d for d in after if d["kind"] == "hidden"]
+    assert hidden and hidden[0]["title"].endswith("at employers you turned down not shown")
+
+
+def test_progress_counts_a_reply_only_after_a_message_of_theirs(search):
+    done = search.model()["done"]
+    assert set(done["recent"]) == {"days", "counts", "funnel"} and done["recent"]["days"] == 30
+    assert done["recent"]["counts"]["applied"] <= done["counts"]["applied"]
+    assert done["recent"]["counts"]["replies"] <= done["counts"]["replies"]
+
+
 def test_an_undo_after_another_change_is_refused(search):
     applied = search.act("ready.applied", KESTREL)
     search.apply()

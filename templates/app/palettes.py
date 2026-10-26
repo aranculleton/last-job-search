@@ -33,6 +33,9 @@ deviations follow from legibility and from the person:
     there (a progress bar, the selected tab, a link's underline, a chart's bar) is that rose
     moved toward main's base only as far as 3:1 needs (WCAG 1.4.11); in the dark it is the
     rose itself. Focus is iris in both, the hint colour.
+  - Dawn's base and surface have half their warmth taken out (each moved halfway to the grey
+    of its own lightness): the maintainer found the page a little too warm (2026-10-26). The
+    accent stays rose; overlay and the tints are dawn's own.
   - Links are in the text colour with an underline in the accent: the person asked for no
     coloured link text, and the underline is what marks a link.
   - Where a dawn colour is too faint for text (subtle, love, gold, foam, iris), the text
@@ -59,8 +62,8 @@ import sys
 
 # Each token: (value, where it comes from). Order is the order written into the CSS.
 DAWN = {
-    "bg": ("#faf4ed", "[P] dawn base: the primary background, the page around the cards"),
-    "surface": ("#fffaf3", "[P] dawn surface: a panel atop base, every card"),
+    "bg": ("#f7f4f0", "[D] dawn base with half its warmth taken out (toward its own grey): the page around the cards"),
+    "surface": ("#fcfaf6", "[D] dawn surface with half its warmth taken out: a panel atop base, every card"),
     "sunk": ("#f2e9e1", "[P] dawn overlay: the depths, tracks and wells"),
     "raised": ("#dfdad9", "[P] dawn highlight med: buttons and chips"),
     "raised-hover": ("#d7d2d3", "[D] highlight med halfway to highlight high, for 4.5:1 with text"),

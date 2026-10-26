@@ -160,6 +160,11 @@ const DRAFT_PROPS = {
     sentence: { type: 'string' }, why: { type: 'string' } }, required: ['sentence', 'why'] } },
   pack_hash: { type: 'string' },
   research_hash: { type: 'string' },
+  // Optional: a few of the allocated resume bullets with a yes named, for this resume only
+  // (section 1 of the pack; tools/bullet_rewording.py is the guard the audit runs).
+  bullet_rewordings: { type: 'array', items: { type: 'object', properties: {
+    id: { type: 'string' }, skill: { type: 'string' }, text: { type: 'string' } },
+    required: ['id', 'skill', 'text'] } },
 }
 const DRAFT_REQ = ['company', 'role', 'summary', 'tools', 'p1', 'p2', 'lead', 'cl_bullets', 'p4', 'angle', 'requirement_map', 'notes_for_tracker', 'claim_map', 'stretches']
 const DRAFT_SCHEMA = { type: 'object', properties: { ...DRAFT_PROPS, check_output: { type: 'string' } }, required: [...DRAFT_REQ, 'check_output'] }

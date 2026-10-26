@@ -13,6 +13,7 @@ import doc_name
 import person
 import company_key
 import tex_escape
+import bullet_rewording
 
 # Every bullet the profile supports, themed. The generator used to draw from
 # fourteen strings in the template, so a logistics resume and a retail
@@ -326,8 +327,52 @@ def final_abbr(a):
     return name
 
 
+_WARNED: set = set()
+
+
+def reworded_bullets(a, warn=True):
+    """{bullet id: LaTeX} for this draft's bullet_rewordings that pass the guard
+    (tools/bullet_rewording.py), and none that fails it: that bullet renders as the
+    profile's own, and a warning says so. For this draft only: nothing here reaches the
+    library, and another draft's resume renders the profile's text.
+
+    A rewording is plain text, escaped by clean() like every drafted field; a currency the
+    profile's bullet writes as a macro (\\pounds{}) is written the same way again, and one
+    whose words are the original's renders the original exactly."""
+    use, why = bullet_rewording.usable(a)
+    if warn:
+        for line in why:
+            said = f"WARNING: {a.get('company')}: reworded bullet {line}"
+            if said not in _WARNED:     # the fit loop builds a draft many times over
+                _WARNED.add(said)
+                print(said, file=sys.stderr)
+    out = {}
+    for b, text in use.items():
+        orig = BULLETS.get(b) or bullet_rewording.original(b) or ""
+        if bullet_rewording.plain(text) == bullet_rewording.plain(orig):
+            out[b] = orig
+            continue
+        t = clean(text)
+        for macro, ch in ((r"\pounds{}", "£"), (r"\euro{}", "€")):
+            if macro in orig:
+                t = t.replace(ch, macro)
+        out[b] = t
+    return out
+
+
+def bullet_text(a, b, reworded=None):
+    """The LaTeX bullet id `b` renders as on this draft's resume: its rewording for this
+    application, or the profile's own text."""
+    got = reworded_bullets(a, warn=False) if reworded is None else reworded
+    return got.get(b, BULLETS[b])
+
+
 def build(a):
     jobs = []
+    # The bullets reworded for a yes on this application (stage_picks.py consent), put
+    # through the guard again here: the audit passed them, and a hand edit to draft.json
+    # since then is never rendered.
+    reworded = reworded_bullets(a)
     ordered = sorted(jobs_for(a),
                      key=lambda j: CHRONO.index(j["employer"])
                      if j["employer"] in CHRONO else len(CHRONO))
@@ -345,7 +390,7 @@ def build(a):
                 "unknown bullet id %s for %s. Every id must exist in the "
                 "profile's bullets.py; skipping one silently drops the "
                 "employer off the resume." % (", ".join(sorted(unknown)), j["employer"]))
-        bl = [kern_aws(BULLETS[b]) for b in keys]
+        bl = [kern_aws(reworded.get(b, BULLETS[b])) for b in keys]
         if not bl:
             continue
         jobs.append(dict(employer=j["employer"], bullets=bl, **m))
@@ -356,7 +401,9 @@ def build(a):
     for r in ROLES:
         emp = r["employer"]
         if emp not in have and r.get("always_show"):
-            jobs.append(dict(employer=emp, bullets=[BULLETS[r["always_show"]]], **META[emp]))
+            b = r["always_show"]
+            jobs.append(dict(employer=emp, bullets=[kern_aws(reworded[b]) if b in reworded
+                                                    else BULLETS[b]], **META[emp]))
     jobs.sort(key=lambda j: CHRONO.index(j["employer"]))
     summary = cap_summary(clean(a["summary"]))
     # The filename suffix is derived, not chosen. A drafter picking it by hand

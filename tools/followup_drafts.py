@@ -78,12 +78,14 @@ def _compose():
 
 def gate(text: str, kind: str, name: str = "", title: str = "", company: str = "",
          contact: str = "", their_message: str = "",
-         card_only: bool = False) -> tuple[list[str], list[str]]:
+         card_only: bool = False, today: str = "") -> tuple[list[str], list[str]]:
     """(findings, warnings) for a draft: compose.validate's findings, which stop it, and
-    compose.advise's warnings, which go beside it for the rewrite."""
+    compose.advise's warnings, which go beside it for the rewrite. Given `contact`, their
+    whole thread is read as of `today` (compose.thread_findings)."""
     compose = _compose()
     found = compose.validate(text, kind, name=name or None, title=title, contact=contact,
-                             their_message=their_message or None, card_only=card_only)
+                             their_message=their_message or None, card_only=card_only,
+                             today=today or None)
     warned = compose.advise(text, kind, name=name or None, title=title,
                             their=(company,) if company else (), company=company)
     return ([f"{v.rule}: {v.text}" for v in found],
@@ -270,7 +272,7 @@ def nudge_from_posting(contact: dict, posting: dict) -> str:
     reason = "%s has since posted a %s role, which is close to the work I do" % (company, title)
     close = compose.phrase("ask", reader, key=str(contact.get("contact_id") or ""))
     return compose.nudge(contact.get("name") or "", reason, close=close or None,
-                         their=(company,))
+                         their=(company,), thread=str(contact.get("contact_id") or "") or None)
 
 
 # ---------------------------------------------------------------- drafting
@@ -368,9 +370,52 @@ def draft(item: dict, contacts_by_id: dict, threads_index: dict, tracker, earlie
         if got["status"] != "write":
             got["why"] = "new reason: %s posted %s" % (company, _clean_title(posting.get("title")))
         return got
+    offer = their_offer(msgs)
+    last = compose.unanswered_ours(msgs)
+    if offer is not None and last is not None:
+        # Their offer to refer is the reason to answer, and the person's own note since is
+        # what this follows up: never written as though the offer were the last word.
+        try:
+            text = compose.follow_up(name, msgs, OFFER_REASON % (company or "your company"),
+                                     close=OFFER_CLOSE)
+        except ValueError as e:
+            return refused or _new("write", kind=kind, who="you",
+                                   why="the follow-up on their offer did not pass: " + _one_line(e))
+        got = _checked(text, kind, name=name, title=title, company=company, contact=cid,
+                       their_message=their, source="code")
+        if got["status"] != "write":
+            got["why"] = "follows up on your note of %s, on their offer of %s" % (
+                last.get("date"), offer.get("date"))
+        return got
     return refused or _new("write", kind=kind, who="you",
                 why="nothing new to say on file: a nudge needs a new reason (a role they "
                     "posted, news at %s, something you have done since)" % (company or "their employer"))
+
+
+# Their own offer to refer, as the one thing a follow-up gives them to answer.
+OFFER_REASON = ("in your last message you offered to refer me if a role came up at %s, and I'd "
+                "still be glad of that")
+OFFER_CLOSE = "If one does, would it be all right to send you the link?"
+
+
+def their_offer(rows) -> dict | None:
+    """Their latest message that offered to refer the person (reply.classify reads it as
+    `referral_offered`, or it was logged so), or None."""
+    import reply as reply_mod
+    import state
+    for r in reversed(list(rows or ())):
+        if not state.said_something(r):
+            continue
+        if str(r.get("scenario") or "").strip() == "referral_offered":
+            return r
+        text = str(r.get("full_text") or "").strip()
+        if text:
+            try:
+                if reply_mod.classify(text, [])["scenario"] == "referral_offered":
+                    return r
+            except Exception:  # noqa: BLE001  a message the classifier cannot read offers nothing
+                continue
+    return None
 
 
 def _one_line(e) -> str:
@@ -597,6 +642,14 @@ def context(ids, contacts, threads, today: str, got=None) -> str:
         if ours is not None:
             out.append("ours (%s): %s" % (ours.get("date"), _clip(ours.get("full_text")
                                                                   or ours.get("summary"))))
+        waiting = compose.unanswered_ours(rows)
+        if waiting is not None:
+            on = state.as_date(waiting.get("date"))
+            out.append("the last word is yours: your message of %s has no answer. Write a "
+                       "follow-up to it (\"Following up on my note from %s\"): never tell them "
+                       "again what it said, and never write as if you last spoke before %s"
+                       % (waiting.get("date"), on.strftime("%B") if on else "then",
+                          waiting.get("date")))
         try:
             read = reply_mod.classify("", rows, today)
             g = reply_mod.guidance(read, contact_id=cid)
@@ -658,7 +711,7 @@ def check(entries, contacts, threads, today: str, got=None) -> list[dict]:
         try:
             findings, warnings = gate(text, kind, name=c.get("name") or "", title=c.get("title") or "",
                                       company=c.get("company") or "", contact=iid if c else "",
-                                      their_message=_their_last(index.get(iid, ())))
+                                      their_message=_their_last(index.get(iid, ())), today=today)
         except ValueError as err:
             findings, warnings = [_one_line(err)], []
         out.append({"id": iid, "ok": not findings, "kind": kind, "text": text,
