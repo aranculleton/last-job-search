@@ -196,7 +196,7 @@ def _paced(tmp_path, monkeypatch, delay):
     sent = []
 
     def run(cmd, stdout=None, **kw):
-        sent.append((cmd[2].replace(os.sep, "/").split("/")[-4], time.monotonic()))
+        sent.append((cmd[2].replace(os.sep, "/").split("/")[-4], time.perf_counter()))
         time.sleep(0.05)
         stdout.write(json.dumps({"description": f"The whole posting {cmd[4]}."}))
 

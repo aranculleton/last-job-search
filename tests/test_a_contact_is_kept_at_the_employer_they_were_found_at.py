@@ -30,6 +30,14 @@ import state  # noqa: E402
 TODAY = datetime.date.today()
 HOME = "Manchester, England, United Kingdom"
 
+@pytest.fixture(autouse=True)
+def _today():
+    """TODAY is the day each test runs, not the day this file was loaded: a run that
+    crossed midnight compared the one with the other (Windows, 2026-10-26)."""
+    global TODAY
+    TODAY = datetime.date.today()
+
+
 
 def _reading(headline, company, current=None, **kw):
     r = {"name": "Rhian Pellow", "company": company, "headline": headline,

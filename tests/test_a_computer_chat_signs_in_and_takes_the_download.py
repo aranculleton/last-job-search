@@ -18,6 +18,8 @@ import re
 import sys
 import zipfile
 
+import pytest
+
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 sys.path[:0] = [os.path.join(ROOT, "tools"), os.path.join(ROOT, "tools", "network")]
 
@@ -46,6 +48,14 @@ SIGNED_IN_EXTRACT = json.dumps(dict(json.loads(GUEST_EXTRACT),
 GUEST_TEXT = ("Rosalind Achterberg\nHead of Pricing Analytics at Kestrel Mutual\n"
               "Sign in to view Rosalind's full profile\nJoin now\nSign in\n")
 FEED_SIGNED_IN = "Home\nMy Network\nJobs\nMessaging\nNotifications\nMe\nStart a post\n"
+
+@pytest.fixture(autouse=True)
+def _today():
+    """TODAY is the day each test runs, not the day this file was loaded: a run that
+    crossed midnight compared the one with the other (Windows, 2026-10-26)."""
+    global TODAY
+    TODAY = datetime.date.today()
+
 
 
 def _state(tmp_path, monkeypatch):

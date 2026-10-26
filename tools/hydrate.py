@@ -74,9 +74,11 @@ SKILL = {"linkedin": "linkedin-search", "freehire": "freehire-search"}
 _PACE: dict[str, tuple[threading.Lock, list[float]]] = {}
 _PACE_GUARD = threading.Lock()
 PACE_BUDGET = 15 * 60
+# perf_counter, not monotonic: Python 3.12 and older read monotonic on Windows in 15.6 ms
+# steps, so a gap was kept up to one step short (a 0.1 s delay measured 0.078 s apart).
 
 
-def pace(skill: str, sleep=time.sleep, clock=time.monotonic) -> bool:
+def pace(skill: str, sleep=time.sleep, clock=time.perf_counter) -> bool:
     """Wait this portal's turn. False once its paced fetches have had their budget."""
     delay = portals.crawl_delay(skill)
     if not delay:

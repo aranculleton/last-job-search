@@ -104,7 +104,7 @@ def blocked(url: str) -> str:
 _LAST: dict[str, float] = {}
 
 
-def pace(url: str, sleep=time.sleep, clock=time.monotonic) -> None:
+def pace(url: str, sleep=time.sleep, clock=time.perf_counter) -> None:
     """Wait out a portal's declared crawl-delay since the last request to its host."""
     name = portal_of(url)
     delay = portals.crawl_delay(name) if name else 0.0

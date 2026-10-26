@@ -110,16 +110,25 @@ def test_a_pdfinfo_that_cannot_open_the_file_leaves_the_count_to_pdftotext(tmp_p
     pdftotext read (2026-10-25): the pages are counted from pdftotext's form feeds."""
     pdf = _pdf(tmp_path / "two.pdf", pages=2)
     monkeypatch.setattr(pdftext, "_pypdf", lambda: None)
-    which, run = pdftext.shutil.which, pdftext.subprocess.run
-    monkeypatch.setattr(pdftext.shutil, "which",
-                        lambda n, *a, **k: "pdfinfo" if n == "pdfinfo" else which(n, *a, **k))
+    import shutil
+    import types
 
     def ran(cmd, *a, **k):
         if cmd[0] == "pdfinfo":
             return subprocess.CompletedProcess(cmd, 1, stdout="", stderr="Couldn't open file")
-        return run(cmd, *a, **k)
-    monkeypatch.setattr(pdftext.subprocess, "run", ran)
-    assert pdftext.pages(pdf) == 2
+        return subprocess.run(cmd, *a, **k)
+    # Only pdftext's own names are faked: patching the shared modules reached every other
+    # caller in the process too.
+    monkeypatch.setattr(pdftext, "shutil", types.SimpleNamespace(
+        which=lambda n, *a, **k: "pdfinfo" if n == "pdfinfo" else shutil.which(n, *a, **k)))
+    monkeypatch.setattr(pdftext, "subprocess", types.SimpleNamespace(run=ran))
+    got = pdftext.pages(pdf)
+    if got != 2:
+        exe = shutil.which("pdftotext")
+        r = subprocess.run([exe, "-layout", "-enc", "UTF-8", pdf, "-"], capture_output=True)
+        feeds = r.stdout.count(b"\f")
+        raise AssertionError(f"pages {got!r}; {exe} said: exit {r.returncode}, {feeds} form "
+                             f"feed(s), stderr {r.stderr.decode('utf-8', 'replace')[:300]!r}")
 
 
 def test_the_page_checks_use_it(tmp_path, no_poppler):
