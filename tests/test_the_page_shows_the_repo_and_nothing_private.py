@@ -196,11 +196,14 @@ def test_a_dump_from_windows_reads_the_same(tmp_path):
 
 def test_a_big_search_is_modelled_inside_two_seconds(tmp_path, monkeypatch):
     """500 applications, 2,000 contacts and 5,000 messages: what the work costs, measured
-    after the first build has loaded the code (the command itself also starts Python)."""
-    small_state = app_state.small(str(tmp_path / "small"))
+    after a first build has loaded the code (the command itself also starts Python). The
+    first build reads a copy of its own: a small state leaves the big one's code paths to
+    load inside the timing, which put a Windows runner 0.1 s over. Nothing carries from one
+    build to the next, so the copy saves the timed build no work."""
+    warm = app_state.large(str(tmp_path / "warm"))
     big = app_state.large(str(tmp_path / "big"))
     monkeypatch.setenv("LJS_COPY", "private")
-    monkeypatch.setenv("LJS_STATE", small_state)
+    monkeypatch.setenv("LJS_STATE", warm)
     today, now = app_model.clock("2026-10-25", app_state.NOW)
     app_model.build(today, now)
     monkeypatch.setenv("LJS_STATE", big)
