@@ -3570,8 +3570,10 @@ def resumes_owed(contacts, threads, tracker=None) -> list[dict]:
             continue
         rows = _rows_of(index, cid)
         made_rows = list(made_index.get(cid, ()))
+        # Read only where a resume was made for them: it is all this is used for, and
+        # reading every message of every contact for it was a third of this function.
         sent_on = [as_date(r.get("date")) or datetime.date.min
-                   for r in rows if says_resume_went(r)]
+                   for r in rows if says_resume_went(r)] if made_rows else []
         base = {"contact_id": cid, "name": contact.get("name", ""),
                 "company": contact.get("company", ""), "company_key": row_company_key(contact),
                 "asked": "", "made": "", "role": "", "words": ""}
