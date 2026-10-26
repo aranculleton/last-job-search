@@ -14,8 +14,8 @@ stay in charge of what goes out.
 ![Your page: what needs you, the jobs worth a look, your drafts and the people to talk to](docs/images/page-demo.gif)
 
 <p>
-  <img src="docs/images/page-todo.png" alt="The To do list on a computer" width="68%">
-  <img src="docs/images/page-jobs-phone.png" alt="Scored jobs on a phone, in the dark look" width="28%">
+  <img src="docs/images/page-todo.webp" alt="The To do list on a computer" width="68%">
+  <img src="docs/images/page-jobs-phone.webp" alt="Scored jobs on a phone, in the dark look" width="28%">
 </p>
 
 <sub>Every name above is made up.</sub>

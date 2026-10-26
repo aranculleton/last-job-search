@@ -738,6 +738,8 @@ KEEPS_NOTHING: dict[str, str] = {
     "tools/page_db.py": "reads and writes the page's database dumps; keeps nothing of its own",
     "tools/app_actions.py": "writes the person's own answers through confirm, exclude, state.py, learned and settings; nothing it wrote is remade",
     "docs/images/page-demo.gif": "a short recording of the page for the README, from the test sample; never in a person's search",
+    "docs/images/page-todo.webp": "a picture of the page for the README, from the test sample; never in a person's search",
+    "docs/images/page-jobs-phone.webp": "a picture of the page on a phone for the README, from the test sample; never in a person's search",
     "tools/app_listen.py": "names the one chat that answers the page, in the page's own database and a record in the git folder that is never committed; read afresh at every start",
     ".claude/skills/app/SKILL.md": "the chat's procedure when the page rings, read afresh each time",
     "tools/confirm.py": "writes the person's own word about an application into the tracker; nothing it wrote is ever remade",
