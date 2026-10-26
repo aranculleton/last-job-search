@@ -149,6 +149,8 @@ make sense to somebody whose repo just received it.
 
 ### Fixed
 
+- **Your page is quicker to bring up to date with a big contact book**: the same dates,
+  names and message words are read once a build, not thousands of times.
 - **Composing a note leaves nothing behind.** The parts a first note was built from wait on
   this computer until its draft is written, never among your files, where every note composed
   and not sent left a file that stopped the next update.

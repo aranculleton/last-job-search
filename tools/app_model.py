@@ -286,6 +286,15 @@ class Ctx:
         return self._got[key]
 
     @property
+    def repo(self) -> tuple:
+        """(owner, folder) of this copy: one git call a build, not one per section that
+        names it (each starts a process, which Windows is slow to do)."""
+        def make():
+            import place
+            return place.repo()
+        return self._once("repo", make)
+
+    @property
     def tracker(self) -> list[dict]:
         def make():
             import csv_store
@@ -402,7 +411,7 @@ def _person(ctx: Ctx, targets: dict) -> dict:
     repo, computer = "", False
     try:
         import place
-        owner, folder = place.repo()
+        owner, folder = ctx.repo
         repo = f"{owner}/{folder}" if owner else ""
         computer = place.works_on() in ("computer", "both")
     except Exception:  # noqa: BLE001
@@ -2646,8 +2655,7 @@ def _listener(ctx: Ctx, targets: dict) -> dict:
     import app_listen
     repo = ""
     try:
-        import place
-        owner, folder = place.repo()
+        owner, folder = ctx.repo
         repo = f"{owner}/{folder}" if owner else ""
     except Exception:  # noqa: BLE001
         pass

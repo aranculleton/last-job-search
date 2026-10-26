@@ -30,6 +30,7 @@ are the recipient's own, so nothing on any banned list appears.
 from __future__ import annotations
 
 import os
+import functools
 import re
 import sys
 from typing import NamedTuple
@@ -421,7 +422,13 @@ def greeting_name(name) -> str:
     """The name a message greets someone by, or "" when there is nobody to greet: the one
     rule the composers, the follow-ups, the brief and the page all use. An address on its
     own (an email where a name should be) greets nobody."""
-    text = " ".join(str(name or "").split())
+    return _greeting_of(str(name or ""))
+
+
+@functools.lru_cache(maxsize=8192)
+def _greeting_of(raw: str) -> str:
+    """Cached: pure text, and a page build greets the same people thousands of times."""
+    text = " ".join(raw.split())
     if not text or "@" in text.split()[0]:
         return ""
     first = first_name(text)

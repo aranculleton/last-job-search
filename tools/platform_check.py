@@ -64,6 +64,9 @@ local_path.run_in_venv()
 local_path.use_venv()
 PY = os.environ.pop(local_path.REEXEC, "") or sys.executable
 EXAMPLE = os.path.join(ROOT, "profile.example")
+# What the job started with, for the suite: the round step sets these for the whole run,
+# and the suite on Windows then ran with a profile the other machines' suites never had.
+_AS_STARTED = {k: os.environ.get(k) for k in ("LJS_PROFILE", "LJS_RESCREEN")}
 RESULTS: list[tuple[str, bool, str]] = []
 
 
@@ -494,8 +497,14 @@ def step_networking(root: str = ROOT, env: dict | None = None) -> None:
 
 
 def step_suite() -> None:
+    env = env_for()
+    for k, v in _AS_STARTED.items():
+        if v is None:
+            env.pop(k, None)
+        else:
+            env[k] = v
     code, out, took = run([PY, "-m", "pytest", "-q", "-p", "no:cacheprovider", "-rf",
-                           "--tb=short", "tests"], env=env_for(), timeout=5400)
+                           "--tb=short", "tests"], env=env, timeout=5400)
     # Every failure by name, then the tail: the last lines alone named two of eleven.
     lines = out.strip().splitlines()
     failed = [ln for ln in lines if ln.startswith(("FAILED ", "ERROR "))]

@@ -777,7 +777,13 @@ _CHANNEL_ALIASES = {
 
 
 def direction(row) -> str:
-    d = str(row.get("direction") or "").strip().lower()
+    return _direction_word(str(row.get("direction") or ""))
+
+
+@functools.lru_cache(maxsize=256)
+def _direction_word(raw: str) -> str:
+    """Cached: a page build asks a few thousand rows their direction about 175,000 times."""
+    d = raw.strip().lower()
     if d in _OUT:
         return "out"
     if d in _IN:
@@ -806,7 +812,13 @@ ACCEPTED_SCENARIOS = frozenset({"accepted_no_reply", "connected_no_reply", "conn
 
 
 def _scenario(row) -> str:
-    return re.sub(r"[\s-]+", "_", str(row.get("scenario") or "").strip().lower())
+    return _scenario_word(str(row.get("scenario") or ""))
+
+
+@functools.lru_cache(maxsize=1024)
+def _scenario_word(raw: str) -> str:
+    """Cached: a log has a few dozen scenario words, read once per row per question."""
+    return re.sub(r"[\s-]+", "_", raw.strip().lower())
 
 
 def is_acceptance(row) -> bool:
@@ -3324,7 +3336,11 @@ def _sentences(text) -> list:
 
 
 def _sent_rx():
-    d = _doc_rx()
+    return _sent_rx_for(_doc_rx())
+
+
+@functools.lru_cache(maxsize=16)
+def _sent_rx_for(d: str):
     return re.compile(
         rf"\b{d}\b[^.!?\n]{{0,40}}?\b(?:sent|emailed|e-mailed|attached|forwarded|shared|went)\b"
         r"|\b(?:sent|emailed|e-mailed|attached|attaching|forwarded|enclosed|enclosing|"
