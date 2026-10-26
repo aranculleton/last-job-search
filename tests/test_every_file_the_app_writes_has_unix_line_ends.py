@@ -7,15 +7,21 @@ So every open() for writing in the app's code says newline=, and one that writes
 newline="\n". The vendored openroles is its own project and is not read here.
 """
 import ast
+import os
 import pathlib
+import sys
+
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+import repo_files  # noqa: E402
 
 ROOT = pathlib.Path(__file__).resolve().parent.parent
 
 
 def _writes_without_newline():
     found = []
-    for p in sorted(list((ROOT / "tools").rglob("*.py")) + list((ROOT / "templates").rglob("*.py"))):
-        if "openroles" in p.parts:
+    for rel in repo_files.tracked(root=str(ROOT)):
+        p = ROOT / rel
+        if not (rel.startswith(("tools/", "templates/")) and rel.endswith(".py")) or "openroles" in p.parts:
             continue
         for node in ast.walk(ast.parse(p.read_text(encoding="utf-8"))):
             if not (isinstance(node, ast.Call) and getattr(node.func, "id", getattr(node.func, "attr", "")) in
