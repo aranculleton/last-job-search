@@ -238,7 +238,7 @@ def test_the_first_publish_makes_the_publisher_the_listener_and_offers_the_pin_o
     assert "which makes it the page's listener" in said and _publish_steps(said)
     out = copy.run("published", PAGE, "--chat", "setup-chat")
     assert "this chat is the page's listener now" in out
-    batch = [w for w in out.split() if w.endswith(".json")]
+    batch = [ln.rsplit(": ", 1)[-1] for ln in out.splitlines() if ln.endswith(".json")]
     assert batch and copy.send("\n".join(batch)) and copy.listener()["chat"] == "setup-chat"
     assert "action pin" in out and "pinned yes|no" in out
     import claude_surfaces
