@@ -20,8 +20,15 @@ make sense to somebody whose repo just received it.
 
 ## [Unreleased]
 
+## [4.0.0] - 2026-10-26
+
 ### Added
 
+- **Everything happens on one page now.** Your search has its own private page, on your
+  phone and your computer: what needs you, your jobs, your drafts, your contacts and a chat
+  with Claude, in light or dark to match your device. Claude works in the background and
+  shows its progress there, and nothing is ever sent for you. Your chat gives you the link
+  after this update; pin it and you never need the chat window again.
 - **The README and the start guide show your page**, with a short demo and screenshots. Every
   name in them is made up.
 - **One chat answers your page, so a tap never wakes them all.** The chat that set you up
@@ -40,11 +47,6 @@ make sense to somebody whose repo just received it.
 - **Each piece of work Claude hands to a chat of its own runs on the model that work needs**:
   searches and research on a cheaper one, anything an employer or a contact reads on the
   strongest, never a cheaper one.
-- **Everything happens on one page now.** Your search has its own private page, on your
-  phone and your computer: what needs you, your jobs, your drafts, your contacts and a chat
-  with Claude, in light or dark to match your device. Claude works in the background and
-  shows its progress there, and nothing is ever sent for you. Your chat gives you the link
-  after this update; pin it and you never need the chat window again.
 - **Setting up happens on the page too**: say "set me up" once, then answer one short
   question at a time, with your private copy made in one click. A setup left half-way, or
   a copy several versions old, carries on from where it was.
