@@ -224,9 +224,6 @@ JSON_FILES = {
     # What each title search found at each employer, dated (sources.record_yield).
     "documents/network/.title_yield.json": {"stamps": ("date",), "indent": 1, "sort": "all",
                                             "ascii": True},
-    # The parts a composed note was built from, named by the note's own words (parts.py).
-    "documents/network/.composed/*.json": {"whole": ("",), "indent": 1, "sort": "all",
-                                           "newline": False},
     # One person as read (reading.save over reading.merge): the newest read's page fields,
     # every source and finding kept, as its own merge does.
     "documents/network/*/reading.json": {
@@ -354,7 +351,8 @@ JSON_NAMES = {
                     "company_research/*.json"),
     ".sweep.json": "documents/rounds/.sweep.json",
     "tools/run_round.py: %s.json": "documents/rounds/*.json",
-    "tools/network/parts.py: .json": "documents/network/.composed/*.json",
+    "tools/network/parts.py: .json": ("a composed note's parts wait in this computer's "
+                                      "ledger until a draft adopts them; " + _OUTSIDE),
     "tools/company_research.py: .json": ("company_research/<key>.json, wired; and a fetched "
                                          "page, " + _OUTSIDE),
     "tools/tweak.py: *.json": "company_research/*.json",

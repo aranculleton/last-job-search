@@ -470,21 +470,17 @@ def test_a_notes_parts_saved_two_ways_take_the_later_save_else_stop(repo):
     unchanged(repo)
 
 
-def test_parts_composed_for_one_note_on_two_chats_take_the_later_save(repo):
+def test_a_composed_note_leaves_nothing_in_the_copy_until_its_draft_takes_it(repo):
+    """A note's parts wait in this computer's ledger, never among the person's files: kept in
+    the copy, every note composed and not written was a file left behind that stopped the
+    next update (2026-10-26). Beside a draft they are the person's, and merge as one."""
     import parts
-
-    def compose(opener):
-        return lambda: parts.remember("first_note", {"opener": opener, "ask": "a call"},
-                                      "Hi Ana, a short note.")
-    r, said = two_chats(repo, compose("Hello"), compose("Hi"), compose("Dear"),
-                        theirs_at="2026-10-25T15:00:00Z", ours_at="2026-10-25T11:00:00Z")
-    assert r.returncode == 0, said
-    folder = os.path.join(repo.root, "documents", "network", parts.PENDING)
-    (name,) = os.listdir(folder)
-    with open(os.path.join(folder, name), encoding="utf-8") as fh:
-        assert json.load(fh)["args"]["opener"] == "Hi"
-    compose("Hi")()
-    unchanged(repo)
+    parts.remember("first_note", {"opener": "Hello", "ask": "a call"}, "Hi Ana, a short note.")
+    status = repo.git("status", "--porcelain", "--untracked-files=all").stdout
+    assert "documents/" not in status, status
+    assert parts.adopt("corwin_haldane", "Hi Ana, a short note.")
+    assert os.path.isfile(os.path.join(repo.root, "documents", "network", "corwin_haldane",
+                                       parts.PARTS))
 
 
 def test_a_notes_parts_saved_two_ways_at_one_moment_stop_the_merge(repo):

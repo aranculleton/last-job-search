@@ -19,7 +19,7 @@ import json
 import os
 
 PARTS = "draft.parts.json"
-PENDING = ".composed"            # documents/network/.composed/<text sha>.json, until adopted
+PENDING = ".composed"            # its old place in the copy; parts now wait in the ledger (_pending)
 KINDS = ("first_note",)
 _DEFAULT = "__default__"
 
@@ -47,7 +47,7 @@ def _plain(v):
 def remember(kind: str, args: dict, text: str, default=None) -> str | None:
     """Keep the arguments a composer was called with, under the text it made. The saved
     reading is named, never copied: it is read again from reading.json on a replay."""
-    d = _dir(PENDING)
+    d = _pending()
     if not d or kind not in KINDS:
         return None
     keep = {}
@@ -76,13 +76,26 @@ def path(contact_id: str) -> str | None:
     return os.path.join(d, PARTS) if d else None
 
 
+def _pending(*parts: str) -> str | None:
+    """Where a composed note's parts wait for the draft writer: this computer's ledger
+    folder (tools/network/pace.py), outside the person's copy, so composing a note leaves
+    nothing among their files. A record reaches the copy only beside a draft (`adopt`):
+    kept in the copy, every note composed and not written, a person's own tests' included,
+    was a file left behind that stopped the next update (2026-10-26)."""
+    try:
+        import pace
+        return os.path.join(pace.ledger_dir(), "composed", *parts)
+    except Exception:  # noqa: BLE001  no ledger: nothing is remembered
+        return None
+
+
 def adopt(contact_id: str, text: str) -> str | None:
     """Beside a draft just written: its parts when the composer made exactly this text,
     else none (a parts record for other words would replay a note nobody wrote)."""
     target = path(contact_id)
     if not target:
         return None
-    pending = _dir(PENDING, sha(text) + ".json")
+    pending = _pending(sha(text) + ".json")
     if pending and os.path.isfile(pending):
         os.makedirs(os.path.dirname(target), exist_ok=True)
         os.replace(pending, target)
@@ -144,7 +157,7 @@ def replay(contact_id: str, overrides: dict, record: dict | None = None):
 
 def remember_record(record: dict, text: str) -> str | None:
     """A parts record kept under the very text it made, for the draft writer to adopt."""
-    d = _dir(PENDING)
+    d = _pending()
     if not d:
         return None
     try:

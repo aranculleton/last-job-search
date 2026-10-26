@@ -73,7 +73,6 @@ documents/network/.reads_stopped.json merge=ljs-state text eol=lf
 documents/network/.search_filters.json merge=ljs-state text eol=lf
 documents/network/.inmail_credits.json merge=ljs-state text eol=lf
 documents/network/.title_yield.json merge=ljs-state text eol=lf
-documents/network/.composed/*.json merge=ljs-state text eol=lf
 documents/network/*/reading.json merge=ljs-state text eol=lf
 documents/network/*/own_facts.json merge=ljs-state text eol=lf
 documents/network/*/draft.parts.json merge=ljs-state text eol=lf

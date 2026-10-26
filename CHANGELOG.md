@@ -149,6 +149,9 @@ make sense to somebody whose repo just received it.
 
 ### Fixed
 
+- **Composing a note leaves nothing behind.** The parts a first note was built from wait on
+  this computer until its draft is written, never among your files, where every note composed
+  and not sent left a file that stopped the next update.
 - **On Windows, a save no longer shows as unsaved work.** Every file the app writes has plain
   line ends there too, so a settings file saved with nothing new in it is no longer a change,
   two chats answering the page at once wait for each other, and GitHub's command is found

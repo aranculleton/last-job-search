@@ -544,9 +544,9 @@ METHODS: dict[str, dict] = {
             (32, "2026-10-23", False, "a card-only note to someone known only from a connection made long ago is refused until their profile is read"),
             (33, "2026-10-24", False, "drafts honour the person's number at one employer (more-at) and hold an InMail until their message window is checked; an Open Profile note is held to an InMail's length; a reading is judged on the day given (grounded today=); nothing is kept in the example person"),
             (34, "2026-10-25", False, "a phone is asked only for what a phone can send, in its short wording; the Chrome wording names the tab Claude opened; a path printed across two Windows drives no longer stops a reading; works in folders with brackets in their names; moved reading-ledger files are named with /; a first note keeps the parts it was built from, so a tweak rebuilds it without a rewrite; a reading the page made is logged as a computer chat's is"),
-            (35, "2026-10-26", False, "every file it writes has plain line ends on Windows too"),
+            (35, "2026-10-26", False, "every file it writes has plain line ends on Windows too; a composed note's parts wait in this computer's ledger, never among the person's files, until a draft takes them"),
         ),
-        "fingerprint": "9d292d765ff18139",
+        "fingerprint": "12e8b80b9c47cf5a",
     },
     "screening": {
         "by": "round", "priority": 2,
