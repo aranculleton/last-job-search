@@ -149,6 +149,8 @@ make sense to somebody whose repo just received it.
 
 ### Fixed
 
+- **Two chats on one Windows computer can save your contacts at the same time**: one used
+  to fail with "It could not be done" while the other had the file open.
 - **Your page is quicker to bring up to date with a big contact book**: the same dates,
   names and message words are read once a build, not thousands of times.
 - **Composing a note leaves nothing behind.** The parts a first note was built from wait on

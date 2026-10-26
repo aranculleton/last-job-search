@@ -229,7 +229,7 @@ def write_rows(path: str, rows, columns) -> None:
             w.writeheader()
             for row in rows:
                 w.writerow({k: ("" if row.get(k) is None else row.get(k)) for k in fields})
-        os.replace(part, real)
+        _swap(part, real)
     except BaseException:
         try:
             os.remove(part)
@@ -278,3 +278,18 @@ def read_rows(path: str, columns=(), create: bool = False) -> list[dict]:
                 row[name] = raw[i] if i < len(raw) else ""
         rows.append(row)
     return rows
+
+
+def _swap(part: str, real: str) -> None:
+    """os.replace, waiting out another chat that has the file open: Windows refuses to
+    replace a file while another process reads it (PermissionError), where POSIX lets
+    both through. Two chats taking one LinkedIn download at once met it (2026-10-26)."""
+    import time
+    for i in range(40):
+        try:
+            os.replace(part, real)
+            return
+        except PermissionError:
+            if os.name != "nt" or i == 39:
+                raise
+            time.sleep(0.05)
