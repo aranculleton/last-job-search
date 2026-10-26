@@ -55,13 +55,13 @@ def test_the_command_reads_a_drafts_file(tmp_path):
     path.write_text(json.dumps([_draft(summary="Analyst who saved 35% of van miles.")]),
                     encoding="utf-8")
     r = subprocess.run([sys.executable, os.path.join(ROOT, "tools", "check_numbers.py"),
-                        "--drafts", str(path)], capture_output=True, text=True, cwd=ROOT,
+                        "--drafts", str(path)], capture_output=True, text=True, encoding="utf-8", errors="replace", cwd=ROOT,
                        env=dict(os.environ, LJS_PROFILE=os.path.join(ROOT, "profile.example")))
     assert r.returncode == 1, r.stdout + r.stderr
     assert "KestrelMutual.summary" in r.stdout and "35%" in r.stdout
 
 
 def test_the_batch_checks_the_letters():
-    with open(os.path.join(ROOT, "tools", "verify_batch.sh"), encoding="utf-8") as fh:
+    with open(os.path.join(ROOT, "tools", "verify_batch.py"), encoding="utf-8") as fh:
         script = fh.read()
-    assert 'check_numbers.py" --drafts "$DRAFTS"' in script
+    assert '"check_numbers.py"), "--drafts", drafts' in script

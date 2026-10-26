@@ -15,8 +15,8 @@ allowed-tools: Read, Write, Edit, Glob, Grep, Bash(bun --version), Bash(bun run 
 
 ## The rules every search keeps
 
-These are the rules CLAUDE.md summarises, in full. Most are enforced in code; this is what
-the code is doing and why.
+These are the rules every round keeps, in full: CLAUDE.md points here. Most are enforced in
+code; this is what the code is doing and why.
 
 **When the user asks to run a job search, scan, or scrape, run the search end to end and
 stop at the ranked shortlist.** The deliverable is a ranked, scored table plus the context
@@ -128,7 +128,8 @@ Only draft unprompted if the user has explicitly said to in that request.
 - **Company throttle.** A company with an open application in the tracker is suppressed: do not
   surface more roles there. The only override is a role scoring 10+ points higher than what was
   already sent, named explicitly. Where one run turns up several eligible roles at one employer,
-  surface only the highest scorer and record the rest as same-employer duplicates.
+  surface only the highest scorer, by its 0-100 fit (priority breaks a tie), and record the rest
+  as same-employer duplicates.
 - **Yield target: at least 5 postings scoring 60+, of which 2 score 75+.** A run that misses
   it expands the search and goes again, up to 3 rounds: more title variants, then the
   remaining priority categories, then wider PASS-set locations, then adjacent target sectors
@@ -153,7 +154,14 @@ Only draft unprompted if the user has explicitly said to in that request.
   field or level is built for the person by `/add-portal` (which `/setup` runs for the
   boards its research found), lives in their repo as a personal path
   (`tools/personal_paths.py`), and is searched by every round, kept to the `crawl-delay`
-  its `SKILL.md` declares. The app never carries one: its leak scan fails if it does.
+  its `SKILL.md` declares. The app never carries a portal of its own beyond those two
+  (`.agents/skills/` is a personal path, and its leak scan fails on one there). What it does
+  carry is the market tables (`tools/markets/`, read with `tools/markets.py`): public facts
+  about the national, field, graduate, executive, regional and remote boards of many
+  countries, each with the robots.txt verdict code made for its search and posting paths
+  and the day it was read, which `/setup` reads before it researches anything. A board from
+  a table is searched only once `/add-portal` has built it in the person's repo, after
+  reading its robots.txt again.
   `python3 tools/portals.py` prints what the next round will search, and the boards
   researched for the person (`PORTAL_RESEARCH`) that have no portal yet.
 - **Employer boards are the third source, and not a portal.** `tools/ats_boards.py` reads
@@ -164,6 +172,23 @@ Only draft unprompted if the user has explicitly said to in that request.
   and `scrape_wide.py` calls it, so `run_round.py` needs nothing extra. `--probe` re-checks
   every token. A board whose robots.txt disallows it is refused, and so is SmartRecruiters
   by its API's; the reasons are recorded beside each.
+
+### A board the chat cannot reach, and a round that comes back thin
+
+- **A job board the session cannot reach** may be blocked by the chat's cloud settings:
+  check `curl -sS "$HTTPS_PROXY/__agentproxy/status"` for `connect_rejected`. That is a
+  policy denial, not a bug: do not route around it. Tell the person what `python3
+  tools/env_check.py --say` prints, word for word (a round prints the same under "Tell the
+  person"): one recommended fix in numbered steps, which reaches the running chat within
+  about a minute. The day's sync checks it and prints the same words first, and the page
+  shows it as a To do card. Until it is fixed, run no search: a web search in its place
+  finds old, closed jobs. `/apply <pasted posting text>` still works.
+- **And it keeps going without being asked.** When a round comes back thin, a good posting
+  arrives from a board that is not covered, an employer they mention has no board on file,
+  or a gate cuts something it should not for their market, propose the fix, do the research
+  (`/add-portal` for a board, after checking robots.txt the way `tools/robots_check.py`
+  does; `tools/ats_boards.py --find "<Employer>"` for an employer's own board), and record
+  it in `profile/`, cited.
 
 ## One command
 
@@ -194,7 +219,10 @@ Optional arguments:
 
 ### Step 5: Present Results
 
-One line of counts, then the table, then a line only for what is off. Never more.
+On the person's page first (CLAUDE.md, "Every output is shown"): the round reaches the page's
+Jobs list through `python3 tools/app.py view`, and the chat says the counts line below and
+where it is. Where there is no page, the chat shows it this way: one line of counts, then the
+table, then a line only for what is off. Never more.
 
 ```
 **P of N cleared the pass bar (60+), Q of them strong (75+); target 5 and 2: met** (or: missed after R rounds)
@@ -239,10 +267,13 @@ already-applied question ("The rules every search keeps", items 5 and 6, at the 
 skill). Ask once:
 > "Which of these should I take forward? And have you already applied to any of them?"
 
-A yes to the second is recorded as a tracker row at `applied` with the date they give. Each
+A yes to the second is recorded with `python3 tools/confirm.py applied` (`--new --company
+--role --url --on <date> --source chat` for one the tracker never had, or the row's name when
+it has it), never by editing the tracker, and the lines it prints, the applications it covered,
+are shown to them. Each
 pick goes to `/apply`, which reuses the round's score and asks nothing already answered here.
 
-Do **not** suggest `/rank` after a normal run: the run already scored everything it presented (a round's scores are in `documents/rounds/<round>.json`; on the manual path `manual-round.md` Step 3 wrote them to `ranked`), so `/rank` would only score them again. `/rank` is for the two cases `/scrape` does not cover: re-scoring after a change to the candidate profile or `profile/12-scoring-brief.md` (`/rank --all`, which skips permanent exclusions), and scoring a backlog added outside the normal flow. (`/rank` sets the `ranked` and `expired` status values in `seen_jobs.json`; treat both as already-seen for dedup purposes.)
+Do **not** suggest `/rank` after a normal run: the run already scored everything it presented (a round's scores are in `documents/rounds/<round>.json`; on the manual path `manual-round.md` Step 3 wrote them to `ranked`), so `/rank` would only score them again. `/rank` is for the two cases `/scrape` does not cover: re-scoring after a change to the candidate profile or `profile/12-scoring-brief.md` (`/rank --all`, which skips permanent exclusions), and scoring a backlog added outside the normal flow. (`/rank` sets the `ranked` and `expired` status values in `seen_jobs.json`. Treat both as already seen: a round shows a `ranked` posting again while it is live, and never one `expired` past its stated deadline, which holds by its own link only, since a posting re-issued under a new link is a new one.)
 
 ### Step 6: Update Tracker (Optional)
 
@@ -265,5 +296,5 @@ If the user decides to apply to any job, the tracker row is written by **job-app
 9. **Score everything you present, and rank by that score.** No posting reaches the user unscored, and the table is ordered by score. A list of unranked links is a failed run.
 10. **An under-target run expands before it reports.** `manual-round.md` Step 3.5's expansion ladder runs before the summary is written, up to 3 rounds (`run_round.py --expand` widens the pages itself and prints the other rungs, Step 3.5). Never pad a thin result with sub-60 postings, and never relax a gate or the location filter to make the yield target.
 11. **Flag distribution patterns, never accuse.** The mass-posting signal (`manual-round.md` Step 2.5) describes how a listing is being distributed, not a claim that the employer is a scam. Never name a company as fraudulent or untrustworthy - present the observation and let the user decide.
-12. **Paginate. Never cap.** A search walks `--page 1..N` until a page comes back empty or wholly duplicated, and covers every location the PASS set covers, not just the biggest city. `run_round.py` does both; `manual-round.md` Step 1b says how by hand.
+12. **Paginate. Never cap.** A search walks `--page 1..N` until a page comes back empty or wholly duplicated (nothing on it the search's own earlier pages did not have; `scrape_wide.py` PageWalk), and covers every location the PASS set covers, not just the biggest city. `run_round.py` does both; `manual-round.md` Step 1b says how by hand.
 13. **Full scoring is one posting per agent, never batched** (Tier 3, `manual-round.md` Step 3), whatever batch size `/rank` uses.

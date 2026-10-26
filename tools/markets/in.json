@@ -1,0 +1,292 @@
+{
+  "name": "India",
+  "country": "in",
+  "aka": [
+    "IN",
+    "IND",
+    "Republic of India",
+    "Bharat"
+  ],
+  "languages": [
+    "en",
+    "hi"
+  ],
+  "currency": "INR",
+  "boards": [
+    {
+      "name": "Naukri.com",
+      "url": "https://www.naukri.com",
+      "kind": "general",
+      "source": "https://en.wikipedia.org/wiki/Naukri.com",
+      "quote": "Naukri.com is an Indian employment website which operates in India and the Middle East",
+      "checked": "2026-10-25",
+      "verified": true,
+      "search": "https://www.naukri.com/analyst-jobs-in-bangalore",
+      "paths": {
+        "search": "/analyst-jobs-in-bangalore",
+        "posting": "/job-listings-"
+      },
+      "robots": {
+        "checked": "2026-10-25",
+        "why": "",
+        "search": false,
+        "status": "disallowed",
+        "posting": false,
+        "crawl_delay": null,
+        "ai_input": null
+      },
+      "public_search": {
+        "checked": "2026-10-25",
+        "status": "not_tried",
+        "http": null
+      }
+    },
+    {
+      "name": "foundit",
+      "url": "https://www.foundit.in",
+      "kind": "general",
+      "source": "https://www.foundit.in/about-us",
+      "quote": "",
+      "checked": "2026-10-25",
+      "verified": false,
+      "why": "the quote is not on the page",
+      "search": "https://www.foundit.in/srp/results?query=analyst&locations=Bengaluru",
+      "paths": {
+        "search": "/srp/results?query=analyst&locations=Bengaluru",
+        "posting": "/job/"
+      },
+      "robots": {
+        "checked": "2026-10-25",
+        "why": "",
+        "search": true,
+        "status": "allowed",
+        "posting": true,
+        "crawl_delay": null,
+        "ai_input": null
+      },
+      "public_search": {
+        "checked": "2026-10-25",
+        "status": "open",
+        "http": 200
+      }
+    },
+    {
+      "name": "Indeed",
+      "url": "https://in.indeed.com",
+      "kind": "general",
+      "source": "https://en.wikipedia.org/wiki/Indeed",
+      "quote": "Indeed is currently available in over 60 countries and 28 languages",
+      "checked": "2026-10-25",
+      "verified": true,
+      "search": "https://in.indeed.com/jobs?q=analyst&l=Bengaluru%2C+Karnataka",
+      "paths": {
+        "search": "/jobs?q=analyst&l=Bengaluru%2C+Karnataka",
+        "posting": "/viewjob?jk=0"
+      },
+      "robots": {
+        "checked": "2026-10-25",
+        "why": "",
+        "search": true,
+        "status": "partial",
+        "posting": false,
+        "crawl_delay": null,
+        "ai_input": null
+      },
+      "public_search": {
+        "checked": "2026-10-25",
+        "status": "blocked",
+        "http": 401
+      }
+    },
+    {
+      "name": "Shine.com",
+      "url": "https://www.shine.com",
+      "kind": "general",
+      "source": "https://www.shine.com/",
+      "quote": "Explore 5 Lacs+ latest job vacancies in India across top companies, cities and industries",
+      "checked": "2026-10-25",
+      "verified": true,
+      "search": "https://www.shine.com/job-search/analyst-jobs-in-bangalore",
+      "paths": {
+        "search": "/job-search/analyst-jobs-in-bangalore",
+        "posting": "/jobs/"
+      },
+      "robots": {
+        "checked": "2026-10-25",
+        "why": "",
+        "search": true,
+        "status": "allowed",
+        "posting": true,
+        "crawl_delay": null,
+        "ai_input": null
+      },
+      "public_search": {
+        "checked": "2026-10-25",
+        "status": "open",
+        "http": 200
+      }
+    }
+  ],
+  "eligibility": [
+    {
+      "phrase": "Indian citizen",
+      "lang": "en",
+      "means": "citizenship",
+      "source": "https://en.wikipedia.org/wiki/Indian_nationality_law",
+      "quote": "Indian territory before 19 July 1948, or had been registered as a citizen of India by Dominion officials after that date, but before commencement of the Constitution.",
+      "checked": "2026-10-25",
+      "verified": true
+    },
+    {
+      "phrase": "Overseas Citizen of India (OCI)",
+      "lang": "en",
+      "means": "residence",
+      "source": "https://en.wikipedia.org/wiki/Overseas_Citizenship_of_India",
+      "quote": "is a form of permanent residency available to people of Indian origin which allows them to live and work in India indefinitely",
+      "checked": "2026-10-25",
+      "verified": true
+    },
+    {
+      "phrase": "Employment visa (E visa)",
+      "lang": "en",
+      "means": "work_right",
+      "source": "https://en.wikipedia.org/wiki/Visa_policy_of_India",
+      "quote": "",
+      "checked": "2026-10-25",
+      "verified": false,
+      "why": "the sentence found on the page does not say it"
+    },
+    {
+      "phrase": "security clearance / police verification",
+      "lang": "en",
+      "means": "clearance",
+      "source": "https://en.wikipedia.org/wiki/Police_verification",
+      "quote": "",
+      "checked": "2026-10-25",
+      "verified": false,
+      "why": "the source could not be read: HTTP 404"
+    }
+  ],
+  "documents": [
+    {
+      "topic": "noun",
+      "value": "resume or CV, both used",
+      "source": "https://en.wikipedia.org/wiki/R%C3%A9sum%C3%A9",
+      "quote": "",
+      "checked": "2026-10-25",
+      "verified": false,
+      "why": "no sentence on the page says it (looked for: India)"
+    },
+    {
+      "topic": "pages",
+      "value": "one to two pages",
+      "source": "https://en.wikipedia.org/wiki/R%C3%A9sum%C3%A9",
+      "quote": "",
+      "checked": "2026-10-25",
+      "verified": false,
+      "why": "the page says this of resumes in general, not of this country"
+    },
+    {
+      "topic": "photo",
+      "value": "optional; often included",
+      "source": "https://en.wikipedia.org/wiki/R%C3%A9sum%C3%A9",
+      "quote": "",
+      "checked": "2026-10-25",
+      "verified": false,
+      "why": "the page says photos are required in parts of Asia and Africa, which does not settle this country"
+    },
+    {
+      "topic": "date_format",
+      "value": "DD/MM/YYYY",
+      "source": "https://en.wikipedia.org/wiki/Date_and_time_notation_in_India",
+      "quote": "the DD-MM-YYYY and DD/MM/YYYY are the two predominant short form representations of the date",
+      "checked": "2026-10-25",
+      "verified": true
+    },
+    {
+      "topic": "spelling",
+      "value": "Indian English (British forms)",
+      "source": "https://en.wikipedia.org/wiki/Indian_English",
+      "quote": "",
+      "checked": "2026-10-25",
+      "verified": false,
+      "why": "the sentence found on the page does not say it"
+    }
+  ],
+  "pay": [
+    {
+      "name": "Periodic Labour Force Survey (Ministry of Statistics)",
+      "url": "https://mospi.gov.in/",
+      "what": "earnings by sector, state and work type",
+      "source": "https://en.wikipedia.org/wiki/Ministry_of_Statistics_and_Programme_Implementation",
+      "quote": "",
+      "checked": "2026-10-25",
+      "verified": false,
+      "why": "the sentence found on the page does not say it"
+    },
+    {
+      "name": "Naukri JobSpeak",
+      "url": "https://www.naukri.com/jobspeak",
+      "what": "hiring and pay trends by sector",
+      "source": "https://en.wikipedia.org/wiki/Naukri.com",
+      "quote": "",
+      "checked": "2026-10-25",
+      "verified": false,
+      "why": "no sentence on the page says it (looked for: JobSpeak)"
+    }
+  ],
+  "places": [
+    {
+      "metro": "Mumbai",
+      "written": [
+        "Mumbai",
+        "Mumbai Metropolitan Region",
+        "MMR",
+        "Thane",
+        "Navi Mumbai"
+      ],
+      "source": "https://en.wikipedia.org/wiki/Mumbai_Metropolitan_Region",
+      "quote": "",
+      "on_page": [
+        "Thane",
+        "Navi Mumbai"
+      ],
+      "checked": "2026-10-25",
+      "verified": false,
+      "why": "the sentence found on the page does not say it"
+    },
+    {
+      "metro": "Delhi NCR",
+      "written": [
+        "Delhi",
+        "New Delhi",
+        "Delhi NCR",
+        "Gurugram",
+        "Gurgaon",
+        "Noida"
+      ],
+      "source": "https://en.wikipedia.org/wiki/National_Capital_Region_(India)",
+      "quote": "Map of the National Capital Region, showing the union territory of Delhi (red) and states and the boundaries of their districts.",
+      "on_page": [
+        "Gurugram",
+        "Noida"
+      ],
+      "checked": "2026-10-25",
+      "verified": true
+    },
+    {
+      "metro": "Bengaluru",
+      "written": [
+        "Bengaluru",
+        "Bangalore"
+      ],
+      "source": "https://en.wikipedia.org/wiki/Bangalore",
+      "quote": "Bengaluru , [ b ] also known as Bangalore (its official name until 1 November 2014), is the capital and largest city of the southern Indian state of Karnataka .",
+      "on_page": [
+        "Bangalore"
+      ],
+      "checked": "2026-10-25",
+      "verified": true
+    }
+  ]
+}

@@ -104,7 +104,8 @@ def test_the_wording_defaults_are_settings_the_person_can_change(profile, monkey
     try:
         compose = importlib.reload(compose)
         text = compose.referral_ask("Wren Halloway", "thanks for the chat on Tuesday",
-                                    "Planning Analyst role", "https://example.com/jobs/1")
+                                    "Planning Analyst role", "https://example.com/jobs/1",
+                                    thread=[{"direction": "in", "channel": "message", "full_text": "Happy to help."}])
         assert text.startswith("Hey Wren,") and "Your Planning Analyst role is the one" in text
     finally:
         monkeypatch.undo()

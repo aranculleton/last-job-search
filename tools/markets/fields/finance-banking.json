@@ -1,0 +1,146 @@
+{
+  "name": "Finance and banking",
+  "field": "finance-banking",
+  "aka": [
+    "finance",
+    "banking",
+    "financial services",
+    "investment",
+    "asset management",
+    "insurance"
+  ],
+  "boards": {
+    "*": [
+      {
+        "name": "eFinancialCareers",
+        "url": "https://www.efinancialcareers.com",
+        "kind": "field",
+        "source": "https://www.efinancialcareers.com/",
+        "quote": "1 job site for finance and tech professionals",
+        "checked": "2026-10-25",
+        "verified": true,
+        "search": "https://www.efinancialcareers.com/jobs/analyst",
+        "paths": {
+          "search": "/jobs/analyst",
+          "posting": "/jobs-"
+        },
+        "robots": {
+          "checked": "2026-10-25",
+          "why": "",
+          "search": true,
+          "status": "allowed",
+          "posting": true,
+          "crawl_delay": 10.0,
+          "ai_input": null
+        },
+        "public_search": {
+          "checked": "2026-10-25",
+          "status": "open",
+          "http": 200
+        }
+      }
+    ]
+  },
+  "licences": {
+    "*": [
+      {
+        "value": "CFA charter (Chartered Financial Analyst), named as preferred in investment roles",
+        "source": "https://en.wikipedia.org/wiki/Chartered_Financial_Analyst",
+        "quote": "A candidate who successfully completes the program and meets other professional requirements is awarded the \"CFA charter\" and becomes a \"CFA charterholder\".",
+        "checked": "2026-10-25",
+        "verified": true
+      }
+    ],
+    "us": [
+      {
+        "value": "FINRA Series 7 (General Securities Representative) for roles that sell securities",
+        "source": "https://en.wikipedia.org/wiki/Series_7_exam",
+        "quote": "The Series 7 is administered by the Financial Industry Regulatory Authority (FINRA), an industry regulatory agency.",
+        "checked": "2026-10-25",
+        "verified": true
+      }
+    ],
+    "ca": [
+      {
+        "value": "Canadian Securities Course (CSC) for roles at an investment dealer",
+        "source": "https://en.wikipedia.org/wiki/Canadian_Securities_Course",
+        "quote": "1964: Canadian Securities Course is first offered.",
+        "checked": "2026-10-25",
+        "verified": true
+      }
+    ]
+  },
+  "pay": {
+    "*": [
+      {
+        "name": "Robert Half Salary Guide",
+        "url": "https://www.roberthalf.com/us/en/insights/salary-guide",
+        "what": "finance and accounting pay by role and city",
+        "source": "https://en.wikipedia.org/wiki/Robert_Half",
+        "quote": "",
+        "checked": "2026-10-25",
+        "verified": false,
+        "why": "no sentence on the page says it (looked for: salary)"
+      }
+    ]
+  },
+  "titles": [
+    {
+      "value": [
+        "Credit Products Officer",
+        "Equity Research Analyst",
+        "Financial Analyst",
+        "Investment Analyst",
+        "Planning Analyst",
+        "Portfolio Manager",
+        "Securities Analyst"
+      ],
+      "source": "https://www.onetonline.org/link/summary/13-2051.00",
+      "quote": "Sample of reported job titles: Analyst, Credit Products Officer",
+      "on_page": [
+        "Credit Products Officer",
+        "Equity Research Analyst",
+        "Financial Analyst",
+        "Investment Analyst",
+        "Planning Analyst",
+        "Portfolio Manager",
+        "Securities Analyst"
+      ],
+      "checked": "2026-10-25",
+      "verified": true
+    }
+  ],
+  "families": [
+    {
+      "family": "BI and reporting tool",
+      "members": [
+        [
+          "Power BI",
+          "\\bpower\\s?bi\\b"
+        ],
+        [
+          "Tableau",
+          "\\btableau\\b"
+        ],
+        [
+          "Cognos",
+          "\\bcognos\\b"
+        ],
+        [
+          "Alteryx",
+          "\\balteryx\\b"
+        ]
+      ],
+      "source": "https://www.onetonline.org/link/summary/13-2051.00",
+      "quote": "Business intelligence and data analysis software - Alteryx software",
+      "on_page": [
+        "Power BI",
+        "Tableau",
+        "Cognos",
+        "Alteryx"
+      ],
+      "checked": "2026-10-25",
+      "verified": true
+    }
+  ]
+}

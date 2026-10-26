@@ -34,6 +34,10 @@ This rule is the input side of the grounding audit (the workflow's audit stage i
 
 ## Step 1: DRAFTER - Evaluate Fit
 
+**Always evaluate fit first** against `profile/04-job-evaluation.md`: run the gates, score the
+four weighted dimensions, and report the 0-100 score and band, presented before anything is
+drafted.
+
 ### 1a. Look the score up before deriving it
 
 **Almost every posting reaching `/apply` was already scored by `/scrape` or `/rank`.** Deriving
@@ -127,9 +131,12 @@ a skill they once said they lack: only they know whether they use it and never s
 since, or can back it up, and the word left off can be the one an ATS screens on. Read the
 posting too, and ask the same way about any other skill it names that the profile lacks.
 
-The tracker knows only what was recorded here (CLAUDE.md, "Memory": "The tracker only knows
-what was recorded"). A yes is recorded as a tracker row at `applied` with the date they give, and
-nothing is drafted.
+The tracker knows only what was recorded here (RUNBOOK.md, "What changes, and where it goes":
+"The tracker only knows what was recorded"). A yes is recorded with `python3 tools/confirm.py applied --new --company
+"<Employer>" --role "<Role>" --url "<link>" --on <the date they give> --source chat` (or
+`confirm.py applied "<Employer>::<role words>" --on <date> --source chat` when the tracker
+already has the row), never by editing the tracker, and the line it prints is shown to them so
+they see exactly which application it recorded. Nothing is drafted.
 
 **Stop until the user answers.** A rejected angle after drafting costs the whole drafting and
 review cycle again; a rejected angle here costs fifteen lines.
@@ -562,10 +569,10 @@ List the files written:
 - `cv/<Prefix>_Resume_<ABBR><CV_EXT>`
 - `cover_letters/<Prefix>_Cover_Letter_<ABBR><COVER_EXT>`
 
-**Show them, never only point at them**, the one way CLAUDE.md sets ("Every output is shown", applications): per role, one call of the session's file-sending tool (SendUserFile or its equivalent) with its resume and cover letter together, captioned with the role, employer, pay (or "pay not stated"), location and apply link; then one index table in the reply, role | apply link, for a batch and a single application alike. Paste beside it what they need without opening anything: the cover letter's text, the outreach note ready to paste, and the two screening answers marked **(decide per application)**. The paths go underneath as plain text, for the record, never as markdown links (a relative link does not open from the desktop app). "The files are in cv/" is never the whole answer.
+**Show them, never only point at them.** On the person's page first (CLAUDE.md, "Every output is shown"): the files in the page's own store and `python3 tools/app.py view`, so the role shows under Drafts, and one line in the chat saying so. Where there is no page, the one way RUNBOOK.md sets ("Delivering in the chat"): per role, one call of the session's file-sending tool (SendUserFile or its equivalent) with its resume and cover letter together, captioned with the role, employer, pay (or "pay not stated"), location and apply link; then one index table in the reply, role | apply link, for a batch and a single application alike. Paste beside it what they need without opening anything: the cover letter's text, the outreach note ready to paste, and the two screening answers marked **(decide per application)**. The paths go underneath as plain text, for the record, never as markdown links (a relative link does not open from the desktop app). "The files are in cv/" is never the whole answer.
 
 End with the line `python3 tools/tips.py apply` prints, if it prints one (it decides when: the first time, then now and then). What they say back
-goes through CLAUDE.md, "Learning the person".
+goes through RUNBOOK.md, "Learning the person".
 
 ### Step 6b: Record the Application
 

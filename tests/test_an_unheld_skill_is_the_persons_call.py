@@ -12,6 +12,7 @@ from __future__ import annotations
 
 import json
 import os
+import shutil
 import subprocess
 import sys
 
@@ -50,7 +51,12 @@ def _stage(tmp_path, posting=POSTING):
                              shortlist=[row])[0]
 
 
-def test_staging_asks_one_short_question_and_nothing_is_assembled_until_it_is_answered(tmp_path):
+def test_staging_asks_one_short_question_and_nothing_is_assembled_until_it_is_answered(
+        tmp_path, monkeypatch):
+    # Updated 2026-10-25: the record below has neither audit in it, which assemble now
+    # refuses (tests/test_every_draft_sent_gets_the_model_audit.py); what this test reads
+    # is the person's answers, so the audit gate is set aside here.
+    monkeypatch.setattr(stage_picks, "_held_back", lambda *a, **k: "")
     p = _stage(tmp_path)
     assert {"Looker", "Spark", "SAP ABAP"} <= set(p["ask_first"])
     q = stage_picks.question(p)
@@ -126,7 +132,8 @@ def test_the_interview_pack_flags_what_they_said_yes_to():
 def test_the_workflow_will_not_draft_a_pick_still_waiting():
     src = open(os.path.join(ROOT, ".claude", "workflows", "draft-applications.js"),
                encoding="utf-8").read()
-    node = subprocess.run(["node", "--version"], capture_output=True)
+    node = subprocess.run(["node", "--version"], capture_output=True) if shutil.which("node") \
+        else subprocess.CompletedProcess(["node"], 127)
     if node.returncode != 0:
         assert "Ask the person first" in src and "skills_yes" in src
         return
@@ -145,7 +152,7 @@ const run = async (picks) => {
 """
     out = subprocess.run(["node", "-e", harness,
                           os.path.join(ROOT, ".claude", "workflows", "draft-applications.js")],
-                         capture_output=True, text=True, check=True).stdout.strip()
+                         capture_output=True, text=True, encoding="utf-8", errors="replace", check=True).stdout.strip()
     assert out == "threw threw ran"
 
 

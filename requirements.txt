@@ -9,3 +9,8 @@ pytest>=7.0
 pyyaml>=6.0
 pypdf>=3.0
 openpyxl>=3.1
+# Windows has no time-zone data of its own, and Python's zoneinfo reads it from this
+# package there (https://docs.python.org/3/library/zoneinfo.html#data-sources): without it
+# "their time now" and the brief's days had no zone to work in. Elsewhere the computer's own
+# data is used, so it is not installed.
+tzdata; sys_platform == "win32"

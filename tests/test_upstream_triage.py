@@ -14,7 +14,7 @@ UPSTREAM_SLUG = "MadsLorentzen/ai-job-search"
 
 def git(root: Path, *args: str) -> str:
     return subprocess.run(
-        ["git", *args], cwd=root, check=True, capture_output=True, text=True
+        ["git", *args], cwd=root, check=True, capture_output=True, text=True, encoding="utf-8", errors="replace"
     ).stdout
 
 
@@ -57,7 +57,7 @@ class TriageRepoFixture(unittest.TestCase):
     def run_triage(self, *args) -> subprocess.CompletedProcess:
         return subprocess.run(
             [sys.executable, str(self.root / "tools" / "upstream_triage.py"), *args],
-            cwd=self.root, capture_output=True, text=True,
+            cwd=self.root, capture_output=True, text=True, encoding="utf-8", errors="replace",
         )
 
 
@@ -263,8 +263,10 @@ class DisabledPortalCommitsAreSkipped(TriageRepoFixture):
         import upstream_triage as U
         self.write(".agents/skills/p/SKILL.md",
                    "---\nenabled: false  # set to true to run this one\n---\n")
+        # With "/" between folders, as git names the paths it is compared with, on Windows
+        # too.
         self.assertEqual(U.disabled_portal_prefixes(str(self.root / ".agents/skills")),
-                         [str(self.root / ".agents/skills/p") + "/"])
+                         [(self.root / ".agents/skills/p").as_posix() + "/"])
         self.write(".agents/skills/p/SKILL.md",
                    "---\nenabled: true  # set to false to keep it installed but skipped\n---\n")
         self.assertEqual(U.disabled_portal_prefixes(str(self.root / ".agents/skills")), [])

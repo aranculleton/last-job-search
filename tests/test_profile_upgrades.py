@@ -373,7 +373,7 @@ def test_only_what_truly_needs_the_person_waits_for_them():
     assert {u.id for u in U.REGISTRY if u.needs == "you"} == {"unconfirmed-facts",
                                                                  "method-routines", "linkedin-plan",
                                                                  "learned-choices", "profile-reads",
-                                                                 "connections-export", "work-place",
+                                                                 "connections-export",
                                                                  "profile-consistency",
                                                                  "campaign-notes", "message-texts",
                                                                  "voice-refresh",
@@ -389,12 +389,15 @@ def test_only_what_truly_needs_the_person_waits_for_them():
     # (the maintainer's instruction, 2026-10-22).
     assert not [u.id for u in U.REGISTRY
                 if re.search(r"\b(?:inbox|gmail|e-?mails?)\b", u.ask or "", re.I)]
-    # Consent to a risk to their own account names the risk.
-    assert "terms forbid" in U.by_id("profile-reads").ask
+    # Reading in the chat's browser needs no question first, and the question that is
+    # left (never asked: nothing makes it pending) carries no warning (2026-10-25).
+    assert U.by_id("profile-reads").pending() == ""
+    assert not re.search(r"\bterms\b|\brisk", U.by_id("profile-reads").ask)
     # Only the person can download their own connections; Claude never touches LinkedIn.
     assert U.by_id("connections-export").steps().endswith("Nothing is sent to anyone.")
-    # Where they will mostly work is theirs to say; nothing in a profile answers it.
-    assert "computer, or on your phone or the web" in U.by_id("work-place").ask
+    # Where they will mostly work is no longer asked of anyone set up before the question:
+    # 4.0 recommends no chat on a computer (2026-10-25).
+    assert U.by_id("work-place").pending() == "" and U.by_id("work-place").needs == "nobody"
     # Two answers to what a recruiter checks first: only the person knows which is true.
     assert "you pick the right one" in U.by_id("profile-consistency").ask
     # Their own notes are folded into the prep document only on their yes.
@@ -445,8 +448,10 @@ def _read(*parts):
 
 
 def test_a_session_applies_them_without_being_asked():
-    claude = _read("CLAUDE.md")
-    step = claude[claude.index("5. **Profile upgrades"):claude.index("In the app itself")]
+    # The step lives in RUNBOOK.md, "Start of a session", since 4.0 (docs/rule_map.json).
+    runbook = _read("RUNBOOK.md")
+    start = runbook[runbook.index("## Start of a session"):]
+    step = start[start.index("5. **Profile upgrades"):start.index("In the app itself")]
     for must in ("run_in_background: true", 'isolation: "worktree"', "/upgrade",
                  "never offer them a list or wait for a yes", "at most three",
                  "undo it yourself"):
@@ -529,7 +534,7 @@ def test_a_changelog_instruction_names_its_upgrade():
 # ------------------------------------------------------------------ the instant runner
 
 def _git(cwd, *args):
-    return subprocess.run(["git", "-C", str(cwd), *args], check=True, text=True,
+    return subprocess.run(["git", "-C", str(cwd), *args], check=True, text=True, encoding="utf-8", errors="replace",
                           capture_output=True, env=dict(os.environ, GIT_AUTHOR_NAME="t",
                           GIT_AUTHOR_EMAIL="t@example.com", GIT_COMMITTER_NAME="t",
                           GIT_COMMITTER_EMAIL="t@example.com")).stdout
@@ -684,7 +689,7 @@ def test_every_question_is_short_and_plain_with_its_detail_kept_for_a_yes():
             assert 1 < len(lines) <= 5, (u.id, len(lines))
             assert not set(lines) & set(u.ask.splitlines())                       # kept apart
     steps = U.by_id("connections-export").steps().splitlines()
-    assert steps[0].startswith("At the time of writing (checked ") and "official page: https://" in steps[0]
+    assert steps[0] == "To get your list of LinkedIn connections:" and "https://" not in steps[0]
     assert steps[-1] == "I only read it. Nothing is sent to anyone."
     assert U.NO_REPLY == "No problem, I'll ask again in a month." and U.REASK_DAYS == 30
 
@@ -746,7 +751,7 @@ def test_a_process_folder_with_no_posting_is_given_one(profile, tmp_path, monkey
     assert "1 hiring process folder(s) with no job_posting.md" in \
         U.by_id("process-postings").pending()
     r = subprocess.run([sys.executable, os.path.join(ROOT, "tools", "interview_pack.py"),
-                        "postings"], cwd=ROOT, env=os.environ, capture_output=True, text=True)
+                        "postings"], cwd=ROOT, env=os.environ, capture_output=True, text=True, encoding="utf-8", errors="replace")
     assert r.returncode == 0, r.stderr
     text = open(os.path.join(folder, "job_posting.md"), encoding="utf-8").read()
     assert "not held yet" in text and "--posting" in text
@@ -830,7 +835,7 @@ def test_reading_files_that_change_on_every_read_are_moved_out_of_the_repo(profi
         '{"date": "2026-10-20", "ids": ["bo_venn"]}', encoding="utf-8")
     assert "1 reading file(s) in documents/network" in U.by_id("runtime-files").pending()
     r = subprocess.run([sys.executable, os.path.join(ROOT, "tools", "network", "reading.py"),
-                        "move-runtime"], cwd=ROOT, env=os.environ, capture_output=True, text=True)
+                        "move-runtime"], cwd=ROOT, env=os.environ, capture_output=True, text=True, encoding="utf-8", errors="replace")
     assert r.returncode == 0, r.stderr
     assert U.by_id("runtime-files").pending() == ""
     assert '"bo_venn"' in open(tmp_path / "ledger" / "reading-ledger.json").read()
@@ -880,7 +885,7 @@ def test_a_checkout_older_than_the_sync_says_so_and_never_lists_or_crashes(
     repo.mkdir()
 
     def run(*args):
-        return subprocess.run(["git", "-C", str(repo), *args], capture_output=True, text=True,
+        return subprocess.run(["git", "-C", str(repo), *args], capture_output=True, text=True, encoding="utf-8", errors="replace",
                               check=True).stdout.strip()
     run("init", "-q")
     run("config", "user.email", "t@example.com")
@@ -934,3 +939,18 @@ def test_a_name_read_through_a_one_argument_getter_is_listed():
     names = profile_names.collect()["networking"]
     assert "tools/network/reply.py:69" in names["HOME_ADJECTIVE"]["where"]
     assert not names["HOME_ADJECTIVE"]["required"]
+
+
+def test_the_check_for_unconfirmed_facts_lists_every_one(profile, monkeypatch, capsys):
+    """/upgrade's step says `--check unconfirmed-facts` lists every [CONFIRM: ...] in the
+    profile; it printed the count, three of them and "..." (2026-10-25)."""
+    cp = profile / "01-candidate-profile.md"
+    asks = [f"the start date of role {n}" for n in range(1, 6)]
+    cp.write_text(cp.read_text(encoding="utf-8")
+                  + "".join(f"\n- Role {n}: [CONFIRM: {a}]" for n, a in enumerate(asks, 1)) + "\n",
+                  encoding="utf-8")
+    monkeypatch.setattr(U, "_personal_repo", lambda: False)
+    assert U.main(["--check", "unconfirmed-facts"]) == 1
+    out = capsys.readouterr().out
+    assert out.startswith("5 facts in your profile only you can confirm")
+    assert all(f"  - {a} (" in out for a in asks), out

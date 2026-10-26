@@ -40,6 +40,7 @@ ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 T = os.path.join(ROOT, "tools")
 sys.path.insert(0, T)
 import person  # noqa: E402
+import local_path  # noqa: E402
 
 STAGES = ("01_prefiltered", "02_hydrated", "03_screened", "04_opportunity",
           "05_ranked", "06_shortlist")
@@ -63,6 +64,9 @@ STAGE_BUDGET_SEC = {
     "hydrate.py": 30 * 60,
 }
 DEFAULT_STAGE_SEC = 10 * 60
+# What hydrate leaves of its stage limit for the fetches still running when its own budget
+# ends (each is cut off at 60 seconds) and for writing what it found.
+HYDRATE_MARGIN_SEC = 2 * 60
 
 
 def _stage_budget(cmd, deadline):
@@ -273,7 +277,37 @@ SUMMARY_DIR = "documents/rounds"
 SUMMARY_FIELDS = ("priority", "fit", "fit_why", "opportunity", "title", "company", "location",
                   "date", "first_seen", "age_days", "url", "portal", "bar", "bar_reason",
                   "warm_route_note", "outreach_pending_note", "throttle_override_note",
-                  "drafted_note")
+                  "drafted_note", "apply_url", "link_kind", "link_status", "link_check",
+                  "near")
+LINK_FIELDS = ("apply_url", "link_kind", "link_status", "link_check")
+
+
+def link_checks(rows: list[dict], scraped: list[dict], now=None) -> list[dict]:
+    """Each kept row with its apply link checked against the employers' own boards as this
+    round read them (tools/apply_link.py), with no request of its own: a board the scrape
+    read is its listing, so a LinkedIn posting is matched to the employer's own and a
+    board's posting is open by being there. Only the link fields are added; the row's own
+    `url` stays as it was found, since rulings are keyed on it."""
+    import apply_link
+    from company_key import key as company_key
+    by_board: dict = {}
+    for r in scraped or []:
+        if isinstance(r, dict) and r.get("portal"):
+            by_board.setdefault((str(r["portal"]), company_key(r.get("company") or "")), []).append(r)
+
+    def read(employer, kind, token):
+        got = by_board.get((kind, company_key(employer)))
+        return (got, None) if got else ([], "this round did not read that board")
+    checker = apply_link.Checker(now=now, read=read)
+    out = []
+    for r in rows:
+        try:
+            shown = checker.shown(r)
+        except Exception:  # noqa: BLE001  a row the checker cannot read keeps no link fields
+            out.append(r)
+            continue
+        out.append(dict(r, **{k: shown[k] for k in LINK_FIELDS if shown.get(k)}))
+    return out
 
 
 def round_order(path: str) -> tuple:
@@ -289,19 +323,37 @@ def round_order(path: str) -> tuple:
     return tuple(int(n) for n in re.findall(r"\d+", name)), written
 
 
-def write_summary(shortlist_path, out_dir, name):
-    """The compact shortlist, and where it was written."""
+def _read_json(path):
+    """A file's JSON, the file closed before anything else happens, failure or not: left
+    open by a failed json.load, a broken shortlist could not be removed on Windows, which
+    deletes no file that is open (2026-10-25)."""
+    with open(path, encoding="utf-8") as fh:
+        return json.load(fh)
+
+
+def write_summary(shortlist_path, out_dir, name, scraped_path=None):
+    """The compact shortlist, and where it was written. With `scraped_path` (the round's
+    scrape), each kept row's apply link is checked against what the round read
+    (link_checks), so a card says where to apply and whether it is still listed."""
     try:
-        rows = json.load(open(shortlist_path))
+        rows = _read_json(shortlist_path)
     except Exception:
         return None
     rows = rows if isinstance(rows, list) else list(rows.values())
     rows.sort(key=lambda r: -(r.get("priority") or 0))
+    kept = rows[:KEEP_TOP]
+    if scraped_path:
+        try:
+            scraped = _read_json(scraped_path)
+            scraped = scraped if isinstance(scraped, list) else list(scraped.values())
+        except Exception:
+            scraped = []
+        kept = link_checks(kept, scraped, datetime.datetime.now(datetime.timezone.utc))
     out = [{k: r.get(k) for k in SUMMARY_FIELDS if r.get(k) not in (None, "")}
-           for r in rows[:KEEP_TOP]]
+           for r in kept]
     os.makedirs(out_dir, exist_ok=True)
     path = os.path.join(out_dir, "%s.json" % name)
-    with open(path, "w") as fh:
+    with open(path, "w", encoding="utf-8", newline="\n") as fh:
         json.dump(out, fh, indent=1)
         fh.write("\n")
     return path
@@ -334,13 +386,13 @@ def slim(path):
     """Rewrite a stage file without the posting bodies. Returns bytes saved."""
     try:
         before = os.path.getsize(path)
-        rows = json.load(open(path))
+        rows = _read_json(path)
     except Exception:
         return 0
     rows = rows if isinstance(rows, list) else list(rows.values())
     out = [{k: v for k, v in r.items() if k != BODY_FIELD} if isinstance(r, dict) else r
            for r in rows]
-    with open(path, "w") as fh:
+    with open(path, "w", encoding="utf-8", newline="\n") as fh:
         json.dump(out, fh, indent=1)
         fh.write("\n")
     return max(0, before - os.path.getsize(path))
@@ -362,7 +414,7 @@ def trim(path, top=KEEP_TOP):
     """
     try:
         before = os.path.getsize(path)
-        rows = json.load(open(path))
+        rows = _read_json(path)
     except Exception:
         try:
             size = os.path.getsize(path)
@@ -371,7 +423,7 @@ def trim(path, top=KEEP_TOP):
         except OSError:
             return 0
     rows = rows if isinstance(rows, list) else list(rows.values())
-    with open(path, "w") as fh:
+    with open(path, "w", encoding="utf-8", newline="\n") as fh:
         json.dump(rows[:top], fh, indent=1)
         fh.write("\n")
     return max(0, before - os.path.getsize(path))
@@ -451,7 +503,7 @@ def yield_of(path):
     A row with no fit, from before fit.py, is counted by its priority.
     """
     try:
-        rows = json.load(open(path))
+        rows = _read_json(path)
     except Exception:
         return 0, 0
     rows = rows if isinstance(rows, list) else list(rows.values())
@@ -462,7 +514,7 @@ def yield_of(path):
 
 def count(path):
     try:
-        d = json.load(open(path))
+        d = _read_json(path)
         return len(d) if isinstance(d, list) else len(d.get("jobs", d))
     except Exception:
         return "?"
@@ -517,18 +569,48 @@ def _boards_not_built() -> list[str]:
         return []
 
 
+class _Parser(argparse.ArgumentParser):
+    """A mistyped option exits 1, a stage broke, as every other failure here does. argparse's
+    own exit for it is 2, which this round keeps for "the yield target was missed": a typo
+    read as a thin market, and the round widened on nothing."""
+
+    def error(self, message):
+        self.print_usage(sys.stderr)
+        self.exit(1, f"{self.prog}: error: {message}\n")
+
+
+def round_dir(out: str) -> str:
+    """--out as this computer names a folder: separators of either kind, no trailing one.
+    `--out rounds\\r1\\` on Windows kept its trailing backslash, so the round's name came
+    out empty and its shortlist was saved as documents/rounds/.json."""
+    if os.sep == "/":
+        out = out.replace("\\", "/")
+    return os.path.normpath(out)
+
+
+def _job_age_days() -> int:
+    """How old a posting may be: the person's own search window (JOB_AGE_DAYS, set from
+    the page: 7, 14 or 30 days), else the app's rule of 14."""
+    try:
+        got = int(getattr(person.module("search"), "JOB_AGE_DAYS", 14) or 14)
+    except Exception:  # noqa: BLE001  no profile here, or a value that is not a number
+        return 14
+    return got if got in (7, 14, 30) else 14
+
+
 def main():
     try:  # a chat that carried on into a new day has not checked the app since
         import sync_app
         sync_app.nudge()
     except Exception:
         pass
-    ap = argparse.ArgumentParser()
+    ap = _Parser()
     ap.add_argument("--out", required=True, help="directory for this round's files")
     ap.add_argument("--pages", type=int, default=None,
                     help="default 5 in the cloud and 2 on a person's own computer "
                          "(scrape_wide.defaults; SCRAPE_PAGES in profile/search.py)")
-    ap.add_argument("--jobage", type=int, default=14, help="hard freshness rule, days")
+    ap.add_argument("--jobage", type=int, default=_job_age_days(),
+                    help="hard freshness rule, days (profile/search.py JOB_AGE_DAYS, else 14)")
     ap.add_argument("--workers", type=int, default=None,
                     help="default 10 in the cloud and 4 on their own computer (SCRAPE_WORKERS)")
     ap.add_argument("--top", type=int, default=40, help="shortlist length shown")
@@ -565,6 +647,7 @@ def main():
                     help="keep the stage files instead of pruning them; they are "
                          "reproducible, so this is for debugging a round that went wrong")
     a = ap.parse_args()
+    a.out = round_dir(a.out)
     # A line this round cannot print in the console's own encoding is printed with a
     # stand-in character, never raised: an accented employer name ended the round.
     for stream in (sys.stdout, sys.stderr):
@@ -578,7 +661,7 @@ def main():
     a.workers = a.workers or workers
     os.makedirs(a.out, exist_ok=True)
     f = lambda n: os.path.join(a.out, n)
-    log = open(f("round.log"), "a", encoding="utf-8", errors="replace")
+    log = open(f("round.log"), "a", encoding="utf-8", errors="replace", newline="\n")
     # One monotonic ceiling for the whole round. Every stage gets the
     # smaller of its own budget and what is left of this.
     started = time.monotonic()
@@ -656,9 +739,13 @@ def main():
     if a.no_seen_read:
         prefilter += ["--keep-ruled-out"]
     run(prefilter, log, deadline)
-    # Hydrate AFTER the free gates: one HTTP call per survivor, none for the rest.
-    run([sys.executable, f"{T}/hydrate.py", f("01_prefiltered.json"), "--out", f(HYDRATED),
-         "--workers", str(a.workers), "--require", a.require]
+    # Hydrate AFTER the free gates: one HTTP call per survivor, none for the rest. It is
+    # given the time its stage limit leaves, less a fetch's own time to finish, so it stops
+    # and writes what it fetched before the limit kills it with nothing written.
+    hydrate = [sys.executable, f"{T}/hydrate.py", f("01_prefiltered.json"), "--out", f(HYDRATED),
+               "--workers", str(a.workers), "--require", a.require]
+    room = _stage_budget(hydrate, deadline)
+    run(hydrate + ["--budget", str(room - min(HYDRATE_MARGIN_SEC, room // 2))]
         + (["--cache", a.hydrate_cache] if a.hydrate_cache else []), log, deadline)
     # The screen's cuts go to seen_jobs.json, so the next round drops them before
     # hydrate fetches them again.
@@ -712,10 +799,18 @@ def main():
     # below returns, so every exit path leaves the same small footprint.
     summary = write_summary(f("06_shortlist.json"),
                             a.summary_dir or person.state(SUMMARY_DIR),
-                            os.path.basename(a.out.rstrip("/")))
+                            os.path.basename(os.path.abspath(a.out)), scraped_path=scraped)
     if summary:
-        print(f"shortlist summary: {os.path.relpath(summary, ROOT)} "
+        print(f"shortlist summary: {local_path.rel(summary, ROOT)} "
               f"(top {KEEP_TOP}, no posting bodies) - commit this one")
+    # What the round filtered out and why, kept every round before the prune deletes the
+    # stage files that say it (tools/filtered.py; `filtered.py back` brings one back).
+    import filtered
+    left_out = filtered.write(a.out, a.summary_dir or person.state(SUMMARY_DIR),
+                              os.path.basename(os.path.abspath(a.out)))
+    if left_out:
+        print(f"filtered out: {local_path.rel(left_out, ROOT)} (each with its reason; "
+              "tools/filtered.py back brings one back)")
     # Read before the prune below deletes 00_scrape/, or a portal that went
     # quiet is never reported and the MISSED message blames the market.
     down = _portals_down(a.out)
@@ -757,7 +852,7 @@ def main():
         # the round before's, they compounded, and the third round searched 6x.
         first = a.first_pages or a.pages
         pages = int(first * WIDENINGS[a.round - 1])
-        nxt = f"{a.out.rstrip('/')}_round{a.round + 1}"
+        nxt = f"{a.out}_round{a.round + 1}"
         print(f"\nexpanding: round {a.round + 1} of {MAX_ROUNDS}, "
               f"pages {a.pages} -> {pages}, "
               f"jobage held at {a.jobage} (the freshness rule never widens) -> {nxt}")

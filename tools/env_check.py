@@ -8,12 +8,15 @@ the network policy refuses still "answered") and never looked at Ashby,
 Workday, pypdf or bun.
 
     python3 tools/env_check.py          # report; exit 0 if all is well, 1 if anything is not
+    python3 tools/env_check.py --fix    # install what is missing (tools/installs.py): on a
+                                        # computer into the person's own folders with no
+                                        # password; in a cloud chat, ./tools/setup_env.sh
 
 What it reads:
-  tools     lualatex and xelatex (the documents), pdftotext (the text-layer
-            check), pypdf (the same, and it can be installed but broken: a
-            container's system `cryptography` makes it panic in pyo3 until
-            `pip3 install --upgrade cffi`), bun (the portal CLIs)
+  tools     lualatex and xelatex (the documents), pypdf (the text-layer check, which
+            can be installed but broken: a container's system `cryptography` makes it
+            panic in pyo3 until `pip3 install --upgrade cffi`), Node or Bun (the portal
+            CLIs), and on a computer GitHub's command line and its sign-in
   hosts     the portals the app calls, every portal the person has (the `url:`
             in its SKILL.md), and every host their employers' boards in
             profile/boards.py are read from, as openroles names them
@@ -76,13 +79,45 @@ def classify(exit_code: int, connect: str, code: str) -> str:
     return "unreachable"
 
 
+def https_host() -> str:
+    """The host Python's own HTTPS is tried on: one curl tries too, not LinkedIn's."""
+    urls = [u for _, u in hosts()]
+    return next((u for u in urls if "linkedin" not in u), urls[0] if urls else "")
+
+
+def https_check(url: str) -> tuple[str, str]:
+    """(verdict, detail) for Python's own HTTPS (urllib) to one host: "ok" when a TLS reply
+    came back verified, "certificates" when this Python could not check the certificate,
+    "unknown" when the host was not reached at all (curl's line says why)."""
+    import ssl
+    import urllib.error
+    import urllib.request
+    local_path.trust_store()
+    try:
+        with urllib.request.urlopen(url, timeout=10) as r:
+            return "ok", f"HTTP {r.status}"
+    except urllib.error.HTTPError as e:      # any status is a reply over verified TLS
+        return "ok", f"HTTP {e.code}"
+    except (urllib.error.URLError, ssl.SSLError, OSError) as e:
+        reason = getattr(e, "reason", e)
+        if isinstance(reason, ssl.SSLCertVerificationError) or \
+                "CERTIFICATE_VERIFY_FAILED" in str(reason):
+            fix = (f"`{FIX} python` gives the app a Python that reads the Mac's certificates"
+                   if sys.platform == "darwin" else
+                   "set SSL_CERT_FILE to this computer's certificate bundle")
+            return "certificates", f"this Python cannot check certificates ({sys.executable}); {fix}"
+        return "unknown", f"not reached ({str(reason)[:80]})"
+
+
 def probe(url: str) -> tuple[str, str]:
     """(verdict, detail) for one URL, through whatever proxy the session uses."""
     if not shutil.which("curl"):
         return "unreachable", "curl is not installed"
-    p = subprocess.run(["curl", "-sS", "-o", "/dev/null", "--max-time", "8",
+    # os.devnull, not /dev/null: Windows' own curl.exe cannot open /dev/null, so every job
+    # site was reported unreachable there (it is "nul" on Windows).
+    p = subprocess.run(["curl", "-sS", "-o", os.devnull, "--max-time", "8",
                         "-w", "%{http_connect} %{http_code}", url],
-                       capture_output=True, text=True)
+                       capture_output=True, text=True, encoding="utf-8", errors="replace")
     connect, _, code = (p.stdout.strip() + "  ").partition(" ")
     code = code.strip()
     verdict = classify(p.returncode, connect.strip(), code)
@@ -123,21 +158,21 @@ def board_hosts() -> list[tuple[str, str]]:
 
 def blocked_say(names) -> str:
     """What the person is told when a cloud chat cannot reach job sites: what happened, the
-    one recommended fix as numbered steps from the registry, and what happens meanwhile.
+    one fix as numbered steps from the registry, and what happens meanwhile.
 
     It replaced "the network policy refused it (proxy 403); add the host under the cloud
     environment's Allowed domains", which a person new to all of it could not act on: they
     had never heard of an environment (2026-10-20). Full is recommended over a list of
-    sites because a list needs a new entry for each new employer's board."""
+    sites because a list needs a new entry for each new employer's board. Cut from 107 words
+    to under 60 (2026-10-25): it said "done" twice, said it would "search again" when nothing
+    had been searched, and explained the cloud before the fix."""
     import claude_surfaces
     names = [n for n in dict.fromkeys(names) if n]
     what = ", ".join(names[:3]) + (" and others" if len(names) > 3 else "")
     return "\n".join(
-        [f"This chat can't reach the job sites{' (' + what + ')' if what else ''}: it runs on "
-         "a computer in the cloud that only reaches a few websites until you allow more.",
-         "Recommended, once:"]
-        + claude_surfaces.steps("cloud-internet")
-        + ["Until then I won't search: it would only find old jobs. Say \"done\" once it's "
+        [f"This chat can't reach job sites yet{' (' + what + ')' if what else ''}. To let it, once:"]
+        + claude_surfaces.steps("cloud-internet")[1:]
+        + ["I won't search before then: it would only find old jobs. Say \"done\" once it's "
            "changed."])
 
 
@@ -170,17 +205,30 @@ def allowlist() -> list[str]:
     return list(dict.fromkeys(h for h in out if h))
 
 
+TOOLS = os.path.join(ROOT, "tools")
+# What the tools themselves import: the repo's .venv first (local_path.use_venv), where
+# env_check --fix puts the packages a system Python refuses.
+VENV_FIRST = "import sys; sys.path.insert(0, sys.argv[1]); import local_path; local_path.use_venv(); "
+
+
+def app_python() -> str:
+    """The Python the app's commands run under here: the repo's .venv's where it starts
+    (an app command started by another one runs itself again under it), else this one."""
+    return local_path.venv_python() if local_path.venv_runs() else sys.executable
+
+
 def module_state(name: str) -> bool:
     """Is a Python module importable here? Asked apart, like pypdf, so a broken one cannot crash this."""
-    return subprocess.run([sys.executable, "-c", f"import {name}"],
-                          capture_output=True, text=True).returncode == 0
+    return subprocess.run([app_python(), "-c", VENV_FIRST + f"import {name}", TOOLS],
+                          capture_output=True, text=True, encoding="utf-8",
+                          errors="replace").returncode == 0
 
 
 def pypdf_state() -> str:
     """'ok', 'missing' or 'broken'. Run apart, because a pyo3 panic kills the
     interpreter rather than raising."""
-    p = subprocess.run([sys.executable, "-c", "import pypdf; pypdf.PdfReader"],
-                       capture_output=True, text=True)
+    p = subprocess.run([app_python(), "-c", VENV_FIRST + "import pypdf; pypdf.PdfReader", TOOLS],
+                       capture_output=True, text=True, encoding="utf-8", errors="replace")
     if p.returncode == 0:
         return "ok"
     return "missing" if "No module named" in p.stderr else "broken"
@@ -193,82 +241,92 @@ CLOUD = os.environ.get("CLAUDE_CODE_REMOTE", "").lower() == "true"
 
 
 def _install(what: str) -> str:
-    """The one command that installs `what` where this session runs."""
-    if CLOUD or shutil.which("apt-get"):
-        return {"latex": "./tools/setup_env.sh installs it" + (" for this session" if CLOUD else ""),
-                "poppler": "./tools/setup_env.sh installs it"}[what]
-    if sys.platform == "darwin":
-        return {"latex": "install it once: brew install --cask mactex-no-gui (SETUP.md, Local machine)",
-                "poppler": "./tools/setup_env.sh installs it (brew install poppler)"}[what]
-    if sys.platform.startswith("win"):
-        return {"latex": "install it once: winget install MiKTeX.MiKTeX (SETUP.md, Local machine)",
-                "poppler": "winget install oschwartz10612.Poppler"}[what]
-    return "install it once (SETUP.md, Local machine)"
+    """What installs `what` where this session runs, in one plain phrase."""
+    if CLOUD:
+        return "./tools/setup_env.sh installs it for this session"
+    return "`python3 tools/env_check.py --fix` installs it (no password)"
 
 
-BREW = ('/bin/bash -c "$(curl -fsSL '
-        'https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)"')
+FIX = "python3 tools/env_check.py --fix"
+
+
+LINUX_MANAGERS = (("apt-get", "sudo apt-get install -y {}"), ("dnf", "sudo dnf install -y {}"),
+                  ("pacman", "sudo pacman -S --noconfirm {}"),
+                  ("zypper", "sudo zypper install -y {}"))
+
+
+def linux_install(package: str, have=None) -> str:
+    """The one command that installs a system package on this Linux, by the package manager
+    it has (Debian and Ubuntu, Fedora, Arch, openSUSE), apt-get where none is found."""
+    have = have or shutil.which
+    for tool, cmd in LINUX_MANAGERS:
+        if have(tool):
+            return cmd.format(package)
+    return LINUX_MANAGERS[0][1].format(package)
 
 
 def local_fixes(system=None, have=None, module=None, py_ok=None, pypdf=None,
-                gh_signed_in=None) -> list:
+                gh_signed_in=None, newer=None) -> list:
     """What this computer is missing, as [(what, the one command, whose)].
 
-    The person's own computer, never a cloud session: one list, one exact command
-    each. `whose` is "" where Claude runs it itself, "password" where it asks for the
-    computer's password and "sign-in" where the person signs in themselves, because
-    those two are the person's to run. Every argument is injectable so each machine
-    can be tested from any other.
+    The person's own computer, never a cloud session. Almost everything is one command
+    Claude runs itself, `env_check.py --fix`, which installs into the person's own
+    folders with no password, no Homebrew and no winget (tools/installs.py). `whose` is ""
+    for those; "sign-in" where the person signs in themselves (GitHub); "dialog" where a
+    window of their computer's own asks them to click (Apple's command line tools, on a
+    Mac with no Git or Python); and "password" only for what Linux installs from the
+    system (Git, Perl), which asks for it. A Python too old for the app is not one of
+    those on Linux: uv installs a current one with no password (python_floor.linux_route).
+    `newer` is whether a Mac still needs the current Python (installs.needs_python). Every
+    argument is injectable so each machine can be tested from any other.
     """
     import python_floor
+    here = system is None                    # this computer, not one a test describes
     system = system or sys.platform
     have = have or shutil.which
     module = module or module_state
     py_ok = python_floor.ok() if py_ok is None else py_ok
     pypdf = pypdf or pypdf_state()
     mac, win = system == "darwin", system.startswith("win")
-    pip = "python -m pip install --user" if win else "pip3 install --user"
+    if newer is None:
+        made = local_path.venv_version()
+        newer = here and mac and sys.version_info[:2] < python_floor.CURRENT and not (
+            made and made >= python_floor.CURRENT and local_path.venv_runs())
     out = []
+    # Linux is the one place a missing Git needs the system's own package manager, and so
+    # the person's password at a terminal: Claude's shell has no terminal for sudo. Which
+    # manager is read from what the computer has, not assumed to be Ubuntu's. A Python too
+    # old for the app is uv's, there and on a Mac with no password.
     if not py_ok:
-        cmd = ("xcode-select --install" if mac else "winget install Python.Python.3.12" if win
-               else "sudo apt-get install -y python3")
-        out.append(("Python 3.9 or newer", cmd, "" if win else "password"))
-    for mod, package in (("pytest", "pytest"), ("yaml", "pyyaml")):
-        if not module(mod):
-            out.append((package, f"{pip} {package}", ""))
-    if pypdf != "ok":
-        out.append(("pypdf", f"{pip} --upgrade cffi" if pypdf == "broken" else f"{pip} pypdf",
-                    ""))
-    latex = not (have("lualatex") and have("xelatex"))
-    poppler, bun, gh = not have("pdftotext"), not have("bun"), not have("gh")
-    if mac:
-        if (latex or poppler or gh) and not have("brew"):
-            out.append(("Homebrew (installs what follows)", BREW, "password"))
-        if latex:
-            out.append(("LaTeX, to make the PDFs", "brew install --cask mactex-no-gui", "password"))
-        if poppler:
-            out.append(("Poppler, to check the PDFs", "brew install poppler", ""))
-    elif win:
-        if latex:
-            out.append(("LaTeX, to make the PDFs",
-                        "winget install MiKTeX.MiKTeX (or the installer at https://miktex.org/download)",
-                        "password"))
-        if poppler:
-            out.append(("Poppler, to check the PDFs", "winget install oschwartz10612.Poppler", "password"))
-    elif latex or poppler:
-        out.append(("LaTeX and Poppler, for the PDFs", "./tools/setup_env.sh", "password"))
-    if bun:
-        out.append(("Bun, for the job searches",
-                    'powershell -c "irm bun.sh/install.ps1 | iex"' if win
-                    else "curl -fsSL https://bun.sh/install | bash", ""))
+        out.append(("Python 3.9 or newer",
+                    "xcode-select --install" if mac else
+                    "powershell -ExecutionPolicy Bypass -File tools/computer_setup.ps1" if win
+                    else python_floor.linux_route(),
+                    "dialog" if mac else ""))
+    elif newer:
+        want = python_floor.CURRENT
+        out.append((f"Python {want[0]}.{want[1]} (this Mac's own is "
+                    f"{sys.version_info[0]}.{sys.version_info[1]}, which no longer gets "
+                    "security fixes)", f"{FIX} python", ""))
+    if not have("git"):
+        out.append(("Git", "xcode-select --install" if mac else f"{FIX} git" if win
+                    else linux_install("git", have), "dialog" if mac else "" if win
+                    else "yours"))
+    if [m for m in ("pytest", "yaml") + (("tzdata",) if win else ()) if not module(m)] \
+            or pypdf != "ok":
+        out.append(("the Python packages", f"{FIX} packages", ""))
+    if not (have("lualatex") and have("xelatex")):
+        out.append(("LaTeX, to make the PDFs", f"{FIX} latex", ""))
+    if not (have("node") or have("bun")):
+        out.append(("Bun, for the job searches", f"{FIX} runtime", ""))
     # A chat on a computer has no GitHub tools of its own: `gh` is how its work
     # reaches GitHub, where the other chats and the brief read it.
+    gh = not have("gh")
     if gh:
-        out.append(("GitHub's command line, so your work reaches GitHub",
-                    "brew install gh" if mac else "winget install GitHub.cli" if win
-                    else "sudo apt-get install -y gh", "password" if not (mac or win) else ""))
+        out.append(("GitHub's command line, so your work reaches GitHub", f"{FIX} gh", ""))
     if gh or gh_signed_in is False or (gh_signed_in is None and not _gh_signed_in(have)):
-        out.append(("GitHub sign-in for it", "gh auth login", "sign-in"))
+        out.append(("GitHub sign-in for it", "gh auth login --web --git-protocol https",
+                    "sign-in"))
     return out
 
 
@@ -277,16 +335,32 @@ def _gh_signed_in(have) -> bool:
         return False
     try:
         return subprocess.run(["gh", "auth", "status"], capture_output=True, text=True,
-                              timeout=20).returncode == 0
+                              encoding="utf-8", errors="replace", timeout=20).returncode == 0
     except (OSError, subprocess.TimeoutExpired):
         return False
 
 
 def main(argv: list[str] | None = None) -> int:
     argv = sys.argv[1:] if argv is None else argv
+    if argv[:1] in (["--help"], ["-h"]):
+        print("usage: python3 tools/env_check.py [--fix [what ...] | --allowlist | --say | "
+              "--https [url]]")
+        return 0
+    if argv[:1] == ["--fix"]:
+        if CLOUD:
+            # A cloud container is root and has apt: the one script, as its setup line runs.
+            return subprocess.call(["bash", os.path.join(ROOT, "tools", "setup_env.sh")])
+        import installs
+        return installs.main(argv[1:] or ["all"])
     if argv[:1] == ["--allowlist"]:
         print("\n".join(allowlist()))
         return 0
+    if argv[:1] == ["--https"]:
+        url = argv[1] if argv[1:] else https_host()
+        verdict, detail = https_check(url)
+        print(f"Python {sys.version_info[0]}.{sys.version_info[1]}.{sys.version_info[2]} "
+              f"HTTPS to {url}: {verdict}, {detail}")
+        return 1 if verdict == "certificates" else 0
     if argv[:1] == ["--say"]:
         names = blocked_names()
         if names:
@@ -308,20 +382,28 @@ def main(argv: list[str] | None = None) -> int:
          f"{sys.version_info[0]}.{sys.version_info[1]})", python_floor.ok(),
          "" if python_floor.ok() else python_floor.how_to_install())
     for module, package, why in (("pytest", "pytest", "the checks before a merge"),
-                                 ("yaml", "pyyaml", "the skills check")):
+                                 ("yaml", "pyyaml", "the skills check"),
+                                 *((("tzdata", "tzdata", "time zones, which Windows lacks"),)
+                                   if sys.platform == "win32" else ())):
         have = module_state(module)
-        fix = (f"missing; pip3 install {package}" if CLOUD
-               else f"missing; pip3 install --user {package} (no password needed)")
+        fix = (f"missing; pip3 install {package}" if CLOUD else "missing; " + _install(package))
         line(f"{package} ({why})", have, "" if have else fix)
     latex = [t for t in ("lualatex", "xelatex") if not shutil.which(t)]
     line("LaTeX (lualatex, xelatex)", not latex, "" if not latex else "missing; " + _install("latex"))
-    line("pdftotext (Poppler)", bool(shutil.which("pdftotext")),
-         "" if shutil.which("pdftotext") else "missing; " + _install("poppler"))
     state = pypdf_state()
-    line("pypdf", state == "ok", {"ok": "", "missing": "missing; pip3 install pypdf",
-                                  "broken": "installed but panics; pip3 install --upgrade cffi"}[state])
-    line("bun (portal searches)", bool(shutil.which("bun")),
-         "" if shutil.which("bun") else "missing; ./tools/setup_env.sh installs it (the portal CLIs need it)")
+    line("pypdf (reads the PDFs)", state == "ok",
+         {"ok": "", "missing": "missing; " + _install("pypdf"),
+          "broken": "installed but panics; pip3 install --upgrade cffi"}[state])
+    run = "node" if shutil.which("node") else "bun" if shutil.which("bun") else ""
+    line("Node or Bun (portal searches)", bool(run),
+         run if run else "missing; " + _install("bun"))
+    if not CLOUD:
+        gh = bool(shutil.which("gh"))
+        line("GitHub's command line (gh)", gh, "" if gh else "missing; " + _install("gh"))
+
+    if https_host():
+        verdict, detail = https_check(https_host())
+        line("Python's own HTTPS (urllib)", verdict != "certificates", detail)
 
     print("job boards")
     blocked = []
@@ -341,4 +423,9 @@ def main(argv: list[str] | None = None) -> int:
 
 
 if __name__ == "__main__":
+    if sys.argv[1:2] != ["--fix"]:
+        # Report under the Python the app's commands run under (the repo's .venv), so what
+        # it says is installed is what they import. --fix runs where it was started, so a
+        # .venv that cannot start can still be made again.
+        local_path.run_in_venv()
     sys.exit(main())

@@ -107,7 +107,7 @@ def test_a_persons_tests_are_tried_on_a_tree_before_it_ships(tmp_path, monkeypat
     assert try_personal_tests.main([str(person), "--ref", "HEAD"]) == 1
     assert "their own tests, 1 now fail" in capsys.readouterr().out
     assert subprocess.run(["git", "-C", str(person), "status", "--porcelain"],
-                          capture_output=True, text=True).stdout == ""      # nothing changed there
+                          capture_output=True, text=True, encoding="utf-8", errors="replace").stdout == ""      # nothing changed there
 
 
 def test_a_test_reaching_into_private_parts_is_noted_before_it_breaks(tmp_path):
@@ -122,7 +122,8 @@ def test_a_test_reaching_into_private_parts_is_noted_before_it_breaks(tmp_path):
         "    with mock.patch('ats_boards._request'), mock.patch.object(A, '_get'):\n        pass\n")
     (tests / "test_public.py").write_text("import ats_boards\ndef test_b():\n    ats_boards.FETCH\n")
     risks = sync_app.own_test_risks(str(tmp_path))
-    assert risks == {os.path.join("profile", "tests", "test_reaching.py"): [
+    # Named with "/", as git and the person's other files name it, on Windows too.
+    assert risks == {"profile/tests/test_reaching.py": [
         "ats_boards._ROBOTS", "ats_boards._get", "ats_boards._request", "fit._core_points"]}
     note = sync_app.own_test_risks_report(risks)
     assert note.startswith("Note: 1 of your own test file(s) reach into private parts of the app")

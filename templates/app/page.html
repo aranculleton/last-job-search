@@ -1,0 +1,52 @@
+<title>{{TITLE}}</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<script>
+/* Before the first paint: Light or Dark, if this viewer chose one (kept on their device).
+   Storage may be refused; then the page follows the device. */
+(function () {
+  try {
+    var r = document.documentElement;
+    r.className += (r.className ? " " : "") + "js";
+    var s = window.localStorage;
+    var l = s && s.getItem("ljs:look");
+    if (l === "light" || l === "dark") r.setAttribute("data-look", l);
+  } catch (e) { /* no storage: follow the device */ }
+})();
+</script>
+<style>
+{{PALETTES}}
+</style>
+<style>
+{{CSS}}
+</style>
+<a class="skip" href="#main">Skip to the main content</a>
+<p class="opening" id="opening">Opening your job search…</p>
+<div class="shell" id="shell" hidden>
+  <header class="top" id="top">
+    <div class="top-in">
+      <h1 class="brand" id="brand">{{TITLE}}</h1>
+      <span class="screen" id="screen" aria-hidden="true"></span>
+      <span class="conn" id="conn"></span>
+      <div class="top-tools" id="toptools"></div>
+    </div>
+    <p class="pulse" id="pulse" hidden>Search data from when this page was made.</p>
+  </header>
+  <nav class="side" id="side" aria-label="Sections"></nav>
+  <main class="main" id="main" tabindex="-1"></main>
+  <aside class="rail" id="rail" aria-label="Work and chat"></aside>
+  <footer class="foot" id="foot"></footer>
+  <nav class="tabs" id="tabs" aria-label="Main sections"></nav>
+</div>
+<section class="private" id="private" hidden aria-labelledby="private-title">
+  <h1 id="private-title">This page is private</h1>
+  <p>It belongs to the person whose job search it is, and only they can use it. Nothing else is shown here.</p>
+</section>
+<div class="toasts" id="toasts"></div>
+<p class="sr-only" id="live" role="status" aria-live="polite" aria-atomic="true"></p>
+<p class="sr-only" id="alert" role="alert" aria-atomic="true"></p>
+<noscript><p>This page needs JavaScript to show your job search.</p></noscript>
+<script type="application/json" id="ljs-model">{{MODEL}}</script>
+<script type="application/json" id="ljs-tables">{{TABLES}}</script>
+<script>
+{{JS}}
+</script>

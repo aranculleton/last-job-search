@@ -1,0 +1,262 @@
+{
+  "name": "Sweden",
+  "country": "se",
+  "aka": [
+    "SE",
+    "Sverige",
+    "Kingdom of Sweden"
+  ],
+  "languages": [
+    "sv"
+  ],
+  "currency": "SEK",
+  "boards": [
+    {
+      "name": "Platsbanken (Arbetsförmedlingen)",
+      "url": "https://arbetsformedlingen.se",
+      "kind": "public",
+      "source": "https://eures.europa.eu/living-and-working/living-and-working-conditions/living-and-working-conditions-sweden_en",
+      "quote": "The Swedish Public Employment Service’s job bank ‘Platsbanken’ is one example",
+      "checked": "2026-10-25",
+      "verified": true,
+      "search": "https://arbetsformedlingen.se/platsbanken/annonser?q=analytiker",
+      "paths": {
+        "search": "/platsbanken/annonser?q=analytiker",
+        "posting": "/platsbanken/annonser/"
+      },
+      "robots": {
+        "checked": "2026-10-25",
+        "why": "",
+        "search": true,
+        "status": "allowed",
+        "posting": true,
+        "crawl_delay": null,
+        "ai_input": null
+      },
+      "public_search": {
+        "checked": "2026-10-25",
+        "status": "open",
+        "http": 200
+      },
+      "api": {
+        "value": "https://jobsearch.api.jobtechdev.se",
+        "source": "https://jobtechdev.se/en/products/jobsearch",
+        "quote": "",
+        "checked": "2026-10-25",
+        "verified": false,
+        "why": "the source could not be read: robots.txt could not be read (RuntimeError)"
+      }
+    },
+    {
+      "name": "Indeed",
+      "url": "https://se.indeed.com",
+      "kind": "general",
+      "source": "https://sv.wikipedia.org/wiki/Indeed",
+      "quote": "Indeed är en global sökmotor för jobbannonser som lanserades i november 2004",
+      "checked": "2026-10-25",
+      "verified": true,
+      "search": "https://se.indeed.com/jobs?q=analytiker&l=Stockholm",
+      "paths": {
+        "search": "/jobs?q=analytiker&l=Stockholm",
+        "posting": "/viewjob?jk=0"
+      },
+      "robots": {
+        "checked": "2026-10-25",
+        "why": "",
+        "search": true,
+        "status": "partial",
+        "posting": false,
+        "crawl_delay": null,
+        "ai_input": null
+      },
+      "public_search": {
+        "checked": "2026-10-25",
+        "status": "blocked",
+        "http": 401
+      }
+    },
+    {
+      "name": "Jobbland",
+      "url": "https://www.jobbland.se",
+      "kind": "aggregator",
+      "source": "https://www.jobbland.se/",
+      "quote": "",
+      "checked": "2026-10-25",
+      "verified": false,
+      "why": "the source could not be read: robots.txt could not be read (HTTP 200 but the body is not a robots.txt)",
+      "search": "https://www.jobbland.se/jobb?q=analytiker",
+      "paths": {
+        "search": "/jobb?q=analytiker",
+        "posting": "/jobb/"
+      },
+      "robots": {
+        "checked": "2026-10-25",
+        "why": "robots.txt could not be read (HTTP 200 but the body is not a robots.txt)",
+        "search": null,
+        "status": "unconfirmed",
+        "posting": null,
+        "crawl_delay": null,
+        "ai_input": null
+      },
+      "public_search": {
+        "checked": "2026-10-25",
+        "status": "not_tried",
+        "http": null
+      }
+    }
+  ],
+  "eligibility": [
+    {
+      "phrase": "arbetstillstånd",
+      "lang": "sv",
+      "means": "work_right",
+      "source": "https://sv.wikipedia.org/wiki/Arbetstillst%C3%A5nd",
+      "quote": "Arbetstillstånd är ett tillstånd en person kan behöva för att kunna arbeta i ett visst land",
+      "checked": "2026-10-25",
+      "verified": true
+    },
+    {
+      "phrase": "uppehållsrätt för EU/EES-medborgare",
+      "lang": "sv",
+      "means": "citizenship",
+      "source": "https://eures.europa.eu/living-and-working/living-and-working-conditions/living-and-working-conditions-sweden_en",
+      "quote": "as the right of EU/EEA citizens and their family members to reside in Sweden for more than three months without a residence permit",
+      "checked": "2026-10-25",
+      "verified": true
+    },
+    {
+      "phrase": "permanent uppehållstillstånd",
+      "lang": "sv",
+      "means": "residence",
+      "source": "https://sv.wikipedia.org/wiki/Uppeh%C3%A5llstillst%C3%A5nd",
+      "quote": "Uppehållstillstånd i Sverige är antingen tillfälliga eller permanenta",
+      "checked": "2026-10-25",
+      "verified": true
+    },
+    {
+      "phrase": "säkerhetsprövning (säkerhetsklass)",
+      "lang": "sv",
+      "means": "clearance",
+      "source": "https://sv.wikipedia.org/wiki/S%C3%A4kerhetspr%C3%B6vning",
+      "quote": "Säkerhetsprövning är en kontroll av en person som skall befatta sig med verksamhet eller få ta del av uppgifter som berör ett rikes säkerhet",
+      "checked": "2026-10-25",
+      "verified": true
+    }
+  ],
+  "documents": [
+    {
+      "topic": "noun",
+      "value": "CV, with a personligt brev",
+      "source": "https://eures.europa.eu/living-and-working/living-and-working-conditions/living-and-working-conditions-sweden_en",
+      "quote": "In most cases, a personal letter with a CV attached is required when you are applying for a job.",
+      "checked": "2026-10-25",
+      "verified": true
+    },
+    {
+      "topic": "pages",
+      "value": "one to two pages",
+      "source": "https://eures.europa.eu/living-and-working/living-and-working-conditions/living-and-working-conditions-sweden_en",
+      "quote": "A CV should be one to two pages long and contain",
+      "checked": "2026-10-25",
+      "verified": true
+    },
+    {
+      "topic": "photo",
+      "value": "optional",
+      "source": "https://eures.europa.eu/living-and-working/living-and-working-conditions/living-and-working-conditions-sweden_en",
+      "quote": "",
+      "checked": "2026-10-25",
+      "verified": false,
+      "why": "no sentence on the page says it (looked for: photo)"
+    },
+    {
+      "topic": "date_format",
+      "value": "YYYY-MM-DD",
+      "source": "https://en.wikipedia.org/wiki/Date_and_time_notation_in_Sweden",
+      "quote": "dates are generally written in the form YYYY-MM-DD",
+      "checked": "2026-10-25",
+      "verified": true
+    },
+    {
+      "topic": "spelling",
+      "value": "Swedish, or English where the posting is in English",
+      "source": "https://eures.europa.eu/living-and-working/living-and-working-conditions/living-and-working-conditions-sweden_en",
+      "quote": "The advertisements are usually in Swedish, which means that most employers assume that applicants have some knowledge of Swedish",
+      "checked": "2026-10-25",
+      "verified": true
+    }
+  ],
+  "pay": [
+    {
+      "name": "Lönestrukturstatistik (SCB, Statistics Sweden)",
+      "url": "https://www.scb.se/hitta-statistik/statistik-efter-amne/arbetsmarknad/loner-och-arbetskostnader/lonestrukturstatistik-hela-ekonomin/",
+      "what": "pay by occupation, sector and sex",
+      "source": "https://www.scb.se/hitta-statistik/statistik-efter-amne/arbetsmarknad/loner-och-arbetskostnader/lonestrukturstatistik-hela-ekonomin/",
+      "quote": "Lönestrukturstatistiken för hela ekonomin har till syfte att årligen ge en översiktlig och jämförbar lönestatistik",
+      "checked": "2026-10-25",
+      "verified": true
+    },
+    {
+      "name": "EURES: living and working conditions in Sweden",
+      "url": "https://eures.europa.eu/living-and-working/living-and-working-conditions/living-and-working-conditions-sweden_en",
+      "what": "average pay for all occupations",
+      "source": "https://eures.europa.eu/living-and-working/living-and-working-conditions/living-and-working-conditions-sweden_en",
+      "quote": "The average salary for all occupations in 2024 was SEK 41 600 per month before tax",
+      "checked": "2026-10-25",
+      "verified": true
+    }
+  ],
+  "places": [
+    {
+      "metro": "Stockholm",
+      "written": [
+        "Stockholm",
+        "Storstockholm",
+        "Solna",
+        "Nacka",
+        "Södertälje"
+      ],
+      "source": "https://en.wikipedia.org/wiki/Gothenburg_Metropolitan_Area",
+      "quote": "Sweden has three metropolitan areas consisting of the areas surrounding the three largest cities",
+      "on_page": [
+        "Stockholm"
+      ],
+      "checked": "2026-10-25",
+      "verified": true
+    },
+    {
+      "metro": "Göteborg",
+      "written": [
+        "Göteborg",
+        "Gothenburg",
+        "Storgöteborg",
+        "Mölndal",
+        "Partille"
+      ],
+      "source": "https://en.wikipedia.org/wiki/Gothenburg_Metropolitan_Area",
+      "quote": "Sweden has three metropolitan areas consisting of the areas surrounding the three largest cities, Stockholm , Gothenburg , and Malmö",
+      "on_page": [
+        "Gothenburg",
+        "Mölndal",
+        "Partille"
+      ],
+      "checked": "2026-10-25",
+      "verified": true
+    },
+    {
+      "metro": "Malmö",
+      "written": [
+        "Malmö",
+        "Stormalmö",
+        "Lund"
+      ],
+      "source": "https://en.wikipedia.org/wiki/Malm%C3%B6",
+      "quote": "Together with Lund, Malmö is the region's economic and education hub",
+      "on_page": [
+        "Lund"
+      ],
+      "checked": "2026-10-25",
+      "verified": true
+    }
+  ]
+}

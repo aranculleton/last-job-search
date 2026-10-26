@@ -66,7 +66,7 @@ def test_the_command_says_so_instead_of_a_traceback(conflicted, tmp_path):
     env = dict(os.environ, LJS_STATE=str(tmp_path), LJS_PROFILE=os.path.join(ROOT, "profile.example"))
     (tmp_path / "network_threads.csv").write_text("contact_id,date,direction\n", encoding="utf-8")
     r = subprocess.run([sys.executable, os.path.join(ROOT, "tools", "network", "state.py")],
-                       capture_output=True, text=True, env=env, timeout=120)
+                       capture_output=True, text=True, encoding="utf-8", errors="replace", env=env, timeout=120)
     assert r.returncode == 1 and "Traceback" not in r.stderr
     assert "network_contacts.csv has unresolved merge-conflict markers" in r.stderr
 

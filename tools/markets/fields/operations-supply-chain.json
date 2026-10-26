@@ -1,0 +1,64 @@
+{
+  "name": "Operations and supply chain",
+  "field": "operations-supply-chain",
+  "aka": [
+    "operations",
+    "supply chain",
+    "logistics",
+    "procurement",
+    "purchasing",
+    "planning"
+  ],
+  "boards": {},
+  "titles": [
+    {
+      "value": [
+        "Logistician",
+        "Production Planner",
+        "Supply Management Specialist"
+      ],
+      "source": "https://www.onetonline.org/link/summary/13-1081.00",
+      "quote": "Sample of reported job titles: Client Services Administrator, Logistician",
+      "on_page": [
+        "Logistician",
+        "Production Planner",
+        "Supply Management Specialist"
+      ],
+      "checked": "2026-10-25",
+      "verified": true
+    }
+  ],
+  "families": [
+    {
+      "family": "ERP",
+      "members": [
+        [
+          "SAP",
+          "(?-i:\\bSAP\\b)"
+        ],
+        [
+          "Oracle E-Business Suite",
+          "\\boracle e-?business suite\\b|\\bEBS\\b"
+        ],
+        [
+          "JD Edwards",
+          "\\bjd edwards\\b"
+        ],
+        [
+          "Microsoft Dynamics",
+          "\\bmicrosoft dynamics\\b|\\bdynamics 365\\b"
+        ]
+      ],
+      "source": "https://www.onetonline.org/link/summary/13-1081.00",
+      "quote": "Enterprise resource planning ERP software - Microsoft Dynamics",
+      "on_page": [
+        "SAP software",
+        "Oracle E-Business Suite",
+        "Oracle JD Edwards EnterpriseOne",
+        "Microsoft Dynamics"
+      ],
+      "checked": "2026-10-25",
+      "verified": true
+    }
+  ]
+}

@@ -1,0 +1,285 @@
+{
+  "name": "Spain",
+  "country": "es",
+  "aka": [
+    "ES",
+    "España",
+    "Kingdom of Spain"
+  ],
+  "languages": [
+    "es",
+    "ca",
+    "eu",
+    "gl"
+  ],
+  "currency": "EUR",
+  "boards": [
+    {
+      "name": "Empléate",
+      "url": "https://www.empleate.gob.es",
+      "kind": "public",
+      "source": "https://eures.europa.eu/living-and-working/living-and-working-conditions/living-and-working-conditions-spain_en",
+      "quote": "Job vacancies managed by the autonomous communities’ public employment services https://www.sistemanacionalempleo.es/OfertaDifusionWEB/busquedaOfertas.do?modo=inicio Empléate https://www.empleate.gob.es/empleo",
+      "checked": "2026-10-25",
+      "verified": true,
+      "search": "https://www.empleate.gob.es/empleo/#/buscador?search=analista",
+      "paths": {
+        "search": "/empleo/",
+        "posting": "/empleo/"
+      },
+      "robots": {
+        "checked": "2026-10-25",
+        "why": "robots.txt could not be read (RuntimeError)",
+        "search": null,
+        "status": "unconfirmed",
+        "posting": null,
+        "crawl_delay": null,
+        "ai_input": null
+      },
+      "public_search": {
+        "checked": "2026-10-25",
+        "status": "not_tried",
+        "http": null
+      }
+    },
+    {
+      "name": "InfoJobs",
+      "url": "https://www.infojobs.net",
+      "kind": "general",
+      "source": "https://es.wikipedia.org/wiki/InfoJobs",
+      "quote": "InfoJobs España es la bolsa de empleo que más tráfico registra en España",
+      "checked": "2026-10-25",
+      "verified": true,
+      "search": "https://www.infojobs.net/ofertas-trabajo/analista",
+      "paths": {
+        "search": "/ofertas-trabajo/analista",
+        "posting": "/madrid/analista/of-"
+      },
+      "robots": {
+        "checked": "2026-10-25",
+        "why": "",
+        "search": false,
+        "status": "disallowed",
+        "posting": false,
+        "crawl_delay": null,
+        "ai_input": null
+      },
+      "public_search": {
+        "checked": "2026-10-25",
+        "status": "not_tried",
+        "http": null
+      }
+    },
+    {
+      "name": "Indeed",
+      "url": "https://es.indeed.com",
+      "kind": "general",
+      "source": "https://es.wikipedia.org/wiki/Indeed",
+      "quote": "Actualmente, Indeed se encuentra disponible en más de 50 países y en más de 28 idiomas",
+      "checked": "2026-10-25",
+      "verified": true,
+      "search": "https://es.indeed.com/jobs?q=analista&l=Madrid",
+      "paths": {
+        "search": "/jobs?q=analista&l=Madrid",
+        "posting": "/viewjob?jk=0"
+      },
+      "robots": {
+        "checked": "2026-10-25",
+        "why": "",
+        "search": true,
+        "status": "partial",
+        "posting": false,
+        "crawl_delay": null,
+        "ai_input": null
+      },
+      "public_search": {
+        "checked": "2026-10-25",
+        "status": "blocked",
+        "http": 401
+      }
+    },
+    {
+      "name": "InfoEmpleo",
+      "url": "https://www.infoempleo.com",
+      "kind": "general",
+      "source": "https://www.infoempleo.com/",
+      "quote": "Encuentra todas las ofertas de trabajo en Infoempleo.com",
+      "checked": "2026-10-25",
+      "verified": true,
+      "search": "https://www.infoempleo.com/trabajo/?search=analista",
+      "paths": {
+        "search": "/trabajo/?search=analista",
+        "posting": "/ofertasdetrabajo/"
+      },
+      "robots": {
+        "checked": "2026-10-25",
+        "why": "",
+        "search": true,
+        "status": "allowed",
+        "posting": true,
+        "crawl_delay": null,
+        "ai_input": null
+      },
+      "public_search": {
+        "checked": "2026-10-25",
+        "status": "open",
+        "http": 200
+      }
+    }
+  ],
+  "eligibility": [
+    {
+      "phrase": "autorización de residencia y trabajo",
+      "lang": "es",
+      "means": "work_right",
+      "source": "https://eures.europa.eu/living-and-working/living-and-working-conditions/living-and-working-conditions-spain_en",
+      "quote": "the person is required to have the relevant residence and work permit",
+      "checked": "2026-10-25",
+      "verified": true
+    },
+    {
+      "phrase": "NIE (Número de Identidad de Extranjero)",
+      "lang": "es",
+      "means": "residence",
+      "source": "https://es.wikipedia.org/wiki/N%C3%BAmero_de_identidad_de_extranjero",
+      "quote": "El Número de Identidad de Extranjero ( NIE ) [ 1 ] es un código para la identificación tributaria de los extranjeros en España",
+      "checked": "2026-10-25",
+      "verified": true
+    },
+    {
+      "phrase": "nacionalidad española o de un Estado miembro de la UE (empleo público)",
+      "lang": "es",
+      "means": "citizenship",
+      "source": "https://es.wikipedia.org/wiki/Empleado_p%C3%BAblico_(Espa%C3%B1a)",
+      "quote": "",
+      "checked": "2026-10-25",
+      "verified": false,
+      "why": "no sentence on the page says it (looked for: nacionalidad)"
+    },
+    {
+      "phrase": "habilitación de seguridad",
+      "lang": "es",
+      "means": "clearance",
+      "source": "https://es.wikipedia.org/wiki/Habilitaci%C3%B3n_de_seguridad",
+      "quote": "",
+      "checked": "2026-10-25",
+      "verified": false,
+      "why": "the source could not be read: HTTP 404"
+    }
+  ],
+  "documents": [
+    {
+      "topic": "noun",
+      "value": "currículum vítae (CV), with a carta de presentación",
+      "source": "https://eures.europa.eu/living-and-working/living-and-working-conditions/living-and-working-conditions-spain_en",
+      "quote": "both the letter and CV must be drafted in Spanish on a computer and in A4 format",
+      "checked": "2026-10-25",
+      "verified": true
+    },
+    {
+      "topic": "pages",
+      "value": "two pages at most",
+      "source": "https://eures.europa.eu/living-and-working/living-and-working-conditions/living-and-working-conditions-spain_en",
+      "quote": "It is best to limit it to two A4 pages",
+      "checked": "2026-10-25",
+      "verified": true
+    },
+    {
+      "topic": "photo",
+      "value": "optional",
+      "source": "https://eures.europa.eu/living-and-working/living-and-working-conditions/living-and-working-conditions-spain_en",
+      "quote": "It is not compulsory to attach a photograph, although this may be useful for some jobs",
+      "checked": "2026-10-25",
+      "verified": true
+    },
+    {
+      "topic": "date_format",
+      "value": "DD/MM/YYYY",
+      "source": "https://en.wikipedia.org/wiki/Date_and_time_notation_in_Spain",
+      "quote": "In Spain , date notation follows the DD/MM/YYYY format",
+      "checked": "2026-10-25",
+      "verified": true
+    },
+    {
+      "topic": "spelling",
+      "value": "Spanish (Catalan, Basque or Galician where a posting asks)",
+      "source": "https://eures.europa.eu/living-and-working/living-and-working-conditions/living-and-working-conditions-spain_en",
+      "quote": "Unless otherwise indicated, both the letter and CV must be drafted in Spanish",
+      "checked": "2026-10-25",
+      "verified": true
+    }
+  ],
+  "pay": [
+    {
+      "name": "Encuesta de Estructura Salarial (INE)",
+      "url": "https://www.ine.es/dyngs/INEbase/es/operacion.htm?c=Estadistica_C&cid=1254736177025&menu=ultiDatos&idp=1254735976596",
+      "what": "pay by occupation, sector and region",
+      "source": "https://www.ine.es/dyngs/INEbase/es/operacion.htm?c=Estadistica_C&cid=1254736177025&menu=ultiDatos&idp=1254735976596",
+      "quote": "Mercado laboral /Salarios y costes laborales /Encuestas de estructura salarial",
+      "checked": "2026-10-25",
+      "verified": true
+    },
+    {
+      "name": "EURES: living and working conditions in Spain",
+      "url": "https://eures.europa.eu/living-and-working/living-and-working-conditions/living-and-working-conditions-spain_en",
+      "what": "the average salary and how pay is set",
+      "source": "https://eures.europa.eu/living-and-working/living-and-working-conditions/living-and-working-conditions-spain_en",
+      "quote": "In 2024, the average salary in Spain was EUR 28 600 gross per year",
+      "checked": "2026-10-25",
+      "verified": true
+    }
+  ],
+  "places": [
+    {
+      "metro": "Madrid",
+      "written": [
+        "Madrid",
+        "Comunidad de Madrid",
+        "Alcobendas",
+        "Getafe",
+        "Las Rozas"
+      ],
+      "source": "https://en.wikipedia.org/wiki/Madrid_metropolitan_area",
+      "quote": "Inner ring ( primera corona ): Alcorcón , Leganés , Getafe , Móstoles , Fuenlabrada",
+      "on_page": [
+        "Getafe",
+        "Alcobendas"
+      ],
+      "checked": "2026-10-25",
+      "verified": true
+    },
+    {
+      "metro": "Barcelona",
+      "written": [
+        "Barcelona",
+        "Àrea Metropolitana de Barcelona",
+        "L'Hospitalet de Llobregat",
+        "Sabadell",
+        "Terrassa"
+      ],
+      "source": "https://en.wikipedia.org/wiki/Barcelona_metropolitan_area",
+      "quote": "It forms a belt of cities: Vilanova i la Geltrú , Vilafranca del Penedès , Martorell , Terrassa , Sabadell",
+      "on_page": [
+        "Sabadell",
+        "Terrassa"
+      ],
+      "checked": "2026-10-25",
+      "verified": true
+    },
+    {
+      "metro": "Valencia",
+      "written": [
+        "Valencia",
+        "València",
+        "Paterna"
+      ],
+      "source": "https://en.wikipedia.org/wiki/Valencia",
+      "quote": "The urban area of Valencia has 1.6 million people while the metropolitan region has 2.5 million",
+      "on_page": [
+        "Paterna"
+      ],
+      "checked": "2026-10-25",
+      "verified": true
+    }
+  ]
+}

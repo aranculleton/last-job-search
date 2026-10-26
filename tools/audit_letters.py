@@ -5,7 +5,7 @@ closing are. Rendering checks read the compiled PDF text, which is what the
 reader sees. Each rule is one from 03-writing-style.md or
 06-cover-letter-templates.md that a letter in this repo has actually broken.
 """
-import re, subprocess, sys, os
+import re, sys, os
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import render_application as R
 from fit_to_page import body_words, load
@@ -248,14 +248,11 @@ def pdf_text(abbr):
     pdf = docpaths.letter_pdf(abbr)
     if not os.path.exists(pdf):
         raise FileNotFoundError(f"no compiled letter at {pdf}; render it before auditing")
+    import pdftext
     try:
-        out = subprocess.run(["pdftotext", "-layout", "-enc", "UTF-8", pdf, "-"],
-                             capture_output=True, text=True)
-    except FileNotFoundError as exc:
-        raise RuntimeError("pdftotext is not installed; see SETUP.md") from exc
-    if out.returncode != 0:
-        raise RuntimeError(f"pdftotext failed on {pdf}: {out.stderr.strip()[:200]}")
-    return out.stdout
+        return pdftext.text(pdf)
+    except pdftext.Unreadable as exc:
+        raise RuntimeError(str(exc)) from None
 
 
 # The opener 03-writing-style.md bans: a first sentence that announces the
@@ -357,6 +354,31 @@ def draft_flags(a, batch=()):
     return flags
 
 
+# What only the drafter's own notes say. A field's name is written in lower case ("in p2",
+# "p4:"), and "P1 incidents" is an incident's priority. The candidate in the third person is
+# their document ("their resume") or their years at one of their own employers: "their SQL
+# reports" and "their two years of growth" are the employer's, and failed the batch.
+_DRAFTER = re.compile(r"(?i:conceded|mid-paragraph|mid-letter|posting's stated|states no gaps|"
+                      r"drafter|framed by adjacency)|\bp[124]\b(?![-\w])")
+
+
+def drafter_text(t: str) -> str:
+    """The first words on a letter's page that only the drafter's notes say, or ""."""
+    m = _DRAFTER.search(t or "")
+    if m:
+        return m.group(0)
+    nouns = "|".join(re.escape(n) for n in {"resume", "CV", person.get("documents.noun", "")} if n)
+    m = re.search(r"\b" + _POSS + r"\b (?:" + nouns + r")\b", t or "", re.I)
+    if m:
+        return m.group(0)
+    for m in re.finditer(r"\b" + _POSS + r"\b (?:\w+ )?years? (?:at|with|in) (.{0,60})", t or "",
+                         re.I):
+        named = R.EMPLOYER_NAMED.match(m.group(1))
+        if named:
+            return (t or "")[m.start(0):m.start(1) + named.end()]
+    return ""
+
+
 def page_text_flags(a):
     """The flags only the compiled letter shows: drafter text on the page, the banned
     nouns and dashes, a doubled phrase, a legal suffix in the salutation."""
@@ -364,12 +386,9 @@ def page_text_flags(a):
     t = pdf_text(R.final_abbr(a))
     # The drafter's own notes must never reach the page. Letters have shipped
     # with "conceded in one sentence mid-letter in p2" in their closing.
-    meta = re.search(r"conceded|mid-paragraph|mid-letter|posting's stated|states no gaps|"
-                     r"\bin p[124]\b|\bp[124]\b|drafter|framed by adjacency|"
-                     r"\b" + _POSS + r"\b (?:SQL|resume|\w+ years)",
-                     t, re.I)
+    meta = drafter_text(t)
     if meta:
-        flags.append(f"DRAFTER TEXT ON PAGE: '{meta.group(0)}'")
+        flags.append(f"DRAFTER TEXT ON PAGE: '{meta}'")
     flags += page_flags(t)
     if re.search(r"\b(\w+(?: \w+){1,3}) \1\b", t):
         flags.append("doubled phrase in PDF")
@@ -391,6 +410,8 @@ if __name__ == "__main__":
     # Through fit_to_page's loader: a kept draft.json names its posting, which is read
     # back through its untrusted fence, and the posting-copy check needs it.
     apps, _read_in = load(sys.argv[1])
+    # A general resume has no letter (tools/general_resume.py): nothing here to read.
+    apps = [a for a in apps if not a.get("general")]
     bad = 0
     for a in apps:
         flags, w = audit(a, apps)

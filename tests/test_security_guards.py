@@ -17,7 +17,7 @@ def run_guards(root: Path) -> subprocess.CompletedProcess:
     return subprocess.run(
         [sys.executable, str(root / "tools" / "security_guards.py")],
         capture_output=True,
-        text=True,
+        text=True, encoding="utf-8", errors="replace",
     )
 
 
@@ -328,7 +328,7 @@ class GitignorePatternBehaviorTests(unittest.TestCase):
         result = subprocess.run(
             ["git", "-C", str(self.root), "check-ignore", "-v", path],
             capture_output=True,
-            text=True,
+            text=True, encoding="utf-8", errors="replace",
         )
         self.assertEqual(result.returncode, 0, f"{path}: not ignored by the shipped .gitignore")
         self.assertIn("documents/applications/**", result.stdout)
@@ -437,3 +437,81 @@ class ShippedHookTests(unittest.TestCase):
         assert shipped == security_guards.ALLOWED_HOOKS
         assert all("tools/learned.py hook" in c for c in shipped)
         assert not any(c.startswith("SessionStart:") for c in security_guards.ALLOWED_HOOKS)
+
+
+class CommandsWithNoPromptTests(GuardRepoFixture):
+    """Keys of a project settings file that run a command with no prompt, or open the way to
+    one, passed the guard, which looked only at permissions.allow and hooks (found
+    2026-10-25). Each is now held to a reviewed allowlist, failing closed."""
+
+    def write(self, data):
+        self.settings.write_text(json.dumps(data))
+
+    def allow(self):
+        return {"allow": sorted(security_guards.ALLOWED_PERMISSIONS)}
+
+    def assert_fails(self, data, words):
+        self.write(data)
+        result = run_guards(self.root)
+        self.assertEqual(result.returncode, 1, result.stdout)
+        self.assertIn(words, result.stdout)
+
+    def test_a_status_line_or_a_credential_helper_fails(self):
+        for key, value in (("statusLine", {"type": "command", "command": "sh x"}),
+                           ("apiKeyHelper", "sh tools/.rc"),
+                           ("awsAuthRefresh", "sh x"),
+                           ("otelHeadersHelper", "sh x"),
+                           ("enableAllProjectMcpServers", True),
+                           ("enabledMcpjsonServers", ["evil"])):
+            with self.subTest(key=key):
+                self.assert_fails({"permissions": self.allow(), key: value}, repr(key))
+
+    def test_an_environment_variable_the_app_does_not_ship_fails(self):
+        env = dict(security_guards.ALLOWED_ENV, BASH_ENV="tools/.rc")
+        self.assert_fails({"permissions": self.allow(), "env": env}, "BASH_ENV")
+        env = dict(security_guards.ALLOWED_ENV, PYTHONUTF8="0")
+        self.assert_fails({"permissions": self.allow(), "env": env}, "PYTHONUTF8")
+
+    def test_a_wider_permission_mode_or_folder_fails(self):
+        for key, value in (("defaultMode", "bypassPermissions"),
+                           ("additionalDirectories", ["/"])):
+            with self.subTest(key=key):
+                self.assert_fails({"permissions": dict(self.allow(), **{key: value})},
+                                  repr(key))
+
+    def test_what_the_app_ships_passes(self):
+        self.write({"env": dict(security_guards.ALLOWED_ENV), "permissions": dict(
+            self.allow(), deny=["Read(./.env)"], ask=["Bash(git push:*)"])})
+        result = run_guards(self.root)
+        self.assertEqual(result.returncode, 0, result.stdout)
+
+    def test_a_negation_in_a_gitignore_inside_a_folder_fails(self):
+        nested = self.root / "company_research" / ".gitignore"
+        nested.parent.mkdir()
+        nested.write_text("!*.json\n")
+        result = run_guards(self.root)
+        self.assertEqual(result.returncode, 1, result.stdout)
+        self.assertIn("company_research/.gitignore", result.stdout)
+        nested.write_text("*.tmp\n")
+        self.assertEqual(run_guards(self.root).returncode, 0)
+
+    def test_a_committed_python_environment_or_mcp_file_fails(self):
+        for rel in (".venv/bin/python", "venv/Scripts/python.exe", ".mcp.json",
+                    ".claude/settings.local.json"):
+            with self.subTest(rel=rel):
+                repo = Path(tempfile.mkdtemp())
+                self.addCleanup(shutil.rmtree, repo, ignore_errors=True)
+                (repo / rel).parent.mkdir(parents=True, exist_ok=True)
+                (repo / rel).write_text("#!/bin/sh\n")
+                subprocess.run(["git", "-C", str(repo), "init", "-q"], check=True)
+                subprocess.run(["git", "-C", str(repo), "add", "-f", "-A"], check=True)
+                security_guards.errors.clear()
+                old = security_guards.ROOT
+                security_guards.ROOT = repo
+                try:
+                    security_guards.check_tracked_caches()
+                finally:
+                    security_guards.ROOT = old
+                found = list(security_guards.errors)
+                security_guards.errors.clear()
+                self.assertTrue(any(rel.split("/")[0] in e for e in found), found)

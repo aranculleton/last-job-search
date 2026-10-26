@@ -29,9 +29,9 @@ apt-get install -y --no-install-recommends \
 pip3 install --upgrade cffi
 pip3 install -r requirements.txt
 
-bun --version || curl -fsSL https://bun.sh/install | bash   # the job-board CLIs; usually preinstalled in Claude's cloud containers
+node --version || bun --version || python3 tools/installs.py runtime   # the job-board CLIs; Claude's cloud containers ship both
 
-python3 -m pytest tests -q          # over 1,200 green before anything else
+python3 -m pytest tests -q          # the app's own tests, for working on the app; a setup never waits on them
 ```
 
 Three notes on why each piece is there:
@@ -109,50 +109,92 @@ still succeed while writes fail.
 
 ## B. Local machine
 
-The steps for running the search on your own computer are in
-[START_HERE.md](START_HERE.md#on-your-own-computer), and Claude does most of them. This
-section is what each tool is for and how to install it by hand.
+On a person's own computer Claude installs everything itself, into the person's own
+folders, with no password, no Homebrew and no winget:
+
+```bash
+python3 tools/env_check.py --fix    # what is missing, one plain line each
+python3 tools/env_check.py          # what is here
+```
+
+A computer with nothing set up yet, not even this copy, starts from
+[COMPUTER.md](COMPUTER.md): Git, GitHub's command line and the clone come first, then this.
+What `--fix` does for each tool, and how to do it by hand (`tools/installs.py` has the code):
 
 ### Python
 
-3.9 or newer: a Mac's own `python3` (3.9.6, from Apple's command line tools) is
-enough, and is what a Mac should use unless you already keep another. CI runs the suite on
-3.9 and 3.13, so nothing in the app may need a newer one. `python3 tools/env_check.py` says
-which you have, and whether pytest and PyYAML are there (`pip3 install --user pytest
-pyyaml`, no password needed).
+3.9 or newer starts every command: a Mac's own `python3` (3.9.6, from Apple's command line
+tools, which a first `git` command offers to install) does. 3.9 has had no security fixes
+since October 2025, so on a Mac `--fix` (and `--fix python`) also installs Python 3.13 into
+your own folders, with no password and no Homebrew: uv by its own installer
+(`curl -LsSf https://astral.sh/uv/install.sh | env UV_NO_MODIFY_PATH=1 sh`, into
+`~/.local/bin`, https://docs.astral.sh/uv/getting-started/installation/), then
+`uv python install 3.13` (into `~/.local/share/uv/python`,
+https://docs.astral.sh/uv/reference/storage/), and the `.venv` below is made with it.
+Apple's `python3` is left as it was: no `--default`, no new command on your PATH, no shell
+startup file changed. An app command started by `python3` runs itself again under the
+`.venv`'s Python when that is another version (`tools/local_path.py`, `run_in_venv()`), so
+nothing is typed differently. A Linux whose Python is older than 3.9 gets the same route
+(`python3 tools/python_floor.py` prints the one command); any other Linux keeps its own.
+Python's own HTTPS (`python3 tools/env_check.py --https`) finds the system's certificates:
+a Python whose OpenSSL has none where it looks (python.org's for a Mac, before its
+"Install Certificates" step, https://docs.python.org/3/using/mac.html) is pointed at
+`/etc/ssl/cert.pem` through `SSL_CERT_FILE`; uv's Python already looks there.
+CI runs the suite on 3.9 and 3.13, so nothing in the app may need a newer one. On
+Windows, the Python install manager from
+python.org (`tools/computer_setup.ps1` adds it with `Add-AppxPackage`, as its page says)
+gives `python`, `py` and `python3`; where only `python` works, `--fix python` adds a
+`python3` command.
+
+The packages (`requirements.txt`) go in the repo's own `.venv`, made with that Python on a
+Mac and with the computer's own Python elsewhere:
 
 ```bash
-python3 --version
-python3 -m pip install --user -r requirements.txt    # pytest, pyyaml, pypdf, openpyxl
+python3 -m venv .venv && .venv/bin/python -m pip install -r requirements.txt
 ```
 
-A virtual environment works too, with any Python from 3.9 up (`uv venv`, or
-`python3 -m venv .venv`): `./tools/ci_local.sh` uses an active one, or `.venv` in the repo,
-before the system `python3`, and says which it used on its first line. Install the
-requirements into whichever one it names.
+Every tool reads that `.venv` itself (`tools/local_path.py`, `use_venv()`), so the
+commands stay `python3 tools/...`. Debian and Ubuntu leave pip out of venv (the
+`python3-venv` package, which needs the password): `--fix` then makes it with
+`--without-pip` and installs pip with PyPA's `get-pip.py`. `pip install --user` is never
+used: Debian, Ubuntu and Homebrew's Python refuse it ("externally managed", PEP 668).
+`./tools/ci_local.sh` uses an active virtual environment, or `.venv`, before the system
+`python3`, and says which it used on its first line.
 
-### Bun
+### Node or Bun
 
-For the portal search CLIs. `./tools/setup_env.sh` installs it when it is missing, with no
-password: `brew install oven-sh/bun/bun` on a Mac with Homebrew, otherwise the official
-`curl -fsSL https://bun.sh/install | bash`, into `~/.bun`. On Windows, the PowerShell
-one-liner from [bun.sh](https://bun.sh).
+For the portal search CLIs: a portal's committed build runs under Node, or under Bun
+where there is no Node (`tools/portals.py` `runtime()`). `--fix` installs Bun from its
+own release into `~/.bun/bin`, unpacked by Python (no `unzip`, no password).
 
 ### LaTeX
 
-- **Linux:** `sudo apt install texlive-full`, or the explicit package set from the
-  container section above if you want it lean.
-- **macOS:** [MacTeX](https://tug.org/mactex/), or TinyTeX for a user-level install.
-- **Windows:** [MiKTeX](https://miktex.org/download).
+TinyTeX ([yihui.org/tinytex](https://yihui.org/tinytex/)), a TeX Live in one folder of
+the person's own: `~/Library/TinyTeX` on a Mac, `~/.TinyTeX` on Linux, `%APPDATA%\TinyTeX`
+on Windows (`%ProgramData%\TinyTeX` when that path has a space or a letter outside ASCII).
+`--fix` runs its official installer, then `tlmgr update --self` (a fresh TinyTeX refuses
+any install before it), the package set below, and a test compile of both example
+documents. By hand on a Mac or Linux:
+
+```bash
+curl -fsSL https://tinytex.yihui.org/install-bin-unix.sh | sh -s "" --no-path
+```
+
+The empty first word matters: the script reads its first word as a folder to keep the
+download in, so the documented `sh -s --no-path` stops with an error. `--no-path` keeps it
+from asking for the password to change the system's PATH; the app finds TinyTeX itself
+(`tools/local_path.py`). On Linux it needs Perl and xz, which most systems have.
+
+A LaTeX that is already there is kept when it compiles both templates: MacTeX, MiKTeX,
+TeX Live from apt. One that cannot compile them and cannot be changed without the
+password gets TinyTeX beside it, found first.
 
 The resume compiles with **lualatex**. pdflatex often fails on modern MiKTeX installs
 with `fontawesome5` font-expansion errors, and lualatex handles the same source cleanly.
 The cover letter compiles with **xelatex**, because `cover.cls` requires `fontspec` for
 its bundled Lato and Raleway.
 
-#### Minimal TeX install (TinyTeX, BasicTeX)
-
-Full distributions work out of the box. Minimal ones need the package set named:
+#### The package set
 
 ```bash
 tlmgr install \
@@ -160,24 +202,29 @@ tlmgr install \
   titlesec textpos xltxtra xunicode cite realscripts needspace
 ```
 
-For BasicTeX or MacTeX, put the TeX binary directory on `PATH` first, usually via
-`/Library/TeX/texbin`.
+(`tools/installs.py` `TEX_PACKAGES`, the same list.) For BasicTeX or MacTeX, put the TeX
+binary directory on `PATH` first, usually via `/Library/TeX/texbin`.
 
-#### Basic MiKTeX on Windows
+#### MiKTeX on Windows
 
-Basic MiKTeX ships a minimal package set and, by default, pops a GUI prompt for each
-missing package. That blocks any non-interactive terminal, Claude Code's Bash tool
-included. Turn it into a silent auto-install:
+MiKTeX asks before installing each missing package, and with nobody to answer, a compile
+waits for ever. `--fix` turns that into a silent install, the per-user setting MiKTeX's
+own [Just enough TeX](https://miktex.org/kb/just-enough-tex) gives, which needs no
+administrator:
 
 ```powershell
-initexmf --admin --set-config-value=[MPM]AutoInstall=1
-initexmf --set-config-value=[MPM]AutoInstall=1
+initexmf --set-config-value=[MPM]AutoInstall=yes
 ```
 
-The first line is for an all-users install and needs an elevated shell; the second covers
-a per-user install. Running both is harmless. To avoid on-the-fly installs entirely,
-pre-install the same package set with `mpm --install=<name>`, dropping `--admin` for a
-per-user install. `mpm --find=<name>` resolves a name that does not match.
+Every LaTeX run the app makes also stops after five minutes and says why
+(`tools/fit_to_page.py`), so a prompt nobody sees cannot hold a chat.
+
+### GitHub's command line
+
+`--fix` installs `gh` from its release archive into `~/.local/bin` (Mac, Linux) or
+`%LOCALAPPDATA%\Programs\gh\bin` (Windows). Signing in is the person's, once: Claude
+starts `gh auth login --web --git-protocol https`, and they copy the code it shows into
+the page GitHub opens.
 
 ### Smoke test
 
@@ -190,6 +237,14 @@ python3 tools/verify_pdf.py cv/main_example.pdf --min-chars 100
 
 These are the two files CI compiles, so if they build here they build there.
 
+### Proof on every computer
+
+`.github/workflows/platforms.yml` runs `tools/platform_check.py` on Linux, a Mac and
+Windows after taking away Homebrew, MacTeX, winget and sudo: the install route from
+scratch, the documents in three colours, an offline round, an interview pack, a
+networking day and the suite, plus Windows PowerShell 5.1 running
+`tools/computer_setup.ps1` and a computer chat on Windows with no `python3`.
+
 ---
 
 ## ATS text extraction
@@ -198,16 +253,12 @@ The verification stack extracts the compiled resume's text layer and checks what
 actually sees: contact details present as literal text, sane reading order, no `(cid:)`
 markers or replacement characters.
 
-The default extractor is **pypdf** (`pip install pypdf`, BSD, no Poppler needed). Poppler
-`pdftotext` is the fallback, and `tools/verify_batch.sh` uses it directly:
-
-- macOS: `brew install poppler` (`./tools/setup_env.sh` does it when Homebrew is there)
-- Debian/Ubuntu: `apt install poppler-utils`
-- Windows: `winget install oschwartz10612.Poppler` (winget comes with Windows 10 and 11)
-
-`pdftotext -layout` must also pass `-enc UTF-8`. Without Poppler, `tools/verify_pdf.py` and
-`tools/verify_batch.sh` stop with an error naming `pdftotext`: install it. Only when a session
-truly cannot is the keyword check done by reading the PDF, and the report says so.
+Every PDF is read with **pypdf** (`requirements.txt`, BSD): the page count, the text and
+the fonts (`tools/pdftext.py`), for `fit_to_page.py`, `verify_batch` and `verify_pdf.py`
+alike, so no system package is needed. Only pypdf sees a text layer whose words run
+together; Poppler's `pdftotext` infers the spaces. Poppler is still used where it is
+installed and pypdf cannot run at all (a broken `cryptography` makes it panic; see
+Troubleshooting), and then the batch says the spacing check was skipped, never passed.
 
 ---
 
@@ -256,7 +307,7 @@ summary.
 **`tools/verify_pdf.py` panics instead of erroring.** A broken system `cryptography`
 package under `pypdf`. `pip3 install --upgrade cffi`.
 
-**Portal CLI does nothing.** Check Bun is installed (`bun --version`) and that the portal is
+**Portal CLI does nothing.** Check Node or Bun is here (`python3 tools/env_check.py`) and that the portal is
 on: `python3 tools/portals.py` prints what the next round searches. The app's two portals are
 switched in `profile/search.py` `PORTALS`, never in their `SKILL.md`, which a sync puts back.
 

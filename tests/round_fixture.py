@@ -133,7 +133,7 @@ POSTINGS = [
         body("Brindle Hart Logistics", "Demand Planning Analyst", "fc", ["fc", "sc", "sql"],
              pay="£42,000 - £46,000", work="site")),
     _li(4, "Inventory Analyst", "Larkspur Retail", MCR, "2026-10-16",
-        ("inventory analyst", MCR, 2, False),
+        ("inventory analyst", MCR, 1, False),
         body("Larkspur Retail", "Inventory Analyst", "sc", ["sql", "sc", "bi"],
              years="3+")),
     _li(5, "Operations Analyst", "Fernhill Freight", MCR, "2026-10-17",
@@ -232,7 +232,7 @@ POSTINGS = [
       "url": "https://jobs.example/freehire/9105", "location": SALFORD, "date": "2026-10-19"},
      body("Oakmere Foods", "Forecasting Analyst", "fc", ["fc", "py"],
           extra=["You will apply reinforcement learning to replenishment policy."])),
-    ("fh", ("operations analyst", 2),
+    ("fh", ("operations analyst", 1),
      {"id": 9106, "title": "Operations Analyst", "company": "Quayside Foods",
       "url": "https://jobs.example/freehire/9106", "location": MCR, "date": "2026-10-14"},
      body("Quayside Foods", "Operations Analyst", "ops", ["sql", "stk"],
@@ -244,7 +244,9 @@ POSTINGS = [
      body("Kestrel Mutual", "Senior Supply Chain Analyst", "sc",
           ["sql", "py", "fc", "sc", "stk"], years="5+")),
     # The employer's own posting, which freehire found too: one address, two sources.
-    ("fh", ("logistics analyst", 2),
+    # On page one: a search walks its pages only while they hold postings (scrape_wide
+    # PageWalk), so nothing sits behind an empty page one, as on a real board.
+    ("fh", ("logistics analyst", 1),
      {"id": 9108, "title": "Transport Planning Analyst", "company": "Wrenfield Freight Ltd",
       "url": "https://boards.greenhouse.io/wrenfield/jobs/7004", "location": MCR,
       "date": "2026-10-16"},
@@ -263,7 +265,7 @@ POSTINGS = [
       "url": "https://cityboard.example/jobs/302", "location": "Salford",
       "date": "2026-10-13"},
      "A Data Analyst to build Power BI reporting and SQL models for our operations team."),
-    ("city", ("inventory analyst", MCR, 2),
+    ("city", ("inventory analyst", MCR, 1),
      {"id": "c-303", "title": "Senior Inventory Analyst", "company": "Fenwick Lane Insurance",
       "url": "https://cityboard.example/jobs/303", "location": "Manchester",
       "date": "2026-10-18"},
@@ -488,7 +490,7 @@ def free_stages(kept: str, out: str, work: str, delays: dict | None = None,
          "--out", out, "--today", TODAY, "--workers", str(workers), "--keep-intermediates",
          "--no-seen-write", "--seen", seen, "--tracker", tracker,
          "--summary-dir", os.path.join(work, "summary")],
-        cwd=ROOT, env=env, capture_output=True, text=True, timeout=600)
+        cwd=ROOT, env=env, capture_output=True, text=True, encoding="utf-8", errors="replace", timeout=600)
 
 
 # What is compared: who is ranked and shortlisted, their scores and their order, and

@@ -108,7 +108,7 @@ def test_a_single_apply_is_staged_like_a_round_pick(tmp_path):
                         str(out), "--company", "Larkspur Retail", "--role",
                         "Senior Supply Chain Analyst", "--posting-file", str(posting),
                         "--url", ROW["url"], "--fit", "81"],
-                       capture_output=True, text=True, cwd=ROOT)
+                       capture_output=True, text=True, encoding="utf-8", errors="replace", cwd=ROOT)
     assert p.returncode == 0, p.stderr
     # The example tracker already holds an application for this very role, so staging
     # now holds it and asks first (tools/posting_profile.py); the answer releases it.
@@ -184,4 +184,24 @@ def test_no_em_dash_in_any_document_the_app_ships():
 def test_a_shortlist_that_will_not_parse_is_not_kept(tmp_path):
     (tmp_path / run_round.SHORTLIST).write_text("not json", encoding="utf-8")
     run_round.prune(str(tmp_path))
+    assert not (tmp_path / run_round.SHORTLIST).exists()
+
+
+def test_a_shortlist_that_will_not_parse_is_closed_before_it_is_removed(tmp_path):
+    """The file was opened inside json.load and left open while the failure was handled,
+    so on Windows, which deletes no file that is open, the removal failed and the broken
+    shortlist was kept (the suite on Windows, 2026-10-25). Each file read is closed first:
+    on any computer, an unclosed file says so with a ResourceWarning when it is let go."""
+    import gc
+    import warnings
+    for name in (run_round.SHORTLIST, "01_dropped.json"):
+        (tmp_path / name).write_text("not json", encoding="utf-8")
+    with warnings.catch_warnings(record=True) as seen:
+        warnings.simplefilter("always")
+        run_round.trim(str(tmp_path / run_round.SHORTLIST))
+        run_round.slim(str(tmp_path / "01_dropped.json"))
+        run_round.write_summary(str(tmp_path / "01_dropped.json"), str(tmp_path / "o"), "r1")
+        run_round.count(str(tmp_path / "01_dropped.json"))
+        gc.collect()
+    assert [w for w in seen if issubclass(w.category, ResourceWarning)] == []
     assert not (tmp_path / run_round.SHORTLIST).exists()

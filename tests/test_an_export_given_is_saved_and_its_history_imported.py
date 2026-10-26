@@ -125,12 +125,16 @@ def test_the_download_is_found_on_the_computer_and_nothing_else_is(tmp_path, mon
         shutil.copy(FIX / n, newer / n)
     os.utime(older, (time.time() - 86400, time.time() - 86400))
     assert E.find_exports(str(home)) == [str(newer), str(older)]
+    # The person's own folder: HOME, and on Windows USERPROFILE, which is where Python
+    # looks there (https://docs.python.org/3/library/os.path.html#os.path.expanduser).
     monkeypatch.setenv("HOME", str(home))
+    monkeypatch.setenv("USERPROFILE", str(home))
     assert E.main(["take", "--find", "--contacts", c, "--threads", t]) == 0
     out = capsys.readouterr().out
     assert out.startswith(f"Found {newer}") and "Imported " in out
     # A computer with none says so, and the steps to get one.
     monkeypatch.setenv("HOME", str(tmp_path / "nobody"))
+    monkeypatch.setenv("USERPROFILE", str(tmp_path / "nobody"))
     assert E.main(["take", "--find"]) == 3
     assert "linkedin-export-files" in capsys.readouterr().out
 

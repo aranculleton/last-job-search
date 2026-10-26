@@ -291,8 +291,12 @@ def _sentence(text) -> str:
     if s[0].islower():
         s = s[0].upper() + s[1:]
     # The person's own ASK ("Would you have 15 minutes for a few questions
-    # sometime") ended every first note on a question with a full stop.
-    if _QUESTION_OPENER.match(s):
+    # sometime") ended every first note on a question with a full stop. Read on the
+    # last sentence: a piece of two that opens on a question and closes on a statement
+    # ("Would you be comfortable referring me for it? Happy to send ..., and no problem
+    # at all if not.") ended every referral ask on "if not?" (networking audit, 2026-10-25).
+    last = re.split(r"(?<=[.!?])\s+", s)[-1]
+    if _QUESTION_OPENER.match(last):
         return s.rstrip(".!") + "?" if s[-1] != "?" else s
     return s if s[-1] in ".!?" else s + "."
 
@@ -562,11 +566,10 @@ def _known_names() -> frozenset:
         for item in getattr(_SKILLS, "ITEMS", ()) or ():
             names.add(_first_word(item[1] if len(item) > 1 else ""))
         try:
-            import csv
+            import csv_store             # the mark a spreadsheet adds, and its encoding
             for f in ("network_contacts.csv", "job_search_tracker.csv"):
-                with open(person.state(f), newline="", encoding="utf-8") as fh:
-                    for r in csv.DictReader(fh):
-                        names.add(_first_word(r.get("company")))
+                for r in csv_store.dict_rows(person.state(f), refuse=False):
+                    names.add(_first_word(r.get("company")))
         except (OSError, ValueError):
             pass
         names.discard("")
@@ -783,6 +786,15 @@ JOB_ASKS = (
     (r"\b(?:any|have|has|got)\b[^.?!]{0,25}\b(?:openings?|vacanc\w+|open (?:roles?|positions?|reqs?))\b",
      "asks", _OPEN_FIX),
     (r"\brefer me\b", "asks", _LATER_FIX),
+    # A referral asked for in so many words: "I'd love a referral for the Staff Data
+    # Scientist role" passed validate() and advise() to a peer and to a head of data
+    # (networking audit, 2026-10-25). The referral is the third stage, asked of someone
+    # who has spoken to them about one linked role (referral_ask), never in a first note.
+    # How they joined ("you came in through a referral") and a programme are not asks.
+    (r"(?<!through )(?<!via )(?<!by )\b(?:a|an|any|your) (?:internal |employee |quick )?"
+     r"referral\b(?! (?:programme|program|scheme|bonus|partner|network))"
+     r"|\brefer(?:ring)? my (?:name|profile|application|resume|cv)\b"
+     r"|\bput (?:me|my name) forward\b", "asks", _LATER_FIX),
     (r"\b(?:be )?considered for (?:the|a|an|your|this|that)\b", "asks", _LATER_FIX),
     # Saying you applied, in every form it takes: "I've just applied", the outreach note's
     # own opening, matched "I just applied" only. A first note is no place for it; the note
@@ -1666,7 +1678,16 @@ def first_note(name, common_ground="", question=None, about_me=ABOUT_ME, ask=_DE
     if told:
         import reading as _reading
         read = bool(_reading.has_read(reading) or _reading.card_enough(reading))
-    return Note(_first_note_voice(note), rtype, recruiter, shape, read=read, card_only=card_only)
+    out = Note(_first_note_voice(note), rtype, recruiter, shape, read=read, card_only=card_only)
+    # Its parts, kept under its own text (tools/network/parts.py): the draft writer keeps
+    # them beside draft.md, so a tweak on the page builds the note again with one part
+    # changed, through this same composer, and needs no model.
+    try:
+        import parts
+        parts.remember("first_note", asked, str(out), default=_DEFAULT)
+    except Exception:  # noqa: BLE001  a note is never refused for its record
+        pass
+    return out
 
 
 def _reaches_fix(name, their=()) -> str:
@@ -1679,8 +1700,34 @@ def _reaches_fix(name, their=()) -> str:
             % (who, f", or name {named}, which their= holds" if named else ""))
 
 
+# A referral ask to someone who has not engaged compresses the three stages into one.
+ASK_TOO_SOON = ("a referral ask goes only to someone who has answered, spoken with the "
+                "candidate or offered help, and nothing from {who} says they have: a first "
+                "note asking for a conversation comes first (compose.first_note()). If they "
+                "did answer or you spoke, log it (state.py received, or the call), then ask")
+
+
+def engaged(thread) -> bool:
+    """Has the person a referral ask is for engaged: a message of theirs or a call held in
+    their thread, or, given their contact_id, a row that says they replied before the log
+    began (throttle.RESPONDED)? `thread` is their contact_id or their message rows."""
+    import state
+    import throttle
+    if isinstance(thread, str):
+        cid = thread.strip()
+        book = person.state("network_contacts.csv")
+        log = person.state("network_threads.csv")
+        row = state.already_contacted(state.load_contacts(book), contact_id=cid) \
+            if cid and os.path.exists(book) else None
+        if row is not None and str(row.get("status") or "").strip() in throttle.RESPONDED:
+            return True
+        thread = state.threads_for(state.load_threads(log), cid) \
+            if cid and os.path.exists(log) else []
+    return any(state.said_something(r) or state.call_held(r) for r in thread or ())
+
+
 def referral_ask(name, context, role, link, close=None, work_auth=None,
-                 seniority="peer") -> str:
+                 seniority="peer", thread=None) -> str:
     """The ask the first note exists to earn, sent once they have engaged.
 
     Only inside a live thread: after a reply, a call or an offer of help. Asked
@@ -1691,9 +1738,18 @@ def referral_ask(name, context, role, link, close=None, work_auth=None,
 
     `context` is what they already did or said ("thanks again for the chat on
     Tuesday"), one line, no restating. `role` names the role and employer;
-    `link` is the posting.
+    `link` is the posting. `thread` is who it goes to: their contact_id, or their
+    message rows. Raises ValueError without it, or when nothing in it is theirs
+    (`engaged`): the three stages were "never compressed into one" in the skill and
+    nowhere in code, and an ask to someone never written to composed and passed
+    validate() with nothing said (networking audit, 2026-10-25).
     """
     _no_reaction_waiting("referral ask")
+    if thread is None:
+        raise ValueError("referral_ask needs thread=: their contact_id, or their messages, so "
+                         "it goes only to someone who has engaged")
+    if not engaged(thread):
+        raise ValueError(ASK_TOO_SOON.format(who=name or "them"))
     for what, value in (("context", context), ("role", role), ("link", link)):
         if not str(value or "").strip():
             raise ValueError(f"referral_ask needs {what}")
@@ -2395,6 +2451,8 @@ def validate(message, kind, name=None, seniority="peer", employers=(),
     out = list(tone.check(text, recipient_seniority=seniority, name=name,
                           live_thread=(k in ("reply", "referral_ask")),
                           others=book_names(contact) if contact else ()))
+    if k == "referral_ask" and contact and not engaged(contact):
+        out.append(tone.Violation("referral_ask_too_soon", ASK_TOO_SOON.format(who=name or contact)))
     if k in FIRST_MESSAGE_KINDS:
         out += first_note_findings(text, recruiter=recruiter, reader=rtype, work_auth=work_auth,
                                    employers=tuple(employers or ()) + (_reader_company(contact),))

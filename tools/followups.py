@@ -34,7 +34,7 @@ Each is now a rule, next to the code it governs:
 
     python3 tools/followups.py [--today YYYY-MM-DD]
     python3 tools/followups.py --close-quiet [--dry-run]   # the brief runs this
-    python3 tools/followups.py --closed-quiet              # what /gmail-sync still searches
+    python3 tools/followups.py --closed-quiet              # closed on silence, still reopenable
 """
 
 from __future__ import annotations
@@ -51,7 +51,6 @@ for _p in (_HERE, os.path.join(_HERE, "network")):
         sys.path.insert(0, _p)
 
 import dates                                          # noqa: E402
-import outreach                                       # noqa: E402
 import docpaths                                       # noqa: E402
 import person                                         # noqa: E402
 import throttle                                       # noqa: E402
@@ -76,8 +75,10 @@ NUDGE_1 = ("Hi {name}, I applied for the {role} role on {date} and wanted to mak
            "reached the right person. Happy to share anything that would help the review. "
            "Is there a good time for a short call?")
 NUDGE_2 = ("Hi {name}, following up once more on the {role} application from {date}. "
-           "If the role has moved on, no problem at all; if it is still open, I would "
-           "value ten minutes to talk through the fit.")
+           "If the role has moved on, no problem at all; if it is still open, could we "
+           "find ten minutes to talk through the fit?")
+# Each is checked by compose's gate before it is shown (`checked` below): "I would value",
+# the old close of the second, was the one line of these the app's own advise() flagged.
 # Either nudge, once they have written since the last one: "wanted to make sure it
 # reached the right person" is not true of an application they have answered.
 NUDGE_AFTER_WORD = ("Hi {name}, thank you for your note on {heard}. I wanted to ask where "
@@ -115,9 +116,10 @@ LOG_AS = "followed up %s"      # the /outcome Step 2b form, so there is one to w
 # saying "chase again" ends it too, so lifting it never means rewriting history.
 _NOT_CHASED = re.compile(r"\bdo(?:[\s-]+not|n['’]?t)[\s-]+chase\b", re.I)
 
-# The employer's word since the application, as the row's notes record it: what
-# /gmail-sync writes (any signal but an acknowledgement), its reopening of a row closed
-# on silence, a hold "per the employer", and the plain words a person writes. Silence is
+# The employer's word since the application, as the row's notes record it: a reopening
+# of a row closed on silence, a hold "per the employer", the plain words a person writes,
+# and the `gmail-sync:` notes an older copy of the app wrote (any signal but an
+# acknowledgement), which old trackers still carry. Silence is
 # counted from the latest of these, not from the application: a recruiter who wrote on
 # day 40 has not been silent for 45 days. An automatic acknowledgement is not a word.
 _EMPLOYER_WORD = re.compile(
@@ -234,7 +236,8 @@ def superseded(rows: list[dict]) -> dict[int, dict]:
     already applied to.
     """
     order = sorted(range(len(rows)),
-                   key=lambda i: (_iso(rows[i].get("date")) or datetime.date.min, i))
+                   key=lambda i: (_iso(throttle.applied_on(rows[i]) or rows[i].get("date"))
+                                  or datetime.date.min, i))
     keys = {i: company_key(rows[i].get("company")) for i in order}
     out: dict[int, dict] = {}
     for n, i in enumerate(order):
@@ -274,14 +277,14 @@ def live_processes(rows: list[dict], closed: dict[int, dict]) -> dict[str, dict]
 def outreach_note(row: dict, docs: str = DOCS) -> str:
     """documents/applications/<slug>/outreach.md for this row, or "".
 
-    The folder name comes from `outreach.slug`, the function that wrote it, with
+    The folder name comes from `docpaths.slug`, the function that wrote it, with
     the abbreviation read off the row's resume. Folders from before the
     abbreviation joined the name are tried without it.
     """
     m = _ABBR.search(str(row.get("cv_file") or ""))
     for abbr in ((m.group(1), "") if m else ("",)):
         try:
-            folder = outreach.slug(row.get("company") or "", row.get("role") or "", abbr)
+            folder = docpaths.slug(row.get("company") or "", row.get("role") or "", abbr)
         except ValueError:
             return ""
         path = os.path.join(docs, folder, "outreach.md")
@@ -298,11 +301,9 @@ def _first_name(name) -> str:
     brackets ("Xiu Mei (Sally) Ho" came out "Xiu") and read "Halloway, Wren"
     as "Halloway". An address on its own is still nobody to greet.
     """
-    parts = state.person_name(name).split()
-    if not parts or "@" in parts[0]:
+    if not state.person_name(name).split():
         return ""
-    first = tone.first_name(name)
-    return first if first[:1].isalpha() else ""
+    return tone.greeting_name(name)
 
 
 def recipient(row: dict, people=(), docs: str = DOCS,
@@ -330,7 +331,8 @@ def recipient(row: dict, people=(), docs: str = DOCS,
             m = _SEND_ON.search(fh.read())
         return {"who": m.group("who").strip() if m else "the hiring manager or the recruiter",
                 "name": "", "how": "on " + m.group("channel").strip() if m else "",
-                "source": os.path.relpath(note, ROOT) if note.startswith(ROOT) else note}
+                "source": os.path.relpath(note, ROOT).replace(os.sep, "/") if note.startswith(ROOT)
+                else note}
     for p in people or ():
         if p.get("status") not in throttle.RESPONDED:
             continue
@@ -382,7 +384,7 @@ def review(rows: list[dict], today: datetime.date, warm: dict | None = None,
     for r in rows:
         if _status(r) != "applied":
             continue
-        applied = _iso(r.get("date"))
+        applied = _iso(throttle.applied_on(r))
         if applied is None:
             continue
         k = company_key(r.get("company"))
@@ -496,6 +498,24 @@ def body(it: dict) -> str:
     return it.get("message") or ""
 
 
+def checked(it: dict) -> list[str]:
+    """What compose's gate says of this nudge's draft: its findings (refused) and its
+    warnings (to rewrite on), each a line; [] when it is clean or there is no draft. The
+    same gate a draft written by hand gets (tools/followup_drafts.py), so a template the
+    person's own rules now refuse is said, never shown as ready."""
+    text = it.get("message") or ""
+    if not text:
+        return []
+    try:
+        import followup_drafts
+        name = (it.get("to") or {}).get("name") or ""
+        found, warned = followup_drafts.gate(text, "message", name=name,
+                                             company=it.get("company") or "")
+    except Exception:  # noqa: BLE001  a profile without networking settings: no gate to run
+        return []
+    return ["refused: " + f for f in found] + ["check: " + w for w in warned]
+
+
 def _quiet_why(it: dict, silence: str) -> str:
     """Why a row has gone quiet: two nudges unanswered, the silence since they last wrote,
     or `silence` (how long since it went, in the caller's words)."""
@@ -541,20 +561,26 @@ def close_quiet(path: str = TRACKER, today: datetime.date | None = None,
             and not not_chased(it["row"].get("notes"), today)]
     if not gone or not write:
         return gone
+    stamp = datetime.datetime.now().strftime("%H:%M")
     for it in gone:
         r = it["row"]
         why = _quiet_why(it, "no reply in %d days" % it["age"])
+        # The search's call, never the person's, and said so: confirmed_by "the search",
+        # and the day it went kept in applied_on, so `confirm.py applied` undoes it.
+        r["applied_on"] = throttle.applied_on(r) or it["date"]
         r["status"] = "no_response"
+        r["confirmed_by"], r["confirmed_at"] = "the search", "%s %s" % (today.isoformat(), stamp)
         note = CLOSED_NOTE % (today.isoformat(), why)
         r["notes"] = ((r.get("notes") or "").rstrip() + " | " + note).strip(" |")
-    csv_store.write_rows(path, rows, csv_store.header(path))
+    csv_store.write_rows(path, rows, list(dict.fromkeys(
+        csv_store.header(path) + list(throttle.CONFIRM_COLUMNS))))
     return gone
 
 
 # A row closed on silence is closed on a presumption, not an answer, and the note it
-# carries says a late reply is recorded. /gmail-sync searched only open rows, and
-# `no_response` is final, so no late reply to one was ever seen. It reads these too, for
-# this long after the close: callers in other tools take months to come back.
+# carries says a late reply is recorded. `no_response` is final, so a reader that looks
+# only at open rows never sees a late reply to one. These are listed for this long after
+# the close: callers in other tools take months to come back.
 REOPEN_WINDOW_DAYS = 120
 _CLOSED_QUIET = re.compile(r"(\d{4}-\d{2}-\d{2}): closed as no_response\b[^|]*"
                            r"\(followups\.py --close-quiet\)")
@@ -600,6 +626,7 @@ def render(items: list[dict], today: datetime.date) -> list[str]:
         lines.append("   " + to_line(it))
         if body(it):
             lines.append("   " + body(it))
+            lines += ["   " + c for c in checked(it)]
     if held:
         lines.append("")
         lines.append("HELD, not to send (%d): the nudge would be due, and this is why not" % len(held))
@@ -646,8 +673,8 @@ def main() -> int:
                     help="close every application gone quiet as no_response, with a dated note")
     ap.add_argument("--dry-run", action="store_true", help="with --close-quiet: list, write nothing")
     ap.add_argument("--closed-quiet", action="store_true",
-                    help="list the rows closed as gone quiet in the last %d days, which "
-                         "/gmail-sync still searches for a late reply" % REOPEN_WINDOW_DAYS)
+                    help="list the rows closed as gone quiet in the last %d days, which a "
+                         "late reply reopens through /outcome" % REOPEN_WINDOW_DAYS)
     a = ap.parse_args()
     today = datetime.date.fromisoformat(a.today)
     if a.closed_quiet:
@@ -661,11 +688,16 @@ def main() -> int:
         return 0
     if a.close_quiet:
         gone = close_quiet(today=today, write=not a.dry_run)
-        verb = "would close" if a.dry_run else "closed"
-        print("%s %d gone quiet as no_response%s" % (
+        # Shown to the person as the search's call, with the way to keep one open: they
+        # know of a reply the tracker does not.
+        verb = "would close" if a.dry_run else "closing"
+        print("%s %d as no reply%s" % (
             verb, len(gone), ": " + "; ".join("%s (%s, applied %s)" % (
                 it["company"], it["role"] or "role not recorded", it["date"]) for it in gone)
             if gone else ""))
+        for it in gone:
+            print('  keep open: python3 tools/confirm.py applied "%s::%s"'
+                  % (it["company"], it["role"] or ""))
         return 0
     items = review(_rows(), today, warm=throttle.warm_routes(), holds=throttle.referral_holds())
     print("\n".join(render(items, today)).lstrip("\n"))

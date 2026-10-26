@@ -125,12 +125,15 @@ def route_group(route: str) -> str:
     return r or "not recorded"
 
 
-def _length_group(text: str) -> str:
+def length_group(text: str) -> str:
     n = len(text)
     if not n:
         return ""
     return "under 200 characters" if n < 200 else "200-300 characters" if n <= 300 \
         else "over 300 characters"
+
+
+_length_group = length_group  # the module's own name for it; other modules call length_group
 
 
 def _rate(hit: int, n: int) -> str:
@@ -341,15 +344,19 @@ def event_contact(contacts, threads, contact_id: str, today=None) -> str:
 
 # ------------------------------------------------------------------ applications
 
-def _norm(text: str) -> str:
+def norm(text: str) -> str:
     return re.sub(r"[^a-z0-9]+", " ", str(text or "").lower()).strip()
+
+
+_norm = norm  # the module's own name for it; other modules call norm
 
 
 def drafts(root: str | None = None) -> list[dict]:
     """Every kept draft object, from documents/applications/*/draft.json."""
     root = root or person.state()
     out = []
-    for path in sorted(glob.glob(os.path.join(root, "documents", "applications", "*", "draft.json"))):
+    for path in sorted(glob.glob(os.path.join(glob.escape(root), "documents", "applications",
+                                              "*", "draft.json"))):
         try:
             with open(path, encoding="utf-8") as fh:
                 data = json.load(fh)
@@ -357,7 +364,7 @@ def drafts(root: str | None = None) -> list[dict]:
             continue
         for d in data if isinstance(data, list) else [data]:
             if isinstance(d, dict):
-                out.append(dict(d, _path=os.path.relpath(path, root)))
+                out.append(dict(d, _path=os.path.relpath(path, root).replace(os.sep, "/")))
     return out
 
 
@@ -410,8 +417,8 @@ _REACHED = re.compile(
 def outcome_md(row: dict) -> str:
     """The application's outcome.md, or "" when it has none."""
     try:
-        import outreach
-        folder = outreach.app_folder(row.get("company"), row.get("role") or "")
+        import docpaths
+        folder = docpaths.app_folder(row.get("company"), row.get("role") or "")
         with open(os.path.join(folder, "outcome.md"), encoding="utf-8") as fh:
             return fh.read()
     except Exception:
@@ -444,7 +451,7 @@ def application_cases(tracker: list[dict], today=None) -> list[dict]:
         if id(r) in later or throttle.is_process(r):
             continue        # a process with no application is not an application's result
         status = str(r.get("status") or "").strip().lower()
-        applied = _date(r.get("date"))
+        applied = _date(throttle.applied_on(r))
         if status in WIN or (status in LOSS and reached_interview(r)):
             won = True
         elif status in LOSS or (status == "applied" and applied
@@ -468,7 +475,8 @@ def _waiting(tracker, today) -> int:
     later = followups.superseded(tracker)
     return sum(1 for r in tracker if str(r.get("status") or "").strip().lower() == "applied"
                and id(r) not in later
-               and _date(r.get("date")) and (today - _date(r.get("date"))).days < SILENT_DAYS)
+               and _date(throttle.applied_on(r))
+               and (today - _date(throttle.applied_on(r))).days < SILENT_DAYS)
 
 
 def brief_documents(tracker, kept, today=None) -> str:
@@ -577,8 +585,29 @@ _STEP_RX = (
 # `- [x] Phone screen (2026-03-10)` once held, and before it, as /outcome writes a
 # booked stage, `- [ ] Phone screen (scheduled 2026-03-10, with Head of Planning)`.
 _STAGE_LINE = re.compile(r"^\s*[-*]\s*\[( |x|X)\]\s*(.+?)\s*$")
+# A time after the date is read past: `register_process` and a hand-written line both
+# wrote "(scheduled 2026-10-27 10:00, with ...)", and the stage read back with no date, so
+# no "no pack yet" and no thank-you reminder ever reached the due list (networking audit,
+# 2026-10-25).
 _STAGE_WHEN = re.compile(r"\((?P<sched>scheduled\s+)?(?P<date>\d{4}-\d{2}-\d{2})"
+                         r"(?:,?\s*(?:at\s+)?(?P<time>\d{1,2}(?:[:.]\d{2})?\s*"
+                         r"(?:[ap]\.?m\.?)?)(?:\s*(?-i:(?P<zone>[A-Z]{2,5}))\b)?(?=\s*[,)]))?"
                          r"(?:\s*,\s*with\s+(?P<with>[^)]*))?\)", re.I)
+
+
+def clock(text) -> str:
+    """A stage's time as written ("10:00", "2pm", "2.30 p.m."), as HH:MM on a 24-hour clock,
+    or "" when it is not one."""
+    m = re.fullmatch(r"\s*(\d{1,2})(?:[:.](\d{2}))?\s*(?:([ap])\.?m\.?)?\s*", str(text or ""),
+                     re.I)
+    if not m:
+        return ""
+    h, mi, half = int(m.group(1)), int(m.group(2) or 0), (m.group(3) or "").lower()
+    if half == "p" and h < 12:
+        h += 12
+    elif half == "a" and h == 12:
+        h = 0
+    return "%02d:%02d" % (h, mi) if h < 24 and mi < 60 else ""
 
 
 def stage_step(label: str) -> str:
@@ -610,15 +639,16 @@ def _heading_stages(text: str, today: str) -> list[dict]:
             continue
         held = date < today
         out.append({"label": label, "step": stage_step(label), "done": held, "date": date,
-                    "scheduled": not held, "with": ""})
+                    "scheduled": not held, "with": "", "time": "", "zone": ""})
     return out
 
 
 def outcome_stages(text: str, today: str = "") -> list[dict]:
     """Each stage line under "Interview stages reached" in an outcome.md.
 
-    {label, step, done, date, scheduled, with}: `done` is the box ticked,
-    `scheduled` a stage booked and not yet held, `with` who it is with. An outcome.md
+    {label, step, done, date, scheduled, with, time, zone}: `done` is the box ticked,
+    `scheduled` a stage booked and not yet held, `with` who it is with, `time` its hour
+    where the line gives one (HH:MM, `clock`) and `zone` the zone written beside it. An outcome.md
     written by hand, with a dated heading per round and no checklist, is read from its
     headings: one such file gave the interview pack no stages at all.
     """
@@ -641,7 +671,9 @@ def outcome_stages(text: str, today: str = "") -> list[dict]:
                     "done": hit.group(1).lower() == "x",
                     "date": when.group("date") if when else "",
                     "scheduled": bool(when and when.group("sched")),
-                    "with": " ".join((when.group("with") or "").split()) if when else ""})
+                    "with": " ".join((when.group("with") or "").split()) if when else "",
+                    "time": clock(when.group("time")) if when else "",
+                    "zone": (when.group("zone") or "") if when else ""})
     return out or _heading_stages(whole, today or dt.date.today().isoformat())
 
 

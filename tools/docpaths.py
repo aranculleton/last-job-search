@@ -9,7 +9,7 @@ The prefix used to be a literal in about ten tools that had to agree, and the
 tracker stores these paths, so tools/doc_name.py matches against them: they
 come from here or they drift.
 
-    python3 tools/docpaths.py shell   # shell assignments for verify_batch.sh
+    python3 tools/docpaths.py shell   # the batch check's profile values, as shell assignments
 """
 
 from __future__ import annotations
@@ -135,7 +135,24 @@ def _ere(s: str) -> str:
 
 
 def shell() -> str:
-    """What verify_batch.sh needs from the profile, as shell assignments."""
+    """What the batch check needs from the profile, as shell assignments (values())."""
+    return "\n".join(f"{k}={shlex.quote(str(x))}" for k, x in values().items())
+
+
+def contact_lines() -> list:
+    """Every contact detail the resume prints, as the page prints it: the place, the phone,
+    the email, the LinkedIn label and each documents.resume_extra line. verify_batch
+    checks the page for each, so a line LaTeX dropped is never lost in silence."""
+    ident = person.get("identity", {}) or {}
+    out = [ident.get(k) for k in ("location", "phone", "email")]
+    if ident.get("linkedin"):
+        out.append(ident.get("linkedin_label") or "LinkedIn")
+    out += list(person.get("documents.resume_extra", []) or [])
+    return [" ".join(str(x).split()) for x in out if str(x or "").strip()]
+
+
+def values() -> dict:
+    """What tools/verify_batch.py needs from the profile, by name."""
     roles = person.module("roles").ROLES
     heads = person.get("documents.headings")
     noun_ban = person.get("documents.banned_nouns", [])
@@ -152,8 +169,11 @@ def shell() -> str:
         ROLE_HEADER="/".join(r["short"] for r in roles),
         ROLE_NAMES=json.dumps([r["employer"] for r in roles]),
         ROLE_MINS=mins,
-        EMAIL=person.get("identity.email"),
-        PHONE=person.get("identity.phone"),
+        # Optional, as the renderer treats them: a profile with no phone was "cannot read
+        # the profile" here, so it could never be verified.
+        EMAIL=person.get("identity.email", "") or "",
+        PHONE=person.get("identity.phone", "") or "",
+        CONTACT_LINES=json.dumps(contact_lines(), ensure_ascii=False),
         PINNED=pinned[1] if pinned else "",
         # A profile with no certifications renders no Certifications section.
         SECTIONS=json.dumps([heads[k] for k in
@@ -169,8 +189,159 @@ def shell() -> str:
         BANNED_NOUNS="|".join(_ere(n) for n in noun_ban),
         BANNED_FLAG=("SAYS_" + re.sub(r"[^A-Z0-9]+", "_", noun_ban[0].upper())) if noun_ban else "",
     )
-    return "\n".join(f"{k}={shlex.quote(str(x))}" for k, x in v.items())
+    return v
 
+# ------------------------------------------------------------ an application's folder
+#
+# Here, beside the documents' names, since 2026-10-25: they lived in outreach.py, so every
+# tool that only needed a folder (the brief, the due list, the follow-ups) loaded the whole
+# drafting toolchain to find one. outreach.py still offers them under the same names.
+
+def slug(company, role, abbr=""):
+    """Directory name for one application. The abbreviation is part of it, so
+    two roles at one employer with the same title (one employer posted "Senior
+    Business Analyst" twice), or two long titles that agree for eighty
+    characters (one role advertised in two cities), never overwrite each other.
+
+    Raises ValueError when company and role together hold no letter or digit.
+    The caller joins the result into a path, so returning "" wrote the
+    application's files straight into documents/applications/ rather than into
+    a folder of its own. documents/README.md has always stated that as the
+    rule; nothing enforced it, because the test covering the rule
+    reimplemented it instead of calling this function, and the two had drifted
+    apart on four of six cases.
+
+    The second strip is after the truncation, not before. An 80-character cut
+    can land on an underscore, and appending the abbreviation then produced the
+    doubled underscore the same rule says cannot occur.
+
+    Non-ASCII letters are dropped rather than transliterated, so `Ørsted`
+    derives `rsted`. That is ugly and it is deliberate: the folder names in
+    documents/applications/ were all written under this behaviour, and changing
+    it would orphan every one of them."""
+    s = f"{company} {role}".lower()
+    s = re.sub(r"[^a-z0-9]+", "_", s).strip("_")[:80].strip("_")
+    if not s:
+        # A company and a role with no ASCII letter between them (an employer named in
+        # Japanese, Greek or Cyrillic): spelled in Latin letters where a table can
+        # (doc_name.ascii_name), else named by the documents' own name, which is never
+        # empty (doc_name.suffix). None of these had a folder: slug() raised.
+        import doc_name
+        s = re.sub(r"[^a-z0-9]+", "_", doc_name.ascii_name(f"{company} {role}").lower())
+        s = s.strip("_")[:80].strip("_")
+        if not s and abbr:
+            return re.sub(r"[^a-z0-9]+", "", abbr.lower())
+    if not s:
+        raise ValueError(
+            "no folder name can be derived from company=%r role=%r: between them "
+            "they hold no letter or digit. Ask for a company or role that does, "
+            "and do not create a file or directory." % (company, role))
+    if abbr:
+        s += "_" + re.sub(r"[^a-z0-9]+", "", abbr.lower())
+    return s
+
+
+# (path, mtime_ns, size) -> {(employer key, role slug): abbr}. Every caller asks for one
+# application, and the due list asks for every live one: each call read the whole tracker
+# again and keyed every row, so 500 rows took 14 seconds (2026-10-25). The tracker is read
+# once for each state of the file.
+_ABBR_INDEX: dict = {}
+
+
+def _abbr_index(path):
+    import csv_store
+    from company_key import key as company_key
+    st = os.stat(path)
+    stamp = (path, st.st_mtime_ns, st.st_size)
+    got = _ABBR_INDEX.get(stamp)
+    if got is not None:
+        return got
+    csv_store.refuse_conflicts(path)
+    rows = csv_store.dict_rows(path, refuse=False)
+    rx = resume_name_rx()
+    got = {}
+    for r in rows:                     # the last row written under a name wins, as before
+        m = rx.search(r.get("cv_file") or "")
+        if m:
+            got[(company_key(r.get("company")), slug("x", r.get("role") or "x"))] = m.group(1)
+    _ABBR_INDEX.clear()
+    _ABBR_INDEX[stamp] = got
+    return got
+
+
+def forget_abbreviations() -> None:
+    """Read the tracker again on the next ask: a writer in this process changed it within
+    the file system's clock step (two seconds on some), so its time and size can match."""
+    _ABBR_INDEX.clear()
+
+
+def _abbr_on_file(company, role):
+    """The abbreviation the tracker's row for this application was written under."""
+    from company_key import key as company_key
+    try:
+        index = _abbr_index(person.state("job_search_tracker.csv"))
+    except OSError:
+        return ""
+    return index.get((company_key(company), slug("x", role)), "")
+
+
+def without_ref(role) -> str:
+    """The role without the requisition number a tracker or a board wrote into it ("Data
+    Scientist II (R_1234567)", "Planner - REQ-20931"), else unchanged. The one rule for it,
+    doc_name.role_core: this kept its own, and "Data Analyst - REQ-2026-0412" came back
+    "Data Analyst - REQ-2026", so the folder named without the number was never found."""
+    import doc_name
+    return doc_name.role_core(role) or str(role or "")
+
+
+def app_folder(company, role, abbr=""):
+    """The folder one application lives in (documents/README.md, Subfolder naming).
+
+    The commands wrote `<company>_<role>/` while the tools wrote
+    `<company>_<role>_<abbr>/`, so /outcome and /interview missed the folder a
+    batch had written and started a second one beside it. The folder already
+    there wins: the full name, then the name without the abbreviation, then the
+    one folder for this company and role under any abbreviation. Otherwise the
+    full name, which is the rule.
+
+    A role carrying its requisition number, "Data Scientist II (R_1234567)", is also
+    looked for without it: the folder was named before the number was written into the
+    tracker, and the interview pack built itself from an empty folder.
+    """
+    base = person.state("documents", "applications")
+    abbr = abbr or _abbr_on_file(company, role)
+    try:
+        stem = slug(company, role)
+    except ValueError:
+        # No ASCII letter in the company or the role: only the documents' own name names
+        # the folder (slug, above).
+        if not abbr:
+            raise
+        return os.path.join(base, slug(company, role, abbr))
+    full = slug(company, role, abbr) if abbr else stem
+    bare = without_ref(role)
+    plain = slug(company, bare) if bare != role else stem
+    for name in dict.fromkeys((full, stem, plain)):
+        if os.path.isdir(os.path.join(base, name)):
+            return os.path.join(base, name)
+    try:
+        hits = [d for d in sorted(os.listdir(base)) for st in dict.fromkeys((stem, plain))
+                if d.startswith(st + "_") and "_" not in d[len(st) + 1:]
+                and os.path.isdir(os.path.join(base, d))]
+    except OSError:
+        hits = []
+    return os.path.join(base, hits[0] if len(hits) == 1 else full)
+
+
+def employer_folders(company) -> list[str]:
+    """Every application folder at this employer, by name."""
+    base = person.state("documents", "applications")
+    try:
+        prefix = slug(company, "") + "_"
+        return sorted(d for d in os.listdir(base)
+                      if d.startswith(prefix) and os.path.isdir(os.path.join(base, d)))
+    except (OSError, ValueError):
+        return []
 
 if __name__ == "__main__":
     if sys.argv[1:] == ["shell"]:

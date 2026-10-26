@@ -1,0 +1,230 @@
+{
+  "name": "Education and academia",
+  "field": "education-academia",
+  "aka": [
+    "education",
+    "teaching",
+    "teacher",
+    "academia",
+    "academic",
+    "higher education",
+    "university",
+    "lecturer"
+  ],
+  "boards": {
+    "*": [
+      {
+        "name": "Times Higher Education Unijobs",
+        "url": "https://www.timeshighereducation.com",
+        "kind": "field",
+        "source": "https://www.timeshighereducation.com/",
+        "quote": "our products and services enable everyone in higher education to make smarter",
+        "checked": "2026-10-25",
+        "verified": true,
+        "search": "https://www.timeshighereducation.com/unijobs/listings/",
+        "paths": {
+          "search": "/unijobs/listings/",
+          "posting": "/unijobs/listing/"
+        },
+        "robots": {
+          "checked": "2026-10-25",
+          "why": "",
+          "search": true,
+          "status": "allowed",
+          "posting": true,
+          "crawl_delay": null,
+          "ai_input": null
+        },
+        "public_search": {
+          "checked": "2026-10-25",
+          "status": "open",
+          "http": 200
+        }
+      },
+      {
+        "name": "Tes",
+        "url": "https://www.tes.com",
+        "kind": "field",
+        "source": "https://www.tes.com/",
+        "quote": "Tes - Education Jobs, Teaching Resources, School Software & Magazine",
+        "checked": "2026-10-25",
+        "verified": true,
+        "search": "https://www.tes.com/jobs/search?keywords=teacher",
+        "paths": {
+          "search": "/jobs/search?keywords=teacher",
+          "posting": "/jobs/vacancy/"
+        },
+        "robots": {
+          "checked": "2026-10-25",
+          "why": "",
+          "search": true,
+          "status": "allowed",
+          "posting": true,
+          "crawl_delay": null,
+          "ai_input": null
+        },
+        "public_search": {
+          "checked": "2026-10-25",
+          "status": "open",
+          "http": 200
+        }
+      }
+    ],
+    "gb": [
+      {
+        "name": "jobs.ac.uk",
+        "url": "https://www.jobs.ac.uk",
+        "kind": "field",
+        "source": "https://www.jobs.ac.uk/",
+        "quote": "",
+        "checked": "2026-10-25",
+        "verified": false,
+        "why": "no sentence on the page says it (looked for: jobs)",
+        "search": "https://www.jobs.ac.uk/search/?keywords=lecturer",
+        "paths": {
+          "search": "/search/?keywords=lecturer",
+          "posting": "/job/"
+        },
+        "robots": {
+          "checked": "2026-10-25",
+          "why": "",
+          "search": true,
+          "status": "allowed",
+          "posting": true,
+          "crawl_delay": null,
+          "ai_input": null
+        },
+        "public_search": {
+          "checked": "2026-10-25",
+          "status": "open",
+          "http": 200
+        }
+      }
+    ],
+    "us": [
+      {
+        "name": "HigherEdJobs",
+        "url": "https://www.higheredjobs.com",
+        "kind": "field",
+        "source": "https://www.higheredjobs.com/",
+        "quote": "",
+        "checked": "2026-10-25",
+        "verified": false,
+        "why": "the source could not be read: a bot check (HTTP 200) instead of the page",
+        "search": "https://www.higheredjobs.com/search/default.cfm?q=lecturer",
+        "paths": {
+          "search": "/search/default.cfm?q=lecturer",
+          "posting": "/details.cfm"
+        },
+        "robots": {
+          "checked": "2026-10-25",
+          "why": "",
+          "search": true,
+          "status": "allowed",
+          "posting": true,
+          "crawl_delay": null,
+          "ai_input": null
+        },
+        "public_search": {
+          "checked": "2026-10-25",
+          "status": "open_browser",
+          "http": 200
+        }
+      }
+    ]
+  },
+  "documents": {
+    "*": [
+      {
+        "topic": "academic_cv",
+        "value": "an academic CV with publications, grants and teaching, with no page limit",
+        "source": "https://en.wikipedia.org/wiki/Curriculum_vitae",
+        "quote": "Example of the type of extensive CV used in academia, in this case 69 pages long",
+        "checked": "2026-10-25",
+        "verified": true
+      }
+    ]
+  },
+  "licences": {
+    "gb": [
+      {
+        "value": "Qualified Teacher Status (QTS) for state schools in England",
+        "source": "https://en.wikipedia.org/wiki/Qualified_Teacher_Status",
+        "quote": "",
+        "checked": "2026-10-25",
+        "verified": false,
+        "why": "the sentence found on the page does not say it"
+      }
+    ]
+  },
+  "titles": [
+    {
+      "value": [
+        "English Teacher",
+        "Math Teacher (Mathematics Teacher)",
+        "Science Teacher",
+        "Secondary Teacher",
+        "Teacher"
+      ],
+      "source": "https://www.onetonline.org/link/summary/25-2031.00",
+      "quote": "Sample of reported job titles: Art Teacher, English Teacher",
+      "on_page": [
+        "English Teacher",
+        "Math Teacher (Mathematics Teacher)",
+        "Science Teacher",
+        "Secondary Teacher",
+        "Teacher"
+      ],
+      "checked": "2026-10-25",
+      "verified": true
+    },
+    {
+      "value": [
+        "Assistant Professor",
+        "Associate Professor",
+        "Instructor",
+        "Mathematics Lecturer",
+        "Professor"
+      ],
+      "source": "https://www.onetonline.org/link/summary/25-1022.00",
+      "quote": "Sample of reported job titles: Adjunct Mathematics Instructor, Assistant Professor",
+      "on_page": [
+        "Assistant Professor",
+        "Associate Professor",
+        "Instructor",
+        "Mathematics Lecturer",
+        "Professor"
+      ],
+      "checked": "2026-10-25",
+      "verified": true
+    }
+  ],
+  "families": [
+    {
+      "family": "learning management system",
+      "members": [
+        [
+          "Blackboard",
+          "\\bblackboard\\b"
+        ],
+        [
+          "Moodle",
+          "\\bmoodle\\b"
+        ],
+        [
+          "Sakai",
+          "\\bsakai\\b"
+        ]
+      ],
+      "source": "https://www.onetonline.org/link/summary/25-1022.00",
+      "quote": "Computer based training software - Blackboard Learn",
+      "on_page": [
+        "Blackboard Learn",
+        "Moodle",
+        "Sakai CLE"
+      ],
+      "checked": "2026-10-25",
+      "verified": true
+    }
+  ]
+}

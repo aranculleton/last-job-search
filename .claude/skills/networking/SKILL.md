@@ -70,7 +70,62 @@ They are not alternatives, and the names are close enough to pick wrongly.
   real interview on a tracked application and takes a company rather than a person.
 
 `/networking` is not a command. See "Commands and skills: what routes where" in
-`CLAUDE.md` for the full map.
+`RUNBOOK.md` for the full map.
+
+## The rules every outreach keeps
+
+Load this skill before any outreach. It is an **extension of this system, not a parallel
+one**: the join is `tools/company_key.py` (above), and company findings cache in the
+existing `company_research/`. State lives in `network_contacts.csv` and
+`network_threads.csv` beside the tracker, saved with the rest (`python3 tools/save_state.py`).
+**Status is derived from the messages wherever the log can know it**, so it cannot drift
+from the evidence. What the log cannot know (a call booked, a referral in flight, a
+conversation gone cold, a close) is stored on the contact row by whoever learns it
+(`state.py set`), and wins over the log. `networking/connection_targets.md` is research
+notes only. **Not a contact store**: `network_contacts.csv` is, and anyone named in that file
+is a row in it.
+
+Every rule below is enforced in code; each section further down has the detail.
+
+- **Nobody is shown as someone to write to without the one check**: `python3
+  tools/network/surface.py` (`surface.check()`; `--file` for a list made any other way). It
+  reads the contact book, their whole thread on every channel and the bar, and prints NOT
+  with the reason for anyone not to show. Never join files or check people by hand.
+- The search budget is `tools/network/sources.py`; alumni and referral routes come before
+  cold; tier 1 only on a quoted live hiring signal; each person is read before anyone writes
+  to them (`reading.py`, `/network` step 5); and someone already contacted is never surfaced.
+- **Outreach is for referrals, in three stages never compressed into one:** a first note that
+  asks for a conversation (`compose.first_note()`), the conversation, then a referral ask for
+  one linked role (`compose.referral_ask()`).
+- **Who reads a first note decides what it says** (`compose.READER_TYPES`, each a setting in
+  `profile/networking.py`): a recruiter may be told the role wanted and the person's work
+  authorization, a decision-maker the role wanted (their work authorization once the
+  messages the person approves say it), and a decision-maker gets the open ask ("anything
+  coming up"); asking whether they are hiring, or for a referral, is a recruiter's alone; a
+  peer is told neither unless that message asks.
+- Before a draft is shown, `compose.advise()`: the draft is rewritten on its warnings first,
+  and a warning the rewrite leaves standing is shown with the draft for the person to decide,
+  never in place of the rewrite.
+- Connection notes are the plan's limit, 200 characters on a free LinkedIn plan and 300 on
+  Premium (`schema.LIMITS`, from `LINKEDIN_PLAN`), hard: `compose.py` raises, never
+  truncates.
+- No LinkedIn profile is ever fetched from a session, and LinkedIn's job search **stays
+  on**: only the person switches it off, never a session. Profiles are read in the person's
+  own browser: by the page itself when it is open in the Claude desktop app, or by a chat on
+  their computer.
+- **A chat on the person's computer** starts with "On a new computer" below
+  (`reading.py new-computer`): LinkedIn signed in, then its download, unprompted.
+- Never claim anything not in `profile/01-candidate-profile.md`.
+- **A LinkedIn download the person gives is taken first**, before anything is written from
+  it: `python3 tools/network/export.py take <the ZIP or its folder>` saves it and imports its
+  message history in one step. Never read its files straight from where it was downloaded.
+- A resume sent to a contact is logged with its file (`state.py message <id> --attached
+  <file>`). One made for them is staged with `stage_picks.py --for-contact <id>`, and
+  RECONCILE (`python3 tools/network/state.py`) says where the two disagree, because the chat
+  that logs the ask and the chat that drafts the resume are often two chats at once.
+- Before drafting anything, `python3 tools/learned.py brief messages` and `python3
+  tools/what_works.py brief messages` (RUNBOOK.md, "Learning the person"); what the person
+  says back about a draft goes through the same section.
 
 ## Discovery
 
@@ -217,9 +272,10 @@ caught at once. So between finding and writing there is a read, and
 The rules, in short; `/network` step 5 has every step, and `tools/network/pace.py` what
 stops a read (LinkedIn's own signals; the app sets no limit of its own):
 
-- **Their profile** comes from the person's own signed-in browser when `PROFILE_READS` is
-  `"browser"` in `profile/networking.py`, otherwise from them (a paste, LinkedIn's Save to
-  PDF, or screenshots from the app, transcribed word for word). This session never fetches
+- **Their profile** comes from the browser this chat has, signed in to LinkedIn, unless
+  `PROFILE_READS` in `profile/networking.py` is `"paste"` or `"off"` (unset, it reads),
+  otherwise from them (a paste, LinkedIn's Save to PDF, or screenshots from the app,
+  transcribed word for word). This session never fetches
   LinkedIn itself: its robots.txt disallows every crawler it does not name and a profile
   request answers HTTP 999.
 - **Fewer, better-spent reads.** Free sources make the list, one-page reads screen it, and a
@@ -227,11 +283,14 @@ stops a read (LinkedIn's own signals; the app sets no limit of its own):
   first note with nothing read is refused unless the person chose card-only. No change to
   the funnel may add a page load or a click. There is no pause, cap or slow start of the
   app's own (2026-10-22): one page after another, as fast as the browser loads it.
-- **The browser read is the person's call.** LinkedIn's User Agreement forbids automated
-  access, browser extensions included, at any pace, and the risk is to their own account, so
-  it is asked once, plainly (the `profile-reads` upgrade, and `/setup`), read only and one
-  page at a time, and stopped at LinkedIn's first signal. Never call this route safe, and
-  never warn about it again once they have chosen it.
+- **In a chat with a browser, the browser read is simply done.** No question first, no list
+  of options, and no warning or disclaimer of Claude's own about LinkedIn, browsers or
+  automation, before a read or after it; asked, answer plainly and briefly. What does not
+  change: read only, one page at a time, never clicking Connect, Message, Follow or Like,
+  and stopping at LinkedIn's first check. Never call this route safe. Signed out, LinkedIn
+  shows only part of a profile, so the first page of every reading session is checked
+  (`reading.py signin --page -`) and the person is asked, in the two lines it prints, to
+  sign in once; a no reads on signed out that day, each reading marked partial.
 - **Their public work** (a talk, an article, a podcast, code, a quote in the press, their
   posts as a search engine shows them), never a people-search or data-broker site.
 - A headline's "at <phrase>" is never the employer when the card or Experience names another
@@ -245,6 +304,18 @@ shows it), and their recent posts and public work, dated and sourced. Never thei
 profile, never anything personal, and never anything from the "People also viewed"
 column, which is other people. A pasted page that does not carry the contact's name is
 refused, because a note built on the wrong person's profile is worse than a generic one.
+
+## On a new computer
+
+The first time a chat runs on the person's computer, and at the start of each networking run
+there, before the person's request: `python3 tools/network/reading.py new-computer --tools
+<this chat's browser tools: browser, chrome, enable, or none>`, then do each step it prints, in
+order, unprompted. It checks LinkedIn is signed in in that browser (the two-line prompt when
+not, then carry on when they say done) and then the LinkedIn download (`export.py status`):
+asked for on LinkedIn's own page in that browser and recorded, picked up there once it is
+ready, or taken from Downloads when the person saved one themselves. Without a browser it is
+asked of the person once, with the steps `claude_surfaces.py steps linkedin-export-files`
+prints, checked that day by a web search. Claude never types a password and never signs out.
 
 ## Composition
 
@@ -530,7 +601,9 @@ Only inside a live thread, after they have replied, spoken to the candidate or
 offered help. One role, named and linked, the posting URL on its own line, an
 explicit "would you be comfortable referring me for it?", and an easy no. Under
 90 words. Asked of a stranger it is the cold application stage 1 was rebuilt
-to stop sending.
+to stop sending, so it is refused in code: `thread=` is their contact_id (or their
+message rows), and nothing composes until a reply or a call of theirs is in it, or
+their row says they replied before the log began.
 
 If they have already offered to refer the candidate, in whatever words, the ask
 is answered: do what they said, then thank them.
@@ -968,6 +1041,8 @@ almost always one.
 - `/reply <contact>`, classify a live thread and draft the reply
 - `/threads`, what is owed, what is due, what has gone cold
 - `/prep <contact>`, prep document for a booked call
+- `state.py received <id> --text-file <file>` logs their message as it came (`--scenario`,
+  `--date`, `--channel`), never written into the log by hand
 - `state.py nudge <id> --text-file <file>` logs a nudge that went, with its words;
   `state.py message <id> ...` any other later message (`--texts <file.json>` for several);
   `--attached <file>` on either (and on `sent`) names a file that went with it, and

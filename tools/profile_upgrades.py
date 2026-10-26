@@ -71,6 +71,7 @@ from typing import Callable
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import person  # noqa: E402
+import local_path  # noqa: E402
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 COSTS = ("instant", "edit", "question", "research")
@@ -109,6 +110,8 @@ class Upgrade:
     # how) or once REASK_DAYS have passed, saying when they said no (`again()`).
     ask_version: int = 1
     changed: str = ""
+    # Every item, one a line, for `--check <id>`, where the pending line names only a few.
+    every: Callable[[], list] | None = None
 
 
 # ------------------------------------------------------------------ helpers
@@ -189,7 +192,7 @@ def record_no(uid: str, today: dt.date | None = None) -> str:
     got = asked()
     got[uid] = {"no": (today or dt.date.today()).isoformat(), "version": u.ask_version}
     p = _asked_path()
-    with open(p, "w", encoding="utf-8") as fh:
+    with open(p, "w", encoding="utf-8", newline="\n") as fh:
         json.dump(got, fh, indent=2, sort_keys=True)
         fh.write("\n")
     return p
@@ -237,14 +240,23 @@ def _probe(code: str) -> str:
             return got
     prelude = "import sys; sys.path[:0] = %r\n" % (_probe_path(),)
     try:
-        r = subprocess.run([sys.executable, "-c", prelude + code], cwd=ROOT, env=os.environ,
-                           capture_output=True, text=True, timeout=PROBE_SECONDS)
+        r = subprocess.run([sys.executable, "-c", prelude + code], cwd=ROOT, env=_utf8_child(),
+                           capture_output=True, text=True, timeout=PROBE_SECONDS,
+                           encoding="utf-8", errors="replace")
     except (OSError, subprocess.TimeoutExpired):
         return ""
     return r.stdout.strip() if r.returncode == 0 else ""
 
 
 PROBE_SECONDS = 120
+
+
+def _utf8_child() -> dict:
+    """The environment for a Python this reads the output of as UTF-8: told to write it.
+    On a Windows terminal in cp1252 (or PYTHONIOENCODING=cp1252) a probe printing "café –"
+    wrote cp1252, which read back as two stand-in characters, and the same probe answered
+    differently alone and inside a look."""
+    return dict(os.environ, PYTHONIOENCODING="utf-8")
 
 
 def _probe_path() -> list[str]:
@@ -297,7 +309,7 @@ def _one_interpreter():
 def _start_worker():
     try:
         proc = subprocess.Popen([sys.executable, "-c", _WORKER % (_probe_path(),)], cwd=ROOT,
-                                env=os.environ, stdin=subprocess.PIPE, stdout=subprocess.PIPE,
+                                env=_utf8_child(), stdin=subprocess.PIPE, stdout=subprocess.PIPE,
                                 stderr=subprocess.DEVNULL, text=True, encoding="ascii",
                                 errors="replace")
     except OSError:
@@ -438,13 +450,11 @@ def _public_holidays() -> str:
 
 
 def _profile_reads() -> str:
-    if _missing("networking", "PROFILE_READS"):
-        return ("nobody has asked whether Claude may read the LinkedIn profile of each person "
-                "about to be messaged in your own browser (profile/networking.py has no "
-                "PROFILE_READS), so a note rests on what you paste and on their public work")
-    if str(getattr(_mod("networking"), "PROFILE_READS", "") or "") == "paste":
-        u = by_id("profile-reads")
-        return again("profile-reads", u.ask_version, u.changed)
+    """Nothing to ask, ever: unset, PROFILE_READS reads in the browser a chat has
+    (tools/network/reading.py reads_setting), and "paste" or "off" is the person's own word.
+    The question it asked first, with its warnings, kept a computer chat from reading at all
+    (the maintainer, 2026-10-25); the upgrade stays registered so a recorded no still names
+    something."""
     return ""
 
 
@@ -486,19 +496,13 @@ def _alumni_text() -> str:
     return ""
 
 
-def _work_place() -> str:
-    """No answer yet to where they will mostly work (tools/place.py, /setup's question)."""
-    if not person.exists("person.json"):
-        return ""
-    try:
-        import json
-        with open(person.path("place.json"), encoding="utf-8") as fh:
-            if json.load(fh).get("works_on"):
-                return ""
-    except (OSError, ValueError):
-        pass
-    return ("set up before the app asked where you will mostly work, so it cannot say when "
-            "a chat is in the wrong place for your settings")
+def _work_place_retired() -> str:
+    """Retired 2026-10-25 with the place question's "if you have one you can use, say yes":
+    4.0 recommends no chat on a computer (the page and the cloud chats Claude makes do
+    everything, and the page reads LinkedIn profiles itself in the desktop app), so nobody
+    set up before the question needs to be asked it. /setup still asks it where a chat cannot
+    tell, with no recommendation. Kept so a no recorded against it still reads."""
+    return ""
 
 
 def _ruling_parts() -> str:
@@ -522,11 +526,20 @@ def _connections_export() -> str:
     if not os.environ.get("LJS_STATE") and os.path.exists(
             person.local_state("documents", "linkedin", "Connections.csv")):
         return ""                                   # in the main checkout, read from a worktree
+    if _download_on_its_way():
+        return ""
     if getattr(_mod("networking"), "CONNECTIONS_EXPORT", None) == "declined":
         u = by_id("connections-export")
         return again("connections-export", u.ask_version, u.changed)
     return ("every networking run starts from strangers, because the people you already know "
             "on LinkedIn are not on file (documents/linkedin/Connections.csv)")
+
+
+def _download_on_its_way() -> bool:
+    """A LinkedIn download asked for and not here yet (`export.py status` says "waiting"):
+    the person has done their part, so neither download question is asked meanwhile. The
+    chat taking it when it lands is export.py's, from the same record."""
+    return _probe("import export; print(export.status()['state'])") == "waiting"
 
 
 def _linkedin_history() -> str:
@@ -537,6 +550,8 @@ def _linkedin_history() -> str:
         return ""
     have = os.path.exists(person.local_state("documents", "linkedin", "Connections.csv"))
     if not have or os.path.exists(person.local_state("documents", "linkedin", "messages.csv")):
+        return ""
+    if _download_on_its_way():
         return ""
     if "linkedin-history" in asked():
         u = by_id("linkedin-history")
@@ -1013,7 +1028,7 @@ def unconfirmed() -> list[tuple[str, str]]:
                     text = fh.read()
             except (OSError, UnicodeDecodeError):
                 continue
-            rel = os.path.relpath(path, os.path.dirname(root))
+            rel = local_path.rel(path, os.path.dirname(root))
             out += [(rel, (m.group(1) or "").strip() or "a fact marked unconfirmed")
                     for m in CONFIRM.finditer(text)]
     return out
@@ -1117,7 +1132,8 @@ REGISTRY: tuple[Upgrade, ...] = (
             "every fact in your profile confirmed by you, never guessed",
             _unconfirmed, "ask the person, at most three at the end of a session, and write "
             "each answer where its [CONFIRM] marker was", "question", "~1 min a fact",
-            priority=2, needs="you"),
+            priority=2, needs="you",
+            every=lambda: [f"{what} ({where})" for where, what in unconfirmed()]),
     Upgrade("required", "2026-10-15",
             "every setting the tools need and cannot default, written for you",
             _required, "/setup --section <the section that writes it>", "question", "~5 min",
@@ -1210,16 +1226,8 @@ REGISTRY: tuple[Upgrade, ...] = (
             paths=("profile/learned.json",),
             priority=2),
     Upgrade("work-place", "2026-10-18",
-            "told when a chat is in the wrong place for your settings, and where to go instead",
-            _work_place, "ask its question with the session's other questions, as written; "
-            "the trade-off `python3 tools/place.py ask` prints only if they ask why or are "
-            "unsure; record the answer with `python3 tools/place.py record "
-            "computer|phone|both` and give the one line it prints. Change no setting",
-            "question", "~1 min",
-            priority=4, needs="you",
-            ask="Will you mostly use this on a computer, or on your phone or the web?",
-            why_ask="Some things, like reading a profile in your own browser, only work in a "
-                    "chat on your computer, so I set things up for where you will be."),
+            "nothing: retired, since no chat on a computer is recommended any more",
+            _work_place_retired, "nothing to do", "question", "~0 min", priority=4),
     Upgrade("ruling-parts", "2026-10-17",
             "a change to one of your rules puts back only the postings ruled out by that rule",
             _ruling_parts, "run `python3 tools/exclude.py cite`, then follow `python3 "
@@ -1299,19 +1307,14 @@ REGISTRY: tuple[Upgrade, ...] = (
             _profile_reads, "write PROFILE_READS = \"browser\" or \"paste\" in "
             "profile/networking.py from their answer; \"paste\" again is also `python3 "
             "tools/profile_upgrades.py --no profile-reads`", "question", "~1 min",
-            names=("networking.PROFILE_READS",),
             priority=2,
             needs="you",
             ask_version=2,
             changed="finding people no longer needs any read, and a read is now only of the best "
                     "ten a run finds, paced, in a chat on your computer",
-            ask="Before writing to the best few people a search finds, should I read their "
-                "LinkedIn profiles in your own browser? LinkedIn's terms forbid automated "
-                "access, so that carries some risk to your account. Or you paste one or two. "
-                "Which?",
-            steps=lambda: ("Reading in your browser works in a chat on your computer in the Claude "
-                           "desktop app. I read one profile at a time, at a person's pace, and "
-                           "click nothing: the risk is lower with those limits, never nothing.\n"
+            ask="Should I read the LinkedIn profiles of the people I write to in your browser, "
+                "or work from ones you paste?",
+            steps=lambda: ("In a chat on your computer, I read each one in the browser there.\n"
                            "Pasting instead: open their profile, select all, copy, and paste it "
                            "here."),
             why_ask="A message that mentions something real about the person gets far more "
@@ -1598,6 +1601,21 @@ REGISTRY = REGISTRY + _method_upgrades()
 # new name goes here or in an upgrade's `names`; tests/test_profile_upgrades.py
 # fails on one in neither.
 SAFE_DEFAULTS: dict[str, str] = {
+    # Written only by the page's Tweak panel, "Keep this for next time" (tools/tweak.py,
+    # 2026-10-25); with none, every document and search is as it was before the setting.
+    "person.json:documents.fill": "\"fuller\": the page is filled with bullets, as before",
+    "person.json:documents.letter_words": "none: a letter is held to 200 to 250 words, as "
+                                          "before",
+    "person.json:documents.skills_max": "\"standard\": the skills line keeps its 18 "
+                                        "skills, as before",
+    "person.json:documents.style": "none: the colour comes from documents.styles or is "
+                                   "black, as before",
+    "search.JOB_AGE_DAYS": "14, the search window run_round.py used before it was a setting",
+    # Read in the browser a chat has, with no question first, since 2026-10-25: the question
+    # and its warnings kept a person's computer chat from reading at all.
+    "networking.PROFILE_READS": "\"browser\": the profiles of the people a run writes to are "
+                                "read in the browser the chat has; \"paste\" or \"off\" is "
+                                "the person's own word (tools/network/reading.py reads_setting)",
     # The number written to at one employer while nobody there has answered; a setting
     # since 2026-10-24, when the person wanted more at four employers.
     "networking.PEOPLE_PER_EMPLOYER": "2, the people written to at one employer while "
@@ -1607,6 +1625,13 @@ SAFE_DEFAULTS: dict[str, str] = {
     "person.json:documents.styles": "none, so every resume and letter is black, as before "
                                     "the setting existed; a colour is the person's choice "
                                     "per kind of employer (templates/doc_style.py)",
+    "person.json:documents.design": "none, so every resume and letter keeps the template's "
+                                    "layout, as before designs existed; the person's own "
+                                    "fonts, sizes and margins when they choose "
+                                    "(templates/doc_design.py)",
+    "person.json:documents.designs": "none, so no kind of employer or employer takes a "
+                                     "design of its own until the person or /setup sets "
+                                     "one (templates/doc_design.py)",
     # Read since before the first release through a one-argument getter (network/reply.py
     # _w) that tools/profile_names.py could not see; nothing about how it is read changed.
     "networking.HOME_ADJECTIVE": "unset, the nationality word in a reply's status and "
@@ -1795,7 +1820,8 @@ def plan(rows: list[tuple[Upgrade, str]] | None = None) -> list[dict]:
 # ------------------------------------------------------------------ instant
 
 def _git(*args: str, check: bool = False) -> subprocess.CompletedProcess:
-    return subprocess.run(["git", "-C", ROOT, *args], text=True, capture_output=True, check=check)
+    return subprocess.run(["git", "-C", ROOT, *args], text=True, capture_output=True, check=check,
+                          encoding="utf-8", errors="replace")
 
 
 def _changed() -> set[str]:
@@ -1857,7 +1883,8 @@ def fetch_master() -> None:
 def _fetch(*spec: str) -> bool:
     try:
         return subprocess.run(["git", "-C", ROOT, "fetch", "-q", "origin", *spec],
-                              capture_output=True, text=True, timeout=60).returncode == 0
+                              capture_output=True, text=True, timeout=60,
+                              encoding="utf-8", errors="replace").returncode == 0
     except (OSError, subprocess.TimeoutExpired):
         return False
 
@@ -1888,7 +1915,8 @@ def push_claim() -> str:
     try:
         r = subprocess.run(["git", "-C", ROOT, "push", "-q", "origin",
                             "%s:%s%s" % (sha, CLAIM_REFS, app)],
-                           capture_output=True, text=True, timeout=60, env=env)
+                           capture_output=True, text=True, timeout=60, env=env,
+                           encoding="utf-8", errors="replace")
     except (OSError, subprocess.TimeoutExpired):
         return ""
     if r.returncode == 0:
@@ -2019,7 +2047,7 @@ def claim(taken: bool = False) -> None:
     r = _git("log", "-1", "--format=%H", f"--grep={SYNC_SUBJECT}", "HEAD").stdout.strip()
     if r:
         try:
-            with open(_marker(), "w", encoding="utf-8") as f:
+            with open(_marker(), "w", encoding="utf-8", newline="\n") as f:
                 f.write(("taken " if taken else "") + r + "\n")
         except OSError:
             pass
@@ -2036,13 +2064,13 @@ def _listed_path() -> str:
 def remember_listed(rows: list[tuple[Upgrade, str]]) -> None:
     sha, _when, _app = _sync_head()
     try:
-        with open(_listed_path(), "w", encoding="utf-8") as fh:
+        with open(_listed_path(), "w", encoding="utf-8", newline="\n") as fh:
             json.dump({"sync": sha, "ids": [u.id for u, _ in rows]}, fh)
     except OSError:
         pass
 
 
-def _listed_ids() -> list[str]:
+def listed_ids() -> list[str]:
     try:
         with open(_listed_path(), encoding="utf-8") as fh:
             got = json.load(fh)
@@ -2050,6 +2078,9 @@ def _listed_ids() -> list[str]:
         return []
     return [i for i in (got.get("ids") or []) if isinstance(i, str)] \
         if isinstance(got, dict) and got.get("sync") == _sync_head()[0] else []
+
+
+_listed_ids = listed_ids  # the module's own name for it; other modules call listed_ids
 
 
 def already_in_place(rows: list[tuple[Upgrade, str]]) -> list[str]:
@@ -2094,16 +2125,25 @@ def run_instant(rows: list[tuple[Upgrade, str]]) -> list[str]:
     for u, _why in rows:
         if u.cost != "instant" or not u.command:
             continue
-        r = subprocess.run(list(u.command), cwd=ROOT, text=True, capture_output=True, timeout=600)
+        # The Python running this one, not whatever `python3` names: on a Windows computer
+        # with python.org's Python `python3` is a Store stand-in that exits 49, and the
+        # upgrade said "not applied" on every sync (build_versions.redo does the same).
+        argv = [sys.executable if u.command[0] == "python3" else u.command[0], *u.command[1:]]
+        try:
+            rc = subprocess.run(argv, cwd=ROOT, text=True, capture_output=True, timeout=600,
+                                encoding="utf-8", errors="replace").returncode
+            failed = f"exit {rc}" if rc else ""
+        except (OSError, subprocess.TimeoutExpired) as e:
+            failed = f"it could not run: {type(e).__name__}"
         touched = sorted(_changed())
         stray = [p for p in touched
                  if not is_personal(p) or not any(fnmatch.fnmatch(p, g) for g in u.paths)]
-        if r.returncode != 0 or stray:
+        if failed or stray:
             _git("checkout", "--", ".")
             _git("clean", "-fdq", "--", *touched) if touched else None
             notes.append(f"{u.id}: not applied ("
-                         + (f"exit {r.returncode}" if r.returncode else
-                            f"it touched {', '.join(stray[:3])}, outside its own files") + ")")
+                         + (failed or f"it touched {', '.join(stray[:3])}, outside its own files")
+                         + ")")
             continue
         if touched:
             _git("add", "-f", "--", *touched)
@@ -2141,7 +2181,7 @@ def main(argv: list[str] | None = None) -> int:
         return 0                                    # the app, or a repo before /setup
     if a.no:
         p = record_no(a.no)
-        print(f"profile_upgrades: their no to {a.no} kept in {os.path.relpath(p, ROOT)}; asked "
+        print(f"profile_upgrades: their no to {a.no} kept in {local_path.rel(p, ROOT)}; asked "
               f"again when the question changes or after {REASK_DAYS} days. Say only: "
               f"\"{NO_REPLY}\"")
         return 0
@@ -2175,6 +2215,10 @@ def main(argv: list[str] | None = None) -> int:
             return 2
         why = upgrade.pending()
         print(why or "done")
+        if why and upgrade.every:
+            # The pending line names a few; /upgrade asks about each (upgrade.md step 5).
+            for item in upgrade.every():
+                print(f"  - {item}")
         return 1 if why else 0
     if _personal_repo() and (a.after or a.plan):
         fetch_master()
@@ -2242,6 +2286,7 @@ def main(argv: list[str] | None = None) -> int:
                   "python3 tools/profile_upgrades.py --take")
         else:
             print("Profile upgrades: none pending.")
+        say_page()
         return 0
     if a.after:
         claim()
@@ -2271,7 +2316,21 @@ def main(argv: list[str] | None = None) -> int:
         remember_listed(rows)
     text = block(rows)
     print(text or "Profile upgrades: none pending.")
+    say_page()
     return 0
+
+
+def say_page() -> None:
+    """The person's page, missing or out of date, said where every sync prints: this file is
+    always the copy the sync just brought in, so a chat whose instructions predate the page
+    still publishes it (tools/app_setup.py page_line). Never breaks the sync."""
+    try:
+        import app_setup
+        said = app_setup.page_line()
+    except Exception:  # noqa: BLE001
+        said = ""
+    if said:
+        print(said)
 
 
 if __name__ == "__main__":

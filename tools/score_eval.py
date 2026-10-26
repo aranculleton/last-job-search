@@ -20,9 +20,9 @@ So: score every fixture, compare against the recorded baseline, and report the
 drift. `--update` re-records, which is a deliberate act that shows up in a diff
 next to the change that caused it.
 
-On top of the baseline sit EXPECTATIONS, which are the assertions that can be
-defended without knowing an exact number: this posting must clear the floor,
-this junior one must not, this one must be gated. Those hold across any
+On top of the baseline sit the expectations, which are the assertions that can be
+defended without knowing an exact number, and each fixture's name says its own: a
+`cut__` posting must be gated, a `pass__` one must not. Those hold across any
 retuning, and a change that breaks one is wrong rather than merely different.
 
 Usage:
@@ -38,6 +38,7 @@ import argparse
 import json
 import os
 import sys
+from collections.abc import Mapping
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 sys.path.insert(0, os.path.join(ROOT, "tools"))
@@ -59,22 +60,51 @@ BASELINE = person.path("tests", "fixtures", "score_baseline.json")
 # real change, large enough that rounding does not cry wolf.
 DEFAULT_TOLERANCE = 3
 
-# What must hold whatever the weights are retuned to. Keyed by fixture stem.
+# What must hold whatever the weights are retuned to, read from each fixture's name.
 #
-# These are deliberately few. An expectation is only worth writing where the
-# answer is defensible without knowing the exact number, and most postings are
-# not like that. "It must clear the fit floor" is defensible for a role that is
-# the candidate's own job in their city; "it must score 83" is not.
-EXPECTATIONS: dict[str, dict] = {
-    "cut__research_ml_core": {"screened": True,
-                              "why": "core is research ML, a hard cut"},
-    "cut__french_job_title": {"screened": True,
-                              "why": "French stated as a requirement"},
-    "cut__mandarin_required": {"screened": True,
-                               "why": "a language bar is a hard cut"},
-    "cut__actuarial_designation": {"screened": True,
-                                   "why": "a credential gate, not a skills gap"},
+# An expectation is only worth writing where the answer is defensible without knowing
+# the exact number, and a fixture's name is that answer: the corpus names every file
+# `cut__*` or `pass__*` for what must happen to it (MAINTAINING.md, "Adding a test").
+# These were four stems of one person's corpus written out here, so every other
+# person's corpus failed on four files it never had, the run straight after --update
+# included.
+EXPECTED_BY_NAME = {
+    "cut__": {"screened": True, "why": "named cut__: it must keep being cut"},
+    "pass__": {"screened": False, "why": "named pass__: it must keep passing"},
 }
+
+
+def expectations(stems) -> dict[str, dict]:
+    """{stem: what must hold} for the fixtures there are, from their names."""
+    return {stem: want for stem in stems for prefix, want in EXPECTED_BY_NAME.items()
+            if stem.startswith(prefix)}
+
+
+class _HardCuts(Mapping):
+    """The hard cuts of the corpus there is: {stem: what must hold} for its `cut__` postings,
+    read each time it is looked at, so a corpus changed since import is the one read."""
+
+    def _now(self) -> dict[str, dict]:
+        stems = sorted(n[:-4] for n in os.listdir(CORPUS) if n.endswith(".txt")) \
+            if os.path.isdir(CORPUS) else []
+        return {s: w for s, w in expectations(stems).items() if s.startswith("cut__")}
+
+    def __getitem__(self, stem):
+        return self._now()[stem]
+
+    def __iter__(self):
+        return iter(self._now())
+
+    def __len__(self):
+        return len(self._now())
+
+
+# Kept for the people whose own tests use it (profile/tests): the name this module's
+# expectations had until 2026-10-25, when it was four stems of one person's corpus written
+# out, all four hard cuts. It now reads the cuts of whatever corpus there is; expectations()
+# and EXPECTED_BY_NAME are what the check reads, `pass__` postings included. A public name
+# stays while a test may.
+EXPECTATIONS: Mapping[str, dict] = _HardCuts()
 
 
 def _title_and_location(text: str) -> tuple[str, str]:
@@ -163,11 +193,8 @@ def compare(now: list[dict], before: dict, tolerance: int) -> list[str]:
 def check_expectations(now: list[dict]) -> list[str]:
     broken = []
     by_stem = {r["stem"]: r for r in now}
-    for stem, want in EXPECTATIONS.items():
-        row = by_stem.get(stem)
-        if row is None:
-            broken.append(f"MISSING {stem}: expected in the corpus")
-            continue
+    for stem, want in expectations(by_stem).items():
+        row = by_stem[stem]
         for field, value in want.items():
             if field == "why":
                 continue
@@ -190,7 +217,7 @@ def main() -> int:
 
     now = [evaluate(c) for c in cases()]
     if a.update:
-        with open(BASELINE, "w", encoding="utf-8") as fh:
+        with open(BASELINE, "w", encoding="utf-8", newline="\n") as fh:
             json.dump({r["stem"]: r for r in now}, fh, indent=1, sort_keys=True)
             fh.write("\n")
         print(f"score_eval: baseline re-recorded over {len(now)} postings")

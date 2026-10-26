@@ -13,6 +13,8 @@ import sys
 import zipfile
 from pathlib import Path
 
+import pytest
+
 ROOT = Path(__file__).resolve().parent.parent
 sys.path[:0] = [str(ROOT / "tools"), str(ROOT / "tools" / "network")]
 
@@ -22,6 +24,14 @@ import state  # noqa: E402
 
 FIX = ROOT / "tests" / "fixtures" / "linkedin_export"
 TODAY = datetime.date(2026, 10, 21)
+
+
+@pytest.fixture(autouse=True)
+def _utc_clock(monkeypatch):
+    """The download's times are UTC and are read on the person's own clock; these fixtures'
+    days and times are pinned on a UTC clock, so the file gives one answer on any computer
+    (tests/test_an_export_is_read_on_the_persons_own_clock.py covers the other zones)."""
+    monkeypatch.setattr(E, "HERE", datetime.timezone.utc)
 
 
 def _book(tmp_path):
@@ -49,6 +59,10 @@ def test_one_reader_finds_a_header_in_any_case_below_its_notes_and_names_what_is
     msgs = tmp_path / "messages.csv"
     msgs.write_text("FROM,DATE,CONTENT\nJuno Castellan,2026-09-12 08:40:00 UTC,\"Line one.\n\n"
                     "Line two.\"\n", encoding="utf-8")
+    got = E.read("messages", str(msgs))
+    assert len(got["rows"]) == 1 and got["rows"][0]["CONTENT"] == "Line one.\n\nLine two."
+    # The same file saved with CRLF, as Windows and a spreadsheet save it: the same words.
+    msgs.write_bytes(msgs.read_bytes().replace(b"\r\n", b"\n").replace(b"\n", b"\r\n"))
     got = E.read("messages", str(msgs))
     assert len(got["rows"]) == 1 and got["rows"][0]["CONTENT"] == "Line one.\n\nLine two."
     assert "ATTACHMENTS" in got["missing"] and got["usable"]

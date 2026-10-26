@@ -104,7 +104,7 @@ class TestCli(unittest.TestCase):
         script = REPO_ROOT / "tools" / "robots_check.py"
         self.assertTrue(script.is_file())
         out = subprocess.run(
-            [sys.executable, str(script)], capture_output=True, text=True, timeout=30
+            [sys.executable, str(script)], capture_output=True, text=True, encoding="utf-8", errors="replace", timeout=30
         )
         # No URL argument: must fail loudly rather than defaulting to "allowed".
         self.assertNotEqual(out.returncode, 0)
@@ -242,7 +242,7 @@ class TestArgumentHardening(unittest.TestCase):
         out = subprocess.run(
             [sys.executable, str(script), "--help"],
             capture_output=True,
-            text=True,
+            text=True, encoding="utf-8", errors="replace",
             timeout=60,
         )
         self.assertEqual(out.returncode, 1)

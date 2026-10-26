@@ -20,8 +20,8 @@ Follow these steps **in order**.
 
 ## Step 1: Portal Basics, worked out, never asked
 
-Nobody is asked to name a job board or a config value (CLAUDE.md, "Claude does the
-tailoring"). Work each out, and say what you chose in one line:
+Nobody is asked to name a job board or a config value (`/setup`, Step 2: "Never ask them to
+name a job board"). Work each out, and say what you chose in one line:
 
 1. **Portal URL** - from `$ARGUMENTS`, else the board `profile/search.py` `PORTAL_RESEARCH`
    names with no portal yet (`python3 tools/portals.py` lists them), else found the way

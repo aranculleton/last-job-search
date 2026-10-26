@@ -1,0 +1,286 @@
+{
+  "name": "Public sector and government",
+  "field": "public-sector",
+  "aka": [
+    "public sector",
+    "government",
+    "civil service",
+    "public service",
+    "federal"
+  ],
+  "boards": {
+    "us": [
+      {
+        "name": "USAJOBS",
+        "url": "https://www.usajobs.gov",
+        "kind": "field",
+        "source": "https://www.usajobs.gov/",
+        "quote": "USAJOBS - The Federal Government's official employment site",
+        "checked": "2026-10-25",
+        "verified": true,
+        "search": "https://www.usajobs.gov/search/results/?k=analyst",
+        "paths": {
+          "search": "/search/results/?k=analyst",
+          "posting": "/job/"
+        },
+        "robots": {
+          "checked": "2026-10-25",
+          "why": "",
+          "search": true,
+          "status": "allowed",
+          "posting": true,
+          "crawl_delay": null,
+          "ai_input": null
+        },
+        "public_search": {
+          "checked": "2026-10-25",
+          "status": "open",
+          "http": 200
+        }
+      }
+    ],
+    "gb": [
+      {
+        "name": "Civil Service Jobs",
+        "url": "https://www.civilservicejobs.service.gov.uk",
+        "kind": "field",
+        "source": "https://en.wikipedia.org/wiki/Civil_Service_(United_Kingdom)",
+        "quote": "",
+        "checked": "2026-10-25",
+        "verified": false,
+        "why": "no sentence on the page says it (looked for: Civil Service Jobs)",
+        "search": "https://www.civilservicejobs.service.gov.uk/csr/index.cgi",
+        "paths": {
+          "search": "/csr/index.cgi",
+          "posting": "/csr/jobs.cgi"
+        },
+        "robots": {
+          "checked": "2026-10-25",
+          "why": "",
+          "search": true,
+          "status": "allowed",
+          "posting": true,
+          "crawl_delay": null,
+          "ai_input": null
+        },
+        "public_search": {
+          "checked": "2026-10-25",
+          "status": "open",
+          "http": 200
+        }
+      }
+    ],
+    "au": [
+      {
+        "name": "APSJobs",
+        "url": "https://www.apsjobs.gov.au",
+        "kind": "field",
+        "source": "https://en.wikipedia.org/wiki/Australian_Public_Service",
+        "quote": "",
+        "checked": "2026-10-25",
+        "verified": false,
+        "why": "no sentence on the page says it (looked for: APSJobs)",
+        "search": "https://www.apsjobs.gov.au/s/job-search",
+        "paths": {
+          "search": "/s/job-search",
+          "posting": "/s/job-details"
+        },
+        "robots": {
+          "checked": "2026-10-25",
+          "why": "",
+          "search": true,
+          "status": "allowed",
+          "posting": true,
+          "crawl_delay": null,
+          "ai_input": null
+        },
+        "public_search": {
+          "checked": "2026-10-25",
+          "status": "open",
+          "http": 200
+        }
+      }
+    ],
+    "nz": [
+      {
+        "name": "jobs.govt.nz",
+        "url": "https://jobs.govt.nz",
+        "kind": "field",
+        "source": "https://jobs.govt.nz/",
+        "quote": "Our Public Service works together to make a meaningful difference for New Zealanders",
+        "checked": "2026-10-25",
+        "verified": true,
+        "search": "https://jobs.govt.nz/",
+        "paths": {
+          "search": "/",
+          "posting": null
+        },
+        "robots": {
+          "checked": "2026-10-25",
+          "why": "",
+          "search": true,
+          "status": "allowed",
+          "posting": null,
+          "crawl_delay": null,
+          "ai_input": null
+        },
+        "public_search": {
+          "checked": "2026-10-25",
+          "status": "open",
+          "http": 200
+        }
+      }
+    ],
+    "ie": [
+      {
+        "name": "publicjobs.ie",
+        "url": "https://www.publicjobs.ie",
+        "kind": "field",
+        "source": "https://www.publicjobs.ie/",
+        "quote": "publicjobs is the leading provider of recruitment, assessment & selection services for Civil Services in Ireland",
+        "checked": "2026-10-25",
+        "verified": true,
+        "search": "https://www.publicjobs.ie/en/",
+        "paths": {
+          "search": "/en/",
+          "posting": "/en/job/"
+        },
+        "robots": {
+          "checked": "2026-10-25",
+          "why": "",
+          "search": true,
+          "status": "allowed",
+          "posting": true,
+          "crawl_delay": null,
+          "ai_input": null
+        },
+        "public_search": {
+          "checked": "2026-10-25",
+          "status": "open",
+          "http": 200
+        }
+      }
+    ],
+    "fr": [
+      {
+        "name": "Choisir le service public",
+        "url": "https://choisirleservicepublic.gouv.fr",
+        "kind": "field",
+        "source": "https://choisirleservicepublic.gouv.fr/",
+        "quote": "Ce site propose des offres d'emplois publiées par les employeurs des Fonctions Publiques d'Etat, Territoriale et Hospitalière",
+        "checked": "2026-10-25",
+        "verified": true,
+        "search": "https://choisirleservicepublic.gouv.fr/nos-offres/",
+        "paths": {
+          "search": "/nos-offres/",
+          "posting": "/offre-emploi/"
+        },
+        "robots": {
+          "checked": "2026-10-25",
+          "why": "",
+          "search": true,
+          "status": "allowed",
+          "posting": true,
+          "crawl_delay": null,
+          "ai_input": null
+        },
+        "public_search": {
+          "checked": "2026-10-25",
+          "status": "open",
+          "http": 200
+        }
+      }
+    ],
+    "nl": [
+      {
+        "name": "Werken voor Nederland",
+        "url": "https://www.werkenvoornederland.nl",
+        "kind": "field",
+        "source": "https://www.werkenvoornederland.nl/",
+        "quote": "Net als Nederland zelf is de Rijksoverheid continu in beweging",
+        "checked": "2026-10-25",
+        "verified": true,
+        "search": "https://www.werkenvoornederland.nl/vacatures",
+        "paths": {
+          "search": "/vacatures",
+          "posting": "/vacatures/"
+        },
+        "robots": {
+          "checked": "2026-10-25",
+          "why": "",
+          "search": true,
+          "status": "allowed",
+          "posting": true,
+          "crawl_delay": null,
+          "ai_input": null
+        },
+        "public_search": {
+          "checked": "2026-10-25",
+          "status": "open",
+          "http": 200
+        }
+      }
+    ]
+  },
+  "documents": {
+    "us": [
+      {
+        "topic": "federal_resume",
+        "value": "a federal resume, longer than a private-sector one, with hours a week and each duty's dates",
+        "source": "https://en.wikipedia.org/wiki/USAJOBS",
+        "quote": "",
+        "checked": "2026-10-25",
+        "verified": false,
+        "why": "the sentence found on the page does not say it"
+      }
+    ],
+    "gb": [
+      {
+        "topic": "success_profiles",
+        "value": "applications are judged on the Civil Service Success Profiles (behaviours, experience, technical)",
+        "source": "https://en.wikipedia.org/wiki/Civil_Service_(United_Kingdom)",
+        "quote": "",
+        "checked": "2026-10-25",
+        "verified": false,
+        "why": "no sentence on the page says it (looked for: Success Profiles)"
+      }
+    ]
+  },
+  "titles": [
+    {
+      "value": [
+        "Administrative Officer",
+        "Executive Officer",
+        "Higher Executive Officer",
+        "Senior Executive Officer",
+        "Grade 7",
+        "Grade 6"
+      ],
+      "source": "https://en.wikipedia.org/wiki/Civil_Service_(United_Kingdom)",
+      "quote": "Higher xxx Officer (HxO) Higher Executive Officer , Process & General Supervisory Grade C P&GS C, HEO, Band C2",
+      "on_page": [
+        "Administrative Officer",
+        "Executive Officer",
+        "Higher Executive Officer",
+        "Senior Executive Officer",
+        "Grade 7",
+        "Grade 6"
+      ],
+      "checked": "2026-10-25",
+      "verified": true
+    }
+  ],
+  "pay": {
+    "us": [
+      {
+        "name": "General Schedule pay tables",
+        "url": "https://www.opm.gov/policy-data-oversight/pay-leave/salaries-wages/",
+        "what": "federal pay by grade and locality",
+        "source": "https://en.wikipedia.org/wiki/General_Schedule_(US_civil_service_pay_scale)",
+        "quote": "The General Schedule ( GS ) is the predominant pay scale within the United States civil service .",
+        "checked": "2026-10-25",
+        "verified": true
+      }
+    ]
+  }
+}

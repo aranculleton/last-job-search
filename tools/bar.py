@@ -58,7 +58,7 @@ sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import company_key as _ck  # noqa: E402
 from company_key import key as company_key  # noqa: E402
 from opportunity import YC_AND_BACKED, _names_in, tier  # noqa: E402
-from sector import TECH_COMPANIES  # noqa: E402
+from sector import tech_name  # noqa: E402
 from text_screen import salary_range  # noqa: E402
 
 EXCLUDED, PAY, PRESTIGE, SIGNAL, NONE = "excluded", "pay", "prestige", "signal", "none"
@@ -189,7 +189,7 @@ def _one_writer(p: str):
     each wrote their own row over the other's, or crashed on the shared temporary file."""
     lock = os.path.join(tempfile.gettempdir(), "ljs-judged-%s.lock"
                         % hashlib.sha1(os.path.abspath(p).encode()).hexdigest()[:16])
-    with open(lock, "a+") as fh:
+    with open(lock, "a+", encoding="utf-8", newline="\n") as fh:
         try:
             import fcntl
             fcntl.flock(fh, fcntl.LOCK_EX)
@@ -222,7 +222,7 @@ def judge(company: str, what: str, why: str, today: str | None = None) -> str:
                 if not (isinstance(r, dict) and own_name(r.get("name") or k) == name)}
         rows[name] = {"name": company, "verdict": what, "why": why,
                       "date": today or datetime.date.today().isoformat()}
-        tmp = tempfile.NamedTemporaryFile("w", dir=os.path.dirname(p) or ".", delete=False,
+        tmp = tempfile.NamedTemporaryFile("w", newline="\n", dir=os.path.dirname(p) or ".", delete=False,
                                           encoding="utf-8", suffix=".tmp")
         with tmp:
             json.dump(dict(sorted(rows.items())), tmp, indent=2, ensure_ascii=False)
@@ -244,7 +244,7 @@ def listed(company: str | None) -> bool:
         return True
     c = f" {k} "
     return bool(_names_in(c, FRONTIER) or _names_in(c, YC_AND_BACKED)
-                or _names_in(c, TECH_COMPANIES))
+                or tech_name(name) or tech_name(k))
 
 
 def verdict(company: str | None, posting: str = "") -> tuple[str, str]:
@@ -286,7 +286,7 @@ def verdict(company: str | None, posting: str = "") -> tuple[str, str]:
         hit = _names_in(c, YC_AND_BACKED)
         if hit:
             return SIGNAL, f"YC or top-tier backed ({hit})"
-        hit = _names_in(c, TECH_COMPANIES)
+        hit = tech_name(name) or tech_name(k)
         if hit:
             return SIGNAL, f"established technology company ({hit})"
     if score < 0 or collided:
@@ -309,7 +309,7 @@ def unjudged(path: str | None = None) -> list[str]:
     that no list names and nobody has judged, each once, in shortlist order."""
     if not path:
         from run_round import round_order
-        found = sorted(glob.glob(person.state("documents", "rounds", "*.json")),
+        found = sorted(glob.glob(os.path.join(glob.escape(person.state("documents", "rounds")), "*.json")),
                        key=round_order)
         if not found:
             return []

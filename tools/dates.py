@@ -69,7 +69,24 @@ def as_date(value, *, iso_only: bool = False,
         return value.date()
     if isinstance(value, datetime.date):
         return value
-    text = " ".join(str(value if value is not None else "").split())
+    raw = str(value if value is not None else "")
+    k = (raw, iso_only, anywhere)
+    if k not in _READ:
+        if len(_READ) >= 8192:
+            _READ.clear()
+        _READ[k] = _from_text(raw, iso_only, anywhere)
+    return _READ[k]
+
+
+# What each text read as: a page build reads the same few thousand dates about a hundred
+# thousand times, and the same text always gives the same date. A plain dict, so this
+# module still imports nothing beyond the date and pattern modules.
+_READ: dict = {}
+
+
+def _from_text(raw: str, iso_only: bool, anywhere: bool) -> datetime.date | None:
+    """`as_date` on text."""
+    text = " ".join(raw.split())
     m = _ISO.match(text)
     if m:
         return _ymd(m)

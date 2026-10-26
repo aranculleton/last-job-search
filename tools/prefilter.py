@@ -375,14 +375,12 @@ def age_days(job: dict, today: _dt.date | None = None) -> int | None:
     """Days since the posting is known to have existed, or None when nothing says.
 
     The earliest of the portal's date, the day this search first saw it
-    (`first_seen`, from seen_jobs.json), the day a job alert sent it
-    (`alert_date`) and the oldest date another copy of it in the same round
-    carries (`copy_date`, `stamp_copies`). A portal relisting a posting gives it a
+    (`first_seen`, from seen_jobs.json) and the oldest date another copy of it in
+    the same round carries (`copy_date`, `stamp_copies`). A portal relisting a posting gives it a
     new date, so the portal's date alone let a month-old posting read as new.
     """
     ages = [a for a in (posted_age(job, today),
                         days_since(job.get("first_seen"), today, iso_only=True),
-                        days_since(job.get("alert_date"), today, iso_only=True),
                         days_since(job.get("copy_date"), today, iso_only=True))
             if a is not None]
     return max(ages) if ages else None
@@ -404,7 +402,7 @@ def stamp_copies(rows: list, today: _dt.date | None = None) -> list:
         d = copy_date(index, job) if isinstance(job, dict) else ""
         if d and not job.get("copy_date"):
             own = [x.isoformat() for x in (as_date(job.get(f), iso_only=True) for f in
-                                          ("date", "posted_date", "first_seen", "alert_date"))
+                                          ("date", "posted_date", "first_seen"))
                    if x is not None]
             if not own or d < min(own):
                 job = dict(job, copy_date=d)
@@ -551,7 +549,8 @@ def _ruled_on(ruled_out, entries: dict, today: _dt.date | None):
 
 
 # How a past ruling's reason opens (throttle.ruled_out): "<status> in seen_jobs.json: ...".
-RULED_IN_SEEN = ("excluded in seen_jobs.json", "skipped in seen_jobs.json")
+RULED_IN_SEEN = ("excluded in seen_jobs.json", "skipped in seen_jobs.json",
+                 "expired in seen_jobs.json")
 
 
 def already_ruled_out(seen_path: str, keep_ruled_out: bool = False,
@@ -636,7 +635,7 @@ def already_ruled_out(seen_path: str, keep_ruled_out: bool = False,
 
 def load_jobs(path: str) -> tuple[list, bool]:
     """Every stage reads a list or an id-keyed dict; returns (rows, was_dict)."""
-    data = json.load(open(path))
+    data = json.load(open(path, encoding="utf-8"))
     if isinstance(data, dict):
         if "seen" in data and isinstance(data["seen"], dict):
             data = data["seen"]
@@ -724,9 +723,9 @@ def main() -> int:
                 for i, r in enumerate(items)}
 
     if a.out:
-        json.dump(shape(kept), open(a.out, "w"), indent=1)
+        json.dump(shape(kept), open(a.out, "w", encoding="utf-8", newline="\n"), indent=1)
     if a.dropped:
-        json.dump(shape(dropped), open(a.dropped, "w"), indent=1)
+        json.dump(shape(dropped), open(a.dropped, "w", encoding="utf-8", newline="\n"), indent=1)
     return 0
 
 

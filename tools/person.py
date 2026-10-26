@@ -54,8 +54,71 @@ local_path.extend()
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 ENV = "LJS_PROFILE"
 DEFAULT = "profile"
+EXAMPLE = os.path.join(ROOT, "profile.example")
 
-SETUP_HINT = "no profile: run /setup"
+
+def in_example(path: str) -> bool:
+    """Is `path` inside the app's example person (profile.example/)? The app's own tests and
+    any chat in the app's checkout read it, so a tool run there records nothing into it."""
+    return os.path.realpath(path).startswith(os.path.realpath(EXAMPLE) + os.sep)
+
+
+def home_zone_named(profile_dir: str) -> str:
+    """The IANA zone the profile names for the person's own time (networking.py TIMEZONE,
+    else routines.json "timezone"), or "". Read as text, without running the profile, since
+    it is wanted before anything else has loaded."""
+    import re
+    iana = re.compile(r"\b[A-Z][A-Za-z]+(?:/[A-Za-z0-9_+-]+)+\b")
+    try:
+        with open(os.path.join(profile_dir, "networking.py"), encoding="utf-8") as fh:
+            m = re.search(r"^TIMEZONE\s*=\s*[\"'](.*?)[\"']", fh.read(), re.M)
+        z = iana.search(m.group(1)) if m else None
+        if z:
+            return z.group(0)
+    except OSError:
+        pass
+    try:
+        with open(os.path.join(profile_dir, "routines.json"), encoding="utf-8") as fh:
+            z = iana.fullmatch(str(json.load(fh).get("timezone") or ""))
+        return z.group(0) if z else ""
+    except (OSError, ValueError, AttributeError):
+        return ""
+
+
+def cloud_day(env=None, profile_dir: str | None = None) -> str:
+    """In a cloud chat, the person's own day: TZ set to their home zone, so `date.today()`
+    is their date and not the cloud computer's. A cloud computer runs on UTC, and the brief
+    for a person in Sydney, due on their Monday morning, was dated and worked out as Sunday
+    (found 2026-10-25). Only in a cloud chat (CLAUDE_CODE_REMOTE), only where TZ is unset
+    (an explicit TZ wins), only for the person's own profile (the app's own tests point
+    LJS_PROFILE at the example person, whose zone is not the computer's), and only for a
+    zone this computer has data for. Returns the zone it set, or ""."""
+    env = os.environ if env is None else env
+    if str(env.get("CLAUDE_CODE_REMOTE", "")).lower() != "true" or env.get("TZ") \
+            or env.get(ENV):
+        return ""
+    import time
+    if not hasattr(time, "tzset"):
+        return ""
+    zone = home_zone_named(profile_dir or os.path.join(ROOT, DEFAULT))
+    if not zone:
+        return ""
+    try:
+        import zoneinfo
+        zoneinfo.ZoneInfo(zone)
+    except Exception:  # noqa: BLE001  no data for that zone here: the computer's day stands
+        return ""
+    env["TZ"] = zone
+    if env is os.environ:
+        time.tzset()
+    return zone
+
+
+cloud_day()
+
+# Another chat may hold the profile, or be writing it: look before starting again (2026-10-25).
+SETUP_HINT = ("no profile here: run `python3 tools/place.py state` first (another chat may hold "
+              "it or be writing it), and run /setup only if it finds none")
 
 
 class NoProfile(RuntimeError):
@@ -100,7 +163,7 @@ def file(key: str, default: str) -> str:
 def _need(name: str) -> str:
     f = path(name)
     if not os.path.isfile(f):
-        raise NoProfile(f"the profile has no {name} ({f}). {SETUP_HINT} or add it")
+        raise NoProfile(f"the profile has no {name} ({f}): run /setup for that part, or add it")
     return f
 
 
@@ -174,7 +237,8 @@ def main_checkout() -> str | None:
     import subprocess
     try:
         r = subprocess.run(["git", "rev-parse", "--git-dir", "--git-common-dir"], cwd=ROOT,
-                           capture_output=True, text=True, timeout=10)
+                           capture_output=True, text=True, timeout=10,
+                           encoding="utf-8", errors="replace")
     except (OSError, subprocess.TimeoutExpired):
         return None
     got = r.stdout.split() if r.returncode == 0 else []
@@ -240,6 +304,51 @@ def paper(kind: str = "resume") -> str:
     if get("documents.paper", ""):
         return get("documents.paper")
     return "letterpaper" if country() in LETTER_COUNTRIES else "a4paper"
+
+
+REMOVE = object()
+
+
+def update(change) -> dict:
+    """Change person.json in one place, atomically: `change(data)` edits the parsed file in
+    place, and the file is written whole (a temporary file, then a rename, so a reader never
+    sees half of it). The one writer of person.json; returns the data written."""
+    import json
+    p = path("person.json")
+    with open(p, encoding="utf-8") as fh:
+        data = json.load(fh)
+    change(data)
+    tmp = p + ".tmp"
+    with open(tmp, "w", encoding="utf-8", newline="\n") as fh:
+        json.dump(data, fh, indent=2, ensure_ascii=False)
+        fh.write("\n")
+    os.replace(tmp, p)
+    reset()
+    return data
+
+
+def put(dotted, value) -> object:
+    """One value in person.json by dotted key (or a list of keys, for a name with a dot in
+    it); REMOVE takes it out. Returns what was there before (_MISSING when nothing was)."""
+    parts = list(dotted) if isinstance(dotted, (list, tuple)) else str(dotted).split(".")
+    seen = {}
+
+    def change(data):
+        here = data
+        for k in parts[:-1]:
+            if not isinstance(here.get(k), dict):
+                here[k] = {}
+            here = here[k]
+        seen["before"] = here.get(parts[-1], _MISSING)
+        if value is REMOVE:
+            here.pop(parts[-1], None)
+        else:
+            here[parts[-1]] = value
+    update(change)
+    return seen["before"]
+
+
+MISSING = _MISSING
 
 
 def reset() -> None:

@@ -165,3 +165,356 @@ Fernhill Realty         # invented employer, the same test
 Northgate Quant Partners    # invented employer, the same test
 Quantitative Analyst    # a job title, the same test
 Quant Research          # a job title, the same test
+Windows Subsystem      # a product: Microsoft's Windows Subsystem for Linux (WSL), quoted from the Chrome docs
+Microsoft Edge      # a product: Microsoft's browser, quoted from the Claude Code docs
+Launch Claude       # a phrase quoted from the desktop app's docs ("Launch Claude from ..."), not a name
+Wren Con                # invented, tests/test_a_name_every_computer_accepts.py
+Juno Nul                # invented, the same test
+Pell Aux                # invented, the same test
+Ρεν Άλαρντ              # invented: the fixtures' Wren Allard in Greek letters, the same test
+User Shell Folders      # a Windows registry key, tools/network/export.py
+Zoë Ångström-Núñez       # invented: the accented name tools/platform_check.py renders a resume for
+Ørkenvik Logistik        # invented: an employer in the LinkedIn download tools/platform_check.py reads
+Riverside Cafe          # invented, the example line in tools/history_interview.py
+Café Brûlé              # invented, tests/test_a_person_without_a_resume_leaves_with_one.py
+Install Certificates     # python.org's own script for a Mac ("Install Certificates.command"), not a name
+# Fonts and the words of their licence: templates/doc_design.py and cover_letters/OpenFonts/fonts/*/OFL.txt.
+Liberation Serif        # a font, vendored under the SIL Open Font License
+Times New Roman's       # a font, named for the widths Liberation Serif shares
+Copyright Holder        # a defined term of the SIL Open Font License
+Modified Version        # a defined term of the SIL Open Font License
+Modified Versions       # the same term
+No Modified Version     # the same licence's wording
+Easy Apply          # a job board's badge after a title, tests/test_a_title_is_the_title_not_the_card.py
+Actively hiring     # a job board's badge after a title, tests/test_a_title_is_the_title_not_the_card.py
+New Grad            # a job title ("Software Engineer, New Grad"), tools/scrape_wide.py
+Oakmere Foods's     # invented employer, tests/test_the_link_shown_is_the_link_to_click.py
+Federal Reserve         # an institution, a news query in tools/brief.py
+European Central Bank   # an institution, the same
+Atkinson Hyperlegible Mono  # a typeface from Google Fonts, templates/app/app.css
+Ana O'Neil
+Brannoc Wexley
+Brannoc van Wexley
+Dara D'Arcwell
+Dokimi Analysi
+Jane O'Neill-Doe
+Ines de la Quarvo
+Orla O'Fennick
+Primer Dannye
+Société de Brévanne
+Université de Lumière
+Δοκιμή Ανάλυση
+Пример Данные
+Orla O’Fennick
+Git Bash's          # a product (Git for Windows' shell), possessive in a commit message
+Ash Brook           # invented, tests/test_a_card_says_what_is_wrong_and_suggests_once.py
+Rue Upcott          # invented person, the same
+Tam Orme            # invented person, the same
+Teal Freight        # invented employer, the same
+Sedge Energy        # invented employer, the same
+Microsoft Foundry   # a product, the same
+Zero Data Retention # an Anthropic product term
+Kit Marden          # invented person, tests/test_a_tweak_changes_one_thing_and_keeps_its_word.py
+# Public names in the market tables (tools/markets/): organisations, places, job titles
+# and products, as the pages each fact cites write them. None is a person.
+Abu Dhabi
+Account Representative
+Accreditation Scheme
+Accredited Employer
+Accredited Employer Work Visa
+Adjunct Mathematics Instructor
+Administrative Analyst
+Administrative Officer
+Adobe Distiller
+Adobe InDesign
+Aichi Prefecture
+Al Ain
+Amostra de Domicílio
+Annual Survey
+Aotearoa New Zealand
+Application Integration Engineer
+Art Teacher
+Assistant Professor
+Associate Professor
+Australian Bureau
+Bangladesh Oceania
+Banquet Manager
+Basic Survey
+Belo Horizonte
+Belo Horizonte Metropolitan
+Bentley MicroStation
+Beschäftigungsstatistik der Bundesagentur
+BioArray Software Environment
+Blackbaud The Raiser's Edge
+Blackboard Learn
+Brand Designer
+Brazilian Portuguese
+British Columbia
+Canary Wharf
+Cape Town
+CareerOneStop Job Finder
+Carteira de Trabalho
+Catering Manager
+Central Statistics Office
+Centralna Baza Ofert Pracy
+Certified Operating Room Nurse
+Chartered Accountants
+Chartered Accountants Australia
+Chartered Engineers
+Chef Hot Technology
+Ciudad de México
+Civil Engineer
+Civil Service Jobs
+Civil Service Success Profiles
+Civil Services
+Civil Services Vacancies
+Client Services Administrator
+Clinical Lab Scientist
+Clinical Laboratory Scientist
+Clinical Pharmacologist
+Communications Consultant
+Communications Specialist
+Competitività Come
+Comunidad de Madrid
+Content Strategist
+Contract Grant Writer
+Control Electrician
+Cork Airport
+Cork City
+Corporate Recruiter
+County Cork
+County Galway
+Credit Products Officer
+Critical Skills Employment Permit
+Dassault Systemes SolidWorks
+Den Haag
+Deutsche Staatsangehörigkeit
+Die Europäische Metropolregion Hamburg
+Die Metropolregion München
+Die Sicherheitsüberprüfung
+Downtown Core
+Dribbble Jobs
+Dubai Marina
+Dublin Metropolitan Area
+Duque de Caxias
+East Region
+Edwards EnterpriseOne
+El Número de Identidad de Extranjero
+Electrical Journey Person
+Employ Florida
+Employee Earnings
+Employment Representative
+Employment Service Center
+Encuesta Nacional de Ocupación
+Encuesta de Estructura Salarial
+English Teacher
+Enhanced Developed Vetting
+Equity Research Analyst
+Estado de México
+European Economic Area
+Explore Gulf
+Federative Republic
+Financial Auditor
+Financial Industry Regulatory Authority
+Fonctions Publiques
+France Travail
+Fundraising Consultant
+Gebietskörperschaften der Landeshauptstadt München
+General Counsel
+General Employment Permit
+General Securities Representative
+General Supervisory Grade
+Geotechnical Engineer
+Golden Visa
+Gouvernement du Québec
+Grande Rio
+Grande São Paulo
+Grant Coordinator
+Graphic Artist
+Graphic Designer
+Great Britain
+Greater Brisbane
+Greater Melbourne
+Greater Montreal
+Guanabara Bay
+Górnośląsko-Zagłębiowska Metropolia
+Hong Kong
+Human Resources Analyst
+Human Resources Coordinator
+Human Resources Generalist
+Industrial Electrician
+InfoJobs Brasil
+InfoJobs España
+InfoJobs Italia
+Inside Salesperson
+Instituto Brasileiro de Geografia
+Internal Auditor
+Internship Programs
+Intuit QuickBooks
+Irish Salary Survey
+Istat Vai
+Jebel Ali
+Jobsuche der Bundesagentur
+Jurong East
+Khalifa City
+Kitchen Manager
+L'Hospitalet de Llobregat
+La Défense
+Labour Force Survey
+Las Rozas
+Law Gazette Jobs
+Law Society
+Logan City
+Long Beach
+Long Island
+Lower Hutt
+Lower Mainland
+Maintenance Electrician
+Manukau Harbour
+Marina Bay
+Math Teacher
+Mathematics Lecturer
+Mathematics Teacher
+Medical Researcher
+Metro Vancouver
+Metropolitan City
+Metropolregion Berlin
+Metropolregion Hamburg
+Metropolregion München
+Metropoolregio Amsterdam
+Mexican Spanish
+Microsoft Publisher
+Middle East
+Midwifery Council
+Moreton Bay
+Mumbai Metropolitan Region
+Métropole de Lyon
+National Vetting Bureau
+Nationale Vacaturebank
+Nature Careers
+Naukri JobSpeak
+Navi Mumbai
+New Delhi
+New Zealanders
+North Shore
+Novo Caged
+Número de Identidad de Extranjero
+Observatorio Laboral
+Occupational Employment
+Occupational Wages
+Oggi Subito
+Ogólnopolskie Badanie Wynagrodzeń
+Oracle Eloqua
+Oracle PeopleSoft
+Oracle Primavera Enterprise Project
+Orange County
+Organizational Development Consultant
+Osservatorio JobPricing
+Outside Sales Representative
+Overseas Citizen
+Papua New Guinea
+Performance Management Analyst
+Periodic Labour Force Survey
+Pesquisa Nacional
+Philanthropy Officer
+Portal del Empleo
+Production Artist
+Prozent der Gesamtbevölkerung der Metropolregion
+Publications Designer
+Qualified Teacher Status
+Quarterly Employment Statistics
+Raffles Place
+Raiser's Edge
+Red Seal
+Redland City
+Relief Charge Nurse
+ReliefWeb Jobs
+Restaurant Manager
+Rio de Janeiro
+Roma Capitale
+Sage SalesLogix
+Sales Rep
+Sales Representative
+San Bernardino County
+San Pedro Garza García
+Santa Fe
+Science Teacher
+Secondary Teacher
+Sesto San Giovanni
+Singapore Citizen
+Singapore Standard English
+Skilled Worker
+SofterWare DonorPerfect
+Software GoldMine
+South Africa's
+South African
+South African English
+Southern Africa
+Southern California
+Statistics Sweden
+Statistisches Bundesamt
+Städte Augsburg
+Subito Lavoro
+São Bernardo
+São Gonçalo
+Teaching Resources
+The Construction Skills Certification
+The Federal Government's
+The Golden Residency
+The Hague
+The Law Society
+The Ministry
+The Series
+The Villeurbanne
+The Wellington
+Thema Verdienst
+Times Higher Education Unijobs
+Top Secret
+Trade Me Jobs
+Trade Me Property
+Uitvoeringsinstituut Werknemersverzekeringen
+Unii Europejskiej
+United Arab Emirates
+United Mexican States
+Upper Hutt
+Upper Silesian
+Urban Agglomeration
+Vaga Inteligente
+Ventura County
+Verklaring Omtrent
+Vilafranca del Penedès
+Vulnerable Persons
+Wage Statistics
+Wage Structure
+Waitākere Ranges
+We Work Remotely
+West Midlands
+Western Cape
+WorkBC Job Board
+Workforce Australia
+Working Nomads
+Àrea Metropolitana de Barcelona
+Überprüfung von Personen
+Świątniki Górne
+# Invented, tests/test_the_market_tables_are_cited_and_checked_by_code.py
+Unread Board
+Zed Widgets
+Widget Maker
+Widget Lead
+Alpha Lathe
+Beta Lathe
+Zed Grads
+Northern Zed
+Beta North
+Alpha Alpha North Beta
+Beta North Gamma Gamma
+AutoCAD Civil
+Google Ads
+Marketo Marketing Automation
+Wake Claude         # the page's button label for starting a chat that answers it (tools/app_listen.py), not a name
+Rafe                # an invented contact in the page's sample (tests/fixtures/app_model_sample.json)
+Noor                # an invented contact in the page's sample
+Tap Draft           # a tip telling the person which button to press (tools/tips.py), not a name
+Tap Prepare         # the same, for the interview pack's button
+Marisol             # an invented contact in the page's sample (tests/fixtures/app_model_sample.json)
+The Tweak           # the page's Tweak panel, named in a test's docstring, not a name

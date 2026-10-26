@@ -79,6 +79,11 @@ def _broken(reg, **change):
     ({"cron": "CRON_TZ=America/Chicago 56 7 * * *"}, "CRON_TZ=Europe/London"),
     ({"chat": {"title": "x", "session_id": "sess 1"}}, "not well formed"),
     ({"key": "job_round"}, "unique `key`"),
+    # Every run pays a whole chat again: an hourly task cost about 12M tokens a day.
+    ({"cron": "CRON_TZ=Europe/London 0 * * * *"}, "more than once a day"),
+    ({"cron": "CRON_TZ=Europe/London */30 7 * * *"}, "more than once a day"),
+    ({"cron": "CRON_TZ=Europe/London 38 7,19 * * 1-5"}, "more than once a day"),
+    ({"cron": "CRON_TZ=Europe/London 38 6-9 * * *"}, "more than once a day"),
 ])
 def test_a_broken_registry_fails_with_the_reason(change, says):
     problems = _broken(REG, **change)
@@ -109,7 +114,7 @@ def test_the_readme_stubs_are_what_the_tool_prints():
 
 def test_the_stub_cli_prints_a_tasks_prompt():
     p = subprocess.run([sys.executable, os.path.join(ROOT, "tools", "routines.py"),
-                        "stub", "job_round"], capture_output=True, text=True)
+                        "stub", "job_round"], capture_output=True, text=True, encoding="utf-8", errors="replace")
     assert p.returncode == 0 and "automation/prompts/job_round.md" in p.stdout
 
 

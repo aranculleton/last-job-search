@@ -522,27 +522,18 @@ def seen(row: dict, today=None, seen_path=None) -> dict:
     """{first_seen, days, repost, ruled_out}: what seen_jobs.json knows of this posting."""
     import throttle
     from lookup_score import norm
-    today = today or dt.date.today()
+    # A caller may give the day as text ("2026-10-21"), as staging's own callers do.
+    today = (today if isinstance(today, dt.date) else as_date(today, iso_only=True)) \
+        or dt.date.today()
     try:
         entries = throttle.load_seen(seen_path or person.state("job_scraper", "seen_jobs.json"))["seen"]
     except (OSError, ValueError):
         entries = {}
     url = norm(row.get("url") or "")
-    t = str(row.get("title") or "").strip().lower()
-    k = key(row.get("company"))
-    c = throttle.city(row.get("location"))
-    own, other = [], []
-    for u, e in entries.items():
-        if not isinstance(e, dict):
-            continue
-        same_url = url and norm(e.get("url") or u) == url
-        same_role = (t and k and str(e.get("title") or "").strip().lower() == t
-                     and key(e.get("company")) == k and throttle.city(e.get("location")) == c)
-        d = as_date(e.get("first_seen"), iso_only=True)
-        if same_url and d:
-            own.append(d)
-        elif same_role and d:
-            other.append(d)
+    # The round's own reading of a relist (throttle.sightings), so staging says what the
+    # round dated the posting as.
+    own, other = [[d] if d else [] for d in (
+        as_date(x, iso_only=True) for x in throttle.sightings(entries, today.isoformat())(row))]
     ruled = ""
     try:
         try:
@@ -641,9 +632,16 @@ def _terms_text(t: dict) -> str:
     return ", ".join(x for x in (_KIND.get(t["kind"], t["kind"]), _length(t)) if x)
 
 
+# A quoted passage, and one cut short before its closing quote (a ruling keeps only its
+# first 120 characters), with what introduces it: ': "Fluent Spanish required, ..."'.
+_QUOTED = re.compile(r'\s*:?\s*["\u201c][^"\u201d]*(?:["\u201d]|$)')
+
+
 def lines(prof: dict, quotes: bool = True) -> list:
     """The profile as a person reads it, one short line a property. With quotes=False,
-    only what was derived (for above a staged pick's fence)."""
+    only what was derived (for above a staged pick's fence): no quote, no place and no
+    reason that repeats the board's own words, which a location written as an instruction
+    carried above the fence."""
     out = []
     t = prof["terms"]
     out.append("terms: " + _terms_text(t))
@@ -653,7 +651,8 @@ def lines(prof: dict, quotes: bool = True) -> list:
     elif p["where"] == "home":
         out.append("pay: %s" % _band(p))
     elif p["where"].startswith("elsewhere"):
-        out.append("pay: %s, stated for %s, not for your area" % (_band(p), p["where"][11:]))
+        out.append("pay: %s, stated for %s, not for your area"
+                   % (_band(p), p["where"][11:] if quotes else "another place"))
     else:
         out.append("pay: stated only in another currency (%s)" % p["currency"]
                    + (': "%s"' % p["quote"][:120] if quotes else ""))
@@ -669,16 +668,22 @@ def lines(prof: dict, quotes: bool = True) -> list:
         out.append("degree: none stated")
     w = prof["where"]
     gate = ""
-    if w["verdict"] == "FLAG":
+    if not quotes:
+        gate = " [the location check: %s]" % w["verdict"] if w["verdict"] else ""
+    elif w["verdict"] == "FLAG":
         gate = " [check: %s]" % _plain_why(w["why"])
     elif w["verdict"]:
         gate = " [%s: %s]" % (w["verdict"], _plain_why(w["why"]))
-    out.append("where: %s, %s%s%s" % (w["location"] or "no location given", w["mode"],
+    place = (w["location"] or "no location given") if quotes else "as the row says"
+    out.append("where: %s, %s%s%s" % (place, w["mode"],
                                       " (%d days a week in the office)" % w["days"] if w["days"] else "",
                                       gate))
     s = prof["seen"]
     if s["ruled_out"]:
-        out.append("seen: ruled out before (%s)" % s["ruled_out"])
+        # A ruling quotes the sentence it rests on, and that is posting text: above a
+        # staged pick's fence it is said without its quote.
+        ruled = s["ruled_out"] if quotes else _QUOTED.sub("", s["ruled_out"]).strip(" :;")
+        out.append("seen: ruled out before (%s)" % ruled)
     elif s["repost"]:
         out.append("seen: first seen %s (%d days ago) under another link: looks like a repost"
                    % (s["first_seen"], s["days"]))

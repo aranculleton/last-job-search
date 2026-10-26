@@ -80,11 +80,15 @@ name leads.
 The fit assessment is the part that matters. Name the gap the person will probe,
 and the strongest honest framing for it.
 
-**Send the file** under the contact's name, as the copy `prep.py` prints on its `send:` line
+**Send the file**, on the person's page first (CLAUDE.md, "Every output is shown": the copy in
+the page's own store and `python3 tools/app.py view`, and one line in the chat); where there is
+no page, in the chat as RUNBOOK.md, "Delivering in the chat", says, and as follows. It goes
+under the contact's name, as the copy `prep.py` prints on its `send:` line
 (`python3 tools/shown.py <the document>` after an edit by hand: every contact's file is
-called `prep.md`), with the session's file-sending tool (SendUserFile or its equivalent), and
-paste beside it the part to read before the call: the fit assessment and anything that changed
-(CLAUDE.md, "Every output is shown"). The file is the record; its path alone is never the
+called `prep.md`), with SendUserFile (`display: "render"`), and paste beside it the part to
+read before the call: the fit assessment and anything that changed (CLAUDE.md, "Every output
+is shown"). With no SendUserFile in the chat (usually one on the person's computer), paste that part and write the copy's full path on its own line: it
+opens when clicked in the desktop app. The file is the record; its path alone is never the
 answer.
 
 **It is rebuilt when anything it rests on moves.** A prep counts as stale when, since it was
@@ -99,4 +103,4 @@ flight) and never one whose only change would be its date: any other prep is reb
 `/prep <contact>` the day a call needs it.
 
 End with the line `python3 tools/tips.py prep` prints, if it prints one (it decides when: the first time, then now and then). What they say back
-goes through CLAUDE.md, "Learning the person".
+goes through RUNBOOK.md, "Learning the person".

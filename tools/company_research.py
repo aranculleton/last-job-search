@@ -71,8 +71,10 @@ from urllib.parse import urljoin, urlsplit
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import person  # noqa: E402
+import local_path  # noqa: E402
 from company_key import key as company_key  # noqa: E402
 from dates import as_date  # noqa: E402
+from safe_name import cap_bytes, windows_safe  # noqa: E402
 
 DIR = "company_research"
 # Research older than this is a lead to re-confirm, not a fact to repeat. Every
@@ -81,12 +83,16 @@ RESEARCH_FRESH_DAYS = 30
 # How long /network's "nobody relevant there" finding rules an employer out.
 PRESENCE_REVIEW_DAYS = 90
 
-_NON_ALNUM = re.compile(r"[^a-z0-9]+")
+# Letters of any script are kept, as in a contact id: "[^a-z0-9]" emptied an employer
+# written in Chinese, Greek or Arabic, which could then never be saved, and the stem is
+# one Windows accepts (safe_name), so a repo holding it checks out there too.
+_NON_WORD = re.compile(r"[\W_]+")
 
 
 def file_key(company) -> str:
     """The filename stem for an employer: its company key, hyphenated."""
-    return _NON_ALNUM.sub("-", str(company_key(str(company or "")) or "").lower()).strip("-")
+    stem = _NON_WORD.sub("-", str(company_key(str(company or "")) or "").lower()).strip("-")
+    return windows_safe(cap_bytes(stem, 150).strip("-"), "-co")
 
 
 def _root(root=None) -> str:
@@ -223,7 +229,7 @@ def path(company, root=None, country=None) -> str | None:
     if os.path.exists(direct):
         plain = direct
     else:
-        for found in sorted(glob.glob(os.path.join(folder, "*.json"))):
+        for found in sorted(glob.glob(os.path.join(glob.escape(folder), "*.json"))):
             stem = os.path.splitext(os.path.basename(found))[0]
             if stem.startswith("_") or "--" in stem:
                 continue
@@ -440,7 +446,7 @@ def _locked(name: str, wait: float = 20.0):
 def _write_json(target_path: str, data) -> None:
     os.makedirs(os.path.dirname(target_path), exist_ok=True)
     tmp = "%s.%d.tmp" % (target_path, os.getpid())
-    with open(tmp, "w", encoding="utf-8") as fh:
+    with open(tmp, "w", encoding="utf-8", newline="\n") as fh:
         json.dump(data, fh, indent=2, ensure_ascii=False)
         fh.write("\n")
     os.replace(tmp, target_path)
@@ -552,8 +558,8 @@ def describe(company, today=None, root=None, country=None) -> str:
     base = root or person.state()
     if not data:
         where = target(company, root, country)
-        return "%s: not cached (would be written to %s)" % (company, os.path.relpath(where, base))
-    rel = os.path.relpath(path(company, root, country), base)
+        return "%s: not cached (would be written to %s)" % (company, local_path.rel(where, base))
+    rel = local_path.rel(path(company, root, country), base)
     if age is None:
         return "%s: no fetched_date, so not fresh: re-confirm before using" % rel
     if fresh:
@@ -676,7 +682,7 @@ def stored_page(url, pages=None) -> dict | None:
 def _store_page(url, title, text, via, pages=None) -> str:
     where = _page_file(url, pages)
     os.makedirs(os.path.dirname(where), exist_ok=True)
-    with open(where + ".tmp", "w", encoding="utf-8") as fh:
+    with open(where + ".tmp", "w", encoding="utf-8", newline="\n") as fh:
         json.dump({"url": url, "title": title, "text": text, "via": via,
                    "stored": time.time()}, fh, ensure_ascii=False)
     os.replace(where + ".tmp", where)
@@ -753,7 +759,8 @@ def curl(url: str, headers: dict) -> tuple[int, dict, str]:
             cmd += ["-H", "%s: %s" % (k, v)]
         cmd += ["--", url]
         try:
-            r = subprocess.run(cmd, capture_output=True, text=True, timeout=45)
+            r = subprocess.run(cmd, capture_output=True, text=True, encoding="utf-8", errors="replace",
+                               timeout=45)
         except (OSError, subprocess.TimeoutExpired) as e:
             return 0, {}, type(e).__name__
         status = int((r.stdout or "0").strip()[-3:] or 0) if (r.stdout or "").strip() else 0
@@ -992,7 +999,7 @@ class _Run:
                 nxt = 0.0
             now = time.time()
             start = max(now, nxt)
-            with open(where, "w", encoding="utf-8") as fh:
+            with open(where, "w", encoding="utf-8", newline="\n") as fh:
                 fh.write(repr(start + delay))
         if start > now:
             self.sleep(start - now)
@@ -1009,7 +1016,7 @@ class _Run:
             except (OSError, ValueError):
                 nxt = 0.0
             if when > nxt:
-                with open(where, "w", encoding="utf-8") as fh:
+                with open(where, "w", encoding="utf-8", newline="\n") as fh:
                     fh.write(repr(when))
 
     def get(self, url: str, headers: dict) -> tuple[int, dict, str] | None:
@@ -1158,7 +1165,7 @@ def fetch(company, urls=(), site=None, country=None, role=None, posting=None, to
     data, age, _fresh = load(company, day, root, cc or None)
     run = _Run(company, day, root, transport, sleep, pages, FETCH_BUDGET if budget is None else budget)
     report = {"company": str(company), "country": cc, "pages": pages_dir(pages),
-              "cache": os.path.relpath(target(company, root, cc or None), root or person.state()),
+              "cache": local_path.rel(target(company, root, cc or None), root or person.state()),
               "age_days": age, "kept": [], "other_roles": [], "candidates": [], "leads": [],
               "urls": [], "budget": run.budget, "used_before": run.used_before}
     for f in data.get("facts") or []:
@@ -1416,7 +1423,7 @@ def main(argv=None) -> int:
         except QuoteNotFound as e:
             print(str(e), file=sys.stderr)
             return 1
-        print(os.path.relpath(written, a.root or person.state()))
+        print(local_path.rel(written, a.root or person.state()))
         return 0
     print(describe(a.company, a.today, a.root, a.country))
     return 0

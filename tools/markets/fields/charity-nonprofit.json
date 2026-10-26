@@ -1,0 +1,209 @@
+{
+  "name": "Charity and non-profit",
+  "field": "charity-nonprofit",
+  "aka": [
+    "charity",
+    "non-profit",
+    "nonprofit",
+    "not-for-profit",
+    "third sector",
+    "NGO",
+    "humanitarian",
+    "development"
+  ],
+  "boards": {
+    "*": [
+      {
+        "name": "Idealist",
+        "url": "https://www.idealist.org",
+        "kind": "field",
+        "source": "https://www.idealist.org/",
+        "quote": "Find volunteer opportunities, nonprofit jobs, social-impact opportunities and more on the Idealist platform",
+        "checked": "2026-10-25",
+        "verified": true,
+        "search": "https://www.idealist.org/en/jobs",
+        "paths": {
+          "search": "/en/jobs",
+          "posting": "/en/nonprofit-job/"
+        },
+        "robots": {
+          "checked": "2026-10-25",
+          "why": "",
+          "search": true,
+          "status": "allowed",
+          "posting": true,
+          "crawl_delay": null,
+          "ai_input": null
+        },
+        "public_search": {
+          "checked": "2026-10-25",
+          "status": "open",
+          "http": 200
+        }
+      },
+      {
+        "name": "ReliefWeb Jobs",
+        "url": "https://reliefweb.int",
+        "kind": "field",
+        "source": "https://reliefweb.int/",
+        "quote": "The leading humanitarian information source on global crises and disasters",
+        "checked": "2026-10-25",
+        "verified": true,
+        "search": "https://reliefweb.int/jobs",
+        "paths": {
+          "search": "/jobs",
+          "posting": "/job/"
+        },
+        "robots": {
+          "checked": "2026-10-25",
+          "why": "",
+          "search": true,
+          "status": "allowed",
+          "posting": true,
+          "crawl_delay": null,
+          "ai_input": null
+        },
+        "public_search": {
+          "checked": "2026-10-25",
+          "status": "open",
+          "http": 200
+        }
+      }
+    ],
+    "gb": [
+      {
+        "name": "CharityJob",
+        "url": "https://www.charityjob.co.uk",
+        "kind": "field",
+        "source": "https://www.charityjob.co.uk/",
+        "quote": "the only job board specifically created for charity, not for profit, third sector and voluntary jobs in the UK",
+        "checked": "2026-10-25",
+        "verified": true,
+        "search": "https://www.charityjob.co.uk/jobs",
+        "paths": {
+          "search": "/jobs",
+          "posting": "/jobs/"
+        },
+        "robots": {
+          "checked": "2026-10-25",
+          "why": "",
+          "search": true,
+          "status": "allowed",
+          "posting": true,
+          "crawl_delay": null,
+          "ai_input": null
+        },
+        "public_search": {
+          "checked": "2026-10-25",
+          "status": "open",
+          "http": 200
+        }
+      }
+    ],
+    "ca": [
+      {
+        "name": "CharityVillage",
+        "url": "https://charityvillage.com",
+        "kind": "field",
+        "source": "https://charityvillage.com/",
+        "quote": "CharityVillage is the top Canadian source for nonprofit news, nonprofit jobs",
+        "checked": "2026-10-25",
+        "verified": true,
+        "search": "https://charityvillage.com/search/",
+        "paths": {
+          "search": "/search/",
+          "posting": "/jobs/"
+        },
+        "robots": {
+          "checked": "2026-10-25",
+          "why": "",
+          "search": true,
+          "status": "allowed",
+          "posting": true,
+          "crawl_delay": 10.0,
+          "ai_input": null
+        },
+        "public_search": {
+          "checked": "2026-10-25",
+          "status": "blocked",
+          "http": 301
+        }
+      }
+    ],
+    "au": [
+      {
+        "name": "EthicalJobs",
+        "url": "https://www.ethicaljobs.com.au",
+        "kind": "field",
+        "source": "https://www.ethicaljobs.com.au/",
+        "quote": "Find community jobs, environmental jobs, not-for-profit jobs and social work jobs in Melbourne, Sydney, Brisbane, Perth & Adelaide",
+        "checked": "2026-10-25",
+        "verified": true,
+        "search": "https://www.ethicaljobs.com.au/jobs",
+        "paths": {
+          "search": "/jobs",
+          "posting": "/jobs/"
+        },
+        "robots": {
+          "checked": "2026-10-25",
+          "why": "",
+          "search": true,
+          "status": "allowed",
+          "posting": true,
+          "crawl_delay": null,
+          "ai_input": null
+        },
+        "public_search": {
+          "checked": "2026-10-25",
+          "status": "open",
+          "http": 200
+        }
+      }
+    ]
+  },
+  "titles": [
+    {
+      "value": [
+        "Development Associate",
+        "Development Officer",
+        "Fundraising Consultant",
+        "Grant Coordinator",
+        "Philanthropy Officer"
+      ],
+      "source": "https://www.onetonline.org/link/summary/13-1131.00",
+      "quote": "Sample of reported job titles: Contract Grant Writer, Development Associate",
+      "on_page": [
+        "Development Associate",
+        "Development Officer",
+        "Fundraising Consultant",
+        "Grant Coordinator",
+        "Philanthropy Officer"
+      ],
+      "checked": "2026-10-25",
+      "verified": true
+    }
+  ],
+  "families": [
+    {
+      "family": "donor CRM",
+      "members": [
+        [
+          "Raiser's Edge",
+          "\\braiser'?s edge\\b"
+        ],
+        [
+          "DonorPerfect",
+          "\\bdonorperfect\\b"
+        ]
+      ],
+      "source": "https://www.onetonline.org/link/summary/13-1131.00",
+      "quote": "Customer relationship management CRM software - Blackbaud The Raiser's Edge",
+      "on_page": [
+        "Blackbaud The Raiser's Edge",
+        "SofterWare DonorPerfect"
+      ],
+      "checked": "2026-10-25",
+      "verified": true
+    }
+  ]
+}

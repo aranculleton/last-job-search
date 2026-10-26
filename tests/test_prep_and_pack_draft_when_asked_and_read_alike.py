@@ -197,14 +197,14 @@ def test_check_numbers_skips_an_answer_marked_as_a_draft(tmp_path):
     path = tmp_path / "interview_prep.md"
     path.write_text(doc, encoding="utf-8")
     run = subprocess.run([sys.executable, os.path.join(ROOT, "tools", "check_numbers.py"),
-                          str(path)], capture_output=True, text=True)
+                          str(path)], capture_output=True, text=True, encoding="utf-8", errors="replace")
     assert "'37 hours'" in run.stdout and "'59 hours'" in run.stdout
     assert "'23 hours'" not in run.stdout and "'41 hours'" not in run.stdout
     # Never outside markdown: a draft has no business in a resume or a letter.
     tex = tmp_path / "resume.tex"
     tex.write_text(doc, encoding="utf-8")
     run = subprocess.run([sys.executable, os.path.join(ROOT, "tools", "check_numbers.py"),
-                          str(tex)], capture_output=True, text=True)
+                          str(tex)], capture_output=True, text=True, encoding="utf-8", errors="replace")
     assert "'23 hours'" in run.stdout
 
 

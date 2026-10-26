@@ -233,7 +233,7 @@ def holds(entry, rules_now: str | None = None, parts_now: dict | None = None) ->
     return entry["rules"] == (rules_now or rules_fingerprint())
 
 
-def _load(path=SEEN) -> dict:
+def load_seen(path=SEEN) -> dict:
     from throttle import as_seen
     try:
         with open(path, encoding="utf-8") as fh:
@@ -242,13 +242,23 @@ def _load(path=SEEN) -> dict:
         return {"seen": {}}
 
 
-def _save(data, path=SEEN) -> None:
-    os.makedirs(os.path.dirname(path), exist_ok=True)
+_load = load_seen  # the module's own name for it; other modules call load_seen
+
+
+def save_seen(data, path=SEEN) -> None:
+    # A bare file name ("seen.json") has no folder to make: os.makedirs("") raised, so
+    # `text_screen.py --seen seen.json` crashed on its first cut and wrote nothing.
+    folder = os.path.dirname(path)
+    if folder:
+        os.makedirs(folder, exist_ok=True)
     tmp = path + ".tmp"
-    with open(tmp, "w", encoding="utf-8") as fh:
+    with open(tmp, "w", encoding="utf-8", newline="\n") as fh:
         json.dump(data, fh, indent=INDENT, ensure_ascii=False)
         fh.write("\n")
     os.replace(tmp, path)
+
+
+_save = save_seen  # the module's own name for it; other modules call save_seen
 
 
 def _stamp_rules(entry: dict, names=(), fp: str = "", parts: dict | None = None) -> None:
@@ -328,24 +338,38 @@ def add_many(rulings, today: str = "", path=SEEN) -> int:
     return len(rulings)
 
 
-def _matcher(words: str = "", urls=()):
-    """Matches an entry by words in its reason, by its address, or by both."""
+def _matcher(words: str = "", urls=(), postings=()):
+    """Matches an entry by words in its reason, by its address, or by both. With
+    `postings`, an entry whose ruling covers one of them by its title, employer and city
+    (throttle.ruled_pair, as a round reads it) matches as its address would."""
     needle = (words or "").strip().lower()
     keys = {norm(u) or u for u in urls or ()}
-    if not keys and len(needle) < 3:
+    postings = [p for p in postings or () if isinstance(p, dict)]
+    if not keys and not postings and len(needle) < 3:
         raise ValueError("name the rulings: words from the reason (three letters or more) "
                          "or --url for each posting")
+
+    def covers(entry) -> bool:
+        if not postings:
+            return False
+        import throttle
+        pair = throttle.entry_pair(entry)
+        return bool(pair) and any(throttle.ruled_pair({pair: "ruled"}, p) for p in postings)
 
     def match(key, entry) -> bool:
         if needle and needle not in str(entry.get("exclusion_reason") or "").lower():
             return False
-        return not keys or bool({key, norm(entry.get("url") or "")} & keys)
+        if not keys and not postings:
+            return True
+        return bool({key, norm(entry.get("url") or "")} & keys) or covers(entry)
     return match
 
 
-def lift(words: str = "", why: str = "", today: str = "", path=SEEN, urls=()) -> list:
-    """Every exclusion whose reason holds `words` (and, with `urls`, only those), lifted."""
-    match = _matcher(words, urls)
+def lift(words: str = "", why: str = "", today: str = "", path=SEEN, urls=(),
+         postings=()) -> list:
+    """Every exclusion whose reason holds `words` (and, with `urls` or `postings`, only
+    those: by its address, or as a ruling on a posting's title, employer and city), lifted."""
+    match = _matcher(words, urls, postings)
     data = _load(path)
     out = []
     for key, entry in data["seen"].items():
@@ -380,8 +404,11 @@ def unreviewed(path=SEEN) -> list:
     return [e for e in _load(path)["seen"].values() if _needs_review(e)]
 
 
-def _group(reason: str) -> str:
+def reason_group(reason: str) -> str:
     return re.split(r"[:;.(,]", reason.strip().lower())[0].strip()[:60] or "(no reason)"
+
+
+_group = reason_group  # the module's own name for it; other modules call reason_group
 
 
 def _grouped(entries) -> list:

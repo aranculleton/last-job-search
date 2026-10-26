@@ -81,7 +81,6 @@ def drive_round(tmp_path, monkeypatch):
     import sys
     sys.path.insert(0, os.path.join(ROOT, "tools"))
     import run_round
-    import sync_app
     calls, spawned = [], []
 
     def fake_run(cmd, log, deadline=None, ok=(0,)):
@@ -100,7 +99,6 @@ def drive_round(tmp_path, monkeypatch):
     monkeypatch.setattr(run_round.subprocess, "call",
                         lambda cmd, *a, **k: spawned.append(list(cmd)) or 0)
     monkeypatch.setattr(run_round, "_upgrades_line", lambda: "")
-    monkeypatch.setattr(sync_app, "nudge", lambda *a, **k: None)
 
     def drive(*argv):
         calls.clear()
@@ -117,7 +115,8 @@ def drive_round(tmp_path, monkeypatch):
 def sync_steps(monkeypatch):
     """tools/sync_app.py's main with git and the network stood in: returns `run(*argv)`
     -> (exit code, the steps it took, in order). `stale` and `sync_rc` set the day's
-    state. For checking what a sync does after it succeeds by running it."""
+    state; `sync_rc` is what the look or the update returns. For checking what a run does
+    after it succeeds by running it."""
     import sys
     import types
     sys.path.insert(0, os.path.join(ROOT, "tools"))
@@ -139,6 +138,7 @@ def sync_steps(monkeypatch):
     monkeypatch.setattr(sync_app, "follow", lambda: "following the app")
     monkeypatch.setattr(sync_app, "app_portals", lambda: [])
     monkeypatch.setattr(sync_app, "sync", lambda: steps.append("sync") or state["sync_rc"])
+    monkeypatch.setattr(sync_app, "look", lambda: steps.append("look") or state["sync_rc"])
     monkeypatch.setattr(sync_app, "git",
                         lambda *a, **k: types.SimpleNamespace(stdout="", returncode=0))
 

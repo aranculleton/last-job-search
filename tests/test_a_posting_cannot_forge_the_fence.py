@@ -103,7 +103,7 @@ class TheArchiveUsesIt(unittest.TestCase):
                             "import runpy, sys; sys.argv = ['outreach.py', '--help'];"
                             f"runpy.run_path({str(ROOT / 'tools' / 'outreach.py')!r}, "
                             "run_name='__main__')"],
-                           capture_output=True, text=True, cwd=os.sep, timeout=60,
+                           capture_output=True, text=True, encoding="utf-8", errors="replace", cwd=os.sep, timeout=60,
                            env=dict(os.environ))
         self.assertNotIn("ModuleNotFoundError", r.stderr, r.stderr)
 

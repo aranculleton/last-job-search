@@ -99,7 +99,7 @@ def test_a_kept_draft_is_read_with_its_posting(tmp_path):
     apps, read_in = fit_to_page.load(str(path))
     assert read_in == {0} and AU.posting_copies(apps[0])
     r = subprocess.run([sys.executable, os.path.join(ROOT, "tools", "audit_letters.py"), str(path)],
-                       capture_output=True, text=True, cwd=ROOT,
+                       capture_output=True, text=True, encoding="utf-8", errors="replace", cwd=ROOT,
                        env=dict(os.environ, LJS_PROFILE=os.path.join(ROOT, "profile.example"),
                                 LJS_STATE=str(tmp_path)))
     assert "no compiled letter" in r.stderr

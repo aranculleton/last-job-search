@@ -39,6 +39,7 @@ from personal_paths import is_personal  # noqa: E402
 from tests import repo_files  # noqa: E402
 
 SETUP = os.path.join(ROOT, B.SETUP)
+SECTIONS = os.path.join(ROOT, B.SECTIONS)
 SETUP_METHODS = [n for n, m in B.METHODS.items() if m.get("setup")]
 
 
@@ -67,7 +68,7 @@ def _app_files() -> list[str]:
 # ------------------------------------------------------------------ nothing slips past
 
 def test_every_app_file_is_in_a_method_or_says_why_it_keeps_nothing():
-    owned = {f for name in B.METHODS for f in B.files(name)} | {B.SETUP}
+    owned = {f for name in B.METHODS for f in B.files(name)} | set(B.SETUP_FILES)
     loose = [f for f in _app_files()
              if f not in owned and not any(fnmatch.fnmatch(f, g) for g in B.KEEPS_NOTHING)]
     assert loose == [], (
@@ -109,9 +110,12 @@ def test_no_method_changes_without_a_version_saying_what_changed():
 
 
 def test_every_instruction_that_writes_the_profile_is_in_a_section():
-    lines = open(SETUP, encoding="utf-8").read().splitlines()
-    start = next(i for i, ln in enumerate(lines) if ln.startswith("## Step 1"))
-    end = next(i for i, ln in enumerate(lines) if ln.startswith("## Step 4"))
+    # setup.md is the order and the questions; how each part is written is in
+    # setup-sections.md, every instruction of it inside a section, so a change to one
+    # is a version of that section (2026-10-25).
+    lines = open(SECTIONS, encoding="utf-8").read().splitlines()
+    start = next(i for i, ln in enumerate(lines) if ln.startswith("## "))
+    end = len(lines)
     inside, loose = None, []
     for n in range(start, end):
         ln = lines[n]
@@ -123,9 +127,11 @@ def test_every_instruction_that_writes_the_profile_is_in_a_section():
             inside = None
             continue
         if inside is None and (ln.startswith("- **") or ln.startswith("### ")):
-            loose.append(f"{B.SETUP}:{n + 1}: {ln[:60]}")
+            loose.append(f"{B.SECTIONS}:{n + 1}: {ln[:60]}")
     assert loose == [], "instructions in no section:\n" + "\n".join(loose)
-    assert lines[start + 1].startswith("<!-- section: ")
+    # setup.md itself writes nothing a section does not say how to write.
+    flow = open(SETUP, encoding="utf-8").read()
+    assert "<!-- section:" not in flow and "setup-sections.md" in flow
 
 
 def test_every_marked_section_is_a_setup_method_and_every_one_is_marked():

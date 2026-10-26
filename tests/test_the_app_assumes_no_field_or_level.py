@@ -65,7 +65,7 @@ class AProfileThatDoesNotSayGetsNoAssumption(unittest.TestCase):
             fh.write('\nTHEME_CUES = {"typography": ["typography", "type design"]}\n')
         env = dict(os.environ, LJS_PROFILE=prof, PYTHONDONTWRITEBYTECODE="1")
         out = subprocess.run([sys.executable, "-c", PROBE], cwd=ROOT, env=env,
-                             capture_output=True, text=True, timeout=120)
+                             capture_output=True, text=True, encoding="utf-8", errors="replace", timeout=120)
         cls.err = out.stderr
         cls.got = dict(line.split(" ", 1) for line in out.stdout.splitlines())
 
@@ -198,7 +198,7 @@ class ContractWorkCanBeTheTarget(unittest.TestCase):
             [sys.executable, "-c",
              "import sys; sys.path.insert(0,'tools'); import opportunity as o; "
              "print(bool(o.CONTRACT.search('locum nurse, 6-month contract')))"],
-            cwd=ROOT, capture_output=True, text=True, timeout=60,
+            cwd=ROOT, capture_output=True, text=True, encoding="utf-8", errors="replace", timeout=60,
             env=dict(os.environ, LJS_PROFILE=self._profile(), PYTHONDONTWRITEBYTECODE="1"))
         self.assertEqual(out.stdout.strip(), "False", out.stderr)
 
@@ -245,7 +245,7 @@ class NetworkingAssumesNoFunction(unittest.TestCase):
                 "OWN_FUNCTION_WORDS"])
         env = dict(os.environ, LJS_PROFILE=prof, PYTHONDONTWRITEBYTECODE="1")
         out = subprocess.run([sys.executable, "-c", NET_PROBE], cwd=ROOT, env=env,
-                             capture_output=True, text=True, timeout=120)
+                             capture_output=True, text=True, encoding="utf-8", errors="replace", timeout=120)
         cls.err = out.stderr
         cls.got = dict(line.split(" ", 1) for line in out.stdout.splitlines())
 

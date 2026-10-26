@@ -1,0 +1,139 @@
+{
+  "name": "Design and creative",
+  "field": "design-creative",
+  "aka": [
+    "design",
+    "creative",
+    "graphic design",
+    "UX",
+    "UI",
+    "product design",
+    "illustration"
+  ],
+  "boards": {
+    "*": [
+      {
+        "name": "Dribbble Jobs",
+        "url": "https://dribbble.com",
+        "kind": "field",
+        "source": "https://dribbble.com/",
+        "quote": "",
+        "checked": "2026-10-25",
+        "verified": false,
+        "why": "no sentence on the page says it (looked for: Dribbble)",
+        "search": "https://dribbble.com/jobs?keyword=designer",
+        "paths": {
+          "search": "/jobs?keyword=designer",
+          "posting": "/jobs/"
+        },
+        "robots": {
+          "checked": "2026-10-25",
+          "why": "",
+          "search": true,
+          "status": "allowed",
+          "posting": true,
+          "crawl_delay": null,
+          "ai_input": null
+        },
+        "public_search": {
+          "checked": "2026-10-25",
+          "status": "open",
+          "http": 200
+        }
+      },
+      {
+        "name": "Behance Jobs",
+        "url": "https://www.behance.net",
+        "kind": "field",
+        "source": "https://en.wikipedia.org/wiki/Behance",
+        "quote": "",
+        "checked": "2026-10-25",
+        "verified": false,
+        "why": "the sentence found on the page does not say it",
+        "search": "https://www.behance.net/joblist",
+        "paths": {
+          "search": "/joblist",
+          "posting": "/joblist/"
+        },
+        "robots": {
+          "checked": "2026-10-25",
+          "why": "",
+          "search": true,
+          "status": "allowed",
+          "posting": true,
+          "crawl_delay": null,
+          "ai_input": null
+        },
+        "public_search": {
+          "checked": "2026-10-25",
+          "status": "blocked",
+          "http": 403
+        }
+      }
+    ]
+  },
+  "documents": {
+    "*": [
+      {
+        "topic": "portfolio",
+        "value": "a portfolio link, often the first thing read",
+        "source": "https://en.wikipedia.org/wiki/R%C3%A9sum%C3%A9",
+        "quote": "online résumé was first pioneered by professions that benefit from the multimedia and rich detail of an HTML résumé",
+        "checked": "2026-10-25",
+        "verified": true
+      }
+    ]
+  },
+  "titles": [
+    {
+      "value": [
+        "Brand Designer",
+        "Designer",
+        "Graphic Artist",
+        "Graphic Designer",
+        "Production Artist",
+        "Publications Designer"
+      ],
+      "source": "https://www.onetonline.org/link/summary/27-1024.00",
+      "quote": "Sample of reported job titles: Artist, Brand Designer",
+      "on_page": [
+        "Brand Designer",
+        "Designer",
+        "Graphic Artist",
+        "Graphic Designer",
+        "Production Artist",
+        "Publications Designer"
+      ],
+      "checked": "2026-10-25",
+      "verified": true
+    }
+  ],
+  "families": [
+    {
+      "family": "desktop publishing tool",
+      "members": [
+        [
+          "InDesign",
+          "\\bindesign\\b"
+        ],
+        [
+          "QuarkXPress",
+          "\\bquark\\s?xpress\\b"
+        ],
+        [
+          "Microsoft Publisher",
+          "\\bmicrosoft publisher\\b"
+        ]
+      ],
+      "source": "https://www.onetonline.org/link/summary/27-1024.00",
+      "quote": "Desktop publishing software - Adobe Distiller",
+      "on_page": [
+        "Adobe InDesign",
+        "QuarkXPress",
+        "Microsoft Publisher"
+      ],
+      "checked": "2026-10-25",
+      "verified": true
+    }
+  ]
+}

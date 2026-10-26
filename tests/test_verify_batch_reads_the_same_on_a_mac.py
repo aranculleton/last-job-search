@@ -11,6 +11,7 @@ from __future__ import annotations
 
 import os
 import re
+import shutil
 import subprocess
 import sys
 
@@ -49,12 +50,35 @@ def test_a_bullet_on_the_page_twice_is_found():
     assert A.duplicate_bullets(alike) == []
 
 
-def test_the_skills_check_is_written_the_way_both_seds_read_it():
+def test_the_skills_check_reads_the_same_on_every_computer(tmp_path):
+    # The check is Python now (tools/verify_batch.py), so no sed of a Mac's or of Linux's
+    # decides what it reads; the shell name is a shim that runs it.
+    import verify_batch as B
+    lines = ["Intro", "Skills", "SQL (advanced)", "Education", "BSc"]
+    assert B.sed_range(lines, "Skills", "Education", drop_end=True) == ["Skills",
+                                                                        "SQL (advanced)"]
+    # A range is closed by the next end line and opens again at the next start, as sed's.
+    assert B.sed_range(["Skills", "a", "Education", "b", "Skills", "c"], "Skills",
+                       "Education") == ["Skills", "a", "Education", "Skills", "c"]
     with open(os.path.join(ROOT, "tools", "verify_batch.sh"), encoding="utf-8") as fh:
-        script = fh.read()
-    assert "{/^$H_EDUCATION/d;p;}" in script and "{/^$H_EDUCATION/d;p}" not in script
-    assert "cut -c1-45" not in script
-    out = subprocess.run(["sed", "-n", "/^Skills/,/^Education/{/^Education/d;p;}"],
-                         input="Intro\nSkills\nSQL (advanced)\nEducation\nBSc\n",
-                         capture_output=True, text=True)
-    assert out.returncode == 0 and out.stdout == "Skills\nSQL (advanced)\n"
+        shim = fh.read()
+    code = [ln for ln in shim.splitlines() if ln.strip() and not ln.lstrip().startswith("#")]
+    assert not [ln for ln in code if re.search(r"\b(sed|awk|pdftotext|pdfinfo)\b", ln)]
+    assert "verify_batch.py" in shim
+    sed = shutil.which("sed")
+    if sed:
+        # Bytes in and out: in text mode Python turns each "\n" it writes into os.linesep,
+        # "\r\n" on Windows (https://docs.python.org/3/library/subprocess.html, "Frequently
+        # Used Arguments"), so sed read other lines from the ones the port reads. The full
+        # path, as Windows looks in its own folders first for a bare name.
+        # The script in a file of its own: on its command line, Git for Windows' sed read an
+        # argument starting with "/" as a path to turn into a Windows one ("char 23:
+        # unknown command: `/'"), and no sed reads its own script file that way.
+        script = tmp_path / "skills.sed"
+        script.write_bytes(b"/^Skills/,/^Education/{/^Education/d;p;}\n")
+        out = subprocess.run([sed, "-n", "-f", str(script)],
+                             input=b"Intro\nSkills\nSQL (advanced)\nEducation\nBSc\n",
+                             capture_output=True)
+        said = out.stdout.decode("utf-8", "replace").replace("\r\n", "\n")
+        assert said.splitlines() == B.sed_range(lines, "Skills", "Education", drop_end=True), (
+            sed, out.returncode, out.stderr.decode("utf-8", "replace"))

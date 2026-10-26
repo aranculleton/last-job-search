@@ -32,6 +32,7 @@ import skills_block
 import bullet_library as LIB
 import untrusted
 import docpaths
+import pdftext
 import person
 
 # How many pages the resume fills: documents.resume_pages, default one. One page
@@ -77,16 +78,19 @@ RENDERED_PROSE = ("p1", "p2", "lead", "p4")
 
 
 def _pages(pdf):
-    out = subprocess.run(["pdfinfo", pdf], capture_output=True, text=True).stdout
-    m = re.search(r"Pages:\s+(\d+)", out)
-    return int(m.group(1)) if m else 9
+    """The page count, read with pypdf (tools/pdftext.py), so no system package is needed.
+    9 when the PDF cannot be read, which no caller mistakes for a fit: _compile raises
+    first when no PDF was made."""
+    n = pdftext.pages(pdf)
+    return 9 if n is None else n
 
 
 def _lines(pdf):
-    """Non-blank text lines, for the report only. One pdftotext run."""
-    p = subprocess.run(["pdftotext", "-layout", "-enc", "UTF-8", pdf, "-"],
-                       capture_output=True, text=True)
-    return len([l for l in p.stdout.splitlines() if l.strip()])
+    """Non-blank text lines, for the report only."""
+    try:
+        return len([l for l in pdftext.text(pdf).splitlines() if l.strip()])
+    except pdftext.Unreadable:
+        return 0
 
 
 def resume_pdf(abbr):
@@ -95,6 +99,12 @@ def resume_pdf(abbr):
 
 def letter_pdf(abbr):
     return docpaths.letter_pdf(abbr)
+
+
+# One LaTeX run takes seconds. Nothing stopped one that never ended: MiKTeX asks before
+# it installs a package it lacks, and with nobody to answer, the compile, the fit and the
+# chat waited for ever.
+COMPILE_TIMEOUT = 300
 
 
 class CompileFailed(RuntimeError):
@@ -133,8 +143,21 @@ def _compile(engine, tex, cwd, pdf, passes=1):
         pass
     last = None
     for _ in range(passes):
-        last = subprocess.run([engine, "-interaction=nonstopmode", tex],
-                              cwd=cwd, capture_output=True, env=tex_env())
+        try:
+            last = subprocess.run([engine, "-interaction=nonstopmode", tex],
+                                  cwd=cwd, capture_output=True, env=tex_env(),
+                                  stdin=subprocess.DEVNULL, timeout=COMPILE_TIMEOUT)
+        except subprocess.TimeoutExpired:
+            raise CompileFailed(
+                f"{engine} was still running on {os.path.basename(tex)} after "
+                f"{COMPILE_TIMEOUT // 60} minutes, so it was stopped. A LaTeX that installs "
+                f"what it is missing as it goes (MiKTeX) can wait for a yes that never "
+                f"comes: `python3 tools/env_check.py --fix` turns that into a silent "
+                f"install. Then render again.") from None
+        except FileNotFoundError:
+            raise CompileFailed(
+                f"{engine} is not on this computer, so the documents cannot be made: "
+                f"`python3 tools/env_check.py --fix` installs LaTeX (no password).") from None
     out = (last.stdout or b"").decode("utf-8", "replace") if last else ""
     if not os.path.exists(pdf):
         tail = out.splitlines()
@@ -158,10 +181,22 @@ def _compile(engine, tex, cwd, pdf, passes=1):
             + f". It substituted defaults and still wrote {os.path.basename(pdf)}, "
             f"so the PDF is valid and wrong. Check the working directory: "
             f"the font paths in the template are relative to it.")
+    log = _log(cwd, tex)
+    # An error LaTeX recovered from still leaves a PDF: "! Missing $ inserted" printed an
+    # email address without its underscore, "! Paragraph ended before \extrainfo was
+    # complete" dropped two contact lines, and each fit reported clean. A clean compile has
+    # no "!" line at all, so any one is a document that does not say what was written.
+    errors = latex_errors(out + "\n" + log)
+    if errors:
+        raise CompileFailed(
+            f"{engine} reported {len(errors)} error(s) in {os.path.basename(tex)} and wrote a "
+            f"PDF anyway, so the page may not say what the draft says: "
+            + "; ".join(errors[:4])
+            + ". Write the value that line names another way, then render again.")
     # A character the font does not have is left out of the page with no error at all: an
     # accented surname or an employer's name loses a letter, a symbol vanishes from a
     # figure, and the PDF is one valid page. LaTeX says so only in its log.
-    lost = missing_characters(out + "\n" + _log(cwd, tex))
+    lost = missing_characters(out + "\n" + log)
     if lost:
         raise CompileFailed(
             f"{engine} could not print {len(lost)} character(s) in {os.path.basename(pdf)}, "
@@ -185,6 +220,17 @@ def _log(cwd, tex):
         return ""
 
 
+def latex_errors(log):
+    """Each error line a compile printed ("! Missing $ inserted."), once, in order. A line
+    of the log that opens on "!" is TeX's own mark for an error, never for a warning."""
+    seen = []
+    for line in (log or "").splitlines():
+        line = line.strip()
+        if line.startswith("!") and line not in seen:
+            seen.append(line)
+    return seen
+
+
 def missing_characters(log):
     """Each character a compile could not print, once: "日 (U+65E5) in lmroman10-regular"."""
     seen = []
@@ -196,35 +242,27 @@ def missing_characters(log):
 
 
 def font_problems(pdf):
-    """Plain lines for each font in `pdf` that is not embedded or is a Type 3 (bitmap) font,
-    from Poppler's pdffonts; [] when every font is embedded, or pdffonts cannot run. A font
-    left out of the file is replaced by whatever the reader's machine has, and a parser may
-    read it wrongly; a Type 3 font prints blurred and many parsers read it as nothing."""
+    """Plain lines for each font in `pdf` that is not embedded or is a Type 3 (bitmap) font;
+    [] when every font is embedded, or the PDF cannot be read. A font left out of the file
+    is replaced by whatever the reader's machine has, and a parser may read it wrongly; a
+    Type 3 font prints blurred and many parsers read it as nothing. Read with pypdf
+    (tools/pdftext.py), the facts Poppler's pdffonts printed, so nothing extra is needed."""
     if not os.path.exists(pdf):
         return []
-    try:
-        got = subprocess.run(["pdffonts", pdf], capture_output=True, text=True)
-    except (FileNotFoundError, OSError):
-        return []
-    if got.returncode != 0:
-        return []
     out = []
-    for line in (got.stdout or "").splitlines()[2:]:
-        cols = line.split()
-        if len(cols) < 7:
-            continue
-        name, kind, emb = cols[0], " ".join(cols[1:-6]), cols[-5]
-        if emb.lower() == "no":
+    for f in pdftext.fonts(pdf) or []:
+        name = f["name"]
+        if not f["embedded"]:
             out.append(f"the font {name} is not embedded in {os.path.basename(pdf)}, so the "
                        f"reader's machine puts another in its place")
-        elif kind.startswith("Type 3"):
+        elif f["type"].startswith("Type3"):
             out.append(f"the font {name} in {os.path.basename(pdf)} is a Type 3 (bitmap) font, "
                        f"which prints blurred and many parsers read as nothing")
     return out
 
 
 def compile_resume(abbr, passes=1):
-    r"""lualatex; returns the page count.
+    r"""lualatex, or xelatex for a design (resume_engine); returns the page count.
 
     One pass settles the page count, which is all a measurement needs, and the
     second pass doubled the cost of every one. But moderncv's footer carries
@@ -233,14 +271,44 @@ def compile_resume(abbr, passes=1):
     trimming therefore printed "1/2" on a one-page document, and shipped that
     way. So measurements stay at one pass and the final render asks for two.
     """
-    return _compile("lualatex", docpaths.resume_stem(abbr) + ".tex",
-                    f"{ROOT}/cv", resume_pdf(abbr), passes)
+    # Where the renderer wrote it: the checkout, or LJS_STATE's folder when that is set.
+    return _compile(resume_engine(abbr), docpaths.resume_stem(abbr) + ".tex",
+                    os.path.dirname(docpaths.resume_tex(abbr)), resume_pdf(abbr), passes)
+
+
+def resume_engine(abbr):
+    """The engine the .tex names on its "Compile with:" line: LuaLaTeX for the template,
+    XeLaTeX for a design (templates/doc_design.py ENGINE). LuaLaTeX when it names none."""
+    try:
+        with open(docpaths.resume_tex(abbr), encoding="utf-8") as fh:
+            head = fh.read(600)
+    except OSError:
+        return "lualatex"
+    m = re.search(r"Compile with: (lualatex|xelatex)\b", head)
+    return m.group(1) if m else "lualatex"
 
 
 def compile_letter(abbr):
     """One xelatex pass; returns the page count."""
     return _compile("xelatex", docpaths.letter_stem(abbr) + ".tex",
-                    f"{ROOT}/cover_letters", letter_pdf(abbr))
+                    os.path.dirname(docpaths.letter_tex(abbr)), letter_pdf(abbr))
+
+
+# The shortest a letter body may be asked to run to (Tweak L1, "Short"): the app keeps every
+# letter between 200 and 250 words (draft_audit.BODY_WORDS).
+MIN_LETTER_WORDS = 205
+
+
+def letter_words(a) -> int:
+    """The most words this letter's body may run to: the draft's own `max_words` (a tweak),
+    else the person's documents.letter_words, else MAX_BODY_WORDS; never under
+    MIN_LETTER_WORDS or over MAX_BODY_WORDS."""
+    want = a.get("max_words") or person.get("documents.letter_words", None) or MAX_BODY_WORDS
+    try:
+        want = int(want)
+    except (TypeError, ValueError):
+        want = MAX_BODY_WORDS
+    return max(MIN_LETTER_WORDS, min(MAX_BODY_WORDS, want))
 
 
 def body_words(a):
@@ -484,9 +552,17 @@ def fit(a):
         # line was swapped for the one that describes the job.
         trimmed |= before - {b for j in a["jobs"] for b in j["bullets"]}
         pages = _render_resume(a)
+    # A design too big for what must stay on the page (every role at its floor) is made a
+    # step smaller, never past a setting's bound, rather than left on two pages. The
+    # template has no step: it is fitted by its bullets alone, as it always was.
+    while pages > PAGES and R.gen.doc_design.step_down(R.build(a)["design"]) is not None:
+        a["design_step"] = int(a.get("design_step") or 0) + 1
+        pages = _render_resume(a)
     # Fill the page. Add a bullet, recompile, and keep it only if the resume is
     # still within its pages; otherwise put the page back the way it was and stop.
-    for _ in range(8):
+    # "Leave some space" (Tweak R7): the page is not filled back up to its last line.
+    fill = str(a.get("fill") or person.get("documents.fill", "") or "fuller")
+    for _ in range(0 if fill == "space" else 8):
         if pages > PAGES:
             break
         snapshot = [list(j["bullets"]) for j in a["jobs"]]
@@ -504,12 +580,21 @@ def fit(a):
             pages = _render_resume(a)   # the PDF on disk must match the draft
             break
         pages = grown
+    if a.get("general"):
+        # A resume for no posting in particular has no letter (tools/general_resume.py).
+        pages = compile_resume(abbr, passes=2)
+        fonts = font_problems(resume_pdf(abbr))
+        if fonts:
+            raise CompileFailed("; ".join(fonts) + ". Use fonts the template embeds (the ones "
+                                "it ships with), then render again.")
+        return (pages, _lines(resume_pdf(abbr))), 0
     lpages = _render_letter(a)
+    most = letter_words(a)
     for _ in range(9):
         words = body_words(a)
-        if lpages <= 1 and words <= MAX_BODY_WORDS:
+        if lpages <= 1 and words <= most:
             break
-        if not trim_letter(a, max(8, words - MAX_BODY_WORDS), page_over=lpages > 1):
+        if not trim_letter(a, max(8, words - most), page_over=lpages > 1):
             break
         lpages = _render_letter(a)
     # Settle the page reference in the footer now that the layout is final.
@@ -551,12 +636,15 @@ def unheld_report(a):
     return out
 
 
-def needs_check(resume_pages, letter_pages, words):
+def needs_check(resume_pages, letter_pages, words, general=False):
     """Whether a fitted application is outside its budgets: the resume off the
-    profile's page count, the letter off one page, or the body over its cap.
+    profile's page count, the letter off one page, or the body over its cap. A
+    general resume (no letter) is held to its pages alone.
 
     It was `resume_pages == 1`, so every application of a person whose profile
     asks for two pages was flagged CHECK however well it fitted."""
+    if general:
+        return not 1 <= resume_pages <= PAGES
     return not (1 <= resume_pages <= PAGES and letter_pages == 1 and words <= MAX_BODY_WORDS)
 
 
@@ -589,7 +677,7 @@ def save(path, apps, read_in):
     """Write the drafts back, never with a posting that arrived fenced."""
     out = [{k: v for k, v in a.items() if not (i in read_in and k == "posting")}
            for i, a in enumerate(apps)]
-    with open(path, "w", encoding="utf-8") as fh:
+    with open(path, "w", encoding="utf-8", newline="\n") as fh:
         json.dump(out, fh, indent=1, ensure_ascii=False)
         fh.write("\n")
 
@@ -608,6 +696,10 @@ if __name__ == "__main__":
         except CompileFailed as exc:
             print(f"fit_to_page: {a.get('abbr') or a.get('company')}: {exc}", file=sys.stderr)
             sys.exit(1)
+        if a.get("general"):
+            flag = "   <-- CHECK" if needs_check(rp, lp, 0, general=True) else ""
+            print(f"{a['abbr']:<12} resume {rp}p/{rl}ln  no letter (a general resume){flag}")
+            continue
         bw = body_words(a)
         flag = "   <-- CHECK" if needs_check(rp, lp, bw) else ""
         print(f"{a['abbr']:<12} resume {rp}p/{rl}ln  letter {lp}p/{bw} body words{flag}")

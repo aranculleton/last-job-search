@@ -78,7 +78,7 @@ def test_the_command_says_what_each_side_counts(tmp_path):
     doc = tmp_path / "answers.md"
     doc.write_text("### Q\nI led 12 clients through it.\n", encoding="utf-8")
     r = subprocess.run([sys.executable, os.path.join(ROOT, "tools", "check_numbers.py"), str(doc)],
-                       capture_output=True, text=True, cwd=ROOT,
+                       capture_output=True, text=True, encoding="utf-8", errors="replace", cwd=ROOT,
                        env=dict(os.environ, LJS_PROFILE=os.path.join(ROOT, "profile.example")))
     assert r.returncode == 1
     assert 'the profile counts 12 "stores against' in r.stdout

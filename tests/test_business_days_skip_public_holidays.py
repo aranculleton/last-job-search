@@ -76,3 +76,31 @@ def test_without_a_profile_weekends_alone_count(monkeypatch):
     monkeypatch.setattr(H, "_settings", lambda: ("", "", ()))
     assert state.business_days_between(D(2026, 10, 9), D(2026, 10, 16)) == 5
     H.for_year.cache_clear()
+
+
+def test_a_day_kept_in_the_next_years_table_still_counts(monkeypatch):
+    # New Year's Day 2022 was a Saturday; the US keeps it on Friday 31 December 2021, in
+    # 2022's table. A range ending in December read only its own year and counted it as a
+    # working day (networking audit, 2026-10-25).
+    monkeypatch.setattr(H, "_settings", lambda: ("US", "", ()))
+    assert dt.date(2021, 12, 31) in H.for_year(2022)
+    assert state.business_days_between("2021-12-30", "2021-12-31") == 0
+    assert state.business_days_between("2021-12-29", "2022-01-03") == 2
+    assert state.add_business_days(dt.date(2021, 12, 30), 1) == dt.date(2022, 1, 3)
+
+
+def test_is_holiday_stays_and_agrees_with_the_count(monkeypatch):
+    # holidays.is_holiday is a public name, and a person's own tests (profile/tests) may use
+    # one: it went on 2026-10-25 as unused, and a person's test that walks a span day by day
+    # with it, to check the business-day count, failed on the name. It is back, reading the
+    # next year's table the way the count does, so a day kept there counts as a holiday.
+    monkeypatch.setattr(H, "_settings", lambda: ("US", "", ()))
+    H.for_year.cache_clear()
+    assert H.is_holiday(D(2021, 12, 31))                     # New Year's Day 2022, observed
+    assert H.is_holiday(D(2022, 7, 4)) and not H.is_holiday(D(2022, 7, 5))
+    start, end = D(2021, 1, 1), D(2022, 12, 31)
+    walked = sum(1 for n in range(1, (end - start).days + 1)
+                 if (start + dt.timedelta(days=n)).weekday() < 5
+                 and not H.is_holiday(start + dt.timedelta(days=n)))
+    assert state.business_days_between(start, end) == walked
+    H.for_year.cache_clear()

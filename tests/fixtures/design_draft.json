@@ -1,0 +1,152 @@
+{
+ "_about": "An invented application for the example person (profile.example), rendered in every design by tools/design_check.py --all and the design tests.",
+ "company": "Larkspur Freight & Cold Chain",
+ "role": "Inventory Planning Analyst",
+ "summary": "Operations analyst with seven years turning warehouse, transport and supplier data into the weekly forecasts operations teams plan against. Built weekly demand-forecasting models in Python and SQL across 2,400 SKUs that cut forecast error from 22% to 14%, with the dbt models and Power BI reporting behind them.",
+ "tools": "SQL, Python, dbt, Power BI",
+ "p1": "Your depot managers can only plan around an inventory forecast they trust, week after week, on chilled and ambient lines alike. At Brindle & Hart Logistics I built the weekly demand-forecasting models in Python and SQL that cut forecast error from 22% to 14% across 2,400 SKUs.",
+ "p2": "Larkspur runs 14 temperature-controlled depots across the North of England. Chilled stock that waits too long is stock written off, and at Oakmere Foods I modelled shelf-life and order patterns for chilled lines, informing order-quantity changes that reduced write-offs by 18% over two quarters.",
+ "lead": "Where my work meets what the role asks:",
+ "cl_bullets": [
+  {
+   "label": "Forecasting",
+   "text": "Forecast error on 2,400 SKUs came down from 22% to 14%, and the business released an estimated £1.1M it had been holding as safety stock."
+  },
+  {
+   "label": "Pipelines",
+   "text": "The warehouse feed now checks itself on a schedule in dbt, where someone used to spend two hours reconciling it by hand each day."
+  },
+  {
+   "label": "Reporting",
+   "text": "More than 30 operations managers read service levels from one governed Power BI dataset I own, where there used to be eleven spreadsheets."
+  }
+ ],
+ "p4": "I am based in Manchester with settled status and full right to work in the UK, so no sponsorship is needed. Whether forecast error runs higher on the chilled network than the ambient one, depot by depot, is the first thing I would want to look at in your data.",
+ "concession": "none",
+ "angle": "A forecaster whose models already decide what depot and operations teams do next week.",
+ "requirement_map": [
+  {
+   "requirement": "SQL and Python",
+   "evidence": "BH_FORECAST"
+  },
+  {
+   "requirement": "demand or inventory forecasting models",
+   "evidence": "BH_FORECAST"
+  },
+  {
+   "requirement": "dbt",
+   "evidence": "BH_PIPE"
+  },
+  {
+   "requirement": "Power BI dashboards",
+   "evidence": "BH_REPORT"
+  },
+  {
+   "requirement": "suppliers and depot managers",
+   "evidence": "OF_SUPPLIER, BH_REPORT"
+  },
+  {
+   "requirement": "a forecasting suite (a plus)",
+   "evidence": "not held; not named"
+  }
+ ],
+ "notes_for_tracker": "Angle: weekly forecasts that depot teams plan against. Company fact: 14 temperature-controlled depots (larkspurfreight.example). Salary stated GBP 42,000 to 48,000.",
+ "deadline": "",
+ "contact_person": "",
+ "req_id": "",
+ "claim_map": [
+  {
+   "field": "summary",
+   "sentence": "Operations analyst with seven years turning warehouse, transport and supplier data into the weekly forecasts operations teams plan against.",
+   "cites": [
+    "SUMMARY"
+   ]
+  },
+  {
+   "field": "summary",
+   "sentence": "Built weekly demand-forecasting models in Python and SQL across 2,400 SKUs that cut forecast error from 22% to 14%, with the dbt models and Power BI reporting behind them.",
+   "cites": [
+    "BH_FORECAST",
+    "BH_PIPE",
+    "BH_REPORT"
+   ]
+  },
+  {
+   "field": "p1",
+   "sentence": "Your depot managers can only plan around an inventory forecast they trust, week after week, on chilled and ambient lines alike.",
+   "cites": [
+    "POSTING"
+   ]
+  },
+  {
+   "field": "p1",
+   "sentence": "At Brindle & Hart Logistics I built the weekly demand-forecasting models in Python and SQL that cut forecast error from 22% to 14% across 2,400 SKUs.",
+   "cites": [
+    "BH_FORECAST"
+   ]
+  },
+  {
+   "field": "p2",
+   "sentence": "Larkspur runs 14 temperature-controlled depots across the North of England.",
+   "cites": [
+    "F1"
+   ]
+  },
+  {
+   "field": "p2",
+   "sentence": "Chilled stock that waits too long is stock written off, and at Oakmere Foods I modelled shelf-life and order patterns for chilled lines, informing order-quantity changes that reduced write-offs by 18% over two quarters.",
+   "cites": [
+    "OF_WASTE"
+   ]
+  },
+  {
+   "field": "lead",
+   "sentence": "Where my work meets what the role asks:",
+   "cites": []
+  },
+  {
+   "field": "cl_bullets[0]",
+   "sentence": "Forecast error on 2,400 SKUs came down from 22% to 14%, and the business released an estimated £1.1M it had been holding as safety stock.",
+   "cites": [
+    "BH_FORECAST"
+   ]
+  },
+  {
+   "field": "cl_bullets[1]",
+   "sentence": "The warehouse feed now checks itself on a schedule in dbt, where someone used to spend two hours reconciling it by hand each day.",
+   "cites": [
+    "BH_PIPE"
+   ]
+  },
+  {
+   "field": "cl_bullets[2]",
+   "sentence": "More than 30 operations managers read service levels from one governed Power BI dataset I own, where there used to be eleven spreadsheets.",
+   "cites": [
+    "BH_REPORT"
+   ]
+  },
+  {
+   "field": "p4",
+   "sentence": "I am based in Manchester with settled status and full right to work in the UK, so no sponsorship is needed.",
+   "cites": [
+    "LOC",
+    "AUTH"
+   ]
+  },
+  {
+   "field": "p4",
+   "sentence": "Whether forecast error runs higher on the chilled network than the ambient one, depot by depot, is the first thing I would want to look at in your data.",
+   "cites": [
+    "POSTING"
+   ]
+  }
+ ],
+ "stretches": [],
+ "pack_hash": "61ed05c74cc9e914",
+ "abbr": "Larkspur",
+ "posting": "Larkspur Freight & Cold Chain is hiring an Inventory Planning Analyst in Manchester.\n\nYou will own the weekly inventory and replenishment forecasts for our chilled and ambient\ndistribution network, and turn them into plans our depot managers can act on.\n\nWhat you bring:\n- Strong SQL and Python for forecasting and analysis\n- Experience building demand or inventory forecasting models\n- dbt or similar for reliable data pipelines\n- Power BI dashboards for operations teams\n- Confident working with suppliers and depot managers\n- Experience with a forecasting suite is a plus\n\nHybrid: two days a week at our the Salford depot office. Salary GBP 42,000 to 48,000.",
+ "residual_risks": [
+  "chilled vs ambient forecast error"
+ ],
+ "letter_date": "25 October 2026"
+}

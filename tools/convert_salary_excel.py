@@ -31,6 +31,13 @@ import argparse
 import re
 from pathlib import Path
 
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+try:
+    import local_path  # the repo's .venv, where env_check --fix installs openpyxl
+    local_path.run_in_venv()
+    local_path.use_venv()
+except Exception:  # noqa: BLE001
+    pass
 try:
     import openpyxl
 except ImportError:
@@ -339,7 +346,7 @@ def main():
         "companies": all_companies,
     }
 
-    with open(output_path, "w", encoding="utf-8") as f:
+    with open(output_path, "w", encoding="utf-8", newline="\n") as f:
         json.dump(output, f, ensure_ascii=False, indent=2)
 
     print(f"\nDone! Wrote {len(all_companies)} company entries to {output_path}")

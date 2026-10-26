@@ -244,6 +244,21 @@ _CUE_AFTER = re.compile(_LANG_STEP + r"{0,3}" + _LANG_SEP
                         r"(?:required|essential|mandatory|necessary|a must)\b)", re.I)
 _UNAMBIGUOUS_RX = (re.compile(r"(?:" + _UNAMBIGUOUS_LANGUAGE + r")", re.I)
                    if _UNAMBIGUOUS_LANGUAGE else _NEVER)
+# A name joined to "speaking" or "language" and set before a word for a market, the people
+# in one or a thing names what the job deals with, not a language the person speaks:
+# "Experience with Spanish-speaking markets is required" and "Japanese-language source
+# systems required" were cut as language requirements, the hyphen read as the cue beside
+# the name. A word for the person keeps the cue ("a Spanish-speaking analyst",
+# "Spanish-speaking candidates"), and so does a word between that starts another phrase.
+_AS_A_MARKET = re.compile(
+    r"[-\s]+(?:speaking|language|spoken)\s+"
+    r"(?:(?!(?:for|to|in|on|at|with|and|or|of|who|that|is|are|be|will|must|should)\b)"
+    r"[a-z&]+\s+){0,2}?"
+    r"(?:markets?|countr(?:y|ies)|regions?|territor(?:y|ies)|communit(?:y|ies)|populations?|"
+    r"audiences?|customers?|clients?|consumers?|users?|patients?|listeners?|viewers?|"
+    r"readers?|households?|segments?|economies|media|press|content|publications?|"
+    r"sources?|systems?|data|documents?|documentation|materials?|websites?|sites?|"
+    r"platforms?|products?|campaigns?|channels?|world)\b", re.I)
 
 # A second language named as a nice-to-have. The screen's own preference words (PREFERRED,
 # and ENCOURAGE, which holds "not required" and "welcome"), and the few a language line adds.
@@ -415,7 +430,7 @@ def _languages_named(sentence: str):
         if not _UNAMBIGUOUS_RX.fullmatch(m.group(0)):
             yield m                     # an English word, matched only beside its cue
         elif (_CUE_BEFORE.search(s[max(0, m.start() - 100):m.start()])
-                or _CUE_AFTER.match(s, m.end())):
+                or (_CUE_AFTER.match(s, m.end()) and not _AS_A_MARKET.match(s, m.end()))):
             yield m
 
 
@@ -571,14 +586,26 @@ _NUM = r"(\d{1,2}|" + "|".join(WORD_NUM) + r")"
 # so the low end is what counts and every dash form matches.
 # The token right after "years" must open an experience phrase, or "18 years
 # or older ... criminal background check" reads as a bar.
+# "4 or more years" says the same as "4+ years", and "3 years' experience" puts its
+# apostrophe where a word boundary cannot follow it: both read as no bar (2026-10-25).
 YEARS = re.compile(
     r"\b" + _NUM + r"\s*(?:\+|(?:\s*(?:-|–|—|to)\s*" + _NUM + r"))?\s*(?:\+\s*)?"
-    r"(?:years?|yrs?)\b\.?\s*"
-    r"(?:(?:of|in|’|'|working|relevant|progressive|professional|hands[- ]on|"
+    r"(?:(?:or|and)\s+(?:more|above|over|greater)\s+)?"
+    r"(?:years?|yrs?)\b\.?\s*(?:['’]\s*)?"
+    r"(?:(?:of|in|working|relevant|progressive|professional|hands[- ]on|"
     r"related|industry|practical|proven|demonstrated|direct|prior|full[- ]time|"
     r"solid|strong|recent|previous|combined|equivalent|total|minimum|"
     r"post[- ]\w+|as an?|as)\b[^.\n]{0,40}?)?"
     r"(experience|exp\b|\brole\b|\bbackground\b)", re.I)
+# "Someone with 7+ years in data science" names a field, not the word experience. It counts
+# only where years_bars already demands a requirement cue and no company boast in the
+# sentence (so "we have 20+ years in the industry" is the firm's, never a bar), and never
+# for the firm's own age in its own words: "in business", "in operation", "in existence".
+YEARS_IN = re.compile(
+    r"\b" + _NUM + r"\s*(?:\+|(?:\s*(?:-|–|—|to)\s*" + _NUM + r"))?\s*(?:\+\s*)?"
+    r"(?:(?:or|and)\s+(?:more|above|over|greater)\s+)?(?:years?|yrs?)\s+in\s+"
+    r"(?!(?:business|operation|operations|existence|service|our\b)\b)"
+    r"(?:an?\s+|the\s+)?[a-z][\w-]*", re.I)
 # A professional designation is a credential gate, not a skills gap: no amount
 # of adjacent experience substitutes for an examining body's credential. A
 # pricing posting can require an actuarial designation in progress, and a full
@@ -680,8 +707,11 @@ def beside_a_bachelor(sentence: str, m) -> bool:
 # engineering, statistics, mathematics, computer science, or physics, or through substantial
 # technical work, research, or projects" was read as a bachelor's, required, with no route
 # (2026-10-24): the other way was named, in other words than "or equivalent".
+# "or a combination of education and experience" is the same other way in (2026-10-25).
 ESCAPE = re.compile(
     r"or equivalent|or comparable|or relevant experience|equivalent experience|"
+    r"\bor (?:an?\s+|any\s+)?(?:equivalent\s+)?combination of (?:relevant\s+)?"
+    r"(?:education|training|experience|schooling|qualifications?)\b|"
     r"or an equivalent|equivalent practical|or related experience"
     r"|\bin lieu of (?:an?\s+|the\s+)?(?:\w+\s+)?degree\b|\bexperience in lieu\b", re.I)
 # The other way in, named in its own words, counts only inside the degree's own sentence and
@@ -711,7 +741,7 @@ WANTS = re.compile(r"\b(?:requir\w*|qualificat\w*|must have|minimum|at least|you
                    r"you'?ll bring|you bring|you'?ll need|you need|you should have|"
                    r"we'?re looking for|looking for|proven|demonstrated|ideal candidate|"
                    r"experience (?:in|with|as)|background in|track record|"
-                   r"candidates? (?:should|must|will))\b", re.I)
+                   r"candidates? (?:should|must|will|with)|someone with)\b", re.I)
 # "We're looking for" is a requirement heading, not a company boast, and reading
 # it as one discarded the sentence behind it: "Who We're Looking For 5+ years
 # of experience in data science" had its bar thrown away by the rule meant to
@@ -927,7 +957,11 @@ def years_bars(text: str) -> list[tuple[int, str]]:
     for s in sentences(text or ""):
         if BOAST.search(s) or not WANTS.search(s):
             continue
-        for m in YEARS.finditer(s):
+        seen = set()
+        for m in list(YEARS.finditer(s)) + list(YEARS_IN.finditer(s)):
+            if m.start() in seen:
+                continue
+            seen.add(m.start())
             n = _num(m.group(1))
             if n > 25 or (n > 12 and not STRONG_WANT.search(s)) or _preferred_bar(s, m):
                 continue
@@ -1668,7 +1702,7 @@ def screen(job: dict) -> dict:
 
 
 def load_jobs(path: str) -> list[dict]:
-    data = json.load(open(path))
+    data = json.load(open(path, encoding="utf-8"))
     return list(data.values()) if isinstance(data, dict) else list(data)
 
 
@@ -1702,9 +1736,9 @@ def main() -> int:
     # already cut for free - exactly what used to happen. Use
     # --out-all when the cut records are wanted too (to record why).
     if a.out:
-        json.dump(keep, open(a.out, "w"), indent=1)
+        json.dump(keep, open(a.out, "w", encoding="utf-8", newline="\n"), indent=1)
     if a.out_all:
-        json.dump(out, open(a.out_all, "w"), indent=1)
+        json.dump(out, open(a.out_all, "w", encoding="utf-8", newline="\n"), indent=1)
     for j in cut:
         print(f"CUT  {(j.get('company') or '')[:26]:26} {(j.get('title') or '')[:38]:38} {j['cuts'][0][:70]}")
     print(f"\n{len(jobs)} screened, {len(keep)} survive, {len(cut)} cut on a quoted stated fact "

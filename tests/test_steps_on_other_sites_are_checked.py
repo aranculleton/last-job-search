@@ -32,16 +32,20 @@ CSV = ("Notes:\n\"When exporting your connection data, you may notice that some 
 
 # ------------------------------------------------------------ every printed step
 
-def test_every_step_printed_says_when_it_was_checked_and_against_what():
+def test_every_step_printed_tells_claude_when_it_was_checked_and_against_what():
+    """Claude is given the day and the page, to check before passing a step on; the person
+    gets the steps alone (they once headed every path, and nobody it was for could use them)."""
     for e in REG["entries"]:
         if not (e.get("steps") or e.get("how")):
             continue
         assert C.official(e).startswith("https://"), e["id"]
+        src = C.source(e["id"])
+        assert e["verified_on"] in src and C.official(e) in src, e["id"]
         if e.get("steps"):
-            head = C.steps(e["id"], today=datetime.date.fromisoformat(e["verified_on"]))
-            assert head[0] == (f"At the time of writing (checked {e['verified_on']}; official "
-                               f"page: {C.official(e)}):")
-            assert not head[-1].startswith("[claude_surfaces:")
+            lines = C.steps(e["id"], today=datetime.date.fromisoformat(e["verified_on"]))
+            assert lines[0] == f"To {e['goal']}:"
+            assert not any(e["verified_on"] in ln or C.official(e) in ln for ln in lines)
+            assert not lines[-1].startswith("[claude_surfaces:")
 
 
 def test_a_step_past_its_date_tells_claude_to_check_it_first():
@@ -83,7 +87,7 @@ def test_the_export_steps_match_linkedins_page_and_never_promise_ten_minutes():
     assert "attach only Connections.csv" in steps
     u = U.by_id("connections-export")
     assert "ten minutes to a day" in u.ask and "about ten minutes," not in u.ask
-    assert u.steps().startswith("At the time of writing (checked ")
+    assert u.steps().startswith("To get your list of LinkedIn connections:")
     assert "import-connections" in u.run and "while-you-wait" in u.run and "people-paste" in u.run
     # The quicker route is offered once, starting where an interview is running.
     offer = sources.while_you_wait([{"company": "Kestrel Mutual", "status": "interview"},

@@ -49,7 +49,7 @@ def test_the_shared_phrase_check_counts_as_verify_batch_did():
                "rebuilt weekly demand forecasts across six depots in dbt",
                "owned the service reporting"]
     assert set(AU.shared_runs(bullets)) == {"weekly demand forecasts across six depots"}
-    with open(os.path.join(ROOT, "tools", "verify_batch.sh"), encoding="utf-8") as fh:
+    with open(os.path.join(ROOT, "tools", "verify_batch.py"), encoding="utf-8") as fh:
         assert re.search(r"from audit_letters import [^\n]*\bshared_runs\b", fh.read())
 
 

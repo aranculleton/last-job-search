@@ -1,0 +1,57 @@
+{
+  "name": "Sales",
+  "field": "sales",
+  "aka": [
+    "sales",
+    "business development",
+    "account management"
+  ],
+  "boards": {},
+  "titles": [
+    {
+      "value": [
+        "Account Representative",
+        "Inside Salesperson",
+        "Outside Sales Representative",
+        "Sales Consultant",
+        "Sales Representative (Sales Rep)",
+        "Salesperson"
+      ],
+      "source": "https://www.onetonline.org/link/summary/41-4012.00",
+      "quote": "Sample of reported job titles: Account Representative, Customer Account Technician",
+      "on_page": [
+        "Account Representative",
+        "Inside Salesperson",
+        "Outside Sales Representative",
+        "Sales Consultant",
+        "Sales Representative (Sales Rep)",
+        "Salesperson"
+      ],
+      "checked": "2026-10-25",
+      "verified": true
+    }
+  ],
+  "families": [
+    {
+      "family": "CRM",
+      "members": [
+        [
+          "GoldMine",
+          "\\bgoldmine\\b"
+        ],
+        [
+          "SalesLogix",
+          "\\bsaleslogix\\b"
+        ]
+      ],
+      "source": "https://www.onetonline.org/link/summary/41-4012.00",
+      "quote": "Customer relationship management CRM software - HEAT Software GoldMine",
+      "on_page": [
+        "HEAT Software GoldMine",
+        "Sage SalesLogix"
+      ],
+      "checked": "2026-10-25",
+      "verified": true
+    }
+  ]
+}

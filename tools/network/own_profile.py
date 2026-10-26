@@ -145,7 +145,7 @@ def load_review() -> dict:
 def save_review(data: dict) -> str:
     path = review_path()
     os.makedirs(os.path.dirname(path), exist_ok=True)
-    with open(path, "w", encoding="utf-8") as fh:
+    with open(path, "w", encoding="utf-8", newline="\n") as fh:
         json.dump(data, fh, indent=2, ensure_ascii=False, sort_keys=True)
         fh.write("\n")
     return path
@@ -520,7 +520,8 @@ def from_paste(path: str, source: str = "paste") -> dict:
         raise ValueError("a pasted profile's source is paste or browser")
     if source == "browser":
         net = person.module("networking") if person.exists("networking.py") else None
-        if str(getattr(net, "PROFILE_READS", "") or "") != "browser":
+        import reading
+        if reading.reads_setting(net) != "browser":
             raise ValueError("their own page is read in their browser only where "
                              "profile/networking.py PROFILE_READS is \"browser\"; otherwise "
                              "they paste it")
@@ -942,10 +943,9 @@ def _clip(text, n) -> str:
 
 
 def _asked_about(limit=5) -> list:
-    import csv
+    import csv_store
     try:
-        with open(person.state("job_search_tracker.csv"), newline="", encoding="utf-8") as fh:
-            rows = list(csv.DictReader(fh))
+        rows = csv_store.dict_rows(person.state("job_search_tracker.csv"), refuse=False)
     except OSError:
         return []
     rows.sort(key=lambda r: str(r.get("date") or ""), reverse=True)

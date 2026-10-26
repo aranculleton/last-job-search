@@ -19,7 +19,7 @@ import sys
 import os
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
-import local_path  # noqa: E402  pdftotext where Homebrew keeps it, on a Mac's bare PATH
+import local_path  # noqa: E402  the repo's .venv, where env_check --fix puts pypdf
 
 local_path.extend()
 from pathlib import Path
@@ -50,10 +50,9 @@ def run_tool(command):
         ).stdout
     except FileNotFoundError as exc:
         raise VerificationError(
-            f"required command '{command[0]}' was not found. "
-            "Install pypdf (`pip install pypdf`) or poppler-utils "
-            "(macOS: brew install poppler, Debian/Ubuntu: apt install poppler-utils, "
-            "Windows: winget install oschwartz10612.Poppler)"
+            f"required command '{command[0]}' was not found, and pypdf, which reads the "
+            "PDF without it, is not installed either: `python3 tools/env_check.py --fix` "
+            "installs pypdf (no password)"
         ) from exc
     except subprocess.CalledProcessError as exc:
         detail = (exc.stderr or "").strip() or (exc.stdout or "").strip()
@@ -314,6 +313,10 @@ def tex_plain(text):
     s = re.sub(r"\\blockline\{([^{}]*)\}\{", r"\1: {", s)
     s = re.sub(r"\\href\{[^{}]*\}\{([^{}]*)\}", r"\1", s)
     s = re.sub(r"\\kern\s*-?[\d.]*\s*(?:pt|em|ex|mu)?", "", s)
+    # A backslash or a brace the text printed (tools/tex_escape.py) is held apart until
+    # every command and group is gone, so it never starts one or ends one.
+    s = re.sub(r"\\textbackslash(?![a-zA-Z])(?:\{\})?", "\x00", s)
+    s = s.replace("\\{", "\x01").replace("\\}", "\x02")
     for name, char in (("pounds", "\u00a3"), ("texteuro", "\u20ac"), ("euro", "\u20ac"),
                        ("textasciitilde", "~"), ("textasciicircum", "^"),
                        ("textbullet", "\u2022"), ("textendash", "-")):
@@ -321,7 +324,9 @@ def tex_plain(text):
     s = re.sub(r"\\([&%$#_{}])", r"\1", s)
     s = s.replace("\\\\", " ")
     s = re.sub(r"\\[a-zA-Z]+\*?(?:\[[^\]]*\])?", "", s)
-    return " ".join(s.replace("{", "").replace("}", "").replace("~", " ").split())
+    s = s.replace("{", "").replace("}", "").replace("~", " ").replace("\x00", "\\")
+    s = s.replace("\x01", "{").replace("\x02", "}")
+    return " ".join(s.split())
 
 
 def canon(text):

@@ -1,0 +1,209 @@
+{
+  "name": "Software and data",
+  "field": "software-data",
+  "aka": [
+    "software",
+    "data",
+    "tech",
+    "technology",
+    "IT",
+    "software engineering",
+    "data science",
+    "analytics"
+  ],
+  "boards": {
+    "*": [
+      {
+        "name": "Wellfound",
+        "url": "https://wellfound.com",
+        "kind": "field",
+        "source": "https://wellfound.com/",
+        "quote": "Wellfound is the AI recruiting platform and talent marketplace for startups",
+        "checked": "2026-10-25",
+        "verified": true,
+        "search": "https://wellfound.com/jobs",
+        "paths": {
+          "search": "/jobs",
+          "posting": "/jobs/"
+        },
+        "robots": {
+          "checked": "2026-10-25",
+          "why": "",
+          "search": true,
+          "status": "allowed",
+          "posting": true,
+          "crawl_delay": null,
+          "ai_input": null
+        },
+        "public_search": {
+          "checked": "2026-10-25",
+          "status": "open",
+          "http": 200
+        }
+      },
+      {
+        "name": "Welcome to the Jungle",
+        "url": "https://www.welcometothejungle.com",
+        "kind": "field",
+        "source": "https://www.welcometothejungle.com/",
+        "quote": "Welcome to the Jungle is the guide that walks you through your job-search",
+        "checked": "2026-10-25",
+        "verified": true,
+        "search": "https://www.welcometothejungle.com/en/jobs?query=data",
+        "paths": {
+          "search": "/en/jobs?query=data",
+          "posting": "/en/companies/"
+        },
+        "robots": {
+          "checked": "2026-10-25",
+          "why": "",
+          "search": false,
+          "status": "partial",
+          "posting": true,
+          "crawl_delay": null,
+          "ai_input": null
+        },
+        "public_search": {
+          "checked": "2026-10-25",
+          "status": "not_tried",
+          "http": null
+        }
+      }
+    ],
+    "us": [
+      {
+        "name": "Dice",
+        "url": "https://www.dice.com",
+        "kind": "field",
+        "source": "https://www.dice.com/",
+        "quote": "Search 70,000+ job openings from tech's hottest employers",
+        "checked": "2026-10-25",
+        "verified": true,
+        "search": "https://www.dice.com/jobs?q=data%20analyst&location=Chicago",
+        "paths": {
+          "search": "/jobs?q=data%20analyst&location=Chicago",
+          "posting": "/job-detail/"
+        },
+        "robots": {
+          "checked": "2026-10-25",
+          "why": "",
+          "search": false,
+          "status": "partial",
+          "posting": true,
+          "crawl_delay": null,
+          "ai_input": null
+        },
+        "public_search": {
+          "checked": "2026-10-25",
+          "status": "not_tried",
+          "http": null
+        }
+      }
+    ]
+  },
+  "documents": {
+    "*": [
+      {
+        "topic": "portfolio",
+        "value": "a GitHub profile or portfolio link beside the resume",
+        "source": "https://en.wikipedia.org/wiki/R%C3%A9sum%C3%A9",
+        "quote": "but all job seekers should now have a digital version of their",
+        "checked": "2026-10-25",
+        "verified": true
+      }
+    ]
+  },
+  "pay": {
+    "*": [
+      {
+        "name": "Levels.fyi",
+        "url": "https://www.levels.fyi/",
+        "what": "pay by company, title, level and city, reported by employees",
+        "source": "https://www.levels.fyi/",
+        "quote": "Search 1M+ data points for different companies, job titles, career levels, and locations",
+        "checked": "2026-10-25",
+        "verified": true
+      }
+    ]
+  },
+  "titles": [
+    {
+      "value": [
+        "Application Developer",
+        "DevOps Engineer",
+        "Software Architect",
+        "Software Developer",
+        "Software Development Engineer",
+        "Software Engineer",
+        "Systems Engineer"
+      ],
+      "source": "https://www.onetonline.org/link/summary/15-1252.00",
+      "quote": "Sample of reported job titles: Application Developer, Application Integration Engineer",
+      "on_page": [
+        "Application Developer",
+        "DevOps Engineer",
+        "Software Architect",
+        "Software Developer",
+        "Software Development Engineer",
+        "Software Engineer",
+        "Systems Engineer"
+      ],
+      "checked": "2026-10-25",
+      "verified": true
+    }
+  ],
+  "families": [
+    {
+      "family": "configuration management tool",
+      "members": [
+        [
+          "Chef",
+          "(?-i:\\bChef\\b)"
+        ],
+        [
+          "Puppet",
+          "(?-i:\\bPuppet\\b)"
+        ],
+        [
+          "Terraform",
+          "\\bterraform\\b"
+        ]
+      ],
+      "source": "https://www.onetonline.org/link/summary/15-1252.00",
+      "quote": "Configuration management software - Chef Hot Technology ; IBM Terraform",
+      "on_page": [
+        "Chef",
+        "Puppet",
+        "Terraform"
+      ],
+      "checked": "2026-10-25",
+      "verified": true
+    },
+    {
+      "family": "statistics or scientific package",
+      "members": [
+        [
+          "SPSS",
+          "\\bspss\\b"
+        ],
+        [
+          "SAS",
+          "(?-i:\\bSAS\\b)"
+        ],
+        [
+          "MATLAB",
+          "\\bmatlab\\b"
+        ]
+      ],
+      "source": "https://www.onetonline.org/link/summary/15-1252.00",
+      "quote": "Analytical or scientific software - IBM SPSS Statistics",
+      "on_page": [
+        "SPSS",
+        "SAS",
+        "MATLAB"
+      ],
+      "checked": "2026-10-25",
+      "verified": true
+    }
+  ]
+}

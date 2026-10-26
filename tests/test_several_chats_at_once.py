@@ -84,19 +84,16 @@ def test_seen_postings_merge_by_posting():
 
 def _git(cwd, *args):
     return subprocess.run(["git", "-C", cwd, "-c", "user.name=t", "-c", "user.email=t@example.com",
-                           *args], capture_output=True, text=True)
+                           *args], capture_output=True, text=True, encoding="utf-8", errors="replace")
 
 
 def test_git_uses_it_for_a_real_merge(tmp_path):
     repo = str(tmp_path)
     _git(repo, "init", "-q", "-b", "master")
     os.makedirs(os.path.join(repo, "tools"))
-    with open(os.path.join(ROOT, "tools", "merge_state.py")) as f, \
-            open(os.path.join(repo, "tools", "merge_state.py"), "w") as g:
-        g.write(f.read())
-    with open(os.path.join(ROOT, ".gitattributes")) as f, \
-            open(os.path.join(repo, ".gitattributes"), "w") as g:
-        g.write(f.read())
+    shutil.copyfile(os.path.join(ROOT, "tools", "merge_state.py"),
+                    os.path.join(repo, "tools", "merge_state.py"))
+    shutil.copyfile(os.path.join(ROOT, ".gitattributes"), os.path.join(repo, ".gitattributes"))
     tracker = os.path.join(repo, "job_search_tracker.csv")
     open(tracker, "w").write(HEAD + ROW_A)
     _git(repo, "add", "-A")
@@ -120,10 +117,10 @@ def test_a_chat_branch_from_before_plain_endings_does_not_bring_crlf_back(tmp_pa
     CRLF, git then showed it changed with no row changed, and the next sync stopped."""
     repo = str(tmp_path)
     _git(repo, "init", "-q", "-b", "master")
+    _git(repo, "config", "core.autocrlf", "false")     # CRLF committed as it is, on Windows too
     os.makedirs(os.path.join(repo, "tools"))
-    with open(os.path.join(ROOT, "tools", "merge_state.py")) as f, \
-            open(os.path.join(repo, "tools", "merge_state.py"), "w") as g:
-        g.write(f.read())
+    shutil.copyfile(os.path.join(ROOT, "tools", "merge_state.py"),
+                    os.path.join(repo, "tools", "merge_state.py"))
     older = "".join("%s merge=ljs-state\n" % p for p in (
         "job_search_tracker.csv", "network_contacts.csv", "network_threads.csv"))
     with open(os.path.join(repo, ".gitattributes"), "w") as g:
@@ -141,9 +138,7 @@ def test_a_chat_branch_from_before_plain_endings_does_not_bring_crlf_back(tmp_pa
         fh.write(rows.replace("c2,Corwin Haldane,in_conversation", "c2,Corwin Haldane,call_booked"))
     _git(repo, "commit", "-qam", "a call booked")
     _git(repo, "checkout", "-q", "master")
-    with open(os.path.join(ROOT, ".gitattributes")) as f, \
-            open(os.path.join(repo, ".gitattributes"), "w") as g:
-        g.write(f.read())
+    shutil.copyfile(os.path.join(ROOT, ".gitattributes"), os.path.join(repo, ".gitattributes"))
     _git(repo, "add", ".gitattributes")
     _git(repo, "add", "--renormalize", "network_contacts.csv")
     _git(repo, "commit", "-qm", "this release")
@@ -441,8 +436,7 @@ def _two_sides(tmp_path, ours_at, theirs_at, ours_status="call_booked",
     os.makedirs(os.path.join(repo, "tools"))
     _git(repo, "init", "-q", "-b", "master")
     for f in ("tools/merge_state.py", ".gitattributes"):
-        with open(os.path.join(ROOT, f)) as src, open(os.path.join(repo, f), "w") as dst:
-            dst.write(src.read())
+        shutil.copyfile(os.path.join(ROOT, f), os.path.join(repo, f))
     book = os.path.join(repo, "network_contacts.csv")
     open(book, "w").write(CONTACTS + JUNO)
     _git(repo, "add", "-A")
@@ -521,8 +515,7 @@ def _two_sides_seen(tmp_path, ours, theirs, base="new"):
     os.makedirs(os.path.join(repo, "job_scraper"))
     _git(repo, "init", "-q", "-b", "master")
     for f in ("tools/merge_state.py", ".gitattributes"):
-        with open(os.path.join(ROOT, f)) as src, open(os.path.join(repo, f), "w") as dst:
-            dst.write(src.read())
+        shutil.copyfile(os.path.join(ROOT, f), os.path.join(repo, f))
     seen = os.path.join(repo, "job_scraper", "seen_jobs.json")
 
     def write(value):
@@ -634,6 +627,10 @@ def test_committed_crlf_state_files_are_made_plain_once_so_the_next_sync_can_pul
     repo = str(tmp_path / "r")
     os.makedirs(repo)
     _git(repo, "init", "-q")
+    # Committed with CRLF, as another computer committed them: Git for Windows' own
+    # core.autocrlf would turn them into plain endings on the way in, and there would be
+    # nothing left to make plain.
+    _git(repo, "config", "core.autocrlf", "false")
     rows = ["contact_id,name,status", "c1,Juno Castellan,awaiting_reply",
             "c2,Corwin Haldane,in_conversation"]
     with open(os.path.join(repo, "network_contacts.csv"), "wb") as fh:
@@ -679,7 +676,7 @@ def test_their_uncommitted_edits_are_never_folded_into_the_line_ending_commit(tm
     subprocess.run(["git", "-C", repo, "update-index", "--add", "--cacheinfo",
                     "100644,%s,network_contacts.csv" % subprocess.run(
                         ["git", "-C", repo, "hash-object", "-w", "--no-filters", path],
-                        capture_output=True, text=True).stdout.strip()], check=True)
+                        capture_output=True, text=True, encoding="utf-8", errors="replace").stdout.strip()], check=True)
     _git(repo, "-c", "user.name=t", "-c", "user.email=t@example.com", "commit", "-qm", "crlf")
     with open(path, "wb") as fh:
         fh.write(b"contact_id,status\r\nc1,call_booked\r\n")           # their edit
@@ -727,8 +724,7 @@ def test_git_merges_the_persons_rules_from_two_chats(tmp_path):
     _git(repo, "init", "-q", "-b", "master")
     for f in ("tools/merge_state.py", ".gitattributes"):
         os.makedirs(os.path.dirname(os.path.join(repo, f)) or repo, exist_ok=True)
-        with open(os.path.join(ROOT, f)) as src, open(os.path.join(repo, f), "w") as dst:
-            dst.write(src.read())
+        shutil.copyfile(os.path.join(ROOT, f), os.path.join(repo, f))
     os.makedirs(os.path.join(repo, "profile"))
     rules = os.path.join(repo, "profile", "learned.json")
 
@@ -800,6 +796,9 @@ def test_two_next_steps_of_the_apps_own_still_take_the_later():
 
 
 def test_the_employers_where_more_may_be_written_to_merge_by_employer():
+    """Changed 2026-10-25, deliberately: this pinned ours' rows, then theirs'. The file's
+    writer (reading.more_at) keeps it sorted by employer, so a merge in any other order
+    rewrote lines it had not merged; it is now written as its writer writes it."""
     base = [{"employer": "Quayside Foods", "limit": 4, "said": "more there", "date": "2026-10-20"}]
     ours = base + [{"employer": "Larkspur Retail", "limit": 3, "said": "a few more",
                     "date": "2026-10-24"}]
@@ -808,5 +807,17 @@ def test_the_employers_where_more_may_be_written_to_merge_by_employer():
     text, problems = M.merge(json.dumps(base), json.dumps(ours), json.dumps(theirs),
                              "profile/more_at.json")
     assert not problems
-    assert [r["employer"] for r in json.loads(text)] == ["Quayside Foods", "Larkspur Retail",
-                                                          "Lanternfish"]
+    assert [r["employer"] for r in json.loads(text)] == ["Lanternfish", "Larkspur Retail",
+                                                          "Quayside Foods"]
+
+
+def test_the_other_side_is_read_from_gits_name_for_it_in_any_case(monkeypatch):
+    """git names the other side of a merge in the driver's environment, GITHEAD_<sha>. On
+    Windows Python gives every name in os.environ in capitals, so the sha came back as
+    capitals, matched nothing, and every row both chats changed was left for a person there
+    (the suite on Windows, 2026-10-25)."""
+    sha = "0123456789abcdef0123456789abcdef01234567"
+    for k in [k for k in os.environ if k.upper().startswith("GITHEAD_")]:
+        monkeypatch.delenv(k)
+    monkeypatch.setenv("GITHEAD_" + sha.upper(), "theirs")
+    assert M._theirs() == sha

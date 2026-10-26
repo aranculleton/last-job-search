@@ -1,0 +1,67 @@
+{
+  "name": "Skilled trades",
+  "field": "skilled-trades",
+  "aka": [
+    "trades",
+    "skilled trades",
+    "electrician",
+    "plumber",
+    "carpenter",
+    "construction",
+    "apprenticeship"
+  ],
+  "boards": {},
+  "licences": {
+    "ca": [
+      {
+        "value": "Red Seal endorsement (interprovincial standard)",
+        "source": "https://en.wikipedia.org/wiki/Red_Seal_Program",
+        "quote": "",
+        "checked": "2026-10-25",
+        "verified": false,
+        "why": "the sentence found on the page does not say it"
+      }
+    ],
+    "gb": [
+      {
+        "value": "CSCS card for construction sites",
+        "source": "https://en.wikipedia.org/wiki/Construction_Skills_Certification_Scheme",
+        "quote": "The Construction Skills Certification Scheme ( CSCS ) is a British company that runs a qualification verification scheme of the same name for the British construction industry.",
+        "checked": "2026-10-25",
+        "verified": true
+      }
+    ],
+    "us": [
+      {
+        "value": "journeyman licence, issued by the state",
+        "source": "https://en.wikipedia.org/wiki/Journeyman",
+        "quote": "",
+        "checked": "2026-10-25",
+        "verified": false,
+        "why": "the sentence found on the page does not say it"
+      }
+    ]
+  },
+  "titles": [
+    {
+      "value": [
+        "Electrician",
+        "Industrial Electrician",
+        "Maintenance Electrician",
+        "Electrical Journey Person",
+        "Wireman"
+      ],
+      "source": "https://www.onetonline.org/link/summary/47-2111.00",
+      "quote": "Sample of reported job titles: Control Electrician, Electrical Journey Person",
+      "on_page": [
+        "Electrician",
+        "Industrial Electrician",
+        "Maintenance Electrician",
+        "Electrical Journey Person",
+        "Wireman"
+      ],
+      "checked": "2026-10-25",
+      "verified": true
+    }
+  ]
+}

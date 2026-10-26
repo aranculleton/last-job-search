@@ -1,5 +1,5 @@
 ---
-framework_version: 2.1.5
+framework_version: 2.1.6
 ---
 
 # Cover Letter Templates and Tailoring Guide
@@ -12,6 +12,7 @@ Cover letters use a custom LaTeX document class (`cover.cls`) with Lato/Raleway 
 **Compile with:** XeLaTeX (cover.cls requires fontspec)
 **Font directory:** `cover_letters/OpenFonts/fonts/`
 **Colour:** the letter takes its resume's style (`templates/doc_style.py`, "Styles" in `05-cv-templates.md`): the name and the bullet marks in the accent, the contact line grey as always. With no style set, the letter is exactly as it always was.
+**Design:** the letter takes its resume's design too (`templates/doc_design.py`, "Designs" in `05-cv-templates.md`): the same body font, size, margins, page and name alignment. With no design set, it is exactly as it always was.
 
 ### Compile command
 

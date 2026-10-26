@@ -27,6 +27,14 @@ import state  # noqa: E402
 
 TODAY = datetime.date.today()
 
+@pytest.fixture(autouse=True)
+def _today():
+    """TODAY is the day each test runs, not the day this file was loaded: a run that
+    crossed midnight compared the one with the other (Windows, 2026-10-26)."""
+    global TODAY
+    TODAY = datetime.date.today()
+
+
 
 def _row(cid, name, company, **kw):
     row = {k: "" for k in schema.CONTACT_COLUMNS}

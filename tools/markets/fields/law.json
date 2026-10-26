@@ -1,0 +1,149 @@
+{
+  "name": "Law",
+  "field": "law",
+  "aka": [
+    "law",
+    "legal",
+    "lawyer",
+    "solicitor",
+    "paralegal",
+    "attorney",
+    "barrister"
+  ],
+  "boards": {
+    "gb": [
+      {
+        "name": "TotallyLegal",
+        "url": "https://www.totallylegal.com",
+        "kind": "field",
+        "source": "https://www.totallylegal.com/",
+        "quote": "The UK's #1 job site for solicitors, lawyers, paralegals and legal executives",
+        "checked": "2026-10-25",
+        "verified": true,
+        "search": "https://www.totallylegal.com/jobs/",
+        "paths": {
+          "search": "/jobs/",
+          "posting": "/job/"
+        },
+        "robots": {
+          "checked": "2026-10-25",
+          "why": "",
+          "search": true,
+          "status": "allowed",
+          "posting": true,
+          "crawl_delay": null,
+          "ai_input": null
+        },
+        "public_search": {
+          "checked": "2026-10-25",
+          "status": "open",
+          "http": 200
+        }
+      },
+      {
+        "name": "Law Gazette Jobs",
+        "url": "https://jobs.lawgazette.co.uk",
+        "kind": "field",
+        "source": "https://jobs.lawgazette.co.uk/",
+        "quote": "Skip to user menu Search 5,764 law jobs in the UK and internationally",
+        "checked": "2026-10-25",
+        "verified": true,
+        "search": "https://jobs.lawgazette.co.uk/jobs/",
+        "paths": {
+          "search": "/jobs/",
+          "posting": "/job/"
+        },
+        "robots": {
+          "checked": "2026-10-25",
+          "why": "",
+          "search": true,
+          "status": "allowed",
+          "posting": true,
+          "crawl_delay": null,
+          "ai_input": null
+        },
+        "public_search": {
+          "checked": "2026-10-25",
+          "status": "open",
+          "http": 200
+        }
+      }
+    ]
+  },
+  "licences": {
+    "us": [
+      {
+        "value": "admission to the state bar",
+        "source": "https://en.wikipedia.org/wiki/Bar_examination",
+        "quote": "",
+        "checked": "2026-10-25",
+        "verified": false,
+        "why": "the sentence found on the page does not say it"
+      }
+    ],
+    "gb": [
+      {
+        "value": "admission as a solicitor (SRA) or call to the Bar",
+        "source": "https://en.wikipedia.org/wiki/Solicitors_Regulation_Authority",
+        "quote": "",
+        "checked": "2026-10-25",
+        "verified": false,
+        "why": "the sentence found on the page does not say it"
+      }
+    ],
+    "ca": [
+      {
+        "value": "licence from the provincial law society (in Ontario, the Law Society of Ontario)",
+        "source": "https://en.wikipedia.org/wiki/Law_Society_of_Ontario",
+        "quote": "The Law Society of Ontario ( LSO ; French : Barreau de l'Ontario ) is the law society responsible for the self-regulation of lawyers and paralegals in the Canadian province of Ontario .",
+        "checked": "2026-10-25",
+        "verified": true
+      }
+    ]
+  },
+  "titles": [
+    {
+      "value": [
+        "Attorney",
+        "Counsel",
+        "General Counsel",
+        "Lawyer",
+        "Prosecutor"
+      ],
+      "source": "https://www.onetonline.org/link/summary/23-1011.00",
+      "quote": "Sample of reported job titles: Attorney, Attorney at Law",
+      "on_page": [
+        "Attorney",
+        "Counsel",
+        "General Counsel",
+        "Lawyer",
+        "Prosecutor"
+      ],
+      "checked": "2026-10-25",
+      "verified": true
+    }
+  ],
+  "families": [
+    {
+      "family": "legal research service",
+      "members": [
+        [
+          "LexisNexis",
+          "\\blexis\\s?nexis\\b"
+        ],
+        [
+          "Westlaw",
+          "\\bwestlaw\\b"
+        ]
+      ],
+      "source": "https://www.onetonline.org/link/summary/23-1011.00",
+      "quote": "Information retrieval or search software - LexisNexis",
+      "on_page": [
+        "LexisNexis",
+        "Westlaw"
+      ],
+      "checked": "2026-10-25",
+      "verified": true
+    }
+  ]
+}

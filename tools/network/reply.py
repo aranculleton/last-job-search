@@ -1279,8 +1279,8 @@ def auto_reply_action(text, sent_on=None) -> str:
     got = state.auto_reply(text, sent_on=sent_on) or {}
     if got.get("kind") == "left":
         return ("They have left: this address no longer reaches them. Close the contact "
-                "(state.py close) and find who holds the role now, rather than nudging an inbox "
-                "nobody reads.")
+                "(state.py set <contact> --status closed --note \"left\") and find who holds "
+                "the role now, rather than nudging an inbox nobody reads.")
     if got.get("back_on"):
         return ("They are away until %s. The thread is still waiting on them: the one nudge "
                 "waits until %d working days after they are back (%s)."

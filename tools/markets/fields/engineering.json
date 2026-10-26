@@ -1,0 +1,163 @@
+{
+  "name": "Engineering (civil, mechanical, electrical)",
+  "field": "engineering",
+  "aka": [
+    "engineering",
+    "civil engineering",
+    "mechanical engineering",
+    "electrical engineering",
+    "structural engineering"
+  ],
+  "boards": {
+    "*": [
+      {
+        "name": "IEEE Job Site",
+        "url": "https://jobs.ieee.org",
+        "kind": "field",
+        "source": "https://en.wikipedia.org/wiki/Institute_of_Electrical_and_Electronics_Engineers",
+        "quote": "",
+        "checked": "2026-10-25",
+        "verified": false,
+        "why": "the sentence found on the page does not say it",
+        "search": "https://jobs.ieee.org/jobs/?keywords=engineer",
+        "paths": {
+          "search": "/jobs/?keywords=engineer",
+          "posting": "/job/"
+        },
+        "robots": {
+          "checked": "2026-10-25",
+          "why": "robots.txt could not be read (HTTP 403)",
+          "search": null,
+          "status": "unconfirmed",
+          "posting": null,
+          "crawl_delay": null,
+          "ai_input": null
+        },
+        "public_search": {
+          "checked": "2026-10-25",
+          "status": "not_tried",
+          "http": null
+        }
+      }
+    ]
+  },
+  "licences": {
+    "us": [
+      {
+        "value": "PE (Professional Engineer) licence, issued by each state",
+        "source": "https://en.wikipedia.org/wiki/Professional_Engineer",
+        "quote": "In the United States, registration or licensure of professional engineers and engineering practice is governed by the individual states",
+        "checked": "2026-10-25",
+        "verified": true
+      }
+    ],
+    "ca": [
+      {
+        "value": "P.Eng. (Professional Engineer), from a provincial regulator",
+        "source": "https://en.wikipedia.org/wiki/Professional_Engineer",
+        "quote": "",
+        "checked": "2026-10-25",
+        "verified": false,
+        "why": "the sentence found on the page does not say it"
+      }
+    ],
+    "gb": [
+      {
+        "value": "CEng (Chartered Engineer)",
+        "source": "https://en.wikipedia.org/wiki/Chartered_Engineer_(UK)",
+        "quote": "Chartered Engineers are registered with the UK's regulatory body for the engineering profession, the Engineering Council , which regulates the use of the Chartered Engineer title.",
+        "checked": "2026-10-25",
+        "verified": true
+      }
+    ]
+  },
+  "titles": [
+    {
+      "value": [
+        "Civil Engineer",
+        "Design Engineer",
+        "Geotechnical Engineer",
+        "Project Engineer",
+        "Structural Engineer"
+      ],
+      "source": "https://www.onetonline.org/link/summary/17-2051.00",
+      "quote": "Sample of reported job titles: City Engineer, Civil Engineer",
+      "on_page": [
+        "Civil Engineer",
+        "Design Engineer",
+        "Geotechnical Engineer",
+        "Project Engineer",
+        "Structural Engineer"
+      ],
+      "checked": "2026-10-25",
+      "verified": true
+    },
+    {
+      "value": [
+        "Mechanical Design Engineer",
+        "Mechanical Engineer",
+        "Product Development Engineer",
+        "Test Engineer"
+      ],
+      "source": "https://www.onetonline.org/link/summary/17-2141.00",
+      "quote": "Sample of reported job titles: Application Engineer, Design Engineer",
+      "on_page": [
+        "Mechanical Design Engineer",
+        "Mechanical Engineer",
+        "Product Development Engineer",
+        "Test Engineer"
+      ],
+      "checked": "2026-10-25",
+      "verified": true
+    }
+  ],
+  "families": [
+    {
+      "family": "CAD tool",
+      "members": [
+        [
+          "AutoCAD",
+          "\\bautocad\\b"
+        ],
+        [
+          "MicroStation",
+          "\\bmicrostation\\b"
+        ],
+        [
+          "SolidWorks",
+          "\\bsolidworks\\b"
+        ]
+      ],
+      "source": "https://www.onetonline.org/link/summary/17-2051.00",
+      "quote": "Bentley MicroStation ; Dassault Systemes SolidWorks Hot Technology",
+      "on_page": [
+        "AutoCAD Civil 3D",
+        "Bentley MicroStation",
+        "Dassault Systemes SolidWorks"
+      ],
+      "checked": "2026-10-25",
+      "verified": true
+    },
+    {
+      "family": "project scheduling tool",
+      "members": [
+        [
+          "Microsoft Project",
+          "\\bmicrosoft project\\b|\\bms project\\b"
+        ],
+        [
+          "Primavera",
+          "\\bprimavera\\b"
+        ]
+      ],
+      "source": "https://www.onetonline.org/link/summary/17-2051.00",
+      "quote": "Project management software - Cost estimating software",
+      "on_page": [
+        "Microsoft Project",
+        "Oracle Primavera Enterprise Project Portfolio Management"
+      ],
+      "checked": "2026-10-25",
+      "verified": true
+    }
+  ]
+}

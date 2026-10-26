@@ -1,0 +1,302 @@
+{
+  "name": "United States",
+  "country": "us",
+  "aka": [
+    "US",
+    "USA",
+    "U.S.",
+    "United States of America",
+    "America"
+  ],
+  "languages": [
+    "en"
+  ],
+  "currency": "USD",
+  "boards": [
+    {
+      "name": "Indeed",
+      "url": "https://www.indeed.com",
+      "kind": "general",
+      "source": "https://en.wikipedia.org/wiki/Indeed",
+      "quote": "is an American multinational employment website for job listings launched in November 2004",
+      "checked": "2026-10-25",
+      "verified": true,
+      "search": "https://www.indeed.com/jobs?q=analyst&l=Chicago%2C+IL",
+      "paths": {
+        "search": "/jobs?q=analyst&l=Chicago%2C+IL",
+        "posting": "/viewjob?jk=0"
+      },
+      "robots": {
+        "checked": "2026-10-25",
+        "why": "",
+        "search": true,
+        "status": "partial",
+        "posting": false,
+        "crawl_delay": null,
+        "ai_input": null
+      },
+      "public_search": {
+        "checked": "2026-10-25",
+        "status": "blocked",
+        "http": 401
+      }
+    },
+    {
+      "name": "ZipRecruiter",
+      "url": "https://www.ziprecruiter.com",
+      "kind": "general",
+      "source": "https://en.wikipedia.org/wiki/ZipRecruiter",
+      "quote": "is an American employment marketplace for job seekers and employers",
+      "checked": "2026-10-25",
+      "verified": true,
+      "search": "https://www.ziprecruiter.com/jobs-search?search=analyst&location=Chicago%2C+IL",
+      "paths": {
+        "search": "/jobs-search?search=analyst&location=Chicago%2C+IL",
+        "posting": "/c/"
+      },
+      "robots": {
+        "checked": "2026-10-25",
+        "why": "",
+        "search": false,
+        "status": "disallowed",
+        "posting": false,
+        "crawl_delay": null,
+        "ai_input": null
+      },
+      "public_search": {
+        "checked": "2026-10-25",
+        "status": "not_tried",
+        "http": null
+      }
+    },
+    {
+      "name": "Monster",
+      "url": "https://www.monster.com",
+      "kind": "general",
+      "source": "https://en.wikipedia.org/wiki/Monster.com",
+      "quote": "Monster.com is a global employment website and job search engine headquartered in Guaynabo",
+      "checked": "2026-10-25",
+      "verified": true,
+      "search": "https://www.monster.com/jobs/search?q=analyst&where=Chicago%2C+IL",
+      "paths": {
+        "search": "/jobs/search?q=analyst&where=Chicago%2C+IL",
+        "posting": "/job-openings/"
+      },
+      "robots": {
+        "checked": "2026-10-25",
+        "why": "",
+        "search": true,
+        "status": "allowed",
+        "posting": true,
+        "crawl_delay": null,
+        "ai_input": null
+      },
+      "public_search": {
+        "checked": "2026-10-25",
+        "status": "blocked",
+        "http": 403
+      }
+    },
+    {
+      "name": "CareerOneStop Job Finder",
+      "url": "https://www.careeronestop.org",
+      "kind": "public",
+      "source": "https://www.careeronestop.org/Site/job-bank-solicitation.aspx",
+      "quote": "",
+      "checked": "2026-10-25",
+      "verified": false,
+      "why": "no sentence on the page says it (looked for: job listings)",
+      "search": "https://www.careeronestop.org/Toolkit/Jobs/find-jobs.aspx?keyword=analyst&location=Chicago%2C%20IL",
+      "paths": {
+        "search": "/Toolkit/Jobs/find-jobs.aspx?keyword=analyst&location=Chicago%2C%20IL",
+        "posting": "/Toolkit/Jobs/find-jobs-details.aspx"
+      },
+      "robots": {
+        "checked": "2026-10-25",
+        "why": "",
+        "search": true,
+        "status": "allowed",
+        "posting": true,
+        "crawl_delay": 5.0,
+        "ai_input": null
+      },
+      "public_search": {
+        "checked": "2026-10-25",
+        "status": "open",
+        "http": 202
+      }
+    }
+  ],
+  "eligibility": [
+    {
+      "phrase": "U.S. citizenship required",
+      "lang": "en",
+      "means": "citizenship",
+      "source": "https://en.wikipedia.org/wiki/USAJOBS",
+      "quote": "",
+      "checked": "2026-10-25",
+      "verified": false,
+      "why": "no sentence on the page says it (looked for: citizen)"
+    },
+    {
+      "phrase": "lawful permanent resident (green card)",
+      "lang": "en",
+      "means": "residence",
+      "source": "https://en.wikipedia.org/wiki/Green_card",
+      "quote": "Green card holders are formally known as lawful permanent residents",
+      "checked": "2026-10-25",
+      "verified": true
+    },
+    {
+      "phrase": "authorized to work in the United States",
+      "lang": "en",
+      "means": "work_right",
+      "source": "https://en.wikipedia.org/wiki/Form_I-9",
+      "quote": "An employer who fails to keep proper records that I-9s are properly filed can be fined $110 per missing item for each form, up to $1100 per form, even if the employee is legally authorized to work in the United States.",
+      "checked": "2026-10-25",
+      "verified": true
+    },
+    {
+      "phrase": "visa sponsorship (H-1B)",
+      "lang": "en",
+      "means": "sponsorship",
+      "source": "https://en.wikipedia.org/wiki/H-1B_visa",
+      "quote": "Sponsorship by an employer is required for applicants",
+      "checked": "2026-10-25",
+      "verified": true
+    },
+    {
+      "phrase": "security clearance (Secret, Top Secret)",
+      "lang": "en",
+      "means": "clearance",
+      "source": "https://en.wikipedia.org/wiki/Classified_information_in_the_United_States",
+      "quote": "if one holds a Top Secret security clearance , one is allowed to handle information up to the level of Top Secret",
+      "checked": "2026-10-25",
+      "verified": true
+    }
+  ],
+  "documents": [
+    {
+      "topic": "noun",
+      "value": "resume",
+      "source": "https://en.wikipedia.org/wiki/Curriculum_vitae",
+      "quote": "In the U.S., most employers use resumes for non-academic positions",
+      "checked": "2026-10-25",
+      "verified": true
+    },
+    {
+      "topic": "pages",
+      "value": "one or two pages; one is usual early in a career",
+      "source": "https://en.wikipedia.org/wiki/Curriculum_vitae",
+      "quote": "which are one or two page summaries of experience, education, and skills",
+      "checked": "2026-10-25",
+      "verified": true
+    },
+    {
+      "topic": "photo",
+      "value": "no photo, and no age, marital status or children",
+      "source": "https://en.wikipedia.org/wiki/R%C3%A9sum%C3%A9",
+      "quote": "while this is not accepted in the UK, U.S., and some European countries",
+      "checked": "2026-10-25",
+      "verified": true
+    },
+    {
+      "topic": "date_format",
+      "value": "MM/DD/YYYY; month and year (June 2024) on a resume",
+      "source": "https://en.wikipedia.org/wiki/Date_and_time_notation_in_the_United_States",
+      "quote": "In traditional American usage, dates are written in the month–day–year order",
+      "checked": "2026-10-25",
+      "verified": true
+    },
+    {
+      "topic": "spelling",
+      "value": "American English (en-US)",
+      "source": "https://en.wikipedia.org/wiki/American_and_British_English_spelling_differences",
+      "quote": "Most words ending in an unstressed ‑our in British English end in ‑or in American English",
+      "checked": "2026-10-25",
+      "verified": true
+    }
+  ],
+  "pay": [
+    {
+      "name": "Occupational Employment and Wage Statistics (Bureau of Labor Statistics)",
+      "url": "https://www.bls.gov/oes/",
+      "what": "wages by occupation, state and metro area",
+      "source": "https://en.wikipedia.org/wiki/Occupational_Employment_and_Wage_Statistics",
+      "quote": "Semi annual survey of businesses conducted by Bureau of Labor Statistics",
+      "checked": "2026-10-25",
+      "verified": true
+    },
+    {
+      "name": "O*NET OnLine",
+      "url": "https://www.onetonline.org/",
+      "what": "median wages for each occupation, nationally and by state",
+      "source": "https://www.onetonline.org/",
+      "quote": "Individuals can find, search, or browse across 900+ occupations based on their goals and needs.",
+      "checked": "2026-10-25",
+      "verified": true
+    }
+  ],
+  "places": [
+    {
+      "metro": "New York",
+      "written": [
+        "New York, NY",
+        "New York City",
+        "NYC",
+        "Newark, NJ",
+        "Jersey City, NJ",
+        "Long Island"
+      ],
+      "source": "https://en.wikipedia.org/wiki/New_York_metropolitan_area",
+      "quote": "Megacity and metropolitan region New York–Newark–Jersey City, NY–NJ metropolitan statistical area",
+      "on_page": [
+        "Newark",
+        "Jersey City",
+        "Long Island"
+      ],
+      "checked": "2026-10-25",
+      "verified": true
+    },
+    {
+      "metro": "Los Angeles",
+      "written": [
+        "Los Angeles, CA",
+        "Long Beach, CA",
+        "Anaheim, CA",
+        "Orange County, CA",
+        "Riverside, CA"
+      ],
+      "source": "https://en.wikipedia.org/wiki/Greater_Los_Angeles",
+      "quote": "encompassing five counties in Southern California extending from Ventura County in the west to San Bernardino County and Riverside County in the east",
+      "on_page": [
+        "Long Beach",
+        "Anaheim",
+        "Orange County",
+        "Riverside"
+      ],
+      "checked": "2026-10-25",
+      "verified": true
+    },
+    {
+      "metro": "Chicago",
+      "written": [
+        "Chicago, IL",
+        "Chicagoland",
+        "Naperville, IL",
+        "Elgin, IL",
+        "Schaumburg, IL"
+      ],
+      "source": "https://en.wikipedia.org/wiki/Chicago_metropolitan_area",
+      "quote": "the Chicago metropolitan area is a key factor of the Illinois economy",
+      "on_page": [
+        "Chicagoland",
+        "Naperville",
+        "Elgin",
+        "Schaumburg"
+      ],
+      "checked": "2026-10-25",
+      "verified": true
+    }
+  ]
+}

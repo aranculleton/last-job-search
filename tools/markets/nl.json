@@ -1,0 +1,288 @@
+{
+  "name": "Netherlands",
+  "country": "nl",
+  "aka": [
+    "NL",
+    "The Netherlands",
+    "Holland",
+    "Nederland"
+  ],
+  "languages": [
+    "nl"
+  ],
+  "currency": "EUR",
+  "boards": [
+    {
+      "name": "werk.nl (UWV)",
+      "url": "https://www.werk.nl",
+      "kind": "public",
+      "source": "https://eures.europa.eu/living-and-working/living-and-working-conditions/living-and-working-conditions-netherlands_en",
+      "quote": "UWV (Uitvoeringsinstituut Werknemersverzekeringen, Employee Insurance Agency): vacancies, CVs and events",
+      "checked": "2026-10-25",
+      "verified": true,
+      "search": "https://www.werk.nl/werkzoekenden/vacatures/?zoekterm=analist",
+      "paths": {
+        "search": "/werkzoekenden/vacatures/?zoekterm=analist",
+        "posting": "/werkzoekenden/vacatures/vacature/"
+      },
+      "robots": {
+        "checked": "2026-10-25",
+        "why": "robots.txt could not be read (RuntimeError)",
+        "search": null,
+        "status": "unconfirmed",
+        "posting": null,
+        "crawl_delay": null,
+        "ai_input": null
+      },
+      "public_search": {
+        "checked": "2026-10-25",
+        "status": "not_tried",
+        "http": null
+      }
+    },
+    {
+      "name": "Nationale Vacaturebank",
+      "url": "https://www.nationalevacaturebank.nl",
+      "kind": "general",
+      "source": "https://eures.europa.eu/living-and-working/living-and-working-conditions/living-and-working-conditions-netherlands_en",
+      "quote": "Intermediair http://www.intermediair.nl Vacaturebank (job vacancy department) http://www.nationalevacaturebank.nl",
+      "checked": "2026-10-25",
+      "verified": true,
+      "search": "https://www.nationalevacaturebank.nl/vacature/zoeken?query=analist",
+      "paths": {
+        "search": "/vacature/zoeken?query=analist",
+        "posting": "/vacature/"
+      },
+      "robots": {
+        "checked": "2026-10-25",
+        "why": "",
+        "search": false,
+        "status": "partial",
+        "posting": true,
+        "crawl_delay": null,
+        "ai_input": null
+      },
+      "public_search": {
+        "checked": "2026-10-25",
+        "status": "not_tried",
+        "http": null
+      }
+    },
+    {
+      "name": "Indeed",
+      "url": "https://nl.indeed.com",
+      "kind": "general",
+      "source": "https://nl.wikipedia.org/wiki/Indeed",
+      "quote": "Indeed is een zoekmachine voor vacatures.",
+      "checked": "2026-10-25",
+      "verified": true,
+      "search": "https://nl.indeed.com/jobs?q=analist&l=Amsterdam",
+      "paths": {
+        "search": "/jobs?q=analist&l=Amsterdam",
+        "posting": "/viewjob?jk=0"
+      },
+      "robots": {
+        "checked": "2026-10-25",
+        "why": "",
+        "search": true,
+        "status": "partial",
+        "posting": false,
+        "crawl_delay": null,
+        "ai_input": null
+      },
+      "public_search": {
+        "checked": "2026-10-25",
+        "status": "blocked",
+        "http": 401
+      }
+    },
+    {
+      "name": "Intermediair",
+      "url": "https://www.intermediair.nl",
+      "kind": "general",
+      "source": "https://eures.europa.eu/living-and-working/living-and-working-conditions/living-and-working-conditions-netherlands_en",
+      "quote": "Intermediair http://www.intermediair.nl Vacaturebank (job vacancy department)",
+      "checked": "2026-10-25",
+      "verified": true,
+      "search": "https://www.intermediair.nl/vacatures?query=analist",
+      "paths": {
+        "search": "/vacatures?query=analist",
+        "posting": "/vacature/"
+      },
+      "robots": {
+        "checked": "2026-10-25",
+        "why": "",
+        "search": true,
+        "status": "allowed",
+        "posting": true,
+        "crawl_delay": null,
+        "ai_input": null
+      },
+      "public_search": {
+        "checked": "2026-10-25",
+        "status": "blocked",
+        "http": 302
+      }
+    }
+  ],
+  "eligibility": [
+    {
+      "phrase": "tewerkstellingsvergunning (TWV) / gecombineerde vergunning (GVVA)",
+      "lang": "nl",
+      "means": "work_right",
+      "source": "https://nl.wikipedia.org/wiki/Tewerkstellingsvergunning",
+      "quote": "Voor bepaalde groepen werknemers wordt de verblijfsvergunning gecombineerd met een werkvergunning",
+      "checked": "2026-10-25",
+      "verified": true
+    },
+    {
+      "phrase": "kennismigrant (highly skilled migrant, employer as recognised sponsor)",
+      "lang": "nl",
+      "means": "sponsorship",
+      "source": "https://nl.wikipedia.org/wiki/Kennismigrant",
+      "quote": "Een kennismigrant is een immigrant die toestemming heeft om in een land te werken op grond van technische of wetenschappelijke kennis",
+      "checked": "2026-10-25",
+      "verified": true
+    },
+    {
+      "phrase": "EU/EER-nationaliteit",
+      "lang": "nl",
+      "means": "citizenship",
+      "source": "https://eures.europa.eu/living-and-working/living-and-working-conditions/living-and-working-conditions-netherlands_en",
+      "quote": "A student from an EEA country or Switzerland does not need a residence permit to work or study in the Netherlands",
+      "checked": "2026-10-25",
+      "verified": true
+    },
+    {
+      "phrase": "Verklaring Omtrent het Gedrag (VOG)",
+      "lang": "nl",
+      "means": "clearance",
+      "source": "https://nl.wikipedia.org/wiki/Verklaring_omtrent_het_gedrag",
+      "quote": "Een verklaring omtrent het gedrag (VOG) is een officieel Nederlands document",
+      "checked": "2026-10-25",
+      "verified": true
+    }
+  ],
+  "documents": [
+    {
+      "topic": "noun",
+      "value": "CV, with a sollicitatiebrief (motivatiebrief)",
+      "source": "https://eures.europa.eu/living-and-working/living-and-working-conditions/living-and-working-conditions-netherlands_en",
+      "quote": "of the standard CV that is customary in the Netherlands is recommended for unsolicited job applications",
+      "checked": "2026-10-25",
+      "verified": true
+    },
+    {
+      "topic": "pages",
+      "value": "two pages at most",
+      "source": "https://eures.europa.eu/living-and-working/living-and-working-conditions/living-and-working-conditions-netherlands_en",
+      "quote": "should normally contain a maximum of two pages (A4 format);",
+      "checked": "2026-10-25",
+      "verified": true
+    },
+    {
+      "topic": "photo",
+      "value": "optional",
+      "source": "https://eures.europa.eu/living-and-working/living-and-working-conditions/living-and-working-conditions-netherlands_en",
+      "quote": "",
+      "checked": "2026-10-25",
+      "verified": false,
+      "why": "no sentence on the page says it (looked for: photo)"
+    },
+    {
+      "topic": "date_format",
+      "value": "DD-MM-YYYY",
+      "source": "https://en.wikipedia.org/wiki/Date_and_time_notation_in_the_Netherlands",
+      "quote": "Date and time notation in the Netherlands records the date using the day–month–year (DMY) format",
+      "checked": "2026-10-25",
+      "verified": true
+    },
+    {
+      "topic": "spelling",
+      "value": "Dutch, or English where the posting is in English",
+      "source": "https://eures.europa.eu/living-and-working/living-and-working-conditions/living-and-working-conditions-netherlands_en",
+      "quote": "they are in Dutch (unless indicated otherwise);",
+      "checked": "2026-10-25",
+      "verified": true
+    }
+  ],
+  "pay": [
+    {
+      "name": "Banen, lonen, arbeidsduur (CBS, Statistics Netherlands)",
+      "url": "https://www.cbs.nl/nl-nl/cijfers/detail/81431ned",
+      "what": "jobs, pay and hours by sector",
+      "source": "https://www.cbs.nl/nl-nl/cijfers/detail/81431ned",
+      "quote": "Werkgelegenheid; banen, lonen, arbeidsduur, SBI2008; kerncijfers | CBS",
+      "checked": "2026-10-25",
+      "verified": true
+    },
+    {
+      "name": "Loonwijzer (WageIndicator)",
+      "url": "https://www.loonwijzer.nl/",
+      "what": "salary checker by occupation",
+      "source": "https://www.loonwijzer.nl/",
+      "quote": "",
+      "checked": "2026-10-25",
+      "verified": false,
+      "why": "the source could not be read: robots.txt could not be read (HTTP 503)"
+    }
+  ],
+  "places": [
+    {
+      "metro": "Amsterdam",
+      "written": [
+        "Amsterdam",
+        "Metropoolregio Amsterdam",
+        "Haarlem",
+        "Zaanstad",
+        "Almere",
+        "Amstelveen"
+      ],
+      "source": "https://en.wikipedia.org/wiki/Amsterdam_metropolitan_area",
+      "quote": "Almere , Haarlem , Zaanstad , Haarlemmermeer , Hilversum , Amstelveen",
+      "on_page": [
+        "Almere",
+        "Haarlem",
+        "Zaanstad",
+        "Amstelveen"
+      ],
+      "checked": "2026-10-25",
+      "verified": true
+    },
+    {
+      "metro": "Rotterdam and The Hague",
+      "written": [
+        "Rotterdam",
+        "Den Haag",
+        "The Hague",
+        "Delft",
+        "Zoetermeer"
+      ],
+      "source": "https://en.wikipedia.org/wiki/Rotterdam_The_Hague_Metropolitan_Area",
+      "quote": "The city of Delft is situated in between the two major cities",
+      "on_page": [
+        "Delft",
+        "Zoetermeer"
+      ],
+      "checked": "2026-10-25",
+      "verified": true
+    },
+    {
+      "metro": "Randstad",
+      "written": [
+        "Randstad",
+        "Utrecht",
+        "Amsterdam",
+        "Rotterdam",
+        "Den Haag"
+      ],
+      "source": "https://en.wikipedia.org/wiki/Randstad",
+      "quote": "it connects and comprises the Netherlands' four biggest cities ( Amsterdam , Rotterdam , The Hague , and Utrecht )",
+      "on_page": [
+        "Utrecht"
+      ],
+      "checked": "2026-10-25",
+      "verified": true
+    }
+  ]
+}

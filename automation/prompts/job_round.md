@@ -1,7 +1,7 @@
 # Job round (optional; schedule: `profile/routines.json`)
 
 Off unless a person asks for a scheduled search: the twice-weekly brief does not search,
-and "find me jobs" in any chat runs one. Follow CLAUDE.md "Job Search Behaviour": score and
+and "find me jobs" in any chat runs one. Follow the job-scraper skill, "The rules every search keeps": score and
 rank, stop at the shortlist, draft nothing until the candidate picks. `_common.md` first.
 
 1. No LaTeX is needed for this step. Pick `rN` as the next round number after the highest
@@ -57,7 +57,9 @@ Reply in <the chat to reply in, per _common.md> with the numbers to draft, for e
    <board>' and I will add it" (that is `/add-portal`, run when they ask, never here).
 
 5. **When the candidate replies with picks** (in this chat): record any "already applied"
-   answers in the tracker, then `./tools/setup_env.sh` (LaTeX this time), stage the picks
+   answers with `python3 tools/confirm.py applied ... --source chat` (`--new --company --role
+   --url --on <date>` for one the tracker never had) and show them the lines it prints, the
+   applications it covered; then `./tools/setup_env.sh` (LaTeX this time), stage the picks
    with `tools/stage_picks.py`. When it prints questions (a pick held for a fixed-term
    contract, pay for another place or an application already in, which role to draft when
    two share an employer, and skills a posting names that the profile does not hold), ask
@@ -65,9 +67,10 @@ Reply in <the chat to reply in, per _common.md> with the numbers to draft, for e
    `stage_picks.py consent` (`--draft` or `--skip` for a held pick). Then run the saved `draft-applications` workflow, assemble, render
    with `tools/fit_to_page.py`, run `tools/verify_batch.sh` (it runs `check_claims` too) until
    clean, write outreach notes and kept drafts with `tools/outreach.py`, record the tracker
-   rows with `tools/record_drafts.py`, and land everything per `_common.md` and CLAUDE.md's
-   persistence rule. Deliver the applications the one way CLAUDE.md sets ("Every output is
-   shown", applications): per role, one file-sending call with its resume and letter,
+   rows with `tools/record_drafts.py`, and land everything per `_common.md` and RUNBOOK.md
+   step 4. This run's reply is the message, so deliver the applications in it, the one way
+   RUNBOOK.md sets ("Delivering in the chat"), and bring the page up to date where there is
+   one (`python3 tools/app.py view`): per role, one file-sending call with its resume and letter,
    captioned role, employer, pay, location and apply link; then one index table in the
    reply, role | apply link; paths as plain text, never as markdown links. Lead with a short
    "drafted N, all verified, here is what to check" line.

@@ -21,7 +21,7 @@ def _read(*parts):
 
 
 def test_no_instruction_gives_the_person_a_git_command_or_a_branch():
-    for parts in (("CLAUDE.md",), ("automation", "prompts", "_common.md"),
+    for parts in (("CLAUDE.md",), ("RUNBOOK.md",), ("automation", "prompts", "_common.md"),
                   (".claude", "commands", "upgrade.md")):
         text = _read(*parts)
         assert "`git revert <sha>` to undo it" not in text, parts

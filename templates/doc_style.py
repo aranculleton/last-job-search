@@ -52,6 +52,7 @@ import sys
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 sys.path.insert(0, os.path.join(ROOT, "tools"))
 import person  # noqa: E402
+import tex_escape  # noqa: E402
 
 DEFAULT = "black"
 
@@ -123,8 +124,12 @@ def choose(draft: dict) -> tuple[str, str]:
         return check(own), "this application's own choice"
     s = setting()
     company = draft.get("company")
+    # The person's own usual colour (Tweak R5, "Keep this for next time"), under any
+    # employer or kind the setting names.
+    usual = str(person.get("documents.style", "") or "").strip()
     if not (s.get("kinds") or s.get("employers")):
-        return DEFAULT, "no style is set"
+        return (check(usual, "person.json documents.style"), "your usual colour") if usual \
+            else (DEFAULT, "no style is set")
     from company_key import key  # noqa: E402
     by_name = {key(k): v for k, v in (s.get("employers") or {}).items()}
     if company and key(company) in by_name:
@@ -132,6 +137,8 @@ def choose(draft: dict) -> tuple[str, str]:
     for kind in kinds_of(company):
         if kind in (s.get("kinds") or {}):
             return s["kinds"][kind], f"the kind {kind!r} in documents.styles"
+    if usual:
+        return check(usual, "person.json documents.style"), "your usual colour"
     return DEFAULT, "the employer is not on a list a style is set for"
 
 
@@ -150,6 +157,7 @@ def resume_block(style: str | None, why: str = "") -> str:
         return ""
     colour = ("\\definecolor{color1}{rgb}{%s}" % _BLUE_RGB if name == "blue"
               else "\\definecolor{color1}{HTML}{%s}" % hexcolour)
+    why = tex_escape.comment(why)
     out = (f"%% Style: {name}, {why or 'chosen for this application'}. Only colour changes: "
            "the name,\n%% the section titles and rules and the bullet marks take it, and every "
            "word sits where\n%% it sits in black. Set for moderncv 2.3 and for 2.4 and later "
@@ -177,6 +185,7 @@ def letter_block(style: str | None, why: str = "") -> str:
     hexcolour, _what = STYLES[name]
     if hexcolour is None:
         return ""
+    why = tex_escape.comment(why)
     return (f"%% Style: {name}, {why or 'chosen for this application'}: the name and the bullet "
             "marks take it,\n%% to match the resume. Nothing moves.\n"
             "\\definecolor{ljsaccent}{HTML}{%s}\n"

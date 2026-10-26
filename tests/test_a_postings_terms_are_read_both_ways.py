@@ -201,10 +201,10 @@ def test_staging_a_blank_or_empty_posting_says_what_to_do(tmp_path):
     empty.write_text("   \n", encoding="utf-8")
     run = [sys.executable, os.path.join(ROOT, "tools", "stage_picks.py"), "single", str(tmp_path)]
     out = subprocess.run(run + ["--company", "Kestrel Mutual", "--role", "Data Analyst",
-                                "--posting-file", str(empty)], capture_output=True, text=True)
+                                "--posting-file", str(empty)], capture_output=True, text=True, encoding="utf-8", errors="replace")
     assert out.returncode != 0 and "is empty" in out.stderr and "Traceback" not in out.stderr
     assert "detail CLI" not in out.stderr
     empty.write_text("A posting.", encoding="utf-8")
     out = subprocess.run(run + ["--company", "   ", "--role", "Data Analyst",
-                                "--posting-file", str(empty)], capture_output=True, text=True)
+                                "--posting-file", str(empty)], capture_output=True, text=True, encoding="utf-8", errors="replace")
     assert out.returncode != 0 and "--company" in out.stderr and "Traceback" not in out.stderr

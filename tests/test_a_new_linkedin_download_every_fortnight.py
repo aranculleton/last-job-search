@@ -19,6 +19,24 @@ import export as E  # noqa: E402
 import state  # noqa: E402
 
 TODAY = datetime.date.today()
+
+
+class _Today(datetime.date):
+    @classmethod
+    def today(cls):
+        return TODAY
+
+
+class _Clock:
+    """export.py's datetime with today held at TODAY. TODAY is read once, when the file is
+    loaded, and a run that crossed midnight took the download on the new day and checked it
+    against the old one (Windows, 2026-10-26)."""
+    date = _Today
+
+    def __getattr__(self, name):
+        return getattr(datetime, name)
+
+
 CONN_HEAD = ('Notes:\n"When exporting your connection data, you may notice that some of the '
              'email addresses are missing."\n\nFirst Name,Last Name,URL,Email Address,Company,'
              'Position,Connected On\n')
@@ -37,6 +55,7 @@ def _state(tmp_path, monkeypatch):
     st = tmp_path / "state"
     (st / "documents" / "linkedin").mkdir(parents=True)
     monkeypatch.setenv("LJS_STATE", str(st))
+    monkeypatch.setattr(E, "datetime", _Clock())
     contacts = [
         {"contact_id": "kestrel_achterberg", "name": "Rosalind Achterberg", "company": "Kestrel Mutual",
          "linkedin_url": "https://www.linkedin.com/in/example-rosalind", "status": "awaiting_reply",

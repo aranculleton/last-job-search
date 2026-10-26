@@ -29,6 +29,7 @@ import sys
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import person  # noqa: E402
+import local_path  # noqa: E402
 
 STAGES = ("research", "draft", "audit", "outreach")
 # What the workflow cannot record, and where it comes from instead.
@@ -104,23 +105,23 @@ def write(round_dir: str, result, usage=None) -> tuple[str, list[str], str]:
                      "the shared budget counter's movement while a stage ran, so concurrent "
                      "stages over-count it"}
     path = os.path.join(round_dir, "cost.json")
-    with open(path, "w", encoding="utf-8") as fh:
+    with open(path, "w", encoding="utf-8", newline="\n") as fh:
         json.dump(batch, fh, indent=1, ensure_ascii=False)
         fh.write("\n")
     kept = []
     try:
-        import outreach
+        import docpaths
     except Exception:
-        outreach = None
+        docpaths = None
     for slug, r in rows.items():
-        if outreach is None or not r.get("company"):
+        if docpaths is None or not r.get("company"):
             continue
-        folder = outreach.app_folder(r["company"], r.get("role") or "", r.get("abbr") or "")
+        folder = docpaths.app_folder(r["company"], r.get("role") or "", r.get("abbr") or "")
         if os.path.isdir(folder):
-            with open(os.path.join(folder, "cost.json"), "w", encoding="utf-8") as fh:
+            with open(os.path.join(folder, "cost.json"), "w", encoding="utf-8", newline="\n") as fh:
                 json.dump(dict(r, slug=slug), fh, indent=1, ensure_ascii=False)
                 fh.write("\n")
-            kept.append(os.path.relpath(os.path.join(folder, "cost.json"), person.state()))
+            kept.append(local_path.rel(os.path.join(folder, "cost.json"), person.state()))
     return path, kept, line
 
 

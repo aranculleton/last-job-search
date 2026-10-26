@@ -123,6 +123,22 @@ PLAN = str(getattr(_NETWORKING, "LINKEDIN_PLAN", "") or "free").strip().lower()
 if PLAN not in PLANS:
     PLAN = "free"
 
+def plan(fresh: bool = False) -> str:
+    """The person's LinkedIn plan, "free" or "premium": the one reader of LINKEDIN_PLAN.
+    `fresh` reads the file as it is now (a change on the page shows in the same run);
+    otherwise the plan this module read at import, which LIMITS were set from."""
+    got = str(getattr(_NETWORKING, "LINKEDIN_PLAN", "") or "")
+    if fresh:
+        try:
+            import profile_set
+            v = profile_set.get("networking.py", "LINKEDIN_PLAN")
+            got = "" if v in (profile_set.MISSING, None) else str(v)
+        except Exception:  # noqa: BLE001  no profile, or no networking settings: free
+            got = ""
+    got = got.strip().lower() or "free"
+    return got if got in PLANS else "free"
+
+
 LIMITS = {
     # No cap on connection requests of the app's own (2026-10-22): it once held a week to 50
     # and a day to 25, a planning number a tool printed as "requests left" as if it were

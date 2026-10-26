@@ -1,7 +1,8 @@
 """The repo's own files, for a test that reads across many of them.
 
 Claude Code puts an agent's isolated checkout inside the repo, at
-`.claude/worktrees/<name>/` (CLAUDE.md starts `/upgrade` in one), and a person's
+`.claude/worktrees/<name>/` (a session starts `/upgrade` in one: RUNBOOK.md, "Start of a
+session"), and a person's
 repo can hold another checkout too. A recursive glob walks straight into it and
 reads a whole second copy of the repo: an older version of every document and the
 person's generated files. A test then fails, or passes, on files that are not this
@@ -46,14 +47,22 @@ def files(*patterns: str, root: Path | str = ROOT) -> list[Path]:
     return sorted(out)
 
 
-def tracked(*pathspecs: str, root: Path | str = ROOT, app_only: bool = True) -> list[str]:
+def tracked(*pathspecs: str, root: Path | str = ROOT, app_only: bool = True,
+            new: bool = False) -> list[str]:
     """The files git tracks under `root` (matching `pathspecs`), relative, each name whole;
-    with `app_only`, never a person's own file. [] where `root` is not a git checkout."""
+    with `app_only`, never a person's own file; with `new`, also the files not committed
+    yet that no ignore rule covers (a change being tested before it is committed). []
+    where `root` is not a git checkout."""
     out = subprocess.run(["git", "-C", str(root), "ls-files", "-z", "--", *pathspecs],
-                         capture_output=True, text=True)
+                         capture_output=True, text=True, encoding="utf-8", errors="replace")
     if out.returncode != 0:
         return []
     names = [n for n in out.stdout.split("\0") if n]
+    if new:
+        more = subprocess.run(["git", "-C", str(root), "ls-files", "-z", "--others",
+                               "--exclude-standard", "--", *pathspecs],
+                              capture_output=True, text=True, encoding="utf-8", errors="replace")
+        names += [n for n in more.stdout.split("\0") if n and n not in names]
     if app_only:
         sys.path.insert(0, str(ROOT / "tools"))
         import personal_paths

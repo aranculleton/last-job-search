@@ -53,7 +53,6 @@ stage in the folder, and after it, while no thank-you note sits there.
 from __future__ import annotations
 
 import argparse
-import csv
 import datetime as dt
 import os
 import re
@@ -64,7 +63,7 @@ sys.path.insert(0, _HERE)
 sys.path.insert(0, os.path.join(_HERE, "network"))
 
 import followups                                     # noqa: E402
-import outreach                                      # noqa: E402
+import docpaths                                      # noqa: E402
 import person                                        # noqa: E402
 import throttle                                      # noqa: E402
 import what_works                                    # noqa: E402
@@ -131,15 +130,10 @@ INTERVIEWING = followups.LIVE_PROCESS - {"offer"}
 
 def _tracker(path=TRACKER):
     import csv_store
-    csv_store.refuse_conflicts(path)
-    try:
-        with open(path, newline="", encoding="utf-8") as fh:
-            return list(csv.DictReader(fh))
-    except OSError:
-        return []
+    return csv_store.tracker(path)
 
 
-def _network(contacts, threads):
+def network_views(contacts, threads):
     """Every contact's derived status, and the two throttle views read from it.
 
     The heat, the replied-contact recipients and the referral holds all need
@@ -153,6 +147,9 @@ def _network(contacts, threads):
         live[cid] = state.effective_status(c, list(index.get(cid, ())))
     return (live, throttle.warm_routes(rows=contacts, live=live),
             throttle.referral_holds(rows=contacts, live=live))
+
+
+_network = network_views  # the module's own name for it; other modules call network_views
 
 
 def build(contacts, threads, tracker, today, docs=None):
@@ -191,13 +188,15 @@ def build(contacts, threads, tracker, today, docs=None):
     for item in state.resumes_owed(contacts, threads, tracker):
         if item["company_key"]:
             slot(item["company_key"], item["company"]).setdefault("resumes_owed", []).append(item)
+    index = state.by_contact(threads)       # one pass over the log, not one a contact
     for c in contacts:
         k = state.row_company_key(c) if hasattr(state, "row_company_key") else company_key(c.get("company"))
         if not k:
             continue
         e = slot(k, (c.get("company") or "").strip())
         e["contacts"].append(c)
-        for got in state.resumes_sent(threads, c.get("contact_id")):
+        cid = str(c.get("contact_id") or "").strip()
+        for got in state.resumes_sent(index.get(cid, []), cid):
             e.setdefault("resumes_sent", []).append(dict(got, name=c.get("name", "")))
         status = live.get(str(c.get("contact_id") or "").strip()) or ""
         e["heat"] = max(e["heat"], HEAT.get(status, 0))
@@ -297,15 +296,18 @@ def render(entries, today, only_live=True):
 # ---------------------------------------------------------------- --due
 
 
-def _stages(row):
+def stages(row):
     """(the application's folder, its files, its outcome.md stages), each empty when absent."""
-    folder = outreach.app_folder(row.get("company"), row.get("role") or "")
+    folder = docpaths.app_folder(row.get("company"), row.get("role") or "")
     try:
         files = os.listdir(folder)
         with open(os.path.join(folder, "outcome.md"), encoding="utf-8") as fh:
             return folder, files, what_works.outcome_stages(fh.read())
     except OSError:
         return folder, [], []
+
+
+_stages = stages  # the module's own name for it; other modules call stages
 
 
 def _has_pack(files, stage, folder="") -> bool:
@@ -349,7 +351,7 @@ def _last_word(row, files, stages, today):
         d = state.as_date(st["date"])
         if d and d <= today:
             seen.append((d, "the %s" % (st["label"] or "interview")))
-    d = state.as_date(row.get("date"))
+    d = state.as_date(throttle.applied_on(row) or row.get("date"))
     if d:
         seen.append((d, "the last update"))
     for entry in str(row.get("notes") or "").split("|"):
@@ -453,8 +455,11 @@ def _stored_draft(contact) -> str:
     return notes.split("| DRAFT:", 1)[1].strip() if "| DRAFT:" in notes else ""
 
 
-def due_items(contacts, threads, tracker, today, docs=None):
+def due_items(contacts, threads, tracker, today, docs=None, network=None):
     """Everything due today or overdue in both halves, plus what a hold is keeping back.
+
+    `network` is `_network(contacts, threads)` when the caller has it already (the page's
+    model does): on a big contact book it is the slowest part, and was worked out twice.
 
     Contacts: everything `state.owed` lists, which is only ever what is owed
     now (a reply the moment they answer, a nudge once its clock has run, a
@@ -536,7 +541,7 @@ def due_items(contacts, threads, tracker, today, docs=None):
             "held": [h for h in (state.action_hold(c.get("next_action"), today),) if h],
             "quiet": False, "kind": "resume", "status": c.get("status", ""),
             "contact_id": r["contact_id"], "old": old})
-    _, warm, holds = _network(contacts, threads)
+    _, warm, holds = network or _network(contacts, threads)
     for n in followups.review(tracker, today, warm, holds, docs or followups.DOCS):
         quiet = n["state"] == "quiet" and n["notice"]
         if n["state"] not in ("due", "held") and not quiet:
@@ -570,7 +575,7 @@ def campaigns(tracker) -> dict:
     for row in tracker or ():
         if (row.get("status") or "").strip().lower() in FINAL:
             continue
-        folder = outreach.app_folder(row.get("company"), row.get("role") or "")
+        folder = docpaths.app_folder(row.get("company"), row.get("role") or "")
         try:
             with open(os.path.join(folder, "campaign.json"), encoding="utf-8") as fh:
                 chat = str(_json.load(fh).get("chat") or "").strip()
@@ -581,8 +586,11 @@ def campaigns(tracker) -> dict:
     return out
 
 
-def _urgency(i):
+def urgency(i):
     return (i["half"] != "contact", i["rank"], -i["late"], i["name"].lower())
+
+
+_urgency = urgency  # the module's own name for it; other modules call urgency
 
 
 def _digest(label, items, late=True, note=""):
@@ -725,7 +733,7 @@ def main():
 
     if a.markdown:
         os.makedirs(os.path.dirname(OUT_MD), exist_ok=True)
-        with open(OUT_MD, "w") as fh:
+        with open(OUT_MD, "w", encoding="utf-8", newline="\n") as fh:
             fh.write(header + body)
         print("wrote %s (%d employers)" % (OUT_MD, body.count("\n## ") + body.startswith("## ")))
     else:

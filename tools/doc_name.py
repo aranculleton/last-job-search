@@ -20,8 +20,10 @@ files away.
 """
 from __future__ import annotations
 
+import hashlib
 import os
 import re
+import unicodedata
 import sys
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
@@ -51,21 +53,81 @@ GENERIC = {"inc", "incorporated", "ltd", "limited", "pty", "llc", "llp", "lp", "
 MAX_CHARS = 14   # long enough for a two-word brand, short enough to stay a name
 
 
-def _words(company: str) -> list[str]:
-    """Words, with a hyphenated name kept whole: Co-Ventures is one word."""
-    parts = re.split(r"[^A-Za-z0-9-]+", str(company or "").strip())
-    return [p.strip("-") for p in parts if p.strip("-")]
+# Letters that are not an ASCII letter plus an accent, so NFKD leaves them whole.
+_PLAIN = str.maketrans({"ø": "o", "Ø": "O", "ß": "ss", "æ": "ae", "Æ": "AE", "œ": "oe",
+                        "Œ": "OE", "đ": "d", "Đ": "D", "ł": "l", "Ł": "L", "þ": "th",
+                        "Þ": "Th", "ð": "d", "Ð": "D", "ı": "i", "ħ": "h", "Ħ": "H"})
 
 
-def suffix(company: str, role_token: str = "") -> str:
+def fold(text: str) -> str:
+    """The plain letters of a name: Brévanne is Brevanne, Nørdvik is Nordvik, Weißfeld is
+    Weissfeld. A file name keeps only ASCII letters, and dropping the accented ones gave
+    `Brvanne`, `Nrdvik` and `Weifeld`."""
+    text = unicodedata.normalize("NFKD", str(text or "").translate(_PLAIN))
+    return "".join(c for c in text if not unicodedata.combining(c))
+
+
+# Greek and Cyrillic in Latin letters (ELOT 743 and BGN/PCGN, simplified), for a name with
+# no Latin letter at all: "Δοκιμή Ανάλυση" is Dokimi Analysi, "Пример Данные" Primer Dannye.
+# fold() has already taken the accents off (ή is η, й is и).
+_TRANSLIT = dict(zip("αβγδεζηθικλμνξοπρσςτυφχψω",
+                     "a v g d e z i th i k l m n x o p r s s t y f ch ps o".split()))
+_TRANSLIT.update(zip("абвгдежзиклмнопрстуфхцчшщыэюяєіґђјљњћџ",
+                     "a b v g d e zh z i k l m n o p r s t u f kh ts ch sh shch y e yu ya ye "
+                     "i g dj j lj nj c dz".split()))
+_TRANSLIT.update({"ъ": "", "ь": ""})
+
+
+def ascii_name(text: str) -> str:
+    """`text` in plain ASCII letters where it can be: accents folded, Greek and Cyrillic
+    spelled in Latin letters. A script with no such table (Japanese, Chinese, Arabic) is
+    left as it is, for the caller to fall back from."""
+    out = []
+    for c in fold(text):
+        low = c.lower()
+        t = _TRANSLIT.get(low)
+        out.append(c if t is None else (t[:1].upper() + t[1:] if c != low else t))
+    return "".join(out)
+
+
+def _words(company: str, legacy: bool = False) -> list[str]:
+    """Words, with a hyphenated name kept whole: Co-Ventures is one word. A name with no
+    Latin letter is read through ascii_name()."""
+    raw = str(company or "") if legacy else fold(company)
+    parts = [p.strip("-") for p in re.split(r"[^A-Za-z0-9-]+", raw.strip()) if p.strip("-")]
+    if not parts and not legacy:
+        parts = [p.strip("-") for p in re.split(r"[^A-Za-z0-9-]+", ascii_name(company).strip())
+                 if p.strip("-")]
+    return parts
+
+
+def _fallback(company: str) -> str:
+    """A name for an employer no letter of which is Latin, or can be made so: the
+    profile's own name for it (employers.py ABBREVIATIONS, keyed on the name as written),
+    else "Employer" and six characters that are this name's alone, so two such employers
+    never share a file (they shared the empty name, and the second overwrote the first)."""
+    name = " ".join(str(company or "").split())
+    if not name:
+        return ""
+    own = KNOWN.get(name.lower())
+    if own:
+        return re.sub(r"[^A-Za-z0-9]", "", own)
+    return "Employer" + hashlib.sha1(name.casefold().encode("utf-8")).hexdigest()[:6]
+
+
+def suffix(company: str, role_token: str = "", legacy: bool = False) -> str:
     """The `<Name>` in <Prefix>_Resume_<Name>.tex.
 
     `role_token` is appended only when applying to two different roles at one
     employer, which is the one case where the company name alone collides.
+    `legacy` is the name before accents were folded (letters simply dropped), which
+    an application already made under it keeps (render_application.final_abbr).
     """
-    words = _words(company)
+    words = _words(company, legacy)
+    token = re.sub(r"[^A-Za-z0-9]", "", ascii_name(role_token) if not legacy else role_token)
     if not words:
-        return ""
+        base = "" if legacy else _fallback(company)
+        return base + ("_" + token if base and token else "")
     known = KNOWN.get(" ".join(words).lower())
     if known is None:
         # Drop the trailing generic words, but never all of them: "The Co Group"
@@ -90,7 +152,6 @@ def suffix(company: str, role_token: str = "") -> str:
                                                       "la", "le", "et", "&"):
             taken.pop()
         known = "".join(taken) or kept[0].replace("-", "")[:MAX_CHARS]
-    token = re.sub(r"[^A-Za-z0-9]", "", role_token)
     return known + ("_" + token if token else "")
 
 
@@ -139,10 +200,7 @@ def tracker_rows(path: str = TRACKER) -> list[dict]:
     """The rows, through csv_store.read_rows, the one state-file reader: a conflicted file
     is refused, and a short row's missing cells read as blanks, never None."""
     import csv_store
-    try:
-        return csv_store.read_rows(path)
-    except OSError:
-        return []
+    return csv_store.tracker(path)
 
 
 def _norm(s: str) -> str:
@@ -165,15 +223,25 @@ def _unsent(row: dict) -> bool:
     return (row.get("status") or "").strip().lower() == "drafted"
 
 
-def reusable(name: str, role: str, rows: list[dict]) -> bool:
-    """Whether every application holding this name is this role, still unsent.
+def _same_employer(row: dict, company: str | None) -> bool:
+    """Whether a tracker row is at this employer, however its name was written; True when
+    no employer is given (an older caller)."""
+    if company is None:
+        return True
+    import company_key
+    return company_key.key(row.get("company") or "") == company_key.key(company)
+
+
+def reusable(name: str, role: str, rows: list[dict], company: str | None = None) -> bool:
+    """Whether every application holding this name is this role at this employer, unsent.
 
     A regenerated draft for the SAME role keeps its name while nothing has gone
     out. Once it has (applied, interview, rejected), the files under that name
     are what the employer received: `/interview` and `/outcome` read them, and
     a redraft rendered over them replaced the record with a document nobody sent.
     """
-    return all(_norm(r.get("role")) == _norm(role) and _unsent(r) for r in owners(name, rows))
+    return all(_norm(r.get("role")) == _norm(role) and _unsent(r) and _same_employer(r, company)
+               for r in owners(name, rows))
 
 
 def check_free(name: str, company: str, role: str, rows: list[dict]) -> None:
@@ -186,7 +254,7 @@ def check_free(name: str, company: str, role: str, rows: list[dict]) -> None:
     nobody sent. Only an unsent draft of the same role may be rendered over.
     """
     for r in owners(name, rows):
-        same = _norm(r.get("role")) == _norm(role)
+        same = _norm(r.get("role")) == _norm(role) and _same_employer(r, company)
         if same and _unsent(r):
             continue
         what = ("the documents already sent for" if same else "the documents for")

@@ -561,7 +561,7 @@ def test_a_renamed_resume_keeps_the_day_it_arrived_and_a_deleted_one_is_never_pa
 def _git(cwd, *args):
     return subprocess.run(["git", "-C", str(cwd), "-c", "user.name=t",
                            "-c", "user.email=t@example.com", *args],
-                          capture_output=True, text=True)
+                          capture_output=True, text=True, encoding="utf-8", errors="replace")
 
 
 def test_two_chats_at_once_leave_one_linked_record(tmp_path, monkeypatch, capsys):
@@ -620,7 +620,7 @@ def test_two_chats_at_once_leave_one_linked_record(tmp_path, monkeypatch, capsys
             side.write_text(_git(net, "show", "%s:%s" % (ref, name)).stdout, encoding="utf-8")
             sides.append(str(side))
         line_merge = subprocess.run(["git", "merge-file", "-p", sides[1], sides[0], sides[2]],
-                                    capture_output=True, text=True)
+                                    capture_output=True, text=True, encoding="utf-8", errors="replace")
         assert line_merge.returncode > 0, name
     sys.path.insert(0, str(ROOT / "tools"))
     import merge_state

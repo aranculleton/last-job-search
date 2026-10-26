@@ -24,6 +24,7 @@ from __future__ import annotations
 import copy
 import json
 import os
+import shutil
 import subprocess
 import sys
 
@@ -192,7 +193,8 @@ def test_a_draft_written_against_other_research_is_refused():
 
 
 def test_the_workflow_hashes_the_research_the_way_the_audit_does():
-    node = subprocess.run(["node", "--version"], capture_output=True)
+    node = subprocess.run(["node", "--version"], capture_output=True) if shutil.which("node") \
+        else subprocess.CompletedProcess(["node"], 127)
     if node.returncode != 0:
         pytest.skip("node is not installed")
     probe = ("const src = require('fs').readFileSync(process.argv[1], 'utf8')"
@@ -206,8 +208,11 @@ def test_the_workflow_hashes_the_research_the_way_the_audit_does():
                            "url": "u", "caution": "old", "read": False},
                           {"claim": None, "quote": "q"}, "not a fact"]}
     for r in (FIXTURE["research"], research, _HALF_AN_EMOJI):
+        # node writes UTF-8. Read in Windows' own code page, a byte cp1252 has no letter for
+        # (the house emoji's 0x8F) stopped the reading thread, and stdout came back None.
         got = json.loads(subprocess.run(["node", "-e", probe, WORKFLOW, json.dumps(r)],
-                                        capture_output=True, text=True, check=True).stdout)
+                                        capture_output=True, text=True, encoding="utf-8",
+                                        check=True).stdout)
         assert got == [draft_audit.research_hash(r), draft_pack.research_lines(r)]
     # A search summary is marked for the drafter in both copies of the lines.
     assert "NOT READ ON THE PAGE" in draft_pack.research_lines(research)

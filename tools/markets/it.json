@@ -1,0 +1,281 @@
+{
+  "name": "Italy",
+  "country": "it",
+  "aka": [
+    "IT",
+    "Italia",
+    "Italian Republic"
+  ],
+  "languages": [
+    "it"
+  ],
+  "currency": "EUR",
+  "boards": [
+    {
+      "name": "Cliclavoro",
+      "url": "https://www.cliclavoro.gov.it",
+      "kind": "public",
+      "source": "https://eures.europa.eu/living-and-working/living-and-working-conditions/living-and-working-conditions-italy_en",
+      "quote": "The Ministry of Labour portal ‘cliclavoro.gov.it’ publishes job vacancies available throughout the country",
+      "checked": "2026-10-25",
+      "verified": true,
+      "search": "https://www.cliclavoro.gov.it/",
+      "paths": {
+        "search": "/",
+        "posting": null
+      },
+      "robots": {
+        "checked": "2026-10-25",
+        "why": "",
+        "search": true,
+        "status": "allowed",
+        "posting": null,
+        "crawl_delay": null,
+        "ai_input": null
+      },
+      "public_search": {
+        "checked": "2026-10-25",
+        "status": "open",
+        "http": 200
+      }
+    },
+    {
+      "name": "InfoJobs Italia",
+      "url": "https://www.infojobs.it",
+      "kind": "general",
+      "source": "https://es.wikipedia.org/wiki/InfoJobs",
+      "quote": "InfoJobs es una bolsa de empleo privada en línea, especializada en el mercado español , italiano y brasileño",
+      "checked": "2026-10-25",
+      "verified": true,
+      "search": "https://www.infojobs.it/offerte-lavoro/analista",
+      "paths": {
+        "search": "/offerte-lavoro/analista",
+        "posting": "/offerta-lavoro/"
+      },
+      "robots": {
+        "checked": "2026-10-25",
+        "why": "robots.txt could not be read (HTTP 200 but the body is not a robots.txt)",
+        "search": null,
+        "status": "unconfirmed",
+        "posting": null,
+        "crawl_delay": null,
+        "ai_input": null
+      },
+      "public_search": {
+        "checked": "2026-10-25",
+        "status": "not_tried",
+        "http": null
+      }
+    },
+    {
+      "name": "Indeed",
+      "url": "https://it.indeed.com",
+      "kind": "general",
+      "source": "https://it.wikipedia.org/wiki/Indeed",
+      "quote": "Indeed è un motore di ricerca per trovare lavoro",
+      "checked": "2026-10-25",
+      "verified": true,
+      "search": "https://it.indeed.com/jobs?q=analista&l=Milano",
+      "paths": {
+        "search": "/jobs?q=analista&l=Milano",
+        "posting": "/viewjob?jk=0"
+      },
+      "robots": {
+        "checked": "2026-10-25",
+        "why": "",
+        "search": true,
+        "status": "partial",
+        "posting": false,
+        "crawl_delay": null,
+        "ai_input": null
+      },
+      "public_search": {
+        "checked": "2026-10-25",
+        "status": "blocked",
+        "http": 401
+      }
+    },
+    {
+      "name": "Subito Lavoro",
+      "url": "https://www.subito.it",
+      "kind": "general",
+      "source": "https://it.wikipedia.org/wiki/Subito.it",
+      "quote": "Oggi Subito.it è uno dei maggiori siti di compravendita più utilizzati in Italia",
+      "checked": "2026-10-25",
+      "verified": true,
+      "search": "https://www.subito.it/annunci-italia/vendita/offerte-lavoro/?q=analista",
+      "paths": {
+        "search": "/annunci-italia/vendita/offerte-lavoro/?q=analista",
+        "posting": "/offerte-lavoro/"
+      },
+      "robots": {
+        "checked": "2026-10-25",
+        "why": "robots.txt could not be read (HTTP 403)",
+        "search": null,
+        "status": "unconfirmed",
+        "posting": null,
+        "crawl_delay": null,
+        "ai_input": null
+      },
+      "public_search": {
+        "checked": "2026-10-25",
+        "status": "not_tried",
+        "http": null
+      }
+    }
+  ],
+  "eligibility": [
+    {
+      "phrase": "permesso di soggiorno per lavoro",
+      "lang": "it",
+      "means": "work_right",
+      "source": "https://it.wikipedia.org/wiki/Permesso_di_soggiorno",
+      "quote": "è un documento rilasciato da un' amministrazione di uno Stato a un individuo straniero",
+      "checked": "2026-10-25",
+      "verified": true
+    },
+    {
+      "phrase": "cittadinanza italiana o di uno Stato membro dell'UE (concorsi pubblici)",
+      "lang": "it",
+      "means": "citizenship",
+      "source": "https://eures.europa.eu/living-and-working/living-and-working-conditions/living-and-working-conditions-italy_en",
+      "quote": "All European Union citizens may take up employment, whether in a self-employed or employed capacity, without the need for a work permit",
+      "checked": "2026-10-25",
+      "verified": true
+    },
+    {
+      "phrase": "nulla osta al lavoro (sponsorship by the employer)",
+      "lang": "it",
+      "means": "sponsorship",
+      "source": "https://it.wikipedia.org/wiki/Decreto_flussi",
+      "quote": "La quota prevista dal decreto flussi per le 14 nazionalità sopra indicate è di 47.100 nulla osta al lavoro.",
+      "checked": "2026-10-25",
+      "verified": true
+    },
+    {
+      "phrase": "nulla osta di sicurezza (NOS)",
+      "lang": "it",
+      "means": "clearance",
+      "source": "https://it.wikipedia.org/wiki/Nulla_osta_di_sicurezza",
+      "quote": "è un'abilitazione conferita a persone fisiche , enti , imprese e società , per il trattamento di informazioni riservate",
+      "checked": "2026-10-25",
+      "verified": true
+    }
+  ],
+  "documents": [
+    {
+      "topic": "noun",
+      "value": "curriculum vitae (CV), often in the Europass format",
+      "source": "https://eures.europa.eu/living-and-working/living-and-working-conditions/living-and-working-conditions-italy_en",
+      "quote": "with the Europass portal, after registering, you can fill in the European template",
+      "checked": "2026-10-25",
+      "verified": true
+    },
+    {
+      "topic": "pages",
+      "value": "two pages at most",
+      "source": "https://eures.europa.eu/living-and-working/living-and-working-conditions/living-and-working-conditions-italy_en",
+      "quote": "",
+      "checked": "2026-10-25",
+      "verified": false,
+      "why": "no sentence on the page says it (looked for: CV, two pages)"
+    },
+    {
+      "topic": "photo",
+      "value": "only if asked for",
+      "source": "https://eures.europa.eu/living-and-working/living-and-working-conditions/living-and-working-conditions-italy_en",
+      "quote": "Unless specifically requested, there is no need to attach a photograph",
+      "checked": "2026-10-25",
+      "verified": true
+    },
+    {
+      "topic": "date_format",
+      "value": "DD/MM/YYYY",
+      "source": "https://en.wikipedia.org/wiki/Date_and_time_notation_in_Italy",
+      "quote": "Date and time notation in Italy records the date using the day–month–year format",
+      "checked": "2026-10-25",
+      "verified": true
+    },
+    {
+      "topic": "spelling",
+      "value": "Italian, unless the posting is in English",
+      "source": "https://eures.europa.eu/living-and-working/living-and-working-conditions/living-and-working-conditions-italy_en",
+      "quote": "Italian culture is typified by its official language, Italian, and by a wide range of regional dialects that reflect the cultural and linguistic diversity of the different Italian regions.",
+      "checked": "2026-10-25",
+      "verified": true
+    }
+  ],
+  "pay": [
+    {
+      "name": "Lavoro e retribuzioni (Istat)",
+      "url": "https://www.istat.it/it/lavoro-e-retribuzioni",
+      "what": "pay by sector and contract",
+      "source": "https://www.istat.it/it/lavoro-e-retribuzioni",
+      "quote": "Lavoro e retribuzioni – Istat Vai al menù della testata",
+      "checked": "2026-10-25",
+      "verified": true
+    },
+    {
+      "name": "Osservatorio JobPricing",
+      "url": "https://www.jobpricing.it/",
+      "what": "salary reports by role and region",
+      "source": "https://www.jobpricing.it/",
+      "quote": "Scopri di più Competitività Come si posiziona la nostra politica retributiva rispetto al mercato ? Siamo allineati con le retribuzioni di mercato?",
+      "checked": "2026-10-25",
+      "verified": true
+    }
+  ],
+  "places": [
+    {
+      "metro": "Milano",
+      "written": [
+        "Milano",
+        "Milan",
+        "Città metropolitana di Milano",
+        "Sesto San Giovanni",
+        "Rho"
+      ],
+      "source": "https://en.wikipedia.org/wiki/Metropolitan_City_of_Milan",
+      "quote": "",
+      "on_page": [
+        "Sesto San Giovanni",
+        "Rho"
+      ],
+      "checked": "2026-10-25",
+      "verified": false,
+      "why": "no sentence on the page says it (looked for: Metropolitan City of Milan, comune)"
+    },
+    {
+      "metro": "Roma",
+      "written": [
+        "Roma",
+        "Rome",
+        "Città metropolitana di Roma Capitale",
+        "Fiumicino"
+      ],
+      "source": "https://en.wikipedia.org/wiki/Metropolitan_City_of_Rome_Capital",
+      "quote": "is Italy's chief airport, is located within the nearby Fiumicino , south-west of Rome",
+      "on_page": [
+        "Fiumicino"
+      ],
+      "checked": "2026-10-25",
+      "verified": true
+    },
+    {
+      "metro": "Napoli",
+      "written": [
+        "Napoli",
+        "Naples",
+        "Città metropolitana di Napoli",
+        "Pozzuoli"
+      ],
+      "source": "https://en.wikipedia.org/wiki/Metropolitan_City_of_Naples",
+      "quote": "Municipalities (comune) in the Metropolitan City vary in size",
+      "on_page": [
+        "Pozzuoli"
+      ],
+      "checked": "2026-10-25",
+      "verified": true
+    }
+  ]
+}

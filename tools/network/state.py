@@ -39,6 +39,7 @@ Usage:
     python3 tools/network/state.py withdraw <contact_id>... [--all-due] [--reason "..."]
     python3 tools/network/state.py text <contact_id> --date YYYY-MM-DD --text-file <file>
     python3 tools/network/state.py message <contact_id> --text-file <file> [--attached <file>]
+    python3 tools/network/state.py received <contact_id> --text-file <file> [--date YYYY-MM-DD] [--channel C]
     python3 tools/network/state.py attach <contact_id> <file | unknown> [--date YYYY-MM-DD]
     python3 tools/network/state.py no-reply <contact_id> --why "<what they said>" [--look-again YYYY-MM-DD]
     python3 tools/network/state.py sent <contact_id>... (--text-file <file> | --draft | --no-note |
@@ -52,7 +53,6 @@ from __future__ import annotations
 
 import argparse
 from collections import Counter
-import csv
 import datetime
 import functools
 import json
@@ -73,6 +73,7 @@ from company_key import key as company_key, fold as _ck_fold, row_key as _ck_row
 from throttle import (FINAL as _THROTTLE_FINAL, SILENCE_DAYS as _THROTTLE_SILENCE_DAYS,  # noqa: E402
                       UNSENT as _THROTTLE_UNSENT)
 import person  # noqa: E402
+from safe_name import windows_safe  # noqa: E402
 
 ROOT = os.path.dirname(os.path.dirname(_HERE))
 # The person's weekend, as Python weekday numbers (Monday 0). Saturday and
@@ -155,7 +156,10 @@ def _holidays(first: datetime.date, last: datetime.date) -> set:
     (tools/holidays.py): a follow-up counted Thanksgiving as a business day."""
     try:
         import holidays
-        return {d for y in range(first.year, last.year + 1) for d in holidays.for_year(y)
+        # A year's table can hold a day of the year before: the US New Year's Day of a
+        # Saturday is kept on Friday 31 December, in the next year's table, so a range
+        # ending in December reads the next year too (networking audit, 2026-10-25).
+        return {d for y in range(first.year, last.year + 2) for d in holidays.for_year(y)
                 if first <= d <= last and d.weekday() not in WEEKEND}
     except Exception:  # no profile, or no rules for the country: weekends alone, as before
         return set()
@@ -211,10 +215,13 @@ def _write_csv(path: str, rows, columns) -> None:
 def _read_csv(path: str, columns) -> list[dict]:
     """Rows as dicts, with every schema column present and every extra column kept.
 
-    A missing file is created holding the header alone (tools/csv_store.py).
+    A missing file is no rows, and stays missing: the first save writes it, header and
+    all. Created on a read, a look (profile_upgrades --all, the sync's own --after-sync)
+    left two new files in a copy without them, and then refused the instant upgrades
+    because the folder had uncommitted changes (2026-10-25).
     """
     import csv_store
-    return csv_store.read_rows(path, columns, create=True)
+    return csv_store.read_rows(path, columns)
 
 
 def load_contacts(path: str = CONTACTS_CSV) -> list[dict]:
@@ -234,9 +241,10 @@ def save_threads(rows, path: str = THREADS_CSV) -> None:
 
 
 def load_tracker(path: str = TRACKER_CSV) -> list[dict]:
-    """The application tracker, read only. Nothing here ever writes it."""
-    with open(path, newline="", encoding="utf-8") as f:
-        return [dict(r) for r in csv.DictReader(f)]
+    """The application tracker, read only. Nothing here ever writes it (read the way a
+    spreadsheet saved it: csv_store.read_text)."""
+    import csv_store
+    return csv_store.tracker(path, refuse=False)
 
 
 # ---------------------------------------------------------------- identity
@@ -384,13 +392,17 @@ def contact_id(name: str | None, company: str | None) -> str:
     its legal name. Two people sharing a surname at one employer land on the same slug
     by design; `unique_contact_id` is what resolves that, because a collision
     has to be resolved against the ids that already exist, not guessed at here.
+
+    The id names the person's folder in documents/network/, so it is a name Windows
+    accepts too: with no employer, "Wren Con" was `con`, a folder Windows refuses, and a
+    repo holding it could not be checked out there (`safe_name.windows_safe`).
     """
     sn = _slug(surname(name))
     if not sn:
         raise ValueError(f"contact_id needs a name with a surname in it, got {name!r}")
     ck = _slug(company_key(company))
     if ck:
-        return f"{ck}_{sn}"
+        return windows_safe(f"{ck}_{sn}")
     # With no employer the surname is the whole id, and a one-letter surname
     # makes it useless: "Robin S" and "Quinn S" both became "s". Recruiter
     # contacts can arrive this way, initial only and no company named. Fall back to
@@ -398,8 +410,8 @@ def contact_id(name: str | None, company: str | None) -> str:
     if len(sn) < 2:
         full = _slug(name)
         if full:
-            return full
-    return sn
+            return windows_safe(full)
+    return windows_safe(sn)
 
 
 def _id_set(existing) -> set:
@@ -738,7 +750,8 @@ def duplicate_line(found, this_id="") -> str:
     others = [(n, i) for n, i in zip(names, ids) if i and i != this_id] or [("", this_id)]
     who = ", ".join("%s (%s)" % (n, i) if n else i for n, i in others)
     return ("may be the same person as %s: %s. Never merged. If it is one person, close the "
-            "newer row (state.py close) and keep the one that holds the messages; if not, write "
+            "newer row (state.py set <its id> --status closed --note \"the same person\") "
+            "and keep the one that holds the messages; if not, write "
             "\"not the same person as %s\" in this row's notes."
             % (who, found.get("reason", ""), others[0][1]))
 
@@ -763,13 +776,22 @@ _CHANNEL_ALIASES = {
 }
 
 
-def _direction(row) -> str:
-    d = str(row.get("direction") or "").strip().lower()
+def direction(row) -> str:
+    return _direction_word(str(row.get("direction") or ""))
+
+
+@functools.lru_cache(maxsize=256)
+def _direction_word(raw: str) -> str:
+    """Cached: a page build asks a few thousand rows their direction about 175,000 times."""
+    d = raw.strip().lower()
     if d in _OUT:
         return "out"
     if d in _IN:
         return "in"
     return ""
+
+
+_direction = direction  # the module's own name for it; other modules call direction
 
 
 def channel_of(row) -> str:
@@ -790,7 +812,13 @@ ACCEPTED_SCENARIOS = frozenset({"accepted_no_reply", "connected_no_reply", "conn
 
 
 def _scenario(row) -> str:
-    return re.sub(r"[\s-]+", "_", str(row.get("scenario") or "").strip().lower())
+    return _scenario_word(str(row.get("scenario") or ""))
+
+
+@functools.lru_cache(maxsize=1024)
+def _scenario_word(raw: str) -> str:
+    """Cached: a log has a few dozen scenario words, read once per row per question."""
+    return re.sub(r"[\s-]+", "_", raw.strip().lower())
 
 
 def is_acceptance(row) -> bool:
@@ -935,11 +963,39 @@ _TEMPLATE = re.compile(
 # for later counts ("I'll pass your profile to our recruiter"): out of the office with a
 # promise in it was read as an automatic reply, so nobody thanked the person advocating
 # (2026-10-21).
+#
+# So does an answer to what was asked, beside a mention of leave (networking audit,
+# 2026-10-25): "Thanks Morgan, I'm on parental leave until January, so not the best person
+# to ask. Try Bo Venn" was read as an out-of-office, the reply was hidden and a nudge was
+# offered. A template knows neither the reader's name nor what they asked, so these count:
+# a greeting by a first name, a no ("isn't hiring", "not interested"), a person to try by
+# name, and a promise about what was sent ("I'll take a look at your profile"). A template's
+# own redirect ("for urgent matters please contact ...") and its promise to answer email on
+# return ("I will respond when I am back") are not among them.
+_NAME = r"(?-i:[A-Z][a-z]+(?:[ -][A-Z][a-z'-]+)?)"
+_NOT_A_NAME = (r"(?!(?-i:Sender|Sir|Madam|Customer|Colleagues?|All|Team|Everyone|There|Valued|"
+               r"Recipient|Thanks?|Thank|Hiring|Candidate|Friend|Again|Later|Back)\b)")
 _ENGAGED = re.compile(
     r"\?|\b(?:happy|glad|keen|love|delighted) to\b|\blet'?s\b|\bworks for me\b|\bsounds good\b"
     r"|\bsend (?:me|over|it|your)\b|\bi(?:'ve| have) (?:passed|shared|forwarded|sent)\b"
     r"|\bi(?:'ll| will| can| could)(?: happily| gladly| certainly| definitely)? (?:pass|forward|"
-    r"share|introduce|ask|send|connect you|put you in touch|flag|mention|refer)\b", re.I)
+    r"share|introduce|ask|send|connect you|put you in touch|flag|mention|refer)\b"
+    # a greeting by name, the way a person opens and a template cannot
+    r"|\A\W*(?:hi|hey|hello|dear|thanks|thank you|cheers)[ ,!-]+" + _NOT_A_NAME + _NAME + r"\b"
+    # a no
+    r"|\b(?:(?:is|are|am)n'?t|(?:is|are|am)\s+not|not)\s+(?:currently\s+|really\s+|actively\s+)?"
+    r"(?:hiring|recruiting|interested)\b|\bnot the (?:best|right) (?:person|contact|one)\b"
+    r"|\bno thanks\b|\bno,? thank you\b|\b(?:can'?t|cannot|won'?t be able to) help\b"
+    r"|\b(?:no|nothing)\s+(?:open|available|suitable|coming up|roles?|openings?|vacanc(?:y|ies)|"
+    r"positions?|headcount)\b|\bgood luck\b"
+    # a person to try, by name
+    r"|\btry\s+" + _NOT_A_NAME + _NAME + r"\b|\b(?:speak|talk|chat)\s+(?:to|with)\s+" + _NOT_A_NAME
+    + _NAME + r"\b|" + _NAME + r"\s+(?:runs|leads|heads|manages|handles|owns|does|is (?:running|"
+    r"leading|handling|doing|in charge of))\s+(?:the\s+|our\s+|their\s+)?(?:hiring|recruit\w*)\b"
+    r"|\b(?:she|he|they)(?:'s| is| are|'re)\s+(?:the one\s+)?(?:hiring|recruiting)\b"
+    # a promise about what was sent, not about answering email
+    r"|\b(?:take|have) a (?:look|read)\b|\blook (?:at|over|through) your\b"
+    r"|\bi(?:'ll| will) (?:think about|consider|keep (?:you|an eye))\b", re.I)
 # Gone: the address no longer reaches them. Third person only, the way the template
 # writes it, and about a person: a name, a pronoun or "this person" as the subject. "I am
 # no longer at Acme" is them, writing, and reply.py reads that; "our team is no longer part
@@ -1091,12 +1147,26 @@ def _auto_reply(body, subject, sent_on):
     return None
 
 
+@functools.lru_cache(maxsize=1)
+def _person_scenarios() -> frozenset:
+    """The scenarios /reply reads a person's message as (reply.SCENARIOS), automatic replies
+    left out. A row logged as one of them was read as a person, and that wins over its
+    words: "referral_offered" on a message that also mentions leave is a referral offered."""
+    try:
+        import reply
+    except ImportError:  # the reader is beside this file; never without it in the app
+        return frozenset()
+    return frozenset(reply.SCENARIOS) - AUTO_REPLY_SCENARIOS - {"gone_quiet"}
+
+
 def is_auto_reply(row) -> bool:
     """Is this inbound row an automatic reply (an out-of-office, a "no longer here") and not them?"""
     if _direction(row) != "in":
         return False
     if _scenario(row) in AUTO_REPLY_SCENARIOS:
         return True
+    if _scenario(row) in _person_scenarios():
+        return False
     return auto_reply(row.get("full_text") or row.get("summary"), row.get("subject"),
                       row.get("date")) is not None
 
@@ -1270,6 +1340,8 @@ def effective_status(contact, thread_rows) -> str:
     stored = str(contact.get("status") or "").strip()
     derived = derive_status(thread_rows)
     if stored in schema.TERMINAL:
+        if stored in REOPENED_BY_A_REPLY and reopened(contact, thread_rows, derived):
+            return derived
         return stored
     if derived == "replied_needs_response":
         return derived
@@ -1310,6 +1382,27 @@ def closed_on(contact) -> datetime.date | None:
             dates.append(as_date(m.group(1) or m.group(2)))
     dates = [d for d in dates if d]
     return max(dates) if dates else None
+
+
+# The one closed status a message from them undoes by itself: gone_cold says nobody
+# answered, and an answer makes it untrue. A late reply to a thread gone cold was never owed:
+# the status was terminal whatever the log said, so the due list read "0 replies owed" while
+# they waited for an answer (networking audit, 2026-10-25). `received` reopened it; a reply
+# the LinkedIn download brought, or a row logged by hand, did not. closed, dropped and
+# converted_to_application are the person's decisions, and a late message there is reported
+# by reconcile ("reopened") for them to judge.
+REOPENED_BY_A_REPLY = frozenset({"gone_cold"})
+
+
+def reopened(contact, rows, derived=None) -> bool:
+    """Have they written since this thread was closed? Their message is the last word, the
+    close was not marked on purpose, and it is not dated on or after their last message."""
+    if derived is None:
+        derived = derive_status(rows)
+    return (derived == "replied_needs_response"
+            and not CLOSED_ON_PURPOSE.search(" ".join(
+                str(contact.get(k) or "") for k in ("next_action", "notes")))
+            and not _closed_after_last_reply(contact, rows))
 
 
 def _closed_after_last_reply(contact, rows) -> bool:
@@ -1382,10 +1475,7 @@ def reconcile(contacts, threads, tracker=None) -> list[dict]:
         elif stored in DERIVABLE and stored != derived:
             flag(cid, name, stored, derived, "contradicts_log",
                  "the log says the status is " + derived)
-        elif (stored in schema.TERMINAL and derived == "replied_needs_response"
-              and not CLOSED_ON_PURPOSE.search(" ".join(
-                  str(contact.get(k) or "") for k in ("next_action", "notes")))
-              and not _closed_after_last_reply(contact, rows)):
+        elif stored in schema.TERMINAL and reopened(contact, rows, derived):
             flag(cid, name, stored, derived, "reopened",
                  "thread was closed and they have since replied")
 
@@ -1618,7 +1708,12 @@ def owed(contacts, threads, today) -> list[dict]:
         pending = request_pending(msgs)
         if pending is not None:
             if (today - pending).days < REQUEST_WITHDRAW_DAYS:
-                _action_row()
+                # The app's own "Once they accept: ..." line is no job while nobody has: it
+                # was listed overdue six working days after every request, with nothing to
+                # send (networking audit, 2026-10-25). A date of the person's own is owed.
+                if not (_APP_ACTION.fullmatch(" ".join(action.split()))
+                        and base["next_action_due"] in _app_dates(msgs, action)):
+                    _action_row()
                 continue
             items.append(dict(base, kind="request_pending", channel="connection",
                               since=pending.isoformat(),
@@ -2180,6 +2275,136 @@ def followed_up(contacts, threads, contact_id, today, text="", date=None, channe
     return {"row": row, "said": note}
 
 
+RECEIVED_CHANNELS = ("message", "inmail", "email", "connection", "intro")
+
+
+def received(contacts, threads, contact_id, today, text="", date=None, channel="",
+             scenario="", subject="") -> dict:
+    """Record their message: what they wrote, the day it came, the way it came.
+
+    /reply step 6 says their message goes into the log at once, and there was no command
+    for it: every chat wrote the row into network_threads.csv by hand, some without its
+    words, so the message could never be read again or count as a reply that worked
+    (networking audit, 2026-10-25). This writes the row the export writes for a message
+    in: direction `in`, the channel, the scenario `reply.classify` reads (given, or read
+    here), a one-line summary and the full text.
+
+    The words are required. Raises ValueError for a contact not in the book, a message
+    with no words, an unknown scenario, and the same words from them on the same day
+    already logged (another chat logged it first). The contact's status follows the log
+    where the log decides it; an app-written follow-up line comes off, because a reply is
+    owed now, not a nudge. Returns {"row", "said"}; both lists change in place and the
+    caller saves them."""
+    day = _need_date(date or today, "date")
+    cid = str(contact_id or "").strip()
+    contact = already_contacted(contacts, contact_id=cid) if cid else None
+    if contact is None:
+        raise ValueError(f"no contact {cid!r} in the contact book")
+    name = contact.get("name") or cid
+    body = _paragraphs(text)
+    if not body:
+        raise ValueError("their words are needed, so the reply can be read again later: "
+                         "--text-file <file> with their message as it came")
+    rows = [r for r in threads_for(threads, cid) if _direction(r)]
+    for r in rows:
+        if (_direction(r) == "in" and str(r.get("date") or "") == day.isoformat()
+                and _same_words_sent(r.get("full_text"), body)):
+            raise ValueError(f"already logged: the same words from {name} on {day.isoformat()}")
+    chan = channel_of(str(channel or ""))
+    if chan and chan not in RECEIVED_CHANNELS:
+        raise ValueError(f"channel is one of {', '.join(RECEIVED_CHANNELS)}, not {channel!r}")
+    if not chan:
+        outs = [r for r in rows if _direction(r) == "out" and not is_withdrawal(r)]
+        chan = channel_of(outs[-1]) if outs else channel_of(contact)
+        # An answer on LinkedIn to a request or an InMail arrives as a message.
+        chan = "message" if chan in ("", "connection", "open_profile") else chan
+    scen = re.sub(r"[\s-]+", "_", str(scenario or "").strip().lower())
+    try:
+        import reply as _reply
+    except ImportError:  # the reader is beside this file; never without it in the app
+        _reply = None
+    # A scenario that says it was not a message (an acceptance, a request) would log their
+    # words as a click, and the thread would read as nobody having written.
+    if scen in ACCEPTED_SCENARIOS or scen in REQUEST_SCENARIOS:
+        raise ValueError(f"{scenario!r} records something they did, not a message: log a "
+                         "message with the scenario /reply read, or none")
+    if _reply is not None:
+        if not scen:
+            try:
+                scen = str(_reply.classify(body, rows, day).get("scenario") or "")
+            except (ValueError, TypeError):
+                scen = ""
+    machine = scen in AUTO_REPLY_SCENARIOS or auto_reply(body, subject, day) is not None
+    summary = ("Automatic reply" if machine else "They replied") + f" ({chan})"
+    row = {"contact_id": cid, "date": day.isoformat(), "direction": "in", "channel": chan,
+           "scenario": scen, "summary": summary, "full_text": body,
+           "subject": " ".join(str(subject or "").split())}
+    threads.append(row)
+    said = ""
+    stored = str(contact.get("status") or "").strip()
+    if stored in DERIVABLE or stored in ("", "connected_no_reply", "gone_cold"):
+        contact["status"] = derive_status(threads_for(threads, cid))
+    elif not machine:
+        said = (f"{name} is at {stored}, which the log does not decide: if this message "
+                f"changes that, state.py set {cid} --status <status>")
+    action = str(contact.get("next_action") or "").strip()
+    if (not machine and str(contact.get("status") or "") in schema.OWED_BY_US
+            and action and _APP_ACTION.fullmatch(action)):
+        contact["next_action"], contact["next_action_due"] = "", ""
+    return {"row": row, "said": said}
+
+
+def _words_from(path: str, prog: str):
+    """A message's words from the file named, or None with one plain line said: a missing
+    file ended `sent`, `text`, `nudge`, `message` and `resent` in a traceback (networking
+    audit, 2026-10-25), where `received` already said it plainly."""
+    try:
+        with open(path, encoding="utf-8") as fh:
+            return fh.read()
+    except (OSError, UnicodeDecodeError) as e:
+        print(f"{prog}: cannot read {path}: {getattr(e, 'strerror', None) or e}")
+        return None
+
+
+def _cli_received(argv) -> int:
+    ap = argparse.ArgumentParser(
+        prog="state.py received",
+        description="Record a message they sent, with their words as it came.")
+    ap.add_argument("contact_id", help="who wrote")
+    ap.add_argument("--text-file", required=True, help="their message, as it came")
+    ap.add_argument("--date", default="", help="the day it came (default today)")
+    ap.add_argument("--channel", default="", choices=("",) + RECEIVED_CHANNELS,
+                    help="default: the way the thread runs (a message on LinkedIn)")
+    ap.add_argument("--scenario", default="",
+                    help="what /reply read it as (default: read here, the same way)")
+    ap.add_argument("--subject", default="")
+    ap.add_argument("--contacts", default=CONTACTS_CSV)
+    ap.add_argument("--threads", default=THREADS_CSV)
+    ap.add_argument("--today", default=datetime.date.today().isoformat())
+    a = ap.parse_args(argv)
+    text = _words_from(a.text_file, "received")
+    if text is None:
+        return 1
+    contacts, threads = load_contacts(a.contacts), load_threads(a.threads)
+    try:
+        got = received(contacts, threads, a.contact_id, a.today, text=text,
+                       date=a.date or None, channel=a.channel, scenario=a.scenario,
+                       subject=a.subject)
+    except ValueError as e:
+        print(f"received: not recorded: {a.contact_id}: {e}")
+        return 1
+    save_threads(threads, a.threads)
+    save_contacts(contacts, a.contacts)
+    row = got["row"]
+    status = (already_contacted(contacts, contact_id=a.contact_id) or {}).get("status", "")
+    print(f"received: {a.contact_id}: {row['summary']} on {row['date']}"
+          + (f", read as {row['scenario']}" if row["scenario"] else "")
+          + (f"; now {status}" if status else ""))
+    if got["said"]:
+        print(f"  {got['said']}")
+    return 0
+
+
 def _drop_draft(contact_id: str) -> bool:
     """Delete documents/network/<id>/draft.md, the unsent copy, when there is one."""
     try:
@@ -2517,8 +2742,9 @@ def _cli_text(argv) -> int:
     ap.add_argument("--threads", default="")
     a = ap.parse_args(argv)
     path = a.threads or person.state("network_threads.csv")
-    with open(a.text_file, encoding="utf-8") as fh:
-        text = fh.read()
+    text = _words_from(a.text_file, "text")
+    if text is None:
+        return 1
     threads = load_threads(path)
     try:
         fill_text(threads, a.contact_id, a.date, text)
@@ -2576,13 +2802,15 @@ def _cli_sent(argv) -> int:
         # went, with the words each carried.
         print(BATCH_SENT_CHECK)
         return 1
+    given = _words_from(a.text_file, "sent") if a.text_file else ""
+    if given is None:
+        return 1
     contacts, threads = load_contacts(a.contacts), load_threads(a.threads)
     done = 0
     for cid in a.contact_ids:
         text, before, subject, placeholder = "", None, a.subject, False
         if a.text_file:
-            with open(a.text_file, encoding="utf-8") as fh:
-                text = fh.read()
+            text = given
             before = _draft_of(cid)
         elif a.draft:
             text = _draft_of(cid)
@@ -2675,8 +2903,17 @@ def _cli_followed_up(argv, kind) -> int:
     texts = {}
     if a.texts:
         import json
-        with open(a.texts, encoding="utf-8") as fh:
-            texts = {str(k): str(v) for k, v in (json.load(fh) or {}).items()}
+        raw = _words_from(a.texts, kind)
+        if raw is None:
+            return 1
+        try:
+            texts = {str(k): str(v) for k, v in (json.loads(raw) or {}).items()}
+        except (ValueError, AttributeError):
+            print(f"{kind}: {a.texts} is not a file of {{contact id: message}} pairs (JSON)")
+            return 1
+    given = _words_from(a.text_file, kind) if a.text_file else ""
+    if given is None:
+        return 1
     if not a.contact_ids:
         # --texts is how several are logged at once: its ids are the ones it names.
         a.contact_ids = list(texts)
@@ -2688,8 +2925,7 @@ def _cli_followed_up(argv, kind) -> int:
     for cid in a.contact_ids:
         before = None
         if a.text_file:
-            with open(a.text_file, encoding="utf-8") as fh:
-                text = fh.read()
+            text = given
             before = _draft_of(cid)
         elif cid in texts:
             text, before = texts[cid], _draft_of(cid)
@@ -2797,11 +3033,10 @@ def _cli_resent(argv) -> int:
     ap.add_argument("--threads", default=THREADS_CSV)
     ap.add_argument("--today", default=datetime.date.today().isoformat())
     a = ap.parse_args(argv)
+    text = _words_from(a.text_file, "resent") if a.text_file else ""
+    if text is None:
+        return 1
     contacts, threads = load_contacts(a.contacts), load_threads(a.threads)
-    text = ""
-    if a.text_file:
-        with open(a.text_file, encoding="utf-8") as fh:
-            text = fh.read()
     try:
         got = resent(contacts, threads, a.contact_id, a.today, text=text, date=a.date or None,
                      subject=a.subject)
@@ -3101,7 +3336,11 @@ def _sentences(text) -> list:
 
 
 def _sent_rx():
-    d = _doc_rx()
+    return _sent_rx_for(_doc_rx())
+
+
+@functools.lru_cache(maxsize=16)
+def _sent_rx_for(d: str):
     return re.compile(
         rf"\b{d}\b[^.!?\n]{{0,40}}?\b(?:sent|emailed|e-mailed|attached|forwarded|shared|went)\b"
         r"|\b(?:sent|emailed|e-mailed|attached|attaching|forwarded|enclosed|enclosing|"
@@ -3331,8 +3570,10 @@ def resumes_owed(contacts, threads, tracker=None) -> list[dict]:
             continue
         rows = _rows_of(index, cid)
         made_rows = list(made_index.get(cid, ()))
+        # Read only where a resume was made for them: it is all this is used for, and
+        # reading every message of every contact for it was a third of this function.
         sent_on = [as_date(r.get("date")) or datetime.date.min
-                   for r in rows if says_resume_went(r)]
+                   for r in rows if says_resume_went(r)] if made_rows else []
         base = {"contact_id": cid, "name": contact.get("name", ""),
                 "company": contact.get("company", ""), "company_key": row_company_key(contact),
                 "asked": "", "made": "", "role": "", "words": ""}
@@ -3396,7 +3637,8 @@ def _general_resume_dates(root: str) -> tuple:
         log = subprocess.run(["git", "-C", root, "log", "--reverse", "-M", "--diff-filter=ADR",
                               "--format=%x00%ad", "--date=short", "--name-status", "--",
                               RESUME_DIRS[1]],
-                             capture_output=True, text=True, timeout=20).stdout
+                             capture_output=True, text=True, encoding="utf-8",
+                             errors="replace", timeout=20).stdout
     except (OSError, subprocess.SubprocessError):
         return ()
     arrived: dict = {}
@@ -3458,9 +3700,12 @@ def resume_findings(contacts, threads, tracker=None, reasons=None) -> list[dict]
                       "reason": reason, "detail": detail})
 
     by_id = {str(c.get("contact_id") or "").strip(): c for c in contacts}
+    # One pass over the log for the book: threads_for per contact read the whole log once a
+    # contact, 25 of state.py's 29 seconds on 2,000 contacts (networking audit, 2026-10-25).
+    index = by_contact(threads)
     for cid, contact in by_id.items():
         made = None
-        for r in threads_for(threads, cid):
+        for r in _rows_of(index, cid):
             if says_resume_went(r) and not names_a_file(r):
                 if made is None:
                     made = [str(row.get("cv_file") or "").strip() for row in tracker or ()
@@ -3494,11 +3739,12 @@ def resume_findings(contacts, threads, tracker=None, reasons=None) -> list[dict]
         cid = str(contact.get("contact_id") or "").strip()
         # The portal route: it went in through the portal under their name, never to them,
         # so there is no message to log. Said by the row, or by what they asked for last.
-        if through_portal(row) or resume_route(threads, cid) == ROUTE_PORTAL:
+        mine = _rows_of(index, cid)
+        if through_portal(row) or resume_route(mine, cid) == ROUTE_PORTAL:
             continue
         day = as_date(row.get("date"))
         stem = _resume_stem(cv)
-        went = [s for s in resumes_sent(threads, cid)
+        went = [s for s in resumes_sent(mine, cid)
                 if (as_date(s["date"]) or datetime.date.min) >= (day or datetime.date.min)
                 or stem in {_resume_stem(f) for f in s["files"]}]
         if went or _settled_since(contact, day):
@@ -3915,7 +4161,7 @@ def record_inmails(balance, contacts, threads, today) -> dict:
                              for c, s, r in inmail_refunds(threads))}
     path = _inmail_path()
     os.makedirs(os.path.dirname(path), exist_ok=True)
-    with open(path, "w", encoding="utf-8") as fh:
+    with open(path, "w", encoding="utf-8", newline="\n") as fh:
         json.dump(rec, fh, indent=1)
         fh.write("\n")
     return rec
@@ -4063,6 +4309,8 @@ def main(argv=None) -> int:
         return _cli_attach(argv[1:])
     if argv[:1] in (["nudge"], ["message"]):
         return _cli_followed_up(argv[1:], argv[0])
+    if argv[:1] == ["received"]:
+        return _cli_received(argv[1:])
     if argv[:1] == ["resent"]:
         return _cli_resent(argv[1:])
     if argv[:1] == ["unsend"]:

@@ -253,6 +253,9 @@ def _subdivisions() -> tuple:
 
 
 SUBDIVISION_CODES, SUBDIVISION_NAMES = _subdivisions()
+# Each state's or province's code beside its name ("on", "ontario"): one place, two spellings.
+SUBDIVISION_PAIRS = tuple((code.lower(), name) for table in (_US_STATES, _CA_PROVINCES, _AU_STATES)
+                          for code, name in table.items())
 # A location's parts, split the way the location gate splits them (prefilter._SPLIT).
 _PART_SPLIT = re.compile(r"\s*(?:,|\||/|&|\(|\)|\s[-\u2013]\s)\s*")
 

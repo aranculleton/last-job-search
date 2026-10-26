@@ -209,9 +209,113 @@ def _remote_mark(location, remote: bool):
     return location
 
 
+# What a board prints after a title on its card, which a reader of the card's text takes
+# as part of it: "Senior Analytics Engineer New Toronto, Ontario, Canada". Only a badge
+# no title ends in is here: "Applied" ("Research Scientist, Applied") and "Hot" are not,
+# and "New" is a badge only where nothing before it makes it a word of the title
+# ("Brand New", "What's New"). The texts are LinkedIn's and Indeed's card labels.
+_BADGE = re.compile(
+    r"(?:^|[\s,;:|·•(\[-]+)(?:"
+    r"new!?|promoted(?: by hirer)?|actively (?:hiring|recruiting|reviewing applicants)|"
+    r"easy apply|reposted(?: \d+ \w+ ago)?|be an early applicant|early applicant|"
+    r"be among the first \d+ applicants|urgently hiring|hiring urgently|urgent hire|"
+    r"featured|top applicant|with verification|just posted|"
+    r"(?:posted )?\d+ (?:minutes?|hours?|days?|weeks?|months?) ago|"
+    r"(?:over )?\d+ applicants|\d+ (?:school )?alumni works? here|"
+    r"\d+ connections? works? here|in your network|your profile matches this job|"
+    r"responses managed off linkedin"
+    r")[)\]]?\s*$", re.I)
+_NEW_IN_TITLE = re.compile(r"\b(?:brand|what'?s|what’s|something|anything)\s+new!?[)\]]?\s*$", re.I)
+# Words a location is written with beyond its own, so "Toronto, Ontario, Canada" after a
+# title is still the row's own place when the row says "Toronto, ON". Never "remote" or
+# "hybrid": a title that says so where its location does not is telling the gate something.
+_PLACE_FILLER = {"greater", "area", "metropolitan", "metro", "region", "canada", "ca", "usa",
+                 "us", "uk", "united", "states", "kingdom"}
+# A title cut so it ends on one of these was never ended by a place ("Teacher of Reading").
+_DANGLING = {"of", "for", "in", "at", "and", "&", "the", "to", "with", "on", "a", "an"}
+_SEPARATORS = " \t,;:|-–—·•/("
+
+
+def _words(s: str) -> list[str]:
+    return re.findall(r"[a-z0-9][a-z0-9'’.-]*", s.lower())
+
+
+def _strip_place(title: str, location: str) -> str:
+    """`title` without a trailing copy of the row's own `location`, or as it is."""
+    place = [w.strip(".") for w in _words(location)]
+    if not place:
+        return title
+    city = _words(location.split(",")[0].split("(")[0])
+    if not city:
+        return title
+    allowed = set(place) | _PLACE_FILLER
+    # "Toronto, ON" and "Toronto, Ontario" are one place: a code brings its name in, and
+    # a name its code (places.py's own tables).
+    from places import SUBDIVISION_PAIRS
+    for code, name in SUBDIVISION_PAIRS:
+        if code in place or all(w in place for w in name.split()):
+            allowed |= {code, *name.split()}
+    # The last place in the title where the city starts, as whole words.
+    lower = title.lower()
+    for m in reversed(list(re.finditer(r"(?<![\w])" + re.escape(" ".join(city)) + r"(?![\w])",
+                                       re.sub(r"\s+", " ", lower)))):
+        tail = re.sub(r"\s+", " ", lower)[m.start():]
+        if not all(w.strip(".") in allowed for w in _words(tail)):
+            return title
+        head = re.sub(r"\s+", " ", title)[:m.start()]
+        # "Greater Toronto Area": the filler before the city goes with it.
+        head = re.sub(r"(?:\bgreater|\bthe)\s*$", "", head, flags=re.I)
+        head = head.rstrip(_SEPARATORS + ")").rstrip()
+        if head.endswith("(") or not _words(head) or _words(head)[-1] in _DANGLING:
+            return title
+        return head
+    return title
+
+
+def clean_title(title, location="") -> str:
+    """A board's title with the badges and the repeat of the row's own place cut off.
+
+    Rows from a card read as text carry what the card shows after the title ("New",
+    "Promoted", "Actively hiring", the location again), and the title then failed every
+    match on it: a dedupe, the tracker's own role, a search of the employer's board.
+    Nothing that is a word of the title is cut ("Software Engineer, New Grad").
+    """
+    if not isinstance(title, str):
+        return title
+    t = re.sub(r"\s+", " ", title).strip()
+    loc = str(location or "")
+    for _ in range(6):
+        before = t
+        if loc:
+            t = _strip_place(t, loc)
+        m = _BADGE.search(t)
+        if m and not (m.group(0).strip(" ([").lower().startswith("new")
+                      and _NEW_IN_TITLE.search(t)):
+            head = t[:m.start()].rstrip(_SEPARATORS).rstrip()
+            if _words(head):
+                t = head
+        # A card that prints its title twice ("Data Analyst Data Analyst with verification").
+        words = t.split(" ")
+        half = len(words) // 2
+        if len(words) % 2 == 0 and half and words[:half] == words[half:]:
+            t = " ".join(words[:half])
+        if t == before:
+            break
+    return t
+
+
+def clean_row(row: dict) -> dict:
+    """The row with its title cleaned (clean_title); the board's own kept as `title_seen`."""
+    title = row.get("title")
+    clean = clean_title(title, row.get("location") or "")
+    if isinstance(title, str) and clean != title.strip():
+        row = {**row, "title": clean, "title_seen": row.get("title_seen") or title}
+    return row
+
+
 def linkedin(q: str, loc: str, page: int, jobage: int,
              remote: bool = False) -> tuple[list[dict], str | None]:
-    cmd = ["node", "--no-warnings", LINKEDIN(), "search", "-q", q, "-l", loc,
+    cmd = [*portals.runtime(), LINKEDIN(), "search", "-q", q, "-l", loc,
            "--jobage", str(jobage), "--page", str(page), "--format", "json"]
     if remote:
         cmd += ["--remote", "remote"]
@@ -232,7 +336,7 @@ def _capped(text):
 
 
 def freehire(q: str, page: int, jobage: int) -> tuple[list[dict], str | None]:
-    d, err = run(["node", "--no-warnings", FREEHIRE(), "search", "-q", q,
+    d, err = run([*portals.runtime(), FREEHIRE(), "search", "-q", q,
                   "--country", PORTAL_COUNTRY, "--jobage", str(jobage), "--limit", "25",
                   "--page", str(page), "--format", "json"])
     out = []
@@ -253,7 +357,7 @@ def contract(skill: str, q: str, loc: str | None, page: int,
     fetching the real posting. Where the board's posting pages may not be
     fetched (`detail: false`), the snippet is all there is, and it is the body.
     """
-    cmd = (["node", "--no-warnings", portal_cli(skill), "search", "-q", q]
+    cmd = ([*portals.runtime(), portal_cli(skill), "search", "-q", q]
            + (["-l", loc] if loc else [])
            + (["--remote"] if remote else [])
            + ["--jobage", str(jobage), "--page", str(page), "--format", "json"])
@@ -362,10 +466,41 @@ def _log_request(path: str | None, line: str) -> None:
     if not path:
         return
     try:
-        with _REQUESTS_LOCK, open(path, "a", encoding="utf-8") as fh:
+        with _REQUESTS_LOCK, open(path, "a", encoding="utf-8", newline="\n") as fh:
             fh.write(line + "\n")
     except OSError:
         pass
+
+
+class PageWalk:
+    """Which deeper pages of a search are worth asking for: none past a page that came back
+    empty, or with nothing on it the search's own earlier pages did not already have.
+
+    The skill's rule 12 is to walk a search's pages until one comes back empty or wholly
+    duplicated. The pages were a plan, every one sent whatever page one said: a search
+    with one posting on page one still sent pages two to five, to LinkedIn among others,
+    whose volume the skill asks to keep low and which counts toward the cap on a
+    person's own computer. A page is judged only once it has answered, so a deeper page
+    already in flight is still sent."""
+
+    def __init__(self):
+        self.ended: dict = {}
+        self.found: dict = {}
+        self.lock = threading.Lock()
+
+    def past_end(self, search, page) -> bool:
+        with self.lock:
+            return search in self.ended and page > self.ended[search]
+
+    def answered(self, search, page, rows) -> None:
+        from lookup_score import norm
+        rows = [r for r in rows or () if isinstance(r, dict)]
+        keys = {norm(r["url"]) or r["url"] for r in rows if r.get("url")}
+        with self.lock:
+            prior = self.found.setdefault(search, set())
+            if not rows or (keys and keys <= prior):
+                self.ended[search] = min(self.ended.get(search, page), page)
+            prior |= keys
 
 
 def sweep(skill: str, tasks: list[tuple], jobage: int, sleep=time.sleep,
@@ -394,13 +529,20 @@ def sweep(skill: str, tasks: list[tuple], jobage: int, sleep=time.sleep,
         _say(plan, log)
     if tally is not None:
         tally.ends = start + SWEEP_BUDGET
-    for task in tasks:
+    walk, at, ended = PageWalk(), 0, 0
+    for at, task in enumerate(tasks):
         q, loc, pg = task[1:4]
         remote = len(task) > 4 and task[4]
+        search = (q, loc, bool(remote))
+        if walk.past_end(search, pg):
+            ended += 1                        # its search ran out on an earlier page
+            if tally is not None:
+                tally.ended = ended
+            continue
         if streak >= SWEEP_MAX_FAILS:
             why = f"{streak} failures in a row ({last})"
             failed.append(f"stopped after {streak} failures in a row; "
-                          f"{len(tasks) - sent} requests not sent ({last})")
+                          f"{len(tasks) - at} requests not sent ({last})")
             break
         if clock() - start > SWEEP_BUDGET:
             why = f"its {SWEEP_BUDGET // 60}-minute budget ran out"
@@ -420,6 +562,8 @@ def sweep(skill: str, tasks: list[tuple], jobage: int, sleep=time.sleep,
         if err:
             failed.append(err)
             last = cause(err)
+        else:
+            walk.answered(search, pg, got)
         rows += got
         new = None
         if on_rows and got:
@@ -434,7 +578,9 @@ def sweep(skill: str, tasks: list[tuple], jobage: int, sleep=time.sleep,
                 tally.failure(err)
             else:
                 tally.success()
-    rest = tasks[sent:]
+    else:
+        at = len(tasks)                       # every task gone through
+    rest = tasks[at:] if why else []
     if rest:
         _say(unsent_line(portals.short(skill), rest, len(tasks), why), log)
     if tally is not None:
@@ -495,6 +641,7 @@ class Tally:
         self.until = 0.0
         self.stopped = ""
         self.capped = 0
+        self.ended = 0                    # deeper pages not sent: their search had run out
         # Failed requests, counted as they land with their causes. `failed` also
         # carries the note a stopped portal leaves, which is not a request.
         self.errors = 0
@@ -534,6 +681,8 @@ class Tally:
             bits.append(f"{self.limited} rate-limited (429), {self.timeouts} timed out")
         if self.capped:
             bits.append(f"{self.capped} deeper page(s) left by the round's cap")
+        if self.ended:
+            bits.append(f"{self.ended} deeper page(s) not needed, their search had run out")
         if self.stopped:
             bits.append(f"stopped: {self.stopped}")
         elif self.finished:
@@ -573,7 +722,7 @@ def _say(line: str, log=None) -> None:
     print(line, file=sys.stderr, flush=True)
     if log:
         try:
-            with open(log, "a", encoding="utf-8") as fh:
+            with open(log, "a", encoding="utf-8", newline="\n") as fh:
                 fh.write(line + "\n")
         except OSError:
             pass
@@ -581,7 +730,7 @@ def _say(line: str, log=None) -> None:
 
 def pool(jobs: list[tuple], workers: int, budget: float = POOL_BUDGET, cap: int | None = None,
          clock=time.monotonic, sleep=time.sleep, tallies: dict | None = None,
-         on_rows=None, on_sent=None) -> tuple[list[dict], dict]:
+         on_rows=None, on_sent=None, page_of=None) -> tuple[list[dict], dict]:
     """Run [(portal, fn, args)] on `workers` threads until done or `budget` runs out.
 
     Each portal gets a Tally (in `tallies`, shared with the progress line). A 429
@@ -590,15 +739,22 @@ def pool(jobs: list[tuple], workers: int, budget: float = POOL_BUDGET, cap: int 
     POOL_MAX_FAILS identical failures in a row of any kind stop it too. `cap`
     is the most requests a portal may send. `on_rows` sees each batch of rows as it
     lands, which is how a partial scrape survives a stage that is killed, and
-    `on_sent` each job that was answered without an error.
+    `on_sent` each job that was answered without an error. `page_of` gives a job's
+    (search, page), and a page past where its search ran out (PageWalk) is not sent.
     Returns (rows, tallies)."""
     tallies = {} if tallies is None else tallies
     start = clock()
     mine = list(dict.fromkeys(j[0] for j in jobs))
+    planned: dict[str, int] = {}
     for portal in mine:
-        n = sum(1 for j in jobs if j[0] == portal)
+        n = planned[portal] = sum(1 for j in jobs if j[0] == portal)
         t = tallies.setdefault(portal, Tally(portal, min(n, cap) if cap else n, workers, cap))
         t.queued, t.ends = n, start + budget
+    walk = PageWalk()
+
+    def past_end(job) -> bool:
+        where = page_of(job) if page_of else None
+        return bool(where) and walk.past_end(*where)
     # One queue a portal, each in the order given, every job numbered by its place in
     # that order. A single queue was walked from the front on every take, past every
     # job of a portal that had stopped or reached its cap, which grows with the square
@@ -609,15 +765,35 @@ def pool(jobs: list[tuple], workers: int, budget: float = POOL_BUDGET, cap: int 
         queues[job[0]].append((n, job))
     rows, lock = [], threading.Lock()
 
+    def drop_ended(portal, heads_only=False):
+        """Take out the portal's queued pages that are past where their search ran out:
+        the next ones to send, or, once sending is over, every one, so what is reported
+        unsent is what was worth sending."""
+        q, t = queues[portal], tallies[portal]
+        keep = deque()
+        while q:
+            n, job = q.popleft()
+            if not past_end(job):
+                keep.append((n, job))
+                if heads_only:
+                    break
+                continue
+            t.queued -= 1
+            t.ended += 1
+            planned[portal] -= 1
+            t.total = min(planned[portal], t.cap) if t.cap else planned[portal]
+        q.extendleft(reversed(keep))
+
     def take():
         now = clock()
         if now - start >= budget:
             return "done", None
         waits, best = [], None
         for portal, q in queues.items():
+            t = tallies[portal]
+            drop_ended(portal, heads_only=True)
             if not q:
                 continue
-            t = tallies[portal]
             if t.stopped or (t.cap and t.sent + t.active >= t.cap):
                 continue
             if t.until > now:
@@ -668,6 +844,9 @@ def pool(jobs: list[tuple], workers: int, budget: float = POOL_BUDGET, cap: int 
                 else:
                     t.streak = 0
                     t.success()
+                    where = page_of(job) if page_of else None
+                    if where:
+                        walk.answered(*where, got)
                     rows.extend(got or ())
                     if on_rows and got:
                         on_rows(list(got))
@@ -682,6 +861,8 @@ def pool(jobs: list[tuple], workers: int, budget: float = POOL_BUDGET, cap: int 
         th.start()
     for th in threads:
         th.join()
+    for portal in queues:
+        drop_ended(portal)
     for portal, t in tallies.items():
         left = len(queues.get(portal, ()))
         if not left or t.stopped:
@@ -943,7 +1124,7 @@ def _write_cursor(state: dict) -> bool:
     new, old = _sweep_paths()
     try:
         os.makedirs(os.path.dirname(new), exist_ok=True)
-        with open(new, "w", encoding="utf-8") as fh:
+        with open(new, "w", encoding="utf-8", newline="\n") as fh:
             json.dump(state, fh, indent=1, sort_keys=True)
             fh.write("\n")
     except OSError:
@@ -1075,7 +1256,7 @@ def _write_partial(out: str, seen: dict) -> None:
     """Everything found so far, written over itself: what a killed stage leaves."""
     tmp = os.path.join(out, PARTIAL + ".tmp")
     try:
-        with open(tmp, "w", encoding="utf-8") as fh:
+        with open(tmp, "w", encoding="utf-8", newline="\n") as fh:
             json.dump(list(seen.values()), fh)
         os.replace(tmp, os.path.join(out, PARTIAL))
     except OSError:
@@ -1105,6 +1286,13 @@ def request_key(job: tuple) -> str:
         q, pg, jobage = args[:3]
         kind, loc = "fh", None
     return json.dumps([kind, q, loc, pg, jobage])
+
+
+def search_page(job: tuple) -> tuple[str, int]:
+    """(the search a pool job's request belongs to, its page): `request_key` without the
+    page, so every page of one search is one search."""
+    kind, q, loc, pg, jobage = json.loads(request_key(job))
+    return json.dumps([kind, q, loc, jobage]), int(pg)
 
 
 def before(folder: str | None) -> tuple[list[dict], set[str]]:
@@ -1145,7 +1333,7 @@ def finish(out: str, seen: dict, today: dt.date, jobage: int, n_tasks: int,
     for j in rows:
         by_portal[j["portal"]] = by_portal.get(j["portal"], 0) + 1
 
-    json.dump(kept, open(f"{out}/kept.json", "w"), indent=1)
+    json.dump(kept, open(f"{out}/kept.json", "w", encoding="utf-8", newline="\n"), indent=1)
     # LinkedIn's search endpoint returns no body, so `desc` is None for every
     # LinkedIn row here. Anything downstream that reads a posting - the text
     # screen, the knockout stage, the extractor - is blind until
@@ -1157,8 +1345,8 @@ def finish(out: str, seen: dict, today: dt.date, jobage: int, n_tasks: int,
               f"Run `python3 tools/hydrate.py {out}/kept.json --out "
               f"{out}/hydrated.json` before ranking, screening or extracting, "
               f"or every one of them reaches the model blind.")
-    json.dump(dropped, open(f"{out}/dropped.json", "w"), indent=1)
-    json.dump(rows, open(f"{out}/scraped.json", "w"), indent=1)
+    json.dump(dropped, open(f"{out}/dropped.json", "w", encoding="utf-8", newline="\n"), indent=1)
+    json.dump(rows, open(f"{out}/scraped.json", "w", encoding="utf-8", newline="\n"), indent=1)
     try:
         os.remove(os.path.join(out, PARTIAL))
     except OSError:
@@ -1252,6 +1440,14 @@ def main() -> int:
     os.makedirs(a.out, exist_ok=True)
 
     on = portals.enabled()
+    # Nothing to run a portal's CLI with is not a thin market: say what is missing and stop,
+    # rather than probe every portal into a FileNotFoundError and end the round on exit 2.
+    if any(v and portals.has_cli(n) for n, v in on.items()):
+        try:
+            portals.runtime()
+        except portals.NoRuntime as e:
+            print(f"scrape_wide: {e}", file=sys.stderr)
+            return 1
     for name in portals.unknown():
         print(f"portals: PORTALS in profile/search.py names {name!r}, which is not "
               f"an installed portal, so it switches nothing", file=sys.stderr)
@@ -1303,7 +1499,7 @@ def main() -> int:
                     _say("Claude, not for them: " + note, a.log)
             json.dump({"portals_down": down, "detail": {k: v[1] for k, v in health.items()},
                        "not_searched": not_searched(health), "say": say},
-                      open(os.path.join(a.out, "00_portal_health.json"), "w"), indent=1)
+                      open(os.path.join(a.out, "00_portal_health.json"), "w", encoding="utf-8", newline="\n"), indent=1)
     skipped = not_searched(health)
     for skill in [k for k, v in on.items() if v and portals.short(k) in skipped]:
         on[skill] = False
@@ -1333,7 +1529,7 @@ def main() -> int:
                 url = r.get("url")
                 key = (_norm(url) or url) if url else None
                 if key and key not in seen:
-                    seen[key] = r
+                    seen[key] = clean_row(r)
                     new += 1
         return new
 
@@ -1403,8 +1599,8 @@ def main() -> int:
     employer_boards = boards.submit(read_boards)
     boards.shutdown(wait=False)
     _, pool_tallies = pool(jobs, workers, budget=a.budget, cap=cap, tallies=tallies,
-                           on_rows=landed, on_sent=answered_now)
-    with open(os.path.join(a.out, SENT), "w", encoding="utf-8") as fh:
+                           on_rows=landed, on_sent=answered_now, page_of=search_page)
+    with open(os.path.join(a.out, SENT), "w", encoding="utf-8", newline="\n") as fh:
         json.dump(sorted(sent_now), fh)
     if jobs:
         timing("LinkedIn and freehire finished after", searching)
@@ -1416,7 +1612,9 @@ def main() -> int:
         except Exception as e:
             rows_, n, errs = [], 1, [f"{type(e).__name__}: {str(e)[:120]}"]
         sent[portal] = n
-        swept.update({k: n for k in mine if portals.short(k) == portal})
+        # Where the next round's tail starts: past every task gone through, a page not
+        # needed because its search had run out included.
+        swept.update({k: n + tallies[portal].ended for k in mine if portals.short(k) == portal})
         if errs:
             failed.setdefault(portal, []).extend(errs)
         landed(rows_)

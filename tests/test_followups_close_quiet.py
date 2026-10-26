@@ -50,7 +50,12 @@ def test_quiet_rows_close_and_live_ones_stay(tmp_path):
     assert [r["status"] for r in rows] == ["no_response", "applied", "applied", "interview",
                                            "applied"]
     assert rows[0]["notes"].startswith("2026-06-01: closed as no_response, no reply in 92 days")
-    assert list(rows[0]) == HEAD                                        # columns kept
+    # Columns kept where they were; the close says it was the search's call, so it is
+    # never read as the person's, and keeps the day it went for `confirm.py` to undo it.
+    assert list(rows[0]) == HEAD + ["applied_on", "confirmed_by", "confirmed_at"]
+    assert (rows[0]["applied_on"], rows[0]["confirmed_by"]) == ("2026-03-01", "the search")
+    assert rows[0]["confirmed_at"].startswith("2026-06-01 ")
+    assert rows[1]["confirmed_by"] == ""
     # Run again: nothing left to close, nothing written twice.
     assert followups.close_quiet(str(path), TODAY, holds={}) == []
 

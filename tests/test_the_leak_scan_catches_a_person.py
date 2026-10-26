@@ -103,6 +103,30 @@ def test_the_apps_own_url_is_not_a_leak_but_a_personal_repo_is(tmp_path, monkeyp
     assert found == ["README.md:2: denylist entry 1"]
 
 
+def test_the_apps_own_address_in_capitals_is_still_the_app_and_the_owner_alone_is_not(
+        tmp_path, monkeypatch):
+    # GitHub reads names without regard to case, so a test that the app in capitals is
+    # still the app names nobody new; the owner's name on its own still fails (2026-10-25).
+    owner = "".join(["ar", "ancull", "eton"])
+    t = _tree(tmp_path, {"t.py": f"{owner.upper()}/last-job-search\n"
+                                 f"{owner.upper()} wrote this\n"
+                                 f"{owner.upper()}/last-job-search-person\n"})
+    found = _scan(t, owner + "\n", monkeypatch=monkeypatch)
+    assert found == ["t.py:2: denylist entry 1", "t.py:3: denylist entry 1"]
+
+
+def test_a_pr_or_commit_text_may_link_the_app_but_never_name_its_owner(tmp_path):
+    # Commit messages and PR text are scanned without a file's allowances; the app's own
+    # address is allowed there too, in any case, and nothing else is (2026-10-25).
+    owner = "".join(["ar", "ancull", "eton"])
+    t = tmp_path / "pr.txt"
+    t.write_text(f"Steps: https://github.com/{owner}/last-job-search/blob/master/X.md\n"
+                 f"APP = \"{owner.upper()}/last-job-search\"\n"
+                 f"Thanks to {owner} for the idea\n", encoding="utf-8")
+    found = leak_scan.scan_text([str(t)], leak_scan.tokens_from([owner]))
+    assert found == ["pr.txt:3: denylist entry 1"]
+
+
 def test_an_unknown_binary_fails_and_a_vendored_font_passes(tmp_path, monkeypatch):
     t = _tree(tmp_path, {"cover_letters/OpenFonts/fonts/x.ttf": b"\0\1binary",
                          "documents_scan.png": b"\x89PNG\0\0"})
@@ -168,13 +192,18 @@ def test_every_form_of_a_recorded_name_and_company_is_an_entry():
 
 def test_a_phone_number_is_an_entry_in_the_forms_it_is_written_anywhere():
     import build_app
-    assert build_app.phone_forms("+1 312 555 0142") == ["312", "555 0142", "5550142", "0142"]
+    # A North American number as a whole and as its seven-digit local part, never its area
+    # code or last four alone: "212" matched the app's own font files and a (#212) in its
+    # changelog, and a number ending in 2026 would match every date (2026-10-25).
+    assert build_app.phone_forms("+1 312 555 0142") == ["312 555 0142", "555 0142", "5550142"]
+    assert build_app.phone_forms("(212) 555-0168") == ["212 555 0168", "555 0168", "5550168"]
     au = "+61" + " 400 111 222"            # assembled, so this file passes the scan it tests
     assert build_app.phone_forms(au) == ["400 111 222", "0400 111 222"]
     assert build_app.phone_forms("0400 111 222") == ["0400 111 222"]
     assert build_app.phone_forms("020 7946 0011") == ["020 7946 0011"]
     # never a short group on its own: it would match everywhere
-    assert all(len(f.replace(" ", "")) >= 4 for f in build_app.phone_forms("+44 7700 900123"))
+    for number in ("+44 7700 900123", "+1 416 555 0126", "416-555-0126"):
+        assert all(len(f.replace(" ", "")) >= 7 for f in build_app.phone_forms(number)), number
 
 
 def test_git_mode_scans_what_would_be_committed_and_nothing_else(tmp_path, monkeypatch):
@@ -268,3 +297,105 @@ def test_an_employer_the_app_names_for_its_products_is_not_a_leak_and_the_list_i
                 pass
     for org in sorted(build_app.ALLOWED_ORGANIZATIONS):
         assert org in text, f"{org} is allowed but the app's own text never names it"
+
+
+def test_a_pdf_text_operator_in_the_design_check_is_not_an_employer(tmp_path, monkeypatch):
+    # The design check reads a page's text positions by the PDF's own two-letter operators;
+    # an employer's short name on a person's denylist can be the same two letters. Only the
+    # quoted operator in that file is set aside (2026-10-25).
+    short = "".join(["T", "D"])
+    t = _tree(tmp_path, {"tools/design_check.py": f'elif op in ("Td", "{short}"):\n'
+                                                   f"# applied to {short} last week\n",
+                         "tools/other.py": f'op = "{short}"\n'})
+    found = _scan(t, short + "\n", monkeypatch=monkeypatch)
+    assert found == ["tools/design_check.py:2: denylist entry 1", "tools/other.py:1: denylist entry 1"]
+
+
+def test_a_files_own_allowance_holds_in_its_commits_diff_and_nowhere_else(tmp_path):
+    # The tree scan gave the design check its allowance; its commit's diff did not, and the
+    # push stopped on a PDF operator (2026-10-25). A message never takes a file's rules.
+    short = "".join(["T", "D"])
+    t = tmp_path / "patches.txt"
+    t.write_text("commit abc\n"
+                 f"Tidy the {short} reader\n"
+                 "diff --git a/tools/design_check.py b/tools/design_check.py\n"
+                 "+++ b/tools/design_check.py\n"
+                 f'+            elif op in ("Td", "{short}"):\n'
+                 "diff --git a/tools/other.py b/tools/other.py\n"
+                 "+++ b/tools/other.py\n"
+                 f'+op = "{short}"\n', encoding="utf-8")
+    found = leak_scan.scan_text([str(t)], leak_scan.tokens_from([short]))
+    assert found == ["patches.txt:2: denylist entry 1", "patches.txt:8: denylist entry 1"]
+
+
+def test_a_committed_file_in_a_folder_a_working_copy_builds_is_scanned_too(tmp_path,
+                                                                            monkeypatch):
+    """The tree scan skips .venv, venv and node_modules, which a working copy makes for
+    itself. build_app exports what is committed and app_watch writes the app's files out,
+    then both scanned that way, so a committed venv/notes.txt holding a name passed them,
+    and the scan before a push, while CI's --git scan found it (2026-10-25)."""
+    import subprocess
+    monkeypatch.setenv("LJS_LEAK_TOKENS", "Quillon Varga")
+    files = {"venv/notes.txt": "Quillon Varga\n", ".venv/a.txt": "Quillon Varga\n",
+             "tools/node_modules/b.txt": "Quillon Varga\n", "README.md": "fine\n"}
+    export = _tree(tmp_path / "export", files)
+    tokens = leak_scan.load_tokens(None)
+    allow = leak_scan.load_allow(None)
+    assert len(leak_scan.scan(export, tokens, allow, export=True)) == 3
+    # A checkout: what it built for itself is still skipped, what it committed is read.
+    repo = _tree(tmp_path / "repo", files)
+    subprocess.run(["git", "-C", repo, "init", "-q"], check=True)
+    subprocess.run(["git", "-C", repo, "add", "-f", "venv/notes.txt", "README.md"], check=True)
+    got = leak_scan.scan(repo, tokens, allow)
+    assert [f.split(":")[0] for f in got] == ["venv/notes.txt"], got
+
+
+def _market_table(entries, note=""):
+    """A market table the way tools/markets.py writes one: two-space JSON, each board
+    opening on its name and then its url."""
+    import json
+    return json.dumps({"country": "zz", "boards": entries, "note": note}, indent=2) + "\n"
+
+
+def test_a_board_in_a_market_table_is_not_a_leak_and_a_person_there_still_is(tmp_path,
+                                                                             monkeypatch):
+    """The market tables name each country's public job boards, and a board the maintainer
+    built a portal for can be on their denylist. Inside tools/markets/ only, a board's name
+    and its own address are set aside, where the name is the address's; a person's name, an
+    email, an employer or a contact id written there still fails (2026-10-25)."""
+    board = "Zorblax" + " Jobs"
+    site = "zorblaxjobs" + ".example"
+    person, employer, contact = "Quillon Varga", "Quayside Foods", "corwin" + "_haldane"
+    email = "quillon" + "@" + "realmail.net"
+    ok = {"name": board, "url": "https://www." + site, "kind": "general",
+          "source": "https://www." + site + "/about", "quote": board + " lists jobs in every town"}
+    not_its_own = {"name": employer, "url": "https://jobs.example.org", "kind": "general"}
+    files = {
+        "tools/markets/zz.json": _market_table([ok], f"{person} at {employer}, {email}, {contact}"),
+        "tools/markets/fields/yy.json": _market_table([not_its_own]),
+        "tools/other.py": f"# {board} is searched\n",
+    }
+    t = _tree(tmp_path, files)
+    found = _scan(t, "\n".join([board, person, "=" + employer, contact]), monkeypatch=monkeypatch)
+    where = sorted((f.split(":")[0], f.split(": ", 1)[1]) for f in found)
+    assert ("tools/markets/zz.json", "denylist entry 1") not in where     # the board itself
+    assert ("tools/other.py", "denylist entry 1") in where                # outside the tables
+    for entry in ("denylist entry 2", "denylist entry 3", "denylist entry 4", "email address"):
+        assert ("tools/markets/zz.json", entry) in where, entry
+    # A board whose name is not its own address's is read like any other line.
+    assert ("tools/markets/fields/yy.json", "denylist entry 3") in where
+
+
+def test_a_board_in_a_market_tables_diff_is_not_a_leak_either(tmp_path):
+    """A commit's patch holds the table's added lines: the board in them passes as it does in
+    the tree, and a person in them still fails."""
+    board, site, person = "Zorblax" + " Jobs", "zorblaxjobs" + ".example", "Quillon Varga"
+    table = _market_table([{"name": board, "url": "https://www." + site}], person)
+    patch = tmp_path / "patches.txt"
+    patch.write_text("commit abc\nAdd a market table\n"
+                     "diff --git a/tools/markets/zz.json b/tools/markets/zz.json\n"
+                     "+++ b/tools/markets/zz.json\n"
+                     + "".join("+" + line + "\n" for line in table.splitlines()),
+                     encoding="utf-8")
+    found = leak_scan.scan_text([str(patch)], leak_scan.tokens_from([board, person]))
+    assert [f.split(": ", 1)[1] for f in found] == ["denylist entry 2"], found

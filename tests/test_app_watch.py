@@ -18,7 +18,7 @@ import build_app  # noqa: E402
 def _git(cwd, *a):
     return subprocess.run(["git", "-C", str(cwd), "-c", "user.name=t", "-c",
                            "user.email=t@example.com", *a], check=True, capture_output=True,
-                          text=True).stdout
+                          text=True, encoding="utf-8", errors="replace").stdout
 
 
 def _setup(tmp_path, monkeypatch, body="All fine here.\n"):
@@ -121,6 +121,28 @@ def test_a_word_the_app_had_before_it_was_recorded_is_not_a_leak(tmp_path, monke
     assert capsys.readouterr().out.startswith("APP LEAK: 1 match(es) in the public app's files")
 
 
+def test_a_copy_set_up_as_the_example_person_is_not_a_leak(tmp_path, monkeypatch, capsys):
+    """A copy whose profile is the app's invented example person, made to try the app,
+    reported that person's name in the app as a leak (2026-10-25). The example is the
+    app's own; anyone else's name in the app is still found."""
+    import json
+    _setup(tmp_path, monkeypatch, "Thanks to Zorblax Quux and Morgan Ellis.\n")
+    _, mine = tmp_path / "example-owner" / "app", tmp_path / "mine"
+    (mine / "profile.example").mkdir()
+    for folder in ("profile.example", "profile"):
+        (mine / folder / "person.json").write_text(
+            json.dumps({"identity": {"name": "Morgan Ellis"}}), encoding="utf-8")
+    monkeypatch.setattr(build_app, "recorded",
+                        lambda: {"Morgan Ellis": None, "Zorblax Quux": None})
+    assert app_watch.main(["--all"]) == 1
+    out = capsys.readouterr().out
+    assert "'Zorblax Quux'" in out and "Morgan Ellis" not in out.split("\n")[0]
+    (mine / "profile" / "person.json").write_text(
+        json.dumps({"identity": {"name": "Corwin Haldane"}}), encoding="utf-8")
+    assert app_watch.main(["--all"]) == 1
+    assert "2 matches" in capsys.readouterr().out
+
+
 def test_an_entry_holding_a_line_break_shifts_no_other_entry(tmp_path, monkeypatch, capsys):
     """Written to a file and read back, a tracker cell with a line break took two numbers,
     and the real leak after it was judged as its neighbour, an ordinary word the app had
@@ -191,10 +213,52 @@ def test_a_page_that_cannot_be_read_moves_no_mark(monkeypatch):
     assert app_watch._pull_requests("") == ([], "pull request text not checked (OSError)")
 
 
-def test_the_sync_runs_it_after_every_successful_sync(sync_steps):
-    # Run the sync and read what it did, rather than search its source for the call.
+def test_the_sync_runs_it_after_every_successful_sync_and_look(sync_steps, monkeypatch):
+    # Run the sync and read what it did, rather than search its source for the call. Where
+    # updates wait for the person's word the day's run is a look, and it runs the watch
+    # too: the maintainer's names are checked every day whether or not an update is taken.
+    import sync_app
     rc, steps = sync_steps()
-    assert rc == 0
+    assert rc == 0 and "look" not in steps
+    assert steps.index("sync") < steps.index("_record_check") < steps.index("app_watch")
+    monkeypatch.setattr(sync_app, "updates", lambda: "when_asked")
+    rc, steps = sync_steps()
+    assert rc == 0 and "sync" not in steps
+    assert steps.index("look") < steps.index("_record_check") < steps.index("app_watch")
+    rc, steps = sync_steps("--update")
+    assert rc == 0 and "look" not in steps
     assert steps.index("sync") < steps.index("_record_check") < steps.index("app_watch")
     rc, steps = sync_steps(sync_rc=1)
     assert rc == 1 and "app_watch" not in steps and "_record_check" not in steps
+
+
+def test_a_leak_is_reported_on_every_look_until_it_is_gone(tmp_path, monkeypatch, capsys):
+    """Every blob, commit and pull request scanned was marked read, findings or not, so the
+    next sync said "App watch: clean" while the name was still public (found 2026-10-25).
+    One missed morning and the daily check reassured from then on."""
+    app, _ = _setup(tmp_path, monkeypatch)
+    _git(app, "switch", "-q", "-c", "leaky")
+    (app / "docs_note.md").write_text("Thanks to Zorblax Quux.\n")
+    _git(app, "add", "-A")
+    _git(app, "commit", "-qm", "A note from Zorblax Quux")
+    pr = {"number": 4, "title": "Fix", "body": "Found by Zorblax Quux",
+          "updated_at": "2026-10-19T00:00:00Z"}
+    asked = []
+
+    def prs(since):
+        asked.append(since)
+        return ([pr] if pr["updated_at"] > since else []), ""
+    monkeypatch.setattr(app_watch, "_pull_requests", prs)
+    for _look in range(3):
+        assert app_watch.main([]) == 1
+        out = capsys.readouterr().out
+        assert out.startswith("APP LEAK: 3 match(es) in the public app (1 in files, "
+                              "1 in commit messages, 1 in pull request text)"), out
+    # The branch is deleted and the pull request edited: clean, and the marks move on.
+    _git(app, "switch", "-q", "master")
+    _git(app, "branch", "-q", "-D", "leaky")
+    pr.update(body="Found by a reader", updated_at="2026-10-20T00:00:00Z")
+    assert app_watch.main([]) == 0
+    assert capsys.readouterr().out.startswith("App watch: clean")
+    assert app_watch.main([]) == 0
+    assert asked[-1] == "2026-10-20T00:00:00Z"

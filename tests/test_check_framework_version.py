@@ -50,7 +50,7 @@ class CheckerRepoFixture(unittest.TestCase):
             cwd=self.root,
             check=True,
             capture_output=True,
-            text=True,
+            text=True, encoding="utf-8", errors="replace",
         )
 
     def run_checker(self):
@@ -61,7 +61,7 @@ class CheckerRepoFixture(unittest.TestCase):
         return subprocess.run(
             [sys.executable, str(self.root / "tools" / "check_framework_version.py")],
             capture_output=True,
-            text=True,
+            text=True, encoding="utf-8", errors="replace",
             env=env,
         )
 

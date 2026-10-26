@@ -3,12 +3,127 @@
 Every step below is a command. Nothing spends model tokens until step 2, and step 2
 spends them only on writing.
 
+## Start of a session: what the start command and the day's check print
+
+Every chat starts with `python3 tools/app.py start --on "<this chat's model>" --tools "<the
+browser tools this chat has: browser, chrome, enable, or none>"` (CLAUDE.md) and does what it
+prints: it checks the copy, runs the day's check below when it has not run today, publishes or
+refreshes the person's page and says where setup stands. This section says what each part
+means, for when a line it prints is unclear.
+
+This repo is either **the app** (`github.com/aranculleton/last-job-search`, public, no
+`profile/`) or **a person's copy**, made from the app and private. In a person's copy the
+day's check is five steps, before anything else:
+
+1. **Pull master**: `python3 tools/sync_app.py --pull`. Another chat may have merged since
+   this container was built. It never merges a master whose history was rewritten (the fetch
+   says "forced update"), which conflicts on hundreds of files: a branch with nothing of its
+   own moves to the new master, and one with commits of its own stops, names them and gives
+   the command that carries them across. Exit 1 means it stopped with nothing changed: do
+   what it printed before anything else.
+2. **Take the app's updates**: `python3 tools/sync_app.py --on "<this chat's model>" --tools
+   "<the browser tools this chat has>"`. It fetches the app and merges what is new (the newest
+   release; the maintainer's own copy takes master), never sends anything back, and ends with
+   the day's model check: what this model suits and what wants another, which goes first in
+   the reply when the person's request is one of the latter. Then the place check
+   (`tools/place.py`), once a chat (weekly only while a computer lacks a tool): when this chat
+   cannot do what the person set up (tools missing on their computer, say), it prints what to
+   tell them, which goes at the end of the reply in its own words: two or three short
+   sentences, and the dated steps only if they ask how (`place.py how`). It offers a choice
+   and never makes it. It recommends no move to a chat on a computer: the page and the cloud
+   chats Claude makes do everything, the page reads LinkedIn profiles itself when it is open
+   in the Claude desktop app, and a chat on a computer is optional, for files kept there
+   (`place.CHATS`). In the maintainer's own copy the sync also checks the public app for
+   their names (`tools/app_watch.py`): an `APP LEAK` line goes first in the reply, before
+   anything else. The app is public, so nothing needs attaching; if the sync still cannot
+   reach it (exit 2), attach it read-only with `add_repo` (owner and repo from the URL
+   `https://github.com/aranculleton/last-job-search`, `access="read"`) and try once more,
+   and if that fails too, say so in one line and carry on. Exit 1 means it stopped with
+   nothing changed: do what it printed yourself (commit the work it lists, carry across what
+   it names) and run it again. Never put it to the person: saving and updating are always
+   yes (updating waits only where they chose that). **Updates arrive by themselves**, unless
+   the person asks to choose when ("only update when I say", in any words): then write
+   `"app_updates": "when_asked"` into `profile/person.json` for them and commit it (the
+   page's Settings has the same switch). From then on this step only looks and changes
+   nothing of the app; when a newer version is waiting it prints one line, once per version
+   ("An update is waiting: ..."), which goes at the end of the reply in its words, and when
+   they say "update" the same command with `--update` takes it. Never press them for it,
+   and nothing waits on it.
+3. **No `profile/`?** `app.py start` has already said where setup stands, before anything is
+   asked, by the one detector (`place.setup_state`): another chat may hold the profile on
+   master or on a branch it has not landed (`set up elsewhere`: it brings it in and the
+   search is set up), or still be writing it (`setup going in another chat`: say its one
+   line and start nothing). Only with none anywhere (`setting up`) does `/setup` start, its
+   questions asked on the page wherever one is published.
+   **A profile here is never set up again** (that is `/reset`): in a chat on their computer
+   it is "Your search is already set up; this computer is ready for it too.", and nothing is
+   asked, least of all a resume.
+   **One chat answers the page**: the one that published it, until setup is done, then a
+   small helper chat of its own ("Job search: Claude's helper (keep this)"). Every other chat
+   neither publishes nor watches the page, and says nothing about it; when the page's own
+   code changed it asks that chat to republish (`app.py republish`). Start prints which this
+   chat is (tools/app_listen.py).
+4. **If the sync brought changes**, say in one plain line what changed for them, from the
+   lines it printed under "What changed": never a file, a command, a version or a git word.
+5. **Profile upgrades apply themselves; nobody has to ask.** The sync ends by listing what
+   this copy still needs (`tools/profile_upgrades.py`): parts of the app that switched on
+   after this person set up (their job boards researched and built, a setting written for
+   their field, a portal rebuilt), and facts in the profile still marked `[CONFIRM: ...]`.
+   The person will not know which ones matter, so never offer them a list or wait for a yes:
+   - **What Claude can do alone** ("Claude applies these itself"): start a background agent
+     at once (Agent tool, `run_in_background: true`, `isolation: "worktree"`) running
+     `/upgrade`, and go on with what the person asked. Their request never waits for it.
+     When it reports, merge its branch into this session's work, then run `python3
+     tools/network/state.py follow-ups --write`: it worked from an older copy of the
+     messages. Its progress shows on the page.
+   - **At the end of your reply**, one plain line per change it made for them, and nothing
+     about commits or commands: if they want one undone, undo it yourself (`git revert`);
+     the page offers the same Undo on each change.
+   - **What needs the person** ("These need you", unconfirmed facts): ask at most three, at
+     the end of the session, never at the start, **each as its short plain question first**,
+     as the sync prints it (the page asks them as To do cards). Detail comes only after a yes
+     (its steps) or a "why?" (one sentence), both in `profile_upgrades.py --plan`; a no gets
+     one line, "No problem, I'll ask again in a month.", and `--no <id>` records it. Never
+     paste a long block, an id, a version number or the word "upgrade". Write each answer
+     where its marker was and commit it. The rest wait for the next session. A no to any
+     question is for now, never for ever: `--no <id>` keeps it, dated, and it comes back when
+     the question changes or after `REASK_DAYS`; a setting the person kept over a new way
+     (`learned.py offer`) is offered again after 30 days, saying when it was kept.
+   If the sync printed nothing about upgrades (its first run after this arrived is the old
+   copy), run `python3 tools/profile_upgrades.py` yourself and do the same.
+   - **One chat per update.** When the sync says the upgrades belong to another chat, start
+     nothing and ask nothing about them, and follow what it prints; when the person says no
+     other chat is open, `python3 tools/profile_upgrades.py --take` hands them over. The chat
+     that brought an update in lands that sync on master promptly, before its other work.
+
+**A chat that carries on for days does this every day, not once.** Most people keep one
+chat going, so "the start of a session" may be days ago. Before each new piece of work (a
+search, an application, outreach, a reply, interview prep), run `python3 tools/sync_app.py
+--if-stale --on "<this chat's model>" --tools "<...>"`. When today's check has not run, it
+does steps 1 and 2 (master, then the app) and the rest follows as above; otherwise it prints
+"already checked today" and changes nothing. `run_round.py` and `stage_picks.py` print a
+reminder when it was skipped, and that reminder is code, so it reaches a chat whose
+instructions were loaded before this rule existed.
+
+**Which model, and how hard it thinks.** The day's sync prints the model check (step 2,
+`--on`). For one piece of work, `python3 tools/model_guide.py <command or kind of work> --on
+"<this chat's model>"` prints nothing when the model fits; otherwise its one line goes first
+in the reply, and the work carries on. `--all` prints the whole table for anyone who asks.
+
+In the app itself, step 2 is a no-op and step 3 does not apply: the app has no profile and
+must never get one. `app.py start` there makes the person's private copy first.
+
 ## 0. Fresh container, or a computer of your own
 
-`./tools/setup_env.sh` does all of this where it can, and is a no-op when it is done. By hand,
-in a cloud container (Debian or Ubuntu), the install is the one line in that script's header,
-the same line START_HERE.md has a person paste into the cloud environment's setup script:
-TeX and Poppler, then `cffi` before the Python packages. Then:
+In a cloud container, `./tools/setup_env.sh` does all of this and is a no-op when it is done:
+the one line in that script's header, the same line a person pastes into the cloud
+environment's setup script, is TeX, then `cffi` before the Python packages. **`./tools/setup_env.sh` sets the container up**,
+one package at a time; pasted into the cloud environment's setup script (where: `python3
+tools/claude_surfaces.py say cloud-environment`), its header line is cached. It is not a
+SessionStart hook, on purpose: `tools/security_guards.py` keeps that allowlist empty.
+SETUP.md, "A. Fresh cloud container", says why each piece is there and what its errors mean
+(`File fontawesome5.sty not found` is an unset `TEXMFHOME`; a pyo3 panic from
+`verify_pdf.py` is a broken `cffi`). Then:
 
 ```bash
 ./tools/ci_local.sh                 # in the app, before a change: every check CI runs, under two minutes
@@ -17,16 +132,15 @@ TeX and Poppler, then `cffi` before the Python packages. Then:
 A person's repo needs neither before work starts: the day's sync runs their own tests when an
 update arrives, and `./tools/ci_local.sh --quick` runs before a merge.
 
-On a Mac (Homebrew; the TeX install asks for the Mac's password once):
+On a computer of their own (a Mac, Windows or Linux), Claude runs one command and the person
+installs nothing first: no Homebrew, no winget, no password.
 
 ```bash
-brew install --cask mactex-no-gui   # nothing to add to the shell: the app finds /Library/TeX/texbin
-brew install poppler
-brew install oven-sh/bun/bun
-python3 -m pip install --user -r requirements.txt   # the Mac's own python3 (3.9) is enough
-./tools/ci_local.sh
+python3 tools/env_check.py --fix    # TinyTeX, Bun, gh and the Python packages, in their own folders
+python3 tools/env_check.py          # then: what is here, one line each
 ```
 
+A computer with nothing set up yet, not even this copy, starts from [COMPUTER.md](COMPUTER.md).
 Full detail, including why `cffi` comes first and which Python to use, is in [SETUP.md](SETUP.md).
 
 **`$SCRATCH` below is any folder outside the repo**: the session's scratchpad in a
@@ -135,6 +249,34 @@ python3 tools/stage_picks.py assemble "$SCRATCH/r1"       # -> drafts.json
 # Dropping a role after the workflow: audit and assemble with --only <slug> ... too.
 ```
 
+**Models, workflows and subagents.** Inside the work, models are pinned per stage to
+`11-cost-model.md`: reading and fetching go to sonnet, and anything that could put a false
+claim in front of an employer runs on the session's own model and is never downgraded. Two
+saved workflows in `.claude/workflows/` run by name with the Workflow tool:
+`draft-applications`, whose args are the contents of `draft_args.json` (`{round_dir, pack,
+pack_hash, picks}`) plus `{today}`, `only` (slugs) to leave out roles the person drops, and
+`repo` when the session is not at the repository root (it writes `draft_<slug>.json` and
+`model_audit_<slug>.json`; `stage_picks.py audit` writes `audit_<slug>.json`); and
+`repo-audit`, the maintainer's (MAINTAINING.md). Two subagents in `.claude/agents/` carry
+the same split for a single `/apply`, an `/interview` or a networking call, where a workflow
+is too much: `employer-researcher` (sonnet: one employer's facts from its own pages, located
+independently, quoted, cached in `company_research/<key>.json`) and `grounding-auditor` (no
+model set, so the session's own: the last read before anything reaches an employer or a
+contact, with profile grounding, `check_claims`, `check_numbers`, `voice_check` and
+`compose.validate()`). The path is the same for a batch from a round and a single `/apply`
+(`stage_picks.py single` stages the one posting). Every draft that will be sent gets both
+audits; a draft the code audit alone passed is never assembled.
+
+**A skill a posting names that the profile does not hold is the person's call, every
+time**: `stage` prints one short question per pick, asked as written (on the page, it was
+asked when they tapped "Draft this": the work item's `answers`), `consent` records each
+answer, and the workflow drafts nothing and `assemble` assembles nothing while a question
+waits. `/apply` Steps 1c and 2 have the rest: a skill the question missed, what a yes puts on
+the page, and a general yes written into the profile in the same turn. `stage` **never reuses
+a name another application was sent under**: a second role at an employer gets a role token
+(`Acme_DemandPlanning`), and `fit_to_page.py` refuses the whole batch if a draft arrives
+under a name that belongs to a different role.
+
 **The drafter reads the pack and nothing else.** `draft_pack.py` compiles what every
 drafter used to read for itself (the profile's facts, each under an id a claim can cite,
 the person's rules and what they have taught it, the openings and closings already sent,
@@ -192,7 +334,7 @@ what each draft object must hold, whichever way it is written.
 
 For each chosen posting, write one draft object; the fields are in
 `tools/render_application.py` `build()`. In short: `abbr`, `company`, `role`, `summary`
-(40 to 48 words, identity first), `tools` (the stack the posting names that the profile
+(36 to 52 words, identity first), `tools` (the stack the posting names that the profile
 supports), `p1` / `p2` / `lead` / `p4` (200 to 250 body words between them), `cl_bullets`,
 and `posting` (the full text). `contact_person` (the recruiter or hiring manager the employer's
 own page names for this role, never a name from anywhere else) addresses the letter to them,
@@ -255,35 +397,106 @@ the posting named rather than copied. After a renderer fix,
 application from it.
 
 Then read every resume and letter in the batch by eye. Not the .tex, the PDF. LaTeX page-break decisions are not
-predictable from source, which is the whole reason this step exists.
+predictable from source, which is the whole reason this step exists. **Verify both
+documents**: go through **every** item in
+`.claude/skills/job-application-assistant/verification-checklist.md` before presenting
+anything (both documents compiled and read back as PDFs is mandatory, never skipped, and so
+is the resume's text layer as an ATS parses it), and report it in one line (all of them
+passed, or `verify_batch.sh`'s last line), plus each item that failed or needs the person's
+call; never the whole list. A finding is fixed in the draft object and rendered again, never
+by hand in the `.tex`. Bullets are **allocated per posting** by `tools/allocate.py`, never
+hand-picked, and filenames are human-looking (`<Prefix>_Resume_<ABBR>`, the File naming table
+in `05-cv-templates.md`).
 
-Deliver the batch the one way CLAUDE.md sets ("Every output is shown"): per role, one
+Deliver the batch on the person's page first (CLAUDE.md, "Every output is shown"): the files
+in the page's own store, then `python3 tools/app.py view`, so each role shows under Drafts.
+Where there is no page, the one way "Delivering in the chat" below sets: per role, one
 file-sending call with its resume and letter, captioned role, employer, pay, location and
 apply link; then one index table in the reply, role | apply link; paths as plain text
 underneath, never as markdown links, which do not open from the desktop app.
 
-## 4. Record and persist
+## 4. Record and persist, then land on master
 
 `python3 tools/record_drafts.py "$SCRATCH/r1/drafts.json" "$SCRATCH/r1/apps_in.json" --round r1`
 adds a row per application at `status=drafted` (fit in `fit_rating`, never priority) and
 writes each `screening_answers.md`. Then:
 
-Then `python3 tools/save_state.py` (CLAUDE.md, "Persistence rule for a person's repo"), which
+Then `python3 tools/save_state.py` (CLAUDE.md, "Saving"), which
 stages each path that exists and no build noise, in any shell, then `git commit -m "<what
 changed>"` and, as a command of its own, `git push -u origin HEAD`.
 
-Never `*.aux *.log *.out *.fls *.fdb_latexmk *.synctex.gz cv/*.txt`. Never edit
-`.gitignore`.
+**What it stages, and why it is forced.** A person's copy is **private** and the search runs
+in cloud containers that are gone when the chat ends, so nothing persists unless it is
+committed, and the state is committed there. (Upstream's "never commit the tracker" rule is
+for public forks. The app itself holds none of it, and its CI fails on a personal path.)
+**Do not edit `.gitignore`**: `tools/security_guards.py` enforces it in CI, so the ignored
+files are forced in instead, path by path. `save_state.py` is the rule as code, so it works
+in any shell: the loop it replaced stopped under zsh, the Mac's own shell, on the first
+pattern that matched nothing, before staging anything. It stages `profile` and `networking`
+with a plain `git add`, never `-f`, which would force in the caches under `profile/tests/`;
+and, forced in, the tracker, `network_contacts.csv`, `network_threads.csv`,
+`job_scraper/seen_jobs.json` and `do_not_target.json`, `documents/cv`, `applications`,
+`network`, `rounds` and `interview`, each application's resume and letter in `cv/` and
+`cover_letters/`, `company_research/*.json` (it costs a fetch to rebuild) and `upskill/*.md`
+(`--list` says what, and stages nothing). `documents/rounds/<round>.json`, each round's top
+60 without the posting bodies, sits outside the ignored `rounds/` on purpose.
+`network_threads.csv` is the file that must never be lost: status is derived from it, and
+without it every contact reverts to `not_contacted` and the same people get messaged twice.
+**Build noise is never staged** (`*.aux`, `*.log`, `*.out`, `*.fls`, `*.fdb_latexmk`,
+`*.synctex.gz`, `cv/*.txt`, `__pycache__/`, `.pytest_cache/`), nor `salary_data.json`
+(licensed third-party data). Never force any of them in by hand.
 
-Then get it onto master. A branch left behind at the end of a session is work the next
-session cannot see and will duplicate.
+### Landing on master
+
+Several chats run against one copy, each in its own container and on its own branch. That
+works only if every branch lands on master before its chat ends: a chat that starts from
+master cannot see work sitting on another chat's branch, and builds it a second time. So:
+
+1. **Start by pulling master and taking the app's updates** ("Start of a session", above),
+   before writing anything, not before pushing.
+2. **Finish by getting the work onto master.** Not "pushed to the branch": on master. Open
+   the pull request, run `./tools/ci_local.sh --quick`, merge it. A branch left behind at the
+   end of a session is work the next chat cannot see and will duplicate.
+3. **Never leave a merged branch around**, and never start new work on an old one.
+4. If the work genuinely is not finishable this session, push it, and say in one plain line
+   that it is not finished and the next chat carries on. The next chat finds it itself
+   (`git branch -r --no-merged origin/master`); the person is never given a branch name.
+
+**Commit and push whenever a unit of work finishes**, not once at the end: a session that
+runs out of context mid-task loses everything uncommitted. Batch the commits and push once a
+unit of work is finished.
+
+**Two chats changing the same state file is not a conflict to resolve by hand.** The
+tracker, the contact book, the message log and every JSON state file the app writes (the
+profile's, the page's, the networking and research records: `merge_state.JSON_FILES`) merge
+row by row or key by key (`tools/merge_state.py`, which every sync wires into git): rows and
+entries either side added are both kept, and notes both sides added are both kept. Where
+both sides changed the same field of the same row, the later change is kept by itself (the
+record's own date where it has one), and the merge says which and what the other side had:
+tell the person in plain words which answer was kept and what the other said, since their
+word outranks it. A line ending "nothing to tell the person" is the app's own record. Git
+stops only where neither change is later. Before
+merging a pull request, `git fetch origin master` and then `git merge origin/master`, each a
+command of its own, so that merge happens in the container, where the driver is set, and not
+on GitHub, where it is not.
+
+The one thing that is **not** negotiable in the other direction: **never push to master
+without CI green**. It is the branch every other chat starts from, so a broken master breaks
+all of them at once. **On a private copy, green is established locally, and that is the
+rule: `./tools/ci_local.sh --quick`** (it skips only the compile of the app's example
+documents, which a person's copy never edits; the full run is for a change to the app). A
+clean run is the evidence and merging on it is allowed; say so in the pull request and name
+anything it reported as SKIP. Why, what CI's Python 3.9 leg is for, and the one case worth a
+billed CI run: MAINTAINING.md, "CI on a private repo".
 
 **On a computer of your own** (no GitHub tools in the chat; `gh` is the route, and
 `place.py` lists it, and `gh auth login`, which is the person's to run, when either is
-missing), each chat works in a folder of its own, made once and first, before any other work
-(the sync's first line says so while a chat is in the main folder):
-`python3 tools/sync_app.py --worktree <name>` (`../<repo>-<name>`, on a new, unique branch from
-master), and every command runs there. Two chats in one folder switch branches under each
+missing), the first chat works in the copy itself, and a second chat open there at the same
+time works in a folder of its own, made once and first, before any other work (the sync's
+first line says so when another chat is working in the main folder):
+`python3 tools/sync_app.py --worktree <name>` (`.claude/worktrees/<name>` inside this folder,
+where Claude Code keeps its own, on a new, unique branch from master), and every command runs
+there: `cd` into it once, and since it is inside the project the chat stays there. Two chats in one folder switch branches under each
 other and fight over git's index. Files git does not carry (the connections export) are read
 from the main folder. Then, from that folder, commit, and:
 
@@ -323,11 +536,17 @@ trusted (the desktop app asks once). Where a merge is still held:
   this. Reply: yes, merge pull request <number>." Then run the merge again, on its own.
 
 It never retries on its own beyond that.
-When the pull request has landed, `git worktree remove <the folder>`.
+When the pull request has landed, `cd` back to the main folder and `git worktree remove <the
+folder>` from there (Windows will not remove a folder a chat is still working in).
 
 ## 5. After the user applies
 
-- `/outcome`, or edit the tracker directly: `status=applied`.
+- `/outcome`, or `python3 tools/confirm.py applied <row> --on <date> --source chat` (an
+  employer, `Employer::title words`, the file's ABBR, or `all from round <name> except ...`),
+  never a hand edit of the tracker: it keeps `date`, writes `applied_on` and who said so, and
+  prints exactly which applications it covered, which the person is shown.
+  `confirm.py check` lists what does not add up (an application nobody confirmed, a draft
+  whose notes say it went).
 - Send the outreach note the same day: `documents/applications/<slug>/outreach.md`.
 - `python3 tools/open_actions.py --due` each morning: only what is due today or overdue,
   people and applications, with the counts on the first line. The full
@@ -358,11 +577,204 @@ At least 5 postings scoring 60+, of which 2 at 75+, all inside the round's age w
 application has two verified one-page PDFs, a persisted posting, an outreach note, a
 tracker row, and 0 claim errors. All of it committed, and on master.
 
+## What changes, and where it goes
+
+Sessions here run in **ephemeral cloud containers**: the conversation is gone when the session
+ends, and anything that matters has to be written to a file and committed, or it did not
+happen. **The standing rule: whenever something changes, write it down before replying.** Not
+at the end of the session, not when asked. A session that learns a fact and only says it in
+chat has lost it.
+
+| What happened | Write it here |
+|---|---|
+| Applied to something, anywhere, including outside this repo | `job_search_tracker.csv`, a new row |
+| An application changed status (interview, offer, rejection, silence) | `job_search_tracker.csv` `status`, via `/outcome` |
+| An interview was booked | that application's `outcome.md`, as a scheduled stage line, via `/outcome` |
+| The questions an interview asked, and which stories landed | `documents/interview/question_bank.csv`, via `/outcome` (`interview_pack.py asked`) |
+| Anything learned about a role, employer or process | `job_search_tracker.csv` `notes`, appended with the date |
+| Messaged someone, or they replied | `network_threads.csv`, one row per message |
+| Sent a contact a resume | that message's row, with the file: `state.py message <id> --attached <file>` |
+| A new person worth contacting | `network_contacts.csv` |
+| A contact's situation changed, or something is now owed | that contact's `status` and `next_action`: `python3 tools/network/state.py set <contact> --status <s> --next-action "<what>" --due <date> --note "<what happened>"`, never by hand |
+| An employer turns out to have no relevant presence at all | `job_scraper/do_not_target.json`, with a `review_after` |
+| A posting was ruled out | `job_scraper/seen_jobs.json`, through `tools/exclude.py add` (a reason, and what it rests on) |
+| A fact about the candidate: a skill, a gap, a date, a constraint | `01-candidate-profile.md`, and `profile/CLAUDE.md` if it belongs in the summary |
+| They told one employer a different place from the profile's | `python3 tools/told.py "<Employer>" "<place>"` (person.json `identity.places_told`) |
+| A reaction or preference: a message, a person, a job, the voice, the questions | the setting it governs, and `profile/learned.json` via `tools/learned.py record` ("Learning the person", below) |
+| Company research that cost a fetch | `company_research/<key>.json` |
+| Something the person did on their page (a tick, an answer, a setting) | applied by `python3 tools/app.py apply`, the `app` skill, never by hand |
+
+`python3 tools/open_actions.py` renders all of it as one view, employers first, each
+carrying its applications and its contacts together. `--company <name>` answers "what is
+happening at <employer>" in one command. It is **derived, never stored**, so it cannot go
+stale: if something is missing there, fix the state file, not the view. The page is built the
+same way (`app.py model`), from these files and nothing else.
+
+**The tracker only knows what was recorded.** A candidate applies to things directly, which
+is why the already-applied question comes before anything is drafted (the job-scraper skill,
+"The rules every search keeps"): a yes is a tracker row at `applied` with the date they give
+(`/apply` Step 1c), and a no is recorded by the `drafted` row the draft writes.
+
+## Delivering in the chat, where there is no page
+
+Everything the person asked for goes on their page first (CLAUDE.md, "Every output is
+shown"). Where no page can be published (the chat has no Artifact tool, or `python3
+tools/app.py published none` was run for it), the chat is the page, and every output
+arrives **in the reply**: a message to send, a draft, a resume, a cover letter, an outreach
+note, an interview pack, a prep doc and a shortlist. Nobody should have to go looking in the
+repo. Text they will send (messages, notes, questions) is pasted in full, ready to copy. A
+document (a PDF, a pack, a prep, a long file) is sent with SendUserFile so it opens in one
+tap (`display: "render"` for a pack or a prep), with the part they need to judge it pasted
+beside it (a pack's one screen), under a name that says whose it is: a prep document is sent
+as the copy `python3 tools/shown.py <file>` makes ("Acme Analyst interview prep.md", never
+"prep.md"), which the prep tools print as `send:`. **Where the chat has no SendUserFile**
+(Claude Code's tools reference lists it for a cloud chat, and for a chat on a computer only
+while it is steered from claude.ai or the phone: `claude_surfaces.py show remote-control`),
+paste that one screen and write the copy's full path on a line of its own: in the desktop app
+a path in the chat opens when clicked. The file path is the record, written underneath, and
+never the answer on its own: "I've put it in documents/..." is not done. The same goes for
+anything updated: show the new version, not where it went.
+
+**Applications, one or a batch, are delivered one way** (2026-10-23):
+
+1. **Per role, one file-sending call** holding that role's resume and cover letter
+   together, captioned: role, employer, pay (or "pay not stated"), location, apply link.
+   With no SendUserFile in the chat, the caption's line and the two files' full paths,
+   one a line, in its place.
+2. **Then one index table in the reply**: role | apply link, the full web address, one row
+   per role. Beside it, what they need to judge each one without opening anything (the
+   outreach note, the screening answers to decide).
+3. **No markdown link to a file in the repo**, in a table or anywhere: a relative link
+   such as `[resume](documents/...)` does not open from the desktop app. Claude's
+   desktop docs say a file's path written in the chat opens when clicked, so each path is
+   written underneath as plain text, as the record.
+
+Never one caption listing every file, never a table of file links, and never one
+message per role in place of the index.
+
+## Learning the person: what a reaction changes
+
+The app's defaults (the voice of a first note, the questions an interview pack asks, who is
+worth contacting, how roles rank) are where everyone starts, and they stay. The person's own
+reactions outrank every default, and **they are kept for good in `profile/learned.json`**
+through `tools/learned.py`. No sync touches it, and no upgrade changes a setting it records.
+The hook and the four steps are in CLAUDE.md ("Learning the person"); this is the detail.
+
+- **Make it stick where it governs.** That means the profile setting: `networking.py`
+  (`OPENER`, `ABOUT_ME`, `ASK`, `GREETING`, `REFERRAL_LINE`, `REFERRAL_CLOSE`,
+  `TITLE_SETS`), `search.py` (the bar, the scoring words), `profile/CLAUDE.md` (how they
+  want to come across, document rules), `07-interview-prep.md`, and for how a page looks
+  ("bigger font", "less cramped", "centre my name") `person.json` `documents.design` through
+  `python3 templates/doc_design.py adjust <change>`. A job they dislike is `python3
+  tools/exclude.py add <url> --basis person --reason "<their words>"`. A person they do not
+  want contacted is a `closed` contact with their reason. A *kind* of job or person becomes
+  the rule that covers all of them.
+- **Rulings change, and that is normal:** when they change their mind about a kind of job, a
+  sector or an employer, undo the ruling in the same turn (`exclude.py lift "<words of the
+  reason>"`, the sector or employer out of `search.py` `BAR_EXCLUDED` or `BAR_DECLINED`, the
+  entry out of `job_scraper/do_not_target.json`). A ruling made by their screening rules
+  lapses by itself when the part of the rules it rests on changes (one blocker row, one gate
+  setting); when you change a screening rule, run `exclude.py lapsed` in the same turn and
+  `restamp` the groups that do not rest on what changed.
+- **Record it**: `python3 tools/learned.py record --area <voice|messages|questions|people|targets|jobs|documents|search|interview|other> --said "<their words>" --rule "<what is different from now on>" --applied-to "<file SETTING>"`.
+  Add `--never-say "<phrase>"` for wording they never want; `tone.py` and `voice_check.py`
+  then flag it in everything drafted. Where their rule and a check disagree, ask once which
+  wins and add `--overrides <the check's rule name>` when theirs does. When it lists
+  `CONTRADICTS`, ask which stands, with both dates, and retire the other. An edit made
+  before sending records itself when the send is logged with its words.
+- **Ask, lightly, and now and then a tip.** After work they will read or send (a shortlist,
+  a draft, a batch of notes, an interview pack, a prep, a brief), end with the one line
+  `python3 tools/tips.py <search|apply|networking|reply|interview|prep|brief>` prints, and
+  nothing if it prints nothing. It decides when: the first time a kind of work is done, a
+  line saying the first go may be off and how to say so; after that a short tip on using the
+  app, at most one every two days. Never write one of your own, never more than one a reply,
+  and never in place of the work. "No more tips" is `python3 tools/tips.py off`. **When they
+  ask what it can do or how to use a part of it** ("show me around", "how do I..."), it is
+  `python3 tools/tips.py tour` (or `tour <topic>`), passed on as it prints: short, never a
+  manual.
+- **Updates and what they have taught it.** A sync's genuine fixes apply: they change code,
+  not their settings. When an update would change a setting `learned.py locked` lists,
+  `/upgrade` changes nothing. It records `learned.py offer` instead, and the person is asked
+  once, with the session's other questions, whether to keep theirs or try the new way.
+
+**What works: it learns from results, not only from what they say.** `tools/what_works.py`
+counts what happened, from the state files and with no model call: which messages drew a
+reply, which applications reached an interview. **Before drafting**, beside the learned
+brief: `brief messages` (with `--channel` and `--route`) for a networking message, `brief
+documents` for an application; match the shape of what worked, never its words or another
+person's facts. **When a result arrives**: `event --company "<employer>"` from `/outcome`,
+`event --contact <id>` from `/reply`, one line shown in the reply. A difference is reported
+only when both groups are big enough and the gap is unlikely to be chance. A resume that
+reached an interview gives its bullets a small, capped lift in `tools/allocate.py`, which
+decides between bullets a posting rates alike and never outranks one the posting asks for. A
+message logged without its `full_text` can never be an example.
+
+## Commands and skills: what routes where
+
+Several names are close enough to pick wrongly, so this is the map. **Skills** are
+knowledge that loads when a topic comes up. **Commands** are the things typed with a
+slash. A command and a skill can share a stem; they are not alternatives to each other.
+
+| Skill | Commands it owns |
+|---|---|
+| `job-application-assistant` | `/apply` `/rank` `/expand` `/outcome` `/interview` `/setup` `/reset` `/add-template` |
+| `job-scraper` (declared name: **`scrape`**) | `/add-portal` |
+| `networking` | `/network` `/reply` `/threads` `/prep` |
+| `upskill` | (none) |
+| `app` | (none: it loads when the person's page rings a chat) |
+
+Also `/html-report` and `/upgrade` (which a session starts itself, "Start of a session"
+step 5), which belong to no skill.
+
+**Two things are typed with a slash.** A file in `.claude/commands/` is one. A skill's
+own declared `name:` is the other, which is why **`/scrape` and `/upskill` work with no
+command file behind them**: `job-scraper/SKILL.md` declares `name: scrape` and
+`upskill/SKILL.md` declares `name: upskill`. This is the whole source of the confusion
+the map exists to settle. `networking` does not do that, so `/networking` is not a
+command; its four actions are the command files `/network`, `/reply`, `/threads` and
+`/prep`.
+
+**The pairs that get confused:**
+
+- **`networking` (skill) vs `/network` (command).** The skill is the rules: tiers, tone,
+  limits, playbooks. The command is one action, a discovery run. Typing `/network` runs a
+  discovery; asking anything about outreach loads the skill. `/reply`, `/threads` and
+  `/prep` are its other three actions.
+- **`/prep` vs `/interview`.** `/prep` prepares a **networking call** that came out of a
+  thread, and takes a contact name. `/interview` prepares a **real interview**, and takes a
+  company: on a tracked application, or on a process with no application at all (a referral
+  that led to a recruiter's call; `interview_pack.py process` registers it). **A recruiter
+  screen on a live hiring process is an interview stage**, referred or not, so it is
+  `/interview`. "Prep me for <employer>" is almost always `/interview`. If it is ambiguous,
+  ask which. Each process keeps one living document, `interview_prep.md` in its folder,
+  updated in place and sent again on every change.
+- **`job-scraper` vs `scrape`.** One skill. The directory is `job-scraper`, the declared
+  `name:` is `scrape`, and `/scrape` is the command. Not three things.
+- **`.claude/skills/` vs `.agents/skills/`.** The first is the skills above. The second is
+  the job-portal CLIs that rounds and `/scrape` call; they are search tools, not advice, and
+  they are never invoked directly.
+- **Portals and employer boards.** The app ships `linkedin-search` and `freehire-search`; a
+  person turns either off in `profile/search.py` `PORTALS`, never in its `SKILL.md`. Every
+  other board is the person's, built by `/add-portal` into their repo. Employer ATS boards
+  (`tools/ats_boards.py`, named in `profile/boards.py`) are a third source;
+  `ats_boards.py --find "<Employer>"` finds a board, through the vendored
+  [openroles](https://github.com/aranculleton/openroles) in `tools/openroles/` (never edited
+  here). `python3 tools/portals.py` prints what the next round searches; the rest is in the
+  job-scraper skill.
+
+**Where things are**: `cv/` holds the LaTeX resume variants (moderncv, banking style),
+`cover_letters/` the letters (the custom `cover.cls`), `.claude/skills/` the skills,
+`.agents/skills/` the job-portal CLIs, and `networking/connection_targets.md` research notes
+only, never a contact store (`network_contacts.csv` is). **Tools run directly, not through a
+slash command** are the table below, each with what it does, its flags and its exit codes:
+`run_round.py` exits 0 when the yield target is met, 2 when it is missed (a thin market) and
+1 when a stage broke.
+
 ## Tools run directly, not through a slash command
 
 | Command | What it does |
 |---|---|
-| `python3 tools/run_round.py --out rounds/rN [--expand]` | The whole free pipeline, portals to ranked shortlist. It checks the yield target and prints MET or MISSED with the counts. **Exit 0 met, exit 2 missed, exit 1 a stage actually broke** - a thin market and a broken pipeline are different answers. `--expand` re-runs wider up to the 3 rounds the rule allows. It **prunes itself**: `rounds/` is gitignored and its ~55MB of stage files are deleted, except `06_shortlist.json` cut to the top 60 with their bodies, which is what drafting is staged from; the same 60 rows, minus the posting bodies, are written to `documents/rounds/<round>.json` and **are** committed. `--keep-intermediates` retains the stage files for debugging a round that went wrong, and a round that **missed** keeps `00_scrape/dropped.json`, `01_dropped.json`, `03_screened_all.json` and `06_skipped.json` automatically, with the posting bodies stripped, because those are the files the MISSED message tells you to read. |
+| `python3 tools/run_round.py --out rounds/rN [--expand]` | The whole free pipeline, portals to ranked shortlist. It checks the yield target and prints MET or MISSED with the counts. **Exit 0 met, exit 2 missed, exit 1 a stage actually broke** - a thin market and a broken pipeline are different answers. `--expand` re-runs wider up to the 3 rounds the rule allows. It **prunes itself**: `rounds/` is gitignored and its ~55MB of stage files are deleted, except `06_shortlist.json` cut to the top 60 with their bodies, which is what drafting is staged from; the same 60 rows, minus the posting bodies, are written to `documents/rounds/<round>.json` and **are** committed, beside what it filtered out and why (`documents/rounds/filtered/<round>.json`, read by `tools/filtered.py`). `--keep-intermediates` retains the stage files for debugging a round that went wrong, and a round that **missed** keeps `00_scrape/dropped.json`, `01_dropped.json`, `03_screened_all.json` and `06_skipped.json` automatically, with the posting bodies stripped, because those are the files the MISSED message tells you to read. |
 | `python3 tools/network/prep.py --all` | Rewrites every contact's prep document. Without it a fix to `prep.py` reaches whichever one somebody runs next and no others. Each document's last line says which prep wrote it: `--stale-only` rewrites only the documents an older prep wrote or written before the contact's row or thread changed (and never writes one for a contact who has none), keeping answers already rewritten to be said, and `--dry-run` lists what would be written and writes nothing. `"<contact>" --check` exits 1 while an answer is raw profile wording or reads as written. |
 | `python3 tools/network/export.py` | LinkedIn's data export, read, only the files it names. **Given one, `take <zip|folder>` first** (`take --find` looks in Downloads, Desktop and Documents): it saves every file the app reads into documents/linkedin/, in the main folder on a computer, and imports the history into network_threads.csv in one step. `files` (no argument) says plainly when messages.csv or Invitations.csv was never saved; `files <zip>` says what a download holds and what is missing, `history --from <zip>` lists the messages and invitations it would add to network_threads.csv (joined by profile address, else a careful name match, else listed as not in the contact book) and `--apply` writes them, twice adding nothing; `pending` lists the invitations sent and never accepted for three weeks, oldest first, for the person to withdraw on LinkedIn, and `withdrawn <name>...` records the ones they did. Nothing is sent. |
 | `python3 tools/network/own_profile.py` | The person's own LinkedIn profile, now and then. `due` prints one line when a look is worth it (never looked over, a fact it compares has changed, or a run of unanswered first notes too long to be chance) and nothing otherwise, at most once in 30 days; `check` lists red flags only, each with its evidence and one fix; `brief` is what is left for the session's model to judge, well under two thousand tokens. Kept in documents/network/own_profile_review.json. |
@@ -374,7 +786,10 @@ tracker row, and 0 claim errors. All of it committed, and on master.
 | `python3 tools/what_works.py brief <messages\|documents\|search\|interviews>` | What has worked, counted from the state files with no model call: reply rates and the messages that drew replies, the applications that reached an interview with the resume and letter they used, the interview rate by fit band and route, and (`interviews`) how far applications get by the stages ticked in each `outcome.md`, with the questions the bank says keep coming up and the stories that landed. A difference is reported only when the groups are big enough and the gap is unlikely to be chance. `event --contact <id>` and `event --company <name>` are the one-line audit when a result arrives. |
 | `python3 tools/interview_pack.py pack "<company>"` | The one living prep document `/interview` builds for a hiring process, one screen first (what they are assessing and want to hear, likely questions with the story or answer for each, hooks, the money, what not to say), then your answers to write as said, what the employer's people and papers have been told (conflicts flagged), who you are meeting and the question for each, the format, and the detail, every fact sourced. `--stage`, `--date`, `--with`, `--format` (case, coding, behavioural, technical, presentation, screen), `--map <json>` and `--write` (beside the application, as `interview_prep.md`, keeping what the person wrote). `process "<company>" --contact <id> --role "<role>" [--posting <file or link>]` registers a process with no application (a referral or a recruiter's call) and writes its document in one command; `postings` gives every process folder that has none a `job_posting.md`. `motive "<question>" --answer "<their words>" [--suits ...] [--not-for ...]` keeps the person's own reasons in `profile/07-interview-prep.md` for every later employer. `check` exits 1 while an answer is unwritten or reads as written, a question waits on the person's own reasons, or research is still to do. `campaign --yes "<chat>"\|--no` records the one-time offer of a chat for that employer. `asked` adds a question an interview asked to `documents/interview/question_bank.csv`; `rework` adds an answer to work on, which a rebuild keeps. |
 | `python3 tools/profile_consistency.py` | The pay band, the walk-away floor, the notice period, the sponsorship position and the permit-disclosure rule, said the same way across the profile: names every other place that says one differently from its source (the rubric's salary table, the candidate profile's notice line, the summary's sponsorship sentence). Exit 1 when anything disagrees; the `profile-consistency` upgrade asks the person which is right. |
-| `python3 tools/followups.py` | The application nudges alone, on the schedule in step 5, "After the user applies": each one due, who it goes to, the held ones with their reason, and where the chase stops (at the throttle's 45 days of silence, `throttle.SILENCE_DAYS`, or a week after the second follow-up). `--close-quiet` closes each application past the chase as `no_response` with a dated note; the brief runs it. |
+| `python3 tools/followups.py` | The application nudges alone, on the schedule in step 5, "After the user applies": each one due, who it goes to, the held ones with their reason, and where the chase stops (at the throttle's 45 days of silence, `throttle.SILENCE_DAYS`, or a week after the second follow-up). `--close-quiet` closes each application past the chase as `no_response` with a dated note, recorded as the search's call (`confirmed_by` "the search") and printed as "closing as no reply" with the `confirm.py applied` line that keeps one open; the brief runs it. |
+| `python3 tools/confirm.py applied\|not-applied\|skip\|closed <rows...>` | What the person says happened to an application, on exactly the rows they meant: a file's ABBR, the employer, `Employer::title words`, or `all from round <name> except ...`. `--on <date>` is the day it went, `--source chat\|page` where they said it; `applied --new --company --role --url` adds one made outside the app. It never moves `date` (part of the tracker's merge key), writes `applied_on`, `confirmed_by` and `confirmed_at`, prints each row it changed, and refuses (exit 1, nothing written) a name that could be two rows, listing them. `check` lists an application nobody confirmed, a draft whose notes say it went, and a page tick the tracker disagrees with (`--ticks <file>`). |
+| `python3 tools/filtered.py show\|back <round> [<pick>...]` | What a round filtered out and why, kept by every round at `documents/rounds/filtered/<round>.json` (the search's gates, what was already ruled out or first seen too long ago, the screen's cuts, the throttle's skips). `back` brings one back: lifts its ruling and adds it to the round's shortlist, printing the rank to stage it as. |
+| `python3 tools/apply_link.py <url>` or `--file <rows.json>` | The link a card shows: tracking taken off with the job kept, a redirect unwrapped, what kind of page it is, and the employer's own listing found on their board where one is on file, stamped "checked <date time>" (or "closed"). LinkedIn is never fetched. `stage_picks.py` runs it on every pick. |
 | `python3 tools/stage_picks.py stage <round_dir> <pick>...` | The step between a shortlist and a draft. A pick is a shortlist rank or `Company::title words`. In a later session, when `rounds/` is gone, it reads `documents/rounds/<round>.json` instead and fetches each pick's body from its board, or reads `<round_dir>/postings/<slug>.txt` when the board will not give it. `single <dir> --company --role --posting-file` stages one posting from no round, which is how `/apply` enters the same pipeline. Writes each posting fenced by `tools/untrusted.py`, `picks.json` (the `draft-applications` workflow's args) and `apps_in.json`, and picks each filename: **a name another application was sent under is never reused**, so a second role at an employer gets a role token (`Acme_DemandPlanning`). It prints what code read from each posting (contract or permanent and when it ends, the pay and whose place it is for, years, degree, where and how it is worked, a repost, what is already running at the employer) and holds a pick with a surprise in it (a fixed-term contract, pay for another place, an application already in, a referral in flight, a second role at one employer unless `--both`) in `held.json` until `consent <round_dir> <slug> --draft` or `--skip`. It prints one short question per pick about the skills the posting names that the profile does not hold (never one it covers under another name: a held part such as Azure Data Factory covers Azure, a listed synonym such as model serving covers model deployment), and `consent <round_dir> <slug> --yes ... --no ...` records the answers: nothing is drafted or assembled while one waits, a yes prints on that resume's skills line, and both answers go into the documents' header. `assemble <round_dir>` turns the audited drafts into `drafts.json` and names any pick with no draft. |
 | `tools/verify_batch.sh <drafts.json>` | Every rendered application: pages, chronology, section layout, text layer, claims, letters. Exits non-zero on any finding. |
 | `python3 tools/record_drafts.py <drafts.json> <apps_in.json> --round rN` | The tracker rows for a rendered batch, by `/apply` Step 6b's rules, plus `screening_answers.md` for each. It writes **fit** in `fit_rating`, never the shortlist's priority, which can exceed 100 on a 0-100 column. |
@@ -385,8 +800,8 @@ tracker row, and 0 claim errors. All of it committed, and on master.
 | `python3 tools/network/why.py [<contact_id>...]` | Why each person: a score from 0 to 100 and one plain line, best first, by counting, with no model call. |
 | `python3 tools/network/openalex.py "<employer>"` | Researchers who put the employer on a recent paper, only when `profile/networking.py` sets `OPENALEX`. A cloud session needs `OPENALEX_API_KEY` (SETUP.md). |
 | `python3 tools/exclude.py` | Rulings in `seen_jobs.json`, each with what it rests on. `add <url> --reason "<why>" [--basis person] [--rests-on "<part>"]` rules a posting out (a reason that cites "blocker N" names its part by itself), `lift "<words in the reason>"` takes rulings off when the person changes their mind, `review` groups older rulings that record no basis, `stamp "<words>" --basis rules\|person` records what a group rests on, `parts` lists the parts of the rules a ruling can rest on, `lapsed` the rulings a rules change lapsed and `restamp "<words>" --rests-on "<part>"\|all` keeps the ones that still hold; `--url` narrows lift, stamp and restamp to named postings when reasons are word for word the same; and `rules` prints the rules fingerprint. |
-| `python3 tools/sync_app.py` | Takes the app's updates and never sends anything back. `--if-stale` pulls master and syncs once a day and is a no-op after that; `--on "<model>"` ends the day's sync with the model check (`tools/model_guide.py`); `--check` says how far behind, changing nothing. Exit 1 stopped with nothing changed, 2 the app could not be reached. |
-| `python3 tools/env_check.py` | Whether this session can do the whole job, one line each: LaTeX, Poppler, pypdf, Bun and every job board's host, with what to do about anything missing. |
+| `python3 tools/sync_app.py` | Takes the app's updates and never sends anything back. `--if-stale` pulls master and syncs once a day and is a no-op after that; `--on "<model>"` ends the day's sync with the model check (`tools/model_guide.py`); `--check` says how far behind, changing nothing. Where the person's profile has `"app_updates": "when_asked"` (their choice, never the default), a plain run and `--if-stale` only look and say once that an update is waiting, and `--update` takes it when they say so. Exit 1 stopped with nothing changed, 2 the app could not be reached. |
+| `python3 tools/env_check.py` | Whether this session can do the whole job, one line each: LaTeX, pypdf, Node or Bun, gh and every job board's host, with what to do about anything missing. `--fix` installs what a computer lacks into the person's own folders with no password (tools/installs.py); in a cloud chat it runs `setup_env.sh`. |
 | `python3 tools/network/state.py` | What is owed, the requests sent and InMail credits left, the tracker links, and **RECONCILE**: every place the contact book disagrees with the message log. An orphaned thread sits undetected unless something runs it. Findings that need a person are listed; relationships that simply predate the message log are counted, not repeated. `withdraw <contact_id>...` (or `--all-due`) records connection requests the person has withdrawn: a `request_withdrawn` row and the contact closed, so they are never surfaced again. `nudge <contact_id> --text-file <file>` logs a nudge that went, with its words, and `message <contact_id> ...` any other later message (`--texts <file.json>` for several); the BUDGET line counts the requests sent this week and today, with no cap of the app's own: LinkedIn says when its own limit is reached. |
 
 `tools/bridges.py` reads the honest-framing table (`profile/skills.py` BRIDGES): for each
@@ -411,7 +826,12 @@ this chat changed itself is kept as usual.
 
 A person's own tests (`profile/tests`) pin how the app worked when they were written, and
 an update can change or remove what they pinned. CI going red after a sync is usually this,
-not a bug in the update.
+not a bug in the update. **A person's own tests (`profile/tests`) use the app's public names
+only**, so fewer break: a name that starts with an underscore, and anything inside
+`tools/openroles/`, can change in any release; a job board is faked through
+`tools/offline_boards.py`. **When they fail after an update**, bringing them in line is
+Claude's job, done in the same turn and committed with the sync's work: never a question or
+a to-do for the person, who hears one plain line at most.
 
 1. `python3 tools/sync_app.py --own-tests` sorts every failing test into two kinds and says
    what to do. The sync and `ci_local.sh` print the same by themselves.

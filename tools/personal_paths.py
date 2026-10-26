@@ -48,6 +48,7 @@ PERSONAL = (
     "networking/**",
     "upskill/*.md",
     "salary_data.json",
+    # Left by the mail sync an older version of the app had: still theirs.
     "gmail_sync/**",
     "rounds/**",
     # Rendered documents. Everything in the two document folders is the
@@ -130,7 +131,8 @@ def changed(root: str = ROOT, base: str = "origin/master") -> list[str] | None:
     """Every path this checkout changed since it left `base`: committed, staged, unstaged
     and untracked (ignored files aside). None when `base` is not known here."""
     def git(*args):
-        return subprocess.run(["git", "-C", root, *args], capture_output=True, text=True)
+        return subprocess.run(["git", "-C", root, *args], capture_output=True, text=True,
+                              encoding="utf-8", errors="replace")
     fork = git("merge-base", "HEAD", base)
     if fork.returncode:
         return None
@@ -143,6 +145,42 @@ def changed(root: str = ROOT, base: str = "origin/master") -> list[str] | None:
         r = subprocess.run(["git", "-C", root, *args], capture_output=True)
         out.update(p for p in r.stdout.decode("utf-8", "replace").split("\0") if p)
     return sorted(out)
+
+
+# Where the sync keeps the app it merged: the release it took, and the app's master
+# (tools/sync_app.py fetches both under its "app" remote).
+APP_REFS = ("refs/remotes/app/release-tag", "refs/remotes/app/master")
+
+
+def _blobs(root: str, ref: str) -> dict[str, str] | None:
+    r = subprocess.run(["git", "-C", root, "ls-tree", "-r", "-z", ref], capture_output=True)
+    if r.returncode:
+        return None
+    out = {}
+    for entry in r.stdout.decode("utf-8", "replace").split("\0"):
+        if "\t" in entry:
+            meta, path = entry.split("\t", 1)
+            out[path] = meta.split()[2]
+    return out
+
+
+def the_apps_own(root: str, paths: list[str]) -> bool:
+    """Whether every one of these app-owned paths is, as committed and in the working tree,
+    exactly the app's: the release the sync merged, or the app's master. A merge of an app
+    update changes only such files, and the app's own CI tested them on Linux, a Mac and
+    Windows before release: running the app's suite again cost a person about 8 minutes a
+    merge, and on Windows it stopped a merge outright (2026-10-25)."""
+    if not paths:
+        return False
+    dirty = subprocess.run(["git", "-C", root, "status", "--porcelain", "-z", "--", *paths],
+                           capture_output=True).stdout
+    if dirty.strip(b"\0"):
+        return False
+    head = _blobs(root, "HEAD")
+    apps = [b for b in (_blobs(root, ref) for ref in APP_REFS) if b is not None]
+    if head is None or not apps:
+        return False
+    return all(any(head.get(p) == app.get(p) for app in apps) for p in paths)
 
 
 def main(argv: list[str]) -> int:
@@ -159,7 +197,10 @@ def main(argv: list[str]) -> int:
             return 1
         app, mine = split(got)
         print("\n".join(mine))
-        return 0 if not app else 1
+        if not app:
+            return 0
+        # 2: the app files that changed are the app's own release, tested by its CI.
+        return 2 if the_apps_own(ROOT, app) else 1
     app, mine = split(tracked())
     if "--personal" in argv:
         print("\n".join(mine))

@@ -91,7 +91,7 @@ def _repo_key() -> str:
     for args in (("config", "--get", "remote.origin.url"), ("rev-parse", "--git-common-dir")):
         try:
             r = subprocess.run(["git", "-C", root, *args], capture_output=True, text=True,
-                               timeout=10)
+                               timeout=10, encoding="utf-8", errors="replace")
         except (OSError, subprocess.TimeoutExpired):
             continue
         got = r.stdout.strip()
@@ -133,7 +133,7 @@ def _locked():
     """Hold the ledger while it is read and written, so two chats on one computer never
     lose each other's records."""
     os.makedirs(ledger_dir(), exist_ok=True)
-    fh = open(os.path.join(ledger_dir(), ".lock"), "a+")
+    fh = open(os.path.join(ledger_dir(), ".lock"), "a+", encoding="utf-8", newline="\n")
     try:
         try:
             import fcntl
@@ -160,7 +160,7 @@ def load() -> dict:
 
 def _save(data: dict) -> None:
     tmp = _path() + ".tmp"
-    with open(tmp, "w", encoding="utf-8") as fh:
+    with open(tmp, "w", encoding="utf-8", newline="\n") as fh:
         json.dump(data, fh, indent=1)
         fh.write("\n")
     os.replace(tmp, _path())

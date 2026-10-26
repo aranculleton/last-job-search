@@ -49,7 +49,7 @@ def test_the_throttle_counts_an_application_already_made_as_one_kind(tmp_path):
                         "--seen", str(seen), "--today", "2026-10-21", "--no-write",
                         "--contacts", str(tmp_path / "none.csv"),
                         "--do-not-target", str(tmp_path / "none.json")],
-                       capture_output=True, text=True, cwd=ROOT)
+                       capture_output=True, text=True, encoding="utf-8", errors="replace", cwd=ROOT)
     assert r.returncode == 0, r.stderr
     assert "{'already applied to this role': 2}" in r.stderr, r.stderr
 
@@ -86,7 +86,7 @@ def test_the_prefilter_counts_todays_holds_apart_from_past_rulings(tmp_path):
                         "--out", str(tmp_path / "kept.json"), "--seen", str(seen),
                         "--dropped", str(tmp_path / "dropped.json"), "--today", today,
                         "--do-not-target", str(dnt), "--contacts", str(tmp_path / "none.csv")],
-                       capture_output=True, text=True, cwd=ROOT)
+                       capture_output=True, text=True, encoding="utf-8", errors="replace", cwd=ROOT)
     assert r.returncode == 0, r.stderr
     assert "1 of the dropped were already ruled out in seen_jobs.json" in r.stderr, r.stderr
     assert "2 are held back today" in r.stderr, r.stderr

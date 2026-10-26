@@ -1,0 +1,153 @@
+{
+  "country": "us",
+  "regions": {
+    "ca": {
+      "name": "California",
+      "aka": [
+        "CA",
+        "Calif."
+      ],
+      "boards": [
+        {
+          "name": "CalCareers",
+          "url": "https://www.calcareers.ca.gov",
+          "kind": "regional",
+          "source": "https://www.calcareers.ca.gov/",
+          "quote": "",
+          "checked": "2026-10-25",
+          "verified": false,
+          "why": "the source could not be read: robots.txt could not be read (HTTP 200 but the body is not a robots.txt)",
+          "search": "https://www.calcareers.ca.gov/CalHRPublic/Search/JobSearchResults.aspx",
+          "paths": {
+            "search": "/CalHRPublic/Search/JobSearchResults.aspx",
+            "posting": "/CalHrPublic/Jobs/JobPosting.aspx"
+          },
+          "robots": {
+            "checked": "2026-10-25",
+            "why": "robots.txt could not be read (HTTP 200 but the body is not a robots.txt)",
+            "search": null,
+            "status": "unconfirmed",
+            "posting": null,
+            "crawl_delay": null,
+            "ai_input": null
+          },
+          "public_search": {
+            "checked": "2026-10-25",
+            "status": "not_tried",
+            "http": null
+          }
+        }
+      ]
+    },
+    "tx": {
+      "name": "Texas",
+      "aka": [
+        "TX"
+      ],
+      "boards": [
+        {
+          "name": "WorkInTexas",
+          "url": "https://www.workintexas.com",
+          "kind": "regional",
+          "source": "https://en.wikipedia.org/wiki/Texas_Workforce_Commission",
+          "quote": "For job seekers, TWC offers career development information, job search resources (including an online job-matching system, workintexas.com), and training programs, and administers the unemployment benefits program.",
+          "checked": "2026-10-25",
+          "verified": true,
+          "search": "https://www.workintexas.com/vosnet/jobbanks/jobsearch.aspx",
+          "paths": {
+            "search": "/vosnet/jobbanks/jobsearch.aspx",
+            "posting": "/vosnet/jobbanks/jobdetails.aspx"
+          },
+          "robots": {
+            "checked": "2026-10-25",
+            "why": "",
+            "search": false,
+            "status": "disallowed",
+            "posting": false,
+            "crawl_delay": null,
+            "ai_input": null
+          },
+          "public_search": {
+            "checked": "2026-10-25",
+            "status": "not_tried",
+            "http": null
+          }
+        }
+      ]
+    },
+    "ny": {
+      "name": "New York",
+      "aka": [
+        "NY",
+        "New York State"
+      ],
+      "boards": [
+        {
+          "name": "StateJobsNY",
+          "url": "https://statejobs.ny.gov",
+          "kind": "regional",
+          "source": "https://statejobs.ny.gov/",
+          "quote": "Find a Job in New York State",
+          "checked": "2026-10-25",
+          "verified": true,
+          "search": "https://statejobs.ny.gov/public/vacancyTable.cfm",
+          "paths": {
+            "search": "/public/vacancyTable.cfm",
+            "posting": "/public/vacancyDetailsView.cfm"
+          },
+          "robots": {
+            "checked": "2026-10-25",
+            "why": "no robots.txt published",
+            "search": true,
+            "status": "no_policy",
+            "posting": true,
+            "crawl_delay": null,
+            "ai_input": null
+          },
+          "public_search": {
+            "checked": "2026-10-25",
+            "status": "open",
+            "http": 200
+          }
+        }
+      ]
+    },
+    "fl": {
+      "name": "Florida",
+      "aka": [
+        "FL"
+      ],
+      "boards": [
+        {
+          "name": "Employ Florida",
+          "url": "https://www.employflorida.com",
+          "kind": "regional",
+          "source": "https://en.wikipedia.org/wiki/FloridaCommerce",
+          "quote": "",
+          "checked": "2026-10-25",
+          "verified": false,
+          "why": "no sentence on the page says it (looked for: Employ Florida)",
+          "search": "https://www.employflorida.com/vosnet/jobbanks/jobsearch.aspx",
+          "paths": {
+            "search": "/vosnet/jobbanks/jobsearch.aspx",
+            "posting": "/vosnet/jobbanks/jobdetails.aspx"
+          },
+          "robots": {
+            "checked": "2026-10-25",
+            "why": "",
+            "search": false,
+            "status": "disallowed",
+            "posting": false,
+            "crawl_delay": null,
+            "ai_input": null
+          },
+          "public_search": {
+            "checked": "2026-10-25",
+            "status": "not_tried",
+            "http": null
+          }
+        }
+      ]
+    }
+  }
+}

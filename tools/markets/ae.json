@@ -1,0 +1,288 @@
+{
+  "name": "United Arab Emirates",
+  "country": "ae",
+  "aka": [
+    "AE",
+    "UAE",
+    "U.A.E.",
+    "Emirates"
+  ],
+  "languages": [
+    "ar",
+    "en"
+  ],
+  "currency": "AED",
+  "boards": [
+    {
+      "name": "Bayt.com",
+      "url": "https://www.bayt.com",
+      "kind": "general",
+      "source": "https://en.wikipedia.org/wiki/Bayt",
+      "quote": "",
+      "checked": "2026-10-25",
+      "verified": false,
+      "why": "no sentence on the page says it (looked for: Bayt.com)",
+      "search": "https://www.bayt.com/en/uae/jobs/analyst-jobs/",
+      "paths": {
+        "search": "/en/uae/jobs/analyst-jobs/",
+        "posting": "/en/uae/jobs/"
+      },
+      "robots": {
+        "checked": "2026-10-25",
+        "why": "robots.txt could not be read (HTTP 403)",
+        "search": null,
+        "status": "unconfirmed",
+        "posting": null,
+        "crawl_delay": null,
+        "ai_input": null
+      },
+      "public_search": {
+        "checked": "2026-10-25",
+        "status": "not_tried",
+        "http": null
+      }
+    },
+    {
+      "name": "Naukrigulf",
+      "url": "https://www.naukrigulf.com",
+      "kind": "general",
+      "source": "https://en.wikipedia.org/wiki/Info_Edge",
+      "quote": "It launched offshoots of Naukri such as NaukriGulf.com for Gulf countries in 2006",
+      "checked": "2026-10-25",
+      "verified": true,
+      "search": "https://www.naukrigulf.com/analyst-jobs-in-dubai-uae",
+      "paths": {
+        "search": "/analyst-jobs-in-dubai-uae",
+        "posting": "/"
+      },
+      "robots": {
+        "checked": "2026-10-25",
+        "why": "robots.txt could not be read (RuntimeError)",
+        "search": null,
+        "status": "unconfirmed",
+        "posting": null,
+        "crawl_delay": null,
+        "ai_input": null
+      },
+      "public_search": {
+        "checked": "2026-10-25",
+        "status": "not_tried",
+        "http": null
+      }
+    },
+    {
+      "name": "GulfTalent",
+      "url": "https://www.gulftalent.com",
+      "kind": "general",
+      "source": "https://www.gulftalent.com/",
+      "quote": "",
+      "checked": "2026-10-25",
+      "verified": false,
+      "why": "the source could not be read: a bot check (HTTP 403) instead of the page",
+      "search": "https://www.gulftalent.com/uae/jobs/title/analyst",
+      "paths": {
+        "search": "/uae/jobs/title/analyst",
+        "posting": "/uae/jobs/"
+      },
+      "robots": {
+        "checked": "2026-10-25",
+        "why": "",
+        "search": true,
+        "status": "allowed",
+        "posting": true,
+        "crawl_delay": null,
+        "ai_input": null
+      },
+      "public_search": {
+        "checked": "2026-10-25",
+        "status": "blocked",
+        "http": 403
+      }
+    },
+    {
+      "name": "Indeed",
+      "url": "https://ae.indeed.com",
+      "kind": "general",
+      "source": "https://en.wikipedia.org/wiki/Indeed",
+      "quote": "Indeed is currently available in over 60 countries and 28 languages",
+      "checked": "2026-10-25",
+      "verified": true,
+      "search": "https://ae.indeed.com/jobs?q=analyst&l=Dubai",
+      "paths": {
+        "search": "/jobs?q=analyst&l=Dubai",
+        "posting": "/viewjob?jk=0"
+      },
+      "robots": {
+        "checked": "2026-10-25",
+        "why": "",
+        "search": true,
+        "status": "partial",
+        "posting": false,
+        "crawl_delay": null,
+        "ai_input": null
+      },
+      "public_search": {
+        "checked": "2026-10-25",
+        "status": "blocked",
+        "http": 401
+      }
+    }
+  ],
+  "eligibility": [
+    {
+      "phrase": "UAE National (Emiratisation)",
+      "lang": "en",
+      "means": "citizenship",
+      "source": "https://en.wikipedia.org/wiki/Emiratisation",
+      "quote": "is an strategic workforce policy implemented by the government of the United Arab Emirates to employ its citizens",
+      "checked": "2026-10-25",
+      "verified": true
+    },
+    {
+      "phrase": "residence visa / employment visa sponsored by the employer",
+      "lang": "en",
+      "means": "sponsorship",
+      "source": "https://en.wikipedia.org/wiki/Visa_policy_of_the_United_Arab_Emirates",
+      "quote": "They have to show their valid UAE residence visas when applying for e-Visas",
+      "checked": "2026-10-25",
+      "verified": true
+    },
+    {
+      "phrase": "work permit (labour card)",
+      "lang": "en",
+      "means": "work_right",
+      "source": "https://en.wikipedia.org/wiki/Visa_policy_of_the_United_Arab_Emirates",
+      "quote": "",
+      "checked": "2026-10-25",
+      "verified": false,
+      "why": "no sentence on the page says it (looked for: work permit)"
+    },
+    {
+      "phrase": "Golden Visa (long-term residence)",
+      "lang": "en",
+      "means": "residence",
+      "source": "https://en.wikipedia.org/wiki/Visa_policy_of_the_United_Arab_Emirates",
+      "quote": "The Golden Residency is one of the leading initiatives of the Federal Authority for Identity, Citizenship, Customs, and Port Security.",
+      "checked": "2026-10-25",
+      "verified": true
+    }
+  ],
+  "documents": [
+    {
+      "topic": "noun",
+      "value": "CV",
+      "source": "https://en.wikipedia.org/wiki/Curriculum_vitae",
+      "quote": "",
+      "checked": "2026-10-25",
+      "verified": false,
+      "why": "the sentence found on the page does not say it"
+    },
+    {
+      "topic": "pages",
+      "value": "two pages",
+      "source": "https://en.wikipedia.org/wiki/R%C3%A9sum%C3%A9",
+      "quote": "",
+      "checked": "2026-10-25",
+      "verified": false,
+      "why": "the page says this of resumes in general, not of this country"
+    },
+    {
+      "topic": "photo",
+      "value": "a photo and nationality are commonly included",
+      "source": "https://en.wikipedia.org/wiki/R%C3%A9sum%C3%A9",
+      "quote": "many Middle East and African countries and some parts of Asia require personal data (e.g., photograph, gender, marital status, children)",
+      "checked": "2026-10-25",
+      "verified": true
+    },
+    {
+      "topic": "date_format",
+      "value": "DD/MM/YYYY",
+      "source": "https://en.wikipedia.org/wiki/List_of_date_formats_by_country",
+      "quote": "Oceania : Papua New Guinea , New Zealand , etc. Middle East : United Arab Emirates , Qatar",
+      "checked": "2026-10-25",
+      "verified": true
+    },
+    {
+      "topic": "spelling",
+      "value": "British English for documents in English; Arabic where asked",
+      "source": "https://en.wikipedia.org/wiki/Languages_of_the_United_Arab_Emirates",
+      "quote": "",
+      "checked": "2026-10-25",
+      "verified": false,
+      "why": "the sentence found on the page does not say it"
+    }
+  ],
+  "pay": [
+    {
+      "name": "Hays GCC Salary Guide",
+      "url": "https://www.hays.ae/salary-guide",
+      "what": "salaries by role across the Gulf",
+      "source": "https://www.hays.ae/salary-guide",
+      "quote": "Explore Gulf region job trends, including salary data for almost 400 roles",
+      "checked": "2026-10-25",
+      "verified": true
+    },
+    {
+      "name": "Bayt salaries",
+      "url": "https://www.bayt.com/en/uae/salaries/",
+      "what": "salaries by job title",
+      "source": "https://en.wikipedia.org/wiki/Bayt",
+      "quote": "",
+      "checked": "2026-10-25",
+      "verified": false,
+      "why": "no sentence on the page says it (looked for: salar)"
+    }
+  ],
+  "places": [
+    {
+      "metro": "Dubai",
+      "written": [
+        "Dubai",
+        "Dubai Marina",
+        "Business Bay",
+        "Deira",
+        "Jebel Ali"
+      ],
+      "source": "https://en.wikipedia.org/wiki/Dubai",
+      "quote": "",
+      "on_page": [
+        "Business Bay",
+        "Deira",
+        "Jebel Ali"
+      ],
+      "checked": "2026-10-25",
+      "verified": false,
+      "why": "the sentence found on the page does not say it"
+    },
+    {
+      "metro": "Abu Dhabi",
+      "written": [
+        "Abu Dhabi",
+        "Khalifa City",
+        "Al Ain"
+      ],
+      "source": "https://en.wikipedia.org/wiki/Abu_Dhabi",
+      "quote": "",
+      "on_page": [
+        "Al Ain"
+      ],
+      "checked": "2026-10-25",
+      "verified": false,
+      "why": "the sentence found on the page does not say it"
+    },
+    {
+      "metro": "Sharjah",
+      "written": [
+        "Sharjah",
+        "Ajman"
+      ],
+      "source": "https://en.wikipedia.org/wiki/Sharjah",
+      "quote": "[ 4 ] [ 5 ] It is the capital of the Emirate of Sharjah and forms part of the Dubai-Sharjah-Ajman metropolitan area .",
+      "on_page": [
+        "Ajman"
+      ],
+      "checked": "2026-10-25",
+      "verified": true
+    }
+  ]
+}

@@ -39,6 +39,7 @@ import sys
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 sys.path.insert(0, os.path.join(ROOT, "tools"))
 import person  # noqa: E402
+import local_path  # noqa: E402
 
 
 def _file(key: str, default: str) -> str:
@@ -170,9 +171,9 @@ def main() -> int:
     folder = person.state("documents", "applications", a.slug)
     os.makedirs(folder, exist_ok=True)
     path = os.path.join(folder, "screening_answers.md")
-    with open(path, "w", encoding="utf-8") as fh:
+    with open(path, "w", encoding="utf-8", newline="\n") as fh:
         fh.write(body)
-    print(f"screening_answers: wrote {os.path.relpath(path, ROOT)}")
+    print(f"screening_answers: wrote {local_path.rel(path, ROOT)}")
     return 0
 
 

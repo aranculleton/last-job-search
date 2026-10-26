@@ -1,0 +1,153 @@
+{
+  "country": "au",
+  "regions": {
+    "nsw": {
+      "name": "New South Wales",
+      "aka": [
+        "NSW"
+      ],
+      "boards": [
+        {
+          "name": "I work for NSW",
+          "url": "https://iworkfor.nsw.gov.au",
+          "kind": "regional",
+          "source": "https://iworkfor.nsw.gov.au/",
+          "quote": "",
+          "checked": "2026-10-25",
+          "verified": false,
+          "why": "the source could not be read: robots.txt could not be read (HTTP 403)",
+          "search": "https://iworkfor.nsw.gov.au/jobs",
+          "paths": {
+            "search": "/jobs",
+            "posting": "/job/"
+          },
+          "robots": {
+            "checked": "2026-10-25",
+            "why": "robots.txt could not be read (HTTP 403)",
+            "search": null,
+            "status": "unconfirmed",
+            "posting": null,
+            "crawl_delay": null,
+            "ai_input": null
+          },
+          "public_search": {
+            "checked": "2026-10-25",
+            "status": "not_tried",
+            "http": null
+          }
+        }
+      ]
+    },
+    "vic": {
+      "name": "Victoria",
+      "aka": [
+        "VIC",
+        "Vic."
+      ],
+      "boards": [
+        {
+          "name": "Careers.vic",
+          "url": "https://www.careers.vic.gov.au",
+          "kind": "regional",
+          "source": "https://www.careers.vic.gov.au/",
+          "quote": "Search for your next job opportunity in the Victorian public sector",
+          "checked": "2026-10-25",
+          "verified": true,
+          "search": "https://www.careers.vic.gov.au/jobs",
+          "paths": {
+            "search": "/jobs",
+            "posting": "/job/"
+          },
+          "robots": {
+            "checked": "2026-10-25",
+            "why": "",
+            "search": true,
+            "status": "allowed",
+            "posting": true,
+            "crawl_delay": null,
+            "ai_input": null
+          },
+          "public_search": {
+            "checked": "2026-10-25",
+            "status": "open",
+            "http": 200
+          }
+        }
+      ]
+    },
+    "qld": {
+      "name": "Queensland",
+      "aka": [
+        "QLD",
+        "Qld"
+      ],
+      "boards": [
+        {
+          "name": "Smart Jobs",
+          "url": "https://smartjobs.qld.gov.au",
+          "kind": "regional",
+          "source": "https://smartjobs.qld.gov.au/",
+          "quote": "",
+          "checked": "2026-10-25",
+          "verified": false,
+          "why": "no sentence on the page says it (looked for: Queensland)",
+          "search": "https://smartjobs.qld.gov.au/jobs",
+          "paths": {
+            "search": "/jobs",
+            "posting": "/jobs/"
+          },
+          "robots": {
+            "checked": "2026-10-25",
+            "why": "no robots.txt published",
+            "search": true,
+            "status": "no_policy",
+            "posting": true,
+            "crawl_delay": null,
+            "ai_input": null
+          },
+          "public_search": {
+            "checked": "2026-10-25",
+            "status": "not_found",
+            "http": 404
+          }
+        }
+      ]
+    },
+    "wa": {
+      "name": "Western Australia",
+      "aka": [
+        "WA"
+      ],
+      "boards": [
+        {
+          "name": "WA Jobs",
+          "url": "https://search.jobs.wa.gov.au",
+          "kind": "regional",
+          "source": "https://search.jobs.wa.gov.au/",
+          "quote": "As the largest employer in the state, the WA public sector needs people with a diverse range of skills",
+          "checked": "2026-10-25",
+          "verified": true,
+          "search": "https://search.jobs.wa.gov.au/page.php?pageID=160",
+          "paths": {
+            "search": "/page.php?pageID=160",
+            "posting": "/page.php?pageID=160"
+          },
+          "robots": {
+            "checked": "2026-10-25",
+            "why": "",
+            "search": true,
+            "status": "allowed",
+            "posting": true,
+            "crawl_delay": 5.0,
+            "ai_input": null
+          },
+          "public_search": {
+            "checked": "2026-10-25",
+            "status": "open",
+            "http": 200
+          }
+        }
+      ]
+    }
+  }
+}

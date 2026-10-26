@@ -189,4 +189,4 @@ supported way round it.
 Everything here is personal data, and it is why the repo is private. The `documents/**`
 ignore rules are enforced by `tools/security_guards.py`, so they are never edited;
 artifacts that belong in the repo are force-added by path with `git add -f`, leaving the
-guard intact. The list is in CLAUDE.md under the persistence rule.
+guard intact. The list is in RUNBOOK.md, step 4.

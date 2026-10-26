@@ -13,14 +13,19 @@ every time it is used, so a session re-checks the page before relying on it.
     python3 tools/claude_surfaces.py check               # stale entries, as warnings (exit 0)
     python3 tools/claude_surfaces.py show <id>           # one entry, its sources and its age
     python3 tools/claude_surfaces.py say <id> [--name N] [--owner O]   # the words a person sees
-    python3 tools/claude_surfaces.py steps <id>          # its steps, dated, for a person who said yes
+    python3 tools/claude_surfaces.py steps <id> [--name N] [--owner O] # its steps, for a person who said yes
     python3 tools/claude_surfaces.py sync-docs           # rewrite every marked block from here
     python3 tools/claude_surfaces.py watch [--strict]    # the maintainer's: quotes still on
                                                          # their pages? a newer release?
 
 A person-facing path is written the one way the app allows: the goal first, then the
-destination "at the time of writing", then the official page. It never tells anyone to
-press, click, tap or find something, because those words name a screen that moves.
+destination, or numbered steps one action a line. It never tells anyone to press, click, tap
+or find something, because those words name a screen that moves. The day an entry was
+checked and its official page are for Claude, never the person (`source`, which `say` and
+`steps` print on stderr, and a comment in a doc's block): "At the time of writing (checked
+2026-10-20; official page: https://...)" headed every step a beginner was given, six times
+in one page of START_HERE, and nobody it was for could use it (2026-10-25). A doc's steps end
+on one line instead, CLOSING.
 `watch` runs only in the app (.github/workflows/claude-surfaces-watch.yml), never in a
 person's repo.
 """
@@ -48,7 +53,7 @@ BLOCK = re.compile(r"^([ \t]*)<!-- claude-surface: ([a-z0-9-]+(?: claim)?) -->\n
                    r"<!-- /claude-surface -->", re.S | re.M)
 # The docs a person reads, which carry the registry's words in marked blocks. Claude's
 # own instructions point at an entry by id instead (`show <id>`).
-DOCS = ("START_HERE.md", "README.md", "SETUP.md", "automation/README.md")
+DOCS = ("START_HERE.md", "README.md", "HELP.md", "SETUP.md", "automation/README.md")
 UA = {"User-Agent": "last-job-search-surfaces-watch/1 (+https://github.com/aranculleton/last-job-search)"}
 
 _CACHE: dict = {}
@@ -76,20 +81,56 @@ def official(e: dict) -> str:
         (s["url"] for s in e.get("sources", ()) if s["url"].startswith("http")), "")
 
 
-def steps(eid: str, reg=None, today=None) -> list:
-    """An entry's steps for a person who said yes, one action a line, headed by the day
-    they were checked and the page to check them against: never shown before they asked.
-    Steps about LinkedIn's screens, passed on unchecked, sent a person to an option LinkedIn
-    no longer offered, so the page is checked that day before they are given.
+# Said once where a doc or a message ends on a path through another company's screens:
+# the date and the page are Claude's, and the person is told what to do when a screen moved.
+CLOSING = "Screens change; tell me if yours looks different."
+# The same in a doc, which is read away from any chat.
+CLOSING_DOC = "Screens change: if yours looks different, tell Claude what you see."
 
-    The person's lines only. Past `stale_after_days` the line for Claude (`warning`, `notes`)
-    comes apart from them: inside them, every message that passes steps on word for word
-    carried it, a file path and all, and grew past its length the day the entry aged."""
+
+def _fill(text: str, name: str = "your copy", owner: str = "") -> str:
+    owner = owner or "<you>"
+    copy = f"github.com/{owner}/{name}" if owner != "<you>" else "your copy's address on GitHub"
+    return text.format(name=name, owner=owner, copy=copy)
+
+
+def _goal(e: dict) -> str:
+    g = e.get("goal", "")
+    return g[:1].upper() + g[1:] if g else ""
+
+
+def source(eid: str, reg=None) -> str:
+    """For Claude, never the person: the day an entry was checked and the page to check it
+    against that day before passing it on (CLAUDE.md, "A step on another company's site")."""
     e = entry(eid, reg)
     page = official(e)
-    head = (f"At the time of writing (checked {e['verified_on']}"
-            + (f"; official page: {page}" if page else "") + "):")
-    return [head] + [f"{i}. {s}" for i, s in enumerate(e.get("steps", ()), 1)]
+    return (f"[claude_surfaces: {e['id']!r} checked {e['verified_on']}"
+            + (f"; official page: {page}" if page else "") + "; check it today before giving it]")
+
+
+def steps(eid: str, reg=None, today=None, name: str = "your copy", owner: str = "",
+          page: bool = False) -> list:
+    """An entry's steps for a person who said yes, one action a line, headed by what they are
+    for: never shown before they asked. An entry with a path and no steps gives its path as
+    the one step, and one with neither its claim: `steps` on eight entries printed only a
+    dated header and nothing to do (2026-10-25).
+
+    The person's lines only. The day it was checked and its page (`source`), and past
+    `stale_after_days` the line telling Claude to re-check it (`warning`, `notes`), come
+    apart from them: inside them, every message that passes steps on word for word carried
+    a file path or a date, and grew past its length the day the entry aged."""
+    e = entry(eid, reg)
+    # On the page there is no "this chat": an entry used on a card carries steps worded for
+    # it (`page_steps`, the helper chat named, Done being the card's own button).
+    use_page = page and e.get("page_steps")
+    goal = e.get("page_goal", "") if use_page else e.get("goal", "")
+    body = [_fill(x, name, owner) for x in (e["page_steps"] if use_page else e.get("steps", ()))]
+    if not body and e.get("how"):
+        how = _fill(e["how"], name, owner)
+        body = [how[:1].upper() + how[1:].rstrip(".") + "."]
+    if not body:
+        return [e["claim"]]
+    return ([f"To {goal}:"] if goal else []) + [f"{i}. {x}" for i, x in enumerate(body, 1)]
 
 
 def age(e: dict, today: datetime.date | None = None) -> int:
@@ -123,17 +164,17 @@ def notes(*eids: str, today=None, reg=None) -> list:
 
 def say(eid: str, name: str = "your copy", owner: str = "", today=None, reg=None,
         goal: bool = True) -> str:
-    """The words a person sees: the goal, the destination at the time of writing, the page.
-    goal=False leaves the goal out, for a sentence that has already said it."""
+    """The words a person sees: the goal, then the destination, in one sentence. goal=False
+    leaves the goal out, for a sentence that has already said it. The date and the official
+    page are Claude's (`source`)."""
     e = entry(eid, reg)
-    fill = {"name": name, "owner": owner or "<you>"}
-    how = e.get("how", "").format(**fill)
-    goal = e.get("goal", "") if goal else ""
+    how = _fill(e.get("how", ""), name, owner)
     if not how:
         return ""
-    page = official(e)
-    head = (goal[:1].upper() + goal[1:] + ". ") if goal else ""
-    return f"{head}At the time of writing: {how}" + (f" (official page: {page})." if page else ".")
+    how = how.rstrip(".")
+    if goal and e.get("goal"):
+        return f"{_goal(e)}: {how}."
+    return f"{how[:1].upper()}{how[1:]}."
 
 
 def vocabulary(reg=None) -> list:
@@ -152,34 +193,32 @@ def mentions(text: str, reg=None) -> list:
 
 
 def render(eid: str, reg=None) -> str:
-    """An entry as a doc block carries it, for a reader who is not in a chat: its numbered
-    steps where it has them, else the path, or the claim for "<id> claim" and for an entry
-    with no path. A beginner given one long sentence of destinations did not know where to
-    start (2026-10-20), so steps come one action a line."""
+    """An entry as a doc block carries it, for a reader who is not in a chat: a comment with
+    the day it was checked and its page (for whoever maintains the doc, never shown), then its
+    numbered steps where it has them, else the path, or the claim for "<id> claim" and for an
+    entry with no path. A beginner given one long sentence of destinations did not know where
+    to start (2026-10-20), so steps come one action a line, and end on CLOSING."""
     want_claim = eid.endswith(" claim")
     e = entry(eid.split()[0], reg)
+    page = official(e)
+    note = f"<!-- checked {e['verified_on']}" + (f"; {page}" if page else "") + " -->"
     if not want_claim and e.get("steps"):
-        goal = e.get("goal", "")
-        page = official(e)
-        head = ((goal[:1].upper() + goal[1:] + ". ") if goal else "") + (
-            f"At the time of writing (checked {e['verified_on']}"
-            + (f"; official page: {page}" if page else "") + "):")
-        return "\n".join([head] + [f"{i}. {s}" for i, s in enumerate(e["steps"], 1)])
+        lines = steps(e["id"], reg, name="YOUR-COPY", owner="YOUR-NAME")
+        return "\n".join([note] + lines + ["", CLOSING_DOC])
     text = "" if want_claim else say(e["id"], name="of your copy", owner="you", reg=reg)
-    return f"{text or e['claim']} Checked {e['verified_on']}."
+    return "\n".join([note, text or e["claim"]])
 
 
 def block(eid: str, indent: str = "", reg=None, width: int = 92) -> str:
     """A marked block as a doc carries it: the rendered entry, wrapped, at `indent`, each
     numbered step on its own line."""
     import textwrap
-    lines = render(eid, reg).split("\n")
-    out = [textwrap.fill(lines[0], width=width, initial_indent=indent, subsequent_indent=indent,
-                         break_long_words=False, break_on_hyphens=False)]
-    for line in lines[1:]:
+    out = []
+    for line in render(eid, reg).split("\n"):
+        numbered = re.match(r"\d+\. ", line)
         out.append(textwrap.fill(line, width=width, initial_indent=indent,
-                                 subsequent_indent=indent + "   ", break_long_words=False,
-                                 break_on_hyphens=False))
+                                 subsequent_indent=indent + ("   " if numbered else ""),
+                                 break_long_words=False, break_on_hyphens=False))
     body = "\n".join(out)
     return f"{indent}<!-- claude-surface: {eid} -->\n{body}\n{indent}<!-- /claude-surface -->"
 
@@ -200,7 +239,7 @@ def sync_docs(root: str = ROOT, reg=None) -> list:
         text = open(p, encoding="utf-8").read()
         new = BLOCK.sub(lambda m: block(m.group(2), m.group(1), reg), text)
         if new != text:
-            with open(p, "w", encoding="utf-8") as fh:
+            with open(p, "w", encoding="utf-8", newline="\n") as fh:
                 fh.write(new)
             changed.append(rel)
     return changed
@@ -313,13 +352,15 @@ def main(argv=None) -> int:
     if cmd == "say":
         e = entry(rest[0])
         print(say(rest[0], **{k[2:]: v for k, v in opt.items()}))
+        print(source(rest[0]), file=sys.stderr)    # for Claude: never said
         w = warning(e)
         if w:
             print(w, file=sys.stderr)
         return 0
     if cmd == "steps":
-        print("\n".join(steps(rest[0])))
-        for w in notes(rest[0]):              # for Claude, as `say` gives it: never said
+        print("\n".join(steps(rest[0], **{k[2:]: v for k, v in opt.items()})))
+        print(source(rest[0]), file=sys.stderr)    # for Claude, as `say` gives it: never said
+        for w in notes(rest[0]):
             print(w, file=sys.stderr)
         return 0
     if cmd == "sync-docs":

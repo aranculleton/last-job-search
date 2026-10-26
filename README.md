@@ -3,12 +3,22 @@
 **The last job search tool you'll ever need.** Claude finds jobs that fit you, scores each one,
 writes and checks a resume and cover letter for the ones you choose, finds the people worth
 talking to and drafts what to say, keeps track of every application and conversation, reminds
-you when to follow up, and gets you ready for interviews. It never sends anything. You stay in
-charge of what goes out.
+you when to follow up, and gets you ready for interviews. It all happens on one private page
+that Claude keeps up to date: you tap, and Claude does the work. It never sends anything. You
+stay in charge of what goes out.
 
 > **Find jobs** → **score each one** → **you choose** → **write and check** → **find the people** → **follow up**
 
 [![CI](https://github.com/aranculleton/last-job-search/actions/workflows/ci.yml/badge.svg)](https://github.com/aranculleton/last-job-search/actions/workflows/ci.yml)
+
+![Your page: what needs you, the jobs worth a look, your drafts and the people to talk to](docs/images/page-demo.gif)
+
+<p>
+  <img src="docs/images/page-todo.webp" alt="The To do list on a computer" width="68%">
+  <img src="docs/images/page-jobs-phone.webp" alt="Scored jobs on a phone, in the dark look" width="28%">
+</p>
+
+<sub>Every name above is made up.</sub>
 
 ## What you need
 
@@ -19,36 +29,34 @@ charge of what goes out.
   - Another agent tool (ChatGPT Codex, Google's Gemini CLI, the Cursor editor)? The core
     works in any agent that can read files and run commands; [AGENTS.md](AGENTS.md) covers
     the Claude Code parts.
-- About fifteen minutes. No coding.
+- No coding, and nothing to install first. A phone is enough.
 
 ## Get started
 
-1. Click the green **Use this template** button, then **Create a new repository**. Tick
-   **Private**. Your copy will hold your work history and the names of people you talk to.
-   **Never fork it**: a fork of a public repository is public.
-2. Connect GitHub to Claude at [claude.ai/connect-github](https://claude.ai/connect-github),
-   and give it access to your new copy only.
-3. Open [claude.ai/code](https://claude.ai/code), choose your copy, and say **"set me up"**.
+1. Make your own private copy: on this page, **Use this template**, then **Create a new
+   repository**, with **Private** chosen. Never fork it: a fork is public.
+2. Open [claude.ai/code](https://claude.ai/code), connect GitHub when it asks, and install the
+   [Claude GitHub App](https://github.com/apps/claude/installations/new) on your copy only.
+3. Choose your copy and say **"set me up"**. Claude asks a few plain questions, does the
+   research and opens your page with your first shortlist on it.
 
-Claude asks you plain questions about yourself and does the rest. If you have a computer,
-**two chats work best**: one on your computer for everything you do, networking included,
-and your brief in the cloud, which follows up for you even when your computer is off.
-[START_HERE.md](START_HERE.md) walks you through both.
+[START_HERE.md](START_HERE.md) has each step for a phone, a browser or a computer, and
+[HELP.md](HELP.md) what to do if something goes wrong.
 
 ## What you can say to it
 
 | You say | You get |
 |---|---|
 | "Find me jobs" | A scored shortlist with links, then a question: which ones? |
+| "Build one with me", when you have no resume | A one-page resume made with you, one job at a time, checked |
 | A job posting, pasted or linked | A resume and cover letter written for that job, checked |
 | "Who should I talk to at Acme?" | People worth contacting there, found from any chat, ranked with the evidence for each, and a first note to send. Nothing is sent: you send it |
 | "What do I owe?" | Replies and follow-ups that are due |
 | "Prep me for my interview at Acme" | Likely questions, your best answers and questions to ask |
 | "They replied" or "I got an interview" | The record updated, and what to do next |
-| "Make me a dashboard" | One page showing every application and how far it got |
 
 It also says what to learn next and takes your own resume template. It never asks for your
-email: new jobs and what is due reach you in Claude, in your brief and your job round.
+email: new jobs and what is due reach you on your page and in your brief.
 
 ## Why it works differently
 
@@ -62,8 +70,8 @@ email: new jobs and what is due reach you in Claude, in your brief and your job 
   note (which asks for a conversation, not a job), the replies and the referral ask. It tracks
   every thread and warns you before a cold application lands on top of a warm introduction.
 - **It reminds you.** When a follow-up is due, on an application or a conversation, it says so
-  and drafts the nudge. Say "set up my brief" and what you owe, what changed and the next
-  three things to do arrive in one message, twice a week.
+  and drafts the nudge. Setup ends by making your brief: what you owe, what changed and the
+  next three things to do, in one message, twice a week.
 - **It checks its own work.** Every resume is compiled, read back and checked the way an
   applicant tracking system reads it, and every claim against what you told it.
 - **It remembers.** Applications, conversations and what is due live in files in your copy,
@@ -90,16 +98,16 @@ You never need any of this to use it.
 | Set up a computer or a cloud environment by hand | [SETUP.md](SETUP.md) |
 | What a search does, step by step | [RUNBOOK.md](RUNBOOK.md) |
 | How each stage works and what it costs | [ARCHITECTURE.md](ARCHITECTURE.md) |
-| The rules Claude follows, and the command map | [CLAUDE.md](CLAUDE.md) |
+| The rules every chat follows, and where every other rule lives | [CLAUDE.md](CLAUDE.md) |
 | The twice-weekly brief and scheduled searches | [automation/README.md](automation/README.md) |
 | Scoring rubric, writing style, cost model | [`.claude/skills/job-application-assistant/`](.claude/skills/job-application-assistant/) |
 | Reporting a bug or suggesting something | [CONTRIBUTING.md](CONTRIBUTING.md) |
 | Working on the app itself | [MAINTAINING.md](MAINTAINING.md) |
 
 Searching, filtering and scoring are plain Python and Bash, so a search reads thousands of
-postings without using the model. The model starts only when you pick what to write. Over
-1,200 tests run in CI and through `./tools/ci_local.sh`. The employer-board reader is also
-published as [openroles](https://github.com/aranculleton/openroles).
+postings without using the model. The model starts only when you pick what to write. The
+tests run in CI on Windows, macOS and Linux, and on any copy through `./tools/ci_local.sh`. The
+employer-board reader is also published as [openroles](https://github.com/aranculleton/openroles).
 
 ## Credits and licence
 

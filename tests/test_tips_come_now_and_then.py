@@ -136,3 +136,128 @@ def test_the_commands_end_with_the_tip_line_not_a_line_of_their_own():
             text = fh.read()
         assert f"tools/tips.py {area}" in text, name
         assert "It sticks from now on.\"" not in text, name
+
+
+# The tour, 2026-10-25. The maintainer: "maybe a prompt in setup like would you like to know
+# how to use this app / x feature ... not walls of text and beginner friendly but again only
+# if necessary or user asks ... be smart here", and of the tips: "make sure it works makes
+# sense doesnt spam the user ... in the setup maybe a few more than otherwise but again dont
+# spam".
+
+def _words(text: str) -> int:
+    return len(re.findall(r"\S+", text))
+
+
+def test_the_tour_is_one_short_line_a_thing_and_each_topic_a_few_lines(profile):
+    state = {}
+    menu = tips.tour("", DAY, state)
+    lines = menu.splitlines()
+    assert lines[0] == tips.TOUR_OPEN and lines[-1] == tips.TOUR_CLOSE
+    assert len(lines) <= 12 and _words(menu) <= 150
+    assert all(_words(l) <= 14 for l in lines[1:-1])
+    for key, _menu, detail in tips.TOUR:
+        assert _words(detail) <= 60, key
+        assert "\n" not in detail
+
+
+def test_a_topic_is_found_by_its_name_or_its_words_and_an_unknown_one_gets_the_list(profile):
+    state = {}
+    assert tips.tour("interview", DAY, state) == dict((k, d) for k, _, d in tips.TOUR)["interview"]
+    assert tips.tour("build my resume", DAY, {}).startswith("Say \"build my resume\"")
+    assert tips.tour("knitting", DAY, {}).startswith(tips.TOUR_OPEN)
+
+
+def test_what_the_tour_showed_is_not_tipped_again_nor_the_tour_itself(profile):
+    state = {}
+    tips.line("search", DAY, state)                         # the first time
+    tips.tour("", DAY, state)                               # they asked to be shown around
+    later = [tips.line(a, DAY + dt.timedelta(days=n), state)
+             for n in range(2, 120, 2) for a in ("search", "apply", "interview", "networking")]
+    said = [s for s in later if s]
+    assert all("show me around" not in s for s in said)
+    covered = {tid for tid in tips.COVERED_BY}
+    for tip_id, _, text in tips.TIPS:
+        if tip_id in covered:
+            assert all(text.split(tips.OFF_HINT)[0] != s.split(tips.OFF_HINT)[0] for s in said), tip_id
+
+
+def test_someone_who_never_took_the_tour_is_offered_it_once_in_a_tip(profile):
+    state = {}
+    tips.line("search", DAY, state)
+    said = [tips.line("search", DAY + dt.timedelta(days=n), state) for n in range(1, 120)]
+    offers = [s for s in said if "show me around" in s]
+    assert len(offers) == 1
+
+
+def test_how_to_stop_them_is_said_once_with_the_first_tip_and_never_with_a_first_time_line(profile):
+    state = {}
+    first = tips.line("search", DAY, state)
+    assert tips.OFF_HINT not in first
+    said = [s for s in (tips.line("search", DAY + dt.timedelta(days=n), state)
+                        for n in range(1, 120)) if s]
+    assert said[0].endswith(tips.OFF_HINT)
+    assert sum(tips.OFF_HINT in s for s in said) == 1
+
+
+def test_setup_day_has_a_few_lines_never_a_stream(profile):
+    # Setup's own day: the first shortlist and the first application each say their
+    # first-time line; a third kind of work that day waits for its next time, and no tip
+    # comes on top however many replies follow.
+    state = {}
+    said = [tips.line(a, DAY, state) for a in ("search", "apply", "networking", "interview",
+                                               "search", "apply", "general")]
+    assert [s for s in said if s] == [tips.FIRST["search"], tips.FIRST["apply"]]
+    assert tips.line("networking", DAY + dt.timedelta(days=1), state) == tips.FIRST["networking"]
+
+
+def test_a_second_chat_the_same_day_gives_no_second_tip(profile, monkeypatch):
+    # The cloud chat gave a tip and landed its record; the computer chat's own copy is
+    # older. Read together, the computer chat stays quiet.
+    landed = {"first": {"search": "2026-10-01"}, "last": DAY.isoformat(),
+              "shown": {"rephrase": DAY.isoformat()}, "areas": {"search": DAY.isoformat()}}
+    (profile / tips.FILE).write_text(json.dumps({"first": {"search": "2026-10-01"},
+                                                 "last": "2026-10-10"}), encoding="utf-8")
+    monkeypatch.setattr(tips, "_on_master", lambda: landed)
+    assert tips.line("search", DAY) == ""
+    assert tips.line("apply", DAY + dt.timedelta(days=0), tips.load()) in ("", tips.FIRST["apply"])
+
+
+def test_the_later_on_or_off_wins_across_chats():
+    a = {"off": True, "off_set": "2026-10-20T09:00:00"}
+    b = {"off": False, "off_set": "2026-10-22T09:00:00"}
+    assert tips._merge(a, b)["off"] is False
+    assert tips._merge(b, a)["off"] is False
+    assert tips._merge({"off": True}, {})["off"] is True
+
+
+def test_tour_words_are_plain():
+    jargon = re.compile(r"`|(?<!\w)--[a-z]|\b(?:git|branch|master|merge|commit|repo|"
+                        r"repository|python3?|upgrade)\b|\.py\b|—", re.I)
+    texts = [tips.TOUR_OPEN, tips.TOUR_CLOSE, tips.OFF_HINT]
+    texts += [m for _, m, _ in tips.TOUR] + [d for _, _, d in tips.TOUR]
+    for t in texts:
+        assert not jargon.search(t), t
+
+
+def test_tour_command_prints_and_records(profile, capsys):
+    assert tips.main(["tour"]) == 0
+    out = capsys.readouterr().out
+    assert out.startswith(tips.TOUR_OPEN)
+    got = json.loads((profile / tips.FILE).read_text())
+    assert got["toured"] and set(got["tour_seen"]) == {k for k, _, _ in tips.TOUR}
+
+
+def test_nothing_is_kept_in_the_example_person(monkeypatch, capsys):
+    # The app's tests and a chat in the app read profile.example/: a tip shown there wrote
+    # profile.example/tips.json, which learned.py refuses for the same reason.
+    example = os.path.join(ROOT, "profile.example")
+    kept = os.path.join(example, tips.FILE)
+    assert not os.path.exists(kept)
+    monkeypatch.setenv(person.ENV, example)
+    try:
+        tips.main(["search"])
+        assert capsys.readouterr().out.strip()
+        assert not os.path.exists(kept)
+    finally:
+        if os.path.exists(kept):
+            os.remove(kept)

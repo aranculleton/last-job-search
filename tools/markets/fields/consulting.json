@@ -1,0 +1,64 @@
+{
+  "name": "Consulting",
+  "field": "consulting",
+  "aka": [
+    "consulting",
+    "management consulting",
+    "consultancy",
+    "strategy",
+    "advisory"
+  ],
+  "boards": {},
+  "titles": [
+    {
+      "value": [
+        "Business Analyst",
+        "Business Consultant",
+        "Management Analyst",
+        "Management Consultant",
+        "Organizational Development Consultant",
+        "Performance Management Analyst"
+      ],
+      "source": "https://www.onetonline.org/link/summary/13-1111.00",
+      "quote": "Sample of reported job titles: Administrative Analyst, Business Analyst",
+      "on_page": [
+        "Business Analyst",
+        "Business Consultant",
+        "Management Analyst",
+        "Management Consultant",
+        "Organizational Development Consultant",
+        "Performance Management Analyst"
+      ],
+      "checked": "2026-10-25",
+      "verified": true
+    }
+  ],
+  "families": [
+    {
+      "family": "statistics package",
+      "members": [
+        [
+          "SPSS",
+          "\\bspss\\b"
+        ],
+        [
+          "Minitab",
+          "\\bminitab\\b"
+        ],
+        [
+          "SAS",
+          "(?-i:\\bSAS\\b)"
+        ]
+      ],
+      "source": "https://www.onetonline.org/link/summary/13-1111.00",
+      "quote": "Analytical or scientific software - IBM SPSS Statistics",
+      "on_page": [
+        "SPSS",
+        "Minitab",
+        "SAS"
+      ],
+      "checked": "2026-10-25",
+      "verified": true
+    }
+  ]
+}

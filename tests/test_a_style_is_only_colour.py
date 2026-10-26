@@ -56,10 +56,11 @@ def test_with_no_style_set_every_document_is_black_and_the_template_is_untouched
     for style in (None, "", "black"):
         assert doc_style.resume_block(style) == "" and doc_style.letter_block(style) == ""
     import resume_gen
-    # The style's lines sit on a line of their own, after the template's colour lines, so
-    # an empty one leaves the blank line that was always there.
-    assert "\\sectionfont\\color{{color1}}#1}}}}\n{style}\n\\usepackage[utf8]" in resume_gen.RESUME_HEAD
-    assert "\\usepackage{{fancyhdr}}\n{letter_style}\n\\pagestyle{{fancy}}" in resume_gen.LETTER
+    # The style's lines sit on a line of their own, after the template's colour lines (and
+    # after a design's, templates/doc_design.py), so empty ones leave the blank line that was
+    # always there.
+    assert "\\sectionfont\\color{{color1}}#1}}}}\n{design}{style}\n\\usepackage[utf8]" in resume_gen.RESUME_HEAD
+    assert "\\usepackage{{fancyhdr}}\n{letter_design}{letter_style}\n\\pagestyle{{fancy}}" in resume_gen.LETTER
 
 
 def test_a_rendered_draft_with_no_style_carries_no_colour_lines(tmp_path, monkeypatch):
@@ -149,7 +150,10 @@ def test_the_claims_check_reads_no_font_key_as_a_word():
 
 
 def _words(pdf):
-    out = subprocess.run(["pdftotext", "-bbox", pdf, "-"], capture_output=True, text=True).stdout
+    # Poppler writes the boxes in UTF-8; read in the computer's code page an accented name
+    # stopped the test (a C locale here, cp1252 on Windows).
+    out = subprocess.run(["pdftotext", "-bbox", pdf, "-"], capture_output=True, text=True,
+                         encoding="utf-8").stdout
     return re.findall(r'<word xMin="([\d.]+)" yMin="([\d.]+)" xMax="([\d.]+)" yMax="([\d.]+)">'
                       r"(.*?)</word>", out)
 
@@ -216,5 +220,5 @@ def test_a_style_moves_no_word_and_adds_only_its_own_colour(rendered, name):
     for pdf, black in ((resume, black_resume), (letter, black_letter)):
         fonts = lambda p: sorted(re.sub(r"^[A-Z]{6}\+", "", ln.split()[0]) for ln in  # noqa: E731
                                  subprocess.run(["pdffonts", p], capture_output=True,
-                                                text=True).stdout.splitlines()[2:] if ln.strip())
+                                                text=True, encoding="utf-8", errors="replace").stdout.splitlines()[2:] if ln.strip())
         assert fonts(pdf) == fonts(black)

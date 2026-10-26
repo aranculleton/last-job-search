@@ -31,7 +31,8 @@ token would publish exactly what the scan exists to keep out.
 Allowances (--allow FILE, or the app's own ALLOW below): "path-glob<TAB>regex".
 Text matching the regex on a line of a matching path is blanked before the
 token scan. The LICENSE copyright line is the one allowance the maintainer's
-name gets.
+name gets. In the market tables (tools/markets/) a job board's or a pay source's name,
+and its own address, are set aside where the name is the address's (market_allowance).
 
 Usage:
     python3 tools/leak_scan.py <tree> [--tokens FILE] [--allow FILE] [--show]
@@ -76,31 +77,92 @@ PLACEHOLDER_HANDLE = re.compile(r"^(?:example|your|yourname|your-name|your-handl
                                 r"example-(?:[a-z-]|%[0-9a-f]{2})+|"
                                 r"(?:[a-z-]|%[0-9a-f]{2})+-example)$", re.I)
 
-# Binary files the app may carry: vendored fonts and TeX packages, and the two
-# compiled example documents, which hold only placeholders.
+# Binary files the app may carry: vendored fonts and TeX packages, the two compiled
+# example documents, which hold only placeholders, and the README's pictures of the page,
+# drawn from the test sample, where every name is invented (2026-10-26).
 BINARY_OK = tuple(_regex(g) for g in (
     "cover_letters/OpenFonts/**", "texmf/**", "**/*.ttf", "**/*.otf", "**/*.pfb",
-    "**/*.tfm", "**/*.enc", "**/*.vf",
+    "**/*.tfm", "**/*.enc", "**/*.vf", "docs/images/**",
 ))
 
 # The app's own allowances. Kept tiny on purpose: every line is a decision.
 ALLOW = (
     # The one permitted mention of the maintainer: the copyright credit.
     ("LICENSE", r"^Copyright \(c\) \d{4}(?:-\d{4})? .*$"),
-    # The app's own address is not a leak.
-    ("**", r"github\.com/aranculleton/last-job-search(?![-\w])"),
-    ("**", r"aranculleton/last-job-search(?![-\w])"),
+    # The app's own address is not a leak, in any letter case: GitHub reads owner and
+    # repository names without regard to case, so a test that the app is still the app in
+    # capitals names nobody new (2026-10-25). Only the whole address is set aside.
+    ("**", r"(?i)github\.com/aranculleton/last-job-search(?![-\w])"),
+    ("**", r"(?i)aranculleton/last-job-search(?![-\w])"),
+    # And the same address in GitHub's "make a copy" link, which names the owner and the
+    # repository as two values (2026-10-26).
+    ("**", r"(?i)template_owner=aranculleton&template_name=last-job-search(?![-\w])"),
+    ("**", r"(?i)aranculleton%2Flast-job-search(?![-\w])"),
     # Nor is the address of openroles, the app's employer-board reader published as its
     # own library and vendored in tools/openroles/.
-    ("**", r"github\.com/aranculleton/openroles(?![-\w])"),
-    ("**", r"aranculleton/openroles(?![-\w])"),
+    ("**", r"(?i)github\.com/aranculleton/openroles(?![-\w])"),
+    ("**", r"(?i)aranculleton/openroles(?![-\w])"),
     # Unmodified TeX Live packages carry their CTAN authors' public addresses.
     ("texmf/**", r"[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+"),
     # The families of interchangeable tools name software, not employers: only each
     # ("Product", r"pattern") entry is set aside, and every comment and other line in
     # the file is still read.
     ("tools/bridges.py", r'\("[^"\n]{1,40}", r"[^"\n]*"\)'),
+    # A PDF's own two-letter text operators (the ones that set, move and show text), quoted
+    # where the design check reads a page's text positions: an employer's short name can
+    # share those letters.
+    # Only the quoted operator is set aside, and every other word in the file is read.
+    ("tools/design_check.py", r'"T[dDfLmjJ*]"'),
 )
+
+# The market tables (tools/markets/, read by /setup) are public facts about job markets,
+# and they name the national job boards of many countries. A board's name can be on the
+# maintainer's own denylist (a portal they built for themselves, an employer they applied
+# to that also runs a board), so inside these files, and only there, a board's name and its
+# own address are set aside where the board names its own site (a pay source's entry too,
+# in the same shape): the name agrees with a
+# label of the address ("Job Bank", www.jobbank.gc.ca). Nothing else in the files is: a
+# person's name, an email, an employer or a contact id written in them still fails, and so
+# does a board whose name is not its address's.
+MARKETS = _regex("tools/markets/**.json")
+_BOARD_SITE = re.compile(r'"name":\s*"([^"\\\n]{1,80})",[\s+]*"url":\s*"https://([A-Za-z0-9.-]+)')
+# Address labels that say nothing about whose site it is.
+_GENERIC_LABELS = {"www", "jobs", "job", "careers", "career", "work", "app", "search", "apply",
+                   "gov", "govt", "gouv", "gob", "gc", "co", "com", "org", "net", "ac", "edu",
+                   "info", "online", "portal", "web", "site", "my", "the"}
+_SECOND_LEVEL = {"co", "com", "gov", "gc", "gob", "gouv", "govt", "org", "net", "ac", "edu",
+                 "or", "ne", "go", "nic", "mil"}
+
+
+def _site(host: str) -> str:
+    """The part of an address its owner registered: eluta.ca, jobbank.gc.ca, seek.com.au."""
+    labels = host.lower().strip(".").split(".")
+    keep = 3 if len(labels) >= 3 and len(labels[-1]) == 2 and labels[-2] in _SECOND_LEVEL else 2
+    return ".".join(labels[-keep:])
+
+
+def _agrees(name: str, host: str) -> bool:
+    """Whether a board's name is its own address's: a label of the address that is not a
+    generic word, four letters or more, makes up at least half of the name's letters."""
+    folded = re.sub(r"[^a-z0-9]", "", plain(name).lower())
+    for label in host.lower().split("."):
+        if len(label) >= 4 and label not in _GENERIC_LABELS and label in folded \
+                and 2 * len(label) >= len(folded):
+            return True
+    return False
+
+
+def market_allowance(text: str) -> re.Pattern | None:
+    """For a market table (or its lines in a patch): a pattern that blanks each board's name
+    and its own address in a URL, for the boards whose name agrees with their address."""
+    parts = []
+    for name, host in _BOARD_SITE.findall(text):
+        if not _agrees(name, host):
+            continue
+        parts.append(r"(?<![A-Za-z0-9])" + re.escape(name) + r"(?![A-Za-z0-9])")
+        parts.append(r"(?<=//)(?:[A-Za-z0-9-]+\.)*" + re.escape(_site(host)) + r"(?![A-Za-z0-9-])")
+    return re.compile("|".join(dict.fromkeys(parts)), re.I) if parts else None
+
 
 SKIP_DIRS = {".git", "node_modules", "__pycache__", ".pytest_cache", ".ruff_cache", ".venv", "venv"}
 
@@ -185,11 +247,31 @@ def _key(pat: re.Pattern) -> str:
     return max(words, key=len).lower()
 
 
-def _walk(tree: str):
+def _walk(tree: str, skip=SKIP_DIRS):
     for dp, dns, fns in os.walk(tree):
-        dns[:] = sorted(d for d in dns if d not in SKIP_DIRS)
+        dns[:] = sorted(d for d in dns if d not in skip)
         for fn in sorted(fns):
             yield os.path.join(dp, fn)
+
+
+def _files(tree: str, skip: bool = True):
+    """Every file a tree scan reads. A folder in SKIP_DIRS is what a working copy builds
+    for itself and git ignores; a committed file in one is pushed all the same. So in a
+    checkout git's own list of tracked files is read too, and a tree that is an export
+    (build_app, app_watch: nothing but committed files) skips nothing but .git. A
+    committed venv/notes.txt passed both, where CI's --git scan found it (2026-10-25)."""
+    seen = set()
+    for full in _walk(tree, SKIP_DIRS if skip else {".git"}):
+        seen.add(os.path.normcase(full))
+        yield full
+    if not (skip and os.path.exists(os.path.join(tree, ".git"))):
+        return
+    out = subprocess.run(["git", "-C", tree, "ls-files", "-z", "--cached"],
+                         capture_output=True).stdout
+    for rel in sorted(set(out.decode("utf-8", "replace").split("\0")) - {""}):
+        full = os.path.join(tree, rel)
+        if os.path.normcase(full) not in seen and os.path.isfile(full):
+            yield full
 
 
 def _committable(tree: str):
@@ -206,10 +288,14 @@ def _committable(tree: str):
             yield full
 
 
-def scan(tree: str, tokens, allow, show: bool = False, git: bool = False) -> list[str]:
+def scan(tree: str, tokens, allow, show: bool = False, git: bool = False,
+         export: bool = False) -> list[str]:
+    """Findings in `tree`: what git would commit (`git`), every file of an export
+    (`export`: nothing in it is a working copy's own), or a working tree's files and
+    everything it has committed."""
     findings: list[str] = []
     keyed = [(_key(pat), (pat, n)) for pat, n in tokens]
-    for full in (_committable(tree) if git else _walk(tree)):
+    for full in (_committable(tree) if git else _files(tree, skip=not export)):
         rel = os.path.relpath(full, tree).replace(os.sep, "/")
         if is_personal(rel):
             findings.append(f"{rel}: personal path (tools/personal_paths.py)")
@@ -220,8 +306,12 @@ def scan(tree: str, tokens, allow, show: bool = False, git: bool = False) -> lis
             if not any(r.match(rel) for r in BINARY_OK):
                 findings.append(f"{rel}: binary file that cannot be scanned and is not allowlisted")
             continue
-        findings += _scan_text(rel, data.decode("utf-8", errors="replace"),
-                               [rx for g, rx in allow if g.match(rel)], keyed, show)
+        text = data.decode("utf-8", errors="replace")
+        rules = [rx for g, rx in allow if g.match(rel)]
+        if MARKETS.match(rel):
+            boards = market_allowance(text)
+            rules += [boards] if boards else []
+        findings += _scan_text(rel, text, rules, keyed, show)
     return findings
 
 
@@ -230,11 +320,45 @@ def scan_text(paths: list[str], tokens, show: bool = False) -> list[str]:
     commit messages. A public repo's PR descriptions and history are as public as its
     files, and a name written there once (2026-10-18) was never scanned."""
     keyed = [(_key(pat), (pat, n)) for pat, n in tokens]
+    # The allowances that hold anywhere (the app's own address and openroles'), so a PR
+    # or a commit that links the app is not a leak. In a patch (`git log -p`), the lines of
+    # each file's hunks take that file's own allowances too, as the tree scan gives them:
+    # a PDF operator the design check names passed the tree and failed its own commit's
+    # diff (2026-10-25). A commit's message takes only the ones that hold anywhere.
+    anywhere = [re.compile(rx) for g, rx in ALLOW if g == "**"]
+    per_file = [(_regex(g), re.compile(rx)) for g, rx in ALLOW if g != "**"]
     out: list[str] = []
     for p in paths:
         with open(p, encoding="utf-8", errors="replace") as fh:
-            out += _scan_text(os.path.basename(p), fh.read(), [], keyed, show)
+            text = fh.read()
+        name = os.path.basename(p)
+        for start, rel, chunk in _patch_chunks(text):
+            rules = anywhere + [rx for g, rx in per_file if rel and g.match(rel)]
+            if rel and MARKETS.match(rel):
+                boards = market_allowance(chunk)
+                rules += [boards] if boards else []
+            for f in _scan_text(name, chunk, rules, keyed, show):
+                head, ln, rest = f.split(":", 2)
+                out.append(f"{head}:{int(ln) + start}:{rest}")
     return out
+
+
+_PATCH_FILE = re.compile(r"^(?:diff --git a/\S+ b/(\S+)|\+\+\+ b/(\S+))$")
+
+
+def _patch_chunks(text: str):
+    """(lines before it, the file its lines belong to or None, its text) for each run of
+    lines in one file's hunks; the whole text as one chunk when it is not a patch."""
+    lines = text.splitlines()
+    chunks, start, rel = [], 0, None
+    for i, line in enumerate(lines):
+        m = _PATCH_FILE.match(line)
+        new = (m.group(1) or m.group(2)) if m else (None if line.startswith("commit ") else rel)
+        if new != rel:
+            chunks.append((start, rel, "\n".join(lines[start:i])))
+            start, rel = i, new
+    chunks.append((start, rel, "\n".join(lines[start:])))
+    return [c for c in chunks if c[2]]
 
 
 def _scan_text(rel: str, text: str, rules, keyed, show: bool) -> list[str]:

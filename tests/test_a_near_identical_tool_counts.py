@@ -48,3 +48,17 @@ def test_a_bridge_is_one_step_and_never_chains(monkeypatch):
     got = bridges.family_bridges("Azure, then BigQuery on top of it.")
     assert [a.asked for a in got] == ["Azure"]
     assert all(set(a.have) <= {"AWS"} for a in got)
+
+
+def test_families_of_one_name_are_one_family(monkeypatch):
+    # A field's market table and the app can each name a "CRM": a tool in either bridges to
+    # a tool in the other, and a tool both name is assessed once.
+    merged = bridges._merged([("CRM", ("Pipedrive", r"\bpipedrive\b"), ("HubSpot", r"\bhubspot\b")),
+                              ("crm", ("GoldMine", r"\bgoldmine\b"), ("HubSpot", r"\bhub\s?spot\b"))])
+    assert merged == [("CRM", ("Pipedrive", r"\bpipedrive\b"), ("HubSpot", r"\bhubspot\b"),
+                       ("GoldMine", r"\bgoldmine\b"))]
+    monkeypatch.setattr(bridges, "_FAMILY_RX", [
+        (fam, [(n, re.compile(p, re.I)) for n, p in members]) for fam, *members in merged])
+    monkeypatch.setattr(bridges, "_HELD_RX", [("GoldMine", re.compile(r"\bgoldmine\b", re.I))])
+    got = bridges.family_bridges("Pipedrive and HubSpot experience required.")
+    assert [(a.asked, a.have) for a in got] == [("Pipedrive", ("GoldMine",)), ("HubSpot", ("GoldMine",))]

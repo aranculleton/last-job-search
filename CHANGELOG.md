@@ -22,10 +22,245 @@ make sense to somebody whose repo just received it.
 
 ### Added
 
+- **The README and the start guide show your page**, with a short demo and screenshots. Every
+  name in them is made up.
+- **One chat answers your page, so a tap never wakes them all.** The chat that set you up
+  looks after the page until setup is done, then hands it to a small helper chat of its own
+  ("Job search: Claude's helper (keep this)"). Every other chat leaves the page alone and
+  says nothing about it. If nobody answers, the page says so and one link starts a chat that
+  takes over.
+- **Your brief lives on your page.** Before it counts anything it takes in what you ticked
+  there, it links your page rather than a file, its questions wait on your page, and the
+  page is up to date after each one.
+- **Move your brief or take a break, from your page.** Change its days and time, or pause
+  your search until a date: the brief rests and nothing is chased meanwhile, and on the day
+  you come back one brief says what is waiting.
+- **Your page is easy to find again**: Claude offers once to pin it to the side of Claude,
+  and every brief links it.
+- **Each piece of work Claude hands to a chat of its own runs on the model that work needs**:
+  searches and research on a cheaper one, anything an employer or a contact reads on the
+  strongest, never a cheaper one.
+- **Everything happens on one page now.** Your search has its own private page, on your
+  phone and your computer: what needs you, your jobs, your drafts, your contacts and a chat
+  with Claude, in light or dark to match your device. Claude works in the background and
+  shows its progress there, and nothing is ever sent for you. Your chat gives you the link
+  after this update; pin it and you never need the chat window again.
+- **Setting up happens on the page too**: say "set me up" once, then answer one short
+  question at a time, with your private copy made in one click. A setup left half-way, or
+  a copy several versions old, carries on from where it was.
+- **Anything Claude made can be changed with one tap**: Tweak on a resume, letter,
+  message, job list, prep or brief offers the changes that make sense for it, says what
+  each costs before you press Apply, keeps the old version, and learns what you prefer.
+- **Problems and good ideas show on the card they belong to**: a closed link, a deadline
+  tomorrow, a referral to ask first, or a similar skill you hold ("Asked for Tableau, you
+  have Power BI"). Never a pop-up, and at most one suggestion a card.
+- **Setup is quicker and cheaper: the app now knows the job market you start in.** For 20
+  countries, 18 fields, every career level, the biggest states and provinces and remote work,
+  it carries the job boards (with what each one's rules allow, checked by code), the wording
+  postings use for a work permit or citizenship, how a resume is written there, where pay is
+  published and how the big cities are named, each with the page it came from and the day it
+  was read. Setup reads that first and researches only what is missing, such as your own town
+  and your target employers. A profile already set up is not redone.
+- **No resume? Build one with Claude.** Say "build one with me" and a short interview, one
+  job at a time and small enough for a phone, writes your history, starting from your
+  LinkedIn download where there is one. You leave setup with a one-page resume, and nothing
+  in it is a result you did not give.
+- **A design for your documents per kind of employer**: the fonts, sizes, margins and
+  alignment. Classic for banks, insurers, law, consulting and the public sector; modern for
+  technology companies and startups. A new search gets them; an existing one looks exactly
+  as it did until you ask. Every design is checked to read cleanly in an applicant
+  tracking system before you see it.
+- **"Show me around"**: a short tour of what you can ask for, offered once at the end of
+  setup and whenever you ask.
+- **Jobs a search set aside can be brought back.** Ask to see what was filtered out and
+  why, and name the one you want: it joins your shortlist with the reason kept.
+  Each round also writes `filtered/<round>.json` beside its summary, in `--summary-dir`
+  too, so that folder now holds a `filtered` folder as well as `<round>.json`.
+- **Apply links you can trust**: tracking is taken off every link, and where the employer
+  publishes its own listing, the link is checked against it and points there.
+- **A chat on your own computer works on Windows, Mac and Linux**, set up with no password
+  and nothing installed first. A Mac gets a current Python of its own, and Apple's is left
+  alone.
+  The batch check is now `tools/verify_batch.py`, reading PDFs with pypdf, with the same
+  checks, flags and exit codes; `tools/verify_batch.sh` only starts it, so a test that
+  reads the checks' source reads the `.py`, and the Skills block is read up to whichever
+  heading follows it.
 - **A resume and its cover letter can take a colour chosen for a kind of employer** (a bank
   in navy, a startup in teal) **or for one application.** Nothing changes unless you ask:
   every document stays black, and a colour never moves a word, a line or the page. Ask
   Claude for a colour and it writes the setting for you.
+
+### Changed
+
+- **What a person's own tests may see change in 4.0** (each deliberate):
+  `tools/verify_batch.sh` hands over to `tools/verify_batch.py`, which now runs every check
+  (`check_numbers`, `voice_check`, `--soft-ok`), so a test that reads the script's text reads
+  the Python file instead; the example cover letter dates itself with a placeholder, never
+  `\today`, because each letter keeps the date it was made; a round's folder holds a
+  `filtered/` folder beside its file; and `stage_picks.py assemble` needs both audits for a
+  pick, naming one with no code audit as missing rather than stopping the batch.
+- **Every change to your page's own design reaches an open page**, a small wording fix too.
+- **The page's privacy line says what is true**: only you can open it unless you share it,
+  and it holds first names, employers, your drafts and your setup answers, so keep it
+  unshared.
+- **No question about using Claude on a computer recommends it**, and nobody set up before
+  that question is asked it now.
+- **More names your own checks might use were retired**: `place.RECOMMEND` ("If you have one you can use, say yes") and `brief.page_parts` (with `brief.py --json`), and the command `tools/setup_state.py` with its names (`setup_state.EXIT`, `PAGE`, `READY`, `ROOT`, `SAY`, `STATES`, `main`, `paste`, `state`, `this_copy`). No chat on a computer is recommended any more, the page builds its own brief, and `python3 tools/app.py start` is the one way any chat finds out where setup stands (`--paste` prints the line for a new computer).
+- **Four messages your own checks might have named were retired**: `env_check.BREW`,
+  `place.SHORT_SIGN_IN`, `place.SHORT_TWO_CHATS` and `place.SIGN_IN_ONCE`. The reading step
+  now asks for the LinkedIn sign-in itself, once, when it finds you signed out; the set-up
+  of a computer needs no Homebrew; and no chat on the computer is recommended for everything.
+- **Every chat starts lighter and starts the same way.** Claude's standing instructions are under
+  a fifth of their old length, so every message in every chat costs less: they now hold only
+  what every chat needs (one command to start, your page first for everything you see,
+  plain words, saving), and each other rule is read only when the work that needs it runs.
+  Nothing was dropped: a check proves each rule still has a home.
+- **Setup is shorter**: two short messages and four questions. The research runs in the
+  background, your first shortlist arrives as the proof it works, and your brief is set up
+  at the end without a question.
+- **A search already set up is never set up again.** A chat that finds it, even while
+  another chat is still saving it, carries on from it and never asks for your resume.
+- **A chat on your computer signs you in to LinkedIn when it needs to**, says once that
+  signed in shows more of each person, and asks for your LinkedIn download by itself, with
+  no warnings in the way.
+- **Fewer first-time lines**: two a day at most, and a tip seen in one chat is not repeated
+  in another.
+- **No email, and no other connections**: the app never reads your inbox.
+- **The date of an application is the day you applied**, written when you tell the app,
+  never a guess from when its documents were made.
+  A redrafted row keeps its `date`, part of the key two chats' trackers merge on, and the
+  tracker gains `applied_on`, `confirmed_by` and `confirmed_at` at the end
+  (`record_drafts.HEADER`), blank on rows from before them.
+- **Updates still arrive by themselves.** If you would rather choose when, say so ("only
+  update when I say") and the app tells you once when one is waiting.
+- **Setup and checking cost less of your Claude usage**: setup researches with one helper
+  instead of five, and the helpers that research employers and check every document start
+  without the app's long instructions, which they never needed.
+- **Your brief costs far less to run**: code gathers it with one command and a small search
+  helper finds the news, so a run uses about a third of what it did, and nothing it promised
+  is dropped. The news now comes from search results, never pages opened.
+- **Follow-ups start from a draft the app made and checked**, so Claude only finishes what
+  code could not.
+- **Taking an update is quicker**: the app's own tests are not run again on your computer
+  for an update its test machines already passed on Linux, a Mac and Windows. Your own
+  checks still run every time.
+- **A scheduled task runs at most once a day**: each run costs a whole chat's worth of
+  usage, so nothing is ever set to check every hour.
+
+### Fixed
+
+- **Two chats on one Windows computer can save your contacts at the same time**: one used
+  to fail with "It could not be done" while the other had the file open.
+- **Your page is quicker to bring up to date with a big contact book**: the same dates,
+  names and message words are read once a build, not thousands of times.
+- **Composing a note leaves nothing behind.** The parts a first note was built from wait on
+  this computer until its draft is written, never among your files, where every note composed
+  and not sent left a file that stopped the next update.
+- **On Windows, a save no longer shows as unsaved work.** Every file the app writes has plain
+  line ends there too, so a settings file saved with nothing new in it is no longer a change,
+  two chats answering the page at once wait for each other, and GitHub's command is found
+  the way Windows finds it.
+- **Job postings read from employers' own hiring systems are cleaner** (openroles 0.4.0):
+  text a posting hides from its readers is left out, Lever, Ashby and Gem postings are read
+  from their full descriptions, and words beside bold or linked text no longer get a stray
+  space. Checking a job site's rules for automated readers takes milliseconds where one
+  large file took minutes, which had stopped setup on that site.
+- **A job site's requested gap between requests is kept exactly on Windows.** Python 3.12
+  and older read the steady clock there in 15.6 ms steps, so a gap could fall a step short.
+- **On Windows, a user folder whose name has an accent no longer trips anything up**: a
+  Python installed there is found and its path read right, by the set-up and by the app, and
+  a Python settings file holding an unusual character no longer stops every command; a
+  PDF's pages are counted there too.
+- **Looking at your contact book or messages no longer creates them**: a missing file stays
+  missing until the first save writes it, so a check for updates leaves no new files behind
+  (`state.load_contacts`, `state.load_threads`).
+- **Two names your own checks may use are back**: `holidays.is_holiday`, now counting a
+  holiday kept in the next year's table as the business-day count does, and
+  `score_eval.EXPECTATIONS`, the hard cuts of whatever screened-postings corpus there is.
+- **A name your own checks use is never removed without saying so**: every change to the
+  app is now checked against the names the last update gave you, and one taken away on
+  purpose has to be listed first, with the date, the reason and a line here that tells
+  you (`tools/public_names.py`).
+- **A kind of tool named in two places is one family now.** When your field's starter list and
+  the app both name, say, a CRM, a tool from either one counts as a near match for the other,
+  and a tool both name is weighed once, not twice.
+- **A copy set up as the app's example person** no longer reports that person's name in
+  the app as a leak; the example is the app's own.
+- **A new computer could not save anything** when its git had no name set. Your copy now
+  takes your GitHub name and GitHub's private address for it, for that copy alone.
+- **Job titles are clean**: badges such as "Easy Apply" and a second copy of the place are
+  taken off, and nothing that is part of the title is.
+- **Years of experience and degree requirements** are read in more of the ways postings
+  write them, and "18 years or older" is never read as experience.
+- **Taking an update could put you back on an older version** the second time; it no
+  longer can.
+- **On Windows, a job search stopped on its last line** when your job search folder and the
+  computer's temporary folder were on different drives.
+- **Text in any alphabet is read and written correctly on Windows**, in every file the app
+  opens.
+- **Text a job page hides from readers is removed** before anything reads the posting.
+- **A job naming a language only as a market** ("Spanish-speaking markets") is no longer
+  thrown out, and the jobs thrown out that way come back.
+- **Where a search finds several roles at one employer**, it keeps the one that fits you
+  best.
+- **A job past its closing date** no longer comes back, and a job you bring back stays back,
+  even when it is a relisted copy.
+- **Searches stop asking for more pages once a page is empty**, so fewer requests go to job
+  sites, and a slow search keeps every description it fetched instead of losing them all.
+- Smaller search fixes: tracking in a link no longer makes one job look like several, a job
+  on a similar-named board is no longer called closed, a redirect to a site you switched off
+  is not followed, and finding an employer's job board works before setup is finished.
+- **A tracker or contact book saved from a spreadsheet** merges between chats with nothing
+  lost, keeps its accented names, and no longer stops the check for updates.
+- **Two chats working at once no longer clash over any of your files.** Your setup
+  answers, page, settings, Tweak buttons and tweaks, the employers you judged or ruled out,
+  your contacts' readings and notes, your research, your round shortlists and the app's own
+  records now merge piece by piece, with nothing either chat added lost; where both changed
+  one answer, the one given later is kept and you are told what the other said.
+- **A reply that mentions leave but answers you** counts as a reply, and a late reply to a
+  conversation that had gone quiet shows as owed.
+- **A referral in progress keeps holding cold applications** at that employer while the
+  person referring you writes.
+- **Messages from a LinkedIn download are dated on your own clock.**
+- **Referral asks go only to people who have replied**, and no longer end "if not?".
+  `compose.referral_ask()` takes `thread=`, their contact_id or their message rows, and
+  raises without it or when nothing in it is theirs.
+- Smaller networking fixes: saving works in folders with brackets in their names,
+  unaccepted connection requests no longer show as overdue, columns you added by hand
+  survive saves, an interrupted save no longer cuts a file short, interviews booked with a
+  time reach the due list, and the networking view is faster on large contact books.
+- **Every value that reaches a resume or letter prints as written**: an email with an
+  underscore, a LinkedIn link with % in it, or an "&" in a heading no longer breaks the
+  document or drops a line. Drafts not yet sent are made again.
+- **Neither check on a draft can be skipped**: a draft goes out only after both have passed,
+  for that exact draft.
+  `stage_picks.py assemble` holds back an `audit_<slug>.json` that is a bare draft, or
+  that lacks the code and model audits of that draft; only a record `stage_picks.py
+  audit` wrote after both is assembled.
+- **A resume that compiled with an error is never called a clean fit**, two-page resumes and
+  letter-size paper pass the design check, and every contact line the resume prints is
+  checked.
+- **An employer named in another alphabet gets a file name of its own**, and the words of a
+  posting reach Claude only inside a fence.
+- Smaller document fixes: small numbers and year-shaped numbers are checked like any other,
+  Canadian spelling is checked for more words, the summary has one length (36 to 52 words)
+  everywhere, and a requisition number is taken off a role the same way wherever it is named.
+  The example letter (`cover_letters/cover_example.tex`) has the four blocks the renderer
+  writes, and a written-out date placeholder where it had `\today`.
+- **A refused update keeps your unsaved file**, the daily check follows your own day, and a
+  rewritten copy of your search offers a command that carries only your own work.
+- **On Windows**: Git installs under a user folder with a space in its name, accents
+  survive, Python and time zones work, and scripts run in Git Bash rather than a missing
+  Linux; a second chat open at the same time is the only one told to take its own folder;
+  starting over works in the Mac's own shell.
+- The safety check refuses every setting that would run a command without asking.
+- **On Windows, two chats changing one row** now merge by which change came later, as
+  everywhere else, instead of leaving the row for you to settle.
+- Designs compile from a copy kept under a folder with a space in its name.
+- **The brief is twice as quick** on a large search: a call prep finds its application from
+  one look at the tracker, an employer's name is worked out once, a contact's follow-up looks
+  at the applications and postings once a run rather than once a contact, and finding an
+  application's folder no longer loads the tools that write documents.
 
 ## [3.13.0] - 2026-10-24
 

@@ -42,14 +42,15 @@ cd "$(dirname "$0")/.."
 . tools/local_path.sh
 
 # Which Python: the one the person set up for this repo when there is one (an
-# active virtual environment, or .venv here), else python3. A Mac's own python3 is
-# 3.9.6 and lacked PyYAML, so the first run said FAIL for a missing package while
-# the person's working 3.10 sat in a venv the script never used. Said first.
-PY="python3"
-if [ -n "${VIRTUAL_ENV:-}" ] && [ -x "$VIRTUAL_ENV/bin/python" ]; then
-  PY="$VIRTUAL_ENV/bin/python"
-elif [ -x .venv/bin/python ]; then
-  PY=".venv/bin/python"
+# active virtual environment, or .venv here), else the first of python3, python and
+# py -3 that runs. A Mac's own python3 is 3.9.6 and lacked PyYAML, so the first run
+# said FAIL for a missing package while the person's working 3.10 sat in a venv the
+# script never used. On Windows `python3` is a Store stand-in that fails, and every
+# check here said FAIL ("Not green") so nothing could be saved. tools/py.sh picks,
+# with a virtual environment's Scripts/python.exe on Windows too. Said first.
+if ! PY="$(sh tools/py.sh --which)"; then
+  echo "Not green: no Python 3.9 or newer was found on this computer. python3 tools/env_check.py says how to put it on." >&2
+  exit 1
 fi
 
 QUICK=0; FULL=0
@@ -57,16 +58,22 @@ for arg in "$@"; do
   [ "$arg" = "--quick" ] && QUICK=1
   [ "$arg" = "--full" ] && FULL=1
 done
-DATA_ONLY=0; CHANGED=""
+DATA_ONLY=0; APP_RELEASE=0; CHANGED=""
 if [ "$FULL" = "0" ] && [ -f profile/person.json ]; then
-  if CHANGED="$("$PY" tools/personal_paths.py --only-personal-changed 2>/dev/null)"; then
-    DATA_ONLY=1
-  fi
+  CHANGED="$("$PY" tools/personal_paths.py --only-personal-changed 2>/dev/null)"
+  case $? in
+    0) DATA_ONLY=1 ;;
+    # The app files that changed are exactly the app's release (an update being landed):
+    # its own CI tested them on Linux, a Mac and Windows, so they are not tested again here.
+    2) DATA_ONLY=1; APP_RELEASE=1 ;;
+  esac
 fi
 # Run the app's own check, unless only the person's own files changed.
 app_check() {                  # app_check <runner> <name> <args...>
   local runner="$1" name="$2"; shift 2
-  if [ "$DATA_ONLY" = "1" ]; then
+  if [ "$APP_RELEASE" = "1" ]; then
+    skip "$name" "the app's own release, tested before it shipped; --full runs it"
+  elif [ "$DATA_ONLY" = "1" ]; then
     skip "$name" "only your own files changed; --full runs it"
   else
     "$runner" "$name" "$@"
@@ -117,7 +124,7 @@ for pair in yaml:pyyaml pytest:pytest pypdf:pypdf; do
   "$PY" -c "import ${pair%%:*}" >/dev/null 2>&1 || missing_mods="$missing_mods ${pair##*:}"
 done
 if [ -n "$missing_mods" ]; then
-  echo "  missing for this Python:$missing_mods ($PY -m pip install --user$missing_mods;"
+  echo "  missing for this Python:$missing_mods (python3 tools/env_check.py says how to install them;"
   echo "  the checks that need them say SKIP or FAIL below for that reason, not the code's)"
 fi
 echo
@@ -138,6 +145,8 @@ else
   printf '  %-42s n/a   (a person'"'"'s own, in profile/tests/fixtures)\n' "scoring baseline"
 fi
 run "framework version guard" "$PY" tools/check_framework_version.py
+# A name a person's own tests may use is never taken away without saying so.
+run "public names stay, or are listed as gone" "$PY" tools/public_names.py check
 # A person's scheduled tasks: a missing prompt file, a mistyped id or a cron
 # with no CRON_TZ fails here rather than at seven in the morning. The app's
 # own tests check the example's registry.
@@ -179,7 +188,11 @@ fi
 
 echo
 echo "tests"
-if [ "$DATA_ONLY" = "1" ]; then
+if [ "$DATA_ONLY" = "1" ] && [ "${APP_RELEASE:-0}" = "1" ]; then
+  echo "  the app's files that changed are exactly its release, which its own checks passed on"
+  echo "  Linux, a Mac and Windows before it shipped, so its suites are skipped (--full runs them)"
+  skip "pytest (the app's suite, on the example person)" "the app's own release, tested before it shipped"
+elif [ "$DATA_ONLY" = "1" ]; then
   echo "  only your own files changed since master ($(printf '%s\n' "$CHANGED" | grep -c .)): the app's"
   echo "  own suites test the app, which did not change, so they are skipped (--full runs them)"
   skip "pytest (the app's suite, on the example person)" "only your own files changed"
@@ -234,6 +247,10 @@ echo "python floor"
 FLOOR_VERSION=3.9
 FLOOR_NAME="tests on Python $FLOOR_VERSION (CI's floor leg)"
 FLOOR_PY="$(command -v python$FLOOR_VERSION || true)"
+if [ -z "$FLOOR_PY" ] && command -v py >/dev/null 2>&1; then      # Windows' launcher
+  # -X utf8: the path as Git Bash reads it, where a Python on Windows writes its code page.
+  FLOOR_PY="$(py -$FLOOR_VERSION -X utf8 -c 'import sys; print(sys.executable)' 2>/dev/null | tr -d '\r' || true)"
+fi
 if [ -z "$FLOOR_PY" ] && command -v uv >/dev/null 2>&1; then
   FLOOR_PY="$(uv python find $FLOOR_VERSION 2>/dev/null || true)"
   if [ -z "$FLOOR_PY" ]; then
@@ -245,15 +262,19 @@ if [ -z "$FLOOR_PY" ]; then
   skip "$FLOOR_NAME" "no python$FLOOR_VERSION here, and no uv to fetch one"
 else
   FLOOR_ENV="${TMPDIR:-/tmp}/ci_local_py${FLOOR_VERSION/./}"
-  if ! "$FLOOR_ENV/bin/python" -c "import pytest" >/dev/null 2>&1; then
+  # A virtual environment keeps its Python in bin/ everywhere but Windows, which uses
+  # Scripts/ (https://docs.python.org/3/library/venv.html#how-venvs-work).
+  floor_bin() { if [ -d "$FLOOR_ENV/Scripts" ]; then echo "$FLOOR_ENV/Scripts/python.exe"; else echo "$FLOOR_ENV/bin/python"; fi; }
+  if ! "$(floor_bin)" -c "import pytest" >/dev/null 2>&1; then
     rm -rf "$FLOOR_ENV"
     "$FLOOR_PY" -m venv "$FLOOR_ENV" >/dev/null 2>&1 \
-      && "$FLOOR_ENV/bin/pip" install -q pytest >/dev/null 2>&1
+      && "$(floor_bin)" -m pip install -q pytest >/dev/null 2>&1
   fi
-  if "$FLOOR_ENV/bin/python" -c "import pytest" >/dev/null 2>&1; then
-    app_check run "$FLOOR_NAME" "$FLOOR_ENV/bin/python" -m pytest tests -q -p no:cacheprovider
+  FLOOR_ENV_PY="$(floor_bin)"
+  if "$FLOOR_ENV_PY" -c "import pytest" >/dev/null 2>&1; then
+    app_check run "$FLOOR_NAME" "$FLOOR_ENV_PY" -m pytest tests -q -p no:cacheprovider
     if [ -d profile/tests ] && { [ "$DATA_ONLY" = "0" ] || printf '%s\n' "$CHANGED" | grep -q '^profile/tests/'; }; then
-      PYTHONDONTWRITEBYTECODE=1 run "$FLOOR_NAME, profile/tests" "$FLOOR_ENV/bin/python" \
+      PYTHONDONTWRITEBYTECODE=1 run "$FLOOR_NAME, profile/tests" "$FLOOR_ENV_PY" \
         -m pytest profile/tests -q -p no:cacheprovider
     fi
   else

@@ -317,7 +317,8 @@ def test_the_outreach_note_runs_validate_for_a_message():
     lambda: compose.email("Wren Halloway", "Our call", "Thanks for the call on Tuesday",
                           "Happy to circle back next month.", ""),
     lambda: compose.referral_ask("Wren Halloway", "thanks for the chat, happy to circle back",
-                                 "Planning Analyst", "https://example.com/job/1"),
+                                 "Planning Analyst", "https://example.com/job/1",
+                                 thread=[{"direction": "in", "channel": "message", "full_text": "Happy to help."}]),
     lambda: compose.warm_intro("Bo Venn", "Wren Halloway", "Bo suggested I get in touch. I am "
                                "passionate about forecasting."),
 ])
@@ -360,7 +361,13 @@ def test_the_docs_say_one_thing_about_warnings_and_lengths():
                 (".claude", "skills", "networking", "SKILL.md")):
         text = _read(*doc)
         assert "rewritten, not shown" not in text and "never shown with a warning" not in text
-        assert "for the person to decide" in text, doc
+        if doc != ("CLAUDE.md",):
+            assert "for the person to decide" in text, doc
+    # CLAUDE.md's copy of the rule moved in 4.0 to the networking skill's "The rules every
+    # outreach keeps" (docs/rule_map.json), which every networking command reads.
+    moved = _read(".claude", "skills", "networking", "SKILL.md").split(
+        "## The rules every outreach keeps", 1)[1].split(" ## ", 1)[0]
+    assert "compose.advise()" in moved and "for the person to decide" in moved
     skill = _read(".claude", "skills", "networking", "SKILL.md")
     assert "about 150 words" not in skill and "about 170 words" in skill
     # The number the composer warns at is its own constant; a search of compose.py for a

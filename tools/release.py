@@ -21,6 +21,11 @@ It never moves, replaces or deletes a tag. A version already tagged (by hand, or
 earlier run) is not tagged again, and one no newer than the newest tag is not released:
 a fix to an old section's wording is not a release. The newest release's notes are
 rewritten when they differ from what this file now makes of its section.
+
+A release ships with the snapshot of its own public names (tools/public_names.py), which
+the release PR writes, so the next release is checked against the names people have. This
+job's checkout is thrown away with it, so a snapshot written here would be lost: publish
+says when the release went out without one, and fails, after tagging, never before.
 """
 from __future__ import annotations
 
@@ -123,7 +128,8 @@ def _gh(args: list[str]) -> subprocess.CompletedProcess:
     cmd = ["gh", *args]
     if os.environ.get("GITHUB_REPOSITORY"):
         cmd += ["--repo", os.environ["GITHUB_REPOSITORY"]]
-    return subprocess.run(cmd, cwd=ROOT, capture_output=True, text=True)
+    return subprocess.run(cmd, cwd=ROOT, capture_output=True, text=True,
+                          encoding="utf-8", errors="replace")
 
 
 def _key(version: str) -> tuple:
@@ -132,7 +138,8 @@ def _key(version: str) -> tuple:
 
 def tags() -> list[str]:
     out = subprocess.run(["git", "-C", ROOT, "ls-remote", "--tags", "--refs", "origin", "v*"],
-                         capture_output=True, text=True, check=True).stdout
+                         capture_output=True, text=True, check=True,
+                         encoding="utf-8", errors="replace").stdout
     return [ln.split("refs/tags/", 1)[1] for ln in out.splitlines() if "refs/tags/" in ln]
 
 
@@ -164,14 +171,33 @@ def publish(sha: str | None = None) -> int:
         print(f"release: nothing to publish: {why}")
         return 0
     tag = "v" + newest["version"]
-    with tempfile.NamedTemporaryFile("w", suffix=".md", delete=False, encoding="utf-8") as fh:
+    with tempfile.NamedTemporaryFile("w", suffix=".md", delete=False, encoding="utf-8", newline="\n") as fh:
         fh.write(text + "\n")
         notes = fh.name
     r = _gh(["release", "create", tag, "--title", tag, "--notes-file", notes,
              "--target", sha or os.environ.get("GITHUB_SHA") or "master"])
     os.unlink(notes)
     print(f"release: published {tag}" if r.returncode == 0 else (r.stderr or r.stdout))
-    return r.returncode
+    return r.returncode or names_kept(tag)
+
+
+def names_kept(tag: str) -> int:
+    """0 when this tree's snapshot of public names is its own, so the next release must
+    keep what `tag` ships; otherwise 1, with the command that writes it. It never holds a
+    release back: by the time it runs, the tag is out."""
+    try:
+        sys.path.insert(0, os.path.join(ROOT, "tools"))
+        import public_names
+        behind = public_names.stale()
+    except Exception as e:  # noqa: BLE001  the release is out either way: say why, and fail
+        print(f"release: {tag} is out, but its public names could not be read: {e}")
+        return 1
+    if not behind:
+        return 0
+    print(f"release: {tag} is out, but went without the snapshot of its public names. Run "
+          f"`python3 tools/public_names.py snapshot` on master and land it, so the next "
+          f"release is checked against what {tag} ships.")
+    return 1
 
 
 def refresh(tag: str, text: str) -> int:
@@ -184,7 +210,7 @@ def refresh(tag: str, text: str) -> int:
     if view.stdout.strip() == text.strip():
         print(f"release: {tag}'s notes are current")
         return 0
-    with tempfile.NamedTemporaryFile("w", suffix=".md", delete=False, encoding="utf-8") as fh:
+    with tempfile.NamedTemporaryFile("w", suffix=".md", delete=False, encoding="utf-8", newline="\n") as fh:
         fh.write(text + "\n")
         notes = fh.name
     r = _gh(["release", "edit", tag, "--notes-file", notes])

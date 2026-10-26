@@ -74,6 +74,6 @@ def test_a_draft_with_no_posting_says_so(tmp_path):
                                  "abbr": "Wrenfield"}]), encoding="utf-8")
     r = subprocess.run([sys.executable, os.path.join(ROOT, "tools", "verify_pdf.py"), "none.pdf",
                         "--keywords", str(path), "--abbr", "Wrenfield"], capture_output=True,
-                       text=True, env=dict(os.environ))
+                       text=True, encoding="utf-8", errors="replace", env=dict(os.environ))
     assert r.returncode == 0
     assert r.stdout.strip() == "no posting kept with this draft, so nothing to measure against"

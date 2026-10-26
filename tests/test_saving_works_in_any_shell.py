@@ -40,7 +40,7 @@ def _repo(tmp_path):
 
 def _staged(r):
     return set(subprocess.run(["git", "-C", r, "diff", "--cached", "--name-only"],
-                              capture_output=True, text=True).stdout.split())
+                              capture_output=True, text=True, encoding="utf-8", errors="replace").stdout.split())
 
 
 def test_what_exists_is_staged_and_nothing_else(tmp_path, capsys):
@@ -72,11 +72,11 @@ def test_it_runs_the_same_from_zsh_where_the_loop_stopped(tmp_path):
     r = _repo(tmp_path)
     loop = ('for p in cv/*_CV_*.tex job_search_tracker.csv; do [ -e "$p" ] && '
             'git add -f -- "$p"; done')
-    old = subprocess.run(["zsh", "-c", loop], cwd=r, capture_output=True, text=True)
+    old = subprocess.run(["zsh", "-c", loop], cwd=r, capture_output=True, text=True, encoding="utf-8", errors="replace")
     assert "no matches found" in old.stderr and _staged(r) == set()
     run = (f"{sys.executable} -c \"import sys; sys.path.insert(0, '{ROOT}/tools'); "
            f"import save_state; sys.exit(save_state.main([], root='{r}'))\"")
-    new = subprocess.run(["zsh", "-c", run], cwd=r, capture_output=True, text=True)
+    new = subprocess.run(["zsh", "-c", run], cwd=r, capture_output=True, text=True, encoding="utf-8", errors="replace")
     assert new.returncode == 0, new.stdout + new.stderr
     assert {"job_search_tracker.csv", "profile/person.json"} <= _staged(r)
 
@@ -96,5 +96,5 @@ def test_a_file_taken_away_is_staged_as_removed(tmp_path):
     (tmp_path / "cv/Morgan_Ellis_Resume_QF.pdf").unlink()
     assert save_state.main([], root=r) == 0
     gone = subprocess.run(["git", "-C", r, "diff", "--cached", "--name-only",
-                           "--diff-filter=D"], capture_output=True, text=True).stdout.split()
+                           "--diff-filter=D"], capture_output=True, text=True, encoding="utf-8", errors="replace").stdout.split()
     assert set(gone) == {"documents/network/ana_rook/draft.md", "cv/Morgan_Ellis_Resume_QF.pdf"}

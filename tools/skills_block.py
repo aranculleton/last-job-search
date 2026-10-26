@@ -21,6 +21,7 @@ import sys
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import person  # noqa: E402
+import tex_escape  # noqa: E402
 
 # What the candidate holds, from the profile's skills.py:
 #   NOT_HELD   name -> (how a posting spells it, why it is not held). Never
@@ -358,7 +359,7 @@ def _yes(consented):
     return list(dict.fromkeys(str(c).strip() for c in consented or () if str(c).strip()))
 
 
-def _final(tools, context, posting="", company="", consented=()):
+def _final(tools, context, posting="", company="", consented=(), max_tokens=None):
     """Tailor's picks first, context top-ups after, capped per line, the
     profile's pinned item guaranteed. The cap keeps the tooling line to one
     rendered line: uncapped, it wraps onto a second with Jira and Confluence,
@@ -432,7 +433,7 @@ def _final(tools, context, posting="", company="", consented=()):
         return max(cands, key=lambda ci: (sel[ci[0]][ci[1]] not in asked_here,
                                           _tokens(ci[0]), ci[1]))
 
-    while sum(_tokens(c) for c in sel) > MAX_TOKENS:
+    while sum(_tokens(c) for c in sel) > (max_tokens or MAX_TOKENS):
         weakest = _weakest()
         if weakest is None:
             break
@@ -453,8 +454,8 @@ def _final(tools, context, posting="", company="", consented=()):
 
 
 # A skill the person said yes to is the posting's spelling, not an inventory item
-# written for LaTeX, so it is escaped on the way out.
-_TEX = {"&": r"\&", "%": r"\%", "#": r"\#", "_": r"\_", "$": r"\$"}
+# written for LaTeX, and a heading is the person's words: both are escaped on the way out,
+# by the one copy of that rule (tools/tex_escape.py). "BI & delivery" printed "BI delivery".
 
 
 def coverage(posting, page, consented=()):
@@ -517,14 +518,26 @@ def coverage_lines(report) -> list:
     return out or ["the posting names nothing the profile's skills list knows"]
 
 
-def render(tools, context="", posting="", company="", consented=()):
+# How many skills the line shows (Tweak R9): only skills held, the posting's words first.
+SIZES = {"fewer": 12, "standard": MAX_TOKENS, "more": 22}
+
+
+def size_for(a=None) -> int:
+    """The skills line's cap for this draft: its own `skills_max`, else the person's
+    documents.skills_max, else MAX_TOKENS."""
+    want = str((a or {}).get("skills_max") or person.get("documents.skills_max", "") or "standard")
+    return SIZES.get(want, MAX_TOKENS)
+
+
+def render(tools, context="", posting="", company="", consented=(), max_tokens=None):
     """LaTeX for the Skills block."""
-    sel = _final(tools, context, posting, company, consented)
+    sel = _final(tools, context, posting, company, consented, max_tokens=max_tokens)
     yes = set(_yes(consented))
 
     def tex(i):
-        return "".join(_TEX.get(ch, ch) for ch in i) if i in yes else i
-    return "\n".join("\\blockline{%s}{%s}" % (label, ", ".join(tex(i) for i in sel[cat]))
+        return tex_escape.text(i) if i in yes else i
+    return "\n".join("\\blockline{%s}{%s}" % (tex_escape.text(label),
+                                              ", ".join(tex(i) for i in sel[cat]))
                      for cat, label in _labels()
                      if len(sel.get(cat, [])) >= MIN_PER_CATEGORY.get(cat, 1))
 

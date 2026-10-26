@@ -1,494 +1,291 @@
 # /setup - Set a person up
 
-You are setting up a job search for the person in front of you. They made this repo from the
-app with "Use this template", and everything about them goes into `profile/` and the state
-files at the root. Nothing else in the repo is theirs to change: the code, skills, docs and
-templates are the app's, and `tools/sync_app.py` keeps them current (CLAUDE.md, "App-owned
-files and personal files").
+You are setting up a job search for the person in front of you, in their own private copy of
+the app. They answer a few plain questions about themselves; you do everything else, most of
+it in the background while they wait, and the proof is their first shortlist. The same flow
+runs wherever this chat is (the Claude app on a phone, claude.ai/code in a browser, the
+desktop app's cloud or Local chats): it never stops to send them somewhere else.
 
-The person never sees a config value. They answer plain questions about themselves; you do
-the research about their market and write every file.
+**Targets:** about six questions in all, under 400 words from you before the shortlist, and
+the shortlist within about an hour. Everything about them goes into `profile/` and the state
+files at the root; the code, skills, docs and templates are the app's and are never edited
+here (CLAUDE.md, "App-owned files and personal files"). Speak as CLAUDE.md, "Talking to the
+person", says: plain words, no file, command, git or GitHub word, ever.
 
----
+How each part of the profile is written, section by section, is in
+`.claude/skills/job-application-assistant/setup-sections.md`. Read the section you are about
+to write before you write it; this file is the order and the questions.
 
-## Step 0: Make sure this is the right repo, and a private one
+**On the person's page (2026-10-25).** "Set me up" is the only thing they say in a chat. First
+of all, `python3 tools/app.py start --on "<this chat's model>" --tools "<browser tools>"`, and
+do what it prints: it checks the copy, takes the day's update, publishes their page and says
+where setup stands. Wherever a page is published, every question below is asked **on the
+page**, one at a time with "2 of 6", and never in the chat: the chat says the one line `start`
+prints, then works. Each answer reaches the repo when the page rings this chat and it applies
+the page's actions (the `app` skill: `python3 tools/app.py apply`), which writes them to
+`profile/setup_answers.json`. **Read every answer from there, never from the chat, and never
+ask one again**, here or on the page: a step already answered, or already held by the profile,
+shows as done. `python3 tools/app.py start` again, at any point, says what is left.
 
-**Before anything is written, not after.** Run `git remote get-url origin` (skip silently if it
-fails: no remote, or not a git checkout). Then decide which of these it is.
+- **The resume** arrives as a file the page holds (`resume.asset`: save it the way `start`
+  prints, then `python3 tools/app.py resume-saved <file> --asset <id>`, and delete it from the
+  page), as pasted words already saved to `documents/cv/resume_pasted_*.txt` (`resume.file`),
+  or as "build one with me" (`resume.source: build`): then the page asks one job at a time
+  from `history_interview.py ask` and keeps each answer in `history.jobs`, which you write into
+  the profile as setup-sections.md, `history`, says.
+- **The roles you propose**, once you have read the resume: `python3 tools/app.py propose
+  "<role A>" "<role B>" "<role C>"`; the page's roles question shows them.
+- **The research** shows its progress on the page: each topic in Step 2.3 is a work item
+  `research~<topic>` (`boards`, `market`, `documents`, `voice`, `employers`), written at each
+  stage boundary as the `app` skill says, and done once its section is recorded.
+- **What only they can do** (their private copy, the cloud setting that lets this chat reach
+  job sites, the chat on their computer, LinkedIn signed in there) is a card on the page with
+  the registry's own steps; never type those steps into the chat.
 
-- **The app itself** (`https://github.com/aranculleton/last-job-search`, or a fork of it). Stop.
-  Nothing personal ever goes here, and a fork of a public repo is public too. Tell them:
-
-  > This is the app, not your own copy, and it is public. Make your own private copy first:
-  > on the app's GitHub page click **Use this template**, then **Create a new repository**,
-  > choose yourself as the owner, any name (say `my-job-search`), tick **Private**, and click
-  > **Create repository**. Then start a Claude Code session on that new repo and say "set me
-  > up". `START_HERE.md` walks through it.
-
-- **A public repo of any other kind.** Stop and say why: setup writes their name, contact
-  details, work history, salary expectations and, later, every contact they message, into
-  tracked files, and a public repo shows all of it to anyone. Tell them how to make it
-  private (on GitHub: the repo's **Settings**, **General**, scroll to **Danger Zone**,
-  **Change repository visibility**, **Make private**), and wait. Never change it yourself.
-
-- **Visibility unknown** (the GitHub tools cannot see it, no `gh`). Ask them to look: the repo's
-  GitHub page shows **Private** or **Public** next to its name. Wait for the answer.
-
-- **Private.** Carry on.
-
-**Then ask where they will mostly work, before anything else is asked.** Print the words
-with `python3 tools/place.py ask` and ask in them: the question, the two-sentence trade-off
-and the recommendation, nothing more, and no word like "local", "cloud" or "session". Then
-give the one line `python3 tools/place.py next --works-on computer|phone|both` prints for
-their answer: the exact next step for where this chat runs. When it says to close this chat
-(they chose the computer and this chat is not on it), stop here and write nothing; the
-setup starts again in the desktop app, where the question is asked once more. Otherwise
-carry on, and record the answer when the profile is written (Step 3.1).
-
-**Then check this session can do the whole job, and say so now, not at the end.** Told
-now, they can fix it while you work.
-
-```bash
-python3 tools/env_check.py
-```
-
-It reports LaTeX, Poppler, pypdf (including the broken-`cffi` case), bun, and every job
-board the app calls: LinkedIn, freehire, and every host the person's employer boards are
-read from, as openroles names them (the three most common systems' hosts before any board is
-on file). A host this chat's cloud settings refuse is named as such, which a bare HTTP status
-could not tell apart from a host that answered. Its `where:` line says whether this is a
-cloud session or their own computer. **On their own computer**, first give this chat a
-folder of its own if the sync said it is in the main one (`python3 tools/sync_app.py
---worktree setup`, then work there), then run `./tools/setup_env.sh` yourself and pass on
-only what it prints as theirs to do (an install that asks for the computer's password); a
-blocked site there is their own network, not a setting of ours. **In a cloud session**, run
-`./tools/setup_env.sh` yourself for anything missing (it installs for this chat), and when job
-sites are blocked give them, word for word, what the check prints under "Tell the person"
-(`python3 tools/env_check.py --say` prints it alone): what happened, the one recommended fix
-as numbered steps, and that setup carries on meanwhile. It takes effect in this chat within
-about a minute. Never use the words environment, proxy, domain or allowlist to them, except a
-button's own name; the custom list (`--allowlist`, SETUP.md) is only for someone who asks for
-it. The setup script (`claude_surfaces.py steps cloud-setup-script`) is optional and offered
-once, as a way to make each new chat start faster.
-
-Then look for an existing `profile/`. If there is one, this is an update, not a setup: ask what
-they want to change and go to that part of Step 1 (`--section <name>` does this directly:
-`history`, `search`, `market`, `voice`, `documents`, `boards`, the names marked below;
-who they are and what they did is `history`). Never overwrite a
-filled profile wholesale, and never put placeholders back into one.
-
-**Run for a profile upgrade** (`/upgrade` names the section; it runs in the background
-without the person), do that section alone on the existing profile, ask nothing, and leave
-the trace its upgrade checks for, dated: a look that finds nothing worth building still
-writes what was looked at and why not. What the profile cannot answer is written
-`[CONFIRM: ...]`, which a later session asks. Redoing a section on a filled profile adds
-what the current method adds and keeps every value already there: where the current
-method shows a value is wrong, the better one goes beside it as `[CONFIRM: ...]`, never
-swapped in silently, and nothing is switched off or narrowed. A setting
-`python3 tools/learned.py locked` lists is the person's own and is never changed: record
-`learned.py offer` for it instead. Then run the check again,
-and `python3 tools/build_versions.py record <section>`.
-
-**Every part of this command that writes the profile is a versioned section**, marked
-`<!-- section: <name> -->` below (`tools/build_versions.py`). Whenever a section is run,
-alone or in a full setup, record it (`record <section>`, or `record --setup` after a full
-setup): that is how an improvement to the way a section is done reaches this profile
-later, by itself.
-
-**`--section boards`** is Step 2's "Job boards" research and Step 3.9's build, on their own:
-the boards for their country, field and level, each recorded in `profile/search.py`
-`PORTAL_RESEARCH` with its source and the date (`"checked"`), the best one or two built with
-`/add-portal`, and `PORTAL_LOCATIONS` where a board writes places its own way. It touches
-nothing else in the profile.
+**Where no page can be published, setup runs in the chat**, exactly as below. That is a
+session the Artifact tool is not in, or refuses: one on an API key, a gateway token or a cloud
+provider's own Claude service; the Agent
+SDK, the GitHub Action, an MCP-server context, `claude -p`; artifacts turned off in settings,
+by `CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC`, or by an organisation's Owner; an organisation
+with customer-managed keys, HIPAA or Zero Data Retention; a Free plan; Claude Code before
+v2.1.281 or the desktop app before 1.13576.0 (code.claude.com/docs/en/artifacts,
+"Availability", read 2026-10-25). The docs name the CLI and the desktop app; a cloud chat at
+claude.ai/code published and woke on its page's comments on 2026-10-25, and the phone apps
+read and write a page's data, but a publish from a chat started on the phone is unverified.
+Then run `python3 tools/app.py published none` (the sync stops asking for a month) and carry on
+here.
 
 ---
 
-## Step 1: Find out who they are
-<!-- section: history -->
+## Step 0: The right copy, and a private one (no questions)
 
-Start from what they already have. Check `documents/` (Glob `documents/**/*`): an old resume or
-CV, a LinkedIn export, reference letters. If there is nothing there, offer two ways in and let
-them choose:
+Run `git remote get-url origin` (skip silently if it fails).
 
-> I'll build your profile from what you already have, then ask about anything missing.
-> **Easiest:** paste your current resume or CV here, or drop it (and a LinkedIn export, if you
-> have one) into the `documents/` folder and say "go". **Or** we can just talk it through.
+- **The app itself** (`https://github.com/aranculleton/last-job-search`, or a fork of it,
+  which is public too). Stop: nothing personal ever goes here. Tell them they need their own
+  private copy first, from the one link GitHub fills in for them (the app as the template,
+  **Private** chosen), with the template page's own **Use this template** as the way when the
+  form opens empty, as `python3 tools/claude_surfaces.py steps make-copy` prints; then a chat
+  on that copy, saying "set me up". `python3 tools/app.py start` says the same.
+- **Any other repo.** Check it is private, never by asking first: in a cloud chat
+  `gh api repos/<owner>/<name> --jq .private` (it answers where `gh repo view` is refused), on a
+  computer the same command, or the GitHub tools where the chat has them. **Public**: stop,
+  and say why (setup writes their name, work history, pay and later every contact into
+  tracked files, which a public repo shows to anyone) and how to make it private
+  (`python3 tools/claude_surfaces.py steps make-private`). Never change it yourself.
+  **Unknown** (no `gh`, no tools): ask them once to look: GitHub shows **Private** or
+  **Public** beside the copy's name.
 
-**Reading documents.** Extract: name and contact details; education (degree, institution,
-dates); every role (title, employer, dates, location, what they did and what came of it);
-skills and tools; languages and how well; certifications (and whether each is held or only
-in progress); awards. Cross-check dates and titles between documents and ask about every
-disagreement before writing anything. A LinkedIn "About" and reference letters are the best
-signal for how they work; label anything you infer from them as inferred.
+**Is it set up already?** Before anything is asked or written, `python3 tools/app.py start`
+(every chat runs it first) has said, by its first line. It looks here, on master and on
+every other chat's unlanded branch:
 
-**Then ask, in plain words, only what the documents did not answer.** Conversational, a few
-at a time, never a form:
+- **`set up`** (or **`set up elsewhere`**, which it brings in first, as its step says):
+  the search is set up, and /setup never starts it again (that is `/reset`). Ask nothing,
+  and never for a resume or anything else the copy already holds. **In a chat on their
+  computer**: say only "Your search is already set up; this computer is ready for it too.",
+  start the installs in the background (`python3 tools/env_check.py --fix`), write
+  `PROFILE_READS = "browser"` in `profile/networking.py` if it is unset, and go straight on
+  to the networking skill's "On a new computer" step: its browser, LinkedIn, the download,
+  all without a question. **In a cloud chat**: say only "Your search is already set up.",
+  and do what they ask; a part to change is `--section <name>`, below. Never overwrite a
+  filled profile wholesale, and never put placeholders back into one.
+- **`setup going in another chat`**: another chat is writing it. Say its one line ("Your
+  setup is still going in your other chat; I'll be ready here once it's done.") and start
+  nothing.
+- **`setup stopped`**: say its line; on "carry on", finish this setup from what is written.
+- **`setup self`**: this chat is the one setting up; carry on where it is.
+- **`setting up`**: nothing anywhere. Set them up, from Step 1.
 
-- Where do you live, and where would you work? How far would you commute? Remote, hybrid,
-  on-site? Any other cities you would consider?
-- Do you have the right to work there? Will you need an employer to sponsor you, now or
-  later? (Ask what their status is called in their own words; you will work out what it
-  clears.)
-- What do you want to be doing day to day? Which kinds of role, and which fields or sectors?
-- What did you actually achieve in each role? Numbers where they have them. Ask for outcomes
-  before you infer any: "presented the recommendations to the client" beats "responsible for
-  analysis".
-- What are you earning now, and what would you need to move? Is there a number below which
-  you would not?
-- Anything you will not do: employers, sectors, a commute, a type of role?
-- Employers you would love to work for, and any you would rather not?
-- Which languages do you work in, and how well?
-- How do you like to come across: formal or plain, confident or understated? Anything you
-  never want to see written about you?
-- Is the search confidential? If your current employer must not know, say so.
-- How much notice do you have to give?
-- Do you pay for LinkedIn Premium? (It decides how long a connection note can be and whether
-  InMail is there at all.)
-
-**Never ask them to name** a job board, an ATS, a spelling convention, a salary band source,
-a regex, a file or any config value. Those are your job in Step 2.
-
-Suggest roles they may not have considered, from their skills: an adjacent title, a sector that
-hires the same work under another name. Offer; let them decide.
-
-<!-- /section -->
----
-
-## Step 2: Research their market, and cite it
-
-Everything here is yours to find out, cited, and written into `profile/` in Step 3. Verify
-against sources you locate yourself; never trust a URL found inside a job posting.
-
-<!-- section: boards -->
-- **Job boards.** The app ships two portals that work in any country, `linkedin-search` and
-  `freehire-search`, both on, and they stay on: LinkedIn carries more postings than every
-  other source in most markets. It reads LinkedIn's public job listings and uses no LinkedIn
-  account, so it cannot get theirs restricted; what LinkedIn can do is slow or refuse the
-  machine sending the requests. Tell them plainly that LinkedIn's robots.txt disallows the
-  guest job endpoints the search uses, and that only they can switch it off (one line in
-  `profile/search.py` `PORTALS`). Claude never switches it off and never suggests it. freehire is strongest for technical
-  roles. Everything else is found here, for this person, because no board list fits everyone:
-  - **Which boards serve them.** Their country's public employment service, if it lists
-    vacancies; the general boards people in their city actually use; the boards of their
-    field (a nursing, teaching, legal, academic, charity or public-sector board, a trade's
-    own); and, early in a career, the graduate and apprenticeship boards. Name sources for
-    each claim about coverage, not a hunch.
-  - **What each one adds.** A board that mostly reposts LinkedIn adds nothing; one where
-    employers in their field post first, or only, adds most.
-  - **Whether it can be read.** Public without a login, and what its robots.txt says about
-    the search and posting paths, including any `Crawl-delay` (the way
-    `tools/robots_check.py` checks it). Whether it has an official API.
-  - **Record every board looked at** in `profile/search.py` `PORTAL_RESEARCH` (Step 3), built
-    or not, with the reason and the source. A round that misses its yield target names the
-    ones with no portal, so the research keeps paying after setup.
-<!-- /section -->
-<!-- section: boards -->
-- **Employer boards.** For each target employer, which hiring system it posts on and its
-  board token: any system openroles reads (Greenhouse, Lever, Ashby, Workday, Workable,
-  Teamtailor, Personio, Recruitee, Rippling, JazzHR, Gem, Polymer, Manatal, Homerun,
-  ClearCompany). `python3 tools/ats_boards.py --find "<Employer>"` (or its careers page URL)
-  finds most of them: it tries the board names an employer is likely to use on every system
-  a name can find, and reads the careers page for the board it links to. A board it only
-  guessed from the name is labelled so, with its size and a few of its roles: another
-  organisation often took the name first (a three-role board under a big employer's short
-  name is rarely theirs), so
-  a guess goes in only once the employer's own careers page links to it. An employer on a
-  system none of those covers (iCIMS, Eightfold and others) often still publishes each job
-  page for search engines: `--add careersite <careers site address>` reads it that way where
-  its robots.txt allows, and says so when it does not. Probe them the way
-  `tools/ats_boards.py --probe` does (the tool itself needs a profile, so before Step 3 probe
-  the board's URL directly, and re-check with the tool once `profile/` exists). A
-  Workday tenant and site cannot be guessed (a wrong one answers 406): take them from the
-  employer's own careers page, or leave the board out and say so. These
-  go in `profile/boards.py` and are how large employers that portals under-index reach a round.
-<!-- /section -->
-<!-- section: market -->
-- **Eligibility.** The wording postings in their country use for citizenship, permanent
-  residence, security clearance and sponsorship, and what their status does and does not
-  clear. This is what the eligibility gate in `profile/search.py` matches, so get the
-  phrasing from real postings.
-<!-- /section -->
-<!-- section: market -->
-- **Pay.** Salary norms for their role, level and city, from sources you can cite: the
-  walk-away floor, the target and the top of the band, in the local currency.
-<!-- /section -->
-<!-- section: documents -->
-- **Documents.** Local conventions: resume or CV, photo or not, paper size, spelling variant,
-  date format, how a letter is signed off. The renderer fits the resume to one page; where
-  the market expects two, tell the person and record it in `profile/CLAUDE.md`.
-<!-- /section -->
-<!-- section: market -->
-- **Places.** The names their area goes by in postings (the metro area, the towns around it,
-  the region), the places worth a flag rather than a fail, and what counts as too far. What a
-  round searches follows from it: `SCRAPE_LOCATIONS` is the home city first, the towns of the
-  metro area a posting may name instead, and the country itself last, so a board that matches
-  places exactly still returns the towns nobody listed and the location gate keeps the
-  commutable ones. `SCRAPE_REMOTE_LOCATIONS` is where remote roles open to them are filed: their
-  country, and, where they can work remotely for an employer abroad, the wider regions such
-  employers post under (a continent, EMEA, worldwide), which the location gate passes.
-<!-- /section -->
-<!-- section: market -->
-- **Languages.** Which languages postings in their market tend to require, for the language
-  gate.
-<!-- /section -->
-<!-- section: search -->
-- **Search terms.** The titles their target work is posted under, including the ones they
-  did not think of, and the queries `/scrape` should run.
-<!-- /section -->
+**`--section <name>`** (`history`, `search`, `market`, `voice`, `documents`, `boards`), run by
+the person or by `/upgrade` in the background: do that section of `setup-sections.md` alone,
+on the existing profile. Run from `/upgrade`, ask nothing: what the profile cannot answer is
+written `[CONFIRM: ...]`, which a later session asks. A redo adds what the current method adds
+and keeps every value already there: where it shows a value is wrong, the better one goes
+beside it as `[CONFIRM: ...]`, never swapped in silently, and nothing is switched off or
+narrowed. A setting `python3 tools/learned.py locked` lists is the person's own and is never
+changed: record `learned.py offer` for it instead. Then
+`python3 tools/build_versions.py record <section>`.
 
 ---
 
-## Step 3: Write the profile
+## Step 1: First message: start everything, ask two things (in the chat only with no page)
 
-`profile.example/` is a complete fictional person, and the shape every profile takes. For
-each file in it, write the person's own version at the same name under `profile/`. Read the
-example file first: its docstring and comments say what it holds and which tool reads it.
-Keep every name the tools read (constants, keys, headings); change only the content.
-The example sets only what it needs, so run `python3 tools/profile_names.py` for every name
-the tools read from each module, which ones they cannot do without, and the file and line
-that reads each: read that line for what a name means and what shape it takes before
-setting it, and set the ones their market needs that the example leaves out.
+In the background, at once, none waiting on another (Bash with `run_in_background`):
 
-<!-- section: documents -->
-### 1. Write `profile/person.json`
-Identity (name, pronouns, file prefix, contact line, LinkedIn) and documents (noun, banned
-nouns, spelling, paper, date format, headings, sign-off), from Steps 1 and 2. The letter is
-printed on the resume's paper unless `documents.letter_paper` says otherwise. Also, from their
-market and level: `resume_pages` (1 unless their market or a long career expects 2),
-`section_order` (a recent graduate often leads with education), and, for a letter in
-another language, `salutation_prefix` and `page_label`. Then record where they said they
-will mostly work, from Step 0: `python3 tools/place.py record computer|phone|both`.
-<!-- /section -->
+- **Land the day's sync**: the first sync in a new copy brings the app in, and the local
+  check is slow until that is on master (RUNBOOK.md, "Landing on master"). Open its pull
+  request, run `./tools/ci_local.sh --quick`, and merge it, all in the background.
+- **The tools**: in a cloud chat `./tools/setup_env.sh`; on their computer
+  `python3 tools/env_check.py --fix`. Nothing is asked of them for either.
+- **Job sites**: in a cloud chat, `python3 tools/env_check.py --say` prints the words to pass
+  on, word for word, when this chat cannot reach job sites. It reaches the running chat
+  within about a minute; setup carries on meanwhile, and only the search waits for it.
 
-<!-- section: history -->
-### 2. Write `profile/01-candidate-profile.md`
-The source of truth for every fact about them. Everything Step 1 established, with the detail
-that will not fit on one page kept under each role's "Additional detail available for
-tailoring". Each role's heading is `### Title - Employer (dates), City`, the dash
-separating title from employer, because the tools read the roles off those headings. Anything
-not yet confirmed is written `[CONFIRM: ...]`, never guessed. Every one left is asked again,
-a few at a time at the end of later sessions, until it is answered (the `unconfirmed-facts`
-profile upgrade): nobody has to remember them.
-<!-- /section -->
+With a page, say only the line `app.py start` printed; the page asks these two. Without one
+(a chat that cannot publish a page), ask them here instead.
+Then say, in about these words and nothing more:
 
-<!-- section: history -->
-### 3. Write `profile/02-behavioral-profile.md`
-How they work, from an assessment if they have one, or from their answers and references.
-Inferred lines are labelled as inferred.
-<!-- /section -->
+> Let's set up your job search. Two things to start:
+> 1. Your resume: attach it (PDF or Word) or paste it.
+>    No resume? Say "build one with me" and I'll make it with you.
+> 2. The work you want next, and where you'd like to work.
+>
+> I'll do the research and the rest.
 
-<!-- section: market -->
-### 4. Write `profile/04-job-evaluation.md`
-Start from the app's template (`.claude/skills/job-application-assistant/04-job-evaluation.md`)
-and fill every `[PLACEHOLDER: ...]`: their gates, match areas, salary table and preferences.
-This is the copy scoring reads.
-<!-- /section -->
-
-<!-- section: history -->
-### 5. Write `profile/07-interview-prep.md`
-Three or four STAR examples from their real achievements, in their words, plus answers to the
-hard questions their history invites. Stubs marked `[CONFIRM]` where details are missing.
-Every story ends on a `Use for:` line naming, in quotes, the interview questions it answers
-("Tell me about a model you built", "How do you handle conflicting numbers"): it is how
-`tools/interview_pack.py` matches a story to a likely question, and a story without one is
-reached by no question. Each hard answer sits under the question as its heading, in quotes,
-with the answer as a `>` quote below it. An answer that argues against a kind of employer
-("depth rather than rotating clients", "product companies rather than more consulting") ends
-on a `Not for:` line naming it, so a pack never hands it over for that employer. The answer
-about a permit or visa follows the disclosure rule they give: when they say only that they
-are entitled to work, the answer is for when they are asked directly, and is never
-volunteered. `profile.example/07-interview-prep.md` shows the shape.
-<!-- /section -->
-
-<!-- section: search -->
-### 6. Write `profile/search-queries.md`
-The queries `/scrape` runs: role titles in priority order (their main direction, their domain,
-adjacent roles, a wider net), their key skills as search terms, and the location tiers.
-<!-- /section -->
-
-<!-- section: voice -->
-### 7. Write `profile/CLAUDE.md`
-The summary the root CLAUDE.md imports: identity, history in brief, skills, target sectors,
-deal-breakers, and any rule that is theirs rather than the app's (how they want to come
-across, what must never be said, confidentiality). Include 2-3 **profile statement templates**,
-one per main role type they want, built from their own strongest evidence: `/apply` drafts the
-resume summary from these, never from the example person's in `05-cv-templates.md`. Then "This search's automation": none yet.
-<!-- /section -->
-
-<!-- section: search -->
-### 8. Write the rest of `profile/`
-`roles.py` (chronology, titles, education, certifications), `bullets.py` (every achievement
-as a themed bullet, more than any one page needs), `skills.py` (what they hold, what they do
-not, and the honest bridges between, with `FAMILIES` for the tools their field treats as
-interchangeable that `tools/bridges.py` FAMILIES does not already list), `search.py` (pay, gates, locations, titles, what the
-scrape searches), `employers.py`, `boards.py`, `networking.py` (their voice: opener, a line
-about them, the ask, their home city and timezone, and `LINKEDIN_PLAN`, "free" or
-"premium", from their answer; on a free account the whole connection note is 200
-characters, so the opener, the line about them and the ask together stay near 120; and
-`PROFILE_READS`, "browser" or "paste", from their answer to whether Claude may read the
-LinkedIn profiles of the best few people a run finds, in their own signed-in browser, said
-plainly: finding people never needs it (search results and their own connections make the
-list in any chat); LinkedIn's terms forbid automated access, and automating a site can break
-its terms, so the risk is to their account; it reads only the people a run will write to,
-one page at a time, stops at LinkedIn's first sign, and clicks nothing; the app reads and drafts and they act; and the
-alternative is pasting the one or two profiles that matter most),
-`claims.py`, `screening.py` (standard form
-answers, sponsorship answered exactly as their status allows), `10-triage-blockers.md`,
-`12-scoring-brief.md`, `13-positioning.md` and `routines.json` (no routines yet).
-
-Settings the example's values would get wrong for anybody outside its field, level or
-market, so write each one for this person, never copy it:
-<!-- /section -->
-
-<!-- section: documents -->
-- **The Skills headings**, `LABELS` in `skills.py`: one `(line, heading)` per line, in their
-  own words for their work (a nurse's are not a data analyst's). Each `line` is a category
-  used in `ITEMS` (or a `MERGE` target), and the items in that category print under it. A
-  resume will not render without them.
-<!-- /section -->
-<!-- section: search -->
-- **The scoring vocabulary**, every `FIT_*` and `OPP_*` name in `search.py` (`FIT_BANDS`,
-  `FIT_CORE`, `FIT_DOMAIN`, `FIT_ROLE_SHAPE`, `OPP_CORE`, `OPP_TITLE_FAMILY` and the rest):
-  the example's are a mid-career analyst's, and copied they mis-rank anyone else. Write them
-  from the person's field and level, then score two or three invented postings (a clear
-  match, a role above them, a different field) and check the order is right.
-<!-- /section -->
-<!-- section: voice -->
-- **Their outreach words**, `voice.py` (`OUTREACH_ASKS`, `OUTREACH_OPENING`): optional; the
-  defaults use their `documents.noun`.
-<!-- /section -->
-<!-- section: search -->
-- **The screen's job-family flags**, `SCREEN_WRONG_FAMILY` and `SCREEN_HOMONYMS` in
-  `search.py`: the job families that are not theirs, and the words that name two different
-  jobs in their field (the example's are an analyst's: "modelling" that means valuation).
-  Optional; unset, nothing is flagged on them. Flags order the queue and never cut.
-<!-- /section -->
-<!-- section: search -->
-- **Their level**, `FIT_BELOW_LEVEL`, `OPP_BELOW_LEVEL` and `OPP_ABOVE_LEVEL` in `search.py`:
-  the titles below and above them, which are ranked down, never cut. For someone early in
-  their career "junior" and "graduate" are the target, so leave them out of the below-level
-  patterns.
-<!-- /section -->
-<!-- section: history -->
-- **Their themes**: a bullet's themes come from `tools/allocate.py` `THEME_CUES`, which is a
-  data analyst's list. Add the themes their work needs, with the words postings use for each,
-  as `THEME_CUES` in `bullets.py`; `python3 tools/allocate.py` names any theme no cue matches.
-<!-- /section -->
-<!-- section: search -->
-- **`YEARS_HELD`** in `search.py`: their years in the work they are applying for. Every
-  experience threshold is measured from it.
-<!-- /section -->
-<!-- section: market -->
-- **Their working week and contract preference**, in `search.py`: `WEEKEND` where it is not
-  Saturday and Sunday, `OPP_CONTRACT = None` for someone who wants contract, locum, supply or
-  seasonal work, and `MANAGES_PEOPLE = True` for someone who has had direct reports.
-<!-- /section -->
-<!-- section: market -->
-- **`CANARY_QUERY`** in `search.py` where "data" is not a word every board in their market
-  has thousands of postings for (another language, or a field where it is rare).
-<!-- /section -->
-<!-- section: voice -->
-- **Who they network with**, in `networking.py`: `TITLE_SETS` (the job titles of the people
-  to find: hiring authority, senior peers, their own function, recruiters), `FUNCTION_TITLE`
-  (a title on a team in their function), `HIRING_ROLE_NOUNS` (what a hiring post in their
-  field calls the role), and for reading replies `OTHER_FUNCTIONS` and `OWN_FUNCTION_WORDS`.
-  `/network` will not search without `TITLE_SETS`; the example's are a data team's.
-  `OPENALEX = True` only where the people worth meeting in their field publish papers
-  (research science, pharma, academia, quantitative finance); leave it off otherwise.
-  `NOT_HIRING_REASON` says in their terms why revenue titles are skipped, and
-  `SPAM_BULK_ROLES` is the role list that marks a staffing harvest: drop their own job from
-  it if it is there (a nurse, a technician).
-- **Where their people are named**, in `networking.py` `PEOPLE_SOURCES`: research it, never
-  ask it. From their field, level and country, pick the 6 to 12 kinds in
-  `tools/network/sources.py` `KINDS` that name the people they should meet, best first, each
-  as `(kind, why it pays for them)` or `(kind, why, the exact search)` where their field has
-  its own place: the professional body whose branch committees name people, the country's
-  official staff directory for a public-sector search, the firm directories of their city
-  for a lawyer, the repositories for an engineer, the graduate recruiters for a student.
-  Search for each to check it names real people at employers like theirs before it goes in,
-  and cite what you found in a comment. `python3 tools/network/sources.py` prints the
-  result. A graduate's plan leads with alumni, school features and early-careers recruiters;
-  a senior person's with team pages, press and rosters; anyone's with their own connections.
-- **Their connections**: ask once, plainly, whether they will download their LinkedIn
-  connections (the `connections-export` upgrade's question), so every run starts from
-  people they know. Take what they attach with `python3 tools/network/sources.py
-  import-connections <it>`: the whole download (the ZIP or its folder) is saved and its
-  message history imported in one step, never read straight from where they downloaded it.
-  Or write `CONNECTIONS_EXPORT = "declined"`.
-<!-- /section -->
-
-<!-- section: boards -->
-### 9. Build their job boards
-Run `/add-portal` for the board from Step 2 that adds the most coverage for them, and for
-the next if it is quick. A portal already built for them is brought up to the current
-`/add-portal` too (its frontmatter, the contract, a live test), so a better way of building
-boards reaches the ones they have. Each one is verified live before it counts (its Step 4), and from
-then on every round searches it at every place in `SCRAPE_LOCATIONS`, and for remote roles
-where the board can filter for them, with nothing else to wire. Write `PORTAL_LOCATIONS` only
-where the board cannot read those names, and mark each built board
-`"status": "built"` in `PORTAL_RESEARCH`. Boards not built yet keep an entry saying why
-(lower coverage, a login wall, robots.txt, blocked by this session's network policy), and
-are offered again when a round comes back thin. `python3 tools/portals.py` shows the result:
-what the next round searches, and what was researched and not built.
-
-Never ask for their email or to connect Gmail: the job round and the brief are their alerts,
-inside Claude.
-<!-- /section -->
-
-<!-- section: none -->
-### 10. Write the state files
-At the repo root, each with the header row from its counterpart in `profile.example/state/`
-and nothing else: `job_search_tracker.csv`, `network_contacts.csv`, `network_threads.csv`.
-And `job_scraper/seen_jobs.json` as `{"seen": {}}` and `job_scraper/do_not_target.json` as
-`{"companies": {}}`.
-<!-- /section -->
+When job sites are blocked, the `--say` words go underneath, with "I'll keep setting you up
+meanwhile."
 
 ---
 
-## Step 4: Commit, prove it works, then push
+## Step 2: On their reply: the first profile, the research, four questions
 
-- `python3 tools/build_versions.py record --setup`: this profile was written by today's
-  version of every section.
-- Commit `profile/`, any portal built in Step 3.9 (`.agents/skills/<name>/`, a plain
-  `git add`: it is theirs) and the state files. The tracker and the seen-jobs file are ignored by
-  `.gitignore` on purpose; force-add them as the root CLAUDE.md's persistence rule says, and
-  never edit `.gitignore`. Commit first: the leak scan in the next step reads the commit.
-- `python3 tools/profile_upgrades.py` says none pending: a fresh setup leaves every trace
-  the upgrades look for. Anything it lists is a step of this setup that was skipped.
-- `./tools/ci_local.sh --quick`. The app's suite runs on the example person and must pass;
-  the leak scan builds the app from this commit and checks none of the person's data is in
-  an app-owned file. A failure that names an app-owned file is the app's to fix: report it,
-  never edit the file here.
-- Render one resume and cover letter for a real posting they care about (`/apply`), read
-  both PDFs back, and show them. This is where a wrong spelling setting, an awkward summary
-  or a missing date comes to light, and the time to fix it is now. Commit again, then push.
+1. **Read what they sent** (setup-sections.md, `history`): every role, date, title, employer,
+   place, result, skill, language, certification (held or in progress) and contact detail. A
+   disagreement between documents is written `[CONFIRM: ...]`, never asked now. **"Build one
+   with me"** (or no resume, in any words) is the guided history in the same section: the
+   fastest source first, then one job a message from `python3 tools/history_interview.py ask`,
+   passed on as it prints. The research below starts from their first reply, not the last.
+2. **Write the first profile** at once, enough for the tools to run: `profile/person.json`
+   (identity; documents from their country's defaults until research says otherwise),
+   `01-candidate-profile.md` from the resume, and the place and work they named. Then
+   `python3 tools/place.py started` (so any other chat sees a setup under way) and
+   `python3 tools/place.py auto` (it records where they work when this chat can tell, and
+   otherwise hands you one question for the end), commit, push, and **land it on master
+   now** (RUNBOOK.md, "Landing on master"), so a chat they open on their computer finds it
+   and waits rather than starting again. Push after every step from here on, and land each:
+   a dropped chat must never lose their answers.
+3. **Read the market tables, then research only what they lack**, as soon as their country
+   and field are known: `python3 tools/markets.py brief <country> --field <field> --level
+   <graduate|mid|senior|executive> --region <state or province> --city <city> --employers
+   <how many they named>` (leave out what you do not know yet). The app ships these tables
+   for many countries, fields and levels: national, field, graduate, executive, regional
+   and remote boards with what each board's own rules for automated readers allow
+   (checked by code, with the date), eligibility wording, document conventions, where pay
+   is published, the big metros' place names, a field's titles and interchangeable tools,
+   every fact with its page and the day it was read. Write what it prints into `profile/`, keeping each source (setup-sections.md
+   says where each part goes), and keep its last block, **Still to research**. Then
+   **one** background agent (sonnet, no worktree) for those lines and nothing else, one
+   scratch file per topic, `$SCRATCH/research/<topic>.md`, every claim with its source,
+   following each topic's section of setup-sections.md: usually pay for their role, level
+   and city (`market`), the towns around their city (`market`), anything about their field
+   the tables do not hold (`boards`, `documents`), and where the people they should meet are
+   named, `PEOPLE_SOURCES` (`voice`), which no table holds. With no table for their country,
+   the brief says so and the agent covers every topic. One agent, never one per topic: each
+   agent pays the app's whole instructions on every step it takes. Each target employer's
+   hiring system is code, not an agent: `python3 tools/ats_boards.py --find "<Employer>"`,
+   one per employer, all at once with Bash in the background (`boards`; it works before the
+   profile is finished). The agent cannot ask the person anything: what needs their yes
+   comes back to you. A board from a table is a lead like any other: it is searched only
+   once `/add-portal` has built it, and that checks the board's rules again first.
+4. **Ask four things, once**, with your own proposals filled in (on the page when there is
+   one: `app.py propose` gives it your roles, and the answers come back in
+   `profile/setup_answers.json`; in the chat only without one):
 
-Then tell them, in a few lines:
+> Thanks. Four quick ones, then I'll get on with it:
+> 1. Can you work in <country> without an employer sponsoring you, now and later?
+> 2. What do you earn now, and what's the least you'd move for?
+> 3. I'd search for <role A>, <role B> and <role C>. Right, or what would you change?
+> 4. Any employers or kinds of work to avoid? And should your current employer not find out?
+
+Skip any the resume already answered. Never ask them to name a job board, a hiring system, a
+spelling, a pay source or any setting: those are yours.
+
+---
+
+## Step 3: Write the profile, while the research runs
+
+Every file in `profile.example/`, written for them, each by its section of setup-sections.md;
+`python3 tools/profile_names.py` lists every name the tools read and which they cannot do
+without. The market tables' facts go in first, then each research file as it arrives, both
+cited. Where they were not asked, use the default and never a question:
+
+| Not asked | Written |
+|---|---|
+| Commute, remote, hybrid, on-site | Their metro area, and all three welcome |
+| Tone | Plain and confident; their reactions correct it (`learned.py`) |
+| Confidential | Yes when they are employed, unless they said otherwise |
+| Notice period, achievements the resume gave no number for | `[CONFIRM: ...]`, asked in later sessions |
+| Reading LinkedIn profiles | `PROFILE_READS = "browser"` where `place.py auto` prints it (a chat on their computer, or a cloud chat the desktop app started), written without asking; on a phone or the web, unset, so a paste |
+| LinkedIn Premium | Unset: notes keep to a free account's limits; asked later |
+| Their LinkedIn download | On a computer, requested at once by the networking skill's "On a new computer" step; on a phone or the web, asked later, by the brief |
+
+Then the state files (setup-sections.md, the last section), and commit and push.
+
+---
+
+## Step 4: The first round is the proof
+
+- **Start it the moment the search can run**: `person.json`, `search.py`, `roles.py`,
+  `employers.py` and `boards.py` (an empty map is fine) written and pushed:
+  `python3 tools/run_round.py --out rounds/r1` in the background, with about 70 minutes'
+  timeout. It does not wait for a board being built; it searches what is there.
+- **While it runs**: build the board that adds the most with `/add-portal` in the background
+  (one whose own rules disallow it is built only on their yes while they are here, asked with
+  the shortlist; setup-sections.md, `boards`); finish the remaining files;
+  `python3 tools/build_versions.py record --setup`; `python3 tools/profile_upgrades.py`
+  (only the questions for later may stay pending: anything else it lists is a step skipped
+  here); `./tools/ci_local.sh --quick` (a failure naming an app-owned file is the app's:
+  never edit it here). Commit and land it.
+- **Their resume, if they had none**: `python3 tools/stage_picks.py general "$SCRATCH/general"`
+  once the profile is written, while the round runs. It drafts, renders, checks and keeps a
+  one-page resume for the roles they search for, with no letter; send it with the shortlist
+  (CLAUDE.md, "Every output is shown") and paste the short copy it prints beside it. Someone
+  whose resume is more than a year out of date is offered it once, in one line with the
+  shortlist: "Want a fresh one-page resume from your profile too? Say "build my resume"."
+- **When it finishes**, show the shortlist the way the job-scraper skill's Step 5 says,
+  then offer to write the top pick. That is the test application: everything in `/apply`
+  applies, the already-applied question first. A round that misses its target (exit 2) says so
+  with its counts and what was tried, and says the boards still being built go into the next.
+
+---
+
+## Step 5: The brief, and the end
+
+- **The brief, set up with no questions.** List their scheduled tasks (`list_triggers`, every
+  page) and run `python3 tools/routines.py brief --triggers <each page>`. A brief that exists,
+  under any name, is attached to and never made twice. In a cloud chat, with none, it prints
+  the calls to make, in order (`create_session` on their copy, `create_trigger` bound to it,
+  and a one-off first brief: never `fire_trigger`), then `routines.py record`; make them, and
+  tell them its one line. On a computer it says what to do (automation/README.md, "For Claude: the rules of setting it up").
+- **Where they will work**: if `place.py auto` handed you its question, ask it now, record the
+  answer (`python3 tools/place.py record computer|phone|both`), and pass on the one line
+  `python3 tools/place.py next` prints.
+- **Finished**: `python3 tools/place.py finished`, commit, and land it; with a page, bring its
+  data up to date (`python3 tools/app.py view`, the `app` skill), so it shows the shortlist
+  and the brief. Then `python3 tools/app.py start` once more: setup being over, it hands the
+  page to a small helper chat of its own, so a tap on the page never wakes this long one. In a chat on their computer, go straight on to the networking skill's "On a
+  new computer" step.
+- **Then, in a few lines:**
 
 > **You're set up.** Everything about you stays in your private copy.
 >
-> - Say **"find me jobs"** for a scored shortlist. It searches <the job sites that are on,
->   by name>, and the careers pages of <the employers in `boards.py`>.
-> - Paste a posting, or its link, for a tailored resume and cover letter.
+> - Say **"find me jobs"** for a new shortlist. It searches <the job sites that are on, by
+>   name> and the careers pages of <the employers in `boards.py`>.
+> - Paste a posting, or its link, for a resume and cover letter written for it.
 > - Say **"who should I talk to at <employer>?"** to find people worth contacting.
-> - Updates to the app arrive by themselves.
+>
+> Want a quick tour of everything else? Say **"show me around"**.
 
-Then the brief, the other half of the two chats `place.py` recommends: one line saying what
-it is (twice a week, what they owe and what changed, arriving even when their computer is
-off) and asking whether to set it up now. On a yes, run "Set up my brief" (CLAUDE.md,
-Automation) in this chat, straight away; on a no, one line, "Say 'set up my brief' any
-time." Never a file, a command or a setting name in either.
+When they say "show me around", or ask what the app can do or how to use something, run
+`python3 tools/tips.py tour` (or `tour <topic>`) and pass on what it prints, as it is.
+
+Nothing more about LinkedIn: no notice, no warning and no question. The job search uses no LinkedIn account.
+Claude never switches it off and never suggests it (setup-sections.md, `boards`). Signing in to LinkedIn, on a computer, is the reading step's own, when it needs it
+(the networking skill).
 
 ---
 
 ## Design principles
 
 - The person answers questions about themselves. Claude does the market research and writes
-  every file.
+  every file, and never asks what a default or the research can answer.
 - Nothing personal is written until the repo is known to be private. The app and any public
   repo are refused.
 - `profile/` and the state files are the only things written. App-owned files are never
   edited; a person's rules go in `profile/CLAUDE.md`.
 - Never invent a fact. Unconfirmed is `[CONFIRM: ...]`, and every researched setting cites
   where it came from.
+- Nothing waits that need not: research, installs, board builds, checks and the first round
+  run in the background, and every step is pushed as it finishes.
 - Re-runnable: with a profile present it updates the part asked for and leaves the rest alone.

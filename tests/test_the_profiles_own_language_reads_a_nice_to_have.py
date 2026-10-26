@@ -106,7 +106,7 @@ def test_a_profile_that_hard_fails_french_reads_a_nice_to_have(french):
     required = [b.format(L="French") for b in REQUIRED]
     out = subprocess.run([sys.executable, "-c", ASK, json.dumps(nice + required)],
                          env={**os.environ, "LJS_PROFILE": str(french)},
-                         capture_output=True, text=True, cwd=ROOT)
+                         capture_output=True, text=True, encoding="utf-8", errors="replace", cwd=ROOT)
     assert out.returncode == 0, out.stderr
     cuts = json.loads(out.stdout)
     for body in nice:

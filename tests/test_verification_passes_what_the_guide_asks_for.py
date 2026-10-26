@@ -246,7 +246,7 @@ def test_a_shortlist_row_with_no_abbr_is_named(tmp_path):
     drafts.write_text(json.dumps([_letter() | {"abbr": "Wrenfield", "summary": "", "tools": ""}]))
     apps_in.write_text(json.dumps([{"company": "Wrenfield Freight Ltd", "title": "Analyst"}]))
     p = subprocess.run([sys.executable, os.path.join(ROOT, "tools", "outreach.py"),
-                        str(drafts), str(apps_in)], capture_output=True, text=True)
+                        str(drafts), str(apps_in)], capture_output=True, text=True, encoding="utf-8", errors="replace")
     assert p.returncode != 0
     assert "has no abbr" in p.stderr and "Traceback" not in p.stderr
 

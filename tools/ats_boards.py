@@ -63,6 +63,7 @@ from __future__ import annotations
 
 import argparse
 import datetime as dt
+import html
 import json
 import os
 import re
@@ -77,7 +78,21 @@ from openroles import BoardError  # noqa: E402
 from openroles.models import systems as _systems  # noqa: E402
 from openroles.providers import READERS  # noqa: E402
 from openroles.providers import workday as _wd  # noqa: E402
-from prefilter import location_verdict, title_verdict  # noqa: E402
+try:
+    from prefilter import location_verdict, title_verdict  # noqa: E402
+    NO_PROFILE = False
+except person.NoProfile:
+    # /setup looks for each target employer's board (`--find`) while the profile is still
+    # being written, in parallel with the rest. With no profile there are no places or
+    # titles to judge against: every role counts, and --find says none was judged. It
+    # crashed with a NoProfile traceback before (2026-10-25).
+    NO_PROFILE = True
+
+    def location_verdict(location, title=""):  # noqa: D103
+        return ("PASS", "no profile yet")
+
+    def title_verdict(title):  # noqa: D103
+        return ("PASS", "no profile yet")
 
 UA = "last-job-search/1.0 (personal job search; contact via GitHub)"
 # Checked for every agent a rule could be written for: everyone, the token
@@ -86,6 +101,47 @@ UA = "last-job-search/1.0 (personal job search; contact via GitHub)"
 # refusal names the rule that was actually written.
 ROBOTS_AGENTS = ("*", "Claude-User", "last-job-search")
 openroles.configure(user_agent=UA, robots_agents=ROBOTS_AGENTS)
+
+# ------------------------------------------------------------ what no reader sees
+#
+# openroles leaves out of a board's text what a browser never shows (a hidden element, a
+# comment, a script) since 0.4.0, so the words come from its rule alone. What it took out
+# is still worth saying: a posting that hides text from its readers may be talking to a
+# machine, and the shortlist warns about it (row["posting_guard"], tools/hydrate.py's
+# words). So the converter each reader calls is wrapped to note what hydrate finds hidden
+# in the markup, and nothing else: openroles is never edited here, and each reader looks
+# the converter up by name when it runs.
+import openroles.models as _or_models  # noqa: E402
+import hydrate as _hydrate  # noqa: E402
+
+_TO_TEXT = _or_models.html_to_text
+
+
+class _Cleaned(str):
+    """A board's text that had something hidden taken out of its markup, and what."""
+    found: dict = {}
+
+
+def shown_text(content) -> str:
+    """openroles' text of a board's HTML, noting what was hidden in it."""
+    s = content if isinstance(content, str) else ""
+    for _ in range(3):                     # as html_to_text reads it: some boards encode twice
+        un = html.unescape(s)
+        if un == s:
+            break
+        s = un
+    found = _hydrate.strip_hidden(s)[1] if "<" in s else {}
+    if not found:
+        return _TO_TEXT(content)
+    text = _Cleaned(_TO_TEXT(content))
+    text.found = found
+    return text
+
+
+for _name, _mod in list(sys.modules.items()):
+    if ((_name == "openroles.models" or _name.startswith("openroles.providers."))
+            and getattr(_mod, "html_to_text", None) is _TO_TEXT):
+        _mod.html_to_text = shown_text
 
 # The map is the person's: profile/boards.py names the employers, the token
 # each one's careers page reads, and the boards checked and refused. Every
@@ -199,6 +255,8 @@ def _wanted(location: str) -> bool:
     loc = (location or "").strip()
     if not loc:
         return False
+    if NO_PROFILE:                 # no places to judge against yet: every role counts
+        return True
     return bool(PLACES.search(loc) or _METRO_RX.search(loc)
                 or _places.HOME_COUNTRY_RX.search(loc.lower()) or BARE_REMOTE.match(loc))
 
@@ -278,7 +336,7 @@ def _desc(job) -> str | None:
 
 
 def _row(employer: str, job, location: str, desc: str | None) -> dict:
-    return {
+    row = {
         "id": job.id,
         "title": job.title,
         "company": employer,
@@ -289,6 +347,10 @@ def _row(employer: str, job, location: str, desc: str | None) -> dict:
         "desc": desc,
         "deadline": job.deadline or None,
     }
+    found = getattr(job.description, "found", None)
+    if found and desc:
+        row["posting_guard"] = _hydrate.said(found)
+    return row
 
 
 def _labels(job) -> list[str]:
@@ -297,8 +359,9 @@ def _labels(job) -> list[str]:
 
 def _worth(job) -> bool:
     """Is a posting's body worth a request: a title prefilter's gate passes, in a place
-    its gate does not fail. The free gates, asked before anything is spent."""
-    if title_verdict(job.title)[0] == "FAIL":
+    its gate does not fail. The free gates, asked before anything is spent. With no
+    profile yet nothing can be judged, so no body is worth a request."""
+    if NO_PROFILE or title_verdict(job.title)[0] == "FAIL":
         return False
     location, verdict = _choose(_labels(job), job.title, job.workplace == "remote")
     return bool(location) and verdict != "FAIL"
@@ -343,6 +406,19 @@ def _read(kind: str):
 
 # ---------------------------------------------------------------- careersite
 
+def _queries():
+    """The round's title variants (scrape_wide.QUERIES), or None with no profile yet.
+
+    scrape_wide reads the profile when it is imported, so --find for a Workday board or a
+    careers site crashed with no profile, the case NO_PROFILE above exists for. With no
+    titles to search by, a board is read whole and a careers site's pages are not
+    narrowed."""
+    if NO_PROFILE:
+        return None
+    from scrape_wide import QUERIES
+    return QUERIES
+
+
 # Job pages read from one careers site a round. Each is a request at the pace the site's
 # robots.txt asks, so a site that asks for ten seconds costs a few minutes at this cap,
 # and the next round moves on to the pages this one did not reach.
@@ -355,7 +431,7 @@ def careersite(employer: str, token: str, queries=None,
     engines. Pages whose address names a job none of the title variants asks for are not
     read, nor pages the search has already ruled out (`skip`, given the page's URL)."""
     if queries is None:
-        from scrape_wide import QUERIES as queries
+        queries = _queries()
     report: dict = {}
     ruled: list[str] = []
 
@@ -442,10 +518,12 @@ def workday(employer: str, token: str, queries=None,
     if not workday_board(token):
         return [], f"not a Workday token (want tenant.wdN/Site): {token!r}"
     if queries is None:
-        from scrape_wide import QUERIES as queries
+        queries = _queries()
     asked: set = set()
 
     def worth(job) -> bool:
+        if NO_PROFILE:              # nothing can be judged, so no body is worth a request
+            return False
         title_ok = title_verdict(job.title)[0] != "FAIL"
         if _wd.more_places(job):
             ok = title_ok
@@ -472,7 +550,7 @@ def workday(employer: str, token: str, queries=None,
             location, _ = _choose(_labels(job), job.title, job.workplace == "remote")
             if location:
                 rows.append(_row(employer, job, location, _desc(job)))
-        elif not _wd.more_places(job):
+        elif NO_PROFILE or not _wd.more_places(job):
             location, _ = _choose([job.location], job.title, job.workplace == "remote")
             if location:
                 rows.append(_row(employer, job, location, None))
@@ -654,7 +732,9 @@ def _find_lines(target: str, found: list[dict]) -> list[str]:
     and for a guess the evidence to check it against, with the entry held back."""
     lines = []
     for b in found:
-        head = f"{b['kind']}/{b['token']}: {b['open']} open, {b['in_range']} in range"
+        head = (f"{b['kind']}/{b['token']}: {b['open']} open"
+                + (" (no profile yet, so none judged in range)" if NO_PROFILE
+                   else f", {b['in_range']} in range"))
         lines.append(head + (f" [{b['why']}]" if b["why"] else ""))
         entry = f'"<Employer>": ("{b["kind"]}", "{b["token"]}"),'
         if b["how"] != "guessed":
@@ -744,7 +824,7 @@ def main() -> int:
     for employer, why in sorted(notes.items()):
         print(f"  partial: {employer}: {why}")
     if a.out:
-        with open(a.out, "w", encoding="utf-8") as fh:
+        with open(a.out, "w", encoding="utf-8", newline="\n") as fh:
             json.dump(rows, fh, indent=1)
         print(f"  wrote {a.out}")
     return 0

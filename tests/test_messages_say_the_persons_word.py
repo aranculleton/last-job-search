@@ -41,7 +41,8 @@ def test_an_email_attaches_the_persons_document():
 
 def test_a_referral_ask_offers_the_persons_document():
     ask = compose.referral_ask("Wren Halloway", "thanks again for the chat on Tuesday",
-                               "Senior Analyst at Acme", "https://example.com/jobs/1")
+                               "Senior Analyst at Acme", "https://example.com/jobs/1",
+                               thread=[{"direction": "in", "channel": "message", "full_text": "Happy to help."}])
     assert "send my CV" in ask and not RESUME.search(ask)
 
 

@@ -53,7 +53,7 @@ def test_nothing_or_help_never_crashes(cmd, tmp_path):
     env = dict(os.environ, LJS_PROFILE=os.path.join(ROOT, "profile.example"), LJS_STATE=str(tmp_path))
     for args in (["--help"],) if cmd in ACTS_ON_THE_REPO else ([], ["--help"]):
         r = subprocess.run([sys.executable, os.path.join(ROOT, cmd), *args], cwd=str(tmp_path),
-                           capture_output=True, text=True, env=env, timeout=120,
+                           capture_output=True, text=True, encoding="utf-8", errors="replace", env=env, timeout=120,
                            stdin=subprocess.DEVNULL)
         assert "Traceback" not in r.stderr, (cmd, args, r.stderr[-400:])
         if args and cmd.endswith("robots_check.py"):

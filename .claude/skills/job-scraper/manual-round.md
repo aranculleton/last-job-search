@@ -167,7 +167,8 @@ better** than what was already sent there, meaning it scores 10 or more points h
 explicitly and name the earlier application, so the user can decide whether to withdraw or ignore.
 
 **One role per company per run.** Where a run turns up several eligible roles at the same
-employer, score them, then surface only the **highest scorer**. Record the others as
+employer, score them, then surface only the **highest scorer**, by its 0-100 fit, never by
+priority (fit times opportunity), which only breaks a tie. Record the others as
 `status: "skipped"` with the reason `same-employer duplicate: <the surfaced role> scored higher
 this run`. Never present three roles at one company and ask the user to choose; that is the
 choice this step exists to make. If the top two are within 3 points and genuinely different
@@ -462,9 +463,9 @@ a month-old posting look fresh. A round records every posting it surfaces at `st
 "surfaced"` (`tools/throttle.py` `write_back`), with `first_seen` set once and `last_seen` moved
 on each sighting; a posting under a new URL with the same title, employer and city as one seen in
 the last 30 days (`throttle.RELIST_WINDOW`) is that posting relisted and keeps its `first_seen`.
-`tools/prefilter.py` ages a posting by the earlier of its portal date and `first_seen` (and a job
-alert's `alert_date`), and the freshness bonus in `tools/opportunity.py` is given only on a
-portal date and never on an unknown or future one.
+`tools/prefilter.py` ages a posting by the earlier of its portal date and `first_seen`, and the
+freshness bonus in `tools/opportunity.py` is given only on a portal date and never on an unknown
+or future one.
 
 2. Only present jobs NOT already in the seen list or tracker.
 

@@ -15,8 +15,19 @@ import unittest
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 sys.path.insert(0, os.path.join(ROOT, "tools"))
 import fit_to_page as F  # noqa: E402
+import local_path  # noqa: E402
 
 TEXMF = os.path.join(ROOT, "texmf")
+# Git Bash on Windows: a bare "bash" there is WSL's launcher (local_path.bash).
+BASH = local_path.bash()
+
+
+def _link(path):
+    """Where a link points. On Windows os.readlink gives the substitution path, with its
+    \\\\?\\ prefix (https://docs.python.org/3/library/os.html#os.readlink, "Changed in
+    version 3.8"), for the same folder the test made the link to."""
+    got = os.readlink(path)
+    return got[4:] if got.startswith("\\\\?\\") else got
 
 
 class VendoredTree(unittest.TestCase):
@@ -35,7 +46,7 @@ class VendoredTree(unittest.TestCase):
     def test_none_of_it_is_gitignored(self):
         files = [os.path.join(dp, f) for dp, _, fs in os.walk(TEXMF) for f in fs]
         r = subprocess.run(["git", "check-ignore", *files], cwd=ROOT,
-                           capture_output=True, text=True)
+                           capture_output=True, text=True, encoding="utf-8", errors="replace")
         self.assertEqual(r.stdout.strip(), "", "ignored files would vanish on clone")
 
 
@@ -84,10 +95,10 @@ class NothingInTheHomeDirectory(unittest.TestCase):
             os.chmod(path, 0o755)
         env = dict(os.environ, HOME=home, PATH=stubs + os.pathsep + os.environ.get("PATH", ""))
         env.pop("BUN_INSTALL", None)
-        return subprocess.run(["bash", os.path.join(ROOT, "tools", "setup_env.sh")], cwd=ROOT,
-                              env=env, capture_output=True, text=True, timeout=120)
+        return subprocess.run([BASH, os.path.join(ROOT, "tools", "setup_env.sh")], cwd=ROOT,
+                              env=env, capture_output=True, text=True, encoding="utf-8", errors="replace", timeout=120)
 
-    @unittest.skipUnless(shutil.which("bash"), "no bash here")
+    @unittest.skipUnless(BASH, "no bash here")
     def test_setup_env_leaves_a_link_to_another_copy_alone_and_says_what_is_used(self):
         import tempfile
         with tempfile.TemporaryDirectory() as home:
@@ -97,11 +108,11 @@ class NothingInTheHomeDirectory(unittest.TestCase):
                 fh.write("# texmf: the two icon packages moderncv loads\n")
             os.symlink(other, os.path.join(home, "texmf"))
             r = self._setup_env(home)
-            self.assertEqual(os.readlink(os.path.join(home, "texmf")), other, r.stdout)
+            self.assertEqual(_link(os.path.join(home, "texmf")), other, r.stdout)
             self.assertNotIn("re-pointed", r.stdout)
             self.assertIn("TEXMFHOME", r.stdout)
 
-    @unittest.skipUnless(shutil.which("bash"), "no bash here")
+    @unittest.skipUnless(BASH, "no bash here")
     def test_setup_env_creates_nothing_and_keeps_a_dangling_link(self):
         import tempfile
         with tempfile.TemporaryDirectory() as home:
@@ -109,7 +120,7 @@ class NothingInTheHomeDirectory(unittest.TestCase):
             self.assertFalse(os.path.lexists(os.path.join(home, "texmf")), r.stdout)
             os.symlink(os.path.join(home, "moved-away"), os.path.join(home, "texmf"))
             r = self._setup_env(home)
-            self.assertEqual(os.readlink(os.path.join(home, "texmf")),
+            self.assertEqual(_link(os.path.join(home, "texmf")),
                              os.path.join(home, "moved-away"), r.stdout)
 
     def test_no_app_script_links_texmf_into_the_home_directory(self):
@@ -152,7 +163,7 @@ class NothingInTheHomeDirectory(unittest.TestCase):
 class KpathseaFindsIt(unittest.TestCase):
     def test_fontawesome5_resolves_to_the_vendored_copy_or_the_system(self):
         r = subprocess.run(["kpsewhich", "fontawesome5.sty"], env=F.tex_env(),
-                           capture_output=True, text=True)
+                           capture_output=True, text=True, encoding="utf-8", errors="replace")
         self.assertTrue(r.stdout.strip(), "fontawesome5.sty not found with tex_env()")
 
 

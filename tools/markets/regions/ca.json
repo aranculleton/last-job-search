@@ -1,0 +1,154 @@
+{
+  "country": "ca",
+  "regions": {
+    "on": {
+      "name": "Ontario",
+      "aka": [
+        "ON",
+        "Ont."
+      ],
+      "boards": [
+        {
+          "name": "Ontario Public Service Careers",
+          "url": "https://www.gojobs.gov.on.ca",
+          "kind": "regional",
+          "source": "https://www.gojobs.gov.on.ca/",
+          "quote": "Ontario Public Service Careers - Search for Jobs",
+          "checked": "2026-10-25",
+          "verified": true,
+          "search": "https://www.gojobs.gov.on.ca/Jobs.aspx",
+          "paths": {
+            "search": "/Jobs.aspx",
+            "posting": "/Preview.aspx"
+          },
+          "robots": {
+            "checked": "2026-10-25",
+            "why": "",
+            "search": true,
+            "status": "allowed",
+            "posting": true,
+            "crawl_delay": null,
+            "ai_input": null
+          },
+          "public_search": {
+            "checked": "2026-10-25",
+            "status": "open",
+            "http": 200
+          }
+        }
+      ]
+    },
+    "qc": {
+      "name": "Quebec",
+      "aka": [
+        "QC",
+        "Québec"
+      ],
+      "boards": [
+        {
+          "name": "Québec emploi",
+          "url": "https://www.quebecemploi.gouv.qc.ca",
+          "kind": "regional",
+          "source": "https://www.quebecemploi.gouv.qc.ca/",
+          "quote": "Québec emploi La plateforme emploi du Gouvernement du Québec",
+          "checked": "2026-10-25",
+          "verified": true,
+          "search": "https://www.quebecemploi.gouv.qc.ca/plateforme-emploi/",
+          "paths": {
+            "search": "/plateforme-emploi/",
+            "posting": "/plateforme-emploi/"
+          },
+          "robots": {
+            "checked": "2026-10-25",
+            "why": "",
+            "search": true,
+            "status": "allowed",
+            "posting": true,
+            "crawl_delay": null,
+            "ai_input": null
+          },
+          "public_search": {
+            "checked": "2026-10-25",
+            "status": "open",
+            "http": 200
+          }
+        }
+      ]
+    },
+    "bc": {
+      "name": "British Columbia",
+      "aka": [
+        "BC",
+        "B.C."
+      ],
+      "boards": [
+        {
+          "name": "WorkBC Job Board",
+          "url": "https://www.workbc.ca",
+          "kind": "regional",
+          "source": "https://www.workbc.ca/",
+          "quote": "",
+          "checked": "2026-10-25",
+          "verified": false,
+          "why": "the source could not be read: robots.txt could not be read (HTTP 200 but the body is not a robots.txt)",
+          "search": "https://www.workbc.ca/search-and-prepare-job/find-jobs",
+          "paths": {
+            "search": "/search-and-prepare-job/find-jobs",
+            "posting": "/search-and-prepare-job/find-jobs"
+          },
+          "robots": {
+            "checked": "2026-10-25",
+            "why": "robots.txt could not be read (HTTP 200 but the body is not a robots.txt)",
+            "search": null,
+            "status": "unconfirmed",
+            "posting": null,
+            "crawl_delay": null,
+            "ai_input": null
+          },
+          "public_search": {
+            "checked": "2026-10-25",
+            "status": "not_tried",
+            "http": null
+          }
+        }
+      ]
+    },
+    "ab": {
+      "name": "Alberta",
+      "aka": [
+        "AB",
+        "Alta."
+      ],
+      "boards": [
+        {
+          "name": "Alberta Public Service jobs",
+          "url": "https://jobpostings.alberta.ca",
+          "kind": "regional",
+          "source": "https://jobpostings.alberta.ca/",
+          "quote": "Apply for jobs within the Alberta Public Service, legislative and minister offices",
+          "checked": "2026-10-25",
+          "verified": true,
+          "search": "https://jobpostings.alberta.ca/search/",
+          "paths": {
+            "search": "/search/",
+            "posting": "/job/"
+          },
+          "robots": {
+            "checked": "2026-10-25",
+            "why": "",
+            "search": true,
+            "status": "allowed",
+            "posting": true,
+            "crawl_delay": null,
+            "ai_input": null
+          },
+          "public_search": {
+            "checked": "2026-10-25",
+            "status": "open",
+            "http": 200
+          }
+        }
+      ]
+    }
+  }
+}

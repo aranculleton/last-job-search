@@ -362,7 +362,7 @@ def record_yield(company: str, query: str, kept: int, placed: int,
                                       "date": (today or datetime.date.today()).isoformat()}
     p = person.state(*TITLE_YIELD_FILE)
     os.makedirs(os.path.dirname(p), exist_ok=True)
-    with open(p, "w", encoding="utf-8") as fh:
+    with open(p, "w", encoding="utf-8", newline="\n") as fh:
         json.dump(got, fh, indent=1, sort_keys=True)
         fh.write("\n")
     return title
@@ -574,7 +574,7 @@ def _cli_harvest(argv: list) -> int:
                                        f"--where company=\"{company}\" --where status=dropped "
                                        "--reason ...)" if c["never_messaged"] else ""))
     if "--out" in opt:
-        with open(opt["--out"], "w", encoding="utf-8") as fh:
+        with open(opt["--out"], "w", encoding="utf-8", newline="\n") as fh:
             json.dump({**run, "dropped": [{"person": p, "why": w} for p, w in run["dropped"]]},
                       fh, indent=1, default=str)
     return 0
@@ -773,8 +773,8 @@ def ladder(tools=(), consent: str | None = None, has_export: bool | None = None)
     say = "" if reads else (
         "These were found from search results" + (" and your connections" if export else "")
         + ", without reading anyone's profile. Reading a profile adds their current role, "
-        "shared history and recent posts; for the one or two who matter most, paste their "
-        "profile, its Save to PDF, or screenshots, and I'll write to them from it.")
+        "shared history and recent posts; for the one or two who matter most, send "
+        + reading.what_to_send(reading.surface()) + ", and I'll write to them from it.")
     return {"rungs": rungs, "read": r["route"], "read_cap": cap,
             "hand_top": 0 if reads else reading.HAND_TOP, "say": say}
 
@@ -885,12 +885,11 @@ def while_you_wait(tracker=None) -> str:
     """The quicker route to the people who matter most while the export is on its way,
     offered once with its steps: one employer's 1st-degree people, pasted, starting
     where an interview is running."""
-    import csv
     rows = tracker
     if rows is None:
+        import csv_store
         try:
-            with open(person.state("job_search_tracker.csv"), encoding="utf-8", newline="") as fh:
-                rows = list(csv.DictReader(fh))
+            rows = csv_store.dict_rows(person.state("job_search_tracker.csv"), refuse=False)
         except OSError:
             rows = []
     live = next((str(r.get("company") or "").strip() for r in reversed(rows)

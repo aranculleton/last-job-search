@@ -31,6 +31,9 @@ from tests import repo_files
 REPO = Path(__file__).resolve().parent.parent
 RESET = REPO / ".claude" / "commands" / "reset.md"
 SETUP = REPO / ".claude" / "commands" / "setup.md"
+# What /setup writes, file by file: setup.md is the order and the questions since it was cut
+# to a flow that survives compaction, and its sections say what each file holds (2026-10-25).
+SECTIONS = REPO / ".claude" / "skills" / "job-application-assistant" / "setup-sections.md"
 
 
 def tracked_document_subfolders():
@@ -83,8 +86,9 @@ def section(text: str, start: str, end: str) -> str:
 
 
 def setup_step3_targets():
-    """Every path /setup Step 3 writes: its `profile/...` targets and state files."""
-    step3 = section(SETUP.read_text(encoding="utf-8"), "## Step 3:", "## Step 4:")
+    """Every path /setup writes: its `profile/...` targets and state files."""
+    text = SECTIONS.read_text(encoding="utf-8")
+    step3 = text[text.index("## The profile's files"):]
     targets = set(re.findall(r"`(profile/[^`]+)`", step3))
     state = section(step3, "Write the state files", "---")
     targets |= set(re.findall(r"`([\w/]+\.(?:csv|json))`", state))
@@ -138,3 +142,30 @@ class TestResetCoversWhatSetupWrites(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+def _state_block():
+    text = RESET.read_text(encoding="utf-8")
+    return text.split("### State reset", 1)[1].split("```bash", 1)[1].split("```", 1)[0]
+
+
+def test_the_state_reset_removes_the_research_under_zsh_too(tmp_path):
+    """zsh, the Mac's own shell, stops a command whose pattern matches nothing ("no matches
+    found") and runs none of it: `rm -f company_research/*.json upskill/*.md` removed no
+    research when there was no upskill plan (2026-10-25). Each folder is cleared on its
+    own now, with find, which no shell expands. Run here in sh and in zsh where there is
+    one, in a folder made for it."""
+    import shutil
+    import subprocess
+    block = "\n".join(ln for ln in _state_block().splitlines()
+                      if ln.startswith("find ") or ln.startswith("rm -f company_research"))
+    assert block, "the state reset clears company_research/ and upskill/"
+    for shell in [s for s in ("sh", "zsh") if shutil.which(s)]:
+        root = tmp_path / shell
+        for rel in ("company_research/acme.json", "company_research/.gitkeep",
+                    "upskill/.gitkeep"):
+            (root / rel).parent.mkdir(parents=True, exist_ok=True)
+            (root / rel).write_text("x", encoding="utf-8")
+        subprocess.run([shutil.which(shell), "-c", block], cwd=root, capture_output=True)
+        assert not (root / "company_research" / "acme.json").exists(), shell
+        assert (root / "company_research" / ".gitkeep").exists(), shell

@@ -46,6 +46,7 @@ import sys
 import tempfile
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+import csv_store  # noqa: E402  the mark a spreadsheet adds, and its encoding
 import person  # noqa: E402
 from personal_paths import is_personal  # noqa: E402
 
@@ -83,6 +84,7 @@ ALLOWED_ORGANIZATIONS = {
 # not listed here fails tests/test_an_invented_name_is_not_a_leak.py, so a name is added
 # on purpose, as tools/name_guard_allow.txt is.
 INVENTED_FIRST_NAMES = frozenset({
+    "Ash", "Kit", "Marisol", "Rafe",  # the page's sample (tests/fixtures/app_model_sample.json)
     "Ana", "Bo", "Bob", "Corwin", "Cy", "Halloway", "Idris", "Ivo", "Jane", "Jean", "Juno",
     "Morgan", "Pell", "Quillon", "Quinn", "Raj", "Rhian", "Riley", "Robin", "Rosalind",
     "Sally", "Sasha", "Shirin", "Tamsin", "Taylor", "Thad", "Wren", "Wrenfield", "Xiu",
@@ -128,8 +130,7 @@ def export(out_dir: str) -> list[str]:
 
 def _csv(path: str) -> list[dict]:
     try:
-        with open(path, newline="", encoding="utf-8") as fh:
-            return list(csv.DictReader(fh))
+        return csv_store.dict_rows(path, refuse=False)
     except OSError:
         return []
 
@@ -179,20 +180,21 @@ def _csv_dated(path: str) -> list[tuple[dict, float | None]]:
     keep(rows, pending)
     folder = os.path.dirname(path) or "."
     top = subprocess.run(["git", "-C", folder, "rev-parse", "--show-toplevel"],
-                         capture_output=True, text=True)
+                         capture_output=True, text=True, encoding="utf-8", errors="replace")
     if top.returncode != 0:
         return dated(None)
     root = top.stdout.strip()
     rel = os.path.relpath(os.path.realpath(path), os.path.realpath(root)).replace(os.sep, "/")
     log = subprocess.run(["git", "-C", root, "log", "--format=%H %at %ct", "--", rel],
-                         capture_output=True, text=True)
+                         capture_output=True, text=True, encoding="utf-8", errors="replace")
     revs = [(p[0], float(min(int(p[1]), int(p[2]))))
             for p in (ln.split() for ln in log.stdout.splitlines()) if len(p) == 3] \
         if log.returncode == 0 else []
     if not revs:
         return dated(None)
     cut = subprocess.run(["git", "-C", root, "rev-parse", "--git-path", "shallow"],
-                         capture_output=True, text=True).stdout.strip()
+                         capture_output=True, text=True,
+                         encoding="utf-8", errors="replace").stdout.strip()
     try:
         with open(cut if os.path.isabs(cut) else os.path.join(root, cut), encoding="utf-8") as fh:
             shallow = set(fh.read().split())
@@ -217,7 +219,7 @@ def _csv_dated(path: str) -> list[tuple[dict, float | None]]:
         size = int(parts[2])
         blob, at = data[at:at + size], at + size + 1
         try:
-            keep(list(csv.DictReader(io.StringIO(blob.decode("utf-8", errors="replace")))),
+            keep(list(csv.DictReader(io.StringIO(csv_store.decode(blob)[0]))),
                  None if k >= len(revs) or revs[k][0] in shallow else revs[k][1])
         except csv.Error:
             continue
@@ -372,13 +374,16 @@ def _people() -> list[str]:
 def phone_forms(written: str) -> list[str]:
     """The entries a phone number needs, in the forms it gets written.
 
-    A North American number: the area code, the line number in its two usual
-    groupings and its last four digits, any of which finds the rest. Anywhere
+    A North American number: the whole number, and its seven-digit local part in
+    its two usual groupings, which finds it however the area code is written. Anywhere
     else: the number as grouped after the country code, and with the trunk 0 it
     is dialled with nationally. Matching ignores separators, so the grouped form
     also finds the digits run together. Short groups alone would match
     everywhere, so they are never entries: the first version took a North
-    American slice of an Australian mobile and blocked every "140" in the app.
+    American slice of an Australian mobile and blocked every "140" in the app, and
+    the area code and the last four digits stood as entries of their own until
+    2026-10-25 ("212" matched the app's own font files, and a number ending 2026
+    every date).
 
     No number is written out in this file. An example in an app file is in
     every person's repo, and the one written here once was a test person's own
@@ -392,7 +397,8 @@ def phone_forms(written: str) -> list[str]:
     nanp = (len(phone) == 11 and written.strip().startswith("+1")
             or len(phone) == 10 and not plus and phone[0] in "23456789")
     if nanp:
-        return [phone[-10:-7], phone[-7:-4] + " " + phone[-4:], phone[-7:], phone[-4:]]
+        return [f"{phone[-10:-7]} {phone[-7:-4]} {phone[-4:]}", phone[-7:-4] + " " + phone[-4:],
+                phone[-7:]]
     national = " ".join(groups)
     if len(national.replace(" ", "")) < 8:
         return []
@@ -535,7 +541,8 @@ def set_aside(found, when: dict, ref: str = RELEASED, root: str = ROOT) -> dict[
     # kept author dates, a container with its clock wrong) would otherwise name a copy
     # from after the leak as one from before it.
     log = subprocess.run(["git", "-C", root, "log", "--first-parent", "--reverse",
-                          "--format=%H %at %ct", ref, "--"], capture_output=True, text=True)
+                          "--format=%H %at %ct", ref, "--"], capture_output=True, text=True,
+                         encoding="utf-8", errors="replace")
     chain = [(p[0], max(int(p[1]), int(p[2])))
              for p in (ln.split() for ln in log.stdout.splitlines()) if len(p) == 3] \
         if log.returncode == 0 else []
@@ -592,7 +599,8 @@ def _carried(sha: str, entries: list[str], root: str = ROOT) -> list[str]:
             os.makedirs(os.path.dirname(full), exist_ok=True)
             with open(full, "wb") as fh:
                 fh.write(data)
-        found = leak_scan.scan(d, leak_scan.tokens_from(entries), leak_scan.load_allow(None))
+        found = leak_scan.scan(d, leak_scan.tokens_from(entries), leak_scan.load_allow(None),
+                               export=True)
     hit = {int(m.group(1)) for f in found for m in [_FOUND.search(f)] if m}
     return [e for n, e in enumerate(entries, 1) if n in hit]
 
@@ -603,8 +611,10 @@ def check(tree: str, when: dict, show: bool = False, ref: str = RELEASED,
     for each entry set aside). A finding on a set-aside entry is not one."""
     import leak_scan
     entries = list(when)
+    # The tree is an export of what is committed: a committed venv/ or node_modules/ is
+    # read too, as CI's --git scan reads it.
     findings = leak_scan.scan(tree, leak_scan.tokens_from(entries), leak_scan.load_allow(None),
-                              show=show)
+                              show=show, export=True)
     return without_aside(findings, entries, when, ref, root)
 
 
@@ -648,7 +658,7 @@ def main(argv: list[str]) -> int:
         print("build_app: no copy of the app's master here to compare with, so nothing was "
               "set aside (python3 tools/sync_app.py fetches it)")
     if a.tokens_out:
-        with open(a.tokens_out, "w", encoding="utf-8") as fh:
+        with open(a.tokens_out, "w", encoding="utf-8", newline="\n") as fh:
             fh.write("\n".join(t for t in when if t not in aside) + "\n")
     if findings:
         print("build_app: LEAK SCAN FAILED. Nothing from this tree may be pushed.", file=sys.stderr)

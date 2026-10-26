@@ -1,11 +1,11 @@
 {
-  "_about": "Every statement the app makes about the Claude app, Claude Code and where a chat runs: what each surface can do, how to reach it, and how a cloud task is made from a computer. Messages read their words from here (tools/claude_surfaces.py say), docs carry them in marked blocks (sync-docs), and tests/test_claude_surfaces.py fails on a statement outside it. Each entry is dated and sourced; `watch` (the maintainer's, run by .github/workflows/claude-surfaces-watch.yml in the app only) checks each quote is still on its page and flags entries after a new Claude Code release. A path a person follows is written as a destination, 'at the time of writing', with the official page beside it, and never tells them to press, click, tap or find anything.",
+  "_about": "Every statement the app makes about the Claude app, Claude Code and where a chat runs: what each surface can do, how to reach it, and how a cloud task is made from a computer. Messages read their words from here (tools/claude_surfaces.py say), docs carry them in marked blocks (sync-docs), and tests/test_claude_surfaces.py fails on a statement outside it. Each entry is dated and sourced; `watch` (the maintainer's, run by .github/workflows/claude-surfaces-watch.yml in the app only) checks each quote is still on its page and flags entries after a new Claude Code release. A path a person follows is written as a destination or as numbered steps and never tells them to press, click, tap or find anything; the day it was checked and its official page are for Claude (`source`), never the person.",
   "stale_after_days": 60,
   "hand_check_days": 30,
   "checked_version": "2.1.302",
   "release_notes": "https://code.claude.com/docs/en/changelog",
   "vocabulary": [
-    "Code tab", "Routines screen", "New routine", "Open with GitHub Desktop", "claude --cloud",
+    "Code tab", "Routines screen", "New routine", "New task", "claude --cloud",
     "/schedule", "Remote Control", "/remote-control", "claude remote-control", "Setup script",
     "Network access",
     "environment menu", "environment selector", "Edit cloud environment",
@@ -14,58 +14,138 @@
     "globe icon", "Browser tools",
     "Get a copy of your data", "Download your data", "larger download", "Connections filter",
     "Current company filter", "Manage invitations", "Sent tab", "Open folder", "Local group",
-    "Free message", "Get more InMail credits"
+    "Free message", "Get more InMail credits", "Create repository from template",
+    "Only select repositories", "Keep cookies"
   ],
   "entries": [
     {
-      "id": "local-chat",
-      "claim": "A chat on the person's own computer runs in the Claude desktop app's Code tab, with Local chosen under the message box and a folder opened beside it. The desktop app includes Claude Code, so nothing else needs installing for it, and it needs a Pro, Max, Team or Enterprise plan.",
-      "goal": "continue this in a chat on your computer",
-      "how": "in the Claude desktop app (claude.ai/download), its Code tab, with Local chosen under the message box and the folder {name} opened beside it",
+      "id": "make-copy",
+      "claim": "A private copy of the app is made from one link: github.com/new with the app as the template (template_owner, template_name), the person's own account as the owner (owner=@me, while signed in), a name and visibility=private, which GitHub documents as pre-filling the new-repository form; the person checks it and creates it. Parameters that are invalid or not permitted are ignored, so the form may open empty; then the template page's own way works: Use this template, then Create a new repository, Private chosen, then Create repository from template. On a phone the same pages work in a web browser; GitHub Mobile can also create a repository from a template (its changelog, 2026-05-11), though whether it lists a template owned by another account was not checked. The pre-filled form's own button was not seen signed in; it is said as Create repository.",
+      "goal": "make your own private copy",
+      "how": "open github.com/new?template_owner=aranculleton&template_name=last-job-search&owner=%40me&name=my-job-search&visibility=private signed in to GitHub, check that Private is chosen, then Create repository; or on github.com/aranculleton/last-job-search, Use this template, then Create a new repository, Private chosen, then Create repository from template",
       "steps": [
-        "Install the Claude desktop app from claude.ai/download if you do not have it, and sign in.",
-        "Open its Code tab, at the top.",
-        "Under the message box, choose Local, then Open folder beside it, and pick the folder GitHub Desktop made.",
-        "Say \"set me up\" there (\"carry on\" if you set up in the cloud before). It checks what your computer needs and installs most of it itself."
+        "Open this link, signed in to GitHub: github.com/new?template_owner=aranculleton&template_name=last-job-search&owner=%40me&name=my-job-search&visibility=private A phone's web browser works too.",
+        "It opens with the job search as the template and Private chosen. Check Private, then choose Create repository.",
+        "If the form opens empty: on github.com/aranculleton/last-job-search, choose Use this template, then Create a new repository, choose Private, then Create repository from template."
+      ],
+      "sources": [
+        {"url": "https://docs.github.com/en/repositories/creating-and-managing-repositories/creating-a-new-repository", "quote": "You can use query parameters to pre-fill form fields when creating a new repository."},
+        {"url": "https://docs.github.com/en/repositories/creating-and-managing-repositories/creating-a-new-repository", "quote": "Alternatively, while signed in use @me to specify your user account as the owner."},
+        {"url": "https://docs.github.com/en/repositories/creating-and-managing-repositories/creating-a-repository-from-a-template", "quote": "Above the file list, click Use this template."},
+        {"url": "https://docs.github.com/en/repositories/creating-and-managing-repositories/creating-a-repository-from-a-template", "quote": "Choose a repository visibility."},
+        {"url": "https://docs.github.com/en/repositories/creating-and-managing-repositories/creating-a-repository-from-a-template", "quote": "Click Create repository from template."},
+        {"url": "https://github.blog/changelog/2026-05-11-create-repositories-on-the-go-with-github-mobile/", "quote": "Optionally select a template."}
+      ],
+      "status": "documented",
+      "verified_on": "2026-10-25",
+      "verified_against": "docs.github.com's new-repository page (its URL query parameters: name, owner with @me, visibility public or private, template_owner and template_name), its template page, and GitHub's changelog of 2026-05-11, read 2026-10-25",
+      "ui_sensitive": true
+    },
+    {
+      "id": "connect-github",
+      "claim": "claude.ai/code asks a new user to connect GitHub and sends them to GitHub to approve it. A cloud chat can then work in a private repository only once the Claude GitHub App is installed on it (github.com/apps/claude/installations/new), where Only select repositories limits it to the ones chosen. The copy is then chosen in the repository selector under the message box, at claude.ai/code or in the Claude app's Code tab.",
+      "goal": "let Claude see your copy",
+      "how": "at claude.ai/code, connect GitHub when it asks, then install the Claude GitHub App at github.com/apps/claude/installations/new with Only select repositories and your copy chosen",
+      "steps": [
+        "Open claude.ai/code and sign in. When it asks to connect GitHub, follow it and approve.",
+        "Open github.com/apps/claude/installations/new, choose your account, then Only select repositories, pick your copy, and install.",
+        "Back at claude.ai/code (or the Code tab in the Claude app), choose your copy under the message box."
+      ],
+      "sources": [
+        {"url": "https://code.claude.com/docs/en/web-quickstart", "quote": "claude.ai/code prompts you to connect GitHub."},
+        {"url": "https://code.claude.com/docs/en/web-quickstart", "quote": "can work in a private repository only when the Claude GitHub App is installed on it."},
+        {"url": "https://code.claude.com/docs/en/web-quickstart", "quote": "click the repository selector below the input box and choose a repository for Claude to work in."},
+        {"url": "https://docs.github.com/en/apps/using-github-apps/installing-a-github-app-from-a-third-party", "quote": "If the app requires repository permissions, select All repositories or Only select repositories."}
+      ],
+      "status": "documented",
+      "verified_on": "2026-10-25",
+      "verified_against": "code.claude.com/docs/en/web-quickstart and docs.github.com's page on installing a GitHub App, read 2026-10-25",
+      "ui_sensitive": true
+    },
+    {
+      "id": "make-private",
+      "claim": "A repository's owner makes it private from its own page on GitHub: Settings, then in the Danger Zone section Change visibility beside Change repository visibility, then confirm and Make this repository private. Setup refuses a public copy, because it would show the person's history, pay and contacts to anyone, and never changes the visibility itself.",
+      "goal": "make your copy private",
+      "how": "on your copy's page on GitHub, Settings, then in Danger Zone, Change visibility, then Make this repository private",
+      "steps": [
+        "On your copy's page on GitHub, open Settings.",
+        "In the Danger Zone section, beside Change repository visibility, choose Change visibility, then Private.",
+        "Confirm, then choose Make this repository private."
+      ],
+      "sources": [
+        {"url": "https://docs.github.com/en/repositories/managing-your-repositorys-settings-and-features/managing-repository-settings/setting-repository-visibility", "quote": "In the \"Danger Zone\" section, to the right of to \"Change repository visibility\", click Change visibility."},
+        {"url": "https://docs.github.com/en/repositories/managing-your-repositorys-settings-and-features/managing-repository-settings/setting-repository-visibility", "quote": "Click Make this repository public or Make this repository private."}
+      ],
+      "status": "documented",
+      "verified_on": "2026-10-25",
+      "verified_against": "docs.github.com's page on setting repository visibility, read 2026-10-25",
+      "ui_sensitive": true
+    },
+    {
+      "id": "local-chat",
+      "claim": "A chat on the person's own computer runs in the Claude desktop app's Code tab, with Local chosen under the message box and a folder opened beside it. The desktop app includes Claude Code, so nothing else needs installing for it, and it needs a Pro, Max, Team or Enterprise plan. Its mode selector, in the row under the message box, offers Auto where auto mode is available, which runs without routine prompts. A new empty folder is enough: the chat makes the person's copy there itself (COMPUTER.md), and where the copy already holds a profile it sets nothing up again and asks nothing. The steps are the same on a Mac and on Windows.",
+      "goal": "set up a chat on your computer",
+      "how": "in the Claude desktop app (claude.ai/download), its Code tab, with Local chosen under the message box and a new empty folder opened beside it",
+      "steps": [
+        "Install the Claude desktop app from claude.ai/download (it has a Mac and a Windows installer) if you do not have it, and sign in.",
+        "Open its Code tab. Under the message box choose Local, then Open folder, and make a new, empty folder for your search.",
+        "If the mode menu under the message box offers Auto, choose it: Claude then asks you far less.",
+        "Paste this there: Open my job search on this computer. My copy is {copy}. Follow github.com/aranculleton/last-job-search/blob/master/COMPUTER.md"
       ],
       "sources": [
         {"url": "https://code.claude.com/docs/en/desktop-quickstart", "quote": "The desktop app includes Claude Code, so you don't need to install Node.js or the CLI to use the Code tab."},
         {"url": "https://code.claude.com/docs/en/desktop-quickstart", "quote": "select the top entry in the Local group"},
-        {"url": "https://code.claude.com/docs/en/desktop-quickstart", "quote": "Claude Code requires a Pro, Max, Team, or Enterprise subscription."}
+        {"url": "https://code.claude.com/docs/en/desktop-quickstart", "quote": "Claude Code requires a Pro, Max, Team, or Enterprise subscription."},
+        {"url": "https://code.claude.com/docs/en/desktop", "quote": "You can switch permission modes at any time using the mode selector in the row under the prompt box."},
+        {"url": "https://code.claude.com/docs/en/desktop", "quote": "Claude runs without routine prompts"}
       ],
       "status": "documented",
-      "verified_on": "2026-10-20",
-      "verified_against": "code.claude.com docs read 2026-10-20; Claude Code 2.1.302",
+      "verified_on": "2026-10-25",
+      "verified_against": "code.claude.com/docs/en/desktop-quickstart and /desktop read 2026-10-25",
       "ui_sensitive": true
     },
     {
-      "id": "clone-copy",
-      "claim": "GitHub Desktop, installed and signed in to GitHub, puts a copy of a repository on the computer from the repository's page on GitHub.",
-      "goal": "put your copy on your computer",
-      "how": "with GitHub Desktop installed (github.com/apps/desktop) and signed in, on github.com/{owner}/{name} choose Code, then Open with GitHub Desktop, then Clone",
-      "steps": [
-        "Install GitHub Desktop from github.com/apps/desktop and sign in with your GitHub account.",
-        "On your copy's page on github.com, choose Code, then Open with GitHub Desktop.",
-        "Choose where to keep it (your Documents folder is fine), then Clone."
-      ],
+      "id": "windows-computer",
+      "claim": "On Windows the Claude desktop app installs from claude.ai/download (an x64 installer, and one for ARM64) and opens from the Start menu; its Code tab is the same as on a Mac (local-chat). Its own browser opens with Ctrl+Shift+B, or the Browser button in the session's title bar (browser-pane-show). Profiles are read in that browser by default, whatever browser the person uses; only someone who already uses Chrome or Edge and wants their own sign-in is offered Claude in Chrome (chrome), which does not work inside WSL. The desktop app does not read PowerShell profiles: a tool newly installed for every program is seen once the app is quit and reopened.",
+      "goal": "use Claude on a Windows computer",
+      "how": "the Claude desktop app from claude.ai/download, opened from the Start menu, its Code tab with Local and a new empty folder under the message box; its own browser comes up with Ctrl+Shift+B",
       "sources": [
-        {"url": "https://docs.github.com/en/desktop/adding-and-cloning-repositories/cloning-a-repository-from-github-to-github-desktop", "quote": "To clone and open the repository with GitHub Desktop, click Open with GitHub Desktop."},
-        {"url": "https://docs.github.com/en/desktop/adding-and-cloning-repositories/cloning-a-repository-from-github-to-github-desktop", "quote": "Sign in to GitHub and GitHub Desktop before you start to clone."}
+        {"url": "https://code.claude.com/docs/en/desktop-quickstart", "quote": "Launch Claude from your Applications folder on macOS, the Start menu on Windows, or your application launcher on Linux, then sign in with your Anthropic account."},
+        {"url": "https://code.claude.com/docs/en/desktop", "quote": "press Cmd+Shift+B on macOS or Ctrl+Shift+B on Windows"},
+        {"url": "https://code.claude.com/docs/en/chrome", "quote": "Chrome integration works with Google Chrome and Microsoft Edge."},
+        {"url": "https://code.claude.com/docs/en/desktop", "quote": "On Windows, Desktop doesn't read PowerShell profiles, so set PATH in your user or system environment variables, then quit and reopen Desktop."}
       ],
       "status": "documented",
-      "verified_on": "2026-10-20",
-      "verified_against": "docs.github.com and github.com/apps/desktop read 2026-10-20",
+      "verified_on": "2026-10-25",
+      "verified_against": "code.claude.com/docs/en/desktop-quickstart, /desktop and /chrome read 2026-10-25",
+      "ui_sensitive": true
+    },
+    {
+      "id": "linux-computer",
+      "claim": "The Claude desktop app on Linux is in beta, for Ubuntu 22.04 or later and Debian 12 or later. On other distributions, such as Fedora or Arch, the terminal version of Claude Code is used instead (curl -fsSL https://claude.ai/install.sh | bash), and claude --chrome gives it the person's own Chrome. Claude in Chrome does not work inside WSL; on Windows with WSL, the Windows desktop app is used. The Linux page does not say whether the desktop app there has its Browser pane: not verified.",
+      "goal": "use Claude on a Linux computer",
+      "how": "on Ubuntu or Debian, the Claude desktop app; elsewhere, in a terminal, curl -fsSL https://claude.ai/install.sh | bash, then claude --chrome in the folder {name}",
+      "sources": [
+        {"url": "https://code.claude.com/docs/en/desktop-linux", "quote": "A Debian-based distribution: Ubuntu 22.04 or later, or Debian 12 or later"},
+        {"url": "https://code.claude.com/docs/en/desktop-linux", "quote": "On distributions that aren't Debian-based, such as Fedora or Arch, run the CLI instead."},
+        {"url": "https://code.claude.com/docs/en/setup", "quote": "curl -fsSL https://claude.ai/install.sh | bash"},
+        {"url": "https://code.claude.com/docs/en/chrome", "quote": "Chrome integration isn't supported in Windows Subsystem for Linux (WSL)."}
+      ],
+      "status": "documented",
+      "verified_on": "2026-10-25",
+      "verified_against": "code.claude.com/docs/en/desktop-linux, /setup and /chrome read 2026-10-25",
       "ui_sensitive": true
     },
     {
       "id": "browser-pane",
-      "claim": "A chat in the desktop app can read web pages in the app's own browser pane, a browser of its own, separate from the person's, with none of their sign-ins until they sign in there. The pane keeps those sign-ins across the app's chats (Anthropic's built-in-browser skill; the docs page says only that the profile is separate).",
+      "claim": "A chat in the desktop app can read web pages in the app's own Browser pane, a browser of its own, separate from the person's, with none of their sign-ins until they sign in there, and needing no particular browser of theirs: Safari, Firefox or any other default is fine. It opens from the Browser button in the session's title bar (browser-pane-show). Keep cookies in the pane's menu keeps sign-ins after the app quits; Anthropic's built-in-browser skill says the pane keeps its profile across the app's chats. It is the default way to read people's profiles on a computer. Whether the Linux desktop app has it is not stated on the Linux page (not verified).",
       "sources": [
-        {"url": "https://code.claude.com/docs/en/desktop", "quote": "The Browser pane uses a clean browser profile, separate from your personal browser, with none of your saved logins or history."}
+        {"url": "https://code.claude.com/docs/en/desktop", "quote": "The Browser pane uses a clean browser profile, separate from your personal browser, with none of your saved logins or history."},
+        {"url": "https://code.claude.com/docs/en/desktop", "quote": "keeps cookies after you quit the app with Keep cookies in the Browser pane's"}
       ],
       "status": "documented",
-      "verified_on": "2026-10-18",
-      "verified_against": "code.claude.com docs read 2026-10-18, and the built-in-browser skill as installed that day",
+      "verified_on": "2026-10-25",
+      "verified_against": "code.claude.com/docs/en/desktop read 2026-10-25, and the built-in-browser skill as installed 2026-10-18; the Linux desktop page read 2026-10-25 does not name the pane",
       "ui_sensitive": false
     },
     {
@@ -81,46 +161,56 @@
     },
     {
       "id": "chrome",
-      "claim": "Claude in Chrome lets a chat in a terminal or in VS Code use the person's own Chrome, with its sign-ins. It needs the Chrome extension and a claude.ai sign-in.",
+      "claim": "Claude in Chrome lets a chat in a terminal or in VS Code use the person's own browser, with its sign-ins. For Claude Code it works with Google Chrome and Microsoft Edge, and Claude Code also detects it in Brave, Arc, Vivaldi and Opera; it is not supported in WSL; it needs the extension, a paid plan and a claude.ai sign-in (/login). Anthropic's support article on the extension itself says Chrome only, with no other Chromium browser: for Claude Code the Code docs are followed. It is offered only to someone who already uses one of those browsers and wants their own sign-in; nobody is told to install Chrome, because the desktop app's own browser works whatever browser they use.",
       "how": "start Claude Code with claude --chrome",
       "sources": [
         {"url": "https://code.claude.com/docs/en/chrome", "quote": "Chrome integration also requires signing in with /login ."},
-        {"url": "https://code.claude.com/docs/en/desktop", "quote": "When you want Claude to act as you in your logged-in sessions, use the Claude in Chrome extension instead, which shares your browser's login state."}
+        {"url": "https://code.claude.com/docs/en/desktop", "quote": "When you want Claude to act as you in your logged-in sessions, use the Claude in Chrome extension instead, which shares your browser's login state."},
+        {"url": "https://code.claude.com/docs/en/chrome", "quote": "Chrome integration works with Google Chrome and Microsoft Edge."},
+        {"url": "https://code.claude.com/docs/en/chrome", "quote": "Claude Code also detects the extension and sets up the connection in other Chromium-based browsers, including Brave, Arc, Vivaldi, and Opera."},
+        {"url": "https://support.claude.com/en/articles/12012173-get-started-with-claude-in-chrome", "quote": "Note: Claude in Chrome is not supported on other Chromium-based web browsers or mobile devices."}
       ],
       "status": "documented",
-      "verified_on": "2026-10-18",
-      "verified_against": "code.claude.com docs read 2026-10-18; Claude Code 2.1.302 has --chrome",
+      "verified_on": "2026-10-25",
+      "verified_against": "code.claude.com/docs/en/chrome and support.claude.com article 12012173 read 2026-10-25; Claude Code 2.1.302 has --chrome",
       "ui_sensitive": true
     },
     {
       "id": "remote-control",
-      "claim": "Remote Control lets the Claude app on a phone, or claude.ai/code in a browser, drive a chat that runs on the person's computer, keeping that chat's tools. The computer has to stay on and the chat has to keep running. It is the way to read profiles in the computer's browser while away from it.",
+      "claim": "Remote Control lets the Claude app on a phone, or claude.ai/code in a browser, drive a chat that runs on the person's computer, keeping that chat's tools. The computer has to stay on and the chat has to keep running. It is the way to read profiles in the computer's browser while away from it: from a terminal, claude remote-control --chrome starts its sessions with Chrome on.",
       "goal": "use the chat on your computer from your phone",
-      "how": "in the chat on your computer, type /remote-control (in a terminal, run claude remote-control in the folder {name}), then open that chat from the Claude app on your phone",
+      "how": "in the chat on your computer, type /remote-control (in a terminal, run claude remote-control --chrome in the folder {name}), then open that chat from the Code tab of the Claude app on your phone",
       "sources": [
         {"url": "https://code.claude.com/docs/en/remote-control", "quote": "Remote Control connects claude.ai/code or the Claude app for iOS and Android to a Claude Code session running on your machine."},
         {"url": "https://code.claude.com/docs/en/remote-control", "quote": "your computer has to stay on and the claude process has to keep running."},
-        {"url": "https://code.claude.com/docs/en/remote-control", "quote": "the Desktop app and VS Code use the /remote-control command."}
+        {"url": "https://code.claude.com/docs/en/remote-control", "quote": "the Desktop app and VS Code use the /remote-control command."},
+        {"url": "https://code.claude.com/docs/en/remote-control", "quote": "Turn Chrome integration on or off in the sessions the server creates"}
       ],
       "status": "documented",
-      "verified_on": "2026-10-18",
-      "verified_against": "code.claude.com docs read 2026-10-18; Claude Code 2.1.302 has --remote-control",
+      "verified_on": "2026-10-25",
+      "verified_against": "code.claude.com/docs/en/remote-control read 2026-10-25",
       "ui_sensitive": true
     },
     {
       "id": "routines-cloud",
-      "claim": "A routine (a scheduled task) runs in the cloud and keeps working with the computer closed. It is made at claude.ai/code/routines, in the desktop app's Code tab as a Cloud routine, or with /schedule typed in a chat on the computer; /schedule is not available inside a cloud chat. The brief is always one of these.",
+      "claim": "A cloud scheduled task (formerly a routine) runs in the cloud and keeps working with the computer closed. It is made at claude.ai/code/routines with New task, in the desktop app's Code tab from Scheduled, then New task, or with /schedule typed in a chat on the computer; /schedule is not available inside a cloud chat. A preset frequency runs on one day a week; a second day is set afterwards with Custom in its edit dialog. The brief is always one of these.",
       "goal": "make the brief in the cloud",
-      "how": "type /schedule in a chat on your computer and answer its questions; or open claude.ai/code/routines in a browser and choose New routine; in the desktop app's Code tab it is Routines, then New routine, then Cloud",
+      "how": "open claude.ai/code/routines in a browser and choose New task (in the desktop app's Code tab: Scheduled, then New task), or type /schedule in a chat on your computer and answer its questions",
       "sources": [
         {"url": "https://code.claude.com/docs/en/routines", "quote": "so they keep working when your laptop is closed."},
-        {"url": "https://code.claude.com/docs/en/routines", "quote": "Create and manage them at claude.ai/code/routines , or from the CLI with /schedule ."},
-        {"url": "https://code.claude.com/docs/en/routines", "quote": "then New routine , and choose Cloud"}
+        {"url": "https://code.claude.com/docs/en/routines", "quote": "Create and manage them at claude.ai/code/routines, or from the CLI with /schedule."},
+        {"url": "https://code.claude.com/docs/en/routines", "quote": "click Scheduled in the sidebar or in the sidebar's More menu, then New task"},
+        {"url": "https://code.claude.com/docs/en/routines", "quote": "create the task and select Custom in its edit dialog"}
       ],
       "status": "documented",
-      "verified_on": "2026-10-18",
-      "verified_against": "code.claude.com docs read 2026-10-18; Claude Code 2.1.302",
-      "ui_sensitive": true
+      "verified_on": "2026-10-25",
+      "verified_against": "code.claude.com/docs/en/routines (now titled scheduled tasks, formerly routines) read 2026-10-25",
+      "ui_sensitive": true,
+      "steps": [
+        "Open claude.ai/code/routines and choose New task (in the desktop app's Code tab: Scheduled, then New task).",
+        "Name it Job search: morning brief, choose your copy, set it weekly at your time, paste the prompt I give you, and save.",
+        "Open it again, choose Custom, and paste the schedule I give you, so it runs on both days."
+      ]
     },
     {
       "id": "routines-local",
@@ -159,7 +249,7 @@
     },
     {
       "id": "phone-and-web",
-      "claim": "A chat started on a phone (the Claude app) or in a web browser (claude.ai/code) is a cloud chat. It has no browser of the person's unless it is linked to their computer (cloud-linked-browser), or it drives a chat there (remote-control).",
+      "claim": "A chat started on a phone (the Claude app) or in a web browser (claude.ai/code) is a cloud chat. It has no browser of the person's unless it is linked to their computer (cloud-linked-browser), or it drives a chat there (remote-control). The private copy can be made from a phone's web browser (make-copy), and GitHub is connected at claude.ai/code (connect-github), so a phone is enough for the whole setup.",
       "sources": [
         {"url": "https://code.claude.com/docs/en/claude-code-on-the-web", "quote": "Mobile : the Code tab in the Claude app"}
       ],
@@ -226,6 +316,13 @@
         "Paste the line into Setup script, then save.",
         "It applies from your next new chat. In this one, Claude installs the same tools itself."
       ],
+      "page_goal": "make each new chat start with the PDF tools in place",
+      "page_steps": [
+        "Open your helper chat (Job search: Claude's helper) at claude.ai/code.",
+        "At the top of that chat, open the small arrow after its title and choose Edit cloud environment.",
+        "Paste the line into Setup script, then save.",
+        "It applies from the next new chat. Come back to this page and tap Done."
+      ],
       "sources": [
         {"url": "https://code.claude.com/docs/en/cloud-environments", "quote": "open the environment settings dialog and enter your script in the Setup script field"},
         {"url": "https://code.claude.com/docs/en/cloud-environments", "quote": "select the caret after the session title at the top, then select Edit cloud environment ."}
@@ -242,8 +339,14 @@
       "how": "at the top of this chat, the small arrow after its title, then Edit cloud environment, with Network access set to Full",
       "steps": [
         "At the top of this chat, open the small arrow after its title and choose Edit cloud environment.",
-        "Set Network access to Full, then save.",
-        "That is all: it reaches this chat within about a minute, with no new chat. Say \"done\" and I'll search again."
+        "Set Network access to Full, then save. It reaches this chat within about a minute."
+      ],
+      "page_goal": "let Claude reach job sites",
+      "page_steps": [
+        "Open your helper chat (Job search: Claude's helper) at claude.ai/code.",
+        "At the top of that chat, open the small arrow after its title and choose Edit cloud environment.",
+        "Set Network access to Full, then save. It reaches Claude within about a minute.",
+        "Come back to this page and tap Done."
       ],
       "sources": [
         {"url": "https://code.claude.com/docs/en/cloud-environments", "quote": "The default level, Trusted, allows package registries and other allowlisted domains."},
@@ -251,8 +354,8 @@
         {"url": "https://code.claude.com/docs/en/cloud-environments", "quote": "its existing sessions follow the new setting within about a minute"}
       ],
       "status": "documented",
-      "verified_on": "2026-10-20",
-      "verified_against": "code.claude.com docs read 2026-10-20",
+      "verified_on": "2026-10-25",
+      "verified_against": "code.claude.com/docs/en/cloud-environments read 2026-10-25",
       "ui_sensitive": true
     },
     {
@@ -419,6 +522,115 @@
       "status": "documented",
       "verified_on": "2026-10-19",
       "verified_against": "code.claude.com/docs/en/desktop read word for word 2026-10-19, and the built-in-browser skill as installed that day",
+      "ui_sensitive": true
+    },
+    {
+      "id": "browser-pane-stay-signed-in",
+      "claim": "The desktop app's Browser pane starts with a clean profile of its own, separate from the person's own browser, with none of their saved logins. It shows from the Browser button in the session's title bar, or Cmd+Shift+B on a Mac and Ctrl+Shift+B on Windows, and its menu has Keep cookies, which keeps sign-ins after the app is quit (the docs do not say whether it is on to begin with).",
+      "goal": "sign in to LinkedIn once in the app's browser and stay signed in",
+      "how": "Cmd+Shift+B on a Mac or Ctrl+Shift+B on Windows shows the app's browser; choose Keep cookies in its \u22ee menu so you stay signed in",
+      "steps": [
+        "Show the app's browser: Cmd+Shift+B on a Mac, or Ctrl+Shift+B on Windows (or Browser in this chat's title bar).",
+        "Sign in to LinkedIn there yourself.",
+        "In the browser's \u22ee menu, choose Keep cookies, so you stay signed in after you quit the app.",
+        "Say done here."
+      ],
+      "page_goal": "sign in to LinkedIn once in the app's browser and stay signed in",
+      "page_steps": [
+        "In the Claude desktop app, show the app's browser: Cmd+Shift+B on a Mac, or Ctrl+Shift+B on Windows.",
+        "Sign in to LinkedIn there yourself.",
+        "In the browser's ⋮ menu, choose Keep cookies, so you stay signed in after you quit the app.",
+        "Come back to this page and tap Done."
+      ],
+      "sources": [
+        {"url": "https://code.claude.com/docs/en/desktop", "quote": "The Browser pane uses a clean browser profile, separate from your personal browser, with none of your saved logins or history"},
+        {"url": "https://code.claude.com/docs/en/desktop", "quote": "Choose whether the Browser keeps cookies after you quit the app with Keep cookies in the Browser pane's \u22ee menu, so you don't have to sign in again"}
+      ],
+      "status": "documented",
+      "verified_on": "2026-10-25",
+      "verified_against": "code.claude.com/docs/en/desktop read 2026-10-25",
+      "ui_sensitive": true
+    },
+    {
+      "id": "find-page",
+      "claim": "A page a chat publishes stays in the person's Claude account. claude.ai/code/artifacts lists every page they have made, and the page's own header links to it; in the Claude app the same pages are under Artifacts in its side menu, on a computer and on a phone. A chat can pin a page to that side menu with the Artifact tool's pin action, which the app offers once, after the first publish. Whether the phone app shows a page Claude Code published, and a pinned one, was not checked on a phone.",
+      "goal": "open your job search page again",
+      "how": "open claude.ai/code/artifacts signed in to Claude and choose your job search; in the Claude app, the same pages are under Artifacts in its side menu",
+      "steps": [
+        "Open claude.ai/code/artifacts, signed in to Claude. It lists every page Claude made for you.",
+        "Choose your job search. In the Claude app, on a computer or a phone, the same pages are under Artifacts in its side menu."
+      ],
+      "ask": "Shall I pin your job search page to the side of Claude, so it is always one step away?",
+      "sources": [
+        {
+          "url": "https://code.claude.com/docs/en/artifacts",
+          "quote": "The header also links to your gallery at claude.ai/code/artifacts, which lists every artifact you have created."
+        },
+        {
+          "url": "https://support.claude.com/en/articles/9487310-what-are-artifacts-and-how-do-i-use-them",
+          "quote": "Everything you make is saved to the Artifacts tab in your Claude sidebar, so you can find it again from any conversation."
+        },
+        {
+          "url": "https://support.claude.com/en/articles/9487310-what-are-artifacts-and-how-do-i-use-them",
+          "quote": "Ask for a design, deck, or doc in any chat, view the result in the Artifacts tab, and edit the artifact."
+        },
+        {
+          "url": "tool:Artifact",
+          "quote": "adds the artifact to, or removes it from, the person's pinned list in their claude.ai sidebar"
+        }
+      ],
+      "status": "documented",
+      "verified_on": "2026-10-25",
+      "verified_against": "code.claude.com/docs/en/artifacts (\"Share an artifact\") and support.claude.com article 9487310 (\"Find your artifacts\", \"Where you can use artifacts\"), read 2026-10-25; the pin from the Artifact tool's own description in Claude Code; not observed on a phone",
+      "ui_sensitive": true
+    },
+    {
+      "id": "page-watch",
+      "claim": "A chat that publishes a page watches it: a comment sent to Claude on it reaches that chat at once, and every chat that watches the page is woken by it. A watch Claude Code started by itself can end after the page goes several hours without activity; publishing it again, or asking Claude to watch it, starts it again. In a cloud chat a watch is a wake subscription the artifact service holds, not a live connection. Claude stops replying on its own to a page after 60 sent comments or thread activations on it within an hour, and picks up as that hour's comments age out.",
+      "sources": [
+        {
+          "url": "https://code.claude.com/docs/en/artifacts",
+          "quote": "After your session publishes an artifact, Claude Code watches that artifact for comments."
+        },
+        {
+          "url": "https://code.claude.com/docs/en/artifacts",
+          "quote": "A watch that Claude Code started on its own can end after the artifact goes several hours without activity."
+        },
+        {
+          "url": "https://code.claude.com/docs/en/artifacts",
+          "quote": "To start the watch again, publish the artifact again or ask Claude to watch it."
+        },
+        {
+          "url": "https://code.claude.com/docs/en/artifacts",
+          "quote": "Claude also stops replying on its own to an artifact after it handles 60 sent comments or thread activations on that artifact within an hour."
+        },
+        {
+          "url": "tool:ArtifactComments",
+          "quote": "in this remote session a watch is a durable wake subscription held by the artifact service, not a live connection"
+        }
+      ],
+      "status": "documented",
+      "verified_on": "2026-10-25",
+      "verified_against": "code.claude.com/docs/en/artifacts (\"Let Claude reply to comments on its own\") read 2026-10-25, and the ArtifactComments tool's own description in a cloud chat; that every watching chat is woken was observed on 2026-10-25",
+      "ui_sensitive": false
+    },
+    {
+      "id": "page-share",
+      "claim": "A page is visible only to the person who published it until they share it from the Share control in the page's header. A page carries what it shows inside itself, so anyone it is shared with can read that, even where the page then shows them only a notice: the job search page holds first names, employers, the person's drafts and their setup answers.",
+      "line": "Only you can open this page unless you share it. It holds first names, employers, your drafts and your setup answers, so keep it unshared.",
+      "sources": [
+        {
+          "url": "https://code.claude.com/docs/en/artifacts",
+          "quote": "A new artifact is visible only to you. To share it, open the artifact in your browser and use the Share control in the page header."
+        },
+        {
+          "url": "https://support.claude.com/en/articles/9487310-what-are-artifacts-and-how-do-i-use-them",
+          "quote": "Artifacts start private to you."
+        }
+      ],
+      "status": "documented",
+      "verified_on": "2026-10-25",
+      "verified_against": "code.claude.com/docs/en/artifacts (\"Share an artifact\") and support.claude.com article 9487310, read 2026-10-25; that a shared page carries its embedded data is how a published page works (one self-contained document)",
       "ui_sensitive": true
     }
   ]

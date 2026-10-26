@@ -32,9 +32,12 @@ Usage: `/reply <contact name or company>`, then paste their message.
    `reply.nudge_due(rows, today)` before drafting anything. If it is not due, or the
    nudges the person's follow-up rule allows have gone out (one, unless MAX_UNANSWERED in
    profile/networking.py allows more), draft nothing and say why: one more costs more
-   than it recovers. If it is due, the nudge is `compose.nudge()`, with a new reason
-   to answer, and `reply.following_up_is_honest(rows, today)` says whether an apology
-   for the gap is owed.
+   than it recovers. If it is due, code drafts it first: `python3 tools/followup_drafts.py
+   --contact <contact_id>` gives the nudge the state supports (a draft on the row or in an
+   earlier pack, or a posting the search found at their employer), already through
+   `compose.validate()` and `compose.advise()`. Show a clean one as it is; only when it says
+   needs writing is the nudge `compose.nudge()` with a new reason to answer, and
+   `reply.following_up_is_honest(rows, today)` says whether an apology for the gap is owed.
 
 4. **Read what they have taught it**: `python3 tools/learned.py brief messages --channel
    <channel> --reader <reader>`: the messages they approved first, then the rules, which
@@ -44,15 +47,20 @@ Usage: `/reply <contact name or company>`, then paste their message.
    derived from their message, what not to do, and any action owed outside the
    thread (send an email, book a slot).
 
-5. **Draft, then validate.** `compose.validate()` plus `tone.restate_ratio()`
-   against their message. A high ratio means the draft is parroting them back,
+5. **Draft, then validate.** `python3 tools/followup_drafts.py check <file.json>` runs
+   the whole gate in one call (`[{"id": "<contact_id>", "text": "<the draft>"}]`):
+   `compose.validate()` plus `tone.restate_ratio()` against their message, then
+   `compose.advise()`. A high ratio means the draft is parroting them back,
    which is the most common tell of a machine-written reply. Rewrite it. Then
    `compose.advise(draft, "reply", company=<their employer>)`: rewrite what it warns about (a phrase that reads as
    generated, stacked hedges, a claim about them written as fact); a soft exit is allowed
    in a reply. If the person reacts to the draft, the reaction is recorded before the next
    draft (`learned.py record` or `skip`): the composers refuse to draft over one.
 
-6. **Record.** Their message goes into `network_threads.csv` now. Ours goes in only when
+6. **Record.** Their message goes into `network_threads.csv` now, by command, with their
+   words as they came: `python3 tools/network/state.py received <contact_id> --text-file
+   <file>` (`--scenario <the scenario from step 2>`; `--date` when it came another day;
+   `--channel` when it came another way than the thread runs). Never by hand. Ours goes in only when
    they say it went, dated the day it went: a draft is not a message, and logging it early
    makes the thread read as waiting on them before anything was sent (the same rule
    `/network` keeps for a first note). Every row carries its full text in `full_text`: a
@@ -103,4 +111,4 @@ If the person is a genuine mismatch, say so instead of drafting something
 optimistic. A polite two-line exit preserves the relationship at zero cost.
 
 End with the line `python3 tools/tips.py reply` prints, if it prints one (it decides when: the first time, then now and then). What they say back
-goes through CLAUDE.md, "Learning the person".
+goes through RUNBOOK.md, "Learning the person".

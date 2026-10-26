@@ -1,0 +1,294 @@
+{
+  "name": "Canada",
+  "country": "ca",
+  "aka": [
+    "CA",
+    "CAN"
+  ],
+  "languages": [
+    "en",
+    "fr"
+  ],
+  "currency": "CAD",
+  "boards": [
+    {
+      "name": "Job Bank",
+      "url": "https://www.jobbank.gc.ca",
+      "kind": "public",
+      "source": "https://www.jobbank.gc.ca/aboutus",
+      "quote": "Job Bank is Canada’s national employment service, available as a website and mobile app",
+      "checked": "2026-10-25",
+      "verified": true,
+      "search": "https://www.jobbank.gc.ca/jobsearch/jobsearch?searchstring=analyst&locationstring=Toronto%2C+ON",
+      "paths": {
+        "search": "/jobsearch/jobsearch?searchstring=analyst&locationstring=Toronto%2C+ON",
+        "posting": "/jobsearch/jobposting/"
+      },
+      "robots": {
+        "checked": "2026-10-25",
+        "why": "",
+        "search": true,
+        "status": "allowed",
+        "posting": true,
+        "crawl_delay": 5.0,
+        "ai_input": null
+      },
+      "public_search": {
+        "checked": "2026-10-25",
+        "status": "open",
+        "http": 200
+      }
+    },
+    {
+      "name": "Indeed",
+      "url": "https://ca.indeed.com",
+      "kind": "general",
+      "source": "https://en.wikipedia.org/wiki/Indeed",
+      "quote": "Indeed is currently available in over 60 countries and 28 languages",
+      "checked": "2026-10-25",
+      "verified": true,
+      "search": "https://ca.indeed.com/jobs?q=analyst&l=Toronto%2C+ON",
+      "paths": {
+        "search": "/jobs?q=analyst&l=Toronto%2C+ON",
+        "posting": "/viewjob?jk=0"
+      },
+      "robots": {
+        "checked": "2026-10-25",
+        "why": "",
+        "search": true,
+        "status": "partial",
+        "posting": false,
+        "crawl_delay": null,
+        "ai_input": null
+      },
+      "public_search": {
+        "checked": "2026-10-25",
+        "status": "blocked",
+        "http": 401
+      }
+    },
+    {
+      "name": "Eluta",
+      "url": "https://www.eluta.ca",
+      "kind": "general",
+      "source": "https://www.eluta.ca/",
+      "quote": "Find thousands of new jobs every day on the official job search engine",
+      "checked": "2026-10-25",
+      "verified": true,
+      "search": "https://www.eluta.ca/search?q=analyst&l=Toronto%2C+ON",
+      "paths": {
+        "search": "/search?q=analyst&l=Toronto%2C+ON",
+        "posting": "/spl/"
+      },
+      "robots": {
+        "checked": "2026-10-25",
+        "why": "",
+        "search": true,
+        "status": "allowed",
+        "posting": true,
+        "crawl_delay": null,
+        "ai_input": null
+      },
+      "public_search": {
+        "checked": "2026-10-25",
+        "status": "open",
+        "http": 200
+      }
+    },
+    {
+      "name": "Talent.com",
+      "url": "https://ca.talent.com",
+      "kind": "aggregator",
+      "source": "https://en.wikipedia.org/wiki/Talent.com",
+      "quote": "",
+      "checked": "2026-10-25",
+      "verified": false,
+      "why": "the source could not be read: HTTP 404",
+      "search": "https://ca.talent.com/jobs?k=analyst&l=Toronto%2C+ON",
+      "paths": {
+        "search": "/jobs?k=analyst&l=Toronto%2C+ON",
+        "posting": "/view?id="
+      },
+      "robots": {
+        "checked": "2026-10-25",
+        "why": "",
+        "search": true,
+        "status": "allowed",
+        "posting": true,
+        "crawl_delay": null,
+        "ai_input": null
+      },
+      "public_search": {
+        "checked": "2026-10-25",
+        "status": "open",
+        "http": 200
+      }
+    }
+  ],
+  "eligibility": [
+    {
+      "phrase": "legally entitled to work in Canada (a work permit, or citizenship or permanent residence)",
+      "lang": "en",
+      "means": "work_right",
+      "source": "https://en.wikipedia.org/wiki/Temporary_foreign_worker_program_in_Canada",
+      "quote": "",
+      "checked": "2026-10-25",
+      "verified": false,
+      "why": "no sentence on the page says it (looked for: open work permit)"
+    },
+    {
+      "phrase": "Canadian citizen or permanent resident",
+      "lang": "en",
+      "means": "residence",
+      "source": "https://en.wikipedia.org/wiki/Permanent_residency_in_Canada",
+      "quote": "A permanent resident holds many of the same rights and responsibilities as a Canadian citizen, including the right to live, work, and study",
+      "checked": "2026-10-25",
+      "verified": true
+    },
+    {
+      "phrase": "Canadian citizenship",
+      "lang": "en",
+      "means": "citizenship",
+      "source": "https://en.wikipedia.org/wiki/Canadian_nationality_law",
+      "quote": "Canada 's primary law governing nationality is the Citizenship Act, 1976",
+      "checked": "2026-10-25",
+      "verified": true
+    },
+    {
+      "phrase": "reliability status or security clearance",
+      "lang": "en",
+      "means": "clearance",
+      "source": "https://en.wikipedia.org/wiki/Classified_information_in_Canada",
+      "quote": "",
+      "checked": "2026-10-25",
+      "verified": false,
+      "why": "the source could not be read: HTTP 404"
+    }
+  ],
+  "documents": [
+    {
+      "topic": "noun",
+      "value": "resume (CV in Quebec and academia)",
+      "source": "https://en.wikipedia.org/wiki/R%C3%A9sum%C3%A9",
+      "quote": "",
+      "checked": "2026-10-25",
+      "verified": false,
+      "why": "no sentence on the page says it (looked for: résumé, Canada)"
+    },
+    {
+      "topic": "pages",
+      "value": "one or two pages",
+      "source": "https://en.wikipedia.org/wiki/R%C3%A9sum%C3%A9",
+      "quote": "",
+      "checked": "2026-10-25",
+      "verified": false,
+      "why": "the page says this of resumes in general, not of this country"
+    },
+    {
+      "topic": "photo",
+      "value": "no photo",
+      "source": "https://www.jobbank.gc.ca/findajob/resources/write-good-resume",
+      "quote": "Although in some countries it may be acceptable to include a photo, it is not the norm in Canada.",
+      "checked": "2026-10-25",
+      "verified": true
+    },
+    {
+      "topic": "date_format",
+      "value": "YYYY-MM-DD officially; month and year on a resume",
+      "source": "https://en.wikipedia.org/wiki/Date_and_time_notation_in_Canada",
+      "quote": "recommends only the ISO format for all-numeric dates to avoid error",
+      "checked": "2026-10-25",
+      "verified": true
+    },
+    {
+      "topic": "spelling",
+      "value": "Canadian English (-ize, but colour, centre); French in Quebec",
+      "source": "https://en.wikipedia.org/wiki/Canadian_English",
+      "quote": "Canadian spelling of the English language combines British and American conventions",
+      "checked": "2026-10-25",
+      "verified": true
+    }
+  ],
+  "pay": [
+    {
+      "name": "Job Bank wages",
+      "url": "https://www.jobbank.gc.ca/trend-analysis/search-wages",
+      "what": "wages by occupation and region",
+      "source": "https://www.jobbank.gc.ca/trend-analysis/search-wages",
+      "quote": "Tool Job profiles Research an occupation and find out what duties are involved, the typical hourly wages, and what skills and education are required.",
+      "checked": "2026-10-25",
+      "verified": true
+    },
+    {
+      "name": "Labour Force Survey wages (Statistics Canada)",
+      "url": "https://www150.statcan.gc.ca/t1/tbl1/en/tv.action?pid=1410006401",
+      "what": "wages by industry and province",
+      "source": "https://www150.statcan.gc.ca/t1/tbl1/en/tv.action?pid=1410006401",
+      "quote": "Employee wages by industry, annual 1 , 2",
+      "checked": "2026-10-25",
+      "verified": true
+    }
+  ],
+  "places": [
+    {
+      "metro": "Toronto",
+      "written": [
+        "Toronto, ON",
+        "Greater Toronto Area",
+        "GTA",
+        "Mississauga, ON",
+        "Brampton, ON",
+        "Markham, ON",
+        "Vaughan, ON"
+      ],
+      "source": "https://en.wikipedia.org/wiki/Greater_Toronto_Area",
+      "quote": "Mississauga is the largest city in Peel Region and the second-largest city in the Greater Toronto Area",
+      "on_page": [
+        "Mississauga",
+        "Brampton",
+        "Markham",
+        "Vaughan"
+      ],
+      "checked": "2026-10-25",
+      "verified": true
+    },
+    {
+      "metro": "Montreal",
+      "written": [
+        "Montréal, QC",
+        "Montreal",
+        "Greater Montreal",
+        "Laval, QC",
+        "Longueuil, QC"
+      ],
+      "source": "https://en.wikipedia.org/wiki/Greater_Montreal",
+      "quote": "It includes the entire Island of Montreal , Laval , and the Urban Agglomeration of Longueuil",
+      "on_page": [
+        "Laval",
+        "Longueuil"
+      ],
+      "checked": "2026-10-25",
+      "verified": true
+    },
+    {
+      "metro": "Vancouver",
+      "written": [
+        "Vancouver, BC",
+        "Metro Vancouver",
+        "Lower Mainland",
+        "Surrey, BC",
+        "Burnaby, BC",
+        "Richmond, BC"
+      ],
+      "source": "https://en.wikipedia.org/wiki/Metro_Vancouver_Regional_District",
+      "quote": "Surrey is the second-most populated city in Metro Vancouver",
+      "on_page": [
+        "Surrey",
+        "Burnaby",
+        "Richmond"
+      ],
+      "checked": "2026-10-25",
+      "verified": true
+    }
+  ]
+}

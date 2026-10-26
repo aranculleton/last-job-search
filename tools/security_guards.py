@@ -15,14 +15,20 @@ Checks:
    which would auto-approve commands on every fork. The same file's `hooks`
    key is held to an allowlist too: a hook runs automatically when its event
    fires, with no prompt, so it is strictly more dangerous than a pre-approved
-   permission.
+   permission. Every other key is held to an allowlist as well, failing closed: a
+   status line, a key helper, an `env` variable or a project MCP server runs a
+   command with no prompt the same way, and so does a wider permission mode.
 2. .gitignore — the personal-data ignore rules must all still be present,
    and no un-allowlisted negation (!pattern) may re-include them. Catches
    weakening that would make future users silently commit their tracker,
-   profile exports, or application archives.
+   profile exports, or application archives. A .gitignore inside a folder holds
+   no negation at all.
 3. .agents/**/package.json — no npm/bun lifecycle scripts (preinstall,
    install, postinstall, prepare, prepack) and no trustedDependencies.
    Catches code execution smuggled into `bun install`.
+4. Nothing committed that is rebuilt on every computer or read as its own by Claude
+   Code: compiled Python, a Python environment (.venv/, venv/), .mcp.json, or
+   .claude/settings.local.json.
 
 Stdlib only. Exit 0 on success, 1 with a failure list otherwise.
 """
@@ -152,6 +158,13 @@ ALLOWED_IGNORE_NEGATIONS = {
 # runs nothing else, needs no network and does nothing in a repo with no profile. It is
 # the only one, and SessionStart stays empty: a setup step is never a hook.
 #
+# Since 2026-10-25 it starts through tools/py.sh, the repo's own launcher, which finds a
+# Python 3.9 or newer and runs nothing else: `python3` alone is not a command on a Windows
+# computer with python.org's Python, so the check never ran there. `sh` is on every Mac and
+# Linux, and on Windows the hooks run in Git Bash, which has it. Each placeholder sits in
+# double quotes, the form the hooks docs give for shell-form commands
+# (https://code.claude.com/docs/en/hooks#reference-scripts-by-path).
+#
 # A hook is strictly more dangerous than a permissions.allow entry. A permission
 # pre-approves something Claude may choose to do; a hook runs unconditionally when
 # its event fires, with no prompt and no model decision in between. Cloning a repo
@@ -159,10 +172,25 @@ ALLOWED_IGNORE_NEGATIONS = {
 # August 2026 wave, planting a SessionStart hook in .claude/settings.json that
 # executed on session start:
 # https://research.jfrog.com/post/shai-hulud-is-back-august/
-LEARNED_HOOK = 'python3 "$CLAUDE_PROJECT_DIR"/tools/learned.py hook'
+LEARNED_HOOK = 'sh "${CLAUDE_PROJECT_DIR}"/tools/py.sh "${CLAUDE_PROJECT_DIR}"/tools/learned.py hook'
 ALLOWED_HOOKS: set[str] = {f"UserPromptSubmit:{LEARNED_HOOK}", f"Stop:{LEARNED_HOOK}"}
 
 FORBIDDEN_SCRIPTS = {"preinstall", "install", "postinstall", "prepare", "prepack"}
+
+# Every other key of .claude/settings.json is refused, failing closed. A project file can
+# set nearly every setting (https://code.claude.com/docs/en/settings, "Settings files and
+# who they affect"), and several run a command with no prompt once the folder is trusted:
+# `statusLine`, `apiKeyHelper` and the other helpers, an `env` variable such as BASH_ENV
+# that every Bash call sources, and `enableAllProjectMcpServers` with a server in
+# `.mcp.json`. The guard looked only at permissions.allow and hooks, and passed all of
+# them (2026-10-25). A key the app needs is added here in the same PR, like a permission.
+ALLOWED_SETTINGS_KEYS = {"$schema", "env", "permissions", "hooks"}
+# permissions: rules that only narrow (deny, ask) are always fine; `defaultMode` and
+# `additionalDirectories` widen what runs or what is read, and are refused.
+ALLOWED_PERMISSION_KEYS = {"allow", "deny", "ask"}
+# The environment the app sets for every chat, each name with its exact value: UTF-8 mode
+# for Python on Windows, and git never stopping to ask (sync_app._git_env says why).
+ALLOWED_ENV = {"PYTHONUTF8": "1", "GIT_TERMINAL_PROMPT": "0", "GCM_INTERACTIVE": "never"}
 
 
 def _hook_commands(event: str, entries: object):
@@ -219,10 +247,37 @@ def check_permissions() -> None:
                             "in the same PR so the addition is explicit and reviewable."
                         )
 
+    for key in sorted(set(data) - ALLOWED_SETTINGS_KEYS):
+        errors.append(
+            f".claude/settings.json: setting not in the reviewed allowlist: {key!r}. Several "
+            "settings run a command with no prompt (a status line, a key helper, a project MCP "
+            "server). If this one is intentional, add it to ALLOWED_SETTINGS_KEYS in "
+            "tools/security_guards.py in the same PR."
+        )
+    env = data.get("env", {})
+    if not isinstance(env, dict):
+        errors.append(".claude/settings.json: env must be an object")
+    else:
+        for name, value in sorted(env.items()):
+            if ALLOWED_ENV.get(name) != value:
+                errors.append(
+                    f".claude/settings.json: environment variable not in the reviewed "
+                    f"allowlist: {name}={value!r}. A variable set here reaches every command a "
+                    "chat runs (BASH_ENV is sourced by each one). If it is intentional, add it "
+                    "to ALLOWED_ENV in tools/security_guards.py in the same PR."
+                )
+
     permissions = data.get("permissions", {})
     if not isinstance(permissions, dict):
         errors.append(".claude/settings.json: permissions must be an object")
         return
+    for key in sorted(set(permissions) - ALLOWED_PERMISSION_KEYS):
+        errors.append(
+            f".claude/settings.json: permissions setting not in the reviewed allowlist: "
+            f"{key!r}. A permission mode or an extra folder widens what runs or what is read "
+            "with no prompt. If it is intentional, add it to ALLOWED_PERMISSION_KEYS in "
+            "tools/security_guards.py in the same PR."
+        )
     allow = permissions.get("allow", [])
     if not isinstance(allow, list) or not all(isinstance(entry, str) for entry in allow):
         errors.append(".claude/settings.json: permissions.allow must be a list of strings")
@@ -257,6 +312,19 @@ def check_gitignore() -> None:
                 "or was renamed intentionally, update REQUIRED_IGNORE_RULES in "
                 "tools/security_guards.py in the same PR."
             )
+    for rel in _nested_gitignores():
+        try:
+            inner = (ROOT / rel).read_text(encoding="utf-8", errors="replace").splitlines()
+        except OSError:
+            continue
+        for line in (x.strip() for x in inner):
+            if line.startswith("!"):
+                errors.append(
+                    f"{rel}: negation rule in a folder's own .gitignore: {line!r}. A rule here "
+                    "overrides the root .gitignore for that folder, so it can re-expose personal "
+                    "data the root ignores (a .gitignore in company_research/ holding !*.json "
+                    "would). Put re-includes in the root .gitignore, where they are reviewed."
+                )
     for line in lines:
         if line.startswith("!") and line not in ALLOWED_IGNORE_NEGATIONS:
             errors.append(
@@ -266,6 +334,30 @@ def check_gitignore() -> None:
                 "taking effect). If this negation is intentional, add it to "
                 "ALLOWED_IGNORE_NEGATIONS in tools/security_guards.py in the same PR."
             )
+
+
+_WALK_SKIP = {".git", "node_modules", ".venv", "venv", "__pycache__", "worktrees"}
+
+
+def _nested_gitignores() -> list[str]:
+    """Every .gitignore below the root, as a path from it: what git would commit (tracked,
+    or new and not ignored), or, outside git, every one on disk."""
+    import os
+    import subprocess
+    try:
+        r = subprocess.run(["git", "-C", str(ROOT), "ls-files", "-z", "--cached", "--others",
+                            "--exclude-standard"], capture_output=True, timeout=60)
+        if r.returncode == 0:
+            names = r.stdout.decode("utf-8", "replace").split("\0")
+            return sorted({n for n in names if n.endswith("/.gitignore")})
+    except (OSError, subprocess.TimeoutExpired):
+        pass
+    found = []
+    for dp, dns, fns in os.walk(ROOT):
+        dns[:] = [d for d in dns if d not in _WALK_SKIP]
+        if ".gitignore" in fns and Path(dp) != ROOT:
+            found.append((Path(dp) / ".gitignore").relative_to(ROOT).as_posix())
+    return sorted(found)
 
 
 def check_package_manifests() -> None:
@@ -313,8 +405,20 @@ def check_tracked_caches() -> None:
         return
     if r.returncode:
         return
-    found = [f for f in r.stdout.decode("utf-8", "replace").split("\0")
-             if f and ("__pycache__/" in f or f.endswith((".pyc", ".pyo")))]
+    tracked = [f for f in r.stdout.decode("utf-8", "replace").split("\0") if f]
+    # A Python environment the app carried would be run by tools/py.sh, which prefers the
+    # repo's .venv, for the hook on every prompt; a committed .mcp.json or local settings
+    # file is read by Claude Code as the folder's own (2026-10-25).
+    shipped = sorted({f.split("/")[0] if f.split("/")[0] in (".venv", "venv") else f
+                      for f in tracked if f.split("/")[0] in (".venv", "venv")
+                      or f in (".mcp.json", ".claude/settings.local.json")})
+    if shipped:
+        errors.append(
+            f"committed, and run or read by Claude Code with no prompt: {', '.join(shipped)}. "
+            "A Python environment is made on each computer and never committed; the app ships "
+            "no MCP server and no local settings. Take them out, keeping them on disk: git rm "
+            f"-r -q --cached {' '.join(shipped)}")
+    found = [f for f in tracked if "__pycache__/" in f or f.endswith((".pyc", ".pyo"))]
     if found:
         dirs = sorted({f.split("__pycache__/")[0] + "__pycache__" if "__pycache__/" in f else f
                        for f in found})
@@ -336,8 +440,8 @@ def main() -> int:
             print(f"  - {err}")
         return 1
     print(
-        "security_guards: OK (permissions allowlist, hooks allowlist, gitignore rules, "
-        "package manifests, no compiled files committed)"
+        "security_guards: OK (settings, permissions and hooks allowlists, gitignore rules, "
+        "package manifests, nothing committed that runs by itself)"
     )
     return 0
 

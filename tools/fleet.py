@@ -50,7 +50,8 @@ STALE_DAYS = 3
 
 
 def git(*args: str) -> str:
-    r = subprocess.run(["git", *args], capture_output=True, text=True)
+    r = subprocess.run(["git", *args], capture_output=True, text=True,
+                       encoding="utf-8", errors="replace")
     return r.stdout.strip() if r.returncode == 0 else ""
 
 
@@ -113,8 +114,9 @@ def main() -> int:
                 flag = "  DIVERGING"
                 findings.append(
                     f"{b['name']} is {b['ahead']} commits past master. The rule in "
-                    f"CLAUDE.md exists because a branch that runs far past master gets "
-                    f"its work rebuilt from scratch by another session. Merge it.")
+                    f"MAINTAINING.md, \"Master is the trunk\", exists because a branch that "
+                    f"runs far past master gets its work rebuilt from scratch by another "
+                    f"session. Merge it.")
             elif age >= STALE_DAYS and b["ahead"]:
                 flag = f"  STALE {age}d"
                 findings.append(

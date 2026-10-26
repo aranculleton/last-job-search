@@ -47,7 +47,7 @@ UA = {"User-Agent": "last-job-search-app-watch/1 (+https://github.com/arancullet
 
 def _git(*args: str, input: str | None = None) -> subprocess.CompletedProcess:
     return subprocess.run(["git", "-C", ROOT, *args], capture_output=True, text=True,
-                          input=input)
+                          input=input, encoding="utf-8", errors="replace")
 
 
 def app_url() -> str:
@@ -71,6 +71,29 @@ def is_maintainers() -> bool:
         and os.path.isdir(os.path.join(ROOT, "profile"))
 
 
+def _example_words() -> str | None:
+    """Every word of the app's invented example person, lowercased, when this repo's
+    profile is that person; None for anyone else."""
+    def name(folder: str) -> str:
+        try:
+            with open(os.path.join(ROOT, folder, "person.json"), encoding="utf-8") as fh:
+                return str((json.load(fh).get("identity") or {}).get("name") or "").strip()
+        except (OSError, ValueError, AttributeError):
+            return ""
+    theirs = name("profile.example")
+    if not theirs or name("profile") != theirs:
+        return None
+    text = []
+    for d, _, files in os.walk(os.path.join(ROOT, "profile.example")):
+        for n in files:
+            try:
+                with open(os.path.join(d, n), encoding="utf-8", errors="replace") as fh:
+                    text.append(fh.read())
+            except OSError:
+                pass
+    return "\n".join(text).lower()
+
+
 def _state_path() -> str:
     d = _git("rev-parse", "--git-common-dir").stdout.strip() or ".git"
     return os.path.join(d if os.path.isabs(d) else os.path.join(ROOT, d), STATE)
@@ -87,7 +110,7 @@ def _load() -> dict:
 
 def _save(state: dict) -> None:
     try:
-        with open(_state_path(), "w", encoding="utf-8") as fh:
+        with open(_state_path(), "w", encoding="utf-8", newline="\n") as fh:
             json.dump(state, fh, indent=1, sort_keys=True)
     except OSError:
         pass
@@ -133,7 +156,7 @@ def _files_findings(files: dict[str, str], tokens) -> list[str]:
             os.makedirs(os.path.dirname(full), exist_ok=True)
             with open(full, "wb") as fh:
                 fh.write(data)
-        return leak_scan.scan(d, tokens, leak_scan.load_allow(None), show=True)
+        return leak_scan.scan(d, tokens, leak_scan.load_allow(None), show=True, export=True)
 
 
 def _text_findings(label: str, text: str, tokens) -> list[str]:
@@ -148,7 +171,7 @@ def _text_findings(label: str, text: str, tokens) -> list[str]:
         return []
     with tempfile.TemporaryDirectory() as d:
         path = os.path.join(d, label)
-        with open(path, "w", encoding="utf-8") as fh:
+        with open(path, "w", encoding="utf-8", newline="\n") as fh:
             fh.write(text)
         return leak_scan.scan_text([path], tokens, show=True)
 
@@ -187,6 +210,14 @@ def watch(everything: bool = False) -> tuple[list[str], str]:
     import build_app
     import leak_scan
     when = build_app.recorded()
+    # A copy set up as the app's own invented person (its profile copied from
+    # profile.example/, to try the app) records that person's words, and the app carries
+    # them on purpose: they are never this repo's to leak (2026-10-25).
+    example = _example_words()
+    ours = len(when)
+    if example is not None:
+        when = {t: w for t, w in when.items() if t.lstrip("=").lower() not in example}
+    as_example = ours - len(when)
     denylist = list(when)
     digest = hashlib.sha1("\n".join(denylist).encode("utf-8")).hexdigest()[:16]
     # Numbered straight from the list, one number an entry: written to a file and read
@@ -220,11 +251,21 @@ def watch(everything: bool = False) -> tuple[list[str], str]:
     by_branch: dict[str, dict[str, str]] = {}
     for key, (blob, branch) in todo.items():
         by_branch.setdefault(branch, {})[key.split("\0", 1)[1]] = blob
+    # Which file version, commit or pull request each finding came from: those are read
+    # again on the next look. Marking them read with the rest reported a leak once, and
+    # every later sync said "clean" while it was still public (2026-10-25).
+    source: dict[str, str] = {}
     for branch, files in sorted(by_branch.items()):
-        findings += [f"branch {branch}: {f}" for f in _files_findings(files, tokens)]
-    seen |= {b for b, _ in todo.values()}
-    # Commit messages new since the last look, on any branch, scanned as one text.
+        for f in _files_findings(files, tokens):
+            findings.append(f"branch {branch}: {f}")
+            hit = next((b for path, b in files.items() if f.startswith(path + ":")), "")
+            source[findings[-1]] = "blob " + hit
+    # Commit messages new since the last look, on any branch, scanned as one text, and
+    # those that had a finding last time, while a branch still holds them.
     new = _git("rev-list", *heads.values(), "--not", *old_tips).stdout.split() if heads else []
+    held = [] if fresh else [c for c in state.get("held_commits") or [] if c not in new and any(
+        _git("merge-base", "--is-ancestor", c, h).returncode == 0 for h in heads.values())]
+    new += held
     commits = len(new)
     if new:
         log = _git("log", "--no-walk=unsorted", "--format=%H%x00%B%x01", *new).stdout
@@ -239,23 +280,36 @@ def watch(everything: bool = False) -> tuple[list[str], str]:
         for f in _text_findings("messages", "\n".join(lines), tokens):
             n = int(f.split(":", 2)[1]) if f.split(":", 2)[1].isdigit() else 1
             findings.append(f"commit {owner[n - 1][:12]} message: {f.split(': ', 1)[-1]}")
+            source[findings[-1]] = "commit " + owner[n - 1]
     since = "" if fresh else str(state.get("prs_since") or "")
     prs, unread = _pull_requests(since)
     for p in prs:
         text = f"{p.get('title') or ''}\n{p.get('body') or ''}"
-        findings += [f"pull request #{p.get('number')}: {f.split(': ', 1)[-1]}"
-                     for f in _text_findings("pr", text, tokens)]
+        for f in _text_findings("pr", text, tokens):
+            findings.append(f"pull request #{p.get('number')}: {f.split(': ', 1)[-1]}")
+            source[findings[-1]] = "pr " + str(p.get("updated_at") or "")
     # An entry the app carried before this repo recorded it is the app's own word, not
     # the person's: set aside the way the leak scan before a push sets it aside.
     findings, aside = build_app.without_aside(findings, denylist, when, f"{REFS}master", ROOT)
+    still = {source.get(f, "") for f in findings}
+    seen |= {b for b, _ in todo.values() if "blob " + b not in still}
     newest = max([str(p.get("updated_at") or "") for p in prs] + [since])
+    # The pull request mark stops short of the oldest one with a finding, so it is read
+    # again; once edited clean, its new time moves the mark past it.
+    leaky = sorted(k[3:] for k in still if k.startswith("pr ") and k[3:])
+    if leaky:
+        newest = max([since] + [str(p.get("updated_at") or "") for p in prs
+                                if str(p.get("updated_at") or "") < leaky[0]])
     _save({"tokens": digest, "blobs": sorted(seen), "tips": sorted(set(heads.values())),
+           "held_commits": sorted(k[7:] for k in still if k.startswith("commit ")),
            "prs_since": newest if not unread else since})
     summary = (f"{len(heads)} branch(es), {len(todo)} new file version(s), {commits} commit "
                f"message(s) and {len(prs)} pull request(s) checked against {len(denylist)} "
                "entries from this repo" + (f"; {unread}" if unread else "")
                + (f"; {len(aside)} set aside, carried by the app before this repo recorded "
-                  "them" if aside else ""))
+                  "them" if aside else "")
+               + (f"; {as_example} set aside, the app's own example person"
+                  if as_example else ""))
     return findings, summary
 
 

@@ -26,6 +26,7 @@ sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import render_application as R
 import untrusted
 import docpaths
+import local_path  # noqa: E402
 import person
 
 sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), "network"))
@@ -45,114 +46,9 @@ ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 MAX_NOTE_WORDS = 80   # "under eighty words": 79 is the most a note may carry
 
 
-def slug(company, role, abbr=""):
-    """Directory name for one application. The abbreviation is part of it, so
-    two roles at one employer with the same title (one employer posted "Senior
-    Business Analyst" twice), or two long titles that agree for eighty
-    characters (one role advertised in two cities), never overwrite each other.
-
-    Raises ValueError when company and role together hold no letter or digit.
-    The caller joins the result into a path, so returning "" wrote the
-    application's files straight into documents/applications/ rather than into
-    a folder of its own. documents/README.md has always stated that as the
-    rule; nothing enforced it, because the test covering the rule
-    reimplemented it instead of calling this function, and the two had drifted
-    apart on four of six cases.
-
-    The second strip is after the truncation, not before. An 80-character cut
-    can land on an underscore, and appending the abbreviation then produced the
-    doubled underscore the same rule says cannot occur.
-
-    Non-ASCII letters are dropped rather than transliterated, so `Ørsted`
-    derives `rsted`. That is ugly and it is deliberate: the folder names in
-    documents/applications/ were all written under this behaviour, and changing
-    it would orphan every one of them."""
-    s = f"{company} {role}".lower()
-    s = re.sub(r"[^a-z0-9]+", "_", s).strip("_")[:80].strip("_")
-    if not s:
-        raise ValueError(
-            "no folder name can be derived from company=%r role=%r: between them "
-            "they hold no letter or digit. Ask for a company or role that does, "
-            "and do not create a file or directory." % (company, role))
-    if abbr:
-        s += "_" + re.sub(r"[^a-z0-9]+", "", abbr.lower())
-    return s
-
-
-def _abbr_on_file(company, role):
-    """The abbreviation the tracker's row for this application was written under."""
-    import csv
-    import csv_store
-    csv_store.refuse_conflicts(person.state("job_search_tracker.csv"))
-    try:
-        with open(person.state("job_search_tracker.csv"), newline="", encoding="utf-8") as fh:
-            rows = list(csv.DictReader(fh))
-    except OSError:
-        return ""
-    want = (_company_key(company) if _company_key else company.lower(), slug("x", role))
-    rx = docpaths.resume_name_rx()
-    for r in reversed(rows):
-        got = (_company_key(r.get("company")) if _company_key else str(r.get("company")).lower(),
-               slug("x", r.get("role") or "x"))
-        m = rx.search(r.get("cv_file") or "")
-        if got == want and m:
-            return m.group(1)
-    return ""
-
-
-# A requisition number written into the role by the tracker or a board:
-# "Data Scientist II (R_1234567)", "Analyst [JR166447]", "Planner - REQ-20931".
-_REF = re.compile(r"\s*(?:[\(\[]\s*(?:req(?:uisition)?|job|ref|id)?\s*[#:]?\s*[A-Za-z]{0,4}[-_ ]?"
-                  r"\d{4,}[\w-]*\s*[\)\]]|[-\u2013|]\s*(?:req(?:uisition)?\s*[#:]?\s*)?"
-                  r"[A-Za-z]{0,4}[-_]?\d{4,}\w*)\s*$", re.I)
-
-
-def without_ref(role) -> str:
-    """The role with a trailing requisition number taken off, else unchanged."""
-    return _REF.sub("", str(role or "")).strip() or str(role or "")
-
-
-def app_folder(company, role, abbr=""):
-    """The folder one application lives in (documents/README.md, Subfolder naming).
-
-    The commands wrote `<company>_<role>/` while the tools wrote
-    `<company>_<role>_<abbr>/`, so /outcome and /interview missed the folder a
-    batch had written and started a second one beside it. The folder already
-    there wins: the full name, then the name without the abbreviation, then the
-    one folder for this company and role under any abbreviation. Otherwise the
-    full name, which is the rule.
-
-    A role carrying its requisition number, "Data Scientist II (R_1234567)", is also
-    looked for without it: the folder was named before the number was written into the
-    tracker, and the interview pack built itself from an empty folder.
-    """
-    base = person.state("documents", "applications")
-    abbr = abbr or _abbr_on_file(company, role)
-    stem = slug(company, role)
-    full = slug(company, role, abbr) if abbr else stem
-    bare = without_ref(role)
-    plain = slug(company, bare) if bare != role else stem
-    for name in dict.fromkeys((full, stem, plain)):
-        if os.path.isdir(os.path.join(base, name)):
-            return os.path.join(base, name)
-    try:
-        hits = [d for d in sorted(os.listdir(base)) for st in dict.fromkeys((stem, plain))
-                if d.startswith(st + "_") and "_" not in d[len(st) + 1:]
-                and os.path.isdir(os.path.join(base, d))]
-    except OSError:
-        hits = []
-    return os.path.join(base, hits[0] if len(hits) == 1 else full)
-
-
-def employer_folders(company) -> list[str]:
-    """Every application folder at this employer, by name."""
-    base = person.state("documents", "applications")
-    try:
-        prefix = slug(company, "") + "_"
-        return sorted(d for d in os.listdir(base)
-                      if d.startswith(prefix) and os.path.isdir(os.path.join(base, d)))
-    except (OSError, ValueError):
-        return []
+# An application's folder and its name are docpaths' (moved there 2026-10-25); the same
+# names here, for every caller and anyone's own checks that use them.
+from docpaths import slug, without_ref, app_folder, employer_folders  # noqa: E402,F401
 
 
 def _plain(s):
@@ -388,7 +284,7 @@ def archive_posting(d, a, meta, today):
     if not posting.strip():
         return "none"
     url = meta.get("url", "")
-    with open(path, "w", encoding="utf-8") as f:
+    with open(path, "w", encoding="utf-8", newline="\n") as f:
         f.write(f"# {a['role']} - {a['company']}\n\n")
         f.write(f"- **Source:** {url}\n" if url else "")
         f.write(f"- **Retrieved:** {meta.get('date', today)} via {meta.get('portal', 'portal search')}\n")
@@ -479,19 +375,19 @@ def write(a, meta, today):
             kept[k] = meta[k]
     if os.path.exists(os.path.join(d, "job_posting.md")):
         kept["posting_from"] = "job_posting.md"
-    with open(os.path.join(d, "draft.json"), "w", encoding="utf-8") as f:
+    with open(os.path.join(d, "draft.json"), "w", encoding="utf-8", newline="\n") as f:
         json.dump([kept], f, indent=1, ensure_ascii=False)
         f.write("\n")
     cid = for_contact_of(a, meta)
     if cid:
-        with open(os.path.join(d, "outreach.md"), "w", encoding="utf-8") as f:
+        with open(os.path.join(d, "outreach.md"), "w", encoding="utf-8", newline="\n") as f:
             f.write(for_contact_md(dict(a, url=a.get("url") or meta.get("url", ""),
                                         **{k: v for k, v in kept.items()
                                            if k.startswith("for_contact")}), cid, today))
         return d
     known = _known_contacts(a["company"])
     replied = [p for p in known if p.get("status") not in SENT_NO_REPLY]
-    with open(os.path.join(d, "outreach.md"), "w") as f:
+    with open(os.path.join(d, "outreach.md"), "w", encoding="utf-8", newline="\n") as f:
         f.write(f"# Outreach note - {a['company']}, {a['role']}\n\n")
         if replied:
             # Without this the note says "message the hiring manager" at an
@@ -560,7 +456,7 @@ if __name__ == "__main__":
         # so there is one answer to "which folder is this application's".
         if len(sys.argv) not in (4, 5):
             raise SystemExit('usage: outreach.py --folder "<Company>" "<Role>" [ABBR]')
-        print(os.path.relpath(app_folder(*sys.argv[2:]), person.state()))
+        print(local_path.rel(app_folder(*sys.argv[2:]), person.state()))
         sys.exit(0)
     if sys.argv[1:2] == ["--check-note"]:
         # /apply writes its note by hand: the same checks the assembled note meets.
@@ -589,7 +485,7 @@ if __name__ == "__main__":
     drafts, _ = fit_to_page.load(sys.argv[1])
     meta = {}
     if len(sys.argv) > 2:
-        raw = json.load(open(sys.argv[2]))
+        raw = json.load(open(sys.argv[2], encoding="utf-8"))
         for m in (raw if isinstance(raw, list) else raw.values()):
             if not m.get("abbr"):
                 raise SystemExit(f"{sys.argv[2]}: the row for {m.get('company') or '(no company)'} "
@@ -616,7 +512,7 @@ if __name__ == "__main__":
             words = 0
         had = os.path.exists(os.path.join(folder(a), "job_posting.md"))
         d = write(a, m, today)
-        print("wrote", os.path.relpath(d, ROOT), "|",
+        print("wrote", local_path.rel(d, ROOT), "|",
               (f"for {cid}: their thread, no cold note" if cid else f"{words} words")
               + (" | kept the archived job_posting.md" if had else ""))
     if refused:

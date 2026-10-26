@@ -70,7 +70,9 @@ bun run .agents/skills/linkedin-search/cli/src/cli.ts detail <id|url> [--format 
 
 `id` is the job ID from `search` results (e.g. `4426311357`). You may also pass a full
 LinkedIn `jobs/view/...` URL or a `urn:li:jobPosting:...` URN. Returns the full description,
-seniority, employment type, job function, and industries.
+seniority, employment type, job function, and industries. The JSON also carries
+`descriptionHtml`, the description as the page marks it up, so the round can take out what the
+page hides from a reader (`tools/hydrate.py`).
 
 ## Usage examples
 

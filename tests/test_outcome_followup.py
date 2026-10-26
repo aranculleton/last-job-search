@@ -5,9 +5,8 @@ implementation), so these tests pin the invariants that would break
 silently: the draft-only rule (the branch must never send anything on the
 user's behalf), the no-new-claims rule that keeps follow-ups inside the
 framework's never-fabricate boundary, the two-follow-up cap that terminates
-into /outcome's own no_response flow, the one clock (tools/followups.py, which
-the daily brief reads too), and the deliberate contrast with /gmail-sync's
-30-day staleness flag.
+into /outcome's own no_response flow, and the one clock (tools/followups.py,
+which the daily brief reads too).
 """
 import subprocess
 import sys
@@ -80,14 +79,6 @@ class OutcomeFollowupBranchSpec(unittest.TestCase):
             "spec lost the cap that stops the follow-up branch from nagging indefinitely",
         )
 
-    def test_threshold_contrast_with_gmail_sync_documented(self):
-        text = COMMAND.read_text(encoding="utf-8")
-        self.assertIn(
-            "30-day staleness flag",
-            text,
-            "spec lost the contrast between followups.py's nudge and /gmail-sync's 30-day alarm",
-        )
-
     @unittest.skipUnless(
         _HAVE_YAML,
         "PyYAML not installed (the CI Python-test job omits it; the lint job runs lint_skills.py directly)",
@@ -97,7 +88,7 @@ class OutcomeFollowupBranchSpec(unittest.TestCase):
             [sys.executable, str(REPO / "tools" / "lint_skills.py")],
             cwd=REPO,
             capture_output=True,
-            text=True,
+            text=True, encoding="utf-8", errors="replace",
         )
         self.assertEqual(result.returncode, 0, f"lint_skills.py failed:\n{result.stdout}{result.stderr}")
 

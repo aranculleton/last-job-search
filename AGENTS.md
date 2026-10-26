@@ -1,5 +1,5 @@
 ---
-framework_version: 2.2.3
+framework_version: 2.2.4
 ---
 
 # Agent guidelines
@@ -17,14 +17,14 @@ It is a pointer, not a second copy. Nothing here is the source of truth for anyt
 
 ## Read these, in this order
 
-1. **[`CLAUDE.md`](CLAUDE.md)** is the real entry point. Candidate profile, operating
-   rules, what routes to which command, the persistence rule, and where the verification
-   checklist is (`.claude/skills/job-application-assistant/verification-checklist.md`). If
-   you read one file, read that one. Then read `profile/CLAUDE.md`, the
-   person: `CLAUDE.md` pulls it in with an `@profile/CLAUDE.md` line that only Claude Code
-   follows.
+1. **[`CLAUDE.md`](CLAUDE.md)** is the real entry point: the short core every chat
+   loads (the one start command, grounding, plain words, delivery to the person's page,
+   saving) and a table naming the file each other topic lives in. If you read one file,
+   read that one. Then read `profile/CLAUDE.md`, the person: `CLAUDE.md` pulls it in with
+   an `@profile/CLAUDE.md` line that only Claude Code follows.
 2. **[`RUNBOOK.md`](RUNBOOK.md)** is one round end to end, portals to sent applications,
-   as a sequence of commands.
+   as a sequence of commands, and the session-wide rules the core points at: the start, the
+   command map, saving and landing, what goes where, delivering in a chat.
 3. **[`.claude/skills/job-application-assistant/`](.claude/skills/job-application-assistant/)**
    holds the methodology: `11-cost-model.md` is where model spend goes and which model
    each stage takes. The candidate's own files are in `profile/`:
@@ -58,7 +58,7 @@ it now catches.
 | Ranking pipeline | `tools/` | Python 3.9+, no model tokens |
 | Portal search | `.agents/skills/*/cli/` | Bun, portable Agent Skills format |
 | Document generation | `tools/` + `templates/resume_gen.py` | Python, then lualatex / xelatex |
-| Verification | `tools/verify_batch.sh`, `check_claims.py`, `audit_letters.py` | bash and Python, then pdftotext |
+| Verification | `tools/verify_batch.sh` (`verify_batch.py`), `check_claims.py`, `audit_letters.py` | Python, reading the PDFs with pypdf |
 | Networking | `tools/network/` | Python |
 | Rules and methodology | `.claude/` | read by the agent |
 
@@ -77,8 +77,8 @@ Each has a way through:
 
 | In Claude Code | Where it lives | In another agent |
 |---|---|---|
-| `CLAUDE.md` loads itself, with the person imported | `CLAUDE.md`, `profile/CLAUDE.md` | Read both at the start of every session, `CLAUDE.md` first, and do its "Start of every session" steps |
-| Slash commands (`/setup`, `/apply`, `/network`, ...) | `.claude/commands/<name>.md` | Each file is a procedure. When the person asks for what a command does ("set me up", "find me jobs", a pasted posting, "they replied"), open that file and follow it step by step. The command map in `CLAUDE.md` says which is which |
+| `CLAUDE.md` loads itself, with the person imported | `CLAUDE.md`, `profile/CLAUDE.md` | Read both at the start of every session, `CLAUDE.md` first, and run the one start command it names (`python3 tools/app.py start`); RUNBOOK.md, "Start of a session", says what each line it prints means. The core is short on purpose: each of its rows names the file the rest of a topic lives in |
+| Slash commands (`/setup`, `/apply`, `/network`, ...) | `.claude/commands/<name>.md` | Each file is a procedure. When the person asks for what a command does ("set me up", "find me jobs", a pasted posting, "they replied"), open that file and follow it step by step. The command map in `RUNBOOK.md` ("Commands and skills: what routes where") says which is which |
 | Skills that load by topic | `.claude/skills/*/SKILL.md` | Before acting on a topic, read the matching skill: applications, the scraper, networking, upskilling |
 | Subagents | `.claude/agents/*.md` | Give the file to your runtime's own subagent as its brief, or do the job yourself by following it. The grounding audit is never skipped: it is the last read before anything reaches an employer or a contact |
 | The `draft-applications` workflow | `.claude/workflows/draft-applications.js` | Run its three stages yourself, one posting at a time, with the prompts written in the file: research, draft, audit. Each audit writes `<round_dir>/audit_<slug>.json`; then `python3 tools/stage_picks.py assemble <round_dir>` as usual |
@@ -92,5 +92,5 @@ fetching. Google's Gemini CLI reads `GEMINI.md`, which points here.
 
 Sessions are ephemeral. Anything learned and not written down is lost. The three state
 files are `job_search_tracker.csv`, `network_contacts.csv` and `network_threads.csv`, and
-`python3 tools/open_actions.py` renders all three as one view. The table in CLAUDE.md
-under "Memory: the repo remembers, the chat does not" says exactly what goes where.
+`python3 tools/open_actions.py` renders all three as one view. The table in RUNBOOK.md,
+"What changes, and where it goes", says exactly what goes where.

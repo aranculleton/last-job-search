@@ -65,7 +65,7 @@ class UpstreamCheckerRepoFixture(unittest.TestCase):
             [sys.executable, str(self.root / "tools" / "check_upstream_updates.py"), "--no-fetch", *args],
             cwd=self.root,
             capture_output=True,
-            text=True,
+            text=True, encoding="utf-8", errors="replace",
         )
 
 

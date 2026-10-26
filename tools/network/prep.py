@@ -66,6 +66,7 @@ for _p in (_HERE, os.path.dirname(_HERE)):
         sys.path.insert(0, _p)
 
 import person as _person  # noqa: E402
+import local_path  # noqa: E402
 
 # Run with no profile (the app itself, or before /setup), the imports below read it and the
 # command crashed with a traceback, `--help` included. It says so plainly instead.
@@ -110,16 +111,16 @@ RESEARCH_FRESH_DAYS = research_cache.RESEARCH_FRESH_DAYS
 # Where a fact is allowed to say it came from when the caller does not name a
 # more specific source. These are files in the repo, so "source: X" stays
 # checkable rather than becoming a shrug.
-PROFILE_SOURCE = os.path.relpath(
+PROFILE_SOURCE = local_path.rel(
     person.file("candidate_profile", "01-candidate-profile.md"), ROOT).replace(os.sep, "/")
 CONTACTS_SOURCE = "network_contacts.csv"
 THREADS_SOURCE = "network_threads.csv"
 TRACKER_SOURCE = "job_search_tracker.csv"
 # Where the work-authorization line each reader hears is kept (networking.py WORK_AUTH).
-NETWORKING_SOURCE = "%s WORK_AUTH" % os.path.relpath(
+NETWORKING_SOURCE = "%s WORK_AUTH" % local_path.rel(
     person.path("networking.py"), ROOT).replace(os.sep, "/")
 # Where the phrases the person has said never to use are kept (tools/learned.py).
-LEARNED_SOURCE = os.path.relpath(person.path(learned.FILE), ROOT).replace(os.sep, "/")
+LEARNED_SOURCE = local_path.rel(person.path(learned.FILE), ROOT).replace(os.sep, "/")
 
 # The phrase the document uses for anything nobody looked up. One phrase, used
 # everywhere, so the user learns to read past it instead of mistaking a blank
@@ -345,7 +346,12 @@ def _research_source(research) -> str:
     fetched = _text(research.get("fetched_date"))
     if not company and not fetched:
         return ""
-    name = "%s/%s.json" % (RESEARCH_DIR, research_cache.file_key(company)) if company else RESEARCH_DIR
+    # The file it was read from, where the loader said: a country's own file
+    # (<key>--<cc>.json) or one keyed under another spelling was cited by a name it is not
+    # kept under (interview audit, 2026-10-25).
+    name = (_text(research.get("_cache_file"))
+            or ("%s/%s.json" % (RESEARCH_DIR, research_cache.file_key(company)) if company
+                else RESEARCH_DIR))
     return "%s, fetched %s" % (name, fetched) if fetched else name
 
 
@@ -1704,13 +1710,13 @@ def _process_lines(contact, application) -> list:
     no row at all, a booked call on the hiring side is sent to /interview the same way."""
     if not application:
         return _unregistered_lines(contact)
-    import outreach
+    import docpaths
     status = _text(application.get("status")).lower()
     if status not in LIVE_STATUSES:
         return []
     living = _pack().LIVING
-    folder = outreach.app_folder(_text(application.get("company")), _text(application.get("role")))
-    path = os.path.relpath(os.path.join(folder, living), STATE_ROOT).replace(os.sep, "/")
+    folder = docpaths.app_folder(_text(application.get("company")), _text(application.get("role")))
+    path = local_path.rel(os.path.join(folder, living), STATE_ROOT).replace(os.sep, "/")
     out = []
     # The hiring side only: a peer's coffee chat at the same employer, or the referrer who
     # started the process, is still a networking call.
@@ -2267,12 +2273,12 @@ def render_prep(contact, company_research=None, application=None, profile_facts=
         if fresh == old:
             return path, "current"
         if not dry_run:
-            with open(path, "w", encoding="utf-8") as f:
+            with open(path, "w", encoding="utf-8", newline="\n") as f:
                 f.write(fresh)
         return path, "restamped"
     if not dry_run:
         os.makedirs(os.path.dirname(path), exist_ok=True)
-        with open(path, "w", encoding="utf-8") as f:
+        with open(path, "w", encoding="utf-8", newline="\n") as f:
             f.write(new)
     return path, "written"
 
@@ -2288,6 +2294,10 @@ def load_research(company, root=STATE_ROOT) -> dict:
     is reaches the document through `_stale_line`, from the file's own date.
     """
     data, _age, _fresh = research_cache.load(company, root=root)
+    if data:
+        found = research_cache.path(company, root=root)
+        if found:
+            data = dict(data, _cache_file=local_path.rel(found, root).replace(os.sep, "/"))
     return data
 
 
@@ -2305,7 +2315,7 @@ def search_context(contact, application, root=STATE_ROOT) -> tuple:
     if not company:
         return (), None
     roles = why.open_roles(company, os.path.join(root, "documents", "rounds"))
-    return [dict(r, source=os.path.relpath(r["_path"], root).replace(os.sep, "/"))
+    return [dict(r, source=local_path.rel(r["_path"], root).replace(os.sep, "/"))
             for r in roles if r.get("_path")], None
 
 
@@ -2316,11 +2326,24 @@ def find_application(contact, tracker_rows) -> dict:
     under an employer's legal name has to find the application filed under its
     initials.
     """
-    for link in state.link_to_applications([contact], tracker_rows or []):
+    rows = tracker_rows or []
+    # One index of the tracker by employer key, kept while the same rows are passed: a
+    # brief rebuilds every prep, and each one keyed every tracker row again (169 preps
+    # on a large state, most of the brief's time on Windows; 2026-10-25).
+    if _INDEX[0] is not rows or _INDEX[1] != len(rows):
+        index: dict[str, list] = {}
+        for r in rows:
+            index.setdefault(state.company_key(r.get("company")), []).append(r)
+        _INDEX[:] = [rows, len(rows), index]
+    near = _INDEX[2].get(state.row_company_key(contact), [])
+    for link in state.link_to_applications([contact], near):
         apps = link["open_applications"] or link["applications"]
         if apps:
             return apps[0]
     return {}
+
+
+_INDEX: list = [None, -1, {}]
 
 
 # ---------------------------------------------------------------- CLI
@@ -2348,8 +2371,8 @@ def _render_one(row, tracker, a, keep_if_same=False, dry_run=False) -> tuple:
         # documents name the same gaps: the tracker's notes are not the posting.
         posting = ""
         if application:
-            import outreach
-            posting = profile_facts.posting_in(outreach.app_folder(
+            import docpaths
+            posting = profile_facts.posting_in(docpaths.app_folder(
                 _text(application.get("company")), _text(application.get("role"))))
         facts = profile_facts.build(
             role=_text(application.get("role")) or _text(row.get("role")), posting=posting)
@@ -2430,7 +2453,7 @@ def main(argv=None) -> int:
                 if what == "written":
                     would += 1
                     print("would %s %s" % ("rewrite" if existed else "write",
-                                           os.path.relpath(path, a.root)))
+                                           local_path.rel(path, a.root)))
                 else:
                     same += 1
             print("%d prep documents would be written (prep v%d)%s; nothing written"
@@ -2464,7 +2487,7 @@ def main(argv=None) -> int:
             with open(path, encoding="utf-8") as fh:
                 found = check_answers(fh.read(), _text(row.get("company")))
         except OSError:
-            print("prep: no %s yet: write it first" % os.path.relpath(path, a.root),
+            print("prep: no %s yet: write it first" % local_path.rel(path, a.root),
                   file=sys.stderr)
             return 1
         for q, why_ in found:
@@ -2477,20 +2500,28 @@ def main(argv=None) -> int:
             "%d answer(s) not fit to say yet" % (len(held) - asks) if len(held) > asks else "",
             "%d draft(s) for you to confirm (%s)" % (drafts, DRAFT_TODO) if drafts else "")
             if x) + "." if found else "Every answer is fit to say aloud.")
+        if not held:
+            # Checked after a hand edit, the copy to send is made again from it.
+            try:
+                import shown
+                print("send: %s (this copy, never the file above: its name says whose it is)"
+                      % shown.copy(path, a.root))
+            except Exception as exc:  # noqa: BLE001  the check passed; only its copy failed
+                print("send: no named copy (%s); send %s" % (exc, local_path.rel(path, a.root)))
         return 1 if held else 0
     if a.dry_run:
-        print("would write %s; nothing written" % os.path.relpath(prep_path(row, a.root), a.root))
+        print("would write %s; nothing written" % local_path.rel(prep_path(row, a.root), a.root))
         return 0
     tracker = state.load_tracker(a.tracker) if os.path.exists(a.tracker) else []
     written = _write_one(row, tracker, a)
-    print(os.path.relpath(written, a.root))
+    print(local_path.rel(written, a.root))
     # The copy to send, named for whose it is: every contact's file is called prep.md.
     try:
         import shown
         print("send: %s (this copy, never the file above: its name says whose it is)"
               % shown.copy(written, a.root))
     except Exception as exc:  # noqa: BLE001  the document is written; only its copy failed
-        print("send: no named copy (%s); send %s" % (exc, os.path.relpath(written, a.root)))
+        print("send: no named copy (%s); send %s" % (exc, local_path.rel(written, a.root)))
     need = research_needed(row, load_research(row.get("company"), a.root), a.today)
     if need:
         print(need)

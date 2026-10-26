@@ -1,0 +1,290 @@
+{
+  "name": "Australia",
+  "country": "au",
+  "aka": [
+    "AU",
+    "AUS",
+    "Commonwealth of Australia"
+  ],
+  "languages": [
+    "en"
+  ],
+  "currency": "AUD",
+  "boards": [
+    {
+      "name": "Workforce Australia",
+      "url": "https://www.workforceaustralia.gov.au",
+      "kind": "public",
+      "source": "https://en.wikipedia.org/wiki/Workforce_Australia",
+      "quote": "Workforce Australia is an Australian Government -funded network of organisations",
+      "checked": "2026-10-25",
+      "verified": true,
+      "search": "https://www.workforceaustralia.gov.au/individuals/jobs/search?searchText=analyst",
+      "paths": {
+        "search": "/individuals/jobs/search?searchText=analyst",
+        "posting": "/individuals/jobs/details/"
+      },
+      "robots": {
+        "checked": "2026-10-25",
+        "why": "",
+        "search": false,
+        "status": "disallowed",
+        "posting": false,
+        "crawl_delay": null,
+        "ai_input": null
+      },
+      "public_search": {
+        "checked": "2026-10-25",
+        "status": "not_tried",
+        "http": null
+      }
+    },
+    {
+      "name": "SEEK",
+      "url": "https://www.seek.com.au",
+      "kind": "general",
+      "source": "https://en.wikipedia.org/wiki/Seek_Limited",
+      "quote": "SEEK Limited is an Australian employment website for job listings, headquartered in Melbourne",
+      "checked": "2026-10-25",
+      "verified": true,
+      "search": "https://www.seek.com.au/analyst-jobs/in-All-Sydney-NSW",
+      "paths": {
+        "search": "/analyst-jobs/in-All-Sydney-NSW",
+        "posting": "/job/"
+      },
+      "robots": {
+        "checked": "2026-10-25",
+        "why": "",
+        "search": true,
+        "status": "partial",
+        "posting": false,
+        "crawl_delay": null,
+        "ai_input": null
+      },
+      "public_search": {
+        "checked": "2026-10-25",
+        "status": "blocked",
+        "http": 403
+      }
+    },
+    {
+      "name": "Indeed",
+      "url": "https://au.indeed.com",
+      "kind": "general",
+      "source": "https://en.wikipedia.org/wiki/Indeed",
+      "quote": "Indeed is currently available in over 60 countries and 28 languages",
+      "checked": "2026-10-25",
+      "verified": true,
+      "search": "https://au.indeed.com/jobs?q=analyst&l=Sydney+NSW",
+      "paths": {
+        "search": "/jobs?q=analyst&l=Sydney+NSW",
+        "posting": "/viewjob?jk=0"
+      },
+      "robots": {
+        "checked": "2026-10-25",
+        "why": "",
+        "search": true,
+        "status": "partial",
+        "posting": false,
+        "crawl_delay": null,
+        "ai_input": null
+      },
+      "public_search": {
+        "checked": "2026-10-25",
+        "status": "blocked",
+        "http": 401
+      }
+    },
+    {
+      "name": "Jora",
+      "url": "https://au.jora.com",
+      "kind": "aggregator",
+      "source": "https://en.wikipedia.org/wiki/Jora",
+      "quote": "",
+      "checked": "2026-10-25",
+      "verified": false,
+      "why": "the sentence found on the page does not say it",
+      "search": "https://au.jora.com/j?q=analyst&l=Sydney+NSW",
+      "paths": {
+        "search": "/j?q=analyst&l=Sydney+NSW",
+        "posting": "/job/"
+      },
+      "robots": {
+        "checked": "2026-10-25",
+        "why": "robots.txt could not be read (HTTP 403)",
+        "search": null,
+        "status": "unconfirmed",
+        "posting": null,
+        "crawl_delay": null,
+        "ai_input": null
+      },
+      "public_search": {
+        "checked": "2026-10-25",
+        "status": "not_tried",
+        "http": null
+      }
+    }
+  ],
+  "eligibility": [
+    {
+      "phrase": "Australian citizen or permanent resident",
+      "lang": "en",
+      "means": "citizenship",
+      "source": "https://en.wikipedia.org/wiki/Australian_nationality_law",
+      "quote": "if at least one of their parents is an Australian citizen or permanent resident",
+      "checked": "2026-10-25",
+      "verified": true
+    },
+    {
+      "phrase": "full working rights / a visa with work rights",
+      "lang": "en",
+      "means": "work_right",
+      "source": "https://en.wikipedia.org/wiki/Australian_nationality_law",
+      "quote": "",
+      "checked": "2026-10-25",
+      "verified": false,
+      "why": "the quote is not on the page"
+    },
+    {
+      "phrase": "employer-sponsored visa (Skills in Demand, formerly TSS 482)",
+      "lang": "en",
+      "means": "sponsorship",
+      "source": "https://en.wikipedia.org/wiki/Temporary_Skill_Shortage_visa",
+      "quote": "",
+      "checked": "2026-10-25",
+      "verified": false,
+      "why": "the source could not be read: HTTP 404"
+    },
+    {
+      "phrase": "security clearance (Baseline, NV1, NV2)",
+      "lang": "en",
+      "means": "clearance",
+      "source": "https://en.wikipedia.org/wiki/Security_clearance",
+      "quote": "",
+      "checked": "2026-10-25",
+      "verified": false,
+      "why": "no sentence on the page says it (looked for: Australia)"
+    }
+  ],
+  "documents": [
+    {
+      "topic": "noun",
+      "value": "resume",
+      "source": "https://en.wikipedia.org/wiki/R%C3%A9sum%C3%A9",
+      "quote": "",
+      "checked": "2026-10-25",
+      "verified": false,
+      "why": "no sentence on the page says it (looked for: Australia, résumé)"
+    },
+    {
+      "topic": "pages",
+      "value": "two to three pages",
+      "source": "https://en.wikipedia.org/wiki/R%C3%A9sum%C3%A9",
+      "quote": "",
+      "checked": "2026-10-25",
+      "verified": false,
+      "why": "no sentence on the page says it (looked for: Australia, pages)"
+    },
+    {
+      "topic": "photo",
+      "value": "no photo",
+      "source": "https://en.wikipedia.org/wiki/R%C3%A9sum%C3%A9",
+      "quote": "",
+      "checked": "2026-10-25",
+      "verified": false,
+      "why": "no sentence on the page says it (looked for: Australia, photo)"
+    },
+    {
+      "topic": "date_format",
+      "value": "DD/MM/YYYY",
+      "source": "https://en.wikipedia.org/wiki/Date_and_time_notation_in_Australia",
+      "quote": "The date and time in Australia are most commonly recorded using the day–month–year format",
+      "checked": "2026-10-25",
+      "verified": true
+    },
+    {
+      "topic": "spelling",
+      "value": "Australian English (British forms: colour, organise)",
+      "source": "https://en.wikipedia.org/wiki/Australian_English",
+      "quote": "Australian spelling is significantly closer to British compared with American spelling",
+      "checked": "2026-10-25",
+      "verified": true
+    }
+  ],
+  "pay": [
+    {
+      "name": "Employee Earnings (Australian Bureau of Statistics)",
+      "url": "https://www.abs.gov.au/statistics/labour/earnings-and-working-conditions/employee-earnings/latest-release",
+      "what": "earnings by occupation, industry and state",
+      "source": "https://www.abs.gov.au/statistics/labour/earnings-and-working-conditions/employee-earnings/latest-release",
+      "quote": "Employee earnings, August 2025 | Australian Bureau of Statistics",
+      "checked": "2026-10-25",
+      "verified": true
+    },
+    {
+      "name": "Occupation profiles (Jobs and Skills Australia)",
+      "url": "https://www.jobsandskills.gov.au/data/occupation-and-industry-profiles",
+      "what": "median weekly earnings by occupation",
+      "source": "https://www.jobsandskills.gov.au/data/occupation-and-industry-profiles",
+      "quote": "",
+      "checked": "2026-10-25",
+      "verified": false,
+      "why": "the source could not be read: robots.txt could not be read (RuntimeError)"
+    }
+  ],
+  "places": [
+    {
+      "metro": "Sydney",
+      "written": [
+        "Sydney NSW",
+        "Greater Sydney",
+        "Sydney CBD",
+        "Parramatta",
+        "North Sydney"
+      ],
+      "source": "https://en.wikipedia.org/wiki/Greater_Sydney",
+      "quote": "Western Sydney viewed from Parramatta",
+      "on_page": [
+        "Parramatta",
+        "North Sydney"
+      ],
+      "checked": "2026-10-25",
+      "verified": false,
+      "why": "the quote is too short to prove anything"
+    },
+    {
+      "metro": "Melbourne",
+      "written": [
+        "Melbourne VIC",
+        "Greater Melbourne",
+        "Melbourne CBD",
+        "Geelong",
+        "Dandenong"
+      ],
+      "source": "https://en.wikipedia.org/wiki/Greater_Melbourne",
+      "quote": "Note: this includes landmarks in the Melbourne central business district and its immediate surrounds, not the Greater Melbourne metropolitan area",
+      "on_page": [
+        "Dandenong"
+      ],
+      "checked": "2026-10-25",
+      "verified": true
+    },
+    {
+      "metro": "Brisbane",
+      "written": [
+        "Brisbane QLD",
+        "Greater Brisbane",
+        "Ipswich",
+        "Logan"
+      ],
+      "source": "https://en.wikipedia.org/wiki/Greater_Brisbane",
+      "quote": "Greater Brisbane is represented by five local government areas (LGAs): the City of Brisbane , the City of Ipswich , Logan City , the City of Moreton Bay and Redland City .",
+      "on_page": [
+        "Ipswich",
+        "Logan"
+      ],
+      "checked": "2026-10-25",
+      "verified": true
+    }
+  ]
+}
