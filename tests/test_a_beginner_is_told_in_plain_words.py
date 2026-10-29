@@ -83,8 +83,7 @@ def test_every_message_the_place_check_says_unasked_is_plain():
     for name in dir(place):
         if name.startswith("SHORT_") and isinstance(getattr(place, name), str):
             _plain(getattr(place, name))
-    for line in (place.QUESTION, place.TRADE_OFF, place.TWO_CHATS):
-        _plain(line)
+    _plain(place.CHATS)
 
 
 def test_what_a_person_hears_about_their_page_after_an_update_is_one_short_sentence():
@@ -92,8 +91,7 @@ def test_what_a_person_hears_about_their_page_after_an_update_is_one_short_sente
     a safety check, offered the pin again, set up a helper in two sentences and reported a
     timer running out. Each of these is all the person hears about one of those, said whole."""
     import app_listen
-    for line in (app_listen.SAY_UPDATED, app_listen.SAY_UPDATING, app_listen.SAY_NOT_UPDATED,
-                 app_listen.SAY_HELPER):
+    for line in (app_listen.SAY_UPDATED, app_listen.SAY_UPDATING, app_listen.SAY_NOT_UPDATED):
         _plain(line)
         assert line.endswith(".") and line.count(". ") == 0 and "?" not in line, line
         assert len(line.split()) <= 15, line
@@ -125,7 +123,7 @@ def _prose(text):
 def test_start_here_recommends_one_fix_for_the_cloud_and_one_way_onto_a_computer():
     text = _read("START_HERE.md")
     cloud = text.split("## 3. Say \"set me up\"", 1)[1].split("## On your computer", 1)[0]
-    local = text.split("## On your computer", 1)[1].split("## Then just talk to it", 1)[0]
+    local = text.split("## On your computer", 1)[1].split("## Then use your page", 1)[0]
     for part in (cloud, local):
         assert "recommended" in part.lower()
         for word in ("proxy", "egress", "allowlist", "Allowed domains", "worktree"):
@@ -163,20 +161,20 @@ def test_what_setup_says_to_the_person_is_plain_and_short():
         _plain(said.replace("<employer>", "").replace("<country>", ""))
     four = next(q for q in quoted if q.startswith("Thanks."))
     assert len(re.findall(r"^\d\. ", four, re.M)) == 4
-    # The place question, asked only where the chat cannot tell, is one short question.
-    ask = f"{place.QUESTION} {place.TRADE_OFF}"
-    _plain(ask)
-    assert ask.count("?") == 1 and len(ask.split()) <= 40
+    # Where they will work is never asked (the maintainer, 2026-10-29: no question with a
+    # clear default): setup says so, and the place tool has no question to hand over.
+    assert "is never asked" in setup and not hasattr(place, "QUESTION")
 
 
 def test_the_brief_is_made_with_nothing_for_the_person_to_type():
     import routines
     readme = _read("automation/README.md")
-    paste = re.search(r"> (Set up my brief in this chat\.)\n", readme)
-    assert paste and len(paste.group(1).split()) <= 8
+    # The bell does it; without a page, four words in the chat they already use.
+    paste = re.search(r'\*\*"(set up my brief)"\*\*', readme)
+    assert paste and "Press the bell on your Brief" in readme
     said = routines.default("Europe/London")["say"]
     _plain(said)
-    assert said.startswith("Your brief is set up: Mondays and Thursdays at 7:38")
+    assert said.startswith("Your brief is on: every day at 7:38")
     for line in claude_surfaces.steps("routines-cloud"):
         _plain(line)
 

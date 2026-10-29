@@ -908,10 +908,6 @@ CANARY_LOCATION = getattr(_S, "CANARY_LOCATION", LOCATIONS[-1] if LOCATIONS else
 CANARY_JOBAGE = 30
 
 
-class PortalDown(RuntimeError):
-    """A portal answered, without error, and returned nothing at all."""
-
-
 # A probe whose error will not change within the round (refused()) marks the portal
 # down with this before what it said, and main() sends it nothing more. It used to be
 # "left to the scrape": freehire's 403 Forbidden went on to fail all 300 requests, and a

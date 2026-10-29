@@ -215,7 +215,7 @@ def test_a_profile_the_page_read_is_logged_as_a_computer_chats_read_is(page):
     batch = json.load(open(got["batches"][0], encoding="utf-8"))
     wipe = next(e for e in batch if e["collection"] == "actions" and e["doc_id"] == aid)
     assert json.load(open(wipe["file_path"], encoding="utf-8")) == {
-        "value": {"text": {"__delete__": True}}}
+        "value": {"text": {"__delete__": True}}, "_v": wipe["if_version"] + 1}
 
 
 def test_nothing_here_fetches_linkedin():

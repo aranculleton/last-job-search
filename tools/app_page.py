@@ -61,10 +61,12 @@ def capabilities() -> dict:
     page is open in the Claude desktop app, with the four tools reading a profile needs.
     """
     return {
-        # reach/<contact>, each contact's LinkedIn address or email for Open profile and Open
-        # in email, is named too, so it stays the owner's alone whatever the root rule says.
+        # addr/part~<n> (reach/<contact> before 4.3), each contact's LinkedIn address or email
+        # for Open profile and Open in email, is named too, so it stays the owner's alone
+        # whatever the root rule says.
         "db": {"rules": [{"path": "", "read": "owner", "write": "owner"},
-                         {"path": "reach", "read": "owner", "write": "owner"}]},
+                         {"path": "reach", "read": "owner", "write": "owner"},
+                         {"path": "addr", "read": "owner", "write": "owner"}]},
         "user": {},
         "downloads": True,
         "comments": {},
@@ -73,8 +75,11 @@ def capabilities() -> dict:
         "assets": {},
         "mcp": {"servers": [{"server": "host:claude_browser",
                              "tools": ["navigate", "get_page_text", "read_page", "preview_start"]},
-                             # The page wakes the chat that answers it by itself.
-                             {"server": "Claude Code Remote", "tools": ["send_message", "list_environments", "create_session"]}]},
+                             # The page wakes the one chat that answers it by itself. Only
+                             # that: a page asking for more (starting chats) was refused by
+                             # some accounts' connector settings, and a new chat per task is
+                             # what the person asked never to happen (2026-10-29).
+                             {"server": "Claude Code Remote", "tools": ["send_message"]}]},
     }
 
 
@@ -126,11 +131,50 @@ def tables() -> dict:
             "work_cost": dict(app_alerts.WORK_COST)}
 
 
+def compact_js(js: str) -> str:
+    """The script without its comment-only lines, its block comments and its indentation.
+
+    A chat reads the whole page before it publishes it, so every byte here is read on each
+    republish (the maintainer, 2026-10-29: "every single process ... cheap"). Only what a
+    browser never runs goes: app.js holds no template literal (tests/test_the_page_is_one_
+    safe_document.py keeps it so), so no line can be inside a string that spans lines, and a
+    line opening with // or /* is a comment wherever it sits. Code and line breaks stay as
+    written, so automatic semicolons fall exactly where they did."""
+    out, in_block = [], False
+    for line in js.split("\n"):
+        t = line.strip()
+        if in_block:
+            if "*/" in t:
+                in_block = False
+                rest = t.split("*/", 1)[1].strip()
+                if rest:
+                    out.append(rest)
+            continue
+        if not t or t.startswith("//"):
+            continue
+        if t.startswith("/*"):
+            if "*/" not in t[2:]:
+                in_block = True
+                continue
+            rest = t[2:].split("*/", 1)[1].strip()
+            if rest:
+                out.append(rest)
+            continue
+        out.append(t)
+    return "\n".join(out)
+
+
+def compact_css(css: str) -> str:
+    """The stylesheet without comments, indentation or blank lines (see compact_js)."""
+    css = re.sub(r"/\*.*?\*/", "", css, flags=re.S)
+    return "\n".join(t for t in (ln.strip() for ln in css.split("\n")) if t)
+
+
 def render(model: dict) -> str:
     """The page, as the Artifact tool publishes it: content only, no doctype or head."""
-    css = _read("app.css")
+    css = compact_css(_read("app.css"))
     colours = palettes.css()
-    js = _read("app.js")
+    js = compact_js(_read("app.js"))
     page = _read("page.html")
     if "</style" in css.lower() or "</style" in colours.lower():
         raise ValueError("the stylesheets must not contain a closing style tag")

@@ -1,7 +1,7 @@
 # Automation: what runs on a clock
 
-One scheduled task keeps the search moving without anyone asking: **a brief, twice a
-week**. A scheduled job round is there too, for anyone who wants new postings found on a
+One scheduled task keeps the search moving without anyone asking, once the person wants it:
+**a brief each morning**, turned on from the bell on their Brief. A scheduled job round is there too, for anyone who wants new postings found on a
 clock, but it is off by default: "find me jobs" in any chat runs one. The instructions live
 in `prompts/`, in git, so changing what a task does is a pull request and never an edit to
 the task. Which tasks exist, when they run and where they report is the person's own
@@ -9,7 +9,7 @@ registry, `profile/routines.json` (`profile.example/routines.json` shows the sha
 
 | Task | What it delivers |
 |---|---|
-| **Job search: morning brief**, twice a week (Monday and Thursday suit most searches) | Led by where the search is (an interview to prep, replies owed, applications waiting, or too little going out), then what is owed with the replies and nudges drafted, the counts since the last brief, three things to do before the next one, and the news that matters. Every run also takes the app's updates, so the copy stays current when no chat is opened (`prompts/morning_brief.md`). |
+| **Job search: morning brief**, every morning once it is turned on (weekdays or other days in one tap) | Led by where the search is (an interview to prep, replies owed, applications waiting, or too little going out), then what is owed with the replies and nudges drafted, the counts since the last brief, three things to do before the next one, and the news that matters. Every run also takes the app's updates, so the copy stays current when no chat is opened (`prompts/morning_brief.md`). |
 | **Job search: shortlist**, optional and off by default | A scored round of new postings, best first (`prompts/job_round.md`). Reply with picks in the same chat and it drafts, verifies and records them. |
 
 **If no brief has arrived two hours after its time on one of its days, the automation is
@@ -19,45 +19,32 @@ Tell any Claude chat "the scheduled tasks are down" and point it at this file.
 
 ## Set it up
 
-**Setup makes the brief for you, and asks nothing.** At the end of `/setup` a cloud chat makes
-it: its own chat, **Job search: morning brief**, on your private repo; a task bound to that
-chat, Mondays and Thursdays at 7:38 your time; and one first brief a few minutes later, so you
-see it work (`python3 tools/routines.py brief` prints the calls). Change its days or time, or
-pause it for a break, on your page (Settings), or say "move my brief" in any chat. Anywhere it
-was not made, say "set up my brief" in any chat.
+**Press the bell on your Brief.** That is all. The chat that answers your page sets the brief
+up in itself, every day at 7:38 your time, and runs a first one a few minutes later so you see
+it work (`python3 tools/routines.py brief` prints the calls). No new chat is made. Change its
+days or time, or turn it off, from the same bell or in Settings, Your brief; take a break from
+the whole search there too. With no page, say "set up my brief" in any chat. Nothing is
+scheduled until you ask: a brief is a run every morning, and the app costs nothing it was not
+asked for.
 
-Two set-ups work reliably, and they trade the same thing: where the briefing arrives. Setup
+Two set-ups work reliably, and they trade the same thing: where the briefing arrives. The bell
 makes (a).
 
-| | (a) One chat per briefing | (b) A routine, a new chat each run |
+| | (a) In the chat that answers your page | (b) A routine, a new chat each run |
 |---|---|---|
-| Where the briefing arrives | A reply in that briefing's own chat | A new chat each run |
+| Where the briefing arrives | Your Brief, and a reply in that chat | A new chat each run |
 | Push to your phone | No | Yes, where the app notifies you of the run |
-| Where you reply to the shortlist | The "Job search: shortlist" chat | The chat that run opened |
-| Set up from | A chat (Claude does it) | A routine (Claude, where its chat has the tool; otherwise you, once) |
+| Where you reply to the shortlist | The chat that answers your page | The chat that run opened |
+| Set up from | The bell (Claude does it) | A routine, made by you, once |
 
 Both run on **your private repo**, never on the public app: a chat on the app holds none of
 your state, and anything it pushed would be public.
 
-**From your own computer.** Say "set up my brief" there too. Claude first checks whether a
-brief already exists (`python3 tools/routines.py brief`), by your registry or a task's own
-prompt and never its title, so a second is never made. The brief always runs in the cloud,
-so it arrives when your computer is off. Where the chat on your computer has the tool for
-routines, Claude makes it itself, as (b); otherwise you make it, once:
-
-<!-- claude-surface: routines-cloud -->
-<!-- checked 2026-10-25; https://code.claude.com/docs/en/routines -->
-To make the brief in the cloud:
-1. Open claude.ai/code/routines and choose New task (in the desktop app's Code tab:
-   Scheduled, then New task).
-2. Name it Job search: morning brief, choose your copy, set it weekly at your time, paste
-   the prompt I give you, and save.
-3. Open it again, choose Custom, and paste the schedule I give you, so it runs on both days.
-
-Screens change: if yours looks different, tell Claude what you see.
-<!-- /claude-surface -->
-
-A scheduled task that runs on your computer is never used for it:
+**From your own computer.** Press the same bell. The brief always runs in the cloud, in
+Claude's helper, so it arrives when your computer is off. Where your page is answered by the chat on
+your computer and there is no helper yet, the same tap opens the helper's chat: press Send
+there, once. Nothing else is asked, and no other chat is made. A scheduled task that runs
+on your computer is never used for it:
 
 <!-- claude-surface: routines-local -->
 <!-- checked 2026-10-18; https://code.claude.com/docs/en/desktop-scheduled-tasks -->
@@ -77,25 +64,26 @@ only the person can, in theirs.
 
 ### For Claude: the rules of setting it up
 
-- **"Set up my brief" is set-up (a), and `/setup` does it at its end, asking nothing.** First
-  list the account's scheduled tasks (`list_triggers`, every page) and run `python3
-  tools/routines.py brief --triggers <each page>`: a brief that exists, whatever it is called,
-  is attached to and never made twice, and a task that only looks like one is asked about.
-- **In a cloud chat** with none, `brief` prints the calls to make, in order:
-  `create_session` on the person's private repo, titled "Job search: morning brief" and with
-  no prompt; `create_trigger` bound to that chat (`persistent_session_id`), `CRON_TZ=<their
-  zone> 38 7 * * 1,4`, the stub as its prompt, `connectors: []`; and a one-off `run_once_at`
-  first brief bound to the same chat, never `fire_trigger`. Then `routines.py record`, and
-  land it. A chat told "Set up my brief in this chat" binds the task to itself the same way.
-- **On their computer** (`python3 tools/claude_surfaces.py show <id>` for remote-trigger,
-  routines-cloud, routines-local and cli-cloud): with the `RemoteTrigger` tool, make it
-  yourself as (b), on the private repo, the stub as its prompt, notifications on, recorded as
-  `routines_screen`; without it, give them once the steps `claude_surfaces.py steps
-  routines-cloud` prints. Never start a cloud chat from your own shell, and never make a
-  desktop scheduled task for the brief (both below).
+- **"Set up my brief" is set-up (a), asking nothing**: the bell's work item (`brief` with
+  `args.setup`, done by the chat that answers the page) or the words in a chat. `/setup`
+  never makes it. First list the account's scheduled tasks (`list_triggers`, every page) and
+  run `python3 tools/routines.py brief --triggers <each page>`: a brief that exists, whatever
+  it is called, is attached to and never made twice, and a task that only looks like one is
+  asked about.
+- **In a cloud chat** with none, `brief` prints the calls to make, in order: `create_trigger`
+  bound to this chat (`persistent_session_id`, this chat's own id), `CRON_TZ=<their zone> 38 7
+  * * *`, the stub as its prompt, `connectors: []`; and a one-off `run_once_at` first brief
+  bound to the same chat, never `fire_trigger`. Then `routines.py record`, and land it. No
+  chat is ever made for it: where this chat's id cannot be read, `brief` says to ask
+  `get_session` (no `session_id`) for it and run again with `--chat <its id>`.
+- **On their computer**, `brief` prints the one line to tell them: turn it on from the bell
+  on their Brief. The bell sends it to the chat in the cloud that answers the page (a brief
+  only runs there, `tools/page_db.py` `can_take`) and starts the helper where there is none.
+  Never make a desktop scheduled task for the brief, never start a cloud chat from your own
+  shell, and never make a routine for it from there.
 - The lines `routines.py brief` prints are for you: act on them, and tell the person only the
-  one line it gives ("Your brief is set up: Mondays and Thursdays at 7:38, ..."), never its
-  file, id or task name.
+  one line it gives ("Your brief is on: every day at 7:38. ..."), never its file, id or task
+  name.
 - The final reply of a run is the message; nothing depends on `fire_trigger`. Only a change
   of schedule needs `update_trigger` or the routine's own page; a change to what a task does
   is a pull request on its prompt file.
@@ -120,66 +108,61 @@ Scheduled run: morning brief. Run `git fetch origin master`, then read `automati
 Scheduled run: job round. Run `git fetch origin master`, then read `automation/prompts/_common.md` and `automation/prompts/job_round.md` as they are on origin/master (`git show origin/master:<path>`) and follow them exactly. If either cannot be read, reply with one line saying which file and why.
 ```
 
-### (a) One chat per briefing
+### (a) In the chat that answers your page
 
-Say **"set up my brief"** in any cloud chat in your repo, or let `/setup` do it. Claude lists
-your scheduled tasks and runs `python3 tools/routines.py brief --triggers <each page>`, so a
-brief that already exists, under any name, is never made twice. With none, it makes the
-brief's own chat (`create_session` on your private repo, titled **Job search: morning brief**),
-a task bound to it (`create_trigger` with that chat's id, `CRON_TZ=<your zone> 38 7 * * 1,4`,
-the morning brief stub below as its prompt, no connectors), and a one-off first run a few
-minutes later bound to the same chat; then `routines.py record` writes `profile/routines.json`
-and it lands on master. You answer nothing: the days and the time are defaults, and the zone
-is the one your profile names. Where a chat cannot make chats itself:
+Press the bell on your Brief, or say **"set up my brief"** in any cloud chat in your repo.
+Claude lists your scheduled tasks and runs `python3 tools/routines.py brief --triggers <each
+page>`, so a brief that already exists, under any name, is never made twice. With none, it
+binds a task to the chat doing the work (`create_trigger` with that chat's id, `CRON_TZ=<your
+zone> 38 7 * * *`, the morning brief stub below as its prompt, no connectors), and a one-off
+first run a few minutes later bound to the same chat; then `routines.py record` writes
+`profile/routines.json` and it lands on master. You answer nothing: the days and the time are
+defaults, and the zone is the one your profile names. Without a page, say
+**"set up my brief"** in the cloud chat you already use: it binds the task to that chat.
 
-1. In a cloud chat (claude.ai/code in a browser, or the Claude app on your phone), start a
-   **new chat with your private repo selected**. Name it after its task: **Job search: morning brief**.
-   (Optional, and cheaper over months: first make the capped environment in "Keep a
-   long-lived chat small" below, and start the chat in it.)
-2. Paste this into it:
+Only if you want new postings searched on a schedule as well, say "set up my shortlist" in
+the same chat: both tasks run there, and no chat is made for either. Most people do not need
+it: "find me jobs" in any chat runs a round. Test each one as below; each briefing arrives as
+a reply in that chat, with no push.
 
-   > Set up my brief in this chat.
-
-   It makes the task bound to itself, with the defaults above, records it and lands it.
-3. Only if you want new postings searched on a schedule as well: start a second new chat
-   with the repo selected, named **Job search: shortlist**, and paste the same with
-   "shortlist" in place of "brief". Most people do not need it: "find me jobs" in any chat
-   runs a round. Each task is independent.
-4. Test each one as below. Each briefing then arrives as a reply in its chat, with no push.
-   If you would rather scroll one chat, bind both tasks to the same one.
+**Old chats tidy themselves away.** Before 4.3 the brief had a chat of its own, long work could
+start a child chat, and a replaced helper stayed in the list. Once a day the chat that answers
+the page moves an older brief into itself (a new task on the same days and time, the old one
+turned off and kept) and archives the app's own chats it no longer uses: never one the person
+named, one a scheduled task that is on still uses, a live campaign's chat, one used in the
+last two days, or one whose work is not on master yet. An archived chat is kept, read-only,
+and comes back on request (`python3 tools/tidy.py undo`).
 
 ### (b) A routine, a new chat each run
 
 1. Make a routine for each task:
 
    <!-- claude-surface: routines-cloud -->
-   <!-- checked 2026-10-25; https://code.claude.com/docs/en/routines -->
+   <!-- checked 2026-10-29; https://code.claude.com/docs/en/routines -->
    To make the brief in the cloud:
    1. Open claude.ai/code/routines and choose New task (in the desktop app's Code tab:
       Scheduled, then New task).
-   2. Name it Job search: morning brief, choose your copy, set it weekly at your time, paste
+   2. Name it Job search: morning brief, choose your copy, set it daily at your time, paste
       the prompt I give you, and save.
-   3. Open it again, choose Custom, and paste the schedule I give you, so it runs on both
-      days.
+   3. Only for days other than every day: open it again, choose Custom, and paste the
+      schedule I give you.
 
    Screens change: if yours looks different, tell Claude what you see.
    <!-- /claude-surface -->
 2. **Name:** Job search: morning brief. **Repository:** tick your private repo.
-   **Schedule:** weekly, on the first of your two days (Monday and Thursday suit most
-   searches), at your time; the screen offers set frequencies, so Custom adds the second
-   day afterwards. **Prompt:** the morning brief stub above, exactly. Turn on notifications
-   for it if the app offers them.
+   **Schedule:** daily, at your time (weekdays or other days afterwards with Custom).
+   **Prompt:** the morning brief stub above, exactly. Turn on notifications for it if the
+   app offers them.
 3. Only if you want a scheduled search too: the same for **Job search: shortlist**, with its
    stub and its days.
 4. Ask any chat in your repo: "add my routines to `profile/routines.json`, with
-   `setup` set to `routines_screen`, and give the brief its second day". It records each
+   `setup` set to `routines_screen`". It records each
    name, cron and prompt file, with `"notifications": {"push": true}` on each
    (`routines.py check` fails without it, because a task nobody hears from is broken), and
-   the trigger ids from `list_triggers` if it can see them (they are optional here). Where
-   it can see the task it sets both days itself with `update_trigger`; otherwise it gives you
-   the words to change it from a chat on your computer, where routines can be changed.
+   the trigger ids from `list_triggers` if it can see them (they are optional here).
 5. Every run is a new chat, and its final reply is the briefing, and the notification where
-   the app sends one. Reply to the shortlist in the chat that run opened.
+   the app sends one. Reply to the shortlist in the chat that run opened. Run chats more than
+   two days old are tidied away by themselves (archived, never deleted: `tools/tidy.py`).
 
 ### Test it, without fire_trigger
 
@@ -202,7 +185,8 @@ environment variable on a cloud environment that only the scheduled chats use:
 1. In claude.ai/code, create a cloud environment for the scheduled chats (or copy the one
    you use), with the same setup script and network access.
 2. Add the environment variable `CLAUDE_CODE_AUTO_COMPACT_WINDOW=200000`.
-3. Create the scheduled chats in that environment (step 1 of (a)).
+3. Start the chat that answers your page in that environment (Settings, Where Claude works,
+   Set it up, then choose the environment in the chat that opens before you press Send).
 
 Only chats in that environment are capped, whatever their model, and your other chats keep
 their full window. Do not put the cap in `.claude/settings.json` instead: that file is the
@@ -229,9 +213,10 @@ can still make it.
 - **If yours still works, do not archive, delete or rebuild that chat.** A rebuilt one
   cannot relay. `_common.md` still hands each message to the relay in that set-up, and the
   reply stands on its own if the hand-off is refused.
-- **If it is lost, do not rebuild it.** Set up (a) or (b) instead. A trigger's bound chat
-  cannot be changed in place, so for (a) delete each old task (`delete_trigger`, after
-  reading it with `get_trigger`) and create it again from its new chat.
+- **If it is lost, do not rebuild it.** Press the bell on your Brief instead: that is (a). A
+  trigger's bound chat cannot be changed in place, so the old task is read with
+  `get_trigger`, turned off with `update_trigger`, and a new one made from the chat that
+  answers your page.
 
 ## Changing something: say it to any Claude chat in your repo
 

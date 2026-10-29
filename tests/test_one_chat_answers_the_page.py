@@ -152,7 +152,7 @@ class Copy:
         return all(fake_db.apply(self.db, ln) for ln in said.splitlines() if ln.endswith(".json"))
 
     def listener(self):
-        p = os.path.join(self.db, "meta", "listener.json")
+        p = os.path.join(self.db, "meta", "listen.json")
         return json.load(open(p, encoding="utf-8"))["data"] if os.path.exists(p) else {}
 
     def queue(self, wid, kind="draft", asked_at="2026-10-25T17:00:00Z"):
@@ -287,15 +287,6 @@ def test_the_wake_link_opens_a_chat_that_takes_over_and_the_listener_hands_to_a_
                     "--helper")
     assert "give the page a small chat of its own" not in said
     copy.run("listen", copy.dump(), "--chat", "session_EXAMPLEHELPER", "--listen")
-
-
-def test_start_names_the_helper_with_its_model_and_never_a_session_for_another_reason(copy):
-    copy.page()
-    assert copy.send(copy.run("listen", copy.dump(), "--chat", "big-chat"))
-    said = copy.run("start", "--on", "Opus 5.5", "--tools", "none", "--chat", "big-chat")
-    assert "give the page a small chat of its own" in said
-    assert "Job search helper" in said and "model sonnet" in said
-    assert "--hand <the new session's id>" in said
 
 
 def test_the_page_is_told_how_to_say_nobody_is_listening_and_what_is_true_of_its_privacy(copy):
@@ -478,12 +469,11 @@ def test_the_pin_is_offered_once_ever_even_when_nobody_answers(copy):
     assert pin["answer"] == "yes" and pin["offered"] and pin["asked"]
 
 
-def test_the_helper_is_announced_in_one_short_sentence(copy):
-    import app_listen
+def test_no_chat_is_ever_started_for_the_page(copy):
+    """A helper chat started for the page had none of the page's tools, published a spare
+    page, and each lapse started another (the maintainer, 2026-10-29). The chat that answers
+    the page is one the person opened; nothing starts another."""
     copy.page()
     assert copy.send(copy.run("listen", copy.dump(), "--chat", "big-chat"))
     said = copy.run("start", "--on", "Opus 5.5", "--tools", "none", "--chat", "big-chat")
-    step = [ln for ln in said.splitlines() if "give the page a small chat of its own" in ln][0]
-    assert ("Tell the person this one sentence, and nothing more about it: "
-            f"\"{app_listen.SAY_HELPER}\"") in step
-    assert "Keep it: it answers your page" not in step
+    assert "create_session" not in said and "chat of its own" not in said

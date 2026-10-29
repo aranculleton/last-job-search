@@ -45,7 +45,7 @@ Screens change: if yours looks different, tell Claude what you see.
 Claude asks two short rounds of questions, does the research itself and shows your first
 shortlist: up to an hour of its time, and you can put it down meanwhile. No resume? Say
 "build one with me" and Claude makes it with you, one job at a time. It ends by opening your
-private page and your twice-weekly brief. If it says it can't reach job sites (recommended, once):
+private page. If it says it can't reach job sites (recommended, once):
 
 <!-- claude-surface: cloud-internet -->
 <!-- checked 2026-10-25; https://code.claude.com/docs/en/cloud-environments -->
@@ -59,8 +59,9 @@ Screens change: if yours looks different, tell Claude what you see.
 
 ## On your computer as well
 
-Recommended if you have one: there Claude can also read people's LinkedIn profiles before you
-write to them. Same copy, nothing moves, and it installs what it needs itself.
+Optional, for files you keep there: your page already reads LinkedIn profiles in the Claude
+desktop app. The recommended way, if you want one: same copy, nothing moves, and it installs
+what it needs.
 
 <!-- claude-surface: local-chat -->
 <!-- checked 2026-10-25; https://code.claude.com/docs/en/desktop-quickstart -->
@@ -87,10 +88,10 @@ terminal, curl -fsSL https://claude.ai/install.sh | bash, then claude --chrome i
 of your copy.
 <!-- /claude-surface -->
 
-## Then just talk to it
+## Then use your page
 
-**"Find me jobs"**, a posting pasted or linked, **"who should I talk to at Acme?"**, **"what
-do I owe?"** or **"prep me for my interview at Acme"**. React to anything ("too formal") and it
-remembers. Updates arrive by themselves, and nothing about you is ever sent back.
+Setup ends by opening it. Tap **Find jobs**, **Draft this** on a job you like, **Find people**,
+and **I heard back** when you do; tweak or bin anything that's off, and it remembers. Anything
+else, ask in **Chat** there. Updates arrive by themselves; nothing of yours is sent back.
 
 If something goes wrong, see [HELP.md](HELP.md), or tell Claude what you see.

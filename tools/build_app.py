@@ -615,6 +615,18 @@ def check(tree: str, when: dict, show: bool = False, ref: str = RELEASED,
     # read too, as CI's --git scan reads it.
     findings = leak_scan.scan(tree, leak_scan.tokens_from(entries), leak_scan.load_allow(None),
                               show=show, export=True)
+    # A finding in a file that is, as committed here, exactly the app's own (its release or
+    # its master) is the app's word, already public, and nothing this copy wrote into it: a
+    # market table's salary guide, named for its publisher, matched a name in the
+    # maintainer's own contact book and kept their copy's check red (2026-10-29). The app's
+    # own CI scans the app with the same denylist, so a real leak there is still caught
+    # where the app is changed.
+    try:
+        import personal_paths
+        same = personal_paths.same_as_the_app(root)
+    except Exception:  # noqa: BLE001  no app ref to compare with: every finding stands
+        same = set()
+    findings = [f for f in findings if f.split(":", 1)[0].strip() not in same]
     return without_aside(findings, entries, when, ref, root)
 
 

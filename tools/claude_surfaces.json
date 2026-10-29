@@ -222,23 +222,25 @@
     },
     {
       "id": "routines-cloud",
-      "claim": "A cloud scheduled task (formerly a routine) runs in the cloud and keeps working with the computer closed. It is made at claude.ai/code/routines with New task, in the desktop app's Code tab from Scheduled, then New task, or with /schedule typed in a chat on the computer; /schedule is not available inside a cloud chat. A preset frequency runs on one day a week; a second day is set afterwards with Custom in its edit dialog. The brief is always one of these.",
+      "claim": "A cloud scheduled task (formerly a routine) runs in the cloud and keeps working with the computer closed. It is made at claude.ai/code/routines with New task, in the desktop app's Code tab from Scheduled, then New task, or with /schedule typed in a chat on the computer; /schedule is not available inside a cloud chat. A preset frequency (hourly, daily or weekly) is picked when it is made; other days are set afterwards with Custom in its edit dialog, and an on/off switch pauses it. The brief is always one of these.",
       "goal": "make the brief in the cloud",
       "how": "open claude.ai/code/routines in a browser and choose New task (in the desktop app's Code tab: Scheduled, then New task), or type /schedule in a chat on your computer and answer its questions",
       "sources": [
         {"url": "https://code.claude.com/docs/en/routines", "quote": "so they keep working when your laptop is closed."},
         {"url": "https://code.claude.com/docs/en/routines", "quote": "Create and manage them at claude.ai/code/routines, or from the CLI with /schedule."},
         {"url": "https://code.claude.com/docs/en/routines", "quote": "click Scheduled in the sidebar or in the sidebar's More menu, then New task"},
-        {"url": "https://code.claude.com/docs/en/routines", "quote": "create the task and select Custom in its edit dialog"}
+        {"url": "https://code.claude.com/docs/en/routines", "quote": "create the task and select Custom in its edit dialog"},
+        {"url": "https://code.claude.com/docs/en/routines", "quote": "pick a preset frequency such as hourly, daily, or weekly"},
+        {"url": "https://code.claude.com/docs/en/routines", "quote": "Use the on/off switch at the top of the page to pause or resume the schedule."}
       ],
       "status": "documented",
-      "verified_on": "2026-10-25",
-      "verified_against": "code.claude.com/docs/en/routines (now titled scheduled tasks, formerly routines) read 2026-10-25",
+      "verified_on": "2026-10-29",
+      "verified_against": "code.claude.com/docs/en/routines (now titled scheduled tasks, formerly routines) read 2026-10-29",
       "ui_sensitive": true,
       "steps": [
         "Open claude.ai/code/routines and choose New task (in the desktop app's Code tab: Scheduled, then New task).",
-        "Name it Job search: morning brief, choose your copy, set it weekly at your time, paste the prompt I give you, and save.",
-        "Open it again, choose Custom, and paste the schedule I give you, so it runs on both days."
+        "Name it Job search: morning brief, choose your copy, set it daily at your time, paste the prompt I give you, and save.",
+        "Only for days other than every day: open it again, choose Custom, and paste the schedule I give you."
       ]
     },
     {
@@ -347,7 +349,7 @@
       ],
       "page_goal": "make each new chat start with the PDF tools in place",
       "page_steps": [
-        "Open your helper chat (Job search: Claude's helper) at claude.ai/code.",
+        "Open your helper chat (Job search helper) at claude.ai/code.",
         "At the top of that chat, open the small arrow after its title and choose Edit cloud environment.",
         "Paste the line into Setup script, then save.",
         "It applies from the next new chat. Come back to this page and tap Done."
@@ -372,7 +374,7 @@
       ],
       "page_goal": "let Claude reach job sites",
       "page_steps": [
-        "Open your helper chat (Job search: Claude's helper) at claude.ai/code.",
+        "Open your helper chat (Job search helper) at claude.ai/code.",
         "At the top of that chat, open the small arrow after its title and choose Edit cloud environment.",
         "Set Network access to Full, then save. It reaches Claude within about a minute.",
         "Come back to this page and tap Done."

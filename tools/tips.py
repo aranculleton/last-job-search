@@ -35,7 +35,6 @@ import csv
 import datetime as dt
 import json
 import os
-import re
 import subprocess
 import sys
 
@@ -162,61 +161,80 @@ TOUR = (
 # one job from found to applied, then the people and the interviews (2026-10-28). `tab` is
 # the page's own section id.
 PAGE_TOUR = (
+    {"key": "brief", "tab": "brief", "title": "Brief",
+     "text": "Your day at a glance: what is booked, the next three things to do, who is "
+             "waiting on you, the best new jobs, news that matters to your search and your "
+             "numbers. Tap any line to go to it."},
     {"key": "todo", "tab": "todo", "title": "To do",
-     "text": "What needs you, most urgent first: a question, a follow-up that is due, an "
-             "interview coming up. Each card has one button."},
+     "text": "What needs you, five at a time, most urgent first: a question, a follow-up "
+             "that is due, an interview coming up. Each card has one button, and a bin."},
     {"key": "jobs", "tab": "jobs", "title": "Jobs",
-     "text": "Roles found for you, scored out of 100, with why. Tap Draft this on one you "
-             "like; the bin takes one off. Find jobs searches again. While Claude works, the "
-             "bar at the top says so: tap it to watch, or to stop it."},
-    {"key": "drafts", "tab": "drafts", "title": "Drafts",
-     "text": "Your resume and letter for each role, written for that posting and checked. "
-             "Get the files, apply on the employer's own site, then tap I have applied. From "
-             "then on it is tracked, and its follow-ups come back to To do."},
+     "text": "Every role from found to applied. Found: scored out of 100 for how well it "
+             "fits you; tap Draft this on one you like. Drafts: your resume and letter, "
+             "checked; get the files, apply on the employer's site, tap I have applied. "
+             "Applied: each one tracked, its follow-ups back in To do."},
     {"key": "contacts", "tab": "contacts", "title": "Contacts",
      "text": "Why people: someone inside who puts your name forward gets you far more "
              "interviews than applying cold. Claude finds who to write to and drafts a short "
-             "note; you send it on LinkedIn yourself. Every recruiter, referrer and hiring "
-             "manager is kept here, with what each conversation needs next."},
+             "note; you send it on LinkedIn yourself. Messages holds the notes ready to send. "
+             "Tap a name to see everything about that person."},
     {"key": "interviews", "tab": "interviews", "title": "Interviews",
-     "text": "Got an interview? Tell Claude in Chat, or tap I heard back on the application. "
+     "text": "Got an interview? Tap I heard back on the application, and the prep follows. "
              "Your prep is here to read: what they will ask, your answers, your questions."},
-    {"key": "progress", "tab": "progress", "title": "Progress",
-     "text": "Everything you have applied for, and how each one is going."},
     {"key": "settings", "tab": "settings", "title": "Settings",
-     "text": "Your profile is here: your jobs, skills, education and certificates. Change "
-             "them any time, and every new resume picks from them."},
+     "text": "Your profile is the first thing here: your jobs, skills, education and "
+             "certificates. Change them any time, and every new resume picks from them."},
     {"key": "chat", "tab": "chat", "title": "Chat",
      "text": "Ask anything, or paste a link, a message or a screenshot and say what you want. "
              "Claude does it, and the result shows up where it belongs."},
 )
+# The same lines on the page, in its own words: a button where the page has one, Chat only
+# where it has none. A chat's tip with no page version is not shown there (asking "what do I
+# owe?" is what To do already shows). A pattern over the chat's words garbled these
+# ("Type "shorter" in Chat, "warmer" or ...", 2026-10-29).
 PAGE_FIRST = {
-    "search": "Your first search here, so the ranking won't be perfect yet. Say what's off "
-              "in Chat (\"too junior\", \"not this kind of company\") and the next one learns.",
-    "apply": "Your first application here. Say in Chat anything you'd change in the wording, "
-             "and it sticks for the next one.",
-    "networking": "Your first notes here, so some may be off. Say in Chat who you wouldn't "
-                  "write to or what you'd say differently, and it sticks.",
+    "search": "Your first search here, so the ranking won't be perfect yet. Use the bin on a "
+              "job that's off and say why: the next search learns.",
+    "apply": "Your first application here. Tap Tweak on the resume or the letter to change the "
+             "wording, and it sticks for the next one.",
+    "networking": "Your first notes here, so some may be off. Tweak a note to change how it "
+                  "reads, or use the bin on someone you wouldn't write to; both stick.",
     "reply": "If a reply doesn't sound like you, change it before you send it and paste what "
-             "you sent: your edits teach it your voice.",
-    "interview": "Your first interview prep. Say in Chat which questions felt wrong or "
-                 "missing, and the next one fits you better.",
+             "you sent in Chat: your edits teach it your voice.",
+    "interview": "Your first interview prep. Tap Tweak on it to change what it covers, and the "
+                 "next one fits you better.",
     "prep": "Your first call prep. After the call, say in Chat how it went.",
-    "brief": "Your first brief. Say in Chat what you'd want more or less of.",
-    "general": "Anything made for you can be changed: say what's off in Chat and it sticks.",
+    "brief": "Your first brief. Tap Tweak the brief for more or less of anything.",
+    "general": "Anything made for you can be changed: tap Tweak on it, and it sticks.",
+}
+PAGE_TIPS = {
+    "rephrase": "Tip: tap Tweak on anything Claude writes to make it shorter, warmer or "
+                "reworded. Your changes teach it your style.",
+    "tour": "Tip: Settings, Help, Show me around gives a short tour.",
+    "reaction-sticks": "Tip: the bin on a job asks why. Your answer sticks for every later "
+                       "search, until you change your mind.",
+    "tell-me": "Tip: when you hear back, tap I heard back on the application, or paste their "
+               "message under Got a message. Claude keeps the record and times the follow-ups.",
+    "paste-link": "Tip: paste any job link into Add a job on Jobs, and Claude scores it and can "
+                  "write the application.",
+    "sent-words": "Tip: if you change a note before sending it, paste what you sent in Chat. "
+                  "Your edits teach Claude how you write.",
+    "mock": "Tip: ask for a mock interview in Chat. Claude asks the questions, you answer, and "
+            "it tells you what landed.",
+    "questions-asked": "Tip: after an interview, say in Chat which questions they asked. The "
+                       "next prep uses them.",
 }
 
 
 def for_page(text: str) -> str:
-    """A tip in the page's words: a first-time line as PAGE_FIRST says it, and a chat's
-    "say"/"tell me" turned into Chat on the page."""
+    """A tip in the page's words (PAGE_FIRST, PAGE_TIPS), or "" when the page has no version
+    of it and shows none."""
     for area, first in FIRST.items():
         if text == first:
             return PAGE_FIRST[area]
-    out = text.replace(OFF_HINT, "")
-    out = re.sub(r"\bTell me\b", "Say in Chat", out)
-    out = re.sub(r"\btell me\b", "say in Chat", out)
-    return re.sub(r"\b[Ss]ay (\"[^\"]+\")", lambda m: f"Type {m.group(1)} in Chat", out)
+    said = text.replace(OFF_HINT, "")
+    key = next((k for k, _, t in TIPS if t == said), "")
+    return PAGE_TIPS.get(key, "")
 
 
 TOUR_OPEN = "Here's what you can say:"

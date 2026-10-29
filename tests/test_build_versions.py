@@ -286,7 +286,8 @@ def test_a_first_release_sync_prints_the_line_that_starts_the_upgrades():
 def test_the_listing_tells_the_session_what_to_do(profile):
     (profile / B.RECORD).unlink()
     text = U.block(U.pending())
-    assert "Claude: start a background agent now that follows .claude/commands/upgrade.md" in text
+    assert ("Claude: start one background agent now (model sonnet) that follows "
+            ".claude/commands/upgrade.md") in text
     assert "at most three" in text
 
 

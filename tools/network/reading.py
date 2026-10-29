@@ -1854,13 +1854,6 @@ def _loads(pages: bool = True) -> list:
     return sorted(out, key=lambda x: x["when"])
 
 
-def _browser_reads(pages: bool = True) -> list:
-    """Every browser page load on file, oldest first: [(when, the gap it asked for, a
-    break?)]. A profile read and a one-page read (`page_read`) both count: the pace is
-    about page loads, whatever the page held. `pages=False` is profiles alone."""
-    return [(x["when"], x["gap"], x["brk"]) for x in _loads(pages)]
-
-
 def _load(src: dict):
     """(when, gap, a break?) from one recorded read, or None when it carries no time."""
     try:
@@ -2025,11 +2018,6 @@ def move_runtime() -> list:
         os.remove(p)
         moved.append("/".join(rel))          # a repo path, named the same on every computer
     return moved
-
-
-def last_browser_read() -> datetime.datetime | None:
-    reads = _browser_reads()
-    return reads[-1][0] if reads else None
 
 
 def _stop_today(today: datetime.date | None = None) -> dict:
@@ -2375,19 +2363,6 @@ def _meanwhile_lines(contacts=None) -> list:
     return (["meanwhile, while the next page waits:"]
             + [f"  {cid}: {what}" for cid, what in got[:8]]
             + ([f"  and {len(got) - 8} more"] if len(got) > 8 else []))
-
-
-def reads_today(today: datetime.date | None = None) -> int:
-    day = (today or datetime.date.today()).isoformat()
-    n = 0
-    for f in glob.glob(os.path.join(glob.escape(person.state(*DIR)), "*", "reading.json")):
-        try:
-            with open(f, encoding="utf-8") as fh:
-                srcs = json.load(fh).get("sources", [])
-        except (OSError, ValueError):
-            continue
-        n += sum(1 for s in srcs if s.get("kind") == "browser" and s.get("date") == day)
-    return n
 
 
 def _shortlist_file(today: datetime.date) -> list:

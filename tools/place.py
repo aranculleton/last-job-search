@@ -13,9 +13,8 @@ changes a setting: where it offers a choice, the person makes it.
     python3 tools/place.py state                     # is the search set up here, landed, on
                                                      # another chat's branch, or still being set up?
     python3 tools/place.py started | finished        # /setup marks its own run, so other chats know
-    python3 tools/place.py auto                      # /setup: record where this chat can tell, else
-                                                     # print the one short question to ask
-    python3 tools/place.py ask                       # that question, with its one-line why
+    python3 tools/place.py auto                      # /setup: record where this chat can tell;
+                                                     # nobody is asked
     python3 tools/place.py record computer|phone|both  # their answer, into profile/place.json
     python3 tools/place.py next [--works-on computer|phone|both]   # the step after it
 
@@ -51,16 +50,6 @@ TOLD_FILE = "ljs-place.json"        # in .git/: the chats already told, never co
 ANSWERS = ("computer", "phone", "both")
 BROWSERS = {"browser", "chrome", "enable"}
 
-# Asked once, at the end of /setup, and only where the chat cannot tell: a chat on the
-# computer is "computer", and a cloud chat started from the desktop app is "both". It
-# used to come first and stop a cloud chat with no profile written, telling the person to
-# start again on their computer (2026-10-25): setup works the same everywhere, so it never
-# stops, and the computer chat is offered once, at the end.
-# It recommends nothing (4.0, 2026-10-25): "If you have one you can use, say yes" went with
-# the recommendation of a chat on the computer.
-QUESTION = "Will you also use Claude on a computer, in its desktop app?"
-TRADE_OFF = ("Everything works here. Opened in the desktop app, your page can also read "
-             "people's LinkedIn profiles before you write to them.")
 # The set-up that works for nearly everyone with a computer, said where a person decides
 # where to work (/setup's question, its next step) and in the check a cloud chat on a
 # computer gives. Told only "a computer does more", people kept every chat in the cloud and
@@ -71,8 +60,6 @@ TRADE_OFF = ("Everything works here. Opened in the desktop app, your page can al
 # there. Someone who already has one keeps it, and hears SHORT_HAS_LOCAL as before.
 CHATS = ("Everything works in your cloud chats and on your page. A chat on your computer is "
          "optional: it is only for files kept on that computer.")
-# The old name, which CLAUDE.md still reads until it is rewritten for 4.0.
-TWO_CHATS = CHATS
 # The one message a computer chat starts from: it names the person's copy and the page that
 # takes an empty folder to a copy that is set up (COMPUTER.md, the app's). The words are
 # the registry's (claude_surfaces local-chat, its last step), so a doc and a chat say one thing.
@@ -98,8 +85,6 @@ FINDING_WORKS = ("Finding people works in this chat. Reading their profiles befo
 # what the person had to wade through (2026-10-25).
 CLOUD_LINK_NOW = ("This chat reads profiles in the Claude desktop app's browser on your "
                   "computer, while the app stays open there.")
-# 4.0: no longer said; the page, opened in the desktop app, is what reads them (PAGE_READS).
-CLOUD_LINK_NOT = ("This chat can't reach that browser just now; the chat on your computer can.")
 PASTE_TOP = ("Or paste the profile of the one or two who matter most, here, and I'll write "
              "to them from it.")
 # When the chat's tools were not named, a line carries this condition for Claude to
@@ -318,8 +303,10 @@ def next_step(works_on: str, where: str, owner: str = "", name: str = "my-job-se
 
 def auto_answer(where: str) -> str:
     """Where the person will work, when this chat can tell without asking: a chat on the
-    computer is "computer", and a cloud chat the desktop app started is "both". "" means ask
-    QUESTION once, at the end of setup."""
+    computer is "computer", and a cloud chat the desktop app started is "both". "" records
+    nothing, and nobody is asked: the page shows what each place does when it matters, and
+    the answer changed nothing else (the maintainer, 2026-10-29: no questions with a clear
+    default)."""
     return {"local": "computer", "desktop-cloud": "both"}.get(where, "")
 
 
@@ -780,7 +767,7 @@ def _steps_block(steps) -> str:
 def main(argv=None) -> int:
     ap = argparse.ArgumentParser(description=__doc__.split("\n")[0])
     ap.add_argument("cmd", nargs="?", default="check",
-                    choices=("check", "how", "ask", "record", "next", "auto", "state", "started",
+                    choices=("check", "how", "record", "next", "auto", "state", "started",
                              "finished"))
     ap.add_argument("answer", nargs="?", default="")
     ap.add_argument("--tools", default=None,
@@ -790,9 +777,6 @@ def main(argv=None) -> int:
     ap.add_argument("--once", action="store_true",
                     help="say nothing if this chat was told these words in the last week")
     a = ap.parse_args(argv)
-    if a.cmd == "ask":
-        print(f"{QUESTION} {TRADE_OFF}")
-        return 0
     if a.cmd == "state":
         got = setup_state()
         print(f"state: {got['state']}" + (f" ({got['ref']})" if got["ref"] else ""))
@@ -806,7 +790,8 @@ def main(argv=None) -> int:
     if a.cmd == "auto":
         got = auto_answer(surface())
         if not got:
-            print(f"ask, once, at the end of setup: {QUESTION} {TRADE_OFF}")
+            print("place: nothing recorded, and nothing to ask (this chat cannot tell where "
+                  "they work; the page shows what each place does)")
             return 0
         print(f"place: recorded {got} in {local_path.rel(record(got), ROOT)} (not asked: "
               "this chat can tell)")

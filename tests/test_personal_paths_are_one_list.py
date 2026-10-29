@@ -129,7 +129,7 @@ def test_the_light_check_is_asked_of_the_repo_it_runs_in(tmp_path):
         return subprocess.run([sys.executable, "tools/personal_paths.py",
                                "--only-personal-changed"], capture_output=True, text=True, encoding="utf-8", errors="replace",
                               cwd=str(repo), env={**os.environ, "PYTHONDONTWRITEBYTECODE": "1"})
-    assert flag().returncode == 1                                         # nothing changed
+    assert flag().returncode == 3                                         # nothing changed
     (repo / "network_contacts.csv").write_text("id\nc1\n")
     got = flag()
     assert got.returncode == 0 and got.stdout.split() == ["network_contacts.csv"]

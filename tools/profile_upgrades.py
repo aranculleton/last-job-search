@@ -32,7 +32,7 @@ Claude starts a background agent that runs `/upgrade`, which works through them 
 the profile and research while the person's own request goes ahead, commits each on
 its own and reports what it wrote and how to undo it. Only an upgrade that needs the
 person's answer or consent (`needs="you"`, with its `ask`) is put to them, once, at the
-end. The twice-weekly shortlist does the same before its round.
+end. The optional scheduled shortlist does the same before its round.
 
 `tools/sync_app.py` runs `--after-sync` after every sync, "up to date"
 included; `tools/run_round.py` prints `--line` with its MET or MISSED summary;
@@ -1801,8 +1801,9 @@ def block(rows: list[tuple[Upgrade, str]]) -> str:
     # Said here as well as in CLAUDE.md: the session that runs the sync which brings
     # this in is still reading the CLAUDE.md from before it.
     lines.append("  Claude: "
-                 + ("start a background agent now that follows .claude/commands/upgrade.md, "
-                    "and carry on with the person's request. " if alone else "")
+                 + ("start one background agent now (model sonnet) that follows "
+                    ".claude/commands/upgrade.md, and carry on with the person's request. "
+                    if alone else "")
                  + "Never show an id, a version or the word upgrade. At the end of your reply "
                  + ("give one line per change it made, then " if alone else "")
                  + "ask at most three questions, each as written, short and alone. Only a yes "

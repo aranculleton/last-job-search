@@ -283,7 +283,8 @@ def test_the_checks_a_draft_got_are_said_in_plain_words(search):
     assert not checks["passed"]
     assert [i["said"] for i in checks["verify"]["items"]] == ["the jobs are not in date order",
                                                                "two bullets share a phrase"]
-    assert checks["line"] == "A check found something: the jobs are not in date order"
+    # Said as what it is, never "a check found something" (the maintainer, 2026-10-29).
+    assert checks["line"] == "The jobs are not in date order."
 
 
 def test_the_model_still_keeps_the_contract(search):

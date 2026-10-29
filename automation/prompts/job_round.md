@@ -1,6 +1,6 @@
 # Job round (optional; schedule: `profile/routines.json`)
 
-Off unless a person asks for a scheduled search: the twice-weekly brief does not search,
+Off unless a person asks for a scheduled search: the brief does not search,
 and "find me jobs" in any chat runs one. Follow the job-scraper skill, "The rules every search keeps": score and
 rank, stop at the shortlist, draft nothing until the candidate picks. `_common.md` first.
 

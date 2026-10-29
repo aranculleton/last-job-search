@@ -61,7 +61,7 @@ v1 preps for a **specific application**. Generic no-target practice is out of sc
 
 ## Step 2: Research the Company (Interview-Focused)
 
-**Hand the research to the `employer-researcher` subagent** (Agent tool; it runs on sonnet and brings its own rules from `.claude/agents/employer-researcher.md`). Its first move is to check the cache, `company_research/<key>.json`, and start from it while `python3 tools/company_research.py "<employer>"` calls it fresh (inside `RESEARCH_FRESH_DAYS`); `/apply` may already have filled it for this same application, and the verification rule below still applies to a cache hit as much as to fresh research. It locates every source independently of the posting, quotes each fact with its URL and writes the cache back, which is what the pack reads. Its brief from here: the employer, the role and team, the stage, and the Company Research Checklist in `profile/04-job-evaluation.md`, plus:
+**First, `python3 tools/company_research.py "<employer>"`.** When it calls the cache fresh (inside `RESEARCH_FRESH_DAYS`), use it as it stands and start no agent: an agent for a fact already saved costs a whole session of its own. Otherwise **hand the research to the `employer-researcher` subagent** (Agent tool; it runs on sonnet and brings its own rules from `.claude/agents/employer-researcher.md`). Its first move is to check the cache, `company_research/<key>.json`, and start from it while `python3 tools/company_research.py "<employer>"` calls it fresh (inside `RESEARCH_FRESH_DAYS`); `/apply` may already have filled it for this same application, and the verification rule below still applies to a cache hit as much as to fresh research. It locates every source independently of the posting, quotes each fact with its URL and writes the cache back, which is what the pack reads. Its brief from here: the employer, the role and team, the stage, and the Company Research Checklist in `profile/04-job-evaluation.md`, plus:
 
 - **Conversation hooks:** 2-3 recent, verifiable company specifics (a product launch, a stated strategic priority) for the "why this company" moment.
 - **What not to say:** anything a careless phrasing would get wrong (a figure of one kind presented as another, a business line they left), in the cache's `do_not_claim`.
@@ -136,12 +136,11 @@ The stage, date and interviewers head the pack, from `outcome.md`'s booked line;
 tools/app.py view`, and one line in the chat); where there is no page, in the chat as
 RUNBOOK.md, "Delivering in the chat", says. It is the copy named for this employer and role (the `send:` line `pack --write` prints, or `python3 tools/shown.py <the document>` after an edit by hand; every process's file is called `interview_prep.md`, so that name alone says nothing) with SendUserFile (`display: "render"`), and the one screen and whatever changed pasted beside it. A chat with no SendUserFile (usually one on the person's computer) pastes the one screen and writes the copy's full path on its own line, which opens when clicked in the desktop app. Several changes in one turn (new answers, a rebuild, a fact found) are one resend. The file is the record and the conversation is the delivery; its path alone is never the answer. Per-contact `/prep` documents at this employer link to it rather than repeat it.
 
-### 7. A chat just for this employer, offered once
-When a stage is booked, `pack --write` prints the offer if it has not been made before: "Want a separate chat just for <employer>? It keeps the prep in one place and leaves this chat for the rest of the search." Put it, once, at the end of the reply. It is optional, and a no is a fine answer. On a yes, `automation/prompts/campaign.md` says how to start it (on the person's private repo, never the app's). Either way, record the answer, which is what stops it being asked again and what tells the rest of the search to leave this employer to that chat:
-
-```bash
-python3 tools/interview_pack.py campaign "<Company>" --role "<Role>" --yes "<the chat's title or id>"   # or --no
-```
+### 7. One chat for the whole search
+Everything for this employer stays here and on the page's Interviews screen: no separate chat
+is offered for it (4.3; the maintainer, 2026-10-29: "fewest possible chats"). A campaign chat
+started before 4.3 carries on as `automation/prompts/campaign.md` says, and the rest of the
+search still leaves that employer to it.
 
 ---
 

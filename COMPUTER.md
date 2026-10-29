@@ -67,16 +67,25 @@ and say that this chat can be continued after.
 
 ## 4. Put their copy in this folder
 
+Ask nothing here and offer no choice: every case below has one right answer.
+
 1. Which copy: the one named in the person's message, else `python3 APP/tools/find_copy.py`.
-   One name: use it. Two or more: ask which, by name. None: they have not made one yet;
-   tell them "Your copy isn't on GitHub yet. Open github.com/aranculleton/last-job-search,
-   click Use this template, then Create a new repository, keep it Private, and tell me its
-   name." and wait.
+   One name: use it. Two or more: the one changed most recently. None: make it, private,
+   from the app: `gh repo create my-job-search --private --template
+   aranculleton/last-job-search` (`my-job-search-2` if the name is taken), and wait about
+   ten seconds while GitHub fills it.
 2. This folder empty: `gh repo clone OWNER/NAME .`. Not empty (the app may have put a
    `.claude` folder here): `git init -q`, `git remote add origin
    https://github.com/OWNER/NAME.git`, `git fetch -q origin`, then
    `git checkout -q -B master --track origin/master` (the copy's own default branch, if
    `git remote show origin` names another).
+3. **Their copy has nothing in it** (made empty on GitHub rather than from the app: the
+   clone says it is empty, or the fetch brings nothing): fill it from the app yourself,
+   keeping the app's history so its updates merge cleanly, and say nothing about it:
+   `git fetch -q https://github.com/aranculleton/last-job-search master`,
+   `git checkout -q -B master FETCH_HEAD`, `git push -q origin master`, then
+   `gh repo edit OWNER/NAME --default-branch master`. That is exactly what making it from
+   the app gives them.
 
 ## 5. Finish, without asking anything
 

@@ -85,7 +85,7 @@ def test_the_message_links_the_page_and_its_questions_wait_there(tmp_path):
     assert "notice period" not in message
     assert "the questions are on the page as To do cards" in claude
     assert "app.py view <D>/view --dump <D> --chat brief" in claude
-    assert "Never publish or watch the page" in claude
+    assert "Never republish the page: this chat already answers it" in claude
     # With no page, the record on GitHub and the questions at the end, as before.
     bare = Search(tmp_path / "bare", page=False)
     _questions(bare.sync)
@@ -119,12 +119,13 @@ def test_the_ticks_on_the_page_are_applied_before_anything_is_counted(monkeypatc
     assert str(calls[-1][1]).endswith("brief.py")
 
 
-def test_the_prompt_says_the_page_comes_first_and_is_never_published():
+def test_the_prompt_says_the_page_comes_first_and_is_never_republished():
+    # The brief runs in the chat that answers the page (4.3), which already watches it.
     with open(os.path.join(ROOT, "automation", "prompts", "morning_brief.md"),
               encoding="utf-8") as fh:
         text = fh.read()
     assert "PAGE\nFIRST" in text or "PAGE FIRST" in text
-    assert "Never publish the page or watch it" in text
+    assert "Never republish the page: this chat already answers it" in text
 
 
 # ------------------------------------------------------------------ moving the brief
@@ -151,9 +152,38 @@ def test_the_brief_moves_to_new_days_and_a_time_and_a_chat_moves_the_task(tmp_pa
     part = routines.page_part(os.path.join(s.profile, "routines.json"))
     assert part["when"] == "Tuesdays and Fridays at 18:15" and part["paused"] is None
     assert part["actions"] == {"move": "brief.move", "pause": "brief.pause",
-                               "resume": "brief.resume"}
+                               "resume": "brief.resume", "off": "brief.off", "on": "brief.on"}
     model = json.loads(s.run("app.py", "model", "--now", "2026-10-25T18:00:00Z"))
     assert model["schedule"]["when"] == "Tuesdays and Fridays at 18:15"
+
+
+def test_the_brief_turns_off_and_on_again_on_its_own_days_and_nothing_else_stops(tmp_path):
+    s = Search(tmp_path)
+    before = s.contacts()
+    out = s.run("routines.py", "off")
+    assert "tell them: Your brief is off. Nothing else stops." in out
+    assert s.contacts() == before                       # no follow-up was held
+    r = next(x for x in s.registry()["routines"] if x["key"] == "morning_brief")
+    assert r["off"] is True and s.run("routines.py", "check").strip() == "routines.json: clean"
+    owed = json.loads(s.run("routines.py", "calls"))
+    assert [(c["tool"], c["args"].get("enabled")) for c in owed] == [("update_trigger", False)]
+    import routines
+    path = os.path.join(s.profile, "routines.json")
+    assert routines.page_part(path)["off"] is True
+    model = json.loads(s.run("app.py", "model", "--now", "2026-10-25T18:00:00Z"))
+    assert model["schedule"]["off"] is True and model["where"]["brief"]["state"] == "off"
+    # Off then on before a chat made the call: the two cancel, nothing is owed but the on.
+    assert "Your brief is on again: " in s.run("routines.py", "on")
+    owed = json.loads(s.run("routines.py", "calls"))
+    assert [(c["for"], c["args"].get("enabled")) for c in owed] == [("on", True)]
+    assert routines.page_part(path)["off"] is False
+    assert "already" in s.run("routines.py", "on")
+    # Off during a break: coming back leaves it off.
+    s.run("routines.py", "off")
+    s.run("routines.py", "pause", "--until", "2026-11-08", "--today", TODAY)
+    s.run("routines.py", "resume", "--today", "2026-11-01")
+    assert not [c for c in json.loads(s.run("routines.py", "calls")) if c["for"] == "resume"]
+    assert next(x for x in s.registry()["routines"] if x["key"] == "morning_brief")["off"] is True
 
 
 def test_a_time_off_the_hour_is_kept_and_a_bad_one_changes_nothing(tmp_path):
@@ -192,8 +222,8 @@ def test_a_break_holds_the_brief_and_every_follow_up_and_coming_back_early_undoe
     assert [c["tool"] for c in owed] == ["update_trigger", "create_trigger"]
     assert owed[0]["args"] == {"trigger_id": "trig_EXAMPLEBRIEF", "enabled": False}
     back = owed[1]["args"]
-    assert back["persistent_session_id"] == "session_EXAMPLEBRIEF"
-    assert back["run_once_at"] == "2026-11-08T07:56:00Z"        # 7:56 in London, in winter
+    assert back["persistent_session_id"] == "session_EXAMPLEHELPER"
+    assert back["run_once_at"] == "2026-11-08T07:38:00Z"        # 7:38 in London, in winter
     assert "automation/prompts/morning_brief.md" in back["prompt"]
     s.run("routines.py", "called", "2", "--id", "trig_EXAMPLEBACK")
     s.run("routines.py", "called", "1")

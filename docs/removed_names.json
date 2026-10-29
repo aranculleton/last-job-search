@@ -112,6 +112,97 @@
    "date": "2026-10-25",
    "reason": "a third command for the one setup detector: python3 tools/app.py start says where setup stands (place.setup_state), and app.py start --paste prints the line for a new computer (app.paste_line)",
    "changelog": "**More names your own checks might use were retired**: `place.RECOMMEND` (\"If you have one you can use, say yes\") and `brief.page_parts` (with `brief.py --json`), and the command `tools/setup_state.py` with its names (`setup_state.EXIT`, `PAGE`, `READY`, `ROOT`, `SAY`, `STATES`, `main`, `paste`, `state`, `this_copy`). No chat on a computer is recommended any more, the page builds its own brief, and `python3 tools/app.py start` is the one way any chat finds out where setup stands (`--paste` prints the line for a new computer)."
+  },
+  {
+   "module": "tools/app_listen.py",
+   "name": "HELPER_PROMPT",
+   "date": "2026-10-29",
+   "reason": "no helper chat is started for the page any more: it lacked the page's tools and made a spare page; the helper is the chat the person starts from Settings (WAKE_PROMPT)",
+   "changelog": "**A name your own checks might have used was retired**: `app_listen.HELPER_PROMPT`. The page never starts a helper chat of its own any more; your helper is the chat you start from Settings, and it says what it is for in its first message."
+  },
+  {
+   "module": "tools/app_listen.py",
+   "name": "setup_done",
+   "date": "2026-10-29",
+   "reason": "nothing called it: start reads setup through place.setup_state",
+   "changelog": "**Names your own checks might have used were retired**: `app_listen.setup_done`, `ats_boards.workday_paths`, `interview_pack.campaign_offer`, `reading.last_browser_read`, `reading.reads_today`, `page_db.where` (now `page_db.can_take`), `place.CLOUD_LINK_NOT`, `place.QUESTION`, `place.TRADE_OFF`, `place.TWO_CHATS`, `safe_name.short_hash` and `scrape_wide.PortalDown`. Nothing in the app used them any more: setup asks nobody where they will work, no separate chat is offered for an interview, and work goes to the chat that answers your page."
+  },
+  {
+   "module": "tools/ats_boards.py",
+   "name": "workday_paths",
+   "date": "2026-10-29",
+   "reason": "nothing called it: openroles reads Workday boards itself",
+   "changelog": "**Names your own checks might have used were retired**: `app_listen.setup_done`, `ats_boards.workday_paths`, `interview_pack.campaign_offer`, `reading.last_browser_read`, `reading.reads_today`, `page_db.where` (now `page_db.can_take`), `place.CLOUD_LINK_NOT`, `place.QUESTION`, `place.TRADE_OFF`, `place.TWO_CHATS`, `safe_name.short_hash` and `scrape_wide.PortalDown`. Nothing in the app used them any more: setup asks nobody where they will work, no separate chat is offered for an interview, and work goes to the chat that answers your page."
+  },
+  {
+   "module": "tools/interview_pack.py",
+   "name": "campaign_offer",
+   "date": "2026-10-29",
+   "reason": "no separate chat is offered for an interview (4.3): prep stays in the chat that answers the page",
+   "changelog": "**Names your own checks might have used were retired**: `app_listen.setup_done`, `ats_boards.workday_paths`, `interview_pack.campaign_offer`, `reading.last_browser_read`, `reading.reads_today`, `page_db.where` (now `page_db.can_take`), `place.CLOUD_LINK_NOT`, `place.QUESTION`, `place.TRADE_OFF`, `place.TWO_CHATS`, `safe_name.short_hash` and `scrape_wide.PortalDown`. Nothing in the app used them any more: setup asks nobody where they will work, no separate chat is offered for an interview, and work goes to the chat that answers your page."
+  },
+  {
+   "module": "tools/network/reading.py",
+   "name": "last_browser_read",
+   "date": "2026-10-29",
+   "reason": "nothing called it: the page reads profiles itself",
+   "changelog": "**Names your own checks might have used were retired**: `app_listen.setup_done`, `ats_boards.workday_paths`, `interview_pack.campaign_offer`, `reading.last_browser_read`, `reading.reads_today`, `page_db.where` (now `page_db.can_take`), `place.CLOUD_LINK_NOT`, `place.QUESTION`, `place.TRADE_OFF`, `place.TWO_CHATS`, `safe_name.short_hash` and `scrape_wide.PortalDown`. Nothing in the app used them any more: setup asks nobody where they will work, no separate chat is offered for an interview, and work goes to the chat that answers your page."
+  },
+  {
+   "module": "tools/network/reading.py",
+   "name": "reads_today",
+   "date": "2026-10-29",
+   "reason": "nothing called it",
+   "changelog": "**Names your own checks might have used were retired**: `app_listen.setup_done`, `ats_boards.workday_paths`, `interview_pack.campaign_offer`, `reading.last_browser_read`, `reading.reads_today`, `page_db.where` (now `page_db.can_take`), `place.CLOUD_LINK_NOT`, `place.QUESTION`, `place.TRADE_OFF`, `place.TWO_CHATS`, `safe_name.short_hash` and `scrape_wide.PortalDown`. Nothing in the app used them any more: setup asks nobody where they will work, no separate chat is offered for an interview, and work goes to the chat that answers your page."
+  },
+  {
+   "module": "tools/page_db.py",
+   "name": "where",
+   "date": "2026-10-29",
+   "reason": "one chat answers the page, so work goes to it whatever its kind: page_db.can_take",
+   "changelog": "**Names your own checks might have used were retired**: `app_listen.setup_done`, `ats_boards.workday_paths`, `interview_pack.campaign_offer`, `reading.last_browser_read`, `reading.reads_today`, `page_db.where` (now `page_db.can_take`), `place.CLOUD_LINK_NOT`, `place.QUESTION`, `place.TRADE_OFF`, `place.TWO_CHATS`, `safe_name.short_hash` and `scrape_wide.PortalDown`. Nothing in the app used them any more: setup asks nobody where they will work, no separate chat is offered for an interview, and work goes to the chat that answers your page."
+  },
+  {
+   "module": "tools/place.py",
+   "name": "CLOUD_LINK_NOT",
+   "date": "2026-10-29",
+   "reason": "no longer said since 4.0: the page reads profiles",
+   "changelog": "**Names your own checks might have used were retired**: `app_listen.setup_done`, `ats_boards.workday_paths`, `interview_pack.campaign_offer`, `reading.last_browser_read`, `reading.reads_today`, `page_db.where` (now `page_db.can_take`), `place.CLOUD_LINK_NOT`, `place.QUESTION`, `place.TRADE_OFF`, `place.TWO_CHATS`, `safe_name.short_hash` and `scrape_wide.PortalDown`. Nothing in the app used them any more: setup asks nobody where they will work, no separate chat is offered for an interview, and work goes to the chat that answers your page."
+  },
+  {
+   "module": "tools/place.py",
+   "name": "QUESTION",
+   "date": "2026-10-29",
+   "reason": "setup no longer asks where the person will work: the answer changed nothing",
+   "changelog": "**Names your own checks might have used were retired**: `app_listen.setup_done`, `ats_boards.workday_paths`, `interview_pack.campaign_offer`, `reading.last_browser_read`, `reading.reads_today`, `page_db.where` (now `page_db.can_take`), `place.CLOUD_LINK_NOT`, `place.QUESTION`, `place.TRADE_OFF`, `place.TWO_CHATS`, `safe_name.short_hash` and `scrape_wide.PortalDown`. Nothing in the app used them any more: setup asks nobody where they will work, no separate chat is offered for an interview, and work goes to the chat that answers your page."
+  },
+  {
+   "module": "tools/place.py",
+   "name": "TRADE_OFF",
+   "date": "2026-10-29",
+   "reason": "went with QUESTION",
+   "changelog": "**Names your own checks might have used were retired**: `app_listen.setup_done`, `ats_boards.workday_paths`, `interview_pack.campaign_offer`, `reading.last_browser_read`, `reading.reads_today`, `page_db.where` (now `page_db.can_take`), `place.CLOUD_LINK_NOT`, `place.QUESTION`, `place.TRADE_OFF`, `place.TWO_CHATS`, `safe_name.short_hash` and `scrape_wide.PortalDown`. Nothing in the app used them any more: setup asks nobody where they will work, no separate chat is offered for an interview, and work goes to the chat that answers your page."
+  },
+  {
+   "module": "tools/place.py",
+   "name": "TWO_CHATS",
+   "date": "2026-10-29",
+   "reason": "an old name for place.CHATS that nothing read",
+   "changelog": "**Names your own checks might have used were retired**: `app_listen.setup_done`, `ats_boards.workday_paths`, `interview_pack.campaign_offer`, `reading.last_browser_read`, `reading.reads_today`, `page_db.where` (now `page_db.can_take`), `place.CLOUD_LINK_NOT`, `place.QUESTION`, `place.TRADE_OFF`, `place.TWO_CHATS`, `safe_name.short_hash` and `scrape_wide.PortalDown`. Nothing in the app used them any more: setup asks nobody where they will work, no separate chat is offered for an interview, and work goes to the chat that answers your page."
+  },
+  {
+   "module": "tools/safe_name.py",
+   "name": "short_hash",
+   "date": "2026-10-29",
+   "reason": "nothing called it",
+   "changelog": "**Names your own checks might have used were retired**: `app_listen.setup_done`, `ats_boards.workday_paths`, `interview_pack.campaign_offer`, `reading.last_browser_read`, `reading.reads_today`, `page_db.where` (now `page_db.can_take`), `place.CLOUD_LINK_NOT`, `place.QUESTION`, `place.TRADE_OFF`, `place.TWO_CHATS`, `safe_name.short_hash` and `scrape_wide.PortalDown`. Nothing in the app used them any more: setup asks nobody where they will work, no separate chat is offered for an interview, and work goes to the chat that answers your page."
+  },
+  {
+   "module": "tools/scrape_wide.py",
+   "name": "PortalDown",
+   "date": "2026-10-29",
+   "reason": "nothing raised or caught it",
+   "changelog": "**Names your own checks might have used were retired**: `app_listen.setup_done`, `ats_boards.workday_paths`, `interview_pack.campaign_offer`, `reading.last_browser_read`, `reading.reads_today`, `page_db.where` (now `page_db.can_take`), `place.CLOUD_LINK_NOT`, `place.QUESTION`, `place.TRADE_OFF`, `place.TWO_CHATS`, `safe_name.short_hash` and `scrape_wide.PortalDown`. Nothing in the app used them any more: setup asks nobody where they will work, no separate chat is offered for an interview, and work goes to the chat that answers your page."
   }
  ]
 }

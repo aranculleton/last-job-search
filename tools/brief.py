@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """The brief, gathered by code in one command, so a scheduled run reads it once.
 
-Everything the twice-weekly brief says comes from the state files: what is due today and
+Everything the morning brief says comes from the state files: what is due today and
 overdue (both halves of `open_actions.py --due`), the replies owed, the application nudges
 with who they go to, the follow-ups drafted by code (`tools/followup_drafts.py`, through
 compose's gate), the counts since the last brief, where the search is, three things to do
@@ -33,8 +33,8 @@ they ticked there changes what is owed, so `--start` stops before gathering and 
 steps that apply those ticks first (`app.py apply`, code alone); `--page-applied` then
 gathers. The message links the page's To do rather than a file on GitHub, its questions are
 on the page as To do cards, and the run brings the page up to date (`app.py view`) after it
-lands. It never publishes the page and never watches it: one chat answers the page
-(tools/app_listen.py). A break the person took (`routines.py pause`) holds the brief: a run
+lands. It runs in the chat that answers the page (tools/app_listen.py), so it never
+publishes the page again and never starts a watch: `app.py view` is all it sends. A break the person took (`routines.py pause`) holds the brief: a run
 during it says so in one line, and the run on the day it ends lifts it.
 
 Plain Python, standard library, no network of its own (the sync in --start fetches). The
@@ -757,36 +757,34 @@ def _next_three(got, counts, replies, drafted, preps, export_line, profile_line,
     live = [i for i in got if not i.get("held") and not i.get("quiet") and not i.get("old")]
     for i in live:
         if i.get("kind") == "interview" and "no pack yet" in (i.get("what") or ""):
-            add(i.get("key"), "Prep the interview: " + i["what"].split(" (")[0].replace(
-                "interview ", "", 1) + ": /interview " + i["name"].split(" (")[0])
+            add(i.get("key"), "Prepare for your interview at %s, %s." % (
+                i["name"].split(" (")[0], i["what"].split(" (")[0].replace("interview ", "", 1)))
     for i in replies:
         who = i.get("name", "")
-        first = first_name(who.split(" (")[0])
         if _noun() + " owed" in (i.get("what") or "") or i.get("kind") == "resume":
-            add(i.get("key"), "Send %s the %s they asked for, then log it: /reply %s"
-                % (who, _noun(), first))
+            add(i.get("key"), "Send %s the %s they asked for." % (who, _noun()))
         elif i["draft"]["status"] in ("ready", "check"):
-            add(i.get("key"), "Send your reply to %s: it is drafted in today's pack." % who)
+            add(i.get("key"), "Send your reply to %s: it is drafted for you." % who)
         else:
-            add(i.get("key"), "Reply to %s: /reply %s" % (who, first))
+            add(i.get("key"), "Reply to %s." % who)
     for i in live:
         if i.get("kind") == "interview" and "thank-you" in (i.get("what") or ""):
-            add(i.get("key"), "Send the thank-you after the interview at %s: /outcome %s"
-                % (i["name"].split(" (")[0], i["name"].split(" (")[0]))
+            add(i.get("key"), "Send the thank-you after your interview at %s."
+                % i["name"].split(" (")[0])
     for i in live:
         if i["draft"]["status"] in ("ready", "check") and i.get("kind") in ("nudge", "first_message") \
                 and i.get("half") == "contact":
-            add(i.get("key"), "Send the nudge to %s: it is in today's pack." % i.get("name"))
+            add(i.get("key"), "Send the nudge to %s: it is drafted for you." % i.get("name"))
     for i in live:
         if i.get("half") == "application" and i["draft"]["status"] in ("ready", "check"):
-            add(i.get("key"), "Send the follow-up on %s: it is in today's pack." % i.get("name"))
+            add(i.get("key"), "Send the follow-up on %s: it is drafted for you." % i.get("name"))
     if drafted:
         names = "; ".join("%s, %s" % (r.get("company"), r.get("role") or "role not recorded")
                           for r in drafted[:3])
-        add("unconfirmed", "Did these go? %s. Say \"applied\" or \"not applied\" for each." % names)
+        add("unconfirmed", "Did these go? %s. Mark each one applied or not." % names)
     for ln in (preps or {}).get("research", [])[:1]:
         name = ln.split(":", 1)[0].strip()
-        add("research:" + name, "Before the call with %s: /prep %s" % (name, first_name(name)))
+        add("research:" + name, "Read the prep before your call with %s." % name)
     if profile_line:
         m = re.search(r"\"([^\"]+)\"", profile_line)
         if m:
@@ -795,8 +793,8 @@ def _next_three(got, counts, replies, drafted, preps, export_line, profile_line,
         add("export_wait", export_line)
     elif export_line and "asked for on" not in export_line:
         m = re.search(r"(\d+) days old", export_line)
-        add("export", "Ask LinkedIn for a new copy of your data%s; say \"LinkedIn download\" in a "
-            "chat and I'll give you the steps." % (" (yours is %s days old)" % m.group(1) if m else ""))
+        add("export", "Ask LinkedIn for a new copy of your data%s; ask Claude for the steps."
+            % (" (yours is %s days old)" % m.group(1) if m else ""))
     for i in live:
         if i.get("kind") == "nudge" and i["draft"]["status"] == "write":
             add(i.get("key"), "Tell me one new thing to say to %s and I'll draft the nudge."
@@ -805,13 +803,13 @@ def _next_three(got, counts, replies, drafted, preps, export_line, profile_line,
         for w in warm[:1]:
             add("warm", "Ask %s (%s) about the team there: a warm route you already have."
                 % (first_name(w["name"]), w["company"]))
-        add("search", "Say \"find me jobs\" for a fresh shortlist.")
+        add("search", "Find new jobs: Jobs, Find jobs.")
     if counts.get("applications"):
-        add("outcome", "Heard back from anyone? /outcome records it.")
-    add("search", "Say \"find me jobs\" for a fresh shortlist.")
-    add("network", "Say /network to find people at an employer you want.")
-    add("targets", "Name an employer you would love to work at, and I'll look for its jobs and "
-        "its people.")
+        add("outcome", "Heard back from anyone? Mark it on the application.")
+    add("search", "Find new jobs: Jobs, Find jobs.")
+    add("network", "Find people at an employer you want: Contacts, Find people.")
+    add("targets", "Watch an employer you would love to work at (Jobs, Change the search), and "
+        "Claude reads its own jobs every search.")
     return out
 
 
@@ -895,6 +893,26 @@ def message_lines(b: dict, owed_max: int = 4) -> list[str]:
     return out
 
 
+def _tidy_due() -> str:
+    """The day's tidy of the app's own old chats, done in the brief's run when the brief runs
+    in the chat that answers the page and nothing has done it yet today: one daily pass, not
+    two (tools/tidy.py)."""
+    try:
+        import app_listen
+        import tidy
+        here = app_listen.this_chat()
+        if app_listen.chat_kind() != "cloud" or not here.startswith("session_"):
+            return ""
+        if (app_listen.seen().get("listener") or {}).get("chat") != here or not tidy.due():
+            return ""
+    except Exception:  # noqa: BLE001  no git folder, no record: nothing to tidy from here
+        return ""
+    return ("tidy, before the final reply (the message is the last thing this run says): "
+            "list_sessions (mine: true) and list_triggers, "
+            "every page, each saved to a file; python3 tools/tidy.py plan --sessions <each> "
+            "--triggers <each>; do what it prints (the app skill, \"Once a day\")")
+
+
 def claude_lines(b: dict) -> list[str]:
     """For the model only: what it acts on. Never in the message."""
     s = b["sync"] or {}
@@ -933,6 +951,9 @@ def claude_lines(b: dict) -> list[str]:
                        " (the first %d; the rest wait in the pack)" % most if n > most else ""))
     if b["profile_line"]:
         out.append("own profile question: a yes runs python3 tools/network/own_profile.py check")
+    tidy_line = _tidy_due()
+    if tidy_line:
+        out.append(tidy_line)
     n = setting("news")
     out.append("news: the news-reader agent, given these searches: %s; at most %d item%s in the "
                "message (the person's setting)" % (" | ".join(b["queries"]), n, "" if n == 1 else "s")
@@ -943,7 +964,8 @@ def claude_lines(b: dict) -> list[str]:
     if b.get("page"):
         out.append("the page, after landing (step 4): ArtifactData query, url %s, collections "
                    "view and meta, out_dir <D>; python3 tools/app.py view <D>/view --dump <D> "
-                   "--chat brief; send every batch it prints. Never publish or watch the page"
+                   "--chat brief; send every batch it prints. Never republish the page: this chat already "
+                   "answers it"
                    % b["page"])
     try:
         import routines

@@ -54,7 +54,7 @@ message box, where it is offered (step 3 of "On your computer as well" in
 [START_HERE.md](START_HERE.md)).
 
 **No brief arrived on one of its days.** The brief comes even when nothing is due, so silence
-means it is broken: tell any chat "my brief didn't arrive". [automation/README.md](automation/README.md)
+means it is broken: say "my brief didn't arrive" in Chat on your page. [automation/README.md](automation/README.md)
 has the rest.
 
 **Something else.** Say what you were doing and what it said. It never sends anything to

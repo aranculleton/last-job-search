@@ -365,15 +365,16 @@ def test_a_finished_or_stalled_job_frees_its_lock():
     assert page_db.next_item(db, "cloud", now)["work"] == "d2"   # no step for hours: stalled
 
 
-def test_cloud_and_computer_never_take_each_others_work():
+def test_the_chat_that_answers_the_page_takes_its_work_and_a_brief_waits_for_the_cloud():
+    """One chat answers the page (tools/app_listen.py), so work never waits for a chat of the
+    other kind: a setting that sent it there stranded it (4.3). Only a brief, which comes with
+    the computer off, waits for a chat in the cloud."""
     now = app_model.parse_time(NOW)
-    db = _db(("r1", _w("reply", to="either")), ("s1", _w("search", to="computer")),
-             ("b1", _w("brief", to="computer")))
-    assert page_db.next_item(db, "cloud", now)["work"] == "r1"
-    assert page_db.next_item(db, "computer", now)["work"] == "s1"
-    assert page_db.next_item(db, "computer", now, either_to="computer")["work"] in ("r1", "s1")
-    only_cloud = _db(("b1", _w("brief", to="computer")))
-    assert page_db.next_item(only_cloud, "computer", now) is None   # a brief runs in the cloud
+    assert page_db.next_item(_db(("s1", _w("search", to="cloud"))), "computer", now)["work"] == "s1"
+    assert page_db.next_item(_db(("s1", _w("search", to="computer"))), "cloud", now)["work"] == "s1"
+    only_brief = _db(("b1", _w("brief", to="computer")))
+    assert page_db.next_item(only_brief, "computer", now) is None
+    assert page_db.next_item(only_brief, "cloud", now)["work"] == "b1"
 
 
 def test_the_heavy_cap_holds_and_urgent_work_goes_first():
@@ -399,9 +400,12 @@ def test_next_writes_its_claim_pinned_with_its_locks(search):
     with open(got["batches"][0], encoding="utf-8") as fh:
         batch = json.load(fh)
     assert [(e["collection"], e["doc_id"], e.get("if_version")) for e in batch] == [
-        ("work", "draft~abc", 5), ("locks", "emp~kestrel_mutual", 2), ("chats", "cloud-1", None)]
-    assert search.run("next", search.dump, "--chat", "c2", "--kind", "computer",
-                      "--now", NOW) == ""
+        ("work", "draft~abc", 5), ("holds", "emp~kestrel_mutual", 2), ("beats", "cloud-1", None)]
+    # A chat of the other kind may be offered the same item; the claim is pinned to version 5,
+    # so only one write of the two can win.
+    again = json.loads(search.run("next", search.dump, "--chat", "c2", "--kind", "computer",
+                                  "--now", NOW))
+    assert again["work"] == "draft~abc" and again["version"] == 5
 
 
 def test_a_fact_to_confirm_is_answered_where_its_mark_was(search):
@@ -454,7 +458,10 @@ def test_the_page_and_the_work_list_name_the_same_kinds_of_work():
     assert set(page_db.STAGES) == set(page_db.WORK_KINDS)
     assert _page_stage_kinds() == set(page_db.WORK_KINDS)
     asked = _page_work_kinds()
-    assert {"search", "draft", "files", "talk", "update"} <= asked, asked
+    assert {"search", "draft", "files", "talk", "brief"} <= asked, asked
+    # An update is queued by the engine from the page's "Update now" (app.update_now), so
+    # it is one kind the work list has that the page never asks for by itself.
+    assert "app.update_now" in app_actions.ACTIONS and "update" in page_db.WORK_KINDS
     assert asked <= set(page_db.WORK_KINDS) | set(ENGINE_TODO_KINDS), asked - set(page_db.WORK_KINDS) - set(ENGINE_TODO_KINDS)
     assert not set(ENGINE_TODO_KINDS) & set(page_db.WORK_KINDS), ("the work list has these now: take them off ENGINE_TODO_KINDS",
                                                                   set(ENGINE_TODO_KINDS) & set(page_db.WORK_KINDS))
@@ -489,7 +496,7 @@ def test_an_update_that_changes_stored_records_waits_for_running_work_and_goes_f
                        stage_at="2026-10-25T17:59:00Z"))
     code = ("u1", _w("update", asked="2026-10-25T09:00:00Z", args={"sha": "a", "migration": False}))
     db = _db(running, code, ("t1", _w("talk", asked="2026-10-25T12:00:00Z")))
-    assert page_db.next_item(db, "cloud", now, either_to="cloud")["work"] == "u1"
+    assert page_db.next_item(db, "cloud", now)["work"] == "u1"
     migration = ("u2", _w("update", asked="2026-10-25T09:00:00Z",
                           args={"sha": "b", "migration": True}))
     db = _db(running, migration, ("t1", _w("talk", asked="2026-10-25T12:00:00Z")))

@@ -183,6 +183,21 @@ def test_the_profiles_own_never_write_rule_turns_the_whole_claim_on(profile):
     assert learned.dislikes("I made the move to Manchester last year.") == []
 
 
+def test_the_persons_own_line_is_never_caught_by_the_wider_family(profile):
+    """A first note built from their own ABOUT_ME was refused for the move it states (the
+    maintainer's copy, 2026-10-29). Their words are theirs; the phrases they banned still
+    are caught word for word."""
+    net = profile / "networking.py"
+    net.write_text(net.read_text(encoding="utf-8") + (
+        '\nABOUT_ME = "I just moved to Manchester from Leeds and work in demand planning."\n'),
+        encoding="utf-8")
+    person.clear_cache() if hasattr(person, "clear_cache") else person._modules.clear()
+    _ban_the_move()
+    assert learned.dislikes("Hi Bo, I just moved to Manchester from Leeds and work in demand "
+                            "planning.") == []
+    assert learned.dislikes("Hi Bo, I recently moved and am relocating.") != []
+
+
 def test_a_draft_saying_the_person_moved_is_not_saved(profile, book, capsys):
     _ban_the_move()
     book.put(WREN, NOTE_SENT)

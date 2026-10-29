@@ -90,13 +90,16 @@ def test_a_first_note_gives_the_words_to_copy_its_count_and_where_it_goes(search
 def test_the_address_is_kept_for_the_owner_alone(search):
     out = search.run("view", os.path.join(search.dump, "view_out"), "--now", NOW)
     batch = json.load(open(json.loads(out)["batches"][0], encoding="utf-8"))
-    reach = [e for e in batch if e["collection"] == "reach"]
-    doc = next(e for e in reach if e["doc_id"] == PELL)
-    got = json.load(open(doc["file_path"], encoding="utf-8"))
+    # A few owner-only records hold every address, each contact in one (page_db.addr_docs).
+    addr = [json.load(open(e["file_path"], encoding="utf-8")) for e in batch
+            if e["collection"] == "addr"]
+    got = next(d["contacts"][PELL] for d in addr if PELL in d["contacts"])
     assert got == {"linkedin": "https://www.linkedin.com/in/example-pell-ansgar",
                    "email": "pell.ansgar@example.co.uk"}
+    assert all(d["_v"] == 1 for d in addr), "made new, each carries the version it will have"
     rules = app_page.capabilities()["db"]["rules"]
     for level in ("view", "interact", "admin"):
+        assert not page_db.can(rules, "addr/part~1", "read", level), level
         assert not page_db.can(rules, f"reach/{PELL}", "read", level), level
         assert not page_db.can(rules, f"reach/{PELL}", "write", level), level
     assert page_db.can(rules, f"reach/{PELL}", "read", "owner")
@@ -198,7 +201,8 @@ def test_their_reply_is_logged_a_reply_is_owed_and_the_draft_starts_from_their_w
     assert queued["args"] == {"contact": WREN, "received": aid, "on": "2026-10-25"}
     # Their words leave the page's database once they are in the log.
     wipe = next(e for e in batch if e["collection"] == "actions" and e["doc_id"] == aid)
-    assert json.load(open(wipe["file_path"], encoding="utf-8")) == {"value": {"__delete__": True}}
+    assert json.load(open(wipe["file_path"], encoding="utf-8")) == {"value": {"__delete__": True},
+                                                                   "_v": wipe["if_version"] + 1}
     search.written_back()
     back = search.act("undo", None, value={"undoes": aid})
     assert search.apply()["ok"] == [back]

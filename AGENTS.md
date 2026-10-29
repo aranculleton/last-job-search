@@ -1,5 +1,5 @@
 ---
-framework_version: 2.2.4
+framework_version: 2.2.5
 ---
 
 # Agent guidelines
@@ -67,6 +67,16 @@ ChatGPT Codex and Google Antigravity discover them without help. `/scrape` in
 [`.claude/skills/job-scraper/`](.claude/skills/job-scraper/) orchestrates them; a runtime
 without that skill can call `tools/run_round.py`, which does the same thing with no model
 in the loop at all.
+
+## Someone hands you the link and says "set me up"
+
+Do it, end to end, and ask them nothing on the way: no choices, and no word of git or
+GitHub (copy, repository, branch, master, template, clone, empty). On a computer, follow
+[COMPUTER.md](COMPUTER.md) from the top: it installs what is missing, signs them in to
+GitHub with one code, makes their private copy from this app (or fills one they made empty)
+and starts it. In Claude Code the app's plugin does the same: `plugin/skills/job-search`.
+In a cloud chat their copy is already attached: run the start command below. Their page
+then asks the setup questions, a few plain ones, and nothing else is theirs to do.
 
 ## Running it in another agent
 

@@ -274,8 +274,7 @@ def test_a_paste_too_short_to_be_a_profile_is_refused(search):
 
 def test_the_brief_moves_from_the_page_and_a_chat_moves_its_task(search):
     s = search.model()["schedule"]
-    assert (s["id"], s["when"], s["paused"]) == ("schedule", "Mondays and Thursdays at 7:56",
-                                                 None)
+    assert (s["id"], s["when"], s["paused"]) == ("schedule", "Every day at 7:38", None)
     aid = search.act("brief.move", "schedule", value={"days": ["tue", "fri"], "time": "07:20"},
                      rev=s["rev"])
     assert search.apply()["ok"] == [aid], search.receipt(aid)
@@ -289,7 +288,7 @@ def test_the_brief_moves_from_the_page_and_a_chat_moves_its_task(search):
     search.written_back()
     back = search.act("undo", None, value={"undoes": aid})
     assert search.apply()["ok"] == [back], search.receipt(back)
-    assert search.model()["schedule"]["when"] == "Mondays and Thursdays at 7:56"
+    assert search.model()["schedule"]["when"] == "Every day at 7:38"
 
 
 def test_a_break_from_the_brief_row_is_the_one_break(search):
@@ -328,7 +327,8 @@ def test_the_model_says_who_answers_the_page_its_privacy_line_and_the_brief(sear
     assert m["listener"]["seen"]["seen_recently"] is False
     assert m["app"]["privacy"].startswith("Only you can open this page")
     assert m["schedule"]["actions"] == {"move": "brief.move", "pause": "brief.pause",
-                                        "resume": "brief.resume"}
+                                        "resume": "brief.resume", "off": "brief.off",
+                                        "on": "brief.on"}
 
 
 def test_republish_is_a_kind_of_page_work():

@@ -349,6 +349,10 @@ def main(argv: list[str] | None = None) -> int:
     if argv[:1] == ["--fix"]:
         if CLOUD:
             # A cloud container is root and has apt: the one script, as its setup line runs.
+            # `--plan` does nothing here either: it says what the script would do.
+            if "--plan" in argv:
+                print("would run: bash tools/setup_env.sh (it installs only what is missing)")
+                return 0
             return subprocess.call(["bash", os.path.join(ROOT, "tools", "setup_env.sh")])
         import installs
         return installs.main(argv[1:] or ["all"])

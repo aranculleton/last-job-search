@@ -73,7 +73,7 @@ Ask the user what happened, then classify:
 - `hired` - accepted an offer
 - `offer_declined` - received an offer, turned it down
 - `rejected` - explicit rejection at any stage
-- `no_response` - no reply; if the user is unsure whether to call it, note how long it has been since the last contact and let them decide - do not impose a cutoff. (The brief closes an application on its own once the chase has ended, `followups.py --close-quiet`, with a dated note on the row; a reply after that is recorded here as usual.)
+- `no_response` - no reply; if the user is unsure whether to call it, note how long it has been since the last contact and let them decide - do not impose a cutoff. (The chat that answers the page closes an application on its own once the chase has ended, `followups.py --close-quiet`, with a dated note on the row; a reply after that is recorded here as usual.)
 - `interview_only` - reached interviews but the process stalled or was abandoned without an explicit rejection
 
 Also collect, without interrogating - one or two open questions are enough:
@@ -120,7 +120,7 @@ Enter this branch from the `followup` argument (Step 0) or from the offer under 
 
 If the user decides not to send, log nothing.
 
-**Termination.** When an application hits two follow-ups and stays silent, do not offer a third. This is the moment to continue in this same command's Step 2: note how long it has been since last contact and let the user decide whether to record `no_response` now. If they leave it, nothing here closes it; the brief does, once the chase has ended (`followups.py --close-quiet`: a week after the second follow-up, or 45 days of silence), with a dated note on the row. And if the user mentions an actual response while in this branch (an interview invitation, a rejection), drop out of the branch and record it through the normal Step 2 flow.
+**Termination.** When an application hits two follow-ups and stays silent, do not offer a third. This is the moment to continue in this same command's Step 2: note how long it has been since last contact and let the user decide whether to record `no_response` now. If they leave it, nothing here closes it; the chat that answers the page does, once the chase has ended (`followups.py --close-quiet`: a week after the second follow-up, or 45 days of silence), with a dated note on the row. And if the user mentions an actual response while in this branch (an interview invitation, a rejection), drop out of the branch and record it through the normal Step 2 flow.
 
 ---
 

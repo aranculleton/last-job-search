@@ -80,9 +80,8 @@ def test_a_cloud_chat_with_no_browser_says_finding_works_and_where_to_read():
     # with no caveat (the link's standing is the registry's, for Claude: cloud-linked-browser).
     assert _say("desktop-cloud", "browser", ["enable"]) == place.CLOUD_LINK_NOW
     assert _say("desktop-cloud", "browser", ["browser"]) == place.CLOUD_LINK_NOW
-    assert "documentation" not in place.CLOUD_LINK_NOW + place.CLOUD_LINK_NOT
+    assert "documentation" not in place.CLOUD_LINK_NOW
     assert len(place.CLOUD_LINK_NOW.split()) <= 25
-    assert place.CLOUD_LINK_NOT not in said         # 4.0: the page reads them, not a move
 
 
 def test_a_chat_that_pastes_hears_nothing_anywhere():
@@ -185,10 +184,8 @@ def test_the_next_step_after_setups_question_never_stops_the_chat():
         assert step.startswith("Carry on here")
         assert "COMPUTER.md" not in step
         _clean(step)
-    _clean(place.QUESTION + " " + place.TRADE_OFF)
     assert not hasattr(place, "RECOMMEND")          # 4.0 recommends no computer chat
-    assert "local" not in place.TRADE_OFF.lower() and "cloud" not in place.TRADE_OFF.lower()
-    assert len((place.QUESTION + " " + place.TRADE_OFF).split()) <= 40
+    assert not hasattr(place, "QUESTION")           # 4.3 asks nobody where they work
 
 
 def test_where_they_work_is_recorded_without_asking_where_the_chat_can_tell():
@@ -196,6 +193,13 @@ def test_where_they_work_is_recorded_without_asking_where_the_chat_can_tell():
     assert place.auto_answer("desktop-cloud") == "both"
     for where in ("phone", "web", "unknown"):
         assert place.auto_answer(where) == ""
+
+
+def test_where_the_chat_cannot_tell_nothing_is_asked(monkeypatch, capsys):
+    monkeypatch.setattr(place, "surface", lambda env=None: "web")
+    assert place.main(["auto"]) == 0
+    said = capsys.readouterr().out
+    assert said.startswith("place: nothing recorded, and nothing to ask") and "?" not in said
 
 
 def test_a_linux_computer_is_told_the_way_that_works_there():

@@ -222,11 +222,6 @@ def _words(text: str) -> set[str]:
     return {w for w in re.findall(r"[a-z0-9][a-z0-9.%+#]*", plain(text).lower()) if len(w) > 2}
 
 
-def _jaccard(a: str, b: str) -> float:
-    x, y = _words(a), _words(b)
-    return len(x & y) / len(x | y) if x and y else 0.0
-
-
 def _roles():
     try:
         return list(person.module("roles").ROLES)
@@ -1054,6 +1049,38 @@ UNREAD = " | NOT READ ON THE PAGE (a search summary): never cite it"
 
 # ------------------------------------------------------------------ build
 
+def cached_research(pick: dict, round_dir: str, today: str = "") -> dict | None:
+    """The employer's saved research, when it is recent and holds facts with their quotes,
+    as the research step would return it, and written where the drafter and the audit read it
+    (research_<slug>.json). The workflow then runs no research agent for this pick: a whole
+    agent to re-read a file already saved cost a session for nothing (the maintainer,
+    2026-10-29). The posting's own fields (contact, salary, deadline) the drafter reads from
+    the posting itself."""
+    try:
+        import company_research
+        data, _age, fresh = company_research.load(str(pick.get("company") or ""), today or None)
+    except Exception:  # noqa: BLE001  no cache, or a broken one: research as before
+        return None
+    facts = [f for f in (data.get("facts") or []) if isinstance(f, dict)
+             and f.get("claim") and f.get("quote") and f.get("url")]
+    if not fresh or len(facts) < 2:
+        return None
+    out = {"company_key": company_research.file_key(pick.get("company") or ""),
+           "cache_path": company_research.path(str(pick.get("company") or "")) or "",
+           "facts": facts[:6], "team_context": str(data.get("team_context") or ""),
+           "do_not_claim": [str(x) for x in data.get("do_not_claim") or []],
+           "not_verified": [str(x) for x in data.get("not_verified") or []],
+           "named_contact": "", "req_id": "", "salary": "", "deadline": "", "work_model": "",
+           "location": "", "cached": True}
+    slug = str(pick.get("slug") or "")
+    if slug:
+        with open(os.path.join(round_dir, f"research_{slug}.json"), "w", encoding="utf-8",
+                  newline="\n") as fh:
+            json.dump(out, fh, indent=1, ensure_ascii=False)
+            fh.write("\n")
+    return out
+
+
 def build(round_dir: str, today: str = "") -> dict:
     """Write pack.md, pack.json and draft_args.json under `round_dir`. Returns pack.json."""
     os.makedirs(round_dir, exist_ok=True)
@@ -1082,6 +1109,10 @@ def build(round_dir: str, today: str = "") -> dict:
         with open(picks_path, encoding="utf-8") as fh:
             picks = json.load(fh)
     staged = [dict(p, brief=posting_brief(p), named=named(p)) for p in picks]
+    for p in staged:
+        got = cached_research(p, round_dir, today)
+        if got:
+            p["research"] = got
     # What the drafter was given, kept under its hash: when the profile changes after a
     # draft, the model auditor is shown what changed rather than told that something did.
     with open(os.path.join(round_dir, f"rules_{meta['rules_hash']}.json"), "w",

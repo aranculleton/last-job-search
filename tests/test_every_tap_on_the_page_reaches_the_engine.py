@@ -204,6 +204,23 @@ def test_a_setting_changed_on_the_page_is_changed(run, tmp_path):
     assert next(s for s in m["settings"] if s["key"] == "tips")["value"] == "off"
 
 
+def test_a_person_put_in_the_bin_is_never_messaged_again(run, tmp_path):
+    # The bin on a person's row (the maintainer, 2026-10-29: "i dont wanna message ade"): one
+    # choice in its own sheet, applied by the engine, and the person shows as stopped.
+    where = Search(str(tmp_path / "s"))
+    got, rec = _round_trip(run, tmp_path, where, "bin", [
+        # Wren owes nothing today, so is one tap below the people who do.
+        {"hash": "contacts", "click": "more people, nothing owed to them now", "exact": False},
+        {"click": "Not Wren?", "exact": True},
+        {"click": "Don't contact Wren", "role": "radio", "exact": True},
+        {"submit": True},
+    ])
+    (a,) = [x for x in got["actions"] if x["action"] == "person.stop"]
+    assert a["item"] == "fernhill_freight_halloway" and a["rev_seen"] and a["value"]["why"], a
+    wren = next(p for p in where.model()["people"] if p["id"] == "fernhill_freight_halloway")
+    assert wren["status"] in ("stopped", "closed"), wren["status"]
+
+
 def test_a_suggestion_declined_is_not_offered_again(run, tmp_path):
     where = Search(str(tmp_path / "s"))
     got, rec = _round_trip(run, tmp_path, where, "nothanks", [

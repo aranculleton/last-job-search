@@ -14,6 +14,10 @@ and still applies to anything sent back there.
 
 These apply whenever the change is to the app, whichever repo the session started in.
 
+- **The page has one design language: `templates/app/DESIGN.md`.** Read it before changing
+  anything a person sees. Its rules are tested on every screen (one bin, never an x; one "?"
+  a card; soft cards with no side lines; plain words), so a page that breaks one fails.
+
 - **Windows is never run on a change.** Linux and Mac decide whether a change is green; a
   Windows question is answered from Microsoft's and Python's documentation and from the
   tests that fake Windows. Its CI jobs run only when started by hand (Actions, Run

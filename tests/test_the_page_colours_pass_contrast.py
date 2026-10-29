@@ -48,14 +48,18 @@ def test_the_ratios_are_computed_by_the_wcag_formula():
 
 def test_rose_is_a_fill_with_near_black_ink_and_its_marks_are_shaded_only_where_dawn_needs_it():
     dawn, main = palettes.DAWN, palettes.MAIN
-    assert dawn["accent"][0] == DAWN["rose"] and main["accent"][0] == MAIN["rose"], "the fill is rose itself, never a brown"
+    # The dark look's fill is rose itself with near-black ink on it. The light look's is its
+    # own ink with white on it (the maintainer, 2026-10-29: the peach with dark text "is
+    # slightly hard to read", and a deeper rose looked worse): calm, and rose stays for marks.
+    assert main["accent"][0] == MAIN["rose"] and main["accent-ink"][0] == MAIN["base"]
+    assert dawn["accent"][0] == dawn["ink"][0] == DAWN["text"] and dawn["accent-ink"][0] == "#ffffff"
+    assert palettes.ratio("#ffffff", dawn["accent"][0]) >= 7
     for p in (dawn, main):
-        assert p["accent-ink"][0] == MAIN["base"]
         assert palettes.ratio(p["accent-ink"][0], p["accent"][0]) >= 4.5
     # Dawn's rose cannot be a mark on dawn's own panes, nor carry light text: hence the shade,
     # and only as far as 3:1 needs.
     assert palettes.ratio(DAWN["rose"], DAWN["overlay"]) < 3 and palettes.ratio(DAWN["surface"], DAWN["rose"]) < 4.5
-    assert dawn["mark"][0] == "#bc7371" and 3 <= palettes.ratio(dawn["mark"][0], dawn["sunk"][0]) < 3.1
+    assert dawn["mark"][0] == "#c27674" and 3 <= palettes.ratio(dawn["mark"][0], dawn["sunk"][0]) < 3.1
     assert main["mark"][0] == MAIN["rose"]
     assert dawn["link"][0] == dawn["ink"][0] and main["link"][0] == main["ink"][0], "links are the text colour, underlined"
     assert dawn["focus"][0] == DAWN["iris"] and main["focus"][0] == MAIN["iris"]
@@ -99,13 +103,6 @@ def test_both_looks_name_the_same_tokens_and_every_state():
     assert set(palettes.STATUSES) == {"done", "running", "waiting", "failed", "overdue", "held"}
 
 
-def _cooler(h, f=0.7):
-    """A colour moved most of the way to the grey of its own lightness (the maintainer,
-    2026-10-28: warm but sleek, like Claude's own light look)."""
-    c = [int(h[i:i + 2], 16) for i in (1, 3, 5)]
-    m = sum(c) / 3
-    return "#%02x%02x%02x" % tuple(round(v + (m - v) * f) for v in c)
-
 
 def test_the_colours_are_rose_pines_own_where_they_are_used_in_its_roles():
     for name, flavour in (("light", DAWN), ("dark", MAIN)):
@@ -115,9 +112,12 @@ def test_the_colours_are_rose_pines_own_where_they_are_used_in_its_roles():
                 assert v in flavour.values() or v == MAIN["base"], (name, k, v)
         if name == "dark":
             assert p["bg"][0] == flavour["base"] and p["surface"][0] == flavour["surface"]
-        else:   # most of the warmth out of dawn's base, surface and depths (2026-10-28)
-            assert p["bg"][0] == _cooler(flavour["base"]) and p["surface"][0] == _cooler(flavour["surface"])
-        assert p["sunk"][0] in (flavour["overlay"], flavour["base"], _cooler(flavour["overlay"]))
+            assert p["sunk"][0] in (flavour["overlay"], flavour["base"])
+        else:   # as light as Claude's own page: near-white base, white cards (2026-10-29)
+            assert p["surface"][0] == "#ffffff"
+            assert all(int(p["bg"][0][i:i + 2], 16) >= 0xf5 for i in (1, 3, 5)), "the page is near-white"
+            assert palettes.luminance(p["sunk"][0]) > palettes.luminance(flavour["overlay"]), "the depths lighter than dawn's"
+            assert palettes.ratio(p["bg"][0], p["surface"][0]) < 1.08, "no darker page around the cards"
         assert p["ink"][0] == flavour["text"] and p["line"][0] == flavour["highlight_med"]
         assert p["selection"][0] == flavour["highlight_med"], "rose pine pairs a selection with text"
         assert p["line-strong"][0] in (flavour["subtle"], flavour["muted"])

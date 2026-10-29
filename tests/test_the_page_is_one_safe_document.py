@@ -41,7 +41,9 @@ def test_the_capabilities_are_exactly_these():
         # reach/<contact> (each contact's address for Open profile) is the owner's alone,
         # named as well as covered by the root (the maintainer's decision, 2026-10-25).
         "db": {"rules": [{"path": "", "read": "owner", "write": "owner"},
-                         {"path": "reach", "read": "owner", "write": "owner"}]},
+                         {"path": "reach", "read": "owner", "write": "owner"},
+                         # addr/part~<n>, where the addresses live since 4.3 (page_db.addr_docs).
+                         {"path": "addr", "read": "owner", "write": "owner"}]},
         "user": {},
         "downloads": True,
         "comments": {},
@@ -52,7 +54,7 @@ def test_the_capabilities_are_exactly_these():
         "mcp": {"servers": [{"server": "host:claude_browser",
                              "tools": ["navigate", "get_page_text", "read_page", "preview_start"]},
                             # The page wakes the chat that answers it (the maintainer, 2026-10-28).
-                            {"server": "Claude Code Remote", "tools": ["send_message", "list_environments", "create_session"]}]},
+                            {"server": "Claude Code Remote", "tools": ["send_message"]}]},
     }
 
 
@@ -176,3 +178,32 @@ def test_the_fixture_is_the_contract_shape_with_invented_people_only():
             for text in [r.get("warm") or ""] + [a["text"] for a in r.get("alerts") or []]:
                 if text.startswith(who + " "):
                     assert where in text, (who, text)
+
+
+def test_the_published_script_is_compacted_safely():
+    """The page is read whole before each publish, so its script goes without comments or
+    indentation (2026-10-29). That is safe only while app.js holds no template literal: a
+    backtick appears only inside a regular expression, never opening a string that spans
+    lines. The compacted script must still parse."""
+    with open(os.path.join(ROOT, "templates", "app", "app.js"), encoding="utf-8") as fh:
+        js = fh.read()
+    for n, line in enumerate(app_page.compact_js(js).split("\n"), 1):
+        for m in re.finditer("`", line):
+            before, after = line[:m.start()], line[m.end():]
+            assert re.search(r"[(=,:\s]/", before) and "/" in after, (
+                f"compacted app.js line {n} has a backtick outside a regular expression: a template literal "
+                "would break compact_js")
+    small = app_page.compact_js(js)
+    assert len(small) < len(js) * 0.92
+    assert "\n//" not in "\n" + small
+    import shutil
+    if shutil.which("node"):
+        import tempfile
+        with tempfile.NamedTemporaryFile("w", suffix=".js", delete=False, encoding="utf-8") as fh:
+            fh.write(small)
+        try:
+            r = subprocess.run(["node", "--check", fh.name], capture_output=True, text=True,
+                               encoding="utf-8", errors="replace")
+            assert r.returncode == 0, r.stderr[:500]
+        finally:
+            os.unlink(fh.name)

@@ -33,7 +33,23 @@ if _HERE not in sys.path:
     sys.path.insert(0, _HERE)
 
 COLLECTIONS = ("actions", "receipts", "work", "chats", "locks", "talk", "meta", "view",
-               "reach")
+               "reach", "addr")
+
+# Where each record lives in the store. The code names a record by what it is (`view`,
+# `meta/listener`); the store keeps the ones only chats write under names of 4.3's own, so
+# no write ever needs the version of a record made before every write carried it (`_v`,
+# below). Before 4.3 those records came back with no version, and every write to them was
+# refused (the maintainer's copy, 2026-10-29).
+STORE = {"view": "screen", "chats": "beats", "locks": "holds"}
+STORE_DOC = {("meta", "listener"): "listen", ("meta", "current"): "now"}
+_LOGICAL = {v: k for k, v in STORE.items()}
+_LOGICAL_DOC = {("meta", v): k for (c, k), v in STORE_DOC.items()}
+
+
+def stored(collection: str, doc_id: str = "") -> tuple[str, str]:
+    """(collection, doc id) as the store holds them."""
+    return STORE.get(collection, collection), STORE_DOC.get((collection, doc_id), doc_id)
+
 
 # The access levels a database rule names, lowest first, and the levels a document has with
 # no rule at all (artifact-capabilities, db: "view < interact < admin < owner").
@@ -56,7 +72,11 @@ def can(rules, path: str, op: str, level: str) -> bool:
     return LEVELS.index(level) >= LEVELS.index(need)
 BATCH_MAX = 50
 DOC_MAX = 256 * 1024
-_SAFE_ID = re.compile(r"[^A-Za-z0-9_\-.~:@+]+")
+# No "@": ArtifactData writes a "~" as "@" in a saved file's name, so an "@" of an id's own
+# could not be told from it.
+_SAFE_ID = re.compile(r"[^A-Za-z0-9_\-.~:+]+")
+# One batch's body stays under the tool's 1 MiB, with room for the entries around the files.
+BATCH_BYTES = 900_000
 
 # ------------------------------------------------------------------ reading a dump
 
@@ -65,18 +85,30 @@ _WRAPPER = {"id", "doc_id", "version", "data", "path", "collection", "created_at
             "updated_at", "create_time", "update_time", "__version__", "_version"}
 
 
+# Every write, by a chat or by the page, carries the version the record will have once it
+# lands (`_v`): the store counts up by one a write, starting at 1 (checked against the store
+# itself, 2026-10-29). ArtifactData's `out_dir` saves a record's fields and nothing else, so
+# `_v` is how a chat reading a dump knows what to pin its next write to.
+VERSION_FIELD = "_v"
+
+
 def unwrap(obj) -> tuple[dict, int | None]:
     """(the document's fields, its version) from one dumped file. A dump holds either the
-    fields themselves, with the version beside them (`__version__`, `_version`), or a
-    wrapper {id, version, data}. Both are read."""
+    fields themselves, or a wrapper {id, version, data}. The version is the wrapper's, else
+    `__version__` or `_version` beside the fields, else the record's own `_v`, else 1: a
+    record from before `_v` that a chat never rewrote was made once, by the page."""
     if not isinstance(obj, dict):
         return {}, None
     if isinstance(obj.get("data"), dict) and set(obj) <= _WRAPPER:
         version = obj.get("version", obj.get("__version__", obj.get("_version")))
-        return dict(obj["data"]), version if isinstance(version, int) else None
-    fields = {k: v for k, v in obj.items() if k not in ("__version__", "_version")}
-    version = obj.get("__version__", obj.get("_version"))
-    return fields, version if isinstance(version, int) else None
+        fields = dict(obj["data"])
+    else:
+        fields = {k: v for k, v in obj.items() if k not in ("__version__", "_version")}
+        version = obj.get("__version__", obj.get("_version"))
+    own = fields.pop(VERSION_FIELD, None)
+    if not isinstance(version, int) or isinstance(version, bool):
+        version = own if isinstance(own, int) and not isinstance(own, bool) and own > 0 else 1
+    return fields, version
 
 
 def _read_json(path: str):
@@ -92,18 +124,25 @@ def load(dump_dir: str) -> dict:
     the chat dumped into `dump_dir`. A collection not dumped is empty."""
     out: dict = {c: {} for c in COLLECTIONS}
     for coll in COLLECTIONS:
-        for path in sorted(glob.glob(os.path.join(dump_dir, coll, "*.json"))):
+        where = os.path.join(dump_dir, STORE.get(coll, coll))
+        if not os.path.isdir(where):
+            where = os.path.join(dump_dir, coll)
+        for path in sorted(glob.glob(os.path.join(where, "*.json"))):
             got = _read_json(path)
             if got is None:
                 continue
             fields, version = unwrap(got)
-            doc_id = os.path.splitext(os.path.basename(path))[0]
+            # ArtifactData spells a "~" in an id as "@" in the file's name; ids never hold
+            # an "@" of their own (safe_id), so every "@" is a "~".
+            doc_id = os.path.splitext(os.path.basename(path))[0].replace("@", "~")
+            if coll == "meta":
+                doc_id = _LOGICAL_DOC.get(("meta", doc_id), doc_id)
             out[coll][doc_id] = {"data": fields, "version": version}
     return out
 
 
 def safe_id(text: str) -> str:
-    """A document id the database takes: letters, digits and _ - . ~ : @ + only."""
+    """A document id the database takes: letters, digits and _ - . ~ : + only."""
     return _SAFE_ID.sub("_", str(text or "")).strip("_")[:200] or "x"
 
 
@@ -116,6 +155,24 @@ def safe_id(text: str) -> str:
 # and `joined()` below reads them back the same way. Each part stays well under the cap.
 PART_BYTES = 200_000
 PART_PREFIX = "part~"
+
+
+ADDR_BYTES = 120_000
+
+
+def addr_docs(reach: dict) -> dict:
+    """Each contact's address (`app_model.reach_docs`) in `addr/part~<n>`, a contact always
+    in the same one while the count of documents holds, so a change rewrites one document."""
+    import zlib
+    if not reach:
+        return {}
+    size = len(json.dumps(reach, ensure_ascii=False).encode("utf-8"))
+    n = max(1, -(-size // ADDR_BYTES))
+    out: dict = {}
+    for cid in sorted(reach):
+        k = f"part~{zlib.crc32(str(cid).encode('utf-8')) % n + 1}"
+        out.setdefault(k, {"contacts": {}})["contacts"][str(cid)] = reach[cid]
+    return out
 
 
 def stored_size(doc) -> int:
@@ -212,12 +269,14 @@ class Writes:
             if_version: int | None = None) -> dict:
         if op not in ("set", "update", "delete"):
             raise ValueError(f"page_db: no write {op!r}")
-        doc_id = safe_id(doc_id)
+        collection, doc_id = stored(collection, safe_id(doc_id))
         self.entries = [e for e in self.entries
                         if not (e["collection"] == collection and e["doc_id"] == doc_id)]
         entry = {"op": op, "collection": collection, "doc_id": doc_id}
         if op != "delete":
-            body = json.dumps(data or {}, ensure_ascii=False, indent=1, sort_keys=True)
+            data = dict(data or {})
+            data[VERSION_FIELD] = int(if_version) + 1 if if_version is not None else 1
+            body = json.dumps(data, ensure_ascii=False, indent=1, sort_keys=True)
             if len(body.encode("utf-8")) > DOC_MAX:
                 raise ValueError(f"page_db: {collection}/{doc_id} is over 256 KiB"
                                  " (page_db.split() writes it as parts)")
@@ -232,6 +291,7 @@ class Writes:
         return entry
 
     def drop(self, collection: str, doc_id: str) -> bool:
+        collection, doc_id = stored(collection, doc_id)
         before = len(self.entries)
         self.entries = [e for e in self.entries
                         if not (e["collection"] == collection and e["doc_id"] == doc_id)]
@@ -239,10 +299,21 @@ class Writes:
 
     def save(self, name: str = "batch") -> list[str]:
         os.makedirs(self.out_dir, exist_ok=True)
+        # At most 50 entries a batch, and at most BATCH_BYTES of bodies: one view went as a
+        # 1.5 MB batch the tool refused (2026-10-26 and again 2026-10-29).
+        parts: list[list[dict]] = [[]]
+        size = 0
+        for e in self.entries:
+            n = os.path.getsize(e["file_path"]) if e.get("file_path") else 0
+            if parts[-1] and (len(parts[-1]) >= BATCH_MAX or size + n > BATCH_BYTES):
+                parts.append([])
+                size = 0
+            parts[-1].append(e)
+            size += n
+        parts = [p for p in parts if p]
         paths = []
-        for n in range(0, len(self.entries), BATCH_MAX):
-            part = self.entries[n:n + BATCH_MAX]
-            suffix = "" if len(self.entries) <= BATCH_MAX else f"_{n // BATCH_MAX + 1}"
+        for i, part in enumerate(parts):
+            suffix = "" if len(parts) == 1 else f"_{i + 1}"
             path = os.path.join(self.out_dir, f"{name}{suffix}.json")
             with open(path, "w", encoding="utf-8", newline="\n") as fh:
                 json.dump(part, fh, ensure_ascii=False, indent=1)
@@ -355,11 +426,13 @@ def progress(kind: str) -> dict:
     return {"kind": kind, "stages": stages, "total_s": sum(s["est_s"] for s in stages)}
 
 
-def where(item: dict, either_to: str = "cloud") -> str:
-    """Which chat a work item is for: its `to`, with "either" going to `either_to`."""
-    kind = WORK_KINDS.get(str(item.get("kind") or ""), {})
-    to = str(item.get("to") or kind.get("to") or "cloud")
-    return either_to if to == "either" else to
+def can_take(item: dict, chat_kind: str) -> bool:
+    """Whether a chat of this kind can do a work item. One chat answers the page
+    (tools/app_listen.py), so work never waits for a chat of the other kind: the item's `to`
+    is only where the page expected it to run. A brief alone needs the cloud, since it comes
+    with the computer off."""
+    kind = WORK_KINDS.get(str(item.get("kind") or ""))
+    return kind is not None and chat_kind in kind["can"]
 
 
 def _key(text) -> str:
@@ -434,12 +507,11 @@ def held_locks(db: dict, now: dt.datetime) -> dict:
     return held
 
 
-def next_item(db: dict, chat_kind: str, now: dt.datetime, either_to: str = "cloud",
+def next_item(db: dict, chat_kind: str, now: dt.datetime,
               cap: int = HEAVY_CAP) -> dict | None:
     """The queued work item this chat should claim, or None.
 
-    Its own chat kind (the item's `to`, "either" by the person's choice), a kind it can do,
-    the most urgent first and then the oldest asked, never past the heavy-job cap (urgent
+    A kind of work it can do (can_take), the most urgent first and then the oldest asked, never past the heavy-job cap (urgent
     may take one more), and never one whose locks another live job holds."""
     work = db.get("work") or {}
     held = held_locks(db, now)
@@ -451,7 +523,7 @@ def next_item(db: dict, chat_kind: str, now: dt.datetime, either_to: str = "clou
         kind = WORK_KINDS.get(str(item.get("kind") or ""))
         if kind is None or str(item.get("status") or "") != "queued" or item.get("stop_asked"):
             continue
-        if chat_kind not in kind["can"] or where(item, either_to) != chat_kind:
+        if not can_take(item, chat_kind):
             continue
         queued.append((-int(item.get("priority") or 0), str(item.get("asked_at") or ""), wid))
     # An update that changes how a record file is stored (args.migration) never interrupts

@@ -547,10 +547,36 @@ def dislikes(text: str) -> list[str]:
     rules = never_say()
     hits = [(m.start(), m.end(), m.group(0)) for _, rx in rules for m in rx.finditer(text)]
     if bans_the_move([p for p, _rx in rules]):
+        own = _own_lines()
         for a, b, said in moved_claims(text, spans=True):
+            # The person's own words are never caught by the wider family: a first note built
+            # from their own ABOUT_ME was refused for the move it states (the maintainer's
+            # copy, 2026-10-29). Their never-say phrases still are, word for word, above.
+            if any(_flat(said) in o for o in own):
+                continue
             if not any(x < b and a < y for x, y, _s in hits):
                 hits.append((a, b, said))
     return [said for _a, _b, said in sorted(hits, key=lambda h: h[0])]
+
+
+def _flat(text: str) -> str:
+    return re.sub(r"\s+", " ", str(text or "")).strip().lower()
+
+
+def _own_lines() -> list[str]:
+    """The lines the person set as their own in profile/networking.py, flattened."""
+    try:
+        if not person.exists("networking.py"):
+            return []
+        net = person.module("networking")
+    except Exception:  # noqa: BLE001  no profile, or a broken one: nothing of theirs
+        return []
+    out = []
+    for name in ("OPENER", "ABOUT_ME", "ASK", "WHO_LINE", "GREETING", "REFERRAL_LINE",
+                 "REFERRAL_CLOSE"):
+        v = getattr(net, name, "")
+        out += [_flat(x) for x in (v if isinstance(v, (list, tuple)) else [v]) if str(x).strip()]
+    return out
 
 
 # A ban on saying the person moved ("recently moved", "relocating", "moving to <City>") is a

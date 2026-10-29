@@ -1,4 +1,4 @@
-# The brief (twice a week; schedule: `profile/routines.json`)
+# The brief (each morning once it is on; schedule: `profile/routines.json`)
 
 One message, built around where this person's search is right now. Code gathers all of it;
 your part is the news and the message. It does not search for jobs: a fresh shortlist is
@@ -8,10 +8,11 @@ a state file, a pack or an earlier brief yourself: `tools/brief.py` has read the
 ## 1. Start and gather: one command
 
 ```
-git switch -c claude/ops-<YYYY-MM-DD>-morning_brief origin/master && python3 tools/brief.py --start --on "<the model this run is on>" --write
+git switch -c claude/ops-<YYYY-MM-DD>-morning_brief origin/master
+python3 tools/brief.py --start --on "<the model this run is on>" --write
 ```
 
-(`-2` on the branch name if it exists.) That is `_common.md` steps 1 to 4 and the whole
+Each on its own, never chained (`-2` on the branch name if it exists). That is `_common.md` steps 1 to 4 and the whole
 gather: the app's updates, the Python side, earlier runs' unsaved work, the follow-ups
 drafted by code and checked, the preps rebuilt, the quiet applications closed, and the
 day's record and pack written. It prints the message with `<NEWS>` still to fill, then the
@@ -48,13 +49,19 @@ the search did not run."
 python3 tools/brief.py news <<'EOF'
 <the news-reader's lines, as they came, best first, at most five>
 EOF
-python3 tools/save_state.py && git commit -qm "Brief <YYYY-MM-DD>" && set -o pipefail && ./tools/ci_local.sh --quick 2>&1 | tail -3 && git push -u origin HEAD
+python3 tools/save_state.py
+git commit -qm "Brief <YYYY-MM-DD>"
+./tools/ci_local.sh --quick
+git push -u origin HEAD
 ```
+
+Each command on its own, never chained: a chain goes to the safety check whole. Push only
+when the local check passed.
 
 `brief.py news` puts the news in the day's record, leaves out any link an earlier brief
 sent, and notes a freeze or layoffs at an employer with a live application on that row.
 Then open the PR and merge it, as `_common.md` "Landing work" says. With a page, bring it up
-to date as its FOR CLAUDE line says. Never publish the page or watch it.
+to date as its FOR CLAUDE line says. Never republish the page: this chat already answers it.
 
 ## 5. The message
 

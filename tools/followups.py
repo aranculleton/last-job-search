@@ -33,7 +33,7 @@ Each is now a rule, next to the code it governs:
                the employer last wrote (last_heard), or since it went
 
     python3 tools/followups.py [--today YYYY-MM-DD]
-    python3 tools/followups.py --close-quiet [--dry-run]   # the brief runs this
+    python3 tools/followups.py --close-quiet [--dry-run]   # the page's chat runs this on a wake
     python3 tools/followups.py --closed-quiet              # closed on silence, still reopenable
 """
 
@@ -530,7 +530,7 @@ def _quiet_why(it: dict, silence: str) -> str:
 def stop_line(it: dict) -> str:
     """The one-off notice for an application that has gone quiet."""
     why = _quiet_why(it, "%d days since it went and no reply" % it["age"])
-    return ("%s - %s, applied %s: %s. Stop chasing it; the brief closes it as no_response."
+    return ("%s - %s, applied %s: %s. Stop chasing it; it is closed as no_response on its own."
             % (it["company"], it["role"] or "role not recorded", it["date"], why))
 
 

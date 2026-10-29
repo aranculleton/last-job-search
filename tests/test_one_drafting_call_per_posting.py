@@ -170,3 +170,27 @@ def test_the_drafter_returns_its_claim_map_and_the_checks_last_word():
                                     text=True, encoding="utf-8", errors="replace", check=True).stdout)
     assert {"claim_map", "stretches"} <= set(got["req"])
     assert "check_output" in got["schema"]
+
+
+def test_the_auditor_writes_the_note_so_it_costs_no_agent_of_its_own():
+    """An 80-word note took a whole agent per application (the maintainer, 2026-10-29:
+    "combine tasks to save usage"). The auditor, with the kept draft in hand, writes it; the
+    Outreach step runs only for a note the auditor did not write."""
+    got = run_workflow({"A": "clean", "B": "clean"}, outreach=True)
+    audits = [c["prompt"] for c in got["calls"] if c["label"].startswith("audit:")]
+    assert audits and all("draft_audit.py note" in p for p in audits)
+    plain = run_workflow({"A": "clean", "B": "clean"})
+    assert not any("draft_audit.py note" in c["prompt"] for c in plain["calls"]
+                   if c["label"].startswith("audit:"))
+
+
+def test_an_employer_researched_recently_costs_no_research_agent():
+    """draft_pack.py puts an employer's recent saved research on its pick; the workflow then
+    starts no research agent for it (the maintainer, 2026-10-29: every process cheap)."""
+    saved = {"facts": [{"claim": "c", "quote": "q", "url": "u"}, {"claim": "d", "quote": "r", "url": "v"}],
+             "team_context": "", "do_not_claim": [], "cached": True}
+    picks = [{"file": "f1", "company": "A", "role": "R", "slug": "a", "ask_first": [], "brief": "POSTING A", "research": saved},
+             {"file": "f2", "company": "B", "role": "R", "slug": "b", "ask_first": [], "brief": "POSTING B"}]
+    got = run_workflow({"A": "clean", "B": "clean"}, picks=picks)
+    assert labels(got, "research") == ["research:b"]
+    assert len(labels(got, "draft")) == 2

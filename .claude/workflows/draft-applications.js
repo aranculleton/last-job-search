@@ -181,6 +181,10 @@ const AUDIT_SCHEMA = {
     p2: { type: 'string' },
     claim_map: { type: 'array', items: CLAIM },
     check_output: { type: 'string' },
+    note: {
+      type: 'object',
+      properties: { outreach_body: { type: 'string' }, claim_map: { type: 'array', items: CLAIM }, check_output: { type: 'string' } },
+    },
   },
   required: ['verdict', 'p1', 'p2', 'claim_map', 'check_output'],
 }
@@ -235,8 +239,11 @@ You are the employer-researcher, doing the research half of Reviewer B in .claud
 4. Write the object you return, as one JSON object, to ${scratch}/research_${pick.slug}.json: the drafter cites its facts by their order (F1, F2, ...) and the audit reads them there. Touch no other file.
 Do not research the candidate. Do not draft anything.`
 
-const research = (pick) => metered(pick, 'research', 'sonnet', researchPrompt(pick), () => agent(researchPrompt(pick),
-  { label: `research:${pick.slug}`, phase: 'Research', schema: RESEARCH_SCHEMA, model: 'sonnet', effort: 'medium' }))
+// An employer researched recently comes with its research already (draft_pack.py
+// cached_research): no agent to re-read what is saved.
+const research = (pick) => pick.research ? Promise.resolve(pick.research)
+  : metered(pick, 'research', 'sonnet', researchPrompt(pick), () => agent(researchPrompt(pick),
+    { label: `research:${pick.slug}`, phase: 'Research', schema: RESEARCH_SCHEMA, model: 'sonnet', effort: 'medium' }))
 
 // ------------------------------------------------------------------ draft
 const draftPrompt = (pick, r) => {
@@ -277,7 +284,18 @@ const auditPrompt = (pick) => `You are the grounding-auditor (.claude/agents/gro
    <the object>
    JSON
    It checks the shape, writes model_audit_${pick.slug}.json, re-checks your corrected draft by code and prints what is still open. If it lists anything under "fix" or "open_after_model", fix it and save once more.
-Return {verdict, p1, p2, claim_map (the p1 and p2 entries only), check_output (the last output of step 3, verbatim)} for the draft you kept. verdict is reject when the draft cannot be made truthful and targeted; say why in its residual_risks.`
+Return {verdict, p1, p2, claim_map (the p1 and p2 entries only), check_output (the last output of step 3, verbatim)} for the draft you kept. verdict is reject when the draft cannot be made truthful and targeted; say why in its residual_risks.${wantsNote(pick) ? NOTE_IN_AUDIT(pick) : ''}`
+
+// The outreach note, written by the auditor once its draft is kept: it has the audited
+// opening and researched paragraph in hand, so a separate call for 80 words cost a whole
+// agent per application for nothing (the maintainer, 2026-10-29: "combine tasks to save
+// usage"). draft_audit.py note still checks it whole; a note missing here is written by the
+// Outreach step as before.
+const NOTE_IN_AUDIT = (pick) => `
+4. Only if step 3 left nothing under "fix" or "open_after_model" and your verdict is not reject: write the body of one LinkedIn note to the hiring manager or recruiter for this role, from the p1 and p2 you kept and the ids they cite. The fixed opening line ("Hi [name], I've just applied for the <role> role at <company>.") is put in front by the tool; write only what follows it. Two sentences: the employer's problem, then the candidate's evidence, naming one of their employers. Then a one-line ask worded for this note. Under 80 words with the opening line. Every fact comes from p1 and p2 and cites the same ids. Save {"outreach_body": ..., "claim_map": [{"field": "outreach_body", "sentence": ..., "cites": [...]}]} with: python3 tools/draft_audit.py note ${scratch} ${pick.slug} <<'JSON'
+   <the object>
+   JSON
+   If it lists anything for outreach_body, fix it and save once more. Add to what you return: note {outreach_body, claim_map, check_output (the last output of this step, verbatim)}.`
 
 const audit = (prev, pick) => {
   if (!prev || !prev.draft) return prev
@@ -307,6 +325,11 @@ const note = (prev, pick) => {
   if (!prev || !wantsNote(pick)) return prev
   // Only a draft both audits accepted: the code's word on the model auditor's draft.
   if (!prev.audit || !acceptedOf(prev.audit.check_output)) return prev
+  const own = prev.audit.note
+  if (own && String(own.outreach_body || '').trim()) {
+    const { note: _n, ...audit } = prev.audit
+    return { ...prev, audit, note: own }
+  }
   const d = { ...prev.draft, p1: prev.audit.p1, p2: prev.audit.p2, claim_map: prev.audit.claim_map }
   return metered(pick, 'outreach', null, notePrompt(pick, d), () => agent(notePrompt(pick, d),
     { label: `outreach:${pick.slug}`, phase: 'Outreach', schema: NOTE_SCHEMA }))

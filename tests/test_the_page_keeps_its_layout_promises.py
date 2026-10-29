@@ -1,4 +1,5 @@
-"""LAYOUT_SPEC section 7, a check for each line, on a phone and wide, light and dark.
+"""The layout checklist (LAYOUT_SPEC section 7, now part of templates/app/DESIGN.md), a check
+for each line, on a phone and wide, light and dark.
 
 Every section is measured once per model, width and theme (tests/app_page/harness.js,
 S.layout), and each numbered line of the checklist is its own test over those numbers. The
@@ -41,8 +42,6 @@ KNOWN = {
     (8, "drafts-messages", "msg-priya-thanks"): BOTH, (8, "drafts-messages", "msg-noor-1"): BOTH,
     # 8: the LinkedIn download card shows its steps as buttons (and Choose its folder, wide).
     (8, "todo", "linkedin-export"): BOTH,
-    # 9: two to-dos about one role both say Open in Jobs, named after the same title.
-    (9, "todo", "Open in Jobs"): BOTH,
     # 9: two applications at one employer, each row named by the employer alone.
     (9, "progress", "Ellerwick Trust"): {"wide"},
 }
@@ -219,6 +218,8 @@ def test_11_spacing_keeps_to_the_scale(vp, scheme):
         for name in re.findall(r"var\((--[\w-]+)", val):
             if name == "--tabs-h":
                 continue  # the tab bar's own height, kept clear of, not a space between things
+            if name == "--target":
+                continue  # a tap target's reach above and below its line, taken back by a margin (4.3)
             got = re.fullmatch(r"\s*(\d+)px\s*", tokens.get(name, ""))
             if not got or int(got.group(1)) not in scale:
                 bad.append((prop, name, tokens.get(name)))

@@ -115,7 +115,7 @@ def test_a_job_goes_from_draft_this_to_applied_on_the_day_given(run, tmp_path, v
         {"click": "Yes, I have applied", "role": "radio"},
         {"fill": {"When did you apply?": "2026-10-20"}},
         {"click": "Mark as applied", "receipts": True, "view": {"jobs": nxt["jobs"], "applications": nxt["applications"]}},
-        {"hash": "jobs", "open": "jt:applied", "read": '[data-item="app-harbourline-pricing"]'},
+        {"hash": "jobs", "open": "jobsw:applied", "read": '[data-item="app-harbourline-pricing"]'},
     ], vp)
     a = _one(got, "job.applied")
     assert a["item"] == "r12-1" and a["value"] == {"on": "2026-10-20"}
@@ -154,7 +154,7 @@ def test_hearing_back_books_an_interview_and_one_prep_card_follows(run, tmp_path
     nxt["due"].append({"id": "due-quayside-prep", "kind": "prep", "title": "Prepare for the Quayside Foods phone screen", "due": "2026-10-26",
                        "overdue_days": 0, "action": "work:prep", "interview": "int-quayside-ops", "rev": "d10"})
     got = _go(run, tmp_path, [
-        {"hash": "jobs", "open": "jt:applied", "click": "I heard back: Quayside Foods, Operations Analyst"},
+        {"hash": "jobs", "open": "jobsw:applied", "click": "I heard back: Quayside Foods, Operations Analyst"},
         {"click": "An interview is booked", "role": "radio"},
         {"fill": {"Which stage": "Phone screen", "The day": "2026-10-26", "The time": "13:00", "With whom": "the recruiter"}},
         {"click": "Save", "exact": True, "receipts": True, "view": {"interviews": nxt["interviews"], "due": nxt["due"]}},
@@ -177,11 +177,11 @@ def test_a_rejection_stops_the_chase(run, tmp_path, vp):
     _item(nxt, "app-quayside-ops").update(status="rejected", last="2026-10-25", rev="apr")
     nxt["due"] = [d for d in nxt["due"] if d["id"] != "due-quayside-ops-follow"]
     got = _go(run, tmp_path, [
-        {"hash": "jobs", "open": "jt:applied", "click": "I heard back: Quayside Foods, Operations Analyst"},
+        {"hash": "jobs", "open": "jobsw:applied", "click": "I heard back: Quayside Foods, Operations Analyst"},
         {"click": "Not this time", "role": "radio"},
         {"click": "Save", "exact": True, "receipts": True, "view": {"applications": nxt["applications"], "due": nxt["due"]}},
         {"hash": "todo"},
-        {"hash": "jobs", "open": "jt:applied", "read": '[data-item="app-quayside-ops"]'},
+        {"hash": "jobs", "open": "jobsw:applied", "read": '[data-item="app-quayside-ops"]'},
     ], vp)
     a = _one(got, "outcome.rejected")
     assert a["item"] == "app-quayside-ops" and a["rev_seen"] == _item(m, "app-quayside-ops")["rev"]
@@ -227,7 +227,7 @@ def test_a_first_note_is_copied_exactly_opened_and_logged_with_the_words_that_we
     m = _sample()
     edited = "Hi Ash, I saw you moved to Copperleaf Pay from Quayside Foods. " + "I work on supply chain analytics in Manchester. " * 6
     got = _go(run, tmp_path, [
-        {"hash": "drafts", "open": "dv:messages", "click": "Copy note to Ash", "clip": True, "read": '[data-item="msg-ash-1"]'},
+        {"hash": "contacts", "open": "contsw:messages", "click": "Copy note to Ash", "clip": True, "read": '[data-item="msg-ash-1"]'},
         {"click": "I sent the note to Ash", "read": '[data-item="msg-ash-1"]'},
     ], vp)
     note = _item(m, "msg-ash-1")
@@ -238,7 +238,7 @@ def test_a_first_note_is_copied_exactly_opened_and_logged_with_the_words_that_we
     _rev_is_the_items(m, a)
     # Changed before sending: the words that went are logged, and the count turns red over the limit.
     got = _go(run, tmp_path, [
-        {"hash": "drafts", "open": "dv:messages"},
+        {"hash": "contacts", "open": "contsw:messages"},
         {"open": "changed-sum:msg-ash-1"},
         {"eval": "(() => { const t = document.querySelector('#chg-msg-ash-1'); t.value = " + json.dumps(edited) + "; t.dispatchEvent(new Event('input', {bubbles: true})); return document.querySelector('#chg-msg-ash-1-n').className; })()"},
         {"click": "I sent these words"},
@@ -252,7 +252,7 @@ def test_an_inmail_copies_subject_and_message_apart(run, tmp_path, vp):
     m = _sample()
     noor = _item(m, "msg-noor-1")
     got = _go(run, tmp_path, [
-        {"hash": "drafts", "open": "dv:messages", "click": "Copy subject", "within": '[data-item="msg-noor-1"]', "clip": True},
+        {"hash": "contacts", "open": "contsw:messages", "click": "Copy subject", "within": '[data-item="msg-noor-1"]', "clip": True},
         {"click": "Copy message", "within": '[data-item="msg-noor-1"]', "clip": True},
     ], vp)
     assert got["after"][0]["clip"] == noor["subject"]
@@ -262,18 +262,18 @@ def test_an_inmail_copies_subject_and_message_apart(run, tmp_path, vp):
 def test_an_email_opens_in_the_mail_app_with_subject_and_body_filled(run, tmp_path, vp):
     seed = {"reach/ellerwick_trust_priya": {"email": "priya@example.com"}}
     got = _go(run, tmp_path, [
-        {"hash": "drafts", "open": "dv:messages", "attr": ['[data-k="open:msg-priya-thanks"]', "href"]},
+        {"hash": "contacts", "open": "contsw:messages", "attr": ['[data-k="open:msg-priya-thanks"]', "href"]},
     ], vp, seed=seed)
     href = got["after"][0]["attr"]
     assert href.startswith("mailto:priya%40example.com?subject=Thank%20you%20for%20Thursday&body=")
     assert "%0D%0A" in href and "\n" not in href
-    got = _go(run, tmp_path, [{"hash": "drafts", "open": "dv:messages", "count": '[data-k="open:msg-priya-thanks"]'}], vp)
+    got = _go(run, tmp_path, [{"hash": "contacts", "open": "contsw:messages", "count": '[data-k="open:msg-priya-thanks"]'}], vp)
     assert got["after"][0]["count"] == 0, "no address on file: no button, never a guess"
 
 
 def test_a_wave_of_first_notes_is_grouped_by_employer_with_the_week_s_budget(run, tmp_path, vp):
     got = _go(run, tmp_path, [
-        {"hash": "drafts", "open": "dv:messages", "read": "#main .wave"},
+        {"hash": "contacts", "open": "contsw:messages", "read": "#main .wave"},
         {"hash": "todo", "count": '#main [data-item^="wave:"]'},
     ], vp)
     wave = got["after"][0]["text"]
@@ -469,9 +469,12 @@ def test_setup_runs_to_a_first_shortlist(run, tmp_path, vp):
 
 
 def test_the_brief_opens_its_items(run, tmp_path, vp):
+    # The Brief is a page of its own (4.3): each line opens the thing it is about.
     got = _go(run, tmp_path, [
-        {"hash": "todo", "eval": "(() => { const b = document.querySelector('#main .brief'); const s = document.querySelector('#main .summary'); return {first: !!b && b.compareDocumentPosition(document.querySelector('#main [data-card]')) & 4, open: !!b && b.open}; })()"},
-        {"click": "Juno replied: your turn", "role": "link"},
+        {"hash": "brief", "eval": "(() => !!document.querySelector('#main .brief-page .bp-next'))()"},
+        {"click": "Reply to Juno at Larkspur Retail.", "role": "link"},
+        {"hash": "brief", "click": "Read the prep for the Larkspur Retail phone screen.", "role": "link"},
     ], vp, clock="2026-10-25T07:30:00Z")
-    assert got["after"][0]["eval"]["first"] and got["after"][0]["eval"]["open"], "on its morning the brief is the first block, open"
+    assert got["after"][0]["eval"], "the Brief has its own page, with the next three"
     assert got["after"][1]["hash"] == "#contacts/larkspur_retail_castellan"
+    assert got["after"][2]["hash"] == "#interviews/int-larkspur-supply"

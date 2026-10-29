@@ -198,7 +198,7 @@ def test_a_pasted_resume_goes_into_the_copy_and_leaves_the_page(fresh):
     scrub = next(e for e in batch if e["collection"] == "actions")
     assert scrub["doc_id"] == aid and scrub["if_version"] == 1
     with open(scrub["file_path"], encoding="utf-8") as fh:
-        assert json.load(fh) == {"value": {"text": {"__delete__": True}}}
+        assert json.load(fh) == {"value": {"text": {"__delete__": True}}, "_v": 2}
     receipt = json.dumps(fresh.receipt(aid))
     assert "Fernhill" not in receipt
     assert fresh.step("resume")["status"] == "done"

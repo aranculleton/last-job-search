@@ -183,6 +183,16 @@ def the_apps_own(root: str, paths: list[str]) -> bool:
     return all(any(head.get(p) == app.get(p) for app in apps) for p in paths)
 
 
+def same_as_the_app(root: str) -> set[str]:
+    """Every path whose blob at HEAD is exactly the app's (its release or its master,
+    APP_REFS). Empty where no app ref is known."""
+    head = _blobs(root, "HEAD")
+    apps = [b for b in (_blobs(root, ref) for ref in APP_REFS) if b is not None]
+    if head is None or not apps:
+        return set()
+    return {p for p, blob in head.items() if any(app.get(p) == blob for app in apps)}
+
+
 def main(argv: list[str]) -> int:
     if argv[:1] in (["-h"], ["--help"]):
         print("usage: python3 tools/personal_paths.py [--personal | --app | "
@@ -190,11 +200,14 @@ def main(argv: list[str]) -> int:
         return 0
     if "--only-personal-changed" in argv:
         # For ./tools/ci_local.sh: exit 0, listing them, when every change since master is
-        # the person's own (their data, their profile, their tests); 1 otherwise, and when
-        # nothing changed at all, since a check of master itself checks everything.
+        # the person's own (their data, their profile, their tests); 3 when nothing changed
+        # at all (the caller decides: a copy has nothing of the app's to test, the app
+        # itself checks everything); 1 otherwise.
         got = changed()
-        if not got:
+        if got is None:
             return 1
+        if not got:
+            return 3
         app, mine = split(got)
         print("\n".join(mine))
         if not app:

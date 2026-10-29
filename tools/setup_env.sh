@@ -10,7 +10,7 @@
 # first few minutes and a handful of model turns rediscovering the same four
 # commands from CLAUDE.md, SETUP.md and RUNBOOK.md, which listed them three
 # slightly different ways. The scheduled routines (daily follow-ups, the
-# twice-weekly round) start the same way, so the cost repeated every weekday.
+# optional round) start the same way, so the cost repeated every weekday.
 #
 # The cheapest fix is not this script: it is the environment's own setup
 # script, which runs before a session starts and is cached. Paste the one line

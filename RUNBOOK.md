@@ -30,8 +30,8 @@ day's check is five steps, before anything else:
    cannot do what the person set up (tools missing on their computer, say), it prints what to
    tell them, which goes at the end of the reply in its own words: two or three short
    sentences, and the dated steps only if they ask how (`place.py how`). It offers a choice
-   and never makes it. It recommends no move to a chat on a computer: the page and the cloud
-   chats Claude makes do everything, the page reads LinkedIn profiles itself when it is open
+   and never makes it. It recommends no move to a chat on a computer: the page and the chat
+   that answers it do everything, the page reads LinkedIn profiles itself when it is open
    in the Claude desktop app, and a chat on a computer is optional, for files kept there
    (`place.CHATS`). In the maintainer's own copy the sync also checks the public app for
    their names (`tools/app_watch.py`): an `APP LEAK` line goes first in the reply, before
@@ -71,11 +71,15 @@ day's check is five steps, before anything else:
    **A profile here is never set up again** (that is `/reset`): in a chat on their computer
    it is "Your search is already set up; this computer is ready for it too.", and nothing is
    asked, least of all a resume.
-   **One chat answers the page**: the one that published it, until setup is done, then a
-   small helper chat of its own ("Job search: Claude's helper (keep this)"). Every other chat
-   neither publishes nor watches the page, and says nothing about it; when the page's own
-   code changed it asks that chat to republish (`app.py republish`). Start prints which this
-   chat is (tools/app_listen.py).
+   **One chat answers the page**: the one that published it, or the helper the person
+   started from Settings ("Claude's helper, in the cloud", which works with their computer
+   off). It is the only chat the app needs: the brief runs in it, long work on another model
+   runs as an agent inside it, and once a day it tidies away the app's own old chats
+   (tools/tidy.py; never the person's own, never unsaved work). The app never starts a chat
+   by itself. Every other chat neither publishes nor watches the page, and says so once, in
+   one line, the first time it starts; when the page's own code changed it asks that chat to
+   republish (`app.py republish`).
+   Start prints which this chat is (tools/app_listen.py).
 4. **If the sync brought changes**, say in one plain line what changed for them, from the
    lines it printed under "What changed": never a file, a command, a version or a git word.
 5. **Profile upgrades apply themselves; nobody has to ask.** The sync ends by listing what
@@ -83,8 +87,8 @@ day's check is five steps, before anything else:
    after this person set up (their job boards researched and built, a setting written for
    their field, a portal rebuilt), and facts in the profile still marked `[CONFIRM: ...]`.
    The person will not know which ones matter, so never offer them a list or wait for a yes:
-   - **What Claude can do alone** ("Claude applies these itself"): start a background agent
-     at once (Agent tool, `run_in_background: true`, `isolation: "worktree"`) running
+   - **What Claude can do alone** ("Claude applies these itself"): start one background agent
+     at once (Agent tool, `model: "sonnet"`, `run_in_background: true`, `isolation: "worktree"`) running
      `/upgrade`, and go on with what the person asked. Their request never waits for it.
      When it reports, merge its branch into this session's work, then run `python3
      tools/network/state.py follow-ups --write`: it worked from an older copy of the
@@ -480,8 +484,10 @@ master cannot see work sitting on another chat's branch, and builds it a second 
 1. **Start by pulling master and taking the app's updates** ("Start of a session", above),
    before writing anything, not before pushing.
 2. **Finish by getting the work onto master.** Not "pushed to the branch": on master. Open
-   the pull request, run `./tools/ci_local.sh --quick`, merge it. A branch left behind at the
-   end of a session is work the next chat cannot see and will duplicate.
+   the pull request, run `./tools/ci_local.sh --quick`, merge it, in one turn and silently:
+   never subscribe to it, set a check-in for it or wait on GitHub's checks, and never tell the
+   person about it or its checks (CLAUDE.md, "Saving"). A branch left behind at the end of a
+   session is work the next chat cannot see and will duplicate.
 3. **Never leave a merged branch around**, and never start new work on an old one.
 4. If the work genuinely is not finishable this session, push it, and say in one plain line
    that it is not finished and the next chat carries on. The next chat finds it itself

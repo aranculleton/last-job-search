@@ -118,8 +118,8 @@ def test_one_command_registers_the_process_and_writes_the_document(state, capsys
     outcome = open(os.path.join(folder, "outcome.md"), encoding="utf-8").read()
     assert "- [ ] Recruiter screen (scheduled 2026-10-21, with Tamsin Marsh" in outcome
     assert "written: " in out and os.path.exists(os.path.join(folder, P.LIVING))
-    # Offered once, optionally.
-    assert out.count("Want a separate chat just for %s?" % FIRM) == 1
+    # No chat of its own is offered (4.3): prep stays in the one chat and on the page.
+    assert "separate chat" not in out
     # Run again, it changes nothing in the tracker.
     assert _process() == 0
     assert "already registered" in capsys.readouterr().out

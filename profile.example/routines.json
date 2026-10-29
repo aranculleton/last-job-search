@@ -1,14 +1,14 @@
 {
-  "_about": "The example person's registry of scheduled tasks, with placeholder ids. A real profile fills in the ids its chats report; automation/README.md walks through it. `setup` is chat_per_briefing (each task bound to its own chat, named after the task, whose reply is the briefing) or routines_screen (each task made as a routine with the repo ticked and notifications on; trigger_id may be left null). Check it with python3 tools/routines.py check; print a task's prompt with python3 tools/routines.py stub <key>.",
+  "_about": "The example person's registry of scheduled tasks, with placeholder ids. A real profile fills in the ids its chats report; automation/README.md walks through it. `setup` is chat_per_briefing (each task bound to a chat, the one that answers the page, whose reply is the briefing) or routines_screen (each task made as a routine with the repo ticked and notifications on; trigger_id may be left null). Check it with python3 tools/routines.py check; print a task's prompt with python3 tools/routines.py stub <key>.",
   "setup": "chat_per_briefing",
   "timezone": "Europe/London",
   "routines": [
     {"key": "morning_brief", "name": "Job search: morning brief",
-     "chat": {"title": "Job search: morning brief", "session_id": "session_EXAMPLEBRIEF"},
-     "trigger_id": "trig_EXAMPLEBRIEF", "cron": "CRON_TZ=Europe/London 56 7 * * 1,4",
-     "prompt_file": "automation/prompts/morning_brief.md", "what": "Twice a week: what is owed, the counts since the last brief, three things to do, and the news that matters."},
+     "chat": {"session_id": "session_EXAMPLEHELPER"},
+     "trigger_id": "trig_EXAMPLEBRIEF", "cron": "CRON_TZ=Europe/London 38 7 * * *",
+     "prompt_file": "automation/prompts/morning_brief.md", "what": "Each morning: what is owed, the counts since the last brief, three things to do, and the news that matters."},
     {"key": "job_round", "name": "Job search: shortlist",
-     "chat": {"title": "Job search: shortlist", "session_id": "session_EXAMPLEROUND"},
+     "chat": {"session_id": "session_EXAMPLEHELPER"},
      "trigger_id": "trig_EXAMPLEROUND", "cron": "CRON_TZ=Europe/London 52 6 * * 1,4",
      "prompt_file": "automation/prompts/job_round.md", "what": "A scored round and the top 8.",
      "paused": "2026-10-16 off by default: the brief does not search, and \"find me jobs\" runs a round in any chat"}

@@ -39,6 +39,9 @@ def test_the_maintainers_repo_is_told_apart_from_anyone_elses(tmp_path, monkeypa
             ("https://github.com/someone-else/my-search", False)):
         repo = _repo(tmp_path / origin.replace("/", "_").replace(":", "_"), origin)
         monkeypatch.setattr(sync_app, "ROOT", str(repo))
+        # Before setup writes a profile, every copy is set up like anyone's.
+        assert sync_app.maintainers() is False, origin
+        os.makedirs(os.path.join(str(repo), "profile"))
         assert sync_app.maintainers() is mine, origin
 
 
@@ -62,3 +65,24 @@ def test_a_role_in_brackets_beside_a_name_is_not_a_name():
 def test_an_accented_name_of_the_cast_is_the_cast():
     # The scan matches accent-blind, so a contact written "Zoé" is the app's "Zoe".
     assert build_app._greetings("Zoé Ruíz") == []
+
+
+def test_a_file_exactly_the_apps_is_never_this_copys_leak(tmp_path):
+    """A market table's salary guide, named for its publisher, matched a name in the
+    maintainer's own contact book and kept their copy's check red (2026-10-29). A file
+    exactly the app's own is already public and nothing the copy wrote; the app's own CI
+    scans it where it changes."""
+    import personal_paths
+    repo = tmp_path / "copy"
+    repo.mkdir()
+    run = lambda *a: subprocess.run(["git", "-C", str(repo), *a], check=True,  # noqa: E731
+                                    capture_output=True)
+    run("init", "-q")
+    (repo / "markets.json").write_text('{"guide": "Quillon Salary Guide"}\n', encoding="utf-8")
+    run("add", "markets.json")
+    run("-c", "user.name=t", "-c", "user.email=t@example.com", "commit", "-qm", "app")
+    run("update-ref", "refs/remotes/app/master", "HEAD")
+    (repo / "mine.txt").write_text("Quillon\n", encoding="utf-8")
+    run("add", "mine.txt")
+    run("-c", "user.name=t", "-c", "user.email=t@example.com", "commit", "-qm", "mine")
+    assert personal_paths.same_as_the_app(str(repo)) == {"markets.json"}

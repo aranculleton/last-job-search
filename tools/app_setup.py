@@ -121,7 +121,7 @@ def record_page(url: str, chat: str = "", now: dt.datetime | None = None) -> str
         raise ValueError("that is not a claude.ai page address")
     got = page_record()
     got.update(url=url, published_at=app_model.stamp(now or dt.datetime.now(dt.timezone.utc)),
-               by=chat or got.get("by") or "")
+               by=chat or got.get("by") or "", title_name=_first_name())
     path = _write_json(os.path.join(profile_dir(), PAGE), got)
     if set_up():
         try:
@@ -573,6 +573,12 @@ def outside_item(key: str, owner: str = "", name: str = "") -> dict:
             "link": claude_surfaces.official(entry), "checked": entry.get("verified_on", ""),
             "options": options, "about": {"step": key},
             "rev": app_model.rev_of(key, lines)}
+    if key == "linkedin":
+        # The page opens LinkedIn in the Claude app's own browser itself (host:claude_browser,
+        # preview_start); the registry's steps stay under More for when it cannot.
+        item["title"] = "Sign in to LinkedIn in Claude's browser, once"
+        item["body"] = "Then Claude can read people's profiles before you write to them."
+        item["browser"] = {"label": "Open LinkedIn", "url": "https://www.linkedin.com/login"}
     if key == "copy":
         # GitHub fills in its new-repository form from these (docs.github.com, "Creating a
         # repository from a URL query", read 2026-10-25): one tap opens it with the app as
@@ -774,11 +780,28 @@ def _sync_stale() -> bool:
         return True
 
 
+def _first_name() -> str:
+    """The name the page is called by ("Morgan's job search"): empty until setup knows it."""
+    try:
+        import person
+        name = str(person.get("identity.name", "") or "")
+        return str(person.get("identity.first", "") or "") or (name.split() or [""])[0]
+    except Exception:  # noqa: BLE001  no profile yet
+        return ""
+
+
 def _page_current() -> bool:
     if not page_record().get("url"):
         return False
     if not set_up():
         return True
+    # Published before the person's name was known ("Your job search"): published once more,
+    # so the page and its card in Claude carry their name (the maintainer, 2026-10-29).
+    # A page published under another name (the person changed theirs) is published again;
+    # one from before the name was kept takes it at the next change to the page's code.
+    named = page_record().get("title_name")
+    if _first_name() and named is not None and named != _first_name():
+        return False
     try:
         import build_versions
         return not build_versions.behind("page")

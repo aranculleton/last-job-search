@@ -150,8 +150,8 @@ meanwhile."
    (identity; documents from their country's defaults until research says otherwise),
    `01-candidate-profile.md` from the resume, and the place and work they named. Then
    `python3 tools/place.py started` (so any other chat sees a setup under way) and
-   `python3 tools/place.py auto` (it records where they work when this chat can tell, and
-   otherwise hands you one question for the end), commit, push, and **land it on master
+   `python3 tools/place.py auto` (it records where they work when this chat can tell; nobody
+   is asked), commit, push, and **land it on master
    now** (RUNBOOK.md, "Landing on master"), so a chat they open on their computer finds it
    and waits rather than starting again. Push after every step from here on, and land each:
    a dropped chat must never lose their answers.
@@ -242,19 +242,16 @@ Then the state files (setup-sections.md, the last section), and commit and push.
 
 ## Step 5: The brief, and the end
 
-- **The brief, set up with no questions.** List their scheduled tasks (`list_triggers`, every
-  page) and run `python3 tools/routines.py brief --triggers <each page>`. A brief that exists,
-  under any name, is attached to and never made twice. In a cloud chat, with none, it prints
-  the calls to make, in order (`create_session` on their copy, `create_trigger` bound to it,
-  and a one-off first brief: never `fire_trigger`), then `routines.py record`; make them, and
-  tell them its one line. On a computer it says what to do (automation/README.md, "For Claude: the rules of setting it up").
-- **Where they will work**: if `place.py auto` handed you its question, ask it now, record the
-  answer (`python3 tools/place.py record computer|phone|both`), and pass on the one line
-  `python3 tools/place.py next` prints.
+- **The brief is theirs to turn on.** Nothing is scheduled at setup: a brief costs a run
+  every morning, so it starts only when they press the bell on their Brief (or Settings,
+  Your brief), and then in the chat that answers the page, so no chat is made for it (the
+  `app` skill, `brief` with `args.setup`). Where there is no page, and they ask for one in
+  the chat ("set up my brief"), do the same here: automation/README.md, "For Claude".
+- **Where they will work** is never asked: pass on the one line `python3 tools/place.py next`
+  prints.
 - **Finished**: `python3 tools/place.py finished`, commit, and land it; with a page, bring its
   data up to date (`python3 tools/app.py view`, the `app` skill), so it shows the shortlist
-  and the brief. Then `python3 tools/app.py start` once more: setup being over, it hands the
-  page to a small helper chat of its own, so a tap on the page never wakes this long one. In a chat on their computer, go straight on to the networking skill's "On a
+  and the brief. This chat goes on answering the page. In a chat on their computer, go straight on to the networking skill's "On a
   new computer" step.
 - **Then, in a few lines:**
 
