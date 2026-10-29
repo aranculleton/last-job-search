@@ -18,6 +18,9 @@ GATE = os.path.join(ROOT, "tools", "push_gate.sh")
 SRC = open(GATE, encoding="utf-8").read()
 
 
+# The maintainer's tools run on Linux or a Mac (and CI's Linux); on Windows `bash` is the
+# Linux subsystem's stub, which has no Linux installed on a runner (2026-10-29).
+@pytest.mark.skipif(os.name == "nt", reason="a maintainer's tool, run on Linux or a Mac")
 def test_it_is_valid_bash_and_says_how_to_run_it_without_a_repo():
     assert subprocess.run(["bash", "-n", GATE]).returncode == 0
     got = subprocess.run(["bash", GATE], capture_output=True, text=True, encoding="utf-8",

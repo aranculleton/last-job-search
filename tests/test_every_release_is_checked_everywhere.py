@@ -21,6 +21,9 @@ SRC = open(SH, encoding="utf-8").read()
 WF = os.path.join(ROOT, ".github", "workflows", "everywhere.yml")
 
 
+# The maintainer's tools run on Linux or a Mac (and CI's Linux); on Windows `bash` is the
+# Linux subsystem's stub, which has no Linux installed on a runner (2026-10-29).
+@pytest.mark.skipif(os.name == "nt", reason="a maintainer's tool, run on Linux or a Mac")
 def test_every_variant_is_there():
     got = subprocess.run(["bash", SH, "list"], capture_output=True, text=True, encoding="utf-8")
     assert got.returncode == 0
