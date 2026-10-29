@@ -70,16 +70,21 @@ _AS_STARTED = {k: os.environ.get(k) for k in ("LJS_PROFILE", "LJS_RESCREEN")}
 RESULTS: list[tuple[str, bool, str]] = []
 
 
-def run(cmd, cwd=ROOT, env=None, timeout=1800):
-    """(exit code, what it printed)."""
+def run(cmd, cwd=ROOT, env=None, timeout=600):
+    """(exit code, what it printed). Each command is named before it starts, so a log cut off
+    by a hang still says which one it was, and gives up after ten minutes by default: a
+    Windows step once hung for an hour with nothing in its log to say where (2026-10-29)."""
+    print("running: " + " ".join(str(c) for c in cmd)[:160], flush=True)
     began = time.monotonic()
     try:
         p = subprocess.run(cmd, cwd=cwd, env=env, capture_output=True, timeout=timeout,
                            stdin=subprocess.DEVNULL)
     except FileNotFoundError as exc:
         return 127, f"{exc}", 0.0
-    except subprocess.TimeoutExpired:
-        return 124, f"timed out after {timeout} s", time.monotonic() - began
+    except subprocess.TimeoutExpired as exc:
+        # What it had printed before it stopped (Windows keeps it; elsewhere it may be none).
+        got = ((exc.stdout or b"") + (exc.stderr or b"")).decode("utf-8", "replace")
+        return 124, f"timed out after {timeout} s\n" + got[-3000:], time.monotonic() - began
     out = (p.stdout or b"") + (p.stderr or b"")
     # Decoded the way a reader would, whatever code page the child wrote in.
     return p.returncode, out.decode("utf-8", "replace"), time.monotonic() - began
@@ -503,8 +508,11 @@ def step_suite() -> None:
             env.pop(k, None)
         else:
             env[k] = v
+    # Parallel workers where the run has pytest-xdist (CI puts it in; a person's own computer
+    # need not): each file kept together, the suite in about a third of the time.
+    par = ["-n", "auto", "--dist", "loadfile"] if run([PY, "-c", "import xdist"], env=env)[0] == 0 else []
     code, out, took = run([PY, "-m", "pytest", "-q", "-p", "no:cacheprovider", "-rf",
-                           "--tb=short", "tests"], env=env, timeout=5400)
+                           "--tb=short", *par, "tests"], env=env, timeout=5400)
     # Every failure by name, then the tail: the last lines alone named two of eleven.
     lines = out.strip().splitlines()
     failed = [ln for ln in lines if ln.startswith(("FAILED ", "ERROR "))]
@@ -599,7 +607,7 @@ def step_computer() -> None:
     shell = local_path.bash()      # Git Bash on Windows, never WSL's launcher
     if shell:
         code, out, took = run([shell, "tools/ci_local.sh", "--quick"], cwd=here, env=cenv,
-                              timeout=3600)
+                              timeout=1200)
         # Every test that failed by name, then the tail: the last lines alone named two of
         # 23 (2026-10-25).
         lines = out.strip().splitlines()

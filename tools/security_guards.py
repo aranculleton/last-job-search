@@ -189,8 +189,13 @@ ALLOWED_SETTINGS_KEYS = {"$schema", "env", "permissions", "hooks"}
 # `additionalDirectories` widen what runs or what is read, and are refused.
 ALLOWED_PERMISSION_KEYS = {"allow", "deny", "ask"}
 # The environment the app sets for every chat, each name with its exact value: UTF-8 mode
-# for Python on Windows, and git never stopping to ask (sync_app._git_env says why).
-ALLOWED_ENV = {"PYTHONUTF8": "1", "GIT_TERMINAL_PROMPT": "0", "GCM_INTERACTIVE": "never"}
+# for Python on Windows, git never stopping to ask (sync_app._git_env says why), and a chat
+# whose history is squeezed at 200,000 tokens rather than at a 1M model's whole window: the
+# chat that answers the page lives for weeks, and every tap and brief re-reads its history
+# (code.claude.com/docs/en/model-config, "CLAUDE_CODE_AUTO_COMPACT_WINDOW"; the maintainer,
+# 2026-10-29, on a plan running out).
+ALLOWED_ENV = {"PYTHONUTF8": "1", "GIT_TERMINAL_PROMPT": "0", "GCM_INTERACTIVE": "never",
+               "CLAUDE_CODE_AUTO_COMPACT_WINDOW": "200000"}
 
 
 def _hook_commands(event: str, entries: object):

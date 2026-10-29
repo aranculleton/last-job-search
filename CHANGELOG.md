@@ -98,7 +98,8 @@ make sense to somebody whose repo just received it.
   never a command to type, and tips point at Tweak, the bin and Add a job.
 - **Windows is checked on every release, and every week**: the set-up on a Windows computer
   runs on each release before it goes out and once a week on its own, free, and never on an
-  ordinary change.
+  ordinary change. The page's own browser tests now run on every change too, and every suite
+  runs in parallel workers, so a release's checks take minutes rather than an hour.
 - **The README and Start here speak in the page's buttons**, with a walk through the page
   and the Brief on its own; Chat is for anything else.
 - **Size**: three sizes. Standard is what Small was, and is the default; Larger is what
@@ -185,6 +186,10 @@ make sense to somebody whose repo just received it.
 
 ### Cheaper to run
 
+- **A chat kept open for weeks costs far less per tap.** Every chat in your copy now squeezes
+  its history at 200,000 tokens instead of letting it grow to a 1M model's million, so the
+  chat that answers your page and writes your brief no longer re-reads weeks of history on
+  every tap. Nothing to set up.
 - **The app never starts a chat by itself, and needs only one.** The page's separate helper
   chat started by the page is gone: it lacked
   the page's tools, made a spare page, and each lapse started another. The page wakes the

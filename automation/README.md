@@ -178,20 +178,12 @@ says so in one plain line. A Routines-screen task runs once with **Run now** on 
 
 ### Keep a long-lived chat small
 
-A chat a task is bound to grows by a run every time, and without a cap a chat on a
-1M-token model can carry hundreds of thousands of tokens into every run. Cap it with an
-environment variable on a cloud environment that only the scheduled chats use:
-
-1. In claude.ai/code, create a cloud environment for the scheduled chats (or copy the one
-   you use), with the same setup script and network access.
-2. Add the environment variable `CLAUDE_CODE_AUTO_COMPACT_WINDOW=200000`.
-3. Start the chat that answers your page in that environment (Settings, Where Claude works,
-   Set it up, then choose the environment in the chat that opens before you press Send).
-
-Only chats in that environment are capped, whatever their model, and your other chats keep
-their full window. Do not put the cap in `.claude/settings.json` instead: that file is the
-app's and is synced into every copy, so a `modelSettings.<model>.autoCompactWindow` there
-caps every chat on that model, for everyone. See
+The chat that answers your page lives for weeks, and every tap and every brief re-reads its
+history. On a model with a 1M-token window that history could grow to a million tokens
+before Claude Code squeezed it, and each wake paid for all of it. So the app caps it: its own
+`.claude/settings.json` sets `CLAUDE_CODE_AUTO_COMPACT_WINDOW` to `200000`, the window every
+model had until recently, for every chat in your copy, in the cloud and on your computer
+alike. Nothing to set up. Values below 100,000 are raised to it by Claude Code. See
 [Set the auto-compact window](https://code.claude.com/docs/en/model-config#set-the-auto-compact-window).
 
 ### Check the registry

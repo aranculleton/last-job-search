@@ -226,6 +226,34 @@ reason in one line in the reply.
    the rehearsal run once more against the published tag: a cloud chat and a computer chat
    each take it and run the everyday commands. The maintainer hears the number, the reason,
    what changed for them, what was checked with real numbers, and what was not tested.
+5. **Hand over, then stop.** Write `docs/NEXT_BUILDER.md` afresh for the next chat: what
+   the release left (anything unfinished, anything not tested, what Linux, Mac and Windows
+   found, the maintainer's notes not yet built, decisions to keep), in plain words and with
+   no real person in it (the push gate scans it like any file). Land it on master, then tell
+   the maintainer in one line that the release is out, and recommend a new chat for the next
+   version: every step of a long chat re-reads all of it, and everything a builder needs is
+   in the repo. Never start that chat yourself; the maintainer starts it with the builder
+   prompt below, when they choose.
+
+## The builder prompt
+
+One chat builds one version. The maintainer starts it by pasting this, with their notes
+under the last line:
+
+```text
+You are the builder for last-job-search, the public app at github.com/aranculleton/last-job-search. I am its maintainer. My own private copy of the app is attached to this chat: read it only so tools/push_gate.sh can build the denylist from it, and never change it.
+
+Before anything else, read MAINTAINING.md ("Developer rules", "Before pushing", "Releasing"), docs/NEXT_BUILDER.md (what the last release left you), and templates/app/DESIGN.md before you touch the page.
+
+How we work:
+- Build what my notes below ask, all of it into [Unreleased] on one branch, with tests. Nothing is released until I say "release it"; then do MAINTAINING.md "Releasing" in full, Linux, Mac and Windows included.
+- Cheap: every step re-reads this chat, so take few steps. Never poll; GitHub wakes you. Read only the failing lines. The whole suite runs on GitHub for free, never by hand. Run tools/push_gate.sh before every push, batch your commits, and push once per round of fixes.
+- Nothing private and no real person's name in the app, ever; the gate passes before any push.
+- Talk to me in plain words: one recommendation, never a question a sensible default answers.
+- When the release is out, write docs/NEXT_BUILDER.md, tell me in one line, and recommend a new chat for the next version.
+
+My notes for this version:
+```
 
 A broken release is fixed forward: a fix on master and a new patch release. Never move or
 delete a published tag, because repos that already took it would then hold history the
@@ -275,19 +303,18 @@ do (the scans with the maintainer's names, which must pass before anything is pu
 what takes a minute or two:
 
 ```bash
-python3 tools/build_app.py <dir> --tokens-out <dir>/tokens      # from the maintainer's repo, once a session
-git archive HEAD | tar -x -C <tree>                             # the exact tree being pushed
-python3 tools/leak_scan.py <tree> --tokens <dir>/tokens
-python3 tools/name_guard.py diff origin/master
-python3 -m ruff check tools templates tests
-python3 tools/lint_skills.py
-python3 tools/security_guards.py
-python3 tools/check_framework_version.py
-python3 tools/public_names.py check
-python3 -m pytest -q <the changed test files, and every test file that imports a changed module> tests/test_build_versions.py
+tools/push_gate.sh <the maintainer's repo> --text <the PR description> --push <branch>
 ```
 
-Then push once, and fix what CI finds in one more push. A private copy has no free CI, so
+One command: it builds the denylist from the maintainer's repo (kept 12 hours), scans the
+exact tree, every patch and commit message since master and the text to be posted, runs the
+name guard, the quick checks and the tests for what changed in parallel workers, and pushes
+only when every step passed. The page's browser tests run in CI's own job (`page` in
+`ci.yml`), beside the rest; a release pull request's Platforms run adds Windows, also beside
+the rest. Batch the commits: each push to an open pull request restarts its runs, and the
+Windows ones take the better part of an hour.
+
+Fix what CI finds in one more push. A private copy has no free CI, so
 there `./tools/ci_local.sh --quick` stays the rule ("CI on a private repo", below).
 
 In a touched portal CLI, also `bun run typecheck` and `bun test`.
