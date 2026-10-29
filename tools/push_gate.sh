@@ -86,7 +86,16 @@ step "public names stay, or are listed as gone" "$PY" tools/public_names.py chec
 
 # The tests for what changed: changed test files, and every test file that imports a changed
 # module. The page's browser tests are left to CI's own job, which runs them in parallel.
-changed="$(git diff --name-only "$BASE" HEAD)"
+# A branch already pushed passed this gate then, and its CI runs everything, so a follow-up
+# push tests only what changed since then: seconds for a one-line fix, not the whole release.
+# The scans above still read every patch since master.
+TBASE="$BASE"; since="master"
+if [ -n "$BRANCH" ] && git fetch -q origin "$BRANCH" 2>/dev/null \
+   && git rev-parse -q --verify "origin/$BRANCH" > /dev/null \
+   && git merge-base --is-ancestor "origin/$BRANCH" HEAD; then
+  TBASE="$(git rev-parse "origin/$BRANCH")"; since="the last push"
+fi
+changed="$(git diff --name-only "$TBASE" HEAD)"
 tests="$(printf '%s\n' "$changed" | grep -E '^tests/test_.*\.py$' || true)"
 for f in $(printf '%s\n' "$changed" | grep -E '^(tools|templates)/.*\.py$' || true); do
   mod="$(basename "$f" .py)"
@@ -97,7 +106,7 @@ picked="$(printf '%s\n' $tests tests/test_build_versions.py | sort -u | while re
   [ -f "$t" ] && ! printf '%s\n' $browser | grep -qx "$t" && echo "$t"; done)"
 par=""
 "$PY" -c "import xdist" > /dev/null 2>&1 && par="-n auto --dist loadfile"
-echo "tests for what changed ($(printf '%s\n' $picked | grep -c . ) files)"
+echo "tests for what changed since $since ($(printf '%s\n' $picked | grep -c . ) files)"
 # shellcheck disable=SC2086
 step "pytest" "$PY" -m pytest -q -p no:cacheprovider $par $picked
 

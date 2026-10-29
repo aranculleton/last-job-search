@@ -11,7 +11,7 @@ from __future__ import annotations
 import os
 import subprocess
 
-import yaml
+import pytest
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 GATE = os.path.join(ROOT, "tools", "push_gate.sh")
@@ -44,7 +44,17 @@ def test_it_pushes_only_after_every_step_and_never_with_force():
 def test_the_browser_tests_it_leaves_out_are_the_ones_ci_runs():
     """The gate skips the page's browser tests because CI's page job runs them: the two pick
     them with the same pattern, so a browser test is never left to neither."""
+    yaml = pytest.importorskip("yaml")
     ci = yaml.safe_load(open(os.path.join(ROOT, ".github", "workflows", "ci.yml"), encoding="utf-8"))
     run = ci["jobs"]["page"]["steps"][-1]["run"]
     pattern = run.split("grep -lE '", 1)[1].split("'", 1)[0]
     assert pattern in SRC
+
+
+def test_a_follow_up_push_tests_only_what_changed_since_the_last_one():
+    """The branch's last push passed this gate and its CI runs the whole suite, so a one-line
+    fix re-tests that line's tests, not the release's (2026-10-29: five minutes, and a timing
+    test tipped over by the load). The scans still read every patch since master."""
+    assert 'merge-base --is-ancestor "origin/$BRANCH" HEAD' in SRC
+    assert 'git diff --name-only "$TBASE" HEAD' in SRC
+    assert '"$BASE..HEAD"' in SRC and "name_guard.py diff origin/master" in SRC
