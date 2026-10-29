@@ -225,7 +225,7 @@ def test_a_thank_you_due_row_drafts_a_thank_you_not_a_prep(run, tmp_path, vp):
 
 def test_a_first_note_is_copied_exactly_opened_and_logged_with_the_words_that_went(run, tmp_path, vp):
     m = _sample()
-    edited = "Hi Ash, I saw you moved to Copperleaf Pay from Quayside Foods. " + "I work on supply chain analytics in Manchester. " * 6
+    edited = "Hello Ash, I saw you moved to Copperleaf Pay from Quayside Foods. " + "I work on supply chain analytics in Manchester. " * 6
     got = _go(run, tmp_path, [
         {"hash": "contacts", "open": "contsw:messages", "click": "Copy note to Ash", "clip": True, "read": '[data-item="msg-ash-1"]'},
         {"click": "I sent the note to Ash", "read": '[data-item="msg-ash-1"]'},

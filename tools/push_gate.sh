@@ -61,7 +61,10 @@ fi
 echo "private data (nothing is pushed unless all of these pass)"
 rm -rf "$WORK/tree" && mkdir -p "$WORK/tree" && git archive HEAD | tar -x -C "$WORK/tree"
 step "the exact tree, against the denylist" "$PY" tools/leak_scan.py "$WORK/tree" --tokens "$TOKENS"
-git log -p -U0 --format="commit %H%n%B" "$BASE..HEAD" -- . ':!tools/openroles' > "$WORK/patches.txt"
+# Only what the patches add: a line they remove is on master already, or was added by an
+# earlier patch here and is read there, and taking out a name the person has since written
+# down (a public guide, an invented greeting) must not fail for showing it go.
+git log -p -U0 --format="commit %H%n%B" "$BASE..HEAD" -- . ':!tools/openroles' | grep -v '^-' > "$WORK/patches.txt" || true
 git log --format="%B%n-----" "$BASE..HEAD" > "$WORK/messages.txt"
 step "every patch since master" "$PY" tools/leak_scan.py --text "$WORK/patches.txt" --tokens "$TOKENS"
 step "commit messages" "$PY" tools/leak_scan.py --text "$WORK/messages.txt" --tokens "$TOKENS"

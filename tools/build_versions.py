@@ -156,8 +156,9 @@ METHODS: dict[str, dict] = {
             (6, "2026-10-21", False, "Wording"),
             (7, "2026-10-25", False, "setup's market section moved to setup-sections.md; pay, eligibility wording and place names are researched in the background while the person answers; setup reads the market tables the app ships first (boards with their robots.txt verdicts, eligibility wording, document conventions, pay sources and place names for 20 countries, 18 fields, four career levels, regional and remote boards, each fact cited and checked by code) and researches only what they lack; a profile already made is not redone; the tool families quote only the tools' own names, never a vendor's"),
             (8, "2026-10-26", False, "every file it writes has plain line ends on Windows too"),
+            (9, "2026-10-29", False, "the Gulf pay guide is listed by its title"),
         ),
-        "fingerprint": "7edcf89fde3a9fa0",
+        "fingerprint": "d2b4e896094432a7",
     },
     "documents": {
         "setup": True, "by": "upgrade", "priority": 3, "time": "~10 min",
@@ -626,8 +627,9 @@ METHODS: dict[str, dict] = {
             (9, "2026-10-25", False, "the brief is made at the end of setup with no questions (Mondays and Thursdays at 07:38 in the person's own zone, in a chat of its own); list_triggers' own shape is read and a brief under any name is found; a brief turned off or whose last run failed is flagged; push alone is enough for the old relay; a task set to run more than once a day is refused, since every run pays a whole chat again; Claude's rules for setting the brief up moved from CLAUDE.md to automation/README.md; the brief's days and time are moved, and a break is taken until a date, from the page (routines.py move, pause and resume: the brief and every follow-up held, put back exactly on return), with the scheduled-task calls only a chat can make kept until it makes them"),
             (10, "2026-10-26", False, "at_most_daily is public; the page moves the brief and takes a break through move, pause and resume, the one break the search has; every file it writes has plain line ends on Windows too"),
             (11, "2026-10-29", False, "the brief is on from the start: set-up turns it on with no question, every day at 7:38, and a copy set up before with none gets it (profile upgrade brief-daily); the bell on the Brief, or Settings, changes it or turns it off; it runs in the chat that answers the page, so no chat is made for it; off and on keep its days and time; a brief that already runs keeps its schedule, and one in a chat of its own from before moves into the page's chat by itself (tools/tidy.py); a brief never makes a chat, and from a chat on the computer it is turned on from the bell, which runs it in the cloud; the app's settings squeeze every chat's history at 200,000 tokens, so the long-lived chat stays cheap"),
+            (12, "2026-10-29", False, "chats keep the model's whole window again: the 200,000-token cap made a chat forget its work every few steps, so the app sets nothing and the security guard refuses the cap"),
         ),
-        "fingerprint": "5e65ce8782405274",
+        "fingerprint": "c7c39d5541ce0c00",
     },
     "expand": {
         "by": "upgrade", "priority": 4, "time": "~15 min",

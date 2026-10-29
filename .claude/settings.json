@@ -2,8 +2,7 @@
   "env": {
     "PYTHONUTF8": "1",
     "GIT_TERMINAL_PROMPT": "0",
-    "GCM_INTERACTIVE": "never",
-    "CLAUDE_CODE_AUTO_COMPACT_WINDOW": "200000"
+    "GCM_INTERACTIVE": "never"
   },
   "permissions": {
     "allow": [
@@ -25,7 +24,9 @@
       "Bash(gh pr view:*)",
       "Bash(git switch --detach origin/master)",
       "Bash(python3 tools/sync_app.py:*)",
-      "Bash(./tools/ci_local.sh:*)"
+      "Bash(./tools/ci_local.sh:*)",
+      "ArtifactData",
+      "ArtifactComments"
     ]
   },
   "hooks": {

@@ -24,8 +24,8 @@
     "version": 24
   },
   "market": {
-    "date": "2026-10-25",
-    "version": 8
+    "date": "2026-10-29",
+    "version": 9
   },
   "network-notes": {
     "date": "2026-10-29",
@@ -49,7 +49,7 @@
   },
   "routines": {
     "date": "2026-10-29",
-    "version": 11
+    "version": 12
   },
   "screening": {
     "date": "2026-10-29",

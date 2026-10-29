@@ -34,8 +34,6 @@ MAINTAINING.md first; this is only what 4.3 left.
   brief's move into the page's chat: tested on the shapes those tools return.
 - The brief's bell opening the helper's chat from inside the Claude app (tested with
   `window.open` stubbed).
-- The 200,000-token history cap (`CLAUDE_CODE_AUTO_COMPACT_WINDOW` in `.claude/settings.json`):
-  set as Claude Code's docs describe, not yet seen compacting a live chat.
 - The page store beyond the probe page, and a republish's read cost on a real page.
 
 ## Platforms

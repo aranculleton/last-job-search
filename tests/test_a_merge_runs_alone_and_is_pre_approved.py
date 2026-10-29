@@ -77,3 +77,13 @@ def test_the_instructions_say_run_it_alone_and_never_reach_for_bypass():
     assert "never switch to bypass permissions" in rule
     # The person approves the one action in their own words, which auto mode accepts.
     assert "Reply: yes, merge pull request <number>." in rule
+
+
+def test_writing_to_the_persons_own_page_never_stops_at_an_approval_box():
+    # The maintainer, 2026-10-29: each page write asked "Allow Claude to edit this artifact's
+    # data?" and brought the chat to the front over the page. Its data and comments are
+    # pre-approved; publishing or deleting a page still asks. Not tested in a live chat: this
+    # pins the rule, not the dialog.
+    allow = json.loads(_read(".claude", "settings.json"))["permissions"]["allow"]
+    assert "ArtifactData" in allow and "ArtifactComments" in allow
+    assert "Artifact" not in allow

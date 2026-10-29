@@ -20,6 +20,15 @@ make sense to somebody whose repo just received it.
 
 ## [Unreleased]
 
+### Fixed
+
+- Chats no longer squeeze their history at 200,000 tokens. The cap made a chat on a
+  1M-window model forget its work every few steps; Claude Code's own default, the model's
+  whole window, holds again, and the security guard refuses the cap coming back.
+- Work a chat does for the page no longer stops at "Allow Claude to edit this artifact's
+  data?", which brought the chat to the front over the page at every write. Writing the
+  page's data and comments is pre-approved; publishing or deleting a page still asks.
+
 ## [4.3.0] - 2026-10-29
 
 ### Added
