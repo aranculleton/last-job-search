@@ -18,6 +18,10 @@ These apply whenever the change is to the app, whichever repo the session starte
   anything a person sees. Its rules are tested on every screen (one bin, never an x; one "?"
   a card; soft cards with no side lines; plain words), so a page that breaks one fails.
 
+- **The whole suite runs once, on the pull request's CI**, which is free on the public app;
+  before a push, only the scans and the changed tests ("Before pushing"). Never the whole
+  suite again by hand.
+
 - **Windows is never run on a change.** Linux and Mac decide whether a change is green; a
   Windows question is answered from Microsoft's and Python's documentation and from the
   tests that fake Windows. Its CI jobs run only when started by hand (Actions, Run
