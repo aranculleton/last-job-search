@@ -187,7 +187,8 @@ reason in one line in the reply.
    is checked, the real ones fixed with a test that fails without the fix, the rejected
    ones named with the reason. Then a bug hunt over the parts the changes touch, not only
    the lines, and the time-shift check (the suite with the clock moved 30, 90 and 400
-   days on). A full `./tools/ci_local.sh`, not `--quick`.
+   days on). The whole suite is the release pull request's own CI run, once, on its final
+   commit (free on the public app); by hand, only "Before pushing".
 1. Before the release PR merges, run the maintainer's own tests against it:
    `python3 tools/try_personal_tests.py <the maintainer's repo>`. It lays this tree over a
    copy of that repo, the way a sync would, and changes neither. A failure the release
@@ -257,13 +258,28 @@ file edit, and the edit happens before the reply.
 
 ## Before pushing
 
-Run what CI runs:
+**On the app, GitHub runs the whole suite on every pull request, for nothing** (a public
+repo's minutes are free), so that run is the evidence and the whole suite is never run again
+by hand: three local runs of about twenty minutes each held up the 4.3 release for an hour
+(the maintainer, 2026-10-29: "this is taking so long"). Before a push, only what CI cannot
+do (the scans with the maintainer's names, which must pass before anything is public) and
+what takes a minute or two:
 
 ```bash
+python3 tools/build_app.py <dir> --tokens-out <dir>/tokens      # from the maintainer's repo, once a session
+git archive HEAD | tar -x -C <tree>                             # the exact tree being pushed
+python3 tools/leak_scan.py <tree> --tokens <dir>/tokens
+python3 tools/name_guard.py diff origin/master
+python3 -m ruff check tools templates tests
 python3 tools/lint_skills.py
 python3 tools/security_guards.py
-python3 -m pytest tests -q
+python3 tools/check_framework_version.py
+python3 tools/public_names.py check
+python3 -m pytest -q <the changed test files, and every test file that imports a changed module> tests/test_build_versions.py
 ```
+
+Then push once, and fix what CI finds in one more push. A private copy has no free CI, so
+there `./tools/ci_local.sh --quick` stays the rule ("CI on a private repo", below).
 
 In a touched portal CLI, also `bun run typecheck` and `bun test`.
 
