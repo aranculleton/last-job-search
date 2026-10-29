@@ -664,6 +664,9 @@ S.engine = async (a) => {
     if (st.count) entry.count = (await page.$$(st.count)).length;
     if (st.calls) entry.calls = (await calls(page)).filter((c) => c.cap === st.calls);
     if (st.eval) entry.eval = await page.evaluate((c) => eval(c), st.eval);
+    // Going back is not done when history.back() returns: Safari's engine moved later than the
+    // read on a busy machine (CI, 2026-10-29). A step that changes the address waits for it.
+    if (st.until) await page.waitForFunction((c) => eval(c), st.until, {timeout: 5000}).catch(() => {});
     entry.hash = await page.evaluate(() => location.hash);
     entry.work = store.list("work/").map((k) => Object.assign({id: k.split("/")[1]}, store.get(k)));
     out.after.push(entry);
@@ -785,6 +788,9 @@ S.write_fail = async (a) => {
   const {page} = o;
   await clickText(page, "button", "I sent the message to Juno");
   await turn(page, 8);
+  // The alert is emptied, then written 30ms later so a screen reader says it again; a busy
+  // machine read it in between (CI, 2026-10-29). Waited for, never assumed.
+  await page.waitForFunction(() => document.getElementById("alert").textContent !== "", null, {timeout: 3000}).catch(() => {});
   const r = {toast: await T(page, ".toast"), state: await one(page, '#main [data-item="msg-juno-1"] .state'), alert: await page.evaluate(() => document.getElementById("alert").textContent),
     live: await page.evaluate(() => document.getElementById("live").textContent), errors: o.errors};
   await o.ctx.close();

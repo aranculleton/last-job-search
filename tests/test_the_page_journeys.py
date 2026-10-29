@@ -387,7 +387,7 @@ def test_a_referral_led_screen_with_no_application_names_the_referrer(run, tmp_p
 def test_the_warm_route_on_a_job_opens_the_person_and_back_returns(run, tmp_path, vp):
     got = _go(run, tmp_path, [
         {"hash": "jobs", "click": "Juno", "role": "link", "within": "[data-item=\"r12-2\"] .warm"},
-        {"eval": "history.back(), 0", "wait": 300},
+        {"eval": "history.back(), 0", "until": "location.hash !== '#contacts/larkspur_retail_castellan'"},
     ], vp)
     assert got["after"][0]["hash"] == "#contacts/larkspur_retail_castellan"
     assert got["after"][1]["hash"] == "#jobs"
