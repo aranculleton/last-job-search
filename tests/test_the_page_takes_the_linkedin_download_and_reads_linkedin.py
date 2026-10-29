@@ -263,9 +263,11 @@ def _split_on_the_page(text, max_chars):
     fn = fn[:fn.index("\n  }\n") + 4]
     out = subprocess.run([node, "-e", fn + "\nprocess.stdout.write(JSON.stringify(splitCsv("
                           "require('fs').readFileSync(0, 'utf8'), " + str(max_chars) + ")));"],
-                         input=text, capture_output=True, encoding="utf-8", timeout=60)
-    assert out.returncode == 0, out.stderr
-    return json.loads(out.stdout)
+                         input=text.encode("utf-8"), capture_output=True, timeout=60)
+    # Bytes both ways: a text pipe on Windows writes every "\n" as "\r\n", so the splitter
+    # saw "\r\r\n" where the page itself reads the file as it is (CI, 2026-10-29).
+    assert out.returncode == 0, out.stderr.decode("utf-8", "replace")
+    return json.loads(out.stdout.decode("utf-8"))
 
 
 def _take_messages(page, aid, messages_assets):
