@@ -199,7 +199,9 @@ def test_a_big_search_is_modelled_inside_two_seconds(tmp_path, monkeypatch):
     a build, once a first build has loaded the code. Timed against a small search's build,
     which pays the same fixed costs: every build starts git a few times, a few hundredths
     of a second on Linux and about a second on a Windows runner, whatever the search's
-    size. This guards how the work grows with the search (2026-10-26)."""
+    size. This guards how the work grows with the search (2026-10-26). It counts this
+    process's own work (process_time), never the wall clock: with the suite in parallel
+    workers a busy runner made the same build read 2.67s (2026-10-29)."""
     warm = app_state.large(str(tmp_path / "warm"))
     small_state = app_state.small(str(tmp_path / "small"))
     big = app_state.large(str(tmp_path / "big"))
@@ -208,13 +210,13 @@ def test_a_big_search_is_modelled_inside_two_seconds(tmp_path, monkeypatch):
     monkeypatch.setenv("LJS_STATE", warm)
     app_model.build(today, now)
     monkeypatch.setenv("LJS_STATE", small_state)
-    start = time.perf_counter()
+    start = time.process_time()
     app_model.build(today, now)
-    fixed = time.perf_counter() - start
+    fixed = time.process_time() - start
     monkeypatch.setenv("LJS_STATE", big)
-    start = time.perf_counter()
+    start = time.process_time()
     m, _ = app_model.build(today, now)
-    took = time.perf_counter() - start
+    took = time.process_time() - start
     # Every live contact is on the page whatever the book's size (here every one has
     # something due); only finished history and the people beyond the budget fold away.
     assert len(m["people"]) == m["people_count"]["live"] == m["people_count"]["all"]
