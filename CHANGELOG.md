@@ -180,6 +180,8 @@ make sense to somebody whose repo just received it.
 - On an iPhone (and in Safari) the panel for tweaking a resume or letter opened with nothing
   in it, two pixels tall. It now opens at its full size.
 - The filter panel's footer read "Show 13 people null" whenever no filter was on.
+- On a laptop in Chrome or Firefox the filter panel opened a little above and left of its
+  button, partly over it. It opens just under the button in every browser.
 - A LinkedIn download with a file over 20 MB (a busy inbox's messages) was refused with "ask
   in Chat", which led nowhere. It now goes in parts and is joined again.
 - In the cloud, the connections from your LinkedIn download were gone by the next chat, so

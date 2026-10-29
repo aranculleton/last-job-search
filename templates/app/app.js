@@ -239,6 +239,16 @@
   // by default ... like 1 job posting per screen"), and every tap target is drawn larger by
   // the same factor (--tz), so a finger still gets its full 44px however small the text.
   const PHONE_SIZES = {smaller: 0.75, standard: 0.85, larger: 1};
+  // A measured box in the page's own px. Chrome and Firefox measure what is drawn, after the
+  // zoom above; Safari measures before it. The body's own two widths give the ratio in every
+  // engine, so a panel placed from a measurement lands where it was measured (probed in all
+  // three, 2026-10-29: the filter panel opened a tenth too high and left in Chrome and Firefox).
+  function drawnPerPx() {
+    const b = document.body;
+    const k = b && b.offsetWidth ? b.getBoundingClientRect().width / b.offsetWidth : 1;
+    return k > 0 ? k : 1;
+  }
+  function pageWidth() { return window.innerWidth / (parseFloat(document.body.style.zoom) || 1); }
   function applySize(z) {
     const phone = window.innerWidth < 760;
     const f = (phone ? PHONE_SIZES : SIZES)[z] || (phone ? PHONE_SIZES : SIZES).standard;
@@ -4321,9 +4331,9 @@
     draw();
     try { filterDlg.showModal(); } catch (e) { filterDlg.setAttribute("open", ""); }
     if (isWide && opener && opener.getBoundingClientRect) {
-      const r = opener.getBoundingClientRect();
-      filterDlg.style.setProperty("--pop-top", Math.round(r.bottom + 8) + "px");
-      filterDlg.style.setProperty("--pop-left", Math.round(Math.max(16, Math.min(window.innerWidth - 456, r.right - 440))) + "px");
+      const r = opener.getBoundingClientRect(), k = drawnPerPx();
+      filterDlg.style.setProperty("--pop-top", Math.round(r.bottom / k + 8) + "px");
+      filterDlg.style.setProperty("--pop-left", Math.round(Math.max(16, Math.min(pageWidth() - 456, r.right / k - 440))) + "px");
     }
     const first = filterDlg.querySelector("button[aria-pressed], input, button");
     if (first) first.focus();
@@ -7277,7 +7287,7 @@
     fabEl.setAttribute("aria-expanded", String(dockOpen));
     document.body.classList.toggle("has-fab", !fabEl.hidden);
     const bp = $("browser-panel");
-    const lift = bp ? Math.ceil(bp.getBoundingClientRect().height) + 12 : 0;
+    const lift = bp ? Math.ceil(bp.getBoundingClientRect().height / drawnPerPx()) + 12 : 0;
     for (const el of [dockEl, fabEl]) el.style.setProperty("--dock-lift", lift + "px");
     if (dockOpen) renderChat();
     else growTalk();

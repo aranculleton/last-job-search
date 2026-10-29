@@ -256,6 +256,10 @@ def test_13_sheets_sit_at_the_bottom_with_close_on_top_and_give_focus_back(layou
         # bottom where it belongs and nothing above it (2026-10-29).
         if m["h"] < 120 or m["stray"]:
             bad.append((kind, m))
+        elif vp == "wide" and kind == "filter" and not (0 <= m["gap"] <= 16 and m["drawnRight"] <= m["vw"]):
+            # On a laptop the filter panel opens just under its button: placed from a
+            # measurement taken in another engine's units, it covered the button (2026-10-29).
+            bad.append((kind, m))
         elif (phone and (m["bottom"] < m["vh"] - 2 or m["h"] > 0.85 * m["vh"])) or not m["close"] or m["closeRow"] > 48 or not m["focusBack"]:
             bad.append((kind, m))
     assert not bad, bad

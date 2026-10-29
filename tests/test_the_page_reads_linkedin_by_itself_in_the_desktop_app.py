@@ -65,7 +65,8 @@ def queued(tmp_path_factory):
                      "queue": [{"id": f"read-c{n}", "contact": f"c{n}", "first_name": name, "employer": "Example Co",
                                 "mode": "deep", "asked_on": "2026-10-25", "reach": f"reach/c{n}", "rev": f"q{n}"}
                                for n, name in ((1, "Ana"), (2, "Bea"), (3, "Cal"))]}
-    seed = {f"reach/c{n}": {"linkedin": f"https://www.linkedin.com/in/example-person-{n}"} for n in (1, 2, 3)}
+    seed = {f"reach/c{n}": {"linkedin": f"https://www.linkedin.com/in/example-person-{w}"}
+            for n, w in ((1, "one"), (2, "two"), (3, "three"))}
     return _write(tmp_path_factory.mktemp("queued"), "queued", m), seed
 
 

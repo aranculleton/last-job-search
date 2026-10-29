@@ -112,6 +112,12 @@ class Store {
 
 // ---------------------------------------------------------------- opening a page
 let browser = null;
+const DRAWN_RECT = `Element.prototype.__drawnRect = function () {
+  const r = this.getBoundingClientRect(), b = document.body;
+  if (!b || !b.offsetWidth || !b.contains(this)) return r;
+  const d = (parseFloat(b.style.zoom) || 1) / (b.getBoundingClientRect().width / b.offsetWidth);
+  return Math.abs(d - 1) < 0.001 ? r : new DOMRect(r.x * d, r.y * d, r.width * d, r.height * d);
+};`;
 async function open(o) {
   const ctx = await browser.newContext({
     viewport: o.viewport || {width: 375, height: 812}, colorScheme: o.scheme || "light", deviceScaleFactor: o.scale || 1,
@@ -132,9 +138,16 @@ async function open(o) {
       for (const [from, to] of o.replace || []) body = body.split(from).join(to);
       return route.fulfill({status: 200, contentType: "text/html; charset=utf-8", body});
     }
+    // A picture the page holds in memory is not the network: Safari's engine routes it here,
+    // where aborting it left a pasted screenshot without its preview (2026-10-29).
+    if (url.startsWith("blob:") || url.startsWith("data:")) return route.continue();
     return route.abort();
   });
   await ctx.addInitScript({content: "window.__LJS_FAKE = " + JSON.stringify(o.fake || {}) + ";"});
+  // Every box the harness measures, as drawn. The page zooms its body; Chrome and Firefox
+  // measure after that zoom and Safari before it (probed 2026-10-29), so a Safari box read
+  // 10 to 15% too big against the screen. The page's own code is left to measure natively.
+  await ctx.addInitScript({content: DRAWN_RECT});
   // What this viewer chose before (kept on their device), the Claude app's own appearance
   // choice on the root, or storage refused altogether: each set before any page script runs.
   if (o.look) await ctx.addInitScript({content: "try { " + Object.entries(o.look).map(([k, v]) => "localStorage.setItem(" + JSON.stringify("ljs:" + k) + ", " + JSON.stringify(v) + ");").join(" ") + " } catch (e) {}"});
@@ -291,7 +304,7 @@ function a11yProbe() {
     if (edge && ratioOf(edge, bgOf(el.parentElement)) < 3) out.push("field edge " + ratioOf(edge, bgOf(el.parentElement)).toFixed(2) + " < 3: " + describe(el));
   }
   for (const f of document.querySelectorAll(".fill, .fun-fill")) {
-    if (!shown(f) || f.getBoundingClientRect().width < 2) continue;
+    if (!shown(f) || f.__drawnRect().width < 2) continue;
     const c = rgba(getComputedStyle(f).backgroundColor);
     const track = bgOf(f.parentElement);
     if (c && ratioOf(c, track) < 3) out.push("bar on its track " + ratioOf(c, track).toFixed(2) + " < 3: " + describe(f.parentElement));
@@ -307,12 +320,21 @@ function a11yProbe() {
 
 // Every control a phone person taps is a 44px target (WCAG 2.5.5; Apple's 44pt).
 function targetsProbe() {
-  const shown = (el) => el.getClientRects().length > 0 && getComputedStyle(el).visibility !== "hidden";
+  // Inside a closed menu is not shown, whatever the engine says: Safari's gives the buttons in
+  // a closed <details> a 0x0 box where Chrome's gives none (2026-10-29).
+  const folded = (el) => {
+    for (let d = el.closest("details:not([open])"); d; d = d.parentElement && d.parentElement.closest("details:not([open])")) {
+      const s = el.closest("summary");
+      if (!(s && s.parentElement === d)) return true;
+    }
+    return false;
+  };
+  const shown = (el) => el.getClientRects().length > 0 && getComputedStyle(el).visibility !== "hidden" && !folded(el);
   const small = [];
   const sel = "button, a[href], summary, select, textarea, input:not([type=checkbox]):not([type=radio]):not([type=hidden]), label.pick, .choice label, .look-choice, .pick-all label";
   for (const el of document.querySelectorAll(sel)) {
     if (!shown(el) || el.classList.contains("skip") || el.closest(".sr-only")) continue;
-    const r = el.getBoundingClientRect();
+    const r = el.__drawnRect();
     // A control drawn smaller than its target reaches the rest through its ::after (app.css,
     // "A button is drawn 36px tall"): the reach counts, scaled by the page's zoom.
     const pa = getComputedStyle(el, "::after");
@@ -342,7 +364,7 @@ function budgetProbe() {
     return false;
   };
   const shown = (el) => el.getClientRects().length > 0 && getComputedStyle(el).visibility !== "hidden" && !hiddenUp(el);
-  const inView = (el) => { const r = el.getBoundingClientRect(); return r.bottom > 0 && r.top < vh && r.width > 0 && r.height > 0; };
+  const inView = (el) => { const r = el.__drawnRect(); return r.bottom > 0 && r.top < vh && r.width > 0 && r.height > 0; };
   // skipText: leave out the words of a message to send, the card's content rather than its chrome.
   const wordsIn = (root, viewOnly, skipText) => {
     let n = 0;
@@ -426,7 +448,7 @@ S.sections = async (a) => {
       // The "?" explainers and the tips a screen shows, all of it and in the first screenful.
       ...(await page.evaluate(() => {
         const shown = (e) => e.getClientRects().length > 0 && e.checkVisibility({visibilityProperty: true});
-        const first = (e) => e.getBoundingClientRect().top < innerHeight;
+        const first = (e) => e.__drawnRect().top < innerHeight;
         const qs = [...document.querySelectorAll("#main button.q, #main button.help-q")].filter(shown);
         const tips = [...document.querySelectorAll("#main .tip, #main .bp-tip")].filter(shown);
         return {qs: qs.length, qsFirst: qs.filter(first).length, tips: tips.length, qKeys: qs.map((q) => q.getAttribute("data-k"))};
@@ -452,7 +474,7 @@ function layoutMeasure() {
   const main = document.getElementById("main");
   const name = (e) => (e.getAttribute("aria-label") || (e.getAttribute("aria-labelledby") ? (document.getElementById(e.getAttribute("aria-labelledby")) || {}).textContent : "") || e.textContent || e.value || "").replace(/\s+/g, " ").trim();
   const firsts = [...main.querySelectorAll("[data-card], .empty, .setting-row")].filter(vis);
-  firsts.sort((x, y) => x.getBoundingClientRect().top - y.getBoundingClientRect().top);
+  firsts.sort((x, y) => x.__drawnRect().top - y.__drawnRect().top);
   const f = firsts[0] || null;
   const title = [...main.querySelectorAll("h2")].find(vis) || null;
   // The blocks between the title and the first item: siblings after the title's own block.
@@ -469,10 +491,10 @@ function layoutMeasure() {
   const afterTitle = title ? (() => { let el = title.nextElementSibling; while (el && !vis(el)) el = el.nextElementSibling; return el; })() : null;
   const controls = [...main.querySelectorAll(".controls")].filter(vis).map((c) => {
     const kids = [...c.querySelectorAll("button, select, input, a, summary")].filter(vis);
-    const tops = kids.map((k) => k.getBoundingClientRect().top);
+    const tops = kids.map((k) => k.__drawnRect().top);
     return {spread: tops.length ? Math.max(...tops) - Math.min(...tops) : 0, scroll: c.scrollWidth - c.clientWidth, n: kids.length};
   });
-  const inView = (e) => { const r = e.getBoundingClientRect(); return r.bottom > 0 && r.top < innerHeight && r.right > 0 && r.left < innerWidth; };
+  const inView = (e) => { const r = e.__drawnRect(); return r.bottom > 0 && r.top < innerHeight && r.right > 0 && r.left < innerWidth; };
   const primary = [...document.querySelectorAll(".btn.primary")].filter((e) => vis(e) && inView(e) && !e.closest("dialog:not([open])")).length;
   const qPrimary = [...main.querySelectorAll(".btn.answer.primary")].filter(vis).length;
   const cards = [...main.querySelectorAll("[data-card]")].filter(vis).map((c) => {
@@ -505,7 +527,7 @@ function layoutMeasure() {
   }
   const empties = [...main.querySelectorAll(".empty")].filter(vis).map((e) => ({buttons: [...e.querySelectorAll("button, a.btn")].filter(vis).length,
     words: e.innerText.trim().split(/\s+/).filter(Boolean).length}));
-  return {first: f ? Math.round(f.getBoundingClientRect().top + scrollY) : null, firstWhat: f ? String(f.className).slice(0, 40) : null,
+  return {first: f ? Math.round(f.__drawnRect().top + scrollY) : null, firstWhat: f ? String(f.className).slice(0, 40) : null,
     blocks, here: main.querySelectorAll(".here").length, activeFilters: main.querySelectorAll(".active-filters").length,
     summaries: summaries.map((e) => e.textContent.replace(/\s+/g, " ").trim()), summaryFirst: !!afterTitle && afterTitle.classList.contains("summary"),
     summarySentence: summaries[0] ? ((summaries[0].firstElementChild || summaries[0]).textContent || "").trim() : "",
@@ -519,16 +541,16 @@ function frameMeasure() {
   const badges = [...document.querySelectorAll("#tabs .badge, #side .badge, #main .seg .badge")].filter(vis).map((b) => ({text: b.textContent.trim(), where: (b.closest("a, button") || b).textContent.replace(b.textContent, "").trim()}));
   const navNumbers = [...document.querySelectorAll("#tabs a.tab, #side a, #main .seg button")].filter(vis).filter((e) => /\d/.test([...e.childNodes].filter((n) => !(n.classList && (n.classList.contains("badge") || n.classList.contains("navcount") || n.classList.contains("sr-only")))).map((n) => n.textContent).join(""))).map((e) => e.textContent.trim());
   const topKids = [...top.querySelectorAll("#brand, #screen, #conn, #pulse, #pill, button, a")].filter(vis).map((e) => e.id || String(e.className));
-  return {topH: Math.round(top.getBoundingClientRect().height), topKids, tabs: tabs.length, badges, navNumbers,
+  return {topH: Math.round(top.__drawnRect().height), topKids, tabs: tabs.length, badges, navNumbers,
     pill: vis(document.getElementById("pill")) || vis(document.getElementById("pulse")), rail: vis(document.getElementById("rail"))};
 }
 async function sheetMeasure(page, kind) {
   return page.evaluate((k) => {
     const d = document.querySelector("dialog." + k + "[open]");
     if (!d) return null;
-    const r = d.getBoundingClientRect();
+    const r = d.__drawnRect();
     const close = [...d.querySelectorAll("button")].find((b) => /^close\b/i.test((b.getAttribute("aria-label") || b.textContent).trim()));
-    const cr = close ? close.getBoundingClientRect() : null;
+    const cr = close ? close.__drawnRect() : null;
     // A null or undefined given to the DOM is printed as the word (the filter sheet's footer
     // read "Show 13 people null", 2026-10-29).
     const stray = /(^|[^\w])(null|undefined|NaN)([^\w]|$)|\[object /.test(d.innerText);
@@ -541,6 +563,13 @@ async function sheetCheck(page, kind, openIt) {
   await turn(page, 4);
   const m = await sheetMeasure(page, kind);
   if (m) {
+    // Where it is drawn against what opened it, as the screen shows them (not as the page
+    // measures itself, which differs between engines under the page's zoom).
+    const ob = await page.locator('[data-k="' + opener + '"]').first().boundingBox();
+    const db = await page.locator("dialog." + kind + "[open]").boundingBox();
+    m.gap = ob && db ? Math.round(db.y - (ob.y + ob.height)) : null;
+    m.drawnRight = db ? Math.round(db.x + db.width) : null;
+    m.vw = page.viewportSize().width;
     await page.locator("dialog." + kind + "[open]").getByRole("button", {name: /^close/i}).first().click();
     await turn(page, 4);
     m.focusBack = await page.evaluate((k) => !!document.activeElement && document.activeElement.getAttribute("data-k") === k, opener);
@@ -582,13 +611,13 @@ S.layout = async (a) => {
         const vis = (e) => e.checkVisibility({visibilityProperty: true, contentVisibilityAuto: true}) && e.getClientRects().length > 0 && !e.closest(".sr-only");
         const clipped = [...document.querySelectorAll("#main button, #top button, #tabs a")].filter(vis).filter((b) => b.scrollWidth > b.clientWidth + 1 && getComputedStyle(b).overflow !== "visible").map((b) => b.textContent.trim().slice(0, 30));
         const rows = [...document.querySelectorAll("#main .controls")].filter(vis).map((c) => {
-          const tops = [...c.querySelectorAll("button, select, input, a, summary")].filter(vis).map((k) => k.getBoundingClientRect().top);
+          const tops = [...c.querySelectorAll("button, select, input, a, summary")].filter(vis).map((k) => k.__drawnRect().top);
           return {spread: tops.length ? Math.max(...tops) - Math.min(...tops) : 0, scroll: c.scrollWidth - c.clientWidth};
         });
         // What sticks out, named, so a failure says where to look.
         const W = document.documentElement.clientWidth;
-        const wide = [...document.querySelectorAll("#main *, #top *")].filter((e) => { const r = e.getBoundingClientRect(); return r.width && r.right > W + 1; })
-          .filter((e) => ![...e.children].some((c) => c.getBoundingClientRect().right > W + 1)).slice(0, 5).map((e) => e.tagName.toLowerCase() + "." + [...e.classList].join(".") + " " + (e.textContent || "").trim().slice(0, 30));
+        const wide = [...document.querySelectorAll("#main *, #top *")].filter((e) => { const r = e.__drawnRect(); return r.width && r.right > W + 1; })
+          .filter((e) => ![...e.children].some((c) => c.__drawnRect().right > W + 1)).slice(0, 5).map((e) => e.tagName.toLowerCase() + "." + [...e.classList].join(".") + " " + (e.textContent || "").trim().slice(0, 30));
         return {overflow: document.documentElement.scrollWidth - document.documentElement.clientWidth, clipped, rows, wide};
       });
     }
@@ -663,7 +692,7 @@ S.tweak = async (a) => {
   const read = async () => ({line: (await panel.locator(".tweak-line").textContent()).trim(),
     disabled: await panel.locator("[data-k=tweak-apply]").isDisabled()});
   const out = {first: await read(), open: await panel.count(), inRail: await page.locator("#rail .tweak-panel").count(),
-    sheet: await page.evaluate(() => { const d = document.querySelector("dialog.tweak-sheet"); if (!d) return null; const r = d.getBoundingClientRect(); return {top: r.top, bottom: r.bottom, h: r.height, vh: innerHeight}; }),
+    sheet: await page.evaluate(() => { const d = document.querySelector("dialog.tweak-sheet"); if (!d) return null; const r = d.__drawnRect(); return {top: r.top, bottom: r.bottom, h: r.height, vh: innerHeight}; }),
     rows: await panel.locator(".tweak-body > .tweak-row").count(), recs: await panel.locator(".rec").count(),
     pressed: await panel.locator('[aria-pressed="true"].tw-opt').count(), keepChecked: await panel.locator("#tweak-keep").isChecked(),
     title: (await panel.locator(".tweak-title").textContent()).trim(), text: (await panel.innerText())};
@@ -1196,7 +1225,7 @@ S.bulk = async (a) => {
   await page.getByRole("button", {name: "Mark 2 as applied"}).click();
   await turn(page, 8);
   r.readyActions = store.list("actions/").filter((p) => p.indexOf("ready.applied") >= 0);
-  r.toastAboveBulk = await page.evaluate(() => { const t = document.querySelector(".toast"); const b = document.querySelector(".bulk"); if (!t || !b) return null; return t.getBoundingClientRect().bottom <= b.getBoundingClientRect().top + 1; });
+  r.toastAboveBulk = await page.evaluate(() => { const t = document.querySelector(".toast"); const b = document.querySelector(".bulk"); if (!t || !b) return null; return t.__drawnRect().bottom <= b.__drawnRect().top + 1; });
   r.errors = o.errors;
   await o.ctx.close();
   return r;
@@ -1390,9 +1419,9 @@ S.chat_dock = async (a) => {
   r.open = {dock: await vis("#chat-dock"), fab: await vis("#chat-fab"), focus: await focusK(), box: await page.evaluate(() => !!document.querySelector("#chat-dock #talk-text")),
     role: await page.getAttribute("#chat-dock", "role"), name: await one(page, "#h-dock"), msgs: await T(page, "#chat-dock .talk-msg .talk-text")};
   r.geo = await page.evaluate(() => {
-    const d = document.getElementById("chat-dock").getBoundingClientRect();
+    const d = document.getElementById("chat-dock").__drawnRect();
     const t = document.getElementById("tabs");
-    const tr = t && t.getClientRects().length ? t.getBoundingClientRect() : null;
+    const tr = t && t.getClientRects().length ? t.__drawnRect() : null;
     return {top: d.top, bottom: d.bottom, left: d.left, right: d.right, vw: innerWidth, vh: innerHeight, tabsTop: tr ? tr.top : null};
   });
   r.a11y = await page.evaluate(a11yProbe);
@@ -1894,7 +1923,7 @@ S.safe_area = async (a) => {
     r[name] = await o.page.evaluate(() => {
       const px = (el, p) => parseFloat(getComputedStyle(el)[p]);
       const tabs = document.getElementById("tabs");
-      const t = tabs.getBoundingClientRect();
+      const t = tabs.__drawnRect();
       return {tabsPadBottom: px(tabs, "paddingBottom"), tabsBottom: Math.round(t.bottom), vh: window.innerHeight, rootPadTop: px(document.documentElement, "paddingTop"),
         bodyLeft: px(document.body, "paddingLeft"), bodyRight: px(document.body, "paddingRight"), shellPadBottom: px(document.getElementById("shell"), "paddingBottom"),
         tabsHeight: Math.round(t.height), topTop: getComputedStyle(document.getElementById("top")).top, sw: document.documentElement.scrollWidth, cw: document.documentElement.clientWidth};
@@ -1918,7 +1947,7 @@ S.forced = async (a) => {
   await goto(page, "work");
   r.bar = await c("dialog .bar");
   r.fill = await c("dialog .fill");
-  r.fillWidth = await page.evaluate(() => { const f = document.querySelector("dialog .fill"); return f ? f.getBoundingClientRect().width : 0; });
+  r.fillWidth = await page.evaluate(() => { const f = document.querySelector("dialog .fill"); return f ? f.__drawnRect().width : 0; });
   r.errors = o.errors;
   await o.ctx.close();
   return r;
