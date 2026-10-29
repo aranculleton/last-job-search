@@ -348,6 +348,11 @@
   // shown with no time at all, never as midnight somewhere.
   let DEVICE_TZ;
   try { DEVICE_TZ = Intl.DateTimeFormat().resolvedOptions().timeZone; } catch (e) { DEVICE_TZ = undefined; }
+  // Dates and numbers in English, the page's language, the way this device writes English: a
+  // device set to French or German put "29 oct." or "60.000" inside an English sentence
+  // (2026-10-29).
+  let LOC;
+  try { const l = String(navigator.language || ""); LOC = /^en(-|$)/i.test(l) ? l : "en-GB"; } catch (e) { LOC = "en-GB"; }
   const zone = () => tz() || DEVICE_TZ;
   const isDateOnly = (s) => /^\d{4}-\d{2}-\d{2}$/.test(txt(s).trim());
   function ymdIn(t, z) {
@@ -391,13 +396,13 @@
   function fmtDay(s) {
     const d = parseDay(dayOf(s));
     if (d === null) return "";
-    try { return new Intl.DateTimeFormat(undefined, {weekday: "short", day: "numeric", month: "short", timeZone: "UTC"}).format(new Date(d)); }
+    try { return new Intl.DateTimeFormat(LOC, {weekday: "short", day: "numeric", month: "short", timeZone: "UTC"}).format(new Date(d)); }
     catch (e) { return txt(s).slice(0, 10); }
   }
   function clock(t, z) {
     const o = {hour: "numeric", minute: "2-digit"};
-    try { return new Intl.DateTimeFormat(undefined, Object.assign({timeZone: z}, o)).format(new Date(t)); }
-    catch (e) { return new Intl.DateTimeFormat(undefined, o).format(new Date(t)); }
+    try { return new Intl.DateTimeFormat(LOC, Object.assign({timeZone: z}, o)).format(new Date(t)); }
+    catch (e) { return new Intl.DateTimeFormat(LOC, o).format(new Date(t)); }
   }
   const city = (z) => txt(z).split("/").pop().replace(/_/g, " ");
   function fmtWhen(s) {
@@ -428,7 +433,7 @@
     if (d < 86400) return plural(Math.round(d / 3600), "hour", "hours") + " ago";
     if (d < 2 * 86400) return "yesterday";
     if (d < 7 * 86400) return Math.round(d / 86400) + " days ago";
-    try { return "on " + new Intl.DateTimeFormat(undefined, {day: "numeric", month: "short"}).format(new Date(t)); }
+    try { return "on " + new Intl.DateTimeFormat(LOC, {day: "numeric", month: "short"}).format(new Date(t)); }
     catch (e) { return "on " + txt(s).slice(0, 10); }
   }
   function dur(sec) {
@@ -446,7 +451,7 @@
     try {
       const opt = {currency: m[1], maximumFractionDigits: 0};
       opt.style = "currency";
-      const f = new Intl.NumberFormat(undefined, opt);
+      const f = new Intl.NumberFormat(LOC, opt);
       const n = (x) => f.format(Number(x.replace(/,/g, "")));
       return n(m[2]) + (m[4] ? " to " + n(m[4]) : "") + m[5];
     } catch (e) { return s; }
@@ -3690,7 +3695,7 @@
     const wk = Number(m[2]);
     const jan4 = new Date(Date.UTC(y, 0, 4));
     const mon = new Date(jan4.getTime() - ((jan4.getUTCDay() + 6) % 7) * DAY + (wk - 1) * 7 * DAY);
-    try { return new Intl.DateTimeFormat(undefined, {day: "numeric", month: "short", timeZone: "UTC"}).format(mon); } catch (e) { return txt(w); }
+    try { return new Intl.DateTimeFormat(LOC, {day: "numeric", month: "short", timeZone: "UTC"}).format(mon); } catch (e) { return txt(w); }
   }
   function weeksChart(weeks) {
     const max = Math.max(1, ...weeks.map((w) => Math.max(Number(w.applied) || 0, Number(w.replies) || 0)));
@@ -4370,7 +4375,7 @@
     if (n === 0) return "today";
     if (n === 1) return "tomorrow";
     if (n > 1 && n < 7) {
-      try { return "on " + new Intl.DateTimeFormat(undefined, {weekday: "long", timeZone: "UTC"}).format(new Date(parseDay(dayOf(s)))); } catch (e) { /* below */ }
+      try { return "on " + new Intl.DateTimeFormat(LOC, {weekday: "long", timeZone: "UTC"}).format(new Date(parseDay(dayOf(s)))); } catch (e) { /* below */ }
     }
     return "on " + fmtDay(s);
   }
@@ -5294,7 +5299,7 @@
     const sid = txt(s.id) || "search-settings";
     const list = (xs) => arr(xs).map(txt).filter(Boolean);
     const join = (xs) => list(xs).join(", ");
-    const money = (n) => (Number(n) ? Number(n).toLocaleString() : "");
+    const money = (n) => (Number(n) ? Number(n).toLocaleString(LOC) : "");
     const pay = obj(s.pay);
     const payWords = typeof s.pay === "string" ? s.pay : pay.floor ? "At least " + money(pay.floor) + (pay.target ? ", hoping for " + money(pay.target) : "") : "";
     const set = (what, value, label) => act([{item: sid, action: "search.set", value: Object.assign({what}, value), rev: txt(s.rev) || null}], label);
@@ -5303,7 +5308,7 @@
     const change = (what, label, value) => btn("Change", () => {
       if (what === "pay") {
         sheet({title: label, fields: [{id: "v", type: "text", label: "The lowest pay you would take", hint: "One number, for example 90000", value: pay.floor ? String(pay.floor) : "", required: true, max: 20}], submit: "Save",
-          onSubmit: (v) => { const n = Number(String(v.v).replace(/[^0-9.]/g, "")); if (n) set("pay", {value: n}, label + ": " + n.toLocaleString()); }});
+          onSubmit: (v) => { const n = Number(String(v.v).replace(/[^0-9.]/g, "")); if (n) set("pay", {value: n}, label + ": " + n.toLocaleString(LOC)); }});
         return;
       }
       if (what === "roles" || what === "places") {
@@ -5818,7 +5823,7 @@
     const big = picked.find((p) => p.blob.size > 20 * 1024 * 1024);
     S.notes.delete("export");
     scheduleRender();
-    const line = counts.map((c) => c.rows.toLocaleString() + " " + (EXPORT_WORDS[c.name] || c.name.replace(/\.csv$/, ""))).join(", ");
+    const line = counts.map((c) => c.rows.toLocaleString(LOC) + " " + (EXPORT_WORDS[c.name] || c.name.replace(/\.csv$/, ""))).join(", ");
     sheet({title: "Your LinkedIn download", intro: "Found " + line + ".",
       note: big ? "One file is over 20 MB, too big for this page. Ask in Chat and Claude takes it from there." : "It stays on your private page until it is saved.",
       fields: big ? [] : [{id: "remove", type: "checks", label: "Once it is saved", options: [["yes", "Remove it from the page once it's saved"]], value: ["yes"]}],

@@ -181,6 +181,7 @@ Install Certificates     # python.org's own script for a Mac ("Install Certifica
 # Fonts and the words of their licence: templates/doc_design.py and cover_letters/OpenFonts/fonts/*/OFL.txt.
 Liberation Serif        # a font, vendored under the SIL Open Font License
 Times New Roman's       # a font, named for the widths Liberation Serif shares
+DejaVu Sans             # a font, the one CI's Linux draws the page in
 Copyright Holder        # a defined term of the SIL Open Font License
 Modified Version        # a defined term of the SIL Open Font License
 Modified Versions       # the same term
@@ -520,3 +521,4 @@ Marisol             # an invented contact in the page's sample (tests/fixtures/a
 The Tweak           # the page's Tweak panel, named in a test's docstring, not a name
 The Brief's        # the page's home screen, not a person
 Rosé Pine          # a product: the colour theme the dark look uses
+Zoë Quillfeather's      # invented, the person whose folder has a space and an accent (platforms.yml, tools/everywhere.sh)

@@ -100,6 +100,11 @@ make sense to somebody whose repo just received it.
   runs on each release before it goes out and once a week on its own, free, and never on an
   ordinary change. The page's own browser tests now run on every change too, and every suite
   runs in parallel workers, so a release's checks take minutes rather than an hour.
+- **Every release is checked where people actually open the app**: the page in Safari's
+  engine (the Claude app on an iPhone), Firefox, a Mac's and Windows' type, a device set to
+  French or German and the far time zones; the rest with the clock a month, three months and
+  over a year on, in the far time zones, from a folder with spaces and accents, and on the
+  newest Python. Two checks, free, on releases and weekly only (`tools/everywhere.sh`).
 - **The README and Start here speak in the page's buttons**, with a walk through the page
   and the Brief on its own; Chat is for anything else.
 - **Size**: three sizes. Standard is what Small was, and is the default; Larger is what
@@ -159,6 +164,9 @@ make sense to somebody whose repo just received it.
 
 ### Fixed
 
+- **Dates and amounts are written in English on any device**: a phone or computer set to
+  French or German put "29 oct." or "60.000" inside the page's English sentences.
+- **A message card no longer pushes a phone sideways at large text**: its top line wraps.
 - **Saving from the page works on every copy.** What a chat read back from your page never
   carried versions, so its writes to anything already there were refused, and ids with a "~"
   came back with an "@". Every record now carries its own version, the busiest live under

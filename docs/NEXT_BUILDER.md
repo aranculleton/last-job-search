@@ -15,8 +15,6 @@ MAINTAINING.md first; this is only what 4.3 left.
 - The 4.2 newcomer journey findings were never closed as a list: check the apply link, the
   searching state, applied shown the same everywhere, a double paste, forms rather than chat,
   and the wording.
-- Releasing step 0's time-shift check (the suite with the clock moved 30, 90 and 400 days on)
-  was not run for 4.3.
 
 ## Not tested against the live services
 
@@ -36,6 +34,11 @@ MAINTAINING.md first; this is only what 4.3 left.
   longer builds a Python 3.9 environment when only personal files changed.
 - Every suite runs in parallel workers, and the page's browser tests run in their own CI job.
   Windows runs on a release pull request, weekly and by hand, never on an ordinary change.
+- Everywhere (`tools/everywhere.sh`, on releases and weekly) checks the page in Safari's
+  engine, Firefox, a Mac's and Windows' type, French and German and the far time zones, and
+  the rest with the clock moved on, in the far time zones, from an odd folder and on the
+  newest Python. Before it, the page was only ever drawn in one font: the layout tests pass
+  in Inter here and failed in the DejaVu Sans font on CI's Linux, 37px over on a phone.
 
 ## The maintainer's own copy
 

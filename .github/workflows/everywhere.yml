@@ -1,0 +1,77 @@
+# Everywhere: the places the app runs that CI's ordinary jobs do not (tools/everywhere.sh).
+#
+#   page    the page's browser tests in Safari's engine (the Claude app on an iPhone, Safari
+#           on a Mac), Firefox, a Mac's and Windows' shapes of type, a device set to French or
+#           German, and 14 hours ahead of London and 10 behind
+#   suite   the rest of the suite with the clock 30, 90 and 400 days on, in the far time
+#           zones, from a folder with spaces, an accent and an apostrophe, on the newest Python
+#
+# On a release pull request (titled "Release X.Y.Z"), weekly and by hand: free on the public
+# app, skipped on every private copy, never on an ordinary change. One job each, so a failure
+# wakes a builder at most twice and ends in one short summary to read (2026-10-29).
+#
+# No paths filter, unlike Platforms: any change to the app can break any of these.
+
+name: Everywhere
+
+on:
+  pull_request:
+    types: [opened, synchronize, reopened]
+  schedule:
+    - cron: "41 5 * * 1"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: everywhere-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  page:
+    name: page everywhere (Safari, Firefox, Mac and Windows type, French and German, far time zones)
+    if: ${{ github.event_name == 'workflow_dispatch' || (!github.event.repository.private && (github.event_name == 'schedule' || startsWith(github.event.pull_request.title, 'Release '))) }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
+      - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065 # v5
+        with:
+          python-version: "3.13"
+      - run: pip install pyyaml pytest pytest-xdist
+      - name: Playwright, its three engines, and a Mac's and Windows' type
+        env:
+          PW: "1.56.1"            # the Playwright the page's harness is tested with
+        run: |
+          npm install -g "playwright@$PW"
+          npx -y "playwright@$PW" install --with-deps chromium webkit firefox
+          sudo apt-get install -y -q fonts-inter fonts-liberation > /dev/null
+      - name: The page in each
+        env:
+          EVERYWHERE_STRICT: "1"
+        run: tools/everywhere.sh page
+
+  suite:
+    name: suite everywhere (the clock moved on, far time zones, an odd folder, the newest Python)
+    if: ${{ github.event_name == 'workflow_dispatch' || (!github.event.repository.private && (github.event_name == 'schedule' || startsWith(github.event.pull_request.title, 'Release '))) }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
+      - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065 # v5
+        with:
+          # The last is the default; the newest is called by name.
+          python-version: |
+            3.14
+            3.13
+      - run: |
+          python -m pip install pyyaml pytest pytest-xdist
+          python3.14 -m pip install pyyaml pytest pytest-xdist
+          sudo apt-get install -y -q faketime > /dev/null
+      - name: The suite in each
+        env:
+          EVERYWHERE_STRICT: "1"
+          PY: python
+          PY_NEWEST: python3.14
+        run: tools/everywhere.sh suite

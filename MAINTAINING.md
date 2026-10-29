@@ -193,9 +193,15 @@ reason in one line in the reply.
    context but not the conclusions, asked for real bugs with concrete inputs. Each finding
    is checked, the real ones fixed with a test that fails without the fix, the rejected
    ones named with the reason. Then a bug hunt over the parts the changes touch, not only
-   the lines, and the time-shift check (the suite with the clock moved 30, 90 and 400
-   days on). The whole suite is the release pull request's own CI run, once, on its final
-   commit (free on the public app); by hand, only "Before pushing". Title the pull request
+   the lines. The whole suite is the release pull request's own CI run, once, on its final
+   commit (free on the public app); by hand, only "Before pushing". The same run checks
+   everywhere people open the app (`tools/everywhere.sh`, the Everywhere workflow): the
+   page in Safari's engine, Firefox, a Mac's and Windows' type, French and German and the
+   far time zones, and the rest with the clock 30, 90 and 400 days on, in the far time
+   zones, from a folder with spaces and accents and on the newest Python. Each of its two
+   jobs ends in one summary: read those lines, reproduce with
+   `EVERYWHERE_TESTS="<the files>" tools/everywhere.sh page|suite <variant>`, never re-run
+   the whole of it by hand. Title the pull request
    "Release X.Y.Z: ...", so its Platforms run takes Windows too, and merge it only when
    Linux, Mac and Windows are green: a Windows failure is fixed in the release, never left.
 1. Before the release PR merges, run the maintainer's own tests against it:

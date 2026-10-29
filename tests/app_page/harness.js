@@ -12,7 +12,14 @@
 const fs = require("fs");
 const path = require("path");
 const readline = require("readline");
-const {chromium} = require("playwright");
+const playwright = require("playwright");
+// The engine, language and time zone the page is opened in. Chrome's engine, British English
+// and London unless a release check asks otherwise (MAINTAINING.md, "Releasing"): the Claude
+// app on an iPhone draws the page with Safari's engine, and claude.ai opens in any browser,
+// language and time zone (2026-10-29).
+const ENGINE = process.env.LJS_PW_ENGINE || "chromium";
+const LOCALE = process.env.LJS_PW_LOCALE || "en-GB";
+const ZONE = process.env.LJS_PW_TZ || "";
 
 const FAKE = path.join(__dirname, "fake_claude.js");
 const SHOTS = process.env.LJS_SHOTS || "";
@@ -99,8 +106,9 @@ let browser = null;
 async function open(o) {
   const ctx = await browser.newContext({
     viewport: o.viewport || {width: 375, height: 812}, colorScheme: o.scheme || "light", deviceScaleFactor: o.scale || 1,
-    reducedMotion: o.reducedMotion || "no-preference", locale: "en-GB", timezoneId: o.timezoneId || "Europe/London",
-    permissions: o.clipboard === false ? [] : ["clipboard-read", "clipboard-write"], hasTouch: !!o.touch,
+    reducedMotion: o.reducedMotion || "no-preference", locale: LOCALE, timezoneId: o.timezoneId || ZONE || "Europe/London",
+    // Only Chrome's engine takes clipboard permissions; the others allow a copy on a tap.
+    permissions: o.clipboard === false || ENGINE !== "chromium" ? [] : ["clipboard-read", "clipboard-write"], hasTouch: !!o.touch,
     forcedColors: o.forcedColors || "none", contrast: o.contrast || "no-preference",
     javaScriptEnabled: o.javaScriptEnabled !== false,
   });
@@ -2003,7 +2011,7 @@ S.walk = async (a) => {
 
 // ---------------------------------------------------------------- the loop
 async function main() {
-  browser = await chromium.launch();
+  browser = await playwright[ENGINE].launch();
   const out = (o) => process.stdout.write(JSON.stringify(o) + "\n");
   out({ready: true, version: browser.version()});
   const rl = readline.createInterface({input: process.stdin});
