@@ -182,6 +182,8 @@ make sense to somebody whose repo just received it.
 - The filter panel's footer read "Show 13 people null" whenever no filter was on.
 - On a laptop in Chrome or Firefox the filter panel opened a little above and left of its
   button, partly over it. It opens just under the button in every browser.
+- Two research writers at the same moment could lose one write when the clock had been
+  moved: a lock read in the instant before its time was written was taken for a dead one.
 - Closing the tweak panel or a detail view after the page had updated left the keyboard
   focus at the top of the page. It goes back to the button that opened it.
 - A LinkedIn download with a file over 20 MB (a busy inbox's messages) was refused with "ask
