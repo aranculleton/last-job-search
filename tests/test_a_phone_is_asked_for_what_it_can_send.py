@@ -35,24 +35,28 @@ def test_the_ladder_tells_a_phone_what_a_phone_can_send(monkeypatch):
     for k, v in PHONE.items():
         monkeypatch.setenv(k, v)
     monkeypatch.delenv("CLAUDECODE", raising=False)
-    said = sources.ladder([], "browser", has_export=False)["say"]
+    # One who pastes profiles is asked, on a phone, for what a phone can send.
+    said = sources.ladder([], "paste", has_export=False)["say"]
     assert "screenshots of their profile from the LinkedIn app" in said
     assert "Save to PDF" not in said
+    # Reading on (the default): the page reads them, and nothing is asked of the phone.
+    said = sources.ladder([], "browser", has_export=False)["say"]
+    assert "screenshots" not in said and "paste" not in said.lower()
 
 
 def test_the_phone_line_is_short_and_says_one_thing_to_send():
-    r = reading.route([], "browser", PHONE)
+    r = reading.route([], "paste", PHONE)
     assert len(r["say"].split()) <= place.SHORT_WORDS
     assert r["say"].count("screenshots") == 1
     assert "paste the" not in r["say"].lower()
 
 
-def test_reading_in_their_own_browser_never_promises_a_pane_keeps_the_sign_in():
+def test_the_route_never_promises_a_pane_keeps_the_sign_in():
+    """Since 4.3 the page reads, never a chat, so the route names no browser of the chat's;
+    whether they are signed in is the page's to find, and the route says nothing of it."""
     local = {"CLAUDECODE": "1"}
-    chrome = reading.route(["chrome"], "browser", local, signed_in=False)["say"]
-    assert "your own Chrome" in chrome and "pane" not in chrome
-    # Whether they are signed in is read off the first page; the route says nothing of it.
-    pane = reading.route(["browser"], "browser", local, signed_in=False)["say"]
-    assert "sign in" not in pane.lower()
+    for tools in (["chrome"], ["browser"], []):
+        said = reading.route(tools, "browser", local, signed_in=False)["say"]
+        assert "Chrome" not in said and "pane" not in said and "sign in" not in said.lower()
     assert "Keep cookies" in reading.signed_out_say("pane")
     assert "pane" not in reading.signed_out_say("chrome")

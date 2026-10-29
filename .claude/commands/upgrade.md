@@ -4,7 +4,7 @@ Works through the profile upgrades Claude can do alone (`tools/profile_upgrades.
 `needs: "nobody"`), most urgent first, and hands back the questions only the person can
 answer. Nobody has to know which upgrades exist or ask for them: RUNBOOK.md, "Start of
 a session", step 5, starts this in a background agent whenever the sync lists one, and
-every scheduled run (the twice-weekly brief, and the optional round) runs it first
+every scheduled run (the morning brief, and the optional round) runs it first
 (`automation/prompts/_common.md` step 2). The person's own request never
 waits for it.
 

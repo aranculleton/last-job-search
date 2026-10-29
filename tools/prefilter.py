@@ -158,11 +158,6 @@ def _abroad_in_remote(loc: str, low: str) -> tuple[str, str] | None:
     return (m.group(0), "region") if m else None
 
 
-def _region_takes_in_home(loc: str) -> tuple:
-    """places.region_takes_in_home, the one reading the text screen's residence cut uses."""
-    return _places.region_takes_in_home(loc)
-
-
 def location_verdict(loc: str, title: str = "") -> tuple[str, str]:
     low = _MODE.sub(" ", (loc or "").lower()).strip()
     low = re.sub(r"\s+", " ", low).strip(" -,")

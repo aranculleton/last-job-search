@@ -9,8 +9,8 @@ someone and writing to them: read them, then write.
 
 Where a reading comes from, best first:
 
-  browser  their LinkedIn profile, read in the person's own signed-in browser
-           (Claude in Chrome, or the desktop app's browser pane), when
+  browser  their LinkedIn profile, read by the person's own page in the Claude desktop
+           app's browser (never by a chat since 4.3), when
            profile/networking.py PROFILE_READS is "browser". Only the people a
            /network run surfaced, best first, one page at a time at a person's
            pace, until the run has as many good fits as it can send (see
@@ -85,7 +85,8 @@ Exit codes, one meaning each, so `read; verdict` can be chained (EXIT):
     11 the batch of notes is too alike to send
     12 done: nobody left to read on today's short list (`next`)
     13 new day: a run went past midnight; today needs its own list
-    14 scroll: the page's text has no Experience yet; scroll it to the very end, read it again
+    14 scroll: the page's text has no Experience yet (a read without its Experience page; the
+       page's reads open that page itself and never meet it)
 """
 
 from __future__ import annotations
@@ -129,6 +130,18 @@ def reads_setting(net) -> str:
 
 
 PROFILE_READS = reads_setting(_NET)
+
+
+def reads_now() -> str:
+    """PROFILE_READS as the file has it now. The page changes it (Settings, or the bin's
+    "Never") and the same run must see the change; PROFILE_READS is the value at import."""
+    try:
+        import profile_set
+        v = profile_set.get("networking.py", "PROFILE_READS")
+    except Exception:  # noqa: BLE001  no profile, or no networking settings: as imported
+        return PROFILE_READS
+    got = "" if v is profile_set.MISSING else str(v or "").strip().lower()
+    return got if got in READS_SETTINGS else "browser"
 # How a browser read behaves: one page at a time, as fast as the browser loads it. It is
 # the person's own signed-in account loading these pages; LinkedIn publishes no thresholds
 # and its terms forbid automated access at any pace, so nothing here makes a browser read
@@ -292,7 +305,8 @@ def _has(name: str, text: str) -> bool:
 # ----------------------------------------------------------------- the page
 
 _SECTIONS = {
-    "about": "about", "summary": "about", "activity": "activity", "featured": "featured",
+    "about": "about", "summary": "about", "activity": "activity", "all activity": "activity",
+    "featured": "featured",
     "experience": "experience", "education": "education", "publications": "publications",
     "licenses & certifications": "other", "licenses and certifications": "other",
     "certifications": "other", "volunteering": "other", "volunteer experience": "other",
@@ -346,13 +360,28 @@ def _age_date(n: int, unit: str, today: datetime.date) -> str:
     return (today - datetime.timedelta(days=days)).isoformat()
 
 
+# The header Claude's browser puts above each page's text (get_page_text): its title, its
+# address, which element was read, then a rule. The page joins a profile's three pages
+# (the profile, its Experience and its Education) and each carries one; read as part of the
+# profile, the address became their headline (seen live, 2026-10-29).
+_TOOL_HEAD = (re.compile(r"^Title: .+$"), re.compile(r"^URL: https?://\S+$"),
+              re.compile(r"^Source element: <[a-z][a-z0-9]*>$"), re.compile(r"^-{3,}$"))
+
+
 def _clean_lines(text: str) -> list:
     out = []
     for raw in untrusted.strip_markers(str(text or "")).replace("\r", "").split("\n"):
         line = " ".join(raw.split())
         if line:
             out.append(line)
-    return out
+    i, kept = 0, []
+    while i < len(out):
+        if all(i + k < len(out) and rx.match(out[i + k]) for k, rx in enumerate(_TOOL_HEAD)):
+            i += len(_TOOL_HEAD)
+            continue
+        kept.append(out[i])
+        i += 1
+    return kept
 
 
 def _sections(lines: list) -> tuple[list, dict, list]:
@@ -1266,29 +1295,15 @@ def signin_steps() -> list:
 
 
 def new_computer(tools=(), today: datetime.date | None = None) -> list:
-    """The first run on a computer, and the start of each run there after: LinkedIn signed
-    in, then its download, each step only while it is still to do. One numbered line a
-    step, for Claude to do in order, unprompted. `tools` is this chat's browser tools
-    (browser, chrome, enable); with none, the download is asked of the person once."""
+    """The start of each run in a chat on the person's computer (one they already had): the
+    LinkedIn download, while it is still to do. One numbered line a step, for Claude to do in
+    order, unprompted. Nothing about signing in: since 4.3 no chat reads LinkedIn, whatever
+    browser it has (route); their page does, and asks them to sign in itself. `tools` is kept
+    for callers that pass it."""
     import export
-    have = [t for t in (str(x).strip().lower() for x in tools or ()) if t]
-    browser = next((t for t in have if t in ("browser", "enable", "chrome")), "")
-    steps = []
-    if browser and PROFILE_READS == "browser" and not signed_in_today(today) \
-            and not declined_sign_in(today):
-        which = "chrome" if browser == "chrome" else "pane"
-        steps.append(
-            ("call enable__mcp__remote-devices__Claude_Browser, then " if browser == "enable"
-             else "") + "open https://www.linkedin.com/feed/ in the browser (its skill first), "
-            "take the page's text and run `python3 tools/network/reading.py signin --page - "
-            f"--browser {which}`: signed-in, carry on; signed-out, say what it prints, as it "
-            "is, and wait for done, then load the page and run it again")
-    got = export.status(today, have)
-    if got["state"] != "fresh":
-        steps.append(f"the LinkedIn download, {got['line']}: {got['do']}")
-    if not browser:
-        steps.append("no browser in this chat: profiles are read from what the person pastes "
-                     "or from what a search found")
+    # Asked of the person, never fetched in this chat's browser: no chat opens LinkedIn.
+    got = export.status(today, ())
+    steps = [f"the LinkedIn download, {got['line']}: {got['do']}"] if got["state"] != "fresh" else []
     return [f"{i}. {s}" for i, s in enumerate(steps, 1)] or ["nothing to do: carry on"]
 
 
@@ -1634,85 +1649,35 @@ def what_to_send(where: str) -> str:
 
 
 def route(tools=(), consent: str | None = None, env=None, signed_in: bool | None = None) -> dict:
-    """How this session reads a profile, chosen for the person, never asked of them.
+    """How a profile is read: by the person's own page, in the Claude desktop app, never by a
+    chat, chosen for the person and never asked of them.
 
-    `tools` is what the session itself has: "browser" (the desktop app's built-in
-    browser pane, as mcp__Claude_Browser__* or mcp__remote-devices__Claude_Browser__*),
-    "chrome" (Claude in Chrome with a Chrome window connected), "chrome-off" (Claude
-    in Chrome installed, but list_connected_browsers returned none), "enable"
-    (enable__mcp__remote-devices__Claude_Browser, which turns the pane on for the
-    conversation). Returns the route, which browser, whether it can be used now,
-    what Claude does, and the one sentence the person is told ("" when nothing needs
-    saying). A person is never told to press a key or find a setting.
+    Since 4.3 no chat reads LinkedIn, whatever browser it has (the maintainer, 2026-10-29: the
+    cloud does nearly everything, and the computer only the reading that needs their sign-in,
+    which the page does). A chat that read profiles put every page into its own context, the
+    costliest part of a run; the page reads them for nothing and hands each to the engine as a
+    reading.done action (app_actions._reading_done). `tools`, `env` and `signed_in` are kept
+    for callers that pass them; nothing depends on them now.
     """
-    have = {str(t).lower() for t in tools}
-    consent = (consent or PROFILE_READS).lower()
-    where = surface(env)
-    signed_in = signed_in_today() if signed_in is None else signed_in
-    hand = what_to_send(where)
-    pane = ("the browser pane in the Claude desktop app" if where == "local"
-            else "the browser pane in the Claude desktop app on your computer, while the app is open")
-    # Whether LinkedIn is signed in is read off the first page (`signed_in`), and only then
-    # is the person asked to sign in (`signed_out_say`): nothing is said of it before.
+    consent = (consent or reads_now()).lower()
+    hand = what_to_send(surface(env))
     if consent == "off":
         return {"route": "public", "browser": "", "usable": False, "do": "public work only",
                 "say": "", "signin": False}
     if consent == "browser":
-        if "browser" in have or "chrome" in have:
-            label = pane if "browser" in have else "your own Chrome, through Claude in Chrome"
-            return {"route": "browser", "browser": label, "usable": True,
-                    "do": ("`reading.py signin` first when it says so, then read each profile "
-                           "in " + label + ", nothing clicked"),
-                    "say": f"I'll read the LinkedIn profiles of the people worth writing to, in {label}.",
-                    "signin": not signed_in}
-        if "enable" in have:
-            return {"route": "enable", "browser": pane, "usable": True,
-                    "do": "call enable__mcp__remote-devices__Claude_Browser, then `reading.py "
-                          "signin` when it says so, and read each profile, nothing clicked",
-                    "say": f"I'll read the LinkedIn profiles of the people worth writing to, in {pane}.",
-                    "signin": not signed_in}
-        import place as _place
-        if _place.page_reads():
-            # The page, open in the Claude desktop app, reads LinkedIn as the person and has
-            # lately: the profiles are queued for it, never a move to a computer chat.
-            return {"route": "page", "browser": "your page in the Claude desktop app",
-                    "usable": True,
-                    "do": ("queue each profile for the page: `reading.py queue-page <contact>"
-                           "...`; it reads them while it is open in the desktop app, and each "
-                           "reading arrives as a reading.done action that `app.py apply` logs "
-                           "the way `reading.py read` does. Write from what is read already "
-                           "meanwhile; never fetch linkedin.com here"),
-                    "say": "Your page reads their profiles when it is open in the Claude "
-                           "desktop app.",
-                    "signin": False}
         import place
-        if "chrome-off" in have:
-            say = ("Your setting reads profiles in your own browser, but Claude in Chrome is "
-                   "installed and no Chrome window is connected to it. For now, for the one or "
-                   f"two who matter most, send {hand} and I'll do the rest.")
-        else:
-            # The same words the place check says once in a chat (tools/place.py): the
-            # choice is offered, never made for them, and the setting is not changed.
-            owner, name = place.repo()
-            # At a computer (a chat on it, or a cloud chat in its desktop app) a read was
-            # asked for here, so the full steps. Anywhere else (a phone, the web, which may
-            # be a phone too) the short words and one line of what to send: a phone was
-            # given a hundred words of computer steps and "paste the profile" beside a
-            # "do" line that asked for screenshots (2026-10-25).
-            detail = where in ("local", "desktop-cloud")
-            told = place.check(where, "browser", [], True, (), owner, name, detail=detail)
-            if told and detail:
-                say = told[0]
-            elif told:
-                say = (told[0].replace(place.SHORT_PASTE, "").strip()
-                       + f" Or send {hand}, for the one or two who matter most.")
-            else:
-                say = f"For the one or two who matter most, send {hand} and I'll do the rest."
-        return {"route": "hand", "browser": "", "usable": False,
-                "do": f"make the whole list from search results and their connections "
-                      f"(sources.ladder); offer {hand} for the best {HAND_TOP} only, never "
-                      "everyone, or carry on in the chat they move to",
-                "say": say, "signin": False}
+        return {"route": "page", "browser": "your page in the Claude desktop app",
+                "usable": True,
+                "do": ("put the best on today's short list (`reading.py shortlist`), queue them "
+                       "for the page (`reading.py queue-page <contact>...`) and save each note "
+                       "from what is known now with `reading.py draft <contact> - "
+                       "--wait-for-read`. The page reads them when it is open in the Claude "
+                       "desktop app, and the notes are rewritten on what it read in one piece "
+                       "of work. Never open linkedin.com in this chat, whatever browser it has"),
+                "say": "" if place.page_reads() else
+                       "Your page reads their profiles when you open it in the Claude app on "
+                       "your computer.",
+                "signin": False}
     return {"route": "hand", "browser": "", "usable": False,
             "do": f"make the whole list from search results and their connections "
                   f"(sources.ladder); offer {hand} for the best {HAND_TOP} only, never everyone",
@@ -1852,13 +1817,6 @@ def _loads(pages: bool = True) -> list:
         if isinstance(rec, dict) and rec.get("at") and (pages or rec.get("kind") == "profile"):
             keep(str(rec.get("kind") or "profile"), rec)
     return sorted(out, key=lambda x: x["when"])
-
-
-def _browser_reads(pages: bool = True) -> list:
-    """Every browser page load on file, oldest first: [(when, the gap it asked for, a
-    break?)]. A profile read and a one-page read (`page_read`) both count: the pace is
-    about page loads, whatever the page held. `pages=False` is profiles alone."""
-    return [(x["when"], x["gap"], x["brk"]) for x in _loads(pages)]
 
 
 def _load(src: dict):
@@ -2025,11 +1983,6 @@ def move_runtime() -> list:
         os.remove(p)
         moved.append("/".join(rel))          # a repo path, named the same on every computer
     return moved
-
-
-def last_browser_read() -> datetime.datetime | None:
-    reads = _browser_reads()
-    return reads[-1][0] if reads else None
 
 
 def _stop_today(today: datetime.date | None = None) -> dict:
@@ -2375,19 +2328,6 @@ def _meanwhile_lines(contacts=None) -> list:
     return (["meanwhile, while the next page waits:"]
             + [f"  {cid}: {what}" for cid, what in got[:8]]
             + ([f"  and {len(got) - 8} more"] if len(got) > 8 else []))
-
-
-def reads_today(today: datetime.date | None = None) -> int:
-    day = (today or datetime.date.today()).isoformat()
-    n = 0
-    for f in glob.glob(os.path.join(glob.escape(person.state(*DIR)), "*", "reading.json")):
-        try:
-            with open(f, encoding="utf-8") as fh:
-                srcs = json.load(fh).get("sources", [])
-        except (OSError, ValueError):
-            continue
-        n += sum(1 for s in srcs if s.get("kind") == "browser" and s.get("date") == day)
-    return n
 
 
 def _shortlist_file(today: datetime.date) -> list:
@@ -5375,6 +5315,12 @@ def main(argv: list | None = None) -> int:
             print(line)
         return EXIT["ok"]
     if a.cmd == "queue-page":
+        if reads_now() != "browser":
+            # The person chose to paste profiles (the page's bin, or Settings): nothing is
+            # queued for Claude's browser, on any device.
+            print("reading: profile reads are set to paste, so nothing is queued for the page. "
+                  "Ask for a paste of the best few, as the networking skill says")
+            return EXIT["error"]
         try:
             got = queue_for_page(a.contact_ids, a.mode)
         except ValueError as e:

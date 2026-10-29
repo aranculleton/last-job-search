@@ -1193,7 +1193,7 @@
    "rule": "The same, said where every chat reads it.",
    "bold": null,
    "home": "CLAUDE.md",
-   "anchor": "never onto master without CI green (in a person's copy, `./tools/ci_local.sh --quick`)",
+   "anchor": "never onto master without CI green (in a person's copy, `./tools/ci_local.sh --quick`, never the full\nrun)",
    "needed_by": [
     "every chat"
    ]
@@ -1487,10 +1487,10 @@
   {
    "id": "brief-twice",
    "was": "Automation: what runs without anyone asking",
-   "rule": "The default is one task, a brief twice a week.",
-   "bold": "a brief twice a week",
+   "rule": "The default is one task, a brief each morning, which the person turns on.",
+   "bold": "a brief each morning",
    "home": "automation/README.md",
-   "anchor": "**a brief, twice a week**",
+   "anchor": "**a brief each morning**",
    "needed_by": [
     "brief set-up"
    ]
@@ -1509,13 +1509,13 @@
   {
    "id": "setups",
    "was": "Automation: what runs without anyone asking",
-   "rule": "Two set-ups work: (a) one chat per task, (b) a routine with the repo ticked.",
+   "rule": "Two set-ups work: (a) in the chat that answers the page, (b) a routine with the repo ticked.",
    "bold": [
     "(a)",
     "(b)"
    ],
    "home": "automation/README.md",
-   "anchor": "### (a) One chat per briefing",
+   "anchor": "### (a) In the chat that answers your page",
    "needed_by": [
     "brief set-up"
    ]
@@ -1589,10 +1589,10 @@
   {
    "id": "set-up-my-brief",
    "was": "Automation: what runs without anyone asking",
-   "rule": "Set up my brief is set-up (a), and /setup does it at its end, asking nothing.",
-   "bold": "\"Set up my brief\" is set-up (a) in `automation/README.md`, and `/setup` does it at its end, asking nothing.",
+   "rule": "Set up my brief is set-up (a), asking nothing: the bell's work or the words in a chat; /setup never makes it.",
+   "bold": "\"Set up my brief\" is set-up (a), asking nothing",
    "home": "automation/README.md",
-   "anchor": "**\"Set up my brief\" is set-up (a), and `/setup` does it at its end, asking nothing.**",
+   "anchor": "**\"Set up my brief\" is set-up (a), asking nothing**",
    "needed_by": [
     "brief set-up",
     "/setup"
@@ -1624,10 +1624,10 @@
   {
    "id": "cloud-calls",
    "was": "Automation: what runs without anyone asking",
-   "rule": "In a cloud chat: create_session, create_trigger bound to it, a one-off first brief, never fire_trigger.",
+   "rule": "In a cloud chat: create_trigger bound to this chat, a one-off first brief, never fire_trigger; a chat is made only where this chat's id is unknown.",
    "bold": "In a cloud chat",
    "home": "automation/README.md",
-   "anchor": "`create_trigger` bound to that chat (`persistent_session_id`)",
+   "anchor": "bound to this chat (`persistent_session_id`, this chat's own id)",
    "needed_by": [
     "brief set-up",
     "/setup"
@@ -1636,10 +1636,10 @@
   {
    "id": "computer-brief",
    "was": "Automation: what runs without anyone asking",
-   "rule": "On their computer: with RemoteTrigger, make it as (b); without, give the steps once.",
+   "rule": "On their computer: point them at the bell, which runs the brief in the cloud; never a desktop task or a routine made from there.",
    "bold": "On their computer",
    "home": "automation/README.md",
-   "anchor": "with the `RemoteTrigger` tool, make it yourself as (b)",
+   "anchor": "turn it on from the bell\n  on their Brief",
    "needed_by": [
     "brief set-up",
     "/setup"
@@ -2454,10 +2454,10 @@
   {
    "id": "new-computer",
    "was": "Networking and Outreach",
-   "rule": "A chat on the person's computer starts with On a new computer.",
+   "rule": "A chat on the person's computer starts with On a new computer. Since 4.3 no chat reads LinkedIn: the person's page does, in the Claude desktop app.",
    "bold": "A chat on the person's computer",
    "home": ".claude/skills/networking/SKILL.md",
-   "anchor": "**A chat on the person's computer** starts with \"On a new computer\"",
+   "anchor": "Profiles are read by the person's own page, in the Claude desktop app's browser, never by a chat",
    "needed_by": [
     "/network",
     "/reply",
@@ -3600,6 +3600,18 @@
    "anchor": "Never the whole list.",
    "needed_by": [
     "/apply"
+   ]
+  },
+  {
+   "id": "landing-silent",
+   "was": "Master is the trunk. Finish on it, start from it.",
+   "rule": "In a person's copy a pull request is opened and merged in the same turn and never watched, timed or reported (the maintainer, 2026-10-29); the copy's rule wins over a chat's own instructions about pull requests.",
+   "bold": "Landing is silent, and it is done in the same turn.",
+   "home": "CLAUDE.md",
+   "anchor": "never subscribe to it, never schedule a check-in for it",
+   "core_bold": "Landing is silent, and it is done in the same turn.",
+   "needed_by": [
+    "every chat"
    ]
   }
  ]

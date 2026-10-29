@@ -20,6 +20,247 @@ make sense to somebody whose repo just received it.
 
 ## [Unreleased]
 
+## [4.3.0] - 2026-10-29
+
+### Added
+
+- **A Brief page, your home screen.** Your day at a glance in a few panels that fit one
+  laptop screen: what is booked today (with its prep a tap away), the brief's next three
+  steps, who is waiting on you by name, the best new jobs with their scores, news that
+  matters to your search with its sources, and your last 30 days in numbers with a small
+  week-by-week chart. Every line opens what it is about. A short tip sits underneath, and
+  Tweak the brief is at the top. The brief's own text is formatted properly: bold stays bold,
+  sources are links, and file names and commands never show.
+- **Your profile is a page of its own**, the first thing in Settings: your experience,
+  skills, education, certificates and resume, each changed where it shows.
+- **Names open the person.** Tap a name in To do, a message or Contacts and see everything
+  about them: what was said, what is owed, where they work.
+- **A bin on every person**, with the usual choices: don't contact them, not interested in
+  that employer any more, already in touch another way, or hide it for a week.
+- **More job filters, that work**: how well it fits you, when it was posted, closing date,
+  work style, pay, someone there you know, where to apply, and whether it is drafted. The
+  filter panel is wider and nothing in it is squeezed.
+- **Add a job** asks who sent it with a name you type (your contacts are suggested as you
+  type, and anyone else is taken as written), and says "checks how well it fits you"
+  instead of "scores it".
+- A **full screen** button on a computer, and the app is named after you ("Morgan's job
+  search").
+- **A short note every morning, on from the start.** What is due today, and news that
+  matters to your search, on your Brief: set-up turns it on, and a copy set up before gets it
+  by itself (Profile upgrade: brief-daily). The bell on your Brief changes it: every day by
+  default; weekdays, other days, another time or off from the same
+  bell or from Settings, which open the same choices. It runs in the chat that already answers
+  your page, so no chat is made for it. Where your page is answered from your computer, the
+  brief still comes with the computer off: the same tap opens Claude's helper in the cloud,
+  and you press Send there once.
+- **Big jobs run side by side.** A job search, a networking run and an interview prep run at
+  the same time in Claude's one helper (three at most, an urgent one more), and replies,
+  tweaks and Chat never wait behind them. No new chat is made for any of it.
+- **Claude's work says where each thing stands.** What is running, and what waits its turn
+  once three big jobs are running ("Next", "Starts as soon as one of the 3 jobs running now is
+  done"); the pill at the top names what is running ("Finding jobs · 1 waiting"); a running
+  bar moves and waiting work breathes.
+- **Your page reads LinkedIn profiles itself, in the Claude app on your computer.** Open it
+  there once: it asks to use Claude's browser, checks you are signed in to LinkedIn, and from
+  then on reads each person networking picks (their profile, then their Experience, Education
+  and recent posts) by itself, at no cost. When it is done, one tap, Write my notes, has Claude
+  rewrite every note from what it read, in one go. Signed out, it says so, opens LinkedIn for
+  you, and checks again when you come back; LinkedIn's own check stops reading until the next
+  day. Rather not? "I paste them" under LinkedIn in Settings, or the bin's Never, holds on
+  every device; on a phone, Send screenshots instead.
+- **Updates show like an app's**: a moving line under the header while the newest version is
+  on its way, and the page refreshes by itself when it is ready.
+- **Old chats tidy themselves away.** A copy that updated through several versions could carry
+  a chat for the brief, a job round chat, helpers since replaced, and chats made for one long
+  job. Once a day the chat that answers your page archives the app's own chats it no longer
+  uses (kept, read-only, never deleted, and brought back if you ask), and moves an older brief
+  into itself on the same days and time. Your own chats, a chat a schedule still uses, a live
+  interview's chat and anything not yet saved are never touched.
+- **Your helper says what it is for** when it starts, under a short name ("Job search
+  helper"), and Settings says it too; if it is ever closed, your page offers a new one.
+- A new chat says once, in one line, that another chat looks after your page, and never again.
+- **One tap where a chat was needed**: bring back the old chats Claude tidied away, and pin
+  your page to your sidebar, each from a button in Settings.
+
+### Changed
+
+- **Seven places instead of eight.** Brief, To do, Jobs, Contacts and Chat, then Interviews
+  and Settings. Jobs holds a role's whole life (Found, Drafts, Applied); Contacts holds the
+  people and the messages to send them; your numbers moved to the Brief.
+- **To do starts with five.** What needs you today comes first, five at a time, with the rest
+  of today behind "Show N more" and anything not due yet behind "Coming up". The count at the
+  top, the badge and the cards now agree (one card, one thing). Each card says where it lives
+  ("Open in Jobs", "Open in Contacts") in its top line and opens that exact job or person. A
+  question about a note to someone is a message, not an application. The tour offer is one
+  line under your next interview.
+- **Contacts opens on who needs you**, with everyone else one tap below, never behind a
+  filter left on. A follow-up more than two weeks late is a conversation gone quiet, and a
+  connection request nobody has accepted is nothing you can act on: neither counts as needing
+  you. The count at the top matches the list.
+- **Settings is what you would change**: you, your search, your brief, the look, LinkedIn,
+  help and your data. How the app runs (where long jobs run, updates, suggestions) is folded
+  at the end; the usual settings suit nearly everyone.
+- **Nothing asks where Claude should work.** Work from your page goes to the one chat that
+  answers it, cloud or computer, so the "Where long tasks run" setting is gone (it could send
+  work to a chat that was not listening). Setup no longer asks whether you will use a computer
+  too, since the answer changed nothing; Settings no longer suggests a second helper when a
+  chat in the cloud already answers your page; and an interview no longer offers a separate
+  chat for its employer. Its prep stays on the Interviews screen. A campaign chat started
+  before this keeps working.
+- **The Brief's next steps name the page's own buttons** ("Find new jobs: Jobs, Find jobs"),
+  never a command to type, and tips point at Tweak, the bin and Add a job.
+- **Windows is checked on every release, and every week**: the set-up on a Windows computer
+  runs on each release before it goes out and once a week on its own, free, and never on an
+  ordinary change. The page's own browser tests now run on every change too, and every suite
+  runs in parallel workers, so a release's checks take minutes rather than an hour.
+- **Every release is checked where people actually open the app**: the page in Safari's
+  engine (the Claude app on an iPhone), Firefox, a Mac's and Windows' type, a device set to
+  French or German and the far time zones; the rest with the clock a month, three months and
+  over a year on, in the far time zones, from a folder with spaces and accents, and on the
+  newest Python. Two checks, free, on releases and weekly only (`tools/everywhere.sh`).
+- **The README and Start here speak in the page's buttons**, with a walk through the page
+  and the Brief on its own; Chat is for anything else.
+- **Size**: three sizes. Standard is what Small was, and is the default; Larger is what
+  Standard was; Smaller is one step smaller again. The old, oversized Larger is gone. **Phones too**: the page is drawn smaller on a phone, so a screen holds two
+  or three jobs instead of one, and every button keeps a full-size tap area while being drawn
+  the size its words need.
+- **Jobs read top down by their number** (75 or more is a strong fit; hover a number to see
+  what it means). The number is a small coloured badge beside the title, so no line of a card
+  is pushed in, and "Still open" no longer carries when it was checked (hover it to see).
+- **Lists look like lists.** Each job, person, draft, message and To do card is its own soft
+  rounded row, a small gap from the next; only a row's main action is filled, the rest are
+  quiet. A state is a small tinted pill ("Replied: your
+  turn", "Drafting"). A job's face says what decides a look (pay and a near closing date);
+  whether its link was checked lately is under More.
+- **No coloured bars down the side of cards.** What needs attention is said on its own line
+  and in the card's state pill.
+- **Copy sits in the corner of each message**, as on a code block, and its words fill the
+  bubble; "I changed it first" shows it opens.
+- Links that are buttons (See the posting, Open in Jobs, Show them) wear a quiet grey
+  underline; the rose is for links inside sentences.
+- Contacts' heading is two lines: what needs you, with Got a message? under it and Find
+  people at its right.
+- On a computer each screen sits in the middle of the space between the menu and Claude's
+  work.
+- Interview prep, and any full view, fills a phone's screen.
+- Searching Contacts finds everyone, including the people folded below.
+- **One bin, on every card, and no x anywhere.** Jobs, drafts, messages, people,
+  interviews, applications and To do cards all put things away the same way. Where there is
+  one answer it is done at once with Undo; where there are several, a short sheet asks: a
+  draft (won't apply, already applied, closed), a note (set it aside, or the person's
+  choices), an interview or an application (they said no, I withdrew, stopped waiting), a To
+  do card about one person (their choices, or hide it for a week).
+- A card shows one "?" at most; the line under a checked draft just says Checked, with what
+  was checked under More.
+- **Each choice in a bin does what it says.** "Not interested in <employer> any more" also
+  closes everyone there you have not written to and turns the employer down for future
+  searches; "Already in touch another way" keeps them as a route and sets their drafted note
+  aside (kept, not deleted); a job set aside for its pay, its place or its field teaches the
+  next search about roles like it. Undo puts every part back.
+- Drafts and messages to send open on the first five, the rest one tap below.
+- On a phone nothing needs two taps any more, and a cost gauge says its words when tapped.
+- The finish-your-profile card hides for a week like every other card, and the LinkedIn
+  reading card's No thanks is in sight, with Check it works once LinkedIn is open.
+- Each person's bin sits in the corner of their row, as a job's does.
+- A "?" always follows the last word of its line, on a phone too, and no screen shows more
+  than three of them before you scroll.
+- **The light look is as light as Claude's own.** White cards on a near-white page.
+- **Draft cards are calmer**: one status line, and "your files are not on this page yet"
+  said once for all of them, with one button that adds them all.
+- **Interview prep reads like a document**: headings, lists, code and tables as they are, an
+  "At a glance" card first, and what you sent and the stages beside it on a computer.
+- The "?" beside a heading is small and sits in its line.
+- The page opens on the Brief (To do while you are setting up), never on Settings.
+- **"Set me up" just works.** Give Claude the app's link and say "set me up": it makes your
+  private copy, fills it if it is empty and opens your page, with no choices to make and no
+  git words.
+
+### Fixed
+
+- On an iPhone (and in Safari) the panel for tweaking a resume or letter opened with nothing
+  in it, two pixels tall. It now opens at its full size.
+- The filter panel's footer read "Show 13 people null" whenever no filter was on.
+- On a laptop in Chrome or Firefox the filter panel opened a little above and left of its
+  button, partly over it. It opens just under the button in every browser.
+- Two research writers at the same moment could lose one write when the clock had been
+  moved: a lock read in the instant before its time was written was taken for a dead one.
+- Closing the tweak panel or a detail view after the page had updated left the keyboard
+  focus at the top of the page. It goes back to the button that opened it.
+- A LinkedIn download with a file over 20 MB (a busy inbox's messages) was refused with "ask
+  in Chat", which led nowhere. It now goes in parts and is joined again.
+- In the cloud, the connections from your LinkedIn download were gone by the next chat, so
+  finding people through them worked once. They are kept in your copy now, and a download
+  that was lost is asked for again.
+- A profile read that could never be kept was read again every time the page opened; a
+  sign-in page now stays waiting and anything else is let go. The browser's own header was
+  read as the person's headline.
+- The card asking anyone with a computer chat to sign in to LinkedIn never went away.
+
+- **Dates and amounts are written in English on any device**: a phone or computer set to
+  French or German put "29 oct." or "60.000" inside the page's English sentences.
+- **A message card no longer pushes a phone sideways at large text**: its top line wraps.
+- **Saving from the page works on every copy.** What a chat read back from your page never
+  carried versions, so its writes to anything already there were refused, and ids with a "~"
+  came back with an "@". Every record now carries its own version, the busiest live under
+  new names, and a chat's batch of writes stays under the size the tool accepts.
+- Contact addresses are kept in a few records, and only the ones that changed are written,
+  instead of every one of hundreds on each refresh.
+- The newest search is the one that ran last, not the one with the highest number, and
+  "posted N days ago" counts on from the day of the search.
+- A line you set as your own (how you say you moved) is never refused by the wider rule.
+- On the maintainer's own copy, a word in the app's own unchanged files (a company in a
+  market table that shares a contact's name) no longer fails the leak scan.
+- Short answers to profile questions are written straight in, with no chat started.
+- Chat messages no longer show twice; the work pill no longer sticks on "1 done".
+- A broken line in the page's styles, which dropped a rule on small screens, is gone.
+- "Skip this one" on a reply was refused (the person had been written to); a reply's bin now
+  offers only what can be done.
+- The footer no longer links to the page you are on.
+- Turning the brief on when your page is answered from your computer queued a brief no chat
+  could take; it goes to the cloud now.
+- Applications that went quiet were closed only by the brief, which is now off until you turn
+  it on; the chat that answers your page closes them whether or not a brief runs.
+- Each step of the brief's saving is one command, never a chain the safety check refuses.
+- Research asked for from the page (an employer's own job board, setup's research) is done the
+  way setup does it, not by the researcher for cover-letter facts.
+
+### Cheaper to run
+
+- **No chat reads LinkedIn any more**, whatever browser it has: a chat reading profiles put
+  every page into its own context, the costliest part of networking. Your page reads them for
+  nothing, and a batch of reads is one rewrite, one wake.
+
+- **A chat kept open for weeks costs far less per tap.** Every chat in your copy now squeezes
+  its history at 200,000 tokens instead of letting it grow to a 1M model's million, so the
+  chat that answers your page and writes your brief no longer re-reads weeks of history on
+  every tap. Nothing to set up.
+- **The app never starts a chat by itself, and needs only one.** The page's separate helper
+  chat started by the page is gone: it lacked
+  the page's tools, made a spare page, and each lapse started another. The page wakes the
+  chat that answers it, and only that (which also ends the connector warning). Setting up
+  Claude's helper in Settings opens that same chat, which knows what to do.
+- Saving in your copy never runs the app's own tests, opens no pull request to watch and
+  sets no timer; it is done quietly in the same turn.
+- Updates that set themselves up run as one background helper on a lighter model.
+- Drafting skips the employer research when it was done in the last few weeks, and writes
+  the outreach note inside the final check instead of a separate step. Interview prep reads
+  saved research before searching again, and job-site searches run as plain commands.
+- The page is published smaller (no comments or indentation in its code).
+- Adding every missing file is one piece of work, not one per application.
+- Long work on another model runs as a helper inside the chat that answers your page, never
+  in a chat of its own, and the day's tidy-up is done once, by the brief or the first tap.
+
+### Removed
+
+- **No chat on your computer is set up or offered**, and the steps for one are gone from
+  setup, Start here, the README and every message: everything runs in the cloud, and your page
+  does the one thing that needs your LinkedIn sign-in. A chat on a computer someone already
+  uses keeps working; it asks only for the LinkedIn download.
+
+- **Names your own checks might have used were retired**: `app_listen.setup_done`, `ats_boards.workday_paths`, `interview_pack.campaign_offer`, `reading.last_browser_read`, `reading.reads_today`, `page_db.where` (now `page_db.can_take`), `place.CLOUD_LINK_NOT`, `place.QUESTION`, `place.TRADE_OFF`, `place.TWO_CHATS`, `safe_name.short_hash` and `scrape_wide.PortalDown`. Nothing in the app used them any more: setup asks nobody where they will work, no separate chat is offered for an interview, and work goes to the chat that answers your page.
+- The "Where long tasks run" setting (`work_either`), and unused code elsewhere.
+- **A name your own checks might have used was retired**: `app_listen.HELPER_PROMPT`. The page never starts a helper chat of its own any more; your helper is the chat you start from Settings, and it says what it is for in its first message.
+
 ## [4.2.0] - 2026-10-29
 
 ### Added

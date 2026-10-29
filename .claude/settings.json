@@ -2,7 +2,8 @@
   "env": {
     "PYTHONUTF8": "1",
     "GIT_TERMINAL_PROMPT": "0",
-    "GCM_INTERACTIVE": "never"
+    "GCM_INTERACTIVE": "never",
+    "CLAUDE_CODE_AUTO_COMPACT_WINDOW": "200000"
   },
   "permissions": {
     "allow": [

@@ -33,8 +33,78 @@ _pages = tempfile.mkdtemp(prefix="ljs_pages_")
 os.environ["LJS_RESEARCH_PAGES"] = _pages
 atexit.register(shutil.rmtree, _pages, ignore_errors=True)
 
+# The networking limits are read from the profile when their module is first imported, and
+# the app reaches that module by two names (`schema`, and `network.schema` from the page's
+# model). Both are imported here, under the example, so a test that points LJS_PROFILE at a
+# free plan for a moment cannot fix the limits for every test after it in the same worker
+# (2026-10-29: a 209-character follow-up was checked against 180 on one parallel run and
+# 280 on another). A test that changes the plan reloads both (reload_limits below).
+import sys  # noqa: E402
+for _p in (os.path.join(ROOT, "tools", "network"), os.path.join(ROOT, "tools")):
+    if _p not in sys.path:
+        sys.path.insert(0, _p)
+import schema as _schema  # noqa: E402,F401
+from network import schema as _network_schema  # noqa: E402,F401
+
+
+def _reload_limits():
+    """Re-read the networking limits under both of the module's names, from whatever profile
+    LJS_PROFILE now names: after a test switches the plan, and again when it switches back."""
+    import importlib
+    for name in ("schema", "network.schema"):
+        if name in sys.modules:
+            importlib.reload(sys.modules[name])
+    return sys.modules["schema"]
+
 
 import pytest  # noqa: E402
+
+
+# Speed limits are measured on a quiet machine. In parallel workers (pytest-xdist) every
+# worker shares the runner's cores, and a build that takes 1.5s alone read 2.6s of its own
+# processor time on Python 3.9 (2026-10-29): no clock is immune to cores shared by four
+# workers. So a test marked `timing` is skipped in the workers and run once, alone, when the
+# parallel run ends, and its result decides the run as any other test's does. Run without
+# workers, it runs in place as before.
+def pytest_configure(config):
+    config.addinivalue_line("markers", "timing: a speed limit, measured alone after a parallel run")
+
+
+def pytest_collection_modifyitems(config, items):
+    if not os.environ.get("PYTEST_XDIST_WORKER"):
+        return
+    later = pytest.mark.skip(reason="a speed limit: timed alone once the parallel run ends")
+    for item in items:
+        if item.get_closest_marker("timing"):
+            item.add_marker(later)
+
+
+def pytest_sessionfinish(session, exitstatus):
+    import subprocess
+    config = session.config
+    if os.environ.get("PYTEST_XDIST_WORKER") or hasattr(config, "workerinput"):
+        return
+    if not getattr(config.option, "numprocesses", None) or getattr(config.option, "markexpr", ""):
+        return
+    cmd = [sys.executable, "-m", "pytest", "-q", "-p", "no:xdist", "-p", "no:cacheprovider", "-m", "timing",
+           "-rf", "--tb=short", *config.args]
+    got = subprocess.run(cmd, cwd=str(config.invocation_params.dir), capture_output=True, text=True,
+                         encoding="utf-8", errors="replace")
+    report = config.pluginmanager.get_plugin("terminalreporter")
+    lines = [ln for ln in (got.stdout + got.stderr).splitlines() if ln.strip()]
+    if report is not None:
+        report.write_sep("-", "speed limits, timed alone")
+        for ln in (lines if got.returncode not in (0, 5) else lines[-1:]):
+            report.write_line(ln)
+    if got.returncode not in (0, 5) and session.exitstatus == 0:
+        session.exitstatus = 1
+
+
+@pytest.fixture
+def reload_limits():
+    """_reload_limits, for a test that switches the plan: call it after, and again after
+    switching back."""
+    return _reload_limits
 
 
 @pytest.fixture

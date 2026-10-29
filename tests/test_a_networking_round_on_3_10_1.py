@@ -16,6 +16,7 @@ from __future__ import annotations
 import datetime
 import json
 import os
+import re
 import shutil
 import subprocess
 import sys
@@ -219,11 +220,16 @@ def test_the_extractors_output_reaches_read_as_it_came(book, wrap):
     assert got["about"].startswith("I run demand forecasting") and got["current"] == "Oakmere Foods"
 
 
-def test_network_step_five_puts_the_extractor_first():
+def test_network_step_five_queues_the_page_and_writes_the_note_now():
+    """Since 4.3 no chat reads a profile, so no chat runs the extractor: step five queues the
+    short list for the person's page and saves each note now, waiting on its read."""
     with open(os.path.join(ROOT, ".claude", "commands", "network.md"), encoding="utf-8") as fh:
         text = " ".join(fh.read().split())
-    assert "the extractor is the way" in text and "finds the snippet's JSON by itself" in text
-    assert text.index("the extractor is the way") < text.index("read the whole page text once")
+    step = text[text.index("5. **Read the short list"):text.index("6. **Read what they have taught it**")]
+    assert "reading.py queue-page" in step and "--wait-for-read" in step
+    assert step.index("queue-page") < step.index("--wait-for-read")
+    assert "ONE piece of `network` work" in step
+    assert not re.search(r"\bscroll|\bextractor\b|reading\.py signin|\bnew-computer\b", step)
 
 
 # ------------------------------------------------------------ 11. the opening slot

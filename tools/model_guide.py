@@ -79,8 +79,9 @@ ALIASES = {
 }
 
 
-# Each kind of work the page queues (tools/page_db.py WORK_KINDS), as the work above. A
-# chat started for one gets the model that work needs (`for_work`). Networking runs write
+# Each kind of work the page queues (tools/page_db.py WORK_KINDS), as the work above. Long
+# work on another model runs as one agent inside the chat that answers the page, on the
+# model that work needs (`for_work`). Networking runs write
 # the first notes a person reads, and the brief writes follow-ups, so both are outreach:
 # whatever a contact or an employer reads runs on the strongest model, never a cheaper one
 # (.claude/skills/job-application-assistant/11-cost-model.md).
@@ -102,9 +103,10 @@ ALIAS = {"frontier": "fable", "strongest": "opus", "balanced": "sonnet", "fast":
 
 
 def for_work(kind: str, on: str = "") -> dict:
-    """The model a chat started for a kind of page work gets, given the model of the chat
-    that starts it: {kind, task, tier, effort, model, why}. `model` is an alias to pass to
-    create_session, or None to leave it out, so the new chat runs on the starter's own.
+    """The model page work runs on, given the model of the chat that answers the page: {kind,
+    task, tier, effort, model, why}. `model` is an alias for the Agent tool's `model` (the
+    work runs as one agent inside that chat, never a new chat), or None to run it in the
+    chat itself, on its own model.
 
     Each gets the tier its work wants ("sonnet" for a search started from Opus, "opus" for a
     draft started from Sonnet), and work that wants the strongest model is never moved

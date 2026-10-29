@@ -269,7 +269,11 @@ def updates() -> str:
 
 def maintainers() -> bool:
     """Is this the app maintainer's own repo (its GitHub owner is the app's)? Only there
-    is the sync's git detail and the maintainer's own news worth printing."""
+    is the sync's git detail and the maintainer's own news worth printing. A copy that has
+    no profile yet is set up like anyone's, whoever owns it: the maintainer trying setup as a
+    newcomer heard about channels and the developer's copy (2026-10-29)."""
+    if not os.path.isdir(os.path.join(ROOT, "profile")):
+        return False
     origin = git("remote", "get-url", "origin", check=False)
     mine = _owner(origin.stdout) if origin.returncode == 0 else ""
     return bool(mine) and mine == _owner(app_url())

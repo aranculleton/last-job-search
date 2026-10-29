@@ -41,18 +41,20 @@ def test_the_capabilities_are_exactly_these():
         # reach/<contact> (each contact's address for Open profile) is the owner's alone,
         # named as well as covered by the root (the maintainer's decision, 2026-10-25).
         "db": {"rules": [{"path": "", "read": "owner", "write": "owner"},
-                         {"path": "reach", "read": "owner", "write": "owner"}]},
+                         {"path": "reach", "read": "owner", "write": "owner"},
+                         # addr/part~<n>, where the addresses live since 4.3 (page_db.addr_docs).
+                         {"path": "addr", "read": "owner", "write": "owner"}]},
         "user": {},
         "downloads": True,
         "comments": {},
-        "room": {},
         "sample": {},
         "assets": {},
         # Claude's own browser, in the desktop app only, with only the tools a reading needs.
         "mcp": {"servers": [{"server": "host:claude_browser",
-                             "tools": ["navigate", "get_page_text", "read_page", "preview_start"]},
-                            # The page wakes the chat that answers it (the maintainer, 2026-10-28).
-                            {"server": "Claude Code Remote", "tools": ["send_message", "list_environments", "create_session"]}]},
+                             "tools": ["navigate", "get_page_text", "read_page", "preview_start"]}]},
+        # No "Claude Code Remote" and no room: the connector could not load on the maintainer's
+        # account and the room asked "send this?" on every tap; the page wakes its chat with the
+        # comment doorbell, rung in the tap (live checks, 2026-10-29).
     }
 
 
@@ -146,16 +148,20 @@ def test_a_model_of_the_wrong_shape_is_named_and_still_rendered():
 
 
 def test_the_command_writes_the_page_and_prints_the_capabilities(tmp_path):
+    # Read as UTF-8, so written as UTF-8: on Windows with no PYTHONUTF8 the command wrote its
+    # message in the console's code page, the path's "ë" was not UTF-8, and the reader got
+    # nothing at all (stderr None; the Windows check, 2026-10-29).
+    env = dict(os.environ, PYTHONIOENCODING="utf-8")
     out = tmp_path / "page.html"
     r = subprocess.run([sys.executable, os.path.join(ROOT, "tools", "app_page.py"), FIXTURE, "--out", str(out)],
-                       capture_output=True, text=True, encoding="utf-8")
+                       capture_output=True, text=True, encoding="utf-8", env=env)
     assert r.returncode == 0, r.stderr
     assert out.read_text(encoding="utf-8") == app_page.render(_model())
     caps = subprocess.run([sys.executable, os.path.join(ROOT, "tools", "app_page.py"), "--capabilities"],
-                          capture_output=True, text=True, encoding="utf-8")
+                          capture_output=True, text=True, encoding="utf-8", env=env)
     assert json.loads(caps.stdout) == app_page.capabilities()
     bad = subprocess.run([sys.executable, os.path.join(ROOT, "tools", "app_page.py"), str(tmp_path / "missing.json")],
-                         capture_output=True, text=True, encoding="utf-8")
+                         capture_output=True, text=True, encoding="utf-8", env=env)
     assert bad.returncode == 2 and "cannot read" in bad.stderr
 
 
@@ -176,3 +182,32 @@ def test_the_fixture_is_the_contract_shape_with_invented_people_only():
             for text in [r.get("warm") or ""] + [a["text"] for a in r.get("alerts") or []]:
                 if text.startswith(who + " "):
                     assert where in text, (who, text)
+
+
+def test_the_published_script_is_compacted_safely():
+    """The page is read whole before each publish, so its script goes without comments or
+    indentation (2026-10-29). That is safe only while app.js holds no template literal: a
+    backtick appears only inside a regular expression, never opening a string that spans
+    lines. The compacted script must still parse."""
+    with open(os.path.join(ROOT, "templates", "app", "app.js"), encoding="utf-8") as fh:
+        js = fh.read()
+    for n, line in enumerate(app_page.compact_js(js).split("\n"), 1):
+        for m in re.finditer("`", line):
+            before, after = line[:m.start()], line[m.end():]
+            assert re.search(r"[(=,:\s]/", before) and "/" in after, (
+                f"compacted app.js line {n} has a backtick outside a regular expression: a template literal "
+                "would break compact_js")
+    small = app_page.compact_js(js)
+    assert len(small) < len(js) * 0.92
+    assert "\n//" not in "\n" + small
+    import shutil
+    if shutil.which("node"):
+        import tempfile
+        with tempfile.NamedTemporaryFile("w", suffix=".js", delete=False, encoding="utf-8") as fh:
+            fh.write(small)
+        try:
+            r = subprocess.run(["node", "--check", fh.name], capture_output=True, text=True,
+                               encoding="utf-8", errors="replace")
+            assert r.returncode == 0, r.stderr[:500]
+        finally:
+            os.unlink(fh.name)

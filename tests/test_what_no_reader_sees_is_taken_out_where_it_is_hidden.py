@@ -16,6 +16,8 @@ import os
 import sys
 import time
 
+import pytest
+
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 sys.path.insert(0, os.path.join(ROOT, "tools"))
 
@@ -95,6 +97,7 @@ def test_a_reader_that_looks_the_converter_up_as_it_runs_is_cleaned_too(boards_w
     assert "SQL" in row["desc"] and "PhD" not in row["desc"]
 
 
+@pytest.mark.timing
 def test_an_unclosed_tag_repeated_is_read_in_a_moment():
     # Every "<a " with no ">" after it was read to the end of the text: 3.8 seconds for
     # one 20,000-character body, and a round reads thousands.

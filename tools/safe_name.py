@@ -14,7 +14,6 @@ name, and a Japanese or Greek title is three or two bytes a letter.
 """
 from __future__ import annotations
 
-import hashlib
 
 RESERVED = frozenset({"con", "prn", "aux", "nul", "conin$", "conout$"}
                      | {f"com{i}" for i in "123456789¹²³"}
@@ -50,7 +49,3 @@ def cap_bytes(text: str, limit: int = MAX_BYTES) -> str:
         return str(text or "")
     return raw[:limit].decode("utf-8", "ignore").rstrip()
 
-
-def short_hash(text: str, n: int = 8) -> str:
-    """A stable few characters standing for the text, for a name with no letters left."""
-    return hashlib.sha1(str(text or "").encode("utf-8")).hexdigest()[:n]

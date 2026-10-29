@@ -20,6 +20,7 @@ import json
 import os
 import sys
 import threading
+import time
 from pathlib import Path
 
 import pytest
@@ -247,6 +248,18 @@ def test_writers_at_the_same_moment_all_land(tmp_path):
     data, _, _ = C.load("Oakmere Foods", root=str(tmp_path))
     assert sorted(f["claim"] for f in data["facts"]) == sorted(f["claim"] for f in facts)
     assert not [n for n in os.listdir(tmp_path / C.DIR) if n.endswith(".tmp")]
+
+
+def test_a_lock_read_before_its_time_is_written_waits_for_it(tmp_path):
+    """Created, then written: a reader in between found it empty and fell back to the file
+    system's clock, which with the date moved called a live lock 400 days old (2026-10-29)."""
+    lock = tmp_path / "x.lock"
+    lock.write_text("", encoding="ascii")
+    old = time.time() - 10_000
+    os.utime(lock, (old, old))
+    born = time.time()
+    threading.Timer(0.03, lambda: lock.write_text(repr(born), encoding="ascii")).start()
+    assert C._lock_born(str(lock)) == born
 
 
 def test_two_roles_at_one_employer_keep_their_teams_apart(tmp_path):

@@ -284,7 +284,7 @@ def _new(status, kind="", text="", why="", who="", source="", warnings=(), findi
 
 
 def draft(item: dict, contacts_by_id: dict, threads_index: dict, tracker, earlier: dict,
-          rows: list[dict]) -> dict:
+          rows: list[dict], today: str = "") -> dict:
     """The draft for one due item: {"status": ready | check | write | none, ...}.
 
     ready  made by code and clean; check  made by code, with advise's warnings to rewrite on;
@@ -303,7 +303,7 @@ def draft(item: dict, contacts_by_id: dict, threads_index: dict, tracker, earlie
         if m and m.group(1) != "[name]":
             name = m.group(1)
         company = (item.get("who") or "").split(" - ")[0]
-        return _checked(item["text"], "message", name=name, company=company, source="code")
+        return _checked(item["text"], "message", name=name, company=company, source="code", today=today)
     contact = contacts_by_id.get(item.get("contact_id") or "", {})
     kind = message_kind(item, contact)
     name = contact.get("name") or item.get("name") or ""
@@ -339,7 +339,7 @@ def draft(item: dict, contacts_by_id: dict, threads_index: dict, tracker, earlie
         if text:
             got = _checked(text, kind, name=name, title=title, company=company, contact=cid,
                            their_message=their, source=source,
-                           card_only=card_only and source == "stored")
+                           card_only=card_only and source == "stored", today=today)
             if got["status"] != "write":
                 return got
             refused = refused or got        # kept: a draft to rewrite on its findings
@@ -366,7 +366,7 @@ def draft(item: dict, contacts_by_id: dict, threads_index: dict, tracker, earlie
                         why="the nudge about %s's %s posting did not pass: %s"
                             % (company, _clean_title(posting.get("title")), _one_line(e)))
         got = _checked(text, kind, name=name, title=title, company=company, contact=cid,
-                       their_message=their, source="code")
+                       their_message=their, source="code", today=today)
         if got["status"] != "write":
             got["why"] = "new reason: %s posted %s" % (company, _clean_title(posting.get("title")))
         return got
@@ -376,13 +376,15 @@ def draft(item: dict, contacts_by_id: dict, threads_index: dict, tracker, earlie
         # Their offer to refer is the reason to answer, and the person's own note since is
         # what this follows up: never written as though the offer were the last word.
         try:
+            # Dated the day it is drafted for (`--today`), never the computer's: run for another
+            # day it said "from August last year" (the date check, 2026-10-29).
             text = compose.follow_up(name, msgs, OFFER_REASON % (company or "your company"),
-                                     close=OFFER_CLOSE)
+                                     close=OFFER_CLOSE, today=today or None)
         except ValueError as e:
             return refused or _new("write", kind=kind, who="you",
                                    why="the follow-up on their offer did not pass: " + _one_line(e))
         got = _checked(text, kind, name=name, title=title, company=company, contact=cid,
-                       their_message=their, source="code")
+                       their_message=their, source="code", today=today)
         if got["status"] != "write":
             got["why"] = "follows up on your note of %s, on their offer of %s" % (
                 last.get("date"), offer.get("date"))
@@ -436,11 +438,11 @@ def _queued_note(cid: str) -> tuple[str, bool, bool]:
 
 
 def _checked(text, kind, name="", title="", company="", contact="", their_message="",
-             source="code", card_only=False) -> dict:
+             source="code", card_only=False, today="") -> dict:
     try:
         findings, warnings = gate(text, kind, name=name, title=title, company=company,
                                   contact=contact, their_message=their_message,
-                                  card_only=card_only)
+                                  card_only=card_only, today=today)
     except ValueError as e:                 # a reaction waiting, an unknown kind
         return _new("write", kind=kind, who="you", why=_one_line(e), source=source)
     if findings:
@@ -515,7 +517,7 @@ def drafts(items, contacts, threads, tracker, today: str) -> list[dict]:
     for i in sorted(items, key=open_actions._urgency):
         i = dict(i)
         i["id"] = item_id(i)
-        i["draft"] = draft(i, by_id, index, tracker, earlier, rows)
+        i["draft"] = draft(i, by_id, index, tracker, earlier, rows, today=today)
         out.append(i)
     return out
 

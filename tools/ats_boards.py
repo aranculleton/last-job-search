@@ -494,11 +494,6 @@ def workday_token(text: str) -> str | None:
     return _wd.token_from(text)
 
 
-def workday_paths(tenant: str, site: str) -> list[str]:
-    """What robots.txt must allow: the listing, the bodies, and the board itself."""
-    return _wd.WorkdayBoard(f"{tenant}.wd1/{site}").robots_paths()
-
-
 def _summarise(errors) -> str:
     counts: dict[str, int] = {}
     for e in errors:

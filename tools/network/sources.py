@@ -725,10 +725,11 @@ LADDER = (
          "whether a named person has a LinkedIn profile at the employer, verified or likely, "
          "from the result's own title; nothing is fetched",
          "anything the profile says", "web search, in any chat"),
-    Rung("browser_read", "a read in your own browser",
+    Rung("browser_read", "a read on your page, in the Claude app on your computer",
          "the profile itself, for the short list only: current role, location, shared "
-         "history, recent posts, and whether a request is already pending",
-         "anyone beyond the short list", "a browser of yours this chat can use, and your yes"),
+         "history, and whether a request is already pending",
+         "anyone beyond the short list",
+         "your page open in the Claude desktop app, signed in to LinkedIn there"),
     Rung("hand", "a paste or screenshots from you",
          "one or two profiles you care most about, read from what you send",
          "a list: it is never how people are found", "you, a few seconds each"),
@@ -738,18 +739,18 @@ LADDER = (
 def ladder(tools=(), consent: str | None = None, has_export: bool | None = None) -> dict:
     """What this run can use from the ladder, for the tools this chat has.
 
-    `tools` as reading.route() takes them (browser, chrome, chrome-off, enable).
+    `tools` is kept for callers that pass it: the page reads, never a chat (reading.route).
     Returns {"rungs": [(Rung, usable, why)], "read": route, "read_cap": None for no cap of
-    the app's own, 0 where nothing is read in the browser,
+    the app's own, 0 where nothing is read,
     "hand_top": n, "say": the one line for the person, or ""}.
     """
     import reading
     r = reading.route(list(tools or ()), consent)
-    # None: no cap of the app's own on browser reads (reading.shortlist_cap); 0: none here.
-    cap = reading.shortlist_cap()[0] if r["route"] in ("browser", "enable") else 0
+    # None: no cap of the app's own on reads (reading.shortlist_cap); 0: none here.
+    cap = reading.shortlist_cap()[0] if r["route"] == "page" else 0
     export = _has_export() if has_export is None else has_export
     declined = CONNECTIONS_EXPORT == "declined"
-    reads = r["route"] in ("browser", "enable")
+    reads = r["route"] == "page"
     rungs = []
     for rung in LADDER:
         if rung.id == "connections":
@@ -760,17 +761,15 @@ def ladder(tools=(), consent: str | None = None, has_export: bool | None = None)
                    else "not on file yet: the connections-export upgrade asks")
         elif rung.id == "browser_read":
             usable = reads
-            why = (f"{r['browser']}, the people worth writing to, one page at a time"
-                   if reads
-                   else "no browser of yours in this chat" if reading.PROFILE_READS == "browser"
-                   else f"PROFILE_READS is {reading.PROFILE_READS!r}")
+            why = (f"{r['browser']}, the people worth writing to, queued for it"
+                   if reads else f"PROFILE_READS is {reading.reads_now()!r}")
         elif rung.id == "hand":
             usable = not reads
             why = f"offered for the best {reading.HAND_TOP} at most" if not reads else "not needed"
         else:
             usable, why = True, "any chat"
         rungs.append((rung, usable, why))
-    say = "" if reads else (
+    say = r["say"] if reads else (
         "These were found from search results" + (" and your connections" if export else "")
         + ", without reading anyone's profile. Reading a profile adds their current role, "
         "shared history and recent posts; for the one or two who matter most, send "

@@ -59,13 +59,24 @@ for arg in "$@"; do
   [ "$arg" = "--full" ] && FULL=1
 done
 DATA_ONLY=0; APP_RELEASE=0; CHANGED=""
-if [ "$FULL" = "0" ] && [ -f profile/person.json ]; then
+# A person's copy: any checkout that is not the public app itself. Setup lands its first
+# save before profile/ exists, and that ran the app's whole suite for six minutes to save
+# nothing of the app's (the maintainer, 2026-10-29).
+IS_COPY=0
+case "$(git remote get-url origin 2>/dev/null)" in
+  *aranculleton/last-job-search|*aranculleton/last-job-search.git) ;;
+  *) IS_COPY=1 ;;
+esac
+[ -f profile/person.json ] && IS_COPY=1
+if [ "$FULL" = "0" ] && [ "$IS_COPY" = "1" ]; then
   CHANGED="$("$PY" tools/personal_paths.py --only-personal-changed 2>/dev/null)"
   case $? in
     0) DATA_ONLY=1 ;;
     # The app files that changed are exactly the app's release (an update being landed):
     # its own CI tested them on Linux, a Mac and Windows, so they are not tested again here.
     2) DATA_ONLY=1; APP_RELEASE=1 ;;
+    # Nothing changed since master: in a copy there is nothing of the app's to test.
+    3) DATA_ONLY=1 ;;
   esac
 fi
 # Run the app's own check, unless only the person's own files changed.
@@ -175,6 +186,10 @@ if [ -f profile/person.json ]; then
   else
     printf '  %-42s n/a   (only the maintainer'"'"'s repo builds the app)\n' "leak scan (app tree built from HEAD)"
   fi
+elif [ "$IS_COPY" = "1" ]; then
+  # A copy before setup has written its profile: private, and nothing in it reaches the app.
+  # Scanned as if it were the app, the page's own address failed the first save (2026-10-29).
+  printf '  %-42s n/a   (a private copy: nothing here reaches the app)\n' "leak scan"
 else
   run "leak scan (what git would commit)" "$PY" tools/leak_scan.py . --git
   # A stranger from a real search is on no denylist: a full name the app has never
@@ -197,7 +212,12 @@ elif [ "$DATA_ONLY" = "1" ]; then
   echo "  own suites test the app, which did not change, so they are skipped (--full runs them)"
   skip "pytest (the app's suite, on the example person)" "only your own files changed"
 else
-  run_py_module pytest "pytest (the app's suite, on the example person)" "$PY" -m pytest tests -q
+  # Parallel workers where pytest-xdist is installed (the maintainer's machines; a person's
+  # computer rarely has it): the suite in about a third of the time, each file kept together.
+  PAR=""
+  "$PY" -c "import xdist" > /dev/null 2>&1 && PAR="-n auto --dist loadfile"
+  # shellcheck disable=SC2086
+  run_py_module pytest "pytest (the app's suite, on the example person)" "$PY" -m pytest tests -q $PAR
 fi
 # The person's own files, read the way the tools read them: every state file (no merge
 # markers, every row parses) and every profile file (each module loads, person.json parses).
@@ -247,6 +267,11 @@ echo "python floor"
 FLOOR_VERSION=3.9
 FLOOR_NAME="tests on Python $FLOOR_VERSION (CI's floor leg)"
 FLOOR_PY="$(command -v python$FLOOR_VERSION || true)"
+# Nothing of the app's or of their own tests changed: no floor Python is fetched or built
+# for a leg that would only be skipped (it cost minutes a save on a Windows computer).
+if [ "$DATA_ONLY" = "1" ] && ! printf '%s\n' "$CHANGED" | grep -q '^profile/tests/'; then
+  FLOOR_PY="skip"
+fi
 if [ -z "$FLOOR_PY" ] && command -v py >/dev/null 2>&1; then      # Windows' launcher
   # -X utf8: the path as Git Bash reads it, where a Python on Windows writes its code page.
   FLOOR_PY="$(py -$FLOOR_VERSION -X utf8 -c 'import sys; print(sys.executable)' 2>/dev/null | tr -d '\r' || true)"
@@ -258,7 +283,9 @@ if [ -z "$FLOOR_PY" ] && command -v uv >/dev/null 2>&1; then
     FLOOR_PY="$(uv python find $FLOOR_VERSION 2>/dev/null || true)"
   fi
 fi
-if [ -z "$FLOOR_PY" ]; then
+if [ "$FLOOR_PY" = "skip" ]; then
+  skip "$FLOOR_NAME" "only your own files changed"
+elif [ -z "$FLOOR_PY" ]; then
   skip "$FLOOR_NAME" "no python$FLOOR_VERSION here, and no uv to fetch one"
 else
   FLOOR_ENV="${TMPDIR:-/tmp}/ci_local_py${FLOOR_VERSION/./}"

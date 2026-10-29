@@ -5,8 +5,11 @@ and never said so, so they did not know signing in was there to do or that a sig
 page shows far less; it never asked for their data download; and getting past its
 questions and warnings was convoluted. Now the first page of a reading session is checked
 (`signed_in`), a signed-out one is met with two plain lines asking them to sign in once,
-reading in the chat's browser needs no question first, and `export.py status` says the next
-step for the download from what is recorded. Every person and employer is invented.
+reading needs no question first, and `export.py status` says the next step for the download
+from what is recorded. Since 4.3 (2026-10-29) no chat reads LinkedIn at all, whatever browser
+it has: the person's page does, in the Claude desktop app, and a chat on the computer is
+asked only for the download. The sign-in checks pinned here are the ones the page's reads
+go through. Every person and employer is invented.
 """
 from __future__ import annotations
 
@@ -122,7 +125,9 @@ def test_no_warning_remains_where_a_read_was_asked_for(monkeypatch):
 
 # ------------------------------------------------------------------ no question first
 
-def test_reading_in_the_chats_browser_needs_no_question_first():
+def test_reading_needs_no_question_first_and_is_the_pages_whatever_the_chat_has():
+    """Unset reads (no question first); and since 4.3 the page reads, never a chat, whatever
+    browser the chat has (2026-10-29)."""
     class Unset:
         pass
 
@@ -132,16 +137,23 @@ def test_reading_in_the_chats_browser_needs_no_question_first():
     assert reading.reads_setting(None) == "browser"
     assert reading.reads_setting(Paste()) == "paste"
     assert profile_upgrades._profile_reads() == ""
-    got = reading.route(["browser"], reading.reads_setting(Unset()), {"CLAUDECODE": "1"})
-    assert got["route"] == "browser" and got["usable"]
+    for tools in (["browser"], ["chrome"], ["enable"], []):
+        got = reading.route(tools, reading.reads_setting(Unset()), {"CLAUDECODE": "1"})
+        assert got["route"] == "page" and got["usable"], got
+        assert "queue-page" in got["do"] and "Never open linkedin.com in this chat" in got["do"]
+    assert reading.route(["browser"], "paste", {"CLAUDECODE": "1"})["route"] == "hand"
 
 
-def test_a_phone_with_no_browser_still_says_its_one_line():
+def test_a_phone_says_its_one_line_about_the_page():
     phone = {"CLAUDE_CODE_REMOTE": "true", "CLAUDE_CODE_ENTRYPOINT": "remote_mobile"}
     said = reading.route([], "browser", phone)["say"]
-    assert "screenshots of their profile from the LinkedIn app" in said
+    assert said in ("", "Your page reads their profiles when you open it in the Claude app on "
+                        "your computer.")
     import place
     assert len(said.split()) <= place.SHORT_WORDS
+    # They chose to paste: then a phone is asked for screenshots of the few who matter most.
+    said = reading.route([], "paste", phone)["say"]
+    assert "screenshots of their profile from the LinkedIn app" in said
 
 
 # ------------------------------------------------------------------ the read itself
@@ -224,6 +236,13 @@ def test_the_download_status_follows_the_record(tmp_path, monkeypatch):
     export._record([], TODAY)
     kept = export.load_record()
     assert kept["taken_on"] == TODAY.isoformat() and kept["requested_on"] == TODAY.isoformat()
+    folder = tmp_path / "linkedin"
+    folder.mkdir()
+    monkeypatch.setattr(export, "default_folder", lambda: str(folder))
+    # Taken, but its files are not on file (a cloud chat's folder went with it, before 4.3):
+    # asked for again, never called fresh.
+    assert export.status(TODAY, [], found=[])["state"] != "fresh"
+    (folder / "Connections.csv").write_text("First Name,Last Name\n", encoding="utf-8")
     got = export.status(TODAY, ["browser"], found=[zip_path])
     assert got["state"] == "fresh" and got["do"] == "nothing"
 
@@ -251,18 +270,23 @@ def test_the_record_merges_key_by_key_between_two_chats():
 
 # ------------------------------------------------------------------ on a new computer
 
-def test_a_new_computer_signs_in_then_takes_the_download_in_that_order(tmp_path, monkeypatch):
+def test_a_chat_on_the_computer_is_asked_only_for_the_download(tmp_path, monkeypatch):
+    """A chat on the computer (one the person already had) signs nobody in and opens no
+    LinkedIn page: the page does that (4.3). It still asks for the download, once."""
     _state(tmp_path, monkeypatch)
-    monkeypatch.setattr(export, "status", lambda today=None, tools=(), **k: {
-        "state": "request", "line": "request: none taken yet", "do": "ask for it"})
-    steps = reading.new_computer(["browser"])
-    assert len(steps) == 2 and "signin --page -" in steps[0] and "--browser pane" in steps[0]
-    assert "the LinkedIn download" in steps[1]
-    reading.mark_signed_in()
+    seen = {}
+
+    def status(today=None, tools=(), **k):
+        seen["tools"] = tools
+        return {"state": "request", "line": "request: none taken yet", "do": "ask for it"}
+    monkeypatch.setattr(export, "status", status)
+    for tools in (["browser"], ["chrome"], []):
+        steps = reading.new_computer(tools)
+        assert steps == ["1. the LinkedIn download, request: none taken yet: ask for it"]
+        assert seen["tools"] == ()               # asked of the person, never in its browser
     monkeypatch.setattr(export, "status", lambda today=None, tools=(), **k: {
         "state": "fresh", "line": "fresh", "do": "nothing"})
     assert reading.new_computer(["browser"]) == ["nothing to do: carry on"]
-    assert "no browser in this chat" in reading.new_computer([])[-1]
     with open(os.path.join(ROOT, ".claude", "skills", "networking", "SKILL.md"),
               encoding="utf-8") as fh:
-        assert "## On a new computer" in fh.read()
+        assert "## On a new computer" not in fh.read()

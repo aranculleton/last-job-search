@@ -127,13 +127,15 @@ def test_the_final_reply_is_the_message():
 
 
 def test_both_set_ups_are_written_down_step_by_step():
-    for heading in ("### (a) One chat per briefing", "### (b) A routine, a new chat each run",
+    for heading in ("### (a) In the chat that answers your page", "### (b) A routine, a new chat each run",
                     "### Test it, without fire_trigger"):
         assert heading in README, heading
     assert "run_once_at" in README and "do not archive, delete or rebuild" in README
 
 
-REAL_ID = re.compile(r"\b(?:trig|session)_(?!EXAMPLE)[A-Za-z0-9]{6,}\b")
+# A real id always carries digits; the session tool's own field names (session_status,
+# session_context) are words, not ids.
+REAL_ID = re.compile(r"\b(?:trig|session)_(?!EXAMPLE)(?=[A-Za-z]*\d)[A-Za-z0-9]{6,}\b")
 
 
 def id_hits(files, read):

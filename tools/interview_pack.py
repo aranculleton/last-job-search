@@ -3747,16 +3747,6 @@ def stages_mark(ctx) -> str:
     return "<!-- stages: %s -->" % "; ".join(dict.fromkeys(have))
 
 
-def campaign_offer(ctx) -> str:
-    """The one-time offer of a chat just for this employer, once a stage is booked: "" when
-    it was made before or nothing is booked yet."""
-    booked = any(s["scheduled"] and not s["done"] for s in ctx["stages"])
-    if not booked or os.path.exists(os.path.join(ctx["folder"], CAMPAIGN_FILE)):
-        return ""
-    return ("Want a separate chat just for %s? It keeps the prep in one place and leaves this "
-            "chat for the rest of the search." % ctx["company"])
-
-
 CAMPAIGN_FILE = "campaign.json"
 
 
@@ -4977,12 +4967,6 @@ def _report(ctx, path) -> None:
     if unfit:
         print("not yet fit to say: %d answer(s); write them in the document as you would say "
               "them, then `interview_pack.py check \"%s\"`" % (unfit, ctx["company"]))
-    offer = campaign_offer(ctx)
-    if offer:
-        print("offer once, optionally, at the end of the reply: %s On a yes, automation/"
-              "prompts/campaign.md says how to start it; either way record the answer: "
-              "python3 tools/interview_pack.py campaign \"%s\" --yes \"<the chat's title or "
-              "id>\" | --no" % (offer, ctx["company"]))
 
 
 if __name__ == "__main__":

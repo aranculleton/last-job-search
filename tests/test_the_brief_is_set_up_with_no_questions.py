@@ -1,4 +1,7 @@
-"""The brief is made at the end of setup, asking nothing, and never twice.
+"""The brief is made when the person turns it on, asking nothing, and never twice.
+
+4.3 (the maintainer, 2026-10-29): it is opt-in from a bell on the Brief, every day by
+default, and it runs in the chat that answers the page, so turning it on makes no chat.
 
 From the setup audits (2026-10-25): a cloud chat could make the brief itself, its own chat
 and a task bound to it, but the person was sent to a second chat to answer two questions;
@@ -87,29 +90,65 @@ def test_the_old_relay_needs_push_and_never_email():
     assert any("by push" in p for p in routines.check(reg))
 
 
-def test_the_defaults_are_monday_and_thursday_at_738_their_time():
+def test_the_defaults_are_every_day_at_738_their_time():
     assert routines.brief_minute() == (7, 38)
     got = routines.default("America/Chicago")
-    assert got["cron"] == "CRON_TZ=America/Chicago 38 7 * * 1,4"
-    assert got["say"] == ("Your brief is set up: Mondays and Thursdays at 7:38, in the chat "
-                          "called Job search: morning brief. Say 'move my brief' to change it.")
+    assert got["cron"] == "CRON_TZ=America/Chicago 38 7 * * *"
+    assert got["when"] == "Every day at 7:38"
+    assert got["say"] == ("Your brief is on: every day at 7:38. Change it or turn it off from "
+                          "the bell on your Brief.")
     assert routines.default("")["cron"] == "" or routines.default("")["zone"]
+    # Other day sets are said the way a person says them.
+    assert routines.day_words([1, 2, 3, 4, 5]) == "Weekdays"
+    assert routines.day_words([0, 6]) == "Weekends"
+    assert routines.day_words([1, 3, 4]) == "Mondays, Wednesdays and Thursdays"
+    assert routines._days("weekdays") == [1, 2, 3, 4, 5]
+    assert routines._days("every day") == list(range(7))
+    assert routines.read_cron("CRON_TZ=Europe/London 38 7 * * 1,4")["when"] == \
+        "Mondays and Thursdays at 7:38"
 
 
-def test_the_plan_is_its_own_chat_a_task_bound_to_it_and_one_first_run():
+def test_the_plan_binds_the_brief_to_the_chat_that_sets_it_up_and_makes_no_chat():
     now = datetime.datetime(2026, 10, 25, 14, 0, tzinfo=datetime.timezone.utc)
-    got = routines.plan("example-owner", "my-job-search", "Europe/London", now=now)
-    assert got["create_session"] == {"title": "Job search: morning brief",
-                                     "source_url": "https://github.com/example-owner/my-job-search"}
+    got = routines.plan("example-owner", "my-job-search", "Europe/London", now=now,
+                        chat="session_EXAMPLEHELPER")
+    assert "create_session" not in got and got["chat"] == "session_EXAMPLEHELPER"
     task = got["create_trigger"]
-    assert task["persistent_session_id"] == "<the session id>"
-    assert task["cron_expression"] == "CRON_TZ=Europe/London 38 7 * * 1,4"
+    assert task["persistent_session_id"] == "session_EXAMPLEHELPER"
+    assert task["cron_expression"] == "CRON_TZ=Europe/London 38 7 * * *"
     assert task["prompt"] == STUB and task["connectors"] == []
     assert task["initiation"] == "human_request"
     first = got["first_brief"]
     assert first["run_once_at"] == "2026-10-25T14:05:00Z" and first["connectors"] == []
-    assert first["persistent_session_id"] == "<the session id>"
+    assert first["persistent_session_id"] == "session_EXAMPLEHELPER"
+    assert "--session session_EXAMPLEHELPER" in got["record"] and "--title" not in got["record"]
+    assert "in the chat called" not in got["say"]
     assert "fire_trigger" not in json.dumps(got)
+
+
+def test_where_this_chats_id_is_unknown_no_chat_is_made_for_it(monkeypatch, tmp_path):
+    """The app never starts a chat by itself (the maintainer, 2026-10-29: "fewest possible
+    chats"): with no id to bind to, the chat asks get_session for its own and runs it again."""
+    for key in ("LJS_CHAT", "CLAUDE_CODE_REMOTE_SESSION_ID", "CLAUDE_CODE_BRIDGE_SESSION_ID",
+                "CLAUDE_CODE_SESSION_ID"):
+        monkeypatch.delenv(key, raising=False)
+    now = datetime.datetime(2026, 10, 25, 14, 0, tzinfo=datetime.timezone.utc)
+    got = routines.plan("example-owner", "my-job-search", "Europe/London", now=now)
+    assert "create_session" not in got and got["chat"] == ""
+    assert "--title" not in got["record"]
+    got = routines.plan("example-owner", "my-job-search", "Europe/London", now=now,
+                        chat="session_EXAMPLEHELPER")
+    assert got["create_trigger"]["persistent_session_id"] == "session_EXAMPLEHELPER"
+
+
+def test_a_chat_on_the_computer_points_at_the_bell_and_makes_nothing(tmp_path):
+    env = dict(os.environ, LJS_PROFILE=str(tmp_path / "no-profile"), CLAUDECODE="1")
+    env.pop("CLAUDE_CODE_REMOTE", None)
+    got = subprocess.run([sys.executable, os.path.join(ROOT, "tools", "routines.py"), "brief"],
+                         capture_output=True, text=True, encoding="utf-8", errors="replace", env=env)
+    assert got.returncode == 0 and "tell them: " + routines.BRIEF_BELL in got.stdout
+    for made in ("create_trigger", "create_session", "RemoteTrigger", "New task"):
+        assert made not in got.stdout, made
 
 
 def test_what_was_made_is_recorded_and_passes_the_check(tmp_path):
@@ -124,13 +163,19 @@ def test_what_was_made_is_recorded_and_passes_the_check(tmp_path):
                                      "prompt_file": "automation/prompts/job_round.md"}]}),
                     encoding="utf-8")
     routines.record("session_EXAMPLENEW", "trig_EXAMPLENEW",
-                    "CRON_TZ=Europe/London 38 7 * * 1,4", path=str(path))
+                    "CRON_TZ=Europe/London 38 7 * * 1,4", path=str(path),
+                    title="Job search: morning brief")
     reg = json.loads(path.read_text(encoding="utf-8"))
     assert routines.check(reg) == []
     assert [r["key"] for r in reg["routines"]] == ["morning_brief", "job_round"]
     brief = reg["routines"][0]
     assert brief["trigger_id"] == "trig_EXAMPLENEW"
     assert brief["chat"] == {"title": "Job search: morning brief", "session_id": "session_EXAMPLENEW"}
+    # Bound to the chat that answers the page, it is that chat's id alone.
+    routines.record("session_EXAMPLEHELPER", "trig_EXAMPLENEW",
+                    "CRON_TZ=Europe/London 38 7 * * *", path=str(path))
+    reg = json.loads(path.read_text(encoding="utf-8"))
+    assert reg["routines"][0]["chat"] == {"session_id": "session_EXAMPLEHELPER"}
     # Recording it again replaces it, never a second brief.
     routines.record("session_EXAMPLENEW", "trig_EXAMPLEOTHER",
                     "CRON_TZ=Europe/London 38 7 * * 1,4", path=str(path))

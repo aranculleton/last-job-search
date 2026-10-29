@@ -2,9 +2,9 @@
 
 Since 2026-10-25 a profile with no PROFILE_READS reads in a browser (reading.py
 reads_setting), so the place check reads the setting by that same rule rather than its own.
-On their computer, in a chat with a browser tool, the once-a-chat check carries what is
-still to do there (LinkedIn signed in, its download: `reading.py new-computer`) and nothing
-when it is all done. And while a LinkedIn download is on its way, neither download question
+In a chat on their computer (one they already had), the once-a-chat check carries what is
+still to do there (the LinkedIn download: `reading.py new-computer`) and nothing when it is
+all done; since 4.3 signing in to LinkedIn is the page's, never a chat's. And while a LinkedIn download is on its way, neither download question
 is asked: the person has done their part.
 """
 import datetime
@@ -45,16 +45,17 @@ def test_no_setting_reads_in_a_browser_the_same_as_reading_does(tmp_path, monkey
     assert place.setting() == ""
 
 
-def test_a_computer_with_a_browser_is_given_what_is_left_and_nothing_once_done(tmp_path,
-                                                                                monkeypatch):
+def test_a_chat_on_the_computer_is_given_what_is_left_and_nothing_once_done(tmp_path,
+                                                                             monkeypatch):
     monkeypatch.setattr(place, "_told_path", lambda: str(tmp_path / "told.json"))
     monkeypatch.setattr(place, "setting", lambda: "browser")
     monkeypatch.setattr(place, "repo", lambda: REPO)
     monkeypatch.setattr(place, "note_local", lambda today=None: False)
     monkeypatch.setattr(place, "has_local", lambda: True)
+    monkeypatch.setattr(place, "page_reads", lambda *a, **k: True)   # the page reads lately
     import env_check
     monkeypatch.setattr(env_check, "local_fixes", lambda: [])
-    left = ["1. the LinkedIn download, request: none taken yet: in the browser, ask LinkedIn"]
+    left = ["1. the LinkedIn download, request: none taken yet: ask for it"]
     monkeypatch.setattr(reading, "new_computer", lambda tools=(), today=None: list(left))
     day = datetime.date(2026, 10, 25)
     out = place.report(["browser"], once=True, env=LOCAL, today=day)
@@ -65,16 +66,16 @@ def test_a_computer_with_a_browser_is_given_what_is_left_and_nothing_once_done(t
     monkeypatch.setattr(reading, "new_computer",
                         lambda tools=(), today=None: ["nothing to do: carry on"])
     assert place.computer_steps("local", ["browser"], day) == []
-    # Not on the computer, or no browser tool: the check never runs it.
+    # Not on the computer: the check never runs it. On it, whatever browser the chat has:
+    # nothing it says needs one (4.3).
     called = []
     monkeypatch.setattr(reading, "new_computer",
                         lambda tools=(), today=None: called.append(tools) or list(left))
-    assert place.computer_steps("local", [], day) == []
-    assert place.computer_steps("local", None, day) == []
     assert place.computer_steps("phone", ["browser"], day) == []
     assert place.computer_steps("cloud", ["enable"], day) == []
     assert called == []
-    assert place.computer_steps("local", ["chrome"], day) == left
+    for tools in ([], None, ["chrome"], ["browser"]):
+        assert place.computer_steps("local", tools, day) == left
 
 
 def test_while_a_download_is_on_its_way_neither_download_question_is_asked(tmp_path,

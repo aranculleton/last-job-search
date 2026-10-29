@@ -144,8 +144,10 @@ def test_setup_looks_first_lands_the_profile_at_once_and_never_starts_again():
     assert "python3 tools/app.py start" in step0          # the one detector says it (4.0)
     assert step0.index("app.py start") < text.index("Let's set up your job search")
     assert "never for a resume" in step0 and "that is `/reset`" in step0
-    assert "Your search is already set up; this computer is ready for it too." in step0
-    assert "\"On a new computer\"" in step0
+    # A chat on the computer is told the same, and reads nothing on LinkedIn itself (4.3).
+    assert "Your search is already set up." in step0
+    assert "LinkedIn is read by their page, never by this chat" in step0
+    assert "On a new computer" not in step0
     step2 = text[text.index("## Step 2"):text.index("## Step 3")]
     assert "python3 tools/place.py started" in step2 and "land it on master" in step2
     step5 = text[text.index("## Step 5"):]
@@ -166,11 +168,11 @@ def test_the_message_a_computer_chat_starts_from_opens_the_search():
         assert "set me up" not in said.lower() and "set up my job search" not in said.lower()
 
 
-def test_profile_reading_on_a_computer_is_written_without_asking():
-    assert place.default_profile_reads("local") == "browser"
-    assert place.default_profile_reads("desktop-cloud") == "browser"
-    for where in ("phone", "web", "unknown"):
-        assert place.default_profile_reads(where) == ""
+def test_profile_reading_is_written_without_asking_wherever_setup_runs():
+    """On by default everywhere (2026-10-29): their page reads in the Claude desktop app,
+    whichever chat set them up; a phone set-up once wrote nothing, which read as paste."""
+    for where in ("local", "desktop-cloud", "phone", "web", "unknown"):
+        assert place.default_profile_reads(where) == "browser"
     sections = open(SECTIONS, encoding="utf-8").read()
     assert 'written without asking: `"browser"`' in sections
 
@@ -230,18 +232,19 @@ def test_a_windows_computer_gets_its_own_short_steps_and_nothing_mac_only():
     steps = C.steps("local-chat", name="my-job-search", owner="example-owner")
     assert "Windows" in steps[1]
     assert not any(MAC_ONLY.search(s) for s in steps), steps
-    # A chat on a Windows computer is told the Windows way, never Terminal.
+    # A chat on a Windows computer is told the page's way, never Terminal.
     for tools in ([], None):
         said = "\n".join(place.check("local", "browser", tools, True, (), *REPO, detail=True,
                                      os_name="win32"))
-        assert C.say("windows-computer", "my-job-search", "example-owner", goal=False) in said
-        assert not MAC_ONLY.search(said.replace(place.IF_NO_BROWSER, "")), said
+        assert place.PAGE_STEPS in said
+        assert not MAC_ONLY.search(said), said
 
 
 def test_the_apps_own_browser_is_the_default_and_nobody_is_told_to_install_chrome():
     said = "\n".join(place.check("local", "browser", [], True, (), *REPO, detail=True))
-    assert "whatever browser you use" in said
-    assert "If you already use Chrome or Edge" in said
+    # The page reads in Claude's own browser, in the desktop app: no browser of theirs, and
+    # no Chrome at all (4.3).
+    assert "Claude's browser" in said and "Chrome" not in said
     assert not re.search(r"install (?:Google )?Chrome", said, re.I)
     claim = C.entry("chrome")["claim"]
     assert "nobody is told to install Chrome" in claim and "Brave" in claim

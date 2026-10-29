@@ -4,8 +4,9 @@
 The person says "set me up" in a chat, once. From then on the questions are asked on their
 page, one at a time with "2 of 6", the research shows its progress there, and what only
 they can do outside it (their private copy, the cloud setting that lets the chat reach job
-sites, signing in to LinkedIn on their computer, the chat on their computer) is a card
-with dated steps from tools/claude_surfaces.json and the official link.
+sites) is a card with dated steps from tools/claude_surfaces.json and the official link.
+Signing in to LinkedIn is the page's own reading card (app.js readingCard), in the Claude
+desktop app: no chat on the computer is set up or offered (4.3).
 
 `start()` is the one entry point for every state a copy can be in. It reads the copy,
 decides, and returns the lines a chat follows, written as instructions so that a chat whose
@@ -121,7 +122,7 @@ def record_page(url: str, chat: str = "", now: dt.datetime | None = None) -> str
         raise ValueError("that is not a claude.ai page address")
     got = page_record()
     got.update(url=url, published_at=app_model.stamp(now or dt.datetime.now(dt.timezone.utc)),
-               by=chat or got.get("by") or "")
+               by=chat or got.get("by") or "", title_name=_first_name())
     path = _write_json(os.path.join(profile_dir(), PAGE), got)
     if set_up():
         try:
@@ -573,6 +574,12 @@ def outside_item(key: str, owner: str = "", name: str = "") -> dict:
             "link": claude_surfaces.official(entry), "checked": entry.get("verified_on", ""),
             "options": options, "about": {"step": key},
             "rev": app_model.rev_of(key, lines)}
+    if key == "linkedin":
+        # The page opens LinkedIn in the Claude app's own browser itself (host:claude_browser,
+        # preview_start); the registry's steps stay under More for when it cannot.
+        item["title"] = "Sign in to LinkedIn in Claude's browser, once"
+        item["body"] = "Then Claude can read people's profiles before you write to them."
+        item["browser"] = {"label": "Open LinkedIn", "url": "https://www.linkedin.com/login"}
     if key == "copy":
         # GitHub fills in its new-repository form from these (docs.github.com, "Creating a
         # repository from a URL query", read 2026-10-25): one tap opens it with the app as
@@ -582,8 +589,10 @@ def outside_item(key: str, owner: str = "", name: str = "") -> dict:
 
 
 def outside_items(targets: dict, kind: dict | None = None) -> list:
-    """The cards for this copy now: its privacy, the job sites, the computer chat and
-    LinkedIn, each only while it is still to do."""
+    """The cards for this copy now: its privacy and the job sites, each only while it is
+    still to do. LinkedIn is the page's own reading card, never one of these: the card here
+    showed for ever to anyone with a computer chat, keyed on a file the reads no longer
+    write (2026-10-29)."""
     out = []
     owner, name = (kind or {}).get("owner", ""), (kind or {}).get("name", "")
     k = (kind or {}).get("kind", "")
@@ -604,15 +613,6 @@ def outside_items(targets: dict, kind: dict | None = None) -> list:
                         "copy": setup_script_line(),
                         "checked": claude_surfaces.entry("cloud-setup-script").get("verified_on", "")}
         out.append(item)
-    if set_up():
-        try:
-            import place
-            # Only for someone who already has a chat on their computer and is not signed in
-            # there: nobody is sent to make one.
-            if place.has_local() and not place.signed_in_ever():
-                out.append(outside_item("linkedin", owner, name))
-        except Exception:  # noqa: BLE001
-            pass
     for item in out:
         targets[item["id"]] = {"kind": "outside", "key": item["about"]["step"], "rev": item["rev"]}
     return out
@@ -774,11 +774,28 @@ def _sync_stale() -> bool:
         return True
 
 
+def _first_name() -> str:
+    """The name the page is called by ("Morgan's job search"): empty until setup knows it."""
+    try:
+        import person
+        name = str(person.get("identity.name", "") or "")
+        return str(person.get("identity.first", "") or "") or (name.split() or [""])[0]
+    except Exception:  # noqa: BLE001  no profile yet
+        return ""
+
+
 def _page_current() -> bool:
     if not page_record().get("url"):
         return False
     if not set_up():
         return True
+    # Published before the person's name was known ("Your job search"): published once more,
+    # so the page and its card in Claude carry their name (the maintainer, 2026-10-29).
+    # A page published under another name (the person changed theirs) is published again;
+    # one from before the name was kept takes it at the next change to the page's code.
+    named = page_record().get("title_name")
+    if _first_name() and named is not None and named != _first_name():
+        return False
     try:
         import build_versions
         return not build_versions.behind("page")

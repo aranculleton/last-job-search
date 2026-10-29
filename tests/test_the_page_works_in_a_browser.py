@@ -40,6 +40,11 @@ PHONE = {"width": 375, "height": 812}
 WIDE = {"width": 1440, "height": 900}
 
 
+
+def _base(ids):
+    """Action ids without the stamp each tap's own id carries from 4.3 (app.js actionId)."""
+    return [re.sub(r"~[0-9a-z]{6,}$", "", x) for x in ids]
+
 def _rgb(name):
     h = palettes.PALETTES[name]["bg"][0].lstrip("#")  # name: "light" (dawn) or "dark" (main)
     return "rgb(%d, %d, %d)" % tuple(int(h[i:i + 2], 16) for i in (0, 2, 4))
@@ -67,9 +72,15 @@ class Runner:
         self.n += 1
         self.proc.stdin.write(json.dumps({"id": self.n, "scenario": scenario, "args": args}) + "\n")
         self.proc.stdin.flush()
-        line = self.lines.get(timeout=180)
-        assert line, "the browser runner stopped"
-        got = json.loads(line)
+        # Each answer carries its question's id. A scenario that overran its wait answers late,
+        # and taking that late answer for the next question failed every test after it with
+        # someone else's result (Safari, 2026-10-29): an older answer is passed over.
+        while True:
+            line = self.lines.get(timeout=180)
+            assert line, "the browser runner stopped"
+            got = json.loads(line)
+            if got.get("id") is None or got["id"] >= self.n:
+                break
         assert got.get("ok"), got.get("error")
         return got["result"]
 
@@ -227,9 +238,12 @@ def test_the_owner_sees_the_page_and_anyone_else_sees_only_a_private_notice(run,
     own = run("paint", html=pages["sample"], clock="2026-10-25T09:00:00Z")
     _clean(own)
     assert own["shellShown"] and not own["privateShown"] and not own["opening"]
-    assert own["heading"] == "To do" and own["cards"] >= 4
+    # It opens on the Brief, greeting the person by name (4.3).
+    assert own["heading"] == "Good morning, Morgan" and own["cards"] >= 4
     assert own["brand"] == "Morgan’s job search"
-    assert own["title"] == "(9) Morgan’s job search", "four answers owed, two things late and three alerts"
+    # One card, one thing (4.3): today's To do cards that still need the person, the number
+    # To do's own summary leads with.
+    assert own["title"] == "(11) Morgan’s job search", "four answers, the things due today or late, and the alerts, a card each"
     assert own["conn"] == "live" and own["pulse"].startswith("Connected.")
     assert own["overflow"]["sw"] <= own["overflow"]["cw"]
     for fake in ({"owner": False}, {"noClaude": True}, {"caps": []}):
@@ -250,20 +264,23 @@ def test_nothing_personal_shows_until_the_owner_check_answers(run, pages):
     assert r["before"]["opening"] and not r["before"]["shell"]
     for word in ("Harbourline", "Juno", "Looker", "Morgan"):
         assert word not in r["before"]["text"], word
-    assert r["after"]["shell"] and r["after"]["heading"] == "To do"
+    assert r["after"]["shell"] and r["after"]["heading"] == "Good morning, Morgan"
 
 
 def test_without_a_store_the_page_says_it_is_read_only(run, pages):
     r = run("paint", html=pages["sample"], fake={"caps": ["user"]})
     _clean(r)
-    assert r["heading"] == "To do" and r["conn"] == "readonly"
+    assert r["heading"] == "Good morning, Morgan" and r["conn"] == "readonly"
     assert r["pulse"].startswith("Read only here: this page cannot keep answers.")
 
 
 # ------------------------------------------------------------------ every section, full and empty
 
-LABELS = {"todo": "To do", "jobs": "Jobs", "drafts": "Drafts", "drafts-messages": "Drafts", "contacts": "Contacts",
-          "interviews": "Interviews", "progress": "Progress", "chat": "Chat", "settings": "Settings"}
+# Drafts are a view of Jobs, the messages to send a view of Contacts, and the Brief greets the
+# person by name (4.3).
+LABELS = {"brief": "Good morning, Morgan", "todo": "To do", "jobs": "Jobs", "drafts": "Jobs", "drafts-messages": "Contacts",
+          "contacts": "Contacts", "interviews": "Interviews", "progress": "Progress", "chat": "Chat", "settings": "Settings",
+          "profile": "Your profile"}
 JARGON = re.compile(r"\b(?:repository|repo|branch|worktree|commit|pull request|PR|git|json|database|db|artifact|webhook|"
                     r"session id|config\w*|null|undefined|NaN|your chat|cloud chat|computer chat|downloadable|applies)\b", re.I)
 OLD_NAMES = re.compile(r"\b(?:Today|To send|Ready to send|Needs you|Ask|Talk|People)\b")
@@ -293,14 +310,41 @@ def test_every_section_full_shows_its_items_in_plain_words(run, pages):
     assert "Two answers about Quayside Foods" in drafts, "a draft's question is on its card, ahead of its other notes"
     assert "Made for Tamsin, who asked for it." in drafts and "I sent it to Tamsin" in drafts
     assert "put your name forward here" not in drafts, "the referrer's own resume carries no hold"
-    assert "Applications" in drafts and "Messages" in drafts
+    # Drafts are a view of Jobs: its switch, Found, Drafts and Applied (4.3).
+    assert "Found" in drafts and "Applied" in drafts
     msgs = r["drafts-messages"]["text"]
     assert "First notes this week" in msgs and "3 notes ready. 3 sent this week of about 20." in msgs
     assert "LinkedIn InMail" in msgs and "Subject:" in msgs and "Copy subject" in msgs
     assert "Every application" in r["progress"]["text"] and "earlier, finished" in r["progress"]["text"]
     settings = r["settings"]["text"]
     assert "An update is waiting" in settings and "4.0.1" not in settings
-    assert "Where Claude works" in settings and "In the cloud" in settings and "Auto" in settings
+    # How the app runs waits, folded, at the end (4.3).
+    assert "How the app runs" in settings and "Auto" in settings and "Your profile" in settings
+
+
+@pytest.mark.parametrize("viewport", [PHONE, WIDE])
+def test_a_screen_shows_at_most_three_question_marks_before_scrolling(run, pages, viewport):
+    # Each "?" explains one thing where it is asked about, and never crowds a screen (the
+    # maintainer, 2026-10-29: "we're not spamming ? stuff are we now?").
+    r = run("sections", html=pages["sample"], viewport=viewport)
+    _clean(r)
+    busy = {sid: (v["qsFirst"], v["qKeys"]) for sid, v in r.items() if isinstance(v, dict) and v.get("qsFirst", 0) > 3}
+    assert not busy, busy
+    tips = {sid: v["tips"] for sid, v in r.items() if isinstance(v, dict) and v.get("tips", 0) > 1}
+    assert not tips, ("one tip a screen at most", tips)
+
+
+@pytest.mark.parametrize("section", list(LABELS))
+def test_every_control_on_every_screen_does_something_and_nothing_throws(run, pages, section):
+    # Each control tapped on a fresh page (the maintainer, 2026-10-29: "I'm starting to doubt
+    # even some of the buttons work"): it opens, sends, moves or changes something on screen,
+    # nothing throws, and every link to another site has a real address.
+    r = run("sweep", html=pages["sample"], viewport=PHONE, clock="2026-10-25T09:00:00Z", sections=[section])
+    assert r["tapped"] == r["perSection"][section] or r["tapped"] == 80, r
+    assert not r["errors"], r["errors"]
+    assert not r["unclickable"], r["unclickable"]
+    assert not r["dead"], ("a tap that did nothing", r["dead"])
+    assert not r["badLinks"], r["badLinks"]
 
 
 def test_every_section_empty_says_what_will_appear_and_offers_one_step(run, pages):
@@ -339,12 +383,13 @@ def test_a_long_history_shows_every_live_thing_without_a_tap_and_folds_only_the_
     assert r["progressRows"] == 40, "40 live applications, all shown"
     assert any(f.startswith("20 earlier, finished") for f in r["progressFold"])
     assert r["progressSearch"] and r["contactSearch"]
-    assert r["contactRows"] == 12, "the 12 live contacts, all shown"
-    assert any(f.startswith("288 earlier, finished") for f in r["contactFold"])
+    assert r["contactDefault"] == 8 and not r["defaultChips"], \
+        "Contacts opens on the 8 who need the person, with no filter left on (4.3)"
+    assert any(f.startswith("292 more people, nothing owed to them now") for f in r["contactFold"]), r["contactFold"]
     assert r["searched"] >= 1 and r["searchFocus"] == "search", "typing in the search box keeps its focus"
     assert any("hidden by your filters" in f for f in r["hidden"])
-    assert r["cleared"] == 12
-    assert r["unfolded"] == 12 + 50, "the fold opens fifty at a time beyond the live ones"
+    assert r["cleared"] == 8
+    assert r["unfolded"] == 8 + 50, "the fold opens fifty at a time beyond the ones who need you"
     assert r["overflow"]["sw"] <= r["overflow"]["cw"]
 
 
@@ -369,7 +414,8 @@ def test_to_do_groups_by_when_then_by_employer_in_the_order_things_are_done(run,
     r = run("todo", html=pages["sample"])
     _clean(r)
     assert r["first"] == "Phone screen with Larkspur Retail", "the soonest interview within 14 days is the first card"
-    assert [b["band"] for b in r["bands"]] == ["Needs your answer", "Due or late", "Next 7 days", "Later"]
+    # Five show first; a band split by the fold heads its rest again inside it (4.3).
+    assert list(dict.fromkeys(b["band"] for b in r["bands"])) == ["Needs your answer", "Due or late", "Next 7 days", "Later"]
     for b in r["bands"]:
         for g in b["groups"]:
             assert g["employer"] is None or len(g["titles"]) >= 2, ("an employer heads only two or more", b["band"], g)
@@ -423,7 +469,7 @@ def test_a_referral_in_flight_asks_before_a_draft_or_an_application(run, pages):
 def test_a_tap_is_saved_only_when_it_is_and_done_when_its_receipt_arrives(run, pages):
     r = run("action_receipt", html=pages["sample"])
     _clean(r)
-    assert len(r["ids"]) == 1 and r["ids"][0] == "actions/act~msg-juno-1~msg.sent"
+    assert len(r["ids"]) == 1 and _base(r["ids"]) == ["actions/act~msg-juno-1~msg.sent"]
     doc = r["doc"]
     assert doc["item"] == "msg-juno-1" and doc["action"] == "msg.sent" and doc["rev_seen"] == "m1"
     assert doc["tab"] and doc["at"].endswith("Z")
@@ -448,7 +494,7 @@ def test_a_failed_save_says_so_at_once_and_never_says_saved(run, pages):
 def test_undo_stays_on_the_item_until_claude_has_done_it(run, pages):
     r = run("undo", html=pages["sample"])
     _clean(r)
-    assert r["before"] == ["actions/act~r12-1~job.dismiss"]
+    assert _base(r["before"]) == ["actions/act~r12-1~job.dismiss"]
     assert r["marked"], "a role set aside stays in place, marked, until it is done"
     assert r["focus"] == "Undo", "focus moves to the item's Undo"
     assert r["undoShown"] == 1
@@ -457,7 +503,7 @@ def test_undo_stays_on_the_item_until_claude_has_done_it(run, pages):
     assert r["reason"]["value"] == {"why": "pay"}, "a reason, if they give one, goes with the same action"
     assert r["during"] >= 1
     assert r["later"] == {"toast": 0, "item": 1}, "the toast goes; the item's Undo stays"
-    assert r["kept"] == ["actions/act~r12-3~job.dismiss"]
+    assert _base(r["kept"]) == ["actions/act~r12-3~job.dismiss"]
 
 
 def test_bulk_select_is_a_mode_and_marks_several_each_their_own_action(run, pages):
@@ -471,7 +517,7 @@ def test_bulk_select_is_a_mode_and_marks_several_each_their_own_action(run, page
     assert got == [("r12-1", "job.applied"), ("r12-3", "job.applied")]
     assert all(len(a["value"]["on"]) == 10 for a in r["actions"]), "the day it went, as the engine reads it"
     assert sorted(r["after"]) == ["Data Analyst, Payments", "Pricing Analyst"], "they stay in place, marked, until done"
-    assert sorted(r["readyActions"]) == ["actions/act~app-ellerwick-insight~ready.applied", "actions/act~app-quayside-demand~ready.applied"]
+    assert sorted(_base(r["readyActions"])) == ["actions/act~app-ellerwick-insight~ready.applied", "actions/act~app-quayside-demand~ready.applied"]
     assert r["toastAboveBulk"] in (True, None), "a toast never covers the bulk bar"
 
 
@@ -485,10 +531,13 @@ def test_settings_save_once_the_person_settles_and_show_the_new_value(run, pages
     assert ("setting-brief_days", '"Tuesday"') in got
     assert r["checked"] is True
     assert r["names"][0] == "An update is waiting", "an update waiting is the first row"
-    # Then the person's own profile (2026-10-28), then the look.
+    # Then Your profile, a page of its own (4.3); then the search, the brief, the look; how
+    # the app runs last, folded.
+    assert r["names"][1].startswith("Your profile"), r["names"]
     look = r["names"].index("Look")
-    assert {"Your jobs", "Your skills", "Education", "Certificates"} <= set(r["names"][1:look]), r["names"]
-    assert r["names"][look:look + 5] == ["Look", "Size", "Where Claude works", "Where long tasks run", "Suggestions"], "then grouped rows, the look first"
+    assert r["names"][look:look + 2] == ["Look", "Size"]
+    adv = r["names"].index("Where Claude works")
+    assert adv > look and r["names"][adv:adv + 2] == ["Where Claude works", "Suggestions"], r["names"]
 
 
 # ------------------------------------------------------------------ asking a chat for work
@@ -499,7 +548,8 @@ def test_draft_this_asks_its_questions_first_says_what_it_costs_and_rings_with_n
     assert r["open"] and r["focusInDialog"]
     assert r["legends"][0] == "Have you already applied for this role?"
     assert any("fixed term" in x for x in r["legends"])
-    assert r["cost"].startswith("About 9 minutes.") and "Nothing is sent." in r["cost"]
+    # The gauge's own words, then the time (4.3).
+    assert "About 9 minutes." in r["cost"] and "Nothing is sent." in r["cost"]
     assert r["stillOpen"] and len(r["errors"]) == 2, "unanswered questions are named, nothing is asked of a chat"
     assert r["submitWhenApplied"] == "Mark as applied" and r["submitWhenNot"] == "Draft it", "the button says what it will do"
     assert r["closed"]
@@ -527,22 +577,26 @@ def test_two_windows_pressing_draft_at_once_make_one_job_and_one_ring(run, pages
     r = run("two_tabs", html=pages["sample"])
     _clean(r)
     assert r["work"] == ["work/draft~r12-1"]
-    assert r["rings"] == 1
+    # Each window rings inside its own tap and cannot wait to hear the other's: at most two
+    # rings for one job, the second wake finding it taken (2026-10-29).
+    assert 1 <= r["rings"] <= 2
     assert any("already on its way" in t for t in r["toasts"])
     assert r["tabs"][0] != r["tabs"][1], "each window has its own id for its actions"
     assert all(s and "1 waiting" in s for s in r["seen"]), r["seen"]
-    assert r["actions"] == ["actions/act~msg-juno-1~msg.sent"]
+    assert _base(r["actions"]) == ["actions/act~msg-juno-1~msg.sent"]
     assert r["otherWindow"] == {"chip": ["Marked as sent"], "buttons": 0}, "the other window cannot tick it again"
 
 
-def test_a_chat_beside_the_page_is_rung_from_the_click_itself(run, pages):
+def test_a_tap_rings_the_doorbell_inside_the_click_once_and_never_asks_send_this(run, pages):
+    """The platform takes a ring only from the person's own recent tap (comments.d.ts), and
+    the room asked "send this?" on every tap: one doorbell ring, inside the click, and no
+    room (live checks, 2026-10-29)."""
     r = run("room", html=pages["sample"])
     _clean(r)
-    room = [c for c in r["calls"] if c["cap"] == "room"]
-    assert len(room) == 1 and room[0]["active"] is True, "sendToClaudeSession runs inside the click"
-    assert room[0]["opts"] == {"deliver": "send", "attachPresence": False}
-    assert room[0]["data"]["work"] == "draft~r12-1"
-    assert not [c for c in r["calls"] if c["cap"] == "comments"], "one ring, not two"
+    assert not [c for c in r["calls"] if c["cap"] == "room"], "no 'send this?' box on a tap"
+    rings = [c for c in r["calls"] if c["cap"] == "comments" and c.get("op") == "sendToClaude"]
+    assert len(rings) == 1 and rings[0]["active"] is True, "rung inside the click"
+    assert rings[0]["text"] == "[app] [work:draft~r12-1]"
     assert r["work"] == ["work/draft~r12-1"]
 
 
@@ -562,7 +616,8 @@ def test_progress_moves_with_the_clock_marks_a_stall_and_tries_again(run, pages)
     r = run("progress", html=pages["sample"], shot="phone-work-done" if SHOTS else "")
     _clean(r)
     assert r["sheet"], "on a phone the work opens as a sheet"
-    assert "1 running" in r["pill"]
+    # One thing running is named in the pill (the maintainer, 2026-10-29: be clear what runs).
+    assert "Finding jobs" in r["pill"]
     a0, a150 = r["at0"], r["at150"]
     # Stages of 60, 300 and 120 s; the second has just started, 60 of 480 s behind it.
     assert a0["now"] == 12
@@ -595,7 +650,7 @@ def test_stop_says_what_is_kept(run, pages):
     _clean(r)
     assert r["late"]["status"] == "Not picked up yet"
     assert "Ask Claude again" in r["rewake"]
-    assert r["prefill"] and r["prefill"].startswith("https://claude.ai/code?prompt=")
+    assert "Claude has been told" in r["told"], "asked again, the doorbell rang and the card says so"
     assert r["running"]["stop_asked"] is True and r["running"]["status"] == "running"
     assert r["runningCard"]["status"] == "Stopping after this step"
     assert "Stop" not in r["runningCard"]["buttons"]
@@ -612,8 +667,9 @@ def test_both_files_download_in_one_tap_and_a_draft_with_none_asks_for_them(run,
     assert [s["filename"] for s in r["saves"]] == ["Morgan_Ellis_CV_Ellerwick.pdf", "Morgan_Ellis_Cover_Letter_Ellerwick.pdf"]
     assert all(s["blob"] and s["size"] > 100 for s in r["saves"])
     assert any("Saved." in n for n in r["note"])
-    assert any(x.startswith("Your files are not on this page yet.") for x in r["noLetter"])
-    assert "Ask Claude to add them" in r["askButtons"] and not any(b.startswith(("Download", "Get both")) for b in r["askButtons"])
+    # Said once for every draft, above them, with one button (4.3).
+    assert r["filesLine"] and r["filesLine"][0].startswith("1 application's files are not on this page yet.")
+    assert not any(b.startswith(("Download", "Get both")) for b in r["askButtons"])
     assert r["primary"] == ["Make it again"]
     assert r["work"]["kind"] == "files" and r["work"]["args"]["files"] == ["Morgan_Ellis_CV_Quayside.pdf"]
 
@@ -649,12 +705,15 @@ def test_chat_is_one_box_and_quick_answers_read_the_page(run, pages):
     assert r["busy"] == "false" and not r["status"]
 
 
-def test_a_question_the_page_cannot_answer_goes_to_claude_by_itself(run, pages):
+def test_a_question_the_page_cannot_answer_goes_to_claude_in_one_tap(run, pages):
+    """Handed on seconds after the tap, the doorbell cannot ring by itself (comments.d.ts:
+    only from the person's own recent tap): the note's one button sends it (2026-10-29)."""
     r = run("talk", html=pages["sample"], question="Can you check the employer's website?",
             sample={"toolCalls": [{"name": "needs_chat", "input": {"reason": "It needs the employer's own website"}}],
                     "reply": "Your cloud chat can look that up."})
     _clean(r)
-    assert any("Claude is working on this" in t and "It needs the employer" not in t for t in r["quick"]), "Claude's own reasoning is never shown"
+    assert any("This needs Claude itself" in t for t in r["quick"]) and not any("It needs the employer" in t for t in r["quick"]), "Claude's own reasoning is never shown"
+    assert any("Sent to Claude" in t for t in r["afterSend"])
     assert not any("Your cloud chat can look that up." in t for t in r["quick"])
     sent = [w for w in r["work"] if w["kind"] == "talk"]
     assert len(sent) == 1 and sent[0]["to"] == "cloud"
@@ -675,12 +734,12 @@ def test_with_no_quick_answers_a_question_goes_to_claude_and_the_answer_comes_ba
     assert "Claude" in "".join(r["who"]) and "Cloud" not in "".join(r["who"])
 
 
-def test_where_claude_works_is_one_setting_and_says_so_only_when_it_matters(run, pages):
+def test_work_goes_to_the_chat_that_answers_the_page_with_nothing_to_choose(run, pages):
     r = run("chat_computer", html=pages["sample"])
     _clean(r)
-    assert "Where long tasks run" in r["legend"], "the choice of where big jobs run, beside the checklist of where Claude works"
-    assert "Works when your computer is off." in r["hints"] and "Can use your files and your browser there." in r["hints"]
-    assert r["setting"]["value"] == "computer"
+    # The maintainer, 2026-10-29: "even i dont know what changing these settings does".
+    assert "Where long tasks run" not in r["legend"]
+    assert not any("work_either" in k for k in r["settingKeys"])
     assert len(r["work"]) == 1 and r["work"][0]["to"] == "computer"
     assert any("This needs your computer: open Claude on it." in t for t in r["waiting"])
     on = run("chat_computer", html=pages["sample"], listening=True)
@@ -798,14 +857,14 @@ def test_keyboard_alone_reaches_and_works_everything_and_the_shortcuts_can_be_sw
     _clean(r)
     assert r["first"] == "Skip to the main content"
     assert r["afterSkip"] == "main"
-    assert r["draftsFocus"] == "Drafts", "a section opened by keyboard puts focus on its heading"
+    assert r["draftsFocus"] == "Contacts", "a section opened by keyboard puts focus on its heading"
     assert r["reachedDraft"]
     assert r["visibleFocus"] not in ("none", "")
     assert r["dialog"] and r["dialogGone"]
     assert r["backOn"] == "Draft this: Harbourline Bank, Pricing Analyst"
     assert r["help"] == "Keyboard shortcuts"
     assert r["afterGT"] == "To do" and r["afterGJ"] == "Jobs"
-    assert r["cardFocus"] == "r12-2", "j moves to the first card: the role with a question comes first"
+    assert r["cardFocus"] == "r12-1", "j moves to the first card: the best match by its number (4.3)"
     assert r["moreClosed"], "Esc closes a card's More"
     assert r["typed"] == ["gj", "Chat"], "typing in a box is never a shortcut"
     assert r["offStays"] == "Settings" and r["stored"] == "off"
@@ -966,7 +1025,7 @@ def test_more_contrast_turns_secondary_text_to_the_body_ink(run, pages):
 def test_what_was_opened_selected_and_typed_outlives_live_updates_and_a_reload(run, pages):
     r = run("persist", html=pages["sample"])
     _clean(r)
-    assert r["stillOpen"] is True and "1 running" in r["pill"]
+    assert r["stillOpen"] is True and "Finding jobs" in r["pill"]
     assert r["selection"] > 100, "a live update never wipes a selection"
     assert r["afterReload"] == "Half a thought about Harbourline"
     assert r["otherTab"] == "", "a draft belongs to the window it was typed in"
@@ -993,8 +1052,10 @@ def test_every_screen_keeps_to_the_simplicity_budgets(run, pages, viewport, sche
         assert got["filled"] <= BUDGET["filled"], (sid, "filled buttons in view", got["filled"])
         for c in got["cards"]:
             # An icon tool on the card's row (Tweak's pencil, a job's bin: the maintainer,
-            # 2026-10-26) is not one of its actions, as an answer is not.
-            others = c["controls"] - c["answers"] - c.get("icons", 0)
+            # 2026-10-26) is not one of its actions, as an answer is not, nor its "?" (the
+            # maintainer, 2026-10-29: "just explainers or ?"), nor a person's name that opens them (the maintainer, 2026-10-29: "why cant i click
+            # his name").
+            others = c["controls"] - c["answers"] - c.get("icons", 0) - c.get("names", 0)
             if not c["alerts"]:
                 assert others <= BUDGET["card_controls"], (sid, c)
             assert c["filled"] <= 1, (sid, c)
@@ -1053,7 +1114,8 @@ def test_a_busy_week_is_a_few_checklists_not_a_card_each(run, pages):
     assert "Nudge" not in r["text"], "a follow-up is called a follow-up"
     assert "Turn on the new reading pace?" not in r["text"], "questions from updates wait in Settings"
     assert "Turn on the new reading pace?" in r["settings"]
-    assert r["counts"].get("drafts") and r["counts"].get("interviews"), r["counts"]
+    # Drafts are inside Jobs (4.3): the quiet counts are on Jobs and Interviews.
+    assert r["counts"].get("jobs") and r["counts"].get("interviews"), r["counts"]
     assert r["progress"]["recent"].startswith("In the last 30 days: 1 applied, 2 replies")
     assert r["progress"]["all"].startswith("Since you started:")
     assert r["bin"]["title"] == "Not for you?" and "No more roles from Harbourline Bank" in r["bin"]["options"]
@@ -1062,19 +1124,19 @@ def test_a_busy_week_is_a_few_checklists_not_a_card_each(run, pages):
 
 # ------------------------------------------------------------------ waking Claude, by itself (2026-10-28)
 
-def test_the_page_wakes_its_helper_chat_by_itself_and_starts_one_when_it_is_gone(run, pages):
+def test_the_page_wakes_its_chat_with_the_doorbell_alone_and_never_starts_a_chat(run, pages):
+    """The "Claude Code Remote" connector could not even load on the maintainer's account and
+    asked on every tap (live check, 2026-10-29): the page calls no connector to wake its chat,
+    and starts no chat of its own."""
     r = run("wake", html=pages["sample"])
     _clean(r)
-    sent = [c for c in r["mcp"] if c["tool"] == "send_message"]
-    assert sent and sent[0]["server"] == "Claude Code Remote" and sent[0]["input"]["session_id"] == "session_EXAMPLEHELPER"
-    assert "[app] [work:draft~r12-1]" in sent[0]["input"]["message"]
-    assert not [c for c in r["mcp"] if c["tool"] == "create_session"], "a helper that answers is never replaced"
-    assert r["wakeCard"] == 0, "no Wake Claude card while the page can wake it"
-    gone = run("wake", html=pages["sample"], fail=["send_message"])
+    assert not [c for c in r["mcp"] if c["server"] == "Claude Code Remote"]
+    assert r["rings"] and r["rings"][0]["active"] is True and "[work:draft~r12-1]" in r["rings"][0]["text"]
+    assert r["wakeCard"] == 0, "no Wake Claude card right after a ring"
+    # Nobody to hear it: still no chat started, and the one card says how to wake Claude.
+    gone = run("wake", html=pages["sample"], canSend="no_session")
     _clean(gone)
-    made = [c for c in gone["mcp"] if c["tool"] == "create_session"]
-    assert len(made) == 1, "one new helper, never one per piece of work"
-    assert made[0]["input"]["title"] == "Job search helper" and made[0]["input"]["environment_id"] == "env_test1"
+    assert not gone["mcp"]
 
 
 # ------------------------------------------------------------------ your profile (2026-10-28)
@@ -1097,8 +1159,8 @@ def test_the_tour_walks_each_section_skips_and_opens_one_part_from_its_title(run
     r = run("tour", html=pages["sample"])
     _clean(r)
     assert r["card"] == ["New here? A one-minute tour"]
-    assert r["first"] == ["To do (1 of 8)"]
-    assert r["second"]["title"] == ["Jobs (2 of 8)"] and r["second"]["hash"] == "#jobs", "each step opens its section"
+    assert r["first"] == ["Brief (1 of 7)"]
+    assert r["second"]["title"] == ["To do (2 of 7)"] and r["second"]["hash"] == "#todo", "each step opens its section"
     assert r["closed"] == 0 and r["cardAfter"] == 0, "skipped, and never offered again on this device"
     assert r["part"]["title"] == ["How Contacts works"]
     assert "Next part: Interviews" in r["part"]["buttons"] and "Close" in r["part"]["buttons"]

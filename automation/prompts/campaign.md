@@ -1,25 +1,11 @@
 # A chat just for one employer: the campaign
 
-When a live process reaches a booked interview (or a referral turns into a recruiter's
-call), `interview_pack.py pack --write` offers the person, once, a chat of its own for that
-employer. This file is that chat's instructions, read from master at the start of every
-session there, so improving them is an ordinary pull request.
-
-## Starting it (the chat that made the offer)
-
-On a yes, in a cloud chat that has the tool: `create_session` on the person's **private**
-repo (never the app's), titled `Job search: <Employer> campaign`, with this as its prompt:
-
-> Read `automation/prompts/campaign.md` from master and follow it, for `<Employer>`, the
-> `<role>` process. Its document is `<the folder>/interview_prep.md`.
-
-Without that tool (a chat on the person's computer), give them the steps to open a new chat
-on their computer (`python3 tools/claude_surfaces.py steps local-chat`) and that prompt in a
-code block to paste there. Nothing else: the new chat makes its own folder itself
-(`python3 tools/sync_app.py --worktree <employer>`, RUNBOOK.md step 4), and they are never told how. Then, either way: `python3 tools/interview_pack.py campaign "<Employer>" --yes
-"<the chat's title or id>"`. From then on `open_actions.py --due` and the brief show that
-employer as handled by its campaign chat, and the rest of the search leaves it alone. On a
-no: `campaign "<Employer>" --no`, and it is never offered again for this process.
+Before 4.3, a booked interview offered the person a chat of its own for that employer. None
+is offered or started any more: interview prep runs in the chat that answers the page, and
+shows on its Interviews screen (the maintainer, 2026-10-29: "fewest possible chats"). A
+campaign chat started earlier keeps working from this file, read from master at the start of
+every session there; `interview_pack.py campaign` still records its answer, and the rest of
+the search leaves that employer to it.
 
 ## Every session in the campaign chat
 

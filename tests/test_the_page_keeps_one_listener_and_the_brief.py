@@ -120,3 +120,77 @@ def test_without_a_schedule_there_is_no_brief_group(run, tmp_path, vp):
     m.pop("schedule")
     got = _go(run, tmp_path, [{"hash": "settings", "count": '[data-k="info-sum:brief-when"]'}], vp, model=m, clock=T)
     assert got["after"][0]["count"] == 0
+
+
+# ------------------------------------------------------------------ the brief's bell
+
+
+def test_the_bell_turns_a_brief_off_and_says_so_where_settings_does(run, tmp_path, vp):
+    # The bell on the Brief opens the same sheet as Settings > Your brief (the maintainer,
+    # 2026-10-29: "the bell is both there and the settings too yes?").
+    got = _go(run, tmp_path, [
+        {"hash": "brief", "read": '[data-k="brief-bell"]'},
+        {"open": "brief-bell"},
+        {"click": "Off", "role": "radio", "exact": True},
+        {"submit": True, "wait": 300},
+        {"hash": "settings", "read": '[data-k="info-sum:brief-when"]'},
+    ], vp, clock=T)
+    assert "Mondays and Thursdays at 7:38" in got["after"][0]["text"]
+    off = _one(got, "brief.off")
+    assert off["item"] == "schedule" and off["rev_seen"] == "sc1"
+    assert "Off" in got["after"][4]["text"], "Settings shows the bell's change at once"
+
+
+def test_the_bell_turns_it_back_on_every_day(run, tmp_path, vp):
+    m = _sample()
+    m["schedule"]["off"] = True
+    got = _go(run, tmp_path, [
+        {"hash": "brief", "open": "brief-bell"},
+        {"click": "Every day", "role": "radio", "exact": True},
+        {"submit": True, "wait": 300},
+    ], vp, model=m, clock=T)
+    assert _one(got, "brief.on")["item"] == "schedule"
+    move = _one(got, "brief.move")
+    assert sorted(move["value"]["days"]) == [1, 2, 3, 4, 5, 6, 7] and move["value"]["time"] == "07:38"
+
+
+def test_with_no_brief_the_bell_asks_once_and_turning_it_on_is_work_for_claude(run, tmp_path, vp):
+    m = _sample()
+    m["schedule"] = {"id": "schedule", "set_up": False, "off": False, "when": "", "days": [], "time": "",
+                     "zone": "Europe/London", "paused": None, "waiting": 0, "rev": "sc0",
+                     "actions": {"move": "brief.move", "pause": "brief.pause", "resume": "brief.resume", "off": "brief.off", "on": "brief.on"}}
+    got = _go(run, tmp_path, [
+        {"hash": "brief", "open": "brief-bell", "read": "dialog[open]"},
+        {"click": "Turn it on", "wait": 500},
+        {"hash": "settings", "read": '[data-k="info-sum:brief-when"]'},
+    ], vp, model=m, clock=T)
+    sheet = got["after"][0]["text"]
+    assert "A brief each morning" in sheet and "no new chat is made" in sheet
+    w = [x for x in got["work"] if x and x.get("kind") == "brief"]
+    assert w and w[-1]["args"] == {"setup": True}, got["work"]
+    assert "Being set up" in got["after"][2]["text"]
+    assert not got["actions"], "nothing scheduled by a tap that only asks"
+    assert w[-1]["to"] == "cloud"
+
+
+def test_answered_on_the_computer_the_bell_sends_the_brief_to_the_cloud_and_starts_the_helper(run, tmp_path, vp):
+    """A brief comes with the computer off, so only a chat in the cloud can run it (tools/page_db.py
+    can_take). Where the page is answered on the computer and no helper is set up, the same tap
+    asks for the brief and opens the helper's chat: nothing else to choose."""
+    m = _sample()
+    m["schedule"] = {"id": "schedule", "set_up": False, "off": False, "when": "", "days": [], "time": "",
+                     "zone": "Europe/London", "paused": None, "waiting": 0, "rev": "sc0",
+                     "actions": {"move": "brief.move", "pause": "brief.pause", "resume": "brief.resume", "off": "brief.off", "on": "brief.on"}}
+    m.setdefault("where", {})["helper"] = {"state": "optional", "title": None, "say": "Only for work while your computer is off."}
+    seed = {"meta/listener": {"chat": "local-1", "title": "Job search", "kind": "computer",
+                              "answered_at": "2026-10-25T08:59:00Z", "watching": True}}
+    got = _go(run, tmp_path, [
+        {"hash": "brief", "eval": "window.__opened = []; window.open = (u) => { window.__opened.push(String(u)); return null; }; 'ok'"},
+        {"open": "brief-bell", "read": "dialog[open]"},
+        {"click": "Turn it on", "wait": 500, "eval": "JSON.stringify(window.__opened)"},
+    ], vp, model=m, seed=seed, clock=T)
+    sheet = got["after"][1]["text"]
+    assert "Claude's helper in the cloud" in sheet and "press Send there, once" in sheet
+    w = [x for x in got["work"] if x and x.get("kind") == "brief"]
+    assert w and w[-1]["to"] == "cloud" and w[-1]["args"] == {"setup": True}
+    assert "claude.ai/code" in got["after"][2]["eval"], got["after"][2]

@@ -663,7 +663,9 @@ def status(today=None, tools=(), found=None, threads=None) -> dict:
                     line=f"take: {path}",
                     do=f"python3 tools/network/export.py take \"{path}\": it saves the download "
                        "and imports its history, and says what changed")
-    if taken and (not EXPORT_EVERY_DAYS or today < due_on):
+    # Taken in a chat whose folder is gone (a cloud chat kept nothing before 4.3): the
+    # connections it held are not on file, so it is asked for again rather than called fresh.
+    if taken and (not EXPORT_EVERY_DAYS or today < due_on) and _holds_any(default_folder()):
         return dict(out, state="fresh",
                     line=f"fresh: taken {taken.isoformat()}"
                          + (f"; the next is due {due_on.isoformat()}" if due_on else ""),

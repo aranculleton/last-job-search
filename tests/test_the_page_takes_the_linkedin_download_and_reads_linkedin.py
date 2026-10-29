@@ -52,6 +52,10 @@ class Page(Search):
         env.pop("LJS_TODAY", None)
         return env
 
+    def root_assets(self):
+        os.makedirs(self.assets, exist_ok=True)
+        return self.assets
+
     def fetched(self):
         """The page's assets as a chat's Artifact read saves them: <asset id>.<ext>."""
         os.makedirs(self.assets, exist_ok=True)
@@ -177,18 +181,35 @@ def test_a_download_asked_for_a_day_ago_and_not_taken_is_said_once(page):
 
 # ------------------------------------------------------------------ B: the page reads LinkedIn
 
+# The tap that says the page read LinkedIn is dated NOW, and the page counts as reading for
+# place.PAGE_READS_DAYS after it: route() and place.check() are asked on that same day (the
+# `today` place.page_reads takes), as the page's model is (`--now NOW`), not on the
+# computer's own calendar.
+ON_THE_DAY = ("import datetime, functools, place\n"
+              "place.page_reads = functools.partial(place.page_reads, "
+              f"today=datetime.date.fromisoformat({NOW[:10]!r}))\n")
+
 
 def test_after_check_it_works_the_page_is_a_browser_that_reads(page):
-    assert page.model()["linkedin"]["reading"]["page_reads"] is False
-    route = page.py("import reading; print(reading.route(())['route'])").strip()
-    assert route == "hand"
+    m = page.model()
+    assert m["linkedin"]["reading"]["page_reads"] is False
+    assert m["where"]["reading"]["state"] == "open_in_app"
+    # The page is the reader before it has read anything too (4.3): queued, and the person
+    # told once where it reads.
+    route = json.loads(page.py(ON_THE_DAY + "import reading, json; "
+                               "print(json.dumps(reading.route(())))"))
+    assert route["route"] == "page" and "Claude app on your computer" in route["say"]
     aid = page.act("reader.checked", "linkedin-reader", value={"ok": True}, rev="")
     assert page.apply()["ok"] == [aid], page.receipt(aid)
-    rd = page.model()["linkedin"]["reading"]
+    m = page.model()
+    rd = m["linkedin"]["reading"]
     assert rd["page_reads"] is True and rd["ok"] is True and rd["checked_at"]
-    route = json.loads(page.py("import reading, json; print(json.dumps(reading.route(())))"))
+    assert m["where"]["reading"]["state"] == "ready"
+    route = json.loads(page.py(ON_THE_DAY + "import reading, json; "
+                               "print(json.dumps(reading.route(())))"))
     assert route["route"] == "page" and route["usable"] and "queue-page" in route["do"]
-    told = page.py("import place; print(place.check('desktop-cloud', 'browser', []))").strip()
+    assert route["say"] == ""
+    told = page.py(ON_THE_DAY + "print(place.check('desktop-cloud', 'browser', []))").strip()
     assert told == "[]"
 
 
@@ -215,7 +236,7 @@ def test_a_profile_the_page_read_is_logged_as_a_computer_chats_read_is(page):
     batch = json.load(open(got["batches"][0], encoding="utf-8"))
     wipe = next(e for e in batch if e["collection"] == "actions" and e["doc_id"] == aid)
     assert json.load(open(wipe["file_path"], encoding="utf-8")) == {
-        "value": {"text": {"__delete__": True}}}
+        "value": {"text": {"__delete__": True}}, "_v": wipe["if_version"] + 1}
 
 
 def test_nothing_here_fetches_linkedin():
@@ -224,3 +245,71 @@ def test_nothing_here_fetches_linkedin():
             src = fh.read()
         assert "urlopen" not in src and "requests.get" not in src, rel
     _ = PELL
+
+
+# A message with a line break of its own: a cut inside its quotes would split it in two.
+EXTRA = ('conv-juno,,Juno Castellan,https://ca.linkedin.com/in/example-juno-castellan,'
+         'Morgan Ellis,https://www.linkedin.com/in/morgan-ellis-example,'
+         '2026-09-12 09:00:00 UTC,,"Thanks Morgan.\nHappy to talk next week.",INBOX,\n')
+
+
+def _split_on_the_page(text, max_chars):
+    node = shutil.which("node")
+    if not node:
+        pytest.skip("node is not installed here")
+    with open(os.path.join(ROOT, "templates", "app", "app.js"), encoding="utf-8") as fh:
+        js = fh.read()
+    fn = js[js.index("  function splitCsv(text, max) {"):]
+    fn = fn[:fn.index("\n  }\n") + 4]
+    out = subprocess.run([node, "-e", fn + "\nprocess.stdout.write(JSON.stringify(splitCsv("
+                          "require('fs').readFileSync(0, 'utf8'), " + str(max_chars) + ")));"],
+                         input=text.encode("utf-8"), capture_output=True, timeout=60)
+    # Bytes both ways: a text pipe on Windows writes every "\n" as "\r\n", so the splitter
+    # saw "\r\r\n" where the page itself reads the file as it is (CI, 2026-10-29).
+    assert out.returncode == 0, out.stderr.decode("utf-8", "replace")
+    return json.loads(out.stdout.decode("utf-8"))
+
+
+def _take_messages(page, aid, messages_assets):
+    os.makedirs(page.assets, exist_ok=True)
+    assets = list(messages_assets)
+    for asset, name in FILES.items():
+        if name != "messages.csv":
+            shutil.copyfile(os.path.join(FIX, name), os.path.join(page.assets, asset + ".csv"))
+            assets.append({"id": asset, "name": name})
+    page.put("actions", aid, {"action": "export.take", "item": "linkedin-export",
+                              "value": {"assets": assets}, "at": "2026-10-25T17:10:00Z",
+                              "rev_seen": "", "tab": "t1"}, version=1)
+    got = page.apply_assets()
+    assert got["ok"] == [aid], page.receipt(aid)
+    return page.receipt(aid)["counts"]
+
+
+def test_a_file_over_the_pages_limit_comes_in_parts_and_is_joined_whole(tmp_path):
+    """A busy inbox's messages run to tens of megabytes, over the page store's 20 MiB. It was
+    refused with "ask in Chat", which led nowhere (2026-10-29). Now the page sends it in parts
+    of whole records, each under the file's first line, and the engine joins them again."""
+    with open(os.path.join(FIX, "messages.csv"), encoding="utf-8", newline="") as fh:
+        src = fh.read()
+    src = src + ("" if src.endswith("\n") else "\n") + EXTRA
+    parts = _split_on_the_page(src, 300)
+    head = src.split("\n", 1)[0] + "\n"
+    assert len(parts) > 2 and all(p.startswith(head) for p in parts)
+    assert parts[0] + "".join(p[len(head):] for p in parts[1:]) == src
+    assert all(p.count('"') % 2 == 0 for p in parts)          # whole records in every part
+    assert any("Thanks Morgan.\nHappy to talk" in p for p in parts)
+    whole = Page(str(tmp_path / "whole"))
+    with open(os.path.join(whole.root_assets(), "a1" * 16 + ".csv"), "w", encoding="utf-8",
+              newline="") as fh:
+        fh.write(src)
+    want = _take_messages(whole, "act-whole", [{"id": "a1" * 16, "name": "messages.csv"}])
+    split = Page(str(tmp_path / "split"))
+    given = []
+    for k, text in enumerate(parts, 1):
+        asset = f"{k:02x}" * 16
+        with open(os.path.join(split.root_assets(), asset + ".csv"), "w", encoding="utf-8",
+                  newline="") as fh:
+            fh.write(text)
+        given.append({"id": asset, "name": "messages.csv", "part": k})
+    got = _take_messages(split, "act-parts", given)
+    assert got == want and got["messages"] > 0

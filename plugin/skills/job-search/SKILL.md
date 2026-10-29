@@ -1,50 +1,62 @@
 ---
 name: job-search
-description: Open the person's job search page, or set it up the first time. Use when they say "open my job search", "job search", "set me up", "start my job search", "my page", or anything about their job search outside its own folder.
+description: Set up or open the person's job search. Use when they say "set me up", "set this up", "set up my job search", "open my job search", "job search", "my page", or hand over the link github.com/aranculleton/last-job-search with any request to set it up or start it.
 ---
 
 # Your job search
 
-This plugin is only the front door. The search itself lives in the person's own private
-copy of last-job-search (a repository on their GitHub account) and on their private page in
-Claude. Find their copy, hand over to it, and say as little as possible: plain words, one
-line a step, never a command, a folder name or a git word.
+This plugin is the front door. The search lives in the person's own private copy of the app
+(a copy on their GitHub account) and on their private page in Claude.
 
-## 1. Inside their copy already
+**Do every step yourself. Ask nothing, offer no choices, and never say copy, repository,
+branch, master, template, clone, push, empty or any git or GitHub word to the person.** The
+only things that are theirs: signing in to GitHub once (step 2), and the setup questions,
+which their page asks. Say one short plain line while you work, at most: "Setting up your
+job search." Then the next thing they see is their page.
 
-When the current folder has `tools/app.py` and `profile/`, run, as its own command:
+`APP` is `https://github.com/aranculleton/last-job-search`. Never set anyone up in the app
+itself: anything written there is public, and its start command refuses.
+
+## 1. Already here
+
+The current folder has `tools/app.py`: go to step 5.
+
+Otherwise look for a folder that has both `tools/app.py` and `profile/`: `~/job-search`,
+`~/my-job-search`, `~/*job-search*`, `~/Documents/*job*search*`, `~/Desktop/*job*search*`.
+Found one: work there, step 5. More than one: the one changed most recently.
+
+## 2. Signed in to GitHub
+
+`gh auth status`. Not signed in, or `gh` missing: follow COMPUTER.md in `APP`, steps 1 to 3
+(it installs what is missing and signs them in with one code they type on GitHub's page).
+
+## 3. Their copy
+
+- Their message names one (`github.com/OWNER/NAME`): use it.
+- Otherwise `gh repo list --limit 100 --json name,owner,isPrivate` and take a private one
+  whose name has "job" and "search" in it.
+- None: make it, private, from the app:
+  `gh repo create my-job-search --private --template aranculleton/last-job-search`
+  (`my-job-search-2` if the name is taken). Then wait about ten seconds: GitHub fills it.
+
+## 4. Put it in a folder of its own
+
+`~/my-job-search` (or the name of their copy, in their home folder), new and empty, then:
+
+- `gh repo clone OWNER/NAME <folder>`.
+- **The copy has nothing in it yet** (the clone says it is empty, or has no files): fill it
+  from the app, silently, keeping the app's history so its updates merge cleanly later. In
+  the folder: `git fetch -q https://github.com/aranculleton/last-job-search master`, then
+  `git checkout -q -B master FETCH_HEAD`, `git push -q origin master` and
+  `gh repo edit OWNER/NAME --default-branch master`. That is exactly what making it from
+  the app would have given them.
+
+## 5. Start
+
+In that folder, `python3 tools/env_check.py --fix` in the background, then:
 
 `python3 tools/app.py start --on "<this chat's model>" --tools "<browser tools: browser, chrome, enable, or none>"`
 
-and do what it prints, in order. It opens or refreshes their page and says where setup
-stands. From here the copy's own instructions (its `CLAUDE.md`) take over.
-
-## 2. Their copy is on this computer somewhere else
-
-Look, in this order, for a folder holding both `tools/app.py` and `profile/`:
-`~/job-search`, `~/my-job-search`, `~/last-job-search*`, `~/Documents/*job*search*`,
-`~/Desktop/*job*search*`. Found: work there (step 1). Found more than one: the one changed
-most recently.
-
-## 3. No copy yet: set one up
-
-Their copy is private and theirs; never use the public app itself (anything about a person
-written there would be public, and its start command refuses).
-
-1. When `gh auth status` succeeds: `gh repo create my-job-search --private --template
-   aranculleton/last-job-search --clone` in their home folder, then step 1 in
-   `~/my-job-search`. Setup runs on the page from there.
-2. Otherwise give them these steps, word for word, then wait for them:
-   1. Open github.com/new?template_owner=aranculleton&template_name=last-job-search&owner=%40me&name=my-job-search&visibility=private
-      signed in to GitHub, and choose Create repository. Keep it Private.
-   2. Come back here and say "done".
-   Then clone it (`git clone https://github.com/<their GitHub name>/my-job-search.git
-   ~/my-job-search`; git asks them to sign in to GitHub the first time) and do step 1.
-
-The twice-weekly brief and phone use need the copy in Claude's cloud too: once setup is
-done on the page, the start command walks them through it.
-
-## Never
-
-- Never run the job search from the plugin's own folder or from the public app.
-- Never ask them which command to run, and never show one.
+and do what it prints, in order. It brings in the newest version, publishes their page,
+opens it, and the page asks the setup questions. From here their copy's own instructions
+(its `CLAUDE.md`) take over.

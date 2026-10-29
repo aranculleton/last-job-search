@@ -23,8 +23,9 @@
 #                     rendered from that copy's folder, and the seed read.
 #
 # Runs only on the public app (whose minutes are free) or by hand, on pull requests that
-# touch the install, the documents, the portals or this file, and weekly, so a change in
-# what TinyTeX, GitHub or Bun publish is seen before a person meets it. Actions are pinned
+# touch the install, the documents, the portals or this file (Linux and Mac; Windows too
+# on a release pull request), and weekly with Windows, so a change in what TinyTeX, GitHub
+# or Bun publish, or a Windows breakage, is seen before a person meets it. Actions are pinned
 # to commit SHAs, as in ci.yml; the token is read-only.
 
 name: Platforms
@@ -88,11 +89,11 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        # Windows only when started by hand (Actions, Run workflow): it took 45 minutes a
-        # run and held a release for hours (the maintainer, 2026-10-26). Linux and Mac
-        # decide a change; Windows behaviour is checked against Microsoft's and Python's
-        # documentation and the tests that fake it.
-        os: ${{ github.event_name == 'workflow_dispatch' && fromJSON('["ubuntu-latest", "macos-latest", "windows-latest"]') || fromJSON('["ubuntu-latest", "macos-latest"]') }}
+        # Windows never on an ordinary change: it takes 45 minutes and held a release for
+        # hours when it ran on every one (the maintainer, 2026-10-26). Linux and Mac decide a
+        # change. Windows runs on a release pull request (titled "Release X.Y.Z"), in the
+        # weekly run and by hand, on the public app, whose minutes are free (2026-10-29).
+        os: ${{ (github.event_name == 'workflow_dispatch' || github.event_name == 'schedule' || startsWith(github.event.pull_request.title, 'Release ')) && fromJSON('["ubuntu-latest", "macos-latest", "windows-latest"]') || fromJSON('["ubuntu-latest", "macos-latest"]') }}
     defaults:
       run:
         shell: bash
@@ -150,11 +151,14 @@ jobs:
           # env_check --fix made one (it does wherever the system Python lacked them).
           PY=$("$PERSON_PY" -c "import sys; sys.path.insert(0, 'tools'); import installs; print(installs.venv_python())")
           [ -x "$PY" ] || PY="$PERSON_PY"
+          # The test runner's parallel workers, for this run only: a person never needs them.
+          "$PY" -m pip install -q pytest-xdist || echo "no pytest-xdist: the suite runs in one worker"
           "$PY" tools/platform_check.py suite
 
   windows-shell:
     name: windows (PowerShell 5.1, no Git yet)
-    if: ${{ github.event_name == 'workflow_dispatch' }}             # by hand only: see person's matrix
+    # On a release pull request, weekly and by hand: never on an ordinary change (see person's matrix).
+    if: ${{ github.event_name == 'workflow_dispatch' || (!github.event.repository.private && (github.event_name == 'schedule' || startsWith(github.event.pull_request.title, 'Release '))) }}
     runs-on: windows-latest
     timeout-minutes: 45
     defaults:
@@ -233,7 +237,8 @@ jobs:
 
   windows-chat:
     name: windows (a computer chat, Git Bash, cp1252)
-    if: ${{ github.event_name == 'workflow_dispatch' }}             # by hand only: see person's matrix
+    # On a release pull request, weekly and by hand: never on an ordinary change (see person's matrix).
+    if: ${{ github.event_name == 'workflow_dispatch' || (!github.event.repository.private && (github.event_name == 'schedule' || startsWith(github.event.pull_request.title, 'Release '))) }}
     runs-on: windows-latest
     timeout-minutes: 75
     defaults:
@@ -243,6 +248,7 @@ jobs:
       - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
 
       - name: A copy already set up, the chat's ordinary day, a general resume and a seed
+        timeout-minutes: 30
         run: |
           chcp.com 1252 || true
           unset PYTHONUTF8 PYTHONIOENCODING
@@ -264,4 +270,7 @@ jobs:
         run: |
           unset PYTHONUTF8 PYTHONIOENCODING
           py=$(python -c "import sys; sys.path.insert(0, 'tools'); import local_path; print(local_path.venv_python() if local_path.venv_runs() else sys.executable)")
-          "$py" -m pytest tests -q -p no:cacheprovider -rf --tb=no 2>&1 | grep -a -E "^(FAILED|ERROR)|passed|failed" | cut -c1-300
+          # Parallel workers for this run only, each file kept together (a person never needs them).
+          par=""
+          "$py" -m pip install -q pytest-xdist && par="-n auto --dist loadfile"
+          "$py" -m pytest tests -q -p no:cacheprovider -rf --tb=no $par 2>&1 | grep -a -E "^(FAILED|ERROR)|passed|failed" | cut -c1-300

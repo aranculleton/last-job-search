@@ -1,14 +1,14 @@
 {
  "model": 1,
  "made_at": "2026-10-25T18:00:00Z",
- "rev": "a222561c15e0",
+ "rev": "3d0939f8e642",
  "app": {
-  "version": "4.2.0",
+  "version": "4.3.0",
   "update_waiting": null,
   "news": [
-   "Your profile, on the page.",
-   "A walkthrough that shows you round.",
-   "The plugin: a front door on your computer."
+   "A Brief page, your home screen.",
+   "Your profile is a page of its own.",
+   "Names open the person."
   ],
   "privacy": "Only you can open this page unless you share it. It holds first names, employers, your drafts and your setup answers, so keep it unshared.",
   "repo": "https://github.com/aranculleton/last-job-search"
@@ -45,7 +45,7 @@
  ],
  "jobs": {
   "round": "r9",
-  "made_at": "2026-10-29T00:46:14Z",
+  "made_at": "2026-10-29T19:10:22Z",
   "met": false,
   "summary": "4 roles on the shortlist, 4 scoring 60 or more and 2 scoring 75 or more. 3 left out, each with its reason.",
   "rows": [
@@ -761,7 +761,7 @@
    "when": "2026-10-28",
    "prep": {
     "path": "documents/applications/thornbury_bank_risk_analyst_thornbury/interview_prep.md",
-    "updated": "2026-10-29T00:46:14Z"
+    "updated": "2026-10-29T19:10:22Z"
    },
    "questions": 2,
    "all_day": true,
@@ -1004,24 +1004,6 @@
    "rev": "7a6d0b2044ce"
   },
   {
-   "id": "setting-work_either",
-   "key": "work_either",
-   "label": "Where Claude works",
-   "kind": "choice",
-   "value": "cloud",
-   "choices": [
-    [
-     "cloud",
-     "The cloud chat"
-    ],
-    [
-     "computer",
-     "The chat on my computer"
-    ]
-   ],
-   "rev": "e383343cfc0e"
-  },
-  {
    "id": "setting-suggestions",
    "key": "suggestions",
    "label": "Suggestions",
@@ -1042,6 +1024,24 @@
     ]
    ],
    "rev": "c798e39a6ab0"
+  },
+  {
+   "id": "setting-profile_reads",
+   "key": "profile_reads",
+   "label": "Reading LinkedIn profiles",
+   "kind": "choice",
+   "value": "paste",
+   "choices": [
+    [
+     "browser",
+     "Claude reads them"
+    ],
+    [
+     "paste",
+     "I paste them"
+    ]
+   ],
+   "rev": "4ae7ef73cc5a"
   }
  ],
  "brief": {
@@ -1060,6 +1060,25 @@
     "text": "Kestrel Mutual is hiring analysts",
     "item": "app-kestrel_mutual_claims_forecasting_analyst",
     "section": "ready"
+   }
+  ],
+  "sections": [
+   {
+    "title": "",
+    "kind": "lead",
+    "text": "",
+    "items": [
+     {
+      "text": "2 replies owed",
+      "item": null,
+      "section": "due"
+     },
+     {
+      "text": "Kestrel Mutual is hiring analysts",
+      "item": "app-kestrel_mutual_claims_forecasting_analyst",
+      "section": "ready"
+     }
+    ]
    }
   ]
  },
@@ -1108,11 +1127,23 @@
   ]
  },
  "updates": {
-  "version": "4.2.0",
-  "newest": "4.2.0",
+  "version": "4.3.0",
+  "newest": "4.3.0",
   "mode": "auto",
   "waiting": null,
   "changed": [
+   {
+    "version": "4.3.0",
+    "date": "2026-10-29",
+    "lines": [
+     "A Brief page, your home screen.",
+     "Your profile is a page of its own.",
+     "Names open the person.",
+     "A bin on every person.",
+     "More job filters, that work.",
+     "Add a job."
+    ]
+   },
    {
     "version": "4.2.0",
     "date": "2026-10-29",
@@ -1123,18 +1154,6 @@
      "Your page wakes Claude by itself.",
      "Running work reads plainly.",
      "On a phone, Chat is the tab alone."
-    ]
-   },
-   {
-    "version": "4.1.0",
-    "date": "2026-10-26",
-    "lines": [
-     "A skill you say yes to can show in your work, not only on the skills line.",
-     "Chat from any page.",
-     "To do is short again.",
-     "Nobody at an employer you turned down fills your To do.",
-     "Questions from updates live in Settings.",
-     "What things cost is a small gauge."
     ]
    }
   ],
@@ -1367,7 +1386,10 @@
    "last_read_at": null,
    "reads": 0,
    "queue": [],
-   "rev": "1a9480c695ca"
+   "setting": "paste",
+   "paused": false,
+   "paused_until": null,
+   "rev": "bafb8a3f06c7"
   }
  },
  "learned": [],
@@ -1376,51 +1398,45 @@
    "id": "tip-search",
    "area": "search",
    "tab": "jobs",
-   "text": "Your first search here, so the ranking won't be perfect yet. Say what's off in Chat (\"too junior\", \"not this kind of company\") and the next one learns.",
+   "text": "Your first search here, so the ranking won't be perfect yet. Use the bin on a job that's off and say why: the next search learns.",
    "rev": "fe7659d1001f"
   },
   "tour": [
    {
+    "key": "brief",
+    "tab": "brief",
+    "title": "Brief",
+    "text": "Your day at a glance: what is booked, the next three things to do, who is waiting on you, the best new jobs, news that matters to your search and your numbers. Tap any line to go to it."
+   },
+   {
     "key": "todo",
     "tab": "todo",
     "title": "To do",
-    "text": "What needs you, most urgent first: a question, a follow-up that is due, an interview coming up. Each card has one button."
+    "text": "What needs you, five at a time, most urgent first: a question, a follow-up that is due, an interview coming up. Each card has one button, and a bin."
    },
    {
     "key": "jobs",
     "tab": "jobs",
     "title": "Jobs",
-    "text": "Roles found for you, scored out of 100, with why. Tap Draft this on one you like; the bin takes one off. Find jobs searches again. While Claude works, the bar at the top says so: tap it to watch, or to stop it."
-   },
-   {
-    "key": "drafts",
-    "tab": "drafts",
-    "title": "Drafts",
-    "text": "Your resume and letter for each role, written for that posting and checked. Get the files, apply on the employer's own site, then tap I have applied. From then on it is tracked, and its follow-ups come back to To do."
+    "text": "Every role from found to applied. Found: scored out of 100 for how well it fits you; tap Draft this on one you like. Drafts: your resume and letter, checked; get the files, apply on the employer's site, tap I have applied. Applied: each one tracked, its follow-ups back in To do."
    },
    {
     "key": "contacts",
     "tab": "contacts",
     "title": "Contacts",
-    "text": "Why people: someone inside who puts your name forward gets you far more interviews than applying cold. Claude finds who to write to and drafts a short note; you send it on LinkedIn yourself. Every recruiter, referrer and hiring manager is kept here, with what each conversation needs next."
+    "text": "Why people: someone inside who puts your name forward gets you far more interviews than applying cold. Claude finds who to write to and drafts a short note; you send it on LinkedIn yourself. Messages holds the notes ready to send. Tap a name to see everything about that person."
    },
    {
     "key": "interviews",
     "tab": "interviews",
     "title": "Interviews",
-    "text": "Got an interview? Tell Claude in Chat, or tap I heard back on the application. Your prep is here to read: what they will ask, your answers, your questions."
-   },
-   {
-    "key": "progress",
-    "tab": "progress",
-    "title": "Progress",
-    "text": "Everything you have applied for, and how each one is going."
+    "text": "Got an interview? Tap I heard back on the application, and the prep follows. Your prep is here to read: what they will ask, your answers, your questions."
    },
    {
     "key": "settings",
     "tab": "settings",
     "title": "Settings",
-    "text": "Your profile is here: your jobs, skills, education and certificates. Change them any time, and every new resume picks from them."
+    "text": "Your profile is the first thing here: your jobs, skills, education and certificates. Change them any time, and every new resume picks from them."
    },
    {
     "key": "chat",
@@ -1495,8 +1511,8 @@
    "say": "Recommended: Claude's helper in the cloud works when your computer is off. Set it up once."
   },
   "reading": {
-   "state": "open_in_app",
-   "say": "Open this page in the Claude desktop app, signed in to LinkedIn, and tap Check it works."
+   "state": "paste",
+   "say": "Off: you paste someone's profile when you write to them."
   },
   "computer": {
    "state": "optional",
@@ -1505,10 +1521,14 @@
   },
   "brief": {
    "state": "ready",
-   "when": "Mondays and Thursdays at 7:56",
-   "say": "Your brief comes Mondays and Thursdays at 7:56."
+   "when": "Every day at 7:38",
+   "say": "Your brief comes every day at 7:38."
   },
-  "rev": "ecce8297604c"
+  "rev": "c6eff5e09e60",
+  "tidied": {
+   "count": 0,
+   "on": null
+  }
  },
  "listener": {
   "doc": "meta/listener",
@@ -1531,22 +1551,30 @@
  },
  "schedule": {
   "set_up": true,
-  "when": "Mondays and Thursdays at 7:56",
+  "off": false,
+  "when": "Every day at 7:38",
   "days": [
+   0,
    1,
-   4
+   2,
+   3,
+   4,
+   5,
+   6
   ],
-  "time": "07:56",
+  "time": "07:38",
   "zone": "Europe/London",
   "paused": null,
   "waiting": 0,
   "actions": {
    "move": "brief.move",
    "pause": "brief.pause",
-   "resume": "brief.resume"
+   "resume": "brief.resume",
+   "off": "brief.off",
+   "on": "brief.on"
   },
   "id": "schedule",
-  "rev": "924082ed0c71"
+  "rev": "577355c2132b"
  },
  "you": {
   "id": "you",

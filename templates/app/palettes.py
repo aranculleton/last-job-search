@@ -33,9 +33,10 @@ deviations follow from legibility and from the person:
     there (a progress bar, the selected tab, a link's underline, a chart's bar) is that rose
     moved toward main's base only as far as 3:1 needs (WCAG 1.4.11); in the dark it is the
     rose itself. Focus is iris in both, the hint colour.
-  - Dawn's base and surface have half their warmth taken out (each moved halfway to the grey
-    of its own lightness): the maintainer found the page a little too warm (2026-10-26). The
-    accent stays rose; overlay and the tints are dawn's own.
+  - Dawn's base is near-white and its surface white, as light as Claude's own page beside it:
+    the maintainer found dawn too warm (2026-10-26) and then the page "unnecessarily dark"
+    next to Claude (2026-10-29). Cards are drawn by their edge, not by a darker page. The
+    accent stays rose; the tints are dawn's own.
   - Links are in the text colour with an underline in the accent: the person asked for no
     coloured link text, and the underline is what marks a link.
   - Where a dawn colour is too faint for text (subtle, love, gold, foam, iris), the text
@@ -62,24 +63,24 @@ import sys
 
 # Each token: (value, where it comes from). Order is the order written into the CSS.
 DAWN = {
-    "bg": ("#f6f4f2", "[D] dawn base with 70% of its warmth taken out (toward its own grey), warm but sleek like Claude's own light look: the page around the cards"),
-    "surface": ("#fbfaf7", "[D] dawn surface with 70% of its warmth taken out: a panel atop base, every card"),
-    "sunk": ("#f2e9e1", "[P] dawn overlay: the depths, tracks and wells"),
-    "raised": ("#dfdad9", "[P] dawn highlight med: buttons and chips"),
-    "raised-hover": ("#d7d2d3", "[D] highlight med halfway to highlight high, for 4.5:1 with text"),
+    "bg": ("#faf9f7", "[D] near-white with a trace of dawn's warmth, as light as Claude's own page beside it (the maintainer, 2026-10-29: the old base was \"unnecessarily dark\"): the page around the cards"),
+    "surface": ("#ffffff", "[D] white: a panel atop base, every card, its edge drawn by line"),
+    "sunk": ("#f3f1ee", "[D] dawn overlay with most of its warmth taken out: the depths, tracks and wells"),
+    "raised": ("#ebe8e6", "[D] dawn highlight med lightened halfway to base: buttons and chips"),
+    "raised-hover": ("#dfdad9", "[P] dawn highlight med: a button, hovered"),
     "ink": ("#575279", "[P] dawn text"),
     "muted": ("#6b6688", "[D] dawn subtle moved 42% toward text: labels, 4.5:1 on overlay"),
     "line": ("#dfdad9", "[P] dawn highlight med: the edge of a card, decoration only"),
     "line-strong": ("#797593", "[P] dawn subtle: a control's border, 4:1 on base and surface"),
-    "accent": ("#d7827e", "[P] dawn rose: a filled button, with near-black ink on it"),
-    "accent-hover": ("#db8e8a", "[D] dawn rose 10% toward surface"),
-    "accent-ink": ("#191724", "[P] main base: near-black ink on rose, 6.2:1"),
+    "accent": ("#575279", "[P] dawn text: a filled button is the page's own ink, with white on it, 7.3:1 (the maintainer, 2026-10-29: the peach with dark text was hard to read, and a deeper rose looked worse); rose stays for marks"),
+    "accent-hover": ("#433e60", "[D] the ink fill a step deeper: white on it, 10:1"),
+    "accent-ink": ("#ffffff", "[D] white on the ink fill, 7.3:1"),
     "accent-soft": ("#f9e7e0", "[D] dawn rose 16% on surface"),
-    "mark": ("#bc7371", "[D] dawn rose moved 14% toward main base: 3:1 on overlay, for bars and marks"),
+    "mark": ("#c27674", "[D] dawn rose moved 11% toward main base: 3:1 on the depths, for bars and marks"),
     "link": ("#575279", "[P] dawn text: a link is the text colour, underlined"),
-    "link-line": ("#bc7371", "[D] the mark: a link's underline"),
+    "link-line": ("#c27674", "[D] the mark: a link's underline"),
     "focus": ("#907aa9", "[P] dawn iris: links and hints, 3.2:1 on overlay"),
-    "chart-a": ("#bc7371", "[D] the mark"),
+    "chart-a": ("#c27674", "[D] the mark"),
     "chart-b": ("#286983", "[P] dawn pine: 5.1:1 on overlay"),
     "st-done": ("#286983", "[P] dawn pine"),
     "st-done-bg": ("#dde3e1", "[D] pine 16% on surface"),

@@ -16,7 +16,6 @@ import sys
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 sys.path.insert(0, os.path.join(ROOT, "tools"))
 
-import interview_pack  # noqa: E402
 import profile_upgrades as U  # noqa: E402
 import sync_app  # noqa: E402
 import tips  # noqa: E402
@@ -46,12 +45,9 @@ def test_what_the_person_hears_about_their_own_checks_is_plain_and_asks_nothing(
     assert "?" not in sync_app.OWN_CHECKS_SAID
 
 
-def test_tips_and_the_campaign_offer_are_plain():
+def test_tips_are_plain():
     for text in list(tips.FIRST.values()) + [t for _, _, t in tips.TIPS]:
         _plain(text, "tips")
-    ctx = {"company": "Kestrel Mutual", "folder": "/nowhere",
-           "stages": [{"scheduled": "2026-11-02", "done": False}]}
-    _plain(interview_pack.campaign_offer(ctx), "campaign_offer")
 
 
 def test_lines_a_tool_prints_for_claude_say_so():

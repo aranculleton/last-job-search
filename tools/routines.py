@@ -15,18 +15,21 @@ whenever ci_local.sh runs, and the app's tests check the example's.
     python3 tools/routines.py default        # the brief's days, time and zone, and the line
     python3 tools/routines.py record --session <id> --trigger <id> [--cron "<cron>"]
                                              # write the brief made into profile/routines.json
-    python3 tools/routines.py move --days mon,thu --time 07:38
+    python3 tools/routines.py move --days weekdays --time 07:38
                                              # the brief's new days and time, written here
     python3 tools/routines.py pause --until <YYYY-MM-DD> | resume
                                              # a break: the brief and every follow-up held
+    python3 tools/routines.py off | on       # the brief alone turned off, or on again
     python3 tools/routines.py calls | called <n> [--id <trig_...>]
                                              # the scheduled-task calls a chat still owes
 
 Code cannot change a scheduled task: only a chat can (update_trigger, create_trigger). So
-`move`, `pause` and `resume` write the registry and the state files, and keep the calls a
-chat owes in the registry (`owed`) until `called` says each was made. The page queues the
-change (its actions brief.move, brief.pause, brief.resume); the chat that applies them, or
-the next one that starts, makes the calls.
+`move`, `pause`, `resume`, `off` and `on` write the registry and the state files, and keep
+the calls a chat owes in the registry (`owed`) until `called` says each was made. The page
+queues the change (its actions brief.move, brief.pause, brief.resume, brief.off, brief.on);
+the chat that applies them, or the next one that starts, makes the calls. Nobody gets a
+brief they did not ask for: it is made only when the person turns it on (the bell on their
+Brief, or Settings), every day at 7:38 their time unless they choose other days.
 
 Three set-ups are recognised (`setup` in the registry; automation/README.md
 walks through the first two):
@@ -269,9 +272,38 @@ def existing_brief(reg: dict | None, triggers=None) -> dict:
 # ------------------------------------------------------------------ making the brief
 
 BRIEF_NAME = "Job search: morning brief"
-BRIEF_DAYS = (1, 4)                     # Monday and Thursday: what suits most searches
+# What a chat on the person's computer says to "set up my brief": the bell does it, in the cloud.
+BRIEF_BELL = ("Your morning brief is ready to start: press the bell on your Brief once. It "
+              "comes from Claude's helper in the cloud, so it arrives when your computer is off.")
+BRIEF_DAYS = (0, 1, 2, 3, 4, 5, 6)      # every day: one short read each morning (the maintainer, 2026-10-29)
 DAY_NAMES = {1: "Mondays", 2: "Tuesdays", 3: "Wednesdays", 4: "Thursdays", 5: "Fridays",
              6: "Saturdays", 0: "Sundays", 7: "Sundays"}
+
+
+def day_words(days) -> str:
+    """"Every day", "Weekdays", "Weekends" or "Mondays and Thursdays", for days Sunday 0."""
+    d = sorted({int(x) % 7 for x in days})
+    if d == list(range(7)):
+        return "Every day"
+    if d == [1, 2, 3, 4, 5]:
+        return "Weekdays"
+    if d == [0, 6]:
+        return "Weekends"
+    names = [DAY_NAMES[x] for x in d]
+    return ", ".join(names[:-1]) + " and " + names[-1] if len(names) > 1 else "".join(names)
+
+
+def in_sentence(when: str) -> str:
+    """"Every day at 7:38" as it reads mid-sentence: "every day at 7:38"; day names keep
+    their capital."""
+    first = when.split(" ", 1)[0]
+    return when[:1].lower() + when[1:] if first in ("Every", "Weekdays", "Weekends") else when
+
+
+def _cron_days(days) -> str:
+    """The cron's day field: "*" for every day, else the days, Sunday 0."""
+    d = sorted({int(x) % 7 for x in days})
+    return "*" if d == list(range(7)) else ",".join(str(x) for x in d)
 
 
 def brief_minute(name: str = BRIEF_NAME, hour: int = 8) -> tuple[int, int]:
@@ -294,43 +326,51 @@ def home_zone() -> str:
 
 
 def default(zone: str = "", days=BRIEF_DAYS, hour: int = 8) -> dict:
-    """The brief nobody had to be asked about: Monday and Thursday at 7:38 their time."""
+    """The brief as it is first made, with no questions: every day at 7:38 their time."""
     zone = zone or home_zone()
     h, m = brief_minute(hour=hour)
-    day_list = ",".join(str(d) for d in days)
-    named = " and ".join(DAY_NAMES[d] for d in days)
-    return {"zone": zone, "cron": f"CRON_TZ={zone} {m} {h} * * {day_list}" if zone else "",
+    named = day_words(days)
+    return {"zone": zone, "cron": f"CRON_TZ={zone} {m} {h} * * {_cron_days(days)}" if zone else "",
             "when": f"{named} at {h}:{m:02d}",
-            "say": f"Your brief is set up: {named} at {h}:{m:02d}, in the chat called "
-                   f"{BRIEF_NAME}. Say 'move my brief' to change it."}
+            "say": f"Your brief is on: {in_sentence(named)} at {h}:{m:02d}. Change it or turn it "
+                   f"off from the bell on your Brief."}
 
 
-def plan(owner: str, name: str, zone: str = "", now: datetime.datetime | None = None) -> dict:
-    """The exact calls a cloud chat makes to set the brief up with no questions: its own
-    chat on the private copy, a task bound to that chat, and one first run a few minutes
-    on (never fire_trigger, which starts a new chat with no copy in it)."""
+def plan(owner: str, name: str, zone: str = "", now: datetime.datetime | None = None,
+         chat: str = "") -> dict:
+    """The exact calls a cloud chat makes to set the brief up with no questions: a task
+    bound to the chat that answers the page (`chat`, this one by default), so the brief
+    starts no chat of its own, and one first run a few minutes on (never fire_trigger, which
+    starts a new chat with no copy in it). No chat is ever made for it: where this chat's id
+    cannot be read, `chat` is empty and the caller asks get_session for it first."""
     d = default(zone)
     stub_text = DEFAULT_STUB.format(label="morning brief", Label="Morning brief",
                                     prompt_file=BRIEF_FILE, relay_id="")
     now = now or datetime.datetime.now(datetime.timezone.utc)
     first = (now + datetime.timedelta(minutes=5)).replace(microsecond=0)
-    return {
-        "create_session": {"title": BRIEF_NAME,
-                           "source_url": f"https://github.com/{owner}/{name}"},
-        "create_trigger": {"name": BRIEF_NAME, "persistent_session_id": "<the session id>",
+    if not chat:
+        import app_listen
+        chat = app_listen.this_chat()
+    chat = chat if str(chat).startswith("session_") else ""
+    sid = chat or "<the session id>"
+    out = {
+        "create_trigger": {"name": BRIEF_NAME, "persistent_session_id": sid,
                            "cron_expression": d["cron"], "prompt": stub_text,
                            "connectors": [], "initiation": "human_request"},
-        "first_brief": {"name": "Job search: first brief", "persistent_session_id":
-                        "<the session id>", "run_once_at": first.strftime("%Y-%m-%dT%H:%M:%SZ"),
+        "first_brief": {"name": "Job search: first brief", "persistent_session_id": sid,
+                        "run_once_at": first.strftime("%Y-%m-%dT%H:%M:%SZ"),
                         "prompt": stub_text, "connectors": [], "initiation": "human_request"},
-        "record": (f"python3 tools/routines.py record --session <the session id> --trigger "
+        "record": (f"python3 tools/routines.py record --session {sid} --trigger "
                    f"<the task's id> --cron \"{d['cron']}\""),
-        "say": d["say"], "zone": d["zone"]}
+        "say": d["say"], "zone": d["zone"], "chat": chat}
+    return out
 
 
 def record(session: str, trigger: str, cron: str = "", path: str | None = None,
-           setup: str = "chat_per_briefing") -> str:
-    """Write the brief just made into profile/routines.json, keeping every other task."""
+           setup: str = "chat_per_briefing", title: str = "") -> str:
+    """Write the brief just made into profile/routines.json, keeping every other task. The
+    chat it runs in is named only when it was made for it; bound to the chat that answers
+    the page, it is that chat's id alone."""
     if path is None:
         import person
         path = person.path("routines.json")
@@ -346,15 +386,19 @@ def record(session: str, trigger: str, cron: str = "", path: str | None = None,
     keep = [r for r in reg.get("routines") or [] if not _is_brief(r)]
     entry = {"key": "morning_brief", "name": BRIEF_NAME,
              "trigger_id": trigger, "cron": cron, "prompt_file": BRIEF_FILE,
-             "what": "Twice a week: what is owed, the counts since the last brief, three things "
+             "what": "Each morning: what is owed, the counts since the last brief, three things "
                      "to do, and the news that matters."}
+    was = next((r for r in reg.get("routines") or [] if _is_brief(r)), None) or {}
+    if was.get("off"):
+        entry["off"] = True
     if reg["setup"] == "chat_per_briefing":
-        entry["chat"] = {"title": BRIEF_NAME, "session_id": session}
+        entry["chat"] = {"session_id": session, **({"title": title} if title else {})}
     reg["routines"] = [entry] + keep
     with open(path, "w", encoding="utf-8", newline="\n") as fh:
         json.dump(reg, fh, indent=2, ensure_ascii=False)
         fh.write("\n")
     return path
+
 
 
 # ------------------------------------------------------------------ the brief's schedule
@@ -368,7 +412,8 @@ CHASE_AGAIN = "{today}: chase again (search resumed)"
 
 
 def _days(value) -> list[int]:
-    """Days of the week, Sunday 0: from "mon,thu", "1,4", "Mondays and Thursdays" or a list."""
+    """Days of the week, Sunday 0: from "mon,thu", "1,4", "Mondays and Thursdays", "every
+    day", "weekdays" or a list."""
     if isinstance(value, (list, tuple)):
         items = [str(v) for v in value]
     else:
@@ -378,6 +423,12 @@ def _days(value) -> list[int]:
         low = it.lower()
         if low.isdigit() and 0 <= int(low) <= 7:
             out.append(int(low) % 7)
+        elif low in ("every", "daily"):
+            out += list(range(7))
+        elif low == "weekdays":
+            out += [1, 2, 3, 4, 5]
+        elif low == "weekends":
+            out += [0, 6]
         elif low[:3] in DAY_WORDS and low not in ("and",):
             out.append(DAY_WORDS[low[:3]])
     return sorted(set(out))
@@ -409,9 +460,8 @@ def cron_for(days, time, zone: str, name: str = BRIEF_NAME) -> dict:
         h, m = h - 1, 60 - back
     elif m == 30:
         m = 30 - back
-    named = " and ".join(DAY_NAMES[x] for x in d)
-    return {"cron": f"CRON_TZ={zone} {m} {h} * * {','.join(str(x) for x in d)}",
-            "when": f"{named} at {h}:{m:02d}", "days": d, "time": f"{h:02d}:{m:02d}"}
+    return {"cron": f"CRON_TZ={zone} {m} {h} * * {_cron_days(d)}",
+            "when": f"{day_words(d)} at {h}:{m:02d}", "days": d, "time": f"{h:02d}:{m:02d}"}
 
 
 def read_cron(cron: str) -> dict:
@@ -433,7 +483,7 @@ def read_cron(cron: str) -> dict:
     days = sorted({x % 7 for x in days})
     h, mi = int(m.group(3)), int(m.group(2))
     return {"zone": m.group(1), "days": days, "time": f"{h:02d}:{mi:02d}",
-            "when": " and ".join(DAY_NAMES[x] for x in days) + f" at {h}:{mi:02d}"}
+            "when": (day_words(days) if days else "") + f" at {h}:{mi:02d}"}
 
 
 def _path(path: str | None) -> str:
@@ -526,15 +576,62 @@ def move(days=None, time=None, cron: str = "", path: str | None = None) -> dict:
     if new["cron"] != old:
         _owe(reg, {"tool": "update_trigger", "for": "move",
                    "args": {**_task_ref(r, reg), "cron_expression": new["cron"]},
-                   "why": f"the brief now comes {new['when']}"})
+                   "why": f"the brief now comes {in_sentence(new['when'])}"})
     problems = check(reg)
     if problems:
         raise ValueError("; ".join(problems))
     _save(reg, path)
     return {"cron": new["cron"], "when": new["when"], "old": old,
-            "say": f"Your brief comes {new['when']} from now on.",
+            "say": f"Your brief comes {in_sentence(new['when'])} from now on.",
             "undo": {"action": "brief.move", "value": {"cron": old}} if old else None,
             "calls": reg.get("owed") or []}
+
+
+def off(path: str | None = None) -> dict:
+    """The brief turned off, kept on file: its task is disabled (a call kept for a chat) and
+    nothing else changes, so turning it on again brings back the same days and time."""
+    path = _path(path)
+    reg = load(path)
+    r = _brief(reg)
+    if r is None:
+        raise ValueError("there is no brief to turn off")
+    if r.get("off"):
+        return {"changed": False, "say": "Your brief is off already.", "undo": None,
+                "calls": reg.get("owed") or []}
+    r["off"] = True
+    reg["owed"] = [c for c in reg.get("owed") or [] if c.get("for") != "on"]
+    _owe(reg, {"tool": "update_trigger", "for": "off",
+               "args": {**_task_ref(r, reg), "enabled": False},
+               "why": "the person turned the brief off"})
+    _save(reg, path)
+    return {"changed": True, "say": "Your brief is off. Nothing else stops.",
+            "undo": {"action": "brief.on"}, "calls": reg.get("owed") or []}
+
+
+def on(path: str | None = None) -> dict:
+    """The brief turned on again, on its old days and time; during a break it waits for
+    the break to end (resume turns it on then)."""
+    path = _path(path)
+    reg = load(path)
+    r = _brief(reg)
+    if r is None:
+        raise ValueError("there is no brief yet to turn on")
+    if not r.get("off"):
+        return {"changed": False, "say": "Your brief is on already.", "undo": None,
+                "calls": reg.get("owed") or []}
+    r.pop("off", None)
+    reg["owed"] = [c for c in reg.get("owed") or [] if c.get("for") != "off"]
+    p = reg.get("pause") or {}
+    if not p:
+        _owe(reg, {"tool": "update_trigger", "for": "on",
+                   "args": {**_task_ref(r, reg), "enabled": True},
+                   "why": "the person turned the brief on again"})
+    _save(reg, path)
+    when = in_sentence((read_cron(r.get("cron") or "") or {}).get("when") or "on its days")
+    return {"changed": True,
+            "say": (f"Your brief is on again from {_short(datetime.date.fromisoformat(p['until']))}, "
+                    f"{when}." if p else f"Your brief is on again: {when}."),
+            "undo": {"action": "brief.off"}, "calls": reg.get("owed") or []}
 
 
 def _live_contacts(contacts: list, threads: list, today: str) -> list:
@@ -689,7 +786,7 @@ def resume(today: str = "", path: str | None = None) -> dict:
         csv_store.write_rows(tracker, rows, csv_store.header(tracker))
     r = _brief(reg)
     reg["owed"] = [c for c in reg.get("owed") or [] if c.get("for") not in ("pause", "back")]
-    if r is not None:
+    if r is not None and not r.get("off"):
         _owe(reg, {"tool": "update_trigger", "for": "resume",
                    "args": {**_task_ref(r, reg), "enabled": True},
                    "why": "the brief comes again"})
@@ -715,8 +812,9 @@ def paused(today: str = "", path: str | None = None) -> dict:
 
 
 def page_part(path: str | None = None) -> dict:
-    """What the page's Settings shows of the brief, and the actions that change it: its days
-    and time in words, a break in force, and how many changes still wait for a chat."""
+    """What the page shows of the brief (its bell, and Settings' "Your brief"), and the
+    actions that change it: on or off, its days and time in words, a break in force, and how
+    many changes still wait for a chat."""
     try:
         reg = load(_path(path))
     except Exception:  # noqa: BLE001  no profile or no registry: no brief yet
@@ -724,11 +822,13 @@ def page_part(path: str | None = None) -> dict:
     r = _brief(reg)
     got = read_cron((r or {}).get("cron") or "")
     p = reg.get("pause") or {}
-    return {"set_up": r is not None, "when": got.get("when", ""), "days": got.get("days", []),
+    return {"set_up": r is not None, "off": bool((r or {}).get("off")),
+            "when": got.get("when", ""), "days": got.get("days", []),
             "time": got.get("time", ""), "zone": got.get("zone") or reg.get("timezone", ""),
             "paused": {"until": p["until"], "since": p.get("since", "")} if p else None,
             "waiting": len(reg.get("owed") or []),
-            "actions": {"move": "brief.move", "pause": "brief.pause", "resume": "brief.resume"}}
+            "actions": {"move": "brief.move", "pause": "brief.pause", "resume": "brief.resume",
+                        "off": "brief.off", "on": "brief.on"}}
 
 
 def load(path: str | None = None) -> dict:
@@ -746,14 +846,16 @@ def main(argv: list[str]) -> int:
               + __doc__.split("\n\n")[1])
         return 0
     if not argv or argv[0] not in ("check", "stub", "brief", "default", "record", "move",
-                                   "pause", "resume", "calls", "called"):
+                                   "pause", "resume", "off", "on", "calls", "called"):
         print(__doc__.split("\n\n")[1])
         return 2
-    if argv[0] in ("move", "pause", "resume", "calls", "called"):
+    if argv[0] in ("move", "pause", "resume", "off", "on", "calls", "called"):
         return _schedule_cli(argv)
     if argv[0] == "brief":
-        triggers, more = None, False
+        triggers, more, chat_arg = None, False, ""
         for i, a in enumerate(argv):
+            if a == "--chat" and i + 1 < len(argv):
+                chat_arg = argv[i + 1]
             if a == "--triggers" and i + 1 < len(argv):
                 with open(argv[i + 1], encoding="utf-8") as fh:
                     page, more = listing(json.load(fh))
@@ -767,36 +869,31 @@ def main(argv: list[str]) -> int:
         if more:
             print("more: the listing has another page (has_more); list it too and pass every "
                   "page with --triggers before deciding")
-        import claude_surfaces
         import place
         if place.surface() == "local":
-            # A chat on their computer never makes a local task for the brief: those run on
-            # the computer (claude_surfaces: routines-local). The brief is the cloud's.
-            if found["state"] in ("registered", "found"):
-                print("tell them: " + place.BRIEF_LOCAL)
-            elif found["state"] == "none":
-                print("make it in the cloud: with the RemoteTrigger tool where this chat has it "
-                      "(claude_surfaces: remote-trigger), as set-up (b); never a desktop "
-                      "scheduled task, and never a cloud chat started from this shell")
-                print("otherwise tell them, once: Your brief will run in the cloud, so it arrives "
-                      "when your computer is off. " + "\n".join(claude_surfaces.steps("routines-cloud")))
-            for eid in ("routines-cloud", "remote-trigger", "routines-local", "cli-cloud"):
-                w = claude_surfaces.warning(claude_surfaces.entry(eid))
-                if w:
-                    print(w)
+            # A chat on their computer never makes the brief: a task made here would run on
+            # the computer, or start a new chat every morning. The bell on the page queues it
+            # for the chat in the cloud that answers the page (tools/page_db.py runs a brief
+            # only there), and starts that helper first where there is none.
+            print("tell them: " + (place.BRIEF_LOCAL if found["state"] in ("registered", "found")
+                                   else BRIEF_BELL))
         elif found["state"] == "none" and triggers is not None:
-            # A cloud chat makes it itself, asking nothing: its own chat on the private copy,
-            # a task bound to it, and a first run in a few minutes (automation/README.md (a)).
+            # A cloud chat makes it itself, asking nothing: a task bound to this chat and a
+            # first run in a few minutes (automation/README.md (a)). Never a chat of its own.
             owner, name = place.repo()
-            got = plan(owner, name)
+            got = plan(owner, name, chat=chat_arg)
             if not got["zone"]:
                 print("zone: the profile names no time zone (networking.py TIMEZONE or "
                       "HOME_CITY): set it from where they live, then run this again")
                 return 1
-            print("make it now, asking nothing, with these calls in this order:")
-            for call in ("create_session", "create_trigger", "first_brief"):
-                tool = "create_trigger" if call == "first_brief" else call
-                print(f"  {tool} ({call}): {json.dumps(got[call], ensure_ascii=False)}")
+            if not got["chat"]:
+                print("chat: this chat's id could not be read: get_session with no session_id "
+                      "gives it; run this again with --chat <its id>. Never make a chat for it.")
+                return 1
+            print("make it now, asking nothing, with these calls in this order (it runs in "
+                  "this chat, so no chat is made for it):")
+            for call in ("create_trigger", "first_brief"):
+                print(f"  create_trigger ({call}): {json.dumps(got[call], ensure_ascii=False)}")
             print(f"  then: {got['record']}, then commit and land it")
             print(f"  tell them: {got['say']}")
         elif found["state"] == "none":
@@ -808,7 +905,8 @@ def main(argv: list[str]) -> int:
         print(json.dumps(got, ensure_ascii=False, indent=2))
         return 0 if got["zone"] else 1
     if argv[0] == "record":
-        opt = {k: argv[argv.index(k) + 1] for k in ("--session", "--trigger", "--cron", "--setup")
+        opt = {k: argv[argv.index(k) + 1] for k in ("--session", "--trigger", "--cron", "--setup",
+                                                    "--title")
                if k in argv and argv.index(k) + 1 < len(argv)}
         if not opt.get("--trigger") or (opt.get("--setup", "chat_per_briefing") ==
                                         "chat_per_briefing" and not opt.get("--session")):
@@ -816,7 +914,8 @@ def main(argv: list[str]) -> int:
                   "[--setup routines_screen]", file=sys.stderr)
             return 2
         path = record(opt.get("--session", ""), opt["--trigger"], opt.get("--cron", ""),
-                      setup=opt.get("--setup", "chat_per_briefing"))
+                      setup=opt.get("--setup", "chat_per_briefing"),
+                      title=opt.get("--title", ""))
         problems = check(load(path))
         for p_ in problems:
             print(f"routines.json: {p_}")
@@ -861,7 +960,8 @@ def _schedule_cli(argv: list[str]) -> int:
                   f"{len(calls())} still owed")
             return 0
         got = (move(a.days or None, a.time or None, a.cron) if argv[0] == "move" else
-               pause(a.until, a.today) if argv[0] == "pause" else resume(a.today))
+               pause(a.until, a.today) if argv[0] == "pause" else
+               off() if argv[0] == "off" else on() if argv[0] == "on" else resume(a.today))
     except (ValueError, KeyError, OSError) as e:
         print(f"routines.py {argv[0]}: nothing changed: {e}")
         return 1

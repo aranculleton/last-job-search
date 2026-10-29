@@ -5,8 +5,9 @@ Two paths. Most sessions take the first.
 - **[Fresh cloud container](#a-fresh-cloud-container)** is how this repo normally runs:
   an ephemeral container, cloned at session start, reclaimed at session end. Nothing is
   preinstalled beyond Python and the repo itself.
-- **[Local machine](#b-local-machine)** is for running the search on your own computer, or
-  working on the pipeline itself, where a persistent LaTeX install is worth having.
+- **[Local machine](#b-local-machine)** is for working on the pipeline itself, or for a chat
+  on a computer someone already uses. Nobody is asked to set one up: the search runs in the
+  cloud, and the person's page reads LinkedIn in the Claude desktop app.
 
 This file is about the machine. Starting your own search is [START_HERE.md](START_HERE.md):
 make a private copy with **Use this template**, then say "set me up" and `/setup` builds

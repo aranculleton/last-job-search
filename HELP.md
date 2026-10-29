@@ -49,12 +49,12 @@ To make your copy private:
 Screens change: if yours looks different, tell Claude what you see.
 <!-- /claude-surface -->
 
-**On your computer, Claude asks before every step.** Choose Auto in the mode menu under the
-message box, where it is offered (step 3 of "On your computer as well" in
-[START_HERE.md](START_HERE.md)).
+**Your page doesn't read LinkedIn profiles.** It reads them only when open in the Claude
+desktop app on your computer: allow Claude's browser when asked. Signed out? Press Open
+LinkedIn on the page, sign in, and come back.
 
 **No brief arrived on one of its days.** The brief comes even when nothing is due, so silence
-means it is broken: tell any chat "my brief didn't arrive". [automation/README.md](automation/README.md)
+means it is broken: say "my brief didn't arrive" in Chat on your page. [automation/README.md](automation/README.md)
 has the rest.
 
 **Something else.** Say what you were doing and what it said. It never sends anything to

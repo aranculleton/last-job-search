@@ -104,7 +104,7 @@ def cmd_model(a) -> int:
 
 def cmd_view(a) -> int:
     """The model as one document a section (`view/<section>`, in parts when it is too big for
-    one: page_db.split) plus `meta/current`, so an open page updates live with no republish.
+    one: page_db.split) plus `meta/current` (stored as `meta/now`), so an open page updates live with no republish.
     Sets on documents that exist are pinned to the versions in `--dump`."""
     import app_model
     import page_db
@@ -148,16 +148,18 @@ def cmd_view(a) -> int:
         reach = app_model.reach_docs(app_model.Ctx(today, now).contacts, ids)
     except Exception:  # noqa: BLE001  no profile yet: nobody to reach
         reach = {}
-    have = db.get("reach") or {} if db else {}
-    for cid, doc in sorted(reach.items()):
-        old = have.get(page_db.safe_id(cid))
-        if old and {k: old["data"].get(k) for k in doc} == doc:
+    # In a few owner-only documents, each contact always in the same one, and only a
+    # document whose contacts changed is written: one per contact meant hundreds of writes
+    # on every refresh, and reading them back hundreds of lines (2026-10-29).
+    have = (db.get("addr") or {}) if db else {}
+    for doc_id, doc in sorted(page_db.addr_docs(reach).items()):
+        old = have.get(doc_id)
+        if old and old["data"].get("contacts") == doc["contacts"]:
             continue
-        w.add("set", "reach", page_db.safe_id(cid), doc,
-              if_version=old["version"] if old else None)
-    for cid, old in sorted(have.items()):
-        if cid not in {page_db.safe_id(c) for c in reach}:
-            w.add("delete", "reach", cid, if_version=old["version"])
+        w.add("set", "addr", doc_id, doc, if_version=old["version"] if old else None)
+    for doc_id, old in sorted(have.items()):
+        if doc_id not in page_db.addr_docs(reach):
+            w.add("delete", "addr", doc_id, if_version=old["version"])
     old = (db.get("meta") or {}).get("current") if db else None
     w.add("set", "meta", "current", {"rev": model["rev"], "made_at": model["made_at"],
                                      "model": model["model"], "by": a.chat},
@@ -211,13 +213,15 @@ def cmd_next(a) -> int:
     db = page_db.load(a.dump)
     chosen = app_listen.next_republish(db, a.chat, now)
     if chosen is None:
-        either = app_model.setting_values().get("work_either", "cloud")
-        chosen = page_db.next_item(app_listen.without_republish(db), a.kind, now,
-                                   either_to=either)
+        chosen = page_db.next_item(app_listen.without_republish(db), a.kind, now)
     if chosen is None:
         return 0
     info = model_guide.for_work(chosen["kind"], a.on)
-    chosen.update(model=info["model"], effort=info["effort"])
+    # A big job runs as a background agent inside this chat, so the chat stays free for the
+    # next tap (the app skill, step 4): `run` says which.
+    heavy = bool(page_db.WORK_KINDS.get(chosen["kind"], {}).get("heavy"))
+    chosen.update(model=info["model"], effort=info["effort"], heavy=heavy,
+                  run="background agent" if heavy else "here")
     if a.claim_out:
         chosen["batches"] = page_db.claim(db, chosen, a.chat, a.kind, now, a.claim_out)
     print(_dump(chosen), end="")
@@ -323,6 +327,33 @@ def cmd_listen(a) -> int:
         print(line)
     for path in got["batches"]:
         print(path)
+    if got["role"] == "listener":
+        # The search's own upkeep, whether or not a brief is on (the brief did it alone
+        # before 4.3, and it is off until asked for): applications gone quiet are closed,
+        # in code, on a wake of the chat that answers the page. Nothing to do, nothing said.
+        try:
+            import followups
+            closed = followups.close_quiet()
+        except Exception:  # noqa: BLE001  no profile or no tracker yet: nothing to close
+            closed = []
+        if closed:
+            print(f"upkeep: {len(closed)} application(s) gone quiet were closed as no reply "
+                  "(followups.py --close-quiet); save them with the rest, after this wake's "
+                  "work (python3 tools/save_state.py)")
+        # The page's store kept small, in code: finished records over two months old go.
+        old = page_db.prune(page_db.load(a.dump), now, os.path.join(a.out or os.path.join(a.dump, "listen_out"), "prune"))
+        if old:
+            print("upkeep: old finished records the page no longer shows are deleted: send "
+                  "these batches after this wake's work, asking nobody:")
+            for path in old:
+                print(path)
+    if got["role"] == "listener" and app_listen.chat_kind() == "cloud":
+        import tidy
+        if tidy.due():
+            print("tidy: once today, after this wake's work and asking nobody: the app's own "
+                  "old chats (tools/tidy.py). list_sessions (mine: true) and list_triggers, every "
+                  "page, each saved to a file in the scratchpad; python3 tools/tidy.py plan "
+                  "--dump \"$D\" --sessions <each> --triggers <each>; do what it prints.")
     return 0
 
 

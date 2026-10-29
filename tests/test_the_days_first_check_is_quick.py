@@ -67,6 +67,7 @@ def test_a_probe_that_kills_its_interpreter_runs_alone_and_the_next_is_still_ans
         assert U._probe("print(2)") == "2"
 
 
+@pytest.mark.timing
 def test_a_probe_out_of_time_says_nothing_and_is_never_run_twice(tmp_path, monkeypatch):
     monkeypatch.setattr(U, "PROBE_SECONDS", 1)
     ran = tmp_path / "ran"

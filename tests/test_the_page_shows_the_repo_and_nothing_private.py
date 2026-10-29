@@ -194,12 +194,15 @@ def test_a_dump_from_windows_reads_the_same(tmp_path):
     assert db["work"]["w2"] == {"data": {"kind": "draft", "status": "queued"}, "version": 7}
 
 
+@pytest.mark.timing
 def test_a_big_search_is_modelled_inside_two_seconds(tmp_path, monkeypatch):
     """500 applications, 2,000 contacts and 5,000 messages: what the size of the search costs
     a build, once a first build has loaded the code. Timed against a small search's build,
     which pays the same fixed costs: every build starts git a few times, a few hundredths
     of a second on Linux and about a second on a Windows runner, whatever the search's
-    size. This guards how the work grows with the search (2026-10-26)."""
+    size. This guards how the work grows with the search (2026-10-26). It counts this
+    process's own work (process_time), never the wall clock: with the suite in parallel
+    workers a busy runner made the same build read 2.67s (2026-10-29)."""
     warm = app_state.large(str(tmp_path / "warm"))
     small_state = app_state.small(str(tmp_path / "small"))
     big = app_state.large(str(tmp_path / "big"))
@@ -208,13 +211,13 @@ def test_a_big_search_is_modelled_inside_two_seconds(tmp_path, monkeypatch):
     monkeypatch.setenv("LJS_STATE", warm)
     app_model.build(today, now)
     monkeypatch.setenv("LJS_STATE", small_state)
-    start = time.perf_counter()
+    start = time.process_time()
     app_model.build(today, now)
-    fixed = time.perf_counter() - start
+    fixed = time.process_time() - start
     monkeypatch.setenv("LJS_STATE", big)
-    start = time.perf_counter()
+    start = time.process_time()
     m, _ = app_model.build(today, now)
-    took = time.perf_counter() - start
+    took = time.process_time() - start
     # Every live contact is on the page whatever the book's size (here every one has
     # something due); only finished history and the people beyond the budget fold away.
     assert len(m["people"]) == m["people_count"]["live"] == m["people_count"]["all"]
@@ -248,11 +251,11 @@ def test_the_model_reaches_an_open_page_as_view_documents(small, tmp_path):
     with open(out["batches"][0], encoding="utf-8") as fh:
         batch = json.load(fh)
     by = {(e["collection"], e["doc_id"]): e for e in batch}
-    assert by[("view", "jobs")]["if_version"] == 4
-    assert "if_version" not in by[("view", "people")]
-    with open(by[("meta", "current")]["file_path"], encoding="utf-8") as fh:
+    assert by[("screen", "jobs")]["if_version"] == 4
+    assert "if_version" not in by[("screen", "people")]
+    with open(by[("meta", "now")]["file_path"], encoding="utf-8") as fh:
         assert json.load(fh)["rev"] == out["rev"] == model(small)["rev"]
-    with open(by[("view", "ready")]["file_path"], encoding="utf-8") as fh:
+    with open(by[("screen", "ready")]["file_path"], encoding="utf-8") as fh:
         assert json.load(fh)["data"][0]["company"] == "Fernhill Freight"
 
 
@@ -290,11 +293,11 @@ def test_a_section_too_big_for_one_document_goes_in_parts_and_comes_back_whole(t
     for (coll, doc_id), (_op, body) in got.items():
         if body is not None:
             assert page_db.stored_size(body) <= page_db.DOC_MAX, f"{coll}/{doc_id}"
-    assert got[("view", "part~jobs~9")][0] == got[("view", "part~people~1")][0] == "delete"
-    head = got[("view", "jobs")][1]
+    assert got[("screen", "part~jobs~9")][0] == got[("screen", "part~people~1")][0] == "delete"
+    head = got[("screen", "jobs")][1]
     assert "data" not in head and head["in_parts"] >= 2 and head["rev"] == out["rev"]
     view = {d: {"data": b, "version": None} for (c, d), (op, b) in got.items()
-            if c == "view" and op == "set"}
+            if c == "screen" and op == "set"}
     assert page_db.joined(view, "jobs") == whole
     assert len(page_db.joined(view, "jobs")["rows"]) == 400
     # A part missing, or from another write, is never read as the section.

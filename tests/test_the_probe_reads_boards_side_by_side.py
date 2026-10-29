@@ -12,6 +12,8 @@ import sys
 import threading
 import time
 
+import pytest
+
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 sys.path.insert(0, os.path.join(ROOT, "tools"))
 
@@ -36,6 +38,7 @@ class _Slow:
         return []
 
 
+@pytest.mark.timing
 def test_the_boards_are_read_at_once_and_said_in_order(monkeypatch):
     slow = _Slow()
     monkeypatch.setattr(ats_boards, "READERS", dict(ats_boards.READERS, greenhouse=slow))

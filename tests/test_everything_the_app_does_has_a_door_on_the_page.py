@@ -52,10 +52,10 @@ def _threads(search):
 def test_where_claude_works_is_four_rows_each_with_its_state_and_next_step(search):
     w = search.model()["where"]
     assert w["helper"]["state"] == "not_set_up" and "computer is off" in w["helper"]["say"]
-    assert w["reading"]["state"] == "open_in_app"
+    assert w["reading"]["state"] == "paste"      # the example person pastes profiles
     assert w["computer"]["state"] == "optional"
-    assert w["brief"] == {"state": "ready", "when": "Mondays and Thursdays at 7:56",
-                          "say": "Your brief comes Mondays and Thursdays at 7:56."}
+    assert w["brief"] == {"state": "ready", "when": "Every day at 7:38",
+                          "say": "Your brief comes every day at 7:38."}
     # The listener as this copy last saw it (tools/app_listen.py keeps it beside the copy's
     # git folder; with none, in the folder itself): the helper took the page.
     import app_listen
@@ -289,8 +289,9 @@ def test_a_break_holds_every_follow_up_until_its_day_and_resume_lifts_it(search)
 def test_one_tip_in_the_page_words_and_the_tour(search):
     h = search.model()["help"]
     tip = h["tip"]
-    assert tip["area"] == "search" and "in Chat" in tip["text"] and "Tell me" not in tip["text"]
-    assert [t["key"] for t in h["tour"]][:2] == ["todo", "jobs"]
+    # The page's own words: a button where the page has one (tips.PAGE_FIRST), never "Tell me".
+    assert tip["area"] == "search" and "bin" in tip["text"] and "Tell me" not in tip["text"]
+    assert [t["key"] for t in h["tour"]][:3] == ["brief", "todo", "jobs"]
     aid = search.act("tip.seen", tip["id"], rev=tip["rev"])
     assert search.apply()["ok"] == [aid], search.receipt(aid)
     after = search.model()["help"]["tip"]

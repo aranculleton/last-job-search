@@ -36,6 +36,7 @@ import hashlib
 import json
 import os
 import re
+import subprocess
 import sys
 
 _HERE = os.path.dirname(os.path.abspath(__file__))
@@ -673,11 +674,48 @@ def _profile_questions(ctx: Ctx, targets: dict) -> list:
 # ------------------------------------------------------------------ jobs
 
 
-def newest_round() -> str:
+_ROUND_DAY: dict = {}
+
+
+def round_day(path: str) -> dt.date | None:
+    """The day a saved search ran: the latest day a posting in it was first seen, else the
+    day the file was last saved to git, else the file's own time. Round numbers restart, so
+    the highest number is not the newest: r29 from mid October sat over r11 from the 24th
+    (the maintainer's copy, 2026-10-29)."""
+    if path in _ROUND_DAY:
+        return _ROUND_DAY[path]
+    rows = _json(path, [])
+    days = [_date(str(r.get("first_seen") or "")[:10]) for r in rows if isinstance(r, dict)] \
+        if isinstance(rows, list) else []
+    day = max((d for d in days if d), default=None)
+    if day is None:
+        try:
+            got = subprocess.run(["git", "log", "-1", "--format=%cs", "--", path],
+                                 cwd=os.path.dirname(path) or ".", capture_output=True,
+                                 text=True, encoding="utf-8", errors="replace", timeout=10,
+                                 stdin=subprocess.DEVNULL)
+            day = _date(got.stdout.strip()) if got.returncode == 0 else None
+        except (OSError, subprocess.TimeoutExpired):
+            day = None
+    if day is None and _mtime(path):
+        day = _date(_mtime(path)[:10])
+    _ROUND_DAY[path] = day
+    return day
+
+
+def rounds_dir(name: str) -> str:
+    return person.state("documents", "rounds", name + ".json")
+
+
+def _round_key(path: str) -> tuple:
     import run_round
+    return (round_day(path) or dt.date.min,) + run_round.round_order(path)
+
+
+def newest_round() -> str:
     files = [p for p in glob.glob(person.state("documents", "rounds", "*.json"))
              if os.path.isfile(p)]
-    return max(files, key=run_round.round_order) if files else ""
+    return max(files, key=_round_key) if files else ""
 
 
 def _band(score) -> str:
@@ -839,17 +877,15 @@ def _earlier_rows(ctx: Ctx, newest: str) -> list[tuple[str, int, dict]]:
     """(round, rank, row) for each posting from an earlier search the person has not
     decided on: found in the last CARRY_DAYS days, or kept for later, and not in the newest
     round (FUNCTIONS_SPEC 1.1)."""
-    import run_round
     from lookup_score import norm
     files = sorted((p for p in glob.glob(person.state("documents", "rounds", "*.json"))
-                    if os.path.isfile(p) and p != newest), key=run_round.round_order,
-                   reverse=True)
+                    if os.path.isfile(p) and p != newest), key=_round_key, reverse=True)
     kept = {norm(u): k for u, k in kept_jobs().items()}
     have = {norm(r.get("url") or "") for r in (_json(newest, []) or []) if isinstance(r, dict)}
     out, seen = [], set(have)
     for p in files:
         name = os.path.splitext(os.path.basename(p))[0]
-        made = _date(_mtime(p)[:10]) if _mtime(p) else None
+        made = round_day(p)
         recent = made is not None and 0 <= (ctx.today - made).days <= CARRY_DAYS
         rows = _json(p, [])
         rows = rows if isinstance(rows, list) else []
@@ -922,8 +958,16 @@ def _jobs(ctx: Ctx, targets: dict) -> dict:
                          "fine, a second message is not.")
         jid = f"{rname}-{rank}"
         top, at_target = _pay_top(pay)
-        posted = r.get("age_days") if isinstance(r.get("age_days"), int) else \
-            app_lists.ago(r.get("date") or r.get("first_seen"), ctx.today)
+        # Counted to today: the posting's own date where the search read one, else its age
+        # on the day the search ran plus the days since. A search's own count stays as it
+        # was, so a row found on the 21st said "posted 1 day ago" a week on (2026-10-29).
+        posted = app_lists.ago(r.get("date"), ctx.today) if _date(str(r.get("date") or "")[:10]) \
+            else None
+        if posted is None and isinstance(r.get("age_days"), int):
+            ran = round_day(rounds_dir(rname)) if not added else None
+            posted = r["age_days"] + max(0, (ctx.today - ran).days) if ran else r["age_days"]
+        if posted is None:
+            posted = app_lists.ago(r.get("first_seen"), ctx.today)
         item = {"id": jid, "rank": rank, "score": score, "band": _band(score),
                 "company": company, "title": title, "place": place, "remote": _remote(place),
                 "pay": {"text": pay or "not stated", "stated": bool(pay), "top": top,
@@ -1129,8 +1173,8 @@ VERIFY_WORDS = {
     "TEXTLAYER_LETTER": "the letter has characters a reader would misread",
     "SPACING_RESUME": "words run together in the resume's text",
     "SPACING_LETTER": "words run together in the letter's text",
-    "DESIGN_RESUME": "the resume's layout breaks a reading rule",
-    "DESIGN_LETTER": "the letter's layout breaks a reading rule",
+    "DESIGN_RESUME": "the resume may not read cleanly in an employer's system",
+    "DESIGN_LETTER": "the letter may not read cleanly in an employer's system",
     "CONTACT": "your contact details are not all in the text",
     "CONTACT_LETTER": "the letter's header is missing your email or phone",
     "ROUNDTRIP": "a line of the draft is missing from the PDF's text",
@@ -1145,7 +1189,8 @@ VERIFY_PASSED = ("one page each", "jobs in date order", "text an applicant track
 def _with_verify(checks: dict, verify: dict | None) -> dict:
     out = dict(checks, verify=verify)
     if verify and not verify["passed"] and checks.get("passed"):
-        out.update(passed=False, line="A check found something: " + verify["items"][0]["said"])
+        said = str(verify["items"][0]["said"] or "")
+        out.update(passed=False, line=said[:1].upper() + said[1:] + ".")
     return out
 
 
@@ -2353,9 +2398,10 @@ def _help(ctx: Ctx, targets: dict) -> dict:
         if not have.get(area):
             continue
         text = tips.line(area, ctx.today, copy.deepcopy(state))
-        if text:
+        said = tips.for_page(text) if text else ""
+        if said:
             tid = f"tip-{area}"
-            out["tip"] = {"id": tid, "area": area, "tab": tab, "text": tips.for_page(text),
+            out["tip"] = {"id": tid, "area": area, "tab": tab, "text": said,
                           "rev": rev_of(tid, text)}
             targets[tid] = {"kind": "tip", "area": area, "rev": out["tip"]["rev"]}
             break
@@ -2561,14 +2607,6 @@ def paused(today: dt.date) -> dict | None:
         if until and until > today else None
 
 
-def _profile_dir_safe() -> str:
-    try:
-        import app_setup
-        return app_setup.profile_dir()
-    except Exception:  # noqa: BLE001
-        return ""
-
-
 # ------------------------------------------------------------------ where Claude works
 
 
@@ -2581,17 +2619,33 @@ def _where(ctx: Ctx, targets: dict) -> dict:
     # The chat that answers the page, as this copy last saw it (tools/app_listen.py): the
     # helper is the small cloud chat the listener hands the page to once setup is done.
     helper = _listener_seen(ctx)
-    helper_row = ({"state": "ready", "title": helper.get("title") or "Job search: Claude's helper",
-                   "say": "Works when your computer is off."} if helper.get("helper") else
+    import app_listen
+    import tidy
+    # Any chat in the cloud that answers the page is the helper, whoever started it: a
+    # second one is never offered beside it. The cloud does the work (4.3), so it is
+    # recommended even where a chat on the computer answers the page today.
+    helper_row = ({"state": "ready", "title": helper.get("title") or app_listen.HELPER_CHAT_TITLE,
+                   "say": "The one chat that does what you ask for here, even with your "
+                          "computer off. If it is ever closed, this page offers a new one."}
+                  if helper.get("helper") or helper.get("kind") == "cloud" else
                   {"state": "not_set_up", "title": None,
                    "say": "Recommended: Claude's helper in the cloud works when your computer "
                           "is off. Set it up once."})
     reads = place.page_reads(ctx.today)
-    reading_row = ({"state": "ready", "say": "Your page reads LinkedIn profiles in the Claude "
+    import reading
+    # The same order the page judges it in (app.js readingState): their choice to paste,
+    # then LinkedIn's pause for the day, then whether a read worked lately.
+    reading_row = ({"state": "paste", "say": "Off: you paste someone's profile when you write "
+                                             "to them."}
+                   if reading.reads_now() != "browser" else
+                   {"state": "paused", "say": "LinkedIn asked Claude to slow down: reading "
+                                              "starts again tomorrow, by itself."}
+                   if reading.gate_state()["kind"] != "go" else
+                   {"state": "ready", "say": "Your page reads LinkedIn profiles in the Claude "
                                             "desktop app."} if reads else
-                   {"state": "open_in_app", "say": "Open this page in the Claude desktop app, "
-                                                   "signed in to LinkedIn, and tap Check it "
-                                                   "works."})
+                   {"state": "open_in_app", "say": "Open this page in the Claude app on your "
+                                                   "computer: it asks once to use Claude's "
+                                                   "browser, and reads LinkedIn profiles there."})
     computer = place.place_record().get("computer_chat")
     computer_row = ({"state": "ready", "since": computer, "say": "Your chat on your computer "
                                                                 "is set up."} if computer else
@@ -2604,14 +2658,22 @@ def _where(ctx: Ctx, targets: dict) -> dict:
     brief = next((r for r in (reg.get("routines") or []) if isinstance(r, dict)
                   and r.get("key") == "morning_brief"), None)
     if brief and brief.get("cron"):
-        when = cron_words(brief["cron"])
-        brief_row = {"state": "ready", "when": when, "say": f"Your brief comes {when}."}
+        when = (routines.read_cron(brief["cron"]).get("when") or "").strip() or \
+            cron_words(brief["cron"])
+        brief_row = ({"state": "off", "when": when, "say": "Your brief is off."}
+                     if brief.get("off") else
+                     {"state": "ready", "when": when,
+                      "say": f"Your brief comes {routines.in_sentence(when)}."})
     else:
         brief_row = {"state": "not_set_up", "when": None,
-                     "say": "Set up your brief: what is due and news that matters, twice a "
-                            "week."}
+                     "say": "A short message each morning, if you want one: what is due, and "
+                            "news that matters."}
+    gone = tidy.archived()
     out = {"id": "where", "helper": helper_row, "reading": reading_row,
-           "computer": computer_row, "brief": brief_row, "rev": ""}
+           "computer": computer_row, "brief": brief_row, "rev": "",
+           # The app's own old chats it tidied away (tools/tidy.py), said once in Settings.
+           "tidied": {"count": len(gone), "on": max((str(g.get("on") or "") for g in gone),
+                                                    default="") or None}}
     out["rev"] = rev_of({k: v for k, v in out.items() if k != "rev"})
     return out
 
@@ -2621,7 +2683,8 @@ _DAY_NAMES = ("Sundays", "Mondays", "Tuesdays", "Wednesdays", "Thursdays", "Frid
 
 
 def cron_words(cron: str) -> str:
-    """"Mondays and Thursdays at 7:56" from a five-field cron (with its CRON_TZ)."""
+    """"every day at 7:56" or "Mondays and Thursdays at 7:56" from a five-field cron (with
+    its CRON_TZ)."""
     parts = str(cron or "").split()
     if parts and parts[0].startswith("CRON_TZ="):
         parts = parts[1:]
@@ -2699,12 +2762,22 @@ def _linkedin(ctx: Ctx, targets: dict) -> dict:
         queue.append(item)
         targets[rid] = {"kind": "page_read", "contact": cid, "mode": item["mode"],
                         "rev": item["rev"]}
+    # LinkedIn stopped the day (a check, a sign-out out of turn): the page reads nothing more
+    # until tomorrow, and says so in one line. The person's choice to paste holds everywhere.
+    setting = "browser" if reading.reads_now() == "browser" else "paste"
+    paused = reading.gate_state()["kind"] != "go"
+    # The page compares this with its own day, so a pause ends at midnight even when no chat
+    # has run since to make the model again.
+    paused_until = (ctx.today + dt.timedelta(days=1)).isoformat() if paused else None
     reading_block = {"id": "linkedin-reader", "page_reads": place.page_reads(ctx.today),
                      "ok": bool(pr.get("ok")) if pr else None,
                      "checked_at": pr.get("checked_at") or None,
                      "last_read_at": pr.get("last_read_at") or None,
-                     "reads": int(pr.get("reads") or 0), "queue": queue,
-                     "rev": rev_of("linkedin-reader", pr.get("checked_at"), pr.get("ok"))}
+                     "reads": int(pr.get("reads") or 0),
+                     "queue": queue if setting == "browser" else [],
+                     "setting": setting, "paused": paused, "paused_until": paused_until,
+                     "rev": rev_of("linkedin-reader", pr.get("checked_at"), pr.get("ok"),
+                                   setting, paused)}
     targets["linkedin-reader"] = {"kind": "linkedin", "id": "linkedin-reader",
                                   "rev": reading_block["rev"]}
     return {"export": export_block, "reading": reading_block}
@@ -2821,10 +2894,15 @@ def setting_values() -> dict:
         out["linkedin_plan"] = schema.plan(fresh=True)
     except Exception:  # noqa: BLE001
         out["linkedin_plan"] = "free"
-    either = str(person.get("work_either", "") or "").strip().lower()
-    out["work_either"] = either if either in ("cloud", "computer") else "cloud"
     import app_alerts
     out["suggestions"] = app_alerts.setting()
+    # "off" is shown as paste: either way Claude's browser reads nothing, and the page offers
+    # only the two (the bin's "Never", or Settings).
+    try:
+        import reading
+        out["profile_reads"] = "browser" if reading.reads_now() == "browser" else "paste"
+    except Exception:  # noqa: BLE001  no networking settings: the default
+        out["profile_reads"] = "browser"
     return out
 
 
@@ -2832,10 +2910,11 @@ SETTINGS = (
     ("app_updates", "How updates arrive", [["auto", "By themselves"], ["when_asked", "When I say"]]),
     ("tips", "Tips now and then", [["on", "On"], ["off", "Off"]]),
     ("linkedin_plan", "Your LinkedIn plan", [["free", "Free"], ["premium", "Premium"]]),
-    ("work_either", "Where Claude works",
-     [["cloud", "The cloud chat"], ["computer", "The chat on my computer"]]),
     # tools/app_alerts.py: alerts about something wrong stay whatever this says.
     ("suggestions", "Suggestions", [["on", "On"], ["urgent", "Only urgent"], ["off", "Off"]]),
+    # networking.py PROFILE_READS: Claude's browser in the desktop app, or the person pastes.
+    ("profile_reads", "Reading LinkedIn profiles", [["browser", "Claude reads them"],
+                                                    ["paste", "I paste them"]]),
 )
 
 
@@ -2857,11 +2936,79 @@ def _brief(ctx: Ctx, targets: dict) -> dict | None:
     if not files:
         return None
     path = files[-1]
-    lines = [scrub(ln.strip()[2:], ()) for ln in _read(path).splitlines()
-             if ln.strip().startswith(("- ", "* "))]
-    lines = [x for x in lines if x][:8]
+    sections = brief_sections(_read(path))
+    lines = [i["text"] for sec in sections for i in sec["items"]][:8]
+    for sec in sections:
+        sec["items"] = [dict(i, **brief_link(ctx, i["text"])) for i in sec["items"]]
     return {"date": os.path.basename(path)[:10], "lines": lines,
-            "items": [dict(text=x, **brief_link(ctx, x)) for x in lines]}
+            "items": [dict(text=x, **brief_link(ctx, x)) for x in lines],
+            "sections": sections}
+
+
+# Which panel each of the brief's headings is (automation/prompts/brief.md writes them).
+BRIEF_KINDS = (("lead", r"lead|today|headline|summary"), ("owed", r"owed|to send|due"),
+               ("next", r"next"), ("news", r"news|market|world"),
+               ("since", r"since|numbers|week|so far"))
+
+
+def brief_line(text: str) -> str:
+    """One line of the brief as the person reads it: no file path, no command, a source
+    named as a link. The brief is written for a chat too, and a page line saying "run
+    `/prep Tamsin`" or "The pack is `documents/network/...`" asked the person to do what
+    the page's own buttons do (the maintainer, 2026-10-29)."""
+    t = str(text or "").strip()
+    t = re.sub(r"\b(?:run|use|do)\s+`/prep\s+([^`]+)`", r"read the prep for \1", t)
+    t = re.sub(r"`/prep\s+([^`]+)`", r"the prep for \1", t)
+    t = re.sub(r"\b(?:with|using|via)\s+`/outcome[^`]*`", "on your page", t)
+    t = re.sub(r"`/(?:outcome)[^`]*`", "your page", t)
+    t = re.sub(r"`/(?:interview)\s+([^`]+)`", r"interview prep for \1", t)
+    t = re.sub(r"`/[a-z-]+[^`]*`", "", t)
+    # "(Bank of Canada, https://...)" reads as a named source: [Bank of Canada](https://...).
+    t = re.sub(r"\(([^(),]{2,60}),\s*(https?://[^\s)]+)\)", r"([\1](\2))", t)
+    t = re.sub(r"(?<!\()(?<!\]\()\b(https?://[^\s)]+)", r"[source](\1)", t)
+    t = t.replace("`", "")
+    t = re.sub(r"\s{2,}", " ", t).strip()
+    return scrub(t, ())
+
+
+def brief_sections(text: str) -> list[dict]:
+    """The brief in its parts, each {title, kind, text, items: [{text}]}: a heading's own
+    sentences as `text`, its bullets or numbered steps as items. A line about a file or a
+    folder is left out: nothing on the page opens a path."""
+    out: list[dict] = []
+    cur = None
+    for raw in str(text or "").splitlines():
+        ln = raw.strip()
+        if ln.startswith("# "):
+            continue
+        m = re.match(r"#{2,3}\s+(.*)", ln)
+        if m:
+            title = m.group(1).strip()
+            kind = next((k for k, rx in BRIEF_KINDS if re.search(r"\b(?:%s)\b" % rx, title, re.I)),
+                        "other")
+            cur = {"title": title, "kind": kind, "text": "", "items": []}
+            out.append(cur)
+            continue
+        if not ln:
+            continue
+        if cur is None:
+            cur = {"title": "", "kind": "lead", "text": "", "items": []}
+            out.append(cur)
+        if re.search(r"(?:^|[\s`(])(?:documents|profile|tools|company_research)/\S+", ln):
+            continue
+        item = re.match(r"(?:[-*]|\d+[.)])\s+(.*)", ln)
+        if item:
+            said = brief_line(item.group(1))
+            if said:
+                cur["items"].append({"text": said})
+        else:
+            said = brief_line(ln)
+            if said:
+                cur["text"] = (cur["text"] + " " + said).strip()
+    # A part with nothing left in it, a "Read from your main chat's ..." note before the
+    # first heading included, is not shown.
+    return [sec for sec in out if (sec["items"] or sec["text"])
+            and not (not sec["title"] and not sec["items"] and len(out) > 1)]
 
 
 def brief_link(ctx: Ctx, line: str) -> dict:

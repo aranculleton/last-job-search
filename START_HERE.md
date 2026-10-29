@@ -45,7 +45,7 @@ Screens change: if yours looks different, tell Claude what you see.
 Claude asks two short rounds of questions, does the research itself and shows your first
 shortlist: up to an hour of its time, and you can put it down meanwhile. No resume? Say
 "build one with me" and Claude makes it with you, one job at a time. It ends by opening your
-private page and your twice-weekly brief. If it says it can't reach job sites (recommended, once):
+private page. If it says it can't reach job sites (recommended, once):
 
 <!-- claude-surface: cloud-internet -->
 <!-- checked 2026-10-25; https://code.claude.com/docs/en/cloud-environments -->
@@ -57,40 +57,17 @@ To let this chat reach job sites:
 Screens change: if yours looks different, tell Claude what you see.
 <!-- /claude-surface -->
 
-## On your computer as well
+## On your computer
 
-Recommended if you have one: there Claude can also read people's LinkedIn profiles before you
-write to them. Same copy, nothing moves, and it installs what it needs itself.
+For networking, once: install the Claude desktop app (claude.ai/download), open your page's
+link in it, and allow Claude's browser when it asks. It reads LinkedIn there by itself and
+asks you to sign in to LinkedIn if you are not. Nothing else to install: everything else
+runs in the cloud.
 
-<!-- claude-surface: local-chat -->
-<!-- checked 2026-10-25; https://code.claude.com/docs/en/desktop-quickstart -->
-To set up a chat on your computer:
-1. Install the Claude desktop app from claude.ai/download (it has a Mac and a Windows
-   installer) if you do not have it, and sign in.
-2. Open its Code tab. Under the message box choose Local, then Open folder, and make a new,
-   empty folder for your search.
-3. If the mode menu under the message box offers Auto, choose it: Claude then asks you far
-   less.
-4. Paste this there: Open my job search on this computer. My copy is
-   github.com/YOUR-NAME/YOUR-COPY. Follow
-   github.com/aranculleton/last-job-search/blob/master/COMPUTER.md
+## Then use your page
 
-Screens change: if yours looks different, tell Claude what you see.
-<!-- /claude-surface -->
-
-On Linux:
-
-<!-- claude-surface: linux-computer -->
-<!-- checked 2026-10-25; https://code.claude.com/docs/en/desktop-linux -->
-Use Claude on a Linux computer: on Ubuntu or Debian, the Claude desktop app; elsewhere, in a
-terminal, curl -fsSL https://claude.ai/install.sh | bash, then claude --chrome in the folder
-of your copy.
-<!-- /claude-surface -->
-
-## Then just talk to it
-
-**"Find me jobs"**, a posting pasted or linked, **"who should I talk to at Acme?"**, **"what
-do I owe?"** or **"prep me for my interview at Acme"**. React to anything ("too formal") and it
-remembers. Updates arrive by themselves, and nothing about you is ever sent back.
+Setup ends by opening it. Tap **Find jobs**, **Draft this** on a job you like, **Find people**,
+and **I heard back** when you do; tweak or bin anything that's off, and it remembers. Anything
+else, ask in **Chat** there. Updates arrive by themselves; nothing of yours is sent back.
 
 If something goes wrong, see [HELP.md](HELP.md), or tell Claude what you see.

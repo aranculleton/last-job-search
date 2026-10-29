@@ -38,8 +38,8 @@ RESULTS = [
 ]
 
 
-def test_a_chat_with_no_browser_still_gets_the_whole_list_and_is_asked_for_nothing_per_person():
-    got = sources.ladder([])
+def test_one_who_pastes_still_gets_the_whole_list_and_is_asked_for_nothing_per_person():
+    got = sources.ladder([])                       # the example person pastes profiles
     usable = {r.id: ok for r, ok, _ in got["rungs"]}
     assert usable["public_web"] and usable["exists"] and not usable["browser_read"]
     assert got["read"] == "hand" and got["read_cap"] == 0 and got["hand_top"] == reading.HAND_TOP == 3
@@ -48,17 +48,17 @@ def test_a_chat_with_no_browser_still_gets_the_whole_list_and_is_asked_for_nothi
     assert not re.search(r"(?:each|every) (?:person|profile)|everyone", got["say"])
 
 
-@pytest.mark.parametrize("tools,route", [(["browser"], "browser"), (["enable"], "enable"),
-                                         (["chrome"], "browser"), (["chrome-off"], "hand"),
-                                         ([], "hand")])
-def test_a_chat_with_a_browser_reads_the_best_few_and_one_without_offers_a_paste(tools, route, monkeypatch):
+@pytest.mark.parametrize("tools", [["browser"], ["enable"], ["chrome"], ["chrome-off"], []])
+def test_the_page_reads_the_best_few_whatever_browser_the_chat_has(tools, monkeypatch):
+    """Since 4.3 no chat reads LinkedIn, whatever browser it has: the person's page does, in
+    the Claude desktop app (reading.route), so every chat's ladder is the same."""
     monkeypatch.setattr(reading, "PROFILE_READS", "browser")
+    monkeypatch.setattr(reading, "reads_now", lambda: "browser")
     got = sources.ladder(tools)
-    assert got["read"] == route
-    reads = route in ("browser", "enable")
-    # No cap of the app's own on browser reads (None); a chat with no browser reads nobody.
-    assert got["read_cap"] == (None if reads else 0)
-    assert (got["say"] == "") == reads
+    usable = {r.id: ok for r, ok, _ in got["rungs"]}
+    assert got["read"] == "page" and usable["browser_read"] and not usable["hand"]
+    # No cap of the app's own on reads (None), and no paste asked for meanwhile.
+    assert got["read_cap"] is None and got["hand_top"] == 0
 
 
 def test_search_results_become_people_with_evidence_and_a_profile_status_nothing_fetched(judged):

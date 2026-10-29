@@ -117,6 +117,7 @@
   }
 
   const SECTIONS = [
+    {id: "brief", label: "Brief", key: "b"},
     {id: "todo", label: "To do", key: "t"},
     {id: "jobs", label: "Jobs", key: "j"},
     {id: "drafts", label: "Drafts", key: "d"},
@@ -125,10 +126,21 @@
     {id: "interviews", label: "Interviews", key: "i"},
     {id: "progress", label: "Progress", key: "p"},
     {id: "settings", label: "Settings", key: "s"},
+    {id: "profile", label: "Your profile", key: "y"},
   ];
   const SECTION_IDS = new Set(SECTIONS.map((s) => s.id));
-  const NAV = ["todo", "jobs", "drafts", "contacts", "chat"];
-  const FOOT_NAV = ["interviews", "progress", "settings"];
+  // Seven places, not eight (the maintainer, 2026-10-29: "conscious that we are having a lot
+  // of tabs"): Drafts and Applied are views of Jobs, the messages to send a view of Contacts,
+  // and Progress is opened from the Brief's numbers.
+  const NAV = ["brief", "todo", "jobs", "contacts", "chat"];
+  const FOOT_NAV = ["interviews", "settings"];
+  // The place in the nav a section belongs to.
+  function navOwner(id) {
+    if (id === "drafts") return draftsView() === "messages" ? "contacts" : "jobs";
+    if (id === "progress") return "brief";
+    if (id === "profile") return "settings";
+    return id;
+  }
   const labelOf = (id) => (SECTIONS.find((s) => s.id === id) || {}).label || "";
   // Earlier names for the sections, and the engine's own names in an action's "to": where
   // each opens now, so an old address or a pinned window still lands in the right place.
@@ -178,7 +190,7 @@
     localWork: new Map(),
     workNote: new Map(),
     sel: {jobs: new Set(), ready: new Set()},
-    can: {comments: null, room: null},
+    can: {comments: null},
     recent: [],
     toasts: [],
     quick: {turns: [], busy: false, ctl: null, mode: null, partial: ""},
@@ -198,7 +210,7 @@
     copyBox: new Map(),
     reach: new Map(),
     // Claude's browser (flow B): whether this device has read a LinkedIn page through it.
-    reading: {ok: false},
+    reading: {ok: false, tried: new Set()},
     tidied: new Set(),
     lastRing: null,
   };
@@ -218,11 +230,30 @@
   }
   // How big the whole page is drawn, on this device only: the person's own zoom, kept with
   // the look (the maintainer, 2026-10-29: "slightly zoomed in on phone").
-  const SIZE_KEY = "ljs:size";
-  const SIZES = {smaller: 0.9, standard: 1, larger: 1.12};
+  // Three sizes (the maintainer, 2026-10-29): Standard is what was Small, Larger is what was
+  // Standard, and Smaller is one step smaller again; the old Larger ("comically large") is
+  // gone. Kept under a new key, so every choice made before starts on the new Standard.
+  const SIZE_KEY = "ljs:size2";
+  const SIZES = {smaller: 0.8, standard: 0.9, larger: 1};
+  // A phone is drawn smaller too (the maintainer, 2026-10-29: "why is the phone so zoomed in
+  // by default ... like 1 job posting per screen"), and every tap target is drawn larger by
+  // the same factor (--tz), so a finger still gets its full 44px however small the text.
+  const PHONE_SIZES = {smaller: 0.75, standard: 0.85, larger: 1};
+  // A measured box in the page's own px. Chrome and Firefox measure what is drawn, after the
+  // zoom above; Safari measures before it. The body's own two widths give the ratio in every
+  // engine, so a panel placed from a measurement lands where it was measured (probed in all
+  // three, 2026-10-29: the filter panel opened a tenth too high and left in Chrome and Firefox).
+  function drawnPerPx() {
+    const b = document.body;
+    const k = b && b.offsetWidth ? b.getBoundingClientRect().width / b.offsetWidth : 1;
+    return k > 0 ? k : 1;
+  }
+  function pageWidth() { return window.innerWidth / (parseFloat(document.body.style.zoom) || 1); }
   function applySize(z) {
-    const f = SIZES[z] || 1;
-    try { document.body.style.zoom = f === 1 ? "" : String(f); } catch (e) { /* no zoom here */ }
+    const phone = window.innerWidth < 760;
+    const f = (phone ? PHONE_SIZES : SIZES)[z] || (phone ? PHONE_SIZES : SIZES).standard;
+    try { document.body.style.zoom = String(f); } catch (e) { /* no zoom here */ }
+    try { document.documentElement.style.setProperty("--tz", phone ? String(1 / f) : "1"); } catch (e) { /* the page's own size */ }
   }
   function setSize(z) {
     S.size = SIZES[z] ? z : "standard";
@@ -253,6 +284,7 @@
       if (data !== undefined && (tms(v.made_at) || 0) > base && k !== "person" && k !== "model") m[k] = data;
     }
     S.m = m;
+    if (S.reading && S.reading.here === true) setTimeout(maybeAutoRead, 0);
   }
   // A section too big for one database document comes as parts (tools/page_db.py split()):
   // view/part~<section>~<n>, each a piece of the section's JSON text at the head's rev, joined
@@ -327,6 +359,11 @@
   // shown with no time at all, never as midnight somewhere.
   let DEVICE_TZ;
   try { DEVICE_TZ = Intl.DateTimeFormat().resolvedOptions().timeZone; } catch (e) { DEVICE_TZ = undefined; }
+  // Dates and numbers in English, the page's language, the way this device writes English: a
+  // device set to French or German put "29 oct." or "60.000" inside an English sentence
+  // (2026-10-29).
+  let LOC;
+  try { const l = String(navigator.language || ""); LOC = /^en(-|$)/i.test(l) ? l : "en-GB"; } catch (e) { LOC = "en-GB"; }
   const zone = () => tz() || DEVICE_TZ;
   const isDateOnly = (s) => /^\d{4}-\d{2}-\d{2}$/.test(txt(s).trim());
   function ymdIn(t, z) {
@@ -370,13 +407,13 @@
   function fmtDay(s) {
     const d = parseDay(dayOf(s));
     if (d === null) return "";
-    try { return new Intl.DateTimeFormat(undefined, {weekday: "short", day: "numeric", month: "short", timeZone: "UTC"}).format(new Date(d)); }
+    try { return new Intl.DateTimeFormat(LOC, {weekday: "short", day: "numeric", month: "short", timeZone: "UTC"}).format(new Date(d)); }
     catch (e) { return txt(s).slice(0, 10); }
   }
   function clock(t, z) {
     const o = {hour: "numeric", minute: "2-digit"};
-    try { return new Intl.DateTimeFormat(undefined, Object.assign({timeZone: z}, o)).format(new Date(t)); }
-    catch (e) { return new Intl.DateTimeFormat(undefined, o).format(new Date(t)); }
+    try { return new Intl.DateTimeFormat(LOC, Object.assign({timeZone: z}, o)).format(new Date(t)); }
+    catch (e) { return new Intl.DateTimeFormat(LOC, o).format(new Date(t)); }
   }
   const city = (z) => txt(z).split("/").pop().replace(/_/g, " ");
   function fmtWhen(s) {
@@ -407,7 +444,7 @@
     if (d < 86400) return plural(Math.round(d / 3600), "hour", "hours") + " ago";
     if (d < 2 * 86400) return "yesterday";
     if (d < 7 * 86400) return Math.round(d / 86400) + " days ago";
-    try { return "on " + new Intl.DateTimeFormat(undefined, {day: "numeric", month: "short"}).format(new Date(t)); }
+    try { return "on " + new Intl.DateTimeFormat(LOC, {day: "numeric", month: "short"}).format(new Date(t)); }
     catch (e) { return "on " + txt(s).slice(0, 10); }
   }
   function dur(sec) {
@@ -425,7 +462,7 @@
     try {
       const opt = {currency: m[1], maximumFractionDigits: 0};
       opt.style = "currency";
-      const f = new Intl.NumberFormat(undefined, opt);
+      const f = new Intl.NumberFormat(LOC, opt);
       const n = (x) => f.format(Number(x.replace(/,/g, "")));
       return n(m[2]) + (m[4] ? " to " + n(m[4]) : "") + m[5];
     } catch (e) { return s; }
@@ -454,9 +491,13 @@
       [0, 1, 2].map((i) => svg("rect", {x: String(i * 5), y: String(8 - i * 4), width: "3.5", height: String(4 + i * 4), rx: "1", class: i < st ? "on" : "off"})));
   }
   // A sheet's cost line, with the gauge its words name in front of it.
+  // Said as the gauge and the time, like every other cost: its words on hover and read aloud.
   function costNode(text) {
-    const st = COST_WORDS.findIndex((w, i) => i && txt(text).indexOf(w) >= 0);
-    return st > 0 ? [gauge(st), " ", text] : text;
+    const t = txt(text);
+    const st = COST_WORDS.findIndex((w, i) => i && t.indexOf(w) >= 0);
+    if (st <= 0) return text;
+    const rest = t.replace(COST_WORDS[st] + ". ", "").replace(COST_WORDS[st], "").trim();
+    return [h("span", {class: "has-tip", "data-tip": COST_WORDS[st], tabindex: "0"}, gauge(st), h("span", {class: "sr-only"}, COST_WORDS[st] + ". ")), " ", rest];
   }
   // An engine cost ({state, label}) said the same way: free things as the engine says them,
   // the rest as the amount and the time this kind of work really takes.
@@ -474,7 +515,7 @@
     const sec = STAGES[txt(kind)] ? stageSeconds(txt(kind)) : 0;
     const time = sec ? (sec < 100 ? "1 min" : Math.round(sec / 60) + " min") : "";
     const words = (COST_WORDS[st] || COST_WORDS[2]) + (sec ? ", " + aboutTime(sec) : "");
-    return h("span", {class: "cost", id, title: words}, gauge(st), time ? h("span", {"aria-hidden": "true"}, time) : null, h("span", {class: "sr-only"}, words));
+    return h("span", {class: "cost has-tip", id, "data-tip": words, tabindex: "0"}, gauge(st), time ? h("span", {"aria-hidden": "true"}, time) : null, h("span", {class: "sr-only"}, words));
   }
 
   // ------------------------------------------------------------------ capabilities
@@ -487,7 +528,7 @@
     } catch (e) { return Promise.resolve(null); }
   }
   const CAP = {};
-  for (const n of ["user", "db", "downloads", "comments", "room", "sample", "assets"]) {
+  for (const n of ["user", "db", "downloads", "comments", "sample", "assets"]) {
     CAP[n] = use(n).then((v) => { S.caps[n] = v; return v; });
   }
   const capsSettled = {};
@@ -508,12 +549,35 @@
     }
     return out;
   }
+  // The version a record will have once this write lands: the store counts up by one a
+  // write from 1, and a chat reading a saved copy has nothing else to pin its next write to
+  // (tools/page_db.py VERSION_FIELD).
+  function nextV(d) { return d ? (Number(d._v) > 0 ? Number(d._v) : 1) + 1 : 1; }
   const unsubs = new Map();
+  // A subscription that errors is dead (db.d.ts: "a fresh onSnapshot is the only recovery"):
+  // it is made again after a short, varied wait, unless access was taken away. Before, it
+  // stayed dead while the page said "Connected" (contract audit, 2026-10-29).
+  const SUB_RETRY = new Map();
   function sub(key, ref, apply) {
     if (unsubs.has(key)) return;
+    const again = (e) => {
+      onDbError(e);
+      const u = unsubs.get(key);
+      unsubs.delete(key);
+      try { if (typeof u === "function") u(); } catch (x) { /* already dead */ }
+      if (e && e.code === "revoked") return;
+      const n = (SUB_RETRY.get(key) || 0) + 1;
+      SUB_RETRY.set(key, n);
+      setTimeout(() => sub(key, ref, apply), Math.min(60000, 1000 * 2 ** Math.min(n, 6)) * (0.5 + Math.random()));
+    };
     try {
-      unsubs.set(key, ref.onSnapshot((snap) => { apply(snap); if (S.flags.dbError && S.flags.dbError !== "revoked") S.flags.dbError = null; liveRender(); }, onDbError));
-    } catch (e) { onDbError(e); }
+      unsubs.set(key, ref.onSnapshot((snap) => { SUB_RETRY.delete(key); apply(snap); if (S.flags.dbError && S.flags.dbError !== "revoked") S.flags.dbError = null; liveRender(); }, again));
+    } catch (e) { again(e); }
+  }
+  function unsub(key) {
+    const u = unsubs.get(key);
+    unsubs.delete(key);
+    try { if (typeof u === "function") u(); } catch (e) { /* gone */ }
   }
   function subscribe(db) {
     sub("work", db.collection("work").orderBy("asked_at", "desc").limit(60), (snap) => {
@@ -523,7 +587,8 @@
       for (const id of next.keys()) S.localWork.delete(id);
     });
     sub("actions", db.collection("actions").orderBy("at", "desc").limit(300), (snap) => { S.actions = docsOf(snap); });
-    sub("receipts", db.collection("receipts").limit(500), (snap) => {
+    // The newest receipts: without an order the store sends the first 500 by id (db.d.ts).
+    sub("receipts", db.collection("receipts").orderBy("applied_at", "desc").limit(500), (snap) => {
       const next = docsOf(snap);
       for (const [id, r] of next) {
         if (!S.receipts.has(id) && S.local.has(id)) {
@@ -533,15 +598,24 @@
       }
       S.receipts = next;
     });
-    sub("chats", db.collection("chats"), (snap) => { S.chats = docsOf(snap); });
+    // Records only chats write live under 4.3's own names (tools/page_db.py STORE), so none
+    // needs the version of a record made before every write carried one (_v).
+    sub("chats", db.collection("beats"), (snap) => { S.chats = docsOf(snap); });
     sub("talk", db.collection("talk"), (snap) => { S.threads = docsOf(snap); followThreads(); });
-    sub("meta", db.doc("meta/current"), (d) => { S.meta = d && d.exists ? d.data() : null; });
+    sub("meta", db.doc("meta/now"), (d) => { S.meta = d && d.exists ? d.data() : null; });
+    // The last ring, read before any tap so the next one can reply in its thread at once.
+    sub("bell", db.doc("meta/doorbell"), (d) => { S.bell = d && d.exists ? d.data() : null; });
     // The one chat a tap wakes, and when it last answered (CONTRACT 7).
-    sub("listener", db.doc("meta/listener"), (d) => { S.listener = d && d.exists ? d.data() : null; });
-    sub("view", db.collection("view"), (snap) => { S.views = docsOf(snap); recompute(); });
+    sub("listener", db.doc("meta/listen"), (d) => { S.listener = d && d.exists ? d.data() : null; });
+    sub("view", db.collection("screen"), (snap) => { S.views = docsOf(snap); recompute(); });
     // How to reach each contact (their LinkedIn address, their email), kept only in this
-    // owner-only collection and never in the page itself (FUNCTIONS_SPEC 1.5 item 2).
-    sub("reach", db.collection("reach"), (snap) => { S.reach = docsOf(snap); scheduleRender(); });
+    // owner-only collection and never in the page itself (FUNCTIONS_SPEC 1.5 item 2), a few
+    // contacts to a record (tools/page_db.py addr_docs).
+    sub("reach", db.collection("addr"), (snap) => {
+      const out = new Map();
+      for (const d of docsOf(snap).values()) for (const [cid, r] of Object.entries(obj(d.contacts))) out.set(cid, r);
+      S.reach = out; scheduleRender();
+    });
     followThreads();
   }
   function followThreads() {
@@ -550,6 +624,9 @@
     const ids = new Set();
     for (const to of TALK_TO) ids.add(currentThread(to));
     if (S.viewConv) for (const [id, t] of S.threads) if (convOf(id, t) === S.viewConv) ids.add(id);
+    // At most 64 live subscriptions a view (db.d.ts): conversations no longer shown are let go,
+    // so a long search never reaches the cap (contract audit, 2026-10-29).
+    for (const key of [...unsubs.keys()]) if (key.startsWith("msgs:") && !ids.has(key.slice(5))) unsub(key);
     for (const th of ids) {
       sub("msgs:" + th, db.collection("talk/" + th + "/messages").orderBy("at").limit(200), (snap) => {
         const list = [];
@@ -682,11 +759,14 @@
     return null;
   }
 
+  // Every tap its own id. The page sees only a window of the receipts (the newest 500), so
+  // "is this id free?" answered from that window reused an id the engine had already applied
+  // and skipped: the card said "Saved" for ever (contract audit, 2026-10-29).
   function actionId(item, action) {
     const base = "act~" + seg(item).slice(0, 90) + "~" + seg(action).slice(0, 40);
-    let id = base;
-    let n = 2;
-    while (S.receipts.has(id)) id = base + "~" + n++;
+    let id;
+    do { id = base + "~" + now().toString(36) + Math.floor(Math.random() * 1296).toString(36); }
+    while (S.receipts.has(id) || S.actions.has(id) || S.local.has(id));
     return id;
   }
 
@@ -709,9 +789,10 @@
     noteFocus();
     const recs = [];
     const ringing = list.some((o) => RINGS(o.action));
-    const roomRing = ringing ? ringRoomSync(list.map((o) => actionId(o.item, o.action)), label) : null;
-    for (const o of list) {
-      const id = actionId(o.item, o.action);
+    const ids = list.map((o) => actionId(o.item, o.action));
+    const rung = ringing ? ringNow(ids, "act") : null;
+    for (const [k, o] of list.entries()) {
+      const id = ids[k];
       const doc = {item: txt(o.item), action: o.action, value: o.value === undefined ? null : o.value,
         at: iso(), rev_seen: o.rev || null, tab: S.tab};
       if (o.undoes) doc.undoes = o.undoes;
@@ -731,7 +812,7 @@
       return recs;
     }
     await Promise.all(recs.map(async (r) => {
-      try { await db.doc("actions/" + r.id).set(r.doc); if (r.state === "saving") r.state = "saved"; }
+      try { await db.doc("actions/" + r.id).set(Object.assign({}, r.doc, {_v: nextV(S.actions.get(r.id))})); if (r.state === "saving") r.state = "saved"; }
       catch (e) { r.state = "failed"; r.code = e && e.code; }
     }));
     const failed = recs.filter((r) => r.state === "failed");
@@ -741,9 +822,8 @@
     } else {
       toast({text: label, ids: recs.map((r) => r.id)});
       announce(label + ". Saved.");
-      if (ringing) {
-        const ids = recs.map((r) => r.id);
-        Promise.resolve(roomRing).then((how) => how || ringComments(ids, false, "act")).then((how) => {
+      if (rung) {
+        rung.then((how) => {
           S.setupRing = {at: now(), how: how || "later", ids};
           scheduleRender();
         });
@@ -784,7 +864,9 @@
   }
   function settingOf(key, fallback) { const s = settingItem(key); const v = s ? settingValue(s) : null; return v === null || v === undefined || v === "" ? fallback : v; }
   const suggestionsMode = () => txt(settingOf("suggestions", "on"));
-  const whereTo = () => (txt(settingOf("work_either", "cloud")) === "computer" ? "computer" : "cloud");
+  // Where the page's work runs: in the one chat that answers it (tools/app_listen.py), so a
+  // card can say "on your computer" when that chat is there. Nobody chooses it.
+  const whereTo = () => (txt(obj(S.listener).kind) === "computer" ? "computer" : "cloud");
 
   // ------------------------------------------------------------------ work
 
@@ -847,7 +929,7 @@
   }
   function finishedAt(w) { return tms(w.finished_at) || tms(w.asked_at) || 0; }
   function limitHit() {
-    if (S.flags.limit) return true;
+    if (S.flags.limit && S.flags.limit > now()) return true;
     let n = 0;
     for (const [, w] of allWork()) {
       if (w.status !== "running" && w.status !== "claimed") continue;
@@ -871,122 +953,67 @@
   }
 
   // Ringing a chat. The work document is the request; a ring only wakes a chat, and carries
-  // ids, never the person's words. The room send must be called inside the click itself.
-  function ringRoomSync(ids, label) {
-    const room = S.caps.room;
-    if (!room || S.can.room !== "available") return null;
-    try {
-      const p = room.sendToClaudeSession({label: clip(label, 100), app: "job_search", work: ids.join(",")},
-        {deliver: "send", attachPresence: false});
-      return Promise.resolve(p).then(() => "room", () => null);
-    } catch (e) { return null; }
-  }
+  // ids, never the person's words. The ring must be made inside the click itself.
   function anchorEl() { return $("top") || document.body; }
-  // The chat that answers this page is woken by the page itself, through Claude's own
-  // connector (Claude Code Remote, send_message to that chat), once per piece of work: no
-  // "Wake Claude", no new chat (the maintainer, 2026-10-28). Its one consent is asked the first
-  // time; where it is refused or missing, the doorbell and the card below stay as before.
-  const WAKER = "Claude Code Remote";
   const within = (p, ms) => Promise.race([p, new Promise((r) => setTimeout(() => r("timeout"), ms))]);
   async function remoteCap() {
     try { const m = await within(Promise.resolve(window.claude && window.claude.use ? window.claude.use("mcp") : null), 4000); return m && m !== "timeout" ? m : null; }
     catch (e) { return null; }
   }
-  // Taps close together wake Claude once: each wake is a turn of the helper chat, and a turn
-  // costs part of the person's plan (the maintainer, 2026-10-29: "cheap to run").
-  const WAKE_GATHER_MS = 4000;
-  // The first tap wakes at once; taps in the next few seconds are gathered into one more.
-  function wakeSoon(ids) {
-    const go = (q) => autoWake(q).then(async (ok) => { if (!ok) ringNote(q, await ringComments(q, false)); else scheduleRender(); });
-    if (!S.wakeTimer) {
-      go(ids);
-      S.wakeTimer = setTimeout(function flush() {
-        const q = S.wakeQueue || [];
-        S.wakeQueue = [];
-        S.wakeTimer = null;
-        if (q.length) { go(q); S.wakeTimer = setTimeout(flush, WAKE_GATHER_MS); }
-      }, WAKE_GATHER_MS);
-      return;
-    }
-    S.wakeQueue = (S.wakeQueue || []).concat(ids.filter((id) => !(S.wakeQueue || []).includes(id)));
-  }
-  async function autoWake(ids) {
-    if (!ids.length) return false;
-    S.woken = S.woken || new Set();
-    const fresh = ids.filter((id) => !S.woken.has(id));
-    if (!fresh.length) return true;
-    const m = await remoteCap();
-    if (!m) { S.wakeFailed = true; return false; }
-    const sid = txt(obj(S.listener).chat);
-    let ok = false;
-    if (/^session_/.test(sid)) {
-      try { ok = (await within(m.callTool(WAKER, "send_message", {session_id: sid, message: "[app] [work:" + fresh.join(",") + "]"}), 15000)) !== "timeout"; }
-      catch (e) { ok = false; }
-    }
-    // The helper is gone (or there never was one): one new one, started by the page itself,
-    // once per page load, on the person's own copy. Never a chat per piece of work.
-    // Work meant for the person's computer is never moved to a cloud chat.
-    if (!ok && fresh.every((id) => txt(obj(workDoc(id)).to) !== "computer")) ok = await startHelper(m, fresh);
-    if (ok) { fresh.forEach((id) => S.woken.add(id)); S.wokenAt = now(); } else S.wakeFailed = true;
-    return ok;
-  }
-  async function startHelper(m, ids) {
-    const repo = safeUrl(txt(obj(M().app).repo));
-    if (!repo || S.helperStarted) return false;
-    S.helperStarted = true;
-    let env = null;
-    try { const got = await within(m.callTool(WAKER, "list_environments", {}), 15000); const hit = /\benv_[A-Za-z0-9_-]+/.exec(JSON.stringify(got)); env = hit ? hit[0] : null; }
-    catch (e) { env = null; }
-    const prompt = "You are this person's job search helper. Run python3 tools/app.py start --on \"<this chat's model>\" --tools none, do what it prints, then take the page's waiting work: [app] [work:" + ids.join(",") + "]";
-    try {
-      const got = await within(m.callTool(WAKER, "create_session", Object.assign({source_url: repo, title: "Job search helper", prompt}, env ? {environment_id: env} : {})), 30000);
-      return got !== "timeout";
-    } catch (e) { return false; }
-  }
-  async function ringComments(ids, force, tag) {
-    const c = await CAP.comments;
-    if (!c) return "none";
-    let can;
-    try { can = await c.canSendToClaude(); } catch (e) { can = "off"; }
-    S.can.comments = can;
-    if (can !== "available") return can;
-    const db = S.caps.db;
-    let bell = null;
-    if (db) {
-      try { const d = await db.doc("meta/doorbell").get(); bell = d && d.exists ? d.data() : null; } catch (e) { bell = null; }
-      if (!force && tag !== "act" && bell && now() - (tms(bell.rung_at) || 0) < RING_COALESCE_MS && arr(bell.ids).length &&
-          arr(bell.ids).every((id) => { const w = workDoc(id); return w && w.status === "queued"; })) {
-        return "coalesced";
-      }
-    }
+  // ------------------------------------------------------------------ waking Claude
+  // One way, the doorbell: a comment sent to Claude, which the chat answering this page
+  // watches. It is rung inside the tap itself, with nothing awaited first, because the
+  // platform takes it only from the person's own recent tap (comments.d.ts); a ring after a
+  // wait was refused. Seen live on 2026-10-29: a tap reached its chat in two seconds. The
+  // connector route (send_message) could not even load on the maintainer's account, and the
+  // room asked "send this?" on every tap: both are gone (contract audit and live checks).
+  // What it needs (may it ring, where, which thread) is read before any tap: refreshCanSend
+  // and the meta/doorbell subscription.
+  function canRing() { return !!S.caps.comments && S.can.comments === "available"; }
+  function ringNow(ids, tag, force) {
+    const c = S.caps.comments;
+    if (!c) return Promise.resolve("none");
+    if (S.can.comments !== "available") return Promise.resolve(S.can.comments || "none");
+    const bell = S.bell;
+    if (!force && tag !== "act" && bell && now() - (tms(bell.rung_at) || 0) < RING_COALESCE_MS && arr(bell.ids).length &&
+        arr(bell.ids).every((id) => { const w = workDoc(id); return w && w.status === "queued"; })) return Promise.resolve("coalesced");
     const text = "[app] [" + (tag || "work") + ":" + ids.join(",") + "]";
-    let res = null;
+    const thread = bell ? txt(bell.thread) : "";
+    let p;
     try {
-      if (bell && bell.thread) {
-        try { res = await c.sendToClaude({threadId: txt(bell.thread), text}); }
-        catch (e) { if (!e || (e.code !== "not_found" && e.code !== "upstream_error")) throw e; res = null; }
-      }
-      if (!res) res = await c.sendToClaude({anchor: await c.anchorFor(anchorEl()), text});
-    } catch (e) {
+      if (thread) p = c.sendToClaude({threadId: thread, text});
+      else if (S.bellAnchor) p = c.sendToClaude({anchor: S.bellAnchor, text});
+      else p = Promise.reject({code: "not_ready"});
+    } catch (e) { p = Promise.reject(e); }
+    return Promise.resolve(p).then(async (res) => {
+      const rec = {rung_at: iso(), tab: S.tab, ids: ids.slice(0, 50), thread: (res && res.threadId) || thread || null};
+      S.bell = rec;
+      const db = S.caps.db;
+      if (db) { try { await db.doc("meta/doorbell").set(rec); } catch (e) { /* the ring went out; this note only saves rings */ } }
+      return "rang";
+    }, (e) => {
       const code = (e && e.code) || "upstream_error";
+      // A thread that is gone: the next tap starts a new one.
+      if (code === "not_found" && S.bell) S.bell = Object.assign({}, S.bell, {thread: null});
       if (code === "claude_unavailable") return "no_session";
       if (code === "forbidden") { S.can.comments = "off"; return "off"; }
       return code;
-    }
-    if (db) {
-      try { await db.doc("meta/doorbell").set({rung_at: iso(), tab: S.tab, ids: ids.slice(0, 50), thread: res && res.threadId ? res.threadId : null}); }
-      catch (e) { /* the ring went out; the coalescing note is only a saving */ }
-    }
-    return "rang";
+    });
+  }
+  // Asked again for one piece of work, from its own button.
+  function ringAgain(id) {
+    const rung = ringNow([id], "work", true);
+    rung.then((how) => {
+      ringNote([id], how);
+      announce(how === "rang" ? "Claude has been told again." : "Claude could not be reached. It starts next time Claude works on your search.");
+    });
   }
   function ringNote(ids, how) {
-    const told = how === "rang" || how === "room" || how === "coalesced";
+    const told = how === "rang" || how === "coalesced";
     S.lastRing = how === "no_session" ? "no_session" : told ? "rang" : S.lastRing;
     for (const id of ids) {
       const w = workDoc(id);
       const toComputer = w && w.to === "computer";
-      // Woken: the card itself says Starting; a second line saying so is noise.
-      if (how === "woken") { S.workNote.delete(id); continue; }
       if (told) S.workNote.set(id, {text: "Claude has been told.", tone: "muted"});
       else if (toComputer) S.workNote.set(id, {text: "This needs your computer: open Claude on it, and it starts there.", tone: "muted"});
       else if (how === "no_session") S.workNote.set(id, {text: "Claude is not working on your search right now. This starts next time it does.", tone: "warn", link: true});
@@ -997,19 +1024,24 @@
   async function refreshCanSend() {
     const c = S.caps.comments;
     if (c) { try { S.can.comments = await c.canSendToClaude(); } catch (e) { S.can.comments = "off"; } }
-    const r = S.caps.room;
-    if (r) { try { S.can.room = await r.canSendToClaudeSession(); } catch (e) { S.can.room = "off"; } }
+    // The anchor a first ring is posted on, made now so a tap need not wait for it.
+    if (c && !S.bellAnchor) { try { S.bellAnchor = await c.anchorFor(anchorEl()); } catch (e) { S.bellAnchor = null; } }
     scheduleRender();
   }
 
   const KIND_CAP_ONE = new Set(["search", "update", "network"]);
-  // Asks a chat for work. Call it inside the click that asked: the room ring has to be.
+  // Work only a chat in the cloud can do (tools/page_db.py WORK_KINDS): the brief, which comes
+  // with the computer off. Settings' "Where Claude works" never sends it to the computer.
+  const CLOUD_ONLY = new Set(["brief"]);
+  // Asks a chat for work. Call it inside the click that asked: the ring has to be.
   // o.ring false: saved for the next chat that works on the search, and nobody is told now.
   function requestWork(specs, o) {
     o = o || {};
     const ring = o.ring !== false;
-    const list = specs.map((s) => Object.assign({id: s.id || (s.kind + "~" + stamp() + "-" + rand4()), to: s.to || whereTo()}, s));
-    const roomRing = ring ? ringRoomSync(list.map((s) => s.id), list.length === 1 ? list[0].title : list.length + " jobs from your page") : null;
+    const list = specs.map((s) => Object.assign({id: s.id || (s.kind + "~" + stamp() + "-" + rand4()), to: s.to || (CLOUD_ONLY.has(s.kind) ? "cloud" : whereTo())}, s));
+    // "One at a time" is known before the tap rings, so an ask that is refused wakes nobody.
+    const oneAtATime = list.some((s) => KIND_CAP_ONE.has(s.kind) && [...allWork()].some(([id, w]) => id !== s.id && w.kind === s.kind && ACTIVE.has(w.status)));
+    const rung = ring && !oneAtATime ? ringNow(list.map((s) => s.id), "work") : null;
     return (async () => {
       const db = await CAP.db;
       if (!db) {
@@ -1029,14 +1061,7 @@
       }
       if (!made.length) { scheduleRender(); return made; }
       announce(made.length === 1 ? "Asked: " + txt(workDoc(made[0]) && workDoc(made[0]).title) + "." : "Asked for " + made.length + " things.");
-      // One way to Claude per tap, the cheapest first: a chat already listening hears it in the
-      // room for nothing; else the one helper chat is woken; the comment bell (which reaches
-      // whichever chat published the page) only where there is no helper to wake.
-      let how = roomRing ? await roomRing : null;
-      const helper = !S.wakeFailed && (/^session_/.test(txt(obj(S.listener).chat)) || txt(obj(M().app).repo));
-      if (!how && helper) { wakeSoon(made); how = "woken"; }
-      if (!how && ring) how = await ringComments(made, false);
-      ringNote(made, how || "later");
+      ringNote(made, (rung ? await rung : null) || "later");
       return made;
     })();
   }
@@ -1045,6 +1070,7 @@
     if (KIND_CAP_ONE.has(s.kind)) {
       for (const [id, w] of allWork()) if (id !== s.id && w.kind === s.kind && ACTIVE.has(w.status)) return {ok: false, why: "one", running: txt(w.title)};
     }
+    let had = workDoc(s.id) || null;
     if (s.slot !== false) {
       let lease;
       try { lease = await ref.acquire({holder: S.tab, ttlMs: 5000}); } catch (e) { lease = {acquired: true}; }
@@ -1052,6 +1078,7 @@
       try {
         const cur = await ref.get();
         const d = cur && cur.exists ? cur.data() : null;
+        had = d;
         if (d && d.status) {
           if (ACTIVE.has(d.status)) return {ok: false, why: "busy"};
           if (d.status === "done" && !s.redo) return {ok: false, why: "done"};
@@ -1060,7 +1087,7 @@
     }
     const doc = {kind: s.kind, title: clip(s.title, 140), to: s.to, args: s.args || {}, asked_at: iso(),
       asked_from: {tab: S.tab}, status: "queued", stages: arr(s.stages).length ? s.stages : defaultStages(s.kind), stage: 0, stage_at: null,
-      steps: [], claimed_by: null, claimed_at: null, stop_asked: false, attempt: 1};
+      steps: [], claimed_by: null, claimed_at: null, stop_asked: false, attempt: 1, _v: nextV(had)};
     S.localWork.set(s.id, doc);
     scheduleRender();
     try { await ref.set(doc); return {ok: true, doc}; }
@@ -1071,7 +1098,7 @@
     const db = await CAP.db;
     if (!w || !db) return;
     const waiting = w.status === "queued";
-    const patch = waiting ? {stop_asked: true, status: "stopped", finished_at: iso()} : {stop_asked: true};
+    const patch = Object.assign(waiting ? {stop_asked: true, status: "stopped", finished_at: iso()} : {stop_asked: true}, {_v: nextV(w)});
     try { await db.doc("work/" + id).update(patch); announce(waiting ? "Stopped. Anything already saved is kept." : "Stopping after this step. Anything already saved is kept."); }
     catch (e) { announce("Could not stop it. Try again."); }
     scheduleRender();
@@ -1079,26 +1106,17 @@
   function retryWork(id) {
     const w = workDoc(id);
     if (!w) return;
-    const roomRing = ringRoomSync([id], txt(w.title));
+    const rung = ringNow([id], "work", true);
     (async () => {
       const db = await CAP.db;
       if (!db) return;
       const patch = {status: "queued", stop_asked: false, claimed_by: null, claimed_at: null, asked_at: iso(),
         stage: 0, stage_at: null, steps: [], error: null, finished_at: null, lease_until: null,
-        attempt: (Number(w.attempt) || 1) + 1, asked_from: {tab: S.tab}};
+        attempt: (Number(w.attempt) || 1) + 1, asked_from: {tab: S.tab}, _v: nextV(w)};
       try { await db.doc("work/" + id).update(patch); } catch (e) { announce("Could not start it again. Try once more."); return; }
       announce("Asked again: " + txt(w.title) + ".");
-      if (S.woken) S.woken.delete(id);
-      autoWake([id]);
-      let how = roomRing ? await roomRing : null;
-      if (!how) how = await ringComments([id], true);
-      ringNote([id], how);
+      ringNote([id], await rung);
     })();
-  }
-  async function ringAgain(id) {
-    const how = await ringComments([id], true);
-    ringNote([id], how);
-    announce(how === "rang" ? "Claude has been told again." : "Claude could not be reached. It starts next time Claude works on your search.");
   }
   function workBusy(id) { const w = workDoc(id); return !!(w && ACTIVE.has(txt(w.status) || "queued")); }
 
@@ -1231,6 +1249,20 @@
       });
       el = h("fieldset", {class: "field", "aria-describedby": id + "-e"}, h("legend", {}, f.label), f.hint ? h("p", {class: "hint"}, f.hint) : null, err, opts, f.extra || null);
       read = () => { const c = el.querySelector("input[type=radio]:checked"); return c ? c.value : null; };
+    } else if (f.type === "pick") {
+      // A name to type, with the matches offered as it is typed, and anyone not on the list
+      // taken as written: a dropdown of four hundred people with no "someone else" was no
+      // way to pick one (the maintainer, 2026-10-29).
+      const lid = id + "-list";
+      const inp = h("input", {type: "text", id, list: lid, autocomplete: "off", placeholder: f.placeholder || "", "aria-describedby": id + "-e"});
+      el = h("div", {class: "field"}, h("label", {for: id}, f.label), f.hint ? h("p", {class: "hint"}, f.hint) : null, err, inp,
+        h("datalist", {id: lid}, arr(f.options).map((op) => h("option", {value: op[1]}))));
+      read = () => {
+        const v = inp.value.trim();
+        if (!v) return null;
+        const hit = arr(f.options).find((op) => op[1].toLowerCase() === v.toLowerCase());
+        return hit ? {id: hit[0]} : {name: v.slice(0, 80)};
+      };
     } else if (f.type === "select") {
       const sel = h("select", {id, "aria-describedby": id + "-e"}, h("option", {value: ""}, f.placeholder || "Choose…"),
         arr(f.options).map((op) => op[2] ? h("optgroup", {label: op[2]}, arr(op[3]).map((o2) => h("option", {value: o2[0]}, o2[1]))) : h("option", {value: op[0]}, op[1])));
@@ -1289,7 +1321,7 @@
       const lead = ref ? h("p", {class: "warm"}, txt(ref.first_name) + " has put your name forward here. Ask " + txt(ref.first_name) + " before you send anything yourself.")
         : r.warm ? h("p", {class: "warm"}, h("span", {class: "warm-k"}, "Before you apply: "), txt(r.warm)) : null;
       dlg = sheet({title: "Draft this: " + txt(r.company) + ", " + txt(r.title), lead,
-        intro: "Claude writes a " + noun() + " and a cover letter, checks every fact and puts them in Drafts.",
+        intro: "Claude writes a " + noun() + " and a cover letter, checks every fact and puts them in Jobs, under Drafts.",
         cost: costLine("draft"), fields, submit: "Draft it",
         onSubmit: (v) => {
           if (v.applied === "yes") {
@@ -1306,7 +1338,7 @@
     rows.forEach((r, ri) => arr(r.questions).filter((q) => !appliedQ(q)).forEach((q, i) =>
       fields.push({id: "r" + ri + "q" + i, type: "radio", label: txt(r.company) + ": " + txt(q), required: true, options: [["yes", "Yes"], ["no", "No"]]})));
     sheet({title: "Draft " + rows.length + " applications",
-      intro: "Each gets a " + noun() + " and a cover letter, checked, in Drafts.", cost: costLine("draft").replace(/^About \d+ minutes?\. /, "About " + plural(rows.length * 9, "minute", "minutes") + " in all. "),
+      intro: "Each gets a " + noun() + " and a cover letter, checked, in Jobs under Drafts.", cost: costLine("draft").replace(/^About \d+ minutes?\. /, "About " + plural(rows.length * 9, "minute", "minutes") + " in all. "),
       fields, submit: "Draft " + rows.length,
       onSubmit: (v) => {
         const applied = new Set(arr(v.applied));
@@ -1391,8 +1423,6 @@
       onSubmit: (v) => { requestWork([{id: "prep~" + seg(iv.id), kind: "prep", title: "Interview prep: " + txt(iv.company) + ", " + txt(iv.role),
         args: {interview: txt(iv.id), note: v.note || null}, redo: true}]); }});
   }
-  // A reply starts from their words (FUNCTIONS_SPEC 1.4).
-  function askReply(p) { logReply(p, true); }
   // A due row's work, each kind its own: the resume someone asked for asks which role first;
   // an interview's prep has one work id however it is asked for; a thank-you and a status
   // note are messages, not prep.
@@ -1420,9 +1450,11 @@
     requestWork([{id: "files~" + seg(a.id), kind: "files", title: "Make the files downloadable: " + txt(a.company),
       args: {application: txt(a.id), files: arr(a.files).filter((f) => !f.asset).map((f) => txt(f.name))}, redo: true}]);
   }
-  function askUpdate(waiting) {
-    const v = txt(obj(waiting).sha || obj(waiting).id) || txt(obj(M().app).update_waiting) || "next";
-    requestWork([{id: "update~" + seg(v), kind: "update", title: "Updating the app", args: {}, redo: false}]);
+  // Every missing file in one piece of work, so the chat wakes once for all of them, not once
+  // an application (the maintainer, 2026-10-29: "combine a lot of tasks to save usage").
+  function askFilesAll(list) {
+    requestWork([{id: "files~all", kind: "files", title: "Make the files downloadable: " + plural(list.length, "application", "applications"),
+      args: {applications: list.map((a) => txt(a.id)), files: list.flatMap((a) => arr(a.files).filter((f) => !f.asset).map((f) => txt(f.name)))}, redo: true}]);
   }
   // A card's alert or suggestion runs what the model says, the same way its own buttons do.
   function runAction(a, from) {
@@ -1551,6 +1583,13 @@
   function more(key, about, kids) {
     const parts = arr(kids).filter(Boolean);
     if (!parts.length) return null;
+    // One button alone behind More is just shown (the maintainer, 2026-10-29: "did this
+    // really need a More for the second button?").
+    if (parts.length === 1 && parts[0].nodeType === 1) {
+      const only = parts[0];
+      const inner = only.classList && only.classList.contains("more-acts") ? [...only.children] : [only];
+      if (inner.length === 1 && /^(BUTTON|A)$/.test(inner[0].tagName)) { inner[0].setAttribute("data-more", "1"); return inner[0]; }
+    }
     return det("more:" + key, false, {class: "more"}, h("summary", {class: "more-btn", "data-k": "more-sum:" + key}, "More", h("span", {class: "sr-only"}, ": " + about)),
       h("div", {class: "more-panel"}, parts));
   }
@@ -1562,9 +1601,6 @@
     return txt(f.label || f.text || f.kind || f.type || f.how || "");
   }
   function chip(text, tone) { return h("span", {class: "chip tone-" + (tone || "plain")}, text); }
-  function sectionHead(id, title, lede, tools, where) {
-    return h("header", {class: "sec-head"}, h("div", {class: "sec-titles"}, h("h2", {id: "h-" + id + (where ? "-" + where : ""), tabindex: "-1"}, title), lede ? h("p", {class: "lede"}, lede) : null), tools ? h("div", {class: "sec-tools"}, tools) : null);
-  }
   function empty(title, body, extra) { return h("div", {class: "empty"}, h("p", {class: "empty-title"}, title), body ? h("p", {}, body) : null, extra || null); }
   function btn(label, onclick, o) {
     o = o || {};
@@ -1617,10 +1653,28 @@
 
   // ------------------------------------------------------------------ lists: live always shown, finished history folded
 
-  function listState(key) {
+  function listState(key, chips) {
     let st = S.lists.get(key);
-    if (!st) { st = {q: "", open: false, pages: 1, chips: obj(pref("f:" + key, {}))}; S.lists.set(key, st); }
+    if (!st) { st = {q: "", open: false, pages: 1, chips: obj(pref("f:" + key, null) || chips || {})}; S.lists.set(key, st); }
     return st;
+  }
+  // The switch at the head of Jobs: what was found, what is drafted, what was sent. One place
+  // for the whole life of an application (the maintainer, 2026-10-29).
+  function jobsSwitch(cur) {
+    const n = {found: jobRows().filter((r) => inTab(jobStatus(r), "new") && Number(r.score) >= 60).length,
+      drafts: readyItems().filter(readyLive).length};
+    return segmented("Jobs", [["found", "Found" + (n.found ? " " + n.found : "")], ["drafts", "Drafts" + (n.drafts ? " " + n.drafts : "")], ["applied", "Applied"]], cur, (v) => {
+      if (v === "drafts") { setPref("drafts:view", "apps"); go("drafts", {focus: false, keepScroll: false}); return; }
+      setPref("jobs:tab", v === "applied" ? "applied" : "new"); S.sel.jobs.clear(); go("jobs", {focus: false});
+    }, "jobsw");
+  }
+  // The switch at the head of Contacts: the people, and the messages to them waiting to go.
+  function contactsSwitch(cur) {
+    const n = messageItems().filter((m) => !settledAction(m.id, ["msg.sent", "msg.skip"]) && msgStatus(m) === "to_send").length;
+    return segmented("Contacts", [["people", "People"], ["messages", "Messages" + (n ? " " + n : "")]], cur, (v) => {
+      if (v === "messages") { setPref("drafts:view", "messages"); go("drafts", {focus: false}); return; }
+      go("contacts", {focus: false});
+    }, "contsw");
   }
   // o: {items, name, render, live(it), fold(it), foldLabel(n), sort(a, b), chips: [{key, label,
   // options: [[value, label, test]]}], search(it), empty(), box(kids)}. Anything live shows
@@ -1636,10 +1690,11 @@
   function listView(key, o) {
     const st = listState(key);
     let items = arr(o.items);
+    let remoteIn = false;
     if (o.remote) {
       const have = new Set(items.map(itemKey));
       const more = fullList(o.remote).filter((it) => !have.has(itemKey(it)));
-      if (more.length) items = items.concat(more);
+      if (more.length) { items = items.concat(more); remoteIn = true; }
     }
     const groups = arr(o.chips).map((g) => Object.assign({}, g, {options: arr(g.options).filter((op) => items.some(op[2]) || arr(st.chips[g.key]).indexOf(op[0]) >= 0)}));
     const searchable = !!o.search && items.length > SEARCH_OVER;
@@ -1656,12 +1711,18 @@
     const filtered = items.filter((it) => passes(it));
     const hidden = items.length - filtered.length;
     const sorted = o.sort ? filtered.slice().sort(o.sort) : filtered.slice();
-    const folded = o.fold ? sorted.filter(o.fold) : [];
-    const open = o.fold ? sorted.filter((it) => !o.fold(it)) : sorted;
-    const liveN = o.live ? open.filter(o.live).length : open.length;
+    // A search looks through everything, folded or not: a name typed is a name found.
+    const folded = o.fold && !q ? sorted.filter(o.fold) : [];
+    const open = o.fold && !q ? sorted.filter((it) => !o.fold(it)) : sorted;
+    const liveN = o.live && !q ? open.filter(o.live).length : open.length;
     let room = Math.max(PAGE_SIZE * st.pages, liveN) - liveN;
-    const shown = open.filter((it) => { if (!o.live || o.live(it)) return true; if (room > 0) { room--; return true; } return false; });
-    const left = open.length - shown.length;
+    const shown = q ? open.slice(0, PAGE_SIZE * st.pages) : open.filter((it) => { if (!o.live || o.live(it)) return true; if (room > 0) { room--; return true; } return false; });
+    // A long list of things to act on opens on its first few (o.first), the rest one tap
+    // below, so a person faces five, never fifty (the maintainer, 2026-10-29: "this volume
+    // immediately led to decision paralysis ... a bit with the resumes too").
+    const cut = o.first && !q && !hidden && !st.all && shown.length > o.first + 2 ? shown.length - o.first : 0;
+    if (cut) shown.splice(o.first);
+    const left = open.length - shown.length - cut;
     const box = o.box || ((kids) => h("div", {class: "stack"}, kids));
     const parts = [];
     const chipsUseful = groups.some((g) => g.options.length >= (g.min || 2));
@@ -1670,12 +1731,17 @@
       if (hidden) parts.push(empty("Nothing matches.", "Clear the filters to see everything again."));
       else if (!folded.length && o.empty) parts.push(o.empty());
     } else parts.push(box(shown.map(o.render)));
+    if (cut) {
+      parts.push(h("p", {class: "fold"}, h("span", {}, (o.firstLabel ? o.firstLabel(cut) : cut + " more") + ": "),
+        btn("Show them", () => { st.all = true; scheduleRender(); }, {kind: "link", key: "first:" + key})));
+    }
     if (left > 0) {
       parts.push(h("p", {class: "fold"}, h("span", {}, left + " more, not shown yet: "),
         btn("Show " + Math.min(left, PAGE_SIZE) + " more", () => { st.pages++; scheduleRender(); }, {kind: "link", key: "more:" + key})));
     }
     const meta = o.remote ? obj(obj(obj(M().lists)[o.remote]).folded) : {};
-    const foldN = Math.max(folded.length, !hidden && Number(meta.count) > 0 ? Number(meta.count) : 0);
+    // What the page holds folded, and what is still in the store, once each.
+    const foldN = folded.length + (!remoteIn && !hidden && Number(meta.count) > 0 ? Number(meta.count) : 0);
     if (foldN) {
       const label = o.foldLabel ? o.foldLabel(foldN) : foldN + " earlier, finished";
       parts.push(h("p", {class: "fold"}, h("span", {}, label + ": "),
@@ -1876,13 +1942,12 @@
     const name = who ? txt(who.first_name) : "";
     const body = !who ? text : text.indexOf(name) === 0 ? [itemLink("contacts", who.id, name, "warm:" + r.id), text.slice(name.length)]
       : [text, " ", itemLink("contacts", who.id, "Open " + name, "warm:" + r.id)];
-    return h("p", {class: "warm"}, h("span", {class: "warm-k"}, "Before you apply: "), body);
+    return h("p", {class: "warm"}, h("span", {class: "warm-k"}, "Before you apply: "), h("span", {class: "warm-t"}, body));
   }
 
   // ------------------------------------------------------------------ To do: what needs the person, from every part
 
   const KINDS = {application: "Application", message: "Message", interview: "Interview", search: "Search", setup: "Setup", update: "Update"};
-  const KINDS_MANY = {application: "Applications", message: "Messages", interview: "Interviews", search: "Searches", setup: "Setup", update: "Updates"};
   // Inside one employer, in the order things should be done: the warm route before the
   // application ("reply to Juno, then send the application").
   const KIND_RANK = {message: 0, interview: 1, application: 2, search: 3, update: 4, setup: 5};
@@ -1892,7 +1957,7 @@
   const DUE_KIND = {reply: "message", nudge: "message", first_message: "message", resume: "message", request_pending: "message",
     interview: "interview", prep: "interview", thank_you: "interview", status_note: "interview", follow_up: "application"};
   const BANDS = [["answer", "Needs your answer"], ["now", "Due or late"], ["week", "Next 7 days"], ["later", "Later"]];
-  const TAB_WORDS = {jobs: "Jobs", drafts: "Drafts", contacts: "Contacts", interviews: "Interviews"};
+  const TAB_WORDS = {jobs: "Jobs", drafts: "Jobs", "drafts-messages": "Contacts", contacts: "Contacts", interviews: "Interviews"};
 
   function kindMark(kind) {
     return h("span", {class: "kind kind-" + kind}, icon("k-" + kind), h("span", {}, KINDS[kind] || "To do"));
@@ -1901,11 +1966,22 @@
     const k = txt(n.kind);
     if (k === "upgrade_ask" || /^q-upgrade-/.test(txt(n.id))) return "update";
     if (k === "setup" || /^q-setup-|^q-fact-/.test(txt(n.id))) return "setup";
+    if (txt(obj(n.about).contact)) return "message";
     return obj(n.about).company ? "application" : "setup";
   }
   function needTab(n) {
+    if (txt(obj(n.about).contact)) return "contacts";
     if (!obj(n.about).company) return null;
     return txt(n.kind) === "confirm" || txt(n.kind) === "conflict" ? "drafts" : "jobs";
+  }
+  // The thing a question is about, so its link opens that and not only its section.
+  function needItem(n) {
+    const ab = obj(n.about);
+    if (txt(ab.contact)) return peopleItems().some((p) => p.id === txt(ab.contact)) ? txt(ab.contact) : null;
+    const same = (co, role) => txt(co).toLowerCase() === txt(ab.company).toLowerCase() && (!txt(ab.role) || txt(role).toLowerCase() === txt(ab.role).toLowerCase());
+    if (needTab(n) === "drafts") { const a = readyItems().find((x) => same(x.company, x.role)); if (a) return a.id; }
+    const r = jobRows().find((x) => same(x.company, x.title));
+    return r ? r.id : null;
   }
   // A dated action on a contact is a message to do; the engine says whose it is in the id
   // (due-<kind>-<contact id>) or, where it adds them, in `contact` and `half`.
@@ -1933,7 +2009,10 @@
         group: /^q-sent-/.test(txt(n.id)) ? "sent" : null,
         counts: !effective(n.id), node: (ctx) => (txt(n.kind) === "setup" ? setupNeedCard(n, ctx) : needCard(n, ctx))});
     }
-    for (const extra of [listenTodo(), waveTodo(), withdrawTodo(), exportTodo(), readingTodo()]) if (extra) out.push(extra);
+    // Connection requests nobody accepted are never a To do card: nothing about them needs
+    // the person, and a count of them only discouraged (the maintainer, 2026-10-29). Each
+    // still says so on its own contact row.
+    for (const extra of [listenTodo(), waveTodo(), exportTodo(), readingTodo()]) if (extra) out.push(extra);
     for (const [id, w] of allWork()) {
       if (txt(w.status) !== "needs_you") continue;
       out.push({key: "work:" + id, kind: WORK_KIND[txt(w.kind)] || "setup", band: "answer", employer: txt(obj(w.args).company) || employerIn(w.title),
@@ -1950,7 +2029,7 @@
       const late = Number(d.overdue_days) > 0 || (n !== null && n < 0);
       if (txt(d.kind) === "hidden") continue;     // said once, under the bands (hiddenLine)
       out.push({key: "due:" + d.id, kind: dueKind(d), band: n === null ? "later" : n <= 0 ? "now" : n <= 7 ? "week" : "later",
-        employer: company || null, due: d.due, late, tab: dueTab(d), contact: dueContact(d), counts: late && !effective(d.id, ["due.done", "due.snooze"]), node: (ctx) => dueRow(d, ctx),
+        employer: company || null, due: d.due, late, tab: dueTab(d), contact: dueContact(d), counts: (late || (n !== null && n <= 0)) && !effective(d.id, ["due.done", "due.snooze"]), node: (ctx) => dueRow(d, ctx),
         d, group: isFollowUp(d) ? "follow" : null});
     }
     // Interviews within two weeks are cards of their own, the soonest at the top; what is
@@ -2010,7 +2089,11 @@
     return txt(d.company) || employerIn(d.title) || (iv ? txt(iv.company) : "") || (person ? txt(person.employer) : "") || "";
   }
   const weightOf = (i) => (i.counts ? (i.weight === undefined ? 1 : i.weight) : 0);
-  function todoBadge() { return todoItems().reduce((n, i) => n + weightOf(i), 0); }
+  // One card, one thing: the badge, To do's summary and its folds count the same cards, today's
+  // that still need the person (a header of 9 over a page of 12 read as a mistake, 2026-10-29).
+  const TODAY_BANDS = new Set(["answer", "now"]);
+  const todayCounts = (list) => list.filter((i) => TODAY_BANDS.has(i.band) && i.counts).length;
+  function todoBadge() { return todayCounts(todoItems().filter((i) => !todoHidden(i))); }
   function itemSort(a, b) {
     const r = (KIND_RANK[a.kind] || 9) - (KIND_RANK[b.kind] || 9);
     if (r) return r;
@@ -2045,12 +2128,42 @@
     return !jobRows().length && !readyItems().length && !messageItems().length && !peopleItems().length && !interviewItems().length &&
       !applications().length && !needsItems().length && !dueItems().length && !Object.keys(obj(obj(m.done).counts)).length;
   }
-  const BAND_SHOWN = 5;      // shown first in a band of more than BAND_FOLD
-  const BAND_FOLD = 8;
+  const TODO_FIRST = 5;     // To do shows this many first; the rest wait behind one fold
+  // Anything on To do can be hidden for a week (the maintainer, 2026-10-29: everything shown
+  // can be acted on or hidden). Kept on this device; it comes back after the week.
+  const HIDE_KEY = "ljs:hidden";
+  function hiddenMap() { try { return JSON.parse(sget("local", HIDE_KEY) || "{}") || {}; } catch (e) { return {}; } }
+  function todoHidden(i) { const at = Number(hiddenMap()[i.key]) || 0; return at > now(); }
+  function hideTodo(key, label) {
+    const m = hiddenMap();
+    for (const k of Object.keys(m)) if (Number(m[k]) < now()) delete m[k];
+    m[key] = now() + 7 * DAY;
+    sset("local", HIDE_KEY, JSON.stringify(m));
+    toast({text: "Hidden for a week: " + clip(label, 60) + ".", ids: [], see: () => { const n = hiddenMap(); delete n[key]; sset("local", HIDE_KEY, JSON.stringify(n)); scheduleRender(); }, seeLabel: "Undo"});
+    scheduleRender();
+  }
+  // One bin on every card in the app, never an x beside it (the maintainer, 2026-10-29: "why
+  // are some Xs and some bins?"). On a card about one person it asks the person's usual
+  // choices, with hiding the card for a week among them; on any other card it hides it for a
+  // week at once, with Undo.
+  function withHide(i, node) {
+    if (!node || !node.querySelector) return node;
+    const top = node.querySelector(".todo-top");
+    const title = (node.querySelector(".card-title, h3") || {}).textContent || "this";
+    const cid = node.classList.contains("group-card") ? "" : txt(i.contact) || txt(obj(obj(i.need).about).contact);
+    const p = cid ? peopleItems().find((x) => txt(x.id) === cid) : null;
+    const hide = () => hideTodo(i.key, title);
+    const x = h("button", {type: "button", class: "btn quiet icon-only small hide-x", "data-k": "hide:" + i.key,
+      "aria-label": p ? "Not " + txt(p.first_name) + "? Or hide this for a week" : "Hide for a week: " + title, title: p ? "Not " + txt(p.first_name) + "?" : "Hide for a week",
+      onclick: () => (p ? askRemovePerson(txt(p.id), txt(p.first_name), txt(p.employer), p.rev, {hide}) : hide())}, icon("bin"));
+    if (top) top.appendChild(x); else node.insertBefore(x, node.firstChild);
+    return node;
+  }
   function renderTodo() {
-    const all = todoItems();
-    const n = all.reduce((k, i) => k + weightOf(i), 0);
+    const all = todoItems().filter((i) => !todoHidden(i));
+    const n = todayCounts(all);
     const week = all.filter((i) => i.band === "week").length;
+    const soonN = all.filter((i) => i.band === "week" || i.band === "later").length;
     const setup = setupCard();
     const su = obj(M().setup);
     const settingUp = !!setup && (txt(su.state) && txt(su.state) !== "done" || emptyModel());
@@ -2062,7 +2175,12 @@
     else if (settingUp) {
       const total = Number(obj(su.progress).total) || 6;
       sum = "Let's set up your search: " + total + " short questions, about " + Math.max(1, Math.round(total * 0.8)) + " minutes.";
-    } else if (n) sum = nWord(n, "thing needs", "things need") + " you now" + (week ? ", " + week + " more this week." : ".");
+    } else if (n) {
+      // Five to start with, not seventy-six at once (the maintainer, 2026-10-29: "this volume
+      // immediately led to decision paralysis"): the rest of today's wait behind one fold, and
+      // what is not due yet behind another.
+      sum = nWord(n, "thing needs", "things need") + " you now.";
+    }
     else if (all.length) {
       sum = "Nothing needs you now." + (week ? " " + week + " this week." : "");
       if (!week) {
@@ -2070,7 +2188,7 @@
         if (next && next.due) small = "Next: " + todoWhat(next) + ", " + dayWords(next.due) + ".";
       }
     } else sum = "You're up to date.";
-    if (!settingUp && iv && dayDiff(iv.when) !== null && dayDiff(iv.when) <= 3) {
+    if (!settingUp && !top && iv && dayDiff(iv.when) !== null && dayDiff(iv.when) <= 3) {
       small = (txt(iv.next_stage) || "Interview") + " with " + txt(iv.company) + " " + dayWords(iv.when) + (timeOf(iv.when) ? " at " + timeOf(iv.when) : "") + ".";
     }
     // Nothing more pressing to say: the shortlist waiting in Jobs, so To do never reads as
@@ -2083,39 +2201,51 @@
     if (paused && !settingUp) { sum = "You are taking a break until " + fmtDay(paused) + "."; small = btn("Start again", () => act([{item: txt(obj(M().search).id) || "search-settings", action: "brief.resume", value: null, rev: txt(obj(M().search).rev) || null}], "Your search carries on"), {kind: "link", key: "resume-top"}); }
     const wrap = h("section", {class: "sec", "aria-labelledby": "h-todo"}, screenHead("todo", "To do", sum, small));
     if (setup) put(wrap, setup);
-    for (const f of all.filter((i) => i.band === "first")) put(wrap, f.node({where: "todo", section: "todo"}));
-    // The brief, on the morning it arrives, is the first block; on other days it folds at the end.
-    const briefToday = !settingUp && obj(M().brief).date && txt(obj(M().brief).date) === todayIso();
-    if (briefToday) put(wrap, briefCard(true));
+    for (const f of all.filter((i) => i.band === "first")) put(wrap, withHide(f, f.node({where: "todo", section: "todo"})));
+    // The brief has a page of its own now; To do is only what to do.
     if (top && !settingUp) put(wrap, top.node({where: "todo", section: "todo"}));
+    // The tour, once, near the top where a newcomer looks first, and one line high: under the
+    // next interview, which matters more.
+    if (!settingUp) put(wrap, tourCard());
     if (!all.length && !setup) {
       put(wrap, empty("Nothing needs you right now.", "New questions and follow-ups appear here first.",
         h("div", {class: "card-actions"}, btn("Find jobs", askSearch, {kind: "primary", small: true, key: "todo-find"}))));
     }
+    // Today's things: the first TODO_FIRST show, in band order, and the rest of today's wait
+    // behind one fold under their band's heading. What is not due yet waits behind a second
+    // fold, "Coming up", open by itself only when nothing is due today.
+    let shown = 0;
+    const rest = h("div", {class: "todo-rest"});
+    const soon = h("div", {class: "todo-rest"});
+    let restN = 0;
+    let soonCount = 0;
     for (const [band, label] of BANDS) {
       const items = all.filter((i) => i.band === band);
       if (!items.length || settingUp && band !== "answer") continue;
+      const today = settingUp || band === "answer" || band === "now";
       const box = h("section", {class: "band", "aria-labelledby": "band-" + band}, h("h3", {class: "group", id: "band-" + band}, label));
-      // The first few of a band show; the rest wait behind one "Show N more", remembered, so
-      // ninety to-dos are a short page, not a long scroll (the maintainer, 2026-10-26).
-      let shown = 0;
-      const rest = [];
+      const restBox = h("section", {class: "band", "aria-labelledby": "band-rest-" + band}, h("h3", {class: "group", id: "band-rest-" + band}, label));
+      let here = 0;
+      let there = 0;
       for (const g of bandGroups(items)) {
         // An employer's name heads its items only where it has two or more in the band; one
         // item already names its employer.
         const head = g.list.length > 1 && g.key.startsWith("e:") ? h("h4", {class: "todo-employer"}, h("bdi", {}, g.title)) : null;
-        const node = h("div", {class: "todo-group"}, head, h("div", {class: "stack"}, g.list.map((i) => i.node({where: "todo", section: "todo"}))));
-        if (items.length <= BAND_FOLD || shown < BAND_SHOWN) { put(box, node); shown += g.list.length; } else rest.push([node, g.list.length]);
+        const node = h("div", {class: "todo-group" + (head ? " by-employer" : "")}, head, h("div", {class: "stack"}, g.list.map((i) => withHide(i, i.node({where: "todo", section: "todo"})))));
+        if (today && (settingUp || shown < TODO_FIRST)) { put(box, node); shown += g.list.length; here++; } else { put(restBox, node); there += g.list.length; }
       }
-      if (rest.length) {
-        const k = rest.reduce((s, r) => s + r[1], 0);
-        put(box, det("band-more:" + band, false, {class: "band-more"}, h("summary", {class: "band-more-sum"}, "Show " + k + " more", h("span", {class: "sr-only"}, ": " + label)), rest.map((r) => r[0])));
-      }
-      put(wrap, box);
+      if (here) put(wrap, box);
+      if (there && today) { put(rest, restBox); restN += there; }
+      if (there && !today) { put(soon, restBox); soonCount += there; }
     }
+    if (restN) put(wrap, det("todo-rest", false, {class: "band-more"}, h("summary", {class: "band-more-sum"}, "Show " + restN + " more"), rest));
+    // Hideable for a week like every other card: the gaps stay listed in Your profile.
+    const finish = settingUp || todoHidden({key: "you-finish"}) ? null : finishProfileCard();
+    if (finish) put(wrap, withHide({key: "you-finish"}, finish));
+    if (soonCount) put(wrap, det("todo-soon", !shown && !top, {class: "band-more soon-more"}, h("summary", {class: "band-more-sum"}, "Coming up: " + soonCount + " not due yet"), soon));
     const hidden = dueItems().find((d) => txt(d.kind) === "hidden");
     if (!settingUp) put(wrap, hidden ? h("p", {class: "muted small hidden-note"}, txt(hidden.title) + ".") : null,
-      finishProfileCard(), progressNote(), briefToday ? null : briefCard(), recentChanges(), tipLine("todo"), tourCard());
+      recentChanges(), tipLine("todo"));
     return wrap;
   }
   // The to-dos that belong to one section, at its top: the same items, done in either place.
@@ -2165,15 +2295,14 @@
     };
     const hints = arr(n.options).filter((op) => txt(op.hint)).map((op) => h("li", {}, h("strong", {}, txt(op.label)), ": " + txt(op.hint)));
     return card("article", {class: "card todo need kind-" + seg(n.kind) + (chosen ? " is-answered" : ""), "aria-labelledby": hid, "data-item": n.id, "data-k": "card:" + (ctx.where || "") + ":" + n.id},
-      h("div", {class: "todo-top"}, kindMark(needKind(n))),
+      h("div", {class: "todo-top"}, kindMark(needKind(n)), ctx.where === "todo" && needTab(n) ? h("span", {class: "todo-open"}, tabLink(needTab(n), needItem(n))) : null),
       h("p", {class: "card-title", id: hid}, txt(n.title)),
       n.body ? h("p", {class: "body"}, txt(n.body)) : null,
       hints.length ? h("ul", {class: "hints"}, hints) : null,
       h("div", {class: "opts", role: "group", "aria-labelledby": hid},
         arr(n.options).map((op, i) => btn(txt(op.label), () => answer(op),
           {kind: "answer", small: true, key: "need:" + (ctx.where || "") + ":" + n.id + ":" + i, pressed: chosen ? chosen.doc.action === op.action : false}))),
-      stateLine(n.id, "need:" + (ctx.where || "") + ":" + n.id),
-      ctx.where === "todo" && needTab(n) ? h("p", {}, tabLink(needTab(n), null)) : null);
+      stateLine(n.id, "need:" + (ctx.where || "") + ":" + n.id));
   }
   function dueSpec(d) {
     const kind = txt(obj(d.work).kind) || txt(d.action).replace(/^work:/, "") || "follow_up";
@@ -2193,13 +2322,15 @@
     const row = (d) => {
       const marked = !!effective(d.id, ["due.done", "due.snooze"]);
       const name = txt(d.title).replace(/^Follow up with /, "");
+      const cid = peopleItems().some((p) => p.id === dueContact(d)) ? dueContact(d) : "";
       return h("li", {class: "g-row" + (marked ? " is-marked" : ""), "data-item": d.id},
-        h("div", {class: "g-main"}, h("p", {class: "g-name"}, h("bdi", {}, name)),
+        h("div", {class: "g-main"}, h("p", {class: "g-name"}, personName(cid, name, "fg:" + d.id)),
           txt(d.context) ? h("p", {class: "muted small"}, txt(d.context)) : null, stateLine(d.id, "due:" + where + ":" + d.id)),
         h("div", {class: "g-acts"}, busy(d) ? btn("See it", openWork, {small: true, kind: "quiet", key: "fgsee:" + where + ":" + d.id}) :
           btn("Draft", () => askDue(d), {small: true, key: "fgdo:" + where + ":" + d.id, aria: "Draft the follow-up: " + name}),
           obj(d.snooze).action && !marked ? btn("Not now", () => act([{item: d.id, action: txt(obj(d.snooze).action), value: {until: plusDays(7)}, rev: d.rev}], "Next week: " + txt(d.title)),
-            {kind: "quiet", small: true, key: "fgsnz:" + where + ":" + d.id, aria: "Not now: " + name}) : null));
+            {kind: "quiet", small: true, key: "fgsnz:" + where + ":" + d.id, aria: "Not now: " + name}) : null,
+          cid && !marked ? btn("", () => askRemovePerson(cid, name.replace(/ at .*$/, ""), employerIn(d.title) || "", null), {kind: "quiet icon-only", small: true, icon: "bin", key: "fgbin:" + where + ":" + d.id, aria: "Not " + name + "?"}) : null));
     };
     return card("article", {class: "card todo group-card", "aria-labelledby": hid, "data-item": "grp:follow:" + band},
       h("div", {class: "todo-top"}, kindMark("message"), late ? h("span", {class: "chip tone-warn"}, late + " late") : null),
@@ -2220,12 +2351,14 @@
     const row = (n) => {
       const who = txt(n.title).replace(/^Did your note to /, "").replace(/ go\?$/, "");
       const co = txt(obj(n.about).company);
+      const cid = txt(obj(n.about).contact) || txt(n.contact);
       const ch = effective(n.id);
       return h("li", {class: "g-row" + (ch ? " is-marked" : ""), "data-item": n.id},
-        h("div", {class: "g-main"}, h("p", {class: "g-name"}, h("bdi", {}, who), co ? h("span", {class: "muted"}, " at ", h("bdi", {}, co)) : null), stateLine(n.id, "need:" + where + ":" + n.id)),
+        h("div", {class: "g-main"}, h("p", {class: "g-name"}, personName(cid, who, "sg:" + n.id), co ? h("span", {class: "muted"}, " at ", h("bdi", {}, co)) : null), stateLine(n.id, "need:" + where + ":" + n.id)),
         h("div", {class: "g-acts", role: "group", "aria-label": "Did your note to " + who + " go?"},
           btn("It went", () => answer(n, yes(n), "It went"), {kind: "answer", small: true, pressed: ch ? ch.doc.action === yes(n).action : false, key: "sgy:" + where + ":" + n.id, aria: "It went: " + who}),
-          not(n).action ? btn("Not yet", () => answer(n, not(n), "Not yet"), {kind: "answer", small: true, pressed: ch ? ch.doc.action === not(n).action : false, key: "sgn:" + where + ":" + n.id, aria: "Not yet: " + who}) : null));
+          not(n).action ? btn("Not yet", () => answer(n, not(n), "Not yet"), {kind: "answer", small: true, pressed: ch ? ch.doc.action === not(n).action : false, key: "sgn:" + where + ":" + n.id, aria: "Not yet: " + who}) : null,
+          cid ? btn("", () => askRemovePerson(cid, who, co, null), {kind: "quiet icon-only", small: true, icon: "bin", key: "sgbin:" + where + ":" + n.id, aria: "Not " + who + "?"}) : null));
     };
     return card("article", {class: "card todo group-card", "aria-labelledby": hid, "data-item": "grp:sent"},
       h("div", {class: "todo-top"}, kindMark("message")),
@@ -2269,15 +2402,16 @@
   }
   async function answerWork(id, text) {
     const w = workDoc(id);
+    if (!w || !text) return;
+    const rung = ringNow([id], "work", true);
     const db = await CAP.db;
-    if (!w || !db || !text) return;
+    if (!db) return;
     const args = Object.assign({}, obj(w.args));
     args.answers = Object.assign({}, obj(args.answers), {[clip(txt(w.note) || "question", 200)]: text});
-    try { await db.doc("work/" + id).update({args, status: "queued", note: null, claimed_by: null, claimed_at: null, lease_until: null}); }
+    try { await db.doc("work/" + id).update({args, status: "queued", note: null, claimed_by: null, claimed_at: null, lease_until: null, _v: nextV(workDoc(id))}); }
     catch (e) { announce("Not sent. Try again."); return; }
     announce("Sent. Claude carries on.");
-    if (S.woken) S.woken.delete(id);
-    autoWake([id]);
+    ringNote([id], await rung);
     scheduleRender();
   }
 
@@ -2290,13 +2424,28 @@
   // A card only the person can act on, outside this page (CONTRACT 6.4): a private copy, a
   // setting in this chat's cloud computer, a sign-in. One link that does it where there is
   // one (6.8), the registry's own dated steps, and Done, which has code look again.
+  async function openInAppBrowser(url, key, said) {
+    let ok = false;
+    try {
+      const m = await remoteCap();
+      if (m) { const got = await within(m.callTool("host:claude_browser", "preview_start", {url}), 20000); ok = got !== "timeout"; }
+    } catch (e) { ok = false; }
+    S.notes.set("browser:" + key, ok ? {text: said || "Opened in the Claude app's browser, beside this page. Sign in there, then come back and tap Done.", tone: "ok"}
+      : {text: "This works when the page is open in the Claude desktop app. There, tap it again; or follow the steps under More.", tone: "warn"});
+    scheduleRender();
+  }
   function setupNeedCard(n, ctx) {
     ctx = ctx || {};
     const hid = "need-" + (ctx.where || "x") + "-" + seg(n.id);
     const open = obj(n.open);
     const url = safeUrl(open.url);
     const chosen = effective(n.id);
-    const go = url ? h("a", {href: url, target: "_blank", rel: "noopener noreferrer", class: "btn primary small", "data-primary": "1", "data-k": "open:" + n.id},
+    const br = obj(n.browser);
+    // Opened in the Claude app's own browser by the page itself (host:claude_browser), so
+    // nobody hunts for a keyboard shortcut (the maintainer, 2026-10-29: Cmd+Shift+B did not
+    // work). Outside the desktop app it says so, and the steps under More still hold.
+    const go = safeUrl(br.url) ? btn(txt(br.label) || "Open it", () => openInAppBrowser(safeUrl(br.url), n.id), {kind: "primary", small: true, key: "browser:" + n.id}) :
+      url ? h("a", {href: url, target: "_blank", rel: "noopener noreferrer", class: "btn primary small", "data-primary": "1", "data-k": "open:" + n.id},
       txt(open.label) || "Open it", h("span", {class: "sr-only"}, " (opens in a new tab)")) : null;
     const steps = pageSteps(n).map(unnumber).filter(Boolean);
     const mo = obj(n.more);
@@ -2317,7 +2466,7 @@
         arr(n.options).map((op, i) => btn(txt(op.label), () => act([{item: n.id, action: txt(op.action), value: op.value === undefined ? null : op.value, rev: n.rev}], txt(op.label) + ": " + txt(n.title)),
           {kind: !go && i === 0 ? "primary" : "answer", small: true, key: "need:" + (ctx.where || "") + ":" + n.id + ":" + i, pressed: chosen ? chosen.doc.action === op.action : false})),
         more("setup:" + n.id, txt(n.title), detail)),
-      stateLine(n.id, "need:" + (ctx.where || "") + ":" + n.id));
+      noteFor("browser:" + n.id), stateLine(n.id, "need:" + (ctx.where || "") + ":" + n.id));
   }
   // The copy comes first: on the public app or a public copy nothing can be kept, so the
   // questions wait behind the card that makes the private copy.
@@ -2373,9 +2522,6 @@
       h("div", {class: "card-actions"}, btn("Start", () => { go("chat", {focus: false}); handOff("Please set up my job search.", true); }, {kind: "primary", small: true, key: "setup-start"})),
       h("p", {class: "small muted"}, "Nothing is ever sent for you."));
   }
-  // One step's sheet. A resume is a file (kept in the page's own store, then saved in the copy
-  // by a chat) or pasted text; every other answer is the step's fields as the engine names them.
-  function askSetupStep(step) { openSetupQuestion(step); }
 
   const DUE_WORK = {follow_up: "Draft the follow-up", nudge: "Draft the follow-up", reply: "Draft a reply", prep: "Prepare me", interview: "Prepare me", resume_for_contact: "Make it"};
   // The button a due row offers, from what is due, never only from the work behind it.
@@ -2472,7 +2618,10 @@
         if (!f) return;
         S.notes.set(fileKey, {text: "Adding your " + noun() + "…", tone: "muted"});
         scheduleRender();
-        Promise.resolve(S.caps.assets.upload(f)).then((got) => {
+        // A file the computer reports with no type (a .md resume often is) is named by its
+        // ending: the store refuses an empty type (assets.d.ts, contract audit 2026-10-29).
+        const type = f.type || ({pdf: "application/pdf", md: "text/markdown", txt: "text/plain"})[txt(f.name).split(".").pop().toLowerCase()] || "text/plain";
+        Promise.resolve(S.caps.assets.upload(f, {type})).then((got) => {
           S.notes.delete(fileKey);
           act([{item: txt(step.id), action: "setup.resume", value: {asset: txt(obj(got).id)}, rev: step.rev}], "Your " + noun() + " is saved");
           advance();
@@ -2513,39 +2662,154 @@
     const hid = "alt-" + (ctx.where || "") + "-" + seg(list[0].id);
     const title = home === "jobs" ? txt(item.title) : home === "drafts" ? txt(item.role) : home === "drafts-messages" ? "Note to " + txt(item.first_name) : txt(item.next_stage || item.role);
     return card("article", {class: "card todo", "aria-labelledby": hid, "data-item": "al:" + list[0].id},
-      h("div", {class: "todo-top"}, kindMark(home === "interviews" ? "interview" : home === "drafts-messages" ? "message" : "application"), h("span", {class: "muted small", id: hid}, title)),
-      list.map((a) => alertLine(a, {where: ctx.where, section: ctx.section, item: item.id})),
-      h("p", {}, tabLink(home, item.id)));
+      h("div", {class: "todo-top"}, kindMark(home === "interviews" ? "interview" : home === "drafts-messages" ? "message" : "application"), h("span", {class: "todo-open"}, tabLink(home, item.id))),
+      h("p", {class: "card-title", id: hid}, title),
+      list.map((a) => alertLine(a, {where: ctx.where, section: ctx.section, item: item.id})));
   }
-  function progressNote() {
-    const c = obj(obj(M().done).counts);
-    if (!Object.values(c).some((v) => Number(v) > 0)) return null;
-    return h("p", {class: "so-far"}, "So far: " + [plural(Number(c.applied) || 0, "application", "applications"), plural(Number(c.replies) || 0, "reply", "replies"), plural(Number(c.interviews) || 0, "interview", "interviews")].join(", ") + ". ",
-      navLink("progress", "See your progress"));
+  // ------------------------------------------------------------------ Brief
+  // The page's front: what matters today at a glance, in panels that fit one laptop screen
+  // with no scrolling (the maintainer, 2026-10-29: "a small dashboard ... multiple panels ...
+  // something u can see at a glance"). Each panel says what it is in one word, shows a few
+  // lines, and opens the screen where they are acted on. The brief's own parts (the engine's
+  // brief.sections) fill it; a person with no brief yet still sees their day and numbers.
+  function briefSecs(kind) { return arr(obj(M().brief).sections).filter((x) => txt(obj(x).kind) === kind); }
+  function briefRow(l, key) {
+    const it = obj(l);
+    const named = resolveSection(txt(it.section));
+    const sec = it.item ? (sectionOfItem(it.item) || (named ? (named.drafts === "messages" ? "drafts-messages" : named.section) : null)) : (named ? named.section : null);
+    const goTo = (e) => { e.preventDefault(); const r = resolveSection(sec) || {section: sec}; go(r.section, {focus: true, drafts: r.drafts, item: it.item || null}); };
+    const href = sec ? "#" + sec + (it.item ? "/" + txt(it.item) : "") : null;
+    // The line itself opens what it is about; a line with a source link of its own keeps that
+    // link and opens its item from a small "Open" beside it, since links cannot nest.
+    if (sec && !/\]\(/.test(txt(it.text))) return h("li", {}, h("a", {href, class: "bp-text bp-link", "data-k": "bp-go:" + key, onclick: goTo}, inlineMd(txt(it.text))));
+    const open = sec ? h("a", {href, class: "bp-go", "data-k": "bp-go:" + key, "aria-label": "Open: " + txt(it.text).replace(/[*_`]/g, "").slice(0, 60), onclick: goTo}, "Open") : null;
+    return h("li", {}, h("span", {class: "bp-text"}, inlineMd(txt(it.text))), open);
   }
-  function briefCard(first) {
+  function briefPanel(key, title, body, foot, opts) {
+    opts = opts || {};
+    return h("section", {class: "bpanel bp-" + key + (opts.wide ? " wide" : "") + (opts.cls ? " " + opts.cls : ""), "aria-labelledby": "bp-" + key, "data-k": "bp:" + key},
+      h("h3", {id: "bp-" + key, class: "bp-title"}, opts.icon ? h("span", {class: "bp-ic"}, icon(opts.icon)) : null, h("span", {}, title), opts.count ? h("span", {class: "bp-count"}, String(opts.count)) : null),
+      h("div", {class: "bp-body"}, body),
+      foot ? h("div", {class: "bp-foot"}, foot) : null);
+  }
+  function briefItems(list, key, n) {
+    const rows = arr(list).slice(0, n);
+    return rows.length ? h("ul", {class: "plain bp-list"}, rows.map((l, i) => briefRow(l, key + ":" + i))) : null;
+  }
+  // What each person on the Brief is waiting for, in two words.
+  const BRIEF_PERSON_WORD = {replied_needs_response: "Your turn", in_conversation: "Talking", referral_in_progress: "Referral", call_booked: "Call booked"};
+  // The hour where the person is, for "Good morning".
+  function hourHere() {
+    try { return Number(new Intl.DateTimeFormat("en-GB", {timeZone: zone(), hour: "numeric", hour12: false}).format(new Date(now()))) % 24; }
+    catch (e) { return new Date(now()).getHours(); }
+  }
+  // A small tip for the Brief: the engine's own when it has one, else one of these, a new
+  // one each day. Each says where to find something; none is a sales line.
+  const BRIEF_TIPS = [
+    "Tap a person's name anywhere to see everything about them: what was said, what is owed, where they work.",
+    "Paste a job link into Add a job on Jobs, and Claude scores it against your profile in a couple of minutes.",
+    "Not interested in someone or something? The bin on its card puts it away, with a choice of how.",
+    "Your prep for an interview opens wide: tap Read your prep, and it fills the screen.",
+    "A message someone sent you? Paste it in Contacts, under Got a message, and Claude drafts the reply.",
+    "Change what your brief covers, or the days it arrives, with Tweak the brief above.",
+    "Everything Claude writes is checked against your profile before you see it; nothing is ever sent for you.",
+  ];
+  function briefTip() {
+    const t = Object.keys(obj(obj(M().help).tip)).length ? obj(obj(M().help).tip) : obj(M().tip);
+    if (obj(M().help).off || settingOf("tips", "on") === "off") return null;
+    const tid = txt(t.id) || "tip";
+    if (txt(t.text) && !effective(tid, ["tip.seen"])) return {text: txt(t.text), done: () => act([{item: tid, action: "tip.seen", value: {area: txt(t.area)}, rev: txt(t.rev) || null}], "Tip put away")};
+    const day = Math.floor(now() / 86400000);
+    const k = "ljs:tip-off:" + day;
+    if (sget("local", k)) return null;
+    return {text: BRIEF_TIPS[day % BRIEF_TIPS.length], done: () => { sset("local", k, "1"); scheduleRender(); }};
+  }
+  // A week's applications as small bars, the last eight weeks.
+  function sparkBars(weeks) {
+    const w = arr(weeks).slice(-8);
+    if (w.filter((x) => Number(x.applied)).length < 2) return null;
+    const max = Math.max(1, ...w.map((x) => Number(x.applied) || 0));
+    const W = 120, H = 32, bw = W / w.length;
+    return svg("svg", {viewBox: "0 0 " + W + " " + H, preserveAspectRatio: "none", class: "bp-spark", role: "img", "aria-label": "Applications a week, the last " + w.length + " weeks: " + w.map((x) => Number(x.applied) || 0).join(", ")},
+      w.map((x, i) => { const v = Number(x.applied) || 0; const hgt = Math.max(2, (v / max) * (H - 2)); return svg("rect", {x: String(i * bw + 1), y: String(H - hgt), width: String(Math.max(2, bw - 3)), height: String(hgt), rx: "2", fill: "var(--chart-a)"}); }));
+  }
+  function renderBrief(where) {
     const b = obj(M().brief);
-    if (!arr(b.lines).length) return null;
-    // Each line opens its item (FUNCTIONS_SPEC 1.10): by the section the model names, or the one
-    // the item is on.
-    const lineOf = (l) => {
-      if (!l || typeof l !== "object") return txt(l);
-      const named = resolveSection(txt(l.section));
-      const sec = sectionOfItem(l.item) || (named ? (named.drafts === "messages" ? "drafts-messages" : named.section) : null);
-      return l.item && sec ? itemLink(sec, txt(l.item), txt(l.text), "brief:" + txt(l.item)) : txt(l.text);
-    };
+    const lead = briefSecs("lead")[0];
+    const next = briefSecs("next").flatMap((x) => arr(x.items));
+    const owed = briefSecs("owed").flatMap((x) => arr(x.items));
+    const news = briefSecs("news").flatMap((x) => arr(x.items));
+    const since = briefSecs("since")[0];
+    const legacy = !arr(b.sections).length ? (arr(b.items).length ? arr(b.items) : arr(b.lines)).map((t) => (t && typeof t === "object" ? t : {text: t})) : [];
+    const name = txt(person().first_name);
+    const hr = hourHere();
+    const hello = (hr < 12 ? "Good morning" : hr < 18 ? "Good afternoon" : "Good evening") + (name ? ", " + name : "");
+    const dayLine = fmtDay(todayIso()) + (b.date ? (dayDiff(b.date) === 0 ? " · this morning's brief" : " · brief from " + fmtDay(b.date)) : "");
+    const tweak = tweakButton("brief", b, "Tweak the brief");
+    const bell = briefBell();
+    // The greeting heads the page; "Brief" is its name in the nav and for a screen reader.
+    const wrap = h("section", {class: "sec brief-page", "aria-label": "Brief"},
+      h("header", {class: "brief-head"},
+        h("div", {class: "brief-hello"}, h("h2", {id: "h-brief" + (where ? "-" + where : ""), tabindex: "-1", class: "screen-title"}, hello), h("div", {class: "summary"}, h("p", {class: "sum-small"}, dayLine))),
+        bell || tweak ? h("div", {class: "head-tools"}, bell, tweak) : null));
+    const grid = h("div", {class: "brief-grid"});
+    // Today: the next interview or call, the brief's lead, and what needs the person.
+    const soon = interviewItems().filter((i) => !isPast(i.when) && txt(i.status) !== "done").sort((x, y) => txt(x.when).localeCompare(txt(y.when)))[0];
+    const need = todoBadge();
+    const ivRow = soon ? h("div", {class: "bp-iv"},
+      h("p", {class: "bp-iv-when"}, relWhen(soon.when) + (timeOf(soon.when) ? " · " + timeOf(soon.when) : "")),
+      h("p", {class: "bp-iv-what"}, (txt(soon.next_stage) || "Interview") + " with ", h("bdi", {}, txt(soon.company))),
+      obj(soon.prep).updated ? btn("Read your prep", () => openDetail("interview", soon.id), {kind: "primary", small: true, key: "bp-prep:" + soon.id})
+        : btn("Prepare me", () => askPrep(soon), {small: true, key: "bp-askprep:" + soon.id})) : null;
+    put(grid, briefPanel("today", "Today", [
+      ivRow,
+      lead && txt(lead.text) ? h("p", {class: "bp-lead"}, inlineMd(txt(lead.text))) : legacy.length ? briefItems(legacy, "legacy", soon ? 3 : 5) : null,
+      !lead && !legacy.length && !soon ? h("p", {class: "muted"}, need ? "Nothing booked today." : "Nothing booked, and nothing needs you.") : null],
+      need ? navLink("todo", plural(need, "thing needs you", "things need you")) : null, {icon: "todo", wide: true}));
+    // Next: the brief's three next steps, else what is owed.
+    const steps = next.length ? next : owed;
+    if (steps.length) put(grid, briefPanel("next", next.length ? "Next three" : "Owed", h("ol", {class: "plain bp-list bp-steps"}, steps.slice(0, 3).map((l, i) => briefRow(l, "next:" + i))),
+      navLink("todo", "All of it in To do"), {icon: "k-update"}));
+    // People: who is waiting on the person, by name; a name opens everything about them.
+    const ppl = peopleItems().filter((p) => personRank(p) === 0).sort((x, y) => (BRIEF_PERSON_WORD[txt(x.status)] ? 0 : 1) - (BRIEF_PERSON_WORD[txt(y.status)] ? 0 : 1) || txt(x.due || "9999").localeCompare(txt(y.due || "9999"))).slice(0, 3);
+    put(grid, briefPanel("people", "People", ppl.length ? h("ul", {class: "plain bp-list bp-people"}, ppl.map((p) => h("li", {},
+      h("a", {href: "#contacts/" + p.id, class: "bp-text bp-link", "data-k": "bp-person:" + p.id, onclick: (e) => { e.preventDefault(); openDetail("person", p.id); }},
+        h("span", {class: "bp-avatar", "aria-hidden": "true"}, txt(p.first_name).slice(0, 1).toUpperCase()),
+        h("span", {class: "bp-who"}, h("strong", {}, txt(p.first_name)), h("span", {class: "bp-at"}, txt(p.employer))),
+        h("span", {class: "bp-state"}, BRIEF_PERSON_WORD[txt(p.status)] || (personDueSoon(p) ? "Follow up" : "")))))) : h("p", {class: "muted"}, "Nobody is waiting on you."),
+      navLink("contacts", "Everyone in Contacts"), {icon: "contacts"}));
+    // Jobs worth a look: the three best new ones, with their scores.
+    const best = jobRows().filter((r) => inTab(jobStatus(r), "new") && Number(r.score) >= 60).sort((x, y) => (Number(y.score) || 0) - (Number(x.score) || 0));
+    const searching = [...allWork()].some(([, w]) => w.kind === "search" && ACTIVE.has(w.status));
+    put(grid, briefPanel("jobs", "Jobs", best.length ? h("ul", {class: "plain bp-list"}, best.slice(0, 3).map((r) => h("li", {},
+      h("a", {href: "#jobs/" + r.id, class: "bp-text bp-link", "data-k": "bp-job:" + r.id, onclick: (e) => { e.preventDefault(); go("jobs", {focus: true, item: r.id}); }},
+        h("strong", {}, txt(r.title)), h("span", {class: "bp-at"}, txt(r.company))),
+      r.score != null ? h("span", {class: "bp-score tone-" + (txt(r.band) || "plain"), title: SCORE_MEANS}, String(r.score)) : null)))
+      : h("p", {class: "muted"}, searching ? "Searching now." : "Nothing new to look at."),
+      [best.length ? navLink("jobs", best.length > 3 ? plural(best.length, "job to look at", "jobs to look at") : "All jobs") : null,
+        !searching ? h("button", {type: "button", class: "btn link", "data-k": "bp-search", onclick: () => askSearch()}, best.length ? "Search again" : "Find jobs") : null],
+      {icon: "jobs", count: best.length || null}));
+    // News that matters to the search: the part of the brief people read for itself.
+    if (news.length) put(grid, briefPanel("news", "News", h("ul", {class: "plain bp-list bp-news"}, news.slice(0, 2).map((l) => h("li", {}, h("span", {class: "bp-text"}, inlineMd(txt(obj(l).text)))))),
+      news.length > 2 ? h("details", {class: "bp-all"}, h("summary", {}, plural(news.length - 2, "more", "more")), h("ul", {class: "plain bp-list bp-news"}, news.slice(2).map((l) => h("li", {}, inlineMd(txt(obj(l).text)))))) : null,
+      {wide: true, icon: "k-message"}));
+    // The numbers: the last 30 days, a week-by-week line, and what happened since the last brief.
+    const d = obj(M().done);
+    const c = obj(obj(d.recent).counts || d.counts);
+    const tile = (k, label) => h("div", {class: "bp-stat"}, h("span", {class: "bp-n"}, String(Number(c[k]) || 0)), h("span", {class: "bp-l"}, label));
+    put(grid, briefPanel("numbers", obj(d.recent).counts ? "Last " + (Number(obj(d.recent).days) || 30) + " days" : "So far", [
+      h("div", {class: "bp-stats"}, tile("applied", "applied"), tile("replies", "replies"), tile("interviews", "interviews"), tile("offers", "offers")),
+      sparkBars(d.weeks),
+      since && arr(since.items).length ? h("details", {class: "bp-all"}, h("summary", {}, txt(since.title) || "Since the last brief"), briefItems(since.items, "since", 6)) : null],
+      navLink("progress", "See your progress"), {icon: "progress"}));
+    put(wrap, grid);
+    const tip = briefTip();
+    if (tip) put(wrap, h("p", {class: "bp-tip"}, h("span", {class: "bp-tip-k"}, "Tip"), h("span", {class: "bp-tip-t"}, tip.text), btn("Got it", tip.done, {kind: "link", key: "bp-tip"})));
     const older = arr(M().briefs).filter((x) => obj(x).date && obj(x).date !== b.date);
-    const keep = BRIEF_LINES[txt(pref("brief:len", "standard"))] || BRIEF_LINES.standard;
-    const lines = arr(b.items).length ? arr(b.items) : arr(b.lines);
-    return det("brief", !!first, {class: "brief" + (first ? " brief-first" : "")}, h("summary", {}, first ? "This morning's brief" : "Your brief, " + (fmtDay(b.date) || "latest")),
-      h("ul", {}, lines.slice(0, keep).map((l) => h("li", {}, lineOf(l)))),
-      // The rest open in place: "2 more lines in the full brief" named lines nobody could reach.
-      lines.length > keep ? h("details", {class: "brief-more"}, h("summary", {}, plural(lines.length - keep, "more line", "more lines")),
-        h("ul", {}, lines.slice(keep).map((l) => h("li", {}, lineOf(l))))) : null,
-      tweakSlot("brief", b, "Tweak the brief", {hint: false}),
-      older.length ? listView("briefs", {items: older, name: "earlier briefs", fold: () => true, foldLabel: (k) => plural(k, "earlier brief", "earlier briefs"),
-        sort: (x, y) => txt(y.date).localeCompare(txt(x.date)),
-        render: (x) => h("div", {class: "brief-old"}, h("p", {class: "card-title"}, fmtDay(x.date)), h("ul", {}, arr(x.lines).map((l) => h("li", {}, txt(typeof l === "object" && l ? l.text : l)))))}) : null);
+    if (older.length) put(wrap, h("details", {class: "brief-earlier"}, h("summary", {}, plural(older.length, "earlier brief", "earlier briefs")),
+      older.sort((x, y) => txt(y.date).localeCompare(txt(x.date))).slice(0, 10).map((x) => h("div", {class: "brief-old"}, h("p", {class: "card-title"}, fmtDay(x.date)),
+        h("ul", {}, arr(x.lines).map((l) => h("li", {}, inlineMd(txt(typeof l === "object" && l ? l.text : l)))))))));
+    return wrap;
   }
   function describeAction(d) {
     const item = txt(d.item);
@@ -2590,8 +2854,14 @@
     const a = effective(r.id, ["job.dismiss", "job.restore", "job.bring_back", "job.applied", "job.not_applied"]);
     const back = txt(r.status) === "dismissed" ? "new" : txt(r.status) || "new";
     if (a) st = {"job.dismiss": "dismissed", "job.applied": "applied", "job.restore": back, "job.bring_back": back, "job.not_applied": "new"}[a.doc.action] || st;
+    // Marked applied on its draft: the job says so at once too, one fact in both places.
+    else if (st !== "applied" && st !== "dismissed") { const d = sameDraft(r); if (d && readyStatus(d) === "applied") st = "applied"; }
     return st;
   }
+  // The draft and the job that are one role: by the draft's job id, else employer and role.
+  const sameKey = (co, role) => (txt(co) + "|" + txt(role)).toLowerCase().replace(/[^a-z0-9|]+/g, " ").trim();
+  function sameDraft(r) { return readyItems().find((a) => txt(a.job) === txt(r.id) || sameKey(a.company, a.role) === sameKey(r.company, r.title)) || null; }
+  function sameJob(a) { return jobRows().find((r) => txt(a.job) === txt(r.id) || sameKey(a.company, a.role) === sameKey(r.company, r.title)) || null; }
   // Set aside or marked applied, and not yet done by Claude: it stays where it was, marked,
   // with its Undo, and moves once Claude has done it.
   function jobPending(r) {
@@ -2605,11 +2875,21 @@
   const JOB_STATUS = {drafting: ["Drafting", "info"], ready: ["Draft ready", "ok"], applied: ["Applied", "ok"], dismissed: ["Set aside", "held"]};
   const REMOTE = (r) => txt(r.remote).toLowerCase().replace(/[-_]/g, " ");
   const payStated = (r) => obj(r.pay).stated !== false && !!txt(obj(r.pay).text) && txt(obj(r.pay).text) !== "not stated";
+  // Every filter a person would reach for (the maintainer, 2026-10-29: "surely we can have far
+  // more filters here that actually work"), each on a field the row really carries; a group
+  // with nothing in this list to match is left off by listFacets.
+  const posted = (r, n) => r.posted_days !== undefined && r.posted_days !== null && Number(r.posted_days) <= n;
   function jobChips() {
-    return [{key: "style", label: "Work style", options: [["remote", "Remote", (r) => REMOTE(r) === "remote"], ["hybrid", "Hybrid", (r) => REMOTE(r) === "hybrid"], ["onsite", "On site", (r) => REMOTE(r) === "on site"]]},
-      {key: "pay", label: "Pay", options: [["stated", "Pay stated", payStated], ["target", "At my target", (r) => obj(r.pay).at_target === true]]},
-      {key: "new", label: "Posted", options: [["7", "This week", (r) => r.posted_days !== undefined && r.posted_days !== null && Number(r.posted_days) <= 7]]},
-      {key: "score", label: "Score", options: [["75", "75 and up", (r) => Number(r.score) >= 75]]}];
+    return [{key: "score", label: "How well it fits you", options: [["75", "Strong, 75 and up", (r) => Number(r.score) >= 75], ["60", "Good, 60 and up", (r) => Number(r.score) >= 60]]},
+      {key: "new", label: "Posted", options: [["1", "Today or yesterday", (r) => posted(r, 1)], ["7", "This week", (r) => posted(r, 7)], ["30", "This month", (r) => posted(r, 30)]]},
+      {key: "closing", label: "Closing date", options: [["7", "Closes within a week", (r) => r.deadline && dayDiff(r.deadline) !== null && dayDiff(r.deadline) >= 0 && dayDiff(r.deadline) <= 7],
+        ["set", "Has a closing date", (r) => !!txt(r.deadline)]]},
+      {key: "style", label: "Work style", options: [["remote", "Remote", (r) => REMOTE(r) === "remote"], ["hybrid", "Hybrid", (r) => REMOTE(r) === "hybrid"], ["onsite", "On site", (r) => REMOTE(r) === "on site"]]},
+      {key: "pay", label: "Pay", options: [["stated", "Pay stated", payStated], ["target", "At or above my target", (r) => obj(r.pay).at_target === true]]},
+      {key: "way", label: "Your way in", options: [["warm", "Someone there you know", (r) => !!txt(r.warm)], ["cold", "Nobody there yet", (r) => !txt(r.warm)]]},
+      {key: "where", label: "Where to apply", options: [["employer", "On the employer's own site", (r) => txt(obj(r.apply).kind) === "employer"], ["linkedin", "On LinkedIn", (r) => txt(obj(r.apply).kind) === "linkedin"],
+        ["board", "On a job site", (r) => ["board", "aggregator"].includes(txt(obj(r.apply).kind))]]},
+      {key: "stage", label: "Where it stands", options: [["ready", "Draft ready", (r) => jobStatus(r) === "ready"], ["todo", "Not drafted yet", (r) => jobStatus(r) === "new"]]}];
   }
   function jobSort() {
     const s = txt(pref("jobs:sort", "match"));
@@ -2618,7 +2898,9 @@
     const base = s === "closing" ? (a, b) => txt(a.deadline || "9999").localeCompare(txt(b.deadline || "9999")) || (Number(b.score) - Number(a.score))
       : s === "newest" ? (a, b) => (Number(a.posted_days === null || a.posted_days === undefined ? 999 : a.posted_days) - Number(b.posted_days === null || b.posted_days === undefined ? 999 : b.posted_days)) || (Number(b.score) - Number(a.score))
         : (a, b) => (Number(b.score) - Number(a.score)) || (Number(a.rank) - Number(b.rank));
-    return (a, b) => (asks(a) - asks(b)) || (closed(a) - closed(b)) || base(a, b);
+    // Best match reads top down by its number: a role asking a question says so on its own card
+    // and in To do, and is never lifted above a better fit (a 79 over an 84 read as a mistake).
+    return s === "match" ? (a, b) => (closed(a) - closed(b)) || base(a, b) : (a, b) => (asks(a) - asks(b)) || (closed(a) - closed(b)) || base(a, b);
   }
   const SET_ASIDE_WHY = [["pay", "Pay"], ["place", "Place"], ["field", "Not my field"], ["employer", "Employer"], ["other", "Other"]];
   function renderJobs(where) {
@@ -2674,7 +2956,7 @@
 
       ["Change the search", () => openTweak("jobs", jb), "tweak"],
     ]);
-    put(wrap, controlRow([segmented("Show", JOB_TABS, tab, (v) => { setPref("jobs:tab", v); S.sel.jobs.clear(); scheduleRender(); }, "jt"), h("span", {class: "grow"}), filterButton(key, lo, f), menu]));
+    put(wrap, controlRow([jobsSwitch("found"), h("span", {class: "grow"}), filterButton(key, lo, f), menu]));
     put(wrap, activeFilters(key, lo, f));
     const onCards = new Set(inThis.flatMap((r) => jobQuestions(r).map((n) => "need:" + n.id)));
     put(wrap, tabTodos("jobs", onCards));
@@ -2712,9 +2994,10 @@
     const live = st !== "applied" && st !== "dismissed";
     const about = txt(r.company) + ", " + txt(r.title);
     const facts = [h("span", {}, payStated(r) ? money(obj(r.pay).text) : "Pay not stated")];
-    // Whether the posting is still up, on the card itself: checked when, or not yet.
+    // The face says what decides a look: pay and a closing date. Whether the posting was
+    // checked lately is under More (the maintainer, 2026-10-29: "it just gives you info badly").
     const ap = obj(r.apply);
-    if (live && !closed && safeUrl(ap.url)) facts.push(" · ", h("span", {class: "muted"}, txt(ap.status) === "open" ? "Still open" + (ap.checked_at ? ", checked " + ago(ap.checked_at) : ap.checked_on ? ", checked " + fmtDay(ap.checked_on) : "") : "Not checked yet"));
+    const upLine = live && !closed && safeUrl(ap.url) ? h("p", {class: "muted small"}, txt(ap.status) === "open" ? "Still open" + (ap.checked_at ? ", checked " + ago(ap.checked_at) : ap.checked_on ? ", checked " + fmtDay(ap.checked_on) : "") + "." : "Not checked yet: the link is checked before you apply.") : null;
     if (r.deadline) {
       const d = dayDiff(r.deadline);
       const soon = d !== null && d <= 7;
@@ -2738,6 +3021,7 @@
     if (primary && primary.tagName === "A") primary.classList.add("btn", "primary", "small");
     const markApplied = () => confirmApplied([r], () => act([{item: r.id, action: "job.applied", value: {on: todayIso()}, rev: r.rev}], "Marked as applied: " + txt(r.company)));
     const extra = pending ? [] : [
+      upLine,
       live ? nearLine(r) : null,
       arr(r.notes).length ? h("ul", {class: "notes"}, arr(r.notes).map((x) => h("li", {}, txt(x)))) : null,
       moreAlerts(r, {where: "jobs", section: "jobs", item: r.id}, asks.length > 0),
@@ -2765,10 +3049,11 @@
     const notesTone = asks.length ? "warn" : closedAlert ? "bad" : alertsOf(r).length && live && !pending ? (ALERT_TONE[txt(alertsOf(r)[0].kind)] || "warn") : word[1] && word[1] !== "ok" && word[1] !== "info" ? word[1] : null;
     return card("article", {class: "card job st-" + seg(st) + (pending ? " is-marked" : "") + (S.selecting ? " selecting" : "") + (notesTone ? " edge-" + notesTone : ""), "aria-labelledby": hid, "data-item": r.id},
       S.selecting && live ? selBox(S.sel.jobs, r.id, about, scheduleRender) : null,
-      h("div", {class: "score", "aria-hidden": "true"},
-        h("span", {class: "score-n"}, txt(r.score)), band ? h("span", {class: "score-band tone-" + bandTone}, cap1(band)) : null),
       h("div", {class: "job-main"},
-        h("div", {class: "job-top"}, h("h3", {id: hid}, txt(r.title)), h("span", {class: "top-end"}, stateWord(word[0], word[1]),
+        // The number is a small badge beside the title, coloured by how strong a fit it is: a
+        // column of its own pushed every line in (the maintainer, 2026-10-29: "the indents").
+        h("div", {class: "job-top"}, h("span", {class: "score-pill tone-" + bandTone, "aria-hidden": "true", title: SCORE_MEANS + (band ? " This one is " + band + "." : "")}, txt(r.score)),
+          h("h3", {id: hid}, txt(r.title)), h("span", {class: "top-end"}, stateWord(word[0], word[1]),
           live && !pending ? btn("", () => askRemoveJob(r, markApplied), {kind: "quiet icon-only", small: true, key: "bin:" + r.id, icon: "bin", aria: "Not for me: " + about}) : null)),
         h("p", {class: "sr-only"}, scoreWords),
         h("p", {class: "org"}, h("bdi", {}, txt(r.company)), [place, style].filter(Boolean).map((x) => " · " + x).join("")),
@@ -2781,6 +3066,58 @@
   }
   // The bin on a job: why it goes, asked once, so the right thing happens (the maintainer,
   // 2026-10-26): this role only, nothing more from the employer, already applied, or closed.
+  // The bin beside a person, wherever they show: the usual ways of saying "not them", each
+  // done in one tap (the maintainer, 2026-10-29: "i dont wanna message ade at canadian tire").
+  function askRemovePerson(cid, name, employer, rev, extra) {
+    extra = extra || {};
+    const who = name || "them";
+    sheet({title: "Not " + who + "?", intro: "Nothing is sent either way. You can change your mind in Contacts.",
+      fields: [{id: "why", type: "radio", label: "What would you like?", required: true, error: "Choose one.", value: extra.skip ? "skip" : extra.hide ? "week" : "person",
+        options: [extra.skip ? ["skip", "Not now: set this note aside"] : null, extra.hide ? ["week", "Just hide this for a week"] : null,
+          ["person", "Don't contact " + who], employer ? ["employer", "Not interested in " + employer + " any more"] : null,
+          ["other", "Already in touch another way"]].filter(Boolean)}],
+      submit: "Done",
+      onSubmit: (v) => {
+        const w = txt(v.why);
+        if (w === "week") { extra.hide(); return; }
+        if (w === "skip") { extra.skip(); return; }
+        const why = w === "employer" ? "not interested in " + employer + " any more" : w === "other" ? "already in touch another way" : "not the right person, said on the page";
+        act([{item: cid, action: "person.stop", value: {why, scope: w, employer: employer || null}, rev: rev || revOf(cid)}],
+          w === "employer" ? "No more from " + employer : w === "other" ? "No note to " + who : "No more messages to " + who);
+      }});
+  }
+  // A person's name that opens everything about them: the thread, what is owed, where they
+  // work (the maintainer, 2026-10-29: "i forgot who this guy is, why cant i click his name").
+  function personName(cid, name, key) {
+    if (!cid || !peopleItems().some((x) => x.id === cid)) return h("bdi", {}, name);
+    return h("a", {href: "#contacts/" + cid, class: "name-link", "data-k": "pname:" + (key || cid), onclick: (e) => { e.preventDefault(); openDetail("person", cid); }}, h("bdi", {}, name));
+  }
+  // What a job's number means, on hover and in the Jobs part of the tour (the maintainer,
+  // 2026-10-29: "a few ppl asked me what is out of 100").
+  const SCORE_MEANS = "How well this job fits you, out of 100. 75 or more is a strong fit; 60 or more is worth a look.";
+  // The bin on a draft: why it is not going out, each answer the right record (G11: given up
+  // on, it folds with Undo and Drafts counts it out).
+  function askRemoveDraft(a, markApplied) {
+    const co = txt(a.company);
+    sheet({title: "Not sending this one?", intro: txt(a.role) + " at " + co + ". Your files are kept either way.",
+      fields: [{id: "why", type: "radio", label: "Why?", required: true, error: "Choose one.", value: "wont",
+        options: [["wont", "I won't apply for it"], ["applied", "I have already applied"], ["closed", "It has closed"]]}],
+      submit: "Done",
+      onSubmit: (v) => {
+        const w = txt(v.why);
+        if (w === "applied") { markApplied(); return; }
+        act([{item: a.id, action: "ready.not_applying", value: {why: w === "closed" ? "the job has closed" : "said on the page"}, rev: a.rev}], "Not applying: " + co);
+      }});
+  }
+  // The bin on an application or an interview: it is over, said the way the tracker records
+  // it (the same outcomes as "I heard back").
+  function askEndApplication(item, what) {
+    sheet({title: "Is " + what + " over?", intro: "It moves to Closed in Applied, and nothing more is chased there.",
+      fields: [{id: "why", type: "radio", label: "What happened?", required: true, error: "Choose one.", value: "rejected",
+        options: [["rejected", "They said no"], ["withdrawn", "I withdrew"], ["no_response", "No reply, and I have stopped waiting"]]}],
+      submit: "Done",
+      onSubmit: (v) => act([{item: txt(item.id), action: "outcome." + txt(v.why), value: {on: todayIso()}, rev: item.rev}], (ACTION_WORDS["outcome." + txt(v.why)] || "Saved") + ": " + txt(item.company))});
+  }
   function askRemoveJob(r, markApplied) {
     const co = txt(r.company);
     sheet({title: "Not for you?", intro: txt(r.title) + " at " + co + ". It leaves your list; you can bring it back from Set aside.",
@@ -2824,6 +3161,10 @@
   function readyStatus(a) {
     const e = effective(a.id, ["ready.applied", "ready.not_applied", "ready.not_applying"]);
     if (e) return e.doc.action === "ready.applied" ? "applied" : e.doc.action === "ready.not_applying" ? "not_applying" : "drafted";
+    // Marked applied on its job: the draft says so at once too.
+    const j = sameJob(a);
+    const je = j ? effective(j.id, ["job.applied", "job.not_applied"]) : null;
+    if (je && je.doc.action === "job.applied") return "applied";
     return txt(a.status) || "drafted";
   }
   const CHANNEL = {linkedin_note: "LinkedIn connection note", linkedin_message: "LinkedIn message", inmail: "LinkedIn InMail", email: "Email"};
@@ -2840,14 +3181,15 @@
     const msgsWaiting = msgs.filter((m) => !settledAction(m.id, ["msg.sent", "msg.skip"]) && msgStatus(m) === "to_send");
     const fix = appsWaiting.filter((a) => alertsOf(a).some((x) => x.kind === "checks") || readyQuestions(a).length).length;
     const writing = [...allWork()].filter(([, w]) => ["draft", "resume_for_contact", "reply", "follow_up", "network"].includes(txt(w.kind)) && ACTIVE.has(w.status)).length;
-    const sum = appsWaiting.length || msgsWaiting.length
-      ? [appsWaiting.length ? nWord(appsWaiting.length, "application", "applications") : null, msgsWaiting.length ? nWord(msgsWaiting.length, "message", "messages") : null].filter(Boolean).join(" and ") + " to send." + (fix ? " " + nWord(fix, "needs", "need") + " a fix first." : "")
-      : "Nothing waiting to send.";
+    // Applications to send are a view of Jobs; messages to send, a view of Contacts.
+    const asJobs = view === "apps";
+    const head = asJobs ? (appsWaiting.length ? nWord(appsWaiting.length, "application", "applications") + " to send." + (fix ? " " + nWord(fix, "needs", "need") + " a fix first." : "") : "No application waiting to send.")
+      : (msgsWaiting.length ? nWord(msgsWaiting.length, "message", "messages") + " to send." : "No message waiting to send.");
     const wrap = h("section", {class: "sec", "aria-labelledby": "h-drafts" + (where ? "-" + where : "")},
-      screenHead("drafts", "Drafts", sum, writing ? "Claude is writing " + writing + " more." : null, where));
+      screenHead("drafts", asJobs ? "Jobs" : "Contacts", head, writing ? "Claude is writing " + writing + " more." : null, where));
     // A resume made for a contact is sent to them, never marked applied with the others.
     const canSelect = view === "apps" && appsWaiting.filter((a) => !a.for_contact).length > 1;
-    put(wrap, controlRow([segmented("Show", [["apps", "Applications"], ["messages", "Messages"]], view, (v) => { setPref("drafts:view", v); keepAddress(true); scheduleRender(); }, "dv"),
+    put(wrap, controlRow([asJobs ? jobsSwitch("drafts") : contactsSwitch("messages"),
       h("span", {class: "grow"}),
       canSelect ? listMenu("drafts", "the drafts", [[S.selectingReady ? "Done selecting" : "Select several", () => { S.selectingReady = !S.selectingReady; if (!S.selectingReady) S.sel.ready.clear(); scheduleRender(); }, "select"]]) : null]));
     if (view === "apps") {
@@ -2865,7 +3207,11 @@
       return box;
     }
     const waiting = items.filter(readyLive);
-    put(box, generalResumeCard());
+    // Files not on the page yet: said once, for all of them, never on every card (the
+    // maintainer, 2026-10-29: "info overload").
+    const noFiles = waiting.filter((a) => arr(a.files).some((f) => (f.asset || Number(f.pages) > 0) && !f.asset) && !readyQuestions(a).length);
+    if (noFiles.length) put(box, h("p", {class: "files-line"}, plural(noFiles.length, "application's files are", "applications' files are") + " not on this page yet. ",
+      btn(noFiles.length > 1 ? "Add them all" : "Add them", () => (noFiles.length > 1 ? askFilesAll(noFiles) : askFiles(noFiles[0])), {kind: "link", key: "files-all"})));
     const ids = waiting.filter((a) => !a.for_contact).map((a) => a.id);
     for (const id of [...S.sel.ready]) if (ids.indexOf(id) < 0) S.sel.ready.delete(id);
     if (S.selectingReady && ids.length > 1) put(box, selectAll(S.sel.ready, ids, "Select all " + ids.length + " not yet sent", "ready"));
@@ -2876,12 +3222,17 @@
     const sentAgo = (a) => daysSince(a.applied_on || a.sent_on);
     const gone = items.filter((a) => !readyLive(a) && !(sentAgo(a) === null && settledAction(a.id)) && !(sentAgo(a) !== null && sentAgo(a) <= 1));
     items = items.filter((a) => gone.indexOf(a) < 0);
-    put(box, listView("drafts:apps", {items, name: "applications", live: readyLive, render: readyCard,
+    put(box, listView("drafts:apps", {items, name: "applications", live: readyLive, render: readyCard, box: (kids) => h("div", {class: "stack list-panel"}, kids),
+      first: 5, firstLabel: (k) => plural(k, "more ready to send", "more ready to send"),
       search: (a) => [a.company, a.role, a.place].join(" "),
       fold: (a) => !readyLive(a) && daysSince(a.applied_on || a.sent_on) !== null && daysSince(a.applied_on || a.sent_on) > 14,
       foldLabel: (k) => k + " sent",
       sort: (a, b) => ((readyLive(a) ? 0 : 1) - (readyLive(b) ? 0 : 1)) || (first(a) - first(b))}));
-    if (gone.length) put(box, h("p", {class: "muted small"}, nWord(gone.length, "application", "applications") + " already sent: in ", navLink("progress", "Progress"), "."));
+    // Your resume for when nobody named a role: after the applications, which are what Drafts
+    // is for, never between the page's first lines and them.
+    put(box, generalResumeCard());
+    if (gone.length) put(box, h("p", {class: "muted small"}, nWord(gone.length, "application", "applications") + " already sent: in ",
+      h("a", {href: "#jobs", class: "navlink", "data-k": "drafts-to-applied", onclick: (e) => { e.preventDefault(); setPref("jobs:tab", "applied"); go("jobs", {focus: true}); }}, "Applied"), "."));
     const n = S.sel.ready.size;
     if (S.selectingReady) {
       put(box, bulkBar(n, [btn("Mark " + n + " as applied", () => {
@@ -2933,6 +3284,8 @@
         paid ? costEl(checkAlert.cost, ac.kind, "cost-p-" + seg(a.id)) : null);
     }
     const extra = [
+      live ? nearLine(a) : null,
+      missing && live && !asks.length ? h("p", {class: "small muted"}, "Your files are not on this page yet. ", btn("Ask Claude to add them", () => askFiles(a), {kind: "link", key: "files:" + a.id})) : null,
       h("ul", {class: "plain file-names"}, files.map((f) => h("li", {}, h("span", {class: "file-kind"}, f.kind === "letter" ? "Cover letter" : Noun()), ": ", h("bdi", {class: "file-name"}, txt(f.name)), f.pages ? ", " + plural(Number(f.pages), "page", "pages") : ""))),
       checks.line ? h("p", {class: "small"}, (checks.passed ? "Checked: " : "Checks: ") + txt(checks.line) + ".") : null,
       !letter.length ? h("p", {class: "small muted"}, "No cover letter for this one.") : null,
@@ -2950,24 +3303,22 @@
       live ? tweakSlot([["resume", "Tweak the " + noun()]].concat(letter.length ? [["letter", "Tweak the letter"]] : []), a) : null,
       h("div", {class: "more-acts"},
         live && (checkAlert || asks.length) ? btn("I have applied", markApplied, {kind: "quiet", small: true, key: "rapplied2:" + a.id, aria: "I have applied: " + about}) : null,
-        st === "applied" ? btn("Not applied after all", () => act([{item: a.id, action: "ready.not_applied", rev: a.rev}], "Marked as not applied: " + txt(a.company)), {kind: "quiet", small: true, key: "rnot:" + a.id}) : null,
-        // G11: given up on, it folds with Undo and Drafts counts it out.
-        live && !forWho ? btn("I won't apply", () => act([{item: a.id, action: "ready.not_applying", value: {why: "said on the page"}, rev: a.rev}], "Not applying: " + txt(a.company)), {kind: "quiet", small: true, key: "rwont:" + a.id, aria: "I won't apply: " + about}) : null),
+        st === "applied" ? btn("Not applied after all", () => act([{item: a.id, action: "ready.not_applied", rev: a.rev}], "Marked as not applied: " + txt(a.company)), {kind: "quiet", small: true, key: "rnot:" + a.id}) : null),
     ];
     const word = !live ? (st === "applied" ? ["Applied", "ok"] : ["Not applying", "plain"]) : asks.length ? ["Needs your answer", "warn"] : checkAlert ? ["Needs a fix", "warn"] : gettingFiles ? ["Getting files ready", "info"] : [null, null];
     const edge = live && word[1] && word[1] !== "ok" && word[1] !== "info" ? " edge-" + word[1] : live && alertsOf(a).length ? edgeOf(alertsOf(a)) : "";
     return card("article", {class: "card app st-" + seg(st) + (S.selectingReady ? " selecting" : "") + edge, "aria-labelledby": hid, "data-item": a.id},
       S.selectingReady && live && !a.for_contact ? selBox(S.sel.ready, a.id, about, scheduleRender) : null,
       h("div", {class: "app-main"},
-        h("div", {class: "job-top"}, h("h3", {id: hid}, txt(a.role)), stateWord(word[0], word[1])),
+        h("div", {class: "job-top"}, h("h3", {id: hid}, txt(a.role)), h("span", {class: "top-end"}, stateWord(word[0], word[1]),
+          live && !forWho ? btn("", () => askRemoveDraft(a, markApplied), {kind: "quiet icon-only", small: true, icon: "bin", key: "dbin:" + a.id, aria: "Not sending: " + about}) : null)),
         h("p", {class: "org"}, h("bdi", {}, txt(a.company)), [txt(a.place), !a.pay || a.pay === "not stated" ? "Pay not stated" : money(a.pay)].filter(Boolean).map((x) => " · " + x).join("")),
         forWho ? h("p", {class: "meta"}, (txt(a.route) === "portal" ? "For the portal, naming " : "Made for ") + txt(forWho.first_name) + (txt(a.route) === "portal" ? " as your referrer." : ", who asked for it.")) : null,
-        live ? nearLine(a) : null,
         ref && live && !alertsOf(a).some((x) => x.kind === "referral_hold") ? h("p", {class: "warm"}, itemLink("contacts", ref.id, txt(ref.first_name), "warmapp:" + a.id), " has put your name forward here: ask before you apply yourself.") : null,
         live ? (asks.length ? questionBlock(asks[0], {where: "drafts", item: a.id}) : cardNotes(a, {where: "drafts", section: "drafts", item: a.id, bare: true}, true)) : null,
-        live && !checkAlert && !asks.length && checks.passed ? h("p", {class: "checks"}, h("span", {"aria-hidden": "true"}, "✓ "), "Checked", hintQ("checks:" + a.id, txt(checks.line), "What was checked")) : null,
+        // What was checked is under More: one "?" a card at most, and this line needs none.
+        live && !checkAlert && !asks.length && checks.passed ? h("p", {class: "checks", title: txt(checks.line)}, h("span", {"aria-hidden": "true"}, "✓ "), "Checked") : null,
         live && !checkAlert && !asks.length && !checks.passed && checks.line ? h("p", {class: "checks tone-warn"}, txt(checks.line)) : null,
-        missing && live && !asks.length ? h("p", {class: "small muted"}, "Your files are not on this page yet. ", btn("Ask Claude to add them", () => askFiles(a), {kind: "link", key: "files:" + a.id})) : null,
         noteFor("dl:" + a.id),
         h("div", {class: "card-actions"}, primary, getBtn,
           // Where to apply, on the card itself: files, then the employer's site, then I have applied.
@@ -2990,7 +3341,8 @@
     const rest = toSend.filter((m) => wave.indexOf(m) < 0);
     if (wave.length) put(box, waveList(wave));
     if (rest.length || !wave.length) {
-      put(box, listView("drafts:messages", {items: rest, name: "messages", live: () => true, render: msgCard,
+      put(box, listView("drafts:messages", {items: rest, name: "messages", live: () => true, render: msgCard, box: (kids) => h("div", {class: "stack list-panel"}, kids),
+        first: 5, firstLabel: (k) => plural(k, "more to send", "more to send"),
         search: (m) => [m.first_name, m.employer].join(" "),
         sort: (a, b) => txt(a.due || "9999").localeCompare(txt(b.due || "9999")),
         empty: () => (wave.length ? null : empty("All sent.", "New notes and replies arrive here."))}));
@@ -3004,7 +3356,8 @@
   // "To Juno at Acme", or "To Juno" where no employer is on file: never a dangling "at".
   function toWho(m) {
     const who = txt(m.first_name) || "them";
-    return txt(m.employer) ? ["To " + who + " at ", h("bdi", {}, txt(m.employer))] : "To " + who;
+    const name = txt(m.contact) && txt(m.first_name) ? personName(txt(m.contact), who, "msg:" + txt(m.id)) : who;
+    return txt(m.employer) ? ["To ", name, " at ", h("bdi", {}, txt(m.employer))] : ["To ", name];
   }
   function msgCard(m) {
     const hid = "msg-" + seg(m.id);
@@ -3022,33 +3375,42 @@
     const parts = msgParts(m);
     // A short word with its full name for a screen reader: "Copy", not "Copy message to Jaimin".
     const copyName = "Copy " + (parts.subject ? "message" : what + " to " + txt(m.first_name));
-    const copyBtn = h("button", {type: "button", class: "btn small copy " + (copied ? "secondary" : "primary"), "data-k": "copy:" + tid, "data-primary": copied ? null : "1",
+    // Copy sits in the bubble's top corner, as on a code block (the maintainer, 2026-10-29).
+    const copyBtn = h("button", {type: "button", class: "btn small copy bubble-copy" + (copied ? "" : " primary"), "data-k": "copy:" + tid, "data-primary": copied ? null : "1",
       "aria-label": copied ? null : copyName, onclick: () => { S.copied.add(m.id); copyText(parts.body, (parts.subject ? "message" : what) + " to " + txt(m.first_name), "copy:" + tid, tid); }},
       icon("copy"), copied ? (fresh ? "Copied" : "Copy again") : "Copy");
     const changedKey = "changed:" + m.id;
     const sentNow = (text) => act([{item: m.id, action: "msg.sent", value: msgSentValue(m, text), rev: m.rev}], "Marked as sent: " + txt(m.first_name));
+    // Copy first, filled, then I sent it is: the order the work is done in.
     const sentBtn = btn("I sent it", () => sentNow(parts.body),
       {kind: copied ? "primary" : "secondary", small: true, key: "sent:" + m.id, aria: "I sent the " + what + " to " + txt(m.first_name)});
     const warnings = arr(m.warnings).map((x) => (typeof x === "string" ? x : txt(obj(x).said) || txt(obj(x).words) || txt(obj(x).text))).filter(Boolean);
     const sid = "msgs-" + seg(m.id);
     return card("article", {class: "card msg" + edgeOf(alertsOf(m)), "aria-labelledby": hid, "data-item": m.id},
       h("div", {class: "msg-top"}, h("span", {class: "kind"}, CHANNEL[txt(m.channel)] || "Message"),
-        m.due && dayDiff(m.due) !== null && dayDiff(m.due) < 0 ? stateWord("Due " + relDay(m.due), "warn") : null),
+        m.due && dayDiff(m.due) !== null && dayDiff(m.due) < 0 ? stateWord("Due " + relDay(m.due), "warn") : null,
+        // The bin, as everywhere: set this note aside, or the person's usual choices.
+        // A note to someone nobody has written to yet can be set aside; a reply cannot (they
+        // have been written to: state.py drop refuses it), so a reply offers the person's choices.
+        txt(m.contact) && !txt(m.application) ? btn("", () => askRemovePerson(txt(m.contact), txt(m.first_name), txt(m.employer), revOf(txt(m.contact)),
+          txt(m.kind) === "first_note" ? {skip: () => act([{item: m.id, action: "msg.skip", rev: m.rev}], "Set aside: the note to " + txt(m.first_name))} : {}),
+        {kind: "quiet icon-only", small: true, icon: "bin", key: "mbin:" + m.id, aria: "Not now, or not " + txt(m.first_name) + "?"}) : null),
       h("h3", {class: "card-title", id: hid}, toWho(m)),
       parts.subject ? h("p", {class: "subject"}, h("span", {class: "muted"}, "Subject: "), h("span", {id: sid}, parts.subject), " ",
         copyButton(parts.subject, "Copy subject", "copy:" + sid, sid)) : null,
       parts.subject ? noteFor("copy:" + sid) : null,
-      h("p", {class: "sendtext big", id: tid}, parts.body),
+      h("div", {class: "sendbox"}, copyBtn, h("p", {class: "sendtext big", id: tid}, parts.body)),
       charCount(m, parts.body),
-      warnings.length ? h("ul", {class: "msg-warn"}, warnings.map((w) => h("li", {}, plainDates(w)))) : null,
+      // What Claude could not fix itself: one calm line, the reasons behind its "?".
+      warnings.length ? h("p", {class: "small hint-line msg-check"}, "Read it once before you send it.",
+        hintQ("chk:" + m.id, warnings.map((w) => txt(plainDates(w)).replace(/^Claude left this as it is:\s*/i, "").replace(/\.$/, "")).map(cap1).join(". "), "Why")) : null,
       cardNotes(m, {where: "drafts", section: "drafts", item: m.id}, true),
-      h("div", {class: "card-actions"}, copyBtn, sentBtn, tweakIcon("message", m), openLink(m),
+      h("div", {class: "card-actions"}, sentBtn, tweakIcon("message", m), openLink(m),
         more("msg:" + m.id, "the " + what + " to " + txt(m.first_name), [m.why ? h("p", {class: "why"}, h("span", {class: "muted"}, "Why them: "), txt(m.why)) : null,
           moreAlerts(m, {where: "drafts", section: "drafts", item: m.id}),
           changedBox(m, changedKey, sentNow),
           txt(m.kind) === "first_note" ? pasteProfileBtn({id: m.contact, contact: m.contact, first_name: m.first_name, rev: revOf(txt(m.contact))}, "paste:" + m.id) : null,
-          relatedLinks(m.employer, m.id, m),
-          h("div", {class: "more-acts"}, txt(m.application) ? null : btn("Skip this one", () => act([{item: m.id, action: "msg.skip", rev: m.rev}], "Skipped the message to " + txt(m.first_name)), {kind: "quiet", small: true, key: "skip:" + m.id, aria: "Skip the message to " + txt(m.first_name)}))])),
+          relatedLinks(m.employer, m.id, m)])),
       tweakResult(m), noteFor("copy:" + tid), stateLine(m.id, "msg:" + m.id));
   }
 
@@ -3061,7 +3423,12 @@
     converted_to_application: ["Now an application", "ok"], gone_cold: ["Gone quiet", "plain"], closed: ["Closed", "plain"],
     dropped: ["Set aside", "plain"], cold: ["Gone quiet", "plain"], stopped: ["Stopped", "plain"]};
   const NEEDS_YOU_P = new Set(["replied_needs_response", "in_conversation", "referral_in_progress", "call_booked"]);
-  function personDueSoon(p) { const d = dayDiff(p.due); return d !== null && d <= 7; }
+  // Due within the week, or late by no more than two: a follow-up a month overdue is a
+  // conversation gone quiet, not something to do today, and counting each one said 458
+  // people needed the person (the maintainer, 2026-10-29).
+  // A connection request nobody has accepted is never owed: there is no one to message yet.
+  function personWaitsOnRequest(p) { return dueItems().some((d) => dueContact(d) === txt(p.id) && PENDING_KINDS.has(txt(d.kind))); }
+  function personDueSoon(p) { const d = dayDiff(p.due); return d !== null && d <= 7 && d >= -14 && !personWaitsOnRequest(p); }
   function personLive(p) {
     if (p.live === true) return true;
     if (p.live === false) return false;
@@ -3073,12 +3440,23 @@
   function personRank(p) { const st = txt(p.status); return NEEDS_YOU_P.has(st) || personDueSoon(p) ? 0 : st === "awaiting_reply" ? 1 : st === "not_contacted" ? 2 : 3; }
   function renderContacts(where) {
     const items = peopleItems();
-    const owe = items.filter((p) => txt(p.status) === "replied_needs_response" || dueItems().some((d) => txt(d.kind) === "reply" && dueContact(d) === txt(p.id))).length;
-    const wait = items.filter((p) => ["awaiting_reply", "connected_no_reply"].includes(txt(p.status))).length;
+    // Only what is live: a reply owed from the last month, and messages out in the last three
+    // weeks. A count of every request ever sent said "566 waiting" (the maintainer, 2026-10-29).
+    const recent = (p, days) => { const d = daysSince(p.last); return d !== null && d <= days; };
+    const owe = items.filter((p) => (txt(p.status) === "replied_needs_response" && recent(p, 30)) || dueItems().some((d) => txt(d.kind) === "reply" && dueContact(d) === txt(p.id))).length;
+    const wait = items.filter((p) => ["awaiting_reply", "connected_no_reply"].includes(txt(p.status)) && recent(p, 21)).length;
     const total = Number(obj(M().people_count).all) || items.length;
-    const sum = !total ? "No contacts yet." : owe ? nWord(owe, "needs", "need") + " a reply from you" + (wait ? ", " + wait + " waiting to hear back." : ".")
+    // The summary counts what the "Needs you" filter shows, so the two never disagree.
+    const need = items.filter((p) => personRank(p) === 0).length;
+    const sum = !total ? "No contacts yet." : need ? nWord(need, "needs", "need") + " you" + (owe ? ", " + (owe === 1 ? "one of them a reply" : owe + " of them replies") : "") + "." + (wait ? " " + wait + " waiting to hear back." : "")
       : "Nobody is waiting on you." + (wait ? " " + wait + " waiting to hear back." : "");
-    const lo = {items, name: "contacts", one: "person", many: "people", live: personLive, fold: (p) => !personLive(p), remote: "people",
+    // Who needs the person first, and everyone else one tap below: a fold, never a filter
+    // left on, so nobody is hidden without the page saying so (the maintainer, 2026-10-29:
+    // "458 people need me" led to decision paralysis).
+    const anyNeeds = items.some((p) => personRank(p) === 0);
+    const upFront = anyNeeds ? (p) => personRank(p) === 0 : personLive;
+    const lo = {items, name: "contacts", one: "person", many: "people", live: upFront, fold: (p) => !upFront(p), remote: "people",
+      foldLabel: (k) => plural(k, "more person", "more people") + (anyNeeds ? ", nothing owed to them now" : ""), foldShow: "Show them",
       sort: (a, b) => (personRank(a) - personRank(b)) || txt(a.due || "9999").localeCompare(txt(b.due || "9999")) || txt(b.last).localeCompare(txt(a.last)),
       chips: [{key: "status", label: "Where it stands", options: [["now", "Needs you", (p) => personRank(p) === 0], ["waiting", "Waiting for a reply", (p) => txt(p.status) === "awaiting_reply"],
         ["new", "Not contacted yet", (p) => txt(p.status) === "not_contacted"]]},
@@ -3090,12 +3468,15 @@
     const f = items.length ? listFacets("contacts", lo) : null;
     const many = f && f.items.length > 8;   // search by name or employer as soon as the list is more than a glance
     const wrap = h("section", {class: "sec", "aria-labelledby": "h-contacts" + (where ? "-" + where : "")},
-      put(screenHead("contacts", "Contacts", sum, null, where, h("div", {class: "head-tools"},
-        btn("Find people", () => askFindPeople(), {small: true, key: "head-find-people", icon: "k-search"}), f && !many ? filterButton("contacts", lo, f) : null)), phoneNow() ? null : gotMessage(where)));
+      // Got a message? is the summary's small line, as Jobs' Add a job is: one block, not two.
+      screenHead("contacts", "Contacts", sum, phoneNow() ? null : gotMessage(where), where, h("div", {class: "head-tools"},
+        btn("Find people", () => askFindPeople(), {small: true, key: "head-find-people", icon: "k-search"}))));
     if (!items.length) {
       put(wrap, empty("Nobody here yet.", "Someone inside who refers you beats applying cold. Find people looks at the employers you want."));
       return wrap;
     }
+    // The switch has a row of its own: beside a search box it was squeezed on a phone.
+    put(wrap, controlRow([contactsSwitch("people"), h("span", {class: "grow"}), many ? null : filterButton("contacts", lo, f)]));
     if (many) put(wrap, controlRow([searchField("contacts", lo), filterButton("contacts", lo, f)]));
     put(wrap, activeFilters("contacts", lo, f));
     put(wrap, listView("contacts", lo));
@@ -3129,6 +3510,17 @@
     else if (due && txt(due.action).startsWith("work:")) owed = btn(dueLabel(due, kind), () => askDue(due), {kind: "primary", small: true, key: "pdue:" + p.id, aria: dueLabel(due, kind) + ": " + txt(due.title)});
     else if (due && doneOf.action) owed = btn(txt(doneOf.label) || "Done", () => act([{item: due.id, action: txt(doneOf.action), value: {on: todayIso()}, rev: due.rev}], "Done: " + txt(due.title)), {kind: "primary", small: true, key: "pdone:" + p.id, aria: (txt(doneOf.label) || "Done") + ": " + txt(due.title)});
     else if (st === "in_conversation") owed = btn("Draft a reply", () => logReply(p, true), {kind: "primary", small: true, key: "reply:" + p.id, aria: "Draft a reply to " + name});
+    const lateBy = p.due && dayDiff(p.due) !== null && dayDiff(p.due) < 0 ? -dayDiff(p.due) : 0;
+    // A connection request nobody accepted cannot be followed up: there is no one to message.
+    const pendingReq = !!(due && PENDING_KINDS.has(txt(due.kind)));
+    const quietLong = !owed && !pendingReq && ["awaiting_reply", "connected_no_reply"].includes(st) && lateBy > 21;
+    const followUp = () => requestWork([{id: "follow_up~" + seg(p.id) + "~" + todayIso(), kind: "follow_up", title: "Follow up with " + name + (txt(p.employer) ? " at " + txt(p.employer) : ""), args: {contact: txt(p.id)}}]);
+    if (!owed && !pendingReq && ["awaiting_reply", "connected_no_reply"].includes(st) && lateBy > 0 && !quietLong) {
+      owed = btn("Draft the follow-up", followUp, {kind: "primary", small: true, key: "pfollow:" + p.id, aria: "Draft the follow-up to " + name});
+    } else if (quietLong) {
+      owed = [btn("Let it go", () => act([{item: p.id, action: "person.status", value: {status: "gone_cold", why: "no reply, let go on the page"}, rev: p.rev}], "Let go: " + name), {kind: "secondary", small: true, key: "plet:" + p.id, aria: "Let it go: " + name}),
+        btn("Follow up anyway", followUp, {kind: "quiet", small: true, key: "pfollow:" + p.id, aria: "Follow up with " + name + " anyway"})];
+    }
     // A first note already written: the row says where it is, never a dead end.
     if (!owed && st === "not_contacted") {
       const m = messageItems().find((x) => txt(x.contact) === txt(p.id) && msgLive(x));
@@ -3136,7 +3528,7 @@
     }
     const call = obj(p.call);
     // Waiting on them, the one thing likely to happen next sits on the row, not under More.
-    const replyOut = !owed && ["awaiting_reply", "connected_no_reply", "in_conversation"].includes(st);
+    const replyOut = (!owed || lateBy > 0) && ["awaiting_reply", "connected_no_reply", "in_conversation"].includes(st);
     const extra = [
       h("div", {class: "more-acts"},
         detailLink("person", p.id, "Open " + name + "'s conversation", "pdetail:" + p.id),
@@ -3154,12 +3546,16 @@
       : st === "call_booked" && callDay && callPast(p) ? "How did it go? Your call was " + dayWords(callDay) + "."
       : st === "call_booked" && callDay ? "Call " + dayWords(callDay) + (call.time ? " at " + txt(call.time) : "")
       : due && PENDING_KINDS.has(txt(due.kind)) ? "Your connection request has not been accepted yet."
+      : quietLong ? "No reply in " + plural(daysSince(p.last) || lateBy, "day", "days") + ". Let it go, or follow up once more."
       : due ? "Next: " + lc1(txt(due.title)) + (late ? ", " + plural(Number(due.overdue_days), "day", "days") + " late" : due.due ? ", " + dayWords(due.due) : "")
         : p.next_action ? "Next: " + txt(p.next_action) + dueWhen : !p.last ? "Not in touch yet" : "";
     return card("li", {class: "person" + (late || tone === "warn" ? " edge-warn" : ""), "aria-labelledby": hid, "data-item": p.id},
       h("div", {class: "avatar", "aria-hidden": "true"}, name.slice(0, 1).toUpperCase()),
       h("div", {class: "person-main"},
-        h("div", {class: "job-top"}, h("h3", {id: hid}, h("bdi", {}, name), txt(p.employer) ? [" at ", h("bdi", {}, txt(p.employer))] : null), stateWord(w, tone === "plain" ? null : tone)),
+        // The bin sits in the row's corner, as on a job, never alone on a line of its own.
+        h("div", {class: "job-top"}, h("h3", {id: hid}, personName(p.id, name, "row:" + p.id), txt(p.employer) ? [" at ", h("bdi", {}, txt(p.employer))] : null),
+          h("span", {class: "top-end"}, stateWord(w, tone === "plain" ? null : tone),
+            !["closed", "stopped", "gone_cold"].includes(st) ? btn("", () => askRemovePerson(p.id, name, txt(p.employer), p.rev), {kind: "quiet icon-only", small: true, icon: "bin", key: "pbin:" + p.id, aria: "Not " + name + "?"}) : null)),
         nextLine ? h("p", {class: "meta"}, nextLine) : null,
         h("div", {class: "card-actions"}, owed, replyOut ? btn("They replied", () => logReply(p, false), {small: true, key: "plog:" + p.id, aria: "Log " + name + "'s reply"}) : null, more("person:" + p.id, name + " at " + txt(p.employer), extra)),
         noteFor("reply:" + p.id), due ? stateLine(due.id, "pdue:" + p.id) : null, stateLine(p.id, "person:" + p.id)));
@@ -3175,11 +3571,11 @@
     let sum = "No interviews booked.";
     let small = null;
     if (next) {
-      const t = timeOf(next.when);
-      // Only the parts that are known: a stage with no date read "with McKinsey, ()."
-      const day = fmtDay(next.when), rel = relDay(next.when);
-      sum = "Next: " + lc1(txt(next.next_stage) || "interview") + " with " + txt(next.company) + (day ? ", " + day + (t ? " at " + t : "") + (rel ? " (" + rel + ")" : "") : "") + ".";
-      small = [obj(next.prep).updated ? "Prep ready" : "No prep yet", ahead.length > 1 ? (ahead.length - 1) + " more booked" : null].filter(Boolean).join(" · ");
+      // The first card says what and when; the summary counts, so the two never repeat.
+      const rel = relDay(next.when);
+      sum = plural(ahead.length, "interview", "interviews") + " coming up" + (rel ? ", the next " + rel : "") + ".";
+      const unprepped = ahead.filter((i) => !obj(i.prep).updated).length;
+      small = unprepped ? nWord(unprepped, "has", "have") + " no prep yet." : "Your prep is ready for each one.";
     }
     const wrap = h("section", {class: "sec", "aria-labelledby": "h-interviews" + (where ? "-" + where : "")}, screenHead("interviews", "Interviews", sum, small, where,
       items.length ? h("div", {class: "head-tools"}, btn("I have an interview", () => haveInterview(), {small: true, key: "iv-head-add"})) : null));
@@ -3188,7 +3584,7 @@
         h("div", {class: "card-actions"}, btn("I have an interview", () => haveInterview(), {kind: "secondary", small: true, key: "iv-empty-chat"}))));
       return wrap;
     }
-    put(wrap, listView("interviews", {items, name: "interviews", live: (i) => !past(i), remote: "interviews",
+    put(wrap, listView("interviews", {items, name: "interviews", live: (i) => !past(i), remote: "interviews", box: (kids) => h("div", {class: "stack list-panel"}, kids),
       fold: (i) => past(i) && daysSince(i.when) !== null && daysSince(i.when) > 14,
       sort: (a, b) => (past(a) ? 1 : 0) - (past(b) ? 1 : 0) || (past(a) ? txt(b.when).localeCompare(txt(a.when)) : txt(a.when || "9999").localeCompare(txt(b.when || "9999"))),
       render: interviewCard}));
@@ -3208,7 +3604,9 @@
     const mock = btn("Practise with Claude", () => startMock(iv), {kind: "secondary", small: true, key: "mock:" + iv.id, aria: "Practise with Claude for " + txt(iv.company)});
     const prepBtn = btn(has ? "Update my prep" : "Prepare me", () => askPrep(iv), {kind: has ? "secondary" : "primary", small: true, key: "prep:" + iv.id, aria: (has ? "Update my prep for " : "Prepare me for ") + txt(iv.company)});
     return card("article", {class: "card interview" + edgeOf(list), "aria-labelledby": hid, "data-item": iv.id},
-      h("div", {class: "job-top"}, h("h3", {id: hid}, (txt(iv.next_stage) || "Interview") + " with ", h("bdi", {}, txt(iv.company))), days !== null ? stateWord(relWhen(iv.when), !gone && days <= 1 ? "warn" : null) : null),
+      h("div", {class: "job-top"}, h("h3", {id: hid}, (txt(iv.next_stage) || "Interview") + " with ", h("bdi", {}, txt(iv.company))),
+        h("span", {class: "top-end"}, days !== null ? stateWord(relWhen(iv.when), !gone && days <= 1 ? "warn" : null) : null,
+          btn("", () => askEndApplication(iv, "the " + lc1(txt(iv.next_stage) || "interview") + " with " + txt(iv.company)), {kind: "quiet icon-only", small: true, icon: "bin", key: "ivbin:" + iv.id, aria: "Not going ahead: " + txt(iv.company)}))),
       h("p", {class: "when"}, [fmtWhen(iv.when) || "Time not set", formatWord(iv.format)].filter(Boolean).join(" · ")),
       h("p", {class: "meta"}, [txt(iv.role), has ? "Prep ready" : "No prep yet"].filter(Boolean).join(" · "), ref.id || ref.contact ? [" · Referred by ", itemLink("contacts", txt(ref.contact || ref.id), txt(ref.first_name), "ivref:" + iv.id)] : null),
       list.length ? alertLine(list[0], {where: "interviews", section: "interviews", item: iv.id, bare: true}) : null,
@@ -3286,7 +3684,7 @@
     const wk = Number(m[2]);
     const jan4 = new Date(Date.UTC(y, 0, 4));
     const mon = new Date(jan4.getTime() - ((jan4.getUTCDay() + 6) % 7) * DAY + (wk - 1) * 7 * DAY);
-    try { return new Intl.DateTimeFormat(undefined, {day: "numeric", month: "short", timeZone: "UTC"}).format(mon); } catch (e) { return txt(w); }
+    try { return new Intl.DateTimeFormat(LOC, {day: "numeric", month: "short", timeZone: "UTC"}).format(mon); } catch (e) { return txt(w); }
   }
   function weeksChart(weeks) {
     const max = Math.max(1, ...weeks.map((w) => Math.max(Number(w.applied) || 0, Number(w.replies) || 0)));
@@ -3411,7 +3809,6 @@
     ]},
   };
   const TWEAK_WORD = {resume: () => noun(), letter: () => "letter", message: () => "message", jobs: () => "search", prep: () => "prep", brief: () => "brief"};
-  const BRIEF_LINES = {short: 3, standard: 6, long: 99};
 
   // Rows for one item: the engine's own (item.tweaks.rows) refine the table where present.
   // The rows come from the engine's own table (model.tweaks.rows, tools/tweak.py) for every
@@ -3526,6 +3923,18 @@
   }
 
   let tweakDlg = null;
+  // Focus goes back to what opened a panel. A live update redraws the card while the panel is
+  // open, so the button that opened it may be gone: its redrawn twin, found by its key, takes
+  // the focus instead, or a keyboard or screen reader is left at the top of the page (seen on a
+  // busy machine, 2026-10-29).
+  function focusBack(op) {
+    if (!op) return;
+    Promise.resolve().then(() => {
+      const k = op.dataset && op.dataset.k;
+      const el = op.isConnected ? op : (k ? document.querySelector('[data-k="' + (window.CSS && CSS.escape ? CSS.escape(k) : k) + '"]') : null);
+      if (el && el.focus) el.focus();
+    });
+  }
   function closeTweak() {
     const st = S.tweak;
     S.tweak = null;
@@ -3533,7 +3942,7 @@
     const rail = $("rail");
     if (rail && rail.querySelector(".tweak-panel")) rail.replaceChildren();
     scheduleRender();
-    if (st && st.opener && st.opener.isConnected && st.opener.focus) st.opener.focus();
+    focusBack(st && st.opener);
   }
   // Open the panel for one output of one item: a bottom sheet over the card on a phone, a
   // panel on the right on wide screens (in the Work rail's place while it is open).
@@ -3543,7 +3952,7 @@
     if (!spec) return;
     const rows = tweakRows(output, item);
     const st = {output, item, spec, rows, chosen: {}, text: "", keep: false, scope: "all", opener: document.activeElement,
-      now: S.can.room === "available", near: {}, rec: tweakRecommended(rows)};
+      now: canRing(), near: {}, rec: tweakRecommended(rows)};
     S.tweak = st;
     const panel = tweakPanel(st);
     if (wide()) {
@@ -3729,8 +4138,8 @@
     if (hintSeen() || S.hintShown) return null;
     S.hintShown = true;
     return h("div", {class: "tweak-tip", role: "note"},
-      h("p", {}, h("strong", {}, "New: "), "the ", icon("tweak"), " button changes the look, length or tone of anything Claude made."),
-      btn("Got it", () => { setPref("hint:tweak", "seen"); scheduleRender(); }, {kind: "quiet", small: true, key: "tweak-tip-ok"}));
+      h("p", {}, "The ", icon("tweak"), " button changes the look, length or tone of anything Claude made."),
+      btn("Got it", () => { setPref("hint:tweak", "seen"); scheduleRender(); }, {kind: "link", small: true, key: "tweak-tip-ok"}));
   }
   // What a finished tweak left: the new version beside the old one, and a way back.
   function tweakResult(item) {
@@ -3749,7 +4158,7 @@
     const what = txt(obj(w.result).summary) || "your changes";
     return h("p", {class: "small tweak-done"}, "New version: " + what + ". The earlier one is kept. ",
       btn("Go back to it", () => requestWork([{id: "tweak~" + seg(txt(item.id)).slice(0, 60) + "~back-" + hash10(id), kind: "tweak", to: "either", title: "Back to the earlier version: " + txt(item.company || item.employer),
-        args: {v: 1, target: tweakTarget(txt(obj(obj(w.args).target).output) || "resume", item), changes: [{p: "back", v: id}], back: id, text: null, keep: null, cost: {state: 1, writes: [], est_s: 45}}}], {ring: S.can.room === "available"}),
+        args: {v: 1, target: tweakTarget(txt(obj(obj(w.args).target).output) || "resume", item), changes: [{p: "back", v: id}], back: id, text: null, keep: null, cost: {state: 1, writes: [], est_s: 45}}}], {ring: canRing()}),
       {kind: "link", key: "tweak-back:" + item.id}));
   }
   // A posting rarely names exactly what someone holds: the near matches the engine found, in
@@ -3780,8 +4189,10 @@
     return h("header", {class: "sec-head"},
       h("h2", {id: "h-" + id + (where ? "-" + where : ""), tabindex: "-1", class: "screen-title"}, title),
       h("div", {class: "summary" + (tool ? " with-tool" : "")},
-        h("div", {class: "sum-words"}, h("p", {class: "sum"}, sum), small ? h("p", {class: "sum-small"}, small) : null),
-        tool || null, q));
+        // The "?" sits in the summary's own line, small, never a line or a column of its own
+        // (the maintainer, 2026-10-29).
+        h("div", {class: "sum-words"}, h("p", {class: "sum"}, sum, q), small ? h("p", {class: "sum-small"}, small) : null),
+        tool || null));
   }
   const nWord = (n, one, many) => n + " " + (n === 1 ? one : many);
   // One row of controls: a view switch, a search over 25 items, Filter, and the list's menu.
@@ -3879,7 +4290,7 @@
     }
     return h("div", {class: "active-filters", role: "group", "aria-label": "Filters on"},
       f.active.map((a) => h("button", {type: "button", class: "af-chip", "data-k": "af:" + key + ":" + a.key + ":" + a.v, onclick: () => take(a)},
-        a.label, h("span", {"aria-hidden": "true"}, " ×"), h("span", {class: "sr-only"}, ": take off"))),
+        a.label, h("span", {"aria-hidden": "true", class: "af-x"}, "×"), h("span", {class: "sr-only"}, ": take off"))),
       btn("Clear all", () => { clearAll(key, o); scheduleRender(); }, {kind: "link", key: "clearall:" + key}));
   }
   let filterDlg = null;
@@ -3891,8 +4302,10 @@
     const draw = () => {
       const f = listFacets(key, o);
       const kids = [];
-      if (f.sorts.length) kids.push(h("div", {class: "fgroup"}, h("p", {class: "fg-label", id: "fg-sort"}, "Sort"),
-        segmented("Sort", f.sorts, f.sortNow, (v) => { setPref(o.sortPref, v === f.sorts[0][0] ? null : v); draw(); scheduleRender(); }, "fsort:" + key)));
+      // Sort as chips that wrap, never a squeezed switch (the maintainer, 2026-10-29).
+      if (f.sorts.length) kids.push(h("div", {class: "fgroup"}, h("p", {class: "fg-label", id: "fg-sort"}, "Sort by"),
+        h("div", {class: "fchips", role: "radiogroup", "aria-labelledby": "fg-sort"}, f.sorts.map(([v, l]) => btn(l, () => { setPref(o.sortPref, v === f.sorts[0][0] ? null : v); draw(); scheduleRender(); },
+          {kind: "filter", small: true, pressed: f.sortNow === v, key: "fsort:" + key + ":" + v})))));
       for (const g of f.groups) {
         kids.push(h("div", {class: "fgroup"}, h("p", {class: "fg-label"}, g.label || cap1(g.key)),
           h("div", {class: "fchips", role: "group", "aria-label": g.label || g.key}, g.options.map((op) => {
@@ -3913,10 +4326,11 @@
     };
     function updateFoot() {
       const f = listFacets(key, o);
-      foot.replaceChildren(
+      // replaceChildren writes a null as the word "null", so only the buttons there are given.
+      foot.replaceChildren(...[
         isWide ? h("button", {type: "button", class: "btn primary", "data-k": "filter-done", onclick: closeFilter}, "Done")
           : h("button", {type: "button", class: "btn primary", "data-k": "filter-show", onclick: closeFilter}, "Show " + nWord(f.shown, o.one || "item", o.many || "items")),
-        f.active.length ? h("button", {type: "button", class: "btn quiet", "data-k": "filter-clear", onclick: () => { clearAll(key, o); draw(); scheduleRender(); }}, "Clear all") : null);
+        f.active.length ? h("button", {type: "button", class: "btn quiet", "data-k": "filter-clear", onclick: () => { clearAll(key, o); draw(); scheduleRender(); }}, "Clear all") : null].filter(Boolean));
     }
     filterDlg = h("dialog", {class: "filter-sheet" + (isWide ? " pop" : ""), "aria-labelledby": "filter-title"},
       h("div", {class: "filter-head"}, h("h2", {id: "filter-title", class: "filter-title"}, "Filter " + (o.name || "")),
@@ -3929,9 +4343,9 @@
     draw();
     try { filterDlg.showModal(); } catch (e) { filterDlg.setAttribute("open", ""); }
     if (isWide && opener && opener.getBoundingClientRect) {
-      const r = opener.getBoundingClientRect();
-      filterDlg.style.setProperty("--pop-top", Math.round(r.bottom + 8) + "px");
-      filterDlg.style.setProperty("--pop-left", Math.round(Math.max(16, Math.min(window.innerWidth - 376, r.right - 360))) + "px");
+      const r = opener.getBoundingClientRect(), k = drawnPerPx();
+      filterDlg.style.setProperty("--pop-top", Math.round(r.bottom / k + 8) + "px");
+      filterDlg.style.setProperty("--pop-left", Math.round(Math.max(16, Math.min(pageWidth() - 456, r.right / k - 440))) + "px");
     }
     const first = filterDlg.querySelector("button[aria-pressed], input, button");
     if (first) first.focus();
@@ -3963,7 +4377,7 @@
     if (n === 0) return "today";
     if (n === 1) return "tomorrow";
     if (n > 1 && n < 7) {
-      try { return "on " + new Intl.DateTimeFormat(undefined, {weekday: "long", timeZone: "UTC"}).format(new Date(parseDay(dayOf(s)))); } catch (e) { /* below */ }
+      try { return "on " + new Intl.DateTimeFormat(LOC, {weekday: "long", timeZone: "UTC"}).format(new Date(parseDay(dayOf(s)))); } catch (e) { /* below */ }
     }
     return "on " + fmtDay(s);
   }
@@ -4104,18 +4518,20 @@
     const copied = S.copied.has(m.id);
     const cn = S.notes.get("copy:" + tid);
     const fresh = !!(cn && cn.text === "Copied." && cn.until > now());
+    const skip = () => act([{item: m.id, action: "msg.skip", rev: m.rev}], "Set aside: the note to " + txt(m.first_name));
     return h("li", {class: "wave-row", "data-item": m.id, "data-card": "wave", tabindex: "-1"},
-      h("p", {class: "wave-to"}, "To " + txt(m.first_name), charCount(m, txt(m.text))),
-      h("p", {class: "sendtext", id: tid}, txt(m.text)),
+      h("p", {class: "wave-to"}, h("span", {}, "To ", txt(m.contact) ? personName(txt(m.contact), txt(m.first_name), "wave:" + txt(m.id)) : txt(m.first_name)), charCount(m, txt(m.text)),
+        // The bin, as on every card: set this note aside, or the person's usual choices.
+        btn("", () => (txt(m.contact) ? askRemovePerson(txt(m.contact), txt(m.first_name), txt(m.employer), revOf(txt(m.contact)), {skip}) : skip()),
+          {kind: "quiet icon-only", small: true, icon: "bin", key: "wbin:" + m.id, aria: "Not now, or not " + txt(m.first_name) + "?"})),
+      h("div", {class: "sendbox"},
+        h("button", {type: "button", class: "btn small copy bubble-copy" + (copied ? "" : " primary"), "data-k": "copy:" + tid, "data-primary": copied ? null : "1", "aria-label": copied ? null : "Copy note to " + txt(m.first_name),
+          onclick: () => { S.copied.add(m.id); copyText(txt(m.text), "note to " + txt(m.first_name), "copy:" + tid, tid); }}, icon("copy"), copied ? (fresh ? "Copied" : "Copy again") : "Copy"),
+        h("p", {class: "sendtext", id: tid}, txt(m.text))),
       h("div", {class: "card-actions"},
-        h("button", {type: "button", class: "btn small copy " + (copied ? "secondary" : "primary"), "data-k": "copy:" + tid, "data-primary": copied ? null : "1",
-          onclick: () => { S.copied.add(m.id); copyText(txt(m.text), "note to " + txt(m.first_name), "copy:" + tid, tid); }}, copied ? (fresh ? "Copied" : "Copy again") : "Copy note to " + txt(m.first_name)),
         btn("I sent it", () => act([{item: m.id, action: "msg.sent", value: msgSentValue(m, m.text), rev: m.rev}], "Marked as sent: " + txt(m.first_name)),
           {kind: copied ? "primary" : "secondary", small: true, key: "sent:" + m.id, aria: "I sent the note to " + txt(m.first_name)}),
-        openLink(m),
-        // A note they will not send leaves the batch, as it does from its own card.
-        more("wave:" + m.id, "the note to " + txt(m.first_name), [h("div", {class: "more-acts"}, btn("Skip this one", () => act([{item: m.id, action: "msg.skip", rev: m.rev}], "Skipped: " + txt(m.first_name)),
-          {kind: "quiet", small: true, key: "skip:" + m.id, aria: "Skip the note to " + txt(m.first_name)}))])),
+        openLink(m)),
       changedBox(m, "changed:" + m.id, (text) => act([{item: m.id, action: "msg.sent", value: msgSentValue(m, text), rev: m.rev}], "Marked as sent: " + txt(m.first_name))),
       noteFor("copy:" + tid), stateLine(m.id, "msg:" + m.id));
   }
@@ -4327,7 +4743,8 @@
       live ? h("div", {class: "more-acts"}, btn("Not applied after all", () => act([{item: job ? job.id : a.id, action: job ? "job.not_applied" : "ready.not_applied", rev: job ? job.rev : a.rev}], "Marked as not applied: " + txt(a.company)), {kind: "quiet", small: true, key: "recnot:" + a.id})) : null,
     ];
     return card("article", {class: "card app-record" + (tone === "warn" ? " edge-warn" : ""), "aria-labelledby": hid, "data-item": a.id},
-      h("div", {class: "job-top"}, h("h3", {id: hid}, txt(a.role)), stateWord(word, tone)),
+      h("div", {class: "job-top"}, h("h3", {id: hid}, txt(a.role)), h("span", {class: "top-end"}, stateWord(word, tone),
+        live ? btn("", () => askEndApplication(a, "your application to " + txt(a.company)), {kind: "quiet icon-only", small: true, icon: "bin", key: "recbin:" + a.id, aria: "It is over: " + about}) : null)),
       h("p", {class: "org"}, h("bdi", {}, txt(a.company)), a.referrer ? [" · Referred by ", itemLink("contacts", txt(obj(a.referrer).contact || obj(a.referrer).id), txt(obj(a.referrer).first_name), "recref:" + a.id)] : null),
       nextLine ? h("p", {class: "meta"}, nextLine) : null,
       h("div", {class: "card-actions"}, primary,
@@ -4348,11 +4765,10 @@
     try { d.close(); } catch (e) { /* closed */ }
     d.remove();
     if (!fromHistory && /\/open$/.test(location.hash)) { try { history.back(); } catch (e) { /* the frame refuses */ } }
-    const op = d._opener;
-    if (op && op.isConnected && op.focus) op.focus();
+    focusBack(d._opener);
   }
   function detailOf(kind, id) {
-    if (kind === "interview") { const iv = interviewItems().find((x) => x.id === id); return iv ? [txt(iv.next_stage || "Interview") + " with " + txt(iv.company), interviewDetail(iv), "interviews", "wide"] : null; }
+    if (kind === "interview") { const iv = interviewItems().find((x) => x.id === id); return iv ? [stageShort(iv.next_stage) + " with " + txt(iv.company), interviewDetail(iv), "interviews", "wide"] : null; }
     if (kind === "person") { const p = peopleItems().find((x) => x.id === id); return p ? [txt(p.first_name) + " at " + txt(p.employer), personDetail(p), "contacts", ""] : null; }
     if (kind === "application") { const a = applicationItems().find((x) => x.id === id); return a ? [txt(a.role) + " at " + txt(a.company), applicationDetail(a), "jobs", ""] : null; }
     return null;
@@ -4405,22 +4821,96 @@
       arr(o.do_not_say || o.avoid).length ? h("div", {}, h("p", {class: "fg-label"}, "Not to say"), h("ul", {}, arr(o.do_not_say || o.avoid).map((x) => h("li", {}, t(x))))) : null);
   }
   // The whole prep, its headings and lists kept, read in place.
-  function prepText(s) {
-    const lines = txt(s).split("\n");
+  // The prep, read on the page as the formatted document it is (the maintainer, 2026-10-29:
+  // "a wall of text"): headings, lists nested by their indent, code kept as code, tables as
+  // tables, bold and italics, quotes and links. Built from text nodes only, never as HTML.
+  function inlineMd(t) {
     const out = [];
-    let list = null;
-    const plain = (x) => x.replace(/\*\*(.+?)\*\*/g, "$1").replace(/\[(.+?)\]\([^)]*\)/g, "$1").replace(/`/g, "");
-    for (const raw of lines) {
-      const ln = raw.trim();
-      if (!ln || /^<!--/.test(ln) || /^-{3,}$/.test(ln)) { list = null; continue; }
-      const head = /^(#{1,4})\s+(.*)$/.exec(ln);
-      if (head) { list = null; out.push(h(head[1].length <= 2 ? "h3" : "h4", {class: "prep-h"}, plain(head[2]))); continue; }
-      const item = /^(?:[-*]|\d+[.)])\s+(.*)$/.exec(ln);
-      if (item) { if (!list) { list = h("ul", {class: "prep-list"}); out.push(list); } list.appendChild(h("li", {}, plain(item[1]))); continue; }
-      list = null;
-      out.push(h("p", {}, plain(ln)));
+    const re = /(\*\*([^*]+)\*\*|__([^_]+)__|\*([^*\s][^*]*?)\*|_([^_\s][^_]*?)_|`([^`]+)`|\[([^\]]+)\]\(([^)\s]+)\))/g;
+    let at = 0;
+    let m;
+    t = txt(t);
+    while ((m = re.exec(t))) {
+      if (m.index > at) out.push(t.slice(at, m.index));
+      if (m[2] || m[3]) out.push(h("strong", {}, m[2] || m[3]));
+      else if (m[4] || m[5]) out.push(h("em", {}, m[4] || m[5]));
+      else if (m[6]) out.push(h("code", {}, m[6]));
+      else if (m[7]) { const u = safeUrl(m[8]); out.push(u ? h("a", {href: u, target: "_blank", rel: "noopener noreferrer"}, m[7]) : m[7]); }
+      at = m.index + m[0].length;
     }
+    if (at < t.length) out.push(t.slice(at));
+    return out;
+  }
+  function prepText(s) {
+    const lines = txt(s).replace(/\r/g, "").split("\n");
+    const out = [];
+    let para = [];
+    let lists = [];          // [{el, indent}] open lists, outermost first
+    const flushPara = () => { if (para.length) { out.push(h("p", {}, inlineMd(para.join(" ")))); para = []; } };
+    const closeLists = () => { lists = []; };
+    for (let i = 0; i < lines.length; i++) {
+      const raw = lines[i];
+      const ln = raw.trim();
+      // A fenced block: kept exactly, in its own box, with its lines as written.
+      const fence = /^(```|~~~)\s*([\w+-]*)\s*$/.exec(ln);
+      if (fence) {
+        flushPara(); closeLists();
+        const body = [];
+        for (i++; i < lines.length && !lines[i].trim().startsWith(fence[1]); i++) body.push(lines[i]);
+        out.push(h("pre", {class: "prep-code"}, h("code", {}, body.join("\n"))));
+        continue;
+      }
+      if (!ln || /^<!--/.test(ln)) { flushPara(); closeLists(); continue; }
+      if (/^(-{3,}|\*{3,}|_{3,})$/.test(ln)) { flushPara(); closeLists(); out.push(h("hr", {class: "prep-rule"})); continue; }
+      const head = /^(#{1,6})\s+(.*?)\s*#*$/.exec(ln);
+      if (head) { flushPara(); closeLists(); out.push(h(head[1].length <= 2 ? "h3" : "h4", {class: "prep-h"}, inlineMd(head[2]))); continue; }
+      // A table: a header row, its |---| line, then rows.
+      if (/^\|.*\|$/.test(ln) && i + 1 < lines.length && /^\|?\s*:?-{2,}/.test(lines[i + 1].trim())) {
+        flushPara(); closeLists();
+        const cells = (r) => r.trim().replace(/^\||\|$/g, "").split("|").map((c) => c.trim());
+        const headCells = cells(ln);
+        const rows = [];
+        for (i += 2; i < lines.length && /^\|.*\|$/.test(lines[i].trim()); i++) rows.push(cells(lines[i]));
+        i--;
+        out.push(h("div", {class: "prep-table-wrap"}, h("table", {class: "prep-table"},
+          h("thead", {}, h("tr", {}, headCells.map((c) => h("th", {scope: "col"}, inlineMd(c))))),
+          h("tbody", {}, rows.map((r) => h("tr", {}, r.map((c) => h("td", {}, inlineMd(c)))))))));
+        continue;
+      }
+      if (/^>\s?/.test(ln)) { flushPara(); closeLists(); out.push(h("blockquote", {class: "prep-quote"}, inlineMd(ln.replace(/^>\s?/, "")))); continue; }
+      const item = /^(\s*)([-*+]|\d+[.)])\s+(.*)$/.exec(raw);
+      if (item) {
+        flushPara();
+        const indent = item[1].replace(/\t/g, "  ").length;
+        const ordered = /\d/.test(item[2]);
+        while (lists.length && indent < lists[lists.length - 1].indent) lists.pop();
+        let top = lists[lists.length - 1];
+        if (!top || indent > top.indent) {
+          const el = h(ordered ? "ol" : "ul", {class: "prep-list"});
+          if (top && top.el.lastChild) top.el.lastChild.appendChild(el); else out.push(el);
+          lists.push({el, indent});
+          top = lists[lists.length - 1];
+        }
+        top.el.appendChild(h("li", {}, inlineMd(item[3])));
+        continue;
+      }
+      // A line under a list item, indented: more of that item.
+      if (lists.length && /^\s{2,}\S/.test(raw) && lists[lists.length - 1].el.lastChild) {
+        lists[lists.length - 1].el.lastChild.append(" ", ...inlineMd(ln));
+        continue;
+      }
+      closeLists();
+      para.push(ln);
+    }
+    flushPara();
     return h("div", {class: "prep-text read"}, out);
+  }
+  // A stage's name for a title: its first clause ("Online test: McKinsey-HackerRank
+  // assessment, invited ..., deadline ..." is "Online test: McKinsey-HackerRank assessment").
+  function stageShort(st) {
+    const t = txt(st) || "Interview";
+    const cut = t.split(/,\s|\s\(|;\s/)[0];
+    return cut.length > 70 ? clip(cut, 70) : cut;
   }
   function interviewDetail(iv) {
     const has = !!obj(iv.prep).updated;
@@ -4430,17 +4920,25 @@
     const head = [fmtWhen(iv.when), formatWord(iv.format), iv.with ? "with " + txt(iv.with) : ""].filter(Boolean).join(" · ");
     return h("div", {class: "d-stack"},
       h("p", {class: "when"}, head),
+      txt(iv.next_stage) !== stageShort(iv.next_stage) ? h("p", {class: "small muted"}, txt(iv.next_stage)) : null,
       ref.id || ref.contact ? h("p", {}, "Referred by ", itemLink("contacts", txt(ref.contact || ref.id), txt(ref.first_name), "ivref:" + iv.id)) : null,
       h("div", {class: "card-actions"},
         busy ? btn("See its progress", openWork, {small: true, key: "dprep-work:" + iv.id}) : has ? null : btn("Prepare me", () => askPrep(iv), {kind: "primary", small: true, key: "dprep:" + iv.id}),
         has && !busy ? btn("Practise with Claude", () => { closeDetail(true); startMock(iv); }, {small: true, key: "dmock:" + iv.id}) : null,
         has && !busy ? btn("Update my prep", () => askPrep(iv), {kind: "quiet", small: true, key: "dprep2:" + iv.id}) : null),
-      // The prep is read here, on the page: its one screen first, then the whole of it.
-      has ? block("Your prep", [oneScreen(iv), iv.prep_text ? prepText(iv.prep_text) : null].filter(Boolean).length ? [oneScreen(iv), iv.prep_text ? prepText(iv.prep_text) : null] : [h("p", {class: "muted"}, "Your prep is saved; it shows here once the page next updates.")])
-        : block("Your prep", [h("p", {class: "muted"}, "No prep yet. Prepare me builds it: what to say, likely questions and questions to ask.")]),
-      block("What you sent", arr(iv.sent_files).filter((f) => txt(f.name)).map((f) => h("p", {}, (f.kind === "letter" ? "Cover letter" : Noun()) + ": ", h("bdi", {}, txt(f.name))))),
-      block("Stages", arr(iv.stages).filter((s) => txt(s.label || s.name)).map((s) => h("p", {}, h("span", {class: "muted"}, (s.date || s.on) ? fmtDay(s.date || s.on) + ": " : ""), txt(s.label || s.name), s.done ? " (done)" : ""))),
-      relatedLinks(iv.company, iv.id, iv));
+      // The prep is read here, on the page: a reading column, its one screen first as a card,
+      // then the whole of it; what was sent and the stages beside it, never under a wall of
+      // text (the maintainer, 2026-10-29).
+      h("div", {class: "prep-layout"},
+        h("div", {class: "prep-main"},
+          has ? [oneScreen(iv) ? h("section", {class: "prep-glance", "aria-label": "At a glance"}, h("h3", {class: "prep-glance-h"}, "At a glance"), oneScreen(iv)) : null,
+            iv.prep_text ? h("article", {class: "prep-doc", "aria-label": "Your prep"}, prepText(iv.prep_text)) : null,
+            !oneScreen(iv) && !iv.prep_text ? h("p", {class: "muted"}, "Your prep is saved; it shows here once the page next updates.") : null]
+            : h("p", {class: "muted"}, "No prep yet. Prepare me builds it: what to say, likely questions and questions to ask.")),
+        h("aside", {class: "prep-side"},
+          block("What you sent", arr(iv.sent_files).filter((f) => txt(f.name)).map((f) => h("p", {}, h("span", {class: "muted"}, (f.kind === "letter" ? "Cover letter" : Noun()) + ": "), h("bdi", {}, txt(f.name))))),
+          block("Stages", arr(iv.stages).filter((s) => txt(s.label || s.name)).map((s) => h("p", {class: s.done ? "muted" : ""}, h("span", {class: "muted"}, (s.date || s.on) ? fmtDay(s.date || s.on) + ": " : ""), txt(s.label || s.name), s.done ? " (done)" : ""))),
+          relatedLinks(iv.company, iv.id, iv))));
   }
   function personDetail(p) {
     const [w, tone] = PERSON_STATUS[txt(p.status)] || [cap1(txt(p.status).replace(/_/g, " ")), "plain"];
@@ -4526,7 +5024,7 @@
       render: appRecordCard, box: (kids) => h("div", {class: "stack"}, kids)};
     const key = "jobs:applied";
     const f = listFacets(key, lo);
-    put(wrap, controlRow([segmented("Show", JOB_TABS, "applied", (v) => { setPref("jobs:tab", v); S.sel.jobs.clear(); scheduleRender(); }, "jt"), h("span", {class: "grow"}), filterButton(key, lo, f)]));
+    put(wrap, controlRow([jobsSwitch("applied"), h("span", {class: "grow"}), filterButton(key, lo, f)]));
     put(wrap, activeFilters(key, lo, f));
     put(wrap, listView(key, lo));
     return wrap;
@@ -4611,15 +5109,8 @@
   function wakeUrl() { return safeUrl(obj(obj(M().listener).wake).url) || prefillUrl(); }
   function listenTodo() {
     if (!notListening()) return null;
-    // Waking it is the page's job: tried first, by itself; the card shows only if that fails.
-    if (!S.wakeFailed && (/^session_/.test(txt(obj(S.listener).chat)) || txt(obj(M().app).repo))) {
-      const ids = [...allWork()].filter(([, w]) => txt(w.status) === "queued").map(([id]) => id);
-      if (ids.some((id) => !(S.woken && S.woken.has(id)))) {
-        if (!S.waking) { S.waking = true; autoWake(ids).then((ok) => { S.waking = false; if (!ok) scheduleRender(); }); }
-        return null;
-      }
-      if (ids.length && now() - (S.wokenAt || 0) < 5 * 60000) return null;
-    }
+    // Rung within the last few minutes: give the chat its time before saying it is not here.
+    if (S.bell && now() - (tms(S.bell.rung_at) || 0) < 5 * 60000 && !S.notes.get("wake")) return null;
     return {key: "listen", kind: "setup", band: "first", employer: null, tab: null, counts: true, node: () => listenCard()};
   }
   function listenCard() {
@@ -4638,10 +5129,11 @@
   // The doorbell this page already rings for work (the comment to Claude); where nothing can
   // receive it, the link that starts a chat for the page, and the words for each.
   async function wakeClaude() {
+    const ids = [...allWork()].filter(([, w]) => txt(w.status) === "queued").map(([id]) => id);
+    const rung = ringNow(ids.length ? ids : ["wake"], ids.length ? "work" : "wake", true);
     S.notes.set("wake", {text: "One moment…", tone: "muted"});
     scheduleRender();
-    const ids = [...allWork()].filter(([, w]) => txt(w.status) === "queued").map(([id]) => id);
-    const how = await ringComments(ids.length ? ids : ["wake"], true, ids.length ? "work" : "wake");
+    const how = await rung;
     S.lastRing = how === "rang" ? "rang" : how === "no_session" ? "no_session" : S.lastRing;
     S.notes.set("wake", how === "rang" ? {text: "Claude has been told. It picks up what is waiting within a minute or two, and this card goes once it answers.", tone: "ok"}
       : {text: "Nothing is open to hear it. Open Claude, and it starts on what is waiting.", tone: "warn"});
@@ -4651,22 +5143,21 @@
   // from the model's `where` (CONTRACT, CAPABILITY_MAP G3), and what this page knows itself
   // where the model says nothing yet.
   const WHERE_WORDS = {ready: ["Ready", "ok"], not_set_up: ["Not set up", "warn"], not_listening: ["Not listening", "warn"], sign_in: ["Sign in once", "warn"],
-    desktop: ["Open in the Claude app", null], open_in_app: ["Open in the Claude app", null], optional: ["Optional", null], off: ["Not set up", null], paused: ["Paused", null]};
+    desktop: ["Open in the Claude app", null], open_in_app: ["Open in the Claude app", null], optional: ["Optional", null], off: ["Not set up", null], paused: ["Paused", null], paste: ["Off", null]};
   function whereState() {
     const w = obj(M().where);
     const helper = txt(obj(w.helper).state) || (freshHeartbeat() || S.can.comments === "available" ? "ready" : "not_listening");
-    const reading = txt(obj(w.reading).state) || readingState();
+    // The page knows best whether it is in the desktop app and signed in; readingState falls
+    // back to the model's row where it has not looked.
+    const reading = readingState();
     const computer = txt(obj(w.computer).state) || (computerListening() ? "ready" : "optional");
-    const brief = obj(w.brief);
-    const briefState = txt(brief.state) || "not_set_up";
     const say = (k) => txt(obj(w[k]).say);
-    return {helper, reading, computer, brief: briefState, briefWhen: txt(brief.when), helperTitle: txt(obj(w.helper).title), computerSteps: arr(obj(w.computer).steps),
-      say: {helper: say("helper"), reading: say("reading"), computer: say("computer"), brief: say("brief")}};
+    return {helper, reading, computer, helperTitle: txt(obj(w.helper).title), computerSteps: arr(obj(w.computer).steps),
+      say: {helper: say("helper"), reading: say("reading"), computer: say("computer")}};
   }
   function whereRows() {
     const st = whereState();
-    const repo = txt(person().repo);
-    const helperLink = "https://claude.ai/code?prompt=" + encodeURIComponent("Set up my job search helper") + (repo ? "&repositories=" + encodeURIComponent(repo) : "");
+    const link = helperLink();
     const row = (key, name, state, line, next) => {
       const [word, tone] = WHERE_WORDS[state] || [cap1(state.replace(/_/g, " ")), null];
       return h("li", {class: "task where-" + key, "data-where": key},
@@ -4675,21 +5166,47 @@
         state === "ready" ? null : next);
     };
     return h("ol", {class: "plain task-list where-list"},
-      row("helper", "Claude's helper, in the cloud", st.helper, st.say.helper || "Works when your computer is off." + (st.helperTitle ? " It is the chat called " + st.helperTitle + "." : ""),
+      row("helper", "Claude's helper, in the cloud", st.helper, st.say.helper || "The one chat that does what you ask for here, even with your computer off." + (st.helperTitle ? " It is called " + st.helperTitle + "." : "") + " If it is ever closed, this page offers a new one.",
         obj(M().where).helper && obj(obj(M().where).helper).action ? btn("Set it up", () => act([{item: "where-helper", action: txt(obj(obj(M().where).helper).action), rev: txt(obj(obj(M().where).helper).rev)}], "Setting up Claude's helper"), {small: true, key: "where-helper"}) :
-          h("p", {}, h("a", {href: helperLink, target: "_blank", rel: "noopener noreferrer", class: "btn secondary small", "data-k": "where-helper-link"}, "Set it up", h("span", {class: "sr-only"}, " (opens Claude in a new tab)")), " then press Send.")),
-      row("reading", "Reading LinkedIn profiles", st.reading === "open_in_app" ? "desktop" : st.reading, "In the Claude app on your computer: can read LinkedIn profiles in your browser.",
-        btn(st.reading === "desktop" ? "How" : "Set it up", () => { closeDetail(true); go("todo", {focus: false}); openReading(); }, {small: true, key: "where-reading"})),
-      row("computer", "Claude on your computer", st.computer, st.say.computer || "Only if you keep files there for Claude.",
-        st.computerSteps.length ? h("div", {}, h("ol", {class: "steps"}, st.computerSteps.map((x) => h("li", {}, txt(x)))),
-          copyButton("Set up my job search on this computer.", "Copy the first message", "copy:where-computer", null), noteFor("copy:where-computer")) : null),
-      row("brief", "Your brief", st.brief, st.say.brief || (st.brief === "ready" && st.briefWhen ? st.briefWhen : "A short message on the days you choose: what is due, and the news that matters."),
-        btn("Set it up", () => requestWork([{id: "brief~setup", kind: "brief", title: "Set up your brief", args: {setup: true}}]), {small: true, key: "where-brief"})));
+          helperAsked() ? h("p", {class: "small", role: "status"}, h("span", {class: "spin", "aria-hidden": "true"}), " Starting. This says Ready once Claude's helper answers, usually within a few minutes.") :
+          h("p", {}, h("a", {href: link, target: "_blank", rel: "noopener noreferrer", class: "btn secondary small", "data-k": "where-helper-link",
+            onclick: () => { sset("local", HELPER_ASKED, String(now())); setTimeout(scheduleRender, 0); }}, "Set it up", h("span", {class: "sr-only"}, " (opens Claude in a new tab)")), " then press Send.")),
+      // Off means the person pastes profiles (the setting the bin's "Never" sets): one way back on.
+      st.reading === "off" || readingHidden() && st.reading !== "ready" ?
+        row("reading", "Reading LinkedIn profiles", "paste", "Off: you paste someone's profile when you write to them.",
+          btn("Turn back on", () => { setReads("browser", "Reading LinkedIn profiles is back on"); toast({text: "Reading LinkedIn profiles is back on.", ids: [], until: 0}); scheduleRender(); }, {small: true, key: "where-reading-on"})) :
+        row("reading", "Reading LinkedIn profiles", st.reading === "open_in_app" ? "desktop" : st.reading, st.reading === "paused" ? "LinkedIn asked Claude to slow down: reading starts again tomorrow, by itself." : "For networking: the Claude app on your computer reads LinkedIn profiles in its own browser.",
+          st.reading === "paused" ? null : btn(st.reading === "desktop" ? "How" : "Set it up", () => { closeDetail(true); go("todo", {focus: false}); openReading(true); }, {small: true, key: "where-reading"})),
+      // A chat on the computer is never offered: the cloud answers the page, and the computer
+      // only reads LinkedIn, through this page (the maintainer, 2026-10-29). One already
+      // listening still shows, so the person can see it.
+      st.computer === "ready" ? row("computer", "Claude on your computer", st.computer, st.say.computer || "Answers only what needs your computer.", null) : null,
+      tidiedLine());
   }
+  // The same link "Claude isn't listening" opens: a chat that runs the start command and
+  // becomes the one that answers the page. A wording of its own reached no instructions.
+  function helperLink() {
+    const repo = txt(person().repo);
+    return wakeUrl() || "https://claude.ai/code" + (repo ? "?repositories=" + encodeURIComponent(repo) : "");
+  }
+  // Whether a chat in the cloud answers the page, so a brief can run there: false only when the
+  // page is known to be answered on the computer and no helper is set up.
+  function cloudAnswers() {
+    return !(txt(obj(S.listener).kind) === "computer" && txt(obj(obj(M().where).helper).state) !== "ready");
+  }
+  // The app's own old chats it tidied away: said once here, in plain words, never a card.
+  function tidiedLine() {
+    const t = obj(obj(M().where).tidied);
+    const n = Number(t.count) || 0;
+    if (!n) return null;
+    return h("li", {class: "task where-tidied"}, h("p", {class: "small muted"}, "Claude tidied away " + plural(n, "old chat", "old chats") + " it no longer used" + (t.on ? ", last on " + fmtDay(txt(t.on)) : "") + ". Nothing in them was lost."),
+      btn("Bring them back", () => { handOff("Bring back the old chats you tidied away.", true); toast({text: "Asked. They come back in your list of chats; the answer is in Chat.", ids: []}); }, {small: true, kind: "quiet", key: "where-untidy"}));
+  }
+  // The brief is not a place Claude works: it is set from its bell and in Your brief above.
   function whereSummary() {
     const st = whereState();
-    const n = [st.helper, st.reading, st.brief].filter((x) => x === "ready").length;
-    return n + " of 3 ready";
+    const n = [st.helper, st.reading].filter((x) => x === "ready").length;
+    return n + " of 2 ready";
   }
 
   // G5. The page on another device: its link, Copy, and one line on keeping it one tap away.
@@ -4702,7 +5219,8 @@
         h("p", {class: "muted"}, "The link arrives with the next update of this page."),
       url ? noteFor("copy:page-url") : null,
       steps.length ? h("ol", {class: "steps"}, steps.map((x) => h("li", {}, txt(x)))) :
-        h("p", {}, "Open the link on your phone signed in to the same Claude account. Ask Claude to pin the page to your sidebar, and it is always one tap away."));
+        h("div", {class: "d-stack"}, h("p", {}, "Open the link on your phone signed in to the same Claude account. Pinned to your sidebar, the page is always one tap away."),
+          btn("Pin it to my sidebar", () => { handOff("Pin my job search page to my sidebar.", true); toast({text: "Asked. Claude pins it; the answer is in Chat.", ids: []}); }, {small: true, kind: "quiet", key: "pin-page"})));
   }
 
   // G7. One job by its link or its text, from the Jobs summary.
@@ -4714,24 +5232,25 @@
     const who = p ? txt(p.first_name) : "";
     const people = peopleItems().filter((x) => txt(x.first_name)).sort((a, b) => txt(a.first_name).localeCompare(txt(b.first_name)));
     sheet({title: p ? "The job " + who + " sent you" : "Add a job",
-      intro: p ? "Paste its link or the posting. Claude scores it, links it to " + who + " as your way in, and writes your " + noun() + " and cover letter."
-        : "The job's link, or the posting itself. Claude scores it and puts it at the top of your list.",
+      intro: p ? "Paste its link or the posting. Claude checks how well it fits you, links it to " + who + " as your way in, and writes your " + noun() + " and cover letter."
+        : "Paste the job's link or the posting. Claude checks how well it fits you and puts it at the top of your jobs.",
       cost: costLine(p ? "draft" : "evaluate"),
       fields: [{id: "posting", type: "text", long: true, label: "The job's link, or paste the posting", required: true, max: 20000},
-        p || !people.length ? null : {id: "contact", type: "select", label: "Did someone send it to you?", placeholder: "No one", options: people.map((x) => [txt(x.id), txt(x.first_name) + (txt(x.employer) ? " at " + txt(x.employer) : "")])},
+        p ? null : {id: "contact", type: "pick", label: "Did someone send it to you? (optional)", placeholder: "Type their name, or leave it empty", options: people.map((x) => [txt(x.id), txt(x.first_name) + (txt(x.employer) ? " at " + txt(x.employer) : "")])},
         {id: "applied", type: "radio", label: "Have you applied to it already?", options: [["no", "No"], ["yes", "Yes"]], value: "no", required: true},
         {id: "on", type: "date", label: "The day you applied", value: todayIso(), showIf: ["applied", "yes"]},
-        {id: "draft", type: "checks", label: "Once it is scored", options: [["yes", "Write my " + noun() + " and cover letter"]], value: p ? ["yes"] : []}].filter(Boolean),
+        {id: "draft", type: "checks", label: "Then", options: [["yes", "Also write my " + noun() + " and cover letter"]], value: p ? ["yes"] : [], showIf: ["applied", "no"]}].filter(Boolean),
       submit: "Add it",
       onSubmit: (v) => {
         const text = txt(v.posting);
         const url = /^https?:\/\/\S+$/.test(text) ? text : null;
-        const contact = p ? txt(p.id) : txt(v.contact);
+        const contact = p ? txt(p.id) : txt(obj(v.contact).id);
+        const fromName = p ? "" : txt(obj(v.contact).name);
         const draft = v.applied !== "yes" && arr(v.draft).includes("yes");
         // `job.add` on the synthetic `job-new` (CONTRACT 6.15): the engine queues the scoring.
         act([{item: "job-new", action: "job.add", value: Object.assign(url ? {url} : {text}, v.applied === "yes" ? {applied_on: v.on || todayIso()} : {},
-          contact ? {contact} : {}, draft ? {draft: true} : {}), rev: null}],
-          v.applied === "yes" ? "Added, as applied" : draft ? "Added: Claude scores it, then writes your " + noun() : "Added: Claude scores it");
+          contact ? {contact} : {}, fromName ? {from_name: fromName} : {}, draft ? {draft: true} : {}), rev: null}],
+          v.applied === "yes" ? "Added, as applied" : draft ? "Added: Claude checks how it fits, then writes your " + noun() : "Added: Claude checks how it fits you");
       }});
   }
 
@@ -4782,7 +5301,7 @@
     const sid = txt(s.id) || "search-settings";
     const list = (xs) => arr(xs).map(txt).filter(Boolean);
     const join = (xs) => list(xs).join(", ");
-    const money = (n) => (Number(n) ? Number(n).toLocaleString() : "");
+    const money = (n) => (Number(n) ? Number(n).toLocaleString(LOC) : "");
     const pay = obj(s.pay);
     const payWords = typeof s.pay === "string" ? s.pay : pay.floor ? "At least " + money(pay.floor) + (pay.target ? ", hoping for " + money(pay.target) : "") : "";
     const set = (what, value, label) => act([{item: sid, action: "search.set", value: Object.assign({what}, value), rev: txt(s.rev) || null}], label);
@@ -4791,7 +5310,7 @@
     const change = (what, label, value) => btn("Change", () => {
       if (what === "pay") {
         sheet({title: label, fields: [{id: "v", type: "text", label: "The lowest pay you would take", hint: "One number, for example 90000", value: pay.floor ? String(pay.floor) : "", required: true, max: 20}], submit: "Save",
-          onSubmit: (v) => { const n = Number(String(v.v).replace(/[^0-9.]/g, "")); if (n) set("pay", {value: n}, label + ": " + n.toLocaleString()); }});
+          onSubmit: (v) => { const n = Number(String(v.v).replace(/[^0-9.]/g, "")); if (n) set("pay", {value: n}, label + ": " + n.toLocaleString(LOC)); }});
         return;
       }
       if (what === "roles" || what === "places") {
@@ -4835,7 +5354,8 @@
           h("input", {type: "checkbox", role: "switch", id: pid, "data-k": pid, checked: p.on !== false,
             onchange: (e) => set("sites", {name: txt(p.name), on: e.target.checked}, label + (e.target.checked ? ": on" : ": off"))}));
       }))) : null,
-      boards.length ? infoRow("search-boards", "Employers you follow", String(boards.length), h("ul", {class: "plain"}, boards.map((b) => h("li", {}, h("bdi", {}, txt(b.employer)))))) : null,
+      boards.length ? infoRow("search-boards", "Employers you follow", String(boards.length), h("div", {class: "d-stack"}, h("ul", {class: "plain"}, boards.map((b) => h("li", {}, h("bdi", {}, txt(b.employer))))),
+        h("p", {class: "small muted"}, "Add one on Jobs: Change the search, then Watch an employer."))) : null,
       infoRow("search-rules", "Left out", rules.length ? plural(rules.length, "rule", "rules") : "None", rules.length ? h("ul", {class: "plain"}, rules.map((r) => h("li", {"data-item": txt(r.id)}, h("span", {}, txt(r.words)), r.count ? h("span", {class: "muted"}, " · " + txt(r.count)) : null, " ",
         btn("Bring back", () => act([{item: txt(r.id), action: "rule.lift", value: null, rev: txt(r.rev) || txt(s.rev) || null}], "Brought back: " + txt(r.words)), {kind: "quiet", small: true, key: "lift:" + txt(r.id)}),
         stateLine(txt(r.id), "rule:" + txt(r.id))))) : h("p", {class: "muted"}, "No kind of job is left out.")),
@@ -4903,39 +5423,50 @@
     return busy.length ? h("p", {class: "small muted", role: "status"}, "Claude is making " + (busy.length === 1 ? "a change" : busy.length + " changes") + " to your profile. ",
       btn("See its progress", openWork, {kind: "link", key: "you-see"})) : null;
   }
-  function youRows() {
+  // Your profile, a page of its own reached from Settings (the maintainer, 2026-10-29: "maybe
+  // the journey should be like settings -> your profile"): what Claude knows, laid out to
+  // read, each part changed where it shows.
+  function profileSummary() {
     const y = you();
-    if (!Object.keys(y).length) return [];
+    const parts = [arr(y.jobs).length ? plural(arr(y.jobs).length, "job", "jobs") : null, arr(y.skills).length ? plural(arr(y.skills).length, "skill", "skills") : null,
+      arr(y.education).length ? plural(arr(y.education).length, "qualification", "qualifications") : null].filter(Boolean);
+    return parts.length ? parts.join(" · ") : "Nothing yet";
+  }
+  function renderProfile(where) {
+    const y = you();
+    const back = h("a", {href: "#settings", class: "back-link", "data-k": "profile-back", onclick: (e) => { e.preventDefault(); go("settings", {focus: true}); }}, "‹ Settings");
+    const wrap = h("section", {class: "sec profile-page", "aria-labelledby": "h-profile" + (where ? "-" + where : "")}, back,
+      screenHead("profile", "Your profile", "Everything Claude knows about you. Each application uses only what fits the job.", null, where));
+    if (!Object.keys(y).length) { put(wrap, empty("Nothing here yet.", "Your profile fills in as you answer the setup questions.")); return wrap; }
+    const busy = profileBusy();
+    if (busy) put(wrap, busy);
+    const missing = arr(y.missing);
+    if (missing.length) put(wrap, h("section", {class: "card prof-card prof-missing", "aria-labelledby": "pf-missing"}, h("h3", {id: "pf-missing", class: "prof-h"}, "Still to fill in"),
+      h("ul", {class: "plain checks-list"}, missing.map((m) => h("li", {class: "toggle-row", "data-card": "1", "data-item": "missing:" + txt(m.part || m.say)}, h("span", {}, txt(m.say)), missingFix(m))))));
+    const grid = h("div", {class: "prof-grid"});
     const jobs = arr(y.jobs);
+    put(grid, h("section", {class: "card prof-card wide", "aria-labelledby": "pf-jobs"},
+      h("div", {class: "prof-top"}, h("h3", {id: "pf-jobs", class: "prof-h"}, "Experience"), btn("Add a job", () => jobSheet(null), {kind: "secondary", small: true, key: "you-add-job"})),
+      jobs.length ? h("ol", {class: "plain prof-jobs"}, jobs.map((j) => h("li", {"data-item": txt(j.id), "data-card": "1"},
+        h("div", {class: "prof-job-main"}, h("p", {class: "prof-job-t"}, h("strong", {}, txt(j.title)), h("span", {class: "muted"}, " at "), h("bdi", {}, txt(j.employer))),
+          h("p", {class: "small muted"}, [txt(j.dates), txt(j.place), Number(j.lines) ? plural(Number(j.lines), "line", "lines") + " Claude can choose from" : "nothing yet on what you did"].filter(Boolean).join(" · "))),
+        h("div", {class: "prof-job-acts"}, btn("Change", () => jobSheet(j), {kind: "quiet", small: true, key: "you-edit:" + txt(j.id), aria: "Change " + txt(j.title) + " at " + txt(j.employer)}),
+          btn("", () => removeJob(j), {kind: "quiet icon-only", small: true, icon: "bin", key: "you-rm:" + txt(j.id), aria: "Take " + txt(j.title) + " at " + txt(j.employer) + " off"}))))) : h("p", {class: "muted"}, "No jobs yet.")));
     const skills = arr(y.skills).map(txt);
+    put(grid, h("section", {class: "card prof-card", "aria-labelledby": "pf-skills"},
+      h("div", {class: "prof-top"}, h("h3", {id: "pf-skills", class: "prof-h"}, "Skills"), btn(skills.length ? "Add or take off" : "Add skills", skillsSheet, {kind: "secondary", small: true, key: "you-skills"})),
+      skills.length ? h("ul", {class: "plain prof-chips"}, skills.map((x) => h("li", {class: "prof-chip"}, x))) : h("p", {class: "muted"}, "None yet.")));
     const edu = arr(y.education).map(txt);
     const certs = arr(y.certificates).map(txt);
-    const missing = arr(y.missing);
-    // One line, so nobody fears a change here rewrites every application.
-    const rows = [h("p", {class: "small muted set-intro"}, "Everything Claude knows about you. Each application uses only what fits that job, and Claude asks you before adding a skill you have not listed.")];
-    if (missing.length) rows.push(h("div", {class: "setting-row you-missing"}, h("p", {class: "set-name"}, "Still to fill in"),
-      h("ul", {class: "plain checks-list"}, missing.map((m) => h("li", {class: "toggle-row"}, h("span", {}, txt(m.say)), missingFix(m))))));
-    rows.push(infoRow("you-jobs", "Your jobs", jobs.length ? plural(jobs.length, "job", "jobs") : "None yet", h("div", {class: "d-stack"},
-      jobs.length ? h("ul", {class: "plain you-list"}, jobs.map((j) => h("li", {"data-item": txt(j.id)},
-        h("p", {}, h("strong", {}, txt(j.title)), " at ", h("bdi", {}, txt(j.employer))),
-        h("p", {class: "small muted"}, [txt(j.dates), txt(j.place), Number(j.lines) ? plural(Number(j.lines), "line", "lines") + " to choose from" : "nothing yet on what you did"].filter(Boolean).join(" · ")),
-        h("div", {class: "card-actions"}, btn("Change", () => jobSheet(j), {kind: "quiet", small: true, key: "you-edit:" + txt(j.id), aria: "Change " + txt(j.title) + " at " + txt(j.employer)}),
-          btn("Take off", () => removeJob(j), {kind: "quiet", small: true, key: "you-rm:" + txt(j.id), aria: "Take " + txt(j.title) + " at " + txt(j.employer) + " off"}))))) : null,
-      btn("Add a job", () => jobSheet(null), {kind: "secondary", small: true, key: "you-add-job"}))));
-    rows.push(infoRow("you-skills", "Your skills", skills.length ? plural(skills.length, "skill", "skills") : "None yet", h("div", {class: "d-stack"},
-      skills.length ? h("p", {class: "you-skills"}, skills.join(" · ")) : null,
-      btn(skills.length ? "Add or take off" : "Add skills", skillsSheet, {kind: "secondary", small: true, key: "you-skills"}))));
-    rows.push(infoRow("you-edu", "Education", edu.length ? String(edu.length) : "None", h("div", {class: "d-stack"},
-      edu.length ? h("ul", {class: "plain"}, edu.map((x) => h("li", {}, x))) : h("p", {class: "muted"}, "Nothing yet."),
-      btn("Change", () => listSheet("education", "Education", edu, "For example: BSc Mathematics, University of Leeds (2016-2019)"), {kind: "secondary", small: true, key: "you-edu"}))));
-    rows.push(infoRow("you-certs", "Certificates", certs.length ? String(certs.length) : "None", h("div", {class: "d-stack"},
-      certs.length ? h("ul", {class: "plain"}, certs.map((x) => h("li", {}, x))) : h("p", {class: "muted"}, "Nothing yet."),
-      btn("Change", () => listSheet("certificates", "Certificates", certs, "Only ones you hold. Write (in progress) after one you are still taking."), {kind: "secondary", small: true, key: "you-certs"}))));
+    put(grid, h("section", {class: "card prof-card", "aria-labelledby": "pf-edu"},
+      h("div", {class: "prof-top"}, h("h3", {id: "pf-edu", class: "prof-h"}, "Education"), btn("Change", () => listSheet("education", "Education", edu, "For example: BSc Mathematics, University of Leeds (2016-2019)"), {kind: "quiet", small: true, key: "you-edu", aria: "Change your education"})),
+      edu.length ? h("ul", {class: "plain prof-lines"}, edu.map((x) => h("li", {}, x))) : h("p", {class: "muted"}, "Nothing yet."),
+      h("div", {class: "prof-top"}, h("h3", {class: "prof-h"}, "Certificates"), btn("Change", () => listSheet("certificates", "Certificates", certs, "Only ones you hold. Write (in progress) after one you are still taking."), {kind: "quiet", small: true, key: "you-certs", aria: "Change your certificates"})),
+      certs.length ? h("ul", {class: "plain prof-lines"}, certs.map((x) => h("li", {}, x))) : h("p", {class: "muted"}, "None.")));
     const r = generalResumeCard();
-    if (r) rows.push(infoRow("you-resume", "Your " + noun(), obj(M().resume).stale ? "Made before your last change" : "Ready", r));
-    const busy = profileBusy();
-    if (busy) rows.unshift(busy);
-    return rows;
+    if (r) put(grid, r);
+    put(wrap, grid);
+    return wrap;
   }
   // To do, once set up: what the profile still lacks, since every resume is built from it.
   function finishProfileCard() {
@@ -4969,33 +5500,127 @@
       noteFor("dl:" + (txt(r.id) || "resume-general")));
   }
 
-  // G13. The brief's days and time (model.schedule, brief.move), and a break from the whole
-  // search (brief.pause on the search's own item too: the one break, tools/routines.py).
+  // G13. The brief: on or off, and its days and time (model.schedule; brief.on, brief.off,
+  // brief.move), from the bell on the Brief and from Settings through the one sheet, so the
+  // two can never disagree; and a break from the whole search (brief.pause, brief.resume).
+  // Nobody gets a brief they did not ask for (the maintainer, 2026-10-29): it starts when the
+  // bell is pressed, every day unless they choose other days.
   const DAY_NAMES = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"];
-  function briefRows() {
+  const BRIEF_DAY_SETS = [["every", "Every day", [0, 1, 2, 3, 4, 5, 6]], ["weekdays", "Weekdays", [1, 2, 3, 4, 5]]];
+  function briefWhen(days, time) {
+    const d = [...new Set(arr(days).map((x) => Number(x) % 7))].sort();
+    if (!d.length) return "";
+    const set = BRIEF_DAY_SETS.find(([, , v]) => v.join() === d.join());
+    const names = d.map((x) => DAY_NAMES[(x + 6) % 7] + "s");
+    const words = set ? set[1] : d.join() === "0,6" ? "Weekends" : names.length > 1 ? names.slice(0, -1).join(", ") + " and " + names[names.length - 1] : names[0];
+    return words + (time ? " at " + txt(time).replace(/^0(\d)/, "$1") : "");
+  }
+  function briefSetupWork() {
+    return [...allWork()].filter(([, w]) => txt(w.kind) === "brief" && obj(w.args).setup)
+      .sort((a, b) => txt(b[1].asked_at).localeCompare(txt(a[1].asked_at)))[0] || null;
+  }
+  // Where the brief stands, the latest tap first, then what the engine says.
+  function briefState() {
     const sc = obj(M().schedule);
-    if (!Object.keys(sc).length) return [];
-    const acts = obj(sc.actions);
-    const paused = briefPaused(sc);
-    const days = arr(sc.days).map((d) => (typeof d === "number" ? DAY_NAMES[(d + 6) % 7] : cap1(txt(d))));
-    const when = txt(sc.when) || (days.length ? days.join(" and ") + (sc.time ? " at " + txt(sc.time) : "") : "Not set up");
     const item = txt(sc.id) || "schedule";
+    const sw = effective(item, ["brief.off", "brief.on"]);
+    const mv = effective(item, ["brief.move"]);
+    const setup = briefSetupWork();
+    const setUp = !!sc.set_up;
+    let days = arr(sc.days).map((x) => Number(x) % 7);
+    let time = txt(sc.time);
+    if (mv) {
+      const v = obj(mv.doc.value);
+      if (arr(v.days).length) days = arr(v.days).map((x) => Number(x) % 7);
+      if (txt(v.time)) time = txt(v.time);
+    }
+    return {sc, item, setUp, on: setUp && (sw ? sw.doc.action === "brief.on" : !sc.off),
+      asked: !setUp && !!setup && ACTIVE.has(txt(setup[1].status) || "queued"), setupId: setup ? setup[0] : null,
+      days, time, when: briefWhen(days, time) || txt(sc.when), paused: briefPaused()};
+  }
+  function briefWord(st) {
+    return !st.setUp ? (st.asked ? "Being set up" : "Off") : !st.on ? "Off" : st.paused ? "Resting until " + fmtDay(st.paused) : st.when || "On";
+  }
+  // The one sheet for the brief, from the bell and from Settings alike.
+  function briefSheet() {
+    const st = briefState();
+    const acts = obj(st.sc.actions);
+    if (!st.setUp) {
+      if (st.asked) { openWork(); return null; }
+      // On the computer alone, the brief needs the helper in the cloud: the same tap starts it.
+      const helper = !cloudAnswers();
+      return sheet({title: "A brief each morning", cls: "brief-sheet",
+        intro: "Each morning Claude writes you a short note: what is due today, and news that matters to your search. " + (helper ?
+          "It comes from Claude's helper in the cloud, so it arrives with your computer off. Turning it on opens the helper's chat: press Send there, once." :
+          "It appears here on your Brief, from the chat that already answers this page, so no new chat is made."),
+        cost: COST_WORDS[2] + ". Once each morning; nothing is sent.", fields: [], submit: "Turn it on", cancel: "Not now",
+        note: "Change the days or time, or turn it off, from this bell or in Settings.",
+        onSubmit: () => {
+          requestWork([{kind: "brief", title: "Set up your brief", args: {setup: true}}]);
+          if (helper) { try { window.open(helperLink(), "_blank", "noopener"); } catch (e) { /* the row in Settings still has the link */ } sset("local", HELPER_ASKED, String(now())); }
+        }});
+    }
+    const set = BRIEF_DAY_SETS.find(([, , v]) => v.join() === [...st.days].sort().join());
+    return sheet({title: "Your brief", cls: "brief-sheet",
+      lead: st.paused && st.on ? h("p", {class: "sheet-intro"}, "Resting until " + fmtDay(st.paused) + ", while you take a break. It starts again by itself then.") : null,
+      fields: [
+        {id: "when", type: "radio", label: "When", required: true, value: !st.on ? "off" : set ? set[0] : "some",
+          options: BRIEF_DAY_SETS.map(([k, l]) => [k, l]).concat([["some", "Some days"], ["off", "Off"]])},
+        {id: "days", type: "checks", label: "Which days", options: DAY_NAMES.map((d) => [d.toLowerCase(), d]), value: st.days.map((x) => DAY_NAMES[(x + 6) % 7].toLowerCase()), showIf: ["when", "some"]},
+        {id: "time", type: "text", label: "Time, in your own time zone", hint: txt(st.sc.zone) ? txt(st.sc.zone).replace(/_/g, " ") + " time." : null, value: st.time || "07:38", max: 10}],
+      submit: "Save",
+      validate: (v) => (v.when === "some" && !arr(v.days).length ? "Choose at least one day." : v.when !== "off" && !/^\d{1,2}:\d{2}$/.test(txt(v.time)) ? "Give the time as hours and minutes, like 07:38." : null),
+      onSubmit: (v) => {
+        const doc = (action, value) => ({item: st.item, action, value, rev: txt(st.sc.rev) || null});
+        if (v.when === "off") {
+          if (st.on) act([doc(txt(acts.off) || "brief.off", null)], "Your brief is off");
+          return;
+        }
+        const pick = BRIEF_DAY_SETS.find(([k]) => k === v.when);
+        const days = pick ? pick[2].map((x) => x || 7) : arr(v.days).map((d) => DAY_NAMES.map((x) => x.toLowerCase()).indexOf(d) + 1).filter((n) => n > 0);
+        const out = [];
+        if (!st.on) out.push(doc(txt(acts.on) || "brief.on", null));
+        const same = [...days.map((x) => x % 7)].sort().join() === [...st.days].sort().join() && txt(v.time) === st.time;
+        if (!same) out.push(doc(txt(acts.move) || "brief.move", {days, time: txt(v.time)}));
+        if (out.length) act(out, "Your brief: " + briefWhen(days.map((x) => x % 7), txt(v.time)));
+      }});
+  }
+  // The bell on the Brief: an icon the size of Tweak, never a badge or a nudge. Its picture
+  // says where the brief stands; a tap opens the same sheet Settings does.
+  function briefBell() {
+    if (!Object.keys(obj(M().schedule)).length) return null;
+    const st = briefState();
+    const word = briefWord(st);
+    const name = !st.setUp ? (st.asked ? "Your brief is being set up" : "Get a brief each morning") : "Your brief: " + word;
+    const b = btn([icon(st.setUp && st.on ? "bell-on" : st.setUp ? "bell-off" : "bell"), h("span", {class: "sr-only"}, name)], briefSheet,
+      {small: true, kind: "secondary", key: "brief-bell"});
+    b.classList.add("icon-only", "bell");
+    if (st.setUp && st.on) b.classList.add("is-on");
+    if (st.asked) b.classList.add("is-asked");
+    b.setAttribute("title", name);
+    return b;
+  }
+  function briefRows() {
+    if (!Object.keys(obj(M().schedule)).length) return [];
+    const st = briefState();
+    const sc = st.sc;
+    const item = st.item;
+    const acts = obj(sc.actions);
+    const paused = st.paused;
+    const line = !st.setUp ? (st.asked ? "Claude is setting it up in the chat that answers this page. It shows as on here once it is." : "A short note each morning: what is due today, and news that matters. Turn it on here.")
+      : !st.on ? "Off. Your days and time are kept for when you turn it back on." : st.when + (txt(sc.zone) ? ", " + txt(sc.zone).replace(/_/g, " ") + " time" : "") + ".";
     return [
-      infoRow("brief-when", "When your brief arrives", paused ? "Resting until " + fmtDay(paused) : when, h("div", {class: "d-stack"},
-        h("p", {}, when + (txt(sc.zone) ? ", " + txt(sc.zone).replace(/_/g, " ") + " time" : "") + "."),
-        btn("Change it", () => sheet({title: "When your brief arrives", fields: [
-          {id: "days", type: "checks", label: "Days", options: DAY_NAMES.map((d) => [d.toLowerCase(), d]), value: days.map((d) => d.toLowerCase())},
-          {id: "time", type: "text", label: "Time, in your own time zone", value: txt(sc.time) || "07:38", max: 10}], submit: "Save",
-          validate: (v) => (!arr(v.days).length ? "Choose at least one day." : !/^\d{1,2}:\d{2}$/.test(txt(v.time)) ? "Give the time as hours and minutes, like 07:38." : null),
-          onSubmit: (v) => act([{item, action: txt(acts.move) || "brief.move", value: {days: arr(v.days).map((d) => DAY_NAMES.map((x) => x.toLowerCase()).indexOf(d) + 1).filter((n) => n > 0), time: txt(v.time)}, rev: txt(sc.rev) || null}],
-            "Your brief: " + arr(v.days).map(cap1).join(", ") + " at " + v.time)}), {small: true, key: "brief-move"}),
-        arr(sc.waiting).length ? h("p", {class: "hint"}, "Claude makes the change next time it works on your search.") : null,
+      infoRow("brief-when", "When it comes", briefWord(st), h("div", {class: "d-stack"},
+        h("p", {}, line),
+        st.asked ? btn("See its progress", openWork, {small: true, key: "brief-see"}) :
+          btn(!st.setUp || !st.on ? "Turn it on" : "Change it", briefSheet, {small: true, key: "brief-move"}),
+        arr(sc.waiting).length || Number(sc.waiting) > 0 ? h("p", {class: "hint"}, "Claude makes the change next time it works on your search.") : null,
         stateLine(item, "brief-move"))),
       infoRow("brief-pause", "Take a break", paused ? "Until " + fmtDay(paused) : "Off", h("div", {class: "d-stack"},
-        h("p", {}, "No brief while you are away. Nothing is lost, and it starts again by itself on the day you choose."),
-        paused ? btn("Start again", () => act([{item, action: txt(acts.resume) || "brief.resume", value: null, rev: txt(sc.rev) || null}], "Your brief starts again"), {small: true, key: "brief-resume"}) :
+        h("p", {}, "Nothing is chased and no brief comes while you are away. Nothing is lost, and it all starts again by itself on the day you choose."),
+        paused ? btn("Start again", () => act([{item, action: txt(acts.resume) || "brief.resume", value: null, rev: txt(sc.rev) || null}], "Your search carries on"), {small: true, key: "brief-resume"}) :
           btn("Take a break until…", () => sheet({title: "Take a break", fields: [{id: "until", type: "date", label: "Until", value: plusDays(14), required: true}], submit: "Take the break",
-            onSubmit: (v) => act([{item, action: txt(acts.pause) || "brief.pause", value: {until: v.until || plusDays(14)}, rev: txt(sc.rev) || null}], "No brief until " + fmtDay(v.until || plusDays(14)))}), {small: true, key: "brief-pause"}),
+            onSubmit: (v) => act([{item, action: txt(acts.pause) || "brief.pause", value: {until: v.until || plusDays(14)}, rev: txt(sc.rev) || null}], "Paused until " + fmtDay(v.until || plusDays(14)))}), {small: true, key: "brief-pause"}),
         stateLine(item, "brief-pause"))),
     ];
   }
@@ -5018,8 +5643,17 @@
   function pasteProfileBtn(p, key) {
     if (readingState() === "ready") return null;
     const name = txt(p.first_name);
+    // On a phone, copying a whole profile is fiddly and screenshots are what people have: they
+    // go to Chat as pictures, which Claude reads and keeps the way a paste is kept.
+    const shots = () => {
+      const d = document.querySelector("dialog.sheet[open]");
+      if (d) { try { d.close(); } catch (e) { /* already closed */ } }
+      startChat("Screenshots of " + name + "'s LinkedIn profile, for my note to them.");
+      if (talkFile) talkFile.click();
+    };
     return btn("Paste " + name + "'s profile", () => sheet({title: "Paste " + name + "'s profile",
       intro: "Open their LinkedIn page, select all, copy, and paste it here. Claude keeps only what a note can rest on.",
+      lead: h("p", {class: "small"}, "On a phone? ", btn("Send screenshots instead", shots, {kind: "link", key: "paste-shots"})),
       cost: costLine("reply"),
       fields: [{id: "text", type: "text", long: true, label: name + "'s profile", required: true, max: 20000}], submit: "Use it",
       // Kept the way a chat keeps a paste, and a note written before it is redrafted on it
@@ -5041,13 +5675,12 @@
     return h("p", {class: "tip small muted"}, txt(t.text), " ", btn("Got it", () => act([{item: tid, action: "tip.seen", value: {area: txt(t.area)}, rev: txt(t.rev) || null}], "Tip put away"), {kind: "link", key: "tip-seen"}));
   }
   const TOUR = [
-    ["todo", "To do", "What needs you, most urgent first. Each card has one button."],
-    ["jobs", "Jobs", "Roles found for you, scored out of 100. Tap Draft this on one you like. While Claude works, the bar at the top says so: tap it to watch or stop it."],
-    ["drafts", "Drafts", "Your resume and letter for each role. Get the files, apply on the employer's site, then tap I have applied: it is tracked from then on."],
-    ["contacts", "Contacts", "Someone inside who puts your name forward beats applying cold. Claude finds who to write to and drafts the note; you send it yourself."],
+    ["brief", "Brief", "Your day at a glance. Tap any line to go to it."],
+    ["todo", "To do", "What needs you, five at a time, most urgent first. Each card has one button, and a bin."],
+    ["jobs", "Jobs", "Every role from found to applied: Found, each with a number out of 100 for how well it fits you (75 or more is a strong fit); Drafts, your resume and letter; Applied, each one tracked."],
+    ["contacts", "Contacts", "Someone inside who puts your name forward beats applying cold. Claude finds who to write to and drafts the note; you send it yourself. Tap a name to see everything about them."],
     ["interviews", "Interviews", "Your prep for each interview, to read before it."],
-    ["progress", "Progress", "Everything you have applied for, and how each one is going."],
-    ["settings", "Settings", "Your profile: jobs, skills, education. Change them any time."],
+    ["settings", "Settings", "Your profile first: jobs, skills, education. Change them any time."],
     ["chat", "Chat", "Ask anything, or paste a link, a message or a screenshot."],
   ];
   // The walkthrough: each step opens its section behind the sheet, so the words sit on the
@@ -5076,11 +5709,9 @@
   }
   function tourCard() {
     if (settingUp() || sget("local", "ljs:toured")) return null;
-    return card("article", {class: "card todo", "aria-labelledby": "tour-title", "data-item": "tour"},
-      h("div", {class: "todo-top"}, kindMark("setup")),
-      h("p", {class: "card-title", id: "tour-title"}, "New here? A one-minute tour"),
-      h("p", {class: "small muted"}, "How a job goes from found to applied, and where everything is."),
-      h("div", {class: "card-actions"}, btn("Show me around", () => showTour(0), {kind: "primary", small: true, key: "tour-start"}),
+    return card("article", {class: "card todo tour-card", "aria-labelledby": "tour-title", "data-item": "tour"},
+      h("p", {class: "tour-words"}, h("span", {class: "card-title", id: "tour-title"}, "New here? A one-minute tour"), h("span", {class: "muted"}, " of where everything is.")),
+      h("div", {class: "card-actions"}, btn("Show me around", () => showTour(0), {kind: "secondary", small: true, key: "tour-start"}),
         btn("No thanks", () => { sset("local", "ljs:toured", "1"); scheduleRender(); }, {kind: "quiet", small: true, key: "tour-no"})));
   }
 
@@ -5200,17 +5831,40 @@
     }
     if (!picked.length) { S.notes.set("export", {text: "None of the files Claude needs are in it: " + [...needed].join(", ") + ".", tone: "warn"}); scheduleRender(); return; }
     const counts = await Promise.all(picked.map(async (p) => ({name: p.name, rows: await csvRows(p.blob)})));
-    const big = picked.find((p) => p.blob.size > 20 * 1024 * 1024);
     S.notes.delete("export");
     scheduleRender();
-    const line = counts.map((c) => c.rows.toLocaleString() + " " + (EXPORT_WORDS[c.name] || c.name.replace(/\.csv$/, ""))).join(", ");
+    const line = counts.map((c) => c.rows.toLocaleString(LOC) + " " + (EXPORT_WORDS[c.name] || c.name.replace(/\.csv$/, ""))).join(", ");
     sheet({title: "Your LinkedIn download", intro: "Found " + line + ".",
-      note: big ? "One file is over 20 MB, too big for this page. Ask in Chat and Claude takes it from there." : "It stays on your private page until it is saved.",
-      fields: big ? [] : [{id: "remove", type: "checks", label: "Once it is saved", options: [["yes", "Remove it from the page once it's saved"]], value: ["yes"]}],
-      submit: big ? "Close" : "Save it",
-      onSubmit: (v) => { if (!big) sendDownload(x, picked, arr(v.remove).includes("yes")); }});
+      note: "It stays on your private page until it is saved.",
+      fields: [{id: "remove", type: "checks", label: "Once it is saved", options: [["yes", "Remove it from the page once it's saved"]], value: ["yes"]}],
+      submit: "Save it",
+      onSubmit: (v) => sendDownload(x, picked, arr(v.remove).includes("yes"))});
   }
   const EXPORT_WORDS = {"messages.csv": "messages", "connections.csv": "connections", "invitations.csv": "invitations"};
+  // A file over the store's limit goes in parts of whole records, each under the file's own
+  // first line: a record ends at a line break outside quotes, since a message holds line
+  // breaks of its own. PART_CHARS keeps a part under 20 MiB even at four bytes a character.
+  const PART_BYTES = 19 * 1024 * 1024;
+  const PART_CHARS = 4500000;
+  function splitCsv(text, max) {
+    let q = false, head = -1;
+    for (let i = 0; i < text.length; i++) { const c = text.charCodeAt(i); if (c === 34) q = !q; else if (c === 10 && !q) { head = i; break; } }
+    if (head < 0) return [text];
+    const first = text.slice(0, head + 1);
+    const parts = [];
+    let start = head + 1, last = start;
+    q = false;
+    for (let i = start; i < text.length; i++) {
+      const c = text.charCodeAt(i);
+      if (c === 34) q = !q;
+      else if (c === 10 && !q) {
+        if (i + 1 - start > max && last > start) { parts.push(first + text.slice(start, last)); start = last; }
+        last = i + 1;
+      }
+    }
+    parts.push(first + text.slice(start));
+    return parts;
+  }
   async function csvRows(blob) {
     try { const t = await blob.text(); return Math.max(0, t.split(/\r?\n/).filter((l) => l.trim()).length - 1); } catch (e) { return 0; }
   }
@@ -5220,18 +5874,32 @@
     S.notes.set("export", {text: "Adding the files…", tone: "muted"});
     scheduleRender();
     const ids = [];
+    // The store takes up to 20 MiB a file (assets.d.ts): a bigger one (a busy inbox's
+    // messages run to tens of megabytes) goes as parts, which the engine joins again
+    // (_export_take). Before, it was "too big, ask in Chat", which led nowhere (2026-10-29).
+    // A failure part way takes back what was added, so nothing is left behind.
+    const files = [];
+    for (const p of picked) {
+      if (!p.blob || p.blob.size <= PART_BYTES) { files.push({name: p.name, blob: p.blob}); continue; }
+      splitCsv(await p.blob.text(), PART_CHARS).forEach((t, k) => files.push({name: p.name, blob: new Blob([t], {type: "text/csv"}), part: k + 1}));
+    }
+    const big = files.filter((f) => f.blob && f.blob.size > 20 * 1024 * 1024);
+    const fits = files.filter((f) => !big.includes(f));
+    if (!fits.length) { S.notes.set("export", {text: "These files are too big to add here.", tone: "bad"}); scheduleRender(); return; }
     try {
-      for (const p of picked) {
+      for (const p of fits) {
         const file = new File([p.blob], p.name, {type: "text/csv"});
-        const got = await assets.upload(file);
-        ids.push({id: txt(obj(got).id), name: p.name});
+        const got = await assets.upload(file, {type: "text/csv"});
+        ids.push(Object.assign({id: txt(obj(got).id), name: p.name}, p.part ? {part: p.part} : {}));
       }
     } catch (e) {
+      for (const f of ids) { try { await assets.delete(f.id); } catch (x) { /* already gone */ } }
       S.notes.set("export", {text: "The files were not added. Try again, or ask in Chat.", tone: "bad"});
       scheduleRender();
       return;
     }
-    S.notes.delete("export");
+    if (big.length) S.notes.set("export", {text: big.map((p) => p.name).join(", ") + (big.length > 1 ? " are" : " is") + " too big to add here, so Claude works without " + (big.length > 1 ? "them" : "it") + ".", tone: "muted"});
+    else S.notes.delete("export");
     S.exportRemove = remove ? ids.map((f) => f.id) : [];
     act([{item: EXPORT_ID(), action: "export.take", value: {assets: ids}, rev: txt(x.rev) || null}], "Saving your LinkedIn download");
   }
@@ -5297,10 +5965,13 @@
           link ? h("p", {}, h("a", {href: link, target: "_blank", rel: "noopener noreferrer", class: "btn secondary small", "data-k": "export-open:settings"}, "Open LinkedIn's download page", h("span", {class: "sr-only"}, " (opens in a new tab)"))) : null,
           obj(x.steps).checked ? h("p", {class: "hint"}, "Steps checked " + fmtDay(obj(x.steps).checked) + ".") : null),
         h("div", {class: "card-actions"}, addDownloadBtn(x, "settings")), noteFor("export"), stateLine(EXPORT_ID(), "export:settings"))),
-      infoRow("linkedin-reading", "Let Claude read LinkedIn profiles", rw, h("div", {class: "d-stack"},
-        h("p", {}, "In the Claude app on your computer: can read LinkedIn profiles in your browser."),
-        st === "ready" ? h("p", {}, stateWord("Ready", "ok")) : null,
-        h("div", {class: "card-actions"}, btn("Check it works", () => openReading(true), {small: true, key: "reading-check:settings"})),
+      infoRow("linkedin-reading", "Let Claude read LinkedIn profiles", st === "off" ? "Off" : rw, h("div", {class: "d-stack"},
+        h("p", {}, "Before Claude writes to someone, the Claude app on your computer reads their LinkedIn profile in its own browser, so the note fits them. Nothing is sent."),
+        st === "paused" ? h("p", {}, "LinkedIn asked Claude to slow down: reading starts again tomorrow, by itself.") : null,
+        st === "off" ? null : S.reading.here === true ? h("div", {class: "card-actions"}, btn("Open LinkedIn", () => openLinkedIn("reading:settings"), {small: true, kind: "secondary", key: "reading-open:settings"}),
+          btn("Check it works", () => openReading(true), {small: true, key: "reading-check:settings"})) :
+          h("p", {class: "small muted"}, "Open this page in the Claude app on your computer to check it."),
+        noteFor("browser:reading:settings"),
         S.reading.line ? h("p", {class: "small", role: "status"}, S.reading.line) : null)),
     ];
   }
@@ -5320,20 +5991,43 @@
   // browser (host:claude_browser). Elsewhere it says so in one line, and Paste their profile
   // stands in (G14). The engine keeps whether it worked (linkedin.reading, reader.checked).
   function readingInfo() { return obj(obj(M().linkedin).reading); }
+  // Where reading stands, judged by this page first (it knows whether it is in the desktop
+  // app and whether LinkedIn has just signed out) and by the model where it has not looked:
+  //   off      the person pastes profiles instead (Settings, or the bin's Never): every device
+  //   paused   LinkedIn stopped today's reads (one of its checks): tomorrow, by itself
+  //   ready    read here this visit, or the engine saw a read in the last two weeks
+  //   sign_in  in the desktop app and not signed in yet, or LinkedIn's check is showing
+  //   desktop  not in the desktop app: nothing to do here but open the page there
+  function todayLocal() { const d = new Date(now()); return d.getFullYear() + "-" + String(d.getMonth() + 1).padStart(2, "0") + "-" + String(d.getDate()).padStart(2, "0"); }
+  function readingPaused() { const u = txt(readingInfo().paused_until); return !!u && todayLocal() < u; }
   function readingState() {
     const ri = readingInfo();
-    if (S.reading.ok || ri.ok === true || sget("local", "ljs:reading") === "ok") return "ready";
+    if (txt(ri.setting) === "paste") return "off";
+    if (readingPaused()) return "paused";
+    if (S.reading.ok) return "ready";
+    if (S.reading.signedOut || S.reading.panel === "sign_in" || S.reading.panel === "check") return "sign_in";
+    const fresh = ri.ok === true && ri.page_reads === true;
+    if (S.reading.here === true) return fresh ? "ready" : "sign_in";
+    if (fresh) return "ready";
+    if (S.reading.here === false) return "desktop";
     const w = txt(obj(obj(M().where).reading).state);
-    if (S.reading.signedOut) return "sign_in";
-    if (S.reading.cap) return "sign_in";
-    if (w === "open_in_app" || S.reading.cap === null) return "desktop";
-    return w || "desktop";
+    return !w || w === "open_in_app" ? "desktop" : w;
   }
   async function browserCap() {
     if (S.reading.cap !== undefined) return S.reading.cap;
     try { S.reading.cap = await claude.use("mcp"); } catch (e) { S.reading.cap = null; }
     if (!S.reading.cap) S.reading.cap = null;
     return S.reading.cap;
+  }
+  // Is this page open in the Claude desktop app, where Claude's browser is? Its browser is
+  // listed only there, and listing never asks the person anything (mcp.d.ts).
+  async function inDesktop() {
+    if (S.reading.here !== undefined) return S.reading.here;
+    const cap = await browserCap();
+    let here = false;
+    if (cap) { try { here = arr(obj(await cap.listTools(BROWSER)).servers).some((x) => txt(obj(x).server) === BROWSER); } catch (e) { here = false; } }
+    S.reading.here = here;
+    return here;
   }
   // The browser's tools are called with inputs built from each tool's own schema, read at
   // view time (describeTool): nothing about their arguments is assumed here. A required field
@@ -5351,47 +6045,207 @@
       if (/url/i.test(k) && want.url) input[k] = want.url;
       else if (/tab/i.test(k) && S.reading.tab !== undefined) input[k] = S.reading.tab;
     }
+    // The desktop browser never describes its tools: describeTool rejects for every host:
+    // server (mcp.d.ts), so the page sent navigate with no address and read a blank tab
+    // (2026-10-29). With no schema, its own names: url, and tabId for the tab it opened.
+    if (!Object.keys(props).length) {
+      if (want.url) input.url = want.url;
+      if (S.reading.tab !== undefined && tool !== "preview_start") input.tabId = S.reading.tab;
+    }
     for (const k of arr(sc.required)) if (!(k in input)) throw Object.assign(new Error("needs " + k), {code: "page_cannot_fill"});
-    const got = await cap.callTool(BROWSER, tool, input);
+    // The first call waits on the app's own "allow" prompt and comes back retryable while it is
+    // open ("connector access isn't confirmed for this artifact right now", seen live
+    // 2026-10-29): one more try after the wait it names, then the error stands.
+    let got;
+    try { got = await cap.callTool(BROWSER, tool, input); }
+    catch (e) {
+      if (!(e && e.retryable)) throw e;
+      await new Promise((ok) => setTimeout(ok, Math.min(Number(e.retryAfterMs) || 2000, 15000)));
+      got = await cap.callTool(BROWSER, tool, input);
+    }
     const pay = obj(got).payload;
     if (pay && typeof pay === "object") for (const k of Object.keys(pay)) if (/tab/i.test(k) && (typeof pay[k] === "number" || typeof pay[k] === "string")) S.reading.tab = pay[k];
     return typeof pay === "string" ? pay : txt(obj(pay).text) || arr(obj(got).content).filter((c) => c.type === "text").map((c) => txt(c.text)).join("\n");
   }
+  // The bin hides the card for a while; "Never" is the person's choice to paste profiles
+  // instead, kept as a setting so it holds on every device and Claude queues nothing for this
+  // browser (the maintainer, 2026-10-29: "never show again, show in 1 week, x weeks").
+  const READING_HIDE = "ljs:reading-hide-until";
+  function readingHidden() { const v = sget("local", READING_HIDE) || ""; if (v === "never") return true; const u = Date.parse(v); return Number.isFinite(u) && u > now(); }
+  function hideReading(days) { sset("local", READING_HIDE, new Date(now() + Number(days || 14) * 86400000).toISOString()); }
+  // Claude reads them, or the person pastes them: the one setting (networking.py
+  // PROFILE_READS), changed here, in Settings and from the bin alike.
+  function setReads(value, label) {
+    const s = settingItem("profile_reads");
+    if (!s) { if (value === "paste") sset("local", READING_HIDE, "never"); scheduleRender(); return; }
+    sset("local", READING_HIDE, null);
+    act([{item: setId(s), action: "setting.set", value, rev: s.rev}], label);
+    if (value === "browser") { readingTried = false; autoReading().catch(() => {}); }
+  }
+  function readsSetting() { const s = settingItem("profile_reads"); return s ? txt(settingValue(s)) : txt(readingInfo().setting) || "browser"; }
+  function askHideReading() {
+    sheet({title: "Hide this for now?", intro: "Claude reads someone's LinkedIn profile to write them a note that fits. While this is hidden, you can paste their profile instead.",
+      fields: [{id: "when", type: "radio", label: "Ask me again", required: true, error: "Choose one.", value: "14",
+        options: [["7", "In a week"], ["14", "In two weeks"], ["30", "In a month"], ["never", "Never: I'll paste profiles myself"]]}],
+      submit: "Hide",
+      onSubmit: (v) => {
+        const w = txt(v.when);
+        if (w === "never") setReads("paste", "Reading LinkedIn profiles is off");
+        else hideReading(w);
+        toast({text: w === "never" ? "Off. Paste a profile when you write to someone; turn it back on in Settings, under LinkedIn." :
+          "Hidden. It comes back " + (w === "7" ? "in a week." : w === "30" ? "in a month." : "in two weeks."), ids: [], until: 0});
+        scheduleRender();
+      }});
+  }
+  // Opened in the Claude desktop app, the page checks LinkedIn by itself, once per opening,
+  // and reads the profiles queued for networking as they arrive: no button to find. Signed
+  // out, the panel says how to sign in. Elsewhere (a phone, a web browser) it reads nothing.
+  let readingTried = false;
+  async function autoReading() {
+    if (readingTried) return;
+    readingTried = true;
+    if (!(await inDesktop())) { scheduleRender(); return; }
+    const st = readingState();
+    if (st === "off" || st === "paused" || (st !== "ready" && readingHidden())) { scheduleRender(); return; }
+    if (st !== "ready") await openReading(true);
+    maybeAutoRead();
+  }
+  function waitingReads() { return arr(readingInfo().queue).filter((q) => !effective(txt(q.id), ["reading.done"])); }
+  // Each person queued is tried once per opening: a read refused (signed out, a page that did
+  // not load) waits for the next opening, or for the person's own tap, never a loop.
+  function maybeAutoRead() {
+    if (!S.owner || S.reading.busy || S.reading.here !== true || readingState() !== "ready") return;
+    const fresh = waitingReads().filter((q) => !S.reading.tried.has(txt(q.id)));
+    if (fresh.length) readProfiles(fresh, "reading").catch(() => {});
+  }
+  // What LinkedIn showed, judged the way the networking code judges it (tools/network/reading.py
+  // page_kind, the same words): one of its own security checks, its sign-in or join page, or
+  // a profile. A sign-out half way through a queue was saved as that person's profile, and
+  // every refusal read as "sign in" (the maintainer, 2026-10-29: never confuse the two).
+  const LI_CHECK = /security (?:verification|check)|let's do a quick security check|verify (?:your )?identity|confirm (?:it's|that it's) you|captcha|are you a (?:human|robot)|press and hold|unusual activity|suspicious activity|automated (?:activity|behaviou?r|software)|account (?:has been |is )?(?:temporarily )?restricted|temporarily (?:limited|restricted)|we've (?:detected|noticed)|too many (?:requests|profile views)|http error 999|\berror 999\b/i;
+  const LI_SIGNIN = /\bauthwall\b|^join linkedin$|^sign in$|join now|sign in to view|join to view|new to linkedin\?|forgot password\?|agree & join|^welcome back$|sign in with (?:email|apple|google)|email or phone|keep me logged in|to see (?:more|their full profile), sign in/im;
+  const LI_SIGNED_IN = /^[·•]?\s*contact info$|^(?:1st|2nd|3rd\+?)$|^[·•]\s*(?:1st|2nd|3rd\+?)$|^message$|^connect$|^pending$|^more$|^start a post$|^my network$|^messaging$/gim;
+  function pageKind(text) {
+    const body = txt(text).split(/\n/).map((l) => l.trim()).filter(Boolean).slice(0, 120).join("\n");
+    if (LI_CHECK.test(body)) return "check";
+    const signed = (body.match(LI_SIGNED_IN) || []).length;
+    if (LI_SIGNIN.test(body) && signed < 3) return "signin";
+    return "profile";
+  }
+  // One answer per refusal from Claude's browser (mcp.d.ts), shared by the check and the reads.
+  function readingRefused(e) {
+    const code = txt(obj(e).code);
+    S.reading.panel = null;
+    if (code === "not_in_manifest" || code === "cancelled" || code === "approval_required" || code === "blocked_by_policy") {
+      S.reading.declined = true;
+      S.reading.line = "Claude's browser was not allowed here. Press Check it works to be asked again.";
+    } else if (code === "server_not_connected" || code === "not_granted" || code === "capability_disabled" || code === "capability_removed" || code === "page_cannot_fill") {
+      S.reading.panel = "none";
+    } else if (code === "upstream_error" && obj(e).retryable) {
+      S.reading.line = "Allow Claude's browser in the box the app shows, then press Check it works.";
+    } else {
+      S.reading.line = "Claude's browser could not open LinkedIn just now. Press Check it works to try again.";
+    }
+  }
+  // LinkedIn signed out or asking to check it is you: reading stops, the engine is told once
+  // (a check stops the day's reads there too), and the panel says what to do.
+  function readingStopped(kind) {
+    S.reading.ok = false;
+    S.reading.signedOut = kind === "signin";
+    S.reading.panel = kind === "check" ? "check" : "sign_in";
+    if (readingInfo().ok !== false || kind === "check") act([{item: txt(readingInfo().id) || "linkedin-reader", action: "reader.checked", value: {ok: false, said: kind === "check" ? "LinkedIn asked to check it was them" : "signed out of LinkedIn", kind}, rev: txt(readingInfo().rev) || null}], kind === "check" ? "LinkedIn asked to check it's you" : "Signed out of LinkedIn");
+  }
+  // Back from signing in, or from LinkedIn's check (the page visible again, or focused): it
+  // checks again by itself and reads what is waiting, so nobody presses Check it works (the
+  // maintainer, 2026-10-29). At most once every ten seconds.
+  let recheckAt = 0;
+  async function recheckReading() {
+    const p = S.reading.panel;
+    if (p !== "sign_in" && p !== "check") return;
+    if (now() - recheckAt < 10000) return;
+    recheckAt = now();
+    await openReading(true);
+    S.reading.tried.clear();
+    maybeAutoRead();
+  }
   function macKeys() { return /Mac|iPhone|iPad/i.test(navigator.platform || navigator.userAgent || ""); }
+  // Profiles read and saved that Claude has not taken in yet: one tap wakes it once for all
+  // of them, and it rewrites every waiting note in one go.
+  function readsUntaken() {
+    const out = [];
+    for (const [id, d] of allActions()) if (d.action === "reading.done" && (actionState(id) === "saved" || actionState(id) === "saving")) out.push(id);
+    return out;
+  }
+  function rungFor(ids) { const b = S.bell; return !!b && now() - (tms(b.rung_at) || 0) < 5 * 60000 && ids.every((id) => arr(b.ids).indexOf(id) >= 0); }
+  function writeNotesNow(ids) {
+    const rung = ringNow(ids, "act", true);
+    S.notes.set("reads-taken", {text: "One moment…", tone: "muted"});
+    scheduleRender();
+    rung.then((how) => {
+      S.notes.set("reads-taken", how === "rang" ? {text: "Claude has been told. Your notes are rewritten in a minute or two.", tone: "ok", until: now() + 120000}
+        : {text: "Claude could not be reached. Your notes are rewritten next time it works on your search.", tone: "warn"});
+      if (S.reading.panel === "done") S.reading.panel = null;
+      scheduleRender();
+    });
+  }
   function readingTodo() {
     const st = readingState();
-    const queue = arr(readingInfo().queue).filter((q) => !effective(txt(q.id), ["reading.done"]));
-    if (st === "ready" && queue.length) {
-      return {key: "reading-queue", kind: "message", band: "week", employer: null, tab: "contacts", counts: false, node: () => readQueueCard(queue)};
+    const queue = waitingReads();
+    const untaken = readsUntaken();
+    if (untaken.length && !rungFor(untaken)) {
+      return {key: "reads-taken", kind: "message", band: "first", employer: null, tab: "contacts", counts: false, node: () => readsTakenCard(untaken)};
     }
-    if (st === "ready") return null;
+    if (queue.length && (st === "ready" || st === "paused" || st === "desktop")) {
+      return {key: "reading-queue", kind: "message", band: "week", employer: null, tab: "contacts", counts: false, node: () => readQueueCard(queue, st)};
+    }
+    if (st === "ready" || st === "off" || st === "paused") return null;
     if (!arr(M().people).length) return null;
-    if (effective("reading-card", ["suggest.dismiss"]) || sget("local", "ljs:reading-no") === "1") return null;
+    if (readingHidden()) return null;
     return {key: "reading", kind: "setup", band: "later", employer: null, tab: "contacts", counts: false, node: () => readingCard()};
+  }
+  function readsTakenCard(ids) {
+    return card("article", {class: "card todo", "aria-labelledby": "rt-title", "data-item": "reads-taken"},
+      h("div", {class: "todo-top"}, kindMark("message")),
+      h("p", {class: "card-title", id: "rt-title"}, nWord(ids.length, "profile", "profiles") + " read"),
+      h("p", {}, "Claude writes your " + (ids.length === 1 ? "note" : "notes") + " from " + (ids.length === 1 ? "it" : "them") + " in one go."),
+      h("div", {class: "card-actions"}, btn("Write my " + (ids.length === 1 ? "note" : "notes"), () => writeNotesNow(ids), {kind: "primary", small: true, key: "reads-write"})),
+      noteFor("reads-taken"));
+  }
+  // Open LinkedIn in Claude's browser, and check it once the person is back.
+  function openLinkedIn(key) {
+    S.readingOpened = true;
+    openInAppBrowser("https://www.linkedin.com/login", key, "LinkedIn is open in Claude's browser. Sign in there, then come back to this page: it checks by itself.");
+    scheduleRender();
   }
   function readingCard() {
     const st = readingState();
     const desktop = st !== "desktop";
-    const steps = arr(obj(M().reading_steps).steps);
     return card("article", {class: "card todo reading", "aria-labelledby": "reading-title", "data-item": "reading-card"},
-      h("div", {class: "todo-top"}, kindMark("setup"), stateWord("Recommended", "info")),
+      h("div", {class: "todo-top"}, kindMark("setup"), stateWord("For networking", "info")),
       h("p", {class: "card-title", id: "reading-title"}, "Let Claude read LinkedIn profiles for you"),
       h("p", {}, "So each note to someone rests on what their own profile says."),
       desktop ? h("ol", {class: "steps"},
         h("li", {}, "Allow this page to use Claude's browser when it asks."),
-        steps.length ? steps.map((s) => h("li", {}, txt(s))) : h("li", {}, "Sign in to LinkedIn once in that browser.")) :
+        h("li", {}, "Press Open LinkedIn and sign in there once. The page checks by itself when you come back.")) :
         h("p", {class: "small muted"}, txt(obj(obj(M().where).reading).say) || "Open this page in the Claude app on your computer to switch this on."),
-      h("div", {class: "card-actions"}, desktop ? btn("Check it works", () => openReading(true), {kind: "primary", small: true, key: "reading-check"}) : null,
-        btn("No thanks", () => { sset("local", "ljs:reading-no", "1"); scheduleRender(); }, {kind: "quiet", small: true, key: "reading-no"})),
+      // Something to do on every view: open LinkedIn in Claude's browser and check it, or hide.
+      desktop ? h("div", {class: "card-actions"}, btn("Open LinkedIn", () => openLinkedIn("reading-card"), {kind: "primary", small: true, key: "reading-open"}),
+        btn("Check it works", () => openReading(true), {kind: "secondary", small: true, key: "reading-check"}),
+        btn("", () => askHideReading(), {kind: "quiet icon-only", small: true, icon: "bin", key: "reading-bin", aria: "Hide this for now"})) :
+        h("div", {class: "card-actions"}, btn("", () => askHideReading(), {kind: "quiet icon-only", small: true, icon: "bin", key: "reading-bin", aria: "Hide this for now"})),
+      noteFor("browser:reading-card"),
       S.reading.line ? h("p", {class: "small", role: "status"}, S.reading.line) : null);
   }
-  function readQueueCard(queue) {
+  function readQueueCard(queue, st) {
     const names = queue.map((q) => txt(q.first_name)).filter(Boolean);
+    const why = st === "paused" ? "LinkedIn asked Claude to slow down, so these wait until tomorrow." :
+      st === "desktop" ? "They are read next time you open this page in the Claude app on your computer." : "";
     return card("article", {class: "card todo", "aria-labelledby": "rq-title", "data-item": "reading-queue"},
       h("div", {class: "todo-top"}, kindMark("message")),
       h("p", {class: "card-title", id: "rq-title"}, "Read " + nWord(queue.length, "profile", "profiles") + " before Claude writes"),
       names.length ? h("p", {class: "small muted"}, names.slice(0, 5).join(", ") + (names.length > 5 ? " and " + (names.length - 5) + " more" : "")) : null,
-      h("div", {class: "card-actions"}, btn("Read them", () => readProfiles(queue, "reading"), {kind: "primary", small: true, key: "read-them"})),
+      why ? h("p", {class: "small"}, why) :
+        h("div", {class: "card-actions"}, btn("Read them", () => { S.reading.tried.clear(); readProfiles(queue, "reading"); }, {kind: "primary", small: true, key: "read-them"})),
       noteFor("reading"));
   }
   // The small panel for Claude's browser: what it is doing, and Close, which only hides it.
@@ -5399,15 +6253,20 @@
     const r = S.reading;
     if (!r.panel) return null;
     const keys = macKeys() ? "Cmd+Shift+B" : "Ctrl+Shift+B";
+    const open = (k) => btn("Open LinkedIn", () => openLinkedIn(k), {kind: "secondary", small: true, key: k});
     let body;
     if (r.panel === "none") body = [h("p", {}, "Open this page in the Claude app on your computer to read profiles.")];
-    else if (r.panel === "sign_in") body = [h("p", {}, "LinkedIn is open in Claude's browser. Press " + keys + " to show it, sign in, then come back here."),
-      h("div", {class: "card-actions"}, btn("Check it works", () => openReading(true), {kind: "primary", small: true, key: "bp-check"}))];
+    else if (r.panel === "check") body = [h("p", {}, "LinkedIn wants to check it's you. Finish its check in Claude's browser (press " + keys + " if you don't see it), then come back here. Reading waits until then."),
+      h("div", {class: "card-actions"}, open("bp-open-check"), btn("Check it works", () => openReading(true), {kind: "primary", small: true, key: "bp-check-li"})), noteFor("browser:bp-open-check")];
+    else if (r.panel === "sign_in") body = [h("p", {}, "You're not signed in to LinkedIn in Claude's browser. Open it, sign in (press " + keys + " if you don't see it), then come back here."),
+      h("div", {class: "card-actions"}, open("bp-open"), btn("Check it works", () => openReading(true), {kind: "primary", small: true, key: "bp-check"})), noteFor("browser:bp-open")];
+    else if (r.panel === "done") body = [h("p", {}, "Read " + plural(r.read, "profile", "profiles") + "."),
+      h("div", {class: "card-actions"}, btn("Write my " + (r.read === 1 ? "note" : "notes"), () => writeNotesNow(readsUntaken()), {kind: "primary", small: true, key: "bp-write"})), noteFor("reads-taken")];
     else body = [h("p", {class: "reading-line"}, h("span", {class: "spin", "aria-hidden": "true"}), " " + (r.at ? "Reading " + r.at : "Opening LinkedIn")),
       r.total ? h("p", {class: "small muted"}, r.done + " of " + r.total) : null];
     return h("aside", {class: "browser-panel", role: "dialog", "aria-modal": "false", "aria-labelledby": "bp-title"},
       h("div", {class: "sheet-top"}, h("p", {class: "bp-title", id: "bp-title"}, "Claude's browser"),
-        h("button", {type: "button", class: "btn quiet small", "data-k": "bp-close", "aria-label": "Close: the reading carries on", onclick: () => { r.panel = null; scheduleRender(); }}, "Close")),
+        h("button", {type: "button", class: "btn quiet small", "data-k": "bp-close", "aria-label": r.panel === "run" ? "Close: the reading carries on" : "Close", onclick: () => { r.panel = null; scheduleRender(); }}, "Close")),
       body);
   }
   // "Check it works": open the person's own LinkedIn feed in Claude's browser and read it.
@@ -5415,53 +6274,93 @@
   // how to sign in.
   async function openReading(check) {
     const cap = await browserCap();
-    if (!cap) { S.reading.panel = "none"; scheduleRender(); return; }
+    // Never a tap that does nothing: where Claude has no browser here, the card says where it does.
+    if (!cap || !(await inDesktop())) { S.reading.panel = "none"; S.reading.line = "This works in the Claude app on your computer, where Claude has a browser of its own."; scheduleRender(); return; }
     if (!check) { scheduleRender(); return; }
-    S.reading.panel = "check";
+    S.reading.panel = "check-run";
     S.reading.at = "your LinkedIn feed";
     scheduleRender();
     try {
       await browserCall(cap, "navigate", {url: "https://www.linkedin.com/feed/"});
       const text = await browserCall(cap, "get_page_text", {});
-      const signedIn = /feed|start a post|home \| linkedin/i.test(text) && !/sign in|join now/i.test(text.slice(0, 400));
+      const kind = pageKind(text);
+      if (kind === "check") { readingStopped("check"); scheduleRender(); return; }
+      const signedIn = kind !== "signin" && /feed|start a post|home \| linkedin/i.test(text) && !/sign in|join now/i.test(text.slice(0, 400));
       S.reading.ok = signedIn;
       S.reading.signedOut = !signedIn;
       S.reading.panel = signedIn ? null : "sign_in";
       S.reading.line = signedIn ? "Ready: Claude can read LinkedIn profiles here." : null;
-      sset("local", "ljs:reading", signedIn ? "ok" : null);
-      act([{item: txt(readingInfo().id) || "linkedin-reader", action: "reader.checked", value: {ok: signedIn}, rev: txt(readingInfo().rev) || null}], signedIn ? "Profile reading works" : "Not signed in to LinkedIn yet");
+      // Told once per change, and again when the engine's record has gone stale (two weeks
+      // with no read): never on every opening (contract audit, 2026-10-29).
+      const ri = readingInfo();
+      if (ri.ok !== signedIn || (signedIn && ri.page_reads !== true)) act([{item: txt(ri.id) || "linkedin-reader", action: "reader.checked", value: {ok: signedIn}, rev: txt(ri.rev) || null}], signedIn ? "Profile reading works" : "Not signed in to LinkedIn yet");
     } catch (e) {
-      const code = txt(obj(e).code);
-      S.reading.panel = code === "server_not_connected" || code === "not_granted" || code === "page_cannot_fill" ? "none" : "sign_in";
+      readingRefused(e);
     }
+    if (S.reading.panel === "check-run") S.reading.panel = null;
     scheduleRender();
   }
+  // One person: their profile (its top card), then their Experience, Education and activity
+  // pages, which LinkedIn shows whole with nothing to scroll; the profile alone shows only its top
+  // card until it is scrolled (seen live, 2026-10-29). A page that has not drawn yet is read
+  // once more after a moment.
+  // Their recent posts too (LinkedIn's own activity page, also whole without scrolling): what
+  // they post is the best "one true thing about them" a note can rest on (2026-10-29).
+  const SECTION_PAGES = [["experience", "details/experience/", /^experience$/im], ["education", "details/education/", /^education$/im],
+    ["activity", "recent-activity/all/", /^(?:all )?activity$/im]];
+  function pageTop(t) { const s = txt(t); const i = s.indexOf("\n---\n"); return (i >= 0 ? s.slice(i + 5) : s).split("\n").map((l) => l.trim()).filter(Boolean).slice(0, 3).join("\n"); }
+  async function readOne(cap, url) {
+    const base = url.replace(/[?#].*$/, "").replace(/\/+$/, "") + "/";
+    await browserCall(cap, "navigate", {url: base});
+    const first = await browserCall(cap, "get_page_text", {});
+    if (pageKind(first) !== "profile") return {kind: pageKind(first)};
+    const parts = [first], pages = ["profile"], tried = [];
+    for (const [name, path, heading] of SECTION_PAGES) {
+      tried.push(name);
+      await browserCall(cap, "navigate", {url: base + path});
+      let t = await browserCall(cap, "get_page_text", {});
+      if (pageKind(t) !== "profile") return {kind: pageKind(t)};
+      if (!heading.test(pageTop(t))) {
+        await new Promise((ok) => setTimeout(ok, 1500));
+        t = await browserCall(cap, "get_page_text", {});
+        if (pageKind(t) !== "profile") return {kind: pageKind(t)};
+      }
+      if (heading.test(pageTop(t))) { parts.push(t); pages.push(name); }
+    }
+    return {kind: "profile", text: clip(parts.join("\n\n"), 60000), pages, tried};
+  }
   // Read the profiles the engine asked for (linkedin.reading.queue) with the panel showing
-  // which, "2 of 5"; it closes when done and leaves one line on the card.
+  // which, "2 of 5". When it is done, one tap has Claude write every note from them.
   async function readProfiles(queue, key) {
     const cap = await browserCap();
-    if (!cap) { S.reading.panel = "none"; scheduleRender(); return; }
+    // Never a tap that does nothing: where Claude has no browser here, the card says where it does.
+    if (!cap || !(await inDesktop())) { S.reading.panel = "none"; S.reading.line = "This works in the Claude app on your computer, where Claude has a browser of its own."; scheduleRender(); return; }
     const r = S.reading;
+    if (r.busy) return;
+    r.busy = true;
     r.panel = "run";
     r.total = queue.length;
     r.done = 0;
+    r.read = 0;
     scheduleRender();
-    let read = 0;
-    for (const q of queue) {
-      r.at = txt(q.first_name) + "'s profile";
-      scheduleRender();
-      const url = safeUrl(obj(S.reach.get(txt(q.contact))).linkedin) || safeUrl(q.reach);
-      if (!url) { r.done += 1; continue; }
-      try {
-        await browserCall(cap, "navigate", {url});
-        const text = clip(await browserCall(cap, "get_page_text", {}), 20000);
-        act([{item: txt(q.id), action: "reading.done", value: {text, mode: txt(q.mode) || "browser", url}, rev: txt(q.rev) || null}], "Read " + txt(q.first_name) + "'s profile");
-        read += 1;
-      } catch (e) { r.signedOut = true; break; }
-      r.done += 1;
-    }
-    r.panel = r.signedOut ? "sign_in" : null;
-    S.notes.set(key || "reading", {text: "Read " + plural(read, "profile", "profiles") + ".", tone: "ok", until: now() + 60000});
+    try {
+      for (const q of queue) {
+        r.tried.add(txt(q.id));
+        r.at = txt(q.first_name) + "'s profile";
+        scheduleRender();
+        const url = safeUrl(obj(S.reach.get(txt(q.contact))).linkedin);
+        if (!url) { r.done += 1; continue; }
+        let got;
+        try { got = await readOne(cap, url); }
+        catch (e) { readingRefused(e); break; }
+        if (got.kind !== "profile") { readingStopped(got.kind); break; }
+        act([{item: txt(q.id), action: "reading.done", value: {text: got.text, mode: txt(q.mode) || "browser", url, pages: got.pages, tried: got.tried}, rev: txt(q.rev) || null}], "Read " + txt(q.first_name) + "'s profile");
+        r.read += 1;
+        r.done += 1;
+      }
+    } finally { r.busy = false; }
+    if (r.panel === "run") r.panel = r.read ? "done" : null;
+    S.notes.set(key || "reading", {text: "Read " + plural(r.read, "profile", "profiles") + ".", tone: "ok", until: now() + 60000});
     scheduleRender();
   }
 
@@ -5520,10 +6419,45 @@
 
   // ------------------------------------------------------------------ Work: a pill in the header, a sheet on a phone, a rail on a wide screen
 
+  // The helper the person started from Settings (a new chat they sent): shown as starting,
+  // here and in Claude's work, until it answers or an hour has gone.
+  const HELPER_ASKED = "ljs:helper-asked";
+  function helperAsked() {
+    const at = Number(sget("local", HELPER_ASKED)) || 0;
+    if (!at || now() - at > 3600000) return false;
+    return txt(obj(obj(M().where).helper).state) !== "ready" && !freshHeartbeat();
+  }
+  function helperStartingCard() {
+    if (!helperAsked()) return null;
+    const at = Number(sget("local", HELPER_ASKED)) || now();
+    return card("article", {class: "work-card st-running", "data-work": "helper-start", "aria-labelledby": "w-helper-start"},
+      h("div", {class: "wc-head"}, h("span", {class: "spin", "aria-hidden": "true"}), h("h3", {id: "w-helper-start", class: "wc-title"}, "Setting up Claude's helper")),
+      h("p", {class: "wc-now"}, "Started " + ago(new Date(at).toISOString()) + ". It answers here within a few minutes."));
+  }
   // Where a finished piece of work shows its result.
   const WORK_HOME = {search: "jobs", draft: "drafts", resume_for_contact: "drafts", prep: "interviews", reply: "drafts-messages", follow_up: "drafts-messages",
     network: "drafts-messages", talk: "chat", update: "settings", files: "drafts", tweak: "drafts", evaluate: "jobs", general_resume: "settings", profile: "settings", own_profile: "todo"};
   const WORK_WORDS = {claimed: "Starting", needs_you: "Needs your answer", done: "Ready", failed: "Did not finish", stopped: "Stopped"};
+  // Where waiting work stands: Claude does one thing at a time in each chat, so work waiting
+  // for the same chat waits its turn behind what is running there (the maintainer,
+  // 2026-10-29: "make it clear if things are queued they're queued in same chat").
+  // Big jobs run side by side in the one helper chat, three at most (page_db.WORK_KINDS
+  // "heavy" and HEAVY_CAP; the app skill, step 4), and an urgent one more. Light work never
+  // waits behind them. So a job is "In line" only while three big ones are running.
+  const HEAVY_KINDS = new Set(["search", "draft", "resume_for_contact", "prep", "network"]);
+  const HEAVY_CAP = 3;
+  function queuePlace(id, w) {
+    const to = txt(w.to) || "cloud";
+    const here = (x) => { const t = txt(x.to) || "cloud"; return t === to || t === "either" || to === "either"; };
+    const heavy = (x) => HEAVY_KINDS.has(txt(x.kind));
+    if (!heavy(w)) return {pos: 0, running: "", busy: 0};
+    const same = activeWork().filter(([, x]) => here(x) && heavy(x));
+    const running = same.filter(([, x]) => x.status === "running" || x.status === "claimed");
+    const queued = same.filter(([, x]) => x.status === "queued").sort((a, b) => (Number(b[1].priority) || 0) - (Number(a[1].priority) || 0) || txt(a[1].asked_at).localeCompare(txt(b[1].asked_at)));
+    const free = Math.max(0, HEAVY_CAP + (Number(w.priority) >= 2 ? 1 : 0) - running.length);
+    const pos = queued.findIndex(([qid]) => qid === id) + 1 - free;
+    return {pos: Math.max(0, pos), running: running.length ? txt(running[0][1].title) : "", busy: pos > 0 ? running.length : 0};
+  }
   function workCard(id, w) {
     const p = progress(w);
     const titleId = "w-" + seg(id);
@@ -5531,10 +6465,12 @@
     const toComputer = w.to === "computer";
     const slow = p.stalled || p.lapsed;
     // A state word only where the work is not simply running.
-    const woken = st === "queued" && S.woken && S.woken.has(id);
-    const label = p.stopping ? "Stopping after this step" : st === "queued" ? (p.late ? "Not picked up yet" : woken ? "Starting" : "Waiting to start") : st === "running" || st === "claimed" ? (slow ? "Stalled" : null) : WORK_WORDS[st] || cap1(st);
+    const place = st === "queued" ? queuePlace(id, w) : null;
+    const inLine = !!(place && place.busy && !p.late);
+    const label = p.stopping ? "Stopping after this step" : st === "queued" ? (p.late ? "Not picked up yet" : inLine ? (place.pos === 1 ? "Next" : "In line") : "Waiting to start") : st === "running" || st === "claimed" ? (slow ? "Stalled" : null) : WORK_WORDS[st] || cap1(st);
     const tone = p.stopping ? "held" : {done: "ok", failed: "bad", stopped: "held", needs_you: "warn"}[st] || (slow || p.late ? "warn" : null);
     const spinning = ACTIVE.has(st) && st !== "needs_you" && st !== "queued" && !slow;
+    const waitingDot = st === "queued" && !p.late;
     const cur = p.stages[Math.min(p.i, p.n - 1)];
     let now1 = "";
     if (st === "running" || st === "claimed") {
@@ -5546,7 +6482,9 @@
     } else if (st === "queued") {
       const upd = obj(obj(M().updates).waiting);
       const held = txt(w.kind) !== "update" && txt(upd.waits_for) && txt(upd.hold_line);
-      now1 = held ? txt(upd.hold_line) + "." : toComputer && !computerListening() ? "This needs your computer: open Claude on it." : p.late ? "Claude has not picked this up yet." : woken ? "Claude has been asked and is starting it." : "Waiting for Claude to start.";
+      now1 = held ? txt(upd.hold_line) + "." : toComputer && !computerListening() ? "This needs your computer: open Claude on it." : p.late ? "Claude has not picked this up yet." :
+        inLine ? (place.pos === 1 ? "Starts as soon as one of the " + place.busy + " jobs running now is done." : plural(place.pos - 1, "job", "jobs") + " before it, once one of the " + place.busy + " running now is done.") :
+        "Waiting for Claude to start.";
     } else if (st === "stopped") now1 = "Stopped. Anything already saved is kept.";
     else if (st === "failed") now1 = (typeof w.error === "string" ? w.error : txt(obj(w.error).plain)) || "It stopped part way. Anything already saved is kept.";
     else if (st === "needs_you") now1 = txt(w.note) || "It has a question for you.";
@@ -5554,13 +6492,13 @@
     const stopBtn = ACTIVE.has(st) && st !== "queued" && st !== "needs_you" && !p.stopping ? btn("Stop", () => stopWork(id), {kind: "secondary", small: true, key: "stop:" + id, aria: "Stop: " + txt(w.title)}) : null;
     const open = openState.get("det:steps:" + id) === true;
     const cardEl = card("article", {class: "work-card st-" + seg(st) + (slow || p.late ? " is-slow" : "") + (tone && tone !== "ok" ? " edge-" + tone : ""), "data-work": id, "data-phase": phaseOf(w, p), "aria-labelledby": titleId, "data-item": "work:" + id},
-      h("div", {class: "wc-head"}, spinning ? h("span", {class: "spin", "aria-hidden": "true"}) : h("span", {class: "dot tone-" + (tone || "info"), "aria-hidden": "true"}),
+      h("div", {class: "wc-head"}, spinning ? h("span", {class: "spin", "aria-hidden": "true"}) : h("span", {class: "dot tone-" + (tone || (waitingDot ? "plain" : "info")) + (waitingDot ? " is-waiting" : ""), "aria-hidden": "true"}),
         h("h3", {id: titleId, class: "wc-title"}, h("button", {type: "button", class: "wc-toggle", "aria-expanded": String(open), "aria-controls": "steps-" + seg(id), "data-k": "wct:" + id,
           onclick: () => { openState.set("det:steps:" + id, !open); scheduleRender(); }}, txt(w.title).replace(/^Nudge /, "Follow up with ") || "Work")),
         stateWord(label, tone)));
     if (now1) put(cardEl, h("p", {class: "wc-now" + (st === "failed" ? " tone-bad" : st === "needs_you" ? " tone-warn" : "")}, now1));
     if (ACTIVE.has(st) || st === "done") {
-      put(cardEl, h("div", {class: "bar", role: "progressbar", "aria-labelledby": titleId, "aria-valuemin": "0", "aria-valuemax": "100",
+      put(cardEl, h("div", {class: "bar" + (spinning ? " is-running" : ""), role: "progressbar", "aria-labelledby": titleId, "aria-valuemin": "0", "aria-valuemax": "100",
         "aria-valuenow": String(p.pct), "aria-valuetext": barText(p)}, h("span", {class: "fill", style: "width:" + p.pct + "%"})));
     }
     put(cardEl, h("p", {class: "wc-time", "data-time": "1"}, ACTIVE.has(st) || st === "done" ? timeText(w, p) : ""));
@@ -5587,15 +6525,14 @@
     if (stopBtn) put(acts, stopBtn);
     // Nothing has picked it up: the page asks its helper chat again; only once that cannot
     // be reached is there a link to start a chat by hand.
-    const canWake = !S.wakeFailed && (/^session_/.test(txt(obj(S.listener).chat)) || txt(obj(M().app).repo));
+    const canWake = canRing();
     const tries = Number(w.attempt) || 1;
-    if ((st === "failed" || st === "stopped" || (slow && ACTIVE.has(st) && !limitHit())) && tries < 3) {
+    if ((st === "failed" || (st === "stopped" && !w.stop_asked) || (slow && ACTIVE.has(st) && !limitHit())) && tries < 3) {
       put(acts, btn("Try again", () => retryWork(id), {kind: "secondary", small: true, key: "retry:" + id, aria: "Try again: " + txt(w.title)}));
     }
-    if (st === "queued" && p.late && !toComputer && canWake) put(acts, btn("Ask Claude again", () => { if (S.woken) S.woken.delete(id); autoWake([id]).then(scheduleRender); }, {kind: "secondary", small: true, key: "rewake:" + id, aria: "Ask Claude again: " + txt(w.title)}));
+    if (st === "queued" && p.late && !toComputer && canWake) put(acts, btn("Ask Claude again", () => ringAgain(id), {kind: "secondary", small: true, key: "rewake:" + id, aria: "Ask Claude again: " + txt(w.title)}));
     if (st === "queued" && (p.late || (note && note.link)) && !toComputer && !canWake) {
-      if (S.can.comments === "available") put(acts, btn("Ask Claude again", () => ringAgain(id), {kind: "quiet", small: true, key: "ring:" + id}));
-      put(acts, h("a", {class: "btn quiet small", href: prefillUrl(), target: "_blank", rel: "noopener noreferrer", "data-k": "prefill:" + id}, "Start it now", h("span", {class: "sr-only"}, " (opens Claude in a new tab)")));
+      put(acts, h("a", {class: "btn quiet small", href: wakeUrl(), target: "_blank", rel: "noopener noreferrer", "data-k": "prefill:" + id}, "Start it now", h("span", {class: "sr-only"}, " (opens Claude in a new tab)")));
     }
     if (acts.childNodes.length) put(cardEl, acts);
     if (open) {
@@ -5621,20 +6558,21 @@
   }
   const WORK_ORDER = {needs_you: 0, running: 1, claimed: 1, queued: 2};
   function workPanel(where) {
-    const items = [...allWork()];
+    const items = [...allWork()].filter(([, w]) => !TERMINAL.has(txt(w.status)) || now() - finishedAt(w) < 86400000);
     const limit = limitHit();
     const active = activeWork();
     const running = active.filter(([, w]) => w.status === "running" || w.status === "claimed").length;
     const queued = active.filter(([, w]) => w.status === "queued").length;
     const ask = active.filter(([, w]) => w.status === "needs_you").length;
     const left = Math.max(0, ...active.map(([, w]) => progress(w).leftS || 0));
-    const sum = active.length ? [running ? running + " running" : null, queued ? queued + " waiting to start" : null, ask ? nWord(ask, "needs", "need") + " you" : null].filter(Boolean).join(", ") + "." : "Nothing running.";
-    const sm = active.length ? "About " + plural(Math.max(1, Math.round(left / 60)), "minute", "minutes") + " left. Nothing is sent." : null;
+    const sum = active.length ? [running ? running + " running" : null, queued ? queued + (running ? " waiting their turn" : " waiting to start") : null, ask ? nWord(ask, "needs", "need") + " you" : null].filter(Boolean).join(", ") + "." : "Nothing running.";
+    const sm = active.length ? (running && queued ? "Claude does one thing at a time in the chat that answers this page. " : "") + "About " + plural(Math.max(1, Math.round(left / 60)), "minute", "minutes") + " left. Nothing is sent." : null;
     return h("section", {class: "workp", "aria-labelledby": "h-work-" + where},
       h("div", {class: "rail-head"}, h("h2", {id: "h-work-" + where, class: "rail-title", tabindex: "-1"}, "Claude's work")),
       h("div", {class: "summary"}, h("div", {class: "sum-words"}, h("p", {class: "sum"}, sum), sm ? h("p", {class: "sum-small"}, sm) : null)),
       limit ? h("div", {class: "banner tone-warn"}, h("p", {}, "Claude may have reached your plan's usage limit. Running work waits until it resets; nothing retries by itself."),
         active.length ? btn("Stop everything", () => { for (const [id] of active) stopWork(id); }, {small: true, key: "pause-all"}) : null) : null,
+      helperStartingCard(),
       listView("work", {items, name: "work", live: ([, w]) => ACTIVE.has(txt(w.status) || "queued"),
         fold: ([, w]) => (txt(w.status) === "stopped" && now() - finishedAt(w) > 2 * 60000) || (TERMINAL.has(txt(w.status)) && now() - finishedAt(w) > 15 * 60000),
         foldLabel: (k) => k + " finished",
@@ -5644,6 +6582,7 @@
   }
   let workDlg = null;
   function openWork() {
+    sset("session", "ljs:work-seen", String(now()));
     if (wide()) {
       if (S.tweak) closeTweak();
       const hd = $("h-work-rail");
@@ -5667,18 +6606,27 @@
   function workPill() {
     const act = activeWork();
     const hour = now() - 3600000;
-    const recent = [...allWork()].filter(([, w]) => TERMINAL.has(w.status) && finishedAt(w) > hour);
-    if (!act.length && !recent.length) return null;
+    // Finished work the person has not looked at yet, for ten minutes at most; work they
+    // stopped themselves is never "done" (the maintainer, 2026-10-29: "1 done" stuck there).
+    const seen = Number(sget("session", "ljs:work-seen")) || 0;
+    const recent = [...allWork()].filter(([, w]) => (w.status === "done" || w.status === "failed") && finishedAt(w) > Math.max(now() - 600000, seen));
     const asking = act.filter(([, w]) => w.status === "needs_you").length;
     const slow = act.filter(([, w]) => { const p = progress(w); return p.stalled || p.lapsed || p.late; }).length;
     // Work nobody has picked up is waiting, never "running" (the maintainer, 2026-10-26).
     const going = act.filter(([, w]) => w.status !== "queued" && w.status !== "needs_you").length;
     const queued = act.filter(([, w]) => w.status === "queued");
-    const starting = queued.filter(([id]) => S.woken && S.woken.has(id)).length;
+    const starting = 0;
     const waiting = queued.length - starting;
-    const words = asking ? plural(asking, "needs you", "need you") : going ? going + " running" : starting ? starting + " starting" : waiting ? waiting + " waiting" : recent.length + " done";
+    const helperGoing = helperAsked() ? 1 : 0;
+    if (!act.length && !recent.length && !helperGoing) return null;
+    // One thing running says what it is ("Finding jobs"); waiting work is counted after it.
+    const one = going === 1 ? txt((act.find(([, w]) => w.status !== "queued" && w.status !== "needs_you") || [null, {}])[1].title) : "";
+    // A phone's top bar has room for the one thing only; the waiting count is in the sheet.
+    const narrow = !wide();
+    const lead = going ? (one && one.length <= (narrow ? 14 : 18) ? one : going + " running") : "";
+    const words = asking ? plural(asking, "needs you", "need you") : going ? lead + (queued.length && !narrow ? " · " + queued.length + " waiting" : "") : starting + helperGoing ? (starting + helperGoing) + " starting" : waiting ? waiting + " waiting" : recent.length + " done";
     return h("button", {type: "button", class: "pill" + (asking || slow ? " warn" : ""), id: "pill", "data-k": "pill", "aria-haspopup": wide() ? null : "dialog", onclick: openWork},
-      going && !asking ? h("span", {class: "spin", "aria-hidden": "true"}) : h("span", {class: "dot tone-" + (asking || slow ? "warn" : "ok"), "aria-hidden": "true"}),
+      going && !asking ? h("span", {class: "spin", "aria-hidden": "true"}) : h("span", {class: "dot tone-" + (asking || slow ? "warn" : !recent.length || act.length ? "plain" : "ok") + (!asking && !slow && act.length ? " is-waiting" : ""), "aria-hidden": "true"}),
       h("span", {}, words), h("span", {class: "sr-only"}, ": show the work"));
   }
 
@@ -5816,7 +6764,8 @@
   }
   function convMessages(conv) {
     const list = [];
-    for (const [id, t] of S.threads) if (convOf(id, t) === conv) for (const m of S.msgs.get(id) || []) list.push(m);
+    const seenIds = new Set();
+    for (const [id, t] of S.threads) if (convOf(id, t) === conv) for (const m of S.msgs.get(id) || []) if (!seenIds.has(m.id)) { seenIds.add(m.id); list.push(m); }
     if (conv === currentConv()) {
       for (const to of TALK_TO) { const th = currentThread(to); if (!S.threads.has(th)) for (const m of S.msgs.get(th) || []) if (!list.find((x) => x.id === m.id)) list.push(m); }
       for (const t of S.quick.turns) if (!list.find((m) => m.id === t.id)) list.push(t);
@@ -5841,20 +6790,22 @@
     const call = ppl.find((p) => txt(p.status) === "call_booked" && !callPast(p));
     const iv = interviewItems().find((i) => !isPast(i.when));
     const owedName = owed ? txt(owed.first_name) : "";
+    // Each opens the form that does it where there is one, and only otherwise starts the
+    // words in the chat box (the maintainer, 2026-10-28: chat starters open forms).
     return [
-      ["Someone sent me a job", "Someone sent me this job. Add it, link it to them and make my " + noun() + " for it: ", "job"],
-      owedName ? ["Help me reply to " + owedName, "Help me reply to " + owedName + ". Their message: ", "reply"] : ["Help me reply to a message", "Help me reply to this message: ", "reply"],
-      call && txt(call.first_name) ? ["Prepare me for my call with " + txt(call.first_name), "Prepare me for my call with " + txt(call.first_name) + ". ", "call"]
-        : iv && txt(iv.company) ? ["Prepare me for " + txt(iv.company), "Prepare me for my interview at " + txt(iv.company) + ". ", "call"]
-        : ["Prepare me for a call", "Prepare me for a call with ", "call"],
-      ["How does this page work?", "How do I ", "help"],
+      ["Someone sent me a job", "Someone sent me this job. Add it, link it to them and make my " + noun() + " for it: ", "job", () => askAddJob()],
+      owedName ? ["Help me reply to " + owedName, "Help me reply to " + owedName + ". Their message: ", "reply", () => logReply(owed, true)] : ["Help me reply to a message", "Help me reply to this message: ", "reply", null],
+      call && txt(call.first_name) ? ["Prepare me for my call with " + txt(call.first_name), "Prepare me for my call with " + txt(call.first_name) + ". ", "call", () => askCallPrep(call)]
+        : iv && txt(iv.company) ? ["Prepare me for " + txt(iv.company), "Prepare me for my interview at " + txt(iv.company) + ". ", "call", () => askPrep(iv)]
+        : ["Prepare me for a call", "Prepare me for a call with ", "call", null],
+      ["How does this page work?", "How do I ", "help", () => showTour(0)],
     ];
   }
   function talkIntro() {
     const what = picsOn() ? "Paste a screenshot or a link" : "Paste a message or a link";
     return [h("p", {class: "talk-intro"}, what + " and say what you want: reply to someone, add a job someone sent you and make the " + noun() + ", prepare for a call. Claude does the rest and it shows up here."),
-      h("div", {class: "examples", role: "group", "aria-label": "Ways to start"}, starters().map(([label, text, k]) =>
-        h("button", {type: "button", class: "btn secondary small", "data-k": "start:" + k, onclick: () => focusTalk(text)}, label))),
+      h("div", {class: "examples", role: "group", "aria-label": "Ways to start"}, starters().map(([label, text, k, form]) =>
+        h("button", {type: "button", class: "btn secondary small", "data-k": "start:" + k, onclick: () => (form ? form() : focusTalk(text))}, label))),
       h("div", {class: "examples", role: "group", "aria-label": "Questions you could ask"}, examples().slice(0, 2).map((q, i) =>
         h("button", {type: "button", class: "btn quiet small", "data-k": "ex:" + i, onclick: () => { talkInput.value = q; sendChat(); }}, q)))];
   }
@@ -5908,7 +6859,7 @@
     let status = "";
     let disabled = false;
     if (S.quick.mode) status = "Practice interview for " + S.quick.mode.company + ". Answer as you would in the room; New conversation ends it.";
-    else if (S.flags.limit) status = "Claude has reached your plan's limit for now. Try again later.";
+    else if (S.flags.limit && S.flags.limit > now()) status = "Claude has reached your plan's limit for now. Try again later.";
     else if (capsSettled.db && capsSettled.sample && !S.caps.db && !S.caps.sample) { status = "This page cannot reach Claude here. Open it in the Claude app."; disabled = true; }
     talkStatus.textContent = status;
     talkStatus.hidden = !status;
@@ -5948,7 +6899,7 @@
     if (withPics && pics.some((p) => p.status === "failed")) { shout("A picture was not added. Remove it, or add it again."); return; }
     S.viewConv = null;
     // A picture always goes to a chat: only a chat can read it (and the reply, the job or the
-    // call it is about needs one anyway). Sent inside this click, so the room ring can go.
+    // call it is about needs one anyway). Sent inside this click, so the ring can go.
     if (withPics) { handOff(text, true, pics.splice(0)); renderPics(); return; }
     if (!S.quick.mode && capsSettled.sample && !S.caps.sample) { handOff(text, true); return; }
     if (!S.quick.mode && pastedSomething(text)) { readPasted(text); return; }
@@ -5961,7 +6912,8 @@
     const th = currentThread(to);
     const mid = "m" + stamp() + rand4();
     const wid = "talk~" + seg(th) + "~" + mid;
-    const roomRing = inClick && to === "cloud" ? ringRoomSync([wid], "A message from your job search page") : null;
+    S.lastHandOff = wid;
+    const rung = inClick && (to === "cloud" || computerListening()) ? ringNow([wid], "work") : null;
     if (talkInput && talkInput.value.trim() === text) { talkInput.value = ""; draftSet("talk", null); countTalk(); }
     // Not sent: the words and the pictures go back in the box, as they were.
     const giveBack = () => { if (talkInput && text) talkInput.value = text; if (shots.length) { pics.unshift(...shots.filter((p) => pics.indexOf(p) < 0)); renderPics(); } };
@@ -5982,22 +6934,22 @@
       const said = text || (images.length === 1 ? "A picture" : images.length + " pictures");
       try {
         if (!S.threads.has(th)) {
-          const doc = {to, conv: currentConv(), title: clip(said, 60), created_at: iso()};
+          const doc = {to, conv: currentConv(), title: clip(said, 60), created_at: iso(), _v: 1};
           S.threads.set(th, doc);
           await db.doc("talk/" + th).set(doc);
           followThreads();
         }
-        const msg = Object.assign({from: "you", text, at: iso(), work: wid}, images.length ? {images} : {});
+        const msg = Object.assign({from: "you", text, at: iso(), work: wid, _v: 1}, images.length ? {images} : {});
         await db.doc("talk/" + th + "/messages/" + mid).set(msg);
-        S.msgs.set(th, (S.msgs.get(th) || []).concat([Object.assign({id: mid}, msg)]));
+        // Shown at once, and only once: the saved copy can arrive before this line runs, and
+        // adding it again showed the message twice (the maintainer, 2026-10-29).
+        const have = S.msgs.get(th) || [];
+        if (!have.some((x) => x.id === mid)) S.msgs.set(th, have.concat([Object.assign({id: mid}, msg)]));
         const made = await createWork(db, {id: wid, kind: "talk", to, title: "Answer: “" + clip(said, 50) + "”", args: {thread: th, message: mid}, slot: false});
         if (!made.ok) throw new Error("work");
       } catch (e) { giveBack(); shout("Not sent. Try again."); renderChat(); return; }
       announce("Sent to Claude.");
-      let how = roomRing ? await roomRing : null;
-      if (!how && (to === "cloud" || computerListening())) how = await ringComments([wid], false);
-      autoWake([wid]);
-      ringNote([wid], how || "none");
+      ringNote([wid], (rung ? await rung : null) || "none");
       renderChat();
     })();
   }
@@ -6023,7 +6975,10 @@
     const f = map[section];
     const out = f ? f() : {error: "No such section. Use one of: " + Object.keys(map).join(", ")};
     let s = JSON.stringify(out);
-    if (s.length > 28000) s = s.slice(0, 28000) + "…";
+    // A tool result is at most 32 KB in bytes (sample.d.ts): accented and non-Latin text takes
+    // more than a byte a letter, so the cut is by bytes (contract audit, 2026-10-29).
+    const enc = new TextEncoder();
+    if (enc.encode(s).length > 28000) { let n = Math.min(s.length, 28000); while (n > 0 && enc.encode(s.slice(0, n)).length > 28000) n = Math.floor(n * 0.9); s = s.slice(0, n) + "…"; }
     return s;
   }
   function findIn(text) {
@@ -6063,7 +7018,7 @@
   async function startMock(iv) {
     if (!(await CAP.sample)) {
       go("chat", {focus: false});
-      handOff("Run a practice " + lc1(txt(iv.next_stage) || "interview") + " with me for " + [txt(iv.role), txt(iv.company)].filter(Boolean).join(" at ") + ", one question at a time from my prep, with short feedback on each answer.", false);
+      handOff("Run a practice " + lc1(txt(iv.next_stage) || "interview") + " with me for " + [txt(iv.role), txt(iv.company)].filter(Boolean).join(" at ") + ", one question at a time from my prep, with short feedback on each answer.", true);
       return;
     }
     S.quick.turns = [];
@@ -6075,7 +7030,7 @@
   }
   async function askQuick(text, hidden) {
     const sample = await CAP.sample;
-    if (!sample) { if (!S.quick.mode) handOff(text, false); return; }
+    if (!sample) { if (!S.quick.mode) handOff(text, true); return; }
     if (S.quick.busy) return;
     if (talkInput && talkInput.value.trim() === text) { talkInput.value = ""; draftSet("talk", null); countTalk(); }
     const youMsg = {id: "q" + stamp() + rand4(), from: "you", text, at: iso()};
@@ -6112,8 +7067,9 @@
     } catch (e) {
       const code = (e && e.code) || "upstream_error";
       answer = txt(e && e.text);
-      if (code === "rate_limited") { S.flags.limit = true; answer = answer || "Claude has reached your plan's limit for now. Try again later."; }
-      else if (code === "not_granted" || code === "sampling_disabled" || code === "not_declared") { S.caps.sample = null; capsSettled.sample = true; if (!S.quick.mode) handoff = "quick answers are off for this page"; }
+      // A limit lasts the wait it names, not the whole visit (sample.d.ts, contract audit).
+      if (code === "rate_limited") { S.flags.limit = now() + Math.max(60000, Number(e && e.retryAfterMs) || 0); answer = answer || "Claude has reached your plan's limit for now. Try again later."; }
+      else if (code === "not_granted" || code === "sampling_disabled" || code === "not_declared" || code === "capability_disabled" || code === "capability_removed" || code === "session_expired") { S.caps.sample = null; capsSettled.sample = true; if (!S.quick.mode) handoff = "quick answers are off for this page"; }
       else if (code === "cancelled") answer = answer ? answer + " (stopped)" : "Stopped.";
       else answer = answer ? answer + " (cut off)" : "That did not work. Try again.";
     }
@@ -6122,10 +7078,15 @@
     S.quick.ctl = null;
     if (handoff && !S.quick.mode) {
       S.quick.turns = S.quick.turns.filter((t) => t !== youMsg);
-      const where = whereTo() === "computer" ? "on your computer" : "in the cloud";
-      S.chatNotes.push({id: "n" + stamp() + rand4(), from: "note", text: "Claude is working on this " + where + ". The answer appears here.", at: iso()});
       handOff(text, false);
-      announce("Claude is working on it " + where + ".");
+      const wid = S.lastHandOff;
+      const note = {id: "n" + stamp() + rand4(), from: "note", at: iso(), sent: false};
+      note.node = () => note.sent ? h("p", {class: "talk-text"}, "Sent to Claude. The answer appears here.") :
+        h("div", {}, h("p", {class: "talk-text"}, "This needs Claude itself, not a quick answer."),
+          h("div", {class: "card-actions"}, btn("Send to Claude", () => { ringNow([wid], "work", true).then((how) => { ringNote([wid], how); note.sent = how === "rang" || how === "coalesced"; if (!note.sent) toast({text: "Claude could not be reached. It answers next time it works on your search.", ids: [], until: 0}); renderChat(); }); },
+            {kind: "primary", small: true, key: "handoff:" + note.id})));
+      S.chatNotes.push(note);
+      announce("This needs Claude itself. Send it when you are ready.");
       renderChat();
       return;
     }
@@ -6149,9 +7110,9 @@
     if (db && !hidden && !S.quick.mode) {
       const th = currentThread("quick");
       try {
-        if (!S.threads.has(th)) { const doc = {to: "quick", conv: currentConv(), title: clip(text, 60), created_at: iso()}; S.threads.set(th, doc); await db.doc("talk/" + th).set(doc); }
-        await db.doc("talk/" + th + "/messages/" + youMsg.id).set({from: "you", text, at: youMsg.at});
-        await db.doc("talk/" + th + "/messages/" + reply.id).set({from: "quick", text: answer, at: reply.at});
+        if (!S.threads.has(th)) { const doc = {to: "quick", conv: currentConv(), title: clip(text, 60), created_at: iso(), _v: 1}; S.threads.set(th, doc); await db.doc("talk/" + th).set(doc); }
+        await db.doc("talk/" + th + "/messages/" + youMsg.id).set({from: "you", text, at: youMsg.at, _v: 1});
+        await db.doc("talk/" + th + "/messages/" + reply.id).set({from: "quick", text: answer, at: reply.at, _v: 1});
       } catch (e) { /* kept on this page only */ }
     }
     announce("Claude: " + clip(answer, 200));
@@ -6337,7 +7298,7 @@
     fabEl.setAttribute("aria-expanded", String(dockOpen));
     document.body.classList.toggle("has-fab", !fabEl.hidden);
     const bp = $("browser-panel");
-    const lift = bp ? Math.ceil(bp.getBoundingClientRect().height) + 12 : 0;
+    const lift = bp ? Math.ceil(bp.getBoundingClientRect().height / drawnPerPx()) + 12 : 0;
     for (const el of [dockEl, fabEl]) el.style.setProperty("--dock-lift", lift + "px");
     if (dockOpen) renderChat();
     else growTalk();
@@ -6389,28 +7350,27 @@
   // "Someone wrote to me": one plain line on Contacts that opens the chat ready for it.
   function phoneNow() { return window.innerWidth < 760; }
   function gotMessage(where) {
-    return h("p", {class: "head-ask"}, btn(picsOn() ? "Got a message? Paste it or a screenshot" : "Got a message? Paste it here",
+    return h("span", {class: "head-ask"}, btn(picsOn() ? "Got a message? Paste it or a screenshot" : "Got a message? Paste it here",
       (e) => openDock({opener: e.currentTarget, text: "Help me reply to this message: "}), {kind: "link", key: "got-msg" + (where ? ":" + where : "")}));
   }
 
   // ------------------------------------------------------------------ Settings
 
   const SETTING_COPY = {
-    work_either: {label: "Where long tasks run", choices: {cloud: ["In the cloud", "Works when your computer is off."], computer: ["On your computer", "Can use your files and your browser there."]}},
     suggestions: {label: "Suggestions", hint: "Warnings about something wrong, like a closed posting, always show.", choices: {on: ["On"], urgent: ["Only urgent"], off: ["Off"]}},
     app_updates: {label: "How updates arrive", choices: {auto: ["By themselves"], when_asked: ["When I say"]}},
     tips: {label: "Tips now and then"},
     linkedin_plan: {label: "Your LinkedIn plan"},
+    profile_reads: {label: "Reading their profiles", hint: "Claude reads them in the Claude app on your computer. Or paste each one yourself.", choices: {browser: ["Claude reads them"], paste: ["I paste them"]}},
   };
-  const SYNTH = [{key: "work_either", label: "Where Claude works", kind: "choice", value: "cloud", choices: [["cloud", "The cloud chat"], ["computer", "The chat on my computer"]]},
-    {key: "suggestions", label: "Suggestions", kind: "choice", value: "on", choices: [["on", "On"], ["urgent", "Only urgent"], ["off", "Off"]]}];
+  const SYNTH = [{key: "suggestions", label: "Suggestions", kind: "choice", value: "on", choices: [["on", "On"], ["urgent", "Only urgent"], ["off", "Off"]]}];
   // The usual value of each setting, for the summary's "changed from the usual".
-  const USUAL = {work_either: "cloud", suggestions: "on", app_updates: "auto", tips: "on"};
+  const USUAL = {suggestions: "on", app_updates: "auto", tips: "on"};
   function settingLabel(s) { return (SETTING_COPY[txt(s.key)] || {}).label || txt(s.label); }
   function allSettings() {
     const list = arr(M().settings).slice();
     for (const x of SYNTH) if (!list.some((s) => txt(s.key) === x.key)) list.push(x);
-    const order = {work_either: 0, suggestions: 1};
+    const order = {suggestions: 0};
     return list.sort((a, b) => (order[a.key] === undefined ? 9 : order[a.key]) - (order[b.key] === undefined ? 9 : order[b.key]));
   }
   const pendingSet = new Map();
@@ -6429,32 +7389,40 @@
     // The waiting update: the updates section's own, or the app block's line (CONTRACT 6.3).
     const waiting = u.waiting ? obj(u.waiting) : obj(M().app).update_waiting ? {line: "An update is waiting", action: "app.update_now", id: "update-now"} : null;
     const changed = all.filter((s) => USUAL[txt(s.key)] !== undefined && txt(settingValue(s)) !== USUAL[txt(s.key)]);
-    const sum = waiting ? "An update is waiting." : changed.length ? nWord(changed.length, "setting", "settings") + " changed from the usual: " + changed.map((s) => settingLabel(s).toLowerCase()).join(", ") + "." : "All on the usual settings.";
+    // The update says itself on its own card; the summary is about the settings.
+    const sum = changed.length ? nWord(changed.length, "setting", "settings") + " changed from the usual: " + changed.map((s) => settingLabel(s).toLowerCase()).join(", ") + "." : "All on the usual settings.";
     const wrap = h("section", {class: "sec", "aria-labelledby": "h-settings" + (where ? "-" + where : "")}, screenHead("settings", "Settings", sum, null, where));
     const byKey = new Map(all.map((s) => [txt(s.key), s]));
     const pick = (keys) => keys.map((k) => byKey.get(k)).filter(Boolean);
-    const known = new Set(["work_either", "suggestions", "app_updates", "tips", "linkedin_plan"]);
+    const known = new Set(["suggestions", "app_updates", "tips", "linkedin_plan", "profile_reads"]);
     const others = all.filter((s) => !known.has(txt(s.key)));
     if (waiting) put(wrap, settingsGroup("", [updateRow(waiting)]));
     // Questions an update brought live here, never in To do: nothing is late about them.
     const asks = needsItems().filter((n) => needKind(n) === "update" && !settledAction(n.id));
     if (asks.length) put(wrap, h("section", {class: "set-asks", "aria-label": "From updates"}, h("h3", {class: "group"}, "From updates"),
       h("div", {class: "stack"}, asks.map((n) => needCard(n, {where: "settings", section: "settings"})))));
-    put(wrap, settingsGroup("Your profile", youRows()));
-    put(wrap, settingsGroup("Look", [lookRow(), sizeRow()]));
-    put(wrap, settingsGroup("How Claude works", [infoRow("where", "Where Claude works", whereSummary(), whereRows())].concat(pick(["work_either", "suggestions", "app_updates", "tips"]).concat(others).map(settingRow))));
+    // What a person comes here to change, first; how the app runs, last and folded (the
+    // maintainer, 2026-10-29: "why would one choose to run long tasks in the cloud or in
+    // local? even i dont know what changing these settings does").
+    put(wrap, settingsGroup("You", [h("button", {type: "button", class: "setting-row act-row prof-row", "data-k": "open-profile", onclick: () => go("profile", {focus: true})},
+      h("span", {class: "set-name"}, "Your profile", h("span", {class: "hint block"}, profileSummary())), h("span", {class: "set-go", "aria-hidden": "true"}, "›"))]));
     const search = searchRows().filter(Boolean);
     if (search.length) put(wrap, settingsGroup("Your search", search));
     put(wrap, settingsGroup("Your brief", briefRows()));
-    put(wrap, settingsGroup("LinkedIn", linkedinRows().concat(pick(["linkedin_plan"]).map(settingRow))));
-    put(wrap, settingsGroup("This device", [keysRow(), infoRow("device", "Check this device", null, deviceList())]));
-    put(wrap, settingsGroup("Help", [actionRow("Ask Claude how something works", () => startChat("How does "), "help-how"),
-      actionRow("Show me around", () => showTour(0), "help-tour"),
-      actionRow("Something looks wrong", () => startChat("Something on my job search page looks wrong. Page version " + txt(obj(M().app).version || u.version) + ". What I saw: "), "help-wrong")]));
+    put(wrap, settingsGroup("Look", [lookRow(), sizeRow()]));
+    put(wrap, settingsGroup("LinkedIn", linkedinRows().concat(pick(["profile_reads", "linkedin_plan"]).map(settingRow))));
+    put(wrap, settingsGroup("Help", [actionRow("Show me around", () => showTour(0), "help-tour"),
+      actionRow("Ask Claude how something works", () => startChat("How does "), "help-how"),
+      actionRow("Something looks wrong", () => startChat("Something on my job search page looks wrong. Page version " + txt(obj(M().app).version || u.version) + ". What I saw: "), "help-wrong")].concat(pick(["tips"]).map(settingRow))));
     put(wrap, settingsGroup("Your data", [infoRow("privacy", "Where your data lives", null, h("p", {}, privacyText())),
       infoRow("device-link", "Open on another device", null, anotherDeviceBody()),
       infoRow("news", "What's new", waiting ? null : "Up to date", updatesBody()),
       infoRow("learned", "What you have taught it", plural(arr(M().learned).filter((x) => !x.retired && !effective(txt(x.id), ["learned.retire"])).length, "rule", "rules"), learnedRows())]));
+    // How the app runs: the usual is right for nearly everyone, so it waits behind one line.
+    const adv = [infoRow("where", "Where Claude works", whereSummary(), whereRows())].concat(pick(["suggestions", "app_updates"]).concat(others).map(settingRow),
+      [keysRow(), infoRow("device", "Check this device", null, deviceList())]).filter(Boolean);
+    put(wrap, det("set-advanced", false, {class: "set-group set-advanced"}, h("summary", {class: "group"}, "How the app runs"),
+      h("p", {class: "small muted set-intro"}, "The usual settings suit nearly everyone. Change these only if Claude suggests it."), h("div", {class: "set-rows"}, adv)));
     return wrap;
   }
   function settingsGroup(title, rows) {
@@ -6561,77 +7529,9 @@
   }
   function deviceList() {
     const yes = (b) => stateWord(b ? "Works here" : "Not here", b ? "ok" : null);
-    const ask = S.can.comments === "available" || S.can.room === "available";
+    const ask = canRing();
     const rows = [["Keeping your answers", !!S.caps.db], ["Saving files", !!S.caps.downloads], ["Quick answers on this page", !!S.caps.sample], ["Telling Claude at once", ask]];
     return h("ul", {class: "plain checks-list"}, rows.map(([l, b]) => h("li", {}, h("span", {}, l), yes(b))));
-  }
-  // Light or dark, kept on this device only. Match my device follows the device, or the
-  // Claude app's own appearance where the person chose one there; Apple's guidance is to
-  // follow the device unless asked, so that is the default.
-  function keysCard() {
-    return h("div", {class: "card setting-card"}, h("div", {class: "setting toggle"},
-      h("input", {type: "checkbox", role: "switch", id: "keys-on", "data-k": "keys-on", checked: S.keysOn, "aria-describedby": "keys-hint",
-        onchange: (e) => { S.keysOn = e.target.checked; sset("local", "ljs:keys", S.keysOn ? null : "off"); announce(S.keysOn ? "Keyboard shortcuts on." : "Keyboard shortcuts off."); }}),
-      h("label", {for: "keys-on"}, "Keyboard shortcuts")), h("p", {class: "hint", id: "keys-hint"}, "Single keys, like g then j for Jobs. Press ? to see them all. Kept on this device."));
-  }
-  // Updates (CONTRACT 6.3): what is waiting, what changed, and each change made for the
-  // person with its own Undo, which a chat runs.
-  function updatesCard() {
-    const u = obj(M().updates);
-    const app = obj(M().app);
-    const box = h("div", {class: "card setting-card updates"}, h("h3", {}, "Updates"));
-    const waiting = u.waiting ? obj(u.waiting) : app.update_waiting ? {line: "An update is waiting.", legacy: true} : null;
-    const w = [...allWork()].find(([id]) => id.startsWith("update~"));
-    const updating = w && ACTIVE.has(w[1].status);
-    if (waiting) {
-      // A change to how records are kept waits for running work to finish; work asked for
-      // meanwhile says so on its own row (hold_line).
-      put(box, h("p", {}, txt(waiting.line) || "An update is waiting.", txt(waiting.waits_for) ? " It starts once the work running now has finished." : ""),
-        h("div", {class: "card-actions"}, updating ? btn("See its progress", openWork, {small: true, key: "upd-see"}) :
-          waiting.legacy ? btn("Update now", () => askUpdate(null), {small: true, key: "update"}) :
-            waiting.action ? btn("Update now", () => act([{item: txt(waiting.id) || "update-now", action: txt(waiting.action), rev: waiting.rev}], "Update asked for"), {small: true, key: "update"}) : null),
-        stateLine(txt(waiting.id) || "update-now", "update"));
-    } else put(box, h("p", {class: "muted"}, txt(u.mode) === "when_asked" ? "Up to date. Updates wait until you say." : "Up to date. Updates arrive by themselves."));
-    const changed = arr(u.changed).length ? arr(u.changed) : arr(app.news).length ? [{version: "", date: "", lines: app.news}] : [];
-    if (changed.length) {
-      put(box, h("h4", {class: "small-head"}, "What's new"), listView("news", {items: changed.map((c, i) => Object.assign({i}, c)), name: "what's new",
-        fold: (c) => c.i > 0, foldLabel: (k) => plural(k, "earlier update", "earlier updates"),
-        render: (c) => h("div", {class: "news"}, c.date ? h("p", {class: "muted small"}, fmtDay(c.date)) : null, h("ul", {}, arr(c.lines).map((l) => h("li", {}, txt(l)))))}));
-    }
-    const done = arr(u.done).filter((d) => !d.undone);
-    if (done.length) {
-      put(box, h("h4", {class: "small-head"}, "Changes made for you"), listView("upgrades", {items: done, name: "changes made for you",
-        fold: (d) => daysSince(d.on) !== null && daysSince(d.on) > 30, sort: (a, b) => txt(b.on).localeCompare(txt(a.on)),
-        render: (d) => h("div", {class: "upgrade"}, h("p", {}, txt(d.line)), d.undo ? h("p", {class: "inline"}, btn("Undo this change", () => act([{item: txt(d.id), action: txt(d.undo), rev: d.rev}], "Undoing: " + clip(txt(d.line), 40)), {kind: "quiet", small: true, key: "upg:" + d.id}),
-          h("span", {class: "cost"}, COST_WORDS[1] + ", " + aboutTime(60))) : null, stateLine(txt(d.id), "upg:" + d.id))}));
-    }
-    return box;
-  }
-  // What the person has taught it (profile/learned.json), when the model carries it.
-  function learnedCard() {
-    const items = arr(M().learned);
-    if (!items.length) return null;
-    return h("div", {class: "card setting-card"}, h("h3", {}, "What you have taught it"),
-      listView("learned", {items, name: "what you have taught it", live: (x) => !x.retired, fold: (x) => !!x.retired, foldLabel: (k) => plural(k, "earlier rule", "earlier rules"),
-        sort: (a, b) => txt(b.on).localeCompare(txt(a.on)),
-        render: (x) => h("div", {class: "learned"}, h("p", {}, txt(x.rule)), x.said ? h("p", {class: "hint"}, "You said: " + txt(x.said)) : null)}));
-  }
-  function helpCard() {
-    return h("div", {class: "card setting-card"}, h("h3", {}, "Help"),
-      h("div", {class: "card-actions"},
-        btn("Ask Claude how something works", () => startChat("How does "), {small: true, key: "help-how"}),
-        btn("Something looks wrong", () => startChat("Something on my job search page looks wrong. Page version " + txt(obj(M().app).version || obj(M().updates).version) + ". What I saw: "), {kind: "quiet", small: true, key: "help-wrong"})));
-  }
-  function deviceCard() {
-    const yes = (b) => chip(b ? "Works here" : "Not here", b ? "ok" : "plain");
-    const ask = S.can.comments === "available" || S.can.room === "available";
-    const rows = [
-      ["Keeping your answers", !!S.caps.db],
-      ["Saving files", !!S.caps.downloads],
-      ["Quick answers on this page", !!S.caps.sample],
-      ["Telling Claude at once", ask],
-    ];
-    return det("device", false, {class: "card setting-card"}, h("summary", {}, "Check this device"), h("ul", {class: "plain checks-list"}, rows.map(([l, b]) => h("li", {}, h("span", {}, l), yes(b)))));
   }
   // The engine's own line (app.privacy, claude_surfaces page-share) where the model carries it.
   function privacyText() {
@@ -6678,7 +7578,8 @@
       else if (readyItems().some((a) => a.id === id)) setPref("drafts:view", "apps");
     } else if (S.section === "contacts") {
       const p = peopleItems().find((x) => x.id === id);
-      if (p && !personLive(p)) listState("contacts").open = true;
+      const anyNeeds = peopleItems().some((x) => personRank(x) === 0);
+      if (p && !(anyNeeds ? personRank(p) === 0 : personLive(p))) listState("contacts").open = true;
     }
   }
   function go(id, o) {
@@ -6739,16 +7640,23 @@
 
   const ICON = {
     todo: "M12 3a9 9 0 1 0 0 18a9 9 0 0 0 0-18zM8 12l3 3l5-6",
+    brief: "M4 4h7v7H4zM13 4h7v4h-7zM13 10h7v10h-7zM4 13h7v7H4z",
     // A pencil, so Tweak never looks like Settings' sliders (the maintainer, 2026-10-26).
     tweak: "M4 20l4-1L19 8l-3-3L5 16zM14 7l3 3",
     copy: "M9 9h11v11H9zM5 15H4V4h11v1",
     bin: "M4 7h16M10 11v6M14 11v6M6 7l1 13h10l1-13M9 7V4h6v3",
+    x: "M7 7l10 10M17 7L7 17",
+    // The brief's bell: plain when there is none, ringing when it is on, struck through off.
+    bell: "M6 16v-5a6 6 0 0 1 12 0v5l1.5 2h-15zM10 20.5a2 2 0 0 0 4 0",
+    "bell-on": "M6 16v-5a6 6 0 0 1 12 0v5l1.5 2h-15zM10 20.5a2 2 0 0 0 4 0M2.5 8.5a10 10 0 0 1 3-5M21.5 8.5a10 10 0 0 0-3-5",
+    "bell-off": "M6 16v-5a6 6 0 0 1 12 0v5l1.5 2h-15zM10 20.5a2 2 0 0 0 4 0M4 4l16 16",
     jobs: "M4 8h16v11H4zM9 8V5h6v3",
     drafts: "M4 20h4L19 9l-4-4L4 16zM13 7l4 4",
     contacts: "M9 11a4 4 0 1 0 0-8a4 4 0 0 0 0 8zM2 21a7 7 0 0 1 14 0M16 3.5a4 4 0 0 1 0 7M18 14a6 6 0 0 1 4 7",
     chat: "M4 5h16v11H9l-5 4z",
     interviews: "M5 5h14v15H5zM5 9h14M9 3v4M15 3v4",
     progress: "M4 20V10M10 20V4M16 20v-7M22 20H2",
+    expand: "M4 9V4h5M20 9V4h-5M4 15v5h5M20 15v5h-5",
     settings: "M12 9a3 3 0 1 0 0 6a3 3 0 0 0 0-6zM10.3 3h3.4l.5 2.4 1.9.8 2-1.4 2.4 2.4-1.4 2 .8 1.9 2.4.5v3.4l-2.4.5-.8 1.9 1.4 2-2.4 2.4-2-1.4-1.9.8-.5 2.4h-3.4l-.5-2.4-1.9-.8-2 1.4-2.4-2.4 1.4-2-.8-1.9L3 13.7v-3.4l2.4-.5.8-1.9-1.4-2 2.4-2.4 2 1.4 1.9-.8z",
     "k-application": "M7 3h7l5 5v13H7zM14 3v5h5",
     "k-message": "M4 5h16v11H9l-5 4z",
@@ -6775,16 +7683,16 @@
     // One coloured badge, on To do; the other counts are quiet (navCount).
     const badgeEl = () => (badge ? h("span", {class: "badge"}, String(badge), h("span", {class: "sr-only"}, " need you")) : null);
     if (side) {
-      patch(side, [h("ul", {class: "plain side-list"}, NAV.map((id) => h("li", {}, h("a", {href: "#" + id, "data-k": "side:" + id, "aria-current": S.section === id ? "page" : null,
+      patch(side, [h("ul", {class: "plain side-list"}, NAV.map((id) => h("li", {}, h("a", {href: "#" + id, "data-k": "side:" + id, "aria-current": navOwner(S.section) === id ? "page" : null,
         onclick: (e) => { e.preventDefault(); go(id, {focus: true}); }}, icon(id), h("span", {class: "side-label"}, labelOf(id)), id === "todo" ? badgeEl() : navCount(id))))),
       // The other sections are full items too, under a rule: small grey words without icons
       // read as hidden (the maintainer, 2026-10-26).
-      h("ul", {class: "plain side-list side-foot"}, FOOT_NAV.map((id) => h("li", {}, h("a", {href: "#" + id, "data-k": "side:" + id, "aria-current": S.section === id ? "page" : null,
+      h("ul", {class: "plain side-list side-foot"}, FOOT_NAV.map((id) => h("li", {}, h("a", {href: "#" + id, "data-k": "side:" + id, "aria-current": navOwner(S.section) === id ? "page" : null,
         onclick: (e) => { e.preventDefault(); go(id, {focus: true}); }}, icon(id), h("span", {class: "side-label"}, labelOf(id)), navCount(id)))))]);
     }
     const tabs = $("tabs");
     if (tabs) {
-      patch(tabs, [h("ul", {class: "plain tab-list"}, NAV.map((id) => h("li", {}, h("a", {href: "#" + id, class: "tab", "data-k": "tab:" + id, "aria-current": S.section === id ? "page" : null,
+      patch(tabs, [h("ul", {class: "plain tab-list"}, NAV.map((id) => h("li", {}, h("a", {href: "#" + id, class: "tab", "data-k": "tab:" + id, "aria-current": navOwner(S.section) === id ? "page" : null,
         onclick: (e) => { e.preventDefault(); go(id, {focus: true}); }}, icon(id), h("span", {class: "tab-label"}, labelOf(id)), id === "todo" ? badgeEl() : navCount(id)))))]);
     }
   }
@@ -6811,7 +7719,8 @@
     const newer = !!(meta && meta.rev && txt(meta.rev) !== txt(S.model.rev) && (tms(meta.published_at) || 0) > (tms(S.model.made_at) || 0));
     const phone = window.innerWidth < 760;
     const screen = $("screen");
-    if (screen) screen.textContent = labelOf(S.section);
+    // The header names the tab a screen belongs to: Messages are Contacts, Drafts are Jobs.
+    if (screen) screen.textContent = S.section === "drafts" ? labelOf(navOwner("drafts")) : labelOf(S.section);
     const conn = $("conn");
     if (conn) {
       patch(conn, [h("button", {type: "button", class: "conn-btn", "data-k": "conn", "aria-expanded": String(!!S.connOpen), "aria-controls": "pulse", "data-state": state,
@@ -6819,22 +7728,34 @@
       conn.setAttribute("data-state", state);
     }
     const pulse = $("pulse");
+    // An update on its way is said like an app says it: one line under the header, moving,
+    // until the new version is published and every open view reloads to it by itself.
+    const updating = [...allWork()].find(([, w]) => (txt(w.kind) === "update" || txt(w.kind) === "republish") && ACTIVE.has(txt(w.status) || "queued"));
     if (pulse) {
       const warn = state !== "live" && state !== "connecting";
-      pulse.hidden = !(S.connOpen || warn || old || newer);
-      pulse.className = "pulse" + (warn || newer ? " tone-warn" : "");
-      patch(pulse, [h("span", {}, words + (age ? " Search data from " + age + "." : "") + (newer ? " A newer version is ready." : "")), " ",
-        h("button", {type: "button", class: "btn link", "data-k": "refresh", onclick: () => { try { location.reload(); } catch (e) { /* the frame refuses */ } }}, "Refresh")]);
+      pulse.hidden = !(S.connOpen || warn || old || newer || updating);
+      pulse.className = "pulse" + (warn || newer ? " tone-warn" : updating ? " is-updating" : "");
+      patch(pulse, updating && !warn && !newer && !S.connOpen ?
+        [h("span", {class: "spin", "aria-hidden": "true"}), h("span", {role: "status"}, txt(updating[1].status) === "queued" ? "An update is waiting for Claude. " : "Updating to the newest version. "),
+          h("span", {class: "muted"}, "Keep using the page: it refreshes by itself when it is ready.")] :
+        [h("span", {}, words + (age ? " Search data from " + age + "." : "") + (newer ? " A newer version is ready." : "")), " ",
+          h("button", {type: "button", class: "btn link", "data-k": "refresh", onclick: () => { try { location.reload(); } catch (e) { /* the frame refuses */ } }}, "Refresh")]);
     }
     const tools = $("toptools");
     if (tools) {
       const parts = [];
-      // The pill while work runs, except where the Work rail already shows it.
-      if (!wide()) parts.push(workPill());
+      // The pill while work runs, except where the Work rail already shows it (the Brief
+      // takes the rail's width for its panels).
+      if (!wide() || S.section === "brief") parts.push(workPill());
       // No "Side by side": it added clutter and no way to close it (the maintainer, 2026-10-28).
       if (wide() && S.split) parts.push(btn("Close the second column", () => { S.split = null; keepAddress(false); render(); }, {kind: "quiet", small: true, key: "split-close"}));
       if (phone && S.section === "chat") parts.push(chatMenu());
       if (phone) parts.push(h("a", {href: "#settings", class: "gear", "aria-label": "Settings", "data-k": "gear", onclick: (e) => { e.preventDefault(); go("settings", {focus: true}); }}, icon("settings")));
+      // Full screen, where the app lets a page ask for it; otherwise no button at all.
+      let fsOk = false;
+      try { fsOk = !phone && !!document.fullscreenEnabled && !document.fullscreenElement; } catch (e) { fsOk = false; }
+      if (fsOk) parts.push(h("button", {type: "button", class: "gear", "aria-label": "Full screen", title: "Full screen", "data-k": "fullscreen",
+        onclick: () => { try { document.documentElement.requestFullscreen().then(() => render(), () => null); } catch (e) { /* refused: nothing changes */ } }}, icon("expand")));
       patch(tools, parts);
     }
   }
@@ -6850,11 +7771,11 @@
     const foot = $("foot");
     if (!foot) return;
     patch(foot, [h("p", {class: "foot-line"},
-      h("span", {class: "foot-links"}, navLink("interviews", "Interviews"), " · ", navLink("progress", "Progress"), " · ", navLink("settings", "Settings"), " · "),
+      h("span", {class: "foot-links"}, [["interviews", "Interviews"], ["settings", "Settings"]].filter(([id]) => navOwner(S.tab) !== id && S.section !== id).map(([id, l]) => [navLink(id, l), " · "])),
       "Private to you. ", h("button", {type: "button", class: "btn link", "aria-expanded": String(!!S.footOpen), "data-k": "foot-details", onclick: () => { S.footOpen = !S.footOpen; render(); }}, S.footOpen ? "Hide" : "Details")),
       S.footOpen ? h("p", {class: "foot-text"}, privacyText()) : null]);
   }
-  const RENDER = {todo: renderTodo, jobs: renderJobs, drafts: renderDrafts, contacts: renderContacts, interviews: renderInterviews, progress: renderProgress, settings: renderSettings};
+  const RENDER = {brief: renderBrief, profile: renderProfile, todo: renderTodo, jobs: renderJobs, drafts: renderDrafts, contacts: renderContacts, interviews: renderInterviews, progress: renderProgress, settings: renderSettings};
   function sectionNode(id, where) {
     if (id === "chat") { renderChat(); return talkEl; }
     if (settingUp() && !["todo", "settings", "chat"].includes(id)) return setupWait(id, where);
@@ -6968,6 +7889,10 @@
       patch(main, split ? [h("div", {class: "col"}, sectionNode(S.section)), h("div", {class: "col"}, sectionNode(S.split, "b"))] : [sectionNode(S.section)]);
     }
     const rail = $("rail");
+    // The Brief is a page to take in at a glance, so it has the whole width: no Work rail
+    // beside it (the work pill in the header shows what runs).
+    const shell = $("shell");
+    if (shell) shell.classList.toggle("no-rail", isWide && S.section === "brief" && !S.tweak);
     // An open Tweak panel holds the rail on wide screens until it closes.
     if (rail) { if (isWide) { if (!S.tweak) patch(rail, [workPanel("rail")]); } else if (rail.childNodes.length) rail.replaceChildren(); }
     if (workDlg) { const body = workDlg.querySelector(".work-body"); if (body) patch(body, [workPanel("sheet")]); }
@@ -7118,19 +8043,29 @@
     });
     const fromHash = parseHash();
     const remembered = sget("session", "ljs:section");
-    if (fromHash && fromHash.section) { S.section = fromHash.section; S.split = fromHash.split || null; S.focusItem = fromHash.item; if (fromHash.drafts) setPref("drafts:view", fromHash.drafts); }
-    else if (remembered && SECTION_IDS.has(remembered)) S.section = remembered;
-    else S.section = "todo";
+    // Opened afresh, the page starts where its link points, else on its first section: one
+    // remembered from last time is not where anyone expects to land, and Settings above all
+    // (the maintainer, 2026-10-29). A reload keeps its place, and a link to one item opens it.
+    let reloaded = false;
+    try { const nav = performance.getEntriesByType("navigation")[0]; reloaded = !!nav && nav.type === "reload"; } catch (e) { reloaded = false; }
+    // The same tab coming back (a reload, or back from another site) keeps its place even
+    // where the browser does not say it was a reload.
+    if (sget("session", "ljs:left")) { reloaded = true; sset("session", "ljs:left", null); }
+    window.addEventListener("pagehide", () => sset("session", "ljs:left", "1"));
+    if (fromHash && fromHash.section && (reloaded || fromHash.item || fromHash.section !== "settings")) { S.section = fromHash.section; S.split = fromHash.split || null; S.focusItem = fromHash.item; if (fromHash.drafts) setPref("drafts:view", fromHash.drafts); }
+    else if (reloaded && remembered && SECTION_IDS.has(remembered)) S.section = remembered;
+    else S.section = settingUp() ? "todo" : "brief";
     window.addEventListener("popstate", fromAddress);
+    document.addEventListener("fullscreenchange", () => scheduleRender());
     window.addEventListener("hashchange", fromAddress);
     window.addEventListener("online", () => { S.online = true; scheduleRender(); });
     window.addEventListener("offline", () => { S.online = false; scheduleRender(); });
     let lastWide = wide();
     // Re-laid out where the frame changes: the phone below 760px, the rail from 1280px.
     let lastBand = window.innerWidth < 760 ? 0 : wide() ? 2 : 1;
-    window.addEventListener("resize", () => { const w = wide(); const band = window.innerWidth < 760 ? 0 : w ? 2 : 1; if (w !== lastWide || band !== lastBand) { lastWide = w; lastBand = band; if (w) closeWork(); render(); } });
-    window.addEventListener("focus", () => refreshCanSend());
-    document.addEventListener("visibilitychange", () => { if (!document.hidden) { refreshCanSend(); liveRender(); } });
+    window.addEventListener("resize", () => { const w = wide(); const band = window.innerWidth < 760 ? 0 : w ? 2 : 1; if (w !== lastWide || band !== lastBand) { if ((band === 0) !== (lastBand === 0)) applySize(S.size); lastWide = w; lastBand = band; if (w) closeWork(); render(); } });
+    window.addEventListener("focus", () => { refreshCanSend(); recheckReading().catch(() => {}); });
+    document.addEventListener("visibilitychange", () => { if (!document.hidden) { refreshCanSend(); liveRender(); recheckReading().catch(() => {}); } });
     document.addEventListener("keydown", onKey);
     setInterval(tick, 1000);
     setInterval(liveRender, 60000);
@@ -7147,6 +8082,7 @@
       render();
       if (fromHash && fromHash.work) openWork();
       if (S.focusItem) showItem(S.focusItem);
+      setTimeout(() => { autoReading().catch(() => {}); }, 1500);
     });
     CAP.db.then((db) => {
       if (!db) { S.flags.readOnly = true; scheduleRender(); return; }
@@ -7155,7 +8091,6 @@
       scheduleRender();
     });
     CAP.comments.then((x) => { if (x) refreshCanSend(); });
-    CAP.room.then((x) => { if (x) refreshCanSend(); });
     for (const n of ["sample", "downloads", "assets"]) CAP[n].then(() => scheduleRender());
   }
 

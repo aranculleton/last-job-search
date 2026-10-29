@@ -8,7 +8,7 @@ to comments on its own"), so when every chat that ran `app.py start` published, 
 the setup chat, each long chat from before 4.0 and every split screen at full size. Now one
 chat answers the page, the listener, and every other chat neither publishes nor watches it.
 
-The record is the page's own database, `meta/listener`: {chat, title, kind, since,
+The record is the page's own database, `meta/listener` (stored as `meta/listen`, page_db.STORE_DOC): {chat, title, kind, since,
 answered_at, took_from}. It is shared at once by every chat and every device, so two chats
 that start together cannot both become the listener: each claims it with a write that only
 one can win (a create, refused when the document exists, or a write pinned to the version
@@ -21,8 +21,9 @@ committed, so a chat that knows another one answers starts with no read at all.
 
 `app.py start` prints the steps (`shape`): the listener keeps its watch on and checks in;
 a chat that may become it asks the database; every other chat does neither and says
-nothing about it. The listener hands the page to a small chat of its own once setup is
-done (`HELPER_TITLE`), so a tap never wakes a long one. When nobody answers, the page shows
+nothing about it. No chat is ever started for the page: a helper started for it had none
+of the page's tools, published a spare page, and each lapse started another (2026-10-29).
+When nobody answers, the page shows
 "Claude isn't listening" with one link that opens a chat which becomes the listener
 (`model_part`, `wake_url`).
 
@@ -52,15 +53,22 @@ CACHE = "ljs-listener.json"            # in the git folder: what this checkout l
 # Work or a tap waiting this long after the listener last answered: nobody is answering.
 LAPSE_S = 10 * 60
 HELPER_TITLE = "Job search helper"
+# The helper's own name in their list of chats, and what it says when it starts: the one
+# thing a person needs to know about it (the maintainer, 2026-10-29: "some quick way of
+# explaining what it's for ... even if the user deletes it it's fine it'll start up again").
+HELPER_CHAT_TITLE = HELPER_TITLE      # short: what it is for is said, never in its name
+# Said once in a chat that does not answer the page, the first time it starts (the
+# maintainer, 2026-10-29: a heads-up about a new chat, "DO NOT MAKE THIS PERSIST").
+SAY_OTHER_CHAT = ("Heads up: your page is looked after by {who}, so this chat leaves it alone. "
+                  "Anything you do here is saved to the same place and shows on your page.")
+SAY_HELPER = ("This chat is your job search helper. It does what you ask for on your page, "
+              "even with your computer off, and writes your morning brief if you turn it on. "
+              "Leave it in your list; if it is ever closed, your page offers to start a new one.")
 # What the page's "Wake Claude" link types for the person; they only press Send. The chat
 # that opens runs the command and becomes the listener: a new chat with nothing else to do,
 # so it is the helper itself and starts no other.
 WAKE_PROMPT = ("Look after my job search page from now on: python3 tools/app.py start "
                "--listen --helper")
-HELPER_PROMPT = ("You are the helper for my job search page: it wakes this chat when I tap "
-                 "something there. Run python3 tools/app.py start --listen --helper and do "
-                 "what it prints. Keep this chat small: anything longer than a couple of "
-                 "minutes goes to a chat of its own.")
 REPUBLISH_TITLE = "Bringing your page up to date"
 # All the person hears about their page after an update: one line. A chat that took an
 # update (2026-10-26) asked whether to bring the page up, explained that a safety check had
@@ -69,7 +77,6 @@ REPUBLISH_TITLE = "Bringing your page up to date"
 SAY_UPDATED = "Your page is updated."
 SAY_UPDATING = "Your page is being updated."
 SAY_NOT_UPDATED = "I couldn't update your page just now."
-SAY_HELPER = "Your page now has a small helper chat of its own; please keep it."
 # How every page step after an update is done: at once, unasked, one command at a time (a
 # chained command goes to the desktop app's safety check whole), with nothing left behind.
 NO_ASK = ("Do it now, before anything else, and never ask the person first: bringing their "
@@ -285,7 +292,24 @@ def decide(db: dict, chat: str, out_dir: str, now: dt.datetime | None = None,
                 "lines": ["listen: the page is handed to the helper chat. Send the batch "
                           "below, then stop this chat's watch: ArtifactComments, action "
                           "watch, url <the page>, on: false."]}
-    take = not mine and (listen or lapsed(rec, db, now))
+    gone = lapsed(rec, db, now)
+    # The cloud answers the page; a chat on the person's computer is for what only it can do
+    # (the maintainer, 2026-10-29: "99% on the cloud, the computer for signed-in things").
+    # So a computer chat never takes the page from a cloud chat that still answers it, even
+    # when asked to look after it; only from one that has stopped, so the page is never left
+    # with nobody.
+    held = (not mine and chat_kind() == "computer" and rec.get("kind") == "cloud"
+            and rec.get("chat") and not gone)
+    take = not mine and not held and (listen or gone)
+    if held:
+        _remember(rec, now)
+        return {"role": "other", "batches": [], "record": rec,
+                "lines": ["listen: the cloud chat answers this page and keeps it; this chat on "
+                          "the computer does only what needs the computer. Say nothing about "
+                          "it to the person.",
+                          "listen: if this chat watches the page from before (ArtifactComments, "
+                          "action watch with no url, lists this chat's watches), stop that "
+                          "watch: action watch, url <the page>, on: false."]}
     if mine:
         w.add("update", DOC_COLLECTION, DOC_ID,
               {"answered_at": at, "watching": True, **({"helper": True} if helper else {})},
@@ -293,19 +317,22 @@ def decide(db: dict, chat: str, out_dir: str, now: dt.datetime | None = None,
         rec = dict(rec, answered_at=at, watching=True, **({"helper": True} if helper else {}))
         lines.append("listen: this chat answers the page. Send the batch below (it says this "
                      "chat answered just now). If it is refused, another chat took the page "
-                     "over: read meta/listener again and run this once more.")
+                     "over: read meta/listen again and run this once more.")
     elif take:
-        new = {"chat": chat, "title": title or ("Job search: Claude's helper" if helper
-                                               else "Job search"),
+        new = {"chat": chat, "title": title or (HELPER_CHAT_TITLE if helper else "Job search"),
                "kind": chat_kind(), "helper": bool(helper), "since": at, "answered_at": at,
                "watching": True, "took_from": rec.get("chat") or None}
         w.add("set", DOC_COLLECTION, DOC_ID, new, if_version=version)
         lines.append("listen: this chat answers the page now. Send the batch below. If it is "
-                     "refused, another chat got there first: read meta/listener again and run "
+                     "refused, another chat got there first: read meta/listen again and run "
                      "this once more.")
         if rec.get("chat"):
             lines.append("listen: the chat that answered before stops by itself: its next "
                          "check finds this one.")
+        if helper and chat.startswith("session_"):
+            lines.append(f"listen: name this chat so the person knows what it is: "
+                         f"set_session_title (session_id {chat}, title \"{HELPER_CHAT_TITLE}\"), "
+                         f"and tell them, as it is: \"{SAY_HELPER}\"")
         _remember(new, now, confirmed=False)
         return {"role": "listener", "lines": lines, "batches": w.save("listen"), "record": new}
     else:
@@ -475,19 +502,11 @@ def pin_line(url: str, n: int | None = None) -> str:
 # ------------------------------------------------------------------ start's steps
 
 
-def _origin() -> tuple[str, str]:
-    try:
-        import app_setup
-        return app_setup.origin()
-    except Exception:  # noqa: BLE001
-        return ("", "")
-
-
 def _check_in(chat: str, url: str, claim: bool, listen: bool, helper: bool) -> str:
     flags = (" --listen" if listen else "") + (" --helper" if helper else "")
     if claim:
         return (f"Ask the page which chat answers it, before publishing anything: ArtifactData "
-                f"get (url {url}, collection meta, doc_id listener) and query (collection "
+                f"get (url {url}, collection meta, doc_id listen) and query (collection "
                 "work, where status == queued), both with out_dir <your scratchpad>/listen; "
                 f"then python3 tools/app.py listen <your scratchpad>/listen --chat "
                 f"{chat or '<this chat id>'}{flags}, and send the batch it prints. It makes "
@@ -497,30 +516,10 @@ def _check_in(chat: str, url: str, claim: bool, listen: bool, helper: bool) -> s
     return (f"This chat answers the person's page. Keep its watch on: ArtifactComments, action "
             f"watch, url {url} (a watch that started by itself can end after hours with no "
             "activity; asking for one starts it again). Then check in: ArtifactData get (url "
-            f"{url}, collection meta, doc_id listener, out_dir <your scratchpad>/listen), "
+            f"{url}, collection meta, doc_id listen, out_dir <your scratchpad>/listen), "
             f"python3 tools/app.py listen <your scratchpad>/listen --chat {chat}{flags}, and "
             "send the batch it prints. If it says another chat answers the page now, stop "
             "this chat's watch (watch, url, on: false) and publish nothing.")
-
-
-def _handover(chat: str, url: str, on: str) -> str:
-    owner, name = _origin()
-    src = f"https://github.com/{owner}/{name}" if owner else "<the person's copy on GitHub>"
-    try:
-        import model_guide
-        model = model_guide.for_work("listen", on)["model"]
-    except Exception:  # noqa: BLE001
-        model = None
-    return ("If the check-in kept this chat as the listener, give the page a small chat of its "
-            "own, so a tap never wakes this one at its size. Where this chat can start cloud "
-            f"chats (create_session): create_session with source_url {src}, title "
-            f"\"{HELPER_TITLE}\"" + (f", model {model}" if model else "") +
-            f", prompt \"{HELPER_PROMPT}\"; then python3 tools/app.py listen <your "
-            f"scratchpad>/listen --chat {chat} --hand <the new session's id>, send its batch, "
-            f"and stop this chat's watch (ArtifactComments, action watch, url {url}, on: "
-            f"false). Tell the person this one sentence, and nothing more about it: "
-            f"\"{SAY_HELPER}\" Where this chat cannot start one, carry on and say nothing: it "
-            "answers the page while it is open.")
 
 
 def _numbered(line: str) -> tuple[str, str] | None:
@@ -535,7 +534,6 @@ def shape(code: int, lines: list[str], chat: str = "", listen: bool = False,
     if code != 0 or len(lines) < 2:
         return lines
     import app_setup
-    head = lines[0]
     url = app_setup.page_record().get("url", "") or ""
     who = role(chat, listen, url)
     steps = list(lines[2:])
@@ -563,9 +561,12 @@ def shape(code: int, lines: list[str], chat: str = "", listen: bool = False,
         got = seen()
         told = got.get("told") or {}
         if (chat or "?") not in told:
+            who = "your Job search helper chat" if (got.get("listener") or {}).get("helper") \
+                else "another of your chats"
             add.append("Another chat answers the person's page. This chat neither publishes it "
-                       "nor watches it, and says nothing about that to the person. If it "
-                       "watches the page from before (ArtifactComments, action watch with no "
+                       "nor watches it. Tell the person once, at the end of this reply, as it "
+                       f"is: \"{SAY_OTHER_CHAT.format(who=who)}\" Never again in this chat. If "
+                       "it watches the page from before (ArtifactComments, action watch with no "
                        "url, lists this chat's watches), stop that watch: action watch, url "
                        f"{url}, on: false.")
             told[chat or "?"] = dt.date.today().isoformat()
@@ -586,9 +587,6 @@ def shape(code: int, lines: list[str], chat: str = "", listen: bool = False,
                        f"send the batch it prints (ArtifactData batch, url {url}), and tell "
                        f"the person only: \"{SAY_UPDATING}\"")
         # The pin is offered by the publish step alone (`published_lines`), which records it.
-        done = head.startswith("app start: set up") and "elsewhere" not in head
-        if done and setup_done() and not helper and not (seen().get("listener") or {}).get("helper"):
-            add.append(_handover(chat, url, on))
         try:
             import routines
             if routines.calls():
@@ -623,8 +621,6 @@ def published_lines(url: str, chat: str, first: bool, out_dir: str,
             record_pin_offered()
         except OSError:
             pass
-    if first and chat and setup_done():
-        out.append("app: " + _handover(chat, url, ""))
     return out
 
 
@@ -662,7 +658,7 @@ def after_update(landed: bool = False, chat: str = "") -> list[str]:
     who = role(chat, False, url)
     if not behind:
         return [f"Claude: an update just landed. Bring the person's page up to date now. {NO_ASK}",
-                "1. ArtifactData query, once for each of the collections view, meta and reach "
+                "1. ArtifactData query, once for each of the collections screen, meta and addr "
                 f"(url {url}, out_dir <your scratchpad>/page-data, limit 1000).",
                 "2. python3 tools/app.py view <your scratchpad>/page-writes --dump <your "
                 "scratchpad>/page-data" + (f" --chat {chat}" if chat else ""),
@@ -682,25 +678,9 @@ def after_update(landed: bool = False, chat: str = "") -> list[str]:
         return [head + " Republish it:"] + _publish_now(url, 1)
     return [head + " Republish it:",
             f"1. Which chat answers the page: ArtifactData get (url {url}, collection meta, "
-            "doc_id listener, out_dir <your scratchpad>/listen), then python3 tools/app.py "
+            "doc_id listen, out_dir <your scratchpad>/listen), then python3 tools/app.py "
             f"listen <your scratchpad>/listen --chat {chat or '<this chat id>'}, and send the "
             "batch it prints.",
             "2. If it says another chat answers the page: " + ask + " Then stop here."] + \
         _publish_now(url, 3)
 
-
-def setup_done() -> bool:
-    """Is setup over (a profile, and no setup started and not finished)? While it runs, the
-    chat setting up answers the page: the answers there are what it carries on from."""
-    import app_setup
-    if not app_setup.set_up():
-        return False
-    try:
-        with open(os.path.join(app_setup.profile_dir(), "place.json"), encoding="utf-8") as fh:
-            mark = (json.load(fh) or {}).get("setup") or {}
-    except (OSError, ValueError, AttributeError):
-        mark = {}
-    if mark.get("finished"):
-        return True
-    return not mark.get("started") and not os.path.isfile(
-        os.path.join(app_setup.profile_dir(), app_setup.ANSWERS))

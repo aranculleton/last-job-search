@@ -64,7 +64,7 @@ def _seed(tmp, name, env, now=NOW):
     _app(env, "view", out, "--now", now)
     seed = {}
     base = os.path.join(out, "files")
-    for coll in ("view", "meta"):
+    for coll in ("screen", "meta"):
         d = os.path.join(base, coll)
         for f in sorted(os.listdir(d)) if os.path.isdir(d) else ():
             with open(os.path.join(d, f), encoding="utf-8") as fh:
@@ -235,7 +235,7 @@ def many(built, tmp_path_factory):
 
 def test_a_jobs_section_in_parts_reaches_the_page_whole(run, many):
     html, seed = many
-    assert "data" not in seed["view/jobs"] and seed["view/jobs"]["in_parts"] >= 2
+    assert "data" not in seed["screen/jobs"] and seed["screen/jobs"]["in_parts"] >= 2
     cards = '#main [data-card][data-item^="r9-"]'
     got = run("engine", html=html, seed=seed, viewport=PHONE,
               steps=[{"hash": "jobs", "count": cards, "read": "#main"}])
@@ -245,7 +245,7 @@ def test_a_jobs_section_in_parts_reaches_the_page_whole(run, many):
     assert "Forecasting Analyst 0" in shown["text"] and "Forecasting Analyst 399" in shown["text"]
     # A part not there yet (a write still arriving) is never read as the section: the page
     # keeps the jobs it already had.
-    partial = {k: v for k, v in seed.items() if k != "view/part~jobs~2"}
+    partial = {k: v for k, v in seed.items() if k != "screen/part~jobs~2"}
     got = run("engine", html=html, seed=partial, viewport=PHONE,
               steps=[{"hash": "jobs", "count": cards, "read": "#main"}])
     assert not got["errors"], got["errors"]

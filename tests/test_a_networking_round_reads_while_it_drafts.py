@@ -628,8 +628,7 @@ def test_the_budget_line_counts_what_went_and_gives_no_cap_of_its_own():
     assert " left this week" not in line and "connections_left" not in b
 
 
-def test_a_connection_cap_written_in_the_profile_holds_nothing(monkeypatch):
-    import importlib
+def test_a_connection_cap_written_in_the_profile_holds_nothing(monkeypatch, reload_limits):
     import person
 
     class Mine:
@@ -640,13 +639,13 @@ def test_a_connection_cap_written_in_the_profile_holds_nothing(monkeypatch):
     real = person.module
     monkeypatch.setattr(person, "module", lambda name: Mine if name == "networking" else real(name))
     try:
-        importlib.reload(schema)
+        reload_limits()
         assert "connections_per_week" not in schema.LIMITS
         assert "connections_per_day" not in schema.LIMITS
         assert schema.LIMITS["inmail_credits_per_month"] == 30    # their plan's limit stands
     finally:
         monkeypatch.undo()
-        importlib.reload(schema)
+        reload_limits()
 
 
 # ------------------------------------------------------------ 17. what the friction was

@@ -84,7 +84,7 @@ def test_the_first_sign_in_page_is_a_wait_and_counts_nothing(tmp_path, monkeypat
                          "--name", "Rosalind Achterberg", "--company", "Kestrel Mutual"])
     assert code == 4 and "run `reading.py signin`" in capsys.readouterr().out
     assert not os.path.exists(tmp_path.joinpath(*reading.STOP_FILE))      # no stop
-    assert reading._browser_reads() == []                                  # not a read
+    assert reading._loads() == []                                          # not a read
     assert reading.load("kestrel_achterberg") is None
 
 

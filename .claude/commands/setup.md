@@ -39,8 +39,8 @@ shows as done. `python3 tools/app.py start` again, at any point, says what is le
   `research~<topic>` (`boards`, `market`, `documents`, `voice`, `employers`), written at each
   stage boundary as the `app` skill says, and done once its section is recorded.
 - **What only they can do** (their private copy, the cloud setting that lets this chat reach
-  job sites, the chat on their computer, LinkedIn signed in there) is a card on the page with
-  the registry's own steps; never type those steps into the chat.
+  job sites, their page opened in the Claude desktop app with LinkedIn signed in there) is a
+  card on the page with the registry's own steps; never type those steps into the chat.
 
 **Where no page can be published, setup runs in the chat**, exactly as below. That is a
 session the Artifact tool is not in, or refuses: one on an API key, a gateway token or a cloud
@@ -83,12 +83,10 @@ every other chat's unlanded branch:
 - **`set up`** (or **`set up elsewhere`**, which it brings in first, as its step says):
   the search is set up, and /setup never starts it again (that is `/reset`). Ask nothing,
   and never for a resume or anything else the copy already holds. **In a chat on their
-  computer**: say only "Your search is already set up; this computer is ready for it too.",
-  start the installs in the background (`python3 tools/env_check.py --fix`), write
-  `PROFILE_READS = "browser"` in `profile/networking.py` if it is unset, and go straight on
-  to the networking skill's "On a new computer" step: its browser, LinkedIn, the download,
-  all without a question. **In a cloud chat**: say only "Your search is already set up.",
-  and do what they ask; a part to change is `--section <name>`, below. Never overwrite a
+  computer** (one they already had): say only "Your search is already set up.", start the
+  installs in the background (`python3 tools/env_check.py --fix`) and do what they ask;
+  LinkedIn is read by their page, never by this chat. **In a cloud chat**: say only "Your
+  search is already set up.", and do what they ask; a part to change is `--section <name>`, below. Never overwrite a
   filled profile wholesale, and never put placeholders back into one.
 - **`setup going in another chat`**: another chat is writing it. Say its one line ("Your
   setup is still going in your other chat; I'll be ready here once it's done.") and start
@@ -150,8 +148,8 @@ meanwhile."
    (identity; documents from their country's defaults until research says otherwise),
    `01-candidate-profile.md` from the resume, and the place and work they named. Then
    `python3 tools/place.py started` (so any other chat sees a setup under way) and
-   `python3 tools/place.py auto` (it records where they work when this chat can tell, and
-   otherwise hands you one question for the end), commit, push, and **land it on master
+   `python3 tools/place.py auto` (it records where they work when this chat can tell; nobody
+   is asked), commit, push, and **land it on master
    now** (RUNBOOK.md, "Landing on master"), so a chat they open on their computer finds it
    and waits rather than starting again. Push after every step from here on, and land each:
    a dropped chat must never lose their answers.
@@ -206,9 +204,9 @@ cited. Where they were not asked, use the default and never a question:
 | Tone | Plain and confident; their reactions correct it (`learned.py`) |
 | Confidential | Yes when they are employed, unless they said otherwise |
 | Notice period, achievements the resume gave no number for | `[CONFIRM: ...]`, asked in later sessions |
-| Reading LinkedIn profiles | `PROFILE_READS = "browser"` where `place.py auto` prints it (a chat on their computer, or a cloud chat the desktop app started), written without asking; on a phone or the web, unset, so a paste |
+| Reading LinkedIn profiles | `PROFILE_READS = "browser"`, written without asking wherever setup runs: their page reads profiles in the Claude desktop app, and "I paste them" in its Settings turns it off |
 | LinkedIn Premium | Unset: notes keep to a free account's limits; asked later |
-| Their LinkedIn download | On a computer, requested at once by the networking skill's "On a new computer" step; on a phone or the web, asked later, by the brief |
+| Their LinkedIn download | Asked on the page (a To do card, and Settings, LinkedIn), and again by the brief once it is a fortnight old |
 
 Then the state files (setup-sections.md, the last section), and commit and push.
 
@@ -242,20 +240,21 @@ Then the state files (setup-sections.md, the last section), and commit and push.
 
 ## Step 5: The brief, and the end
 
-- **The brief, set up with no questions.** List their scheduled tasks (`list_triggers`, every
-  page) and run `python3 tools/routines.py brief --triggers <each page>`. A brief that exists,
-  under any name, is attached to and never made twice. In a cloud chat, with none, it prints
-  the calls to make, in order (`create_session` on their copy, `create_trigger` bound to it,
-  and a one-off first brief: never `fire_trigger`), then `routines.py record`; make them, and
-  tell them its one line. On a computer it says what to do (automation/README.md, "For Claude: the rules of setting it up").
-- **Where they will work**: if `place.py auto` handed you its question, ask it now, record the
-  answer (`python3 tools/place.py record computer|phone|both`), and pass on the one line
-  `python3 tools/place.py next` prints.
+- **The brief is on from the start, every day.** Turn it on now, asking nothing: the chat
+  that answers the page is where it runs, so no chat is made for it. `list_triggers` (every
+  page), `python3 tools/routines.py brief --triggers <each page>`, and the calls it prints,
+  then pass on the one line it prints (the time, and that the bell on their Brief changes it
+  or turns it off). In a chat on their computer it prints the one line to pass on instead:
+  the bell starts it from the cloud with one press, so it comes with the computer off.
+  Where there is no page: automation/README.md, "For Claude".
+- **Networking needs their page open once in the Claude desktop app**: it reads LinkedIn there
+  by itself (allow Claude's browser when asked, sign in to LinkedIn if it says so), and the
+  page's To do card walks them through it. Say it in one line; never call it optional.
+- **Where they will work** is never asked: pass on the one line `python3 tools/place.py next`
+  prints.
 - **Finished**: `python3 tools/place.py finished`, commit, and land it; with a page, bring its
   data up to date (`python3 tools/app.py view`, the `app` skill), so it shows the shortlist
-  and the brief. Then `python3 tools/app.py start` once more: setup being over, it hands the
-  page to a small helper chat of its own, so a tap on the page never wakes this long one. In a chat on their computer, go straight on to the networking skill's "On a
-  new computer" step.
+  and the brief. This chat goes on answering the page.
 - **Then, in a few lines:**
 
 > **You're set up.** Everything about you stays in your private copy.

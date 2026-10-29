@@ -66,7 +66,7 @@ publish their jobs for search engines), so a named target is asked for everythin
 open instead of being found by keyword. A new employer goes in that map only after
 `python3 tools/ats_boards.py --add <ats> <token>` has seen it return jobs.
 
-Run all portal CLI calls in parallel where possible using the Agent tool. Collect all `results` arrays into a single pool for Step 2, keeping each result tagged with its source portal skill (for Step 2 `detail` lookups).
+Run all portal CLI calls in parallel where possible, as background commands in this chat (Bash with `run_in_background`), never as agents: an agent to run one command costs a whole session of its own. Collect all `results` arrays into a single pool for Step 2, keeping each result tagged with its source portal skill (for Step 2 `detail` lookups).
 
 If a CLI tool exits with a non-zero code, log the error message and continue - do not abort the whole search.
 

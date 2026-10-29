@@ -64,6 +64,7 @@ documents/rounds/added/jobs.json merge=ljs-state text eol=lf
 documents/rounds/kept/jobs.json merge=ljs-state text eol=lf
 documents/page_assets.json merge=ljs-state text eol=lf
 documents/network/page_reads_queue.json merge=ljs-state text eol=lf
+documents/network/page_reader.json merge=ljs-state text eol=lf
 documents/applications/*/verify.json merge=ljs-state text eol=lf
 documents/network/own_profile_review.json merge=ljs-state text eol=lf
 documents/network/.page_reads.json merge=ljs-state text eol=lf

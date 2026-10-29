@@ -207,6 +207,9 @@ JSON_FILES = {
     # An application's latest checks (verify_batch.py _record): the newer run stands whole.
     "documents/applications/*/verify.json": {"whole": ("",), "stamps": ("at",), "indent": 1,
                                              "ascii": True},
+    # The page as a reader of LinkedIn (place.PAGE_READS_FILE): the later check or read stands.
+    "documents/network/page_reader.json": {"whole": ("",), "stamps": ("checked_at", "last_read_at"),
+                                           "indent": 1, "ascii": True},
     "documents/network/.page_reads.json": {"lists": {"reads": ("at", "url")}, "indent": 1,
                                            "ascii": True, "newline": False},
     "documents/network/.signed_in.json": {"whole": ("",), "stamps": ("at",), "indent": 1,
@@ -322,6 +325,7 @@ JSON_NAMES = {
                      "tools/draft_audit.py: rules_*.json", "tools/draft_audit.py: draft_*.json",
                      "tools/draft_audit.py: **.json", "tools/draft_audit.py: .json",
                      "tools/draft_pack.py: rules_*.json", "tools/draft_pack.py: .json",
+                     "tools/draft_pack.py: research_*.json",
                      "tools/stage_picks.py: audit_*.json", "tools/stage_picks.py: draft_*.json",
                      "tools/stage_picks.py: audit_{}.json", "tools/stage_picks.py: draft_{}.json",
                      "tools/stage_picks.py: model_audit_{}.json",
@@ -330,7 +334,7 @@ JSON_NAMES = {
                      "tools/tweak.py: draft_*.json", "tools/tweak.py: research_*.json"),
                     _SCRATCH),
     **dict.fromkeys(("ljs-app-watch.json", "ljs-job-sites.json", "ljs-listener.json",
-                     "ljs-place.json",
+                     "ljs-place.json", "ljs-tidy.json",
                      "ljs-reactions.json", "ljs-upgrades-listed.json", "ljs_own_tests.json",
                      ".reactions.json"), _GITDIR),
     **dict.fromkeys(("claude_surfaces.json", "public_names.json", "removed_names.json",
@@ -338,11 +342,16 @@ JSON_NAMES = {
                      "tools/leak_scan.py: **.json", "tools/markets.py: *.json",
                      "tools/markets.py: .json"), _APP),
     **dict.fromkeys(("reading-ledger.json", "budget.json"), _OUTSIDE),
+    # profile/tidy.json (tools/tidy.py): the old chats tidied away, a list only ever added
+    # to, by the one chat that answers the page once a day; a second chat that took the page
+    # over adds other chats' ids, never a different value for one already there.
+    "tidy.json": "written by the chat that answers the page alone, once a day, a list only "
+                 "added to: two chats never write one entry differently",
     **dict.fromkeys(("tools/app_setup.py: .json", "tools/bar.py: *.json",
                      "tools/build_app.py: .json", "tools/company_research.py: *.json",
                      "tools/followup_drafts.py: *.json", "tools/stage_picks.py: .json",
                      "tools/network/why.py: *.json", "tools/profile_upgrades.py: .json",
-                     "tools/person.py: .json", "FILE.json"), _READS),
+                     "tools/person.py: .json", "tools/app_actions.py: .json", "FILE.json"), _READS),
     **dict.fromkeys((".parts.json", "tools/tweak.py: draft.*.parts.json"), _HASHED),
     # Wired under a pattern rather than by name.
     **dict.fromkeys(("_hosts.json", "tools/company_research.py: %s--%s.json",

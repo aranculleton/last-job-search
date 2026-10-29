@@ -1,4 +1,5 @@
-"""LAYOUT_SPEC section 7, a check for each line, on a phone and wide, light and dark.
+"""The layout checklist (LAYOUT_SPEC section 7, now part of templates/app/DESIGN.md), a check
+for each line, on a phone and wide, light and dark.
 
 Every section is measured once per model, width and theme (tests/app_page/harness.js,
 S.layout), and each numbered line of the checklist is its own test over those numbers. The
@@ -41,8 +42,6 @@ KNOWN = {
     (8, "drafts-messages", "msg-priya-thanks"): BOTH, (8, "drafts-messages", "msg-noor-1"): BOTH,
     # 8: the LinkedIn download card shows its steps as buttons (and Choose its folder, wide).
     (8, "todo", "linkedin-export"): BOTH,
-    # 9: two to-dos about one role both say Open in Jobs, named after the same title.
-    (9, "todo", "Open in Jobs"): BOTH,
     # 9: two applications at one employer, each row named by the employer alone.
     (9, "progress", "Ellerwick Trust"): {"wide"},
 }
@@ -219,6 +218,8 @@ def test_11_spacing_keeps_to_the_scale(vp, scheme):
         for name in re.findall(r"var\((--[\w-]+)", val):
             if name == "--tabs-h":
                 continue  # the tab bar's own height, kept clear of, not a space between things
+            if name == "--target":
+                continue  # a tap target's reach above and below its line, taken back by a margin (4.3)
             got = re.fullmatch(r"\s*(\d+)px\s*", tokens.get(name, ""))
             if not got or int(got.group(1)) not in scale:
                 bad.append((prop, name, tokens.get(name)))
@@ -251,7 +252,15 @@ def test_13_sheets_sit_at_the_bottom_with_close_on_top_and_give_focus_back(layou
         if kind == "filterAt":
             continue
         phone = vp == "phone"
-        if (phone and (m["bottom"] < m["vh"] - 2 or m["h"] > 0.85 * m["vh"])) or not m["close"] or m["closeRow"] > 48 or not m["focusBack"]:
+        # An open sheet has its rows in it: WebKit once drew the Tweak sheet 2px tall, its
+        # bottom where it belongs and nothing above it (2026-10-29).
+        if m["h"] < 120 or m["stray"]:
+            bad.append((kind, m))
+        elif vp == "wide" and kind == "filter" and not (0 <= m["gap"] <= 16 and m["drawnRight"] <= m["vw"]):
+            # On a laptop the filter panel opens just under its button: placed from a
+            # measurement taken in another engine's units, it covered the button (2026-10-29).
+            bad.append((kind, m))
+        elif (phone and (m["bottom"] < m["vh"] - 2 or m["h"] > 0.85 * m["vh"])) or not m["close"] or m["closeRow"] > 48 or not m["focusBack"]:
             bad.append((kind, m))
     assert not bad, bad
 

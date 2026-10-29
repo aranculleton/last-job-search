@@ -53,7 +53,7 @@ def capabilities() -> dict:
 
     db: owner-only, read and write, at the root, so a person the page is shared with reads
     nothing, and again on reach/, where each contact's address is kept for the owner; user: to know the owner; downloads: each document saved as a file; comments,
-    full form: the doorbell that wakes a chat; room: a chat open beside the page; sample:
+    full form: the doorbell that wakes a chat, rung in the tap; sample:
     quick answers on the page; assets: the documents' PDFs, uploaded by a chat and read
     back by the page, the LinkedIn download and a resume the person adds, and the pictures
     they add to the chat, which the chat that answers reads by id; mcp: Claude's
@@ -61,20 +61,23 @@ def capabilities() -> dict:
     page is open in the Claude desktop app, with the four tools reading a profile needs.
     """
     return {
-        # reach/<contact>, each contact's LinkedIn address or email for Open profile and Open
-        # in email, is named too, so it stays the owner's alone whatever the root rule says.
+        # addr/part~<n> (reach/<contact> before 4.3), each contact's LinkedIn address or email
+        # for Open profile and Open in email, is named too, so it stays the owner's alone
+        # whatever the root rule says.
         "db": {"rules": [{"path": "", "read": "owner", "write": "owner"},
-                         {"path": "reach", "read": "owner", "write": "owner"}]},
+                         {"path": "reach", "read": "owner", "write": "owner"},
+                         {"path": "addr", "read": "owner", "write": "owner"}]},
         "user": {},
         "downloads": True,
         "comments": {},
-        "room": {},
         "sample": {},
         "assets": {},
+        # Claude's own browser in the desktop app, for reading LinkedIn. The page wakes its
+        # chat with the comment doorbell, rung in the tap: the "Claude Code Remote" connector
+        # it used for a day could not even load on the maintainer's account, and asked on
+        # every tap (live check, 2026-10-29).
         "mcp": {"servers": [{"server": "host:claude_browser",
-                             "tools": ["navigate", "get_page_text", "read_page", "preview_start"]},
-                             # The page wakes the chat that answers it by itself.
-                             {"server": "Claude Code Remote", "tools": ["send_message", "list_environments", "create_session"]}]},
+                             "tools": ["navigate", "get_page_text", "read_page", "preview_start"]}]},
     }
 
 
@@ -126,11 +129,50 @@ def tables() -> dict:
             "work_cost": dict(app_alerts.WORK_COST)}
 
 
+def compact_js(js: str) -> str:
+    """The script without its comment-only lines, its block comments and its indentation.
+
+    A chat reads the whole page before it publishes it, so every byte here is read on each
+    republish (the maintainer, 2026-10-29: "every single process ... cheap"). Only what a
+    browser never runs goes: app.js holds no template literal (tests/test_the_page_is_one_
+    safe_document.py keeps it so), so no line can be inside a string that spans lines, and a
+    line opening with // or /* is a comment wherever it sits. Code and line breaks stay as
+    written, so automatic semicolons fall exactly where they did."""
+    out, in_block = [], False
+    for line in js.split("\n"):
+        t = line.strip()
+        if in_block:
+            if "*/" in t:
+                in_block = False
+                rest = t.split("*/", 1)[1].strip()
+                if rest:
+                    out.append(rest)
+            continue
+        if not t or t.startswith("//"):
+            continue
+        if t.startswith("/*"):
+            if "*/" not in t[2:]:
+                in_block = True
+                continue
+            rest = t[2:].split("*/", 1)[1].strip()
+            if rest:
+                out.append(rest)
+            continue
+        out.append(t)
+    return "\n".join(out)
+
+
+def compact_css(css: str) -> str:
+    """The stylesheet without comments, indentation or blank lines (see compact_js)."""
+    css = re.sub(r"/\*.*?\*/", "", css, flags=re.S)
+    return "\n".join(t for t in (ln.strip() for ln in css.split("\n")) if t)
+
+
 def render(model: dict) -> str:
     """The page, as the Artifact tool publishes it: content only, no doctype or head."""
-    css = _read("app.css")
+    css = compact_css(_read("app.css"))
     colours = palettes.css()
-    js = _read("app.js")
+    js = compact_js(_read("app.js"))
     page = _read("page.html")
     if "</style" in css.lower() or "</style" in colours.lower():
         raise ValueError("the stylesheets must not contain a closing style tag")

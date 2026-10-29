@@ -14,11 +14,22 @@ and still applies to anything sent back there.
 
 These apply whenever the change is to the app, whichever repo the session started in.
 
+- **The page has one design language: `templates/app/DESIGN.md`.** Read it before changing
+  anything a person sees. Its rules are tested on every screen (one bin, never an x; one "?"
+  a card; soft cards with no side lines; plain words), so a page that breaks one fails.
+
+- **The whole suite runs once, on the pull request's CI**, which is free on the public app;
+  before a push, only the scans and the changed tests ("Before pushing"). Never the whole
+  suite again by hand.
+
 - **Windows is never run on a change.** Linux and Mac decide whether a change is green; a
   Windows question is answered from Microsoft's and Python's documentation and from the
-  tests that fake Windows. Its CI jobs run only when started by hand (Actions, Run
-  workflow). Each Windows run took 45 minutes and held 4.0.0 for hours (the maintainer,
-  2026-10-26).
+  tests that fake Windows. Its CI jobs run on a release pull request (one titled "Release
+  X.Y.Z"), in the weekly Platforms run and by hand, all on the public app, whose minutes are
+  free (the maintainer, 2026-10-29: Windows people must be able to use it, at no cost to
+  the maintainer). A release is green on Windows before it merges; a red weekly run is
+  fixed in the next release. Each Windows run took 45
+  minutes and held 4.0.0 for hours when it ran on every change (the maintainer, 2026-10-26).
 - **Look first at how it is meant to be done, and how others do it**, for every question
   about the app, bug fix, feature and release, without being asked (the maintainer,
   2026-10-23): Claude's own documentation (code.claude.com and docs.claude.com) for anything
@@ -182,8 +193,17 @@ reason in one line in the reply.
    context but not the conclusions, asked for real bugs with concrete inputs. Each finding
    is checked, the real ones fixed with a test that fails without the fix, the rejected
    ones named with the reason. Then a bug hunt over the parts the changes touch, not only
-   the lines, and the time-shift check (the suite with the clock moved 30, 90 and 400
-   days on). A full `./tools/ci_local.sh`, not `--quick`.
+   the lines. The whole suite is the release pull request's own CI run, once, on its final
+   commit (free on the public app); by hand, only "Before pushing". The same run checks
+   everywhere people open the app (`tools/everywhere.sh`, the Everywhere workflow): the
+   page in Safari's engine, Firefox, a Mac's and Windows' type, French and German and the
+   far time zones, and the rest with the clock 30, 90 and 400 days on, in the far time
+   zones, from a folder with spaces and accents and on the newest Python. Each of its two
+   jobs ends in one summary: read those lines, reproduce with
+   `EVERYWHERE_TESTS="<the files>" tools/everywhere.sh page|suite <variant>`, never re-run
+   the whole of it by hand. Title the pull request
+   "Release X.Y.Z: ...", so its Platforms run takes Windows too, and merge it only when
+   Linux, Mac and Windows are green: a Windows failure is fixed in the release, never left.
 1. Before the release PR merges, run the maintainer's own tests against it:
    `python3 tools/try_personal_tests.py <the maintainer's repo>`. It lays this tree over a
    copy of that repo, the way a sync would, and changes neither. A failure the release
@@ -212,6 +232,34 @@ reason in one line in the reply.
    the rehearsal run once more against the published tag: a cloud chat and a computer chat
    each take it and run the everyday commands. The maintainer hears the number, the reason,
    what changed for them, what was checked with real numbers, and what was not tested.
+5. **Hand over, then stop.** Write `docs/NEXT_BUILDER.md` afresh for the next chat: what
+   the release left (anything unfinished, anything not tested, what Linux, Mac and Windows
+   found, the maintainer's notes not yet built, decisions to keep), in plain words and with
+   no real person in it (the push gate scans it like any file). Land it on master, then tell
+   the maintainer in one line that the release is out, and recommend a new chat for the next
+   version: every step of a long chat re-reads all of it, and everything a builder needs is
+   in the repo. Never start that chat yourself; the maintainer starts it with the builder
+   prompt below, when they choose.
+
+## The builder prompt
+
+One chat builds one version. The maintainer starts it by pasting this, with their notes
+under the last line:
+
+```text
+You are the builder for last-job-search, the public app at github.com/aranculleton/last-job-search. I am its maintainer. My own private copy of the app is attached to this chat: read it only so tools/push_gate.sh can build the denylist from it, and never change it.
+
+Before anything else, read MAINTAINING.md ("Developer rules", "Before pushing", "Releasing"), docs/NEXT_BUILDER.md (what the last release left you), and templates/app/DESIGN.md before you touch the page.
+
+How we work:
+- Build what my notes below ask, all of it into [Unreleased] on one branch, with tests. Nothing is released until I say "release it"; then do MAINTAINING.md "Releasing" in full, Linux, Mac and Windows included.
+- Cheap: every step re-reads this chat, so take few steps. Never poll; GitHub wakes you. Read only the failing lines. The whole suite runs on GitHub for free, never by hand. Run tools/push_gate.sh before every push, batch your commits, and push once per round of fixes.
+- Nothing private and no real person's name in the app, ever; the gate passes before any push.
+- Talk to me in plain words: one recommendation, never a question a sensible default answers.
+- When the release is out, write docs/NEXT_BUILDER.md, tell me in one line, and recommend a new chat for the next version.
+
+My notes for this version:
+```
 
 A broken release is fixed forward: a fix on master and a new patch release. Never move or
 delete a published tag, because repos that already took it would then hold history the
@@ -253,13 +301,27 @@ file edit, and the edit happens before the reply.
 
 ## Before pushing
 
-Run what CI runs:
+**On the app, GitHub runs the whole suite on every pull request, for nothing** (a public
+repo's minutes are free), so that run is the evidence and the whole suite is never run again
+by hand: three local runs of about twenty minutes each held up the 4.3 release for an hour
+(the maintainer, 2026-10-29: "this is taking so long"). Before a push, only what CI cannot
+do (the scans with the maintainer's names, which must pass before anything is public) and
+what takes a minute or two:
 
 ```bash
-python3 tools/lint_skills.py
-python3 tools/security_guards.py
-python3 -m pytest tests -q
+tools/push_gate.sh <the maintainer's repo> --text <the PR description> --push <branch>
 ```
+
+One command: it builds the denylist from the maintainer's repo (kept 12 hours), scans the
+exact tree, every patch and commit message since master and the text to be posted, runs the
+name guard, the quick checks and the tests for what changed in parallel workers, and pushes
+only when every step passed. The page's browser tests run in CI's own job (`page` in
+`ci.yml`), beside the rest; a release pull request's Platforms run adds Windows, also beside
+the rest. Batch the commits: each push to an open pull request restarts its runs, and the
+Windows ones take the better part of an hour.
+
+Fix what CI finds in one more push. A private copy has no free CI, so
+there `./tools/ci_local.sh --quick` stays the rule ("CI on a private repo", below).
 
 In a touched portal CLI, also `bun run typecheck` and `bun test`.
 

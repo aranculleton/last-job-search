@@ -1408,7 +1408,8 @@
           "larkspur_retail_ltd_kit"
         ]
       },
-      "draft": null
+      "draft": null,
+      "prep_text": "# Larkspur Retail: Senior Supply Chain Analyst\n\nLast updated Mon 26 Oct. Next: the phone screen on Wednesday at 13:00.\n\n*Before and after, never during: nothing here is open while you are on the call.*\n\n## What they will ask\n\n- Why supply chain analytics, and why Larkspur.\n- A forecast you built and what changed because of it.\n  - Say the SKU count and the error before and after.\n  - Name who used it.\n- How you handle a stakeholder who disagrees with the numbers.\n\n## The forecasting skeleton to know\n\nType this once from memory:\n\n```python\nimport pandas as pd\ndef clean(df):\n    df = df.copy()\n    # parse dates, drop duplicates\n    return df.drop_duplicates()\n```\n\n## Your plan\n\n| Day | Do |\n|---|---|\n| Mon 26 | Read the job posting again; write three stories. |\n| Tue 27 | Say each story out loud, two minutes each. |\n\n> Ask them what a good first quarter looks like.\n"
     },
     {
       "id": "int-harbourline-risk",
@@ -1747,24 +1748,6 @@
       "rev": "st3"
     },
     {
-      "key": "work_either",
-      "label": "Work either chat can do goes to",
-      "kind": "choice",
-      "value": "cloud",
-      "choices": [
-        [
-          "cloud",
-          "The cloud chat"
-        ],
-        [
-          "computer",
-          "The chat on my computer"
-        ]
-      ],
-      "id": "setting-work_either",
-      "rev": "st4"
-    },
-    {
       "key": "suggestions",
       "label": "Suggestions",
       "kind": "choice",
@@ -1801,6 +1784,82 @@
       {
         "text": "A new search found 6 roles worth a look",
         "item": "r12-1"
+      }
+    ],
+    "sections": [
+      {
+        "title": "Lead",
+        "kind": "lead",
+        "text": "A phone screen with **Larkspur Retail** on Wednesday at 1pm, and Juno at Larkspur has replied and is waiting on you. Two applications from last week are still quiet.",
+        "items": []
+      },
+      {
+        "title": "Next three",
+        "kind": "next",
+        "text": "",
+        "items": [
+          {
+            "text": "Reply to Juno at Larkspur Retail.",
+            "item": "larkspur_retail_castellan",
+            "section": "people"
+          },
+          {
+            "text": "Read the prep for the Larkspur Retail phone screen.",
+            "item": "int-larkspur-supply",
+            "section": "interviews"
+          },
+          {
+            "text": "Look at the 6 new roles from the last search.",
+            "item": null,
+            "section": "jobs"
+          }
+        ]
+      },
+      {
+        "title": "Owed",
+        "kind": "owed",
+        "text": "",
+        "items": [
+          {
+            "text": "**Juno, Larkspur Retail:** a reply to her note about the analytics team.",
+            "item": "larkspur_retail_castellan",
+            "section": "people"
+          }
+        ]
+      },
+      {
+        "title": "News",
+        "kind": "news",
+        "text": "",
+        "items": [
+          {
+            "text": "The central bank held its rate at 4% this week ([the bank's statement](https://example.com/rates)). Retailers' planning teams expect steadier demand, worth a line in supply chain conversations.",
+            "item": null,
+            "section": null
+          },
+          {
+            "text": "Two large grocers announced new distribution centres near the city ([a trade report](https://example.com/report)), so demand planning roles there may grow.",
+            "item": null,
+            "section": null
+          }
+        ]
+      },
+      {
+        "title": "Since 22 October",
+        "kind": "since",
+        "text": "",
+        "items": [
+          {
+            "text": "Applications sent: 2.",
+            "item": null,
+            "section": "jobs"
+          },
+          {
+            "text": "Replies: 1, from Juno at Larkspur Retail.",
+            "item": "larkspur_retail_castellan",
+            "section": "people"
+          }
+        ]
       }
     ]
   },
@@ -2183,7 +2242,7 @@
   },
   "tip": {
     "area": "search",
-    "text": "First goes are the least fitted to you. Say what's off in Chat and the next one learns.",
+    "text": "Tip: tap Tweak on anything Claude writes to make it shorter, warmer or reworded. Your changes teach it your style.",
     "rev": "tp1"
   },
   "linkedin_export": {
@@ -2214,6 +2273,7 @@
   "schedule": {
     "id": "schedule",
     "set_up": true,
+    "off": false,
     "when": "Mondays and Thursdays at 7:38",
     "days": [
       1,
@@ -2227,7 +2287,9 @@
     "actions": {
       "move": "brief.move",
       "pause": "brief.pause",
-      "resume": "brief.resume"
+      "resume": "brief.resume",
+      "off": "brief.off",
+      "on": "brief.on"
     },
     "rev": "sc1"
   },

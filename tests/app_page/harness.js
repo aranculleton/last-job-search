@@ -12,7 +12,17 @@
 const fs = require("fs");
 const path = require("path");
 const readline = require("readline");
-const {chromium} = require("playwright");
+const playwright = require("playwright");
+// The engine, language and time zone the page is opened in. Chrome's engine, British English
+// and London unless a release check asks otherwise (MAINTAINING.md, "Releasing"): the Claude
+// app on an iPhone draws the page with Safari's engine, and claude.ai opens in any browser,
+// language and time zone (2026-10-29).
+const ENGINE = process.env.LJS_PW_ENGINE || "chromium";
+// What the page copied: the clipboard itself in Chrome's engine, which lets a test read it
+// back; elsewhere what the page handed to it (fake_claude.js keeps it).
+const copied = (page) => page.evaluate((chromium) => chromium ? navigator.clipboard.readText() : (window.__ljsCopied || ""), ENGINE === "chromium");
+const LOCALE = process.env.LJS_PW_LOCALE || "en-GB";
+const ZONE = process.env.LJS_PW_TZ || "";
 
 const FAKE = path.join(__dirname, "fake_claude.js");
 const SHOTS = process.env.LJS_SHOTS || "";
@@ -30,13 +40,35 @@ function merge(a, b) {
   }
   return out;
 }
+// Where the store keeps a record (tools/page_db.py STORE, STORE_DOC): a test names it by
+// what it is, as the engine's code does, and the store holds it under 4.3's own name. A
+// contact's address goes into the few records that hold them all (page_db.addr_docs).
+function storedPath(p) {
+  if (p === "meta/listener") return "meta/listen";
+  if (p === "meta/current") return "meta/now";
+  return p.replace(/^view\//, "screen/").replace(/^chats\//, "beats/").replace(/^locks\//, "holds/");
+}
+// An action by what it is (its item and action): every tap has an id of its own from 4.3, the
+// item and action then a stamp (app.js actionId).
+function actionAt(store, base) {
+  const p = store.list("actions/").find((x) => x === base || x.startsWith(base + "~"));
+  return p ? store.get(p) : null;
+}
 class Store {
   constructor(seed) {
     this.docs = new Map();
     this.leases = new Map();
     this.pages = new Set();
     this.v = 0;
-    for (const [p, d] of Object.entries(seed || {})) this.docs.set(p, {data: clone(d), version: ++this.v});
+    for (const [p, d] of Object.entries(seed || {})) {
+      if (p.startsWith("reach/")) {
+        const cur = this.docs.get("addr/part~1") || {data: {contacts: {}}, version: 0};
+        cur.data.contacts[p.slice(6)] = clone(d);
+        this.docs.set("addr/part~1", {data: cur.data, version: ++this.v});
+        continue;
+      }
+      this.docs.set(storedPath(p), {data: clone(d), version: ++this.v});
+    }
   }
   change(p, data) {
     const version = ++this.v;
@@ -64,10 +96,11 @@ class Store {
     }
     return {error: "invalid_argument"};
   }
-  get(p) { const d = this.docs.get(p); return d ? clone(d.data) : null; }
-  version(p) { const d = this.docs.get(p); return d ? d.version : 0; }
+  get(p) { const d = this.docs.get(storedPath(p)); return d ? clone(d.data) : null; }
+  version(p) { const d = this.docs.get(storedPath(p)); return d ? d.version : 0; }
   // A chat's write: ArtifactData pinned to the version it read, refused when it moved on.
   chat(p, data, ifVersion, op) {
+    p = storedPath(p);
     if (ifVersion !== undefined && this.version(p) !== ifVersion) return {refused: true};
     const cur = this.docs.get(p);
     const next = op === "update" && cur ? merge(cur.data, data) : clone(data);
@@ -79,11 +112,18 @@ class Store {
 
 // ---------------------------------------------------------------- opening a page
 let browser = null;
+const DRAWN_RECT = `Element.prototype.__drawnRect = function () {
+  const r = this.getBoundingClientRect(), b = document.body;
+  if (!b || !b.offsetWidth || !b.contains(this)) return r;
+  const d = (parseFloat(b.style.zoom) || 1) / (b.getBoundingClientRect().width / b.offsetWidth);
+  return Math.abs(d - 1) < 0.001 ? r : new DOMRect(r.x * d, r.y * d, r.width * d, r.height * d);
+};`;
 async function open(o) {
   const ctx = await browser.newContext({
-    viewport: o.viewport || {width: 375, height: 812}, colorScheme: o.scheme || "light",
-    reducedMotion: o.reducedMotion || "no-preference", locale: "en-GB", timezoneId: o.timezoneId || "Europe/London",
-    permissions: o.clipboard === false ? [] : ["clipboard-read", "clipboard-write"], hasTouch: !!o.touch,
+    viewport: o.viewport || {width: 375, height: 812}, colorScheme: o.scheme || "light", deviceScaleFactor: o.scale || 1,
+    reducedMotion: o.reducedMotion || "no-preference", locale: LOCALE, timezoneId: o.timezoneId || ZONE || "Europe/London",
+    // Only Chrome's engine takes clipboard permissions; the others allow a copy on a tap.
+    permissions: o.clipboard === false || ENGINE !== "chromium" ? [] : ["clipboard-read", "clipboard-write"], hasTouch: !!o.touch,
     forcedColors: o.forcedColors || "none", contrast: o.contrast || "no-preference",
     javaScriptEnabled: o.javaScriptEnabled !== false,
   });
@@ -98,9 +138,16 @@ async function open(o) {
       for (const [from, to] of o.replace || []) body = body.split(from).join(to);
       return route.fulfill({status: 200, contentType: "text/html; charset=utf-8", body});
     }
+    // A picture the page holds in memory is not the network: Safari's engine routes it here,
+    // where aborting it left a pasted screenshot without its preview (2026-10-29).
+    if (url.startsWith("blob:") || url.startsWith("data:")) return route.continue();
     return route.abort();
   });
   await ctx.addInitScript({content: "window.__LJS_FAKE = " + JSON.stringify(o.fake || {}) + ";"});
+  // Every box the harness measures, as drawn. The page zooms its body; Chrome and Firefox
+  // measure after that zoom and Safari before it (probed 2026-10-29), so a Safari box read
+  // 10 to 15% too big against the screen. The page's own code is left to measure natively.
+  await ctx.addInitScript({content: DRAWN_RECT});
   // What this viewer chose before (kept on their device), the Claude app's own appearance
   // choice on the root, or storage refused altogether: each set before any page script runs.
   if (o.look) await ctx.addInitScript({content: "try { " + Object.entries(o.look).map(([k, v]) => "localStorage.setItem(" + JSON.stringify("ljs:" + k) + ", " + JSON.stringify(v) + ");").join(" ") + " } catch (e) {}"});
@@ -125,7 +172,10 @@ async function open(o) {
     // Every page runs on the sample's own morning unless a scenario sets another time, so what
     // is due, late or this week does not move with the day the tests run.
     await page.clock.install({time: new Date(o.clock || process.env.LJS_TEST_NOW || "2026-10-25T09:00:00Z")});
-    await page.goto("https://ljs.test/" + (o.hash ? "#" + o.hash : ""));
+    // A fresh load never opens on Settings (4.3): a test that starts there arrives the way a
+    // person does, from the page itself.
+    if (o.hash === "settings") { await page.goto("https://ljs.test/"); await settle(page); await page.evaluate(() => { location.hash = "settings"; }); }
+    else await page.goto("https://ljs.test/" + (o.hash ? "#" + o.hash : ""));
     pages.push(page);
   }
   if (o.javaScriptEnabled !== false) for (const p of pages) await settle(p);
@@ -137,6 +187,10 @@ async function turn(page, n) {
   }
 }
 async function settle(page) {
+  // The page started first: before it has, there is nothing to wait on, and a step taken then
+  // (a section set in the address) is read by a page that has not started (Firefox under load,
+  // the Everywhere check, 2026-10-29).
+  await page.waitForFunction(() => !!window.LJS, null, {timeout: 15000}).catch(() => {});
   await page.evaluate(() => (window.LJS && window.LJS.settled) || null);
   await turn(page, 4);
 }
@@ -149,8 +203,19 @@ async function shot(page, name, full) {
   return file;
 }
 async function goto(page, id) {
-  await page.evaluate((h) => { location.hash = h; }, id);
+  // Set to the address it already has, nothing happens: no hashchange. After a reload the
+  // address is already the section's, while the page may have opened on its first one.
+  await page.evaluate((h) => { if (location.hash === "#" + h) location.hash = "_"; location.hash = h; }, id);
   await turn(page, 4);
+  // To do shows five first (4.3); a scenario that goes there reads and taps the whole list.
+  if (id === "todo") {
+    // Unfolded once the list is drawn: unfolded before, the fold drawn after stayed shut and a
+    // card behind it went unmeasured (Safari on a busy machine, CI, 2026-10-29).
+    await page.waitForFunction(() => window.LJS && window.LJS.state().section === "todo" && !!document.querySelector("#main [data-card], #main .empty"), null, {timeout: 5000}).catch(() => {});
+    await turn(page, 2);
+    await page.$$eval("details.band-more:not([open])", (ds) => ds.forEach((d) => { d.open = true; }));
+    await turn(page, 2);
+  }
 }
 const T = (page, sel) => page.$$eval(sel, (els) => els.map((e) => e.innerText.trim()));
 const one = async (page, sel) => { const el = await page.$(sel); return el ? (await el.innerText()).trim() : null; };
@@ -162,6 +227,9 @@ async function menuPick(page, name) {
 }
 // A setting is a row that opens in place to its choices (LAYOUT_SPEC 4.10).
 async function openSetting(page, key) {
+  // How the app runs is folded at the end of Settings (4.3): unfold it first.
+  await page.$$eval("details.set-advanced:not([open])", (ds) => ds.forEach((d) => { d.open = true; }));
+  await turn(page, 2);
   const sum = page.locator('[data-k="set-sum:' + key + '"]').first();
   const open = await sum.evaluate((el) => el.parentElement.open);
   if (!open) { await sum.click(); await turn(page, 3); }
@@ -243,7 +311,7 @@ function a11yProbe() {
     if (edge && ratioOf(edge, bgOf(el.parentElement)) < 3) out.push("field edge " + ratioOf(edge, bgOf(el.parentElement)).toFixed(2) + " < 3: " + describe(el));
   }
   for (const f of document.querySelectorAll(".fill, .fun-fill")) {
-    if (!shown(f) || f.getBoundingClientRect().width < 2) continue;
+    if (!shown(f) || f.__drawnRect().width < 2) continue;
     const c = rgba(getComputedStyle(f).backgroundColor);
     const track = bgOf(f.parentElement);
     if (c && ratioOf(c, track) < 3) out.push("bar on its track " + ratioOf(c, track).toFixed(2) + " < 3: " + describe(f.parentElement));
@@ -259,13 +327,32 @@ function a11yProbe() {
 
 // Every control a phone person taps is a 44px target (WCAG 2.5.5; Apple's 44pt).
 function targetsProbe() {
-  const shown = (el) => el.getClientRects().length > 0 && getComputedStyle(el).visibility !== "hidden";
+  // Inside a closed menu is not shown, whatever the engine says: Safari's gives the buttons in
+  // a closed <details> a 0x0 box where Chrome's gives none (2026-10-29).
+  const folded = (el) => {
+    for (let d = el.closest("details:not([open])"); d; d = d.parentElement && d.parentElement.closest("details:not([open])")) {
+      const s = el.closest("summary");
+      if (!(s && s.parentElement === d)) return true;
+    }
+    return false;
+  };
+  const shown = (el) => el.getClientRects().length > 0 && getComputedStyle(el).visibility !== "hidden" && !folded(el);
   const small = [];
   const sel = "button, a[href], summary, select, textarea, input:not([type=checkbox]):not([type=radio]):not([type=hidden]), label.pick, .choice label, .look-choice, .pick-all label";
   for (const el of document.querySelectorAll(sel)) {
     if (!shown(el) || el.classList.contains("skip") || el.closest(".sr-only")) continue;
-    const r = el.getBoundingClientRect();
-    if (r.height < 43.5 || r.width < 43.5) small.push(el.tagName.toLowerCase() + "." + String(el.className).split(" ").join(".") + " \"" + (el.textContent || "").trim().slice(0, 30) + "\" " + Math.round(r.width) + "x" + Math.round(r.height));
+    const r = el.__drawnRect();
+    // A control drawn smaller than its target reaches the rest through its ::after (app.css,
+    // "A button is drawn 36px tall"): the reach counts, scaled by the page's zoom.
+    const pa = getComputedStyle(el, "::after");
+    const z = parseFloat(getComputedStyle(document.body).zoom) || 1;
+    const reach = (v) => Math.max(0, -(parseFloat(v) || 0)) * z;
+    const on = pa.content && pa.content !== "none" && pa.position === "absolute";
+    const hgt = r.height + (on ? reach(pa.top) + reach(pa.bottom) : 0);
+    const wid = r.width + (on ? reach(pa.left) + reach(pa.right) : 0);
+    // A link inside a sentence keeps its own width (WCAG 2.5.8, "Inline"); its height is a target.
+    const inline = getComputedStyle(el).display === "inline-block" && !!el.closest("p, li, h3, h4") && el.tagName !== "BUTTON" || (el.matches(".btn.link") && !!el.closest("p"));
+    if (hgt < 43.5 || (wid < 43.5 && !inline)) small.push(el.tagName.toLowerCase() + "." + String(el.className).split(" ").join(".") + " \"" + (el.textContent || "").trim().slice(0, 30) + "\" " + Math.round(wid) + "x" + Math.round(hgt));
   }
   return small;
 }
@@ -284,7 +371,7 @@ function budgetProbe() {
     return false;
   };
   const shown = (el) => el.getClientRects().length > 0 && getComputedStyle(el).visibility !== "hidden" && !hiddenUp(el);
-  const inView = (el) => { const r = el.getBoundingClientRect(); return r.bottom > 0 && r.top < vh && r.width > 0 && r.height > 0; };
+  const inView = (el) => { const r = el.__drawnRect(); return r.bottom > 0 && r.top < vh && r.width > 0 && r.height > 0; };
   // skipText: leave out the words of a message to send, the card's content rather than its chrome.
   const wordsIn = (root, viewOnly, skipText) => {
     let n = 0;
@@ -306,14 +393,15 @@ function budgetProbe() {
   const cards = [...main.querySelectorAll("[data-card]")].filter(shown).map((c) => {
     const cs = controls(c, false);
     return {item: c.getAttribute("data-item"), words: wordsIn(c, false, true), controls: cs.length,
-      answers: cs.filter((b) => b.classList.contains("answer")).length, icons: cs.filter((b) => b.classList.contains("icon-only")).length, filled: cs.filter((b) => b.classList.contains("primary")).length,
-      alerts: c.querySelectorAll(".alert, .suggest").length};
+      answers: cs.filter((b) => b.classList.contains("answer")).length, icons: cs.filter((b) => b.classList.contains("icon-only") || b.classList.contains("q")).length, names: cs.filter((b) => b.classList.contains("name-link")).length, filled: cs.filter((b) => b.classList.contains("primary")).length,
+      alerts: c.querySelectorAll(".alert, .suggest").length,
+      labels: cs.map((b) => (b.getAttribute("aria-label") || b.textContent || "").replace(/\s+/g, " ").trim().slice(0, 24))};
   });
   return {chrome, screenWords: wordsIn(main, true), screenControls: controls(main, true).length, filled, cards};
 }
 
 // ---------------------------------------------------------------- scenarios
-const SECTIONS = ["todo", "jobs", "drafts", "drafts-messages", "contacts", "interviews", "progress", "chat", "settings"];
+const SECTIONS = ["brief", "todo", "jobs", "drafts", "drafts-messages", "contacts", "interviews", "progress", "chat", "settings", "profile"];
 const S = {};
 async function openMore(page, item) {
   await page.locator('[data-item="' + item + '"] summary.more-btn').first().click();
@@ -332,7 +420,7 @@ S.paint = async (a) => {
     conn: await page.evaluate(() => (document.getElementById("conn") || {getAttribute: () => null}).getAttribute("data-state")),
     overflow: await overflow(page),
     side: await visible(page, "#side"), tabs: await visible(page, "#tabs"), rail: await visible(page, "#rail"),
-    cards: (await page.$$("#main [data-card]")).length,
+    cards: (await page.$$("#main [data-card], #main .bpanel")).length,
     privateShown: await visible(page, "#private"), shellShown: await visible(page, "#shell"), opening: await visible(page, "#opening"),
     bodyText: await page.evaluate(() => document.body.innerText),
     errors: o.errors,
@@ -360,8 +448,18 @@ S.sections = async (a) => {
   const out = {};
   for (const id of SECTIONS) {
     await goto(page, id);
+    await page.$$eval("details.band-more:not([open])", (ds) => ds.forEach((d) => { d.open = true; }));
+    await turn(page, 2);
     out[id] = {heading: await one(page, "#main h2"), empty: await T(page, "#main .empty-title"), text: (await one(page, "#main")) || "",
-      overflow: await overflow(page), items: (await page.$$("#main [data-card], #main .talk-msg, #main tbody tr")).length};
+      overflow: await overflow(page), items: (await page.$$("#main [data-card], #main .talk-msg, #main tbody tr")).length,
+      // The "?" explainers and the tips a screen shows, all of it and in the first screenful.
+      ...(await page.evaluate(() => {
+        const shown = (e) => e.getClientRects().length > 0 && e.checkVisibility({visibilityProperty: true});
+        const first = (e) => e.__drawnRect().top < innerHeight;
+        const qs = [...document.querySelectorAll("#main button.q, #main button.help-q")].filter(shown);
+        const tips = [...document.querySelectorAll("#main .tip, #main .bp-tip")].filter(shown);
+        return {qs: qs.length, qsFirst: qs.filter(first).length, tips: tips.length, qKeys: qs.map((q) => q.getAttribute("data-k"))};
+      }))};
     if (a.shots) out[id].shot = await shot(page, a.shots + "-" + id, true);
   }
   out.errors = o.errors;
@@ -383,7 +481,7 @@ function layoutMeasure() {
   const main = document.getElementById("main");
   const name = (e) => (e.getAttribute("aria-label") || (e.getAttribute("aria-labelledby") ? (document.getElementById(e.getAttribute("aria-labelledby")) || {}).textContent : "") || e.textContent || e.value || "").replace(/\s+/g, " ").trim();
   const firsts = [...main.querySelectorAll("[data-card], .empty, .setting-row")].filter(vis);
-  firsts.sort((x, y) => x.getBoundingClientRect().top - y.getBoundingClientRect().top);
+  firsts.sort((x, y) => x.__drawnRect().top - y.__drawnRect().top);
   const f = firsts[0] || null;
   const title = [...main.querySelectorAll("h2")].find(vis) || null;
   // The blocks between the title and the first item: siblings after the title's own block.
@@ -400,10 +498,10 @@ function layoutMeasure() {
   const afterTitle = title ? (() => { let el = title.nextElementSibling; while (el && !vis(el)) el = el.nextElementSibling; return el; })() : null;
   const controls = [...main.querySelectorAll(".controls")].filter(vis).map((c) => {
     const kids = [...c.querySelectorAll("button, select, input, a, summary")].filter(vis);
-    const tops = kids.map((k) => k.getBoundingClientRect().top);
+    const tops = kids.map((k) => k.__drawnRect().top);
     return {spread: tops.length ? Math.max(...tops) - Math.min(...tops) : 0, scroll: c.scrollWidth - c.clientWidth, n: kids.length};
   });
-  const inView = (e) => { const r = e.getBoundingClientRect(); return r.bottom > 0 && r.top < innerHeight && r.right > 0 && r.left < innerWidth; };
+  const inView = (e) => { const r = e.__drawnRect(); return r.bottom > 0 && r.top < innerHeight && r.right > 0 && r.left < innerWidth; };
   const primary = [...document.querySelectorAll(".btn.primary")].filter((e) => vis(e) && inView(e) && !e.closest("dialog:not([open])")).length;
   const qPrimary = [...main.querySelectorAll(".btn.answer.primary")].filter(vis).length;
   const cards = [...main.querySelectorAll("[data-card]")].filter(vis).map((c) => {
@@ -413,30 +511,35 @@ function layoutMeasure() {
     return {item: c.getAttribute("data-item"), states: own(".state").length, alerts: own(".alert, .warm").length, suggests: own(".suggest").length,
       // A card's actions: its one alert or suggestion, a question's answers and the "What was
       // checked" target are parts of their own line, not actions.
-      buttons: own("button, a.btn").filter((b) => !b.closest("summary, .suggest, .alert, .warm") && !b.classList.contains("answer") && !b.classList.contains("q") && !b.classList.contains("icon-only")).length,
-      links: own("a:not(.btn)").filter((x) => !x.closest(".suggest, .alert, .warm")).length, more: own("details.more, details.more-menu, summary.more-btn").length};
+      // A More holding one action shows that action in its place (4.3): it fills the More's
+      // slot, not a button's.
+      buttons: own("button, a.btn").filter((b) => !b.closest("summary, .suggest, .alert, .warm") && !b.classList.contains("answer") && !b.classList.contains("q") && !b.classList.contains("icon-only") && !b.hasAttribute("data-more")).length,
+      // A person's name that opens them is the card's title, not one of its links.
+      links: own("a:not(.btn)").filter((x) => !x.closest(".suggest, .alert, .warm") && !x.classList.contains("name-link")).length, more: own("details.more, details.more-menu, summary.more-btn, [data-more]").length};
   });
   const named = [...main.querySelectorAll("button, a, input, select, summary")].filter(vis).map(name).filter(Boolean);
   const dupNames = named.filter((n, i) => named.indexOf(n) !== i);
   const items = cards.map((c) => c.item).filter(Boolean);
   const dupItems = items.filter((n, i) => items.indexOf(n) !== i);
-  const pairs = new Set(), weights = new Set(), tones = new Set();
+  const pairs = new Set(), weights = new Set(), tones = new Set(), pairWhere = {};
   for (const el of main.querySelectorAll("*")) {
     if (!vis(el) || !inView(el)) continue;
     for (const c of el.classList) if (c.startsWith("tone-")) tones.add(c);
     if (![...el.childNodes].some((n) => n.nodeType === 3 && n.textContent.trim())) continue;
     const cs = getComputedStyle(el);
-    pairs.add(cs.fontSize + "/" + cs.fontWeight);
+    const pair = cs.fontSize + "/" + cs.fontWeight;
+    if (!pairs.has(pair)) pairWhere[pair] = (el.tagName + "." + [...el.classList].join(".")).slice(0, 40);
+    pairs.add(pair);
     weights.add(cs.fontWeight);
   }
   const empties = [...main.querySelectorAll(".empty")].filter(vis).map((e) => ({buttons: [...e.querySelectorAll("button, a.btn")].filter(vis).length,
     words: e.innerText.trim().split(/\s+/).filter(Boolean).length}));
-  return {first: f ? Math.round(f.getBoundingClientRect().top + scrollY) : null, firstWhat: f ? String(f.className).slice(0, 40) : null,
+  return {first: f ? Math.round(f.__drawnRect().top + scrollY) : null, firstWhat: f ? String(f.className).slice(0, 40) : null,
     blocks, here: main.querySelectorAll(".here").length, activeFilters: main.querySelectorAll(".active-filters").length,
     summaries: summaries.map((e) => e.textContent.replace(/\s+/g, " ").trim()), summaryFirst: !!afterTitle && afterTitle.classList.contains("summary"),
     summarySentence: summaries[0] ? ((summaries[0].firstElementChild || summaries[0]).textContent || "").trim() : "",
     controls, primary, qPrimary, cards, dupNames: [...new Set(dupNames)], dupItems: [...new Set(dupItems)],
-    pairs: [...pairs], weights: [...weights], tones: [...tones], empties, overflow: document.documentElement.scrollWidth - document.documentElement.clientWidth};
+    pairs: [...pairs], pairWhere, weights: [...weights], tones: [...tones], empties, overflow: document.documentElement.scrollWidth - document.documentElement.clientWidth};
 }
 function frameMeasure() {
   const vis = (e) => !!e && e.checkVisibility({visibilityProperty: true, contentVisibilityAuto: true}) && e.getClientRects().length > 0;
@@ -445,17 +548,20 @@ function frameMeasure() {
   const badges = [...document.querySelectorAll("#tabs .badge, #side .badge, #main .seg .badge")].filter(vis).map((b) => ({text: b.textContent.trim(), where: (b.closest("a, button") || b).textContent.replace(b.textContent, "").trim()}));
   const navNumbers = [...document.querySelectorAll("#tabs a.tab, #side a, #main .seg button")].filter(vis).filter((e) => /\d/.test([...e.childNodes].filter((n) => !(n.classList && (n.classList.contains("badge") || n.classList.contains("navcount") || n.classList.contains("sr-only")))).map((n) => n.textContent).join(""))).map((e) => e.textContent.trim());
   const topKids = [...top.querySelectorAll("#brand, #screen, #conn, #pulse, #pill, button, a")].filter(vis).map((e) => e.id || String(e.className));
-  return {topH: Math.round(top.getBoundingClientRect().height), topKids, tabs: tabs.length, badges, navNumbers,
+  return {topH: Math.round(top.__drawnRect().height), topKids, tabs: tabs.length, badges, navNumbers,
     pill: vis(document.getElementById("pill")) || vis(document.getElementById("pulse")), rail: vis(document.getElementById("rail"))};
 }
 async function sheetMeasure(page, kind) {
   return page.evaluate((k) => {
     const d = document.querySelector("dialog." + k + "[open]");
     if (!d) return null;
-    const r = d.getBoundingClientRect();
+    const r = d.__drawnRect();
     const close = [...d.querySelectorAll("button")].find((b) => /^close\b/i.test((b.getAttribute("aria-label") || b.textContent).trim()));
-    const cr = close ? close.getBoundingClientRect() : null;
-    return {bottom: Math.round(r.bottom), top: Math.round(r.top), h: Math.round(r.height), vh: innerHeight, close: !!close, closeRow: cr ? Math.round(cr.top - r.top) : null};
+    const cr = close ? close.__drawnRect() : null;
+    // A null or undefined given to the DOM is printed as the word (the filter sheet's footer
+    // read "Show 13 people null", 2026-10-29).
+    const stray = /(^|[^\w])(null|undefined|NaN)([^\w]|$)|\[object /.test(d.innerText);
+    return {bottom: Math.round(r.bottom), top: Math.round(r.top), h: Math.round(r.height), vh: innerHeight, close: !!close, closeRow: cr ? Math.round(cr.top - r.top) : null, stray};
   }, kind);
 }
 async function sheetCheck(page, kind, openIt) {
@@ -464,8 +570,21 @@ async function sheetCheck(page, kind, openIt) {
   await turn(page, 4);
   const m = await sheetMeasure(page, kind);
   if (m) {
+    // Where it is drawn against what opened it, as the screen shows them (not as the page
+    // measures itself, which differs between engines under the page's zoom).
+    const ob = await page.locator('[data-k="' + opener + '"]').first().boundingBox();
+    const db = await page.locator("dialog." + kind + "[open]").boundingBox();
+    m.gap = ob && db ? Math.round(db.y - (ob.y + ob.height)) : null;
+    m.drawnRight = db ? Math.round(db.x + db.width) : null;
+    m.vw = page.viewportSize().width;
+    // A live update redraws the page while the sheet is open, as it does whenever Claude
+    // writes: the button that opened the sheet is replaced, and focus still has to come back.
+    await page.evaluate(() => window.LJS.render());
+    await turn(page, 2);
     await page.locator("dialog." + kind + "[open]").getByRole("button", {name: /^close/i}).first().click();
     await turn(page, 4);
+    // Focus goes back once the sheet has closed, later on a busy machine (CI, 2026-10-29).
+    await page.waitForFunction((k) => !!document.activeElement && document.activeElement.getAttribute("data-k") === k, opener, {timeout: 2000}).catch(() => {});
     m.focusBack = await page.evaluate((k) => !!document.activeElement && document.activeElement.getAttribute("data-k") === k, opener);
   }
   return m;
@@ -505,10 +624,14 @@ S.layout = async (a) => {
         const vis = (e) => e.checkVisibility({visibilityProperty: true, contentVisibilityAuto: true}) && e.getClientRects().length > 0 && !e.closest(".sr-only");
         const clipped = [...document.querySelectorAll("#main button, #top button, #tabs a")].filter(vis).filter((b) => b.scrollWidth > b.clientWidth + 1 && getComputedStyle(b).overflow !== "visible").map((b) => b.textContent.trim().slice(0, 30));
         const rows = [...document.querySelectorAll("#main .controls")].filter(vis).map((c) => {
-          const tops = [...c.querySelectorAll("button, select, input, a, summary")].filter(vis).map((k) => k.getBoundingClientRect().top);
+          const tops = [...c.querySelectorAll("button, select, input, a, summary")].filter(vis).map((k) => k.__drawnRect().top);
           return {spread: tops.length ? Math.max(...tops) - Math.min(...tops) : 0, scroll: c.scrollWidth - c.clientWidth};
         });
-        return {overflow: document.documentElement.scrollWidth - document.documentElement.clientWidth, clipped, rows};
+        // What sticks out, named, so a failure says where to look.
+        const W = document.documentElement.clientWidth;
+        const wide = [...document.querySelectorAll("#main *, #top *")].filter((e) => { const r = e.__drawnRect(); return r.width && r.right > W + 1; })
+          .filter((e) => ![...e.children].some((c) => c.__drawnRect().right > W + 1)).slice(0, 5).map((e) => e.tagName.toLowerCase() + "." + [...e.classList].join(".") + " " + (e.textContent || "").trim().slice(0, 30));
+        return {overflow: document.documentElement.scrollWidth - document.documentElement.clientWidth, clipped, rows, wide};
       });
     }
   }
@@ -521,8 +644,11 @@ S.engine = async (a) => {
   const o = await open({html: a.html, viewport: a.viewport, scheme: a.scheme, seed: a.seed || {}, fake: a.fake, clipboard: a.clipboard, clock: a.clock});
   const {page, store} = o;
   const out = {texts: {}, after: [], shots: []};
+  // To do shows five first: what a test reads is the whole list, the rest unfolded.
+  const unfold = async () => { await page.$$eval("details.band-more:not([open])", (ds) => ds.forEach((d) => { d.open = true; })); await turn(page, 2); };
   for (const id of a.hashes || []) {
     await goto(page, id);
+    await unfold();
     out.texts[id] = (await one(page, "#main")) || "";
     if (a.shots) out.shots.push(await shot(page, a.shots + "-" + id.replace(/[^a-z0-9-]/gi, "_"), true));
   }
@@ -530,7 +656,9 @@ S.engine = async (a) => {
     if (st.hash) await goto(page, st.hash);
     if (st.more) await openMore(page, st.more);
     if (st.open) { await page.locator('[data-k="' + st.open + '"]').first().click(); await turn(page, 3); }
-    if (st.click) { await (st.within ? page.locator(st.within) : page).getByRole(st.role || "button", {name: st.click, exact: !!st.exact}).first().click(); await turn(page, 6); }
+    // To do shows five first; what a step taps may wait behind "Show the other N".
+    if (st.click) { await page.$$eval("details.band-more:not([open])", (ds) => ds.forEach((d) => { d.open = true; })); await turn(page, 2);
+      await (st.within ? page.locator(st.within) : page).getByRole(st.role || "button", {name: st.click, exact: !!st.exact}).first().click(); await turn(page, 6); }
     if (st.fill) for (const [label, value] of Object.entries(st.fill)) await page.locator("dialog").getByLabel(label, {exact: false}).first().fill(value);
     if (st.file) { await page.setInputFiles('dialog input[type="file"]', {name: st.file, mimeType: "application/pdf", buffer: PDF}); await turn(page, 8); }
     if (st.submit) { await page.locator("dialog [data-k=sheet-go]").click(); await turn(page, 6); }
@@ -542,12 +670,16 @@ S.engine = async (a) => {
     }
     if (st.view) { for (const [k, v] of Object.entries(st.view)) store.chat("view/" + k, {made_at: "2026-10-25T09:00:00Z", data: v}); await turn(page, 8); }
     if (st.hash2) await goto(page, st.hash2);
+    await unfold();
     const entry = {text: (await one(page, st.read || "#main")) || "", dialog: (await one(page, "dialog")) || ""};
-    if (st.clip) entry.clip = await page.evaluate(() => navigator.clipboard.readText());
+    if (st.clip) entry.clip = await copied(page);
     if (st.attr) entry.attr = await page.getAttribute(st.attr[0], st.attr[1]).catch(() => null);
     if (st.count) entry.count = (await page.$$(st.count)).length;
     if (st.calls) entry.calls = (await calls(page)).filter((c) => c.cap === st.calls);
     if (st.eval) entry.eval = await page.evaluate((c) => eval(c), st.eval);
+    // Going back is not done when history.back() returns: Safari's engine moved later than the
+    // read on a busy machine (CI, 2026-10-29). A step that changes the address waits for it.
+    if (st.until) await page.waitForFunction((c) => eval(c), st.until, {timeout: 5000}).catch(() => {});
     entry.hash = await page.evaluate(() => location.hash);
     entry.work = store.list("work/").map((k) => Object.assign({id: k.split("/")[1]}, store.get(k)));
     out.after.push(entry);
@@ -576,7 +708,7 @@ S.tweak = async (a) => {
   const read = async () => ({line: (await panel.locator(".tweak-line").textContent()).trim(),
     disabled: await panel.locator("[data-k=tweak-apply]").isDisabled()});
   const out = {first: await read(), open: await panel.count(), inRail: await page.locator("#rail .tweak-panel").count(),
-    sheet: await page.evaluate(() => { const d = document.querySelector("dialog.tweak-sheet"); if (!d) return null; const r = d.getBoundingClientRect(); return {top: r.top, bottom: r.bottom, h: r.height, vh: innerHeight}; }),
+    sheet: await page.evaluate(() => { const d = document.querySelector("dialog.tweak-sheet"); if (!d) return null; const r = d.__drawnRect(); return {top: r.top, bottom: r.bottom, h: r.height, vh: innerHeight}; }),
     rows: await panel.locator(".tweak-body > .tweak-row").count(), recs: await panel.locator(".rec").count(),
     pressed: await panel.locator('[aria-pressed="true"].tw-opt').count(), keepChecked: await panel.locator("#tweak-keep").isChecked(),
     title: (await panel.locator(".tweak-title").textContent()).trim(), text: (await panel.innerText())};
@@ -650,7 +782,7 @@ S.undo = async (a) => {
   await page.locator("dialog").getByRole("radio", {name: "Not this role: the pay", exact: true}).check();
   await clickText(page, "button", "Take it off my list");
   await turn(page, 6);
-  const reason = store.get("actions/act~r12-3~job.dismiss");
+  const reason = actionAt(store, "actions/act~r12-3~job.dismiss");
   const during = (await page.$$(".toast button:text-is('Undo')")).length + (await page.$$("#main button.undo")).length;
   // The pointer off the toast: a toast under it is held open on purpose.
   await page.mouse.move(1, 1);
@@ -669,6 +801,9 @@ S.write_fail = async (a) => {
   const {page} = o;
   await clickText(page, "button", "I sent the message to Juno");
   await turn(page, 8);
+  // The alert is emptied, then written 30ms later so a screen reader says it again; a busy
+  // machine read it in between (CI, 2026-10-29). Waited for, never assumed.
+  await page.waitForFunction(() => document.getElementById("alert").textContent !== "", null, {timeout: 3000}).catch(() => {});
   const r = {toast: await T(page, ".toast"), state: await one(page, '#main [data-item="msg-juno-1"] .state'), alert: await page.evaluate(() => document.getElementById("alert").textContent),
     live: await page.evaluate(() => document.getElementById("live").textContent), errors: o.errors};
   await o.ctx.close();
@@ -758,7 +893,7 @@ S.stop = async (a) => {
   r.rewake = (await bar(page, "prep~int-larkspur-supply")).buttons;
   await page.locator(workSel("prep~int-larkspur-supply")).getByRole("button", {name: "Ask Claude again: Interview prep: Larkspur Retail"}).click();
   await turn(page, 8);
-  r.prefill = await page.$eval(workSel("prep~int-larkspur-supply") + " a.btn", (x) => x.href).catch(() => null);
+  r.told = await page.$eval(workSel("prep~int-larkspur-supply"), (x) => x.textContent).catch(() => "");
   r.runningBefore = (await bar(page, "search~1")).buttons;
   await page.locator(workSel("search~1")).getByRole("button", {name: "Stop: Finding jobs"}).click();
   await turn(page, 6);
@@ -912,12 +1047,55 @@ S.room = async (a) => {
 // new one on the person's copy when that fails, never asking anyone to wake Claude.
 S.wake = async (a) => {
   const seed = {"meta/listener": {chat: "session_EXAMPLEHELPER", kind: "cloud", answered_at: "2026-10-25T08:00:00Z"}};
-  const o = await open({html: a.html, hash: "jobs", seed, fake: {canSend: "no_session", mcp: {fail: a.fail || []}}});
+  const o = await open({html: a.html, hash: "jobs", seed, fake: {canSend: a.canSend || "available", mcp: {fail: a.fail || []}}});
   await draftViaDialog(o.page);
   await turn(o.page, 8);
-  const r = {mcp: (await calls(o.page)).filter((c) => c.cap === "mcp").map((c) => ({tool: c.tool, server: c.server, input: c.input})), errors: o.errors};
+  const all = await calls(o.page);
+  const r = {mcp: all.filter((c) => c.cap === "mcp").map((c) => ({tool: c.tool, server: c.server, input: c.input})),
+    rings: all.filter((c) => c.cap === "comments" && c.op === "sendToClaude").map((c) => ({text: c.text, active: c.active})), errors: o.errors};
   await goto(o.page, "todo");
   r.wakeCard = (await o.page.$$('#main [data-item="listen"]')).length;
+  await o.ctx.close();
+  return r;
+};
+
+// Reading LinkedIn in the desktop app: the page checks by itself when it opens there, and
+// says how to sign in when signed out (2026-10-29).
+S.reading = async (a) => {
+  const o = await open({html: a.html, hash: a.hash || "todo", seed: a.seed || {}, model: a.model, fake: {canSend: a.canSend || "no_session", mcp: {browser: {inApp: a.inApp !== false, signedIn: !!a.signedIn, askFirst: !!a.askFirst, signInLater: !!a.signInLater, signOutAfter: a.signOutAfter || 0, check: a.check || 0, declined: !!a.declined, slowSections: !!a.slowSections}}}});
+  await o.page.waitForTimeout(2500);
+  // Until the page has finished reading (each page that draws late adds a moment).
+  await o.page.waitForFunction(() => { const s = window.LJS.state().reading; return !s.busy && s.panel !== "run" && s.panel !== "check-run"; }, null, {timeout: 30000}).catch(() => {});
+  await turn(o.page, 8);
+  const r = {browser: (await calls(o.page)).filter((c) => c.cap === "mcp" && c.server === "host:claude_browser").map((c) => ({tool: c.tool, input: c.input})), errors: o.errors};
+  if (a.signInLater) {
+    // The person signs in in Claude's browser and comes back to the page.
+    await o.page.evaluate(() => { window.__ljsBrowser.signedIn = true; window.dispatchEvent(new Event("focus")); });
+    await o.page.waitForTimeout(1500);
+    await o.page.waitForFunction(() => { const s = window.LJS.state().reading; return !s.busy && s.panel !== "run" && s.panel !== "check-run"; }, null, {timeout: 30000}).catch(() => {});
+    await turn(o.page, 8);
+  }
+  r.panel = await o.page.evaluate(() => { const p = document.querySelector(".browser-panel"); return p ? p.textContent : ""; });
+  r.state = await o.page.evaluate(() => { const s = window.LJS.state(); return {ok: s.reading.ok, signedOut: s.reading.signedOut, panel: s.reading.panel}; });
+  r.acts = [...o.store.docs.entries()].filter(([p]) => p.startsWith("actions/")).map(([p, d]) => ({id: p.slice(8), action: d.data.action, value: d.data.value}));
+  r.line = await o.page.evaluate(() => window.LJS.state().reading.line || "");
+  r.todo = await o.page.evaluate(() => (document.querySelector("#main") || document.body).textContent);
+  r.cards = await o.page.evaluate(() => [...document.querySelectorAll("#main [data-item]")].map((e) => e.getAttribute("data-item")));
+  if (a.write) {
+    // "Write my notes" in the panel: one ring for every profile read, from the person's tap.
+    await o.page.click('[data-k="bp-write"]');
+    await o.page.waitForTimeout(600);
+    r.rings = (await calls(o.page)).filter((c) => c.cap === "comments" && c.op === "sendToClaude").map((c) => ({text: c.text, active: c.active}));
+    r.cardsAfter = await o.page.evaluate(() => [...document.querySelectorAll("#main [data-item]")].map((e) => e.getAttribute("data-item")));
+  }
+  if (a.bin) {
+    await o.page.$eval('[data-k="reading-bin"]', (b) => b.click());
+    await o.page.waitForTimeout(300);
+    await o.page.check('input[type="radio"][value="' + a.bin + '"]');
+    await o.page.click('[data-k="sheet-go"]');
+    await o.page.waitForTimeout(900);
+    r.acts = [...o.store.docs.entries()].filter(([p]) => p.startsWith("actions/")).map(([p, d]) => ({id: p.slice(8), action: d.data.action, value: d.data.value, item: d.data.item}));
+  }
   await o.ctx.close();
   return r;
 };
@@ -936,8 +1114,10 @@ S.you = async (a) => {
   await dlg.getByLabel(/What you did there/).fill("Built the weekly stock report for 40 stores.");
   await dlg.getByRole("button", {name: "Add it"}).click();
   await turn(page, 6);
+  // Settings, then Your profile: a page of its own since 4.3.
   await goto(page, "settings");
-  await page.locator('[data-k="info-sum:you-skills"]').first().click();
+  await page.locator('[data-k="open-profile"]').first().click();
+  await turn(page, 3);
   await page.getByRole("button", {name: "Add or take off"}).first().click();
   await turn(page, 3);
   dlg = page.locator("dialog.sheet");
@@ -945,7 +1125,6 @@ S.you = async (a) => {
   await dlg.getByLabel(/^Add skills/).fill("Looker, SQL");
   await dlg.getByRole("button", {name: "Save"}).click();
   await turn(page, 6);
-  await page.locator('[data-k="info-sum:you-jobs"]').first().click();
   await page.getByRole("button", {name: "Take Graduate Analyst at Saltmarsh Analytics off"}).first().click();
   await turn(page, 3);
   await page.locator("dialog.sheet").getByRole("button", {name: "Take it off"}).click();
@@ -1012,7 +1191,9 @@ S.downloads = async (a) => {
   r.noLetter = await T(page, '#main .card.app[aria-labelledby="app-app-quayside-demand"] .muted.small');
   r.askButtons = await T(page, '#main .card.app[aria-labelledby="app-app-quayside-demand"] button');
   r.primary = await T(page, '#main .card.app[aria-labelledby="app-app-quayside-demand"] .card-actions .btn[data-primary]');
-  await page.getByRole("button", {name: "Ask Claude to add them"}).click();
+  // Files not on the page yet are said once, above the drafts (4.3).
+  r.filesLine = await T(page, "#main .files-line");
+  await page.locator('[data-k="files-all"]').first().click();
   await turn(page, 8);
   r.work = store.get("work/files~app-quayside-demand");
   r.errors = o.errors;
@@ -1030,7 +1211,7 @@ S.copy = async (a) => {
   const r = {before, label: await T(page, '#main [data-item="msg-juno-1"] button.copy'), note: await T(page, "#main .card.msg .note"),
     sentFilled: await main('#main [data-item="msg-juno-1"] [data-k="sent:msg-juno-1"]'),
     selected: await page.evaluate(() => String(window.getSelection())), errors: o.errors};
-  if (!a.denied) r.clip = await page.evaluate(() => navigator.clipboard.readText());
+  if (!a.denied) r.clip = await copied(page);
   await o.ctx.close();
   return r;
 };
@@ -1063,7 +1244,7 @@ S.bulk = async (a) => {
   await page.getByRole("button", {name: "Mark 2 as applied"}).click();
   await turn(page, 8);
   r.readyActions = store.list("actions/").filter((p) => p.indexOf("ready.applied") >= 0);
-  r.toastAboveBulk = await page.evaluate(() => { const t = document.querySelector(".toast"); const b = document.querySelector(".bulk"); if (!t || !b) return null; return t.getBoundingClientRect().bottom <= b.getBoundingClientRect().top + 1; });
+  r.toastAboveBulk = await page.evaluate(() => { const t = document.querySelector(".toast"); const b = document.querySelector(".bulk"); if (!t || !b) return null; return t.__drawnRect().bottom <= b.__drawnRect().top + 1; });
   r.errors = o.errors;
   await o.ctx.close();
   return r;
@@ -1077,7 +1258,7 @@ S.alerts = async (a) => {
   const r = {closed: await T(page, '#main [data-item="r12-5"] .alert-text'), cost: await T(page, '#main [data-item="r12-5"] .alert .cost')};
   await page.locator('#main [data-item="r12-5"] .alert').getByRole("button", {name: "Set it aside"}).click();
   await turn(page, 6);
-  r.fixed = store.get("actions/act~r12-5~job.dismiss");
+  r.fixed = actionAt(store, "actions/act~r12-5~job.dismiss");
   // The draft's own card asks its question first; its failed check is a card in To do.
   await goto(page, "todo");
   r.checksFix = await T(page, '#main [data-item="al:al-checks-app-quayside-demand"] .fix .btn');
@@ -1085,7 +1266,7 @@ S.alerts = async (a) => {
   r.suggest = await T(page, '#main [data-item="app-ellerwick-insight"] .suggest-text');
   await page.getByRole("button", {name: /^No thanks: The posting asks for Tableau/}).click();
   await turn(page, 6);
-  r.dismissed = store.get("actions/act~sg-near-app-ellerwick-insight-3f2a9c1d~suggest.dismiss");
+  r.dismissed = actionAt(store, "actions/act~sg-near-app-ellerwick-insight-3f2a9c1d~suggest.dismiss");
   r.gone = (await page.$$('#main [data-item="app-ellerwick-insight"] .suggest')).length;
   r.toast = await T(page, ".toast-text");
   await page.locator(".toast").last().getByRole("button", {name: "Undo", exact: true}).click();
@@ -1093,7 +1274,7 @@ S.alerts = async (a) => {
   r.back = (await page.$$('#main [data-item="app-ellerwick-insight"] .suggest')).length;
   await goto(page, "settings");
   await openSetting(page, "suggestions");
-  await page.getByLabel("Off", {exact: true}).first().check();
+  await page.locator('[data-k="set-sum:suggestions"]').locator("xpath=..").getByLabel("Off", {exact: true}).first().check();
   await page.waitForTimeout(700);
   await turn(page, 6);
   await goto(page, "drafts");
@@ -1172,6 +1353,9 @@ S.talk = async (a) => {
   await page.waitForTimeout(50);
   await turn(page, 12);
   r.quick = await T(page, "#main .talk-msg .talk-text");
+  // Handed on to Claude, the note's one button sends it, from the person's own tap.
+  const send = page.locator("#main .talk-msg").getByRole("button", {name: "Send to Claude"});
+  if (await send.count()) { await send.first().click(); await turn(page, 6); r.afterSend = await T(page, "#main .talk-msg .talk-text"); }
   r.tools = await page.evaluate(() => (window.__toolResults || []).map((t) => [t.name, String(t.out).slice(0, 400)]));
   r.sampleCall = (await calls(page)).filter((c) => c.cap === "sample").map((c) => ({tools: c.tools, tier: c.modelTier, last: c.input[c.input.length - 1], first: String(c.input[0].content).slice(0, 120)}));
   r.stored = store.list("talk/");
@@ -1204,18 +1388,17 @@ S.chat_cloud = async (a) => {
   return r;
 };
 
-// Where Claude works is one choice in Settings. On this computer with no chat open there, the
-// question waits and the page says so in plain words; with one open, it goes there.
+// Work goes to the one chat that answers the page, with nothing to choose (4.3): answered on
+// the computer, a question waits for it there and the page says so; with it open, it goes there.
+// The brief's bell on such a page starts the helper in the cloud in the same tap.
 S.chat_computer = async (a) => {
-  const seed = a.listening ? {"chats/computer-1": {kind: "computer", title: "On the laptop", can: ["talk"], seen_at: new Date().toISOString(), busy: null}} : {};
+  const listener = {"meta/listener": {chat: "local-1", kind: "computer", answered_at: "2026-10-25T08:00:00Z"}};
+  const seed = Object.assign({}, listener, a.listening ? {"chats/computer-1": {kind: "computer", title: "On the laptop", can: ["talk"], seen_at: new Date().toISOString(), busy: null}} : {});
   const o = await open({html: a.html, hash: "settings", seed, fake: {canSend: "available", caps: ["user", "db", "comments", "room", "downloads", "assets"]}});
   const {page, store} = o;
-  await openSetting(page, "work_either");
-  const r = {legend: await T(page, "#main fieldset legend"), hints: await T(page, "#main .choice .hint")};
-  await page.getByLabel(/^On your computer/).check();
-  await page.waitForTimeout(700);
-  await turn(page, 6);
-  r.setting = store.get("actions/act~setting-work_either~setting.set");
+  await page.$$eval("details.set-advanced:not([open])", (ds) => ds.forEach((d) => { d.open = true; }));
+  await turn(page, 2);
+  const r = {legend: await T(page, "#main fieldset legend"), settingKeys: await page.$$eval('[data-k^="set-sum:"]', (els) => els.map((e) => e.getAttribute("data-k")))};
   await goto(page, "chat");
   await page.getByLabel("Ask Claude anything").fill("Can you open the CV file on my laptop?");
   await page.getByRole("button", {name: "Send", exact: true}).click();
@@ -1255,9 +1438,9 @@ S.chat_dock = async (a) => {
   r.open = {dock: await vis("#chat-dock"), fab: await vis("#chat-fab"), focus: await focusK(), box: await page.evaluate(() => !!document.querySelector("#chat-dock #talk-text")),
     role: await page.getAttribute("#chat-dock", "role"), name: await one(page, "#h-dock"), msgs: await T(page, "#chat-dock .talk-msg .talk-text")};
   r.geo = await page.evaluate(() => {
-    const d = document.getElementById("chat-dock").getBoundingClientRect();
+    const d = document.getElementById("chat-dock").__drawnRect();
     const t = document.getElementById("tabs");
-    const tr = t && t.getClientRects().length ? t.getBoundingClientRect() : null;
+    const tr = t && t.getClientRects().length ? t.__drawnRect() : null;
     return {top: d.top, bottom: d.bottom, left: d.left, right: d.right, vw: innerWidth, vh: innerHeight, tabsTop: tr ? tr.top : null};
   });
   r.a11y = await page.evaluate(a11yProbe);
@@ -1313,9 +1496,15 @@ S.chat_pics = async (a) => {
     dt.items.add(new File([bytes], "screenshot.png", {type: "image/png"}));
     const ta = document.getElementById("talk-text");
     ta.focus();
-    ta.dispatchEvent(new ClipboardEvent("paste", {clipboardData: dt, bubbles: true, cancelable: true}));
+    // A paste event carrying the picture. Firefox drops clipboardData given to a synthetic
+    // ClipboardEvent (the Everywhere check, 2026-10-29), so it is put on the event itself.
+    const ev = new Event("paste", {bubbles: true, cancelable: true});
+    Object.defineProperty(ev, "clipboardData", {value: dt});
+    ta.dispatchEvent(ev);
   }, PNG.toString("base64"));
   await turn(page, 8);
+  // A picture decodes in its own time, later in Firefox than in Chrome's engine.
+  await page.waitForFunction(() => [...document.querySelectorAll(".talk-attach img.pic-thumb")].every((i) => i.complete && i.naturalWidth > 0), null, {timeout: 5000}).catch(() => {});
   r.tray = await page.evaluate(() => [...document.querySelectorAll(".talk-attach .pic-chip")].map((c) => {
     const img = c.querySelector("img.pic-thumb");
     return {img: !!img, loaded: !!img && img.complete && img.naturalWidth > 0, state: c.querySelector(".pic-state").textContent, remove: (c.querySelector("button") || {}).textContent};
@@ -1359,8 +1548,8 @@ S.keyboard = async (a) => {
   await page.keyboard.press("Enter");
   await turn(page, 2);
   r.afterSkip = await page.evaluate(() => document.activeElement.id);
-  // Into the nav, then Drafts by keyboard alone.
-  await page.focus('#side a[href="#drafts"]');
+  // Into the nav, then Contacts by keyboard alone.
+  await page.focus('#side a[href="#contacts"]');
   await page.keyboard.press("Enter");
   await turn(page, 4);
   r.draftsFocus = await page.evaluate(() => document.activeElement.textContent.trim());
@@ -1411,6 +1600,8 @@ S.keyboard = async (a) => {
   await turn(page, 3);
   r.typed = [await page.inputValue("#talk-text"), await one(page, "#main h2")];
   await goto(page, "settings");
+  await page.$$eval("details.set-advanced:not([open])", (ds) => ds.forEach((d) => { d.open = true; }));
+  await turn(page, 2);
   await page.getByRole("switch", {name: "Keyboard shortcuts"}).uncheck();
   await turn(page, 3);
   await page.evaluate(() => document.activeElement.blur());
@@ -1430,7 +1621,7 @@ S.history = async (a) => {
   const {page} = o;
   await page.click('#side a[href="#jobs"]');
   await turn(page, 3);
-  await page.click('#side a[href="#drafts"]');
+  await page.click('#side a[href="#contacts"]');
   await turn(page, 3);
   await page.goBack();
   await turn(page, 6);
@@ -1458,7 +1649,11 @@ S.crowd = async (a) => {
   const {page} = o;
   const r = {progressRows: (await page.$$('#main [data-list="progress:apps"] tbody tr, #main [data-list="progress:apps"] .app-row')).length, progressFold: await T(page, "#main .fold"), progressSearch: !!(await page.$("#main input[type=search]"))};
   await goto(page, "contacts");
-  r.contactRows = (await page.$$("#main .person")).length;
+  // Contacts opens on who needs the person (4.3), with no filter left on: everyone else is
+  // one fold below.
+  r.contactDefault = (await page.$$("#main .person")).length;
+  r.defaultChips = await T(page, "#main .active-filters .af-chip");
+  r.contactRows = r.contactDefault;
   r.contactFold = await T(page, "#main .fold");
   r.contactSearch = !!(await page.$("#main input[type=search]"));
   await page.locator("#main input[type=search]").fill("Quayside");
@@ -1469,7 +1664,7 @@ S.crowd = async (a) => {
   await page.getByRole("button", {name: "Clear filters"}).first().click();
   await turn(page, 4);
   r.cleared = (await page.$$("#main .person")).length;
-  const fold = page.getByRole("button", {name: /^Show \d+ earlier, finished/});
+  const fold = page.getByRole("button", {name: /^Show \d+ more (person|people)/});
   await fold.first().click();
   await turn(page, 4);
   r.unfolded = (await page.$$("#main .person")).length;
@@ -1479,12 +1674,131 @@ S.crowd = async (a) => {
   return r;
 };
 
+// Every control on every screen, tapped one at a time on a fresh page: none throws, and each
+// does something a person can see or that reaches Claude (the maintainer, 2026-10-29: "I'm
+// starting to doubt even some of the buttons work"). A link to another site is checked for a
+// real address instead of followed.
+S.sweep = async (a) => {
+  const out = {dead: [], errors: [], unclickable: [], badLinks: [], tapped: 0, perSection: {}};
+  const keysOn = (page) => page.evaluate(() => {
+    const vis = (e) => e.getClientRects().length > 0 && e.checkVisibility({visibilityProperty: true}) && !e.closest("details:not([open]) > :not(summary)");
+    // What is already chosen (the switch's own place, a pressed answer) and what is switched
+    // off are not taps that should do something.
+    const els = [...document.querySelectorAll("#main [data-k]")].filter((e) => vis(e) && e.matches("button, a[href], summary, input[type=radio], input[type=checkbox], label")
+      && e.getAttribute("aria-pressed") !== "true" && !e.hasAttribute("aria-current") && !e.disabled && e.getAttribute("aria-disabled") !== "true" && !(e.matches("input") && e.checked));
+    const ext = els.filter((e) => e.matches("a[href]") && /^https?:/.test(e.getAttribute("href"))).map((e) => [e.getAttribute("data-k"), e.getAttribute("href")]);
+    return {keys: [...new Set(els.filter((e) => !(e.matches("a[href]") && /^https?:/.test(e.getAttribute("href")))).map((e) => e.getAttribute("data-k")))], ext};
+  });
+  const snap = (page) => page.evaluate(() => {
+    const m = document.getElementById("main");
+    let h = 0; const t = (m ? m.innerHTML : "") + "|" + document.title + "|" + (document.getElementById("toasts") || {innerHTML: ""}).innerHTML + "|" + (document.getElementById("rail") || {innerHTML: ""}).innerHTML;
+    for (let i = 0; i < t.length; i++) h = (h * 31 + t.charCodeAt(i)) | 0;
+    const ae = document.activeElement;
+    return {h, hash: location.hash, dialogs: [...document.querySelectorAll("dialog")].filter((d) => d.open).length, calls: (window.__calls || []).length,
+      opened: [...document.querySelectorAll("details[open]")].length, scroll: Math.round(scrollY), focus: ae ? ae.id || ae.getAttribute("data-k") || ae.tagName : ""};
+  });
+  for (const id of a.sections || SECTIONS) {
+    const first = await open({html: a.html, viewport: a.viewport, fake: a.fake, clock: a.clock});
+    await goto(first.page, id);
+    const {keys, ext} = await keysOn(first.page);
+    for (const [k, href] of ext) { try { const u = new URL(href); if (!u.hostname.includes(".")) out.badLinks.push([id, k, href]); } catch (e) { out.badLinks.push([id, k, href]); } }
+    await first.ctx.close();
+    out.perSection[id] = keys.length;
+    for (const k of keys.slice(0, a.limit || 80)) {
+      const o = await open({html: a.html, viewport: a.viewport, fake: a.fake, clock: a.clock});
+      const {page} = o;
+      await goto(page, id);
+      // A choice drawn as a label is tapped on its label, as a person does; a file picker
+      // opening is something happening.
+      let el = page.locator('#main [data-k="' + k + '"]').first();
+      if (await el.evaluate((e) => e.matches("input") && !!e.closest("label"))) el = page.locator('#main label:has([data-k="' + k + '"])').first();
+      let chose = false;
+      page.on("filechooser", () => { chose = true; });
+      const before = await snap(page);
+      try {
+        // Found again once if the page drew it afresh between finding it and tapping it, as a
+        // person's tap would land on the new one (Firefox under load, 2026-10-29).
+        try { await el.scrollIntoViewIfNeeded({timeout: 2000}); }
+        catch (e) { if (!/not attached|detached/i.test(String(e.message || e))) throw e; await turn(page, 3); el = page.locator('#main [data-k="' + k + '"]').first(); await el.scrollIntoViewIfNeeded({timeout: 2000}); }
+        const b2 = await snap(page);
+        await el.click({timeout: 3000});
+        await turn(page, 5);
+        const after = await snap(page);
+        // Focus counts only where it moved somewhere else (an empty Send puts it in the box);
+        // the tapped control taking focus itself is not something happening.
+        const moved = chose || after.h !== b2.h || after.hash !== b2.hash || after.dialogs !== b2.dialogs || after.calls !== b2.calls || after.opened !== b2.opened || (after.focus !== b2.focus && after.focus !== k && after.focus !== "BODY");
+        if (!moved) out.dead.push([id, k]);
+        void before;
+      } catch (e) { out.unclickable.push([id, k, String(e.message || e).split("\n")[0].slice(0, 120)]); }
+      if (o.errors.length) out.errors.push([id, k, o.errors.slice(0, 2)]);
+      out.tapped++;
+      await o.ctx.close();
+    }
+  }
+  return out;
+};
+
+// Every status pill on every screen, with its tone: a status always reads as a word a person
+// uses (never "not_contacted") and carries a colour (the maintainer, 2026-10-29: "make sure
+// all statuses work").
+S.statuses = async (a) => {
+  const o = await open({html: a.html, viewport: a.viewport, clock: a.clock, seed: a.seed});
+  const {page} = o;
+  const out = {words: [], errors: []};
+  for (const id of a.sections || SECTIONS) {
+    await goto(page, id);
+    const got = await page.evaluate(() => [...document.querySelectorAll("#main .state-word")].map((e) => ({
+      text: e.textContent.trim(), tone: ([...e.classList].find((c) => c.startsWith("tone-")) || "").replace("tone-", ""),
+      bg: getComputedStyle(e).backgroundColor, color: getComputedStyle(e).color})));
+    for (const w of got) out.words.push(Object.assign({section: id}, w));
+  }
+  out.errors = o.errors;
+  await o.ctx.close();
+  return out;
+};
+
+// The page's design language, measured on every screen (templates/app/DESIGN.md): one "?" a
+// card at most; no x on a card (the bin is the one way to put something away); no line drawn
+// down the side of anything; and every live item a person might not want carries the bin.
+S.design = async (a) => {
+  const o = await open({html: a.html, viewport: a.viewport, clock: a.clock, scheme: a.scheme});
+  const {page} = o;
+  const out = {sections: {}, errors: []};
+  for (const id of a.sections || SECTIONS) {
+    await goto(page, id);
+    await page.$$eval("details.band-more:not([open])", (ds) => ds.forEach((d) => { d.open = true; }));
+    await turn(page, 2);
+    out.sections[id] = await page.evaluate(() => {
+      const vis = (e) => e.getClientRects().length > 0 && e.checkVisibility({visibilityProperty: true}) && !e.closest("details:not([open]) > :not(summary)");
+      const name = (c) => (c.getAttribute("data-item") || (c.querySelector("h3, .card-title") || {}).textContent || c.className).toString().trim().slice(0, 40);
+      const cards = [...document.querySelectorAll("#main .card, #main .wave-row")].filter(vis);
+      const manyQ = cards.filter((c) => [...c.querySelectorAll(".q")].filter(vis).length > 1).map(name);
+      const xPath = "M7 7l10 10M17 7L7 17";
+      const xs = [...document.querySelectorAll("#main svg path")].filter((p) => p.getAttribute("d") === xPath && vis(p)).map((p) => name(p.closest(".card, li, section") || p));
+      const side = [...document.querySelectorAll("#main *")].filter(vis).filter((e) => {
+        if (e.matches("input, textarea, select, blockquote, .prep-quote, .field.has-error, .tab, .side-list a")) return false;
+        const cs = getComputedStyle(e);
+        const w = parseFloat(cs.borderLeftWidth) || 0;
+        return w >= 2 && cs.borderLeftStyle !== "none" && w > (parseFloat(cs.borderRightWidth) || 0) && cs.borderLeftColor !== "rgba(0, 0, 0, 0)";
+      }).map((e) => e.tagName.toLowerCase() + "." + [...e.classList].join("."));
+      const needBin = [...document.querySelectorAll("#main .card.job:not(.is-marked):not(.st-dismissed):not(.st-applied), #main .card.app:not(.st-applied):not(.st-not_applying):not(.quiet-card), #main .card.msg:not(.is-marked), #main li.person, #main .card.interview, #main .card.app-record, #main .wave-row")]
+        .filter(vis).filter((c) => !c.querySelector('[data-k^="bin:"], [data-k^="dbin:"], [data-k^="mbin:"], [data-k^="pbin:"], [data-k^="ivbin:"], [data-k^="recbin:"], [data-k^="wbin:"]'))
+        .filter((c) => !c.matches(".card.app") || !c.querySelector(".meta") || !/Made for|For the portal/.test(c.textContent))
+        .map(name);
+      return {manyQ, xs, side: [...new Set(side)], needBin};
+    });
+  }
+  out.errors = o.errors;
+  await o.ctx.close();
+  return out;
+};
+
 // Every screen, counted against the budgets.
 S.budget = async (a) => {
   const o = await open({html: a.html, viewport: a.viewport, scheme: a.scheme});
   const {page} = o;
   const out = {};
-  for (const id of a.sections || ["todo", "jobs", "drafts", "drafts-messages", "contacts", "interviews", "progress", "chat", "settings"]) {
+  for (const id of a.sections || SECTIONS) {
     await goto(page, id);
     await page.evaluate(() => window.scrollTo(0, 0));
     out[id] = await page.evaluate(budgetProbe);
@@ -1552,7 +1866,7 @@ S.picker = async (a) => {
   const o = await open({html: a.html, hash: "settings", tabs: 2});
   const [p1, p2] = o.pages;
   const r = {before: await p1.evaluate(() => getComputedStyle(document.body).backgroundColor), legends: await T(p1, "#main .look-row .set-name"), choices: await T(p1, "#main .look-row .look-name")};
-  await p1.getByLabel("Dark", {exact: true}).check();
+  await p1.locator("label.look-choice:has(#look-dark)").click();
   await turn(p1, 4);
   r.after = await p1.evaluate(() => ({bg: getComputedStyle(document.body).backgroundColor, look: document.documentElement.getAttribute("data-look"), stored: localStorage.getItem("ljs:look"), scheme: getComputedStyle(document.documentElement).colorScheme}));
   r.actions = o.store.list("actions/");
@@ -1560,8 +1874,14 @@ S.picker = async (a) => {
   r.otherWindow = await p2.evaluate(() => ({bg: getComputedStyle(document.body).backgroundColor, checked: [...document.querySelectorAll(".look-row input:checked")].map((x) => x.value)}));
   await p1.reload();
   await settle(p1);
+  // Back to Settings, where the look is chosen: the Firefox driver does not report a reload
+  // as one, so the page opens on its first section (the Everywhere check, 2026-10-29). Where
+  // a reload keeps its place is pinned on its own.
+  await goto(p1, "settings");
+  await p1.waitForSelector("label.look-choice:has(#look-auto)", {timeout: 15000}).catch(() => {});
+  await turn(p1, 2);
   r.reloaded = await p1.evaluate(() => ({bg: getComputedStyle(document.body).backgroundColor, checked: [...document.querySelectorAll(".look-row input:checked")].map((x) => x.value)}));
-  await p1.getByLabel("Auto").check();
+  await p1.locator("label.look-choice:has(#look-auto)").click();
   await turn(p1, 4);
   r.back = await p1.evaluate(() => ({bg: getComputedStyle(document.body).backgroundColor, look: document.documentElement.getAttribute("data-look"), stored: localStorage.getItem("ljs:look")}));
   r.errors = o.errors;
@@ -1582,7 +1902,7 @@ S.first_paint_look = async (a) => {
 S.no_storage = async (a) => {
   const o = await open({html: a.html, hash: "settings", noStorage: true, scheme: "dark"});
   const r = {bg: await o.page.evaluate(() => getComputedStyle(document.body).backgroundColor), heading: await one(o.page, "#main h2")};
-  await o.page.getByLabel("Light", {exact: true}).check();
+  await o.page.locator("label.look-choice:has(#look-light)").click();
   await turn(o.page, 4);
   r.after = await o.page.evaluate(() => getComputedStyle(document.body).backgroundColor);
   r.errors = o.errors;
@@ -1622,7 +1942,7 @@ S.safe_area = async (a) => {
     r[name] = await o.page.evaluate(() => {
       const px = (el, p) => parseFloat(getComputedStyle(el)[p]);
       const tabs = document.getElementById("tabs");
-      const t = tabs.getBoundingClientRect();
+      const t = tabs.__drawnRect();
       return {tabsPadBottom: px(tabs, "paddingBottom"), tabsBottom: Math.round(t.bottom), vh: window.innerHeight, rootPadTop: px(document.documentElement, "paddingTop"),
         bodyLeft: px(document.body, "paddingLeft"), bodyRight: px(document.body, "paddingRight"), shellPadBottom: px(document.getElementById("shell"), "paddingBottom"),
         tabsHeight: Math.round(t.height), topTop: getComputedStyle(document.getElementById("top")).top, sw: document.documentElement.scrollWidth, cw: document.documentElement.clientWidth};
@@ -1646,7 +1966,7 @@ S.forced = async (a) => {
   await goto(page, "work");
   r.bar = await c("dialog .bar");
   r.fill = await c("dialog .fill");
-  r.fillWidth = await page.evaluate(() => { const f = document.querySelector("dialog .fill"); return f ? f.getBoundingClientRect().width : 0; });
+  r.fillWidth = await page.evaluate(() => { const f = document.querySelector("dialog .fill"); return f ? f.__drawnRect().width : 0; });
   r.errors = o.errors;
   await o.ctx.close();
   return r;
@@ -1774,14 +2094,18 @@ S.split = async (a) => {
   return r;
 };
 
+function shotSeed() {
+  const runAt = new Date(Date.now() - 200000).toISOString();
+  return {"work/search~1": runningDoc({asked_at: runAt, claimed_at: runAt, stage_at: new Date(Date.now() - 90000).toISOString(), steps: [{at: runAt, text: "Searching 4 job sites and 12 employers"}], count: {done: 3, total: 4}}),
+    "work/draft~r12-2": runningDoc({kind: "draft", title: "CV and letter: Larkspur Retail, Senior Supply Chain Analyst", status: "queued", asked_at: new Date(Date.now() - 40000).toISOString(), stage: 0, steps: []})};
+}
 S.shots = async (a) => {
   const files = [];
-  const runAt = new Date(Date.now() - 200000).toISOString();
-  const seed = {"work/search~1": runningDoc({asked_at: runAt, claimed_at: runAt, stage_at: new Date(Date.now() - 90000).toISOString(), steps: [{at: runAt, text: "Searching 4 job sites and 12 employers"}], count: {done: 3, total: 4}}),
-    "work/draft~r12-2": runningDoc({kind: "draft", title: "CV and letter: Larkspur Retail, Senior Supply Chain Analyst", status: "queued", asked_at: new Date(Date.now() - 40000).toISOString(), stage: 0, steps: []})};
+  const seed = shotSeed();
   for (const s of a.list) {
-    const o = await open({html: a.html, viewport: s.viewport, scheme: s.scheme, hash: s.hash, seed: s.seed === false ? {} : seed, fake: s.fake, look: s.look});
+    const o = await open({html: a.html, viewport: s.viewport, scheme: s.scheme, hash: s.hash, seed: s.seed === false ? {} : seed, fake: s.fake, look: s.look, scale: s.scale});
     if (s.click) { await o.page.getByRole("button", {name: s.click}).first().click(); await turn(o.page, 4); }
+    if (s.go) { await o.page.locator('[data-k="side:' + s.go + '"], [data-k="tab:' + s.go + '"]').first().click(); await turn(o.page, 4); }
     if (s.more) await openMore(o.page, s.more);
     files.push(await shot(o.page, (s.dir ? s.dir + "/" : "") + s.name, !!s.full));
     await o.ctx.close();
@@ -1789,9 +2113,32 @@ S.shots = async (a) => {
   return files;
 };
 
+// The README's walkthrough: one page, opened once, and a frame before each step with where
+// its tap lands (k: a data-k prefix; text: a button's name; any: words on the screen; press: a
+// key), so the animation
+// shows someone moving through the page.
+S.walk = async (a) => {
+  const o = await open({html: a.html, viewport: a.viewport, hash: a.hash, seed: shotSeed(), scale: a.scale});
+  const out = [];
+  for (const [i, st] of a.steps.entries()) {
+    const loc = st.k ? o.page.locator('[data-k^="' + st.k + '"]').first() :
+      st.text ? o.page.getByRole(st.role || "button", {name: new RegExp("^" + st.text)}).first() :
+      st.any ? o.page.locator("#main").getByText(st.any, {exact: true}).first() : null;
+    let at = null;
+    if (loc) { const b = await loc.boundingBox(); if (b) at = {x: b.x + b.width / 2, y: b.y + b.height / 2}; }
+    out.push({file: await shot(o.page, a.name + "-" + String(i).padStart(2, "0"), false), at});
+    if (loc) await loc.click();
+    if (st.press) await o.page.keyboard.press(st.press);
+    await turn(o.page, st.wait || 6);
+  }
+  out.push({file: await shot(o.page, a.name + "-end", false), at: null});
+  await o.ctx.close();
+  return out;
+};
+
 // ---------------------------------------------------------------- the loop
 async function main() {
-  browser = await chromium.launch();
+  browser = await playwright[ENGINE].launch();
   const out = (o) => process.stdout.write(JSON.stringify(o) + "\n");
   out({ready: true, version: browser.version()});
   const rl = readline.createInterface({input: process.stdin});
