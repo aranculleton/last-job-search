@@ -340,41 +340,21 @@ def test_where_the_session_runs_is_read_from_its_environment():
 
 
 def test_the_route_is_chosen_for_the_person_and_never_asks_them_to_press_anything():
-    # It says which browser and whether it can be used; whether LinkedIn is signed in is read
-    # off the first page, and asked only then (reading.signed_out_say).
-    r = reading.route(["browser"], "browser", LOCAL, signed_in=False)
-    assert r["route"] == "browser" and r["usable"] and "browser pane in the Claude desktop app" in r["say"]
-    assert r["signin"] and "sign in" not in r["say"].lower()
-    assert "sign in" not in reading.route(["browser"], "browser", LOCAL, signed_in=True)["say"]
-    assert "while the app is open" in reading.route(["browser"], "browser", CLOUD_DESKTOP,
-                                                    signed_in=True)["say"]
-    assert reading.route(["enable"], "browser", CLOUD_DESKTOP)["route"] == "enable"
-    # Claude in Chrome installed with no Chrome window connected is not a browser.
-    off = reading.route(["chrome-off"], "browser", LOCAL)
-    assert off["route"] == "hand" and not off["usable"] and "no Chrome window is connected" in off["say"]
-    assert reading.route(["chrome-off", "browser"], "browser", LOCAL)["route"] == "browser"
-    phone = reading.route([], "browser", CLOUD_PHONE)
-    # A phone is told in a few words, with one thing to send it can actually send: no
-    # computer steps, no "select all", no Save to PDF (2026-10-25).
+    # Since 4.3 the person's page reads, never a chat, whatever browser the chat has or where
+    # it runs: one route, queued for the page, and the person told once where it reads.
     import place
-    assert phone["route"] == "hand" and len(phone["say"].split()) <= place.SHORT_WORDS
-    assert "screenshots of their profile from the LinkedIn app" in phone["say"]
-    assert "screenshots of their profile from the LinkedIn app" in phone["do"]
-    assert not any(w in phone["say"] for w in ("Save to PDF", "select all", "At the time of"))
-    web = reading.route([], "browser", {"CLAUDE_CODE_REMOTE": "true",
-                                        "CLAUDE_CODE_ENTRYPOINT": "remote_web"})
-    assert len(web["say"].split()) <= place.SHORT_WORDS and "Save to PDF" not in web["say"]
+    for env in (LOCAL, CLOUD_DESKTOP, CLOUD_PHONE):
+        for tools in (["browser"], ["enable"], ["chrome"], ["chrome-off"], []):
+            r = reading.route(tools, "browser", env, signed_in=False)
+            assert r["route"] == "page" and r["usable"] and not r["signin"]
+            assert "queue-page" in r["do"] and "--wait-for-read" in r["do"]
+            assert "sign in" not in r["say"].lower() and "Chrome" not in r["say"]
+            assert len(r["say"].split()) <= place.SHORT_WORDS
+    phone = reading.route([], "browser", CLOUD_PHONE)
     desk = reading.route([], "browser", CLOUD_DESKTOP)
-    # A cloud chat in the desktop app with no browser says finding works and that the page,
-    # opened in the desktop app, reads them (4.0 recommends no move to a computer chat); a
-    # chat on the computer is only the other way. Never a paste: the person is at a computer.
-    assert desk["say"].startswith("Finding people works in this chat.")
-    assert "To set up a chat on your computer:\n1. Install the Claude desktop app" in desk["say"]
-    assert "\n2. Open its Code tab." in desk["say"] and "GitHub Desktop" not in desk["say"]
-    assert "Your page reads them when you open it in the Claude desktop app." in desk["say"]
-    assert "the chat on your computer can" not in desk["say"]
-    assert "one or two who matter most" not in desk["say"]
-    assert not desk["usable"] and desk["route"] == "hand"
+    for r in (phone, desk):
+        assert "chat on your computer" not in r["say"] and "Code tab" not in r["say"]
+        assert not any(w in r["say"] for w in ("Save to PDF", "select all", "At the time of"))
     paste = reading.route([], "paste", CLOUD_PHONE)
     assert paste["say"].startswith("For the one or two who matter most, send screenshots")
     assert reading.route(["browser"], "off", LOCAL)["route"] == "public"

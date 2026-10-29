@@ -26,9 +26,8 @@ when a look is not worth it, so every networking run can call it for free. It is
 
 Where the profile comes from, in order: their LinkedIn export's Profile.csv,
 Positions.csv, Education.csv, Skills.csv and Certifications.csv (`export.py`); else what
-they paste, written by the session into the shape `shape` prints; or their own page
-read in their own browser by the session, only where profile/networking.py PROFILE_READS
-is "browser". Nothing here fetches linkedin.com, ever. Each look is kept in
+they paste, written by the session into the shape `shape` prints. No chat reads their page
+in a browser (4.3), and nothing here fetches linkedin.com, ever. Each look is kept in
 documents/network/own_profile_review.json: the date, the source, what it compared, the
 findings, their answers and what they decided. A finding they say they do not care
 about is never raised again (`dismiss`, kept in profile/learned.json).

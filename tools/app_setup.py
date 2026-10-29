@@ -4,8 +4,9 @@
 The person says "set me up" in a chat, once. From then on the questions are asked on their
 page, one at a time with "2 of 6", the research shows its progress there, and what only
 they can do outside it (their private copy, the cloud setting that lets the chat reach job
-sites, signing in to LinkedIn on their computer, the chat on their computer) is a card
-with dated steps from tools/claude_surfaces.json and the official link.
+sites) is a card with dated steps from tools/claude_surfaces.json and the official link.
+Signing in to LinkedIn is the page's own reading card (app.js readingCard), in the Claude
+desktop app: no chat on the computer is set up or offered (4.3).
 
 `start()` is the one entry point for every state a copy can be in. It reads the copy,
 decides, and returns the lines a chat follows, written as instructions so that a chat whose
@@ -588,8 +589,10 @@ def outside_item(key: str, owner: str = "", name: str = "") -> dict:
 
 
 def outside_items(targets: dict, kind: dict | None = None) -> list:
-    """The cards for this copy now: its privacy, the job sites, the computer chat and
-    LinkedIn, each only while it is still to do."""
+    """The cards for this copy now: its privacy and the job sites, each only while it is
+    still to do. LinkedIn is the page's own reading card, never one of these: the card here
+    showed for ever to anyone with a computer chat, keyed on a file the reads no longer
+    write (2026-10-29)."""
     out = []
     owner, name = (kind or {}).get("owner", ""), (kind or {}).get("name", "")
     k = (kind or {}).get("kind", "")
@@ -610,15 +613,6 @@ def outside_items(targets: dict, kind: dict | None = None) -> list:
                         "copy": setup_script_line(),
                         "checked": claude_surfaces.entry("cloud-setup-script").get("verified_on", "")}
         out.append(item)
-    if set_up():
-        try:
-            import place
-            # Only for someone who already has a chat on their computer and is not signed in
-            # there: nobody is sent to make one.
-            if place.has_local() and not place.signed_in_ever():
-                out.append(outside_item("linkedin", owner, name))
-        except Exception:  # noqa: BLE001
-            pass
     for item in out:
         targets[item["id"]] = {"kind": "outside", "key": item["about"]["step"], "rev": item["rev"]}
     return out

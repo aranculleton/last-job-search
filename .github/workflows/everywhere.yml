@@ -7,8 +7,8 @@
 #           zones, from a folder with spaces, an accent and an apostrophe, on the newest Python
 #
 # On a release pull request (titled "Release X.Y.Z"), weekly and by hand: free on the public
-# app, skipped on every private copy, never on an ordinary change. One job each, so a failure
-# wakes a builder at most twice and ends in one short summary to read (2026-10-29).
+# app, skipped on every private copy, never on an ordinary change. The page in four jobs side
+# by side and the rest in one, each ending in one short summary to read (2026-10-29).
 #
 # No paths filter, unlike Platforms: any change to the app can break any of these.
 
@@ -30,27 +30,47 @@ concurrency:
 
 jobs:
   page:
-    name: page everywhere (Safari, Firefox, Mac and Windows type, French and German, far time zones)
+    # Four jobs side by side, not eight variants one after another: the release waited about
+    # 50 minutes on this job alone (2026-10-29). Each installs only the engine it needs.
+    name: page everywhere (${{ matrix.name }})
     if: ${{ github.event_name == 'workflow_dispatch' || (!github.event.repository.private && (github.event_name == 'schedule' || startsWith(github.event.pull_request.title, 'Release '))) }}
     runs-on: ubuntu-latest
-    timeout-minutes: 60
+    timeout-minutes: 45
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - name: Safari
+            variants: safari
+            engines: webkit
+          - name: Firefox
+            variants: firefox
+            engines: firefox
+          - name: Mac and Windows type, French
+            variants: mac-type windows-type french
+            engines: chromium
+          - name: German, far time zones
+            variants: german ahead behind
+            engines: chromium
     steps:
       - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
       - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065 # v5
         with:
           python-version: "3.13"
       - run: pip install pyyaml pytest pytest-xdist
-      - name: Playwright, its three engines, and a Mac's and Windows' type
+      - name: Playwright, the engine this job needs, and a Mac's and Windows' type
         env:
           PW: "1.56.1"            # the Playwright the page's harness is tested with
+          ENGINES: ${{ matrix.engines }}
         run: |
           npm install -g "playwright@$PW"
-          npx -y "playwright@$PW" install --with-deps chromium webkit firefox
+          npx -y "playwright@$PW" install --with-deps $ENGINES
           sudo apt-get install -y -q fonts-inter fonts-liberation > /dev/null
       - name: The page in each
         env:
           EVERYWHERE_STRICT: "1"
-        run: tools/everywhere.sh page
+          VARIANTS: ${{ matrix.variants }}
+        run: tools/everywhere.sh page $VARIANTS
 
   suite:
     name: suite everywhere (the clock moved on, far time zones, an odd folder, the newest Python)
@@ -66,9 +86,8 @@ jobs:
             3.14
             3.13
       - run: |
-          python -m pip install pyyaml pytest pytest-xdist
+          python -m pip install pyyaml pytest pytest-xdist time-machine
           python3.14 -m pip install pyyaml pytest pytest-xdist
-          sudo apt-get install -y -q faketime > /dev/null
       - name: The suite in each
         env:
           EVERYWHERE_STRICT: "1"

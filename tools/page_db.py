@@ -411,7 +411,11 @@ WORK_KINDS = {
     "profile": {"to": "either", "can": ("cloud", "computer"), "heavy": False},
 }
 assert set(STAGES) == set(WORK_KINDS)
-HEAVY_CAP = 2
+# Three big jobs at once (a search, a networking run and an interview prep, the maintainer's
+# own example, 2026-10-29), and an urgent one more. The work and its cost are the same run side
+# by side or one after another; the cap only keeps the cloud computer's disk and memory clear
+# (a search round's stage files, a batch's LaTeX compiles).
+HEAVY_CAP = 3
 ACTIVE = ("claimed", "running")
 FINISHED = ("done", "failed", "stopped")
 # A claim not moved on in this long is not believed: a lock it holds is free again.
@@ -606,3 +610,43 @@ def claim(db: dict, chosen: dict, chat_id: str, chat_kind: str, now: dt.datetime
     w.add("set", "chats", chat_id, heartbeat(chat_id, chat_kind, now, busy=chosen["work"]),
           if_version=mine["version"] if mine else None)
     return w.save("claim")
+
+
+# ------------------------------------------------------------------ keeping the store small
+
+KEEP_DAYS = 60      # what the page shows of the past: its newest 300 actions and 500 receipts
+PRUNE_CAP = 150     # deletes a wake sends at most, so one wake never sends a long batch
+
+
+def prune(db: dict, now: dt.datetime, out_dir: str, keep_days: int = KEEP_DAYS,
+          cap: int = PRUNE_CAP) -> list[str]:
+    """Batches deleting what is finished and older than `keep_days`: an applied action with
+    its receipt, and finished work. A page's store holds at most 25,000 records (db.d.ts:
+    "prune old ones"), and nothing deleted them before 4.3 (contract audit, 2026-10-29).
+    Nothing still waiting is touched: an action without a receipt stays, and so does work
+    that is not finished."""
+    cutoff = (now - dt.timedelta(days=keep_days)).strftime("%Y-%m-%dT%H:%M:%S")
+    w = Writes(out_dir)
+    n = 0
+    receipts = db.get("receipts") or {}
+    actions = db.get("actions") or {}
+    for aid, doc in sorted(receipts.items(), key=lambda kv: str((kv[1].get("data") or {}).get("applied_at") or "")):
+        if n >= cap:
+            break
+        at = str((doc.get("data") or {}).get("applied_at") or "")
+        if not at or at[:19] >= cutoff:
+            continue
+        w.add("delete", "receipts", aid, if_version=doc.get("version"))
+        n += 1
+        if aid in actions and n < cap:
+            w.add("delete", "actions", aid, if_version=actions[aid].get("version"))
+            n += 1
+    for wid, doc in sorted((db.get("work") or {}).items()):
+        if n >= cap:
+            break
+        d = doc.get("data") or {}
+        at = str(d.get("finished_at") or d.get("asked_at") or "")
+        if str(d.get("status") or "") in FINISHED and at and at[:19] < cutoff:
+            w.add("delete", "work", wid, if_version=doc.get("version"))
+            n += 1
+    return w.save("prune") if n else []

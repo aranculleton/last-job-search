@@ -34,6 +34,11 @@ FORCED = (
     "cv/*_Resume_*.tex", "cv/*_Resume_*.pdf", "cv/*_CV_*.tex", "cv/*_CV_*.pdf",
     "cover_letters/*_Cover_Letter_*.tex", "cover_letters/*_Cover_Letter_*.pdf",
     "company_research/*.json", "upskill/*.md",
+    # The LinkedIn download's connections and invitations, which later runs read (the ladder's
+    # first rung, who has a request pending). In the cloud a chat's folder goes when it ends,
+    # so they were gone by the next chat (2026-10-29). Not messages.csv: its history is in
+    # network_threads.csv already, and it runs to tens of megabytes.
+    "documents/linkedin/Connections.csv", "documents/linkedin/Invitations.csv",
 )
 # Never forced in: LaTeX's build files, text dumps of a resume, caches, licensed salary
 # data, and the mail cursor an older version of the app left in some repos (CLAUDE.md,

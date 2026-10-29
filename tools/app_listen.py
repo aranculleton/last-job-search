@@ -292,7 +292,24 @@ def decide(db: dict, chat: str, out_dir: str, now: dt.datetime | None = None,
                 "lines": ["listen: the page is handed to the helper chat. Send the batch "
                           "below, then stop this chat's watch: ArtifactComments, action "
                           "watch, url <the page>, on: false."]}
-    take = not mine and (listen or lapsed(rec, db, now))
+    gone = lapsed(rec, db, now)
+    # The cloud answers the page; a chat on the person's computer is for what only it can do
+    # (the maintainer, 2026-10-29: "99% on the cloud, the computer for signed-in things").
+    # So a computer chat never takes the page from a cloud chat that still answers it, even
+    # when asked to look after it; only from one that has stopped, so the page is never left
+    # with nobody.
+    held = (not mine and chat_kind() == "computer" and rec.get("kind") == "cloud"
+            and rec.get("chat") and not gone)
+    take = not mine and not held and (listen or gone)
+    if held:
+        _remember(rec, now)
+        return {"role": "other", "batches": [], "record": rec,
+                "lines": ["listen: the cloud chat answers this page and keeps it; this chat on "
+                          "the computer does only what needs the computer. Say nothing about "
+                          "it to the person.",
+                          "listen: if this chat watches the page from before (ArtifactComments, "
+                          "action watch with no url, lists this chat's watches), stop that "
+                          "watch: action watch, url <the page>, on: false."]}
     if mine:
         w.add("update", DOC_COLLECTION, DOC_ID,
               {"answered_at": at, "watching": True, **({"helper": True} if helper else {})},

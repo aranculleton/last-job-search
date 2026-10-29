@@ -26,7 +26,8 @@ a copy of its rules:
     person.stop        state.py set --status closed             undone by person.status
     person.status      state.py set (status, next action, due)  undone by person.status
     consent.yes / .no  the answer on its work item (db only)    undone by the other one
-    setting.set        person.json, tips.py, LINKEDIN_PLAN      undone by setting.set
+    setting.set        person.json, tips.py, LINKEDIN_PLAN,     undone by setting.set
+                       PROFILE_READS
     needs.answer       learned.py decide; a fact written where  undone by needs.unanswer
                        its [CONFIRM] mark was                   (a fact), or by saying so
     due.done           state.py set, a contact's dated next     undone by due.undo
@@ -191,7 +192,8 @@ ACTIONS = {
     "person.status": (("person", "message"), "state.py set", "person.status"),
     "consent.yes": (("work",), "the work item's answers (db only)", "consent.no"),
     "consent.no": (("work",), "the work item's answers (db only)", "consent.yes"),
-    "setting.set": (("setting",), "person.json, tips.py, networking.py LINKEDIN_PLAN",
+    "setting.set": (("setting",), "person.json, tips.py, networking.py LINKEDIN_PLAN and "
+                    "PROFILE_READS",
                     "setting.set"),
     "needs.answer": (("offer", "fact", "upgrade_ask"),
                      "learned.py decide; the profile at its mark; an update's question "
@@ -236,7 +238,7 @@ ACTIONS = {
     "export.take": (("linkedin",), "export.py take on the files the page added (fetched by the "
                                    "chat into --assets): saved, history imported, counted",
                     ""),
-    "reader.checked": (("linkedin",), "documents/network/.page_reads.json: the page read a "
+    "reader.checked": (("linkedin",), "documents/network/page_reader.json: the page read a "
                                       "LinkedIn page, or could not", ""),
     "reading.done": (("page_read",), "reading.py read --source browser, as a computer chat "
                                      "logs a reading; off the page's queue", ""),
@@ -254,6 +256,17 @@ class Refused(Exception):
 
 # ------------------------------------------------------------------ the item index
 
+
+
+def _lock_born(lock: str) -> float:
+    """When a lock was taken, as its taker wrote it: by Python's own clock, so a lock is
+    judged by the clock that judges it, never the file system's (a lock read as 400 days old
+    with the date moved on was broken under a live writer, 2026-10-29)."""
+    try:
+        with open(lock, encoding="ascii") as fh:
+            return float(fh.read().strip())
+    except (OSError, ValueError):
+        return os.path.getmtime(lock)
 
 def _sections_for(item_id: str) -> tuple:
     if item_id.startswith("due-"):
@@ -1003,11 +1016,12 @@ def _thread_lock(wait: float = 30.0):
     while True:
         try:
             fd = os.open(lock, os.O_CREAT | os.O_EXCL | os.O_WRONLY)
+            os.write(fd, repr(time.time()).encode("ascii"))
             os.close(fd)
             break
         except FileExistsError:
             try:
-                if time.time() - os.path.getmtime(lock) > 120:      # a writer that died
+                if time.time() - _lock_born(lock) > 120:      # a writer that died
                     os.remove(lock)
                     continue
             except OSError:
@@ -1882,7 +1896,9 @@ def _export_unrequested(r: Run) -> dict:
 
 
 def _assets_given(r: Run) -> list:
-    """[(asset id, the file name it stands for)], only names the app reads."""
+    """[(asset id, the file name it stands for, its part)], only names the app reads. A file
+    over the page store's 20 MiB comes as parts (`part`, from 1), each a whole number of
+    records under the file's own header line, joined again in `_export_take`."""
     import export
     names = set(export.FILES.values())
     out = []
@@ -1892,8 +1908,12 @@ def _assets_given(r: Run) -> list:
         aid, name = re.sub(r"[^0-9a-f]", "", str(a.get("id") or ""))[:32], str(a.get("name") or "")
         base = os.path.basename(name)
         match = next((n for n in names if n.lower() == base.lower()), None)
+        try:
+            part = max(1, int(a.get("part") or 1))
+        except (TypeError, ValueError):
+            part = 1
         if aid and match:
-            out.append((aid, match))
+            out.append((aid, match, part))
     return out
 
 
@@ -1911,28 +1931,35 @@ def _export_take(r: Run) -> dict:
                       "Invitations.csv and Connections.csv.")
     folder = ASSETS_DIR[0]
     found, missing = [], []
-    for aid, name in given:
+    for aid, name, part in given:
         hits = [f for f in (os.listdir(folder) if folder and os.path.isdir(folder) else [])
                 if f.split(".")[0] == aid]
-        (found.append((os.path.join(folder, hits[0]), name)) if hits else missing.append(aid))
+        (found.append((os.path.join(folder, hits[0]), name, part)) if hits else missing.append(aid))
     if missing:
         raise NeedsAssets(missing)
+    found.sort(key=lambda x: (x[1], x[2]))
     h = hashlib.sha256()
-    for path, name in sorted(found, key=lambda x: x[1]):
+    for path, name, _part in found:
         h.update(name.encode())
         with open(path, "rb") as fh:
             h.update(fh.read())
     digest = h.hexdigest()[:20]
-    remove = [aid for aid, _n in given]
+    remove = [g[0] for g in given]
     with _thread_lock():
         rec = export.load_record()
-        if digest in (rec.get("taken_hashes") or []):
+        # The same download again changes nothing, unless its files are no longer on file
+        # (taken in a chat whose folder went with it): then it is taken again.
+        if digest in (rec.get("taken_hashes") or []) and export._holds_any(export.default_folder()):
             return {"note": "Already taken: that download changed nothing new.", "undo": None,
                     "remove_assets": remove}
         work = tempfile.mkdtemp(prefix="ljs_export_")
         try:
-            for path, name in found:
-                shutil.copyfile(path, os.path.join(work, name))
+            for path, name, part in found:
+                # Parts after the first carry the header line again: it is dropped, so the
+                # joined file is the one LinkedIn gave.
+                with open(path, "rb") as src, open(os.path.join(work, name), "ab") as out:
+                    data = src.read()
+                    out.write(data.split(b"\n", 1)[1] if part > 1 and b"\n" in data else data)
             lines = export.take([work])
         finally:
             shutil.rmtree(work, ignore_errors=True)
@@ -1967,16 +1994,95 @@ def _reader_checked(r: Run) -> dict:
         bool(ok)
     _page_reads_save({"ok": ok, "checked_at": app_model.stamp(r.at),
                       "said": r.words("said")[:200]})
+    if not ok and r.words("kind") == "check":
+        # One of LinkedIn's own checks, met on the page: the day's reads stop here as they do
+        # for a chat that meets one (reading.stop), and the page waits for tomorrow.
+        import reading
+        reading.stop("LinkedIn showed a check on the page: " + (r.words("said") or "a check")[:120])
+        return {"note": "LinkedIn asked to check it was you, so reading stops for today. Finish "
+                        "its check in Claude's browser; reading starts again tomorrow.",
+                "undo": None}
     return {"note": ("Your page reads LinkedIn: profiles are read there from now on."
-                     if ok else "Your page could not read LinkedIn yet: open it in the Claude "
-                                "desktop app, signed in to LinkedIn, and check again."),
+                     if ok else "Not signed in to LinkedIn in Claude's browser yet: sign in "
+                                "there, and the page checks again by itself."),
             "undo": None}
+
+
+REWRITE = "network~rewrite~"
+
+
+def _rewrite_ids(args) -> list:
+    args = args if isinstance(args, dict) else {}
+    got = [str(c) for c in (args.get("contacts") or []) if str(c).strip()]
+    one = str(args.get("contact") or "").strip()
+    return got + [one] if one and one not in got else got
+
+
+def _queue_rewrite(r: Run, cid: str) -> str:
+    """Their waiting note, rewritten on the profile just read, as one `network` work item for
+    every profile read before Claude next runs: a batch of reads is one piece of work and one
+    chat turn, never one each (the maintainer, 2026-10-29: keep it cheap). Returns the line
+    for the receipt."""
+    import reading
+    if not (reading.waits_on_read(cid) or reading.card_only_draft(cid)):
+        return ""
+    work = r.db.get("work") or {}
+    for doc in work.values():
+        d = doc["data"]
+        if d.get("kind") == "network" and (d.get("args") or {}).get("rewrite") and \
+                str(d.get("status") or "") not in page_db.FINISHED and cid in _rewrite_ids(d.get("args")):
+            return " Your note to them is already being rewritten."
+    # The batch still open: written earlier in this same run, or queued and not yet taken.
+    wid, data, version = "", None, None
+    for e in r.w.entries:
+        if e["collection"] == "work" and e["doc_id"].startswith(page_db.safe_id(REWRITE)) and \
+                e["op"] == "set" and e.get("file_path"):
+            with open(e["file_path"], encoding="utf-8") as fh:
+                data = json.load(fh)
+            data.pop(page_db.VERSION_FIELD, None)
+            wid, version = e["doc_id"], e.get("if_version")
+    if data is None:
+        for k, doc in sorted(work.items()):
+            d = doc["data"]
+            if k.startswith(page_db.safe_id(REWRITE)) and str(d.get("status") or "") == "queued" \
+                    and not d.get("claimed_by"):
+                wid, data, version = k, dict(d), doc["version"]
+                data.pop(page_db.VERSION_FIELD, None)
+                break
+    if data is None:
+        wid = page_db.safe_id(REWRITE + app_model.stamp(r.at).replace(":", "").replace("-", ""))
+        data = {"kind": "network", "to": page_db.WORK_KINDS["network"]["to"],
+                "args": {"contacts": [], "rewrite": True, "read": []},
+                "asked_at": app_model.stamp(r.at), "asked_from": {"tab": r.act.get("tab") or ""},
+                "priority": 0, "status": "queued", "stage": 0,
+                "stages": page_db.progress("network")["stages"]}
+    args = dict(data.get("args") or {})
+    ids = _rewrite_ids(args)
+    if cid not in ids:
+        ids.append(cid)
+    args.update({"contacts": ids, "rewrite": True,
+                 "read": [x for x in (args.get("read") if isinstance(args.get("read"), list)
+                                      else [args.get("read")] if args.get("read") else [])]
+                 + [r.aid]})
+    args.pop("contact", None)
+    data["args"] = args
+    data["title"] = (f"Your note to {_first(ids[0])}, on their profile" if len(ids) == 1 else
+                     f"Your notes to {len(ids)} people, on their profiles")
+    r.w.add("set", "work", wid, data, if_version=version)
+    return " Claude rewrites your note to them on it next."
 
 
 def _reading_done(r: Run) -> dict:
     """A profile the page read: logged by `reading.py read --source browser` exactly as a
-    computer chat logs one, then off the page's queue. Their page's words leave the page's
-    database with the receipt."""
+    computer chat logs one, then off the page's queue, and its waiting note queued for its
+    rewrite with every other profile read since Claude last ran. Their page's words leave the
+    page's database with the receipt.
+
+    The page reads three of LinkedIn's pages for each person: the profile (its top card), its
+    Experience and its Education (`value.pages` names those that loaded). The profile alone
+    shows no Experience until it is scrolled (seen live, 2026-10-29), and a refused read stayed
+    on the queue to be read again at every opening: so a read with its Experience page loaded
+    is never told to scroll, and a refusal no read can fix takes them off the queue."""
     import reading
     cid = r.target.get("contact") or ""
     text = str(r.value.get("text") or "")
@@ -1986,6 +2092,8 @@ def _reading_done(r: Run) -> dict:
         raise Refused("Nothing was read from their page: " + (r.words("said") or "it was "
                       "empty") + ".")
     mode = str(r.value.get("mode") or r.target.get("mode") or "deep")
+    pages = [str(p) for p in (r.value.get("pages") or []) if isinstance(p, str)]
+    pages += [str(p) for p in (r.value.get("tried") or []) if isinstance(p, str)]
     # The page's queue is its list for the day: on today's short list, as a computer chat
     # puts each person it reads (`reading.py shortlist`), then read the same way.
     _cli(reading, ["shortlist", cid])
@@ -1993,6 +2101,10 @@ def _reading_done(r: Run) -> dict:
     try:
         argv = ["read", cid, path, "--source", "browser", "--mode",
                 mode if mode in reading.READ_MODES else "deep", "--browser", "pane"]
+        if "experience" in pages:
+            # Their Experience page itself was opened: scrolling the profile would show
+            # nothing more, so what it showed is read as it is.
+            argv.append("--no-experience")
         if r.words("url"):
             argv += ["--url", r.words("url")]
         code, out = _cli(reading, argv)
@@ -2001,24 +2113,43 @@ def _reading_done(r: Run) -> dict:
     if r.version is not None and not str(r.act.get("claimed_by") or ""):
         r.w.add("update", "actions", r.aid, {"value": {"text": {"__delete__": True}}},
                 if_version=r.version)
-    if code not in (reading.EXIT["ok"], reading.EXIT["skip"]):
-        raise Refused(_said(out) if out.strip() else "the reading was not kept")
+    kept = code in (reading.EXIT["ok"], reading.EXIT["skip"]) or \
+        any(ln.startswith("reading: saved ") for ln in out.splitlines())
+    if not kept:
+        # LinkedIn signed out, asked for a check, or the page had not loaded: worth reading
+        # again, so they stay on the queue. Anything else no second read would change (reads
+        # set to paste, a page that is not theirs): off the queue, so it is never read again.
+        again = {reading.EXIT["signin"]: "LinkedIn showed its sign-in page, not their profile. "
+                                          "Sign in in Claude's browser and they are read again.",
+                 reading.EXIT["check"]: "LinkedIn asked to check it's you, so reading stops for "
+                                         "today. They are read again tomorrow.",
+                 reading.EXIT["unknown"]: "Their page did not load. They are read again next time.",
+                 reading.EXIT["scroll"]: "Their Experience did not load. They are read again "
+                                          "next time."}
+        if code in again:
+            raise Refused(again[code])
+        reading.page_read_done(cid)
+        raise Refused("Their profile could not be kept, so it is not read again: paste it on "
+                      "their card instead." if reading.reads_now() == "browser" else
+                      "Reading profiles is set to paste: paste theirs on their card.")
     reading.page_read_done(cid)
     rec = _page_reads_save({"ok": True, "last_read_at": app_model.stamp(r.at)})
     _page_reads_save({"reads": int(rec.get("reads") or 0) + 1})
     verdict = next((ln for ln in out.splitlines() if ln.startswith("verdict:")), "")
     who = _first(cid)
-    return {"note": f"Read {who}'s page." + (" Worth writing to." if "KEEP" in verdict else
-                                            " Not one to write to now." if "SKIP" in verdict
-                                            else ""), "undo": None}
+    said = f"Read {who}'s page."
+    if "SKIP" in verdict:
+        return {"note": said + " Not one to write to now.", "undo": None}
+    return {"note": said + (" Worth writing to." if "KEEP" in verdict else "")
+            + _queue_rewrite(r, cid), "undo": None}
 
 
 def _profile_pasted(r: Run) -> dict:
     """Their LinkedIn page, pasted on a phone or the web (CAPABILITY_MAP G14): kept by
     `reading.py read --source paste` exactly as a chat keeps a paste, the words then gone from
     the page's database. A note to them written before anything was read (WAITS ON A READ,
-    or card-only) is queued for its rewrite on what was read: `network` work with
-    args.rewrite, one id per contact, so pasting twice queues it once."""
+    or card-only) is queued for its rewrite on what was read (`_queue_rewrite`: one piece
+    of work for every profile kept before Claude next runs, each contact on it once)."""
     import reading
     cid = r.target.get("contact") or ""
     text = str(r.value.get("text") or "")
@@ -2045,21 +2176,7 @@ def _profile_pasted(r: Run) -> dict:
         f"Kept what {who}'s profile says."
     if "SKIP" in verdict:
         return {"note": said + " Not one to write to now.", "undo": None}
-    if not (reading.waits_on_read(cid) or reading.card_only_draft(cid)):
-        return {"note": said, "undo": None}
-    wid = page_db.safe_id(f"network~rewrite~{cid}")
-    have = (r.db.get("work") or {}).get(wid)
-    if have and str(have["data"].get("status") or "") not in page_db.FINISHED:
-        return {"note": said + " Your note to them is already being rewritten.", "undo": None}
-    r.w.add("set", "work", wid, {
-        "kind": "network", "title": f"Your note to {who}, on their profile",
-        "to": page_db.WORK_KINDS["network"]["to"],
-        "args": {"contact": cid, "rewrite": True, "read": r.aid},
-        "asked_at": app_model.stamp(r.at), "asked_from": {"tab": r.act.get("tab") or ""},
-        "priority": 0, "status": "queued", "stage": 0,
-        "stages": page_db.progress("network")["stages"]},
-        if_version=have["version"] if have else None)
-    return {"note": said + " Claude rewrites your note to them on it next.", "undo": None}
+    return {"note": said + _queue_rewrite(r, cid), "undo": None}
 
 
 # ---- work items (the page's own list; nothing in the repo)
@@ -2135,6 +2252,9 @@ def _setting_set(r: Run) -> dict:
         tips.save(got)
     elif key == "linkedin_plan":
         _set_plan(value)
+    elif key == "profile_reads":
+        import profile_set
+        profile_set.set_line("networking.py", "PROFILE_READS", value)
     label = dict(next(ch for k, _, ch in app_model.SETTINGS if k == key))[value]
     return {"note": f"Changed: {label}.",
             "undo": {"action": "setting.set", "target": dict(r.target), "value": {"value": old}}}

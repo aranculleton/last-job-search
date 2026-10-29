@@ -45,16 +45,29 @@ make sense to somebody whose repo just received it.
   instead of "scores it".
 - A **full screen** button on a computer, and the app is named after you ("Morgan's job
   search").
-- **A bell on your Brief.** Press it for a short note each morning: what is due today, and
-  news that matters to your search. Nothing is scheduled until you do, since it is a run every
-  morning. Every day by default; weekdays, other days, another time or off from the same
+- **A short note every morning, on from the start.** What is due today, and news that
+  matters to your search, on your Brief: set-up turns it on, and a copy set up before gets it
+  by itself (Profile upgrade: brief-daily). The bell on your Brief changes it: every day by
+  default; weekdays, other days, another time or off from the same
   bell or from Settings, which open the same choices. It runs in the chat that already answers
   your page, so no chat is made for it. Where your page is answered from your computer, the
   brief still comes with the computer off: the same tap opens Claude's helper in the cloud,
   and you press Send there once.
-- **Claude's work says where each thing stands.** What is running, and what waits its turn in
-  the same chat ("Next", "Starts when Finding jobs is done"); the pill at the top names what
-  is running ("Finding jobs · 1 waiting"); a running bar moves and waiting work breathes.
+- **Big jobs run side by side.** A job search, a networking run and an interview prep run at
+  the same time in Claude's one helper (three at most, an urgent one more), and replies,
+  tweaks and Chat never wait behind them. No new chat is made for any of it.
+- **Claude's work says where each thing stands.** What is running, and what waits its turn
+  once three big jobs are running ("Next", "Starts as soon as one of the 3 jobs running now is
+  done"); the pill at the top names what is running ("Finding jobs · 1 waiting"); a running
+  bar moves and waiting work breathes.
+- **Your page reads LinkedIn profiles itself, in the Claude app on your computer.** Open it
+  there once: it asks to use Claude's browser, checks you are signed in to LinkedIn, and from
+  then on reads each person networking picks (their profile, then their Experience, Education
+  and recent posts) by itself, at no cost. When it is done, one tap, Write my notes, has Claude
+  rewrite every note from what it read, in one go. Signed out, it says so, opens LinkedIn for
+  you, and checks again when you come back; LinkedIn's own check stops reading until the next
+  day. Rather not? "I paste them" under LinkedIn in Settings, or the bin's Never, holds on
+  every device; on a phone, Send screenshots instead.
 - **Updates show like an app's**: a moving line under the header while the newest version is
   on its way, and the page refreshes by itself when it is ready.
 - **Old chats tidy themselves away.** A copy that updated through several versions could carry
@@ -164,6 +177,19 @@ make sense to somebody whose repo just received it.
 
 ### Fixed
 
+- On an iPhone (and in Safari) the panel for tweaking a resume or letter opened with nothing
+  in it, two pixels tall. It now opens at its full size.
+- The filter panel's footer read "Show 13 people null" whenever no filter was on.
+- A LinkedIn download with a file over 20 MB (a busy inbox's messages) was refused with "ask
+  in Chat", which led nowhere. It now goes in parts and is joined again.
+- In the cloud, the connections from your LinkedIn download were gone by the next chat, so
+  finding people through them worked once. They are kept in your copy now, and a download
+  that was lost is asked for again.
+- A profile read that could never be kept was read again every time the page opened; a
+  sign-in page now stays waiting and anything else is let go. The browser's own header was
+  read as the person's headline.
+- The card asking anyone with a computer chat to sign in to LinkedIn never went away.
+
 - **Dates and amounts are written in English on any device**: a phone or computer set to
   French or German put "29 oct." or "60.000" inside the page's English sentences.
 - **A message card no longer pushes a phone sideways at large text**: its top line wraps.
@@ -194,6 +220,10 @@ make sense to somebody whose repo just received it.
 
 ### Cheaper to run
 
+- **No chat reads LinkedIn any more**, whatever browser it has: a chat reading profiles put
+  every page into its own context, the costliest part of networking. Your page reads them for
+  nothing, and a batch of reads is one rewrite, one wake.
+
 - **A chat kept open for weeks costs far less per tap.** Every chat in your copy now squeezes
   its history at 200,000 tokens instead of letting it grow to a 1M model's million, so the
   chat that answers your page and writes your brief no longer re-reads weeks of history on
@@ -215,6 +245,11 @@ make sense to somebody whose repo just received it.
   in a chat of its own, and the day's tidy-up is done once, by the brief or the first tap.
 
 ### Removed
+
+- **No chat on your computer is set up or offered**, and the steps for one are gone from
+  setup, Start here, the README and every message: everything runs in the cloud, and your page
+  does the one thing that needs your LinkedIn sign-in. A chat on a computer someone already
+  uses keeps working; it asks only for the LinkedIn download.
 
 - **Names your own checks might have used were retired**: `app_listen.setup_done`, `ats_boards.workday_paths`, `interview_pack.campaign_offer`, `reading.last_browser_read`, `reading.reads_today`, `page_db.where` (now `page_db.can_take`), `place.CLOUD_LINK_NOT`, `place.QUESTION`, `place.TRADE_OFF`, `place.TWO_CHATS`, `safe_name.short_hash` and `scrape_wide.PortalDown`. Nothing in the app used them any more: setup asks nobody where they will work, no separate chat is offered for an interview, and work goes to the chat that answers your page.
 - The "Where long tasks run" setting (`work_either`), and unused code elsewhere.

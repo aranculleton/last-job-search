@@ -2622,25 +2622,30 @@ def _where(ctx: Ctx, targets: dict) -> dict:
     import app_listen
     import tidy
     # Any chat in the cloud that answers the page is the helper, whoever started it: a
-    # second one is never offered beside it. With the page answered on the computer it is
-    # optional, and the brief's bell starts it when the brief is turned on.
+    # second one is never offered beside it. The cloud does the work (4.3), so it is
+    # recommended even where a chat on the computer answers the page today.
     helper_row = ({"state": "ready", "title": helper.get("title") or app_listen.HELPER_CHAT_TITLE,
                    "say": "The one chat that does what you ask for here, even with your "
                           "computer off. If it is ever closed, this page offers a new one."}
                   if helper.get("helper") or helper.get("kind") == "cloud" else
-                  {"state": "optional", "title": None,
-                   "say": "Only for work while your computer is off. Turning on your brief "
-                          "sets it up for you."}
-                  if helper.get("kind") == "computer" else
                   {"state": "not_set_up", "title": None,
                    "say": "Recommended: Claude's helper in the cloud works when your computer "
                           "is off. Set it up once."})
     reads = place.page_reads(ctx.today)
-    reading_row = ({"state": "ready", "say": "Your page reads LinkedIn profiles in the Claude "
+    import reading
+    # The same order the page judges it in (app.js readingState): their choice to paste,
+    # then LinkedIn's pause for the day, then whether a read worked lately.
+    reading_row = ({"state": "paste", "say": "Off: you paste someone's profile when you write "
+                                             "to them."}
+                   if reading.reads_now() != "browser" else
+                   {"state": "paused", "say": "LinkedIn asked Claude to slow down: reading "
+                                              "starts again tomorrow, by itself."}
+                   if reading.gate_state()["kind"] != "go" else
+                   {"state": "ready", "say": "Your page reads LinkedIn profiles in the Claude "
                                             "desktop app."} if reads else
-                   {"state": "open_in_app", "say": "Open this page in the Claude desktop app, "
-                                                   "signed in to LinkedIn, and tap Check it "
-                                                   "works."})
+                   {"state": "open_in_app", "say": "Open this page in the Claude app on your "
+                                                   "computer: it asks once to use Claude's "
+                                                   "browser, and reads LinkedIn profiles there."})
     computer = place.place_record().get("computer_chat")
     computer_row = ({"state": "ready", "since": computer, "say": "Your chat on your computer "
                                                                 "is set up."} if computer else
@@ -2757,12 +2762,22 @@ def _linkedin(ctx: Ctx, targets: dict) -> dict:
         queue.append(item)
         targets[rid] = {"kind": "page_read", "contact": cid, "mode": item["mode"],
                         "rev": item["rev"]}
+    # LinkedIn stopped the day (a check, a sign-out out of turn): the page reads nothing more
+    # until tomorrow, and says so in one line. The person's choice to paste holds everywhere.
+    setting = "browser" if reading.reads_now() == "browser" else "paste"
+    paused = reading.gate_state()["kind"] != "go"
+    # The page compares this with its own day, so a pause ends at midnight even when no chat
+    # has run since to make the model again.
+    paused_until = (ctx.today + dt.timedelta(days=1)).isoformat() if paused else None
     reading_block = {"id": "linkedin-reader", "page_reads": place.page_reads(ctx.today),
                      "ok": bool(pr.get("ok")) if pr else None,
                      "checked_at": pr.get("checked_at") or None,
                      "last_read_at": pr.get("last_read_at") or None,
-                     "reads": int(pr.get("reads") or 0), "queue": queue,
-                     "rev": rev_of("linkedin-reader", pr.get("checked_at"), pr.get("ok"))}
+                     "reads": int(pr.get("reads") or 0),
+                     "queue": queue if setting == "browser" else [],
+                     "setting": setting, "paused": paused, "paused_until": paused_until,
+                     "rev": rev_of("linkedin-reader", pr.get("checked_at"), pr.get("ok"),
+                                   setting, paused)}
     targets["linkedin-reader"] = {"kind": "linkedin", "id": "linkedin-reader",
                                   "rev": reading_block["rev"]}
     return {"export": export_block, "reading": reading_block}
@@ -2881,6 +2896,13 @@ def setting_values() -> dict:
         out["linkedin_plan"] = "free"
     import app_alerts
     out["suggestions"] = app_alerts.setting()
+    # "off" is shown as paste: either way Claude's browser reads nothing, and the page offers
+    # only the two (the bin's "Never", or Settings).
+    try:
+        import reading
+        out["profile_reads"] = "browser" if reading.reads_now() == "browser" else "paste"
+    except Exception:  # noqa: BLE001  no networking settings: the default
+        out["profile_reads"] = "browser"
     return out
 
 
@@ -2890,6 +2912,9 @@ SETTINGS = (
     ("linkedin_plan", "Your LinkedIn plan", [["free", "Free"], ["premium", "Premium"]]),
     # tools/app_alerts.py: alerts about something wrong stay whatever this says.
     ("suggestions", "Suggestions", [["on", "On"], ["urgent", "Only urgent"], ["off", "Off"]]),
+    # networking.py PROFILE_READS: Claude's browser in the desktop app, or the person pastes.
+    ("profile_reads", "Reading LinkedIn profiles", [["browser", "Claude reads them"],
+                                                    ["paste", "I paste them"]]),
 )
 
 

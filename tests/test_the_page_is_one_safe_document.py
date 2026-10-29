@@ -47,14 +47,14 @@ def test_the_capabilities_are_exactly_these():
         "user": {},
         "downloads": True,
         "comments": {},
-        "room": {},
         "sample": {},
         "assets": {},
         # Claude's own browser, in the desktop app only, with only the tools a reading needs.
         "mcp": {"servers": [{"server": "host:claude_browser",
-                             "tools": ["navigate", "get_page_text", "read_page", "preview_start"]},
-                            # The page wakes the chat that answers it (the maintainer, 2026-10-28).
-                            {"server": "Claude Code Remote", "tools": ["send_message"]}]},
+                             "tools": ["navigate", "get_page_text", "read_page", "preview_start"]}]},
+        # No "Claude Code Remote" and no room: the connector could not load on the maintainer's
+        # account and the room asked "send this?" on every tap; the page wakes its chat with the
+        # comment doorbell, rung in the tap (live checks, 2026-10-29).
     }
 
 
@@ -148,16 +148,20 @@ def test_a_model_of_the_wrong_shape_is_named_and_still_rendered():
 
 
 def test_the_command_writes_the_page_and_prints_the_capabilities(tmp_path):
+    # Read as UTF-8, so written as UTF-8: on Windows with no PYTHONUTF8 the command wrote its
+    # message in the console's code page, the path's "ë" was not UTF-8, and the reader got
+    # nothing at all (stderr None; the Windows check, 2026-10-29).
+    env = dict(os.environ, PYTHONIOENCODING="utf-8")
     out = tmp_path / "page.html"
     r = subprocess.run([sys.executable, os.path.join(ROOT, "tools", "app_page.py"), FIXTURE, "--out", str(out)],
-                       capture_output=True, text=True, encoding="utf-8")
+                       capture_output=True, text=True, encoding="utf-8", env=env)
     assert r.returncode == 0, r.stderr
     assert out.read_text(encoding="utf-8") == app_page.render(_model())
     caps = subprocess.run([sys.executable, os.path.join(ROOT, "tools", "app_page.py"), "--capabilities"],
-                          capture_output=True, text=True, encoding="utf-8")
+                          capture_output=True, text=True, encoding="utf-8", env=env)
     assert json.loads(caps.stdout) == app_page.capabilities()
     bad = subprocess.run([sys.executable, os.path.join(ROOT, "tools", "app_page.py"), str(tmp_path / "missing.json")],
-                         capture_output=True, text=True, encoding="utf-8")
+                         capture_output=True, text=True, encoding="utf-8", env=env)
     assert bad.returncode == 2 and "cannot read" in bad.stderr
 
 

@@ -134,8 +134,11 @@ class Copy:
                          "    print('https://github.com/someone/my-job-search')\n"
                          "elif sys.argv[1:2] == ['api']:\n"
                          f"    print({'true' if private else 'false'!r})\n")
+            # The script by %~dp0, its own folder: cmd reads a .cmd file in the console's code
+            # page, so a folder with an accent in it ("Zoë") written into the file as UTF-8
+            # named a script that was not there (the Windows check, 2026-10-29).
             with open(os.path.join(bindir, "gh.cmd"), "w", encoding="utf-8", newline="\r\n") as fh:
-                fh.write(f'@"{sys.executable}" "{fake}" %*\n')
+                fh.write(f'@"{sys.executable}" "%~dp0{os.path.basename(fake)}" %*\n')
         self.path = bindir + os.pathsep + os.environ.get("PATH", "")
         return log
 

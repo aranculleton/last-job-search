@@ -102,6 +102,19 @@ class Copy:
         self.root = str(root)
         self.state = os.path.join(self.root, "state")
         self.profile = app_state.profile_copy(os.path.join(self.root, "profile"))
+        # The example person said no to the sync's questions (asked.json, dated October
+        # 2026), and a no is asked again REASK_DAYS later. profile_upgrades.py takes no
+        # date, so the noes are dated today, on the clock it reads: what these tests mean
+        # is "they said no lately", never "a month went by".
+        import datetime
+        asked = os.path.join(self.profile, "asked.json")
+        with open(asked, encoding="utf-8") as fh:
+            noes = json.load(fh)
+        for got in noes.values():
+            if isinstance(got, dict) and got.get("no"):
+                got["no"] = datetime.date.today().isoformat()
+        with open(asked, "w", encoding="utf-8") as fh:
+            json.dump(noes, fh, indent=2)
         os.makedirs(self.state, exist_ok=True)
         self.db = os.path.join(self.root, "db")
         os.makedirs(self.db, exist_ok=True)

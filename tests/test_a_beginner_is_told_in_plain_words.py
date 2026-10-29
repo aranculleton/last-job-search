@@ -120,15 +120,19 @@ def _prose(text):
     return re.sub(r"`[^`]*`", "", text)
 
 
-def test_start_here_recommends_one_fix_for_the_cloud_and_one_way_onto_a_computer():
+def test_start_here_recommends_one_fix_for_the_cloud_and_one_step_on_a_computer():
+    """The computer's one step is the Claude desktop app, for reading LinkedIn: no chat there
+    is offered, since the cloud does everything else (the maintainer, 2026-10-29)."""
     text = _read("START_HERE.md")
     cloud = text.split("## 3. Say \"set me up\"", 1)[1].split("## On your computer", 1)[0]
     local = text.split("## On your computer", 1)[1].split("## Then use your page", 1)[0]
+    assert "recommended" in cloud.lower()
     for part in (cloud, local):
-        assert "recommended" in part.lower()
         for word in ("proxy", "egress", "allowlist", "Allowed domains", "worktree"):
             assert word not in part, word
-    assert "Network access to Full" in cloud and "COMPUTER.md" in local
+    assert "Network access to Full" in cloud
+    assert "Claude desktop app" in local and "LinkedIn" in local
+    assert "COMPUTER.md" not in local and "Code tab" not in local
     assert "GitHub Desktop" not in text and "Terminal" not in text
 
 

@@ -327,6 +327,10 @@ def scan_text(paths: list[str], tokens, show: bool = False) -> list[str]:
     # diff (2026-10-25). A commit's message takes only the ones that hold anywhere.
     anywhere = [re.compile(rx) for g, rx in ALLOW if g == "**"]
     per_file = [(_regex(g), re.compile(rx)) for g, rx in ALLOW if g != "**"]
+    # A hunk's header numbers are line numbers, never anything written: one matched a short
+    # number on the denylist (2026-10-29). Only the numbers are set aside; the function name
+    # git prints after them is still read.
+    hunk = re.compile(r"^@@ -\d+(?:,\d+)? \+\d+(?:,\d+)? @@")
     out: list[str] = []
     for p in paths:
         with open(p, encoding="utf-8", errors="replace") as fh:
@@ -334,6 +338,7 @@ def scan_text(paths: list[str], tokens, show: bool = False) -> list[str]:
         name = os.path.basename(p)
         for start, rel, chunk in _patch_chunks(text):
             rules = anywhere + [rx for g, rx in per_file if rel and g.match(rel)]
+            rules += [hunk] if rel else []
             if rel and MARKETS.match(rel):
                 boards = market_allowance(chunk)
                 rules += [boards] if boards else []

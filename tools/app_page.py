@@ -53,7 +53,7 @@ def capabilities() -> dict:
 
     db: owner-only, read and write, at the root, so a person the page is shared with reads
     nothing, and again on reach/, where each contact's address is kept for the owner; user: to know the owner; downloads: each document saved as a file; comments,
-    full form: the doorbell that wakes a chat; room: a chat open beside the page; sample:
+    full form: the doorbell that wakes a chat, rung in the tap; sample:
     quick answers on the page; assets: the documents' PDFs, uploaded by a chat and read
     back by the page, the LinkedIn download and a resume the person adds, and the pictures
     they add to the chat, which the chat that answers reads by id; mcp: Claude's
@@ -70,16 +70,14 @@ def capabilities() -> dict:
         "user": {},
         "downloads": True,
         "comments": {},
-        "room": {},
         "sample": {},
         "assets": {},
+        # Claude's own browser in the desktop app, for reading LinkedIn. The page wakes its
+        # chat with the comment doorbell, rung in the tap: the "Claude Code Remote" connector
+        # it used for a day could not even load on the maintainer's account, and asked on
+        # every tap (live check, 2026-10-29).
         "mcp": {"servers": [{"server": "host:claude_browser",
-                             "tools": ["navigate", "get_page_text", "read_page", "preview_start"]},
-                             # The page wakes the one chat that answers it by itself. Only
-                             # that: a page asking for more (starting chats) was refused by
-                             # some accounts' connector settings, and a new chat per task is
-                             # what the person asked never to happen (2026-10-29).
-                             {"server": "Claude Code Remote", "tools": ["send_message"]}]},
+                             "tools": ["navigate", "get_page_text", "read_page", "preview_start"]}]},
     }
 
 

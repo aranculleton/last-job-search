@@ -18,6 +18,9 @@ const playwright = require("playwright");
 // app on an iPhone draws the page with Safari's engine, and claude.ai opens in any browser,
 // language and time zone (2026-10-29).
 const ENGINE = process.env.LJS_PW_ENGINE || "chromium";
+// What the page copied: the clipboard itself in Chrome's engine, which lets a test read it
+// back; elsewhere what the page handed to it (fake_claude.js keeps it).
+const copied = (page) => page.evaluate((chromium) => chromium ? navigator.clipboard.readText() : (window.__ljsCopied || ""), ENGINE === "chromium");
 const LOCALE = process.env.LJS_PW_LOCALE || "en-GB";
 const ZONE = process.env.LJS_PW_TZ || "";
 
@@ -44,6 +47,12 @@ function storedPath(p) {
   if (p === "meta/listener") return "meta/listen";
   if (p === "meta/current") return "meta/now";
   return p.replace(/^view\//, "screen/").replace(/^chats\//, "beats/").replace(/^locks\//, "holds/");
+}
+// An action by what it is (its item and action): every tap has an id of its own from 4.3, the
+// item and action then a stamp (app.js actionId).
+function actionAt(store, base) {
+  const p = store.list("actions/").find((x) => x === base || x.startsWith(base + "~"));
+  return p ? store.get(p) : null;
 }
 class Store {
   constructor(seed) {
@@ -165,6 +174,10 @@ async function turn(page, n) {
   }
 }
 async function settle(page) {
+  // The page started first: before it has, there is nothing to wait on, and a step taken then
+  // (a section set in the address) is read by a page that has not started (Firefox under load,
+  // the Everywhere check, 2026-10-29).
+  await page.waitForFunction(() => !!window.LJS, null, {timeout: 15000}).catch(() => {});
   await page.evaluate(() => (window.LJS && window.LJS.settled) || null);
   await turn(page, 4);
 }
@@ -177,7 +190,9 @@ async function shot(page, name, full) {
   return file;
 }
 async function goto(page, id) {
-  await page.evaluate((h) => { location.hash = h; }, id);
+  // Set to the address it already has, nothing happens: no hashchange. After a reload the
+  // address is already the section's, while the page may have opened on its first one.
+  await page.evaluate((h) => { if (location.hash === "#" + h) location.hash = "_"; location.hash = h; }, id);
   await turn(page, 4);
   // To do shows five first (4.3); a scenario that goes there reads and taps the whole list.
   if (id === "todo") { await page.$$eval("details.band-more:not([open])", (ds) => ds.forEach((d) => { d.open = true; })); await turn(page, 2); }
@@ -514,7 +529,10 @@ async function sheetMeasure(page, kind) {
     const r = d.getBoundingClientRect();
     const close = [...d.querySelectorAll("button")].find((b) => /^close\b/i.test((b.getAttribute("aria-label") || b.textContent).trim()));
     const cr = close ? close.getBoundingClientRect() : null;
-    return {bottom: Math.round(r.bottom), top: Math.round(r.top), h: Math.round(r.height), vh: innerHeight, close: !!close, closeRow: cr ? Math.round(cr.top - r.top) : null};
+    // A null or undefined given to the DOM is printed as the word (the filter sheet's footer
+    // read "Show 13 people null", 2026-10-29).
+    const stray = /(^|[^\w])(null|undefined|NaN)([^\w]|$)|\[object /.test(d.innerText);
+    return {bottom: Math.round(r.bottom), top: Math.round(r.top), h: Math.round(r.height), vh: innerHeight, close: !!close, closeRow: cr ? Math.round(cr.top - r.top) : null, stray};
   }, kind);
 }
 async function sheetCheck(page, kind, openIt) {
@@ -612,7 +630,7 @@ S.engine = async (a) => {
     if (st.hash2) await goto(page, st.hash2);
     await unfold();
     const entry = {text: (await one(page, st.read || "#main")) || "", dialog: (await one(page, "dialog")) || ""};
-    if (st.clip) entry.clip = await page.evaluate(() => navigator.clipboard.readText());
+    if (st.clip) entry.clip = await copied(page);
     if (st.attr) entry.attr = await page.getAttribute(st.attr[0], st.attr[1]).catch(() => null);
     if (st.count) entry.count = (await page.$$(st.count)).length;
     if (st.calls) entry.calls = (await calls(page)).filter((c) => c.cap === st.calls);
@@ -719,7 +737,7 @@ S.undo = async (a) => {
   await page.locator("dialog").getByRole("radio", {name: "Not this role: the pay", exact: true}).check();
   await clickText(page, "button", "Take it off my list");
   await turn(page, 6);
-  const reason = store.get("actions/act~r12-3~job.dismiss");
+  const reason = actionAt(store, "actions/act~r12-3~job.dismiss");
   const during = (await page.$$(".toast button:text-is('Undo')")).length + (await page.$$("#main button.undo")).length;
   // The pointer off the toast: a toast under it is held open on purpose.
   await page.mouse.move(1, 1);
@@ -827,7 +845,7 @@ S.stop = async (a) => {
   r.rewake = (await bar(page, "prep~int-larkspur-supply")).buttons;
   await page.locator(workSel("prep~int-larkspur-supply")).getByRole("button", {name: "Ask Claude again: Interview prep: Larkspur Retail"}).click();
   await turn(page, 8);
-  r.prefill = await page.$eval(workSel("prep~int-larkspur-supply") + " a.btn", (x) => x.href).catch(() => null);
+  r.told = await page.$eval(workSel("prep~int-larkspur-supply"), (x) => x.textContent).catch(() => "");
   r.runningBefore = (await bar(page, "search~1")).buttons;
   await page.locator(workSel("search~1")).getByRole("button", {name: "Stop: Finding jobs"}).click();
   await turn(page, 6);
@@ -981,12 +999,55 @@ S.room = async (a) => {
 // new one on the person's copy when that fails, never asking anyone to wake Claude.
 S.wake = async (a) => {
   const seed = {"meta/listener": {chat: "session_EXAMPLEHELPER", kind: "cloud", answered_at: "2026-10-25T08:00:00Z"}};
-  const o = await open({html: a.html, hash: "jobs", seed, fake: {canSend: "no_session", mcp: {fail: a.fail || []}}});
+  const o = await open({html: a.html, hash: "jobs", seed, fake: {canSend: a.canSend || "available", mcp: {fail: a.fail || []}}});
   await draftViaDialog(o.page);
   await turn(o.page, 8);
-  const r = {mcp: (await calls(o.page)).filter((c) => c.cap === "mcp").map((c) => ({tool: c.tool, server: c.server, input: c.input})), errors: o.errors};
+  const all = await calls(o.page);
+  const r = {mcp: all.filter((c) => c.cap === "mcp").map((c) => ({tool: c.tool, server: c.server, input: c.input})),
+    rings: all.filter((c) => c.cap === "comments" && c.op === "sendToClaude").map((c) => ({text: c.text, active: c.active})), errors: o.errors};
   await goto(o.page, "todo");
   r.wakeCard = (await o.page.$$('#main [data-item="listen"]')).length;
+  await o.ctx.close();
+  return r;
+};
+
+// Reading LinkedIn in the desktop app: the page checks by itself when it opens there, and
+// says how to sign in when signed out (2026-10-29).
+S.reading = async (a) => {
+  const o = await open({html: a.html, hash: a.hash || "todo", seed: a.seed || {}, model: a.model, fake: {canSend: a.canSend || "no_session", mcp: {browser: {inApp: a.inApp !== false, signedIn: !!a.signedIn, askFirst: !!a.askFirst, signInLater: !!a.signInLater, signOutAfter: a.signOutAfter || 0, check: a.check || 0, declined: !!a.declined, slowSections: !!a.slowSections}}}});
+  await o.page.waitForTimeout(2500);
+  // Until the page has finished reading (each page that draws late adds a moment).
+  await o.page.waitForFunction(() => { const s = window.LJS.state().reading; return !s.busy && s.panel !== "run" && s.panel !== "check-run"; }, null, {timeout: 30000}).catch(() => {});
+  await turn(o.page, 8);
+  const r = {browser: (await calls(o.page)).filter((c) => c.cap === "mcp" && c.server === "host:claude_browser").map((c) => ({tool: c.tool, input: c.input})), errors: o.errors};
+  if (a.signInLater) {
+    // The person signs in in Claude's browser and comes back to the page.
+    await o.page.evaluate(() => { window.__ljsBrowser.signedIn = true; window.dispatchEvent(new Event("focus")); });
+    await o.page.waitForTimeout(1500);
+    await o.page.waitForFunction(() => { const s = window.LJS.state().reading; return !s.busy && s.panel !== "run" && s.panel !== "check-run"; }, null, {timeout: 30000}).catch(() => {});
+    await turn(o.page, 8);
+  }
+  r.panel = await o.page.evaluate(() => { const p = document.querySelector(".browser-panel"); return p ? p.textContent : ""; });
+  r.state = await o.page.evaluate(() => { const s = window.LJS.state(); return {ok: s.reading.ok, signedOut: s.reading.signedOut, panel: s.reading.panel}; });
+  r.acts = [...o.store.docs.entries()].filter(([p]) => p.startsWith("actions/")).map(([p, d]) => ({id: p.slice(8), action: d.data.action, value: d.data.value}));
+  r.line = await o.page.evaluate(() => window.LJS.state().reading.line || "");
+  r.todo = await o.page.evaluate(() => (document.querySelector("#main") || document.body).textContent);
+  r.cards = await o.page.evaluate(() => [...document.querySelectorAll("#main [data-item]")].map((e) => e.getAttribute("data-item")));
+  if (a.write) {
+    // "Write my notes" in the panel: one ring for every profile read, from the person's tap.
+    await o.page.click('[data-k="bp-write"]');
+    await o.page.waitForTimeout(600);
+    r.rings = (await calls(o.page)).filter((c) => c.cap === "comments" && c.op === "sendToClaude").map((c) => ({text: c.text, active: c.active}));
+    r.cardsAfter = await o.page.evaluate(() => [...document.querySelectorAll("#main [data-item]")].map((e) => e.getAttribute("data-item")));
+  }
+  if (a.bin) {
+    await o.page.$eval('[data-k="reading-bin"]', (b) => b.click());
+    await o.page.waitForTimeout(300);
+    await o.page.check('input[type="radio"][value="' + a.bin + '"]');
+    await o.page.click('[data-k="sheet-go"]');
+    await o.page.waitForTimeout(900);
+    r.acts = [...o.store.docs.entries()].filter(([p]) => p.startsWith("actions/")).map(([p, d]) => ({id: p.slice(8), action: d.data.action, value: d.data.value, item: d.data.item}));
+  }
   await o.ctx.close();
   return r;
 };
@@ -1102,7 +1163,7 @@ S.copy = async (a) => {
   const r = {before, label: await T(page, '#main [data-item="msg-juno-1"] button.copy'), note: await T(page, "#main .card.msg .note"),
     sentFilled: await main('#main [data-item="msg-juno-1"] [data-k="sent:msg-juno-1"]'),
     selected: await page.evaluate(() => String(window.getSelection())), errors: o.errors};
-  if (!a.denied) r.clip = await page.evaluate(() => navigator.clipboard.readText());
+  if (!a.denied) r.clip = await copied(page);
   await o.ctx.close();
   return r;
 };
@@ -1149,7 +1210,7 @@ S.alerts = async (a) => {
   const r = {closed: await T(page, '#main [data-item="r12-5"] .alert-text'), cost: await T(page, '#main [data-item="r12-5"] .alert .cost')};
   await page.locator('#main [data-item="r12-5"] .alert').getByRole("button", {name: "Set it aside"}).click();
   await turn(page, 6);
-  r.fixed = store.get("actions/act~r12-5~job.dismiss");
+  r.fixed = actionAt(store, "actions/act~r12-5~job.dismiss");
   // The draft's own card asks its question first; its failed check is a card in To do.
   await goto(page, "todo");
   r.checksFix = await T(page, '#main [data-item="al:al-checks-app-quayside-demand"] .fix .btn');
@@ -1157,7 +1218,7 @@ S.alerts = async (a) => {
   r.suggest = await T(page, '#main [data-item="app-ellerwick-insight"] .suggest-text');
   await page.getByRole("button", {name: /^No thanks: The posting asks for Tableau/}).click();
   await turn(page, 6);
-  r.dismissed = store.get("actions/act~sg-near-app-ellerwick-insight-3f2a9c1d~suggest.dismiss");
+  r.dismissed = actionAt(store, "actions/act~sg-near-app-ellerwick-insight-3f2a9c1d~suggest.dismiss");
   r.gone = (await page.$$('#main [data-item="app-ellerwick-insight"] .suggest')).length;
   r.toast = await T(page, ".toast-text");
   await page.locator(".toast").last().getByRole("button", {name: "Undo", exact: true}).click();
@@ -1244,6 +1305,9 @@ S.talk = async (a) => {
   await page.waitForTimeout(50);
   await turn(page, 12);
   r.quick = await T(page, "#main .talk-msg .talk-text");
+  // Handed on to Claude, the note's one button sends it, from the person's own tap.
+  const send = page.locator("#main .talk-msg").getByRole("button", {name: "Send to Claude"});
+  if (await send.count()) { await send.first().click(); await turn(page, 6); r.afterSend = await T(page, "#main .talk-msg .talk-text"); }
   r.tools = await page.evaluate(() => (window.__toolResults || []).map((t) => [t.name, String(t.out).slice(0, 400)]));
   r.sampleCall = (await calls(page)).filter((c) => c.cap === "sample").map((c) => ({tools: c.tools, tier: c.modelTier, last: c.input[c.input.length - 1], first: String(c.input[0].content).slice(0, 120)}));
   r.stored = store.list("talk/");
@@ -1384,9 +1448,15 @@ S.chat_pics = async (a) => {
     dt.items.add(new File([bytes], "screenshot.png", {type: "image/png"}));
     const ta = document.getElementById("talk-text");
     ta.focus();
-    ta.dispatchEvent(new ClipboardEvent("paste", {clipboardData: dt, bubbles: true, cancelable: true}));
+    // A paste event carrying the picture. Firefox drops clipboardData given to a synthetic
+    // ClipboardEvent (the Everywhere check, 2026-10-29), so it is put on the event itself.
+    const ev = new Event("paste", {bubbles: true, cancelable: true});
+    Object.defineProperty(ev, "clipboardData", {value: dt});
+    ta.dispatchEvent(ev);
   }, PNG.toString("base64"));
   await turn(page, 8);
+  // A picture decodes in its own time, later in Firefox than in Chrome's engine.
+  await page.waitForFunction(() => [...document.querySelectorAll(".talk-attach img.pic-thumb")].every((i) => i.complete && i.naturalWidth > 0), null, {timeout: 5000}).catch(() => {});
   r.tray = await page.evaluate(() => [...document.querySelectorAll(".talk-attach .pic-chip")].map((c) => {
     const img = c.querySelector("img.pic-thumb");
     return {img: !!img, loaded: !!img && img.complete && img.naturalWidth > 0, state: c.querySelector(".pic-state").textContent, remove: (c.querySelector("button") || {}).textContent};
@@ -1598,7 +1668,10 @@ S.sweep = async (a) => {
       page.on("filechooser", () => { chose = true; });
       const before = await snap(page);
       try {
-        await el.scrollIntoViewIfNeeded({timeout: 2000});
+        // Found again once if the page drew it afresh between finding it and tapping it, as a
+        // person's tap would land on the new one (Firefox under load, 2026-10-29).
+        try { await el.scrollIntoViewIfNeeded({timeout: 2000}); }
+        catch (e) { if (!/not attached|detached/i.test(String(e.message || e))) throw e; await turn(page, 3); el = page.locator('#main [data-k="' + k + '"]').first(); await el.scrollIntoViewIfNeeded({timeout: 2000}); }
         const b2 = await snap(page);
         await el.click({timeout: 3000});
         await turn(page, 5);
@@ -1753,6 +1826,12 @@ S.picker = async (a) => {
   r.otherWindow = await p2.evaluate(() => ({bg: getComputedStyle(document.body).backgroundColor, checked: [...document.querySelectorAll(".look-row input:checked")].map((x) => x.value)}));
   await p1.reload();
   await settle(p1);
+  // Back to Settings, where the look is chosen: the Firefox driver does not report a reload
+  // as one, so the page opens on its first section (the Everywhere check, 2026-10-29). Where
+  // a reload keeps its place is pinned on its own.
+  await goto(p1, "settings");
+  await p1.waitForSelector("label.look-choice:has(#look-auto)", {timeout: 15000}).catch(() => {});
+  await turn(p1, 2);
   r.reloaded = await p1.evaluate(() => ({bg: getComputedStyle(document.body).backgroundColor, checked: [...document.querySelectorAll(".look-row input:checked")].map((x) => x.value)}));
   await p1.locator("label.look-choice:has(#look-auto)").click();
   await turn(p1, 4);

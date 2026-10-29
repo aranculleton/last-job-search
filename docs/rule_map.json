@@ -2454,10 +2454,10 @@
   {
    "id": "new-computer",
    "was": "Networking and Outreach",
-   "rule": "A chat on the person's computer starts with On a new computer.",
+   "rule": "A chat on the person's computer starts with On a new computer. Since 4.3 no chat reads LinkedIn: the person's page does, in the Claude desktop app.",
    "bold": "A chat on the person's computer",
    "home": ".claude/skills/networking/SKILL.md",
-   "anchor": "**A chat on the person's computer** starts with \"On a new computer\"",
+   "anchor": "Profiles are read by the person's own page, in the Claude desktop app's browser, never by a chat",
    "needed_by": [
     "/network",
     "/reply",

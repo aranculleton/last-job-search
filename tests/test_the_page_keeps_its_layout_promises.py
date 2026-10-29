@@ -252,7 +252,11 @@ def test_13_sheets_sit_at_the_bottom_with_close_on_top_and_give_focus_back(layou
         if kind == "filterAt":
             continue
         phone = vp == "phone"
-        if (phone and (m["bottom"] < m["vh"] - 2 or m["h"] > 0.85 * m["vh"])) or not m["close"] or m["closeRow"] > 48 or not m["focusBack"]:
+        # An open sheet has its rows in it: WebKit once drew the Tweak sheet 2px tall, its
+        # bottom where it belongs and nothing above it (2026-10-29).
+        if m["h"] < 120 or m["stray"]:
+            bad.append((kind, m))
+        elif (phone and (m["bottom"] < m["vh"] - 2 or m["h"] > 0.85 * m["vh"])) or not m["close"] or m["closeRow"] > 48 or not m["focusBack"]:
             bad.append((kind, m))
     assert not bad, bad
 

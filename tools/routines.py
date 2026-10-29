@@ -273,8 +273,8 @@ def existing_brief(reg: dict | None, triggers=None) -> dict:
 
 BRIEF_NAME = "Job search: morning brief"
 # What a chat on the person's computer says to "set up my brief": the bell does it, in the cloud.
-BRIEF_BELL = ("Turn it on from the bell on your Brief. It comes from Claude's helper in the "
-              "cloud, so it arrives when your computer is off; nothing to do on your computer.")
+BRIEF_BELL = ("Your morning brief is ready to start: press the bell on your Brief once. It "
+              "comes from Claude's helper in the cloud, so it arrives when your computer is off.")
 BRIEF_DAYS = (0, 1, 2, 3, 4, 5, 6)      # every day: one short read each morning (the maintainer, 2026-10-29)
 DAY_NAMES = {1: "Mondays", 2: "Tuesdays", 3: "Wednesdays", 4: "Thursdays", 5: "Fridays",
              6: "Saturdays", 0: "Sundays", 7: "Sundays"}

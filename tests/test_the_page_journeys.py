@@ -359,13 +359,16 @@ def test_a_referral_is_asked_for_one_role_and_holds_cold_applications(run, tmp_p
 
 def test_a_resume_asked_for_is_made_for_that_person_and_logged_with_its_file(run, tmp_path, vp):
     got = _go(run, tmp_path, [
-        {"hash": "todo", "click": "Choose the role", "read": "dialog"},
+        # The choices read from the options themselves: Firefox and Safari leave a select's
+        # options out of the dialog's text (the Everywhere check, 2026-10-29).
+        {"hash": "todo", "click": "Choose the role", "read": "dialog",
+         "eval": "[...document.querySelectorAll('dialog option')].map((o) => o.textContent).join('\\n')"},
         {"click": "Cancel", "exact": True},
         {"hash": "drafts", "click": "I sent it to Tamsin"},
         {"submit": True},
     ], vp)
     sheet = got["after"][0]["dialog"]
-    assert "Which role is it for?" in sheet and "Free, instant" in sheet, sheet
+    assert "Which role is it for?" in sheet and "Free, instant" in got["after"][0]["eval"], sheet
     a = _one(got, "ready.sent_to_contact")
     assert a["item"] == "app-copperleaf-payments" and a["rev_seen"] == "a3"
     assert a["value"]["attached"] == "Morgan_Ellis_CV_Copperleaf.pdf" and a["value"]["contact"] == "copperleaf_pay_tamsin"

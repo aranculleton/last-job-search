@@ -190,7 +190,7 @@
     localWork: new Map(),
     workNote: new Map(),
     sel: {jobs: new Set(), ready: new Set()},
-    can: {comments: null, room: null},
+    can: {comments: null},
     recent: [],
     toasts: [],
     quick: {turns: [], busy: false, ctl: null, mode: null, partial: ""},
@@ -210,7 +210,7 @@
     copyBox: new Map(),
     reach: new Map(),
     // Claude's browser (flow B): whether this device has read a LinkedIn page through it.
-    reading: {ok: false},
+    reading: {ok: false, tried: new Set()},
     tidied: new Set(),
     lastRing: null,
   };
@@ -274,6 +274,7 @@
       if (data !== undefined && (tms(v.made_at) || 0) > base && k !== "person" && k !== "model") m[k] = data;
     }
     S.m = m;
+    if (S.reading && S.reading.here === true) setTimeout(maybeAutoRead, 0);
   }
   // A section too big for one database document comes as parts (tools/page_db.py split()):
   // view/part~<section>~<n>, each a piece of the section's JSON text at the head's rev, joined
@@ -517,7 +518,7 @@
     } catch (e) { return Promise.resolve(null); }
   }
   const CAP = {};
-  for (const n of ["user", "db", "downloads", "comments", "room", "sample", "assets"]) {
+  for (const n of ["user", "db", "downloads", "comments", "sample", "assets"]) {
     CAP[n] = use(n).then((v) => { S.caps[n] = v; return v; });
   }
   const capsSettled = {};
@@ -543,11 +544,30 @@
   // (tools/page_db.py VERSION_FIELD).
   function nextV(d) { return d ? (Number(d._v) > 0 ? Number(d._v) : 1) + 1 : 1; }
   const unsubs = new Map();
+  // A subscription that errors is dead (db.d.ts: "a fresh onSnapshot is the only recovery"):
+  // it is made again after a short, varied wait, unless access was taken away. Before, it
+  // stayed dead while the page said "Connected" (contract audit, 2026-10-29).
+  const SUB_RETRY = new Map();
   function sub(key, ref, apply) {
     if (unsubs.has(key)) return;
+    const again = (e) => {
+      onDbError(e);
+      const u = unsubs.get(key);
+      unsubs.delete(key);
+      try { if (typeof u === "function") u(); } catch (x) { /* already dead */ }
+      if (e && e.code === "revoked") return;
+      const n = (SUB_RETRY.get(key) || 0) + 1;
+      SUB_RETRY.set(key, n);
+      setTimeout(() => sub(key, ref, apply), Math.min(60000, 1000 * 2 ** Math.min(n, 6)) * (0.5 + Math.random()));
+    };
     try {
-      unsubs.set(key, ref.onSnapshot((snap) => { apply(snap); if (S.flags.dbError && S.flags.dbError !== "revoked") S.flags.dbError = null; liveRender(); }, onDbError));
-    } catch (e) { onDbError(e); }
+      unsubs.set(key, ref.onSnapshot((snap) => { SUB_RETRY.delete(key); apply(snap); if (S.flags.dbError && S.flags.dbError !== "revoked") S.flags.dbError = null; liveRender(); }, again));
+    } catch (e) { again(e); }
+  }
+  function unsub(key) {
+    const u = unsubs.get(key);
+    unsubs.delete(key);
+    try { if (typeof u === "function") u(); } catch (e) { /* gone */ }
   }
   function subscribe(db) {
     sub("work", db.collection("work").orderBy("asked_at", "desc").limit(60), (snap) => {
@@ -557,7 +577,8 @@
       for (const id of next.keys()) S.localWork.delete(id);
     });
     sub("actions", db.collection("actions").orderBy("at", "desc").limit(300), (snap) => { S.actions = docsOf(snap); });
-    sub("receipts", db.collection("receipts").limit(500), (snap) => {
+    // The newest receipts: without an order the store sends the first 500 by id (db.d.ts).
+    sub("receipts", db.collection("receipts").orderBy("applied_at", "desc").limit(500), (snap) => {
       const next = docsOf(snap);
       for (const [id, r] of next) {
         if (!S.receipts.has(id) && S.local.has(id)) {
@@ -572,6 +593,8 @@
     sub("chats", db.collection("beats"), (snap) => { S.chats = docsOf(snap); });
     sub("talk", db.collection("talk"), (snap) => { S.threads = docsOf(snap); followThreads(); });
     sub("meta", db.doc("meta/now"), (d) => { S.meta = d && d.exists ? d.data() : null; });
+    // The last ring, read before any tap so the next one can reply in its thread at once.
+    sub("bell", db.doc("meta/doorbell"), (d) => { S.bell = d && d.exists ? d.data() : null; });
     // The one chat a tap wakes, and when it last answered (CONTRACT 7).
     sub("listener", db.doc("meta/listen"), (d) => { S.listener = d && d.exists ? d.data() : null; });
     sub("view", db.collection("screen"), (snap) => { S.views = docsOf(snap); recompute(); });
@@ -591,6 +614,9 @@
     const ids = new Set();
     for (const to of TALK_TO) ids.add(currentThread(to));
     if (S.viewConv) for (const [id, t] of S.threads) if (convOf(id, t) === S.viewConv) ids.add(id);
+    // At most 64 live subscriptions a view (db.d.ts): conversations no longer shown are let go,
+    // so a long search never reaches the cap (contract audit, 2026-10-29).
+    for (const key of [...unsubs.keys()]) if (key.startsWith("msgs:") && !ids.has(key.slice(5))) unsub(key);
     for (const th of ids) {
       sub("msgs:" + th, db.collection("talk/" + th + "/messages").orderBy("at").limit(200), (snap) => {
         const list = [];
@@ -723,11 +749,14 @@
     return null;
   }
 
+  // Every tap its own id. The page sees only a window of the receipts (the newest 500), so
+  // "is this id free?" answered from that window reused an id the engine had already applied
+  // and skipped: the card said "Saved" for ever (contract audit, 2026-10-29).
   function actionId(item, action) {
     const base = "act~" + seg(item).slice(0, 90) + "~" + seg(action).slice(0, 40);
-    let id = base;
-    let n = 2;
-    while (S.receipts.has(id)) id = base + "~" + n++;
+    let id;
+    do { id = base + "~" + now().toString(36) + Math.floor(Math.random() * 1296).toString(36); }
+    while (S.receipts.has(id) || S.actions.has(id) || S.local.has(id));
     return id;
   }
 
@@ -750,9 +779,10 @@
     noteFocus();
     const recs = [];
     const ringing = list.some((o) => RINGS(o.action));
-    const roomRing = ringing ? ringRoomSync(list.map((o) => actionId(o.item, o.action)), label) : null;
-    for (const o of list) {
-      const id = actionId(o.item, o.action);
+    const ids = list.map((o) => actionId(o.item, o.action));
+    const rung = ringing ? ringNow(ids, "act") : null;
+    for (const [k, o] of list.entries()) {
+      const id = ids[k];
       const doc = {item: txt(o.item), action: o.action, value: o.value === undefined ? null : o.value,
         at: iso(), rev_seen: o.rev || null, tab: S.tab};
       if (o.undoes) doc.undoes = o.undoes;
@@ -782,9 +812,8 @@
     } else {
       toast({text: label, ids: recs.map((r) => r.id)});
       announce(label + ". Saved.");
-      if (ringing) {
-        const ids = recs.map((r) => r.id);
-        Promise.resolve(roomRing).then((how) => how || ringComments(ids, false, "act")).then((how) => {
+      if (rung) {
+        rung.then((how) => {
           S.setupRing = {at: now(), how: how || "later", ids};
           scheduleRender();
         });
@@ -890,7 +919,7 @@
   }
   function finishedAt(w) { return tms(w.finished_at) || tms(w.asked_at) || 0; }
   function limitHit() {
-    if (S.flags.limit) return true;
+    if (S.flags.limit && S.flags.limit > now()) return true;
     let n = 0;
     for (const [, w] of allWork()) {
       if (w.status !== "running" && w.status !== "claimed") continue;
@@ -914,107 +943,67 @@
   }
 
   // Ringing a chat. The work document is the request; a ring only wakes a chat, and carries
-  // ids, never the person's words. The room send must be called inside the click itself.
-  function ringRoomSync(ids, label) {
-    const room = S.caps.room;
-    if (!room || S.can.room !== "available") return null;
-    try {
-      const p = room.sendToClaudeSession({label: clip(label, 100), app: "job_search", work: ids.join(",")},
-        {deliver: "send", attachPresence: false});
-      return Promise.resolve(p).then(() => "room", () => null);
-    } catch (e) { return null; }
-  }
+  // ids, never the person's words. The ring must be made inside the click itself.
   function anchorEl() { return $("top") || document.body; }
-  // The chat that answers this page is woken by the page itself, through Claude's own
-  // connector (Claude Code Remote, send_message to that chat), once per piece of work: no
-  // "Wake Claude", no new chat (the maintainer, 2026-10-28). Its one consent is asked the first
-  // time; where it is refused or missing, the doorbell and the card below stay as before.
-  const WAKER = "Claude Code Remote";
   const within = (p, ms) => Promise.race([p, new Promise((r) => setTimeout(() => r("timeout"), ms))]);
   async function remoteCap() {
     try { const m = await within(Promise.resolve(window.claude && window.claude.use ? window.claude.use("mcp") : null), 4000); return m && m !== "timeout" ? m : null; }
     catch (e) { return null; }
   }
-  // Taps close together wake Claude once: each wake is a turn of the helper chat, and a turn
-  // costs part of the person's plan (the maintainer, 2026-10-29: "cheap to run").
-  const WAKE_GATHER_MS = 4000;
-  // The first tap wakes at once; taps in the next few seconds are gathered into one more.
-  function wakeSoon(ids) {
-    const go = (q) => autoWake(q).then(async (ok) => { if (!ok) ringNote(q, await ringComments(q, false)); else scheduleRender(); });
-    if (!S.wakeTimer) {
-      go(ids);
-      S.wakeTimer = setTimeout(function flush() {
-        const q = S.wakeQueue || [];
-        S.wakeQueue = [];
-        S.wakeTimer = null;
-        if (q.length) { go(q); S.wakeTimer = setTimeout(flush, WAKE_GATHER_MS); }
-      }, WAKE_GATHER_MS);
-      return;
-    }
-    S.wakeQueue = (S.wakeQueue || []).concat(ids.filter((id) => !(S.wakeQueue || []).includes(id)));
-  }
-  async function autoWake(ids) {
-    if (!ids.length) return false;
-    S.woken = S.woken || new Set();
-    const fresh = ids.filter((id) => !S.woken.has(id));
-    if (!fresh.length) return true;
-    const m = await remoteCap();
-    if (!m) { S.wakeFailed = true; return false; }
-    const sid = txt(obj(S.listener).chat);
-    let ok = false;
-    if (/^session_/.test(sid)) {
-      try { ok = (await within(m.callTool(WAKER, "send_message", {session_id: sid, message: "[app] [work:" + fresh.join(",") + "]"}), 15000)) !== "timeout"; }
-      catch (e) { ok = false; }
-    }
-    // The page never starts a chat itself: when its helper cannot be reached, the page's own
-    // bell rings instead (wakeSoon), and the person's next chat picks the work up.
-    if (ok) { fresh.forEach((id) => S.woken.add(id)); S.wokenAt = now(); } else S.wakeFailed = true;
-    return ok;
-  }
-  async function ringComments(ids, force, tag) {
-    const c = await CAP.comments;
-    if (!c) return "none";
-    let can;
-    try { can = await c.canSendToClaude(); } catch (e) { can = "off"; }
-    S.can.comments = can;
-    if (can !== "available") return can;
-    const db = S.caps.db;
-    let bell = null;
-    if (db) {
-      try { const d = await db.doc("meta/doorbell").get(); bell = d && d.exists ? d.data() : null; } catch (e) { bell = null; }
-      if (!force && tag !== "act" && bell && now() - (tms(bell.rung_at) || 0) < RING_COALESCE_MS && arr(bell.ids).length &&
-          arr(bell.ids).every((id) => { const w = workDoc(id); return w && w.status === "queued"; })) {
-        return "coalesced";
-      }
-    }
+  // ------------------------------------------------------------------ waking Claude
+  // One way, the doorbell: a comment sent to Claude, which the chat answering this page
+  // watches. It is rung inside the tap itself, with nothing awaited first, because the
+  // platform takes it only from the person's own recent tap (comments.d.ts); a ring after a
+  // wait was refused. Seen live on 2026-10-29: a tap reached its chat in two seconds. The
+  // connector route (send_message) could not even load on the maintainer's account, and the
+  // room asked "send this?" on every tap: both are gone (contract audit and live checks).
+  // What it needs (may it ring, where, which thread) is read before any tap: refreshCanSend
+  // and the meta/doorbell subscription.
+  function canRing() { return !!S.caps.comments && S.can.comments === "available"; }
+  function ringNow(ids, tag, force) {
+    const c = S.caps.comments;
+    if (!c) return Promise.resolve("none");
+    if (S.can.comments !== "available") return Promise.resolve(S.can.comments || "none");
+    const bell = S.bell;
+    if (!force && tag !== "act" && bell && now() - (tms(bell.rung_at) || 0) < RING_COALESCE_MS && arr(bell.ids).length &&
+        arr(bell.ids).every((id) => { const w = workDoc(id); return w && w.status === "queued"; })) return Promise.resolve("coalesced");
     const text = "[app] [" + (tag || "work") + ":" + ids.join(",") + "]";
-    let res = null;
+    const thread = bell ? txt(bell.thread) : "";
+    let p;
     try {
-      if (bell && bell.thread) {
-        try { res = await c.sendToClaude({threadId: txt(bell.thread), text}); }
-        catch (e) { if (!e || (e.code !== "not_found" && e.code !== "upstream_error")) throw e; res = null; }
-      }
-      if (!res) res = await c.sendToClaude({anchor: await c.anchorFor(anchorEl()), text});
-    } catch (e) {
+      if (thread) p = c.sendToClaude({threadId: thread, text});
+      else if (S.bellAnchor) p = c.sendToClaude({anchor: S.bellAnchor, text});
+      else p = Promise.reject({code: "not_ready"});
+    } catch (e) { p = Promise.reject(e); }
+    return Promise.resolve(p).then(async (res) => {
+      const rec = {rung_at: iso(), tab: S.tab, ids: ids.slice(0, 50), thread: (res && res.threadId) || thread || null};
+      S.bell = rec;
+      const db = S.caps.db;
+      if (db) { try { await db.doc("meta/doorbell").set(rec); } catch (e) { /* the ring went out; this note only saves rings */ } }
+      return "rang";
+    }, (e) => {
       const code = (e && e.code) || "upstream_error";
+      // A thread that is gone: the next tap starts a new one.
+      if (code === "not_found" && S.bell) S.bell = Object.assign({}, S.bell, {thread: null});
       if (code === "claude_unavailable") return "no_session";
       if (code === "forbidden") { S.can.comments = "off"; return "off"; }
       return code;
-    }
-    if (db) {
-      try { await db.doc("meta/doorbell").set({rung_at: iso(), tab: S.tab, ids: ids.slice(0, 50), thread: res && res.threadId ? res.threadId : null}); }
-      catch (e) { /* the ring went out; the coalescing note is only a saving */ }
-    }
-    return "rang";
+    });
+  }
+  // Asked again for one piece of work, from its own button.
+  function ringAgain(id) {
+    const rung = ringNow([id], "work", true);
+    rung.then((how) => {
+      ringNote([id], how);
+      announce(how === "rang" ? "Claude has been told again." : "Claude could not be reached. It starts next time Claude works on your search.");
+    });
   }
   function ringNote(ids, how) {
-    const told = how === "rang" || how === "room" || how === "coalesced";
+    const told = how === "rang" || how === "coalesced";
     S.lastRing = how === "no_session" ? "no_session" : told ? "rang" : S.lastRing;
     for (const id of ids) {
       const w = workDoc(id);
       const toComputer = w && w.to === "computer";
-      // Woken: the card itself says Starting; a second line saying so is noise.
-      if (how === "woken") { S.workNote.delete(id); continue; }
       if (told) S.workNote.set(id, {text: "Claude has been told.", tone: "muted"});
       else if (toComputer) S.workNote.set(id, {text: "This needs your computer: open Claude on it, and it starts there.", tone: "muted"});
       else if (how === "no_session") S.workNote.set(id, {text: "Claude is not working on your search right now. This starts next time it does.", tone: "warn", link: true});
@@ -1025,8 +1014,8 @@
   async function refreshCanSend() {
     const c = S.caps.comments;
     if (c) { try { S.can.comments = await c.canSendToClaude(); } catch (e) { S.can.comments = "off"; } }
-    const r = S.caps.room;
-    if (r) { try { S.can.room = await r.canSendToClaudeSession(); } catch (e) { S.can.room = "off"; } }
+    // The anchor a first ring is posted on, made now so a tap need not wait for it.
+    if (c && !S.bellAnchor) { try { S.bellAnchor = await c.anchorFor(anchorEl()); } catch (e) { S.bellAnchor = null; } }
     scheduleRender();
   }
 
@@ -1034,13 +1023,15 @@
   // Work only a chat in the cloud can do (tools/page_db.py WORK_KINDS): the brief, which comes
   // with the computer off. Settings' "Where Claude works" never sends it to the computer.
   const CLOUD_ONLY = new Set(["brief"]);
-  // Asks a chat for work. Call it inside the click that asked: the room ring has to be.
+  // Asks a chat for work. Call it inside the click that asked: the ring has to be.
   // o.ring false: saved for the next chat that works on the search, and nobody is told now.
   function requestWork(specs, o) {
     o = o || {};
     const ring = o.ring !== false;
     const list = specs.map((s) => Object.assign({id: s.id || (s.kind + "~" + stamp() + "-" + rand4()), to: s.to || (CLOUD_ONLY.has(s.kind) ? "cloud" : whereTo())}, s));
-    const roomRing = ring ? ringRoomSync(list.map((s) => s.id), list.length === 1 ? list[0].title : list.length + " jobs from your page") : null;
+    // "One at a time" is known before the tap rings, so an ask that is refused wakes nobody.
+    const oneAtATime = list.some((s) => KIND_CAP_ONE.has(s.kind) && [...allWork()].some(([id, w]) => id !== s.id && w.kind === s.kind && ACTIVE.has(w.status)));
+    const rung = ring && !oneAtATime ? ringNow(list.map((s) => s.id), "work") : null;
     return (async () => {
       const db = await CAP.db;
       if (!db) {
@@ -1060,14 +1051,7 @@
       }
       if (!made.length) { scheduleRender(); return made; }
       announce(made.length === 1 ? "Asked: " + txt(workDoc(made[0]) && workDoc(made[0]).title) + "." : "Asked for " + made.length + " things.");
-      // One way to Claude per tap, the cheapest first: a chat already listening hears it in the
-      // room for nothing; else the one helper chat is woken; the comment bell (which reaches
-      // whichever chat published the page) only where there is no helper to wake.
-      let how = roomRing ? await roomRing : null;
-      const helper = !S.wakeFailed && (/^session_/.test(txt(obj(S.listener).chat)) || txt(obj(M().app).repo));
-      if (!how && helper) { wakeSoon(made); how = "woken"; }
-      if (!how && ring) how = await ringComments(made, false);
-      ringNote(made, how || "later");
+      ringNote(made, (rung ? await rung : null) || "later");
       return made;
     })();
   }
@@ -1112,7 +1096,7 @@
   function retryWork(id) {
     const w = workDoc(id);
     if (!w) return;
-    const roomRing = ringRoomSync([id], txt(w.title));
+    const rung = ringNow([id], "work", true);
     (async () => {
       const db = await CAP.db;
       if (!db) return;
@@ -1121,17 +1105,8 @@
         attempt: (Number(w.attempt) || 1) + 1, asked_from: {tab: S.tab}, _v: nextV(w)};
       try { await db.doc("work/" + id).update(patch); } catch (e) { announce("Could not start it again. Try once more."); return; }
       announce("Asked again: " + txt(w.title) + ".");
-      if (S.woken) S.woken.delete(id);
-      autoWake([id]);
-      let how = roomRing ? await roomRing : null;
-      if (!how) how = await ringComments([id], true);
-      ringNote([id], how);
+      ringNote([id], await rung);
     })();
-  }
-  async function ringAgain(id) {
-    const how = await ringComments([id], true);
-    ringNote([id], how);
-    announce(how === "rang" ? "Claude has been told again." : "Claude could not be reached. It starts next time Claude works on your search.");
   }
   function workBusy(id) { const w = workDoc(id); return !!(w && ACTIVE.has(txt(w.status) || "queued")); }
 
@@ -2417,15 +2392,16 @@
   }
   async function answerWork(id, text) {
     const w = workDoc(id);
+    if (!w || !text) return;
+    const rung = ringNow([id], "work", true);
     const db = await CAP.db;
-    if (!w || !db || !text) return;
+    if (!db) return;
     const args = Object.assign({}, obj(w.args));
     args.answers = Object.assign({}, obj(args.answers), {[clip(txt(w.note) || "question", 200)]: text});
     try { await db.doc("work/" + id).update({args, status: "queued", note: null, claimed_by: null, claimed_at: null, lease_until: null, _v: nextV(workDoc(id))}); }
     catch (e) { announce("Not sent. Try again."); return; }
     announce("Sent. Claude carries on.");
-    if (S.woken) S.woken.delete(id);
-    autoWake([id]);
+    ringNote([id], await rung);
     scheduleRender();
   }
 
@@ -2438,13 +2414,13 @@
   // A card only the person can act on, outside this page (CONTRACT 6.4): a private copy, a
   // setting in this chat's cloud computer, a sign-in. One link that does it where there is
   // one (6.8), the registry's own dated steps, and Done, which has code look again.
-  async function openInAppBrowser(url, key) {
+  async function openInAppBrowser(url, key, said) {
     let ok = false;
     try {
       const m = await remoteCap();
       if (m) { const got = await within(m.callTool("host:claude_browser", "preview_start", {url}), 20000); ok = got !== "timeout"; }
     } catch (e) { ok = false; }
-    S.notes.set("browser:" + key, ok ? {text: "Opened in the Claude app's browser, beside this page. Sign in there, then come back and tap Done.", tone: "ok"}
+    S.notes.set("browser:" + key, ok ? {text: said || "Opened in the Claude app's browser, beside this page. Sign in there, then come back and tap Done.", tone: "ok"}
       : {text: "This works when the page is open in the Claude desktop app. There, tap it again; or follow the steps under More.", tone: "warn"});
     scheduleRender();
   }
@@ -2632,7 +2608,10 @@
         if (!f) return;
         S.notes.set(fileKey, {text: "Adding your " + noun() + "…", tone: "muted"});
         scheduleRender();
-        Promise.resolve(S.caps.assets.upload(f)).then((got) => {
+        // A file the computer reports with no type (a .md resume often is) is named by its
+        // ending: the store refuses an empty type (assets.d.ts, contract audit 2026-10-29).
+        const type = f.type || ({pdf: "application/pdf", md: "text/markdown", txt: "text/plain"})[txt(f.name).split(".").pop().toLowerCase()] || "text/plain";
+        Promise.resolve(S.caps.assets.upload(f, {type})).then((got) => {
           S.notes.delete(fileKey);
           act([{item: txt(step.id), action: "setup.resume", value: {asset: txt(obj(got).id)}, rev: step.rev}], "Your " + noun() + " is saved");
           advance();
@@ -3951,7 +3930,7 @@
     if (!spec) return;
     const rows = tweakRows(output, item);
     const st = {output, item, spec, rows, chosen: {}, text: "", keep: false, scope: "all", opener: document.activeElement,
-      now: S.can.room === "available", near: {}, rec: tweakRecommended(rows)};
+      now: canRing(), near: {}, rec: tweakRecommended(rows)};
     S.tweak = st;
     const panel = tweakPanel(st);
     if (wide()) {
@@ -4157,7 +4136,7 @@
     const what = txt(obj(w.result).summary) || "your changes";
     return h("p", {class: "small tweak-done"}, "New version: " + what + ". The earlier one is kept. ",
       btn("Go back to it", () => requestWork([{id: "tweak~" + seg(txt(item.id)).slice(0, 60) + "~back-" + hash10(id), kind: "tweak", to: "either", title: "Back to the earlier version: " + txt(item.company || item.employer),
-        args: {v: 1, target: tweakTarget(txt(obj(obj(w.args).target).output) || "resume", item), changes: [{p: "back", v: id}], back: id, text: null, keep: null, cost: {state: 1, writes: [], est_s: 45}}}], {ring: S.can.room === "available"}),
+        args: {v: 1, target: tweakTarget(txt(obj(obj(w.args).target).output) || "resume", item), changes: [{p: "back", v: id}], back: id, text: null, keep: null, cost: {state: 1, writes: [], est_s: 45}}}], {ring: canRing()}),
       {kind: "link", key: "tweak-back:" + item.id}));
   }
   // A posting rarely names exactly what someone holds: the near matches the engine found, in
@@ -4325,10 +4304,11 @@
     };
     function updateFoot() {
       const f = listFacets(key, o);
-      foot.replaceChildren(
+      // replaceChildren writes a null as the word "null", so only the buttons there are given.
+      foot.replaceChildren(...[
         isWide ? h("button", {type: "button", class: "btn primary", "data-k": "filter-done", onclick: closeFilter}, "Done")
           : h("button", {type: "button", class: "btn primary", "data-k": "filter-show", onclick: closeFilter}, "Show " + nWord(f.shown, o.one || "item", o.many || "items")),
-        f.active.length ? h("button", {type: "button", class: "btn quiet", "data-k": "filter-clear", onclick: () => { clearAll(key, o); draw(); scheduleRender(); }}, "Clear all") : null);
+        f.active.length ? h("button", {type: "button", class: "btn quiet", "data-k": "filter-clear", onclick: () => { clearAll(key, o); draw(); scheduleRender(); }}, "Clear all") : null].filter(Boolean));
     }
     filterDlg = h("dialog", {class: "filter-sheet" + (isWide ? " pop" : ""), "aria-labelledby": "filter-title"},
       h("div", {class: "filter-head"}, h("h2", {id: "filter-title", class: "filter-title"}, "Filter " + (o.name || "")),
@@ -5108,15 +5088,8 @@
   function wakeUrl() { return safeUrl(obj(obj(M().listener).wake).url) || prefillUrl(); }
   function listenTodo() {
     if (!notListening()) return null;
-    // Waking it is the page's job: tried first, by itself; the card shows only if that fails.
-    if (!S.wakeFailed && (/^session_/.test(txt(obj(S.listener).chat)) || txt(obj(M().app).repo))) {
-      const ids = [...allWork()].filter(([, w]) => txt(w.status) === "queued").map(([id]) => id);
-      if (ids.some((id) => !(S.woken && S.woken.has(id)))) {
-        if (!S.waking) { S.waking = true; autoWake(ids).then((ok) => { S.waking = false; if (!ok) scheduleRender(); }); }
-        return null;
-      }
-      if (ids.length && now() - (S.wokenAt || 0) < 5 * 60000) return null;
-    }
+    // Rung within the last few minutes: give the chat its time before saying it is not here.
+    if (S.bell && now() - (tms(S.bell.rung_at) || 0) < 5 * 60000 && !S.notes.get("wake")) return null;
     return {key: "listen", kind: "setup", band: "first", employer: null, tab: null, counts: true, node: () => listenCard()};
   }
   function listenCard() {
@@ -5135,10 +5108,11 @@
   // The doorbell this page already rings for work (the comment to Claude); where nothing can
   // receive it, the link that starts a chat for the page, and the words for each.
   async function wakeClaude() {
+    const ids = [...allWork()].filter(([, w]) => txt(w.status) === "queued").map(([id]) => id);
+    const rung = ringNow(ids.length ? ids : ["wake"], ids.length ? "work" : "wake", true);
     S.notes.set("wake", {text: "One moment…", tone: "muted"});
     scheduleRender();
-    const ids = [...allWork()].filter(([, w]) => txt(w.status) === "queued").map(([id]) => id);
-    const how = await ringComments(ids.length ? ids : ["wake"], true, ids.length ? "work" : "wake");
+    const how = await rung;
     S.lastRing = how === "rang" ? "rang" : how === "no_session" ? "no_session" : S.lastRing;
     S.notes.set("wake", how === "rang" ? {text: "Claude has been told. It picks up what is waiting within a minute or two, and this card goes once it answers.", tone: "ok"}
       : {text: "Nothing is open to hear it. Open Claude, and it starts on what is waiting.", tone: "warn"});
@@ -5148,11 +5122,13 @@
   // from the model's `where` (CONTRACT, CAPABILITY_MAP G3), and what this page knows itself
   // where the model says nothing yet.
   const WHERE_WORDS = {ready: ["Ready", "ok"], not_set_up: ["Not set up", "warn"], not_listening: ["Not listening", "warn"], sign_in: ["Sign in once", "warn"],
-    desktop: ["Open in the Claude app", null], open_in_app: ["Open in the Claude app", null], optional: ["Optional", null], off: ["Not set up", null], paused: ["Paused", null]};
+    desktop: ["Open in the Claude app", null], open_in_app: ["Open in the Claude app", null], optional: ["Optional", null], off: ["Not set up", null], paused: ["Paused", null], paste: ["Off", null]};
   function whereState() {
     const w = obj(M().where);
     const helper = txt(obj(w.helper).state) || (freshHeartbeat() || S.can.comments === "available" ? "ready" : "not_listening");
-    const reading = txt(obj(w.reading).state) || readingState();
+    // The page knows best whether it is in the desktop app and signed in; readingState falls
+    // back to the model's row where it has not looked.
+    const reading = readingState();
     const computer = txt(obj(w.computer).state) || (computerListening() ? "ready" : "optional");
     const say = (k) => txt(obj(w[k]).say);
     return {helper, reading, computer, helperTitle: txt(obj(w.helper).title), computerSteps: arr(obj(w.computer).steps),
@@ -5174,11 +5150,16 @@
           helperAsked() ? h("p", {class: "small", role: "status"}, h("span", {class: "spin", "aria-hidden": "true"}), " Starting. This says Ready once Claude's helper answers, usually within a few minutes.") :
           h("p", {}, h("a", {href: link, target: "_blank", rel: "noopener noreferrer", class: "btn secondary small", "data-k": "where-helper-link",
             onclick: () => { sset("local", HELPER_ASKED, String(now())); setTimeout(scheduleRender, 0); }}, "Set it up", h("span", {class: "sr-only"}, " (opens Claude in a new tab)")), " then press Send.")),
-      row("reading", "Reading LinkedIn profiles", st.reading === "open_in_app" ? "desktop" : st.reading, "In the Claude app on your computer: can read LinkedIn profiles in your browser.",
-        btn(st.reading === "desktop" ? "How" : "Set it up", () => { closeDetail(true); go("todo", {focus: false}); openReading(); }, {small: true, key: "where-reading"})),
-      row("computer", "Claude on your computer", st.computer, st.say.computer || "Only if you keep files there for Claude.",
-        st.computerSteps.length ? h("div", {}, h("ol", {class: "steps"}, st.computerSteps.map((x) => h("li", {}, txt(x)))),
-          copyButton("Set up my job search on this computer.", "Copy the first message", "copy:where-computer", null), noteFor("copy:where-computer")) : null),
+      // Off means the person pastes profiles (the setting the bin's "Never" sets): one way back on.
+      st.reading === "off" || readingHidden() && st.reading !== "ready" ?
+        row("reading", "Reading LinkedIn profiles", "paste", "Off: you paste someone's profile when you write to them.",
+          btn("Turn back on", () => { setReads("browser", "Reading LinkedIn profiles is back on"); toast({text: "Reading LinkedIn profiles is back on.", ids: [], until: 0}); scheduleRender(); }, {small: true, key: "where-reading-on"})) :
+        row("reading", "Reading LinkedIn profiles", st.reading === "open_in_app" ? "desktop" : st.reading, st.reading === "paused" ? "LinkedIn asked Claude to slow down: reading starts again tomorrow, by itself." : "For networking: the Claude app on your computer reads LinkedIn profiles in its own browser.",
+          st.reading === "paused" ? null : btn(st.reading === "desktop" ? "How" : "Set it up", () => { closeDetail(true); go("todo", {focus: false}); openReading(true); }, {small: true, key: "where-reading"})),
+      // A chat on the computer is never offered: the cloud answers the page, and the computer
+      // only reads LinkedIn, through this page (the maintainer, 2026-10-29). One already
+      // listening still shows, so the person can see it.
+      st.computer === "ready" ? row("computer", "Claude on your computer", st.computer, st.say.computer || "Answers only what needs your computer.", null) : null,
       tidiedLine());
   }
   // The same link "Claude isn't listening" opens: a chat that runs the start command and
@@ -5605,7 +5586,7 @@
     const item = st.item;
     const acts = obj(sc.actions);
     const paused = st.paused;
-    const line = !st.setUp ? (st.asked ? "Claude is setting it up in the chat that answers this page. It shows as on here once it is." : "A short note each morning: what is due today, and news that matters. Off until you turn it on.")
+    const line = !st.setUp ? (st.asked ? "Claude is setting it up in the chat that answers this page. It shows as on here once it is." : "A short note each morning: what is due today, and news that matters. Turn it on here.")
       : !st.on ? "Off. Your days and time are kept for when you turn it back on." : st.when + (txt(sc.zone) ? ", " + txt(sc.zone).replace(/_/g, " ") + " time" : "") + ".";
     return [
       infoRow("brief-when", "When it comes", briefWord(st), h("div", {class: "d-stack"},
@@ -5641,8 +5622,17 @@
   function pasteProfileBtn(p, key) {
     if (readingState() === "ready") return null;
     const name = txt(p.first_name);
+    // On a phone, copying a whole profile is fiddly and screenshots are what people have: they
+    // go to Chat as pictures, which Claude reads and keeps the way a paste is kept.
+    const shots = () => {
+      const d = document.querySelector("dialog.sheet[open]");
+      if (d) { try { d.close(); } catch (e) { /* already closed */ } }
+      startChat("Screenshots of " + name + "'s LinkedIn profile, for my note to them.");
+      if (talkFile) talkFile.click();
+    };
     return btn("Paste " + name + "'s profile", () => sheet({title: "Paste " + name + "'s profile",
       intro: "Open their LinkedIn page, select all, copy, and paste it here. Claude keeps only what a note can rest on.",
+      lead: h("p", {class: "small"}, "On a phone? ", btn("Send screenshots instead", shots, {kind: "link", key: "paste-shots"})),
       cost: costLine("reply"),
       fields: [{id: "text", type: "text", long: true, label: name + "'s profile", required: true, max: 20000}], submit: "Use it",
       // Kept the way a chat keeps a paste, and a note written before it is redrafted on it
@@ -5820,17 +5810,40 @@
     }
     if (!picked.length) { S.notes.set("export", {text: "None of the files Claude needs are in it: " + [...needed].join(", ") + ".", tone: "warn"}); scheduleRender(); return; }
     const counts = await Promise.all(picked.map(async (p) => ({name: p.name, rows: await csvRows(p.blob)})));
-    const big = picked.find((p) => p.blob.size > 20 * 1024 * 1024);
     S.notes.delete("export");
     scheduleRender();
     const line = counts.map((c) => c.rows.toLocaleString(LOC) + " " + (EXPORT_WORDS[c.name] || c.name.replace(/\.csv$/, ""))).join(", ");
     sheet({title: "Your LinkedIn download", intro: "Found " + line + ".",
-      note: big ? "One file is over 20 MB, too big for this page. Ask in Chat and Claude takes it from there." : "It stays on your private page until it is saved.",
-      fields: big ? [] : [{id: "remove", type: "checks", label: "Once it is saved", options: [["yes", "Remove it from the page once it's saved"]], value: ["yes"]}],
-      submit: big ? "Close" : "Save it",
-      onSubmit: (v) => { if (!big) sendDownload(x, picked, arr(v.remove).includes("yes")); }});
+      note: "It stays on your private page until it is saved.",
+      fields: [{id: "remove", type: "checks", label: "Once it is saved", options: [["yes", "Remove it from the page once it's saved"]], value: ["yes"]}],
+      submit: "Save it",
+      onSubmit: (v) => sendDownload(x, picked, arr(v.remove).includes("yes"))});
   }
   const EXPORT_WORDS = {"messages.csv": "messages", "connections.csv": "connections", "invitations.csv": "invitations"};
+  // A file over the store's limit goes in parts of whole records, each under the file's own
+  // first line: a record ends at a line break outside quotes, since a message holds line
+  // breaks of its own. PART_CHARS keeps a part under 20 MiB even at four bytes a character.
+  const PART_BYTES = 19 * 1024 * 1024;
+  const PART_CHARS = 4500000;
+  function splitCsv(text, max) {
+    let q = false, head = -1;
+    for (let i = 0; i < text.length; i++) { const c = text.charCodeAt(i); if (c === 34) q = !q; else if (c === 10 && !q) { head = i; break; } }
+    if (head < 0) return [text];
+    const first = text.slice(0, head + 1);
+    const parts = [];
+    let start = head + 1, last = start;
+    q = false;
+    for (let i = start; i < text.length; i++) {
+      const c = text.charCodeAt(i);
+      if (c === 34) q = !q;
+      else if (c === 10 && !q) {
+        if (i + 1 - start > max && last > start) { parts.push(first + text.slice(start, last)); start = last; }
+        last = i + 1;
+      }
+    }
+    parts.push(first + text.slice(start));
+    return parts;
+  }
   async function csvRows(blob) {
     try { const t = await blob.text(); return Math.max(0, t.split(/\r?\n/).filter((l) => l.trim()).length - 1); } catch (e) { return 0; }
   }
@@ -5840,18 +5853,32 @@
     S.notes.set("export", {text: "Adding the files…", tone: "muted"});
     scheduleRender();
     const ids = [];
+    // The store takes up to 20 MiB a file (assets.d.ts): a bigger one (a busy inbox's
+    // messages run to tens of megabytes) goes as parts, which the engine joins again
+    // (_export_take). Before, it was "too big, ask in Chat", which led nowhere (2026-10-29).
+    // A failure part way takes back what was added, so nothing is left behind.
+    const files = [];
+    for (const p of picked) {
+      if (!p.blob || p.blob.size <= PART_BYTES) { files.push({name: p.name, blob: p.blob}); continue; }
+      splitCsv(await p.blob.text(), PART_CHARS).forEach((t, k) => files.push({name: p.name, blob: new Blob([t], {type: "text/csv"}), part: k + 1}));
+    }
+    const big = files.filter((f) => f.blob && f.blob.size > 20 * 1024 * 1024);
+    const fits = files.filter((f) => !big.includes(f));
+    if (!fits.length) { S.notes.set("export", {text: "These files are too big to add here.", tone: "bad"}); scheduleRender(); return; }
     try {
-      for (const p of picked) {
+      for (const p of fits) {
         const file = new File([p.blob], p.name, {type: "text/csv"});
-        const got = await assets.upload(file);
-        ids.push({id: txt(obj(got).id), name: p.name});
+        const got = await assets.upload(file, {type: "text/csv"});
+        ids.push(Object.assign({id: txt(obj(got).id), name: p.name}, p.part ? {part: p.part} : {}));
       }
     } catch (e) {
+      for (const f of ids) { try { await assets.delete(f.id); } catch (x) { /* already gone */ } }
       S.notes.set("export", {text: "The files were not added. Try again, or ask in Chat.", tone: "bad"});
       scheduleRender();
       return;
     }
-    S.notes.delete("export");
+    if (big.length) S.notes.set("export", {text: big.map((p) => p.name).join(", ") + (big.length > 1 ? " are" : " is") + " too big to add here, so Claude works without " + (big.length > 1 ? "them" : "it") + ".", tone: "muted"});
+    else S.notes.delete("export");
     S.exportRemove = remove ? ids.map((f) => f.id) : [];
     act([{item: EXPORT_ID(), action: "export.take", value: {assets: ids}, rev: txt(x.rev) || null}], "Saving your LinkedIn download");
   }
@@ -5917,10 +5944,13 @@
           link ? h("p", {}, h("a", {href: link, target: "_blank", rel: "noopener noreferrer", class: "btn secondary small", "data-k": "export-open:settings"}, "Open LinkedIn's download page", h("span", {class: "sr-only"}, " (opens in a new tab)"))) : null,
           obj(x.steps).checked ? h("p", {class: "hint"}, "Steps checked " + fmtDay(obj(x.steps).checked) + ".") : null),
         h("div", {class: "card-actions"}, addDownloadBtn(x, "settings")), noteFor("export"), stateLine(EXPORT_ID(), "export:settings"))),
-      infoRow("linkedin-reading", "Let Claude read LinkedIn profiles", rw, h("div", {class: "d-stack"},
-        h("p", {}, "In the Claude app on your computer: can read LinkedIn profiles in your browser."),
-        st === "ready" ? h("p", {}, stateWord("Ready", "ok")) : null,
-        h("div", {class: "card-actions"}, btn("Check it works", () => openReading(true), {small: true, key: "reading-check:settings"})),
+      infoRow("linkedin-reading", "Let Claude read LinkedIn profiles", st === "off" ? "Off" : rw, h("div", {class: "d-stack"},
+        h("p", {}, "Before Claude writes to someone, the Claude app on your computer reads their LinkedIn profile in its own browser, so the note fits them. Nothing is sent."),
+        st === "paused" ? h("p", {}, "LinkedIn asked Claude to slow down: reading starts again tomorrow, by itself.") : null,
+        st === "off" ? null : S.reading.here === true ? h("div", {class: "card-actions"}, btn("Open LinkedIn", () => openLinkedIn("reading:settings"), {small: true, kind: "secondary", key: "reading-open:settings"}),
+          btn("Check it works", () => openReading(true), {small: true, key: "reading-check:settings"})) :
+          h("p", {class: "small muted"}, "Open this page in the Claude app on your computer to check it."),
+        noteFor("browser:reading:settings"),
         S.reading.line ? h("p", {class: "small", role: "status"}, S.reading.line) : null)),
     ];
   }
@@ -5940,20 +5970,43 @@
   // browser (host:claude_browser). Elsewhere it says so in one line, and Paste their profile
   // stands in (G14). The engine keeps whether it worked (linkedin.reading, reader.checked).
   function readingInfo() { return obj(obj(M().linkedin).reading); }
+  // Where reading stands, judged by this page first (it knows whether it is in the desktop
+  // app and whether LinkedIn has just signed out) and by the model where it has not looked:
+  //   off      the person pastes profiles instead (Settings, or the bin's Never): every device
+  //   paused   LinkedIn stopped today's reads (one of its checks): tomorrow, by itself
+  //   ready    read here this visit, or the engine saw a read in the last two weeks
+  //   sign_in  in the desktop app and not signed in yet, or LinkedIn's check is showing
+  //   desktop  not in the desktop app: nothing to do here but open the page there
+  function todayLocal() { const d = new Date(now()); return d.getFullYear() + "-" + String(d.getMonth() + 1).padStart(2, "0") + "-" + String(d.getDate()).padStart(2, "0"); }
+  function readingPaused() { const u = txt(readingInfo().paused_until); return !!u && todayLocal() < u; }
   function readingState() {
     const ri = readingInfo();
-    if (S.reading.ok || ri.ok === true || sget("local", "ljs:reading") === "ok") return "ready";
+    if (txt(ri.setting) === "paste") return "off";
+    if (readingPaused()) return "paused";
+    if (S.reading.ok) return "ready";
+    if (S.reading.signedOut || S.reading.panel === "sign_in" || S.reading.panel === "check") return "sign_in";
+    const fresh = ri.ok === true && ri.page_reads === true;
+    if (S.reading.here === true) return fresh ? "ready" : "sign_in";
+    if (fresh) return "ready";
+    if (S.reading.here === false) return "desktop";
     const w = txt(obj(obj(M().where).reading).state);
-    if (S.reading.signedOut) return "sign_in";
-    if (S.reading.cap) return "sign_in";
-    if (w === "open_in_app" || S.reading.cap === null) return "desktop";
-    return w || "desktop";
+    return !w || w === "open_in_app" ? "desktop" : w;
   }
   async function browserCap() {
     if (S.reading.cap !== undefined) return S.reading.cap;
     try { S.reading.cap = await claude.use("mcp"); } catch (e) { S.reading.cap = null; }
     if (!S.reading.cap) S.reading.cap = null;
     return S.reading.cap;
+  }
+  // Is this page open in the Claude desktop app, where Claude's browser is? Its browser is
+  // listed only there, and listing never asks the person anything (mcp.d.ts).
+  async function inDesktop() {
+    if (S.reading.here !== undefined) return S.reading.here;
+    const cap = await browserCap();
+    let here = false;
+    if (cap) { try { here = arr(obj(await cap.listTools(BROWSER)).servers).some((x) => txt(obj(x).server) === BROWSER); } catch (e) { here = false; } }
+    S.reading.here = here;
+    return here;
   }
   // The browser's tools are called with inputs built from each tool's own schema, read at
   // view time (describeTool): nothing about their arguments is assumed here. A required field
@@ -5971,51 +6024,207 @@
       if (/url/i.test(k) && want.url) input[k] = want.url;
       else if (/tab/i.test(k) && S.reading.tab !== undefined) input[k] = S.reading.tab;
     }
+    // The desktop browser never describes its tools: describeTool rejects for every host:
+    // server (mcp.d.ts), so the page sent navigate with no address and read a blank tab
+    // (2026-10-29). With no schema, its own names: url, and tabId for the tab it opened.
+    if (!Object.keys(props).length) {
+      if (want.url) input.url = want.url;
+      if (S.reading.tab !== undefined && tool !== "preview_start") input.tabId = S.reading.tab;
+    }
     for (const k of arr(sc.required)) if (!(k in input)) throw Object.assign(new Error("needs " + k), {code: "page_cannot_fill"});
-    const got = await cap.callTool(BROWSER, tool, input);
+    // The first call waits on the app's own "allow" prompt and comes back retryable while it is
+    // open ("connector access isn't confirmed for this artifact right now", seen live
+    // 2026-10-29): one more try after the wait it names, then the error stands.
+    let got;
+    try { got = await cap.callTool(BROWSER, tool, input); }
+    catch (e) {
+      if (!(e && e.retryable)) throw e;
+      await new Promise((ok) => setTimeout(ok, Math.min(Number(e.retryAfterMs) || 2000, 15000)));
+      got = await cap.callTool(BROWSER, tool, input);
+    }
     const pay = obj(got).payload;
     if (pay && typeof pay === "object") for (const k of Object.keys(pay)) if (/tab/i.test(k) && (typeof pay[k] === "number" || typeof pay[k] === "string")) S.reading.tab = pay[k];
     return typeof pay === "string" ? pay : txt(obj(pay).text) || arr(obj(got).content).filter((c) => c.type === "text").map((c) => txt(c.text)).join("\n");
   }
+  // The bin hides the card for a while; "Never" is the person's choice to paste profiles
+  // instead, kept as a setting so it holds on every device and Claude queues nothing for this
+  // browser (the maintainer, 2026-10-29: "never show again, show in 1 week, x weeks").
+  const READING_HIDE = "ljs:reading-hide-until";
+  function readingHidden() { const v = sget("local", READING_HIDE) || ""; if (v === "never") return true; const u = Date.parse(v); return Number.isFinite(u) && u > now(); }
+  function hideReading(days) { sset("local", READING_HIDE, new Date(now() + Number(days || 14) * 86400000).toISOString()); }
+  // Claude reads them, or the person pastes them: the one setting (networking.py
+  // PROFILE_READS), changed here, in Settings and from the bin alike.
+  function setReads(value, label) {
+    const s = settingItem("profile_reads");
+    if (!s) { if (value === "paste") sset("local", READING_HIDE, "never"); scheduleRender(); return; }
+    sset("local", READING_HIDE, null);
+    act([{item: setId(s), action: "setting.set", value, rev: s.rev}], label);
+    if (value === "browser") { readingTried = false; autoReading().catch(() => {}); }
+  }
+  function readsSetting() { const s = settingItem("profile_reads"); return s ? txt(settingValue(s)) : txt(readingInfo().setting) || "browser"; }
+  function askHideReading() {
+    sheet({title: "Hide this for now?", intro: "Claude reads someone's LinkedIn profile to write them a note that fits. While this is hidden, you can paste their profile instead.",
+      fields: [{id: "when", type: "radio", label: "Ask me again", required: true, error: "Choose one.", value: "14",
+        options: [["7", "In a week"], ["14", "In two weeks"], ["30", "In a month"], ["never", "Never: I'll paste profiles myself"]]}],
+      submit: "Hide",
+      onSubmit: (v) => {
+        const w = txt(v.when);
+        if (w === "never") setReads("paste", "Reading LinkedIn profiles is off");
+        else hideReading(w);
+        toast({text: w === "never" ? "Off. Paste a profile when you write to someone; turn it back on in Settings, under LinkedIn." :
+          "Hidden. It comes back " + (w === "7" ? "in a week." : w === "30" ? "in a month." : "in two weeks."), ids: [], until: 0});
+        scheduleRender();
+      }});
+  }
+  // Opened in the Claude desktop app, the page checks LinkedIn by itself, once per opening,
+  // and reads the profiles queued for networking as they arrive: no button to find. Signed
+  // out, the panel says how to sign in. Elsewhere (a phone, a web browser) it reads nothing.
+  let readingTried = false;
+  async function autoReading() {
+    if (readingTried) return;
+    readingTried = true;
+    if (!(await inDesktop())) { scheduleRender(); return; }
+    const st = readingState();
+    if (st === "off" || st === "paused" || (st !== "ready" && readingHidden())) { scheduleRender(); return; }
+    if (st !== "ready") await openReading(true);
+    maybeAutoRead();
+  }
+  function waitingReads() { return arr(readingInfo().queue).filter((q) => !effective(txt(q.id), ["reading.done"])); }
+  // Each person queued is tried once per opening: a read refused (signed out, a page that did
+  // not load) waits for the next opening, or for the person's own tap, never a loop.
+  function maybeAutoRead() {
+    if (!S.owner || S.reading.busy || S.reading.here !== true || readingState() !== "ready") return;
+    const fresh = waitingReads().filter((q) => !S.reading.tried.has(txt(q.id)));
+    if (fresh.length) readProfiles(fresh, "reading").catch(() => {});
+  }
+  // What LinkedIn showed, judged the way the networking code judges it (tools/network/reading.py
+  // page_kind, the same words): one of its own security checks, its sign-in or join page, or
+  // a profile. A sign-out half way through a queue was saved as that person's profile, and
+  // every refusal read as "sign in" (the maintainer, 2026-10-29: never confuse the two).
+  const LI_CHECK = /security (?:verification|check)|let's do a quick security check|verify (?:your )?identity|confirm (?:it's|that it's) you|captcha|are you a (?:human|robot)|press and hold|unusual activity|suspicious activity|automated (?:activity|behaviou?r|software)|account (?:has been |is )?(?:temporarily )?restricted|temporarily (?:limited|restricted)|we've (?:detected|noticed)|too many (?:requests|profile views)|http error 999|\berror 999\b/i;
+  const LI_SIGNIN = /\bauthwall\b|^join linkedin$|^sign in$|join now|sign in to view|join to view|new to linkedin\?|forgot password\?|agree & join|^welcome back$|sign in with (?:email|apple|google)|email or phone|keep me logged in|to see (?:more|their full profile), sign in/im;
+  const LI_SIGNED_IN = /^[·•]?\s*contact info$|^(?:1st|2nd|3rd\+?)$|^[·•]\s*(?:1st|2nd|3rd\+?)$|^message$|^connect$|^pending$|^more$|^start a post$|^my network$|^messaging$/gim;
+  function pageKind(text) {
+    const body = txt(text).split(/\n/).map((l) => l.trim()).filter(Boolean).slice(0, 120).join("\n");
+    if (LI_CHECK.test(body)) return "check";
+    const signed = (body.match(LI_SIGNED_IN) || []).length;
+    if (LI_SIGNIN.test(body) && signed < 3) return "signin";
+    return "profile";
+  }
+  // One answer per refusal from Claude's browser (mcp.d.ts), shared by the check and the reads.
+  function readingRefused(e) {
+    const code = txt(obj(e).code);
+    S.reading.panel = null;
+    if (code === "not_in_manifest" || code === "cancelled" || code === "approval_required" || code === "blocked_by_policy") {
+      S.reading.declined = true;
+      S.reading.line = "Claude's browser was not allowed here. Press Check it works to be asked again.";
+    } else if (code === "server_not_connected" || code === "not_granted" || code === "capability_disabled" || code === "capability_removed" || code === "page_cannot_fill") {
+      S.reading.panel = "none";
+    } else if (code === "upstream_error" && obj(e).retryable) {
+      S.reading.line = "Allow Claude's browser in the box the app shows, then press Check it works.";
+    } else {
+      S.reading.line = "Claude's browser could not open LinkedIn just now. Press Check it works to try again.";
+    }
+  }
+  // LinkedIn signed out or asking to check it is you: reading stops, the engine is told once
+  // (a check stops the day's reads there too), and the panel says what to do.
+  function readingStopped(kind) {
+    S.reading.ok = false;
+    S.reading.signedOut = kind === "signin";
+    S.reading.panel = kind === "check" ? "check" : "sign_in";
+    if (readingInfo().ok !== false || kind === "check") act([{item: txt(readingInfo().id) || "linkedin-reader", action: "reader.checked", value: {ok: false, said: kind === "check" ? "LinkedIn asked to check it was them" : "signed out of LinkedIn", kind}, rev: txt(readingInfo().rev) || null}], kind === "check" ? "LinkedIn asked to check it's you" : "Signed out of LinkedIn");
+  }
+  // Back from signing in, or from LinkedIn's check (the page visible again, or focused): it
+  // checks again by itself and reads what is waiting, so nobody presses Check it works (the
+  // maintainer, 2026-10-29). At most once every ten seconds.
+  let recheckAt = 0;
+  async function recheckReading() {
+    const p = S.reading.panel;
+    if (p !== "sign_in" && p !== "check") return;
+    if (now() - recheckAt < 10000) return;
+    recheckAt = now();
+    await openReading(true);
+    S.reading.tried.clear();
+    maybeAutoRead();
+  }
   function macKeys() { return /Mac|iPhone|iPad/i.test(navigator.platform || navigator.userAgent || ""); }
+  // Profiles read and saved that Claude has not taken in yet: one tap wakes it once for all
+  // of them, and it rewrites every waiting note in one go.
+  function readsUntaken() {
+    const out = [];
+    for (const [id, d] of allActions()) if (d.action === "reading.done" && (actionState(id) === "saved" || actionState(id) === "saving")) out.push(id);
+    return out;
+  }
+  function rungFor(ids) { const b = S.bell; return !!b && now() - (tms(b.rung_at) || 0) < 5 * 60000 && ids.every((id) => arr(b.ids).indexOf(id) >= 0); }
+  function writeNotesNow(ids) {
+    const rung = ringNow(ids, "act", true);
+    S.notes.set("reads-taken", {text: "One moment…", tone: "muted"});
+    scheduleRender();
+    rung.then((how) => {
+      S.notes.set("reads-taken", how === "rang" ? {text: "Claude has been told. Your notes are rewritten in a minute or two.", tone: "ok", until: now() + 120000}
+        : {text: "Claude could not be reached. Your notes are rewritten next time it works on your search.", tone: "warn"});
+      if (S.reading.panel === "done") S.reading.panel = null;
+      scheduleRender();
+    });
+  }
   function readingTodo() {
     const st = readingState();
-    const queue = arr(readingInfo().queue).filter((q) => !effective(txt(q.id), ["reading.done"]));
-    if (st === "ready" && queue.length) {
-      return {key: "reading-queue", kind: "message", band: "week", employer: null, tab: "contacts", counts: false, node: () => readQueueCard(queue)};
+    const queue = waitingReads();
+    const untaken = readsUntaken();
+    if (untaken.length && !rungFor(untaken)) {
+      return {key: "reads-taken", kind: "message", band: "first", employer: null, tab: "contacts", counts: false, node: () => readsTakenCard(untaken)};
     }
-    if (st === "ready") return null;
+    if (queue.length && (st === "ready" || st === "paused" || st === "desktop")) {
+      return {key: "reading-queue", kind: "message", band: "week", employer: null, tab: "contacts", counts: false, node: () => readQueueCard(queue, st)};
+    }
+    if (st === "ready" || st === "off" || st === "paused") return null;
     if (!arr(M().people).length) return null;
-    if (effective("reading-card", ["suggest.dismiss"]) || sget("local", "ljs:reading-no") === "1") return null;
+    if (readingHidden()) return null;
     return {key: "reading", kind: "setup", band: "later", employer: null, tab: "contacts", counts: false, node: () => readingCard()};
+  }
+  function readsTakenCard(ids) {
+    return card("article", {class: "card todo", "aria-labelledby": "rt-title", "data-item": "reads-taken"},
+      h("div", {class: "todo-top"}, kindMark("message")),
+      h("p", {class: "card-title", id: "rt-title"}, nWord(ids.length, "profile", "profiles") + " read"),
+      h("p", {}, "Claude writes your " + (ids.length === 1 ? "note" : "notes") + " from " + (ids.length === 1 ? "it" : "them") + " in one go."),
+      h("div", {class: "card-actions"}, btn("Write my " + (ids.length === 1 ? "note" : "notes"), () => writeNotesNow(ids), {kind: "primary", small: true, key: "reads-write"})),
+      noteFor("reads-taken"));
+  }
+  // Open LinkedIn in Claude's browser, and check it once the person is back.
+  function openLinkedIn(key) {
+    S.readingOpened = true;
+    openInAppBrowser("https://www.linkedin.com/login", key, "LinkedIn is open in Claude's browser. Sign in there, then come back to this page: it checks by itself.");
+    scheduleRender();
   }
   function readingCard() {
     const st = readingState();
     const desktop = st !== "desktop";
-    const steps = arr(obj(M().reading_steps).steps);
     return card("article", {class: "card todo reading", "aria-labelledby": "reading-title", "data-item": "reading-card"},
-      h("div", {class: "todo-top"}, kindMark("setup"), stateWord("Recommended", "info")),
+      h("div", {class: "todo-top"}, kindMark("setup"), stateWord("For networking", "info")),
       h("p", {class: "card-title", id: "reading-title"}, "Let Claude read LinkedIn profiles for you"),
       h("p", {}, "So each note to someone rests on what their own profile says."),
       desktop ? h("ol", {class: "steps"},
         h("li", {}, "Allow this page to use Claude's browser when it asks."),
-        steps.length ? steps.map((s) => h("li", {}, txt(s))) : h("li", {}, "Sign in to LinkedIn once in that browser.")) :
+        h("li", {}, "Press Open LinkedIn and sign in there once. The page checks by itself when you come back.")) :
         h("p", {class: "small muted"}, txt(obj(obj(M().where).reading).say) || "Open this page in the Claude app on your computer to switch this on."),
-      // Something to do on every view: open LinkedIn in Claude's browser, check it, or no.
-      // Check it works once LinkedIn has been opened; No thanks always in sight, and for good.
-      h("div", {class: "card-actions"}, btn("Open LinkedIn", () => { S.readingOpened = true; openInAppBrowser("https://www.linkedin.com/login", "reading-card"); scheduleRender(); }, {kind: "primary", small: true, key: "reading-open"}),
-        S.readingOpened ? btn("Check it works", () => openReading(true), {kind: "secondary", small: true, key: "reading-check"}) : null,
-        btn("No thanks", () => { sset("local", "ljs:reading-no", "1"); toast({text: "Claude won't ask about reading LinkedIn again.", ids: [], until: 0}); scheduleRender(); }, {kind: "quiet", small: true, key: "reading-no"})),
+      // Something to do on every view: open LinkedIn in Claude's browser and check it, or hide.
+      desktop ? h("div", {class: "card-actions"}, btn("Open LinkedIn", () => openLinkedIn("reading-card"), {kind: "primary", small: true, key: "reading-open"}),
+        btn("Check it works", () => openReading(true), {kind: "secondary", small: true, key: "reading-check"}),
+        btn("", () => askHideReading(), {kind: "quiet icon-only", small: true, icon: "bin", key: "reading-bin", aria: "Hide this for now"})) :
+        h("div", {class: "card-actions"}, btn("", () => askHideReading(), {kind: "quiet icon-only", small: true, icon: "bin", key: "reading-bin", aria: "Hide this for now"})),
       noteFor("browser:reading-card"),
       S.reading.line ? h("p", {class: "small", role: "status"}, S.reading.line) : null);
   }
-  function readQueueCard(queue) {
+  function readQueueCard(queue, st) {
     const names = queue.map((q) => txt(q.first_name)).filter(Boolean);
+    const why = st === "paused" ? "LinkedIn asked Claude to slow down, so these wait until tomorrow." :
+      st === "desktop" ? "They are read next time you open this page in the Claude app on your computer." : "";
     return card("article", {class: "card todo", "aria-labelledby": "rq-title", "data-item": "reading-queue"},
       h("div", {class: "todo-top"}, kindMark("message")),
       h("p", {class: "card-title", id: "rq-title"}, "Read " + nWord(queue.length, "profile", "profiles") + " before Claude writes"),
       names.length ? h("p", {class: "small muted"}, names.slice(0, 5).join(", ") + (names.length > 5 ? " and " + (names.length - 5) + " more" : "")) : null,
-      h("div", {class: "card-actions"}, btn("Read them", () => readProfiles(queue, "reading"), {kind: "primary", small: true, key: "read-them"})),
+      why ? h("p", {class: "small"}, why) :
+        h("div", {class: "card-actions"}, btn("Read them", () => { S.reading.tried.clear(); readProfiles(queue, "reading"); }, {kind: "primary", small: true, key: "read-them"})),
       noteFor("reading"));
   }
   // The small panel for Claude's browser: what it is doing, and Close, which only hides it.
@@ -6023,15 +6232,20 @@
     const r = S.reading;
     if (!r.panel) return null;
     const keys = macKeys() ? "Cmd+Shift+B" : "Ctrl+Shift+B";
+    const open = (k) => btn("Open LinkedIn", () => openLinkedIn(k), {kind: "secondary", small: true, key: k});
     let body;
     if (r.panel === "none") body = [h("p", {}, "Open this page in the Claude app on your computer to read profiles.")];
-    else if (r.panel === "sign_in") body = [h("p", {}, "LinkedIn is open in Claude's browser. Press " + keys + " to show it, sign in, then come back here."),
-      h("div", {class: "card-actions"}, btn("Check it works", () => openReading(true), {kind: "primary", small: true, key: "bp-check"}))];
+    else if (r.panel === "check") body = [h("p", {}, "LinkedIn wants to check it's you. Finish its check in Claude's browser (press " + keys + " if you don't see it), then come back here. Reading waits until then."),
+      h("div", {class: "card-actions"}, open("bp-open-check"), btn("Check it works", () => openReading(true), {kind: "primary", small: true, key: "bp-check-li"})), noteFor("browser:bp-open-check")];
+    else if (r.panel === "sign_in") body = [h("p", {}, "You're not signed in to LinkedIn in Claude's browser. Open it, sign in (press " + keys + " if you don't see it), then come back here."),
+      h("div", {class: "card-actions"}, open("bp-open"), btn("Check it works", () => openReading(true), {kind: "primary", small: true, key: "bp-check"})), noteFor("browser:bp-open")];
+    else if (r.panel === "done") body = [h("p", {}, "Read " + plural(r.read, "profile", "profiles") + "."),
+      h("div", {class: "card-actions"}, btn("Write my " + (r.read === 1 ? "note" : "notes"), () => writeNotesNow(readsUntaken()), {kind: "primary", small: true, key: "bp-write"})), noteFor("reads-taken")];
     else body = [h("p", {class: "reading-line"}, h("span", {class: "spin", "aria-hidden": "true"}), " " + (r.at ? "Reading " + r.at : "Opening LinkedIn")),
       r.total ? h("p", {class: "small muted"}, r.done + " of " + r.total) : null];
     return h("aside", {class: "browser-panel", role: "dialog", "aria-modal": "false", "aria-labelledby": "bp-title"},
       h("div", {class: "sheet-top"}, h("p", {class: "bp-title", id: "bp-title"}, "Claude's browser"),
-        h("button", {type: "button", class: "btn quiet small", "data-k": "bp-close", "aria-label": "Close: the reading carries on", onclick: () => { r.panel = null; scheduleRender(); }}, "Close")),
+        h("button", {type: "button", class: "btn quiet small", "data-k": "bp-close", "aria-label": r.panel === "run" ? "Close: the reading carries on" : "Close", onclick: () => { r.panel = null; scheduleRender(); }}, "Close")),
       body);
   }
   // "Check it works": open the person's own LinkedIn feed in Claude's browser and read it.
@@ -6040,54 +6254,92 @@
   async function openReading(check) {
     const cap = await browserCap();
     // Never a tap that does nothing: where Claude has no browser here, the card says where it does.
-    if (!cap) { S.reading.panel = "none"; S.reading.line = "This works in the Claude app on your computer, where Claude has a browser of its own."; scheduleRender(); return; }
+    if (!cap || !(await inDesktop())) { S.reading.panel = "none"; S.reading.line = "This works in the Claude app on your computer, where Claude has a browser of its own."; scheduleRender(); return; }
     if (!check) { scheduleRender(); return; }
-    S.reading.panel = "check";
+    S.reading.panel = "check-run";
     S.reading.at = "your LinkedIn feed";
     scheduleRender();
     try {
       await browserCall(cap, "navigate", {url: "https://www.linkedin.com/feed/"});
       const text = await browserCall(cap, "get_page_text", {});
-      const signedIn = /feed|start a post|home \| linkedin/i.test(text) && !/sign in|join now/i.test(text.slice(0, 400));
+      const kind = pageKind(text);
+      if (kind === "check") { readingStopped("check"); scheduleRender(); return; }
+      const signedIn = kind !== "signin" && /feed|start a post|home \| linkedin/i.test(text) && !/sign in|join now/i.test(text.slice(0, 400));
       S.reading.ok = signedIn;
       S.reading.signedOut = !signedIn;
       S.reading.panel = signedIn ? null : "sign_in";
       S.reading.line = signedIn ? "Ready: Claude can read LinkedIn profiles here." : null;
-      sset("local", "ljs:reading", signedIn ? "ok" : null);
-      act([{item: txt(readingInfo().id) || "linkedin-reader", action: "reader.checked", value: {ok: signedIn}, rev: txt(readingInfo().rev) || null}], signedIn ? "Profile reading works" : "Not signed in to LinkedIn yet");
+      // Told once per change, and again when the engine's record has gone stale (two weeks
+      // with no read): never on every opening (contract audit, 2026-10-29).
+      const ri = readingInfo();
+      if (ri.ok !== signedIn || (signedIn && ri.page_reads !== true)) act([{item: txt(ri.id) || "linkedin-reader", action: "reader.checked", value: {ok: signedIn}, rev: txt(ri.rev) || null}], signedIn ? "Profile reading works" : "Not signed in to LinkedIn yet");
     } catch (e) {
-      const code = txt(obj(e).code);
-      S.reading.panel = code === "server_not_connected" || code === "not_granted" || code === "page_cannot_fill" ? "none" : "sign_in";
+      readingRefused(e);
     }
+    if (S.reading.panel === "check-run") S.reading.panel = null;
     scheduleRender();
   }
+  // One person: their profile (its top card), then their Experience, Education and activity
+  // pages, which LinkedIn shows whole with nothing to scroll; the profile alone shows only its top
+  // card until it is scrolled (seen live, 2026-10-29). A page that has not drawn yet is read
+  // once more after a moment.
+  // Their recent posts too (LinkedIn's own activity page, also whole without scrolling): what
+  // they post is the best "one true thing about them" a note can rest on (2026-10-29).
+  const SECTION_PAGES = [["experience", "details/experience/", /^experience$/im], ["education", "details/education/", /^education$/im],
+    ["activity", "recent-activity/all/", /^(?:all )?activity$/im]];
+  function pageTop(t) { const s = txt(t); const i = s.indexOf("\n---\n"); return (i >= 0 ? s.slice(i + 5) : s).split("\n").map((l) => l.trim()).filter(Boolean).slice(0, 3).join("\n"); }
+  async function readOne(cap, url) {
+    const base = url.replace(/[?#].*$/, "").replace(/\/+$/, "") + "/";
+    await browserCall(cap, "navigate", {url: base});
+    const first = await browserCall(cap, "get_page_text", {});
+    if (pageKind(first) !== "profile") return {kind: pageKind(first)};
+    const parts = [first], pages = ["profile"], tried = [];
+    for (const [name, path, heading] of SECTION_PAGES) {
+      tried.push(name);
+      await browserCall(cap, "navigate", {url: base + path});
+      let t = await browserCall(cap, "get_page_text", {});
+      if (pageKind(t) !== "profile") return {kind: pageKind(t)};
+      if (!heading.test(pageTop(t))) {
+        await new Promise((ok) => setTimeout(ok, 1500));
+        t = await browserCall(cap, "get_page_text", {});
+        if (pageKind(t) !== "profile") return {kind: pageKind(t)};
+      }
+      if (heading.test(pageTop(t))) { parts.push(t); pages.push(name); }
+    }
+    return {kind: "profile", text: clip(parts.join("\n\n"), 60000), pages, tried};
+  }
   // Read the profiles the engine asked for (linkedin.reading.queue) with the panel showing
-  // which, "2 of 5"; it closes when done and leaves one line on the card.
+  // which, "2 of 5". When it is done, one tap has Claude write every note from them.
   async function readProfiles(queue, key) {
     const cap = await browserCap();
     // Never a tap that does nothing: where Claude has no browser here, the card says where it does.
-    if (!cap) { S.reading.panel = "none"; S.reading.line = "This works in the Claude app on your computer, where Claude has a browser of its own."; scheduleRender(); return; }
+    if (!cap || !(await inDesktop())) { S.reading.panel = "none"; S.reading.line = "This works in the Claude app on your computer, where Claude has a browser of its own."; scheduleRender(); return; }
     const r = S.reading;
+    if (r.busy) return;
+    r.busy = true;
     r.panel = "run";
     r.total = queue.length;
     r.done = 0;
+    r.read = 0;
     scheduleRender();
-    let read = 0;
-    for (const q of queue) {
-      r.at = txt(q.first_name) + "'s profile";
-      scheduleRender();
-      const url = safeUrl(obj(S.reach.get(txt(q.contact))).linkedin) || safeUrl(q.reach);
-      if (!url) { r.done += 1; continue; }
-      try {
-        await browserCall(cap, "navigate", {url});
-        const text = clip(await browserCall(cap, "get_page_text", {}), 20000);
-        act([{item: txt(q.id), action: "reading.done", value: {text, mode: txt(q.mode) || "browser", url}, rev: txt(q.rev) || null}], "Read " + txt(q.first_name) + "'s profile");
-        read += 1;
-      } catch (e) { r.signedOut = true; break; }
-      r.done += 1;
-    }
-    r.panel = r.signedOut ? "sign_in" : null;
-    S.notes.set(key || "reading", {text: "Read " + plural(read, "profile", "profiles") + ".", tone: "ok", until: now() + 60000});
+    try {
+      for (const q of queue) {
+        r.tried.add(txt(q.id));
+        r.at = txt(q.first_name) + "'s profile";
+        scheduleRender();
+        const url = safeUrl(obj(S.reach.get(txt(q.contact))).linkedin);
+        if (!url) { r.done += 1; continue; }
+        let got;
+        try { got = await readOne(cap, url); }
+        catch (e) { readingRefused(e); break; }
+        if (got.kind !== "profile") { readingStopped(got.kind); break; }
+        act([{item: txt(q.id), action: "reading.done", value: {text: got.text, mode: txt(q.mode) || "browser", url, pages: got.pages, tried: got.tried}, rev: txt(q.rev) || null}], "Read " + txt(q.first_name) + "'s profile");
+        r.read += 1;
+        r.done += 1;
+      }
+    } finally { r.busy = false; }
+    if (r.panel === "run") r.panel = r.read ? "done" : null;
+    S.notes.set(key || "reading", {text: "Read " + plural(r.read, "profile", "profiles") + ".", tone: "ok", until: now() + 60000});
     scheduleRender();
   }
 
@@ -6168,13 +6420,22 @@
   // Where waiting work stands: Claude does one thing at a time in each chat, so work waiting
   // for the same chat waits its turn behind what is running there (the maintainer,
   // 2026-10-29: "make it clear if things are queued they're queued in same chat").
+  // Big jobs run side by side in the one helper chat, three at most (page_db.WORK_KINDS
+  // "heavy" and HEAVY_CAP; the app skill, step 4), and an urgent one more. Light work never
+  // waits behind them. So a job is "In line" only while three big ones are running.
+  const HEAVY_KINDS = new Set(["search", "draft", "resume_for_contact", "prep", "network"]);
+  const HEAVY_CAP = 3;
   function queuePlace(id, w) {
     const to = txt(w.to) || "cloud";
     const here = (x) => { const t = txt(x.to) || "cloud"; return t === to || t === "either" || to === "either"; };
-    const same = activeWork().filter(([, x]) => here(x));
+    const heavy = (x) => HEAVY_KINDS.has(txt(x.kind));
+    if (!heavy(w)) return {pos: 0, running: "", busy: 0};
+    const same = activeWork().filter(([, x]) => here(x) && heavy(x));
     const running = same.filter(([, x]) => x.status === "running" || x.status === "claimed");
-    const queued = same.filter(([, x]) => x.status === "queued").sort((a, b) => txt(a[1].asked_at).localeCompare(txt(b[1].asked_at)));
-    return {pos: queued.findIndex(([qid]) => qid === id) + 1, running: running.length ? txt(running[0][1].title) : "", busy: running.length};
+    const queued = same.filter(([, x]) => x.status === "queued").sort((a, b) => (Number(b[1].priority) || 0) - (Number(a[1].priority) || 0) || txt(a[1].asked_at).localeCompare(txt(b[1].asked_at)));
+    const free = Math.max(0, HEAVY_CAP + (Number(w.priority) >= 2 ? 1 : 0) - running.length);
+    const pos = queued.findIndex(([qid]) => qid === id) + 1 - free;
+    return {pos: Math.max(0, pos), running: running.length ? txt(running[0][1].title) : "", busy: pos > 0 ? running.length : 0};
   }
   function workCard(id, w) {
     const p = progress(w);
@@ -6183,10 +6444,9 @@
     const toComputer = w.to === "computer";
     const slow = p.stalled || p.lapsed;
     // A state word only where the work is not simply running.
-    const woken = st === "queued" && S.woken && S.woken.has(id);
     const place = st === "queued" ? queuePlace(id, w) : null;
     const inLine = !!(place && place.busy && !p.late);
-    const label = p.stopping ? "Stopping after this step" : st === "queued" ? (p.late ? "Not picked up yet" : inLine ? (place.pos === 1 ? "Next" : "In line") : woken ? "Starting" : "Waiting to start") : st === "running" || st === "claimed" ? (slow ? "Stalled" : null) : WORK_WORDS[st] || cap1(st);
+    const label = p.stopping ? "Stopping after this step" : st === "queued" ? (p.late ? "Not picked up yet" : inLine ? (place.pos === 1 ? "Next" : "In line") : "Waiting to start") : st === "running" || st === "claimed" ? (slow ? "Stalled" : null) : WORK_WORDS[st] || cap1(st);
     const tone = p.stopping ? "held" : {done: "ok", failed: "bad", stopped: "held", needs_you: "warn"}[st] || (slow || p.late ? "warn" : null);
     const spinning = ACTIVE.has(st) && st !== "needs_you" && st !== "queued" && !slow;
     const waitingDot = st === "queued" && !p.late;
@@ -6202,8 +6462,8 @@
       const upd = obj(obj(M().updates).waiting);
       const held = txt(w.kind) !== "update" && txt(upd.waits_for) && txt(upd.hold_line);
       now1 = held ? txt(upd.hold_line) + "." : toComputer && !computerListening() ? "This needs your computer: open Claude on it." : p.late ? "Claude has not picked this up yet." :
-        inLine ? (place.pos === 1 ? "Starts when " + (place.running || "the work before it") + " is done, in the same chat." : plural(place.pos, "thing", "things") + " before it, in the same chat.") :
-        woken ? "Claude has been asked and is starting it." : "Waiting for Claude to start.";
+        inLine ? (place.pos === 1 ? "Starts as soon as one of the " + place.busy + " jobs running now is done." : plural(place.pos - 1, "job", "jobs") + " before it, once one of the " + place.busy + " running now is done.") :
+        "Waiting for Claude to start.";
     } else if (st === "stopped") now1 = "Stopped. Anything already saved is kept.";
     else if (st === "failed") now1 = (typeof w.error === "string" ? w.error : txt(obj(w.error).plain)) || "It stopped part way. Anything already saved is kept.";
     else if (st === "needs_you") now1 = txt(w.note) || "It has a question for you.";
@@ -6244,15 +6504,14 @@
     if (stopBtn) put(acts, stopBtn);
     // Nothing has picked it up: the page asks its helper chat again; only once that cannot
     // be reached is there a link to start a chat by hand.
-    const canWake = !S.wakeFailed && (/^session_/.test(txt(obj(S.listener).chat)) || txt(obj(M().app).repo));
+    const canWake = canRing();
     const tries = Number(w.attempt) || 1;
     if ((st === "failed" || (st === "stopped" && !w.stop_asked) || (slow && ACTIVE.has(st) && !limitHit())) && tries < 3) {
       put(acts, btn("Try again", () => retryWork(id), {kind: "secondary", small: true, key: "retry:" + id, aria: "Try again: " + txt(w.title)}));
     }
-    if (st === "queued" && p.late && !toComputer && canWake) put(acts, btn("Ask Claude again", () => { if (S.woken) S.woken.delete(id); autoWake([id]).then(scheduleRender); }, {kind: "secondary", small: true, key: "rewake:" + id, aria: "Ask Claude again: " + txt(w.title)}));
+    if (st === "queued" && p.late && !toComputer && canWake) put(acts, btn("Ask Claude again", () => ringAgain(id), {kind: "secondary", small: true, key: "rewake:" + id, aria: "Ask Claude again: " + txt(w.title)}));
     if (st === "queued" && (p.late || (note && note.link)) && !toComputer && !canWake) {
-      if (S.can.comments === "available") put(acts, btn("Ask Claude again", () => ringAgain(id), {kind: "quiet", small: true, key: "ring:" + id}));
-      put(acts, h("a", {class: "btn quiet small", href: prefillUrl(), target: "_blank", rel: "noopener noreferrer", "data-k": "prefill:" + id}, "Start it now", h("span", {class: "sr-only"}, " (opens Claude in a new tab)")));
+      put(acts, h("a", {class: "btn quiet small", href: wakeUrl(), target: "_blank", rel: "noopener noreferrer", "data-k": "prefill:" + id}, "Start it now", h("span", {class: "sr-only"}, " (opens Claude in a new tab)")));
     }
     if (acts.childNodes.length) put(cardEl, acts);
     if (open) {
@@ -6335,7 +6594,7 @@
     // Work nobody has picked up is waiting, never "running" (the maintainer, 2026-10-26).
     const going = act.filter(([, w]) => w.status !== "queued" && w.status !== "needs_you").length;
     const queued = act.filter(([, w]) => w.status === "queued");
-    const starting = queued.filter(([id]) => S.woken && S.woken.has(id)).length;
+    const starting = 0;
     const waiting = queued.length - starting;
     const helperGoing = helperAsked() ? 1 : 0;
     if (!act.length && !recent.length && !helperGoing) return null;
@@ -6579,7 +6838,7 @@
     let status = "";
     let disabled = false;
     if (S.quick.mode) status = "Practice interview for " + S.quick.mode.company + ". Answer as you would in the room; New conversation ends it.";
-    else if (S.flags.limit) status = "Claude has reached your plan's limit for now. Try again later.";
+    else if (S.flags.limit && S.flags.limit > now()) status = "Claude has reached your plan's limit for now. Try again later.";
     else if (capsSettled.db && capsSettled.sample && !S.caps.db && !S.caps.sample) { status = "This page cannot reach Claude here. Open it in the Claude app."; disabled = true; }
     talkStatus.textContent = status;
     talkStatus.hidden = !status;
@@ -6619,7 +6878,7 @@
     if (withPics && pics.some((p) => p.status === "failed")) { shout("A picture was not added. Remove it, or add it again."); return; }
     S.viewConv = null;
     // A picture always goes to a chat: only a chat can read it (and the reply, the job or the
-    // call it is about needs one anyway). Sent inside this click, so the room ring can go.
+    // call it is about needs one anyway). Sent inside this click, so the ring can go.
     if (withPics) { handOff(text, true, pics.splice(0)); renderPics(); return; }
     if (!S.quick.mode && capsSettled.sample && !S.caps.sample) { handOff(text, true); return; }
     if (!S.quick.mode && pastedSomething(text)) { readPasted(text); return; }
@@ -6632,7 +6891,8 @@
     const th = currentThread(to);
     const mid = "m" + stamp() + rand4();
     const wid = "talk~" + seg(th) + "~" + mid;
-    const roomRing = inClick && to === "cloud" ? ringRoomSync([wid], "A message from your job search page") : null;
+    S.lastHandOff = wid;
+    const rung = inClick && (to === "cloud" || computerListening()) ? ringNow([wid], "work") : null;
     if (talkInput && talkInput.value.trim() === text) { talkInput.value = ""; draftSet("talk", null); countTalk(); }
     // Not sent: the words and the pictures go back in the box, as they were.
     const giveBack = () => { if (talkInput && text) talkInput.value = text; if (shots.length) { pics.unshift(...shots.filter((p) => pics.indexOf(p) < 0)); renderPics(); } };
@@ -6668,10 +6928,7 @@
         if (!made.ok) throw new Error("work");
       } catch (e) { giveBack(); shout("Not sent. Try again."); renderChat(); return; }
       announce("Sent to Claude.");
-      let how = roomRing ? await roomRing : null;
-      if (!how && (to === "cloud" || computerListening())) how = await ringComments([wid], false);
-      autoWake([wid]);
-      ringNote([wid], how || "none");
+      ringNote([wid], (rung ? await rung : null) || "none");
       renderChat();
     })();
   }
@@ -6697,7 +6954,10 @@
     const f = map[section];
     const out = f ? f() : {error: "No such section. Use one of: " + Object.keys(map).join(", ")};
     let s = JSON.stringify(out);
-    if (s.length > 28000) s = s.slice(0, 28000) + "…";
+    // A tool result is at most 32 KB in bytes (sample.d.ts): accented and non-Latin text takes
+    // more than a byte a letter, so the cut is by bytes (contract audit, 2026-10-29).
+    const enc = new TextEncoder();
+    if (enc.encode(s).length > 28000) { let n = Math.min(s.length, 28000); while (n > 0 && enc.encode(s.slice(0, n)).length > 28000) n = Math.floor(n * 0.9); s = s.slice(0, n) + "…"; }
     return s;
   }
   function findIn(text) {
@@ -6737,7 +6997,7 @@
   async function startMock(iv) {
     if (!(await CAP.sample)) {
       go("chat", {focus: false});
-      handOff("Run a practice " + lc1(txt(iv.next_stage) || "interview") + " with me for " + [txt(iv.role), txt(iv.company)].filter(Boolean).join(" at ") + ", one question at a time from my prep, with short feedback on each answer.", false);
+      handOff("Run a practice " + lc1(txt(iv.next_stage) || "interview") + " with me for " + [txt(iv.role), txt(iv.company)].filter(Boolean).join(" at ") + ", one question at a time from my prep, with short feedback on each answer.", true);
       return;
     }
     S.quick.turns = [];
@@ -6749,7 +7009,7 @@
   }
   async function askQuick(text, hidden) {
     const sample = await CAP.sample;
-    if (!sample) { if (!S.quick.mode) handOff(text, false); return; }
+    if (!sample) { if (!S.quick.mode) handOff(text, true); return; }
     if (S.quick.busy) return;
     if (talkInput && talkInput.value.trim() === text) { talkInput.value = ""; draftSet("talk", null); countTalk(); }
     const youMsg = {id: "q" + stamp() + rand4(), from: "you", text, at: iso()};
@@ -6786,8 +7046,9 @@
     } catch (e) {
       const code = (e && e.code) || "upstream_error";
       answer = txt(e && e.text);
-      if (code === "rate_limited") { S.flags.limit = true; answer = answer || "Claude has reached your plan's limit for now. Try again later."; }
-      else if (code === "not_granted" || code === "sampling_disabled" || code === "not_declared") { S.caps.sample = null; capsSettled.sample = true; if (!S.quick.mode) handoff = "quick answers are off for this page"; }
+      // A limit lasts the wait it names, not the whole visit (sample.d.ts, contract audit).
+      if (code === "rate_limited") { S.flags.limit = now() + Math.max(60000, Number(e && e.retryAfterMs) || 0); answer = answer || "Claude has reached your plan's limit for now. Try again later."; }
+      else if (code === "not_granted" || code === "sampling_disabled" || code === "not_declared" || code === "capability_disabled" || code === "capability_removed" || code === "session_expired") { S.caps.sample = null; capsSettled.sample = true; if (!S.quick.mode) handoff = "quick answers are off for this page"; }
       else if (code === "cancelled") answer = answer ? answer + " (stopped)" : "Stopped.";
       else answer = answer ? answer + " (cut off)" : "That did not work. Try again.";
     }
@@ -6796,10 +7057,15 @@
     S.quick.ctl = null;
     if (handoff && !S.quick.mode) {
       S.quick.turns = S.quick.turns.filter((t) => t !== youMsg);
-      const where = whereTo() === "computer" ? "on your computer" : "in the cloud";
-      S.chatNotes.push({id: "n" + stamp() + rand4(), from: "note", text: "Claude is working on this " + where + ". The answer appears here.", at: iso()});
       handOff(text, false);
-      announce("Claude is working on it " + where + ".");
+      const wid = S.lastHandOff;
+      const note = {id: "n" + stamp() + rand4(), from: "note", at: iso(), sent: false};
+      note.node = () => note.sent ? h("p", {class: "talk-text"}, "Sent to Claude. The answer appears here.") :
+        h("div", {}, h("p", {class: "talk-text"}, "This needs Claude itself, not a quick answer."),
+          h("div", {class: "card-actions"}, btn("Send to Claude", () => { ringNow([wid], "work", true).then((how) => { ringNote([wid], how); note.sent = how === "rang" || how === "coalesced"; if (!note.sent) toast({text: "Claude could not be reached. It answers next time it works on your search.", ids: [], until: 0}); renderChat(); }); },
+            {kind: "primary", small: true, key: "handoff:" + note.id})));
+      S.chatNotes.push(note);
+      announce("This needs Claude itself. Send it when you are ready.");
       renderChat();
       return;
     }
@@ -7074,6 +7340,7 @@
     app_updates: {label: "How updates arrive", choices: {auto: ["By themselves"], when_asked: ["When I say"]}},
     tips: {label: "Tips now and then"},
     linkedin_plan: {label: "Your LinkedIn plan"},
+    profile_reads: {label: "Reading their profiles", hint: "Claude reads them in the Claude app on your computer. Or paste each one yourself.", choices: {browser: ["Claude reads them"], paste: ["I paste them"]}},
   };
   const SYNTH = [{key: "suggestions", label: "Suggestions", kind: "choice", value: "on", choices: [["on", "On"], ["urgent", "Only urgent"], ["off", "Off"]]}];
   // The usual value of each setting, for the summary's "changed from the usual".
@@ -7106,7 +7373,7 @@
     const wrap = h("section", {class: "sec", "aria-labelledby": "h-settings" + (where ? "-" + where : "")}, screenHead("settings", "Settings", sum, null, where));
     const byKey = new Map(all.map((s) => [txt(s.key), s]));
     const pick = (keys) => keys.map((k) => byKey.get(k)).filter(Boolean);
-    const known = new Set(["suggestions", "app_updates", "tips", "linkedin_plan"]);
+    const known = new Set(["suggestions", "app_updates", "tips", "linkedin_plan", "profile_reads"]);
     const others = all.filter((s) => !known.has(txt(s.key)));
     if (waiting) put(wrap, settingsGroup("", [updateRow(waiting)]));
     // Questions an update brought live here, never in To do: nothing is late about them.
@@ -7122,7 +7389,7 @@
     if (search.length) put(wrap, settingsGroup("Your search", search));
     put(wrap, settingsGroup("Your brief", briefRows()));
     put(wrap, settingsGroup("Look", [lookRow(), sizeRow()]));
-    put(wrap, settingsGroup("LinkedIn", linkedinRows().concat(pick(["linkedin_plan"]).map(settingRow))));
+    put(wrap, settingsGroup("LinkedIn", linkedinRows().concat(pick(["profile_reads", "linkedin_plan"]).map(settingRow))));
     put(wrap, settingsGroup("Help", [actionRow("Show me around", () => showTour(0), "help-tour"),
       actionRow("Ask Claude how something works", () => startChat("How does "), "help-how"),
       actionRow("Something looks wrong", () => startChat("Something on my job search page looks wrong. Page version " + txt(obj(M().app).version || u.version) + ". What I saw: "), "help-wrong")].concat(pick(["tips"]).map(settingRow))));
@@ -7241,7 +7508,7 @@
   }
   function deviceList() {
     const yes = (b) => stateWord(b ? "Works here" : "Not here", b ? "ok" : null);
-    const ask = S.can.comments === "available" || S.can.room === "available";
+    const ask = canRing();
     const rows = [["Keeping your answers", !!S.caps.db], ["Saving files", !!S.caps.downloads], ["Quick answers on this page", !!S.caps.sample], ["Telling Claude at once", ask]];
     return h("ul", {class: "plain checks-list"}, rows.map(([l, b]) => h("li", {}, h("span", {}, l), yes(b))));
   }
@@ -7776,8 +8043,8 @@
     // Re-laid out where the frame changes: the phone below 760px, the rail from 1280px.
     let lastBand = window.innerWidth < 760 ? 0 : wide() ? 2 : 1;
     window.addEventListener("resize", () => { const w = wide(); const band = window.innerWidth < 760 ? 0 : w ? 2 : 1; if (w !== lastWide || band !== lastBand) { if ((band === 0) !== (lastBand === 0)) applySize(S.size); lastWide = w; lastBand = band; if (w) closeWork(); render(); } });
-    window.addEventListener("focus", () => refreshCanSend());
-    document.addEventListener("visibilitychange", () => { if (!document.hidden) { refreshCanSend(); liveRender(); } });
+    window.addEventListener("focus", () => { refreshCanSend(); recheckReading().catch(() => {}); });
+    document.addEventListener("visibilitychange", () => { if (!document.hidden) { refreshCanSend(); liveRender(); recheckReading().catch(() => {}); } });
     document.addEventListener("keydown", onKey);
     setInterval(tick, 1000);
     setInterval(liveRender, 60000);
@@ -7794,6 +8061,7 @@
       render();
       if (fromHash && fromHash.work) openWork();
       if (S.focusItem) showItem(S.focusItem);
+      setTimeout(() => { autoReading().catch(() => {}); }, 1500);
     });
     CAP.db.then((db) => {
       if (!db) { S.flags.readOnly = true; scheduleRender(); return; }
@@ -7802,7 +8070,6 @@
       scheduleRender();
     });
     CAP.comments.then((x) => { if (x) refreshCanSend(); });
-    CAP.room.then((x) => { if (x) refreshCanSend(); });
     for (const n of ["sample", "downloads", "assets"]) CAP[n].then(() => scheduleRender());
   }
 

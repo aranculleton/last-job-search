@@ -57,36 +57,12 @@ To let this chat reach job sites:
 Screens change: if yours looks different, tell Claude what you see.
 <!-- /claude-surface -->
 
-## On your computer as well
+## On your computer
 
-Optional, for files you keep there: your page already reads LinkedIn profiles in the Claude
-desktop app. The recommended way, if you want one: same copy, nothing moves, and it installs
-what it needs.
-
-<!-- claude-surface: local-chat -->
-<!-- checked 2026-10-25; https://code.claude.com/docs/en/desktop-quickstart -->
-To set up a chat on your computer:
-1. Install the Claude desktop app from claude.ai/download (it has a Mac and a Windows
-   installer) if you do not have it, and sign in.
-2. Open its Code tab. Under the message box choose Local, then Open folder, and make a new,
-   empty folder for your search.
-3. If the mode menu under the message box offers Auto, choose it: Claude then asks you far
-   less.
-4. Paste this there: Open my job search on this computer. My copy is
-   github.com/YOUR-NAME/YOUR-COPY. Follow
-   github.com/aranculleton/last-job-search/blob/master/COMPUTER.md
-
-Screens change: if yours looks different, tell Claude what you see.
-<!-- /claude-surface -->
-
-On Linux:
-
-<!-- claude-surface: linux-computer -->
-<!-- checked 2026-10-25; https://code.claude.com/docs/en/desktop-linux -->
-Use Claude on a Linux computer: on Ubuntu or Debian, the Claude desktop app; elsewhere, in a
-terminal, curl -fsSL https://claude.ai/install.sh | bash, then claude --chrome in the folder
-of your copy.
-<!-- /claude-surface -->
+For networking, once: install the Claude desktop app (claude.ai/download), open your page's
+link in it, and allow Claude's browser when it asks. It reads LinkedIn there by itself and
+asks you to sign in to LinkedIn if you are not. Nothing else to install: everything else
+runs in the cloud.
 
 ## Then use your page
 

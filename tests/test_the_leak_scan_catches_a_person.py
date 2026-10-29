@@ -386,6 +386,21 @@ def test_a_board_in_a_market_table_is_not_a_leak_and_a_person_there_still_is(tmp
     assert ("tools/markets/fields/yy.json", "denylist entry 3") in where
 
 
+def test_a_hunks_line_numbers_are_not_a_leak_and_its_function_name_is_read(tmp_path):
+    # A hunk header's line number matched a short number on the denylist (2026-10-29): a line
+    # number is never something written. The name git prints after it is still read.
+    num, name = "6" + "47", "Quillon" + " Varga"
+    t = tmp_path / "patches.txt"
+    t.write_text("commit abc\nMove a test\n"
+                 "diff --git a/tests/x.py b/tests/x.py\n"
+                 "+++ b/tests/x.py\n"
+                 f"@@ -638 +{num} @@ def test_stop():\n"
+                 f"@@ -1,2 +3,4 @@ def test_{name.replace(' ', '_')}():\n"
+                 f"+call({num})\n", encoding="utf-8")
+    found = leak_scan.scan_text([str(t)], leak_scan.tokens_from([num, name]))
+    assert found == ["patches.txt:6: denylist entry 2", "patches.txt:7: denylist entry 1"], found
+
+
 def test_a_board_in_a_market_tables_diff_is_not_a_leak_either(tmp_path):
     """A commit's patch holds the table's added lines: the board in them passes as it does in
     the tree, and a person in them still fails."""

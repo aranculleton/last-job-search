@@ -54,12 +54,12 @@ BROWSERS = {"browser", "chrome", "enable"}
 # where to work (/setup's question, its next step) and in the check a cloud chat on a
 # computer gives. Told only "a computer does more", people kept every chat in the cloud and
 # found out at their first networking run that profiles cannot be read there.
-# 4.0 (2026-10-25): no move to a computer chat is recommended any more. The page and the
-# cloud chats Claude makes do everything; the page reads LinkedIn profiles itself when it
-# is opened in the Claude desktop app; a chat on the computer is optional, for files kept
-# there. Someone who already has one keeps it, and hears SHORT_HAS_LOCAL as before.
-CHATS = ("Everything works in your cloud chats and on your page. A chat on your computer is "
-         "optional: it is only for files kept on that computer.")
+# 4.0 (2026-10-25): no move to a computer chat is recommended any more. 4.3 (2026-10-29): none
+# is offered at all. The cloud does the work; on the computer, the page alone reads LinkedIn
+# profiles in the Claude desktop app. Someone who already has a computer chat keeps it.
+CHATS = ("Everything runs in the cloud and on your page. On your computer, open your page in "
+         "the Claude desktop app: it reads LinkedIn profiles there by itself, and nothing else "
+         "is needed.")
 # The one message a computer chat starts from: it names the person's copy and the page that
 # takes an empty folder to a copy that is set up (COMPUTER.md, the app's). The words are
 # the registry's (claude_surfaces local-chat, its last step), so a doc and a chat say one thing.
@@ -68,29 +68,20 @@ COMPUTER_PAGE = "github.com/aranculleton/last-job-search/blob/master/COMPUTER.md
 # in the desktop app, reads them as the person (host:claude_browser, proven 2026-10-25).
 PAGE_READS = ("Finding people works here. Your page reads their LinkedIn profiles when you "
               "open it in the Claude desktop app.")
-# Said instead to a person who already has a chat on their computer (place.json
-# "computer_chat"): what this chat can do, with no move to make.
-SHORT_HAS_LOCAL = ("Finding people works here. Their profiles are read in your chat on your "
-                   "computer.")
-
-# The one line a chat with no browser of the person's says about reading. Finding
-# people never needs it (tools/network/sources.py, the ladder), so the line says what
-# works here first, and nothing it says blocks the work.
-FINDING_WORKS = ("Finding people works in this chat. Reading their profiles before writing "
-                 "to them needs a browser of yours, which this chat cannot reach.")
-# A cloud chat can reach the browser in the Claude desktop app on the person's computer
-# while the app is open there (claude_surfaces: cloud-linked-browser, which records that
-# Anthropic's skill describes it and its docs do not yet). The person is told what works,
-# in a sentence, and no caveat: a reply that warned and warned before reading anything was
-# what the person had to wade through (2026-10-25).
-CLOUD_LINK_NOW = ("This chat reads profiles in the Claude desktop app's browser on your "
-                  "computer, while the app stays open there.")
+# Since 4.3 no chat reads LinkedIn, whatever browser it has: the page does, in the Claude
+# desktop app (reading.route). These names stay, as public names, each saying that now.
+SHORT_HAS_LOCAL = PAGE_READS
+FINDING_WORKS = "Finding people works in this chat."
+CLOUD_LINK_NOW = PAGE_READS
 PASTE_TOP = ("Or paste the profile of the one or two who matter most, here, and I'll write "
              "to them from it.")
-# When the chat's tools were not named, a line carries this condition for Claude to
-# test first. It is never said to the person.
+# Kept for callers that test it; no line is conditional on this chat's tools any more.
 IF_NO_BROWSER = ("[only if this chat has no browser tool: no Claude_Browser tools, no "
                  "enable__mcp__remote-devices__Claude_Browser, no Claude in Chrome] ")
+# The steps, for someone who asks how: their page, in the desktop app, asks once and reads.
+PAGE_STEPS = ("To have their profiles read: open your page in the Claude app on your computer. "
+              "It asks once to use Claude's browser: allow it, and sign in to LinkedIn there "
+              "once. It reads them by itself from then on.")
 # Nothing about signing in to LinkedIn is said here: the reading step itself sees when the
 # browser is signed out and asks them to sign in, once, saying what signing in shows
 # (tools/network/reading.py). Said here as well, with its caveats, it came before any reading
@@ -103,8 +94,7 @@ IF_NO_BROWSER = ("[only if this chat has no browser tool: no Claude_Browser tool
 # and two URLs at the end of every reply was the part nobody read.
 SHORT_REMOTE = PAGE_READS
 SHORT_CLOUD = PAGE_READS
-SHORT_LOCAL = ("Finding people works here. Reading their profiles before writing to them needs "
-               "a browser this chat can use, such as the Claude desktop app's own.")
+SHORT_LOCAL = PAGE_READS
 SHORT_PASTE = "Or paste the one or two who matter most."
 SHORT_LINK_NOW = CLOUD_LINK_NOW
 SHORT_WORDS = 60     # the most any one default message may run to (tests/test_place.py)
@@ -159,16 +149,6 @@ def computer_paste(owner: str = "", name: str = "my-job-search") -> str:
         "Paste this there: ", 1)[-1]
 
 
-def _continue_locally(owner: str, name: str, then: str) -> str:
-    """The way there, as numbered steps from the registry: a new empty folder in the desktop
-    app, and one message that makes their copy there and sets it up (COMPUTER.md). A person
-    who had only ever used the cloud could not follow one long sentence of destinations
-    (2026-10-20); GitHub Desktop, which this once began with, is not needed at all."""
-    import claude_surfaces
-    return ("\n".join(claude_surfaces.steps("local-chat", name=name, owner=owner))
-            + f"\nOnce it is set up, say \"{then}\" there.\n{claude_surfaces.CLOSING}")
-
-
 def linux_kind(platform: str | None = None, release: str | None = None,
                os_release: str | None = None) -> str:
     """"wsl", "debian" (Ubuntu, Debian and their kin: the desktop app's beta), "other"
@@ -199,8 +179,8 @@ def check(where: str, setting: str, tools=None, signed_in: bool = False, fixes=(
           os_name: str = "") -> list:
     """What to tell the person about this chat's place. [] when it is right.
 
-    `tools` is the browser tools this chat has (browser, chrome, chrome-off, enable),
-    or None when unknown, which asks the chat to look before it says anything.
+    `tools`, `signed_in`, `works` and `has_local` are kept for callers that pass them: since
+    4.3 the page reads profiles whatever this chat has (reading.route).
     `fixes` is env_check.local_fixes(): what this computer is missing. By default each
     message is two or three short sentences with no links; `detail` gives the steps,
     each path dated with its official page, for a person who asked how. `has_local` is
@@ -209,64 +189,25 @@ def check(where: str, setting: str, tools=None, signed_in: bool = False, fixes=(
     computer is told the way that works there; "" says nothing particular to one.
     """
     out = []
-    have = None if tools is None else {str(t).lower() for t in tools} & BROWSERS
-    then = f"find me people at {employer}" if employer else "find me people at <employer>"
-    if setting == "browser" and not have and page_reads():
-        # The page reads in the desktop app, and has lately: a browser that can read, so
-        # nothing to tell about reading.
+    if setting == "browser" and page_reads():
+        # The page reads in the desktop app, and has lately: nothing to tell about reading.
         setting = "page"
     if setting == "browser":
-        # By the tools the chat has, never by where it was started: a phone chat linked
-        # to the computer reads profiles as well as a chat on it does (claude_surfaces:
-        # cloud-linked-browser), and where a chat was started is not documented.
-        if have:
-            if where != "local" and have & {"browser", "enable"}:
-                out.append(CLOUD_LINK_NOW if detail else SHORT_LINK_NOW)
-        elif has_local and where != "local":
-            line = SHORT_HAS_LOCAL
-            out.append(line if have is not None else IF_NO_BROWSER + line)
-        elif not detail:
-            line = ({"phone": SHORT_REMOTE + " " + SHORT_PASTE,
-                     "web": SHORT_REMOTE + " " + SHORT_PASTE,
-                     "local": SHORT_LOCAL + " Ask me how."}
-                    .get(where, SHORT_CLOUD + " " + SHORT_PASTE))
-            out.append(line if have is not None else IF_NO_BROWSER + line)
+        # Profiles are read by the person's page in the Claude desktop app, whatever this chat
+        # is or has (reading.route, 4.3): no chat reads them, and none is offered for it.
+        # Unasked, the one short line and a paste for the few who matter most; asked how, the
+        # steps, with the paste offered on a phone or the web only (at a computer the page
+        # opened there reads them, 4.0).
+        away = where in ("phone", "web")
+        if not detail:
+            out.append(PAGE_READS + " " + SHORT_PASTE)
+        elif where == "local" and linux_kind(os_name or "none") == "other":
+            # No desktop app here (Fedora, Arch: claude_surfaces linux-computer).
+            out.append(f"{FINDING_WORKS} Your page reads profiles in the Claude desktop app, "
+                       "which this computer does not have: open your page on a Mac or Windows "
+                       f"computer. {PASTE_TOP}")
         else:
-            if where in ("phone", "web"):
-                line = (f"{FINDING_WORKS} Your page reads them when you open it in the Claude "
-                        f"desktop app on a computer. {PASTE_TOP}")
-            elif where == "local" and linux_kind(os_name or "none") in ("other", "wsl"):
-                # No desktop app here (Fedora, Arch: claude_surfaces linux-computer), and in
-                # WSL no Claude in Chrome either: the way that works, said first.
-                kind = linux_kind(os_name)
-                way = (_say("linux-computer", owner, name, False) if kind == "other"
-                       else "In WSL, Claude in Chrome does not work: use the Claude desktop app "
-                            "on Windows itself for reading profiles.")
-                line = ("Finding people works in this chat. Reading their profiles before writing "
-                        f"to them needs a browser this chat can use. {way} {PASTE_TOP}")
-            elif where == "local" and os_name == "win32":
-                line = ("Finding people works in this chat. Reading their profiles before writing "
-                        "to them needs a browser this chat can use: the Claude desktop app has "
-                        f"its own. {_say('windows-computer', owner, name, False)} {PASTE_TOP}")
-            elif where == "local":
-                # The desktop app's own browser is the default, whatever browser the person
-                # uses; Claude in Chrome only for someone already on Chrome or Edge who wants
-                # their own sign-in. Nobody is told to install Chrome (claude_surfaces: chrome).
-                line = ("Finding people works in this chat. Reading their profiles before writing "
-                        "to them needs a browser this chat can use: the Claude desktop app has "
-                        f"its own, whatever browser you use. {_say('local-chat', owner, name, False)}"
-                        " If you already use Chrome or Edge and want your own sign-in there, "
-                        f"Claude in Chrome does it from a terminal: {_say('chrome', owner, name, False)}"
-                        f" {PASTE_TOP}")
-            else:
-                # Asked how, in a cloud chat at a computer (the desktop app, or a start not
-                # known): the page first, which needs nothing new, opened right there; a chat
-                # on the computer only as the other way, for someone who wants one. Nothing
-                # to paste: the person is at a computer.
-                line = (f"{FINDING_WORKS} Your page reads them when you open it in the Claude "
-                        "desktop app. If you would also like a chat on your computer: "
-                        f"{_continue_locally(owner, name, then)}")
-            out.append(line if have is not None else IF_NO_BROWSER + line)
+            out.append(f"{FINDING_WORKS} {PAGE_STEPS}" + (f" {PASTE_TOP}" if away else ""))
     # A person with a computer is no longer told to move to it (4.0): nothing is said here
     # that the page does not already do.
     if where == "local" and fixes:
@@ -291,8 +232,7 @@ def next_step(works_on: str, where: str, owner: str = "", name: str = "my-job-se
     the profile is written wherever the person is, and a computer chat is offered once, with
     the one message that sets it up (2026-10-25)."""
     if works_on in ("computer", "both") and where != "local":
-        return (f"{CHATS} On your computer, open your page in the Claude desktop app: it reads "
-                "LinkedIn profiles there by itself.")
+        return CHATS
     if works_on == "phone" and where == "local":
         return (f"Carry on here. On your phone, open claude.ai/code and choose {name}: both "
                 "work on your copy on GitHub.")
@@ -548,10 +488,11 @@ def mark_setup(event: str, today: datetime.date | None = None) -> str:
 
 
 def default_profile_reads(where: str) -> str:
-    """PROFILE_READS written without asking: "browser" on a computer, or in a cloud chat the
-    desktop app started (it reads in the desktop app's browser); "" (unset, so a paste) on a
-    phone or the web. A question and its warnings came first before (2026-10-25)."""
-    return "browser" if where in ("local", "desktop-cloud") else ""
+    """PROFILE_READS written without asking, wherever setup runs: "browser". The person's page
+    reads profiles in the Claude desktop app whatever chat set them up (reading.route, 4.3),
+    and "I paste them" in its Settings is the way out. A question and its warnings came first
+    before (2026-10-25); a phone set-up once wrote nothing, which read as paste."""
+    return "browser"
 
 
 def setting() -> str:
@@ -576,7 +517,10 @@ def setting() -> str:
 # browser (host:claude_browser). Once it has read a page lately ("Check it works" on the page,
 # or a profile it read for a chat), it counts as a browser that can read: nobody is sent to a
 # chat on their computer for reading, and readings are queued for the page.
-PAGE_READS_FILE = ("documents", "network", ".page_reads.json")
+# Its own file: until 4.3 it shared .page_reads.json with reading.py's one-page reads ledger
+# (PAGES_FILE), which the runtime-files upgrade moves out of the repo, so the first sync after
+# a check deleted it and reading switched itself off (journey review, 2026-10-29).
+PAGE_READS_FILE = ("documents", "network", "page_reader.json")
 PAGE_READS_DAYS = 14
 
 
@@ -739,11 +683,11 @@ def report(tools=None, employer: str = "", once: bool = False, env=None,
 
 
 def computer_steps(where: str, tools, today: datetime.date | None = None) -> list:
-    """On their computer, in a chat with a browser tool: what is still to do there (LinkedIn
-    signed in, its download), from `reading.py new-computer`. [] anywhere else, and when it
-    is all done."""
+    """In a chat on their computer: what is still to do there (their LinkedIn download, which
+    such a chat can take from Downloads), from `reading.py new-computer`. [] anywhere else,
+    and when it is all done. Signing in to LinkedIn is the page's, never a chat's (4.3)."""
     have = [str(t).strip().lower() for t in tools or ()]
-    if where != "local" or not set(have) & BROWSERS or not setting():
+    if where != "local" or not setting():
         return []
     try:
         net_dir = os.path.join(ROOT, "tools", "network")

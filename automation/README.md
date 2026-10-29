@@ -19,13 +19,12 @@ Tell any Claude chat "the scheduled tasks are down" and point it at this file.
 
 ## Set it up
 
-**Press the bell on your Brief.** That is all. The chat that answers your page sets the brief
-up in itself, every day at 7:38 your time, and runs a first one a few minutes later so you see
+**Nothing to do: it is on from the start.** Set-up turns it on, and a copy set up before 4.3
+gets it by itself. The chat that answers your page sets the brief up in itself, every day at 7:38 your time, and runs a first one a few minutes later so you see
 it work (`python3 tools/routines.py brief` prints the calls). No new chat is made. Change its
 days or time, or turn it off, from the same bell or in Settings, Your brief; take a break from
-the whole search there too. With no page, say "set up my brief" in any chat. Nothing is
-scheduled until you ask: a brief is a run every morning, and the app costs nothing it was not
-asked for.
+the whole search there too. With no page, say "set up my brief" in any chat. It is one
+short run each morning in a chat that already exists, so it never adds a chat.
 
 Two set-ups work reliably, and they trade the same thing: where the briefing arrives. The bell
 makes (a).

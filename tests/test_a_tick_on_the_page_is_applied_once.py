@@ -378,12 +378,19 @@ def test_the_chat_that_answers_the_page_takes_its_work_and_a_brief_waits_for_the
 
 
 def test_the_heavy_cap_holds_and_urgent_work_goes_first():
+    """Three big jobs side by side (a search, a networking run and an interview prep, the
+    maintainer's own example, 2026-10-29), an urgent one more, and light work any time."""
     now = app_model.parse_time(NOW)
+    assert page_db.HEAVY_CAP == 3
+    two = [(f"n{i}", _w("network", f"Employer {i}", status="running",
+                        stage_at="2026-10-25T17:59:00Z")) for i in range(2)]
+    third = _db(*two, ("d1", _w("draft", "Kestrel Mutual", asked="2026-10-25T11:00:00Z")))
+    assert page_db.next_item(third, "cloud", now)["work"] == "d1"   # a third runs beside them
     running = [(f"n{i}", _w("network", f"Employer {i}", status="running",
-                            stage_at="2026-10-25T17:59:00Z")) for i in range(2)]
-    db = _db(*running, ("d1", _w("draft", "Kestrel Mutual")),
+                            stage_at="2026-10-25T17:59:00Z")) for i in range(3)]
+    db = _db(*running, ("d1", _w("draft", "Kestrel Mutual", asked="2026-10-25T11:00:00Z")),
              ("t1", _w("talk", asked="2026-10-25T12:00:00Z")))
-    assert page_db.next_item(db, "cloud", now)["work"] == "t1"
+    assert page_db.next_item(db, "cloud", now)["work"] == "t1"     # the fourth waits; talk goes
     db["work"]["d2"] = {"data": _w("prep", "Thornbury Bank", priority=2), "version": 9}
     assert page_db.next_item(db, "cloud", now)["work"] == "d2"     # urgent takes one more place
     db["work"]["d2"]["data"]["stop_asked"] = True

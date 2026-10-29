@@ -217,7 +217,11 @@ def cmd_next(a) -> int:
     if chosen is None:
         return 0
     info = model_guide.for_work(chosen["kind"], a.on)
-    chosen.update(model=info["model"], effort=info["effort"])
+    # A big job runs as a background agent inside this chat, so the chat stays free for the
+    # next tap (the app skill, step 4): `run` says which.
+    heavy = bool(page_db.WORK_KINDS.get(chosen["kind"], {}).get("heavy"))
+    chosen.update(model=info["model"], effort=info["effort"], heavy=heavy,
+                  run="background agent" if heavy else "here")
     if a.claim_out:
         chosen["batches"] = page_db.claim(db, chosen, a.chat, a.kind, now, a.claim_out)
     print(_dump(chosen), end="")
@@ -336,6 +340,13 @@ def cmd_listen(a) -> int:
             print(f"upkeep: {len(closed)} application(s) gone quiet were closed as no reply "
                   "(followups.py --close-quiet); save them with the rest, after this wake's "
                   "work (python3 tools/save_state.py)")
+        # The page's store kept small, in code: finished records over two months old go.
+        old = page_db.prune(page_db.load(a.dump), now, os.path.join(a.out or os.path.join(a.dump, "listen_out"), "prune"))
+        if old:
+            print("upkeep: old finished records the page no longer shows are deleted: send "
+                  "these batches after this wake's work, asking nobody:")
+            for path in old:
+                print(path)
     if got["role"] == "listener" and app_listen.chat_kind() == "cloud":
         import tidy
         if tidy.due():

@@ -52,7 +52,7 @@ def _threads(search):
 def test_where_claude_works_is_four_rows_each_with_its_state_and_next_step(search):
     w = search.model()["where"]
     assert w["helper"]["state"] == "not_set_up" and "computer is off" in w["helper"]["say"]
-    assert w["reading"]["state"] == "open_in_app"
+    assert w["reading"]["state"] == "paste"      # the example person pastes profiles
     assert w["computer"]["state"] == "optional"
     assert w["brief"] == {"state": "ready", "when": "Every day at 7:38",
                           "say": "Your brief comes every day at 7:38."}

@@ -69,7 +69,8 @@ python3 tools/app.py next "$D" --chat <your chat id> --kind cloud|computer --on 
 
 Nothing printed: nothing is yours; end the turn. Otherwise send its claim batch. Refused
 means another chat took it: read `work` again and run `next` once more. Never take an item
-`next` did not give you: it keeps the locks and the heavy-job cap.
+`next` did not give you: it keeps the locks and the heavy-job cap. `run` says where it is
+done: `here`, or `background agent` (below, "Work is done here").
 
 ## 4. Do the work with the app's own commands
 
@@ -116,6 +117,11 @@ messages (ArtifactData `query`, collection `talk/<thread>/messages`, `out_dir: $
   skill's way). Draft the application (the drafting path in RUNBOOK.md step 2) only
   when the message asks for it or says to apply. Answer in the thread with where it is:
   the score, who it is linked to, and where it shows (Jobs, or Drafts once drafted).
+- **Screenshots of someone's LinkedIn profile** (the page's "Send screenshots instead", for
+  a note to them): find who in the contact book, transcribe what the pictures show word for
+  word under LinkedIn's own headings (About, Experience, Education) into a file, never filling
+  a gap, and run `reading.py read <contact> <file> --source screenshot`; then rewrite their
+  waiting note on it (`/network`, `args.rewrite`) and put it in the thread, ready to copy.
 - **Someone wrote to them**: find who in the contact book, log their message the networking
   skill's way, draft the reply (`/reply`), and put the draft in the thread in full, ready to
   copy. Nothing is ever sent.
@@ -131,11 +137,22 @@ result in the reply and on the page (`app.py view`), and never ask which command
 
 Work is done here, in this one chat, the page's helper: never a new chat, for any piece of
 work (the maintainer, 2026-10-28: "new chats keep getting created for every small thing";
-2026-10-29: one helper at most). When the model `next` printed differs from this chat's and
-the work is long (a search, a batch of drafts), it runs as one agent inside this chat (the
-Agent tool, `model` as `next` printed), waited for, with the url and work id in its prompt;
-this chat pins the stages either side. Drafting and audits are never moved below this
-chat's model.
+2026-10-29: one helper at most). **A big job never holds this chat**: when `next` prints
+`run: background agent` (a search, drafts, a resume for a contact, an interview prep, a
+networking run), send its claim, then start it as one background agent inside this chat
+(the Agent tool, `run_in_background: true`, `isolation: "worktree"`, `model` as `next`
+printed) with the url, the work id and steps 4 and 5 of this skill in its prompt: it does
+the work, writes its stages, finishes its item, lands its work on master itself, and
+reports in one line. Drafts and a resume for a contact are the exception: their workflow
+(`draft-applications`) already runs in the background, so stage them here, start the
+workflow, and carry the path on here once it reports. Never wait for either: go straight
+back to step 3 for the next item, so a
+search, a networking run and an interview prep run side by side (three at most,
+`page_db.HEAVY_CAP`; `next` keeps the cap and the locks), and `run: here` work (a reply, a
+tweak, a message in the chat) is done in this chat at once. When an agent reports, run `app.py
+view` and send its batch: this chat is the one writer of the page's view, so two agents
+never write it at once. Drafting and audits are never moved below this chat's model. Agents
+are never mentioned to the person; the page shows each job's progress.
 
 **Once a day, the app's own old chats are tidied** (`listen` prints `tidy:` when it is due):
 `list_sessions` (`mine: true`) and `list_triggers`, every page, each saved to a file, then

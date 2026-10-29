@@ -1,14 +1,14 @@
 """A chat says once whether it is the right place for what the person set up.
 
-Finding people works in any chat (tools/network/sources.py, the ladder); reading their
-profiles needs a browser of the person's that the chat can use. So the check decides by
-the tools a chat has, never by where it was started: a phone chat linked to the computer
-reads as well as a chat on it. Each combination it can meet is pinned here. The words
-follow the one rule for a path a person follows: the goal first, then the destination or
-numbered steps (tools/claude_surfaces.json), the day it was checked and its page kept for
-Claude, and never press, click, tap or find. No em dashes, UK spelling, and never a request
-for everyone's screenshots. And setup is never stopped: the computer chat is offered once,
-at its end, with the one message that sets it up (2026-10-25).
+Finding people works in any chat (tools/network/sources.py, the ladder). Since 4.3 no chat
+reads LinkedIn, whatever browser it has: the person's page does, in the Claude desktop app
+(reading.route), and no chat on the computer is offered (2026-10-29). So the line is the same
+whatever tools a chat has, and nothing is said once the page has read lately. Each
+combination it can meet is pinned here. The words follow the one rule for a path a person
+follows: the goal first, then the destination or numbered steps (tools/claude_surfaces.json),
+the day it was checked and its page kept for Claude, and never press, click, tap or find. No
+em dashes, UK spelling, and never a request for everyone's screenshots. And setup is never
+stopped.
 """
 import datetime
 import json
@@ -53,35 +53,21 @@ def _say(where, setting, tools, signed_in=True, fixes=(), detail=True):
     return "\n".join(out)
 
 
-def test_a_cloud_chat_with_no_browser_says_finding_works_and_where_to_read():
-    for where in ("desktop-cloud", "unknown"):
-        said = _say(where, "browser", [])
-        assert said.startswith(place.FINDING_WORKS)            # what works here, first
-        # Numbered steps, one action a line: one long sentence of destinations lost a
-        # person who had only used the cloud (2026-10-20). No GitHub Desktop: the chat on the
-        # computer makes the copy itself, from one message (COMPUTER.md).
-        # 4.0: the page first, which needs nothing new (it reads profiles when opened in the
-        # desktop app); a chat on the computer only as the other way, steps and all, for a
-        # person who asked how and would rather have one.
-        assert "Your page reads them when you open it in the Claude desktop app" in said
-        assert said.index("Your page reads") < said.index("To set up a chat on your computer")
-        assert "To set up a chat on your computer:\n1. Install the Claude desktop app" in said
-        assert "\n2. Open its Code tab." in said
-        assert "github.com/example-owner/my-job-search" in said and "COMPUTER.md" in said
-        assert said.endswith(claude_surfaces.CLOSING)
-        # No paste offered to a person at a computer: the page opened there reads them.
-        assert place.CHATS not in said and place.PASTE_TOP not in said
-    # Not knowing the chat's tools, it asks the chat to look before it says anything.
-    said = _say("desktop-cloud", "browser", [])
-    unsure = _say("desktop-cloud", "browser", None)
-    assert unsure.startswith("[only if this chat has no browser tool")
-    assert unsure[len(place.IF_NO_BROWSER):] == said            # the words said are the same
-    # A cloud chat the desktop app lends its browser to can read, and says so in a sentence,
-    # with no caveat (the link's standing is the registry's, for Claude: cloud-linked-browser).
-    assert _say("desktop-cloud", "browser", ["enable"]) == place.CLOUD_LINK_NOW
-    assert _say("desktop-cloud", "browser", ["browser"]) == place.CLOUD_LINK_NOW
-    assert "documentation" not in place.CLOUD_LINK_NOW
-    assert len(place.CLOUD_LINK_NOW.split()) <= 25
+def test_whatever_browser_a_chat_has_its_page_reads_the_profiles():
+    """4.3 (2026-10-29): no chat reads LinkedIn, whatever browser it has; the person's page
+    does, in the Claude desktop app. So the line is the same for every chat at a computer,
+    by its tools or none, and nothing offers a chat on the computer."""
+    for where in ("desktop-cloud", "unknown", "local"):
+        for tools in ([], ["browser"], ["enable"], ["chrome"], None):
+            said = _say(where, "browser", tools)
+            assert said.startswith(place.FINDING_WORKS)            # what works here, first
+            assert place.PAGE_STEPS in said
+            assert "chat on your computer" not in said and "COMPUTER.md" not in said
+            assert "claude --chrome" not in said and "Code tab" not in said
+            # No paste offered to a person at a computer: the page opened there reads them.
+            assert place.PASTE_TOP not in said
+            assert _say(where, "browser", tools, detail=False) == place.PAGE_READS + " " + place.SHORT_PASTE
+    assert "documentation" not in place.PAGE_READS and len(place.PAGE_READS.split()) <= 25
 
 
 def test_a_chat_that_pastes_hears_nothing_anywhere():
@@ -91,39 +77,29 @@ def test_a_chat_that_pastes_hears_nothing_anywhere():
 
 
 def test_a_phone_or_the_web_is_pointed_at_the_page_and_never_an_install():
-    """4.0: no move to a computer chat is suggested; the page reads profiles itself when it is
-    opened in the Claude desktop app."""
+    """No move to a computer chat is suggested (4.0), and none is offered at all (4.3): the
+    page reads profiles itself when it is opened in the Claude desktop app."""
     for where in ("phone", "web"):
-        said = _say(where, "browser", [])
-        assert said.startswith(place.FINDING_WORKS)
-        assert "Your page reads them" in said and place.PASTE_TOP in said
-        assert "remote-control" not in said and "chat on your computer" not in said
-        assert not re.search(r"\binstall", said, re.I)
-    # A phone chat linked to the computer reads as well as one on it: by tools, not place.
-    # Signing in is the reading step's own (reading.py asks when it finds them signed out).
-    assert _say("phone", "browser", ["enable"]) == place.CLOUD_LINK_NOW
-    assert _say("phone", "browser", ["enable"], signed_in=False) == place.CLOUD_LINK_NOW
+        for tools in ([], ["enable"]):
+            said = _say(where, "browser", tools)
+            assert said.startswith(place.FINDING_WORKS)
+            assert place.PAGE_STEPS in said and place.PASTE_TOP in said
+            assert "remote-control" not in said and "chat on your computer" not in said
+            assert _say(where, "browser", tools, detail=False) == place.PAGE_READS + " " + place.SHORT_PASTE
 
 
-def test_a_chat_on_their_computer_signed_out_hears_nothing_from_the_place_check():
-    """The sign-in is the reading step's to ask for, once, when it finds them signed out,
-    saying what signing in shows. Said here too, with its caveats, it came before any reading
-    and buried the one thing to do (2026-10-25)."""
-    assert _say("local", "browser", ["browser"], signed_in=False) == ""
-    assert _say("local", "browser", ["chrome"], signed_in=False) == ""
+def test_once_the_page_has_read_lately_nothing_is_said(monkeypatch):
+    monkeypatch.setattr(place, "page_reads", lambda *a, **k: True)
+    for where in ("desktop-cloud", "phone", "web", "local", "unknown"):
+        assert _say(where, "browser", []) == "" and _say(where, "browser", ["browser"]) == ""
+
+
+def test_signing_in_is_the_pages_never_the_place_checks():
+    """The page asks them to sign in, on its own card, when it finds them signed out."""
     assert not hasattr(place, "SIGN_IN_ONCE") and not hasattr(place, "SHORT_SIGN_IN")
-
-
-def test_a_chat_on_their_computer_signed_in_is_the_right_place():
-    assert _say("local", "browser", ["browser"], signed_in=True) == ""
-    assert _say("local", "paste", [], signed_in=True) == ""
-
-
-def test_a_terminal_chat_with_no_browser_names_the_desktop_app_and_chrome():
-    said = _say("local", "browser", [])
-    assert said.startswith("Finding people works in this chat.")
-    assert "Continue this in a chat on your computer" not in said      # it is on one
-    assert "claude --chrome" in said and place.PASTE_TOP in said
+    for signed_in in (True, False):
+        assert "sign in" not in _say("local", "browser", ["browser"], signed_in=signed_in,
+                                     detail=False).lower()
 
 
 def test_a_computer_missing_python_gets_one_list_with_the_password_ones_marked():
@@ -237,7 +213,7 @@ def test_said_once_in_a_chat_and_again_only_when_it_changes(tmp_path, monkeypatc
     assert place.report([], once=True, env=env, today=day) == ""
     # A chat that was told an older wording (one open before an update) hears the new one,
     # once, and then nothing again.
-    monkeypatch.setattr(place, "SHORT_CLOUD", "Finding people works in this chat, still.")
+    monkeypatch.setattr(place, "PAGE_READS", "Finding people works in this chat, still.")
     assert "still." in place.report([], once=True, env=env)
     assert place.report([], once=True, env=env) == ""
     assert place.report([], once=True, env={**env, "CLAUDE_CODE_REMOTE_SESSION_ID": "cse_EXAMPLE2"})
@@ -267,7 +243,7 @@ def test_a_person_with_a_chat_on_their_computer_is_never_asked_to_move():
                                has_local=True) == []
             said = place.check(where, "browser", [], False, (), *REPO, works=works,
                                has_local=True)
-            assert said == [place.SHORT_HAS_LOCAL]
+            assert said == [place.SHORT_HAS_LOCAL + " " + place.SHORT_PASTE]
             assert "move" not in said[0] and "Ask me how" not in said[0]
 
 
@@ -385,8 +361,9 @@ def test_what_every_chat_says_unasked_is_two_or_three_short_sentences_and_no_lin
     for answer, where in (("both", "web"), ("computer", "web")):
         assert place.CHATS in place.next_step(answer, where, *REPO)
     assert place.BRIEF_LOCAL in place.next_step("computer", "local", *REPO)
-    # The steps are all still there for the person who asks.
-    assert "To set up a chat on your computer:" in _say("desktop-cloud", "browser", [])
+    # The steps are there for the person who asks: their page, never a chat on the computer.
+    assert place.PAGE_STEPS in _say("desktop-cloud", "browser", [])
+    assert "chat on your computer" not in _say("desktop-cloud", "browser", [])
 
 
 def test_nobody_with_a_computer_is_told_to_move_to_it():
@@ -401,6 +378,6 @@ def test_nobody_with_a_computer_is_told_to_move_to_it():
         assert place.check("local", "paste", [], False, (), *REPO, works=works) == []
     # Someone who already has a computer chat keeps hearing the line that names it.
     assert place.check("web", "browser", [], False, (), *REPO,
-                       has_local=True) == [place.SHORT_HAS_LOCAL]
+                       has_local=True) == [place.SHORT_HAS_LOCAL + " " + place.SHORT_PASTE]
     assert place.check("web", "paste", [], False, (), *REPO, works="phone") == []
     assert place.check("web", "paste", [], False, (), *REPO) == []      # never asked yet

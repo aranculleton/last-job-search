@@ -89,6 +89,17 @@ PRESENCE_REVIEW_DAYS = 90
 _NON_WORD = re.compile(r"[\W_]+")
 
 
+
+def _lock_born(lock: str) -> float:
+    """When a lock was taken, as its taker wrote it: by Python's own clock, so a lock is
+    judged by the clock that judges it, never the file system's (a lock read as 400 days old
+    with the date moved on was broken under a live writer, 2026-10-29)."""
+    try:
+        with open(lock, encoding="ascii") as fh:
+            return float(fh.read().strip())
+    except (OSError, ValueError):
+        return os.path.getmtime(lock)
+
 def file_key(company) -> str:
     """The filename stem for an employer: its company key, hyphenated."""
     stem = _NON_WORD.sub("-", str(company_key(str(company or "")) or "").lower()).strip("-")
@@ -424,11 +435,12 @@ def _locked(name: str, wait: float = 20.0):
     while True:
         try:
             fd = os.open(lock, os.O_CREAT | os.O_EXCL | os.O_WRONLY)
+            os.write(fd, repr(time.time()).encode("ascii"))
             os.close(fd)
             break
         except FileExistsError:
             try:
-                if time.time() - os.path.getmtime(lock) > 60:   # a writer that died
+                if time.time() - _lock_born(lock) > 60:   # a writer that died
                     os.remove(lock)
                     continue
             except OSError:

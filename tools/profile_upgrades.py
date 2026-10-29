@@ -496,6 +496,18 @@ def _alumni_text() -> str:
     return ""
 
 
+def _brief_daily() -> str:
+    """A morning brief on file, on or turned off by the person; else what is missing. On by
+    default from 4.3 (the maintainer, 2026-10-29): a copy set up before then has none until
+    the bell is pressed, and most never find the bell."""
+    try:
+        import routines
+        reg = routines.load()
+    except Exception:  # no profile or no registry yet: setup makes it
+        return "no morning brief yet"
+    return "" if any(routines._is_brief(r) for r in routines.work(reg or {})) else "no morning brief yet"
+
+
 def _work_place_retired() -> str:
     """Retired 2026-10-25 with the place question's "if you have one you can use, say yes":
     4.0 recommends no chat on a computer (the page and the cloud chats Claude makes do
@@ -1233,6 +1245,14 @@ REGISTRY: tuple[Upgrade, ...] = (
             command=("python3", "tools/learned.py", "adopt-profile-rules"),
             paths=("profile/learned.json",),
             priority=2),
+    Upgrade("brief-daily", "2026-10-29",
+            "a short note every morning on your Brief: what is due today, and news that matters "
+            "to your search",
+            _brief_daily, "in the chat that answers the page, in the cloud: `list_triggers` "
+            "(every page), `python3 tools/routines.py brief --triggers <each page>`, the calls "
+            "it prints, and the one line it prints to say. In a chat on their computer it prints "
+            "the line instead (one press of the bell starts it from the cloud): put it on their "
+            "page as a To do", "edit", "~1 min", priority=3),
     Upgrade("work-place", "2026-10-18",
             "nothing: retired, since no chat on a computer is recommended any more",
             _work_place_retired, "nothing to do", "question", "~0 min", priority=4),
@@ -1322,7 +1342,8 @@ REGISTRY: tuple[Upgrade, ...] = (
                     "ten a run finds, paced, in a chat on your computer",
             ask="Should I read the LinkedIn profiles of the people I write to in your browser, "
                 "or work from ones you paste?",
-            steps=lambda: ("In a chat on your computer, I read each one in the browser there.\n"
+            steps=lambda: ("With your page open in the Claude desktop app, it reads each one in the "
+                           "browser there.\n"
                            "Pasting instead: open their profile, select all, copy, and paste it "
                            "here."),
             why_ask="A message that mentions something real about the person gets far more "

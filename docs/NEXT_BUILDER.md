@@ -22,6 +22,14 @@ MAINTAINING.md first; this is only what 4.3 left.
 
 ## Not tested against the live services
 
+- First: the page reading LinkedIn itself in the Claude desktop app's browser
+  (host:claude_browser), the only reader since 4.3. Proven live on 2026-10-29 for the feed
+  and one profile's three pages (the profile, /details/experience/, /details/education/;
+  the Education page once came back before it had drawn, hence the one re-read). The whole
+  flow (a queue read by itself, "Write my notes", a sign-out and LinkedIn's check) is tested
+  with the browser simulated only.
+- Big jobs as background agents inside the one helper chat (the app skill, step 4): tested
+  on `next`'s output and the cap, never with real agents running side by side.
 - The daily tidy-up's calls (`list_sessions`, `get_session`, `archive_session`) and an older
   brief's move into the page's chat: tested on the shapes those tools return.
 - The brief's bell opening the helper's chat from inside the Claude app (tested with

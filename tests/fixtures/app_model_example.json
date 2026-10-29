@@ -1,7 +1,7 @@
 {
  "model": 1,
  "made_at": "2026-10-25T18:00:00Z",
- "rev": "3cc89f721593",
+ "rev": "3d0939f8e642",
  "app": {
   "version": "4.3.0",
   "update_waiting": null,
@@ -45,7 +45,7 @@
  ],
  "jobs": {
   "round": "r9",
-  "made_at": "2026-10-29T14:07:16Z",
+  "made_at": "2026-10-29T19:10:22Z",
   "met": false,
   "summary": "4 roles on the shortlist, 4 scoring 60 or more and 2 scoring 75 or more. 3 left out, each with its reason.",
   "rows": [
@@ -761,7 +761,7 @@
    "when": "2026-10-28",
    "prep": {
     "path": "documents/applications/thornbury_bank_risk_analyst_thornbury/interview_prep.md",
-    "updated": "2026-10-29T14:07:16Z"
+    "updated": "2026-10-29T19:10:22Z"
    },
    "questions": 2,
    "all_day": true,
@@ -1024,6 +1024,24 @@
     ]
    ],
    "rev": "c798e39a6ab0"
+  },
+  {
+   "id": "setting-profile_reads",
+   "key": "profile_reads",
+   "label": "Reading LinkedIn profiles",
+   "kind": "choice",
+   "value": "paste",
+   "choices": [
+    [
+     "browser",
+     "Claude reads them"
+    ],
+    [
+     "paste",
+     "I paste them"
+    ]
+   ],
+   "rev": "4ae7ef73cc5a"
   }
  ],
  "brief": {
@@ -1368,7 +1386,10 @@
    "last_read_at": null,
    "reads": 0,
    "queue": [],
-   "rev": "1a9480c695ca"
+   "setting": "paste",
+   "paused": false,
+   "paused_until": null,
+   "rev": "bafb8a3f06c7"
   }
  },
  "learned": [],
@@ -1490,8 +1511,8 @@
    "say": "Recommended: Claude's helper in the cloud works when your computer is off. Set it up once."
   },
   "reading": {
-   "state": "open_in_app",
-   "say": "Open this page in the Claude desktop app, signed in to LinkedIn, and tap Check it works."
+   "state": "paste",
+   "say": "Off: you paste someone's profile when you write to them."
   },
   "computer": {
    "state": "optional",
@@ -1503,7 +1524,7 @@
    "when": "Every day at 7:38",
    "say": "Your brief comes every day at 7:38."
   },
-  "rev": "50068ea06899",
+  "rev": "c6eff5e09e60",
   "tidied": {
    "count": 0,
    "on": null

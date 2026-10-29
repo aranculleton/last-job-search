@@ -21,9 +21,7 @@ stay in charge of what goes out.
 ## What you need
 
 - A GitHub account (free).
-- Claude Code, which comes with a paid Claude plan. On your own computer an Anthropic API
-  key works instead and you pay only for what you use, often cheaper if you search now and
-  then, but the scheduled brief and cloud chats need a plan.
+- A paid Claude plan, which comes with Claude Code: your search runs in its cloud chats.
   - Another agent tool (ChatGPT Codex, Google's Gemini CLI, the Cursor editor)? The core
     works in any agent that can read files and run commands; [AGENTS.md](AGENTS.md) covers
     the Claude Code parts.
@@ -31,15 +29,14 @@ stay in charge of what goes out.
 
 ## Get started
 
-**On a computer:** open the Claude desktop app, give Claude this page's link and say
-**"set me up"**. That is all ([COMPUTER.md](COMPUTER.md) is how Claude does it).
-
-**On a phone or in a browser:**
-
 1. On this page, **Use this template**, then **Create a new repository**, **Private**.
 2. Open [claude.ai/code](https://claude.ai/code), connect GitHub, and install the
    [Claude GitHub App](https://github.com/apps/claude/installations/new) on your copy only.
 3. Choose your copy and say **"set me up"**.
+
+That works from a phone or any browser: everything runs in the cloud. On a computer, open your
+page in the Claude desktop app once: it reads the LinkedIn profiles of people you write to,
+in Claude's own browser, so each note fits them. Nothing to install beyond the app.
 
 [START_HERE.md](START_HERE.md) has each step; [HELP.md](HELP.md) helps if something goes wrong.
 
@@ -82,25 +79,6 @@ You tap; Claude does the work in the background and shows how far it has got.
 Anything else, ask in **Chat** on the page. No resume yet? Say "build one with me" there. It
 never asks for your email: everything reaches you on your page.
 
-## On a computer: open it from any chat (optional)
-
-The app also comes as a Claude Code plugin: a front door, not a second copy. Installed on your
-computer, "open my job search" in any chat there opens your page, and the first time it makes
-your private copy for you. Your search still lives in your own private copy, which keeps
-itself up to date; the plugin only finds it. Chats in the cloud and on a phone do not load
-plugins, and do not need it.
-
-<!-- claude-surface: plugin-install -->
-<!-- checked 2026-10-28; https://code.claude.com/docs/en/discover-plugins -->
-To open your job search from any chat on your computer:
-1. In Claude Code on your computer (the Claude desktop app's Code tab, or a terminal), type:
-   /plugin install last-job-search --marketplace aranculleton/last-job-search
-2. When it asks where to install it, choose your user account.
-3. From then on, say "open my job search" in any chat on that computer.
-
-Screens change: if yours looks different, tell Claude what you see.
-<!-- /claude-surface -->
-
 ## Why it works differently
 
 - **It ranks, it does not hide.** A job advert is a wish list. A missing skill lowers a score;
@@ -113,8 +91,8 @@ Screens change: if yours looks different, tell Claude what you see.
   note (which asks for a conversation, not a job), the replies and the referral ask. It tracks
   every thread and warns you before a cold application lands on top of a warm introduction.
 - **It reminds you.** When a follow-up is due, on an application or a conversation, it says so
-  and drafts the nudge. Press the bell on your Brief for a short note each morning: what you
-  owe, what changed and the next three things to do.
+  and drafts the nudge. A short note each morning, on from the start: what you owe, what
+  changed and the next three things to do (the bell on your Brief changes it).
 - **One chat does the work.** Your page is answered by one chat, which also writes the brief
   and runs long jobs inside itself. The app never starts chats by itself, and old ones from
   earlier versions tidy themselves away, with nothing in them lost.

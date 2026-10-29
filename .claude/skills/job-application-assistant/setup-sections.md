@@ -1,5 +1,5 @@
 ---
-framework_version: 1.0.0
+framework_version: 1.0.1
 ---
 
 # Setup, section by section
@@ -263,13 +263,12 @@ form answers, sponsorship answered exactly as their status allows), `10-triage-b
 `12-scoring-brief.md` and `13-positioning.md`. `routines.json` is written when the brief is
 made (`tools/routines.py record`), not before.
 
-`PROFILE_READS` is written without asking: `"browser"` in a chat on their computer or a cloud
-chat the desktop app started (`python3 tools/place.py auto` prints it), where people's
-profiles are read in that browser; on a phone or the web it is left unset, so a note rests on
-what they paste. `LINKEDIN_PLAN` is left unset (notes keep to a free account's 200
+`PROFILE_READS` is written without asking: `"browser"`, wherever setup runs. Their page reads
+people's profiles in the Claude desktop app (never a chat), and "I paste them" in its
+Settings turns it off. `LINKEDIN_PLAN` is left unset (notes keep to a free account's 200
 characters, which fits either plan) and asked later by its profile upgrade.
-`CONNECTIONS_EXPORT`: on a computer, the networking skill's "On a new computer" step requests
-their LinkedIn download at once; on a phone or the web the brief asks for it later.
+`CONNECTIONS_EXPORT`: their LinkedIn download is asked for on the page (a To do card, and
+Settings, LinkedIn) and again by the brief once it is a fortnight old.
 
 Settings the example's values would get wrong for anybody outside its field, level or
 market, so write each one for this person, never copy it:

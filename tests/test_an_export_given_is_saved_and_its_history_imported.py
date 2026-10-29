@@ -11,7 +11,6 @@ alone from an archive, by design. Every name, address and message here is invent
 import os
 import shutil
 import sys
-import time
 import zipfile
 from pathlib import Path
 
@@ -123,7 +122,10 @@ def test_the_download_is_found_on_the_computer_and_nothing_else_is(tmp_path, mon
     newer.mkdir()
     for n in CSVS:
         shutil.copy(FIX / n, newer / n)
-    os.utime(older, (time.time() - 86400, time.time() - 86400))
+    # Both dated from the file system's own clock, a day apart: dated from Python's, the two
+    # were on different clocks once the release check moved Python's date on (2026-10-29).
+    newest = os.path.getmtime(newer)
+    os.utime(older, (newest - 86400, newest - 86400))
     assert E.find_exports(str(home)) == [str(newer), str(older)]
     # The person's own folder: HOME, and on Windows USERPROFILE, which is where Python
     # looks there (https://docs.python.org/3/library/os.path.html#os.path.expanduser).

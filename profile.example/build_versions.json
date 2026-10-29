@@ -32,8 +32,8 @@
     "version": 37
   },
   "networking": {
-    "date": "2026-10-26",
-    "version": 62
+    "date": "2026-10-29",
+    "version": 63
   },
   "page": {
     "date": "2026-10-29",
@@ -44,8 +44,8 @@
     "version": 24
   },
   "research": {
-    "date": "2026-10-25",
-    "version": 10
+    "date": "2026-10-29",
+    "version": 11
   },
   "routines": {
     "date": "2026-10-29",
@@ -56,8 +56,8 @@
     "version": 33
   },
   "search": {
-    "date": "2026-10-25",
-    "version": 10
+    "date": "2026-10-29",
+    "version": 11
   },
   "upskill": {
     "date": "2026-10-15",

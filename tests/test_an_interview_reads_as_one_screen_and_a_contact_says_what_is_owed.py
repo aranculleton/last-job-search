@@ -255,9 +255,10 @@ def test_a_pasted_profile_is_kept_as_a_paste_and_the_note_rewritten_once(search)
     work = [e for b in got["batches"] for e in json.load(open(b, encoding="utf-8"))
             if e["collection"] == "work"]
     (w,) = work
-    assert w["doc_id"] == page_db.safe_id(f"network~rewrite~{PELL}")
+    assert w["doc_id"].startswith(page_db.safe_id("network~rewrite~"))
     body = json.load(open(w["file_path"], encoding="utf-8"))
     assert body["kind"] == "network" and body["args"]["rewrite"] is True
+    assert body["args"]["contacts"] == [PELL] and body["args"]["read"] == [aid]
 
 
 def test_a_paste_too_short_to_be_a_profile_is_refused(search):

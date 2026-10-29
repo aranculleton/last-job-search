@@ -781,6 +781,10 @@ dialog.tweak-sheet[open] { display: flex; flex-direction: column; }
   dialog.tweak-sheet { inset: 0 0 0 auto; width: 400px; max-height: 100dvh; height: 100dvh; border-radius: 0; }
 }
 .tweak-panel { display: flex; flex-direction: column; min-height: 0; max-height: inherit; height: 100%; }
+/* In the sheet the panel is the sheet's one flex row, never 100% of it: on a phone the sheet's
+   height is its content's, and WebKit (Safari, the iPhone app) read 100% of that as nothing,
+   so the sheet opened 2px tall (the Everywhere check, 2026-10-29). */
+dialog.tweak-sheet > .tweak-panel { height: auto; flex: 1 1 auto; }
 #rail .tweak-panel { position: sticky; top: 76px; max-height: calc(100dvh - 92px); background: var(--surface); border: 1px solid var(--line); border-radius: var(--r); }
 .tweak-head { display: flex; align-items: flex-start; justify-content: space-between; gap: 12px; padding: 16px 16px 8px; }
 .tweak-title { margin: 0; font-size: 1.125rem; font-weight: 600; line-height: 1.3; }

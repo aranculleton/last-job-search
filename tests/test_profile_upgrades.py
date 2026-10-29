@@ -771,7 +771,11 @@ def test_one_application_in_two_folders_is_made_one(profile, tmp_path, monkeypat
     (base / "ternmoor_foods_planner_tm" / "draft.json").write_text("[]", encoding="utf-8")
     monkeypatch.setenv(person.STATE_ENV, str(st))
     assert "1 application(s) kept in two folders" in U.by_id("one-folder-each").pending()
-    r = subprocess.run(list(U.by_id("one-folder-each").command), cwd=ROOT, env=os.environ,
+    # "python3" is the command as a chat runs it; on Windows there is no such program, so
+    # the test runs it with this Python (WinError 2 on the Windows check, 2026-10-29).
+    cmd = list(U.by_id("one-folder-each").command)
+    cmd[0] = sys.executable if cmd[0] == "python3" else cmd[0]
+    r = subprocess.run(cmd, cwd=ROOT, env=os.environ,
                        capture_output=True, text=True, encoding="utf-8", errors="replace")
     assert r.returncode == 0, r.stderr
     assert sorted(os.listdir(base)) == ["ternmoor_foods_planner_tm"]

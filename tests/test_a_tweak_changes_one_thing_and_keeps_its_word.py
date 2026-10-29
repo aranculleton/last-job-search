@@ -28,6 +28,7 @@ import doc_design  # noqa: E402
 import doc_style  # noqa: E402
 import tweak  # noqa: E402
 import untrusted  # noqa: E402
+from app_state import NOW  # noqa: E402
 from test_a_tick_on_the_page_is_applied_once import KESTREL, Search  # noqa: E402
 
 FAKE = '''import json, os, sys
@@ -50,9 +51,12 @@ class Tweaks(Search):
         self.n_work = 0
 
     def env(self):
+        # The tweak reads the page on the same clock as the page the test looks at
+        # (`model --now NOW`): the tap that marks it applied is dated NOW, and on the
+        # computer's own clock it falls out of Drafts 14 days later (RECENT_APPLIED_DAYS).
         env = dict(os.environ, LJS_PROFILE=self.profile, LJS_STATE=self.state, LJS_COPY="private",
-                   LJS_TWEAK_RENDER=f'"{sys.executable}" "{self.fake}"', FAKE_LOG=self.log)
-        env.pop("LJS_TODAY", None)
+                   LJS_TWEAK_RENDER=f'"{sys.executable}" "{self.fake}"', FAKE_LOG=self.log,
+                   LJS_TODAY=NOW)
         return env
 
     def renders(self) -> int:

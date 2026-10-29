@@ -140,8 +140,13 @@
   const comments = Object.freeze({
     canSendToClaude: async () => cfg.canSend || "available",
     anchorFor: async (el) => { if (!el || !el.isConnected) throw {code: "invalid", message: "not attached"}; return {path: "body", x: 1, y: 1}; },
+    // Only from the person's own recent tap (comments.d.ts), as the browser counts it: a ring
+    // sent after a wait was refused live, and this fake took it until 4.3 (2026-10-29).
     sendToClaude: async (t) => {
-      calls.push({cap: "comments", op: "sendToClaude", text: t.text, threadId: t.threadId || null, anchor: !!t.anchor});
+      const ua = navigator.userActivation;
+      const active = ua ? ua.isActive : null;
+      calls.push({cap: "comments", op: "sendToClaude", text: t.text, threadId: t.threadId || null, anchor: !!t.anchor, active});
+      if (active === false && !cfg.anyTime) throw {code: "claude_unavailable", message: "not from the viewer's own recent gesture"};
       if (cfg.sendError) throw {code: cfg.sendError, message: "test"};
       return {threadId: t.threadId || "thread" + (++threadN), commentId: "c" + calls.length};
     },
@@ -204,14 +209,77 @@
   }, list: async () => ({assets: [], usage: {}}), delete: async () => {}});
   // Claude's own connectors, for the page waking its helper chat: only when a test gives
   // `cfg.mcp` ({fail: [tool names that reject]}), so every other test sees none.
+  // Claude's own browser in the desktop app (host:claude_browser), as its contract has it
+  // (mcp.d.ts): it is listed only inside the app (`browser.inApp`), describeTool rejects for
+  // every host: server, and a call missing its address fails like the real tool does. Signed
+  // in or out is `browser.signedIn`. Before 4.3 the fake answered anything, so a page that
+  // sent navigate with no address passed every test (2026-10-29).
+  const B = "host:claude_browser";
+  const br = cfg.mcp && cfg.mcp.browser;
+  // A test signs the person in or out between steps.
+  window.__ljsBrowser = br || null;
+  const browserTool = (tool, input) => {
+    if (!br || !br.inApp) throw Object.assign(new Error("not connected"), {code: "server_not_connected"});
+    if (br.declined) throw Object.assign(new Error("declined"), {code: "not_in_manifest"});
+    if ((tool === "navigate" || tool === "preview_start") && !(input && input.url)) throw Object.assign(new Error("url is required"), {code: "tool_error"});
+    if (tool === "preview_start") return {payload: {tabId: 7}};
+    if (tool === "navigate") return {payload: {ok: true}};
+    if (tool === "get_page_text" || tool === "read_page") {
+      // As the real browser gives it (seen live, 2026-10-29): a header naming the page, then
+      // its text. A profile shows only its top card until scrolled; its Experience and
+      // Education pages show everything. `slowSections` draws each of those late, once.
+      const at = String(br.at || "");
+      const feed = /linkedin\.com\/(login|feed)/.test(at);
+      const section = (/\/details\/(experience|education)\//.exec(at) || [])[1] || (/\/recent-activity\//.test(at) ? "activity" : "");
+      if (!feed && !section) br.reads = (br.reads || 0) + 1;
+      const head = "Title: LinkedIn\nURL: " + at + "\nSource element: <main>\n---\n";
+      if (br.check && !feed && br.reads > br.check) return {payload: {text: head + "Let's do a quick security check\nPress and hold"}};
+      const out = !br.signedIn || (br.signOutAfter && !feed && br.reads > br.signOutAfter);
+      if (section && br.slowSections && !(br.drawn = br.drawn || {})[at]) { br.drawn[at] = true; return {payload: {text: head + "Profile language\nEnglish\nAbout\nAccessibility"}}; }
+      const text = out ? "Sign in\nJoin now\nNew to LinkedIn?" : feed ? "Home | LinkedIn\nStart a post\nMy Network\nMessaging" :
+        section === "experience" ? "Experience\nData analyst\nExample Co · Full-time\n2022 - Present · 3 yrs" :
+        section === "education" ? "Education\nExample University\nBSc Statistics" :
+        section === "activity" ? "All activity\nPosts\nAda Example posted this \u2022 1w\nOur team is growing in Leeds." :
+        "Ada Example\n· 2nd\nData analyst at Example Co\nContact info\nMessage\nConnect\nMore";
+      return {payload: {text: head + text}};
+    }
+    return {payload: {ok: true}};
+  };
   const mcp = cfg.mcp ? Object.freeze({callTool: async (server, tool, input) => {
     calls.push({cap: "mcp", server, tool, input});
+    if (server === B) {
+      // The app's allow prompt still open: the first call is refused, retryable, as seen live.
+      if (br && br.askFirst && !br.asked) { br.asked = true; throw Object.assign(new Error("connector access isn't confirmed for this artifact right now"), {code: "upstream_error", retryable: true, retryAfterMs: 200}); }
+      if (input && input.url) br.at = input.url;
+      return browserTool(tool, input);
+    }
     if ((cfg.mcp.fail || []).indexOf(tool) >= 0) throw Object.assign(new Error("tool_error"), {code: "tool_error"});
     if (tool === "list_environments") return {payload: {environments: [{environment_id: "env_test1", kind: "anthropic_cloud"}]}};
     return {payload: {ok: true}};
+  }, describeTool: async (server, tool) => {
+    if (String(server).startsWith("host:")) throw Object.assign(new Error("no schema"), {code: "bad_request"});
+    return {name: tool, description: "", inputSchema: {}};
+  }, listTools: async (server) => {
+    const all = br && br.inApp ? [{server: B, authStatus: "unknown", tools: [{name: "navigate", description: ""}]}] : [];
+    return {servers: server ? all.filter((x) => x.server === server) : all};
   }}) : null;
   const NS = {db, user, comments, room, sample, downloads, assets, mcp};
 
+  // What the page copied, kept for the test to read: only Chrome's engine lets a test read
+  // the clipboard back (Safari's refuses with NotAllowedError, the Everywhere check,
+  // 2026-10-29). The copy itself still goes through as before.
+  if (navigator.clipboard && navigator.clipboard.writeText) {
+    const write = navigator.clipboard.writeText.bind(navigator.clipboard);
+    try { Object.defineProperty(navigator.clipboard, "writeText", {value: (t) => { window.__ljsCopied = String(t); return write(t); }, configurable: true}); } catch (e) { /* ignore */ }
+  }
+  {
+    const exec0 = document.execCommand.bind(document);
+    document.execCommand = (cmd, ...rest) => {
+      const done = exec0(cmd, ...rest);
+      if (cmd === "copy" && done) { const el = document.activeElement; window.__ljsCopied = el && "value" in el && el.selectionEnd > el.selectionStart ? el.value.slice(el.selectionStart, el.selectionEnd) : String(document.getSelection() || ""); }
+      return done;
+    };
+  }
   if (cfg.clipboardDenied && navigator.clipboard) {
     try { Object.defineProperty(navigator.clipboard, "writeText", {value: () => Promise.reject(new Error("denied")), configurable: true}); } catch (e) { /* ignore */ }
     // A frame that refuses the clipboard refuses the old copy command too.

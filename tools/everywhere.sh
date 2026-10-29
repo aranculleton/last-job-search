@@ -18,7 +18,7 @@
 # EVERYWHERE_TESTS="tests/test_a.py tests/test_b.py" runs only those files: to reproduce a
 # failure the summary named, cheaply, before a fix is pushed.
 #
-# A variant this machine cannot run (no Safari engine, no libfaketime, no newest Python) is
+# A variant this machine cannot run (no Safari engine, no time-machine, no newest Python) is
 # reported SKIP, never passed; with EVERYWHERE_STRICT=1, as CI sets, a SKIP fails. Exit 0
 # only when every variant ran and passed. The last lines name each failure and its failing
 # tests: read those, never the whole log.
@@ -32,7 +32,6 @@ mkdir -p "$OUT"
 PAGE_VARIANTS="safari firefox mac-type windows-type french german ahead behind"
 SUITE_VARIANTS="30-days 90-days 400-days ahead behind odd-folder newest-python"
 BROWSER_TESTS="$(grep -lE 'app_page/harness\.js|journeys\.browser\(\)|_node_env|test_the_page_journeys import|import test_the_page_journeys' tests/*.py)"
-FAKETIME_LIB="${FAKETIME_LIB:-/usr/lib/x86_64-linux-gnu/faketime/libfaketimeMT.so.1}"
 PY_NEWEST="${PY_NEWEST:-python3.14}"
 
 kind="${1:-}"
@@ -122,7 +121,35 @@ if [ "$kind" = page ]; then
   done
 else
   skips=(); for b in $BROWSER_TESTS; do skips+=("--ignore=$b"); done
-  noft=""; [ -f "$FAKETIME_LIB" ] || noft="no libfaketime here"
+  # The clock moved on for every Python the suite starts, its tools' own included: a
+  # sitecustomize on PYTHONPATH that moves the date and leaves waiting alone (time-machine).
+  # libfaketime moved the C library's clocks too and broke Python's own sleep with "Invalid
+  # argument" in 300 tests that have nothing to do with dates (2026-10-29).
+  shift="$OUT/clock-shift"; mkdir -p "$shift"
+  cat > "$shift/sitecustomize.py" <<'PYEND'
+import os
+_days = os.environ.get("LJS_CLOCK_SHIFT_DAYS")
+if _days:
+    import subprocess
+    import time
+    import time_machine
+    # A plain timestamp: given a UTC datetime, time-machine sets TZ=UTC in every process and
+    # would hide the time-zone bugs this check is for.
+    time_machine.travel(time.time() + int(_days) * 86400, tick=True).start()
+    # git keeps the real clock unless told: its commits are dated on the moved one too, so a
+    # commit's age is read on the same clock as everything else.
+    _init = subprocess.Popen.__init__
+
+    def _popen(self, *a, **kw):
+        env = dict(kw.get("env") if kw.get("env") is not None else os.environ)
+        stamp = "%d +0000" % time.time()
+        for k in ("GIT_COMMITTER_DATE", "GIT_AUTHOR_DATE"):
+            env.setdefault(k, stamp)
+        kw["env"] = env
+        return _init(self, *a, **kw)
+    subprocess.Popen.__init__ = _popen
+PYEND
+  noclock=""; "$PY" -c "import time_machine" > /dev/null 2>&1 || noclock="no time-machine here (pip install time-machine)"
   set -- tests "${skips[@]}"
   if [ -n "${EVERYWHERE_TESTS:-}" ]; then
     # shellcheck disable=SC2086
@@ -131,7 +158,7 @@ else
   for v in $wanted; do
     case "$v" in
       30-days|90-days|400-days)
-        run "$v" "$noft" "$PY" "$ROOT" "LD_PRELOAD=$FAKETIME_LIB" "FAKETIME=+${v%-days}d" FAKETIME_DONT_FAKE_MONOTONIC=1 -- "$@" ;;
+        run "$v" "$noclock" "$PY" "$ROOT" "PYTHONPATH=$shift${PYTHONPATH:+:$PYTHONPATH}" "LJS_CLOCK_SHIFT_DAYS=${v%-days}" -- "$@" ;;
       ahead) run ahead "" "$PY" "$ROOT" TZ=Pacific/Kiritimati -- "$@" ;;
       behind) run behind "" "$PY" "$ROOT" TZ=Pacific/Pago_Pago -- "$@" ;;
       odd-folder)

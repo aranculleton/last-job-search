@@ -207,6 +207,9 @@ JSON_FILES = {
     # An application's latest checks (verify_batch.py _record): the newer run stands whole.
     "documents/applications/*/verify.json": {"whole": ("",), "stamps": ("at",), "indent": 1,
                                              "ascii": True},
+    # The page as a reader of LinkedIn (place.PAGE_READS_FILE): the later check or read stands.
+    "documents/network/page_reader.json": {"whole": ("",), "stamps": ("checked_at", "last_read_at"),
+                                           "indent": 1, "ascii": True},
     "documents/network/.page_reads.json": {"lists": {"reads": ("at", "url")}, "indent": 1,
                                            "ascii": True, "newline": False},
     "documents/network/.signed_in.json": {"whole": ("",), "stamps": ("at",), "indent": 1,

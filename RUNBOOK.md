@@ -158,7 +158,9 @@ python3 tools/env_check.py --fix    # TinyTeX, Bun, gh and the Python packages, 
 python3 tools/env_check.py          # then: what is here, one line each
 ```
 
-A computer with nothing set up yet, not even this copy, starts from [COMPUTER.md](COMPUTER.md).
+Nobody is asked to set up a computer: the cloud does the work, and the person's page reads
+LinkedIn in the Claude desktop app. [COMPUTER.md](COMPUTER.md) is for a chat on a computer that
+someone already uses.
 Full detail, including why `cffi` comes first and which Python to use, is in [SETUP.md](SETUP.md).
 
 **`$SCRATCH` below is any folder outside the repo**: the session's scratchpad in a
