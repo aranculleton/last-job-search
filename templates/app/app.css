@@ -714,7 +714,9 @@ dialog.question-screen[open] { display: flex; flex-direction: column; }
 .task-name { min-width: 0; }
 
 /* messages to send: the count, the subject, the link out, the copy box, the wave */
-.msg-top { display: flex; align-items: center; justify-content: flex-start; gap: 8px; }
+/* Wraps, so "LinkedIn message", "Due yesterday" and the bin never push a phone sideways at
+   large text (2026-10-29: 37px over in the font Linux draws, not in Inter). */
+.msg-top { display: flex; flex-wrap: wrap; align-items: center; justify-content: flex-start; gap: 8px; }
 .msg-top > .icon-only { margin-left: auto; }
 .subject { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
 .openlink { display: inline-flex; align-items: center; min-height: var(--target); font-weight: 600; }
