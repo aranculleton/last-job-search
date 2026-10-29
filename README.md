@@ -12,10 +12,10 @@ stay in charge of what goes out.
 [![CI](https://github.com/aranculleton/last-job-search/actions/workflows/ci.yml/badge.svg)](https://github.com/aranculleton/last-job-search/actions/workflows/ci.yml)
 
 <p align="center">
-  <img src="docs/images/page-demo.webp" width="720"
-       alt="A walk through your page: the Brief, To do, Jobs and Drafts, Contacts and Messages, Interviews, then an interview prep opened">
+  <img src="docs/images/page-brief.webp" width="720"
+       alt="The Brief: today's interview, the next three things to do, who is waiting on you, the best new jobs, news and your numbers">
   <br>
-  <sub>A walk through your page, with an invented search on it. Every name is made up.</sub>
+  <sub><b>The Brief</b>, your home screen: the day at a glance</sub>
 </p>
 
 ## What you need
@@ -43,10 +43,10 @@ in Claude's own browser, so each note fits them. Nothing to install beyond the a
 ## What it looks like
 
 <p align="center">
-  <img src="docs/images/page-brief.webp" width="720"
-       alt="The Brief: today's interview, the next three things to do, who is waiting on you, the best new jobs, news and your numbers">
+  <img src="docs/images/page-demo.webp" width="720"
+       alt="A walk through your page: the Brief, To do, Jobs and Drafts, Contacts and Messages, Interviews, then an interview prep opened">
   <br>
-  <sub><b>The Brief</b>, your home screen: the day at a glance</sub>
+  <sub>A walk through your page, with an invented search on it. Every name is made up.</sub>
 </p>
 
 <p align="center">
