@@ -194,6 +194,7 @@ def test_a_dump_from_windows_reads_the_same(tmp_path):
     assert db["work"]["w2"] == {"data": {"kind": "draft", "status": "queued"}, "version": 7}
 
 
+@pytest.mark.timing
 def test_a_big_search_is_modelled_inside_two_seconds(tmp_path, monkeypatch):
     """500 applications, 2,000 contacts and 5,000 messages: what the size of the search costs
     a build, once a first build has loaded the code. Timed against a small search's build,

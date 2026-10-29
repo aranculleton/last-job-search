@@ -5,6 +5,10 @@ MAINTAINING.md first; this is only what 4.3 left.
 
 ## Left open
 
+- First: the release's slowest check is Windows' set-up and suite, about 26 minutes (11 of
+  them the suite on four workers). Split its suite across three runners, as a matrix in
+  Platforms, for about 15: free on the public app, and it does not wake a builder more
+  often if each shard ends in the same summary.
 - An interview with no application ("Something else" in I have an interview) opens Chat
   rather than a form.
 - "Employers you follow" can be added on the page (Jobs, Change the search, Watch an

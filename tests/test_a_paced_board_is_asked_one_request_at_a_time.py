@@ -15,6 +15,8 @@ import sys
 import threading
 import time
 
+import pytest
+
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 sys.path.insert(0, os.path.join(ROOT, "tools"))
 
@@ -24,6 +26,7 @@ import portals  # noqa: E402
 DELAY, FETCH = 0.3, 0.5
 
 
+@pytest.mark.timing
 def test_one_request_in_flight_and_each_a_delay_after_the_last_began(monkeypatch):
     monkeypatch.setattr(portals, "crawl_delay", lambda skill: DELAY)
     monkeypatch.setattr(portals, "skill_of", lambda portal: "cityboard-search")

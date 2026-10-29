@@ -275,6 +275,7 @@ def _big_state(root, contacts=400, rows=200, seed=7, today=dt.date(2026, 10, 25)
                 w.writerow({k: r.get(k, "") for k in c})
 
 
+@pytest.mark.timing
 @pytest.mark.parametrize("write", [False, True])
 def test_a_large_state_is_gathered_in_under_two_seconds_and_stays_short(tmp_path, write):
     """What the state's size costs the brief, timed against a small state's run, which pays

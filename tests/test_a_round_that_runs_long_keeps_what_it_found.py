@@ -16,6 +16,8 @@ import sys
 import threading
 import time
 
+import pytest
+
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 sys.path.insert(0, os.path.join(ROOT, "tools"))
 
@@ -43,6 +45,7 @@ def _row(n):
     return [{"url": f"https://jobs.example/{n}", "title": "Analyst", "portal": "fake"}]
 
 
+@pytest.mark.timing
 def test_a_portal_that_hangs_is_stopped_by_the_budget_and_what_arrived_is_kept():
     done = []
 

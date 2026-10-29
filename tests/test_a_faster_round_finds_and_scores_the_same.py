@@ -398,6 +398,7 @@ def test_the_pool_sends_in_the_order_given_past_a_capped_portal():
     assert tallies["linkedin"].capped == 5 and tallies["freehire"].capped == 1
 
 
+@pytest.mark.timing
 def test_a_stopped_portals_queue_does_not_slow_every_other_request():
     """Every take walked the whole queue past the stopped portal's jobs."""
     import time
