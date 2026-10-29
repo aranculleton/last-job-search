@@ -96,8 +96,9 @@ make sense to somebody whose repo just received it.
   before this keeps working.
 - **The Brief's next steps name the page's own buttons** ("Find new jobs: Jobs, Find jobs"),
   never a command to type, and tips point at Tweak, the bin and Add a job.
-- **Windows is checked every week**: the set-up on a Windows computer runs on its own once a
-  week, free, and never holds up a change or a release.
+- **Windows is checked on every release, and every week**: the set-up on a Windows computer
+  runs on each release before it goes out and once a week on its own, free, and never on an
+  ordinary change.
 - **The README and Start here speak in the page's buttons**, with a walk through the page
   and the Brief on its own; Chat is for anything else.
 - **Size**: three sizes. Standard is what Small was, and is the default; Larger is what

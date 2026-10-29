@@ -24,9 +24,11 @@ These apply whenever the change is to the app, whichever repo the session starte
 
 - **Windows is never run on a change.** Linux and Mac decide whether a change is green; a
   Windows question is answered from Microsoft's and Python's documentation and from the
-  tests that fake Windows. Its CI jobs run by hand (Actions, Run workflow) and in the weekly
-  Platforms run on the public app, which is free and blocks nothing (the maintainer,
-  2026-10-29); a red weekly run is fixed in the next release. Each Windows run took 45
+  tests that fake Windows. Its CI jobs run on a release pull request (one titled "Release
+  X.Y.Z"), in the weekly Platforms run and by hand, all on the public app, whose minutes are
+  free (the maintainer, 2026-10-29: Windows people must be able to use it, at no cost to
+  the maintainer). A release is green on Windows before it merges; a red weekly run is
+  fixed in the next release. Each Windows run took 45
   minutes and held 4.0.0 for hours when it ran on every change (the maintainer, 2026-10-26).
 - **Look first at how it is meant to be done, and how others do it**, for every question
   about the app, bug fix, feature and release, without being asked (the maintainer,
@@ -193,7 +195,9 @@ reason in one line in the reply.
    ones named with the reason. Then a bug hunt over the parts the changes touch, not only
    the lines, and the time-shift check (the suite with the clock moved 30, 90 and 400
    days on). The whole suite is the release pull request's own CI run, once, on its final
-   commit (free on the public app); by hand, only "Before pushing".
+   commit (free on the public app); by hand, only "Before pushing". Title the pull request
+   "Release X.Y.Z: ...", so its Platforms run takes Windows too, and merge it only when
+   Linux, Mac and Windows are green: a Windows failure is fixed in the release, never left.
 1. Before the release PR merges, run the maintainer's own tests against it:
    `python3 tools/try_personal_tests.py <the maintainer's repo>`. It lays this tree over a
    copy of that repo, the way a sync would, and changes neither. A failure the release

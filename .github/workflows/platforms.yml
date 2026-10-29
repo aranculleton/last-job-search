@@ -23,9 +23,9 @@
 #                     rendered from that copy's folder, and the seed read.
 #
 # Runs only on the public app (whose minutes are free) or by hand, on pull requests that
-# touch the install, the documents, the portals or this file (Linux and Mac), and weekly
-# with Windows too, so a change in what TinyTeX, GitHub or Bun publish, or a Windows
-# breakage, is seen before a person meets it. Actions are pinned
+# touch the install, the documents, the portals or this file (Linux and Mac; Windows too
+# on a release pull request), and weekly with Windows, so a change in what TinyTeX, GitHub
+# or Bun publish, or a Windows breakage, is seen before a person meets it. Actions are pinned
 # to commit SHAs, as in ci.yml; the token is read-only.
 
 name: Platforms
@@ -89,11 +89,11 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        # Windows never on a change: it took 45 minutes a run and held a release for hours
-        # (the maintainer, 2026-10-26). Linux and Mac decide a change. Windows runs by hand
-        # (Actions, Run workflow) and in the weekly run on the public app, whose minutes are
-        # free and which blocks nothing (the maintainer, 2026-10-29).
-        os: ${{ (github.event_name == 'workflow_dispatch' || github.event_name == 'schedule') && fromJSON('["ubuntu-latest", "macos-latest", "windows-latest"]') || fromJSON('["ubuntu-latest", "macos-latest"]') }}
+        # Windows never on an ordinary change: it takes 45 minutes and held a release for
+        # hours when it ran on every one (the maintainer, 2026-10-26). Linux and Mac decide a
+        # change. Windows runs on a release pull request (titled "Release X.Y.Z"), in the
+        # weekly run and by hand, on the public app, whose minutes are free (2026-10-29).
+        os: ${{ (github.event_name == 'workflow_dispatch' || github.event_name == 'schedule' || startsWith(github.event.pull_request.title, 'Release ')) && fromJSON('["ubuntu-latest", "macos-latest", "windows-latest"]') || fromJSON('["ubuntu-latest", "macos-latest"]') }}
     defaults:
       run:
         shell: bash
@@ -155,8 +155,8 @@ jobs:
 
   windows-shell:
     name: windows (PowerShell 5.1, no Git yet)
-    # By hand, and weekly on the public app: never on a change (see person's matrix).
-    if: ${{ github.event_name == 'workflow_dispatch' || (github.event_name == 'schedule' && !github.event.repository.private) }}
+    # On a release pull request, weekly and by hand: never on an ordinary change (see person's matrix).
+    if: ${{ github.event_name == 'workflow_dispatch' || (!github.event.repository.private && (github.event_name == 'schedule' || startsWith(github.event.pull_request.title, 'Release '))) }}
     runs-on: windows-latest
     timeout-minutes: 45
     defaults:
@@ -235,8 +235,8 @@ jobs:
 
   windows-chat:
     name: windows (a computer chat, Git Bash, cp1252)
-    # By hand, and weekly on the public app: never on a change (see person's matrix).
-    if: ${{ github.event_name == 'workflow_dispatch' || (github.event_name == 'schedule' && !github.event.repository.private) }}
+    # On a release pull request, weekly and by hand: never on an ordinary change (see person's matrix).
+    if: ${{ github.event_name == 'workflow_dispatch' || (!github.event.repository.private && (github.event_name == 'schedule' || startsWith(github.event.pull_request.title, 'Release '))) }}
     runs-on: windows-latest
     timeout-minutes: 75
     defaults:
