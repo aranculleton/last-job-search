@@ -208,7 +208,14 @@ async function goto(page, id) {
   await page.evaluate((h) => { if (location.hash === "#" + h) location.hash = "_"; location.hash = h; }, id);
   await turn(page, 4);
   // To do shows five first (4.3); a scenario that goes there reads and taps the whole list.
-  if (id === "todo") { await page.$$eval("details.band-more:not([open])", (ds) => ds.forEach((d) => { d.open = true; })); await turn(page, 2); }
+  if (id === "todo") {
+    // Unfolded once the list is drawn: unfolded before, the fold drawn after stayed shut and a
+    // card behind it went unmeasured (Safari on a busy machine, CI, 2026-10-29).
+    await page.waitForFunction(() => window.LJS && window.LJS.state().section === "todo" && !!document.querySelector("#main [data-card], #main .empty"), null, {timeout: 5000}).catch(() => {});
+    await turn(page, 2);
+    await page.$$eval("details.band-more:not([open])", (ds) => ds.forEach((d) => { d.open = true; }));
+    await turn(page, 2);
+  }
 }
 const T = (page, sel) => page.$$eval(sel, (els) => els.map((e) => e.innerText.trim()));
 const one = async (page, sel) => { const el = await page.$(sel); return el ? (await el.innerText()).trim() : null; };
