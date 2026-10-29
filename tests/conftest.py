@@ -33,8 +33,38 @@ _pages = tempfile.mkdtemp(prefix="ljs_pages_")
 os.environ["LJS_RESEARCH_PAGES"] = _pages
 atexit.register(shutil.rmtree, _pages, ignore_errors=True)
 
+# The networking limits are read from the profile when their module is first imported, and
+# the app reaches that module by two names (`schema`, and `network.schema` from the page's
+# model). Both are imported here, under the example, so a test that points LJS_PROFILE at a
+# free plan for a moment cannot fix the limits for every test after it in the same worker
+# (2026-10-29: a 209-character follow-up was checked against 180 on one parallel run and
+# 280 on another). A test that changes the plan reloads both (reload_limits below).
+import sys  # noqa: E402
+for _p in (os.path.join(ROOT, "tools", "network"), os.path.join(ROOT, "tools")):
+    if _p not in sys.path:
+        sys.path.insert(0, _p)
+import schema as _schema  # noqa: E402,F401
+from network import schema as _network_schema  # noqa: E402,F401
+
+
+def _reload_limits():
+    """Re-read the networking limits under both of the module's names, from whatever profile
+    LJS_PROFILE now names: after a test switches the plan, and again when it switches back."""
+    import importlib
+    for name in ("schema", "network.schema"):
+        if name in sys.modules:
+            importlib.reload(sys.modules[name])
+    return sys.modules["schema"]
+
 
 import pytest  # noqa: E402
+
+
+@pytest.fixture
+def reload_limits():
+    """_reload_limits, for a test that switches the plan: call it after, and again after
+    switching back."""
+    return _reload_limits
 
 
 @pytest.fixture

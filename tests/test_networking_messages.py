@@ -13,7 +13,6 @@ Found by reading the composers and the reply classifier against the example pers
 """
 from __future__ import annotations
 
-import importlib
 import os
 import shutil
 import sys
@@ -35,7 +34,7 @@ import state  # noqa: E402
 # ------------------------------------------------------------------ the plan
 
 @pytest.fixture
-def plan(tmp_path, monkeypatch):
+def plan(tmp_path, monkeypatch, reload_limits):
     """Reload schema against a copy of the example whose plan the test sets."""
     d = tmp_path / "profile"
     shutil.copytree(os.path.join(ROOT, "profile.example"), d)
@@ -47,12 +46,12 @@ def plan(tmp_path, monkeypatch):
         monkeypatch.setenv(person.ENV, str(d))
         person._modules.clear()
         person._data.clear()
-        return importlib.reload(schema)
+        return reload_limits()
     yield use
     monkeypatch.undo()
     person._modules.clear()
     person._data.clear()
-    importlib.reload(schema)
+    reload_limits()
 
 
 def test_with_no_plan_recorded_the_free_limits_apply(plan):
@@ -288,3 +287,13 @@ def test_the_note_checker_runs_from_the_command_line():
     r = subprocess.run([sys.executable, os.path.join(ROOT, "tools", "outreach.py"), "--check-note",
                         outreach.outreach_note(LETTER)], capture_output=True, text=True, encoding="utf-8", errors="replace")
     assert r.returncode == 0, r.stdout + r.stderr
+
+
+def test_both_names_of_the_limits_agree_when_the_plan_changes(plan):
+    """The page's model reads the limits as network.schema, the composers as schema: one
+    worker once checked a follow-up against a free plan's 180 under one name while the
+    profile said Premium's 280 under the other (2026-10-29)."""
+    import sys
+    s = plan('LINKEDIN_PLAN = "free"\n')
+    assert sys.modules["network.schema"].LIMITS == s.LIMITS
+    assert s.LIMITS["nudge_chars"] == 180
