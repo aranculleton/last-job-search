@@ -548,7 +548,9 @@ def ruled_out(entries: dict, today: str = "") -> tuple[dict[str, str],
     """URL key -> reason and (title, employer key, city) -> reason for everything already ruled out.
 
     The city is part of the key: a ruling on a place or a language in one city
-    blocked the same title at that employer everywhere. Read it with `ruled_pair`.
+    blocked the same title at that employer everywhere. A remote posting has no city
+    (ANYWHERE, `place`), so its ruling holds wherever the title is posted. Read it with
+    `ruled_pair`.
 
     `today` is the round's day. Given it, a ruling holds for the same title at that
     employer and city only while the ruled posting was seen within RELIST_WINDOW days,
@@ -634,17 +636,24 @@ def ruled_out(entries: dict, today: str = "") -> tuple[dict[str, str],
 
 
 def entry_pair(e: dict) -> tuple[str, str, str] | None:
-    """The (title, employer key, city) a ruling on this entry covers, ANYWHERE for an
-    entry with no location, or None for one with no title or employer. `ruled_pair` reads
-    a posting against it."""
+    """The (title, employer key, city) a ruling on this entry covers, or None for one with
+    no title or employer. The city is ANYWHERE for an entry with no location, with no
+    place in it, or with a remote one (`place`): see `city`. `ruled_pair` reads a posting
+    against it."""
     t, k = title_key(e.get("title")), key(e.get("company"))
     if not (t and k):
         return None
-    return (t, k, city(e["location"]) if e.get("location") else ANYWHERE)
+    return (t, k, place(e.get("location")))
 
 
 def ruled_pair(pairs: dict, job: dict) -> str:
-    """The reason a posting's title, employer and city were ruled out, or ""."""
+    """The reason a posting's title, employer and city were ruled out, or "".
+
+    A posting is read the same with its place or without it, as far as the place can say:
+    one with no location (a board that gives none, a prefilter that has not fetched it)
+    is ANYWHERE, so it meets only a ruling that holds anywhere, and one with a location
+    meets that ruling too, as well as the one made in its own city. So a posting dropped
+    without its place is always one this drops with it."""
     t, k, c = _posting_key(job.get("title"), job.get("company"), job.get("location"))
     if not (t and k):
         return ""
@@ -662,11 +671,27 @@ RELIST_WINDOW = 30
 
 _CITY_NOISE = re.compile(r"\([^)]*\)|\b(?:hybrid|on[- ]?site|in[- ]office|remote|flexible)\b")
 _SEEN_DAYS = ("first_seen", "excluded_date", "skipped_date", "rank_date", "last_seen")
+# Remote working, in the words a board uses for it, and the words that say it is not only
+# that: a location with the first and not the second ("Remote", "Remote (Canada)", "Remote -
+# Canada", "Canada (Remote)", "Work from home") is tied to no place to be.
+_REMOTE_WORK = re.compile(r"\b(?:remote(?:ly)?|work(?:ing)? from (?:home|anywhere)|wfh"
+                          r"|telecommut\w*|home[- ]?based|anywhere)\b")
+_ON_SITE = re.compile(r"\b(?:hybrid|on[- ]?site|in[- ]office|office[- ]based)\b")
 
 
 def city(location) -> str:
-    """The first place a location names, lower-cased: "Toronto, ON, Canada" is "toronto"."""
-    low = _CITY_NOISE.sub(" ", str(location or "").lower())
+    """The first place a location names, lower-cased: "Toronto, ON, Canada" is "toronto".
+
+    A remote posting names no place to be, so its city is ANYWHERE whatever country it
+    names: "Remote (Canada)" was "" (the brackets and the word cut, nothing left), a key no
+    posting with a location ever had, so a ruling on it covered a sibling posted with no
+    location and not the same role on another board posted as "Canada". "Toronto
+    (Hybrid/Remote)" still names Toronto, because it says it is not only remote. "" is a
+    location that names nothing at all."""
+    low = str(location or "").lower()
+    if _REMOTE_WORK.search(low) and not _ON_SITE.search(low):
+        return ANYWHERE
+    low = _CITY_NOISE.sub(" ", low)
     for part in re.split(r"[,|/;]|\s[-\u2013]\s", low):
         part = " ".join(part.split()).strip(" -")
         if part:
@@ -674,8 +699,22 @@ def city(location) -> str:
     return ""
 
 
+def place(location) -> str:
+    """The city a posting or a ruling is kept under: `city`, or ANYWHERE where the location
+    names none (no location, or only "Hybrid"), so that no key is the empty string.
+
+    A ruling on a remote posting is kept under ANYWHERE too, and so covers the same title
+    at that employer wherever it is posted. A remote posting is not tied to a place, so what
+    ruled it out (the kind of work, the level, a language, the employer's terms) holds for
+    its copy on another board, whether that board writes "Canada", "Toronto" or "Remote".
+    The cost: where an employer posts one remote role for each country, a ruling made on
+    one country's terms also covers the others. A ruling on a place goes stale by itself
+    once the location gate no longer fails it (`is_stale_exclusion`)."""
+    return city(location) or ANYWHERE
+
+
 def _posting_key(title, company, location) -> tuple[str, str, str]:
-    return (title_key(title), key(company), city(location))
+    return (title_key(title), key(company), place(location))
 
 
 def _days_seen(e: dict) -> list[str]:

@@ -377,8 +377,9 @@ METHODS: dict[str, dict] = {
             (22, "2026-10-25", True, "the pack's one screen stops asking for a reason they already wrote; a stage booked with the pack is written into outcome.md; the questions asked are recorded under the right role; a path printed across two Windows drives no longer stops it; works in folders with brackets in their names; the pack goes on the person's page first, and in the chat only where there is no page; an application's folder is found by the paths module, not the outreach one; rebooking a stage keeps the blank line after it, so the next heading no longer runs into it"),
             (23, "2026-10-26", False, "a stage booked with a time keeps it on its outcome.md line (scheduled <day> HH:MM), and booked again for the same day with no time it stays; the page reads the pack's one screen, its practice questions with the person's own answers and its format (one_screen, practice, format_of); an answer kept to work on is written once and can be taken off again; a process registered from the page keeps its call's time; next_stage is public; packs already made stay as they are; every file it writes has plain line ends on Windows too"),
             (24, "2026-10-29", False, "interview prep reads the saved employer research first and starts a research agent only when none is recent; no separate chat is offered for an employer, and a campaign chat started before carries on"),
+            (25, "2026-10-29", False, "the pack asks which team the call is for only when the employer has another posting for the role, and lists the other postings, not the one the call is for; the same role on two boards is one posting and a posting past its deadline is none"),
         ),
-        "fingerprint": "6eb45f20145e495e",
+        "fingerprint": "6acd5e4db2cb0da3",
     },
     "research": {
         "by": "upgrade", "priority": 3, "applies": "live_applications", "time": "~5 min each",
@@ -606,8 +607,9 @@ METHODS: dict[str, dict] = {
             (31, "2026-10-26", False, "the seen-jobs file's reader and writer and the status spellings have public names the page's engine calls (exclude.load_seen, save_seen, reason_group, throttle.spellings); nothing screened differently; every file it writes has plain line ends on Windows too"),
             (32, "2026-10-26", True, "bar.py lists the employers of people with a follow-up owed that nobody has judged (unjudged --contacts), for the brief to judge once; money about the employer (revenue, funding, valuation) is never pay, and a single labelled figure in the person's currency is read"),
             (33, "2026-10-29", False, "an unused helper removed from the free filters; screening is as before"),
+            (34, "2026-10-29", False, "a ruling on a remote posting holds for the same role on another board, whichever place that board names, and a posting read without its place is ruled out exactly when it would be with it"),
         ),
-        "fingerprint": "1d109c0d026f3aaa",
+        "fingerprint": "8fb1a532e988ec36",
     },
     "routines": {
         "by": "you", "priority": 3, "applies": "routines",
