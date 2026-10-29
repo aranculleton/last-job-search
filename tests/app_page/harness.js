@@ -572,6 +572,8 @@ async function sheetCheck(page, kind, openIt) {
     m.vw = page.viewportSize().width;
     await page.locator("dialog." + kind + "[open]").getByRole("button", {name: /^close/i}).first().click();
     await turn(page, 4);
+    // Focus goes back once the sheet has closed, later on a busy machine (CI, 2026-10-29).
+    await page.waitForFunction((k) => !!document.activeElement && document.activeElement.getAttribute("data-k") === k, opener, {timeout: 2000}).catch(() => {});
     m.focusBack = await page.evaluate((k) => !!document.activeElement && document.activeElement.getAttribute("data-k") === k, opener);
   }
   return m;
