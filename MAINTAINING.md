@@ -24,9 +24,10 @@ These apply whenever the change is to the app, whichever repo the session starte
 
 - **Windows is never run on a change.** Linux and Mac decide whether a change is green; a
   Windows question is answered from Microsoft's and Python's documentation and from the
-  tests that fake Windows. Its CI jobs run only when started by hand (Actions, Run
-  workflow). Each Windows run took 45 minutes and held 4.0.0 for hours (the maintainer,
-  2026-10-26).
+  tests that fake Windows. Its CI jobs run by hand (Actions, Run workflow) and in the weekly
+  Platforms run on the public app, which is free and blocks nothing (the maintainer,
+  2026-10-29); a red weekly run is fixed in the next release. Each Windows run took 45
+  minutes and held 4.0.0 for hours when it ran on every change (the maintainer, 2026-10-26).
 - **Look first at how it is meant to be done, and how others do it**, for every question
   about the app, bug fix, feature and release, without being asked (the maintainer,
   2026-10-23): Claude's own documentation (code.claude.com and docs.claude.com) for anything
