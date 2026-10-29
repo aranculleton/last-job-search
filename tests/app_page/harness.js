@@ -570,6 +570,10 @@ async function sheetCheck(page, kind, openIt) {
     m.gap = ob && db ? Math.round(db.y - (ob.y + ob.height)) : null;
     m.drawnRight = db ? Math.round(db.x + db.width) : null;
     m.vw = page.viewportSize().width;
+    // A live update redraws the page while the sheet is open, as it does whenever Claude
+    // writes: the button that opened the sheet is replaced, and focus still has to come back.
+    await page.evaluate(() => window.LJS.render());
+    await turn(page, 2);
     await page.locator("dialog." + kind + "[open]").getByRole("button", {name: /^close/i}).first().click();
     await turn(page, 4);
     // Focus goes back once the sheet has closed, later on a busy machine (CI, 2026-10-29).

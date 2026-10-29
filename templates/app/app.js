@@ -3923,6 +3923,18 @@
   }
 
   let tweakDlg = null;
+  // Focus goes back to what opened a panel. A live update redraws the card while the panel is
+  // open, so the button that opened it may be gone: its redrawn twin, found by its key, takes
+  // the focus instead, or a keyboard or screen reader is left at the top of the page (seen on a
+  // busy machine, 2026-10-29).
+  function focusBack(op) {
+    if (!op) return;
+    Promise.resolve().then(() => {
+      const k = op.dataset && op.dataset.k;
+      const el = op.isConnected ? op : (k ? document.querySelector('[data-k="' + (window.CSS && CSS.escape ? CSS.escape(k) : k) + '"]') : null);
+      if (el && el.focus) el.focus();
+    });
+  }
   function closeTweak() {
     const st = S.tweak;
     S.tweak = null;
@@ -3930,7 +3942,7 @@
     const rail = $("rail");
     if (rail && rail.querySelector(".tweak-panel")) rail.replaceChildren();
     scheduleRender();
-    if (st && st.opener && st.opener.isConnected && st.opener.focus) st.opener.focus();
+    focusBack(st && st.opener);
   }
   // Open the panel for one output of one item: a bottom sheet over the card on a phone, a
   // panel on the right on wide screens (in the Work rail's place while it is open).
@@ -4753,8 +4765,7 @@
     try { d.close(); } catch (e) { /* closed */ }
     d.remove();
     if (!fromHistory && /\/open$/.test(location.hash)) { try { history.back(); } catch (e) { /* the frame refuses */ } }
-    const op = d._opener;
-    if (op && op.isConnected && op.focus) op.focus();
+    focusBack(d._opener);
   }
   function detailOf(kind, id) {
     if (kind === "interview") { const iv = interviewItems().find((x) => x.id === id); return iv ? [stageShort(iv.next_stage) + " with " + txt(iv.company), interviewDetail(iv), "interviews", "wide"] : null; }
