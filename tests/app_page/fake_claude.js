@@ -202,7 +202,15 @@
     (window.__ljsAssets = window.__ljsAssets || []).push({id, name: (blob && blob.name) || "", type});
     return {id, url: "/_blob/" + id, sizeBytes: (blob && blob.size) || 0, contentType: type};
   }, list: async () => ({assets: [], usage: {}}), delete: async () => {}});
-  const NS = {db, user, comments, room, sample, downloads, assets};
+  // Claude's own connectors, for the page waking its helper chat: only when a test gives
+  // `cfg.mcp` ({fail: [tool names that reject]}), so every other test sees none.
+  const mcp = cfg.mcp ? Object.freeze({callTool: async (server, tool, input) => {
+    calls.push({cap: "mcp", server, tool, input});
+    if ((cfg.mcp.fail || []).indexOf(tool) >= 0) throw Object.assign(new Error("tool_error"), {code: "tool_error"});
+    if (tool === "list_environments") return {payload: {environments: [{environment_id: "env_test1", kind: "anthropic_cloud"}]}};
+    return {payload: {ok: true}};
+  }}) : null;
+  const NS = {db, user, comments, room, sample, downloads, assets, mcp};
 
   if (cfg.clipboardDenied && navigator.clipboard) {
     try { Object.defineProperty(navigator.clipboard, "writeText", {value: () => Promise.reject(new Error("denied")), configurable: true}); } catch (e) { /* ignore */ }

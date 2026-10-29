@@ -38,7 +38,7 @@ def _waiting():
     return {"work/search~late": {"kind": "search", "title": "Finding jobs", "to": "cloud", "args": {}, "asked_at": "2026-10-25T08:30:00Z",
                                  "status": "queued", "stages": [], "stage": 0, "stage_at": None, "steps": [], "claimed_by": None,
                                  "claimed_at": None, "stop_asked": False, "attempt": 1},
-            "meta/listener": {"chat": "cloud-1", "title": "Job search: Claude's helper (keep this)", "kind": "cloud",
+            "meta/listener": {"chat": "cloud-1", "title": "Job search helper", "kind": "cloud",
                               "answered_at": "2026-10-25T07:30:00Z",
                               "watching": True}}
 
@@ -68,7 +68,7 @@ def test_with_nothing_to_hear_it_wake_claude_says_so_and_offers_the_chat(run, tm
 def test_a_listener_heard_lately_shows_no_card(run, tmp_path, vp):
     seed = _waiting()
     seed["meta/listener"]["answered_at"] = "2026-10-25T08:59:00Z"
-    seed["chats/cloud-1"] = {"kind": "cloud", "title": "Job search: Claude's helper (keep this)", "seen_at": "2026-10-25T08:59:00Z", "watching": True}
+    seed["chats/cloud-1"] = {"kind": "cloud", "title": "Job search helper", "seen_at": "2026-10-25T08:59:00Z", "watching": True}
     got = _go(run, tmp_path, [{"hash": "todo", "count": '[data-item="listen"]'}], vp, seed=seed, clock=T)
     assert got["after"][0]["count"] == 0
 

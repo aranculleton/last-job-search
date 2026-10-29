@@ -93,6 +93,8 @@ WORK = {
     # One posting the person added, scored as /apply Step 1 scores it (the gates, then fit);
     # a look over their own LinkedIn profile, which every contact reads.
     "evaluate": "apply", "own_profile": "outreach",
+    # A change to their own profile: every resume is built from it, so it is grounding work.
+    "profile": "apply",
 }
 # The model picker's aliases (code.claude.com/docs/en/model-config, "Model aliases"), which
 # follow the newest model of each tier, so nothing here names a version.

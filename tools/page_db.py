@@ -309,6 +309,10 @@ STAGES = {
     # A look over their own LinkedIn profile (tools/network/own_profile.py check).
     "own_profile": [("read", "Reading your profile", 60), ("check", "Checking it", 60),
                     ("write", "Writing what to fix", 45)],
+    # A change to what their profile holds, asked on the page (Settings, Your profile): made
+    # in 01-candidate-profile.md first, then the files the resume is built from.
+    "profile": [("read", "Reading your profile", 20), ("change", "Making the change", 60),
+                ("check", "Checking your resume still fits", 45)],
     # The page's own code changed: the listener alone builds it and publishes it
     # (tools/app_listen.py; `already` closes it with nothing published).
     "republish": [("build", "Building the new page", 20), ("publish", "Putting it up", 20)],
@@ -333,6 +337,7 @@ WORK_KINDS = {
     "general_resume": {"to": "either", "can": ("cloud", "computer"), "heavy": False},
     "own_profile": {"to": "either", "can": ("cloud", "computer"), "heavy": False},
     "republish": {"to": "either", "can": ("cloud", "computer"), "heavy": False},
+    "profile": {"to": "either", "can": ("cloud", "computer"), "heavy": False},
 }
 assert set(STAGES) == set(WORK_KINDS)
 HEAVY_CAP = 2

@@ -50,7 +50,9 @@ def test_the_capabilities_are_exactly_these():
         "assets": {},
         # Claude's own browser, in the desktop app only, with only the tools a reading needs.
         "mcp": {"servers": [{"server": "host:claude_browser",
-                             "tools": ["navigate", "get_page_text", "read_page", "preview_start"]}]},
+                             "tools": ["navigate", "get_page_text", "read_page", "preview_start"]},
+                            # The page wakes the chat that answers it (the maintainer, 2026-10-28).
+                            {"server": "Claude Code Remote", "tools": ["send_message", "list_environments", "create_session"]}]},
     }
 
 

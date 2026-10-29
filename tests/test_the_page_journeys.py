@@ -192,7 +192,7 @@ def test_a_rejection_stops_the_chase(run, tmp_path, vp):
 def test_the_prep_is_read_on_the_page_and_practice_uses_its_questions(run, tmp_path, vp):
     got = _go(run, tmp_path, [
         {"hash": "interviews", "click": "Read your prep", "read": "dialog.detail"},
-        {"click": "Practice questions", "within": "dialog.detail", "read": "#main", "wait": 300, "calls": "sample"},
+        {"click": "Practise with Claude", "within": "dialog.detail", "read": "#main", "wait": 300, "calls": "sample"},
         {"eval": "(() => { const t = document.querySelector('#talk-text'); t.value = 'I have three years of store and supplier data behind me, turned into weekly plans.'; t.dispatchEvent(new Event('input', {bubbles: true})); return 1; })()"},
         {"click": "Send", "exact": True, "wait": 300, "read": "#main .talk-list"},
     ], vp, fake={"canSend": "available", "sample": {"replies": [
@@ -283,19 +283,18 @@ def test_a_wave_of_first_notes_is_grouped_by_employer_with_the_week_s_budget(run
     assert got["after"][1]["count"] == 1, "one card for the wave in To do, never one a note"
 
 
-def test_a_reply_owed_says_so_and_asks_for_their_words_first(run, tmp_path, vp):
-    m = _sample()
+def test_a_reply_owed_says_so_and_drafts_from_their_words_already_kept(run, tmp_path, vp):
+    """Juno's reply is in the conversation already: drafting the answer asks only what to say
+    back, never for their words a second time (2026-10-29)."""
     got = _go(run, tmp_path, [
         {"hash": "contacts", "read": '[data-item="larkspur_retail_castellan"]'},
         {"click": "Draft a reply to Juno", "read": "dialog"},
-        {"fill": {"Paste what Juno said": "Hi Morgan, happy to. Thursday lunchtime works for me."}, "submit": True},
+        {"fill": {"Anything you want to say back": "Yes, Thursday at 12 works."}, "submit": True},
     ], vp)
     assert "Replied: your turn" in got["after"][0]["text"]
-    assert "Paste what Juno said" in got["after"][1]["dialog"]
-    a = _one(got, "msg.received")
-    assert a["item"] == "larkspur_retail_castellan" and a["value"]["text"].startswith("Hi Morgan")
-    assert a["value"]["draft"] is True, "with draft, the engine queues the reply carrying their words"
-    _rev_is_the_items(m, a)
+    assert "Paste what Juno said" not in got["after"][1]["dialog"]
+    w = [x for x in got["work"] if x and x.get("kind") == "reply"]
+    assert len(w) == 1 and w[0]["args"] == {"contact": "larkspur_retail_castellan", "want": "Yes, Thursday at 12 works."}
 
 
 def test_a_call_is_booked_prepared_for_and_followed_by_a_thank_you(run, tmp_path, vp):
@@ -402,8 +401,9 @@ def test_links_are_the_model_s_own_so_spelling_differences_still_join(run, tmp_p
 def test_changing_your_mind_keeps_the_reason_and_brings_things_back(run, tmp_path, vp):
     got = _go(run, tmp_path, [
         {"hash": "jobs", "click": "Not for me: Harbourline Bank, Pricing Analyst"},
+        # Why is asked once, in the bin's own sheet (2026-10-29: never a second "Why?").
+        {"click": "Not this role: the pay", "role": "radio", "exact": True},
         {"click": "Take it off my list"},
-        {"click": "Pay", "exact": True},
         {"click": "41 left out by the search", "exact": False},
         {"click": "Bring back Transport Planning Analyst at Fernhill Freight"},
         {"click": "Set it aside", "exact": True},

@@ -54,7 +54,7 @@ CLOCK_KEYS = frozenset({"made_at", "updated", "seen_at", "seen_recently"})
 SECTIONS = ("app", "person", "needs_you", "jobs", "ready", "messages", "due", "people",
             "interviews", "done", "settings", "brief", "setup", "updates", "applications",
             "referrals", "message_budget", "linkedin", "learned", "help", "resume",
-            "search", "where", "listener", "schedule")
+            "search", "where", "listener", "schedule", "you")
 # The page shows every live contact, then the rest by recency up to a size budget
 # (tools/app_lists.py PEOPLE_BYTES); the whole book is in the page's database for "Show".
 DUE_MAX = 100
@@ -423,9 +423,16 @@ def _app(ctx: Ctx, targets: dict) -> dict:
     u = _updates(ctx, targets)
     waiting = u.get("waiting") or None
     news = ((u.get("changed") or [{}])[0].get("lines") or [])[:3]
+    try:
+        import app_setup
+        owner, name = app_setup.origin()
+    except Exception:  # noqa: BLE001
+        owner, name = "", ""
     return {"version": u.get("version") or "",
             "update_waiting": waiting["line"] if waiting and u.get("mode") == "when_asked"
-            else None, "news": news, "privacy": _privacy_line()}
+            else None, "news": news, "privacy": _privacy_line(),
+            # The copy the page belongs to, so the page can start its helper chat itself.
+            "repo": f"https://github.com/{owner}/{name}" if owner and name else None}
 
 
 def _privacy_line() -> str:
@@ -1258,6 +1265,12 @@ def _ready(ctx: Ctx, targets: dict) -> list:
         item["rev"] = rev_of(rid, row_rev(row), [(f["path"], f["pages"], f["asset"])
                                                  for f in item["files"]],
                              (item["outreach"] or {}).get("text"))
+        # A resume made for a contact (stage_picks.py --for-contact): who, by first name only,
+        # and whether it goes to them or through a portal naming them.
+        fc = str(draft.get("for_contact") or "").strip()
+        if fc:
+            item["for_contact"] = {"id": fc, "first_name": first_name(draft.get("for_contact_name"))}
+            item["route"] = str(draft.get("for_contact_route") or "")
         item["near"] = _near(folder, draft)
         item["tweaks_done"] = _tweaks_done(folder, os.path.join(folder, "draft.json"))
         _card(ctx, targets, item, "for_ready", row, folder)
@@ -1589,6 +1602,21 @@ STATUS_WORDS = {
 }
 
 
+def who_they_are(c: dict, status: str) -> str:
+    """recruiter, referrer, hiring (an interviewer, a hiring manager or HR) or peer: what the
+    Contacts filter sorts people by (the maintainer, 2026-10-28)."""
+    from network import compose
+    title = str(c.get("title") or "")
+    route = str(c.get("route") or "").strip().lower()
+    if status == "referral_in_progress" or route == "referral":
+        return "referrer"
+    if compose.is_recruiter(title):
+        return "recruiter"
+    if route == "hiring_team" or re.search(r"\b(hiring manager|head of|director|manager|lead|vp|chief|hr|human resources|people partner|talent)\b", title, re.I):
+        return "hiring"
+    return "peer"
+
+
 def owed_button(cid: str, status: str, due: str, today: dt.date, has_draft: bool) -> dict | None:
     """The one button a contact row shows, only when something is owed."""
     if status == "replied_needs_response":
@@ -1699,6 +1727,7 @@ def _people(ctx: Ctx, targets: dict) -> list:
                 "owed": owed_button(cid, status, due, ctx.today, cid in drafts),
                 "last": last,
                 "next_action": action, "due": due or None, "route": full[cid]["route"],
+                "who": who_they_are(c, status),
                 "replied": full[cid]["replied"], "live": full[cid]["live"],
                 "call": _call_of(cid, "call_booked" if str(c.get("status") or "") ==
                                  "call_booked" else status, due),
@@ -1935,6 +1964,9 @@ def _interviews(ctx: Ctx, targets: dict) -> list:
                            for s_ in stages],
                 "format": _format_of(text, stage.get("label")),
                 "one_screen": _one_screen(text, ctx.names),
+                # The prep itself, so it is read on the page, never only from a chat (the
+                # maintainer, 2026-10-28): its words, contact details out, cut at a length.
+                "prep_text": scrub(text, ctx.names)[:20000] if text else None,
                 "practice": interview_pack.practice(text) if text else None,
                 "sent_files": _sent_files(ctx, row),
                 "referrer": referrer_of(ctx, row),
@@ -2119,6 +2151,10 @@ def _applications(ctx: Ctx, targets: dict) -> list:
                 "followed_up": len(re.findall(r"followed up \d{4}-\d{2}-\d{2}",
                                               str(row.get("notes") or ""))),
                 "heard": list(HEARD.get(st, ())), "rev": ""}
+        # The posting it went to, so an applied card links to it with no job row left.
+        link = _link_on_row(row, {})
+        if link.get("url") or link.get("apply_url"):
+            item["apply"] = apply_link(link)
         item["rev"] = rev_of(rid, row_rev(row), item["stages"], nxt)
         quiet = app_lists.ago(last, ctx.today)
         if live or (quiet is not None and quiet <= fold):
@@ -2361,7 +2397,93 @@ def _resume(ctx: Ctx, targets: dict) -> dict | None:
     return item
 
 
+# ------------------------------------------------------------------ you: what the profile holds
+
+_TEX_WRAP = re.compile(r"\\(?:textbf|textit|emph|mbox)\{([^{}]*)\}")
+_TEX_SEP = re.compile(r"\s*(?:\\textbullet\{\}|\\textbullet\b|\\\\|\n|;)\s*")
+
+
+def tex_plain(text) -> str:
+    """A profile's LaTeX string as the words it shows: braces, kerns and escapes gone."""
+    s = str(text or "")
+    for _ in range(3):
+        s = _TEX_WRAP.sub(r"\1", s)
+    s = re.sub(r"\\kern\S*\s*", "", s)
+    s = re.sub(r"\\([&%$#_])", r"\1", s).replace("--", "-").replace("~", " ")
+    s = re.sub(r"\\[a-zA-Z]+\{\}|\\[a-zA-Z]+\b|[{}]", "", s)
+    return re.sub(r"\s+", " ", s).strip(" .")
+
+
+def _plain_list(value) -> list:
+    parts = value if isinstance(value, (list, tuple)) else _TEX_SEP.split(str(value or ""))
+    return [x for x in (tex_plain(p) for p in parts) if x]
+
+
+def _you(ctx: Ctx, targets: dict) -> dict | None:
+    """What the profile holds, as the person would list it: their jobs (with how many lines
+    each has to choose from), skills, education and certificates, and what is still missing.
+    Every change is work for a chat (`profile`), made in 01-candidate-profile.md first."""
+    if not person.exists("roles.py"):
+        return None
+    try:
+        roles = person.module("roles")
+        lib = getattr(person.module("bullets"), "LIB", {}) if person.exists("bullets.py") else {}
+        sk = person.module("skills") if person.exists("skills.py") else None
+    except Exception:  # noqa: BLE001
+        return None
+    jobs = []
+    for r in getattr(roles, "ROLES", []) or []:
+        employer = str(r.get("employer") or "")
+        lines = [k for k in (lib.get(employer) or {}) if not str(k).endswith("_SHORT")]
+        jobs.append({"id": "you-job-" + seg(employer + "-" + str(r.get("title") or "")),
+                     "employer": employer, "title": str(r.get("title") or ""),
+                     "dates": str(r.get("dates") or "").replace("--", "-"),
+                     "place": str(r.get("loc") or ""), "lines": len(lines)})
+    skills = []
+    for it in (getattr(sk, "ITEMS", None) or []) if sk else []:
+        name = str(it[1]) if len(it) > 1 else ""
+        if name and name not in skills:
+            skills.append(name)
+    education = _plain_list(getattr(roles, "EDUCATION", ""))
+    certs = _plain_list(getattr(roles, "CERTIFICATIONS", ""))
+    try:
+        text = read_text(person.path("01-candidate-profile.md"))
+    except person.NoProfile:
+        text = ""
+    confirm = len(re.findall(r"\[CONFIRM:", text))
+    missing = []
+    if not jobs:
+        missing.append({"part": "jobs", "say": "The jobs you have had"})
+    for j in jobs:
+        if not j["lines"]:
+            missing.append({"part": "lines", "job": j["id"],
+                            "say": f"What you did as {j['title']} at {j['employer']}".strip()})
+    if not skills:
+        missing.append({"part": "skills", "say": "Your skills"})
+    if confirm:
+        missing.append({"part": "confirm", "say": f"{confirm} detail{'s' if confirm != 1 else ''} "
+                                                  "to check"})
+    out = {"id": "you", "jobs": jobs, "skills": skills, "education": education,
+           "certificates": certs, "missing": missing, "rev": ""}
+    out["rev"] = rev_of("you", {k: v for k, v in out.items() if k != "rev"})
+    targets["you"] = {"kind": "you", "rev": out["rev"]}
+    return out
+
+
 # ------------------------------------------------------------------ your search
+
+
+# A job site's name as people write it: "linkedin-search" is LinkedIn, never "Linkedin".
+_BRANDS = {"linkedin": "LinkedIn", "freehire": "Freehire", "jobbank": "Job Bank",
+           "indeed": "Indeed", "glassdoor": "Glassdoor"}
+
+
+def portal_label(name: str) -> str:
+    base = re.sub(r"-search$", "", str(name or ""))
+    if base.lower() in _BRANDS:
+        return _BRANDS[base.lower()]
+    words = re.split(r"[-_]+", base)
+    return " ".join(w if w.isupper() else w[:1].upper() + w[1:] for w in words if w)
 
 
 def _search(ctx: Ctx, targets: dict) -> dict:
@@ -2415,7 +2537,7 @@ def _search(ctx: Ctx, targets: dict) -> dict:
                     "cut": got("SALARY_CUT_BELOW")},
             "window_days": got("JOB_AGE_DAYS", 14),
             "employers": [str(x) for x in got("SCRAPE_EMPLOYERS", []) or []],
-            "portals": [{"name": k, "on": bool(v), "why": why.get(k, "")}
+            "portals": [{"name": k, "label": portal_label(k), "on": bool(v), "why": why.get(k, "")}
                         for k, v in sorted(sites.items())],
             "boards": [{"employer": k, "system": (v[0] if isinstance(v, (list, tuple)) and v
                                                    else str(v))} for k, v in sorted(boards.items())],
@@ -2600,6 +2722,16 @@ def _done(ctx: Ctx, targets: dict) -> dict:
     offers = throttle.spellings("offer", "hired", "offer_declined")
     sent = [(r, _date(throttle.applied_on(r))) for r in rows]
     sent = [(r, d) for r, d in sent if d]
+    # One application is one row, however many times the tracker holds it (the maintainer,
+    # 2026-10-28: the same role at one employer, sent the same day, was listed twice).
+    from company_key import key as _ckey
+    once, kept = set(), []
+    for r, d in sent:
+        k = (_ckey(r.get("company") or ""), " ".join(str(r.get("role") or "").lower().split()), d)
+        if k not in once:
+            once.add(k)
+            kept.append((r, d))
+    sent = kept
     interviews = sum(1 for r in rows if _status(r) in throttle.REACHED_INTERVIEW)
     n_offers = sum(1 for r in rows if _status(r) in offers)
     # A reply is a message back after one of theirs: a LinkedIn history imported whole holds
@@ -2829,7 +2961,7 @@ BUILDERS = {"app": _app, "person": _person, "needs_you": _needs_you, "jobs": _jo
             "referrals": _referrals, "message_budget": _message_budget,
             "linkedin": _linkedin, "learned": _learned, "help": _help, "resume": _resume,
             "search": _search, "where": _where, "listener": _listener,
-            "schedule": _schedule}
+            "schedule": _schedule, "you": _you}
 
 # What a section is before there is a profile to build it from: a setup still running, or
 # none started. The page shows the setup then, and every other section empty.

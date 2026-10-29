@@ -1,0 +1,17 @@
+{
+  "name": "last-job-search",
+  "description": "The front door to your job search: opens your private job search page, or sets it up the first time. Claude finds and scores jobs, writes and checks your resume and cover letter, finds the people worth talking to and keeps track of everything. It never sends anything.",
+  "author": {
+    "name": "last-job-search"
+  },
+  "homepage": "https://github.com/aranculleton/last-job-search",
+  "repository": "https://github.com/aranculleton/last-job-search",
+  "license": "MIT",
+  "keywords": [
+    "job search",
+    "resume",
+    "cover letter",
+    "networking",
+    "interview prep"
+  ]
+}

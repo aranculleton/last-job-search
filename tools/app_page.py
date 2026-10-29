@@ -72,7 +72,9 @@ def capabilities() -> dict:
         "sample": {},
         "assets": {},
         "mcp": {"servers": [{"server": "host:claude_browser",
-                             "tools": ["navigate", "get_page_text", "read_page", "preview_start"]}]},
+                             "tools": ["navigate", "get_page_text", "read_page", "preview_start"]},
+                             # The page wakes the chat that answers it by itself.
+                             {"server": "Claude Code Remote", "tools": ["send_message", "list_environments", "create_session"]}]},
     }
 
 

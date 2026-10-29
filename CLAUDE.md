@@ -114,7 +114,7 @@ documents sent with the file-sending tool, and applications delivered the one wa
 The page is always one tap away from a chat. When the person asks for it in any words
 ("open the app", "where's my page"), open it at once with the Artifact tool's `open` action
 (its address is `url` in `profile/app.json`), and end every reply that changed something on
-it with one line: "Your page: <its link>".
+it with one line: "Your page is up to date: <its link>" (nothing to press unless they want to look).
 
 ## Learning the person
 

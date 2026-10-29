@@ -680,6 +680,8 @@ p.count.tone-warn { color: var(--st-overdue); }
 .app-row { padding: 12px 16px; border-top: 1px solid var(--line); display: grid; grid-template-columns: minmax(0, 1fr); gap: 4px; overflow-wrap: anywhere; }
 .app-rows > .app-row:first-child { border-top: 0; }
 .app-row-top { font-weight: 600; }
+/* Employer and role read as one line of words, never two wrapped columns. */
+.app-row-top .btn.link { display: inline-block; text-align: left; padding: 8px 0; white-space: normal; }
 
 @media (max-width: 759px) {
   .top { padding-block: 0; }
@@ -894,7 +896,14 @@ dialog.work-sheet :is(select, input, textarea) { width: 100%; max-width: 100%; m
 /* With a mouse the page's text is a step smaller than the browser's default, and still scales
    with the person's own text-size setting: at 16px it read as zoomed in on a computer
    (the maintainer, 2026-10-26). Touch screens keep the full size. */
-@media (pointer: fine) { html { font-size: 93.75%; } }
+/* With a mouse, the size Claude's own app uses (14px text), so a screen holds what it
+   should; phones keep their larger, touch-sized type (the maintainer, 2026-10-28). */
+@media (pointer: fine) and (min-width: 760px) {
+  html { font-size: 87.5%; }
+  :root { --target: 36px; --top-h: 52px; }
+  .card { padding: 12px 16px; }
+  .sec-head .screen-title { font-size: 1.375rem; }
+}
 
 /* ------------------------------------------------------------------ the chat from any section, and pictures in it
    (the person, 2026-10-26). The conversation is one body: on the Chat page it lays out as part
@@ -964,4 +973,46 @@ body.has-fab .shell { padding-bottom: calc(var(--tabs-h) + env(safe-area-inset-b
     height: min(72dvh, calc(100dvh - var(--tabs-h) - env(safe-area-inset-bottom, 0px) - env(safe-area-inset-top, 0px) - var(--top-h) - var(--dock-lift, 0px)));
     padding-left: env(safe-area-inset-left, 0px); padding-right: env(safe-area-inset-right, 0px);
   }
+}
+
+/* Typing dots on a reply on its way. */
+.typing { display: inline-flex; gap: 4px; vertical-align: middle; }
+.typing span { width: 6px; height: 6px; border-radius: 50%; background: currentColor; opacity: 0.3; animation: typing 1.2s infinite ease-in-out; }
+.typing span:nth-child(2) { animation-delay: 0.2s; }
+.typing span:nth-child(3) { animation-delay: 0.4s; }
+@keyframes typing { 0%, 60%, 100% { opacity: 0.3; } 30% { opacity: 1; } }
+@media (prefers-reduced-motion: reduce) { .typing span { animation: none; opacity: 0.6; } }
+
+/* The "?" beside a section's title opens that part of the tour (2026-10-28). */
+.help-q { flex: none; align-self: flex-start; min-width: var(--target); min-height: var(--target); border-radius: 999px; border: 1px solid var(--line); background: transparent; color: var(--muted); font: inherit; font-size: 0.875rem; cursor: pointer; }
+.help-q:hover { color: var(--ink); border-color: var(--muted); }
+.help-q:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }
+.set-intro { margin: 0 0 4px; padding: 0 16px; }
+.you-missing { display: block; padding: 12px 16px; }
+.you-missing .set-name { margin: 0 0 4px; }
+/* On a phone every line counts: the tour is in Settings and the chat answers how-to. */
+@media (max-width: 759px) { .help-q { display: none; } }
+/* A phone shows more at once (the maintainer, 2026-10-29: "barely anything fits"): text a
+   touch smaller, cards and gaps tighter, every tap target still 44px. */
+@media (max-width: 759px) {
+  html { font-size: 93.75%; }
+  .sec { gap: 8px; }
+  .stack { gap: 8px; }
+  .card { padding: 12px; }
+  .sec-head { padding-block: 4px 0; gap: 8px; }
+  .summary { gap: 8px; }
+  .empty { padding: 16px; }
+  .card-actions { gap: 8px; }
+}
+/* A name inside a sentence stays in the sentence: a full-size tap area drawn into the lines
+   around it instead of a 44px line of its own. */
+.warm .btn.link { display: inline-block; min-height: 44px; min-width: 44px; padding: 12px 2px; margin-block: -12px; vertical-align: baseline; line-height: 20px; white-space: normal; }
+@media (max-width: 759px) {
+  .card.job { grid-template-columns: minmax(0, 1fr); row-gap: 4px; }
+  .card.job.selecting { grid-template-columns: 28px minmax(0, 1fr); }
+  .card.job.selecting .score, .card.job.selecting .job-main { grid-column: 2; }
+  .card.job .score { flex-direction: row; align-items: center; gap: 8px; }
+  .score-n { font-size: 1.25rem; }
+  .card.job { position: relative; }
+  .card.job .top-end { position: absolute; top: 8px; right: 8px; }
 }

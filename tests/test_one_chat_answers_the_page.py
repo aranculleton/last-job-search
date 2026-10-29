@@ -294,7 +294,7 @@ def test_start_names_the_helper_with_its_model_and_never_a_session_for_another_r
     assert copy.send(copy.run("listen", copy.dump(), "--chat", "big-chat"))
     said = copy.run("start", "--on", "Opus 5.5", "--tools", "none", "--chat", "big-chat")
     assert "give the page a small chat of its own" in said
-    assert "Job search: Claude's helper (keep this)" in said and "model sonnet" in said
+    assert "Job search helper" in said and "model sonnet" in said
     assert "--hand <the new session's id>" in said
 
 

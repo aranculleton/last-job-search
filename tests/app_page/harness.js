@@ -554,6 +554,7 @@ S.engine = async (a) => {
     if (a.shots && st.shot) out.shots.push(await shot(page, a.shots + "-" + st.shot, !!st.full));
   }
   out.actions = store.list("actions/").map((k) => store.get(k));
+  out.work = store.list("work/").map((k) => store.get(k));
   out.rings = (await calls(page)).filter((c) => c.cap === "comments" && c.text).map((c) => c.text);
   out.assets = (await page.evaluate(() => (window.__ljsAssets || []).slice())) || [];
   out.errors = o.errors;
@@ -645,13 +646,14 @@ S.undo = async (a) => {
   const after = store.list("actions/");
   const back = await T(page, "#main .card.job h3");
   await clickText(page, "button", "Not for me: Copperleaf Pay, Data Analyst, Payments");
+  // Why, asked once in the bin's sheet: the same action, with its reason.
+  await page.locator("dialog").getByRole("radio", {name: "Not this role: the pay", exact: true}).check();
   await clickText(page, "button", "Take it off my list");
-  await turn(page, 4);
-  // Why, if they like: the same action, now with a reason.
-  await page.locator('#main [data-item="r12-3"]').getByRole("button", {name: "Pay", exact: true}).click();
   await turn(page, 6);
   const reason = store.get("actions/act~r12-3~job.dismiss");
   const during = (await page.$$(".toast button:text-is('Undo')")).length + (await page.$$("#main button.undo")).length;
+  // The pointer off the toast: a toast under it is held open on purpose.
+  await page.mouse.move(1, 1);
   await page.clock.runFor(60000);
   await turn(page, 6);
   const later = {toast: (await page.$$(".toast")).length, item: (await page.$$("#main button.undo")).length};
@@ -735,7 +737,7 @@ S.limit = async (a) => {
   }});
   const {page, store} = o;
   const r = {banner: await T(page, "dialog .banner"), a: await bar(page, "search~1")};
-  await page.locator("dialog").getByRole("button", {name: "Pause everything"}).click();
+  await page.locator("dialog").getByRole("button", {name: "Stop everything"}).click();
   await turn(page, 8);
   r.paused = [store.get("work/search~1").stop_asked, store.get("work/draft~r12-2").stop_asked];
   r.errors = o.errors;
@@ -751,7 +753,13 @@ S.stop = async (a) => {
   }, fake: {canSend: "available"}});
   const {page, store} = o;
   const r = {late: await bar(page, "prep~int-larkspur-supply")};
+  // Late: the page asks its helper again first; only when that cannot be reached (no
+  // connector here) is the link to start a chat by hand offered.
+  r.rewake = (await bar(page, "prep~int-larkspur-supply")).buttons;
+  await page.locator(workSel("prep~int-larkspur-supply")).getByRole("button", {name: "Ask Claude again: Interview prep: Larkspur Retail"}).click();
+  await turn(page, 8);
   r.prefill = await page.$eval(workSel("prep~int-larkspur-supply") + " a.btn", (x) => x.href).catch(() => null);
+  r.runningBefore = (await bar(page, "search~1")).buttons;
   await page.locator(workSel("search~1")).getByRole("button", {name: "Stop: Finding jobs"}).click();
   await turn(page, 6);
   r.running = store.get("work/search~1");
@@ -900,6 +908,83 @@ S.room = async (a) => {
   return r;
 };
 
+// The page wakes its helper chat by itself (Claude Code Remote send_message), and starts a
+// new one on the person's copy when that fails, never asking anyone to wake Claude.
+S.wake = async (a) => {
+  const seed = {"meta/listener": {chat: "session_EXAMPLEHELPER", kind: "cloud", answered_at: "2026-10-25T08:00:00Z"}};
+  const o = await open({html: a.html, hash: "jobs", seed, fake: {canSend: "no_session", mcp: {fail: a.fail || []}}});
+  await draftViaDialog(o.page);
+  await turn(o.page, 8);
+  const r = {mcp: (await calls(o.page)).filter((c) => c.cap === "mcp").map((c) => ({tool: c.tool, server: c.server, input: c.input})), errors: o.errors};
+  await goto(o.page, "todo");
+  r.wakeCard = (await o.page.$$('#main [data-item="listen"]')).length;
+  await o.ctx.close();
+  return r;
+};
+
+// Your profile: a gap filled from To do, skills changed and a job taken off in Settings, each
+// one `profile` work item a chat makes (2026-10-28).
+S.you = async (a) => {
+  const o = await open({html: a.html, hash: "todo"});
+  const {page, store} = o;
+  const works = () => store.list("work/").map((k) => store.get(k)).filter((w) => w && w.kind === "profile");
+  const r = {card: await T(page, '#main [data-item="you"] .card-title')};
+  await page.locator('#main [data-item="you"]').getByRole("button", {name: "Add what you did"}).click();
+  await turn(page, 3);
+  let dlg = page.locator("dialog.sheet");
+  r.sheet = await T(page, "dialog.sheet #sheet-title");
+  await dlg.getByLabel(/What you did there/).fill("Built the weekly stock report for 40 stores.");
+  await dlg.getByRole("button", {name: "Add it"}).click();
+  await turn(page, 6);
+  await goto(page, "settings");
+  await page.locator('[data-k="info-sum:you-skills"]').first().click();
+  await page.getByRole("button", {name: "Add or take off"}).first().click();
+  await turn(page, 3);
+  dlg = page.locator("dialog.sheet");
+  await dlg.getByLabel("Power BI").uncheck();
+  await dlg.getByLabel(/^Add skills/).fill("Looker, SQL");
+  await dlg.getByRole("button", {name: "Save"}).click();
+  await turn(page, 6);
+  await page.locator('[data-k="info-sum:you-jobs"]').first().click();
+  await page.getByRole("button", {name: "Take Graduate Analyst at Saltmarsh Analytics off"}).first().click();
+  await turn(page, 3);
+  await page.locator("dialog.sheet").getByRole("button", {name: "Take it off"}).click();
+  await turn(page, 6);
+  r.works = works().map((w) => ({title: w.title, args: w.args}));
+  r.busy = await T(page, "#main .you-busy, #main [role=status]");
+  r.errors = o.errors;
+  await o.ctx.close();
+  return r;
+};
+
+// The walkthrough: offered once on To do, each step opening its section, skippable one step
+// or all of it; and one part of it from the "?" on any section's title (2026-10-28).
+S.tour = async (a) => {
+  // A laptop: the "?" on a section's title is not shown on a phone.
+  const o = await open({html: a.html, hash: "todo", viewport: {width: 1280, height: 800}});
+  const {page} = o;
+  const r = {card: await T(page, '#main [data-item="tour"] .card-title')};
+  await page.getByRole("button", {name: "Show me around"}).click();
+  await turn(page, 4);
+  r.first = await T(page, "dialog.sheet #sheet-title");
+  await page.locator("dialog.sheet").getByRole("button", {name: "Next"}).click();
+  await turn(page, 4);
+  await page.waitForTimeout(100);
+  r.second = {title: await T(page, "dialog.sheet #sheet-title"), hash: await page.evaluate(() => location.hash)};
+  await page.locator("dialog.sheet").getByRole("button", {name: "Skip the rest"}).click();
+  await turn(page, 4);
+  r.closed = await page.locator("dialog.sheet[open]").count();
+  await goto(page, "todo");
+  r.cardAfter = await page.locator('#main [data-item="tour"]').count();
+  await goto(page, "contacts");
+  await page.getByRole("button", {name: "How Contacts works"}).click();
+  await turn(page, 4);
+  r.part = {title: await T(page, "dialog.sheet #sheet-title"), buttons: await T(page, "dialog.sheet button")};
+  r.errors = o.errors;
+  await o.ctx.close();
+  return r;
+};
+
 S.no_listener = async (a) => {
   const o = await open({html: a.html, hash: "jobs", fake: {canSend: "no_session"}});
   await draftViaDialog(o.page);
@@ -927,7 +1012,7 @@ S.downloads = async (a) => {
   r.noLetter = await T(page, '#main .card.app[aria-labelledby="app-app-quayside-demand"] .muted.small');
   r.askButtons = await T(page, '#main .card.app[aria-labelledby="app-app-quayside-demand"] button');
   r.primary = await T(page, '#main .card.app[aria-labelledby="app-app-quayside-demand"] .card-actions .btn[data-primary]');
-  await page.getByRole("button", {name: "Get the files"}).click();
+  await page.getByRole("button", {name: "Ask Claude to add them"}).click();
   await turn(page, 8);
   r.work = store.get("work/files~app-quayside-demand");
   r.errors = o.errors;
@@ -1127,7 +1212,7 @@ S.chat_computer = async (a) => {
   const {page, store} = o;
   await openSetting(page, "work_either");
   const r = {legend: await T(page, "#main fieldset legend"), hints: await T(page, "#main .choice .hint")};
-  await page.getByLabel(/^On this computer/).check();
+  await page.getByLabel(/^On your computer/).check();
   await page.waitForTimeout(700);
   await turn(page, 6);
   r.setting = store.get("actions/act~setting-work_either~setting.set");
@@ -1156,6 +1241,15 @@ S.chat_dock = async (a) => {
   const vis = (sel) => visible(page, sel);
   const focusK = () => page.evaluate(() => document.activeElement ? document.activeElement.getAttribute("data-k") : null);
   const r = {fab: await vis("#chat-fab"), fabName: await page.getAttribute("#chat-fab", "aria-label"), dockBefore: await vis("#chat-dock")};
+  if (a.viewport && a.viewport.width < 760) {
+    await goto(page, "contacts");
+    await page.getByRole("button", {name: /^Got a message\?/}).first().click();
+    await turn(page, 6);
+    r.phone = {hash: await page.evaluate(() => location.hash), dock: await vis("#chat-dock"), focus: await focusK(), value: await page.inputValue("#main #talk-text")};
+    r.errors = o.errors;
+    await o.ctx.close();
+    return r;
+  }
   await page.click("#chat-fab");
   await turn(page, 6);
   r.open = {dock: await vis("#chat-dock"), fab: await vis("#chat-fab"), focus: await focusK(), box: await page.evaluate(() => !!document.querySelector("#chat-dock #talk-text")),
@@ -1247,7 +1341,7 @@ S.chat_pics = async (a) => {
 
 S.mock = async (a) => {
   const o = await open({html: a.html, hash: "interviews", fake: {sample: {reply: "First question: tell me about a forecast you built."}}});
-  await o.page.getByRole("button", {name: "Practice questions for Larkspur Retail"}).click();
+  await o.page.getByRole("button", {name: "Practise with Claude for Larkspur Retail"}).click();
   await o.page.waitForTimeout(50);
   await turn(o.page, 10);
   const r = {heading: await one(o.page, "#main h2"), msgs: await T(o.page, "#main .talk-msg .talk-text"),
@@ -1664,12 +1758,16 @@ S.settings = async (a) => {
 };
 
 S.split = async (a) => {
-  const o = await open({html: a.html, viewport: {width: 1440, height: 900}, hash: "jobs"});
+  // No "Side by side" menu any more (the maintainer, 2026-10-28); an address with two
+  // sections still opens both, with one plain way to close the second.
+  const o = await open({html: a.html, viewport: {width: 1440, height: 900}, hash: "jobs+contacts"});
   const {page} = o;
-  await page.locator("#toptools summary.menu-btn").click();
-  await page.locator("#toptools .menu-item", {hasText: "Open Contacts beside"}).click();
   await turn(page, 4);
-  const r = {cols: (await page.$$("#main.split > .col")).length, headings: await T(page, "#main h2"), hash: await page.evaluate(() => location.hash)};
+  const menu = (await page.$$("#toptools summary.menu-btn")).length;
+  const r = {menu, cols: (await page.$$("#main.split > .col")).length, headings: await T(page, "#main h2"), hash: await page.evaluate(() => location.hash)};
+  await page.getByRole("button", {name: "Close the second column"}).click();
+  await turn(page, 4);
+  r.after = (await page.$$("#main.split > .col")).length;
   if (a.shot) r.shot = await shot(page, a.shot);
   r.errors = o.errors;
   await o.ctx.close();

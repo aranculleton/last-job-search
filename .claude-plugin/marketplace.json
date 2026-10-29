@@ -1,0 +1,14 @@
+{
+  "name": "last-job-search",
+  "description": "last-job-search: a job search Claude runs end to end, on your own private copy.",
+  "owner": {
+    "name": "last-job-search"
+  },
+  "plugins": [
+    {
+      "name": "last-job-search",
+      "source": "./plugin",
+      "description": "Opens your private job search page, or sets it up the first time."
+    }
+  ]
+}

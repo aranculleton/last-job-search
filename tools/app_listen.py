@@ -51,7 +51,7 @@ DOC_COLLECTION, DOC_ID = "meta", "listener"
 CACHE = "ljs-listener.json"            # in the git folder: what this checkout last saw
 # Work or a tap waiting this long after the listener last answered: nobody is answering.
 LAPSE_S = 10 * 60
-HELPER_TITLE = "Job search: Claude's helper (keep this)"
+HELPER_TITLE = "Job search helper"
 # What the page's "Wake Claude" link types for the person; they only press Send. The chat
 # that opens runs the command and becomes the listener: a new chat with nothing else to do,
 # so it is the helper itself and starts no other.

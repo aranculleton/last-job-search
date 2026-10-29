@@ -556,7 +556,9 @@ def _job_dismiss(r: Run) -> dict:
     exclude.add(t["url"], why or "not for me (said on the page)", title=t.get("title", ""),
                 company=t.get("company", ""), basis="person", today=r.day.isoformat(),
                 location=t.get("place", ""), path=person.state("job_scraper", "seen_jobs.json"))
-    if why:
+    # A reason about the posting itself (it closed) or none in particular is no preference
+    # to learn; pay, place, field and employer are.
+    if why and why.lower() not in ("closed", "not this role", "role"):
         try:
             import learned
             learned.record("jobs", why, f"Not this posting: {t.get('title')} at "
@@ -775,8 +777,19 @@ def _confirm(r: Run, word: str, on: str = "") -> dict:
 def _ready_applied(r: Run) -> dict:
     on = r.on()
     _confirm(r, "applied", on=on)
-    return {"note": f"Marked as applied on {on}.",
-            "undo": {"action": "ready.not_applied", "target": r.target}}
+    note = f"Marked as applied on {on}."
+    # "I applied, naming X": X's referral is now in flight there, so nothing else at that
+    # employer goes in cold and the follow-up is a thank-you, not a nudge.
+    cid = str(r.value.get("referrer") or "").strip()
+    if cid and _contact(cid)[0] is not None:
+        role = str(r.target.get("role") or "")
+        _cli(_state(), ["set", cid, "--status", "referral_in_progress", "--next-action",
+                        f"Referral for {role}: wait to hear, then thank them" if role else
+                        "Referral in progress: wait to hear, then thank them", "--due", "",
+                        "--note", f"applied naming them as referrer{' for ' + role if role else ''}"
+                        ", said on the page", "--today", r.day.isoformat()])
+        note += f" {_first(cid)} is named as your referrer."
+    return {"note": note, "undo": {"action": "ready.not_applied", "target": r.target}}
 
 
 def _ready_not_applied(r: Run) -> dict:
@@ -1034,11 +1047,15 @@ def _msg_sent(r: Run) -> dict:
     sub_in, text = state.split_subject(text)
     text = text.strip()
     subject = " ".join(str(r.value.get("subject") or sub_in or t.get("subject") or "").split())
+    outside = bool(r.value.get("outside"))
+    if not text and outside:
+        # "Yes, it went" for a note sent outside the app with no draft on file: the send is
+        # kept so nobody is written to twice; its words are not known.
+        text = "[sent outside the app; the words were not kept]"
     if not text:
         raise Refused("The words that went are needed, so they can be kept with the thread.")
     day = r.on()
     attached = r.words("attached")
-    outside = bool(r.value.get("outside"))
     path = _text_file(text)
     try:
         with _thread_lock():
@@ -1210,7 +1227,9 @@ def _msg_received(r: Run) -> dict:
         if not have or str(have["data"].get("status") or "") in page_db.FINISHED:
             r.w.add("set", "work", wid, {
                 "kind": "reply", "title": f"Reply to {who}", "to": "either",
-                "args": {"contact": cid, "received": r.aid, "on": day},
+                "args": dict({"contact": cid, "received": r.aid, "on": day},
+                             **({"want": str(r.value.get("want"))[:600]} if r.value.get("want")
+                                else {})),
                 "asked_at": app_model.stamp(r.at), "asked_from": {"tab": r.act.get("tab") or ""},
                 "priority": 0, "status": "queued", "stage": 0,
                 "stages": [{"name": x["name"], "est_s": x["est_s"]}
@@ -1395,6 +1414,19 @@ def _due_snooze(r: Run) -> dict:
             csv_store.header(path) + list(throttle.CONFIRM_COLUMNS))))
         return {"note": f"Not today: {t.get('company')} again on {day.isoformat()}.",
                 "undo": {"action": "due.undo", "target": dict(t), "value": {"notes": before}}}
+    if t.get("half") == "requests":
+        # "Keep waiting" on the connection requests nobody accepted: each one's day moved.
+        moved = 0
+        for cid in t.get("contacts") or []:
+            if _contact(cid)[0] is None:
+                continue
+            code, _out = _cli(_state(), ["set", cid, "--due", day.isoformat(), "--note",
+                                         f"kept waiting for the request, again {day.isoformat()}, "
+                                         "said on the page", "--today", r.day.isoformat()])
+            moved += 0 if code else 1
+        if not moved:
+            raise Refused("None of them is in your contact book now.")
+        return {"note": f"Kept waiting: asked again on {day.isoformat()}.", "undo": None}
     cid = t.get("contact") or ""
     row, _ = _contact(cid)
     if row is None:
@@ -1497,25 +1529,51 @@ def _search_set(r: Run) -> dict:
     if not p:
         raise Refused("That is not a search setting the page can change.")
     v = r.value.get("value") if "value" in r.value else r.value.get("to")
-    if what in ("places", "roles") and isinstance(r.value.get("add") or r.value.get("remove"),
-                                                  str):
-        v = {"add": r.value["add"]} if r.value.get("add") else {"remove": r.value["remove"]}
+    steps = None
+    if what in ("places", "roles"):
+        add, rem = r.value.get("add"), r.value.get("remove")
+        if isinstance(add, str) or isinstance(rem, str):
+            v = {"add": add} if add else {"remove": rem}
+        elif isinstance(add, list) or isinstance(rem, list):
+            # Several at once, from the page's one sheet: each written in turn, so every one
+            # reads the list as the one before left it.
+            steps = ([{"add": str(x).strip()} for x in add or [] if str(x).strip()]
+                     + [{"remove": str(x).strip()} for x in rem or [] if str(x).strip()])
+        elif isinstance(v, list):
+            raise Refused("Say what to add or take off, one at a time.")
     if what == "sites" and r.value.get("name"):
         v = {str(r.value["name"]): bool(r.value.get("on"))}
-    work = {"kind": "tweak", "args": {"target": {"id": "jobs", "output": "jobs"},
-                                      "changes": [{"p": p, "v": v}],
-                                      "keep": {"scope": "all"}}}
-    got = tweak.apply(work, r.day)
-    if got.get("status") not in ("done", "cached"):
-        raise Refused(got.get("summary") or "It could not be changed.")
-    for n, item in enumerate(got.get("then") or []):
-        wid = page_db.safe_id(f"{item['kind']}~setting~{got.get('key')}~{n}")
-        r.w.add("set", "work", wid, {"kind": item["kind"], "title": item.get("title") or "",
-                                     "to": page_db.WORK_KINDS[item["kind"]]["to"],
-                                     "args": item.get("args") or {},
-                                     "asked_at": app_model.stamp(r.at), "priority": 0,
-                                     "status": "queued", "stage": 0,
-                                     "stages": page_db.progress(item["kind"])["stages"]})
+    if what == "pay" and isinstance(v, str):
+        # The first number written, never every digit run together ("90,000, hoping for
+        # 110,000" was once read as 90000110000).
+        m = re.search(r"\d[\d,]*(?:\.\d+)?", v)
+        v = float(m.group(0).replace(",", "")) if m else None
+    if what == "pay" and not isinstance(v, (int, float)):
+        raise Refused("Give the lowest pay you would take, as one number.")
+
+    def one(change) -> dict:
+        work = {"kind": "tweak", "args": {"target": {"id": "jobs", "output": "jobs"},
+                                          "changes": [{"p": p, "v": change}],
+                                          "keep": {"scope": "all"}}}
+        got = tweak.apply(work, r.day)
+        if got.get("status") not in ("done", "cached"):
+            raise Refused(got.get("summary") or "It could not be changed.")
+        for n, item in enumerate(got.get("then") or []):
+            wid = page_db.safe_id(f"{item['kind']}~setting~{got.get('key')}~{n}")
+            r.w.add("set", "work", wid, {"kind": item["kind"], "title": item.get("title") or "",
+                                         "to": page_db.WORK_KINDS[item["kind"]]["to"],
+                                         "args": item.get("args") or {},
+                                         "asked_at": app_model.stamp(r.at), "priority": 0,
+                                         "status": "queued", "stage": 0,
+                                         "stages": page_db.progress(item["kind"])["stages"]})
+        return got
+
+    if steps is not None:
+        if not steps:
+            raise Refused("Nothing to change.")
+        notes = [one(c).get("summary") for c in steps]
+        return {"note": "; ".join(n for n in notes if n) or "Changed.", "undo": None}
+    got = one(v)
     return {"note": got.get("summary") or "Changed.",
             "undo": {"action": "search.unset", "target": dict(r.target),
                      "value": {"key": got.get("key")}} if got.get("status") == "done" else None}

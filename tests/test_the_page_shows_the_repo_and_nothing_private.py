@@ -224,7 +224,7 @@ def test_a_big_search_is_modelled_inside_two_seconds(tmp_path, monkeypatch):
 def test_every_kind_of_work_has_its_stages():
     kinds = ("search", "draft", "resume_for_contact", "prep", "network", "reply", "follow_up",
              "brief", "research", "update", "talk", "files", "tweak", "evaluate",
-             "general_resume", "own_profile", "republish")
+             "general_resume", "own_profile", "republish", "profile")
     for kind in kinds:
         got = page_db.progress(kind)
         assert got["stages"] and all(s["est_s"] > 0 and s["name"] for s in got["stages"])
