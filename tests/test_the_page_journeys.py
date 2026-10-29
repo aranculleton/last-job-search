@@ -189,6 +189,30 @@ def test_a_rejection_stops_the_chase(run, tmp_path, vp):
     assert "Not this time" in got["after"][4]["text"]
 
 
+def test_an_interview_binned_leaves_interviews_at_once_and_undo_brings_it_back(run, tmp_path, vp):
+    # The bin on an interview said "no reply" and the card stayed until a chat applied it (the
+    # maintainer, 2026-10-29): it leaves Interviews, To do and the counts as it is chosen.
+    card = "document.querySelector('#main article[data-item=\"int-harbourline-risk\"]')"
+    line = "document.querySelector('#main .ended[data-item=\"int-harbourline-risk\"]')"
+    soon = "document.querySelectorAll('#main [data-item=\"soon:int-harbourline-risk\"]').length"
+    binned = [
+        {"hash": "interviews", "open": "ivbin:int-harbourline-risk"},
+        {"click": "No reply, and I have stopped waiting", "role": "radio"},
+        {"submit": True, "ready": "!" + card + " && !!" + line},
+    ]
+    got = _go(run, tmp_path, [{"hash": "todo", "eval": soon}] + binned + [{"hash": "todo", "eval": soon}], vp)
+    a = _one(got, "outcome.no_response")
+    assert a["item"] == "int-harbourline-risk" and a["rev_seen"] == _item(_sample(), a["item"]).get("rev")
+    before, ended, todo = got["after"][0], got["after"][3], got["after"][4]
+    assert before["eval"] == 1 and todo["eval"] == 0, (before["eval"], todo["eval"])
+    assert "Second interview with Harbourline Bank: marked as no reply." in ended["text"], ended["text"]
+    assert "Saved. Claude will pick this up." in ended["text"] and "2 interviews coming up" in ended["text"], ended["text"]
+    # Undo, before a chat has seen it: the card is back and nothing is left to apply.
+    got = _go(run, tmp_path, binned + [{"open": "undo:ivend:int-harbourline-risk", "ready": "!!" + card + " && !" + line}], vp)
+    assert "3 interviews coming up" in got["after"][3]["text"] and "marked as no reply" not in got["after"][3]["text"]
+    assert not [x for x in got["actions"] if x["action"] == "outcome.no_response"]
+
+
 def test_the_prep_is_read_on_the_page_and_practice_uses_its_questions(run, tmp_path, vp):
     got = _go(run, tmp_path, [
         {"hash": "interviews", "click": "Read your prep", "read": "dialog.detail"},

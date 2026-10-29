@@ -671,6 +671,9 @@ S.engine = async (a) => {
     if (st.view) { for (const [k, v] of Object.entries(st.view)) store.chat("view/" + k, {made_at: "2026-10-25T09:00:00Z", data: v}); await turn(page, 8); }
     if (st.hash2) await goto(page, st.hash2);
     await unfold();
+    // What the step checks is waited for, with a time limit, never read after a set number of
+    // turns: a timeout fails the step.
+    if (st.ready) await page.waitForFunction((c) => eval(c), st.ready, {timeout: 5000});
     const entry = {text: (await one(page, st.read || "#main")) || "", dialog: (await one(page, "dialog")) || ""};
     if (st.clip) entry.clip = await copied(page);
     if (st.attr) entry.attr = await page.getAttribute(st.attr[0], st.attr[1]).catch(() => null);
