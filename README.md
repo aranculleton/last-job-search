@@ -41,6 +41,7 @@ stay in charge of what goes out.
 [START_HERE.md](START_HERE.md) has each step for a phone, a browser or a computer, and
 [HELP.md](HELP.md) what to do if something goes wrong.
 
+
 ## What it looks like
 
 <p align="center">
@@ -69,6 +70,25 @@ Tap, or say it in any chat. Claude does the work in the background and shows its
 
 No resume yet? Say "build one with me". It never asks for your email: new jobs and what is
 due reach you on your page and in your twice-weekly brief.
+
+## On a computer: open it from any chat (optional)
+
+The app also comes as a Claude Code plugin: a front door, not a second copy. Installed on your
+computer, "open my job search" in any chat there opens your page, and the first time it makes
+your private copy for you. Your search still lives in your own private copy, which keeps
+itself up to date; the plugin only finds it. Chats in the cloud and on a phone do not load
+plugins, and do not need it.
+
+<!-- claude-surface: plugin-install -->
+<!-- checked 2026-10-28; https://code.claude.com/docs/en/discover-plugins -->
+To open your job search from any chat on your computer:
+1. In Claude Code on your computer (the Claude desktop app's Code tab, or a terminal), type:
+   /plugin install last-job-search --marketplace aranculleton/last-job-search
+2. When it asks where to install it, choose your user account.
+3. From then on, say "open my job search" in any chat on that computer.
+
+Screens change: if yours looks different, tell Claude what you see.
+<!-- /claude-surface -->
 
 ## Why it works differently
 

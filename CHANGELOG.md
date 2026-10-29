@@ -20,6 +20,82 @@ make sense to somebody whose repo just received it.
 
 ## [Unreleased]
 
+## [4.2.0] - 2026-10-29
+
+### Added
+
+- **Your profile, on the page.** Settings opens on what Claude knows about you: your jobs,
+  skills, education, certificates and your resume. Add a job, change one, take one off, untick
+  a skill or add new ones; Claude makes each change and a fresh resume. It is the pool every
+  application picks from, never what goes on each one. A profile with gaps (a job with nothing
+  on what you did, no skills) gets a "Finish your profile" card in To do, each gap with the
+  form that fills it.
+- **A walkthrough that shows you round.** Offered once, it opens each section in turn and
+  follows a job from found to applied, then why people matter and where interviews go. Skip a
+  step or the rest of it; take it again from Settings, or one part from the **?** beside any
+  section's title. Ask the chat "how do I…" and it answers from the same words, with Show me.
+- **The plugin: a front door on your computer.** Optional: one line in Claude Code installs
+  it, and "open my job search" in any chat there opens your page, or makes your private copy
+  the first time. Your copy still holds everything and updates itself; cloud and phone chats
+  do not load plugins and do not need it. README, "On a computer".
+
+### Changed
+
+- **Your page wakes Claude by itself.** Something you ask for on the page reaches the chat
+  that does the work at once, through Claude's own connector (asked for once), so "Wake
+  Claude" and "Start it now" are gone, and no new chat is started for each small thing. If
+  that chat has gone, the page starts one fresh helper, never one per task.
+- **Running work reads plainly.** Work Claude has been asked for says Starting; running work
+  has a Stop button of its own; work nobody has picked up offers Ask Claude again; and when
+  something finishes, fails or has a question, a note says so on screen with See it.
+- **On a phone, Chat is the tab alone**: no floating button and no panel over it as well.
+- **More fits on a phone.** Text a touch smaller, tighter cards and gaps, job cards one column
+  wide with the score above the title, and every tap target still full size. Settings, Look,
+  has a new **Size** (Smaller, Standard, Larger) for this device.
+- **Cheaper to run.** Taps close together wake Claude once, and one tap reaches Claude one
+  way, never through the page's comment bell and the helper chat both.
+- **Empty sections say what they are for** and offer the next step: Contacts and Messages
+  explain why people matter and offer Find people; Interviews says how one gets there.
+- **Interview prep is read on the page.** "Read your prep" shows the prep itself in
+  Interviews; practising with Claude is a choice beside it, never the only way in.
+- **Contacts filter by who they are**: recruiters, referrers, hiring managers and HR, people
+  in your field; and search by name or employer on any list longer than a glance.
+- **Questions from updates are decided for you** where nothing is lost: notes kept before a
+  prep existed are folded in, and you are never asked to paste old messages (your LinkedIn
+  download brings them).
+- **A cooler, sleeker look**: the light background and cards lose most of their pink, with
+  the rose accent kept; on a computer with a mouse, text and controls are sized like the
+  Claude app's own.
+- **"Side by side" is gone**, and work that was stopped leaves the work list after two minutes.
+- **The chat shows moving dots while Claude works**, and the helper chat is called
+  "Job search helper".
+
+### Fixed
+
+- A message in the page's chat could be sent twice, and its note showed Claude's own reasoning.
+- "Read your prep" showed "arrives with the next update", an empty "The paper" and stages
+  with no names.
+- One application listed twice in Progress when the tracker held it twice.
+- Old work still said "Nudge" for a follow-up.
+- Your resume could only be downloaded once something had been drafted; it is in Settings now.
+- Try again on work that did not finish never told Claude.
+- The tour described a Messages section the page no longer has.
+- A question Claude asked mid-task had nowhere to be answered: it now has an Answer button.
+- Settings, Your search: changing roles or places always failed, the pay box saved every digit
+  run together, and Avoid offered a Change that could not work.
+- "Yes, I applied" on "Did you apply?" was refused, Paste their profile failed from both of its
+  buttons, Keep waiting on connection requests failed, and Skip on an application's follow-up
+  failed.
+- "I applied, naming" a referrer now records the referral; what you want to say back reaches
+  the reply; a rejection keeps the day you heard; a closed posting is no longer saved as
+  something you dislike.
+- An applied card links to its posting; a follow-up due on an application shows on its card; a
+  thank-you after an interview remembers which interview; a resume made for a contact says so.
+- Drafting a reply no longer asks you to paste a reply you already logged; Interviews always
+  has I have an interview; a past interview offers I heard back; To do points to new jobs.
+- Jobs stays open while the first search runs, and To do and Settings agree on a break.
+- The page never guessed a contact's pronoun in its examples.
+
 ## [4.1.0] - 2026-10-26
 
 ### Changed

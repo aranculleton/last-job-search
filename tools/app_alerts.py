@@ -50,7 +50,9 @@ WORK_COST = {"search": 2, "draft": 3, "resume_for_contact": 3, "prep": 3, "netwo
              # over their own profile.
              "evaluate": 1, "general_resume": 1, "own_profile": 2,
              # The page's new code built and published by the listener: no drafting.
-             "republish": 1}
+             "republish": 1,
+             # A change to their own profile, and a fresh resume made from it.
+             "profile": 2}
 
 SUGGEST_PER_DAY = 3
 PAUSE_AFTER = 3

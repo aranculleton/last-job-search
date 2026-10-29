@@ -158,28 +158,37 @@ TOUR = (
 # first-time lines in the page's words ("Say what's off in Chat"), never a chat's ("tell
 # me"). Nothing here runs unasked: the tour opens from Settings, a tip shows once at the end
 # of its tab (CAPABILITY_MAP G15).
+# The page's walkthrough: it opens each section in turn and says what it is for, following
+# one job from found to applied, then the people and the interviews (2026-10-28). `tab` is
+# the page's own section id.
 PAGE_TOUR = (
     {"key": "todo", "tab": "todo", "title": "To do",
-     "text": "What is due, most urgent first. Each card has one button; tap Done when it is "
-             "done, or Not today."},
+     "text": "What needs you, most urgent first: a question, a follow-up that is due, an "
+             "interview coming up. Each card has one button."},
     {"key": "jobs", "tab": "jobs", "title": "Jobs",
-     "text": "New roles scored out of 100 against what you want, with why. Find jobs searches "
-             "again; tap Draft this on one you want; the bin takes one off your list."},
-    {"key": "drafts", "tab": "ready", "title": "Drafts",
-     "text": "Your resume and letter for each role, checked. Get both files, apply on the "
-             "employer's own site, then tap I have applied."},
-    {"key": "messages", "tab": "messages", "title": "Messages",
-     "text": "Notes to people worth writing to. Copy one, send it on LinkedIn yourself, then "
-             "tap I sent it."},
-    {"key": "contacts", "tab": "people", "title": "Contacts",
-     "text": "Everyone you are talking to, and what is owed. When someone writes back, tap "
-             "They replied; if they sent you a job, tap They sent me a job. Find people "
-             "looks for more."},
+     "text": "Roles found for you, scored out of 100, with why. Tap Draft this on one you "
+             "like; the bin takes one off. Find jobs searches again. While Claude works, the "
+             "bar at the top says so: tap it to watch, or to stop it."},
+    {"key": "drafts", "tab": "drafts", "title": "Drafts",
+     "text": "Your resume and letter for each role, written for that posting and checked. "
+             "Get the files, apply on the employer's own site, then tap I have applied. From "
+             "then on it is tracked, and its follow-ups come back to To do."},
+    {"key": "contacts", "tab": "contacts", "title": "Contacts",
+     "text": "Why people: someone inside who puts your name forward gets you far more "
+             "interviews than applying cold. Claude finds who to write to and drafts a short "
+             "note; you send it on LinkedIn yourself. Every recruiter, referrer and hiring "
+             "manager is kept here, with what each conversation needs next."},
     {"key": "interviews", "tab": "interviews", "title": "Interviews",
-     "text": "Your prep for each interview, to read before it. Tap Prepare me to build it."},
+     "text": "Got an interview? Tell Claude in Chat, or tap I heard back on the application. "
+             "Your prep is here to read: what they will ask, your answers, your questions."},
+    {"key": "progress", "tab": "progress", "title": "Progress",
+     "text": "Everything you have applied for, and how each one is going."},
+    {"key": "settings", "tab": "settings", "title": "Settings",
+     "text": "Your profile is here: your jobs, skills, education and certificates. Change "
+             "them any time, and every new resume picks from them."},
     {"key": "chat", "tab": "chat", "title": "Chat",
      "text": "Ask anything, or paste a link, a message or a screenshot and say what you want. "
-             "Claude does the rest and it shows up here."},
+             "Claude does it, and the result shows up where it belongs."},
 )
 PAGE_FIRST = {
     "search": "Your first search here, so the ranking won't be perfect yet. Say what's off "

@@ -99,11 +99,12 @@ def test_both_looks_name_the_same_tokens_and_every_state():
     assert set(palettes.STATUSES) == {"done", "running", "waiting", "failed", "overdue", "held"}
 
 
-def _cooler(h):
-    """A colour moved halfway to the grey of its own lightness."""
+def _cooler(h, f=0.7):
+    """A colour moved most of the way to the grey of its own lightness (the maintainer,
+    2026-10-28: warm but sleek, like Claude's own light look)."""
     c = [int(h[i:i + 2], 16) for i in (1, 3, 5)]
     m = sum(c) / 3
-    return "#%02x%02x%02x" % tuple(round(v + (m - v) * 0.5) for v in c)
+    return "#%02x%02x%02x" % tuple(round(v + (m - v) * f) for v in c)
 
 
 def test_the_colours_are_rose_pines_own_where_they_are_used_in_its_roles():
@@ -114,9 +115,9 @@ def test_the_colours_are_rose_pines_own_where_they_are_used_in_its_roles():
                 assert v in flavour.values() or v == MAIN["base"], (name, k, v)
         if name == "dark":
             assert p["bg"][0] == flavour["base"] and p["surface"][0] == flavour["surface"]
-        else:   # half the warmth out of dawn's base and surface (the maintainer, 2026-10-26)
+        else:   # most of the warmth out of dawn's base, surface and depths (2026-10-28)
             assert p["bg"][0] == _cooler(flavour["base"]) and p["surface"][0] == _cooler(flavour["surface"])
-        assert p["sunk"][0] in (flavour["overlay"], flavour["base"])
+        assert p["sunk"][0] in (flavour["overlay"], flavour["base"], _cooler(flavour["overlay"]))
         assert p["ink"][0] == flavour["text"] and p["line"][0] == flavour["highlight_med"]
         assert p["selection"][0] == flavour["highlight_med"], "rose pine pairs a selection with text"
         assert p["line-strong"][0] in (flavour["subtle"], flavour["muted"])

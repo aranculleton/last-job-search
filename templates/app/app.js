@@ -216,6 +216,21 @@
     const r = document.documentElement;
     if (l === "light" || l === "dark") r.setAttribute("data-look", l); else r.removeAttribute("data-look");
   }
+  // How big the whole page is drawn, on this device only: the person's own zoom, kept with
+  // the look (the maintainer, 2026-10-29: "slightly zoomed in on phone").
+  const SIZE_KEY = "ljs:size";
+  const SIZES = {smaller: 0.9, standard: 1, larger: 1.12};
+  function applySize(z) {
+    const f = SIZES[z] || 1;
+    try { document.body.style.zoom = f === 1 ? "" : String(f); } catch (e) { /* no zoom here */ }
+  }
+  function setSize(z) {
+    S.size = SIZES[z] ? z : "standard";
+    applySize(S.size);
+    sset("local", SIZE_KEY, S.size === "standard" ? null : S.size);
+    announce(({smaller: "Smaller.", standard: "Standard size.", larger: "Larger."})[S.size]);
+    scheduleRender();
+  }
   function setLook(l) {
     S.look = l;
     applyLook(l);
@@ -548,6 +563,11 @@
     for (const [id, w] of next) {
       const p = prev.get(id);
       if (!p) continue;
+      if (p.status !== w.status && (w.status === "done" || w.status === "failed" || w.status === "needs_you")) {
+        const tab = WORK_HOME[txt(w.kind)];
+        toast({text: txt(w.title).replace(/^Nudge /, "Follow up with ") + (w.status === "done" ? ": ready." : w.status === "failed" ? ": did not finish." : ": Claude has a question."), ids: [], bad: w.status === "failed",
+          see: w.status === "needs_you" ? () => askWorkAnswer(id) : w.status === "failed" ? openWork : tab ? () => go(tab, {focus: true}) : openWork, seeLabel: w.status === "needs_you" ? "Answer it" : "See it"});
+      }
       if (p.status !== w.status) {
         if (w.status === "done") announce(txt(w.title) + ": ready.");
         else if (w.status === "failed") announce(txt(w.title) + ": did not finish.");
@@ -862,6 +882,67 @@
     } catch (e) { return null; }
   }
   function anchorEl() { return $("top") || document.body; }
+  // The chat that answers this page is woken by the page itself, through Claude's own
+  // connector (Claude Code Remote, send_message to that chat), once per piece of work: no
+  // "Wake Claude", no new chat (the maintainer, 2026-10-28). Its one consent is asked the first
+  // time; where it is refused or missing, the doorbell and the card below stay as before.
+  const WAKER = "Claude Code Remote";
+  const within = (p, ms) => Promise.race([p, new Promise((r) => setTimeout(() => r("timeout"), ms))]);
+  async function remoteCap() {
+    try { const m = await within(Promise.resolve(window.claude && window.claude.use ? window.claude.use("mcp") : null), 4000); return m && m !== "timeout" ? m : null; }
+    catch (e) { return null; }
+  }
+  // Taps close together wake Claude once: each wake is a turn of the helper chat, and a turn
+  // costs part of the person's plan (the maintainer, 2026-10-29: "cheap to run").
+  const WAKE_GATHER_MS = 4000;
+  // The first tap wakes at once; taps in the next few seconds are gathered into one more.
+  function wakeSoon(ids) {
+    const go = (q) => autoWake(q).then(async (ok) => { if (!ok) ringNote(q, await ringComments(q, false)); else scheduleRender(); });
+    if (!S.wakeTimer) {
+      go(ids);
+      S.wakeTimer = setTimeout(function flush() {
+        const q = S.wakeQueue || [];
+        S.wakeQueue = [];
+        S.wakeTimer = null;
+        if (q.length) { go(q); S.wakeTimer = setTimeout(flush, WAKE_GATHER_MS); }
+      }, WAKE_GATHER_MS);
+      return;
+    }
+    S.wakeQueue = (S.wakeQueue || []).concat(ids.filter((id) => !(S.wakeQueue || []).includes(id)));
+  }
+  async function autoWake(ids) {
+    if (!ids.length) return false;
+    S.woken = S.woken || new Set();
+    const fresh = ids.filter((id) => !S.woken.has(id));
+    if (!fresh.length) return true;
+    const m = await remoteCap();
+    if (!m) { S.wakeFailed = true; return false; }
+    const sid = txt(obj(S.listener).chat);
+    let ok = false;
+    if (/^session_/.test(sid)) {
+      try { ok = (await within(m.callTool(WAKER, "send_message", {session_id: sid, message: "[app] [work:" + fresh.join(",") + "]"}), 15000)) !== "timeout"; }
+      catch (e) { ok = false; }
+    }
+    // The helper is gone (or there never was one): one new one, started by the page itself,
+    // once per page load, on the person's own copy. Never a chat per piece of work.
+    // Work meant for the person's computer is never moved to a cloud chat.
+    if (!ok && fresh.every((id) => txt(obj(workDoc(id)).to) !== "computer")) ok = await startHelper(m, fresh);
+    if (ok) { fresh.forEach((id) => S.woken.add(id)); S.wokenAt = now(); } else S.wakeFailed = true;
+    return ok;
+  }
+  async function startHelper(m, ids) {
+    const repo = safeUrl(txt(obj(M().app).repo));
+    if (!repo || S.helperStarted) return false;
+    S.helperStarted = true;
+    let env = null;
+    try { const got = await within(m.callTool(WAKER, "list_environments", {}), 15000); const hit = /\benv_[A-Za-z0-9_-]+/.exec(JSON.stringify(got)); env = hit ? hit[0] : null; }
+    catch (e) { env = null; }
+    const prompt = "You are this person's job search helper. Run python3 tools/app.py start --on \"<this chat's model>\" --tools none, do what it prints, then take the page's waiting work: [app] [work:" + ids.join(",") + "]";
+    try {
+      const got = await within(m.callTool(WAKER, "create_session", Object.assign({source_url: repo, title: "Job search helper", prompt}, env ? {environment_id: env} : {})), 30000);
+      return got !== "timeout";
+    } catch (e) { return false; }
+  }
   async function ringComments(ids, force, tag) {
     const c = await CAP.comments;
     if (!c) return "none";
@@ -904,6 +985,8 @@
     for (const id of ids) {
       const w = workDoc(id);
       const toComputer = w && w.to === "computer";
+      // Woken: the card itself says Starting; a second line saying so is noise.
+      if (how === "woken") { S.workNote.delete(id); continue; }
       if (told) S.workNote.set(id, {text: "Claude has been told.", tone: "muted"});
       else if (toComputer) S.workNote.set(id, {text: "This needs your computer: open Claude on it, and it starts there.", tone: "muted"});
       else if (how === "no_session") S.workNote.set(id, {text: "Claude is not working on your search right now. This starts next time it does.", tone: "warn", link: true});
@@ -941,11 +1024,17 @@
         if (r.ok) made.push(s.id);
         else if (r.why === "busy") { S.workNote.set(s.id, {text: "Already on its way.", tone: "muted"}); toast({text: (s.title || "That") + " is already on its way.", ids: [], until: 0}); }
         else if (r.why === "done") { toast({text: (s.title || "That") + " is already done.", ids: [], until: 0}); }
+        else if (r.why === "one") { toast({text: "One at a time: " + (r.running || "the last one") + " is still going. Ask again once it finishes.", ids: [], until: 0}); }
         else { toast({text: "Not saved. Try again.", ids: [], until: 0}); }
       }
       if (!made.length) { scheduleRender(); return made; }
-      announce(made.length === 1 ? "Asked: " + txt(workDoc(made[0]) && workDoc(made[0]).title) + "." : "Asked for " + made.length + " jobs.");
+      announce(made.length === 1 ? "Asked: " + txt(workDoc(made[0]) && workDoc(made[0]).title) + "." : "Asked for " + made.length + " things.");
+      // One way to Claude per tap, the cheapest first: a chat already listening hears it in the
+      // room for nothing; else the one helper chat is woken; the comment bell (which reaches
+      // whichever chat published the page) only where there is no helper to wake.
       let how = roomRing ? await roomRing : null;
+      const helper = !S.wakeFailed && (/^session_/.test(txt(obj(S.listener).chat)) || txt(obj(M().app).repo));
+      if (!how && helper) { wakeSoon(made); how = "woken"; }
       if (!how && ring) how = await ringComments(made, false);
       ringNote(made, how || "later");
       return made;
@@ -954,7 +1043,7 @@
   async function createWork(db, s) {
     const ref = db.doc("work/" + seg(s.id));
     if (KIND_CAP_ONE.has(s.kind)) {
-      for (const [id, w] of allWork()) if (id !== s.id && w.kind === s.kind && ACTIVE.has(w.status)) return {ok: false, why: "busy"};
+      for (const [id, w] of allWork()) if (id !== s.id && w.kind === s.kind && ACTIVE.has(w.status)) return {ok: false, why: "one", running: txt(w.title)};
     }
     if (s.slot !== false) {
       let lease;
@@ -999,6 +1088,8 @@
         attempt: (Number(w.attempt) || 1) + 1, asked_from: {tab: S.tab}};
       try { await db.doc("work/" + id).update(patch); } catch (e) { announce("Could not start it again. Try once more."); return; }
       announce("Asked again: " + txt(w.title) + ".");
+      if (S.woken) S.woken.delete(id);
+      autoWake([id]);
       let how = roomRing ? await roomRing : null;
       if (!how) how = await ringComments([id], true);
       ringNote([id], how);
@@ -1054,6 +1145,7 @@
         h("span", {class: "toast-text"}, t.text),
         undoable ? h("button", {type: "button", class: "btn quiet small", "data-k": "toast-undo:" + t.key, onclick: () => undo(t.ids)}, "Undo") : null,
         t.retry ? h("button", {type: "button", class: "btn quiet small", "data-k": "toast-retry:" + t.key, onclick: () => { t.gone = true; t.retry(); }}, "Try again") : null,
+        t.see ? h("button", {type: "button", class: "btn quiet small", "data-k": "toast-see:" + t.key, onclick: () => { t.gone = true; t.see(); renderToasts(); }}, t.seeLabel || "See it") : null,
         h("button", {type: "button", class: "btn quiet small icon", "aria-label": "Close this message", "data-k": "toast-x:" + t.key,
           onclick: () => { t.gone = true; renderToasts(); }}, "×"));
     }));
@@ -1312,7 +1404,11 @@
     const iv = interviewItems().find((i) => txt(i.id) === txt(d.interview)) || interviewItems().find((i) => txt(i.company) === (txt(d.company) || employerIn(d.title)) && !isPast(i.when));
     if ((kind === "prep" || sub === "prep") && iv) { askPrep(iv); return; }
     if (sub === "thank_you" || sub === "status_note") {
-      requestWork([{id: "follow_up~" + sub + "~" + seg(txt(d.interview) || d.id), kind: "follow_up", title: txt(d.title), args: {due: txt(d.id), interview: txt(d.interview) || (iv ? iv.id : null), kind: sub}, redo: true}]);
+      // The interview, company and role the engine put on the due item's own work come first:
+      // a thank-you is for an interview already past, which the search below skips.
+      const wa = obj(obj(d.work).args);
+      requestWork([{id: "follow_up~" + sub + "~" + seg(txt(wa.interview) || txt(d.interview) || d.id), kind: "follow_up", title: txt(d.title),
+        args: Object.assign({}, wa, {due: txt(d.id), interview: txt(wa.interview) || txt(d.interview) || (iv ? iv.id : null), kind: sub}), redo: true}]);
       return;
     }
     if (kind === "reply" && person) { logReply(person, true); return; }
@@ -1333,6 +1429,12 @@
     a = obj(a);
     if (a.type === "work") {
       requestWork([{id: txt(a.id) || (txt(a.kind) + "~" + seg(from)), kind: txt(a.kind), title: txt(a.title) || txt(a.label), args: obj(a.args), redo: true}]);
+    } else if (a.type === "act" && txt(a.input) === "text") {
+      // An action that needs words from the person (a pasted profile): asked here first.
+      const item = txt(a.item) || from;
+      sheet({title: txt(a.label) || "Paste it", intro: txt(a.ask) || null, submit: "Use it",
+        fields: [{id: "text", type: "text", long: true, label: txt(a.label) || "Paste it here", required: true, max: 20000}],
+        onSubmit: (v) => act([{item, action: txt(a.action), value: {text: v.text}, rev: revOf(item)}], txt(a.label) || "Done")});
     } else if (a.type === "act") {
       const item = txt(a.item) || from;
       act([{item, action: txt(a.action), value: a.value === undefined ? null : a.value, rev: revOf(item)}], txt(a.label) || "Done");
@@ -1971,8 +2073,14 @@
     if (!settingUp && iv && dayDiff(iv.when) !== null && dayDiff(iv.when) <= 3) {
       small = (txt(iv.next_stage) || "Interview") + " with " + txt(iv.company) + " " + dayWords(iv.when) + (timeOf(iv.when) ? " at " + timeOf(iv.when) : "") + ".";
     }
+    // Nothing more pressing to say: the shortlist waiting in Jobs, so To do never reads as
+    // "nothing to do" while new roles sit unlooked at.
+    if (!settingUp && !small) {
+      const fresh = jobRows().filter((r) => jobStatus(r) === "new").length;
+      if (fresh) small = btn(nWord(fresh, "new job", "new jobs") + " to look at", () => go("jobs", {focus: true}), {kind: "link", key: "todo-jobs"});
+    }
     const paused = pausedUntil();
-    if (paused && !settingUp) { sum = "Your search is paused until " + fmtDay(paused) + "."; small = btn("Resume now", () => act([{item: txt(obj(M().search).id) || "search-settings", action: "brief.resume", value: null, rev: txt(obj(M().search).rev) || null}], "Your search carries on"), {kind: "link", key: "resume-top"}); }
+    if (paused && !settingUp) { sum = "You are taking a break until " + fmtDay(paused) + "."; small = btn("Start again", () => act([{item: txt(obj(M().search).id) || "search-settings", action: "brief.resume", value: null, rev: txt(obj(M().search).rev) || null}], "Your search carries on"), {kind: "link", key: "resume-top"}); }
     const wrap = h("section", {class: "sec", "aria-labelledby": "h-todo"}, screenHead("todo", "To do", sum, small));
     if (setup) put(wrap, setup);
     for (const f of all.filter((i) => i.band === "first")) put(wrap, f.node({where: "todo", section: "todo"}));
@@ -2007,7 +2115,7 @@
     }
     const hidden = dueItems().find((d) => txt(d.kind) === "hidden");
     if (!settingUp) put(wrap, hidden ? h("p", {class: "muted small hidden-note"}, txt(hidden.title) + ".") : null,
-      progressNote(), briefToday ? null : briefCard(), recentChanges(), tipLine("todo"));
+      finishProfileCard(), progressNote(), briefToday ? null : briefCard(), recentChanges(), tipLine("todo"), tourCard());
     return wrap;
   }
   // The to-dos that belong to one section, at its top: the same items, done in either place.
@@ -2035,7 +2143,7 @@
       list.length ? alertLine(list[0], {where: "soon", section: "todo", item: iv.id, bare: true}) : null,
       h("div", {class: "card-actions"},
         busy ? btn("See its progress", openWork, {small: true, key: "soonwork:" + iv.id}) :
-          has ? btn("Practice questions", () => startMock(iv), {kind: "primary", small: true, key: "soonmock:" + iv.id, aria: "Practice questions for " + txt(iv.company) + " (from To do)"}) :
+          has ? btn("Read your prep", () => openDetail("interview", iv.id), {kind: "primary", small: true, key: "soonmock:" + iv.id, aria: "Read your prep for " + txt(iv.company) + " (from To do)"}) :
             btn("Prepare me", () => askPrep(iv), {kind: "primary", small: true, key: "soonprep:" + iv.id, aria: "Prepare me for " + txt(iv.company) + " (from To do)"}),
         tabLink("interviews", iv.id)));
   }
@@ -2053,7 +2161,7 @@
         return;
       }
       if (op.work) { requestWork([Object.assign({id: txt(obj(op.work).kind) + "~" + seg(n.id)}, obj(op.work))]); return; }
-    act([{item: txt(op.item) || n.id, action: txt(op.action), value: op.value === undefined ? txt(op.label) : op.value, rev: op.item ? revOf(txt(op.item)) || n.rev : n.rev}], "Answered: " + txt(op.label));
+    act([{item: txt(op.item) || n.id, action: txt(op.action), value: op.value === undefined ? (/\.answer$/.test(txt(op.action)) ? txt(op.label) : null) : op.value, rev: op.item ? revOf(txt(op.item)) || n.rev : n.rev}], "Answered: " + txt(op.label));
     };
     const hints = arr(n.options).filter((op) => txt(op.hint)).map((op) => h("li", {}, h("strong", {}, txt(op.label)), ": " + txt(op.hint)));
     return card("article", {class: "card todo need kind-" + seg(n.kind) + (chosen ? " is-answered" : ""), "aria-labelledby": hid, "data-item": n.id, "data-k": "card:" + (ctx.where || "") + ":" + n.id},
@@ -2107,7 +2215,7 @@
     const hid = "sg-" + where;
     const yes = (n) => obj(arr(n.options)[0]);
     const not = (n) => obj(arr(n.options)[1]);
-    const answer = (n, op, word) => act([{item: n.id, action: txt(op.action), value: op.value === undefined ? txt(op.label) : op.value, rev: n.rev}], word + ": " + txt(n.title));
+    const answer = (n, op, word) => act([{item: n.id, action: txt(op.action), value: op.value === undefined ? (/\.answer$/.test(txt(op.action)) ? txt(op.label) : null) : op.value, rev: n.rev}], word + ": " + txt(n.title));
     const left = ns.filter((n) => !effective(n.id));
     const row = (n) => {
       const who = txt(n.title).replace(/^Did your note to /, "").replace(/ go\?$/, "");
@@ -2148,7 +2256,29 @@
       h("div", {class: "todo-top"}, kindMark(WORK_KIND[txt(w.kind)] || "setup")),
       h("p", {class: "card-title", id: hid}, txt(w.title)),
       h("p", {}, txt(w.note) || "It has a question for you."),
-      h("div", {class: "card-actions"}, btn("See it", openWork, {kind: "primary", small: true, key: "wt:" + (ctx.where || "") + ":" + id})));
+      h("div", {class: "card-actions"}, btn("Answer", () => askWorkAnswer(id), {kind: "primary", small: true, key: "wt:" + (ctx.where || "") + ":" + id, aria: "Answer: " + txt(w.title)})));
+  }
+  // A question work raised (status needs_you, the question in `note`): answered here, kept in
+  // its args.answers under the question, and the work goes back to Claude to carry on.
+  function askWorkAnswer(id) {
+    const w = workDoc(id);
+    if (!w) return;
+    sheet({title: txt(w.title), intro: txt(w.note) || "Claude has a question about this.", submit: "Send",
+      fields: [{id: "a", type: "text", long: true, max: 2000, label: "Your answer", required: true}],
+      onSubmit: (v) => { answerWork(id, String(v.a || "").trim()); }});
+  }
+  async function answerWork(id, text) {
+    const w = workDoc(id);
+    const db = await CAP.db;
+    if (!w || !db || !text) return;
+    const args = Object.assign({}, obj(w.args));
+    args.answers = Object.assign({}, obj(args.answers), {[clip(txt(w.note) || "question", 200)]: text});
+    try { await db.doc("work/" + id).update({args, status: "queued", note: null, claimed_by: null, claimed_at: null, lease_until: null}); }
+    catch (e) { announce("Not sent. Try again."); return; }
+    announce("Sent. Claude carries on.");
+    if (S.woken) S.woken.delete(id);
+    autoWake([id]);
+    scheduleRender();
   }
 
   // ------------------------------------------------------------------ setup and first run
@@ -2240,7 +2370,7 @@
     return card("article", {class: "card todo setup", "aria-labelledby": "setup-title", "data-item": "setup"},
       h("div", {class: "todo-top"}, kindMark("setup")),
       h("p", {class: "card-title", id: "setup-title"}, "Set up your search"),
-      h("div", {class: "card-actions"}, btn("Start", () => startChat("Please set up my job search."), {kind: "primary", small: true, key: "setup-start"})),
+      h("div", {class: "card-actions"}, btn("Start", () => { go("chat", {focus: false}); handOff("Please set up my job search.", true); }, {kind: "primary", small: true, key: "setup-start"})),
       h("p", {class: "small muted"}, "Nothing is ever sent for you."));
   }
   // One step's sheet. A resume is a file (kept in the page's own store, then saved in the copy
@@ -2541,7 +2671,7 @@
     const f = listFacets(key, lo);
     const menu = listMenu("jobs", "the jobs list", [
       inThis.length > 1 ? [selecting ? "Done selecting" : "Select several", () => { S.selecting = !S.selecting; if (!S.selecting) S.sel.jobs.clear(); scheduleRender(); }, "select"] : null,
-      wide() ? ["Open Drafts beside", () => { S.split = "drafts"; keepAddress(false); render(); }, "beside"] : null,
+
       ["Change the search", () => openTweak("jobs", jb), "tweak"],
     ]);
     put(wrap, controlRow([segmented("Show", JOB_TABS, tab, (v) => { setPref("jobs:tab", v); S.sel.jobs.clear(); scheduleRender(); }, "jt"), h("span", {class: "grow"}), filterButton(key, lo, f), menu]));
@@ -2561,7 +2691,7 @@
     }
     const n = S.sel.jobs.size;
     const picked = rows.filter((r) => S.sel.jobs.has(r.id));
-    const draftable = picked.filter((r) => ["new", "ready"].indexOf(jobStatus(r)) >= 0 && obj(r.apply).status !== "closed");
+    const draftable = picked.filter((r) => jobStatus(r) === "new" && obj(r.apply).status !== "closed");
     if (selecting) {
       put(wrap, bulkBar(n, [
         draftable.length ? btn("Draft " + draftable.length, () => confirmApplied(draftable, () => askDraft(draftable), "draft"), {kind: "primary", small: true, key: "bulk-draft"}) : null,
@@ -2603,7 +2733,7 @@
     else if (st === "ready") primary = btn("See the draft", () => { const a = readyItems().find((x) => (r.draft ? x.id === txt(r.draft) : txt(x.company) === txt(r.company))); go("drafts", {focus: !a, drafts: "apps", item: a ? a.id : null}); }, {kind: "primary", small: true, key: "seeready:" + r.id, aria: "See the draft: " + about});
     else if (st === "drafting") primary = btn("See its progress", openWork, {small: true, key: "seework:" + r.id, aria: "See its progress: " + about});
     else if (st === "dismissed") primary = btn("Bring back", () => act([{item: r.id, action: "job.bring_back", rev: r.rev}], "Brought back: " + txt(r.company)), {small: true, key: "restore:" + r.id, aria: "Bring back: " + about});
-    else if (iv) primary = btn(obj(iv.prep).updated ? "Practice questions" : "Prepare me", () => (obj(iv.prep).updated ? startMock(iv) : askPrep(iv)), {kind: "primary", small: true, key: "jobiv:" + r.id, aria: (obj(iv.prep).updated ? "Practice questions for " : "Prepare me for ") + txt(r.company)});
+    else if (iv) primary = btn(obj(iv.prep).updated ? "Read your prep" : "Prepare me", () => (obj(iv.prep).updated ? openDetail("interview", iv.id) : askPrep(iv)), {kind: "primary", small: true, key: "jobiv:" + r.id, aria: (obj(iv.prep).updated ? "Read your prep for " : "Prepare me for ") + txt(r.company)});
     else if (nudge) primary = btn("Draft the follow-up", () => askDue(nudge), {kind: "primary", small: true, key: "jobnudge:" + r.id, aria: "Draft the follow-up: " + about});
     if (primary && primary.tagName === "A") primary.classList.add("btn", "primary", "small");
     const markApplied = () => confirmApplied([r], () => act([{item: r.id, action: "job.applied", value: {on: todayIso()}, rev: r.rev}], "Marked as applied: " + txt(r.company)));
@@ -2661,7 +2791,7 @@
       onSubmit: (v) => {
         const w = txt(v.why);
         if (w === "applied") { markApplied(); return; }
-        const value = w === "employer" ? {why: "employer", scope: "employer"} : w === "role" ? null : {why: w};
+        const value = w === "employer" ? {why: "employer", scope: "employer"} : w === "role" ? {why: "not this role"} : {why: w};
         act([{item: r.id, action: "job.dismiss", value, rev: r.rev}], w === "employer" ? "No more roles from " + co : "Set aside: " + co);
       }});
   }
@@ -2686,7 +2816,7 @@
               {kind: "quiet", small: true, pressed: !!on, key: "fb:" + it.id, aria: "Bring back " + txt(it.title) + " at " + txt(it.company)}),
             stateLine(it.id, "fb:" + it.id));
         })),
-        Number(g.count) > arr(g.items).length ? h("p", {class: "hint"}, (Number(g.count) - arr(g.items).length) + " more like these: ask in Chat to see them all.") : null)));
+        Number(g.count) > arr(g.items).length ? h("p", {class: "hint"}, "And " + (Number(g.count) - arr(g.items).length) + " more left out for the same reason.") : null)));
   }
 
   // ------------------------------------------------------------------ Drafts: applications and messages
@@ -2711,7 +2841,7 @@
     const fix = appsWaiting.filter((a) => alertsOf(a).some((x) => x.kind === "checks") || readyQuestions(a).length).length;
     const writing = [...allWork()].filter(([, w]) => ["draft", "resume_for_contact", "reply", "follow_up", "network"].includes(txt(w.kind)) && ACTIVE.has(w.status)).length;
     const sum = appsWaiting.length || msgsWaiting.length
-      ? nWord(appsWaiting.length, "application", "applications") + " and " + nWord(msgsWaiting.length, "message", "messages") + " to send." + (fix ? " " + nWord(fix, "needs", "need") + " a fix first." : "")
+      ? [appsWaiting.length ? nWord(appsWaiting.length, "application", "applications") : null, msgsWaiting.length ? nWord(msgsWaiting.length, "message", "messages") : null].filter(Boolean).join(" and ") + " to send." + (fix ? " " + nWord(fix, "needs", "need") + " a fix first." : "")
       : "Nothing waiting to send.";
     const wrap = h("section", {class: "sec", "aria-labelledby": "h-drafts" + (where ? "-" + where : "")},
       screenHead("drafts", "Drafts", sum, writing ? "Claude is writing " + writing + " more." : null, where));
@@ -2837,16 +2967,22 @@
         live ? (asks.length ? questionBlock(asks[0], {where: "drafts", item: a.id}) : cardNotes(a, {where: "drafts", section: "drafts", item: a.id, bare: true}, true)) : null,
         live && !checkAlert && !asks.length && checks.passed ? h("p", {class: "checks"}, h("span", {"aria-hidden": "true"}, "✓ "), "Checked", hintQ("checks:" + a.id, txt(checks.line), "What was checked")) : null,
         live && !checkAlert && !asks.length && !checks.passed && checks.line ? h("p", {class: "checks tone-warn"}, txt(checks.line)) : null,
-        missing && live && !asks.length ? h("p", {class: "small muted"}, "Your files are not on this page yet. ", btn("Get the files", () => askFiles(a), {kind: "link", key: "files:" + a.id})) : null,
+        missing && live && !asks.length ? h("p", {class: "small muted"}, "Your files are not on this page yet. ", btn("Ask Claude to add them", () => askFiles(a), {kind: "link", key: "files:" + a.id})) : null,
         noteFor("dl:" + a.id),
         h("div", {class: "card-actions"}, primary, getBtn,
+          // Where to apply, on the card itself: files, then the employer's site, then I have applied.
+          live && !forWho && safeUrl(obj(a.apply).url) ? applyLink(a.apply, "rapply:" + a.id, "Apply on their site") : null,
           live && !checkAlert && !asks.length ? (forWho ? sentToBtn(a, forWho, getBtn) : btn("I have applied", markApplied, {kind: getBtn ? "secondary" : "primary", small: true, key: "rapplied:" + a.id, aria: "I have applied: " + about})) : null,
           more("app:" + a.id, about, extra)),
         stateLine(a.id, "ready:" + a.id)));
   }
   function draftMessages(items) {
     const box = h("div", {class: "drafts-msgs"});
-    if (!items.length) { put(box, empty("No messages to send.", "Notes to people at the employers you want arrive here, ready to copy.")); return box; }
+    if (!items.length) {
+      put(box, empty("No messages to send.", "Notes to people at the employers you want arrive here, ready to copy and send on LinkedIn yourself.",
+        h("div", {class: "card-actions"}, btn("Find people", () => askFindPeople(), {kind: "secondary", small: true, key: "msgs-empty-find"}))));
+      return box;
+    }
     const toSend = items.filter((m) => !settledAction(m.id, ["msg.sent", "msg.skip"]));
     const gone = items.filter((m) => settledAction(m.id, ["msg.sent", "msg.skip"]));
     // A wave of first notes: one list, by employer, with the send budget at its top.
@@ -2912,7 +3048,7 @@
           changedBox(m, changedKey, sentNow),
           txt(m.kind) === "first_note" ? pasteProfileBtn({id: m.contact, contact: m.contact, first_name: m.first_name, rev: revOf(txt(m.contact))}, "paste:" + m.id) : null,
           relatedLinks(m.employer, m.id, m),
-          h("div", {class: "more-acts"}, btn("Skip this one", () => act([{item: m.id, action: "msg.skip", rev: m.rev}], "Skipped the message to " + txt(m.first_name)), {kind: "quiet", small: true, key: "skip:" + m.id, aria: "Skip the message to " + txt(m.first_name)}))])),
+          h("div", {class: "more-acts"}, txt(m.application) ? null : btn("Skip this one", () => act([{item: m.id, action: "msg.skip", rev: m.rev}], "Skipped the message to " + txt(m.first_name)), {kind: "quiet", small: true, key: "skip:" + m.id, aria: "Skip the message to " + txt(m.first_name)}))])),
       tweakResult(m), noteFor("copy:" + tid), stateLine(m.id, "msg:" + m.id));
   }
 
@@ -2945,18 +3081,26 @@
     const lo = {items, name: "contacts", one: "person", many: "people", live: personLive, fold: (p) => !personLive(p), remote: "people",
       sort: (a, b) => (personRank(a) - personRank(b)) || txt(a.due || "9999").localeCompare(txt(b.due || "9999")) || txt(b.last).localeCompare(txt(a.last)),
       chips: [{key: "status", label: "Where it stands", options: [["now", "Needs you", (p) => personRank(p) === 0], ["waiting", "Waiting for a reply", (p) => txt(p.status) === "awaiting_reply"],
-        ["new", "Not contacted yet", (p) => txt(p.status) === "not_contacted"]]}],
+        ["new", "Not contacted yet", (p) => txt(p.status) === "not_contacted"]]},
+        // Who they are, so a recruiter or the person who referred you is one tap away.
+        {key: "who", label: "Who they are", options: [["recruiter", "Recruiters", (p) => txt(p.who) === "recruiter"], ["referrer", "Referrers", (p) => txt(p.who) === "referrer"],
+          ["hiring", "Hiring managers and HR", (p) => txt(p.who) === "hiring"], ["peer", "People in your field", (p) => txt(p.who) === "peer"]]}],
       search: (p) => [p.first_name, p.employer].join(" "), searchLabel: "Name or employer",
       render: personRow, box: (kids) => h("ul", {class: "plain people"}, kids)};
     const f = items.length ? listFacets("contacts", lo) : null;
-    const many = f && f.items.length > SEARCH_OVER;
+    const many = f && f.items.length > 8;   // search by name or employer as soon as the list is more than a glance
     const wrap = h("section", {class: "sec", "aria-labelledby": "h-contacts" + (where ? "-" + where : "")},
       put(screenHead("contacts", "Contacts", sum, null, where, h("div", {class: "head-tools"},
-        btn("Find people", () => askFindPeople(), {small: true, key: "head-find-people", icon: "k-search"}), f && !many ? filterButton("contacts", lo, f) : null)), gotMessage(where)));
-    if (!items.length) { put(wrap, empty("Nobody here yet.", "People at the employers you want appear here.")); return wrap; }
+        btn("Find people", () => askFindPeople(), {small: true, key: "head-find-people", icon: "k-search"}), f && !many ? filterButton("contacts", lo, f) : null)), phoneNow() ? null : gotMessage(where)));
+    if (!items.length) {
+      put(wrap, empty("Nobody here yet.", "Someone inside who refers you beats applying cold. Find people looks at the employers you want."));
+      return wrap;
+    }
     if (many) put(wrap, controlRow([searchField("contacts", lo), filterButton("contacts", lo, f)]));
     put(wrap, activeFilters("contacts", lo, f));
     put(wrap, listView("contacts", lo));
+    // On a phone the list comes first; the way in for a message someone sent follows it.
+    if (phoneNow()) put(wrap, gotMessage(where));
     put(wrap, exportFootLink());
     return wrap;
   }
@@ -3037,8 +3181,13 @@
       sum = "Next: " + lc1(txt(next.next_stage) || "interview") + " with " + txt(next.company) + (day ? ", " + day + (t ? " at " + t : "") + (rel ? " (" + rel + ")" : "") : "") + ".";
       small = [obj(next.prep).updated ? "Prep ready" : "No prep yet", ahead.length > 1 ? (ahead.length - 1) + " more booked" : null].filter(Boolean).join(" · ");
     }
-    const wrap = h("section", {class: "sec", "aria-labelledby": "h-interviews" + (where ? "-" + where : "")}, screenHead("interviews", "Interviews", sum, small, where));
-    if (!items.length) { put(wrap, empty("No interviews booked.", "When an employer books a stage, it appears here with Prepare me.")); return wrap; }
+    const wrap = h("section", {class: "sec", "aria-labelledby": "h-interviews" + (where ? "-" + where : "")}, screenHead("interviews", "Interviews", sum, small, where,
+      items.length ? h("div", {class: "head-tools"}, btn("I have an interview", () => haveInterview(), {small: true, key: "iv-head-add"})) : null));
+    if (!items.length) {
+      put(wrap, empty("No interviews booked.", "Got one? Say which application it is for: it appears here, and Claude writes your prep for it.",
+        h("div", {class: "card-actions"}, btn("I have an interview", () => haveInterview(), {kind: "secondary", small: true, key: "iv-empty-chat"}))));
+      return wrap;
+    }
     put(wrap, listView("interviews", {items, name: "interviews", live: (i) => !past(i), remote: "interviews",
       fold: (i) => past(i) && daysSince(i.when) !== null && daysSince(i.when) > 14,
       sort: (a, b) => (past(a) ? 1 : 0) - (past(b) ? 1 : 0) || (past(a) ? txt(b.when).localeCompare(txt(a.when)) : txt(a.when || "9999").localeCompare(txt(b.when || "9999"))),
@@ -3056,14 +3205,18 @@
     const list = gone ? [] : alertsOf(iv);
     const ref = obj(iv.referrer);
     const read = btn("Read your prep", () => openDetail("interview", iv.id), {kind: "primary", small: true, key: "read:" + iv.id, aria: "Read your prep for your " + lc1(txt(iv.next_stage) || "interview") + " with " + txt(iv.company)});
-    const mock = btn("Practice questions", () => startMock(iv), {kind: "secondary", small: true, key: "mock:" + iv.id, aria: "Practice questions for " + txt(iv.company)});
+    const mock = btn("Practise with Claude", () => startMock(iv), {kind: "secondary", small: true, key: "mock:" + iv.id, aria: "Practise with Claude for " + txt(iv.company)});
     const prepBtn = btn(has ? "Update my prep" : "Prepare me", () => askPrep(iv), {kind: has ? "secondary" : "primary", small: true, key: "prep:" + iv.id, aria: (has ? "Update my prep for " : "Prepare me for ") + txt(iv.company)});
     return card("article", {class: "card interview" + edgeOf(list), "aria-labelledby": hid, "data-item": iv.id},
       h("div", {class: "job-top"}, h("h3", {id: hid}, (txt(iv.next_stage) || "Interview") + " with ", h("bdi", {}, txt(iv.company))), days !== null ? stateWord(relWhen(iv.when), !gone && days <= 1 ? "warn" : null) : null),
       h("p", {class: "when"}, [fmtWhen(iv.when) || "Time not set", formatWord(iv.format)].filter(Boolean).join(" · ")),
       h("p", {class: "meta"}, [txt(iv.role), has ? "Prep ready" : "No prep yet"].filter(Boolean).join(" · "), ref.id || ref.contact ? [" · Referred by ", itemLink("contacts", txt(ref.contact || ref.id), txt(ref.first_name), "ivref:" + iv.id)] : null),
       list.length ? alertLine(list[0], {where: "interviews", section: "interviews", item: iv.id, bare: true}) : null,
-      gone ? null : h("div", {class: "card-actions"},
+      gone ? (() => {
+        const app = applicationItems().find((a) => appLive(a) && txt(a.company) === txt(iv.company));
+        return h("div", {class: "card-actions"}, app ? btn("I heard back", () => heardBack(app), {kind: "primary", small: true, key: "ivheard:" + iv.id, aria: "I heard back from " + txt(iv.company)}) : null,
+          has ? btn("Read your prep", () => openDetail("interview", iv.id), {kind: "quiet", small: true, key: "read:" + iv.id}) : null);
+      })() : h("div", {class: "card-actions"},
         busy ? btn("See its progress", openWork, {small: true, key: "ivwork:" + iv.id}) : has ? read : prepBtn,
         !busy && has ? mock : null,
         more("iv:" + iv.id, txt(iv.company), [has ? h("p", {class: "small muted"}, "Prep updated " + ago(prep.updated) + ".") : null, relatedLinks(iv.company, iv.id, iv),
@@ -3093,7 +3246,8 @@
     const sum = nothing ? "Nothing counted yet." : when + n("applied") + " applied, " + nWord(n("replies"), "reply", "replies") + ", " + nWord(n("interviews"), "interview", "interviews") + ", " + (n("offers") ? nWord(n("offers"), "offer", "offers") : "no offers yet") + ".";
     const small = nothing ? "Each application you mark as sent is counted here." : funnelReading(funnel);
     const wrap = h("section", {class: "sec", "aria-labelledby": "h-progress" + (where ? "-" + where : "")}, screenHead("progress", "Progress", sum, small, where));
-    if (nothing) { put(wrap, empty("Nothing counted yet.", "Each application you mark as sent is counted here, with every reply and interview after it.")); return wrap; }
+    if (nothing) { put(wrap, empty("Nothing counted yet.", "Each application you mark as sent is counted here, with every reply and interview after it.",
+      h("div", {class: "card-actions"}, btn("Go to Jobs", () => go("jobs", {focus: true}), {kind: "secondary", small: true, key: "progress-go-jobs"})))); return wrap; }
     if (hasRecent) {
       const pick = (v) => { setPref("progress:range", v); scheduleRender(); };
       put(wrap, controlRow([segmented("Period", [["recent", "Last " + (Number(recent.days) || 30) + " days"], ["all", "All time"]], range, pick, "range")]));
@@ -3619,11 +3773,15 @@
   // `small` is the optional second line in small print, with at most one link; `tool` sits at
   // the summary's right end (the Filter button of Contacts, when there is no control row).
   function screenHead(id, title, sum, small, where, tool) {
+    const part = !where && tourSteps().some((t) => t[0] === id);
+    // The "?" sits at the end of the summary line: the title is hidden under a phone's own
+    // top bar, and a "?" on a line of its own looked broken.
+    const q = part ? h("button", {type: "button", class: "help-q", "data-k": "help:" + id, "aria-label": "How " + title + " works", onclick: () => showTourPart(id)}, "?") : null;
     return h("header", {class: "sec-head"},
       h("h2", {id: "h-" + id + (where ? "-" + where : ""), tabindex: "-1", class: "screen-title"}, title),
       h("div", {class: "summary" + (tool ? " with-tool" : "")},
         h("div", {class: "sum-words"}, h("p", {class: "sum"}, sum), small ? h("p", {class: "sum-small"}, small) : null),
-        tool || null));
+        tool || null, q));
   }
   const nWord = (n, one, many) => n + " " + (n === 1 ? one : many);
   // One row of controls: a view switch, a search over 25 items, Filter, and the list's menu.
@@ -3845,7 +4003,7 @@
       return;
     }
     if (op.work) { requestWork([Object.assign({id: txt(obj(op.work).kind) + "~" + seg(n.id)}, obj(op.work))]); return; }
-    act([{item: txt(op.item) || n.id, action: txt(op.action), value: op.value === undefined ? txt(op.label) : op.value, rev: op.item ? revOf(txt(op.item)) || n.rev : n.rev}], "Answered: " + txt(op.label));
+    act([{item: txt(op.item) || n.id, action: txt(op.action), value: op.value === undefined ? (/\.answer$/.test(txt(op.action)) ? txt(op.label) : null) : op.value, rev: op.item ? revOf(txt(op.item)) || n.rev : n.rev}], "Answered: " + txt(op.label));
   }
   function questionBlock(n, ctx) {
     ctx = ctx || {};
@@ -3954,7 +4112,10 @@
           onclick: () => { S.copied.add(m.id); copyText(txt(m.text), "note to " + txt(m.first_name), "copy:" + tid, tid); }}, copied ? (fresh ? "Copied" : "Copy again") : "Copy note to " + txt(m.first_name)),
         btn("I sent it", () => act([{item: m.id, action: "msg.sent", value: msgSentValue(m, m.text), rev: m.rev}], "Marked as sent: " + txt(m.first_name)),
           {kind: copied ? "primary" : "secondary", small: true, key: "sent:" + m.id, aria: "I sent the note to " + txt(m.first_name)}),
-        openLink(m)),
+        openLink(m),
+        // A note they will not send leaves the batch, as it does from its own card.
+        more("wave:" + m.id, "the note to " + txt(m.first_name), [h("div", {class: "more-acts"}, btn("Skip this one", () => act([{item: m.id, action: "msg.skip", rev: m.rev}], "Skipped: " + txt(m.first_name)),
+          {kind: "quiet", small: true, key: "skip:" + m.id, aria: "Skip the note to " + txt(m.first_name)}))])),
       changedBox(m, "changed:" + m.id, (text) => act([{item: m.id, action: "msg.sent", value: msgSentValue(m, text), rev: m.rev}], "Marked as sent: " + txt(m.first_name))),
       noteFor("copy:" + tid), stateLine(m.id, "msg:" + m.id));
   }
@@ -3978,7 +4139,7 @@
   // Setting up: the other screens wait for it, with one way back to it.
   function settingUp() {
     const st = txt(obj(M().setup).state);
-    return (!!st && st !== "done") || (!st && emptyModel());
+    return (!!st && st !== "done" && st !== "searching") || (!st && emptyModel());
   }
   function setupWait(id, where) {
     const su = obj(M().setup);
@@ -3993,6 +4154,16 @@
   // drafts carries that action, so the chat that takes it has something to answer.
   function logReply(p, draftToo) {
     const name = txt(p.first_name);
+    // Their reply is already in the log: drafting the answer never asks for it again.
+    const th = arr(p.thread);
+    const last = th.length ? th[th.length - 1] : null;
+    if (draftToo && txt(p.status) === "replied_needs_response" && last && txt(last.from) !== "you" && txt(last.text)) {
+      sheet({title: "Draft a reply to " + name, intro: "Claude answers " + name + "'s last message, which is already kept.", cost: costLine("reply"),
+        fields: [{id: "want", type: "text", long: true, label: "Anything you want to say back", max: 600}], submit: "Draft my reply",
+        onSubmit: (v) => requestWork([{id: "reply~" + seg(p.id) + "~" + stamp(), kind: "reply", title: "Reply to " + name + (txt(p.employer) ? " at " + txt(p.employer) : ""),
+          args: Object.assign({contact: txt(p.id)}, txt(v.want) ? {want: txt(v.want)} : {})}])});
+      return;
+    }
     sheet({title: draftToo ? "Draft a reply to " + name : "Log " + name + "'s reply",
       intro: "Paste what " + name + " said. It is kept with your conversation and never sent anywhere.",
       cost: draftToo ? costLine("reply") : null,
@@ -4058,18 +4229,41 @@
 
   // "I heard back": an interview booked (stage, day, optional time, with whom), a rejection,
   // an offer or a withdrawal, each written the way /outcome writes it.
-  function heardBack(a) {
+  // An interview booked: for one of their applications, the page's own I heard back; for
+  // anything else (a referral's recruiter call, say), the chat registers it.
+  function haveInterview(pre) {
+    const live = applicationItems().filter(appLive);
+    if (!live.length) { startChat("I have an interview: "); return; }
+    sheet({title: "I have an interview", submit: "Next",
+      fields: [{id: "a", type: "radio", label: "Which is it for?", required: true, error: "Choose one.",
+        options: live.map((a) => [txt(a.id), txt(a.role) + " at " + txt(a.company)]).concat([["other", "Something else"]])}],
+      onSubmit: (v) => {
+        if (v.a === "other") { setTimeout(() => startChat("I have an interview: "), 0); return; }
+        const a = live.find((x) => txt(x.id) === v.a);
+        if (a) setTimeout(() => heardBack(a, pre || {}), 0);
+      }});
+  }
+  // An interview has its own day below, so the sheet's "When" goes while it is chosen.
+  function whenShown(el, on) {
+    const d = el && el.closest ? el.closest("dialog") || el : el;
+    const w = d ? [...d.querySelectorAll("input[type=date]")].find((x) => x.id !== "hb-day") : null;
+    const f = w && w.closest(".field");
+    if (f) f.hidden = !on;
+  }
+  // `pre`: what the chat read from a pasted invitation (stage, day, time, with), filled in.
+  function heardBack(a, pre) {
     const what = txt(a.role) + " at " + txt(a.company);
     const stageField = h("div", {class: "reveal", hidden: true});
     const dlg = sheet({title: "What happened: " + what, fields: [
       {id: "kind", type: "radio", label: "What did you hear?", required: true, error: "Choose one.",
         options: [["interview", "An interview is booked"], ["rejected", "Not this time"], ["offer", "An offer"], ["withdrawn", "I withdrew"], ["no_response", "Nothing, and I have stopped waiting"]]
           .filter(([k]) => !arr(a.heard).length || arr(a.heard).includes("outcome." + k) || k === "no_response"),
-        onChange: (v) => { stageField.hidden = v !== "interview"; }, extra: stageField},
+        onChange: (v, el) => { stageField.hidden = v !== "interview"; whenShown(el, v !== "interview"); }, extra: stageField},
       {id: "on", type: "date", label: "When", value: todayIso()}],
       submit: "Save", validate: (v) => (v.kind === "interview" && !stageField.querySelector("#hb-day").value ? "Give the day of the interview." : null),
       onSubmit: (v) => {
-        const val = v.kind === "offer" ? {on: v.on || todayIso()} : v.kind === "rejected" || v.kind === "withdrawn" || v.kind === "no_response" ? {} : {on: v.on || todayIso()};
+        // The day they gave goes with every answer: a rejection is dated when it came.
+        const val = {on: v.on || todayIso()};
         if (v.kind === "interview") {
           val.stage = txt(stageField.querySelector("#hb-stage").value) || "Interview";
           val.on = stageField.querySelector("#hb-day").value;
@@ -4085,6 +4279,14 @@
       h("div", {class: "field"}, h("label", {for: "hb-day"}, "The day"), h("input", {type: "date", id: "hb-day"})),
       h("div", {class: "field"}, h("label", {for: "hb-time"}, "The time", h("span", {class: "optional"}, " (if you like)")), h("input", {type: "text", id: "hb-time", maxlength: 20, placeholder: "13:00"})),
       h("div", {class: "field"}, h("label", {for: "hb-with"}, "With whom", h("span", {class: "optional"}, " (if you like)")), h("input", {type: "text", id: "hb-with", maxlength: 80})));
+    if (pre && dlg) {
+      const r = dlg.querySelector('input[type=radio][value="interview"]');
+      if (r) r.checked = true;
+      stageField.hidden = false;
+      whenShown(dlg, false);
+      const fill = (id, v) => { const el = stageField.querySelector("#" + id); if (el && v) el.value = v; };
+      fill("hb-stage", txt(pre.stage)); fill("hb-day", txt(pre.day)); fill("hb-time", txt(pre.time)); fill("hb-with", txt(pre.with));
+    }
     return dlg;
   }
   // Every application, from every round and from outside the app: the engine's records where
@@ -4102,7 +4304,7 @@
     const ids = arr(obj(a.related).interviews);
     return interviewItems().find((i) => (txt(i.application) === txt(a.id) || ids.includes(i.id)) && !isPast(i.when)) || null;
   }
-  function appNudge(a) { return dueItems().find((d) => txt(d.application) === txt(a.id)) || null; }
+  function appNudge(a) { return dueItems().find((d) => txt(d.application) === txt(a.id) || (txt(d.item) === txt(a.id) && txt(d.kind) !== "hidden")) || null; }
   function appRecordCard(a) {
     const hid = "rec-" + seg(a.id);
     const about = txt(a.company) + ", " + txt(a.role);
@@ -4114,13 +4316,13 @@
     const nextLine = iv && !isPast(iv.when) ? "Next: " + lc1(txt(iv.next_stage) || "interview") + " " + dayWords(iv.when) + (timeOf(iv.when) ? " at " + timeOf(iv.when) : "")
       : nudge ? "Next: " + lc1(txt(nudge.title)) + (Number(nudge.overdue_days) > 0 ? ", " + plural(Number(nudge.overdue_days), "day", "days") + " late" : nudge.due ? ", " + dayWords(nudge.due) : "")
         : txt(next.label || next.title) ? "Next: " + lc1(txt(next.label || next.title)) + (next.date || next.on ? ", " + dayWords(next.date || next.on) : "") : a.applied_on ? "Applied " + fmtDay(a.applied_on) : "";
-    const primary = !live ? null : iv && !isPast(iv.when) ? btn(obj(iv.prep).updated ? "Practice questions" : "Prepare me", () => (obj(iv.prep).updated ? startMock(iv) : askPrep(iv)), {kind: "primary", small: true, key: "recprep:" + a.id, aria: (obj(iv.prep).updated ? "Practice questions for " : "Prepare me for ") + txt(a.company)})
+    const primary = !live ? null : iv && !isPast(iv.when) ? btn(obj(iv.prep).updated ? "Read your prep" : "Prepare me", () => (obj(iv.prep).updated ? openDetail("interview", iv.id) : askPrep(iv)), {kind: "primary", small: true, key: "recprep:" + a.id, aria: (obj(iv.prep).updated ? "Read your prep for " : "Prepare me for ") + txt(a.company)})
       : nudge ? btn("Draft the follow-up", () => askDue(nudge), {kind: "primary", small: true, key: "recnudge:" + a.id, aria: "Draft the follow-up: " + about}) : null;
     const job = jobRows().find((r) => txt(r.id) === txt(a.job)) || null;
     const extra = [
       arr(a.stages).length ? h("ol", {class: "plain timeline"}, arr(a.stages).map((s) => h("li", {}, h("span", {class: "muted"}, s.date || s.on ? fmtDay(s.date || s.on) + ": " : ""), txt(s.label || s.name), s.scheduled ? " (booked)" : ""))) : null,
       nudge && obj(nudge.done).action ? h("div", {class: "more-acts"}, btn("Follow-up sent", () => act([{item: nudge.id, action: txt(obj(nudge.done).action), value: {on: todayIso()}, rev: nudge.rev}], "Follow-up marked as sent: " + txt(a.company)), {small: true, key: "recdone:" + a.id})) : null,
-      job ? h("p", {}, applyLink(job.apply, "recapply:" + a.id)) : null,
+      job || a.apply ? h("p", {}, applyLink(job ? job.apply : a.apply, "recapply:" + a.id)) : null,
       relatedLinks(a.company, a.id, a),
       live ? h("div", {class: "more-acts"}, btn("Not applied after all", () => act([{item: job ? job.id : a.id, action: job ? "job.not_applied" : "ready.not_applied", rev: job ? job.rev : a.rev}], "Marked as not applied: " + txt(a.company)), {kind: "quiet", small: true, key: "recnot:" + a.id})) : null,
     ];
@@ -4184,16 +4386,41 @@
   }
   // The pack's one screen, as the model carries it: likely questions with what to answer each
   // with, hooks, the money line, what not to say.
+  // The prep's one screen, in the shape the engine writes (interview_pack.one_screen):
+  // what they assess, what they want to hear, questions with the answer to give, things to
+  // bring up, pay, and what not to say.
   function oneScreen(iv) {
     const o = iv.one_screen;
     if (!o) return null;
     if (Array.isArray(o)) return h("ul", {class: "read"}, o.map((x) => h("li", {}, txt(x))));
+    const t = (x) => txt(typeof x === "object" && x ? (x.text || x.question || x.q) : x);
     const qs = arr(o.questions);
     return h("div", {class: "read"},
-      qs.length ? h("ol", {class: "read-q"}, qs.map((q) => h("li", {}, h("p", {class: "q-text"}, txt(q.q || q)), q.with ? h("p", {class: "muted"}, "Answer with: " + txt(q.with)) : null))) : null,
-      arr(o.hooks).length ? h("div", {}, h("p", {class: "fg-label"}, "Things to bring up"), h("ul", {}, arr(o.hooks).map((x) => h("li", {}, txt(x))))) : null,
+      o.assessing ? h("p", {}, h("span", {class: "fg-label"}, "What they are assessing: "), txt(o.assessing)) : null,
+      o.hear ? h("p", {}, h("span", {class: "fg-label"}, "What they want to hear: "), txt(o.hear)) : null,
+      qs.length ? h("div", {}, h("p", {class: "fg-label"}, "Likely questions"), h("ol", {class: "read-q"}, qs.map((q) => h("li", {}, h("p", {class: "q-text"}, t(q)),
+        txt(obj(q).answer || obj(q).with) ? h("p", {class: "muted"}, "Answer with: " + txt(obj(q).answer || obj(q).with)) : null)))) : null,
+      arr(o.hooks).length ? h("div", {}, h("p", {class: "fg-label"}, "Things to bring up"), h("ul", {}, arr(o.hooks).map((x) => h("li", {}, t(x))))) : null,
       o.money ? h("p", {}, h("span", {class: "fg-label"}, "If pay comes up: "), txt(o.money)) : null,
-      arr(o.avoid).length ? h("div", {}, h("p", {class: "fg-label"}, "Not to say"), h("ul", {}, arr(o.avoid).map((x) => h("li", {}, txt(x))))) : null);
+      arr(o.do_not_say || o.avoid).length ? h("div", {}, h("p", {class: "fg-label"}, "Not to say"), h("ul", {}, arr(o.do_not_say || o.avoid).map((x) => h("li", {}, t(x))))) : null);
+  }
+  // The whole prep, its headings and lists kept, read in place.
+  function prepText(s) {
+    const lines = txt(s).split("\n");
+    const out = [];
+    let list = null;
+    const plain = (x) => x.replace(/\*\*(.+?)\*\*/g, "$1").replace(/\[(.+?)\]\([^)]*\)/g, "$1").replace(/`/g, "");
+    for (const raw of lines) {
+      const ln = raw.trim();
+      if (!ln || /^<!--/.test(ln) || /^-{3,}$/.test(ln)) { list = null; continue; }
+      const head = /^(#{1,4})\s+(.*)$/.exec(ln);
+      if (head) { list = null; out.push(h(head[1].length <= 2 ? "h3" : "h4", {class: "prep-h"}, plain(head[2]))); continue; }
+      const item = /^(?:[-*]|\d+[.)])\s+(.*)$/.exec(ln);
+      if (item) { if (!list) { list = h("ul", {class: "prep-list"}); out.push(list); } list.appendChild(h("li", {}, plain(item[1]))); continue; }
+      list = null;
+      out.push(h("p", {}, plain(ln)));
+    }
+    return h("div", {class: "prep-text read"}, out);
   }
   function interviewDetail(iv) {
     const has = !!obj(iv.prep).updated;
@@ -4205,16 +4432,21 @@
       h("p", {class: "when"}, head),
       ref.id || ref.contact ? h("p", {}, "Referred by ", itemLink("contacts", txt(ref.contact || ref.id), txt(ref.first_name), "ivref:" + iv.id)) : null,
       h("div", {class: "card-actions"},
-        busy ? btn("See its progress", openWork, {small: true, key: "dprep-work:" + iv.id}) : has ? btn("Practice questions", () => { closeDetail(true); startMock(iv); }, {kind: "primary", small: true, key: "dmock:" + iv.id}) : btn("Prepare me", () => askPrep(iv), {kind: "primary", small: true, key: "dprep:" + iv.id}),
-        has && !busy ? btn("Update my prep", () => askPrep(iv), {small: true, key: "dprep2:" + iv.id}) : null),
-      block("Read before", [oneScreen(iv) || h("p", {class: "muted"}, has ? "Your prep is ready. Its one screen arrives here with the next update of this page." : "No prep yet. Prepare me builds it: what to say, likely questions and questions to ask.")]),
-      block("The paper", arr(iv.sent_files).map((f) => h("p", {}, (f.kind === "letter" ? "Cover letter" : Noun()) + ": ", h("bdi", {}, txt(f.name))))),
-      block("Stages", arr(iv.stages).map((s) => h("p", {}, h("span", {class: "muted"}, s.on ? fmtDay(s.on) + ": " : ""), txt(s.name), s.done ? " (done)" : ""))),
+        busy ? btn("See its progress", openWork, {small: true, key: "dprep-work:" + iv.id}) : has ? null : btn("Prepare me", () => askPrep(iv), {kind: "primary", small: true, key: "dprep:" + iv.id}),
+        has && !busy ? btn("Practise with Claude", () => { closeDetail(true); startMock(iv); }, {small: true, key: "dmock:" + iv.id}) : null,
+        has && !busy ? btn("Update my prep", () => askPrep(iv), {kind: "quiet", small: true, key: "dprep2:" + iv.id}) : null),
+      // The prep is read here, on the page: its one screen first, then the whole of it.
+      has ? block("Your prep", [oneScreen(iv), iv.prep_text ? prepText(iv.prep_text) : null].filter(Boolean).length ? [oneScreen(iv), iv.prep_text ? prepText(iv.prep_text) : null] : [h("p", {class: "muted"}, "Your prep is saved; it shows here once the page next updates.")])
+        : block("Your prep", [h("p", {class: "muted"}, "No prep yet. Prepare me builds it: what to say, likely questions and questions to ask.")]),
+      block("What you sent", arr(iv.sent_files).filter((f) => txt(f.name)).map((f) => h("p", {}, (f.kind === "letter" ? "Cover letter" : Noun()) + ": ", h("bdi", {}, txt(f.name))))),
+      block("Stages", arr(iv.stages).filter((s) => txt(s.label || s.name)).map((s) => h("p", {}, h("span", {class: "muted"}, (s.date || s.on) ? fmtDay(s.date || s.on) + ": " : ""), txt(s.label || s.name), s.done ? " (done)" : ""))),
       relatedLinks(iv.company, iv.id, iv));
   }
   function personDetail(p) {
     const [w, tone] = PERSON_STATUS[txt(p.status)] || [cap1(txt(p.status).replace(/_/g, " ")), "plain"];
     const st = txt(p.status);
+    const written = !!st && st !== "not_contacted";
+    const talking = ["replied_needs_response", "in_conversation", "call_booked", "referral_agreed"].includes(st);
     const thread = arr(p.thread);
     const jobsThere = jobRows().filter((r) => arr(obj(p.related).jobs).includes(r.id));
     const steps = [["Written to", st !== "not_contacted"], ["Replied", !!p.replied || ["replied_needs_response", "in_conversation", "call_booked", "referral_in_progress"].includes(st)],
@@ -4222,16 +4454,18 @@
     return h("div", {class: "d-stack"},
       h("p", {}, stateWord(w, tone === "plain" ? null : tone), p.next_action ? h("span", {class: "muted"}, " · Next: " + txt(p.next_action) + (p.due ? ", " + dayWords(p.due) : "")) : null),
       h("ol", {class: "plain stepper"}, steps.map(([l, done]) => h("li", {class: done ? "done" : ""}, h("span", {class: "sr-only"}, done ? "Done: " : "Not yet: "), l))),
+      // Only what fits where the conversation is: nobody is told to log a reply from someone
+      // they have not written to yet.
       h("div", {class: "card-actions wrap"},
-        btn("They replied", () => logReply(p, false), {small: true, key: "dlog:" + p.id}),
-        btn("Draft a reply", () => logReply(p, true), {kind: st === "replied_needs_response" ? "primary" : "secondary", small: true, key: "dreply:" + p.id}),
-        btn(st === "call_booked" ? "Change the call" : "Call booked", () => askCall(p), {small: true, key: "dcall:" + p.id}),
+        written ? btn("They replied", () => logReply(p, false), {small: true, key: "dlog:" + p.id}) : null,
+        written ? btn("Draft a reply", () => logReply(p, true), {kind: st === "replied_needs_response" ? "primary" : "secondary", small: true, key: "dreply:" + p.id}) : null,
+        written ? btn(st === "call_booked" ? "Change the call" : "Call booked", () => askCall(p), {small: true, key: "dcall:" + p.id}) : null,
         st === "call_booked" ? btn("Prepare for the call", () => askCallPrep(p), {small: true, key: "dcallprep:" + p.id}) : null,
-        st === "referral_in_progress" ? btn("The referral is over", () => referralEnded(p), {small: true, key: "dref-end:" + p.id}) : btn("They put my name forward", () => referralAgreed(p), {small: true, key: "dref:" + p.id}),
+        st === "referral_in_progress" ? btn("The referral is over", () => referralEnded(p), {small: true, key: "dref-end:" + p.id}) : talking ? btn("They put my name forward", () => referralAgreed(p), {small: true, key: "dref:" + p.id}) : null,
         btn("Make a " + noun() + " for " + txt(p.first_name), () => askContactResume(p), {small: true, key: "dres:" + p.id}),
         btn("Find more people at " + txt(p.employer), () => findPeople(p.employer), {kind: "quiet", small: true, key: "dfind:" + p.id}),
         pasteProfileBtn(p, "dpaste:" + p.id),
-        btn("Stop", () => act([{item: p.id, action: "person.stop", value: {why: "stopped on the page"}, rev: p.rev}], "Stopped: " + txt(p.first_name)), {kind: "quiet", small: true, key: "dstop:" + p.id})),
+        btn("Don't contact again", () => act([{item: p.id, action: "person.stop", value: {why: "stopped on the page"}, rev: p.rev}], "Not contacted again: " + txt(p.first_name)), {kind: "quiet", small: true, key: "dstop:" + p.id})),
       block("Your conversation", thread.length ? h("ol", {class: "plain timeline"}, thread.map((t) => h("li", {class: "t-" + seg(t.from)}, h("p", {class: "muted small"}, (t.from === "you" ? "You" : txt(p.first_name)) + (t.on ? ", " + fmtDay(t.on) : "")), h("p", {class: "t-text"}, txt(t.text))))) : [h("p", {class: "muted"}, p.last ? "Last in touch " + fmtDay(p.last) + "." : "Nothing sent yet.")]),
       block("Roles at " + txt(p.employer), jobsThere.map((r) => h("p", {}, itemLink("jobs", r.id, txt(r.title), "dpjob:" + r.id), r.warm ? null : " ", st === "replied_needs_response" || st === "in_conversation" || st === "call_booked" ? btn("Ask " + txt(p.first_name) + " for a referral for this role", () => askReferral(p, r), {kind: "link", key: "dask:" + r.id}) : null))),
       stateLine(p.id, "dperson:" + p.id));
@@ -4377,6 +4611,15 @@
   function wakeUrl() { return safeUrl(obj(obj(M().listener).wake).url) || prefillUrl(); }
   function listenTodo() {
     if (!notListening()) return null;
+    // Waking it is the page's job: tried first, by itself; the card shows only if that fails.
+    if (!S.wakeFailed && (/^session_/.test(txt(obj(S.listener).chat)) || txt(obj(M().app).repo))) {
+      const ids = [...allWork()].filter(([, w]) => txt(w.status) === "queued").map(([id]) => id);
+      if (ids.some((id) => !(S.woken && S.woken.has(id)))) {
+        if (!S.waking) { S.waking = true; autoWake(ids).then((ok) => { S.waking = false; if (!ok) scheduleRender(); }); }
+        return null;
+      }
+      if (ids.length && now() - (S.wokenAt || 0) < 5 * 60000) return null;
+    }
     return {key: "listen", kind: "setup", band: "first", employer: null, tab: null, counts: true, node: () => listenCard()};
   }
   function listenCard() {
@@ -4543,9 +4786,29 @@
     const pay = obj(s.pay);
     const payWords = typeof s.pay === "string" ? s.pay : pay.floor ? "At least " + money(pay.floor) + (pay.target ? ", hoping for " + money(pay.target) : "") : "";
     const set = (what, value, label) => act([{item: sid, action: "search.set", value: Object.assign({what}, value), rev: txt(s.rev) || null}], label);
-    const change = (what, label, value) => btn("Change", () => sheet({title: label, fields: [{id: "v", type: "text", label, value, required: true, max: 300}], submit: "Save",
-      intro: what === "roles" || what === "places" ? "Claude looks again for job sites and employers that fit, and says what it costs first." : null,
-      onSubmit: (v) => set(what, {value: what === "pay" ? Number(String(v.v).replace(/[^0-9.]/g, "")) || v.v : list(String(v.v).split(/\s*[,;]\s*/))}, label + ": " + v.v)}), {small: true, key: "search-change:" + what});
+    // Roles and places: untick to take one off, add new ones (one a line: a place has commas
+    // of its own); sent as one change the engine writes in turn. Pay: one number, the lowest.
+    const change = (what, label, value) => btn("Change", () => {
+      if (what === "pay") {
+        sheet({title: label, fields: [{id: "v", type: "text", label: "The lowest pay you would take", hint: "One number, for example 90000", value: pay.floor ? String(pay.floor) : "", required: true, max: 20}], submit: "Save",
+          onSubmit: (v) => { const n = Number(String(v.v).replace(/[^0-9.]/g, "")); if (n) set("pay", {value: n}, label + ": " + n.toLocaleString()); }});
+        return;
+      }
+      if (what === "roles" || what === "places") {
+        const now = list(what === "roles" ? s.roles : s.places);
+        sheet({title: label, intro: "Untick any to take off, and add new ones. Claude looks again for job sites and employers that fit.",
+          fields: [now.length ? {id: "keep", type: "checks", label: "Searched now", options: now.map((x) => [x, x]), value: now} : null,
+            {id: "add", type: "text", long: true, max: 600, label: what === "roles" ? "Add roles" : "Add places", hint: "One a line."}].filter(Boolean),
+          submit: "Save", onSubmit: (v) => {
+            const add = String(v.add || "").split(/\n+/).map((x) => x.trim()).filter((x) => x && !now.includes(x));
+            const remove = now.filter((x) => !arr(v.keep).includes(x));
+            if (add.length || remove.length) set(what, {add, remove}, label + ": " + [add.length ? "add " + add.join(", ") : "", remove.length ? "take off " + remove.join(", ") : ""].filter(Boolean).join("; "));
+          }});
+        return;
+      }
+      sheet({title: label, fields: [{id: "v", type: "text", label, value, required: true, max: 300}], submit: "Save",
+        onSubmit: (v) => set(what, {value: list(String(v.v).split(/\s*[,;]\s*/))}, label + ": " + v.v)});
+    }, {small: true, key: "search-change:" + what});
     // The row shows the first few and a count; the whole list opens below it (the maintainer
     // found 75 roles and 13 places in full a lot to take in, 2026-10-26).
     const few = (value, items) => {
@@ -4553,7 +4816,9 @@
       if (names.length <= 3) return value;
       return names.slice(0, 3).join(", ") + " and " + (names.length - 3) + " more";
     };
-    const plain = (what, name, value, items) => infoRow("search-" + what, name, few(value, items) || "Not set", h("div", {class: "d-stack"}, h("p", {}, value || "Not set"), change(what, name, value), stateLine(sid, "search:" + what)));
+    // Only what the engine can write has a Change button (app_actions _SEARCH_ROWS).
+    const plain = (what, name, value, items) => infoRow("search-" + what, name, few(value, items) || "Not set", h("div", {class: "d-stack"}, h("p", {}, value || "Not set"),
+      ["roles", "places", "pay"].includes(what) ? change(what, name, value) : h("p", {class: "small muted"}, "To leave out a kind of job, use the bin on it in Jobs."), stateLine(sid, "search:" + what)));
     const portals = arr(s.portals);
     const boards = arr(s.boards);
     const rules = arr(s.rules).filter((r) => !effective(txt(r.id), ["rule.lift"]));
@@ -4575,6 +4840,113 @@
         btn("Bring back", () => act([{item: txt(r.id), action: "rule.lift", value: null, rev: txt(r.rev) || txt(s.rev) || null}], "Brought back: " + txt(r.words)), {kind: "quiet", small: true, key: "lift:" + txt(r.id)}),
         stateLine(txt(r.id), "rule:" + txt(r.id))))) : h("p", {class: "muted"}, "No kind of job is left out.")),
     ];
+  }
+
+  // G14. Your profile (model.you): the jobs, skills, education and certificates every resume
+  // is built from. Each change is one `profile` work item: a chat writes it into the profile
+  // (01-candidate-profile.md first) and makes a fresh resume, so nothing here edits a file.
+  const you = () => obj(M().you);
+  const askProfile = (args, title) => requestWork([{kind: "profile", title, args}]);
+  function jobSheet(j, need) {
+    sheet({title: j ? (need ? "What you did at " + txt(j.employer) : "Change this job") : "Add a job",
+      intro: j && !need ? null : "Claude writes your " + noun() + " lines from what you say here, and only that.",
+      fields: [
+        {id: "title", type: "text", label: "Job title", value: j ? txt(j.title) : "", required: true, max: 120},
+        {id: "employer", type: "text", label: "Employer", value: j ? txt(j.employer) : "", required: true, max: 120},
+        {id: "dates", type: "text", label: "When", hint: "For example: Mar 2023 - Present", value: j ? txt(j.dates) : "", required: true, max: 60},
+        {id: "place", type: "text", label: "Where", value: j ? txt(j.place) : "", max: 80},
+        {id: "text", type: "text", long: true, max: 3000, required: !j || !!need,
+          label: j && !need ? "Anything else to change" : "What you did there, and what came of it",
+          hint: j && !need ? null : "A few lines in your own words. Numbers help: how many, how much, how often."}],
+      submit: j && !need ? "Save" : "Add it", cost: costLine("profile"),
+      onSubmit: (v) => { askProfile(Object.assign({part: "job", change: j ? "edit" : "add", was: j ? {employer: txt(j.employer), title: txt(j.title), dates: txt(j.dates)} : null}, v), (j ? "Update " : "Add ") + v.title + " at " + v.employer); }});
+  }
+  function removeJob(j) {
+    sheet({title: "Take this job off?", intro: txt(j.title) + " at " + txt(j.employer) + " comes off your profile, and off every " + noun() + " made from now on.",
+      fields: [], submit: "Take it off", cost: costLine("profile"),
+      onSubmit: () => { askProfile({part: "job", change: "remove", was: {employer: txt(j.employer), title: txt(j.title), dates: txt(j.dates)}}, "Take " + txt(j.title) + " at " + txt(j.employer) + " off"); }});
+  }
+  function skillsSheet() {
+    const skills = arr(you().skills).map(txt);
+    sheet({title: "Your skills", intro: skills.length ? "Untick any to take off, and add new ones below." : "Add the skills you use, separated by commas.",
+      fields: [skills.length ? {id: "keep", type: "checks", label: "On your profile", options: skills.map((x) => [x, x]), value: skills} : null,
+        {id: "add", type: "text", label: "Add skills", hint: "Separated by commas. Only ones you really have: an employer may ask about any of them.", max: 400, required: !skills.length}].filter(Boolean),
+      submit: "Save", cost: costLine("profile"),
+      onSubmit: (v) => {
+        const remove = skills.filter((x) => !arr(v.keep).includes(x));
+        const add = String(v.add || "").split(/\s*[,;]\s*/).map((x) => x.trim()).filter((x) => x && !skills.includes(x));
+        if (!remove.length && !add.length) return;
+        askProfile({part: "skills", change: "edit", add, remove}, "Skills: " + [add.length ? "add " + add.join(", ") : "", remove.length ? "take off " + remove.join(", ") : ""].filter(Boolean).join("; "));
+      }});
+  }
+  function listSheet(part, title, items, hint) {
+    sheet({title, intro: "One a line. Change, add or take away any.",
+      fields: [{id: "text", type: "text", long: true, max: 2000, label: title, value: items.join("\n"), hint}], submit: "Save", cost: costLine("profile"),
+      onSubmit: (v) => {
+        const now = String(v.text || "").split(/\n+/).map((x) => x.trim()).filter(Boolean);
+        if (now.join("\n") === items.join("\n")) return;
+        askProfile({part, change: "edit", items: now, was: items}, title + ": changed");
+      }});
+  }
+  // The missing parts, each with the one form that fills it.
+  function missingFix(m) {
+    const part = txt(m.part);
+    const j = arr(you().jobs).find((x) => txt(x.id) === txt(m.job));
+    if (part === "jobs") return btn("Add a job", () => jobSheet(null), {kind: "secondary", small: true, key: "you-fix-jobs"});
+    if (part === "lines" && j) return btn("Add what you did", () => jobSheet(j, true), {kind: "secondary", small: true, key: "you-fix:" + txt(m.job)});
+    if (part === "skills") return btn("Add skills", skillsSheet, {kind: "secondary", small: true, key: "you-fix-skills"});
+    if (part === "confirm") return btn("Check them", () => go("todo", {focus: true}), {kind: "secondary", small: true, key: "you-fix-confirm"});
+    return null;
+  }
+  function profileBusy() {
+    const busy = [...allWork()].filter(([, w]) => txt(w.kind) === "profile" && !TERMINAL.has(txt(w.status)));
+    return busy.length ? h("p", {class: "small muted", role: "status"}, "Claude is making " + (busy.length === 1 ? "a change" : busy.length + " changes") + " to your profile. ",
+      btn("See its progress", openWork, {kind: "link", key: "you-see"})) : null;
+  }
+  function youRows() {
+    const y = you();
+    if (!Object.keys(y).length) return [];
+    const jobs = arr(y.jobs);
+    const skills = arr(y.skills).map(txt);
+    const edu = arr(y.education).map(txt);
+    const certs = arr(y.certificates).map(txt);
+    const missing = arr(y.missing);
+    // One line, so nobody fears a change here rewrites every application.
+    const rows = [h("p", {class: "small muted set-intro"}, "Everything Claude knows about you. Each application uses only what fits that job, and Claude asks you before adding a skill you have not listed.")];
+    if (missing.length) rows.push(h("div", {class: "setting-row you-missing"}, h("p", {class: "set-name"}, "Still to fill in"),
+      h("ul", {class: "plain checks-list"}, missing.map((m) => h("li", {class: "toggle-row"}, h("span", {}, txt(m.say)), missingFix(m))))));
+    rows.push(infoRow("you-jobs", "Your jobs", jobs.length ? plural(jobs.length, "job", "jobs") : "None yet", h("div", {class: "d-stack"},
+      jobs.length ? h("ul", {class: "plain you-list"}, jobs.map((j) => h("li", {"data-item": txt(j.id)},
+        h("p", {}, h("strong", {}, txt(j.title)), " at ", h("bdi", {}, txt(j.employer))),
+        h("p", {class: "small muted"}, [txt(j.dates), txt(j.place), Number(j.lines) ? plural(Number(j.lines), "line", "lines") + " to choose from" : "nothing yet on what you did"].filter(Boolean).join(" · ")),
+        h("div", {class: "card-actions"}, btn("Change", () => jobSheet(j), {kind: "quiet", small: true, key: "you-edit:" + txt(j.id), aria: "Change " + txt(j.title) + " at " + txt(j.employer)}),
+          btn("Take off", () => removeJob(j), {kind: "quiet", small: true, key: "you-rm:" + txt(j.id), aria: "Take " + txt(j.title) + " at " + txt(j.employer) + " off"}))))) : null,
+      btn("Add a job", () => jobSheet(null), {kind: "secondary", small: true, key: "you-add-job"}))));
+    rows.push(infoRow("you-skills", "Your skills", skills.length ? plural(skills.length, "skill", "skills") : "None yet", h("div", {class: "d-stack"},
+      skills.length ? h("p", {class: "you-skills"}, skills.join(" · ")) : null,
+      btn(skills.length ? "Add or take off" : "Add skills", skillsSheet, {kind: "secondary", small: true, key: "you-skills"}))));
+    rows.push(infoRow("you-edu", "Education", edu.length ? String(edu.length) : "None", h("div", {class: "d-stack"},
+      edu.length ? h("ul", {class: "plain"}, edu.map((x) => h("li", {}, x))) : h("p", {class: "muted"}, "Nothing yet."),
+      btn("Change", () => listSheet("education", "Education", edu, "For example: BSc Mathematics, University of Leeds (2016-2019)"), {kind: "secondary", small: true, key: "you-edu"}))));
+    rows.push(infoRow("you-certs", "Certificates", certs.length ? String(certs.length) : "None", h("div", {class: "d-stack"},
+      certs.length ? h("ul", {class: "plain"}, certs.map((x) => h("li", {}, x))) : h("p", {class: "muted"}, "Nothing yet."),
+      btn("Change", () => listSheet("certificates", "Certificates", certs, "Only ones you hold. Write (in progress) after one you are still taking."), {kind: "secondary", small: true, key: "you-certs"}))));
+    const r = generalResumeCard();
+    if (r) rows.push(infoRow("you-resume", "Your " + noun(), obj(M().resume).stale ? "Made before your last change" : "Ready", r));
+    const busy = profileBusy();
+    if (busy) rows.unshift(busy);
+    return rows;
+  }
+  // To do, once set up: what the profile still lacks, since every resume is built from it.
+  function finishProfileCard() {
+    const missing = arr(you().missing).filter((m) => txt(m.part) !== "confirm");
+    if (!missing.length || settingUp()) return null;
+    return card("article", {class: "card todo", "aria-labelledby": "you-finish", "data-item": "you"},
+      h("div", {class: "todo-top"}, kindMark("setup")),
+      h("p", {class: "card-title", id: "you-finish"}, "Finish your profile"),
+      h("p", {class: "small muted"}, "Every " + noun() + " and letter is built from it, so a gap here is a gap in each one."),
+      h("ul", {class: "plain checks-list"}, missing.map((m) => h("li", {class: "toggle-row"}, h("span", {}, txt(m.say)), missingFix(m)))),
+      profileBusy());
   }
 
   // G12. The resume for when nobody named a role: download it, or make a fresh one (model.resume).
@@ -4627,21 +4999,20 @@
         stateLine(item, "brief-pause"))),
     ];
   }
-  function briefPaused(sc) {
-    const item = txt(sc.id) || "schedule";
-    const e = effective(item, ["brief.pause", "brief.resume"]);
-    if (e) return e.doc.action === "brief.pause" ? txt(obj(e.doc.value).until) : null;
-    const until = txt(sc.paused_until) || txt(obj(sc.paused).until);
+  // One break, whichever screen set it (Settings writes the brief's item, To do the
+  // search's): the latest tap on either wins, then what the engine says.
+  function breakUntil() {
+    const sc = obj(M().schedule);
+    const ids = [txt(sc.id) || "schedule", txt(obj(M().search).id) || "search-settings"];
+    const taps = ids.map((id) => effective(id, ["brief.pause", "brief.resume"])).filter(Boolean)
+      .sort((a, b) => txt(b.doc.at).localeCompare(txt(a.doc.at)));
+    if (taps.length) return taps[0].doc.action === "brief.pause" ? txt(obj(taps[0].doc.value).until) : null;
+    const until = txt(sc.paused_until) || txt(obj(sc.paused).until) || txt(obj(obj(M().search).pause).until) || txt(obj(M().pause).until);
     return until && dayDiff(until) !== null && dayDiff(until) >= 0 ? until : null;
   }
+  function briefPaused() { return breakUntil(); }
   function plusDays(n) { return ymdIn(now() + n * DAY, zone()); }
-  function pausedUntil() {
-    const sid = txt(obj(M().search).id) || "search-settings";
-    const e = effective(sid, ["brief.pause", "brief.resume"]);
-    if (e) return e.doc.action === "brief.pause" ? txt(obj(e.doc.value).until) : null;
-    const p = Object.keys(obj(obj(M().search).pause)).length ? obj(obj(M().search).pause) : obj(M().pause);
-    return txt(p.until) && dayDiff(p.until) !== null && dayDiff(p.until) >= 0 ? txt(p.until) : null;
-  }
+  function pausedUntil() { return breakUntil(); }
 
   // G14. Where the page cannot read a profile for itself: paste it, and the note is redrafted on it.
   function pasteProfileBtn(p, key) {
@@ -4651,11 +5022,9 @@
       intro: "Open their LinkedIn page, select all, copy, and paste it here. Claude keeps only what a note can rest on.",
       cost: costLine("reply"),
       fields: [{id: "text", type: "text", long: true, label: name + "'s profile", required: true, max: 20000}], submit: "Use it",
-      onSubmit: (v) => {
-        const cid = txt(p.contact || p.id);
-        const q = arr(readingInfo().queue).find((x) => txt(x.contact) === cid);
-        act([{item: q ? txt(q.id) : "read-" + cid, action: "reading.done", value: {text: v.text, mode: "paste"}, rev: q ? txt(q.rev) || null : null}], "Claude reads " + name + "'s profile");
-      }}),
+      // Kept the way a chat keeps a paste, and a note written before it is redrafted on it
+      // (profile.pasted, on the person or their message).
+      onSubmit: (v) => act([{item: txt(p.id), action: "profile.pasted", value: {text: v.text}, rev: p.rev}], "Claude reads " + name + "'s profile")}),
     {kind: "quiet", small: true, key: key || "paste-profile:" + txt(p.id)});
   }
 
@@ -4672,18 +5041,47 @@
     return h("p", {class: "tip small muted"}, txt(t.text), " ", btn("Got it", () => act([{item: tid, action: "tip.seen", value: {area: txt(t.area)}, rev: txt(t.rev) || null}], "Tip put away"), {kind: "link", key: "tip-seen"}));
   }
   const TOUR = [
-    ["To do", "Everything that needs you, the most urgent first. Tap a card's button to do the next thing."],
-    ["Jobs", "Roles worth a look, best first. Find jobs searches again; Draft this writes a resume and letter; the bin takes one off your list."],
-    ["Drafts", "What is ready to send: get the files, copy the notes, then say you sent them."],
-    ["Contacts", "The people at the employers you want, and what each conversation needs next. Find people looks for more."],
-    ["Chat", "Ask anything, or paste a link, a message or a screenshot: Claude does the rest and it shows up here."],
+    ["todo", "To do", "What needs you, most urgent first. Each card has one button."],
+    ["jobs", "Jobs", "Roles found for you, scored out of 100. Tap Draft this on one you like. While Claude works, the bar at the top says so: tap it to watch or stop it."],
+    ["drafts", "Drafts", "Your resume and letter for each role. Get the files, apply on the employer's site, then tap I have applied: it is tracked from then on."],
+    ["contacts", "Contacts", "Someone inside who puts your name forward beats applying cold. Claude finds who to write to and drafts the note; you send it yourself."],
+    ["interviews", "Interviews", "Your prep for each interview, to read before it."],
+    ["progress", "Progress", "Everything you have applied for, and how each one is going."],
+    ["settings", "Settings", "Your profile: jobs, skills, education. Change them any time."],
+    ["chat", "Chat", "Ask anything, or paste a link, a message or a screenshot."],
   ];
-  function showTour(i) {
+  // The walkthrough: each step opens its section behind the sheet, so the words sit on the
+  // thing they describe. Offered once, after setup (tourCard), and from Settings, Help.
+  function tourSteps() {
+    const engine = arr(obj(M().help).tour).filter((t) => SECTION_IDS.has(txt(t.tab)));
+    return engine.length ? engine.map((t) => [txt(t.tab), txt(t.title), txt(t.text)]) : TOUR;
+  }
+  // The whole tour from step i; with `only`, that one part, offering the next part or Close.
+  // Every step can be skipped (Next) and the rest of it too (Skip the rest).
+  function showTour(i, only) {
     i = i || 0;
-    const tour = arr(obj(M().help).tour).length ? arr(obj(M().help).tour).map((t) => [txt(t.title), txt(t.text)]) : TOUR;
-    const [title, body] = tour[i];
-    sheet({title: title + " (" + (i + 1) + " of " + tour.length + ")", intro: body, submit: i < tour.length - 1 ? "Next" : "Done", cancel: "Close",
-      onSubmit: () => { if (i < tour.length - 1) setTimeout(() => showTour(i + 1), 0); }});
+    const tour = tourSteps();
+    if (i < 0 || i >= tour.length) return;
+    if (i === 0 && !only) sset("local", "ljs:toured", "1");
+    const [tab, title, body] = tour[i];
+    const last = i === tour.length - 1;
+    go(tab, {focus: false});
+    setTimeout(() => sheet({title: only ? "How " + title + " works" : title + " (" + (i + 1) + " of " + tour.length + ")", intro: body, cls: "tour",
+      submit: last ? "Done" : only ? "Next part: " + tour[i + 1][1] : "Next", cancel: last || only ? "Close" : "Skip the rest",
+      onSubmit: () => { if (!last) setTimeout(() => showTour(i + 1, only), 0); }}), 0);
+  }
+  function showTourPart(tab) {
+    const i = tourSteps().findIndex((t) => t[0] === tab);
+    if (i >= 0) showTour(i, true);
+  }
+  function tourCard() {
+    if (settingUp() || sget("local", "ljs:toured")) return null;
+    return card("article", {class: "card todo", "aria-labelledby": "tour-title", "data-item": "tour"},
+      h("div", {class: "todo-top"}, kindMark("setup")),
+      h("p", {class: "card-title", id: "tour-title"}, "New here? A one-minute tour"),
+      h("p", {class: "small muted"}, "How a job goes from found to applied, and where everything is."),
+      h("div", {class: "card-actions"}, btn("Show me around", () => showTour(0), {kind: "primary", small: true, key: "tour-start"}),
+        btn("No thanks", () => { sset("local", "ljs:toured", "1"); scheduleRender(); }, {kind: "quiet", small: true, key: "tour-no"})));
   }
 
   // G17. Steps on a card are the page's, never a chat's: "Say done" is the card's own button,
@@ -5057,7 +5455,7 @@
       try {
         await browserCall(cap, "navigate", {url});
         const text = clip(await browserCall(cap, "get_page_text", {}), 20000);
-        act([{item: txt(q.id), action: "reading.done", value: {text, mode: "browser", url}, rev: txt(q.rev) || null}], "Read " + txt(q.first_name) + "'s profile");
+        act([{item: txt(q.id), action: "reading.done", value: {text, mode: txt(q.mode) || "browser", url}, rev: txt(q.rev) || null}], "Read " + txt(q.first_name) + "'s profile");
         read += 1;
       } catch (e) { r.signedOut = true; break; }
       r.done += 1;
@@ -5105,8 +5503,9 @@
       app ? h("div", {class: "card-actions"},
         btn(booked ? "Booked" : "Book it", () => act([{item: app.id, action: "outcome.interview", value: Object.assign({on: txt(g.day), stage: txt(g.stage) || "Interview"}, txt(g.time) ? {time: txt(g.time)} : {}, txt(g.with) ? {with: txt(g.with)} : {}), rev: app.rev}], "Booked: " + txt(app.company)),
           {kind: "primary", small: true, key: "book-it", pressed: !!booked}),
-        btn("Change it first", () => heardBack(app), {kind: "quiet", small: true, key: "book-change"})) :
-        h("p", {class: "small muted"}, "No application of yours matches it. Say which one, and Claude books it."),
+        btn("Change it first", () => heardBack(app, g), {kind: "quiet", small: true, key: "book-change"})) :
+        h("div", {}, h("p", {class: "small muted"}, "No application of yours matches it."),
+          h("div", {class: "card-actions"}, btn("Choose the application", () => haveInterview(g), {kind: "secondary", small: true, key: "book-choose"}))),
       app ? stateLine(app.id, "book") : null);
   }
   function replyOffer(g, text) {
@@ -5121,6 +5520,9 @@
 
   // ------------------------------------------------------------------ Work: a pill in the header, a sheet on a phone, a rail on a wide screen
 
+  // Where a finished piece of work shows its result.
+  const WORK_HOME = {search: "jobs", draft: "drafts", resume_for_contact: "drafts", prep: "interviews", reply: "drafts-messages", follow_up: "drafts-messages",
+    network: "drafts-messages", talk: "chat", update: "settings", files: "drafts", tweak: "drafts", evaluate: "jobs", general_resume: "settings", profile: "settings", own_profile: "todo"};
   const WORK_WORDS = {claimed: "Starting", needs_you: "Needs your answer", done: "Ready", failed: "Did not finish", stopped: "Stopped"};
   function workCard(id, w) {
     const p = progress(w);
@@ -5129,7 +5531,8 @@
     const toComputer = w.to === "computer";
     const slow = p.stalled || p.lapsed;
     // A state word only where the work is not simply running.
-    const label = p.stopping ? "Stopping after this step" : st === "queued" ? (p.late ? "Not picked up yet" : "Waiting to start") : st === "running" || st === "claimed" ? (slow ? "Stalled" : null) : WORK_WORDS[st] || cap1(st);
+    const woken = st === "queued" && S.woken && S.woken.has(id);
+    const label = p.stopping ? "Stopping after this step" : st === "queued" ? (p.late ? "Not picked up yet" : woken ? "Starting" : "Waiting to start") : st === "running" || st === "claimed" ? (slow ? "Stalled" : null) : WORK_WORDS[st] || cap1(st);
     const tone = p.stopping ? "held" : {done: "ok", failed: "bad", stopped: "held", needs_you: "warn"}[st] || (slow || p.late ? "warn" : null);
     const spinning = ACTIVE.has(st) && st !== "needs_you" && st !== "queued" && !slow;
     const cur = p.stages[Math.min(p.i, p.n - 1)];
@@ -5143,28 +5546,28 @@
     } else if (st === "queued") {
       const upd = obj(obj(M().updates).waiting);
       const held = txt(w.kind) !== "update" && txt(upd.waits_for) && txt(upd.hold_line);
-      now1 = held ? txt(upd.hold_line) + "." : toComputer && !computerListening() ? "This needs your computer: open Claude on it." : p.late ? "Claude has not picked this up yet." : "Waiting for Claude to start.";
+      now1 = held ? txt(upd.hold_line) + "." : toComputer && !computerListening() ? "This needs your computer: open Claude on it." : p.late ? "Claude has not picked this up yet." : woken ? "Claude has been asked and is starting it." : "Waiting for Claude to start.";
     } else if (st === "stopped") now1 = "Stopped. Anything already saved is kept.";
     else if (st === "failed") now1 = (typeof w.error === "string" ? w.error : txt(obj(w.error).plain)) || "It stopped part way. Anything already saved is kept.";
     else if (st === "needs_you") now1 = txt(w.note) || "It has a question for you.";
     else if (st === "done") now1 = txt(obj(w.result).summary);
-    const stopBtn = ACTIVE.has(st) && st !== "queued" && !p.stopping ? h("button", {type: "button", class: "btn link", "data-k": "stop:" + id, "aria-label": "Stop: " + txt(w.title), onclick: (e) => { e.stopPropagation(); stopWork(id); }}, "Stop") : null;
+    const stopBtn = ACTIVE.has(st) && st !== "queued" && st !== "needs_you" && !p.stopping ? btn("Stop", () => stopWork(id), {kind: "secondary", small: true, key: "stop:" + id, aria: "Stop: " + txt(w.title)}) : null;
     const open = openState.get("det:steps:" + id) === true;
     const cardEl = card("article", {class: "work-card st-" + seg(st) + (slow || p.late ? " is-slow" : "") + (tone && tone !== "ok" ? " edge-" + tone : ""), "data-work": id, "data-phase": phaseOf(w, p), "aria-labelledby": titleId, "data-item": "work:" + id},
       h("div", {class: "wc-head"}, spinning ? h("span", {class: "spin", "aria-hidden": "true"}) : h("span", {class: "dot tone-" + (tone || "info"), "aria-hidden": "true"}),
         h("h3", {id: titleId, class: "wc-title"}, h("button", {type: "button", class: "wc-toggle", "aria-expanded": String(open), "aria-controls": "steps-" + seg(id), "data-k": "wct:" + id,
-          onclick: () => { openState.set("det:steps:" + id, !open); scheduleRender(); }}, txt(w.title) || "Work")),
+          onclick: () => { openState.set("det:steps:" + id, !open); scheduleRender(); }}, txt(w.title).replace(/^Nudge /, "Follow up with ") || "Work")),
         stateWord(label, tone)));
     if (now1) put(cardEl, h("p", {class: "wc-now" + (st === "failed" ? " tone-bad" : st === "needs_you" ? " tone-warn" : "")}, now1));
     if (ACTIVE.has(st) || st === "done") {
       put(cardEl, h("div", {class: "bar", role: "progressbar", "aria-labelledby": titleId, "aria-valuemin": "0", "aria-valuemax": "100",
         "aria-valuenow": String(p.pct), "aria-valuetext": barText(p)}, h("span", {class: "fill", style: "width:" + p.pct + "%"})));
     }
-    put(cardEl, h("p", {class: "wc-time", "data-time": "1"}, ACTIVE.has(st) || st === "done" ? timeText(w, p) : "", stopBtn ? [" · ", stopBtn] : null));
+    put(cardEl, h("p", {class: "wc-time", "data-time": "1"}, ACTIVE.has(st) || st === "done" ? timeText(w, p) : ""));
     // Work nobody has started yet can be called off in one plain tap: the small "Stop" at the
     // end of the time line went unseen, and a tap that queued a nudge looked unstoppable
     // (the maintainer, 2026-10-26).
-    if (st === "needs_you") put(cardEl, h("p", {}, navLink("todo", "Answer it in To do")));
+    if (st === "needs_you") put(cardEl, h("div", {class: "wc-actions"}, btn("Answer", () => askWorkAnswer(id), {kind: "primary", small: true, key: "wans:" + id, aria: "Answer: " + txt(w.title)})));
     if (slow && ACTIVE.has(st)) {
       put(cardEl, h("p", {class: "wc-warn tone-warn", "data-stall": "1"}, limitHit() ?
         "Claude may have reached your plan's usage limit. This waits until it resets." :
@@ -5173,7 +5576,7 @@
     if (st === "done") {
       const links = arr(obj(w.result).links).map((l) => safeUrl(l.url) ? h("a", {href: safeUrl(l.url), target: "_blank", rel: "noopener noreferrer"}, txt(l.label)) : null).filter(Boolean);
       if (links.length) put(cardEl, h("p", {class: "wc-links"}, links));
-      const goTo = {search: "jobs", draft: "drafts", resume_for_contact: "drafts", prep: "interviews", reply: "drafts-messages", follow_up: "drafts-messages", network: "drafts-messages", talk: "chat", update: "settings", files: "drafts", tweak: "drafts"}[w.kind];
+      const goTo = WORK_HOME[w.kind];
       if (goTo) put(cardEl, h("p", {}, tabLink(goTo, null)));
     }
     const note = S.workNote.get(id);
@@ -5181,11 +5584,16 @@
     const acts = h("div", {class: "wc-actions"});
     // Work nobody has started yet is called off in one plain tap, first on its row.
     if (st === "queued" && !p.stopping) put(acts, btn("Don't do it", () => stopWork(id), {kind: "secondary", small: true, key: "stop:" + id, aria: "Don't do it: " + txt(w.title)}));
+    if (stopBtn) put(acts, stopBtn);
+    // Nothing has picked it up: the page asks its helper chat again; only once that cannot
+    // be reached is there a link to start a chat by hand.
+    const canWake = !S.wakeFailed && (/^session_/.test(txt(obj(S.listener).chat)) || txt(obj(M().app).repo));
     const tries = Number(w.attempt) || 1;
     if ((st === "failed" || st === "stopped" || (slow && ACTIVE.has(st) && !limitHit())) && tries < 3) {
       put(acts, btn("Try again", () => retryWork(id), {kind: "secondary", small: true, key: "retry:" + id, aria: "Try again: " + txt(w.title)}));
     }
-    if (st === "queued" && (p.late || (note && note.link)) && !toComputer) {
+    if (st === "queued" && p.late && !toComputer && canWake) put(acts, btn("Ask Claude again", () => { if (S.woken) S.woken.delete(id); autoWake([id]).then(scheduleRender); }, {kind: "secondary", small: true, key: "rewake:" + id, aria: "Ask Claude again: " + txt(w.title)}));
+    if (st === "queued" && (p.late || (note && note.link)) && !toComputer && !canWake) {
       if (S.can.comments === "available") put(acts, btn("Ask Claude again", () => ringAgain(id), {kind: "quiet", small: true, key: "ring:" + id}));
       put(acts, h("a", {class: "btn quiet small", href: prefillUrl(), target: "_blank", rel: "noopener noreferrer", "data-k": "prefill:" + id}, "Start it now", h("span", {class: "sr-only"}, " (opens Claude in a new tab)")));
     }
@@ -5223,12 +5631,12 @@
     const sum = active.length ? [running ? running + " running" : null, queued ? queued + " waiting to start" : null, ask ? nWord(ask, "needs", "need") + " you" : null].filter(Boolean).join(", ") + "." : "Nothing running.";
     const sm = active.length ? "About " + plural(Math.max(1, Math.round(left / 60)), "minute", "minutes") + " left. Nothing is sent." : null;
     return h("section", {class: "workp", "aria-labelledby": "h-work-" + where},
-      h("div", {class: "rail-head"}, h("h2", {id: "h-work-" + where, class: "rail-title", tabindex: "-1"}, "Work")),
+      h("div", {class: "rail-head"}, h("h2", {id: "h-work-" + where, class: "rail-title", tabindex: "-1"}, "Claude's work")),
       h("div", {class: "summary"}, h("div", {class: "sum-words"}, h("p", {class: "sum"}, sum), sm ? h("p", {class: "sum-small"}, sm) : null)),
       limit ? h("div", {class: "banner tone-warn"}, h("p", {}, "Claude may have reached your plan's usage limit. Running work waits until it resets; nothing retries by itself."),
-        active.length ? btn("Pause everything", () => { for (const [id] of active) stopWork(id); }, {small: true, key: "pause-all"}) : null) : null,
+        active.length ? btn("Stop everything", () => { for (const [id] of active) stopWork(id); }, {small: true, key: "pause-all"}) : null) : null,
       listView("work", {items, name: "work", live: ([, w]) => ACTIVE.has(txt(w.status) || "queued"),
-        fold: ([, w]) => TERMINAL.has(txt(w.status)) && now() - finishedAt(w) > 15 * 60000,
+        fold: ([, w]) => (txt(w.status) === "stopped" && now() - finishedAt(w) > 2 * 60000) || (TERMINAL.has(txt(w.status)) && now() - finishedAt(w) > 15 * 60000),
         foldLabel: (k) => k + " finished",
         sort: (a, b) => ((WORK_ORDER[a[1].status] === undefined ? 3 : WORK_ORDER[a[1].status]) - (WORK_ORDER[b[1].status] === undefined ? 3 : WORK_ORDER[b[1].status])) ||
           (TERMINAL.has(a[1].status) ? finishedAt(b[1]) - finishedAt(a[1]) : txt(a[1].asked_at).localeCompare(txt(b[1].asked_at))),
@@ -5265,8 +5673,10 @@
     const slow = act.filter(([, w]) => { const p = progress(w); return p.stalled || p.lapsed || p.late; }).length;
     // Work nobody has picked up is waiting, never "running" (the maintainer, 2026-10-26).
     const going = act.filter(([, w]) => w.status !== "queued" && w.status !== "needs_you").length;
-    const waiting = act.filter(([, w]) => w.status === "queued").length;
-    const words = asking ? plural(asking, "needs you", "need you") : going ? going + " running" : waiting ? waiting + " waiting" : recent.length + " done";
+    const queued = act.filter(([, w]) => w.status === "queued");
+    const starting = queued.filter(([id]) => S.woken && S.woken.has(id)).length;
+    const waiting = queued.length - starting;
+    const words = asking ? plural(asking, "needs you", "need you") : going ? going + " running" : starting ? starting + " starting" : waiting ? waiting + " waiting" : recent.length + " done";
     return h("button", {type: "button", class: "pill" + (asking || slow ? " warn" : ""), id: "pill", "data-k": "pill", "aria-haspopup": wide() ? null : "dialog", onclick: openWork},
       going && !asking ? h("span", {class: "spin", "aria-hidden": "true"}) : h("span", {class: "dot tone-" + (asking || slow ? "warn" : "ok"), "aria-hidden": "true"}),
       h("span", {}, words), h("span", {class: "sr-only"}, ": show the work"));
@@ -5437,6 +5847,7 @@
       call && txt(call.first_name) ? ["Prepare me for my call with " + txt(call.first_name), "Prepare me for my call with " + txt(call.first_name) + ". ", "call"]
         : iv && txt(iv.company) ? ["Prepare me for " + txt(iv.company), "Prepare me for my interview at " + txt(iv.company) + ". ", "call"]
         : ["Prepare me for a call", "Prepare me for a call with ", "call"],
+      ["How does this page work?", "How do I ", "help"],
     ];
   }
   function talkIntro() {
@@ -5465,7 +5876,8 @@
         const w = workDoc(last.work || ("talk~" + seg(currentThread(to)) + "~" + seg(last.id)));
         if (!w || !ACTIVE.has(w.status)) continue;
         const words = w.status === "queued" ? (to === "computer" && !computerListening() ? "This needs your computer: open Claude on it. Your question waits here until then." : "Claude is starting on this…") : "Claude is working on it…";
-        items.push(h("li", {class: "talk-msg pending"}, h("p", {class: "talk-text muted"}, words)));
+        // Moving dots, as in a Claude chat, so a wait never looks like a freeze.
+        items.push(h("li", {class: "talk-msg pending", role: "status"}, h("p", {class: "talk-text muted"}, words, " ", h("span", {class: "typing", "aria-hidden": "true"}, h("span", {}), h("span", {}), h("span", {})))));
       }
     }
     talkList.setAttribute("aria-busy", S.quick.busy ? "true" : "false");
@@ -5527,6 +5939,10 @@
   }
   function sendChat() {
     const text = talkInput.value.trim();
+    // One press, one message: a second press while the first is on its way, or the same words
+    // again within a few seconds, sends nothing (the maintainer, 2026-10-28: it sent twice).
+    if (S.quick.busy || S.sending || (text && S.lastSent && S.lastSent.text === text && now() - S.lastSent.at < 8000)) return;
+    if (text) S.lastSent = {text, at: now()};
     const withPics = pics.length && !S.quick.mode;
     if (!text && !withPics) { talkInput.focus(); return; }
     if (withPics && pics.some((p) => p.status === "failed")) { shout("A picture was not added. Remove it, or add it again."); return; }
@@ -5580,6 +5996,7 @@
       announce("Sent to Claude.");
       let how = roomRing ? await roomRing : null;
       if (!how && (to === "cloud" || computerListening())) how = await ringComments([wid], false);
+      autoWake([wid]);
       ringNote([wid], how || "none");
       renderChat();
     })();
@@ -5628,7 +6045,9 @@
       " Write plain, short answers: two or three sentences or a short list, in everyday words. Never invent a job, a person, a date, a number or a fact. " +
       "You cannot browse, send or change anything, or write " + noun() + "s or letters. If the question needs any of that, or files, the web or work done, " +
       (withTools ? "call needs_chat with a one-line reason and say nothing else." : "answer only with NEEDS CHAT: and a one-line reason.") +
-      " Today is " + todayIso() + ".";
+      " Today is " + todayIso() + "." +
+      " How this page works, for questions about using it: " + tourSteps().map((t) => t[1] + " (section " + t[0] + "): " + t[2]).join(" ") +
+      " Your profile, help and the tour are in Settings. When the question is how to use the page or where something is, answer from that, then end with a last line SHOW: and the one section it is about.";
     if (S.quick.mode) {
       const mm = S.quick.mode;
       const qs = arr(mm.questions);
@@ -5641,7 +6060,12 @@
     }
     return base + (withTools ? "" : "\n\nThe page's data:\n" + ["jobs", "ready", "due", "people", "interviews", "messages", "done", "brief"].map((s) => s + ": " + digest(s).slice(0, 4000)).join("\n"));
   }
-  function startMock(iv) {
+  async function startMock(iv) {
+    if (!(await CAP.sample)) {
+      go("chat", {focus: false});
+      handOff("Run a practice " + lc1(txt(iv.next_stage) || "interview") + " with me for " + [txt(iv.role), txt(iv.company)].filter(Boolean).join(" at ") + ", one question at a time from my prep, with short feedback on each answer.", false);
+      return;
+    }
     S.quick.turns = [];
     S.chatNotes = [];
     S.quick.mode = {company: txt(iv.company), role: txt(iv.role), stage: txt(iv.next_stage) || "interview", questions: packQuestions(iv), lastAnswer: ""};
@@ -5699,7 +6123,7 @@
     if (handoff && !S.quick.mode) {
       S.quick.turns = S.quick.turns.filter((t) => t !== youMsg);
       const where = whereTo() === "computer" ? "on your computer" : "in the cloud";
-      S.chatNotes.push({id: "n" + stamp() + rand4(), from: "note", text: "This needs more than this page (" + handoff + "), so Claude is working on it " + where + ". The answer appears here.", at: iso()});
+      S.chatNotes.push({id: "n" + stamp() + rand4(), from: "note", text: "Claude is working on this " + where + ". The answer appears here.", at: iso()});
       handOff(text, false);
       announce("Claude is working on it " + where + ".");
       renderChat();
@@ -5713,8 +6137,14 @@
         answer = [fb.band ? "Band: " + fb.band : null].concat(fb.kept.map((k) => "- " + k), [fb.next || null]).filter(Boolean).join("\n");
       }
     }
+    const show = /\n?\s*SHOW:\s*([a-z]+)\s*$/i.exec(answer);
+    if (show) answer = answer.slice(0, show.index).trim();
     const reply = {id: "q" + stamp() + rand4(), from: "quick", text: answer, at: iso()};
     S.quick.turns.push(reply);
+    const part = show && tourSteps().find((t) => t[0] === show[1].toLowerCase());
+    if (part && !S.quick.mode) S.chatNotes.push({id: "o" + stamp() + rand4(), from: "claude", at: iso(), node: () => h("div", {class: "offer-card"},
+      h("div", {class: "card-actions"}, btn("Show me " + part[1], () => showTourPart(part[0]), {kind: "secondary", small: true, key: "show-part:" + part[0]}),
+        btn("Take the whole tour", () => showTour(0), {kind: "quiet", small: true, key: "show-tour"})))});
     const db = S.caps.db;
     if (db && !hidden && !S.quick.mode) {
       const th = currentThread("quick");
@@ -5901,7 +6331,9 @@
     dockEl.hidden = !dockOpen;
     // Out of the way of a selection's own bar, and lifted over Claude's browser panel.
     const bulk = !!document.querySelector("#main .bulk");
-    fabEl.hidden = shown || dockOpen || bulk;
+    // On a phone the Chat tab is the one way in: a floating button as well was two buttons
+    // for one thing (the maintainer, 2026-10-28).
+    fabEl.hidden = shown || dockOpen || bulk || window.innerWidth < 760;
     fabEl.setAttribute("aria-expanded", String(dockOpen));
     document.body.classList.toggle("has-fab", !fabEl.hidden);
     const bp = $("browser-panel");
@@ -5922,6 +6354,8 @@
     if (S.owner !== true) return;
     if (!dockEl) buildDock();
     if (chatShown()) { focusTalk(o.text); return; }
+    // A phone has the Chat tab: the panel there was a second chat window over the first.
+    if (window.innerWidth < 760) { go("chat", {focus: false}); focusTalk(o.text); return; }
     if (!dockOpen) {
       const op = o.opener || document.activeElement;
       dockBackTo = op && op.dataset && op.dataset.k ? op.dataset.k : null;
@@ -5953,6 +6387,7 @@
     focusTalk();
   }
   // "Someone wrote to me": one plain line on Contacts that opens the chat ready for it.
+  function phoneNow() { return window.innerWidth < 760; }
   function gotMessage(where) {
     return h("p", {class: "head-ask"}, btn(picsOn() ? "Got a message? Paste it or a screenshot" : "Got a message? Paste it here",
       (e) => openDock({opener: e.currentTarget, text: "Help me reply to this message: "}), {kind: "link", key: "got-msg" + (where ? ":" + where : "")}));
@@ -5961,7 +6396,7 @@
   // ------------------------------------------------------------------ Settings
 
   const SETTING_COPY = {
-    work_either: {label: "Where big jobs run", choices: {cloud: ["In the cloud", "Works when your computer is off."], computer: ["On this computer", "Can use files and your browser here."]}},
+    work_either: {label: "Where long tasks run", choices: {cloud: ["In the cloud", "Works when your computer is off."], computer: ["On your computer", "Can use your files and your browser there."]}},
     suggestions: {label: "Suggestions", hint: "Warnings about something wrong, like a closed posting, always show.", choices: {on: ["On"], urgent: ["Only urgent"], off: ["Off"]}},
     app_updates: {label: "How updates arrive", choices: {auto: ["By themselves"], when_asked: ["When I say"]}},
     tips: {label: "Tips now and then"},
@@ -6005,7 +6440,8 @@
     const asks = needsItems().filter((n) => needKind(n) === "update" && !settledAction(n.id));
     if (asks.length) put(wrap, h("section", {class: "set-asks", "aria-label": "From updates"}, h("h3", {class: "group"}, "From updates"),
       h("div", {class: "stack"}, asks.map((n) => needCard(n, {where: "settings", section: "settings"})))));
-    put(wrap, settingsGroup("Look", [lookRow()]));
+    put(wrap, settingsGroup("Your profile", youRows()));
+    put(wrap, settingsGroup("Look", [lookRow(), sizeRow()]));
     put(wrap, settingsGroup("How Claude works", [infoRow("where", "Where Claude works", whereSummary(), whereRows())].concat(pick(["work_either", "suggestions", "app_updates", "tips"]).concat(others).map(settingRow))));
     const search = searchRows().filter(Boolean);
     if (search.length) put(wrap, settingsGroup("Your search", search));
@@ -6017,7 +6453,7 @@
       actionRow("Something looks wrong", () => startChat("Something on my job search page looks wrong. Page version " + txt(obj(M().app).version || u.version) + ". What I saw: "), "help-wrong")]));
     put(wrap, settingsGroup("Your data", [infoRow("privacy", "Where your data lives", null, h("p", {}, privacyText())),
       infoRow("device-link", "Open on another device", null, anotherDeviceBody()),
-      infoRow("news", "What's new", waiting ? "An update is waiting" : "Up to date", updatesBody()),
+      infoRow("news", "What's new", waiting ? null : "Up to date", updatesBody()),
       infoRow("learned", "What you have taught it", plural(arr(M().learned).filter((x) => !x.retired && !effective(txt(x.id), ["learned.retire"])).length, "rule", "rules"), learnedRows())]));
     return wrap;
   }
@@ -6072,6 +6508,14 @@
       h("div", {class: "segctl", role: "radiogroup", "aria-labelledby": "look-name"}, opts.map(([v, label]) => {
         const id = "look-" + v;
         return h("label", {class: "seg-opt look-choice", for: id}, h("input", {type: "radio", name: "look", id, "data-k": id, value: v, checked: S.look === v, onchange: () => setLook(v)}), h("span", {class: "look-name"}, label));
+      })));
+  }
+  function sizeRow() {
+    const opts = [["smaller", "Smaller"], ["standard", "Standard"], ["larger", "Larger"]];
+    return h("div", {class: "setting-row look-row"}, h("span", {class: "set-name", id: "size-name"}, "Size"),
+      h("div", {class: "segctl", role: "radiogroup", "aria-labelledby": "size-name"}, opts.map(([v, label]) => {
+        const id = "size-" + v;
+        return h("label", {class: "seg-opt look-choice", for: id}, h("input", {type: "radio", name: "size", id, "data-k": id, value: v, checked: (S.size || "standard") === v, onchange: () => setSize(v)}), h("span", {class: "look-name"}, label));
       })));
   }
   function keysRow() {
@@ -6387,11 +6831,8 @@
       const parts = [];
       // The pill while work runs, except where the Work rail already shows it.
       if (!wide()) parts.push(workPill());
-      if (wide()) {
-        const opts = NAV.concat(["interviews", "progress", "settings"]).filter((id) => id !== S.section);
-        parts.push(listMenu("split", "side by side", [S.split ? ["Close the second column", () => { S.split = null; keepAddress(false); render(); }, "none"] : null]
-          .concat(opts.map((id) => ["Open " + labelOf(id) + " beside", () => { S.split = id; keepAddress(false); render(); }, id])), "Side by side"));
-      }
+      // No "Side by side": it added clutter and no way to close it (the maintainer, 2026-10-28).
+      if (wide() && S.split) parts.push(btn("Close the second column", () => { S.split = null; keepAddress(false); render(); }, {kind: "quiet", small: true, key: "split-close"}));
       if (phone && S.section === "chat") parts.push(chatMenu());
       if (phone) parts.push(h("a", {href: "#settings", class: "gear", "aria-label": "Settings", "data-k": "gear", onclick: (e) => { e.preventDefault(); go("settings", {focus: true}); }}, icon("settings")));
       patch(tools, parts);
@@ -6664,6 +7105,8 @@
   function start() {
     pruneDrafts();
     S.look = readLook();
+    S.size = SIZES[sget("local", SIZE_KEY)] ? sget("local", SIZE_KEY) : "standard";
+    applySize(S.size);
     sset("local", "ljs:palette", null);
     S.keysOn = sget("local", "ljs:keys") !== "off";
     S.conv = sget("session", "ljs:conv") || null;

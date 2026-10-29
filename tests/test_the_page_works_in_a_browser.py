@@ -485,7 +485,10 @@ def test_settings_save_once_the_person_settles_and_show_the_new_value(run, pages
     assert ("setting-brief_days", '"Tuesday"') in got
     assert r["checked"] is True
     assert r["names"][0] == "An update is waiting", "an update waiting is the first row"
-    assert r["names"][1:5] == ["Look", "Where Claude works", "Where big jobs run", "Suggestions"], "then grouped rows, the look first"
+    # Then the person's own profile (2026-10-28), then the look.
+    look = r["names"].index("Look")
+    assert {"Your jobs", "Your skills", "Education", "Certificates"} <= set(r["names"][1:look]), r["names"]
+    assert r["names"][look:look + 5] == ["Look", "Size", "Where Claude works", "Where long tasks run", "Suggestions"], "then grouped rows, the look first"
 
 
 # ------------------------------------------------------------------ asking a chat for work
@@ -591,10 +594,12 @@ def test_stop_says_what_is_kept(run, pages):
     r = run("stop", html=pages["sample"])
     _clean(r)
     assert r["late"]["status"] == "Not picked up yet"
+    assert "Ask Claude again" in r["rewake"]
     assert r["prefill"] and r["prefill"].startswith("https://claude.ai/code?prompt=")
     assert r["running"]["stop_asked"] is True and r["running"]["status"] == "running"
     assert r["runningCard"]["status"] == "Stopping after this step"
     assert "Stop" not in r["runningCard"]["buttons"]
+    assert "Stop" in r["runningBefore"], "running work has a Stop button of its own"
     assert r["queued"]["status"] == "stopped" and r["queued"]["stop_asked"] is True
     assert r["queuedCard"]["sentence"] == "Stopped. Anything already saved is kept."
 
@@ -608,7 +613,7 @@ def test_both_files_download_in_one_tap_and_a_draft_with_none_asks_for_them(run,
     assert all(s["blob"] and s["size"] > 100 for s in r["saves"])
     assert any("Saved." in n for n in r["note"])
     assert any(x.startswith("Your files are not on this page yet.") for x in r["noLetter"])
-    assert "Get the files" in r["askButtons"] and not any(b.startswith(("Download", "Get both")) for b in r["askButtons"])
+    assert "Ask Claude to add them" in r["askButtons"] and not any(b.startswith(("Download", "Get both")) for b in r["askButtons"])
     assert r["primary"] == ["Make it again"]
     assert r["work"]["kind"] == "files" and r["work"]["args"]["files"] == ["Morgan_Ellis_CV_Quayside.pdf"]
 
@@ -649,7 +654,7 @@ def test_a_question_the_page_cannot_answer_goes_to_claude_by_itself(run, pages):
             sample={"toolCalls": [{"name": "needs_chat", "input": {"reason": "It needs the employer's own website"}}],
                     "reply": "Your cloud chat can look that up."})
     _clean(r)
-    assert any("This needs more than this page (It needs the employer's own website)" in t for t in r["quick"])
+    assert any("Claude is working on this" in t and "It needs the employer" not in t for t in r["quick"]), "Claude's own reasoning is never shown"
     assert not any("Your cloud chat can look that up." in t for t in r["quick"])
     sent = [w for w in r["work"] if w["kind"] == "talk"]
     assert len(sent) == 1 and sent[0]["to"] == "cloud"
@@ -673,8 +678,8 @@ def test_with_no_quick_answers_a_question_goes_to_claude_and_the_answer_comes_ba
 def test_where_claude_works_is_one_setting_and_says_so_only_when_it_matters(run, pages):
     r = run("chat_computer", html=pages["sample"])
     _clean(r)
-    assert "Where big jobs run" in r["legend"], "the choice of where big jobs run, beside the checklist of where Claude works"
-    assert "Works when your computer is off." in r["hints"] and "Can use files and your browser here." in r["hints"]
+    assert "Where long tasks run" in r["legend"], "the choice of where big jobs run, beside the checklist of where Claude works"
+    assert "Works when your computer is off." in r["hints"] and "Can use your files and your browser there." in r["hints"]
     assert r["setting"]["value"] == "computer"
     assert len(r["work"]) == 1 and r["work"][0]["to"] == "computer"
     assert any("This needs your computer: open Claude on it." in t for t in r["waiting"])
@@ -689,6 +694,13 @@ def test_the_chat_opens_from_any_section_in_a_panel_with_the_same_thread(run, pa
     the window", so a question on any page needs no trip to Chat first."""
     r = run("chat_dock", html=pages["sample"], viewport=vp)
     _clean(r)
+    if vp is PHONE:
+        # One way into the chat on a phone, its tab: no floating button and no panel over it
+        # (the maintainer, 2026-10-28).
+        assert not r["fab"] and not r["dockBefore"]
+        assert r["phone"]["hash"] == "#chat" and not r["phone"]["dock"]
+        assert r["phone"]["value"] == "Help me reply to this message: " and r["phone"]["focus"] == "talk-text"
+        return
     assert r["fab"] and r["fabName"] == "Chat with Claude" and not r["dockBefore"]
     o = r["open"]
     assert o["dock"] and not o["fab"] and o["role"] == "dialog" and o["name"] == "Chat"
@@ -727,7 +739,9 @@ def test_a_pasted_screenshot_goes_with_the_message_as_its_id(run, pages):
     _clean(r)
     assert r["add"] and r["placeholder"] == "Ask anything, or paste a screenshot of a message you got"
     assert r["intro"].startswith("Paste a screenshot or a link and say what you want: reply to someone, add a job someone sent you")
-    assert r["starters"][0] == "Someone sent me a job" and len(r["starters"]) == 3, r["starters"]
+    # Three to do things, and one for help with the page itself (2026-10-28).
+    assert r["starters"][0] == "Someone sent me a job" and len(r["starters"]) == 4, r["starters"]
+    assert r["starters"][3] == "How does this page work?"
     assert [t["img"] for t in r["tray"]] == [True] and r["tray"][0]["loaded"], "the screenshot shows in the box"
     assert r["tray"][0]["state"].endswith("Ready to send") and r["tray"][0]["remove"] == "Remove"
     assert [(u["name"], u["type"]) for u in r["uploaded"]] == [("screenshot.png", "image/png")]
@@ -814,10 +828,12 @@ def test_times_are_the_persons_own_with_the_zone_named_and_a_date_is_a_day(run, 
     assert not any("Passed" in c for c in home["chips"])
 
 
-def test_a_second_section_opens_beside_the_first_on_a_wide_screen(run, pages):
+def test_no_side_by_side_menu_and_a_second_column_closes_plainly(run, pages):
     r = run("split", html=pages["sample"], shot="wide-split" if SHOTS else "")
     _clean(r)
+    assert r["menu"] == 0, "no Side by side menu"
     assert r["cols"] == 2 and r["headings"][:2] == ["Jobs", "Contacts"] and r["hash"] == "#jobs+contacts"
+    assert r["after"] == 0, "Close the second column closes it"
 
 
 def test_reduced_motion_stops_the_spinner_and_the_bar(run, pages):
@@ -877,7 +893,8 @@ def test_light_or_dark_is_chosen_in_settings_kept_for_this_viewer_and_followed_b
     r = run("picker", html=pages["sample"])
     _clean(r)
     assert r["before"] == _rgb("light")
-    assert r["legends"] == ["Look"] and r["choices"] == ["Auto", "Light", "Dark"]
+    # The look, then this device's size (2026-10-29).
+    assert r["legends"] == ["Look", "Size"] and r["choices"] == ["Auto", "Light", "Dark", "Smaller", "Standard", "Larger"]
     assert r["after"] == {"bg": _rgb("dark"), "look": "dark", "stored": "dark", "scheme": "dark"}
     assert r["actions"] == [], "a look is the viewer's own: nothing is asked of a chat"
     assert r["otherWindow"]["bg"] == _rgb("dark") and "dark" in r["otherWindow"]["checked"]
@@ -1041,3 +1058,47 @@ def test_a_busy_week_is_a_few_checklists_not_a_card_each(run, pages):
     assert r["progress"]["all"].startswith("Since you started:")
     assert r["bin"]["title"] == "Not for you?" and "No more roles from Harbourline Bank" in r["bin"]["options"]
     assert r["gauge"] >= 1, "a cost is a gauge of bars, its words on hover"
+
+
+# ------------------------------------------------------------------ waking Claude, by itself (2026-10-28)
+
+def test_the_page_wakes_its_helper_chat_by_itself_and_starts_one_when_it_is_gone(run, pages):
+    r = run("wake", html=pages["sample"])
+    _clean(r)
+    sent = [c for c in r["mcp"] if c["tool"] == "send_message"]
+    assert sent and sent[0]["server"] == "Claude Code Remote" and sent[0]["input"]["session_id"] == "session_EXAMPLEHELPER"
+    assert "[app] [work:draft~r12-1]" in sent[0]["input"]["message"]
+    assert not [c for c in r["mcp"] if c["tool"] == "create_session"], "a helper that answers is never replaced"
+    assert r["wakeCard"] == 0, "no Wake Claude card while the page can wake it"
+    gone = run("wake", html=pages["sample"], fail=["send_message"])
+    _clean(gone)
+    made = [c for c in gone["mcp"] if c["tool"] == "create_session"]
+    assert len(made) == 1, "one new helper, never one per piece of work"
+    assert made[0]["input"]["title"] == "Job search helper" and made[0]["input"]["environment_id"] == "env_test1"
+
+
+# ------------------------------------------------------------------ your profile (2026-10-28)
+
+def test_the_profile_is_filled_in_and_changed_on_the_page_one_work_item_each(run, pages):
+    r = run("you", html=pages["sample"])
+    _clean(r)
+    assert r["card"] == ["Finish your profile"]
+    assert r["sheet"] == ["What you did at Saltmarsh Analytics"]
+    got = {(w["args"]["part"], w["args"]["change"]): w["args"] for w in r["works"]}
+    assert got[("job", "edit")]["text"] == "Built the weekly stock report for 40 stores."
+    assert got[("job", "edit")]["was"]["employer"] == "Saltmarsh Analytics"
+    # SQL is already on the profile, so only Looker is added.
+    assert got[("skills", "edit")]["add"] == ["Looker"] and got[("skills", "edit")]["remove"] == ["Power BI"]
+    assert got[("job", "remove")]["was"]["title"] == "Graduate Analyst"
+    assert len(r["works"]) == 3
+
+
+def test_the_tour_walks_each_section_skips_and_opens_one_part_from_its_title(run, pages):
+    r = run("tour", html=pages["sample"])
+    _clean(r)
+    assert r["card"] == ["New here? A one-minute tour"]
+    assert r["first"] == ["To do (1 of 8)"]
+    assert r["second"]["title"] == ["Jobs (2 of 8)"] and r["second"]["hash"] == "#jobs", "each step opens its section"
+    assert r["closed"] == 0 and r["cardAfter"] == 0, "skipped, and never offered again on this device"
+    assert r["part"]["title"] == ["How Contacts works"]
+    assert "Next part: Interviews" in r["part"]["buttons"] and "Close" in r["part"]["buttons"]

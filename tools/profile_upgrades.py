@@ -907,13 +907,10 @@ def _missing_texts() -> str:
     """Messages that drew a reply, logged without their words: what_works cannot learn from
     them. The message that drew a senior reader's reply in three hours reached the log days
     later, and earlier ones were logged as "approach" with no text."""
-    if not person.exists():
-        return ""
-    found = _probe("import state, what_works as w; "
-                   "print(sum(1 for c in w.message_cases(state.load_contacts(), "
-                   "state.load_threads()) if c['won'] and not c['text']))")
-    n = int(found) if found.isdigit() else 0
-    return ("%d message(s) that drew a reply are logged without their words" % n) if n else ""
+    # Never put to the person: the LinkedIn download they give every fortnight brings the
+    # words in by itself (tools/network/export.py), so nobody is asked to paste them (the
+    # maintainer, 2026-10-28: "make these types of decisions for them").
+    return ""
 
 
 # The wording the app's own defaults used to put in a person's voice settings: "I am" and
@@ -1466,17 +1463,15 @@ REGISTRY: tuple[Upgrade, ...] = (
             "folded into it so the next chat has them",
             _campaign_notes, "python3 -c \"import sys; sys.path[:0]=['tools','tools/network']; "
             "import json, interview_pack as p; print(json.dumps(p.handkept_notes(), indent=1))\""
-            " lists each file and its prep document. For each, after a yes: build the document "
+            " lists each file and its prep document. For each: build the document "
             "if it is missing (interview_pack.py pack \"<employer>\" --write); put each answer "
             "the file holds under its question in Your answers, and each decision in Notes, as "
             "it is written there; a fact about the person goes to profile/01-candidate-profile.md "
             "instead, and a stock answer to profile/07-interview-prep.md (interview_pack.py "
             "motive); then add to Notes \"- Folded in from <path> on <date>.\" Leave the file "
-            "where it is", "question", "~5 min", priority=2, needs="you", conditional=True,
-            ask="You kept notes for an interview before its prep document existed. Can I fold "
-                "them into it, so the next chat has them?",
-            why_ask="What was decided in them, like where you say you are based or why you "
-                    "moved, is otherwise lost to the next chat."),
+            "where it is", "edit", "~5 min", priority=2, conditional=True),
+            # Done by Claude alone: folding notes in loses nothing and asks nothing of the
+            # person (the maintainer, 2026-10-28: "make these types of decisions for them")
     Upgrade("dropped-rows", "2026-10-19",
             "people you set aside before writing, kept apart from real dead ends and easy to "
             "reopen",

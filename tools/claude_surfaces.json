@@ -105,6 +105,35 @@
       "ui_sensitive": true
     },
     {
+      "id": "plugin-install",
+      "claim": "On a computer, the app's plugin is an optional front door: in any Claude Code chat there, \"open my job search\" opens the person's page, or makes their private copy the first time. It is installed by typing one line into Claude Code: /plugin install last-job-search --marketplace aranculleton/last-job-search (Claude Code 2.1.275 or later), choosing the person's user account as where it goes. A cloud chat, the browser at claude.ai/code included, loads no plugins, so it is for a computer only; the person's copy keeps itself up to date either way. A third-party marketplace's plugins do not update by themselves unless turned on: /plugin, its Marketplaces tab, the marketplace, then Enable auto-update. Typing the line into the desktop app's Code tab rather than a terminal was not tried.",
+      "goal": "open your job search from any chat on your computer",
+      "how": "type /plugin install last-job-search --marketplace aranculleton/last-job-search into Claude Code on your computer, and choose your user account",
+      "steps": [
+        "In Claude Code on your computer (the Claude desktop app's Code tab, or a terminal), type: /plugin install last-job-search --marketplace aranculleton/last-job-search",
+        "When it asks where to install it, choose your user account.",
+        "From then on, say \"open my job search\" in any chat on that computer."
+      ],
+      "sources": [
+        {
+          "url": "https://code.claude.com/docs/en/discover-plugins",
+          "quote": "Run `/plugin install` with the plugin's name and marketplace."
+        },
+        {
+          "url": "https://code.claude.com/docs/en/discover-plugins",
+          "quote": "has no plugin browser and doesn't load the plugins you installed on your own machine"
+        },
+        {
+          "url": "https://code.claude.com/docs/en/discover-plugins",
+          "quote": "Off by default"
+        }
+      ],
+      "status": "documented",
+      "verified_on": "2026-10-28",
+      "verified_against": "code.claude.com/docs/en/discover-plugins read 2026-10-28; the one-line install and its version from the same page; the plugin and marketplace checked with claude plugin validate 2.1.312",
+      "ui_sensitive": true
+    },
+    {
       "id": "windows-computer",
       "claim": "On Windows the Claude desktop app installs from claude.ai/download (an x64 installer, and one for ARM64) and opens from the Start menu; its Code tab is the same as on a Mac (local-chat). Its own browser opens with Ctrl+Shift+B, or the Browser button in the session's title bar (browser-pane-show). Profiles are read in that browser by default, whatever browser the person uses; only someone who already uses Chrome or Edge and wants their own sign-in is offered Claude in Chrome (chrome), which does not work inside WSL. The desktop app does not read PowerShell profiles: a tool newly installed for every program is seen once the app is quit and reopened.",
       "goal": "use Claude on a Windows computer",

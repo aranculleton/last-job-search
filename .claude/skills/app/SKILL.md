@@ -78,14 +78,15 @@ page, so never ask it again):
 
 | kind | run |
 |---|---|
-| search | `run_round.py`, then the shortlist (the job-scraper skill) |
-| draft, resume_for_contact | the drafting path in RUNBOOK.md step 2 (`stage_picks.py stage`, `consent` from `answers`, the workflow, both audits, `assemble`, RUNBOOK step 3) |
+| search | `run_round.py`, then the shortlist (the job-scraper skill); `args.note` is what the person typed about it, followed like any instruction of theirs |
+| draft, resume_for_contact | the drafting path in RUNBOOK.md step 2 (`stage_picks.py stage`, `consent` from the item's `answers`, or from `args.answers` (a list of question and answer) when the page queued it, the workflow, both audits, `assemble`, RUNBOOK step 3). `resume_for_contact`: `stage_picks.py --for-contact <args.contact>` for `args.job`, or the general resume when `job` is null; `args.note` is what they typed |
 | evaluate | /apply Step 1 on `args.url` or `args.text`, then `added_jobs.py add <row.json>`; with `applied_on`, `confirm.py applied --new`; with `contact` (who sent it), that person is the job's referral route: `network/state.py set <contact> --next-action "apply via <first name>'s referral" --note "sent <role> at <employer>"`, never by hand, and `result.summary` says who it is linked to; with `draft: true`, once it is scored queue its `draft` work as tapping Draft does (`app_actions.py` `_job_draft`) |
 | general_resume | `stage_picks.py general` |
-| prep | `/interview`; with `args.contact`, `network/prep.py "<contact>"` |
-| network, reply, follow_up | `/network` (`args.rewrite`: that contact's waiting note, rewritten on the profile just read), `/reply` (`args.received` names their logged message; `args.update`, news for a referrer), the networking skill |
+| prep | `/interview` for `args.interview`; with `args.contact`, `network/prep.py "<contact>"`; `args.note` is what they typed |
+| network, reply, follow_up | `/network` (`args.rewrite`: that contact's waiting note, rewritten on the profile just read), `/reply` (`args.received` names their logged message, and with none it is their latest one in the log; `args.want`, what they want to say back, in their words; `args.update`, news for a referrer; `args.kind: thank_you` a thank-you, `args.kind: referral_ask` with `args.job` the referral ask for that one role, `compose.referral_ask()`), the networking skill. A `follow_up` with `args.application` (or `args.interview`) is an application's or an interview's follow-up: `/outcome` Step 2b, never the networking skill |
 | own_profile | `network/own_profile.py check` |
-| brief | the brief's prompt |
+| profile | the change in `args` (`part`: job, skills, education, certificates or fill; `change`: add, edit or remove), made the way `/setup` writes that part: `01-candidate-profile.md` first, then `roles.py`, `bullets.py`, `skills.py` and the summary in `profile/CLAUDE.md` to match. Only what the person gave goes in, in their words and with their numbers; a job added gets its resume lines written from `args.text`, and anything unclear is asked in the work's thread, never guessed. A removal takes it out everywhere. Then `stage_picks.py general` for a fresh resume; `result.summary` says what changed |
+| brief | the brief's prompt; with `args.setup: true`, setting the brief up (automation/README.md, set-up (a)), not running it |
 | research | the `employer-researcher` subagent |
 | update | `sync_app.py --update`: the person asked, on the page. Then the page steps it prints, at once and unasked |
 | talk | read the thread's messages and their pictures ("A message in the chat", below); do what it asks; answer in the thread |
@@ -128,10 +129,12 @@ The same applies to a screenshot, message or link pasted into any chat, page or 
 picture is already in front of you there, so read it directly, do the same steps, show the
 result in the reply and on the page (`app.py view`), and never ask which command to run.
 
-Anything over about two minutes goes to a fresh child session (`create_session` on the
-private repo, the url and work id in its prompt), on the `model` `next` printed: the one
-that work needs (tools/model_guide.py `for_work`). When it is null, leave `model` out and
-the child runs on your own; drafting and audits are never moved below it.
+Work is done here, in this one chat, the page's helper: never a new chat per piece of work
+(the maintainer, 2026-10-28: "new chats keep getting created for every small thing"). Only
+when the model `next` printed differs from this chat's and the work is long (a search, a
+batch of drafts) does it go to a child session, one at a time, reused while it lives, titled
+in at most three words ("Job search: drafts"), the url and work id in its prompt. Drafting
+and audits are never moved below this chat's model.
 
 **Progress costs nothing extra.** At each stage boundary (`app.py progress <kind>`), in the
 same message as that stage's first command, one pinned `update` of `work/<id>`: `status:
@@ -167,5 +170,7 @@ that brings nothing new is said to nobody.
 - Work nobody can take is answered in its thread: "Your computer chat isn't open. Let the
   cloud chat do it?"
 - A question the work raises that the page did not ask goes on the item as `status:
-  needs_you` with the question in `note`; the page asks it. Never wait in the chat.
+  needs_you` with the question in `note`; the page asks it. Never wait in the chat. The
+  person's answer comes back on the same item, queued again, in `args.answers` under the
+  question: take it with `next` and carry on from where it stopped.
 - Every write is pinned (`if_version`) except a create; one write at a time per document.

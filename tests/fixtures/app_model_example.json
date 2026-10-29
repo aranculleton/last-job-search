@@ -1,16 +1,17 @@
 {
  "model": 1,
  "made_at": "2026-10-25T18:00:00Z",
- "rev": "3cebd8c26407",
+ "rev": "a222561c15e0",
  "app": {
-  "version": "4.0.0",
+  "version": "4.2.0",
   "update_waiting": null,
   "news": [
-   "Everything happens on one page now.",
-   "The README and the start guide show your page.",
-   "One chat answers your page, so a tap never wakes them all."
+   "Your profile, on the page.",
+   "A walkthrough that shows you round.",
+   "The plugin: a front door on your computer."
   ],
-  "privacy": "Only you can open this page unless you share it. It holds first names, employers, your drafts and your setup answers, so keep it unshared."
+  "privacy": "Only you can open this page unless you share it. It holds first names, employers, your drafts and your setup answers, so keep it unshared.",
+  "repo": "https://github.com/aranculleton/last-job-search"
  },
  "person": {
   "first_name": "Morgan",
@@ -44,7 +45,7 @@
  ],
  "jobs": {
   "round": "r9",
-  "made_at": "2026-10-26T10:51:55Z",
+  "made_at": "2026-10-29T00:46:14Z",
   "met": false,
   "summary": "4 roles on the shortlist, 4 scoring 60 or more and 2 scoring 75 or more. 3 left out, each with its reason.",
   "rows": [
@@ -638,6 +639,7 @@
    "next_action": "send the CV",
    "due": "2026-10-20",
    "route": "alumni",
+   "who": "hiring",
    "replied": true,
    "live": true,
    "call": null,
@@ -698,6 +700,7 @@
    "next_action": "One nudge if no reply",
    "due": "2026-09-29",
    "route": "cold",
+   "who": "hiring",
    "replied": false,
    "live": true,
    "call": null,
@@ -726,6 +729,7 @@
    "next_action": "Send the first note; call if needed",
    "due": null,
    "route": "alumni",
+   "who": "hiring",
    "replied": false,
    "live": true,
    "call": null,
@@ -757,7 +761,7 @@
    "when": "2026-10-28",
    "prep": {
     "path": "documents/applications/thornbury_bank_risk_analyst_thornbury/interview_prep.md",
-    "updated": "2026-10-26T10:51:55Z"
+    "updated": "2026-10-29T00:46:14Z"
    },
    "questions": 2,
    "all_day": true,
@@ -784,6 +788,7 @@
    ],
    "format": null,
    "one_screen": null,
+   "prep_text": "# Interview prep\n\n<!-- stages: Panel interview -->\n\n- **Q.** Tell me about a forecast you built (screen; source: posting)\n- **Q.** How do you check your data (screen; source: posting)\n",
    "practice": {
     "questions": [
      {
@@ -1103,33 +1108,33 @@
   ]
  },
  "updates": {
-  "version": "4.0.0",
-  "newest": "4.0.0",
+  "version": "4.2.0",
+  "newest": "4.2.0",
   "mode": "auto",
   "waiting": null,
   "changed": [
    {
-    "version": "4.0.0",
-    "date": "2026-10-26",
+    "version": "4.2.0",
+    "date": "2026-10-29",
     "lines": [
-     "Everything happens on one page now.",
-     "The README and the start guide show your page.",
-     "One chat answers your page, so a tap never wakes them all.",
-     "Your brief lives on your page.",
-     "Move your brief or take a break, from your page.",
-     "Your page is easy to find again."
+     "Your profile, on the page.",
+     "A walkthrough that shows you round.",
+     "The plugin: a front door on your computer.",
+     "Your page wakes Claude by itself.",
+     "Running work reads plainly.",
+     "On a phone, Chat is the tab alone."
     ]
    },
    {
-    "version": "3.13.0",
-    "date": "2026-10-24",
+    "version": "4.1.0",
+    "date": "2026-10-26",
     "lines": [
-     "Every resume's text is black.",
-     "A message that needs no answer can be marked so.",
-     "A file can go on a message already logged.",
-     "How many people you write to at one employer is yours.",
-     "An InMail is written only for someone who will get it.",
-     "Saving your work runs the same in any shell."
+     "A skill you say yes to can show in your work, not only on the skills line.",
+     "Chat from any page.",
+     "To do is short again.",
+     "Nobody at an employer you turned down fills your To do.",
+     "Questions from updates live in Settings.",
+     "What things cost is a small gauge."
     ]
    }
   ],
@@ -1179,6 +1184,13 @@
     "outcome.withdrawn"
    ],
    "rev": "16a35d81a7da",
+   "apply": {
+    "url": "https://jobs.example/thornbury/risk",
+    "kind": "employer",
+    "checked_on": null,
+    "checked_at": null,
+    "status": "not_checked"
+   },
    "related": {
     "interviews": [
      "int-thornbury_bank_risk_analyst"
@@ -1211,6 +1223,13 @@
     "outcome.no_response"
    ],
    "rev": "244c42f74ff6",
+   "apply": {
+    "url": "https://example.com/jobs/1",
+    "kind": "employer",
+    "checked_on": null,
+    "checked_at": null,
+    "status": "not_checked"
+   },
    "related": {
     "jobs": [
      "r9-4"
@@ -1365,43 +1384,49 @@
     "key": "todo",
     "tab": "todo",
     "title": "To do",
-    "text": "What is due, most urgent first. Each card has one button; tap Done when it is done, or Not today."
+    "text": "What needs you, most urgent first: a question, a follow-up that is due, an interview coming up. Each card has one button."
    },
    {
     "key": "jobs",
     "tab": "jobs",
     "title": "Jobs",
-    "text": "New roles scored out of 100 against what you want, with why. Find jobs searches again; tap Draft this on one you want; the bin takes one off your list."
+    "text": "Roles found for you, scored out of 100, with why. Tap Draft this on one you like; the bin takes one off. Find jobs searches again. While Claude works, the bar at the top says so: tap it to watch, or to stop it."
    },
    {
     "key": "drafts",
-    "tab": "ready",
+    "tab": "drafts",
     "title": "Drafts",
-    "text": "Your resume and letter for each role, checked. Get both files, apply on the employer's own site, then tap I have applied."
-   },
-   {
-    "key": "messages",
-    "tab": "messages",
-    "title": "Messages",
-    "text": "Notes to people worth writing to. Copy one, send it on LinkedIn yourself, then tap I sent it."
+    "text": "Your resume and letter for each role, written for that posting and checked. Get the files, apply on the employer's own site, then tap I have applied. From then on it is tracked, and its follow-ups come back to To do."
    },
    {
     "key": "contacts",
-    "tab": "people",
+    "tab": "contacts",
     "title": "Contacts",
-    "text": "Everyone you are talking to, and what is owed. When someone writes back, tap They replied; if they sent you a job, tap They sent me a job. Find people looks for more."
+    "text": "Why people: someone inside who puts your name forward gets you far more interviews than applying cold. Claude finds who to write to and drafts a short note; you send it on LinkedIn yourself. Every recruiter, referrer and hiring manager is kept here, with what each conversation needs next."
    },
    {
     "key": "interviews",
     "tab": "interviews",
     "title": "Interviews",
-    "text": "Your prep for each interview, to read before it. Tap Prepare me to build it."
+    "text": "Got an interview? Tell Claude in Chat, or tap I heard back on the application. Your prep is here to read: what they will ask, your answers, your questions."
+   },
+   {
+    "key": "progress",
+    "tab": "progress",
+    "title": "Progress",
+    "text": "Everything you have applied for, and how each one is going."
+   },
+   {
+    "key": "settings",
+    "tab": "settings",
+    "title": "Settings",
+    "text": "Your profile is here: your jobs, skills, education and certificates. Change them any time, and every new resume picks from them."
    },
    {
     "key": "chat",
     "tab": "chat",
     "title": "Chat",
-    "text": "Ask anything, or paste a link, a message or a screenshot and say what you want. Claude does the rest and it shows up here."
+    "text": "Ask anything, or paste a link, a message or a screenshot and say what you want. Claude does it, and the result shows up where it belongs."
    }
   ],
   "off": false
@@ -1446,11 +1471,13 @@
   "portals": [
    {
     "name": "freehire-search",
+    "label": "Freehire",
     "on": true,
     "why": "A free board that lists jobs from many sites."
    },
    {
     "name": "linkedin-search",
+    "label": "LinkedIn",
     "on": true,
     "why": "LinkedIn's own job search. Its robots rules turn crawlers away; only you switch it off."
    }
@@ -1458,7 +1485,7 @@
   "boards": [],
   "rules": [],
   "pause": null,
-  "rev": "629e4fcdbbd2"
+  "rev": "1ba13b86ac16"
  },
  "where": {
   "id": "where",
@@ -1487,7 +1514,7 @@
   "doc": "meta/listener",
   "answered": "answered_at",
   "quiet_after_s": 600,
-  "helper": "Job search: Claude's helper (keep this)",
+  "helper": "Job search helper",
   "wake": {
    "label": "Wake Claude",
    "url": "https://claude.ai/code?prompt=Look%20after%20my%20job%20search%20page%20from%20now%20on%3A%20python3%20tools%2Fapp.py%20start%20--listen%20--helper&repositories=aranculleton%2Flast-job-search",
@@ -1520,6 +1547,60 @@
   },
   "id": "schedule",
   "rev": "924082ed0c71"
+ },
+ "you": {
+  "id": "you",
+  "jobs": [
+   {
+    "id": "you-job-Brindle---Hart-Logistics-Senior-Operations-Analyst",
+    "employer": "Brindle & Hart Logistics",
+    "title": "Senior Operations Analyst",
+    "dates": "Mar 2023 - Present",
+    "place": "Manchester, UK",
+    "lines": 4
+   },
+   {
+    "id": "you-job-Oakmere-Foods-Supply-Chain-Data-Analyst",
+    "employer": "Oakmere Foods",
+    "title": "Supply Chain Data Analyst",
+    "dates": "Sep 2020 - Feb 2023",
+    "place": "Leeds, UK",
+    "lines": 4
+   },
+   {
+    "id": "you-job-Saltmarsh-Analytics-Graduate-Analyst",
+    "employer": "Saltmarsh Analytics",
+    "title": "Graduate Analyst",
+    "dates": "Sep 2019 - Aug 2020",
+    "place": "Manchester, UK",
+    "lines": 2
+   }
+  ],
+  "skills": [
+   "SQL",
+   "Python, pandas",
+   "Excel",
+   "demand forecasting",
+   "inventory optimisation",
+   "route optimisation",
+   "A/B testing",
+   "statistics",
+   "dbt",
+   "data quality testing",
+   "Azure SQL",
+   "Power BI",
+   "Tableau",
+   "stakeholder reporting",
+   "Jira"
+  ],
+  "education": [
+   "BSc Mathematics, University of Leeds, UK (2016-2019)"
+  ],
+  "certificates": [
+   "Microsoft Certified: Power BI Data Analyst Associate (2024)"
+  ],
+  "missing": [],
+  "rev": "6c8230af07ed"
  },
  "people_count": {
   "shown": 3,

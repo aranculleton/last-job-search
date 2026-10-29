@@ -375,7 +375,7 @@ def test_only_what_truly_needs_the_person_waits_for_them():
                                                                  "learned-choices", "profile-reads",
                                                                  "connections-export",
                                                                  "profile-consistency",
-                                                                 "campaign-notes", "message-texts",
+                                                                 "message-texts",
                                                                  "voice-refresh",
                                                                  # Only they can give their own
                                                                  # profile (2026-10-21).
@@ -400,8 +400,9 @@ def test_only_what_truly_needs_the_person_waits_for_them():
     assert U.by_id("work-place").pending() == "" and U.by_id("work-place").needs == "nobody"
     # Two answers to what a recruiter checks first: only the person knows which is true.
     assert "you pick the right one" in U.by_id("profile-consistency").ask
-    # Their own notes are folded into the prep document only on their yes.
-    assert "Can I fold them into it" in U.by_id("campaign-notes").ask
+    # Their own notes are folded into the prep document for them, never asked about
+    # (2026-10-28: "make these types of decisions for them").
+    assert U.by_id("campaign-notes").needs == "nobody" and not U.by_id("campaign-notes").ask
     # Only they have the words they sent; nothing in the app can fetch them.
     assert "paste them in once" in U.by_id("message-texts").ask
 
@@ -861,7 +862,7 @@ def test_reading_files_that_change_on_every_read_are_moved_out_of_the_repo(profi
     assert '"bo_venn"' in open(tmp_path / "ledger" / "reading-ledger.json").read()
 
 
-def test_messages_that_drew_replies_without_their_words_are_asked_for_once(profile, tmp_path,
+def test_messages_that_drew_replies_without_their_words_are_never_asked_for(profile, tmp_path,
                                                                             monkeypatch):
     import schema
     import state
@@ -879,7 +880,8 @@ def test_messages_that_drew_replies_without_their_words_are_asked_for_once(profi
             "channel": "inmail", "scenario": "reply", "summary": "replied",
             "full_text": "Thanks, let's talk."}
     state.save_threads([out, back], str(st / "network_threads.csv"))
-    assert "1 message(s) that drew a reply" in U.by_id("message-texts").pending()
+    # The LinkedIn download brings the words; nobody is asked to paste them (2026-10-28).
+    assert U.by_id("message-texts").pending() == ""
     state.save_threads([dict(out, full_text="Hi Juno, hope you're well."), back],
                        str(st / "network_threads.csv"))
     assert U.by_id("message-texts").pending() == ""

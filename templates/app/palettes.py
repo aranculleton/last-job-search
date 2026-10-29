@@ -62,8 +62,8 @@ import sys
 
 # Each token: (value, where it comes from). Order is the order written into the CSS.
 DAWN = {
-    "bg": ("#f7f4f0", "[D] dawn base with half its warmth taken out (toward its own grey): the page around the cards"),
-    "surface": ("#fcfaf6", "[D] dawn surface with half its warmth taken out: a panel atop base, every card"),
+    "bg": ("#f6f4f2", "[D] dawn base with 70% of its warmth taken out (toward its own grey), warm but sleek like Claude's own light look: the page around the cards"),
+    "surface": ("#fbfaf7", "[D] dawn surface with 70% of its warmth taken out: a panel atop base, every card"),
     "sunk": ("#f2e9e1", "[P] dawn overlay: the depths, tracks and wells"),
     "raised": ("#dfdad9", "[P] dawn highlight med: buttons and chips"),
     "raised-hover": ("#d7d2d3", "[D] highlight med halfway to highlight high, for 4.5:1 with text"),
