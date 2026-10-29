@@ -163,7 +163,7 @@ def test_setting_a_job_aside_keeps_the_reason_given(run, tmp_path):
     where = Search(str(tmp_path / "s"))
     got, rec = _round_trip(run, tmp_path, where, "aside", [
         {"hash": "jobs", "click": "Not for me: Dovecote Freight, Inventory Analyst"},
-        {"click": "Not this role: the pay", "role": "radio", "exact": True}, {"click": "Take it off my list"},
+        {"click": "The pay", "role": "radio", "exact": True}, {"click": "Take it off my list"},
     ])
     acts = [x for x in got["actions"] if x["action"] == "job.dismiss"]
     assert acts and acts[-1]["value"] == {"why": "pay"}

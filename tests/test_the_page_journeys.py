@@ -429,7 +429,7 @@ def test_changing_your_mind_keeps_the_reason_and_brings_things_back(run, tmp_pat
     got = _go(run, tmp_path, [
         {"hash": "jobs", "click": "Not for me: Harbourline Bank, Pricing Analyst"},
         # Why is asked once, in the bin's own sheet (2026-10-29: never a second "Why?").
-        {"click": "Not this role: the pay", "role": "radio", "exact": True},
+        {"click": "The pay", "role": "radio", "exact": True},
         {"click": "Take it off my list"},
         {"click": "41 left out by the search", "exact": False},
         {"click": "Bring back Transport Planning Analyst at Fernhill Freight"},

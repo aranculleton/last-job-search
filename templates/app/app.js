@@ -1264,7 +1264,8 @@
         return h("div", {class: "choice"}, h("input", {type: "radio", name: id, id: oid, value: op[0], checked: f.value === op[0],
           onchange: () => { if (f.onChange) f.onChange(op[0], el); }}), h("label", {for: oid}, op[1]));
       });
-      el = h("fieldset", {class: "field", "aria-describedby": id + "-e"}, h("legend", {}, f.label), f.hint ? h("p", {class: "hint"}, f.hint) : null, err, opts, f.extra || null);
+      el = h("fieldset", {class: "field" + (f.pills ? " pills" : ""), "aria-describedby": id + "-e"}, h("legend", {}, f.label), f.hint ? h("p", {class: "hint"}, f.hint) : null, err,
+        f.pills ? h("div", {class: "pill-row"}, opts) : opts, f.extra || null);
       read = () => { const c = el.querySelector("input[type=radio]:checked"); return c ? c.value : null; };
     } else if (f.type === "pick") {
       // A name to type, with the matches offered as it is typed, and anyone not on the list
@@ -2033,8 +2034,25 @@
   function alertCounts(a) { const ac = obj(a.action); return !(ac.type === "work" && workBusy(txt(ac.id))); }
 
   // Every to-do, wherever it lives: {key, kind, band, employer, due, late, tab, counts, node(ctx)}.
+  // A person put in the bin, or their employer with them: every To do row about them goes at
+  // once, before a chat applies it, not only the row the bin was on (the maintainer,
+  // 2026-10-29: the bin on one row of "Did these notes go?" "didnt go away"). Undo brings
+  // them back.
+  function stoppedPeople() {
+    const ids = new Set();
+    const cos = new Set();
+    for (const [id, d] of allActions()) {
+      if (txt(d.action) !== "person.stop") continue;
+      const st = actionState(id);
+      if (st === "refused" || st === "undone" || st === "failed" || st === "unsaved") continue;
+      ids.add(txt(d.item));
+      if (txt(obj(d.value).scope) === "employer" && txt(obj(d.value).employer)) cos.add(txt(obj(d.value).employer).toLowerCase());
+    }
+    return (cid, co) => !!cid && (ids.has(cid) || (!!co && cos.has(txt(co).toLowerCase())));
+  }
   function todoItems() {
     const out = [];
+    const stopped = stoppedPeople();
     const ivs = interviewItems().filter((i) => !isPast(i.when) && dayDiff(i.when) !== null && dayDiff(i.when) <= 14)
       .sort((a, b) => txt(a.when).localeCompare(txt(b.when)));
     const ivCompanies = new Set(ivs.map((i) => txt(i.company)));
@@ -2042,6 +2060,7 @@
       if (settledAction(n.id)) continue;
       // Questions from updates live in Settings, never in To do (the maintainer, 2026-10-26).
       if (needKind(n) === "update") continue;
+      if (stopped(txt(obj(n.about).contact) || txt(n.contact), txt(obj(n.about).company))) continue;
       out.push({key: "need:" + n.id, kind: needKind(n), band: "answer", employer: txt(obj(n.about).company) || null, tab: needTab(n), need: n,
         group: /^q-sent-/.test(txt(n.id)) ? "sent" : null,
         counts: !effective(n.id), node: (ctx) => (txt(n.kind) === "setup" ? setupNeedCard(n, ctx) : needCard(n, ctx))});
@@ -2058,6 +2077,7 @@
     for (const d of dueItems()) {
       if (PENDING_KINDS.has(txt(d.kind))) continue;   // one card for all of them (withdrawTodo)
       const company = dueEmployer(d);
+      if (stopped(dueContact(d), company)) continue;
       // An interview's prep owed is that interview's own card, never a second one; its
       // thank-you and status note are rows of their own, each with its own button.
       const isPrep = txt(d.kind) === "prep" || (txt(d.kind) === "interview" && txt(d.action) === "work:prep");
@@ -3134,6 +3154,16 @@
   // What a job's number means, on hover and in the Jobs part of the tour (the maintainer,
   // 2026-10-29: "a few ppl asked me what is out of 100").
   const SCORE_MEANS = "How well this job fits you, out of 100. 75 or more is a strong fit; 60 or more is worth a look.";
+  // Why a job or a draft goes in the bin: short choices side by side, "Not this one" already
+  // picked, so one tap on the button is enough (the maintainer, 2026-10-29: seven long lines
+  // were "info overload"; "shouldnt there be an option thats like not this one or also draft
+  // too old"). Pay, place and field teach the next ranking; only the last turns the employer
+  // down.
+  function binWhy(co) {
+    return {id: "why", type: "radio", pills: true, label: "Why? (optional)", required: true, error: "Choose one.", value: "role",
+      options: [["role", "Not this one"], ["pay", "The pay"], ["place", "The place"], ["field", "Not my field"], ["old", "Too old"],
+        ["closed", "It has closed"], ["applied", "Already applied"], ["employer", "No more from " + co]]};
+  }
   // The bin on a draft: why it is not going out, each answer the right record (G11: given up
   // on, it folds with Undo and Drafts counts it out).
   function askRemoveDraft(a, markApplied) {
@@ -3142,9 +3172,7 @@
     // ranking, and only the employer choice turns the employer down (the maintainer,
     // 2026-10-29: "does this just block the company?").
     sheet({title: "Not sending this one?", intro: txt(a.role) + " at " + co + ". Your files are kept either way.",
-      fields: [{id: "why", type: "radio", label: "Why?", required: true, error: "Choose one.", value: "role",
-        options: [["role", "Not this role"], ["pay", "Not this role: the pay"], ["place", "Not this role: the place"], ["field", "Not my field"],
-          ["employer", "No more roles from " + co], ["applied", "I have already applied"], ["closed", "It has closed"]]}],
+      fields: [binWhy(co)],
       submit: "Done",
       onSubmit: (v) => {
         const w = txt(v.why);
@@ -3164,9 +3192,7 @@
   function askRemoveJob(r, markApplied) {
     const co = txt(r.company);
     sheet({title: "Not for you?", intro: txt(r.title) + " at " + co + ". It leaves your list; you can bring it back from Set aside.",
-      fields: [{id: "why", type: "radio", label: "Why?", required: true, error: "Choose one.", value: "role",
-        options: [["role", "Not this role"], ["pay", "Not this role: the pay"], ["place", "Not this role: the place"], ["field", "Not my field"],
-          ["employer", "No more roles from " + co], ["applied", "I have already applied"], ["closed", "It has closed"]]}],
+      fields: [binWhy(co)],
       submit: "Take it off my list",
       onSubmit: (v) => {
         const w = txt(v.why);
@@ -3480,7 +3506,24 @@
     if (st === "awaiting_reply") { const s = daysSince(p.last); return s === null || s <= 60 || personDueSoon(p); }
     return personDueSoon(p) && st !== "closed" && st !== "stopped";
   }
-  function personRank(p) { const st = txt(p.status); return NEEDS_YOU_P.has(st) || personDueSoon(p) ? 0 : st === "awaiting_reply" ? 1 : st === "not_contacted" ? 2 : 3; }
+  // Who needs the person now: a reply they owe, a call this week, or a conversation or
+  // referral with something due. A follow-up after a note nobody answered is not that: it is
+  // there to take or leave, counted apart (the maintainer, 2026-10-29: "do 418 people really
+  // need me?"; most were follow-ups due on notes nobody had answered).
+  function replyOwedTo() { return new Set(dueItems().filter((d) => txt(d.kind) === "reply").map(dueContact)); }
+  function personNeedsYou(p, owed) {
+    const st = txt(p.status);
+    if (st === "replied_needs_response") { const s = daysSince(p.last); return s === null || s <= 30 || personDueSoon(p); }
+    if ((owed || replyOwedTo()).has(txt(p.id))) return true;
+    // A call within the week needs preparing for; one with no day kept counts while it is
+    // recent, since a booked call a season old is history, not a call to prepare.
+    if (st === "call_booked") {
+      const d = dayDiff(txt(obj(p.call).day || obj(p.call).on));
+      if (d !== null ? d >= 0 && d <= 7 : (daysSince(p.last) !== null && daysSince(p.last) <= 30)) return true;
+    }
+    return NEEDS_YOU_P.has(st) && personDueSoon(p);
+  }
+  function personRank(p, owed) { const st = txt(p.status); return personNeedsYou(p, owed) ? 0 : personDueSoon(p) ? 1 : st === "awaiting_reply" ? 2 : st === "not_contacted" ? 3 : 4; }
   function renderContacts(where) {
     const items = peopleItems();
     // Only what is live: a reply owed from the last month, and messages out in the last three
@@ -3490,18 +3533,22 @@
     const wait = items.filter((p) => ["awaiting_reply", "connected_no_reply"].includes(txt(p.status)) && recent(p, 21)).length;
     const total = Number(obj(M().people_count).all) || items.length;
     // The summary counts what the "Needs you" filter shows, so the two never disagree.
-    const need = items.filter((p) => personRank(p) === 0).length;
-    const sum = !total ? "No contacts yet." : need ? nWord(need, "needs", "need") + " you" + (owe ? ", " + (owe === 1 ? "one of them a reply" : owe + " of them replies") : "") + "." + (wait ? " " + wait + " waiting to hear back." : "")
-      : "Nobody is waiting on you." + (wait ? " " + wait + " waiting to hear back." : "");
+    const owed = replyOwedTo();
+    const rank = new Map(items.map((p) => [p, personRank(p, owed)]));
+    const need = items.filter((p) => rank.get(p) === 0).length;
+    const follow = items.filter((p) => rank.get(p) === 1 && txt(p.status) !== "not_contacted").length;
+    const sum = (!total ? "No contacts yet." : need ? nWord(need, "needs", "need") + " you" + (owe ? ", " + (owe === 1 ? "one of them a reply" : owe + " of them replies") : "") + "."
+      : "Nobody is waiting on you.") + (total && follow ? " " + plural(follow, "follow-up", "follow-ups") + " you could send." : "") + (total && wait ? " " + wait + " waiting to hear back." : "");
     // Who needs the person first, and everyone else one tap below: a fold, never a filter
     // left on, so nobody is hidden without the page saying so (the maintainer, 2026-10-29:
     // "458 people need me" led to decision paralysis).
-    const anyNeeds = items.some((p) => personRank(p) === 0);
-    const upFront = anyNeeds ? (p) => personRank(p) === 0 : personLive;
+    const anyNeeds = need > 0;
+    const upFront = anyNeeds ? (p) => rank.get(p) === 0 : personLive;
     const lo = {items, name: "contacts", one: "person", many: "people", live: upFront, fold: (p) => !upFront(p), remote: "people",
       foldLabel: (k) => plural(k, "more person", "more people") + (anyNeeds ? ", nothing owed to them now" : ""), foldShow: "Show them",
-      sort: (a, b) => (personRank(a) - personRank(b)) || txt(a.due || "9999").localeCompare(txt(b.due || "9999")) || txt(b.last).localeCompare(txt(a.last)),
-      chips: [{key: "status", label: "Where it stands", options: [["now", "Needs you", (p) => personRank(p) === 0], ["waiting", "Waiting for a reply", (p) => txt(p.status) === "awaiting_reply"],
+      sort: (a, b) => ((rank.get(a) ?? personRank(a, owed)) - (rank.get(b) ?? personRank(b, owed))) || txt(a.due || "9999").localeCompare(txt(b.due || "9999")) || txt(b.last).localeCompare(txt(a.last)),
+      chips: [{key: "status", label: "Where it stands", options: [["now", "Needs you", (p) => personRank(p, owed) === 0], ["follow", "Follow-up you could send", (p) => personRank(p, owed) === 1 && txt(p.status) !== "not_contacted"],
+        ["waiting", "Waiting for a reply", (p) => txt(p.status) === "awaiting_reply"],
         ["new", "Not contacted yet", (p) => txt(p.status) === "not_contacted"]]},
         // Who they are, so a recruiter or the person who referred you is one tap away.
         {key: "who", label: "Who they are", options: [["recruiter", "Recruiters", (p) => txt(p.who) === "recruiter"], ["referrer", "Referrers", (p) => txt(p.who) === "referrer"],
@@ -4235,7 +4282,23 @@
   // screens), then one summary sentence, then at most one row of controls, then the first item.
   // `small` is the optional second line in small print, with at most one link; `tool` sits at
   // the summary's right end (the Filter button of Contacts, when there is no control row).
+  // Work going on for a screen is said at its head, so nobody starts it again or wonders
+  // whether anything is happening (the maintainer, 2026-10-29: Contacts "doesnt indicate
+  // people is searching right now ... other parts of the app dont indicate things are running
+  // too like interviews"). Find jobs and Find people say it on their own button.
+  const SCREEN_WORK = {jobs: ["draft", "files", "tweak"], contacts: ["reply", "follow_up", "resume_for_contact", "referral_ask", "talk"],
+    interviews: ["prep", "interview", "thank_you"], profile: ["profile", "setup"]};
+  function runningHere(id, where) {
+    const kinds = SCREEN_WORK[id];
+    if (!kinds) return null;
+    const going = [...allWork()].filter(([, w]) => kinds.indexOf(txt(w.kind)) >= 0 && ACTIVE.has(txt(w.status)));
+    if (!going.length) return null;
+    const words = going.length === 1 ? "Claude is on it: " + txt(going[0][1].title) : "Claude is on " + going.length + " things here";
+    return h("p", {class: "sum-small running-here", "data-running": String(going.length)}, h("span", {class: "spin", "aria-hidden": "true"}), " ",
+      h("span", {}, words + ". "), btn("See how it is going", () => openWork(), {kind: "link", key: "running:" + id + (where ? ":" + where : "")}));
+  }
   function screenHead(id, title, sum, small, where, tool) {
+    const running = runningHere(id, where);
     const part = !where && tourSteps().some((t) => t[0] === id);
     // The "?" sits at the end of the summary line: the title is hidden under a phone's own
     // top bar, and a "?" on a line of its own looked broken.
@@ -4245,7 +4308,7 @@
       h("div", {class: "summary" + (tool ? " with-tool" : "")},
         // The "?" sits in the summary's own line, small, never a line or a column of its own
         // (the maintainer, 2026-10-29).
-        h("div", {class: "sum-words"}, h("p", {class: "sum"}, sum, q), small ? h("p", {class: "sum-small"}, small) : null),
+        h("div", {class: "sum-words"}, h("p", {class: "sum"}, sum, q), small ? h("p", {class: "sum-small"}, small) : null, running),
         tool || null));
   }
   const nWord = (n, one, many) => n + " " + (n === 1 ? one : many);

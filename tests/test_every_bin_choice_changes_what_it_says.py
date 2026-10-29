@@ -113,8 +113,8 @@ def test_a_job_binned_for_its_pay_place_or_field_teaches_the_next_ranking(search
     assert {r["id"]: r["status"] for r in search.model()["jobs"]["rows"]}["r9-1"] == "dismissed"
 
 
-def test_a_closed_posting_or_this_role_alone_teaches_nothing(search):
-    for why in ("closed", "not this role"):
+def test_a_closed_or_old_posting_or_this_role_alone_teaches_nothing(search):
+    for why in ("closed", "old", "not this role"):
         s = search
         a = s.act("job.dismiss", "r9-1", value={"why": why})
         assert s.apply()["ok"] == [a]
@@ -158,6 +158,7 @@ def _learned(search):
     ("field", "you are not sending this one", "Not their field", False),
     ("employer", "no more roles from Kestrel Mutual", "", True),
     ("closed", "the job has closed", "", False),
+    ("old", "it is too old now", "", False),
     ("said on the page", "you are not sending this one", "", False),   # a page before 4.4
 ])
 def test_a_draft_binned_records_its_reason_and_undo_puts_all_of_it_back(search, why, note,

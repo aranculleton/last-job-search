@@ -52,14 +52,15 @@ from test_the_page_journeys import PHONE, _go, _one  # noqa: E402
 T = "2026-10-25T09:00:00Z"
 
 
-# The Jobs bin's reasons, each sent as the engine reads it (tests/test_every_bin_choice_changes
+# The Jobs bin's reasons, short pills with "Not this one" already chosen, each sent as the engine reads it (tests/test_every_bin_choice_changes
 # _what_it_says.py applies each one); only the employer choice turns the employer down.
 @pytest.mark.parametrize("pick,why,toast", [
-    ("Not this role", "not this role", "Not applying: Ellerwick Trust"),
-    ("Not this role: the pay", "pay", "Not applying: Ellerwick Trust"),
-    ("Not this role: the place", "place", "Not applying: Ellerwick Trust"),
+    ("Not this one", "not this role", "Not applying: Ellerwick Trust"),
+    ("The pay", "pay", "Not applying: Ellerwick Trust"),
+    ("The place", "place", "Not applying: Ellerwick Trust"),
     ("Not my field", "field", "Not applying: Ellerwick Trust"),
-    ("No more roles from Ellerwick Trust", "employer", "No more roles from Ellerwick Trust"),
+    ("Too old", "old", "Not applying: Ellerwick Trust"),
+    ("No more from Ellerwick Trust", "employer", "No more roles from Ellerwick Trust"),
     ("It has closed", "closed", "Not applying: Ellerwick Trust"),
 ])
 def test_a_drafts_bin_says_why_it_is_not_going_out(run, tmp_path, pick, why, toast):

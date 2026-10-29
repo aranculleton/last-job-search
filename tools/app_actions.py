@@ -585,7 +585,7 @@ def _job_dismiss(r: Run) -> dict:
 def _dismiss_rule(why: str, t: dict) -> str:
     """What a reason in the job bin teaches the next ranking (/rank reads `learned.py brief
     jobs` before it scores): a rule about roles like this one, never only this posting. A
-    closed posting or "not this role" teaches nothing."""
+    closed or too old a posting, or "not this role", teaches nothing."""
     w = (why or "").strip().lower()
     what = f"{t.get('title')} at {t.get('company')}" + (f" ({t['url']})" if t.get("url") else "")
     place = str(t.get("place") or "").strip()
@@ -599,7 +599,7 @@ def _dismiss_rule(why: str, t: dict) -> str:
     if w == "field":
         return (f"Not their field: rank lower roles like {what}, the same kind of work in "
                 "another title too.")
-    if w in ("", "closed", "not this role", "role", "employer"):
+    if w in ("", "closed", "old", "not this role", "role", "employer"):
         return ""
     return f"Not this posting: {what}. Their words: {why}"
 
@@ -833,8 +833,8 @@ def _ready_not_applied(r: Run) -> dict:
 
 def _ready_not_applying(r: Run) -> dict:
     """The bin on a draft, with the Jobs bin's reasons (the maintainer, 2026-10-29): closed is
-    recorded as closed; pay, place and field teach the next ranking; the employer is turned
-    down by name. Undo puts every part back."""
+    recorded as closed; too old is set aside and teaches nothing; pay, place and field teach
+    the next ranking; the employer is turned down by name. Undo puts every part back."""
     why = r.words().lower()
     closed = why in ("closed", "the job has closed")
     _confirm(r, "closed" if closed else "skip")
@@ -854,6 +854,7 @@ def _ready_not_applying(r: Run) -> dict:
         except SystemExit:
             rule = ""                   # no profile to learn in: the draft is still set aside
     note = ("Set aside: the job has closed." if closed
+            else "Set aside: it is too old now." if why == "old"
             else f"Set aside, and no more roles from {t.get('company')}." if declined
             else "Set aside: you are not sending this one.")
     return {"note": note, "why": why,

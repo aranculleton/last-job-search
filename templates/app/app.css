@@ -440,7 +440,14 @@ p.count.tone-bad { color: var(--st-failed); }
    without a number changing (reduced motion stills both, below). */
 @keyframes breathe { 0%, 100% { opacity: 0.4; } 50% { opacity: 1; } }
 .dot.is-waiting { animation: breathe 1.8s ease-in-out infinite; }
-.bar.is-running .fill { background-image: linear-gradient(90deg, transparent, var(--surface), transparent); background-size: 50% 100%; background-repeat: no-repeat; animation: sweep-bg 1.8s ease-in-out infinite; }
+/* The sweep is a soft glow carried along the fill on its own layer: moved by transform at an
+   even pace, so it glides rather than stepping, and faded at both edges, so no band shows. */
+.bar.is-running .fill { position: relative; overflow: hidden; }
+.bar.is-running .fill::after { content: ""; position: absolute; inset: 0; transform: translateX(-100%); will-change: transform;
+  background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.28), transparent);
+  background: linear-gradient(90deg, transparent 0%, color-mix(in srgb, var(--surface) 10%, transparent) 30%, color-mix(in srgb, var(--surface) 38%, transparent) 50%, color-mix(in srgb, var(--surface) 10%, transparent) 70%, transparent 100%);
+  animation: glide 2.4s linear infinite; }
+@keyframes glide { to { transform: translateX(100%); } }
 /* The brief's bell: the size of Tweak, ink when the brief is on and muted when it is not, so
    it never reads as an alarm. */
 .btn.bell:not(.is-on) .ic { color: var(--muted); }
@@ -486,6 +493,11 @@ dialog.work-sheet { width: min(560px, calc(100vw - 16px)); }
 .choice { display: flex; align-items: flex-start; gap: 12px; min-height: 36px; }
 .choice input { margin-top: 2px !important; flex: none; }
 .choice label { cursor: pointer; }
+/* Short choices as pills side by side: the radio stays, so it reads and works as a choice. */
+.pills .pill-row { display: flex; flex-wrap: wrap; gap: 8px; }
+.pills .choice { align-items: center; gap: 8px; min-height: 0; padding: 6px 12px; border: 1px solid var(--line); border-radius: 99px; }
+.pills .choice:has(input:checked) { border-color: var(--mark); background: var(--sunk); }
+.pills .choice input { margin-top: 0 !important; width: 16px; height: 16px; }
 .toggle { display: flex; align-items: center; gap: 12px; }
 .toggle input { width: 22px; height: 22px; accent-color: var(--mark); flex: none; }
 .toggle label { font-weight: 600; }
@@ -912,6 +924,8 @@ a.navlink, .applylink, .btn.link, .fold .btn.link, .bp-foot a { text-decoration-
   .wc-more summary { min-height: var(--target); }
   .choice { min-height: var(--target); }
   .choice label { flex: 1; padding-block: calc((var(--target) - 20px) / 2); line-height: 20px; }
+  .pills .choice { padding-block: 0; }
+  .pills .choice label { flex: none; }
   .choice input { margin-top: calc((var(--target) - 20px) / 2) !important; }
   .pick-all label { padding-block: 12px; }
 }
