@@ -1256,3 +1256,75 @@ def test_the_news_says_when_it_was_gathered_and_when_it_is_old(run, pages):
     assert not re.search(r"\d{4,}\s*h\b", fresh["bodyText"], re.I), fresh["bodyText"][:400]
     old = run("paint", html=pages["sample"], hash="brief", clock="2026-10-28T09:00:00Z")
     assert re.search(r"Gathered \w+ 25 Oct\. Your next brief brings fresh news\.", old["bodyText"]), old["bodyText"][:600]
+
+
+def test_the_numbers_say_what_they_count_and_each_bar_says_its_week(run, pages):
+    """Bars with no words meant nothing, "1 interviews" read wrong, and "replies" next to
+    "applied" read as employers when it counts people who answered a message (2026-10-30)."""
+    r = run("paint", html=pages["sample"], hash="brief", clock="2026-10-25T09:00:00Z")
+    _clean(r)
+    assert re.search(r"Applications a week, the last \d weeks\. This week: \d+\.", r["bodyText"]), r["bodyText"][-800:]
+    assert "people replied" in r["bodyText"] or "person replied" in r["bodyText"]
+    assert not re.search(r"\b1\s+interviews\b", r["bodyText"])
+
+
+def test_how_far_applications_went_opens_in_place_with_no_page_of_its_own(run, pages):
+    r = run("paint", html=pages["sample"], hash="brief", clock="2026-10-25T09:00:00Z")
+    _clean(r)
+    assert "How far they got" in r["bodyText"] and "See your progress" not in r["bodyText"]
+
+
+def test_the_brief_opens_on_short_points_and_reads_its_news_whole(run, pages):
+    """One long paragraph was hard to read on a phone, and the news stopped mid-sentence with
+    nothing to open it (the maintainer, 2026-10-30)."""
+    r = run("look", html=pages["sample"], hash="brief", clock="2026-10-25T09:00:00Z",
+            sels=["ul.bp-lead-list li", ".bp-news .bp-text"])
+    _clean(r)
+    assert len(r["found"]["ul.bp-lead-list li"]) >= 2, r["found"]
+    assert all(not t.endswith("…") for t in r["found"][".bp-news .bp-text"])
+
+
+def test_a_contact_says_who_they_came_through(run, pages, tmp_path):
+    m = _sample()
+    p = m["people"][0]
+    p["came_through"] = "Ines"
+    r = run("look", html=_write(tmp_path, "through", m), hash="contacts", sels=['[data-item="%s"] .small.muted' % p["id"]])
+    _clean(r)
+    assert "Came through Ines" in r["found"]['[data-item="%s"] .small.muted' % p["id"]], r["found"]
+
+
+def test_a_saved_linkedin_download_shows_as_work_until_claude_reads_it(run, pages):
+    """Saved, it was nowhere in Claude's work, and the person could not tell it was coming
+    (the maintainer, 2026-10-30)."""
+    seed = {"actions/a-export": {"action": "export.take", "item": "export", "value": {"assets": []},
+                                 "at": "2026-10-25T08:59:00.000Z", "rev": None}}
+    r = run("look", html=pages["sample"], hash="work", clock="2026-10-25T09:00:00.000Z", seed=seed,
+            sels=["[data-tap-work]"])
+    _clean(r)
+    got = " ".join(r["found"]["[data-tap-work]"])
+    assert "Reading your LinkedIn download" in got, r["found"]
+
+
+def test_a_posting_up_for_months_says_so_on_its_card(run, pages, tmp_path):
+    """One 515 days old went to drafting with nothing on it to question (2026-10-30)."""
+    m = _sample()
+    row = m["jobs"]["rows"][0]
+    row["posted_days"] = 515
+    r = run("look", html=_write(tmp_path, "old", m), hash="jobs", sels=['[data-item="%s"] .soon' % row["id"]])
+    _clean(r)
+    assert "Posted over a year ago" in " ".join(r["found"]['[data-item="%s"] .soon' % row["id"]]), r["found"]
+
+
+def test_work_that_did_not_finish_says_stopped_and_can_be_put_away(run, pages):
+    """It said "under a minute left" with its chat closed, and had no way to put it away
+    (2026-10-30)."""
+    seed = {"work/draft~x": {"kind": "draft", "title": "Resume and letter: Example Co", "to": "cloud", "args": {},
+                             "asked_at": "2026-10-25T08:40:00.000Z", "claimed_at": "2026-10-25T08:41:00.000Z",
+                             "finished_at": "2026-10-25T08:58:00.000Z", "status": "failed",
+                             "error": "Not drafted: the role is not open where you can work.", "stages": [], "stage": 0, "steps": []}}
+    r = run("look", html=pages["sample"], hash="work", clock="2026-10-25T09:00:00.000Z", seed=seed,
+            sels=['[data-work="draft~x"] .wc-time', '[data-work="draft~x"] [data-k="wput:draft~x"]'])
+    _clean(r)
+    (t,) = r["found"]['[data-work="draft~x"] .wc-time']
+    assert t.startswith("Stopped") and "left" not in t, t
+    assert len(r["found"]['[data-work="draft~x"] [data-k="wput:draft~x"]']) == 1

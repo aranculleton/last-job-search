@@ -418,6 +418,7 @@ def recorded() -> dict[str, float | None]:
     set aside: the person's own name and contact details, their employers and schools,
     everyone a discovery run or a prep document named, and profile/leak_tokens.txt.
     """
+    _whole_history()
     out: dict[str, float | None] = {}
     for t, when in _entries():
         t = (t or "").strip()
@@ -425,6 +426,25 @@ def recorded() -> dict[str, float | None]:
             continue
         out[t] = _earlier(when, out[t]) if t in out else when
     return out
+
+
+def _whole_history(root: str = "") -> bool:
+    """Fetch the rest of this repo's history when it is a shallow clone, once, quietly. A cloud
+    chat starts from a short clone, so a row first seen at its oldest commit had no date, was
+    never set aside, and the daily check called ordinary words the app had used first ("Visa",
+    "Fetch") a leak every day (2026-10-30). True when the history is whole after it."""
+    root = root or ROOT
+    shallow = subprocess.run(["git", "-C", root, "rev-parse", "--is-shallow-repository"],
+                             capture_output=True, text=True, encoding="utf-8", errors="replace")
+    if shallow.returncode != 0 or shallow.stdout.strip() != "true":
+        return shallow.returncode == 0
+    for how in (["--unshallow"], ["--deepen=1000000"]):
+        got = subprocess.run(["git", "-C", root, "fetch", "--quiet", *how, "origin"],
+                             capture_output=True, text=True, encoding="utf-8", errors="replace",
+                             timeout=600)
+        if got.returncode == 0:
+            return True
+    return False
 
 
 def _entries() -> list[tuple[str, float | None]]:

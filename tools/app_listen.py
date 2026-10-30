@@ -85,6 +85,12 @@ SAY_NOT_UPDATED = "I couldn't update your page just now: {url}"
 # update queued for a listener last heard from 12 hours before waited until the person asked
 # in the chat whether it was happening (2026-10-30).
 UPDATE_QUIET_S = 60 * 60
+# A chat re-reads its whole history at every wake, so one answering the page for days grew
+# dearer with every tap. Once it has answered for this long, at a quiet moment (nothing queued
+# or running), it starts a fresh helper, which takes the page on its own start (the
+# maintainer, 2026-10-30). Until the new one has taken it, the old one still answers: a fresh
+# chat that never starts changes nothing.
+RENEW_S = 20 * 3600
 # How every page step after an update is done: at once, unasked, one command at a time (a
 # chained command goes to the desktop app's safety check whole), with nothing left behind.
 NO_ASK = ("Do it now, before anything else, and never ask the person first: bringing their "
@@ -340,6 +346,13 @@ def decide(db: dict, chat: str, out_dir: str, now: dt.datetime | None = None,
                           "action watch with no url, lists this chat's watches), stop that "
                           "watch: action watch, url <the page>, on: false."]}
     if mine:
+        renew = renewal(rec, db, chat, now)
+        if renew:
+            lines.append("listen: renew: this chat has answered the page for a day, and nothing "
+                         "is waiting. Start its fresh helper now, unasked and saying nothing to "
+                         "the person: create_session " + json.dumps(renew, ensure_ascii=False) +
+                         ". The new chat takes the page as it starts; until then this one still "
+                         "answers, and its next check-in finds the new one and stops its watch.")
         fresh = {"answered_at": at, "watching": True, **({"helper": True} if helper else {})}
         if version is None:
             # Read only under its 4.2 name (page_db.load): the new record is made, whole.
@@ -361,6 +374,11 @@ def decide(db: dict, chat: str, out_dir: str, now: dt.datetime | None = None,
         if rec.get("chat"):
             lines.append("listen: the chat that answered before stops by itself: its next "
                          "check finds this one.")
+            if rec.get("helper") and str(rec.get("chat")).startswith("session_"):
+                lines.append(f"listen: it was a helper the app started ({rec.get('chat')}): once "
+                             "this chat's batch is sent, archive it (archive_session) if "
+                             f"get_session still gives its title as \"{HELPER_CHAT_TITLE}\"; "
+                             "a chat the person named is left as it is.")
         if helper and chat.startswith("session_"):
             lines.append(f"listen: name this chat so the person knows what it is: "
                          f"set_session_title (session_id {chat}, title \"{HELPER_CHAT_TITLE}\"), "
@@ -379,6 +397,34 @@ def decide(db: dict, chat: str, out_dir: str, now: dt.datetime | None = None,
                           "watch: action watch, url <the page>, on: false."]}
     _remember(rec, now)
     return {"role": "listener", "lines": lines, "batches": w.save("listen"), "record": rec}
+
+
+def renewal(rec: dict, db: dict, chat: str, now: dt.datetime) -> dict | None:
+    """The create_session call for a fresh helper, or None. Only a cloud chat answering the
+    page for RENEW_S, with nothing queued or running, and not renewed in the last RENEW_S."""
+    if not chat or rec.get("chat") != chat or chat_kind() != "cloud":
+        return None
+    since = _time(rec.get("since"))
+    if since is None or (now - since).total_seconds() < RENEW_S:
+        return None
+    for doc in (db.get("work") or {}).values():
+        if str(doc["data"].get("status") or "") in ("queued", "claimed", "running"):
+            return None
+    got = seen()
+    last = _time(got.get("renewed_at"))
+    if last is not None and (now - last).total_seconds() < RENEW_S:
+        return None
+    try:
+        import app_setup
+        owner, name = app_setup.origin()
+    except Exception:  # noqa: BLE001  no address to start it from: stay as it is
+        return None
+    if not owner or not name:
+        return None
+    got["renewed_at"] = _stamp(now)
+    _save_seen(got)
+    return {"title": HELPER_CHAT_TITLE, "prompt": WAKE_PROMPT,
+            "source_url": f"https://github.com/{owner}/{name}"}
 
 
 def first_claim(chat: str, out_dir: str, now: dt.datetime | None = None,

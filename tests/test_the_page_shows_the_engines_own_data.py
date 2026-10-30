@@ -68,7 +68,9 @@ def _seed(tmp, name, env, now=NOW):
         d = os.path.join(base, coll)
         for f in sorted(os.listdir(d)) if os.path.isdir(d) else ():
             with open(os.path.join(d, f), encoding="utf-8") as fh:
-                seed[coll + "/" + f[:-5]] = json.load(fh)
+                # A body's file is named without "~" (page_db.body_name): the record's id is
+                # read back with it restored.
+                seed[coll + "/" + f[:-5].replace("@", "~").replace("=", ":")] = json.load(fh)
     return seed
 
 
@@ -122,6 +124,18 @@ def built(tmp_path_factory):
     rows[0]["deadline"] = "2026-10-26"
     with open(rp, "w", encoding="utf-8") as fh:
         json.dump(rows, fh)
+    # A chat stopped a draft because the role is not one they can take, and ruled it out by
+    # the rules (2026-10-30): it leaves the list like one the person binned.
+    sp = os.path.join(st, "job_scraper", "seen_jobs.json")
+    with open(sp, encoding="utf-8") as fh:
+        seen = json.load(fh)
+    book = seen.get("seen", seen) if isinstance(seen, dict) else {}
+    book[rows[1]["url"]] = {"url": rows[1]["url"], "title": rows[1]["title"], "company": rows[1]["company"],
+                            "status": "excluded", "basis": "rules", "exclusion_reason": "location: US only",
+                            "excluded_date": "2026-10-24"}
+    with open(sp, "w", encoding="utf-8") as fh:
+        json.dump(seen, fh)
+    out["ruled"] = (rows[1]["title"], rows[1]["company"])
     kf = os.path.join(st, "documents", "applications", "kestrel_mutual_claims_forecasting_analyst_kestrel")
     with open(os.path.join(kf, "job_posting.md"), "w", encoding="utf-8") as fh:
         fh.write("# Claims Forecasting Analyst\n\nYou will build Looker dashboards and forecasts in Python and SQL.\n")
@@ -323,19 +337,21 @@ def test_what_only_the_person_can_do_shows_the_registrys_steps_and_the_line_to_c
     assert "\n1. " not in card
 
 
-def test_an_update_waiting_and_an_improvement_made_can_be_taken_and_taken_back(run, built):
+def test_an_update_waiting_can_be_taken_and_an_improvement_made_is_said_not_undone(run, built):
+    """Since 2026-10-30 an improvement has no Undo: taking one back reversed work later
+    changes stood on, and the next update made it again. Anything unwanted is said in Chat."""
     model = built["models"]["rich"]
     got = _go(run, built, "rich", hashes=["settings"], steps=[
         {"hash": "settings", "click": "Update now"},
-        {"hash": "settings", "open": "info-sum:news", "click": "Undo this change", "read": "#main"},
+        {"hash": "settings", "open": "info-sum:news", "read": "#main"},
     ])
     t = got["texts"]["settings"]
     assert "A newer version is ready: 4.0.0." in t and "It starts once the work running now has finished." in t
     assert "Your job sites were searched for again, the current way." in got["after"][1]["text"], "What's new opens to what was done"
     by = {a["action"]: a for a in got["actions"]}
     assert by["app.update_now"]["item"] == "update-now" and by["app.update_now"]["rev_seen"] == model["updates"]["waiting"]["rev"]
-    done = model["updates"]["done"][0]
-    assert by["upgrade.undo"]["item"] == done["id"] and by["upgrade.undo"]["rev_seen"] == done["rev"]
+    assert "upgrade.undo" not in by and "Undo this change" not in got["after"][1]["text"]
+    assert "Say so in Chat and Claude puts it right." in got["after"][1]["text"]
 
 
 def test_done_on_a_dated_action_is_sent_with_the_rev_it_was_seen_at(run, built):
@@ -354,3 +370,9 @@ def test_an_alerts_own_action_carries_the_items_rev(run, built):
     (a,) = [x for x in got["actions"] if x["action"] == "suggest.dismiss"]
     job = next(r for r in model["jobs"]["rows"] if r.get("suggest"))
     assert a["item"] == job["suggest"]["id"] and a["rev_seen"] == job["suggest"]["rev"]
+
+
+def test_a_job_a_chat_ruled_out_leaves_the_list(built):
+    title, company = built["ruled"]
+    rows = [r for r in built["models"]["rich"]["jobs"]["rows"] if r["title"] == title and r["company"] == company]
+    assert rows and all(r["status"] == "dismissed" for r in rows), rows

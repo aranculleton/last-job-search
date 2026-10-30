@@ -1025,6 +1025,18 @@ S.picked_up = async (a) => {
   return r;
 };
 
+// Open a section and read what the given selectors find: how many, and their words. Waited
+// for the first selector, with a time limit.
+S.look = async (a) => {
+  const o = await open({html: a.html, hash: a.hash || "brief", clock: a.clock, seed: a.seed || {}});
+  const {page} = o;
+  const sels = a.sels || [];
+  if (sels.length) await page.waitForSelector(sels[0], {timeout: 5000}).catch(() => {});
+  const r = {found: await page.evaluate((list) => Object.fromEntries(list.map((q) => [q, [...document.querySelectorAll(q)].map((e) => e.textContent.trim())])), sels), errors: o.errors};
+  await o.ctx.close();
+  return r;
+};
+
 async function draftViaDialog(page, opts) {
   await page.getByRole("button", {name: "Draft this: Harbourline Bank, Pricing Analyst"}).click();
   await turn(page, 3);

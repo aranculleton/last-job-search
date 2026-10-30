@@ -695,6 +695,13 @@ message per role in place of the index.
 
 ## Learning the person: what a reaction changes
 
+**Tidying what they have taught it** (the page's "Tidy these up", or asked in any words):
+`python3 tools/learned.py list`, then find three kinds: a rule the app now does by itself
+(name the change that made it so), two that say the same thing (one `record --replaces`
+the other, in their words), and one a later rule replaced. Show each with its reason on
+the page, as one To do card, and retire (`learned.py retire`) only what they say yes to.
+Nothing goes unasked (2026-10-30).
+
 The app's defaults (the voice of a first note, the questions an interview pack asks, who is
 worth contacting, how roles rank) are where everyone starts, and they stay. The person's own
 reactions outrank every default, and **they are kept for good in `profile/learned.json`**

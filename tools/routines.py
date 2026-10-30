@@ -551,15 +551,37 @@ def _task_ref(r: dict, reg: dict) -> dict:
     return out
 
 
-def move(days=None, time=None, cron: str = "", path: str | None = None) -> dict:
+def move(days=None, time=None, cron: str = "", path: str | None = None, zone: str = "") -> dict:
     """New days and a new time for the brief: written into the registry, and the one call
-    that moves the task itself kept until a chat makes it. `cron` sets it outright (an undo)."""
+    that moves the task itself kept until a chat makes it. `cron` sets it outright (an undo).
+    `zone` moves it to another time zone, the page's own choice (2026-10-30)."""
     path = _path(path)
     reg = load(path)
     r = _brief(reg)
     if r is None:
         raise ValueError("there is no brief yet to move")
     old = r.get("cron") or ""
+    if zone:
+        try:
+            import zoneinfo
+            zoneinfo.ZoneInfo(zone)
+        except Exception:  # noqa: BLE001  not a zone this computer knows
+            raise ValueError(f"{zone!r} is not a time zone") from None
+        moved_from = reg.get("timezone") or ""
+        reg["timezone"] = zone
+        # Every scheduled task runs on the one zone, at the same clock time as before: the
+        # job round at 06:52 stays 06:52 where the person now is.
+        for other in reg.get("routines") or []:
+            c = str(other.get("cron") or "")
+            if other is r or not c.startswith("CRON_TZ="):
+                continue
+            new_c = f"CRON_TZ={zone} " + c.split(" ", 1)[1]
+            if new_c != c:
+                other["cron"] = new_c
+                if moved_from != zone and other.get("trigger_id"):
+                    _owe(reg, {"tool": "update_trigger", "for": "move",
+                               "args": {**_task_ref(other, reg), "cron_expression": new_c},
+                               "why": f"{other.get('name') or other.get('key')} keeps its time in {zone}"})
     zone = reg.get("timezone") or home_zone()
     if not zone:
         raise ValueError("the profile names no time zone")

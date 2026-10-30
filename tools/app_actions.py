@@ -1840,7 +1840,8 @@ def _brief_move(r: Run) -> dict:
     days = r.value.get("days")
     try:
         got = routines.move(cron=cron) if cron else routines.move(
-            days=days if days not in (None, "", []) else None, time=r.words("time") or None)
+            days=days if days not in (None, "", []) else None, time=r.words("time") or None,
+            zone=r.words("zone") or "")
     except ValueError as e:
         raise Refused(_routines_said(e)) from None
     if got["cron"] == got.get("old"):
@@ -2338,7 +2339,7 @@ def _tweak_offer(r: Run) -> dict:
     yes = str(r.words() or r.value.get("value") or "").lower() in ("yes", "y", "true")
     got = tweak.answer_offer(o, yes, r.day)
     note = ("Kept as your usual." if yes and o["kind"] == "usual" else
-            "Added: it is on the Tweak panel now." if yes else
+            "Added: it is under Edit now." if yes else
             "No problem, I'll ask again in a month.")
     return {"note": note, "undo": {"action": "tweak.offer_undo", "target": dict(r.target),
                                    "value": got}}

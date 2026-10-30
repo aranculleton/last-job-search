@@ -197,6 +197,9 @@ LinkedIn is never fetched from a session.
    mixes kinds instead of running one. The search tool sometimes declines a people query:
    never rephrase it to get round that; the next kind in the plan carries the run.
 
+   A run the page asked for brings back `args.count` people at most (5 when not given),
+   never more than can be sent: the person chose how many (2026-10-30).
+
    **When the searches the budget allows are spent and the batch is not full, stop and say
    so**, with `sources.short_batch(found, wanted, tried, have_connections, browser, named)`:
    how many it found of how many it could send (`named` is everyone kept, when more than

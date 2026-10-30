@@ -52,6 +52,37 @@ make sense to somebody whose repo just received it.
 - **The page fills the screen it is on**, however wide: no more empty sides at full screen.
 - **A recorded reaction says to save it with the turn's work**, so a cloud chat is not held
   at its end, and a cloud chat takes itself off the pull request it opens.
+- **Find jobs and Find people ask how many**, a few by default: the best 10 jobs (or 25, or
+  every one that fits, up to 60), and 5 people (or 10, or 20). A search no longer leaves
+  hundreds to wade through.
+- **Resumes asked for together are one job in one chat**, faster and cheaper than one chat
+  each; one asked for later starts alongside straight away.
+- **A job's own location decides where it is open.** An employer's office tags passed a US-only
+  role as a Canada one; and a posting up for months says so on its card.
+- **A job a chat finds you can't take leaves the list**, and stops counting on the Brief.
+- **Work that did not finish says "Stopped"** and can be put away; waiting work starts as soon
+  as the job before it ends.
+- **"Tweak" is now "Edit"**, and its "Something else?" box is open, ready to type in.
+- **A practice interview is a clear session**: an empty box to start, "End practice", and one
+  line left when it ends.
+- **The Brief opens on short points, the news reads whole, the bars say what they are**, the
+  counts read right ("1 interview", "people replied"), and how far applications went opens in
+  place.
+- **Contacts say who someone came through**, dates read as dates, the steps show as one row,
+  and nobody in a hiring process is offered a referral ask.
+- **Settings**: your search lists show as chips with short place names; the brief has a time
+  picker and a time zone you can change, which moves your other scheduled task with it; the
+  LinkedIn download has nothing to tick and shows in Claude's work until it is read; each
+  "Left out" rule shows what it left out; Help's questions open the chat bubble where you are;
+  What's new has no Undo; and what you have taught Claude has a "?"-style note and a "Tidy
+  these up".
+- **A long prep scrolls properly on a phone.**
+- **The chat that answers your page renews itself once a day**, at a quiet moment, so it
+  never grows slow and dear; a job's own chat is archived as soon as it is done.
+- **Pinning is a tip, said once**, and "Something looks wrong" offers, once, a link to report
+  an app fault for everyone.
+- **The daily check no longer calls ordinary words a leak** ("Visa", "Fetch"): it reads your
+  copy's whole history before deciding.
 
 ## [4.4.0] - 2026-10-30
 

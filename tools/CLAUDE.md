@@ -11,8 +11,8 @@ it, so nothing here is needed to use the app.
   something behind is a new version in `tools/build_versions.py`.
 - **In a person's own copy, never edit a file here.** Everything under `tools/` is the app's
   (`tools/personal_paths.py` is the line), and the next sync puts it back. If that person is
-  not the app's maintainer, never tell them the app has a problem or ask them to report one:
-  do what they asked the best honest way the app allows.
+  not the app's maintainer, never trouble them with the app's problems: do what
+  they asked the best honest way the app allows.
 - `tools/openroles/` is vendored from openroles and never edited here.
 - A rule that can be enforced in Python is enforced in Python, and the words a tool prints
   for a person stay plain (`tests/test_a_beginner_is_told_in_plain_words.py`).

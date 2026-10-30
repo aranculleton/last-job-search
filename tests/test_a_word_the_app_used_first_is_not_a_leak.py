@@ -285,3 +285,20 @@ def test_the_allowed_organizations_list_is_closed():
     assert build_app.ALLOWED_ORGANIZATIONS == {
         "Anthropic", "LinkedIn", "GitHub", "eBay", "Docker",
         "Google", "Microsoft", "Apple", "IBM", "Oracle"}
+
+
+def test_a_short_clone_fetches_its_whole_history_before_dating_a_row(tmp_path):
+    """A cloud chat starts from a short clone: a row first seen at its oldest commit had no
+    date and was never set aside, so the daily check called "Visa" a leak (2026-10-30)."""
+    src = tmp_path / "src"
+    src.mkdir()
+    _git(src, "init", "-q", "-b", "master")
+    for n, day in enumerate(("2026-01-10", "2026-02-10", "2026-03-10")):
+        _commit(src, {f"f{n}.txt": "x\n"}, day)
+    clone = tmp_path / "clone"
+    subprocess.run(["git", "clone", "-q", "--depth", "1", f"file://{src}", str(clone)], check=True,
+                   capture_output=True)
+    assert _git(clone, "rev-parse", "--is-shallow-repository") == "true"
+    assert build_app._whole_history(str(clone)) is True
+    assert _git(clone, "rev-parse", "--is-shallow-repository") == "false"
+    assert build_app._whole_history(str(clone)) is True, "a whole history is left as it is"

@@ -1,7 +1,7 @@
 {
   "boards": {
-    "date": "2026-10-29",
-    "version": 24
+    "date": "2026-10-30",
+    "version": 25
   },
   "documents": {
     "date": "2026-10-25",
@@ -32,8 +32,8 @@
     "version": 37
   },
   "networking": {
-    "date": "2026-10-29",
-    "version": 63
+    "date": "2026-10-30",
+    "version": 64
   },
   "page": {
     "date": "2026-10-30",
@@ -48,8 +48,8 @@
     "version": 11
   },
   "routines": {
-    "date": "2026-10-29",
-    "version": 12
+    "date": "2026-10-30",
+    "version": 13
   },
   "screening": {
     "date": "2026-10-29",

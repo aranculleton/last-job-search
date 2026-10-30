@@ -353,8 +353,24 @@ def _row(employer: str, job, location: str, desc: str | None) -> dict:
     return row
 
 
+# A posting's own location that names no place: the job is wherever its offices are.
+_NOT_A_PLACE = re.compile(r"^\s*(?:hybrid|remote|anywhere|flexible|multiple locations|various"
+                          r"(?: locations)?|(?:[a-z]+\s+)*time\s*zones?|(?:utc|gmt)\s*[+-]?\s*\d*)\s*$",
+                          re.I)
+# Systems whose extra places are internal office tags, not sites the job is open at.
+OFFICE_TAGS = frozenset({"greenhouse", "gem"})
+
+
 def _labels(job) -> list[str]:
-    return list(job.locations) or ([job.location] if job.location else [])
+    """Where a posting can be done. A Greenhouse posting's offices are the employer's own
+    tags: Figma filed a role open in San Francisco, New York or remote in the United States
+    under "Canada" and "US", and the office tag passed it as a Canada role (2026-10-30). So a
+    posting that names its own place is judged by that place, and its offices only where it
+    names none ("Hybrid", a time zone, nothing)."""
+    own = str(job.location or "").strip()
+    if getattr(job, "ats", "") in OFFICE_TAGS and own and not _NOT_A_PLACE.match(own):
+        return [own]
+    return list(job.locations) or ([own] if own else [])
 
 
 def _worth(job) -> bool:

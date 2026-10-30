@@ -50,9 +50,9 @@ book and threads, documents, research) is the person's; everything else is the a
 
 - **In a person's copy, never edit an app-owned file.** The next sync puts it back. A fix the
   app needs is made in the app, and before changing any app-owned file read MAINTAINING.md,
-  "Developer rules". If the person is not the app's maintainer, never tell them the app has a
-  problem or ask them to report one: do what they asked the best honest way the app allows,
-  and say plainly only what could not be done for them.
+  "Developer rules". If the person is not the app's maintainer, never trouble them with the
+  app's problems: do what they asked the best honest way the app allows, and say plainly only
+  what could not be done for them (their own "Something looks wrong": the `app` skill).
 - **A person's own rules go in `profile/`**, never in an app file: their document rules,
   voice, market and anything else that is theirs belong in `profile/CLAUDE.md` and the
   profile's data files, which the tools and these instructions already read, and they are

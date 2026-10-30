@@ -557,3 +557,30 @@ def test_every_line_after_an_update_gives_the_page_link(copy):
             assert quoted and all(q.endswith(PAGE) for q in quoted if q.startswith(("Your page", "I couldn't"))), ln
     for line in (app_listen.SAY_UPDATED, app_listen.SAY_UPDATING, app_listen.SAY_NOT_UPDATED):
         assert app_listen.say(line, PAGE).endswith(": " + PAGE)
+
+
+def test_a_chat_answering_the_page_for_a_day_starts_a_fresh_helper_at_a_quiet_moment(copy, tmp_path, monkeypatch):
+    """A chat re-reads its whole history at every wake, so one answering for days grew
+    dearer with every tap (2026-10-30). After a day, with nothing waiting, it starts a fresh
+    helper; until that one takes the page, it still answers."""
+    import app_listen
+    monkeypatch.setattr(app_listen, "chat_kind", lambda: "cloud")
+    now = dt.datetime(2026, 10, 30, 12, 0, tzinfo=dt.timezone.utc)
+    rec = {"chat": "session_old", "kind": "cloud", "helper": True, "since": "2026-10-29T08:00:00Z",
+           "answered_at": "2026-10-30T11:00:00Z"}
+    quiet = {"meta": {"listener": {"data": rec, "version": 3}}, "work": {}}
+    got = app_listen.decide(quiet, "session_old", str(tmp_path / "a"), now)
+    renew = [ln for ln in got["lines"] if ln.startswith("listen: renew:")]
+    assert got["role"] == "listener" and len(renew) == 1 and app_listen.WAKE_PROMPT in renew[0]
+    # Once a day: asked again an hour later, nothing.
+    again = app_listen.decide(quiet, "session_old", str(tmp_path / "b"), now + dt.timedelta(hours=1))
+    assert not [ln for ln in again["lines"] if ln.startswith("listen: renew:")]
+    # Never with work waiting.
+    app_listen._save_seen({k: v for k, v in app_listen.seen().items() if k != "renewed_at"})
+    busy = dict(quiet, work={"w1": {"data": {"status": "queued"}, "version": 1}})
+    assert not [ln for ln in app_listen.decide(busy, "session_old", str(tmp_path / "c"), now)["lines"]
+                if ln.startswith("listen: renew:")]
+    # The fresh helper takes it, and is told to archive the old helper by its title only.
+    took = app_listen.decide(quiet, "session_new", str(tmp_path / "d"), now, listen=True, helper=True)
+    assert took["role"] == "listener" and any("archive_session" in ln and app_listen.HELPER_CHAT_TITLE in ln
+                                              for ln in took["lines"])

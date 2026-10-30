@@ -52,7 +52,7 @@ def _model(done=None):
 
 def test_the_resume_panel_shows_the_engines_labels_and_sends_its_codes(run, tmp_path, vp):
     path = _write(tmp_path, "tw", _model())
-    got = run("tweak", html=path, viewport=vp, hash="drafts-applications", item=ITEM, entry="Tweak the CV", exact=False,
+    got = run("tweak", html=path, viewport=vp, hash="drafts-applications", item=ITEM, entry="Edit the CV", exact=False,
               choose=[["R4", "name-centre"], ["R5", "navy"]], apply=True)
     assert not got["errors"], got["errors"]
     resume = [r for r in _engine_rows() if "resume" in r["outputs"] and r["control"] != "per-bullet"]
@@ -70,9 +70,9 @@ def test_the_resume_panel_shows_the_engines_labels_and_sends_its_codes(run, tmp_
 
 def test_a_letter_length_that_needs_a_model_says_so_before_apply(run, tmp_path, vp):
     path = _write(tmp_path, "tl", _model())
-    got = run("tweak", html=path, viewport=vp, hash="drafts-applications", item=ITEM, entry="Tweak the letter", exact=False, choose=[["L1", "full"]])
+    got = run("tweak", html=path, viewport=vp, hash="drafts-applications", item=ITEM, entry="Edit the letter", exact=False, choose=[["L1", "full"]])
     assert not got["errors"], got["errors"]
-    short = run("tweak", html=path, viewport=vp, hash="drafts-applications", item=ITEM, entry="Tweak the letter", exact=False, choose=[["L1", "short"]])
+    short = run("tweak", html=path, viewport=vp, hash="drafts-applications", item=ITEM, entry="Edit the letter", exact=False, choose=[["L1", "short"]])
     # L1 is code for short and standard, and the engine's model_values make full a rewrite.
     assert got["after"]["line"] != short["after"]["line"]
     assert "Addressed to" in got["text"]
@@ -80,7 +80,7 @@ def test_a_letter_length_that_needs_a_model_says_so_before_apply(run, tmp_path, 
 
 def test_without_the_engines_rows_the_page_keeps_its_own(run, tmp_path, vp):
     path = _write(tmp_path, "tp", _sample())
-    got = run("tweak", html=path, viewport=vp, hash="drafts-applications", item=ITEM, entry="Tweak the CV", exact=False)
+    got = run("tweak", html=path, viewport=vp, hash="drafts-applications", item=ITEM, entry="Edit the CV", exact=False)
     assert not got["errors"], got["errors"]
     assert got["rows"] == 5 and "Summary" in got["text"]
 

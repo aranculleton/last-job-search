@@ -715,6 +715,11 @@ dialog.detail[open] { display: flex; flex-direction: column; }
 dialog.detail::backdrop { background: var(--bg); opacity: 0.85; }
 .detail-top { position: sticky; top: 0; z-index: 1; display: flex; align-items: center; padding: max(8px, env(safe-area-inset-top, 0px)) 16px 8px; background: var(--surface); border-bottom: 1px solid var(--line); }
 .detail-body { display: grid; gap: 16px; padding: 16px max(16px, env(safe-area-inset-left, 0px)) 32px; min-width: 0; overflow-wrap: anywhere; }
+/* The body scrolls, never the whole dialog: on an iPhone a long prep stopped drawing part
+   way down a dialog that scrolled as one (2026-10-30). Header fixed, body the one scroller. */
+dialog.detail[open] { overflow: hidden; }
+.detail-top { flex: none; }
+dialog.detail .detail-body { flex: 1 1 auto; min-height: 0; overflow-y: auto; -webkit-overflow-scrolling: touch; overscroll-behavior: contain; align-content: start; }
 .detail-title { font-size: 1.375rem; font-weight: 700; line-height: 1.25; }
 @media (min-width: 760px) { dialog.detail { margin: auto; width: 680px; height: auto; max-height: calc(100dvh - 64px); border: 1px solid var(--line); border-radius: var(--r); } }
 dialog.question-screen { position: fixed; inset: 0; margin: 0; width: 100%; max-width: 100%; height: calc(100dvh * var(--tz)); max-height: calc(100dvh * var(--tz)); padding: 0; border: 0; background: var(--surface); color: var(--ink); }
@@ -824,6 +829,7 @@ dialog.tweak-sheet > .tweak-panel { height: auto; flex: 1 1 auto; }
 .tweak-hint { margin: 0; }
 .tweak-near ul { display: grid; gap: 8px; margin: 8px 0; }
 .tweak-near li { display: grid; gap: 8px; }
+.tweak-else-label { display: block; font-weight: 600; margin-bottom: 8px; }
 .tweak-extra > summary, .tweak-else > summary { cursor: pointer; font-weight: 600; min-height: var(--target); display: flex; align-items: center; }
 .tweak-extra[open] { display: grid; gap: 16px; }
 .tweak-else textarea { width: 100%; font: inherit; color: var(--ink); background: var(--surface); border: 1px solid var(--line-strong); border-radius: var(--r-sm); padding: 8px 12px; }
@@ -1220,7 +1226,9 @@ body.has-fab .shell { padding-bottom: calc(var(--tabs-h) + env(safe-area-inset-b
 .bp-list li { display: flex; gap: 8px; align-items: center; line-height: 1.45; min-width: 0; }
 .bp-text { flex: 1; min-width: 0; overflow-wrap: anywhere; display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden; }
 .bp-news .bp-list li, .bp-news li { align-items: baseline; }
-.bp-news .bp-text { -webkit-line-clamp: 4; }
+/* News is read whole: cut at four lines it stopped mid-sentence with nothing to open it
+   (2026-10-30). */
+.bp-news .bp-text { -webkit-line-clamp: unset; display: block; overflow: visible; }
 .bp-go { flex: none; font-size: var(--t-sm); }
 .bp-steps li { align-items: baseline; }
 .bp-steps { counter-reset: step; }
@@ -1320,3 +1328,33 @@ body.has-fab .shell { padding-bottom: calc(var(--tabs-h) + env(safe-area-inset-b
 .prep-glance .read-q p { margin: 0; }
 .prep-glance ul { margin: 0; padding-left: 20px; display: flex; flex-direction: column; gap: 4px; }
 .prep-doc { max-width: 76ch; }
+/* The numbers card: what the bars are, and how far applications went, opened in place. */
+.bp-spark-cap { margin: 4px 0 0; }
+.bp-spark rect:focus { outline: 2px solid var(--focus, var(--link)); }
+.bp-funnel-list { display: grid; gap: 8px; margin-top: 8px; }
+.bp-funnel-row { display: grid; gap: 4px; }
+.bp-funnel-bar { display: block; height: 8px; border-radius: 4px; background: var(--sunk); overflow: hidden; }
+.bp-funnel-bar .fill { display: block; height: 100%; background: var(--mark); border-radius: 4px; }
+/* Where a conversation is, as one row of steps: done ones filled, the rest outlined. Plain
+   lines read as a list of words (2026-10-30). */
+.stepper { display: flex; flex-wrap: wrap; gap: 8px; margin: 4px 0; }
+.stepper li { padding: 4px 12px; border-radius: 999px; border: 1px solid var(--line-strong); font-size: var(--t-sm); color: var(--muted); }
+.stepper li.done { background: var(--sunk); color: var(--ink); border-color: transparent; }
+.d-next { margin: 0; }
+.bp-lead-list { display: grid; gap: 8px; margin: 0; padding-left: 1.1em; }
+.bp-lead-list li { line-height: 1.45; }
+.chip-list { display: flex; flex-wrap: wrap; gap: 8px; margin: 0; }
+.chip-list .chip { padding: 4px 12px; border-radius: 999px; background: var(--sunk); color: var(--ink); font-size: var(--t-sm); }
+/* A light finish (2026-10-30: "slightly more polished, don't go overboard"): cards lift a
+   touch under a pointer, buttons answer a press, and nothing moves for someone who asked
+   their device for less motion. */
+.btn, .chip, .seg-opt { transition: background-color 0.15s ease, border-color 0.15s ease, box-shadow 0.15s ease, transform 0.08s ease; }
+.btn:active:not(:disabled) { transform: translateY(1px); }
+@media (hover: hover) and (pointer: fine) {
+  .card, .work-card, .bpanel { transition: box-shadow 0.18s ease, border-color 0.18s ease; }
+  .card:hover, .work-card:hover, .bpanel:hover { box-shadow: 0 2px 12px rgb(0 0 0 / 0.06); }
+}
+@media (prefers-reduced-motion: reduce) {
+  .btn, .chip, .seg-opt, .card, .work-card, .bpanel { transition: none; }
+  .btn:active:not(:disabled) { transform: none; }
+}

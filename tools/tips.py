@@ -79,6 +79,8 @@ TIPS = (
      "style from what you change."),
     ("tour", ("general",),
      "Tip: say \"show me around\" for a short tour of what else I can do."),
+    ("pin", ("general",),
+     "Tip: say \"pin my page\" and I'll pin your job search page to your sidebar, one tap away."),
     ("reaction-sticks", ("general", "search", "networking"),
      "Tip: a reaction like \"not this kind of company\" or \"too formal\" sticks for every "
      "later round, until you change your mind."),
@@ -195,20 +197,20 @@ PAGE_TOUR = (
 PAGE_FIRST = {
     "search": "Your first search here, so the ranking won't be perfect yet. Use the bin on a "
               "job that's off and say why: the next search learns.",
-    "apply": "Your first application here. Tap Tweak on the resume or the letter to change the "
+    "apply": "Your first application here. Tap Edit on the resume or the letter to change the "
              "wording, and it sticks for the next one.",
-    "networking": "Your first notes here, so some may be off. Tweak a note to change how it "
+    "networking": "Your first notes here, so some may be off. Edit a note to change how it "
                   "reads, or use the bin on someone you wouldn't write to; both stick.",
     "reply": "If a reply doesn't sound like you, change it before you send it and paste what "
              "you sent in Chat: your edits teach it your voice.",
-    "interview": "Your first interview prep. Tap Tweak on it to change what it covers, and the "
+    "interview": "Your first interview prep. Tap Edit on it to change what it covers, and the "
                  "next one fits you better.",
     "prep": "Your first call prep. After the call, say in Chat how it went.",
-    "brief": "Your first brief. Tap Tweak the brief for more or less of anything.",
-    "general": "Anything made for you can be changed: tap Tweak on it, and it sticks.",
+    "brief": "Your first brief. Tap Edit the brief for more or less of anything.",
+    "general": "Anything made for you can be changed: tap Edit on it, and it sticks.",
 }
 PAGE_TIPS = {
-    "rephrase": "Tip: tap Tweak on anything Claude writes to make it shorter, warmer or "
+    "rephrase": "Tip: tap Edit on anything Claude writes to make it shorter, warmer or "
                 "reworded. Your changes teach it your style.",
     "tour": "Tip: Settings, Help, Show me around gives a short tour.",
     "reaction-sticks": "Tip: the bin on a job asks why. Your answer sticks for every later "
@@ -223,6 +225,10 @@ PAGE_TIPS = {
             "it tells you what landed.",
     "questions-asked": "Tip: after an interview, say in Chat which questions they asked. The "
                        "next prep uses them.",
+    # Pinning, said once among the tips, never asked again (the maintainer, 2026-10-30: make
+    # it easier to find, "don't pester the user with it").
+    "pin": "Tip: pin this page to your sidebar so it's always one tap away: Settings, Your "
+           "page, Pin it to my sidebar.",
 }
 
 

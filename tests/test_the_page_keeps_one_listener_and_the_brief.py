@@ -94,7 +94,7 @@ def test_your_brief_moves_rests_and_starts_again_from_settings(run, tmp_path, vp
     got = _go(run, tmp_path, [
         {"hash": "settings", "open": "info-sum:brief-when", "read": '[data-k="info-sum:brief-when"]'},
         {"click": "Change it", "within": "#main"},
-        {"fill": {"Time, in your own time zone": "08:15"}, "submit": True},
+        {"fill": {"Time": "08:15"}, "submit": True},
         {"open": "info-sum:brief-pause"},
         {"click": "Take a break until…", "within": "#main"},
         {"fill": {"Until": "2026-11-08"}, "submit": True},
