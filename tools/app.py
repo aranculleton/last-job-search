@@ -122,7 +122,8 @@ def cmd_view(a) -> int:
         old = (db.get("view") or {}).get(doc_id) if db else None
         w.add("set", "view", doc_id, doc, if_version=old["version"] if old else None)
     for doc_id in app_lists.stale(full, db.get("view") or {}):
-        w.add("delete", "view", doc_id, if_version=db["view"][doc_id]["version"])
+        if db["view"][doc_id]["version"] is not None:      # read under 4.2's name: kept
+            w.add("delete", "view", doc_id, if_version=db["view"][doc_id]["version"])
     # The model builds `listener` and `schedule` itself now; each document is written once.
     # A section too big for one document (a long search's jobs, a big contact book) goes as
     # parts the page joins again (page_db.split), never cut short.
@@ -137,7 +138,8 @@ def cmd_view(a) -> int:
             w.add("set", "view", doc_id, doc, if_version=old["version"] if old else None)
             written.append(doc_id)
     for doc_id in page_db.stale_parts(db.get("view") or {}, written):
-        w.add("delete", "view", doc_id, if_version=db["view"][doc_id]["version"])
+        if db["view"][doc_id]["version"] is not None:      # read under 4.2's name: kept
+            w.add("delete", "view", doc_id, if_version=db["view"][doc_id]["version"])
     # Where each message goes (Open profile, Open in email): the address in an owner-only
     # document per contact, read by the page only for its owner and never embedded in it.
     ids = [m["contact"] for m in model.get("messages") or [] if m.get("contact")] + \
@@ -320,9 +322,30 @@ def cmd_listen(a) -> int:
     import app_model
     import page_db
     _, now = app_model.clock(None, a.now)
-    got = app_listen.decide(page_db.load(a.dump), app_listen.this_chat(a.chat),
-                            a.out or os.path.join(a.dump, "listen_out"), now,
+    out = a.out or os.path.join(a.dump, "listen_out")
+    db = page_db.load(a.dump)
+    # A page a 4.2 chat left keeps its records under the old names: they move to the new
+    # ones once, in code, before anything is written to them (2026-10-29).
+    more = page_db.to_read(a.dump, db)
+    if more:
+        print("listen: this page was made by an older version of the app, and its records "
+              "move to their new names once, now. ArtifactData query, once for each of the "
+              f"collections {', '.join(more)} (url <the page>, out_dir the same folder, limit "
+              "1000), then run this again with the same folder. Say nothing about it to the "
+              "person.")
+        return 0
+    move = page_db.move(db, a.dump, os.path.join(out, "move"),
+                        app_listen._stamp(now), app_listen.this_chat(a.chat))
+    if move["batches"]:
+        page_db.moved_into(a.dump, move)
+    got = app_listen.decide(move["db"], app_listen.this_chat(a.chat), out, now,
                             listen=a.listen, helper=a.helper, hand_to=a.hand)
+    if move["batches"]:
+        print("listen: the page's records take their new names: send these batches first, in "
+              "order, asking nobody. If one is refused, another chat did it already: read "
+              "again into a new folder and run this once more.")
+        for path in move["batches"]:
+            print(path)
     for line in got["lines"]:
         print(line)
     for path in got["batches"]:
@@ -340,6 +363,18 @@ def cmd_listen(a) -> int:
             print(f"upkeep: {len(closed)} application(s) gone quiet were closed as no reply "
                   "(followups.py --close-quiet); save them with the rest, after this wake's "
                   "work (python3 tools/save_state.py)")
+        # An interview's time said in a note or a message goes on the interview's own
+        # record, so the page shows it and nobody is asked to add it (2026-10-29).
+        try:
+            import interview_pack
+            zone = person.home_zone_named(person.directory()) or "UTC"
+            timed = interview_pack.take_times(today=app_model.local_day(now, zone).isoformat())
+        except Exception:  # noqa: BLE001  no profile or no interview yet: nothing to take
+            timed = []
+        if timed:
+            print(f"upkeep: {len(timed)} interview time(s) said in a note or a message were "
+                  "saved on the interview; save them with the rest and bring the page up to "
+                  "date (python3 tools/app.py view), asking nobody")
         # The page's store kept small, in code: finished records over two months old go.
         old = page_db.prune(page_db.load(a.dump), now, os.path.join(a.out or os.path.join(a.dump, "listen_out"), "prune"))
         if old:

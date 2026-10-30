@@ -340,8 +340,9 @@ METHODS: dict[str, dict] = {
             (53, "2026-10-26", False, "RUNBOOK: saying update in any words is enough and the page is brought up to date at once, unasked; the pin is offered once ever; a timer or background job that brings nothing is never mentioned; one folder per application, named once for its employer (Profile upgrade: one-folder-each moves strays); no pay question raised from the employer's revenue; a resume bullet can name a skill the person said yes to, for that application only (same numbers and tools, only the yes added, only into related work, checked by both audits and the renderer); with no rewording every document renders as before"),
             (54, "2026-10-29", False, "the page's light colours, kept beside the document templates, cooled; every document renders as before"),
             (55, "2026-10-29", False, "an employer researched recently is drafted from its saved research, with no research agent; the outreach note is written by the final check; long work on another model runs as an agent inside the chat that answers the page, never a chat of its own; work from the page goes to whichever chat answers it, cloud or computer; documents render as before"),
+            (56, "2026-10-29", False, "RUNBOOK.md says how an interview's time is saved on its record (interview_pack.py book and times); documents render and are checked as before"),
         ),
-        "fingerprint": "fd44dd3d75b4fa7f",
+        "fingerprint": "23194e286bb06194",
     },
     "interview": {
         "by": "upgrade", "priority": 2, "applies": "live_interviews", "time": "~15 min",
@@ -377,9 +378,9 @@ METHODS: dict[str, dict] = {
             (22, "2026-10-25", True, "the pack's one screen stops asking for a reason they already wrote; a stage booked with the pack is written into outcome.md; the questions asked are recorded under the right role; a path printed across two Windows drives no longer stops it; works in folders with brackets in their names; the pack goes on the person's page first, and in the chat only where there is no page; an application's folder is found by the paths module, not the outreach one; rebooking a stage keeps the blank line after it, so the next heading no longer runs into it"),
             (23, "2026-10-26", False, "a stage booked with a time keeps it on its outcome.md line (scheduled <day> HH:MM), and booked again for the same day with no time it stays; the page reads the pack's one screen, its practice questions with the person's own answers and its format (one_screen, practice, format_of); an answer kept to work on is written once and can be taken off again; a process registered from the page keeps its call's time; next_stage is public; packs already made stay as they are; every file it writes has plain line ends on Windows too"),
             (24, "2026-10-29", False, "interview prep reads the saved employer research first and starts a research agent only when none is recent; no separate chat is offered for an employer, and a campaign chat started before carries on"),
-            (25, "2026-10-29", False, "the pack asks which team the call is for only when the employer has another posting for the role, and lists the other postings, not the one the call is for; the same role on two boards is one posting and a posting past its deadline is none"),
+            (25, "2026-10-29", False, "the pack asks which team the call is for only when the employer has another posting for the role, and lists the other postings, not the one the call is for; the same role on two boards is one posting and a posting past its deadline is none; an interview's time said in the chat, an invite, a message or a contact's note is saved on its record (interview_pack.py book and times, and --time when a stage is booked), so the page shows it instead of time not set; packs already made stay as they are"),
         ),
-        "fingerprint": "6acd5e4db2cb0da3",
+        "fingerprint": "b8db9f046baccfc5",
     },
     "research": {
         "by": "upgrade", "priority": 3, "applies": "live_applications", "time": "~5 min each",

@@ -311,10 +311,13 @@ def decide(db: dict, chat: str, out_dir: str, now: dt.datetime | None = None,
                           "action watch with no url, lists this chat's watches), stop that "
                           "watch: action watch, url <the page>, on: false."]}
     if mine:
-        w.add("update", DOC_COLLECTION, DOC_ID,
-              {"answered_at": at, "watching": True, **({"helper": True} if helper else {})},
-              if_version=version)
-        rec = dict(rec, answered_at=at, watching=True, **({"helper": True} if helper else {}))
+        fresh = {"answered_at": at, "watching": True, **({"helper": True} if helper else {})}
+        if version is None:
+            # Read only under its 4.2 name (page_db.load): the new record is made, whole.
+            w.add("set", DOC_COLLECTION, DOC_ID, dict(rec, **fresh))
+        else:
+            w.add("update", DOC_COLLECTION, DOC_ID, fresh, if_version=version)
+        rec = dict(rec, **fresh)
         lines.append("listen: this chat answers the page. Send the batch below (it says this "
                      "chat answered just now). If it is refused, another chat took the page "
                      "over: read meta/listen again and run this once more.")
@@ -506,8 +509,8 @@ def _check_in(chat: str, url: str, claim: bool, listen: bool, helper: bool) -> s
     flags = (" --listen" if listen else "") + (" --helper" if helper else "")
     if claim:
         return (f"Ask the page which chat answers it, before publishing anything: ArtifactData "
-                f"get (url {url}, collection meta, doc_id listen) and query (collection "
-                "work, where status == queued), both with out_dir <your scratchpad>/listen; "
+                f"query (url {url}, collection meta) and query (collection work, where "
+                "status == queued), both with out_dir <your scratchpad>/listen; "
                 f"then python3 tools/app.py listen <your scratchpad>/listen --chat "
                 f"{chat or '<this chat id>'}{flags}, and send the batch it prints. It makes "
                 "this chat the listener only where none answers, or where the person asked "
@@ -515,8 +518,8 @@ def _check_in(chat: str, url: str, claim: bool, listen: bool, helper: bool) -> s
                 "watches the page, and says nothing about either.")
     return (f"This chat answers the person's page. Keep its watch on: ArtifactComments, action "
             f"watch, url {url} (a watch that started by itself can end after hours with no "
-            "activity; asking for one starts it again). Then check in: ArtifactData get (url "
-            f"{url}, collection meta, doc_id listen, out_dir <your scratchpad>/listen), "
+            "activity; asking for one starts it again). Then check in: ArtifactData query (url "
+            f"{url}, collection meta, out_dir <your scratchpad>/listen), "
             f"python3 tools/app.py listen <your scratchpad>/listen --chat {chat}{flags}, and "
             "send the batch it prints. If it says another chat answers the page now, stop "
             "this chat's watch (watch, url, on: false) and publish nothing.")
@@ -677,8 +680,8 @@ def after_update(landed: bool = False, chat: str = "") -> list[str]:
     if who == "listener":
         return [head + " Republish it:"] + _publish_now(url, 1)
     return [head + " Republish it:",
-            f"1. Which chat answers the page: ArtifactData get (url {url}, collection meta, "
-            "doc_id listen, out_dir <your scratchpad>/listen), then python3 tools/app.py "
+            f"1. Which chat answers the page: ArtifactData query (url {url}, collection "
+            "meta, out_dir <your scratchpad>/listen), then python3 tools/app.py "
             f"listen <your scratchpad>/listen --chat {chat or '<this chat id>'}, and send the "
             "batch it prints.",
             "2. If it says another chat answers the page: " + ask + " Then stop here."] + \

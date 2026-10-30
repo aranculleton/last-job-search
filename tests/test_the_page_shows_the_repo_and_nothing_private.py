@@ -243,9 +243,11 @@ def test_the_model_reaches_an_open_page_as_view_documents(small, tmp_path):
     so a page that is open updates with no republish. A document that exists is pinned to
     the version the dump read."""
     dump = tmp_path / "dump"
-    (dump / "view").mkdir(parents=True)
-    (dump / "view" / "jobs.json").write_text(json.dumps({"rev": "old", "__version__": 4}),
-                                             encoding="utf-8")
+    # A read of the store's `screen` collection (page_db.STORE): a record read only under
+    # 4.2's `view` is not one the new name has, so nothing is pinned to its version.
+    (dump / "screen").mkdir(parents=True)
+    (dump / "screen" / "jobs.json").write_text(json.dumps({"rev": "old", "__version__": 4}),
+                                               encoding="utf-8")
     out = json.loads(_app(small, "view", str(tmp_path / "out"), "--dump", str(dump),
                           "--now", app_state.NOW).stdout)
     with open(out["batches"][0], encoding="utf-8") as fh:
@@ -283,9 +285,9 @@ def test_a_section_too_big_for_one_document_goes_in_parts_and_comes_back_whole(t
     whole = model(state)["jobs"]
     assert page_db.stored_size({"data": whole}) > page_db.DOC_MAX * 3 // 2
     dump = tmp_path / "dump"
-    (dump / "view").mkdir(parents=True)
+    (dump / "screen").mkdir(parents=True)
     for doc_id in ("part~jobs~9", "part~people~1"):    # left by an earlier, bigger write
-        (dump / "view" / f"{doc_id}.json").write_text(
+        (dump / "screen" / f"{doc_id}.json").write_text(
             json.dumps({"rev": "old", "text": "[", "__version__": 2}), encoding="utf-8")
     out = json.loads(_app(state, "view", str(tmp_path / "out"), "--dump", str(dump),
                           "--now", app_state.NOW).stdout)

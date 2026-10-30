@@ -35,7 +35,9 @@ on every wake:
 python3 tools/app.py listen "$D" --chat <your chat id>
 ```
 
-Send the batch it prints with the others. If it says another chat answers the page, stop
+Send the batch it prints with the others; batches it prints before its own (a page an older
+version made, whose records take their new names once) go first, and a read it asks for is
+made into the same `$D` before running it again. If it says another chat answers the page, stop
 your watch (ArtifactComments, action `watch`, the url, `on: false`), write nothing else and
 end the turn: that chat takes it.
 
@@ -128,6 +130,11 @@ messages (ArtifactData `query`, collection `talk/<thread>/messages`, `out_dir: $
 - **Someone proposed a time for a call** ("how about 2pm ET Thursday?"): log their message,
   record the call booked on that day with `network/state.py set <contact> --status
   call_booked --due <day>`, draft the short yes, and say the call prep follows.
+- **An interview's day or time** (an invite, a recruiter's message, said in passing): log
+  the message, then save it on the interview itself with `interview_pack.py book "<Company>"
+  --stage "<stage>" --date <day> --time <HH:MM> [--zone <as written>]`, so the page shows
+  it. Logging a message or a note already saves a time it gives (`Saved on the interview:`);
+  never tell the person to add a time, or fix any record, themselves.
 - **Anything else** is answered in the thread in plain words; work it starts shows in the
   page's Work list as it runs.
 

@@ -2884,6 +2884,19 @@
    "core_bold": "Short."
   },
   {
+   "id": "records-yours",
+   "was": "new in 4.0",
+   "rule": "A record missing what the chat knows, or wrong, is fixed by the chat with the app's own command; the person is never told to fix it by hand.",
+   "bold": "Records are yours to fix.",
+   "home": "CLAUDE.md",
+   "anchor": "**Records are yours to fix.**",
+   "needed_by": [
+    "every chat"
+   ],
+   "core_bold": "Records are yours to fix.",
+   "changed": "2026-10-29: an interview's time sat in a contact's note, the page said \"time not set\", and the chat told the person to add it themselves"
+  },
+  {
    "id": "git-yours",
    "was": "Talking to the person: plain words, one recommendation, short",
    "rule": "Git and GitHub are yours, done without asking and never explained.",

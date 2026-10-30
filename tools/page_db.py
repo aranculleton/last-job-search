@@ -121,24 +121,110 @@ def _read_json(path: str):
 
 def load(dump_dir: str) -> dict:
     """{collection: {doc_id: {"data": fields, "version": n or None}}} for every collection
-    the chat dumped into `dump_dir`. A collection not dumped is empty."""
+    the chat dumped into `dump_dir`. A collection not dumped is empty.
+
+    A record read under its 4.2 name (`view/jobs`, `meta/listener`) stands for its new one
+    only while the new one does not exist, and then with no version and `"old": True`: its
+    version is the old record's, which the new name never had, so a write pinned to it was
+    refused (2026-10-29). The first write makes the new record, and `move()` makes them all."""
     out: dict = {c: {} for c in COLLECTIONS}
     for coll in COLLECTIONS:
-        where = os.path.join(dump_dir, STORE.get(coll, coll))
-        if not os.path.isdir(where):
-            where = os.path.join(dump_dir, coll)
-        for path in sorted(glob.glob(os.path.join(where, "*.json"))):
-            got = _read_json(path)
-            if got is None:
-                continue
-            fields, version = unwrap(got)
-            # ArtifactData spells a "~" in an id as "@" in the file's name; ids never hold
-            # an "@" of their own (safe_id), so every "@" is a "~".
-            doc_id = os.path.splitext(os.path.basename(path))[0].replace("@", "~")
-            if coll == "meta":
-                doc_id = _LOGICAL_DOC.get(("meta", doc_id), doc_id)
-            out[coll][doc_id] = {"data": fields, "version": version}
+        new = STORE.get(coll, coll)
+        # The old name first, so a record under its new name always wins.
+        for where in dict.fromkeys((coll, new)):
+            for path in sorted(glob.glob(os.path.join(dump_dir, where, "*.json"))):
+                got = _read_json(path)
+                if got is None:
+                    continue
+                fields, version = unwrap(got)
+                # ArtifactData spells a "~" in an id as "@" in the file's name; ids never
+                # hold an "@" of their own (safe_id), so every "@" is a "~".
+                doc_id = os.path.splitext(os.path.basename(path))[0].replace("@", "~")
+                old = where != new
+                if coll == "meta":
+                    old = ("meta", doc_id) in STORE_DOC
+                    doc_id = _LOGICAL_DOC.get(("meta", doc_id), doc_id)
+                if not old:
+                    out[coll][doc_id] = {"data": fields, "version": version}
+                elif doc_id not in out[coll] or out[coll][doc_id].get("old"):
+                    out[coll][doc_id] = {"data": fields, "version": None, "old": True}
     return out
+
+
+# ------------------------------------------------------------------ moving a 4.2 page
+
+# A page a 4.2 chat left holds its records under the old names. The first chat on 4.3 that
+# answers the page makes every new record from its old one, in code: the old one's fields
+# with the version a new record has (1, as `_v`), and last `meta/moved`, so no chat moves
+# them twice. The old records are left as they are: a write to one needs its version, which
+# a 4.2 read never kept.
+MOVED = "moved"
+# What a move reads, besides what every wake reads: both names of each renamed collection,
+# so a create never meets a record it did not know was there (a batch is all or nothing).
+MOVE_READS = ("view", "screen", "chats", "beats", "locks", "holds")
+_ASKED = ".move-asked"      # in a dump folder: the chat was asked to read MOVE_READS into it
+
+
+def unmoved(dump_dir: str, db: dict) -> bool:
+    """Does the store still hold a 4.2 page's records that were never moved? Told by meta,
+    which every check-in reads: 4.2's `meta/listener` or `meta/current`, and no mark."""
+    if MOVED in (db.get("meta") or {}):
+        return False
+    return any(os.path.isfile(os.path.join(dump_dir, "meta", doc_id + ".json"))
+               for (_c, doc_id) in STORE_DOC)
+
+
+def to_read(dump_dir: str, db: dict) -> list[str]:
+    """The collections a chat reads into `dump_dir` before a move, once: [] when nothing
+    needs moving, the old ones are there, or the chat was asked already. An empty collection
+    leaves no folder, so a new one missing is no reason to ask: a create that meets a record
+    the chat did not read is refused, and the chat reads again. Asking is noted in the
+    folder."""
+    if not unmoved(dump_dir, db) or os.path.exists(os.path.join(dump_dir, _ASKED)):
+        return []
+    if all(os.path.isdir(os.path.join(dump_dir, c)) for c in STORE):
+        return []
+    missing = [c for c in MOVE_READS if not os.path.isdir(os.path.join(dump_dir, c))]
+    with open(os.path.join(dump_dir, _ASKED), "w", encoding="utf-8") as fh:
+        fh.write("\n".join(missing) + "\n")
+    return missing
+
+
+def move(db: dict, dump_dir: str, out_dir: str, at: str, chat: str = "") -> dict:
+    """The move as batch files: every record read only under its old name created under its
+    new one, then the mark, in the last batch. {"batches", "entries", "db"}: `db` is the dump
+    as it will be once they land, each moved record at version 1, for the writes this chat
+    builds next. Nothing to move, no batches (and `db` as it was)."""
+    if not unmoved(dump_dir, db):
+        return {"batches": [], "entries": [], "db": db}
+    w = Writes(out_dir)
+    after = {c: dict(docs) for c, docs in db.items()}
+    for coll in COLLECTIONS:
+        for doc_id, doc in sorted((db.get(coll) or {}).items()):
+            if not doc.get("old"):
+                continue
+            try:
+                w.add("set", coll, doc_id, doc["data"])
+            except ValueError:      # over the cap as it stands: its next write makes it
+                continue
+            after[coll][doc_id] = {"data": doc["data"], "version": 1}
+    w.add("set", "meta", MOVED, {"at": at, "by": chat or None,
+                                 "records": len(w.entries)})
+    after.setdefault("meta", {})[MOVED] = {"data": {"at": at}, "version": 1}
+    return {"batches": w.save("move"), "entries": w.entries, "db": after}
+
+
+def moved_into(dump_dir: str, got: dict) -> None:
+    """Write the moved records into the dump, as a read would save them once the move has
+    landed, so every later step that reads the same folder pins to the versions they have."""
+    for e in got.get("entries") or []:
+        where = os.path.join(dump_dir, e["collection"])
+        os.makedirs(where, exist_ok=True)
+        with open(e["file_path"], encoding="utf-8") as fh:
+            body = fh.read()
+        name = e["doc_id"].replace("~", "@") + ".json"
+        with open(os.path.join(where, name), "w", encoding="utf-8", newline="\n") as fh:
+            fh.write(body)
 
 
 def safe_id(text: str) -> str:

@@ -31,7 +31,11 @@ The pack leads with one screen (five likely questions with what to answer with,
 three hooks, the money line, what not to say), then the detail.
 
     python3 tools/interview_pack.py pack "<Company>" [--role R] [--stage "Phone screen"]
-            [--date YYYY-MM-DD] [--with "<name or title>"] [--map map.json] [--write]
+            [--date YYYY-MM-DD] [--time 14:00] [--with "<name or title>"] [--map map.json]
+            [--write]
+    python3 tools/interview_pack.py book "<Company>" [--role R] [--stage S]
+            [--date YYYY-MM-DD] --time 2pm [--zone EST] [--with "<who>"]
+    python3 tools/interview_pack.py times [--company C]
     python3 tools/interview_pack.py asked --company C --role R --stage S --question "..."
             [--story "<story title>"] [--landed yes|partly|no] [--note "..."]
     python3 tools/interview_pack.py rework --company C --role R --stage S
@@ -898,7 +902,7 @@ def process_channel(contact) -> str:
 
 
 def register_process(company, contact_id, role, stage="", date="", with_="", today=None,
-                     contacts=None, posting="", time="") -> tuple:
+                     contacts=None, posting="", time="", zone="") -> tuple:
     """Make a hiring process with no application something every reader can see: a
     tracker row (PROCESS_NOTE) and its folder with an outcome.md, the booked stage on it
     when given. Returns (row, folder, added). Run twice, it changes nothing."""
@@ -969,15 +973,16 @@ def register_process(company, contact_id, role, stage="", date="", with_="", tod
                 "by %s.\n" % (company, role, "" if screen_first else "- [ ] Phone screen\n",
                               today, name))
     if _text(stage):
-        text = _with_stage(text, stage, date, with_, time)
+        text = _with_stage(text, stage, date, with_, time, zone)
     with open(out, "w", encoding="utf-8", newline="\n") as fh:
         fh.write(text)
     return have, folder, added
 
 
-def _with_stage(text, stage, date="", with_="", time="") -> str:
+def _with_stage(text, stage, date="", with_="", time="", zone="") -> str:
     """outcome.md's text with this stage booked on its checklist: `- [ ] <stage> (scheduled
-    <date>, with <who>)`, the line the brief, /outcome and every pack read."""
+    <date> [<HH:MM> [<zone>]], with <who>)`, the line the brief, /outcome, every pack and the
+    page read. `zone` is one an invite gives beside the time (EST), when not the person's."""
     # [ \t], never \s: in a multi-line match \s ate the newline and the blank line after a
     # rebooked stage, so booking it twice ran the next heading into it.
     same = re.compile(r"^- \[ \] %s(?:[ \t]*\(.*\))?[ \t]*$" % re.escape(stage), re.M | re.I)
@@ -990,8 +995,10 @@ def _with_stage(text, stage, date="", with_="", time="") -> str:
         # Said again for the same day with no time: the time on the line stays.
         was = what_works.outcome_stages("## Interview stages reached\n" + hits[0].group(0))
         if was and was[0]["date"] == _text(date):
-            time = was[0].get("time") or ""
-    when = "%s %s" % (date, what_works.clock(time)) if what_works.clock(time) else date
+            time, zone = was[0].get("time") or "", was[0].get("zone") or ""
+    zone = _text(zone).upper() if re.fullmatch(r"[A-Za-z]{2,5}", _text(zone)) else ""
+    when = ("%s %s%s" % (date, what_works.clock(time), " " + zone if zone else "")
+            if what_works.clock(time) else date)
     line = "- [ ] %s%s" % (stage, " (scheduled %s%s)" % (
         when, ", with %s" % with_ if _text(with_) else "") if _text(date) else "")
     if not hits:
@@ -1016,7 +1023,8 @@ def _with_stage(text, stage, date="", with_="", time="") -> str:
     return text.rstrip("\n") + "\n\n## Interview stages reached\n%s\n" % line
 
 
-def record_stage(folder, company, role, stage, date, with_="", today=None, time="") -> str:
+def record_stage(folder, company, role, stage, date, with_="", today=None, time="",
+                 zone="") -> str:
     """Book a stage given to `pack --write` in the process's outcome.md, the record the
     brief reminds from and every later pack reads: given there with a date, it was used
     for that one pack and recorded nowhere (interview audit, 2026-10-25). An outcome.md not
@@ -1027,12 +1035,131 @@ def record_stage(folder, company, role, stage, date, with_="", today=None, time=
         text = ("# Outcome: %s - %s\n\n**Status:** in_progress\n\n## Interview stages "
                 "reached\n\n## Notes\n- %s: %s booked for %s.\n"
                 % (company, role, _text(today) or dt.date.today().isoformat(), stage, date))
-    text = _with_stage(text, stage, date, with_, time)
+    text = _with_stage(text, stage, date, with_, time, zone)
     os.makedirs(folder, exist_ok=True)
     with open(out, "w", encoding="utf-8", newline="\n") as fh:
         fh.write(text)
     m = re.search(r"^- \[ \] %s.*$" % re.escape(stage), text, re.M | re.I)
     return m.group(0) if m else ""
+
+
+# ------------------------------------------------------------------ a time said elsewhere
+
+# An interview's day and time as a note, an invite or a message says them: "Wednesday 28
+# October at 2pm", "Oct 28th, 14:00 EST", "2026-10-28 at 9.30am", "2pm on the 28th of
+# October". The time sat in a contact's note while the interview's record had its day alone,
+# so the page said "time not set" and the chat told the person to add it themselves
+# (2026-10-29): wherever it is said, the interview's own record takes it.
+_MONTH_RX = (r"(?P<mon>jan(?:uary)?|feb(?:ruary)?|mar(?:ch)?|apr(?:il)?|may|june?|july?|"
+             r"aug(?:ust)?|sep(?:t(?:ember)?)?|oct(?:ober)?|nov(?:ember)?|dec(?:ember)?)\.?")
+_SAID_DAYS = (
+    re.compile(r"\b(?P<y>\d{4})-(?P<m>\d{2})-(?P<d>\d{2})\b"),
+    re.compile(r"\b(?P<d>\d{1,2})(?:st|nd|rd|th)?\s+(?:of\s+)?%s(?:,?\s+(?P<y>\d{4})\b)?"
+               % _MONTH_RX, re.I),
+    re.compile(r"\b%s\s+(?:the\s+)?(?P<d>\d{1,2})(?:st|nd|rd|th)?\b(?:,?\s+(?P<y>\d{4})\b)?"
+               % _MONTH_RX, re.I),
+)
+_SAID_CLOCK = (r"(?<![\d:.])(?P<time>\d{1,2}[:.]\d{2}(?:\s*[ap]\.?m\b\.?)?|\d{1,2}\s*[ap]\.?m\b\.?)"
+               r"(?:[ \t]*(?-i:(?P<zone>[A-Z]{2,5}))\b)?")
+# Right after the day, or a few plain words on ("28 October is now at 11:15"): never across
+# a number, so another day's time is not taken.
+_CLOCK_AFTER = re.compile(r"[ \t,]*(?:(?:[a-z]+[ \t]+){0,3}?(?:at|from|@)[ \t]*)?" + _SAID_CLOCK,
+                          re.I)
+_NOTE_DAY = re.compile(r"(?=\b\d{4}-\d{2}-\d{2}:)")
+_CLOCK_BEFORE = re.compile(_SAID_CLOCK + r"[ \t,]*(?:on[ \t]+)?(?:(?:mon|tue|wed|thu|fri|sat|"
+                           r"sun)[a-z]*\.?,?[ \t]+)?(?:the[ \t]+)?$", re.I)
+_MONTHS3 = ("jan", "feb", "mar", "apr", "may", "jun", "jul", "aug", "sep", "oct", "nov", "dec")
+
+
+def _zone_word(word) -> str:
+    """A zone written beside a time (EST, CET, BST), or "" for capitals that are not one."""
+    import app_model
+    w = _text(word)
+    return w if w in app_model._ZONE_WORDS or re.fullmatch(r"[A-Z]{1,4}T", w) else ""
+
+
+def time_said(text, day) -> tuple:
+    """(HH:MM, zone or "") for `day` (YYYY-MM-DD) where `text` gives that day with a time
+    beside it, else ("", ""). A day given with no year is taken as `day`'s own."""
+    text, day = str(text or ""), _text(day)
+    try:
+        want = dt.date.fromisoformat(day)
+    except ValueError:
+        return "", ""
+    for rx in _SAID_DAYS:
+        for m in rx.finditer(text):
+            g = m.groupdict()
+            month = int(g["m"]) if g.get("m") else _MONTHS3.index(g["mon"][:3].lower()) + 1
+            if (month, int(g["d"])) != (want.month, want.day) or (
+                    g.get("y") and int(g["y"]) != want.year):
+                continue
+            hit = (_CLOCK_AFTER.match(text, m.end())
+                   or _CLOCK_BEFORE.search(text[max(0, m.start() - 40):m.start()]))
+            clock = what_works.clock(hit.group("time")) if hit else ""
+            if clock:
+                return clock, _zone_word(hit.group("zone"))
+    return "", ""
+
+
+def take_times(today=None, company="", tracker=None, contacts=None, threads=None) -> list:
+    """Every booked interview with no time on its record whose day is said, with a time, in
+    the application's notes, a note on someone at that employer, or a message recorded with
+    them: the time goes on the stage's line in outcome.md, the record the page and every pack
+    read. Where they disagree, the newest message says it; where that is still not one time,
+    nothing is written. `company` limits it to one employer. Returns what was written, as
+    [{company, role, stage, date, time, zone}]."""
+    import open_actions
+    today = _text(today) or dt.date.today().isoformat()
+    if tracker is None:
+        tracker = what_works._csv(person.state("job_search_tracker.csv"))
+    if contacts is None:
+        path = person.state("network_contacts.csv")
+        contacts = state.load_contacts(path) if os.path.exists(path) else []
+    if threads is None:
+        path = person.state("network_threads.csv")
+        threads = state.load_threads(path) if os.path.exists(path) else []
+    only = company_key(company) if _text(company) else ""
+    out = []
+    for row in tracker:
+        k = company_key(row.get("company"))
+        if not k or (only and k != only):
+            continue
+        folder, _files, stages = open_actions.stages(row)
+        open_ = [s for s in stages if s["date"] and not s["done"] and s["date"] >= today
+                 and not s.get("time")]
+        if not open_:
+            continue
+        here = [c for c in contacts if company_key(c.get("company")) == k]
+        ids = {_text(c.get("contact_id")) for c in here} - {""}
+        # A note's entries are dated by their "YYYY-MM-DD:" start, as the tools write them.
+        said = [(piece[:10] if re.match(r"\d{4}-\d{2}-\d{2}:", piece) else "", piece)
+                for words in [row.get("notes")] + [c.get(f) for c in here
+                                                   for f in ("notes", "next_action")]
+                for piece in _NOTE_DAY.split(_text(words))]
+        said += [(_text(t.get("date")), t.get(f)) for t in threads
+                 if _text(t.get("contact_id")) in ids for f in ("full_text", "summary", "subject")]
+        for s in open_:
+            found = [(when, time_said(words, s["date"])) for when, words in said if _text(words)]
+            found = [(when, got) for when, got in found if got[0]]
+            if not found:
+                continue
+            newest = max(when for when, _ in found)
+            times = {got for when, got in found if when == newest}
+            if len(times) != 1:
+                continue
+            clock, zone = times.pop()
+            record_stage(folder, _text(row.get("company")), _text(row.get("role")), s["label"],
+                         s["date"], "", today=today, time=clock, zone=zone)
+            out.append({"company": _text(row.get("company")), "role": _text(row.get("role")),
+                        "stage": s["label"], "date": s["date"], "time": clock, "zone": zone})
+    return out
+
+
+def saved_line(got: dict) -> str:
+    """What a chat may pass on as it is, once a time is on the interview's record."""
+    return "Saved on the interview: %s with %s on %s at %s%s." % (
+        got["stage"], got["company"], got["date"], got["time"],
+        " " + got["zone"] if got.get("zone") else "")
 
 
 # The archive's own Status word for each tracker outcome (documents/README.md), and the
@@ -4714,6 +4841,16 @@ def _day(value) -> str:
     raise argparse.ArgumentTypeError("%r is not a date: write it YYYY-MM-DD" % value)
 
 
+def _clock(value) -> str:
+    """A time as HH:MM (14:00, 2pm, 9.30am all read), or argparse's own error."""
+    if not value:
+        return ""
+    got = what_works.clock(value)
+    if got:
+        return got
+    raise argparse.ArgumentTypeError("%r is not a time: write it like 14:00 or 2pm" % value)
+
+
 def main(argv=None) -> int:
     ap = argparse.ArgumentParser(description=__doc__.split("\n")[0])
     sub = ap.add_subparsers(dest="cmd", required=True)
@@ -4757,6 +4894,26 @@ def main(argv=None) -> int:
                                                   "link; without it the folder says it is not "
                                                   "held yet")
     pr.add_argument("--today", type=_day)
+    for s in (p, pr):
+        s.add_argument("--time", default="", type=_clock, help="its time: 14:00, 2pm or 9.30am")
+        s.add_argument("--zone", default="", help="a zone the invite gives beside the time "
+                                                  "(EST), when it is not the person's own")
+    bk = sub.add_parser("book", help="save an interview's day and time on its own record "
+                                     "(outcome.md), however it was given: said in a chat, an "
+                                     "invite, a message or a note")
+    bk.add_argument("company")
+    bk.add_argument("--role", default="")
+    bk.add_argument("--stage", default="", help="as outcome.md names it; default the next booked")
+    bk.add_argument("--date", default="", type=_day, help="default: the day it is booked for")
+    bk.add_argument("--time", default="", type=_clock, help="14:00, 2pm or 9.30am")
+    bk.add_argument("--zone", default="", help="a zone the invite gives beside the time (EST), "
+                                               "when it is not the person's own")
+    bk.add_argument("--with", dest="with_", default="")
+    bk.add_argument("--today", type=_day)
+    tm = sub.add_parser("times", help="every booked interview whose time is said in a note or "
+                                      "a message and not yet on its record: saved there")
+    tm.add_argument("--company", default="")
+    tm.add_argument("--today", type=_day)
     po = sub.add_parser("postings", help="give every process folder that has none a "
                                          "job_posting.md (registered before process wrote one)")
     po.add_argument("--today", type=_day)
@@ -4814,6 +4971,35 @@ def main(argv=None) -> int:
             print("kept in %s: every later pack, at every employer, uses it and checks it "
                   "against the employer" % _repo_rel(path))
             return 0
+        if a.cmd == "times":
+            got = take_times(today=a.today, company=a.company)
+            for g in got:
+                print(saved_line(g))
+            if not got:
+                print("times: nothing to save: every booked interview has its time on its "
+                      "record, or no note or message gives one")
+            return 0
+        if a.cmd == "book":
+            import open_actions
+            tracker = what_works._csv(person.state("job_search_tracker.csv"))
+            row = _row(a.company, a.role, tracker,
+                       state.load_contacts(person.state("network_contacts.csv")))
+            company, role = _text(row.get("company")) or a.company, _text(row.get("role"))
+            today = a.today or dt.date.today().isoformat()
+            _folder, _files, stages = open_actions.stages(row)
+            named = [s for s in stages if s["label"].lower() == _text(a.stage).lower()]
+            stage = named[0] if named else ({} if _text(a.stage) else next_stage(stages, today))
+            label, date = _text(a.stage) or _text(stage.get("label")), a.date or _text(
+                stage.get("date"))
+            if not (label and date):
+                raise ValueError("no interview is booked at %s yet: give it with --stage and "
+                                 "--date" % company)
+            folder = docpaths.app_folder(company, role)
+            line = record_stage(folder, company, role, label, date, a.with_, today=today,
+                                time=a.time, zone=a.zone)
+            print("saved in %s/outcome.md: %s" % (_rel(folder), line))
+            print("The page shows it once it is brought up to date (python3 tools/app.py view).")
+            return 0
         if a.cmd == "postings":
             done = missing_postings()
             for company, role, folder in done:
@@ -4823,7 +5009,8 @@ def main(argv=None) -> int:
             return 0
         if a.cmd == "process":
             row, folder, added = register_process(a.company, a.contact, a.role, a.stage, a.date,
-                                                  a.with_, today=a.today, posting=a.posting)
+                                                  a.with_, today=a.today, posting=a.posting,
+                                                  time=a.time, zone=a.zone)
             print("%s: %s at %s, led by %s; its folder is %s.\n"
                   % ("registered" if added else "already registered", row["role"], row["company"],
                      row["contact_person"], _rel(folder)))
@@ -4924,7 +5111,7 @@ def main(argv=None) -> int:
             folder = docpaths.app_folder(company, role)
             if os.path.isdir(folder):
                 booked = record_stage(folder, company, role, a.stage, a.date, a.with_,
-                                      today=a.today)
+                                      today=a.today, time=a.time, zone=a.zone)
                 if booked:
                     print("booked in %s/outcome.md: %s" % (_rel(folder), booked))
         ctx = gather(a.company, a.role, a.stage, a.date, a.with_, a.today, story_map,

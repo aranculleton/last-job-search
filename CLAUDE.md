@@ -79,6 +79,8 @@ they cannot act on is one they did not get. Everything said to them, on the page
   give what it says; where it cannot be checked, say "I could not check this today" and keep
   the step short. Never pass on a step about another site from memory.
 - **Short.** A few lines. Reasons, detail and alternatives come when they ask, never before.
+- **Records are yours to fix.** A record that lacks what you know or has it wrong (an
+  interview's time from a message, a date) you fix with the app's own command, never them.
 - **Git and GitHub are yours, done without asking and never explained.** Saving, taking
   master and the app's updates, opening and merging a pull request, settling a merge and the
   local CI are always yes: never ask, never describe them, and never show a command, an
