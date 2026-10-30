@@ -22,7 +22,6 @@ from __future__ import annotations
 import json
 import os
 import re
-import shutil
 import subprocess
 import sys
 
@@ -34,6 +33,7 @@ import pytest  # noqa: E402
 import app  # noqa: E402
 import app_model  # noqa: E402
 import app_setup  # noqa: E402
+import local_path  # noqa: E402
 import page_db  # noqa: E402
 import scrape_wide  # noqa: E402
 import tidy  # noqa: E402
@@ -311,7 +311,11 @@ def _floor_leg():
     return check + text[start:end]
 
 
-@pytest.mark.skipif(shutil.which("bash") is None, reason="needs bash")
+# Git Bash on Windows: a bare "bash" there reaches the Windows Subsystem for Linux first.
+BASH = local_path.bash()
+
+
+@pytest.mark.skipif(not BASH, reason="needs bash")
 @pytest.mark.parametrize("quick,data_only,ran,skipped", [
     # --quick: the app's tests on the oldest Python, but never the person's own a second time.
     ("1", "0", ["floor"], ["profile/tests"]),
@@ -335,7 +339,7 @@ def test_the_quick_landing_check_runs_their_own_tests_once(tmp_path, quick, data
     env = dict(os.environ, PATH=f"{stubs}{os.pathsep}{os.environ.get('PATH', '')}",
                TMPDIR=str(tmp_path / "tmp"), QUICK=quick, DATA_ONLY=data_only,
                APP_RELEASE="0", CHANGED="profile/tests/test_my_rules.py")
-    r = subprocess.run(["bash", "-c", script], cwd=str(tmp_path), env=env,
+    r = subprocess.run([BASH, "-c", script], cwd=str(tmp_path), env=env,
                        capture_output=True, encoding="utf-8", timeout=60)
     assert r.returncode == 0, r.stderr
     floor = "tests on Python 3.9 (CI's floor leg)"

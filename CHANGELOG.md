@@ -20,6 +20,8 @@ make sense to somebody whose repo just received it.
 
 ## [Unreleased]
 
+## [4.4.0] - 2026-10-30
+
 ### Fixed
 
 - **A ruling on where a remote posting is now holds only there.** "Based in the US only" on
