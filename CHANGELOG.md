@@ -76,6 +76,8 @@ make sense to somebody whose repo just received it.
 
 ### Changed
 
+- **A release's Windows check runs in three parts side by side**, so the slowest set-up
+  check finishes in about a third of the time it took.
 - **Each screen says when Claude is working on it**: "Claude is on it: ..." at the top, or
   how many things, with See how it is going a tap away.
 - **Find jobs and Find people never start a second run.** While one is going the button

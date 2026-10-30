@@ -82,9 +82,9 @@ concurrency:
 
 jobs:
   person:
-    name: person (${{ matrix.os }})
+    name: person (${{ matrix.target.os }}${{ matrix.target.shard && format(', part {0}', matrix.target.shard) || '' }})
     if: ${{ !github.event.repository.private || github.event_name == 'workflow_dispatch' }}
-    runs-on: ${{ matrix.os }}
+    runs-on: ${{ matrix.target.os }}
     timeout-minutes: 90
     strategy:
       fail-fast: false
@@ -93,7 +93,9 @@ jobs:
         # hours when it ran on every one (the maintainer, 2026-10-26). Linux and Mac decide a
         # change. Windows runs on a release pull request (titled "Release X.Y.Z"), in the
         # weekly run and by hand, on the public app, whose minutes are free (2026-10-29).
-        os: ${{ (github.event_name == 'workflow_dispatch' || github.event_name == 'schedule' || startsWith(github.event.pull_request.title, 'Release ')) && fromJSON('["ubuntu-latest", "macos-latest", "windows-latest"]') || fromJSON('["ubuntu-latest", "macos-latest"]') }}
+        # Its suite is split across three runners side by side (LJS_SUITE_SHARD, read by
+        # tools/platform_check.py suite): 11 minutes of a 26-minute job became about 4.
+        target: ${{ (github.event_name == 'workflow_dispatch' || github.event_name == 'schedule' || startsWith(github.event.pull_request.title, 'Release ')) && fromJSON('[{"os":"ubuntu-latest"}, {"os":"macos-latest"}, {"os":"windows-latest", "shard":"1/3"}, {"os":"windows-latest", "shard":"2/3"}, {"os":"windows-latest", "shard":"3/3"}]') || fromJSON('[{"os":"ubuntu-latest"}, {"os":"macos-latest"}]') }}
     defaults:
       run:
         shell: bash
@@ -144,6 +146,8 @@ jobs:
         run: PATH="$PERSON_PATH" "$PERSON_PY" tools/platform_check.py documents general designs seed round interview networking
 
       - name: The test suite
+        env:
+          LJS_SUITE_SHARD: ${{ matrix.target.shard }}
         run: |
           PATH="$PERSON_PATH"
           "$PERSON_PY" -c "import sys; sys.path.insert(0, 'tools'); import local_path; print(local_path.venv_site())"

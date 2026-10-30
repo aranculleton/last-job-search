@@ -511,12 +511,33 @@ def step_suite() -> None:
     # Parallel workers where the run has pytest-xdist (CI puts it in; a person's own computer
     # need not): each file kept together, the suite in about a third of the time.
     par = ["-n", "auto", "--dist", "loadfile"] if run([PY, "-c", "import xdist"], env=env)[0] == 0 else []
+    part, files = suite_part(os.environ.get("LJS_SUITE_SHARD", ""))
     code, out, took = run([PY, "-m", "pytest", "-q", "-p", "no:cacheprovider", "-rf",
-                           "--tb=short", *par, "tests"], env=env, timeout=5400)
+                           "--tb=short", *par, *files], env=env, timeout=5400)
     # Every failure by name, then the tail: the last lines alone named two of eleven.
     lines = out.strip().splitlines()
     failed = [ln for ln in lines if ln.startswith(("FAILED ", "ERROR "))]
-    check("the test suite", code == 0, "\n".join(failed[:80] + lines[-40:]), took)
+    check("the test suite" + part, code == 0, "\n".join(failed[:80] + lines[-40:]), took)
+
+
+def suite_part(shard: str) -> tuple[str, list[str]]:
+    """The test files one runner takes when the suite is split ("2/3": the second of three),
+    so Windows runs it on three runners side by side (2026-10-30). Each file goes, largest
+    first, to the part with the least so far, the same way on every runner; an empty or
+    malformed value is the whole suite."""
+    m = re.fullmatch(r"\s*(\d+)\s*/\s*(\d+)\s*", shard or "")
+    if not m or not 1 <= int(m.group(1)) <= int(m.group(2)):
+        return "", ["tests"]
+    k, n = int(m.group(1)), int(m.group(2))
+    tests = os.path.join(ROOT, "tests")
+    names = sorted(f for f in os.listdir(tests) if f.startswith("test_") and f.endswith(".py"))
+    loads, mine = [0] * n, []
+    for f in sorted(names, key=lambda f: (-os.path.getsize(os.path.join(tests, f)), f)):
+        i = loads.index(min(loads))
+        loads[i] += os.path.getsize(os.path.join(tests, f))
+        if i == k - 1:
+            mine.append(os.path.join("tests", f))
+    return f" (part {k} of {n})", sorted(mine)
 
 
 # ------------------------------------------------------------------ a computer chat
