@@ -352,3 +352,42 @@ def test_each_setup_answer_the_page_sends_is_applied_and_moves_setup_on(tmp_path
         done.append(nxt)
         assert len(done) <= 6
     assert done[0] == "resume" and setup["progress"]["done"] >= 4
+
+
+# ------------------------------------------------------------------ the pin, now and then
+
+
+def test_the_page_offers_the_pin_until_it_is_pinned_and_a_not_now_comes_back_later(search):
+    """The chat offered the pin once ever, and most who missed it never found Settings; the
+    page asked every time would pester (the maintainer, 2026-10-30: "make it more prominent
+    ... during setup ... and for existing installs ... not permanently just be smart")."""
+    assert search.model()["pin"] == {"due": True}, "never answered: the page offers it"
+    aid = search.act("pin.answer", "pin", value={"answer": "later"}, rev="")
+    assert search.apply()["ok"] == [aid], search.receipt(aid)
+    assert search.model()["pin"] == {"due": False}, "Not now: not again today"
+    with open(os.path.join(search.profile, "app.json"), encoding="utf-8") as fh:
+        later = json.load(fh)["pin"]["later"]
+    assert len(later) == 1
+    aid = search.act("pin.answer", "pin", value={"answer": "yes"}, rev="")
+    assert search.apply()["ok"] == [aid], search.receipt(aid)
+    with open(os.path.join(search.profile, "app.json"), encoding="utf-8") as fh:
+        assert json.load(fh)["pin"]["answer"] == "yes"
+    bad = search.act("pin.answer", "pin", value={"answer": "maybe"}, rev="")
+    assert bad not in search.apply()["ok"]
+
+
+def test_a_not_now_is_asked_again_a_month_on_and_three_answers_are_the_last(monkeypatch, tmp_path):
+    import datetime as dt
+    import app_listen
+    monkeypatch.setenv("LJS_PROFILE", str(tmp_path))
+    day = dt.date(2026, 10, 30)
+    assert app_listen.pin_due(day)
+    app_listen.record_pin("no", day)  # said no to the chat's offer: one answer
+    assert not app_listen.pin_due(day + dt.timedelta(days=29))
+    assert app_listen.pin_due(day + dt.timedelta(days=30))
+    app_listen.record_pin("later", day + dt.timedelta(days=30))
+    assert app_listen.pin_due(day + dt.timedelta(days=60))
+    app_listen.record_pin("later", day + dt.timedelta(days=60))
+    assert not app_listen.pin_due(day + dt.timedelta(days=400)), "three answers: never again"
+    app_listen.record_pin("yes", day)
+    assert not app_listen.pin_due(day + dt.timedelta(days=400))

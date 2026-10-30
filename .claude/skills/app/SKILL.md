@@ -219,6 +219,10 @@ page (`app_setup.APP_REPO` + `/issues/new?title=...&body=...`) with what happene
 page's version only, never a name, an employer or anything else of theirs (`tools/name_guard.py
 text` on it first). Never ask them to report it, and never chase it (2026-10-30).
 
+**"Pin my job search page to my sidebar."** (the page's Pin it): Artifact, action `pin`, the
+page's url, then `python3 tools/app.py pinned yes`, and one line: "Pinned: it's in your sidebar
+now." Never offer it again in a chat; the page asks by itself, now and then.
+
 ## 5. Finish in one batch
 
 - `work/<id>`: `status: done` (or `failed`, `error` in plain words), `finished_at`,

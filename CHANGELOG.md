@@ -79,8 +79,13 @@ make sense to somebody whose repo just received it.
 - **A long prep scrolls properly on a phone.**
 - **The chat that answers your page renews itself once a day**, at a quiet moment, so it
   never grows slow and dear; a job's own chat is archived as soon as it is done.
-- **Pinning is a tip, said once**, and "Something looks wrong" offers, once, a link to report
-  an app fault for everyone.
+- **The page offers to pin itself**, on the Brief and while your first search runs, with Pin
+  it and Not now. A Not now comes back a month later, three times at most, and once it is
+  pinned it never asks again; Settings keeps the button. "Something looks wrong" offers, once,
+  a link to suggest a fix for a future update.
+- **Tips are in plain words** ("Tap the bin on any job that's wrong for you and say why").
+- **A follow-up on an application keeps its own card in To do**, with its Done button; only
+  follow-ups to people, replies and people to close share a checklist card.
 - **The daily check no longer calls ordinary words a leak** ("Visa", "Fetch"): it reads your
   copy's whole history before deciding.
 

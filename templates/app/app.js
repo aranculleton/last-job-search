@@ -2207,8 +2207,10 @@
   function dueGroupKey(d) {
     if (dueContact(d) && NO_REPLY.test(txt(d.title)) && obj(d.done).action) return "leave";
     if (isFollowUp(d)) return "follow";
+    // Only the kinds a checklist row can finish: a follow-up on an application keeps its own
+    // card and its Done (a grouped row only drafts).
     const a = txt(d.action);
-    return a.startsWith("work:") && a !== "work:prep" ? "work~" + a.slice(5) : null;
+    return a.startsWith("work:") && GROUP_WORDS["work~" + a.slice(5)] ? "work~" + a.slice(5) : null;
   }
   // A follow-up owed to a contact: a nudge, or a dated "follow up" on their row.
   function isFollowUp(d) {
@@ -2676,7 +2678,8 @@
         h("p", {class: "reading-line"}, h("span", {class: "spin", "aria-hidden": "true"}), " Claude is searching your job sites and scoring what it finds."),
         research.length ? h("ol", {class: "plain task-list"}, research.map((r) => h("li", {class: "task"}, h("span", {class: "task-name"}, txt(r.label)),
           stateWord(txt(r.status) === "done" ? "Done" : txt(r.status) === "running" ? "Now" : "Waiting", txt(r.status) === "done" ? "ok" : null)))) : null,
-        h("p", {class: "small muted"}, "Your jobs appear in Jobs as soon as they are scored."));
+        h("p", {class: "small muted"}, "Your jobs appear in Jobs as soon as they are scored."),
+        pinOffer("setup"));
     }
     if (st && st !== "done") {
       if (copyFirst()) return null;
@@ -2895,17 +2898,17 @@
   const BRIEF_TIPS = [
     "Tap a person's name anywhere to see everything about them: what was said, what is owed, where they work.",
     "Paste a job link into Add a job on Jobs, and Claude scores it against your profile in a couple of minutes.",
-    "Not interested in someone or something? The bin on its card puts it away, with a choice of how.",
-    "Your prep for an interview opens wide: tap Read your prep, and it fills the screen.",
-    "A message someone sent you? Paste it in Contacts, under Got a message, and Claude drafts the reply.",
-    "Change what your brief covers, or the days it arrives, with Edit the brief above.",
-    "Everything Claude writes is checked against your profile before you see it; nothing is ever sent for you.",
+    "Not interested in someone or something? Tap the bin on its card to put it away.",
+    "Tap Read your prep to open an interview prep full screen.",
+    "Got a message from someone? Paste it in Contacts, under Got a message, and Claude drafts the reply.",
+    "Tap Edit the brief, above, to change what it covers or which days it comes.",
+    "Claude checks everything it writes against your profile, and never sends anything for you.",
   ];
   function briefTip() {
     const t = Object.keys(obj(obj(M().help).tip)).length ? obj(obj(M().help).tip) : obj(M().tip);
     if (obj(M().help).off || settingOf("tips", "on") === "off") return null;
     const tid = txt(t.id) || "tip";
-    if (txt(t.text) && !effective(tid, ["tip.seen"])) return {text: txt(t.text), done: () => act([{item: tid, action: "tip.seen", value: {area: txt(t.area)}, rev: txt(t.rev) || null}], "Tip put away")};
+    if (txt(t.text) && !effective(tid, ["tip.seen"])) return {text: txt(t.text).replace(/^Tip:\s*/, ""), done: () => act([{item: tid, action: "tip.seen", value: {area: txt(t.area)}, rev: txt(t.rev) || null}], "Tip put away")};
     const day = Math.floor(now() / 86400000);
     const k = "ljs:tip-off:" + day;
     if (sget("local", k)) return null;
@@ -3044,8 +3047,11 @@
       funnelMore(obj(d.recent).funnel || d.funnel),
       since && arr(since.items).length ? h("details", {class: "bp-all"}, h("summary", {}, txt(since.title) || "Since the last brief"), briefItems(since.items, "since", 6)) : null],
       null, {icon: "progress"}));
+    const su = txt(obj(M().setup).state);
+    const pin = !su || su === "done" ? pinOffer("brief") : null;
+    if (pin) put(wrap, pin);
     put(wrap, grid);
-    const tip = briefTip();
+    const tip = pin ? null : briefTip();
     if (tip) put(wrap, h("p", {class: "bp-tip"}, h("span", {class: "bp-tip-k"}, "Tip"), h("span", {class: "bp-tip-t"}, tip.text), btn("Got it", tip.done, {kind: "link", key: "bp-tip"})));
     const older = arr(M().briefs).filter((x) => obj(x).date && obj(x).date !== b.date);
     if (older.length) put(wrap, h("details", {class: "brief-earlier"}, h("summary", {}, plural(older.length, "earlier brief", "earlier briefs")),
@@ -5541,7 +5547,22 @@
       url ? noteFor("copy:page-url") : null,
       steps.length ? h("ol", {class: "steps"}, steps.map((x) => h("li", {}, txt(x)))) :
         h("div", {class: "d-stack"}, h("p", {}, "Open the link on your phone signed in to the same Claude account. Pinned to your sidebar, the page is always one tap away."),
-          btn("Pin it to my sidebar", () => { handOff("Pin my job search page to my sidebar.", true); toast({text: "Asked. Claude pins it; the answer is in Chat.", ids: []}); }, {small: true, kind: "quiet", key: "pin-page"})));
+          btn("Pin it to my sidebar", askPin, {small: true, kind: "quiet", key: "pin-page"})));
+  }
+
+  // The page's own offer to pin itself, smart about when (app_listen.pin_due): never once it
+  // is pinned, a Not now back after a month, three times at most, and never in the middle of
+  // setup's questions. Settings keeps the button for any time (the maintainer, 2026-10-30:
+  // "make it more prominent ... during setup ... dont pester the user ... be smart about it").
+  function askPin() { handOff("Pin my job search page to my sidebar.", true); toast({text: "Asked. Claude pins it; the answer is in Chat.", ids: []}); }
+  function pinOffer(where) {
+    if (!obj(M().pin).due || effective("pin", ["pin.answer"])) return null;
+    const answer = (a, word) => act([{item: "pin", action: "pin.answer", value: {answer: a}, rev: null}], word);
+    return h("div", {class: "pin-offer", role: "group", "aria-label": "Keep this page one tap away"},
+      h("span", {class: "pin-t"}, "Keep this page one tap away: pin it to your sidebar."),
+      h("span", {class: "pin-acts"},
+        btn("Pin it", () => { answer("yes", "Pinning it"); askPin(); }, {kind: "primary", small: true, key: "pin-yes:" + where}),
+        btn("Not now", () => answer("later", "Not now: asked again in a month"), {kind: "quiet", small: true, key: "pin-later:" + where})));
   }
 
   // G7. One job by its link or its text, from the Jobs summary.
@@ -6027,7 +6048,7 @@
     if (at !== tab && !(tab === "drafts" && at === "drafts-messages")) return null;
     const tid = txt(t.id) || "tip";
     if (effective(tid, ["tip.seen"])) return null;
-    return h("p", {class: "tip small muted"}, txt(t.text), " ", btn("Got it", () => act([{item: tid, action: "tip.seen", value: {area: txt(t.area)}, rev: txt(t.rev) || null}], "Tip put away"), {kind: "link", key: "tip-seen"}));
+    return h("p", {class: "tip small muted"}, "Tip: " + txt(t.text).replace(/^Tip:\s*/, ""), " ", btn("Got it", () => act([{item: tid, action: "tip.seen", value: {area: txt(t.area)}, rev: txt(t.rev) || null}], "Tip put away"), {kind: "link", key: "tip-seen"}));
   }
   const TOUR = [
     ["brief", "Brief", "Your day at a glance. Tap any line to go to it."],

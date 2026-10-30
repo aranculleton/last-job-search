@@ -3288,6 +3288,13 @@ def build(today: dt.date | None = None, now: dt.datetime | None = None,
         except Exception:  # noqa: BLE001  no profile yet: no buttons, no usual
             model["tweaks"] = {"rows": tweak.table(), "buttons": [], "usual": {}, "rules": {}}
         model["hints"] = tweak.hints()
+        # Whether the page offers to pin itself now (app_listen.pin_due: never once pinned,
+        # and a Not now is asked again a month later, three times at most).
+        try:
+            import app_listen
+            model["pin"] = {"due": app_listen.pin_due(today)}
+        except Exception:  # noqa: BLE001  no profile yet: nothing to offer
+            model["pin"] = {"due": False}
         model["rev"] = model_rev(model)
     return model, targets
 

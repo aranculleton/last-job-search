@@ -228,6 +228,9 @@ ACTIONS = {
     "tweak.offer_undo": (("tweak_offer",), "tools/tweak.py undo_offer", ""),
     "hint.seen": (("hint",), "profile/tips.json page_hints: the one-time hint not shown again",
                   ""),
+    "pin.answer": (("pin",), "profile/app.json pin: yes once pinned (never offered again), "
+                             "later for Not now (offered again after a month, three times at "
+                             "most)", ""),
     "suggest.dismiss": (("suggest",), "profile/app.json suggest_no: never offered again",
                         "suggest.undismiss"),
     "suggest.undismiss": (("suggest",), "profile/app.json suggest_no: may be offered again",
@@ -439,7 +442,7 @@ BARE = {
     "outcome.interview": "stage", "outcome.rejected": "why", "outcome.offer": "on",
     "outcome.withdrawn": "why", "outcome.no_response": "why", "referral.agreed": "role",
     "referral.ended": "why", "due.snooze": "until", "reading.done": "text",
-    "brief.pause": "until", "tip.seen": "area", "job.add": "text", "brief.move": "time",
+    "brief.pause": "until", "tip.seen": "area", "pin.answer": "answer", "job.add": "text", "brief.move": "time",
     "interview.rework": "question", "profile.pasted": "text", "ready.sent_to_contact": "text",
 }
 DATED = {"job.applied", "ready.applied", "msg.sent", "msg.received", "outcome.interview",
@@ -2351,6 +2354,15 @@ def _tweak_offer_undo(r: Run) -> dict:
     return {"note": "Taken back.", "undo": None}
 
 
+def _pin_answer(r: Run) -> dict:
+    import app_listen
+    answer = str(r.value.get("answer") or r.words() or "")
+    if answer not in ("yes", "later"):
+        raise Refused("Pin it or not now: nothing else is an answer here.")
+    app_listen.record_pin(answer, r.day)
+    return {"note": "Got it.", "undo": None}
+
+
 def _hint_seen(r: Run) -> dict:
     import tweak
     name = re.sub(r"[^a-z_]", "", str(r.value.get("hint") or r.words() or "tweak"))[:20] or "tweak"
@@ -2803,6 +2815,7 @@ HANDLERS = {
     "suggest.dismiss": _suggest_dismiss, "suggest.undismiss": _suggest_undismiss,
     "due.done": _due_done, "due.undo": _due_undo, "tweak.undo": _tweak_undo,
     "tweak.offer": _tweak_offer, "tweak.offer_undo": _tweak_offer_undo, "hint.seen": _hint_seen,
+    "pin.answer": _pin_answer,
     "work.stop": _work_stop, "work.resume": lambda r: _work_stop(r, stop=False),
     "export.requested": _export_requested, "export.unrequested": _export_unrequested,
     "export.take": _export_take, "reader.checked": _reader_checked,
@@ -2830,6 +2843,8 @@ NO_UNDO = {
     "tip.seen": "a tip seen is seen: nothing about the search changed",
     "setup.done": "it only checks again what the person did outside the page",
     "hint.seen": "a hint seen is seen: nothing about the search changed",
+    "pin.answer": "pinning is the sidebar's: Settings keeps the button, and a Not now comes "
+                  "back by itself",
     "tweak.offer_undo": "it is itself the taking back of an answer",
     "setup.make_copy": "a repository is never deleted by the app; the person deletes it on GitHub",
 }
@@ -2867,6 +2882,8 @@ def _target_of(act: dict, index: Index) -> dict | None:
         return {"kind": "work", "id": item}
     if "hint" in kinds:
         return {"kind": "hint", "id": item}
+    if "pin" in kinds:
+        return {"kind": "pin", "id": item}
     if "new_job" in kinds and item in ("job-new", "jobs-add"):
         return {"kind": "new_job", "id": item}
     return index.find(item, kinds, str(act.get("rev_seen") or ""))
@@ -2932,7 +2949,7 @@ def _one(aid: str, act: dict, index: Index, db: dict, w, chat: str, zone: str,
         kinds = ACTIONS[name][0]
         if target.get("kind") not in kinds:
             return _receipt("conflict", "That cannot be done to that.", chat, now, aid, act)
-        if target.get("kind") not in ("work", "hint", "linkedin", "new_job") and \
+        if target.get("kind") not in ("work", "hint", "pin", "linkedin", "new_job") and \
                 not _seen_current(act, target, index):
             return _receipt("stale", "It changed since you saw it: look again.", chat, now,
                             aid, act)

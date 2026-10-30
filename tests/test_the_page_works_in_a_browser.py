@@ -1328,3 +1328,33 @@ def test_work_that_did_not_finish_says_stopped_and_can_be_put_away(run, pages):
     (t,) = r["found"]['[data-work="draft~x"] .wc-time']
     assert t.startswith("Stopped") and "left" not in t, t
     assert len(r["found"]['[data-work="draft~x"] [data-k="wput:draft~x"]']) == 1
+
+
+def test_the_page_offers_the_pin_on_the_brief_and_while_the_first_search_runs(run, pages, tmp_path):
+    """Pinning was offered once in a chat and then only from Settings (the maintainer,
+    2026-10-30: make it more prominent, during setup too, without pestering)."""
+    m = _sample()
+    m["pin"] = {"due": True}
+    r = run("look", html=_write(tmp_path, "pin", m), hash="brief", clock="2026-10-25T09:00:00Z",
+            sels=[".pin-offer"])
+    _clean(r)
+    assert any("pin it to your sidebar" in t for t in r["found"][".pin-offer"]), r["found"]
+    # Answered Not now on this device: gone at once, before Claude has applied it.
+    seed = {"actions/a-pin": {"action": "pin.answer", "item": "pin", "value": {"answer": "later"},
+                              "at": "2026-10-25T08:59:00.000Z", "rev": None}}
+    r = run("look", html=_write(tmp_path, "pin2", m), hash="brief", clock="2026-10-25T09:00:00Z",
+            seed=seed, sels=[".brief-grid", ".pin-offer"])
+    _clean(r)
+    assert r["found"][".brief-grid"] and r["found"][".pin-offer"] == [], r["found"]
+    # The first search running: offered in its card, the natural wait, and not on the Brief.
+    m["setup"] = dict(m.get("setup") or {}, state="searching", research=[])
+    r = run("look", html=_write(tmp_path, "pin3", m), hash="todo", clock="2026-10-25T09:00:00Z",
+            sels=['[data-item="setup"] .pin-offer'])
+    _clean(r)
+    assert r["found"]['[data-item="setup"] .pin-offer'], r["found"]
+    # Not due (pinned, or a Not now this month): nowhere.
+    m["pin"] = {"due": False}
+    r = run("look", html=_write(tmp_path, "pin4", m), hash="todo", clock="2026-10-25T09:00:00Z",
+            sels=['[data-item="setup"]', ".pin-offer"])
+    _clean(r)
+    assert r["found"]['[data-item="setup"]'] and r["found"][".pin-offer"] == [], r["found"]

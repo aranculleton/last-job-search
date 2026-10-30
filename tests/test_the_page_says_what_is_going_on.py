@@ -51,7 +51,7 @@ def test_find_people_takes_a_note_in_the_person_s_words_as_find_jobs_does(run, t
     ], vp, clock=T)
     asked = [w for w in got["work"] if w["kind"] == "network"]
     assert len(asked) == 1, asked
-    assert asked[0]["args"] == {"note": "Product teams in logistics"}, asked[0]
+    assert asked[0]["args"] == {"count": 5, "note": "Product teams in logistics"}, asked[0]
     assert asked[0]["title"] == "People: Product teams in logistics", asked[0]["title"]
 
 
@@ -61,7 +61,7 @@ def test_find_people_left_empty_looks_at_the_employers_wanted(run, tmp_path):
         {"submit": True, "ready": "!document.querySelector('dialog[open]')"},
     ], PHONE, clock=T)
     asked = [w for w in got["work"] if w["kind"] == "network"]
-    assert len(asked) == 1 and asked[0]["args"] == {} and asked[0]["title"] == "People at the employers you want", asked
+    assert len(asked) == 1 and asked[0]["args"] == {"count": 5} and asked[0]["title"] == "People at the employers you want", asked
 
 
 PLAIN = "[...document.querySelectorAll('#main button')].filter((b) => /^(Find people|Find jobs)$/.test(b.textContent.trim())).length"

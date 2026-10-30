@@ -1262,6 +1262,10 @@ body.has-fab .shell { padding-bottom: calc(var(--tabs-h) + env(safe-area-inset-b
 .bp-tip { display: flex; align-items: baseline; gap: 8px 12px; flex-wrap: wrap; margin: 0; padding: 12px 16px; border-radius: var(--r-sm); background: var(--sunk); font-size: var(--t-sm); }
 .bp-tip-k { font-weight: 600; color: var(--ink); }
 .bp-tip-t { min-width: 0; }
+.pin-offer { display: flex; align-items: center; gap: 8px 12px; flex-wrap: wrap; margin: 0; padding: 12px 16px; border-radius: var(--r-sm); background: var(--sunk); font-size: var(--t-sm); }
+.pin-t { min-width: 0; }
+.pin-acts { display: inline-flex; gap: 8px; margin-left: auto; }
+.setup .pin-offer { margin-top: 12px; }
 .brief-earlier > summary { cursor: pointer; color: var(--muted); font-size: var(--t-sm); }
 .bp-link { color: inherit; text-decoration: none; border-radius: 4px; }
 @media (hover: hover) { .bp-link:hover { text-decoration: underline; text-decoration-color: var(--link-line); text-underline-offset: 3px; } }

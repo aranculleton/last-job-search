@@ -551,7 +551,8 @@ def cmd_republish(a) -> int:
 def cmd_pinned(a) -> int:
     import app_listen
     app_listen.record_pin(a.answer)
-    print("app: noted; the pin is never offered again")
+    print("app: noted; the chat never offers the pin again" + (
+        "" if a.answer == "yes" else ", and the page offers it again after a month at most"))
     return 0
 
 

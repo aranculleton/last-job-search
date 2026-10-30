@@ -562,10 +562,46 @@ def pin_asked() -> bool:
 
 
 def record_pin(answer: str, today: dt.date | None = None) -> str:
-    """Their answer to "pin it?", so it is asked once: profile/app.json `pin`."""
-    if answer not in ("yes", "no"):
-        raise ValueError("the answer is yes or no")
-    return _write_pin(asked=(today or dt.date.today()).isoformat(), answer=answer)
+    """Their answer to "pin it?": profile/app.json `pin`. "later" is the page's Not now:
+    each one is kept, so `pin_due` can ask again after a while and then stop."""
+    if answer not in ("yes", "no", "later"):
+        raise ValueError("the answer is yes, no or later")
+    day = (today or dt.date.today()).isoformat()
+    if answer == "later":
+        import app_setup
+        later = list((app_setup.page_record().get("pin") or {}).get("later") or [])
+        return _write_pin(later=sorted(set(later + [day])))
+    return _write_pin(asked=day, answer=answer)
+
+
+# The page's own offer, asked again only after a while and only a few times: the chat's
+# offer was once ever, and most people who missed it never found Settings (the maintainer,
+# 2026-10-30: "make it more prominent ... during setup ... and for existing installs ...
+# not permanently just be smart about it", and "don't pester the user").
+PIN_AGAIN_DAYS = 30
+PIN_ASKS = 3
+
+
+def pin_due(today: dt.date | None = None) -> bool:
+    """Should the page offer the pin now? Never once it is pinned. A no in the chat or a Not
+    now on the page each count as one answer; after one, it is asked again a month later,
+    and after `PIN_ASKS` of them, never (the button in Settings stays)."""
+    import app_setup
+    pin = app_setup.page_record().get("pin") or {}
+    if pin.get("answer") == "yes":
+        return False
+    said = [str(d) for d in (pin.get("later") or []) if d]
+    if pin.get("answer") == "no" and pin.get("asked"):
+        said.append(str(pin["asked"]))
+    if len(said) >= PIN_ASKS:
+        return False
+    if not said:
+        return True
+    try:
+        last = dt.date.fromisoformat(max(said)[:10])
+    except ValueError:
+        return True
+    return (today or dt.date.today()) >= last + dt.timedelta(days=PIN_AGAIN_DAYS)
 
 
 def record_pin_offered(today: dt.date | None = None) -> str:
