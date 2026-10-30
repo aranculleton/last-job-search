@@ -321,7 +321,7 @@ def cmd_pin(a) -> int:
     _, now = app_model.clock(None, a.now)
     db = page_db.load(a.dump)
     count = {"done": a.done, "total": a.total} if a.total else None
-    left = a.left_s
+    left, stage = a.left_s, a.stage
     if a.log:
         try:
             with open(a.log, encoding="utf-8", errors="replace") as fh:
@@ -331,9 +331,11 @@ def cmd_pin(a) -> int:
         if seen:
             count = {"done": seen["done"], "total": seen["total"]}
             left = seen["left_s"] if seen["left_s"] is not None else left
+            # The round's own log knows which step it is on; the chat pins "scrape" throughout.
+            stage = seen["stage"] or stage
     try:
         got = page_db.pin(db, a.work, now, a.out or os.path.join(a.dump, "out"),
-                          stage=a.stage, line=a.line, count=count, left_s=left, dump_dir=a.dump)
+                          stage=stage, line=a.line, count=count, left_s=left, dump_dir=a.dump)
     except KeyError as e:
         print(f"app: {e.args[0]}", file=sys.stderr)
         return 2

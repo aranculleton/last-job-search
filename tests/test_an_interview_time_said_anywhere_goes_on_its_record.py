@@ -144,3 +144,21 @@ def test_every_chat_is_told_to_save_the_time_itself_and_never_to_hand_it_back():
     assert "(scheduled YYYY-MM-DD HH:MM, with <title or name>)" in outcome
     assert "interview_pack.py times" in interview and "interview_pack.py times" in outcome
     assert "never tell the person to add a time, or fix any record, themselves" in app
+
+
+@pytest.mark.parametrize("said,moment", [
+    ("Tuesday, November 10 at 2:00 PM CST", "2026-11-10T20:00:00Z"),
+    ("Tuesday, November 10 at 2:00 PM AST", "2026-11-10T18:00:00Z"),
+    ("Tuesday, November 10 at 9:30 AM NST", "2026-11-10T13:00:00Z"),
+    ("Tuesday, November 10 at 9:00 AM AKST", "2026-11-10T18:00:00Z"),
+    ("Tuesday, November 10 at 9:00 AM HST", "2026-11-10T19:00:00Z"),
+])
+def test_a_time_kept_in_a_north_american_zone_is_placed_on_the_page(said, moment):
+    # "2:00 PM CST" was saved, and the page said "time not set": the reader kept any capitals
+    # ending in T and the page placed only the zones it listed (the release review, 2026-10-30).
+    import app_model
+    import interview_pack
+    clock, zone = interview_pack.time_said(said, "2026-11-10")
+    assert clock and zone, said
+    assert app_model.interview_when("2026-11-10", clock, zone, home="Europe/London") == moment
+    assert app_model.interview_when("2026-11-10", "14:00", "America/Chicago") == "2026-11-10T20:00:00Z"

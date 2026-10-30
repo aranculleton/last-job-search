@@ -157,3 +157,63 @@ def test_contacts_counts_only_who_needs_the_person_and_the_follow_ups_apart(run,
     assert "Nobody is waiting on you." in head, head
     assert "4 follow-ups you could send." in head, head
     assert "need you" not in head, head
+
+
+def _q(item):
+    return "!!document.querySelector('#main [data-item=\"" + item + "\"]')"
+
+
+def _fernhill():
+    # Two more rows at the employer: one for a person nobody has written to yet, one for a
+    # person already in a conversation; and a reply owed to the person whose row is binned.
+    model = _sample()
+    base = next(d for d in model["due"] if d["id"] == "due-fernhill-nudge")
+    model["people"].append({"id": "fernhill_freight_tamsin", "first_name": "Tamsin", "employer": "Fernhill Freight",
+                            "status": "not_contacted", "rev": "p-tamsin"})
+    for did, cid, kind in [("due-fernhill-tamsin", "fernhill_freight_tamsin", "nudge"),
+                           ("due-fernhill-odile", "fernhill_freight_odile", "nudge"),
+                           ("due-fernhill-reply", "fernhill_freight_halloway", "reply")]:
+        model["due"].append(dict(copy.deepcopy(base), id=did, contact=cid, kind=kind, item="msg-" + did))
+    return model
+
+
+def _bin(choice):
+    rows = "[" + ", ".join(_q(i) for i in ["q-sent-fernhill_freight_halloway", "due-fernhill-nudge", "due-fernhill-tamsin",
+                                           "due-fernhill-odile", "due-fernhill-reply"]) + "]"
+    return [{"hash": "todo", "eval": rows},
+            {"click": "Not Wren?", "within": "#main [data-item=\"q-sent-fernhill_freight_halloway\"]"},
+            {"click": choice, "role": "radio"},
+            {"submit": True, "ready": _q("q-sent-fernhill_freight_halloway")[1:], "eval": rows}]
+
+
+def test_the_bin_for_an_employer_keeps_the_rows_of_people_already_in_conversation(run, tmp_path):
+    # The chat closes only the people there nobody has written to yet (app_actions), so the
+    # page hides only theirs: a colleague already written to keeps their rows.
+    got = _go(run, tmp_path, _bin("Not interested in Fernhill Freight any more"), PHONE, model=_fernhill(), clock=T)
+    assert got["after"][0]["eval"] == [True] * 5, got["after"][0]["eval"]
+    assert got["after"][3]["eval"] == [False, False, False, True, False], got["after"][3]["eval"]
+
+
+def test_in_touch_another_way_drops_the_note_and_keeps_a_reply_they_are_owed(run, tmp_path):
+    got = _go(run, tmp_path, _bin("Already in touch another way"), PHONE, model=_fernhill(), clock=T)
+    assert _one(got, "person.stop")["value"]["scope"] == "other"
+    assert got["after"][3]["eval"] == [False, False, True, True, True], got["after"][3]["eval"]
+
+
+def _ended(status):
+    model = _sample()
+    next(i for i in model["interviews"] if i["id"] == "int-harbourline-risk")["status"] = status
+    seed = {"actions/act~iv-end": {"item": "int-harbourline-risk", "action": "outcome.no_response", "value": {"on": "2026-10-20"},
+                                   "at": "2026-10-20T09:00:00Z"},
+            "receipts/act~iv-end": {"applied_at": "2026-10-20T10:00:00Z", "result": "ok"}}
+    card = "!!document.querySelector('#main article[data-item=\"int-harbourline-risk\"]')"
+    return model, seed, card
+
+
+def test_an_interview_ended_on_the_page_comes_back_when_a_chat_books_a_new_stage(run, tmp_path):
+    # The end hid the interview for good, so a stage a chat booked afterwards on the same
+    # application never showed. Once the chat has saved the end, the record decides.
+    for status, shown in [("no_response", False), ("interview", True)]:
+        model, seed, card = _ended(status)
+        got = _go(run, tmp_path, [{"hash": "interviews", "eval": card}], PHONE, model=model, seed=seed, clock=T)
+        assert got["after"][0]["eval"] is shown, (status, got["after"][0]["text"][:300])

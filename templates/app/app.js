@@ -733,7 +733,11 @@
       const e = effective(x, IV_TURNS);
       if (e && (!best || txt(e.doc.at) > txt(best.doc.at))) best = e;
     }
-    return best && IV_ENDS.indexOf(best.doc.action) >= 0 ? best : null;
+    if (!best || IV_ENDS.indexOf(best.doc.action) < 0) return null;
+    // Once the chat has saved the end, the record speaks for itself: a stage a chat books
+    // afterwards puts the process back in interview, and the interview shows again.
+    if (best.state === "applied" && /^(interview|offer)/i.test(txt(obj(iv).status))) return null;
+    return best;
   }
   function settledAction(id, names) {
     const e = effective(id, names);
@@ -1876,7 +1880,7 @@
     }
     return h("div", {class: "alert tone-" + (ALERT_TONE[txt(a.kind)] || "warn"), "data-alert": a.id},
       // Why it matters waits behind a "?": the line and its fix are what the card needs.
-      h("div", {class: "alert-body"}, h("div", {class: "hint-line"}, h("p", {class: "alert-text"}, h("span", {class: "sr-only"}, "Needs fixing: "), plainDates(a.text)),
+      h("div", {class: "alert-body"}, h("div", {class: "hint-line"}, h("p", {class: "alert-text"}, h("span", {class: "sr-only"}, "Needs fixing:\u00a0"), plainDates(a.text)),
         a.why ? hintQ("why:" + (ctx.where || "") + ":" + a.id, txt(plainDates(a.why)).replace(/\.$/, ""), "Why: " + clip(txt(plainDates(a.text)), 60)) : null), fix));
   }
   // Three No thanks of one kind in 30 days pause that kind here too, as the engine does.
@@ -1908,7 +1912,7 @@
         paid ? costEl(sg.cost, ac.type === "work" ? ac.kind : null, cid) : null);
     }
     return h("div", {class: "suggest", "data-suggest": sg.id},
-      h("div", {class: "hint-line"}, h("p", {class: "suggest-text"}, h("span", {class: "sr-only"}, "Suggestion: "), plainDates(sg.text)),
+      h("div", {class: "hint-line"}, h("p", {class: "suggest-text"}, h("span", {class: "sr-only"}, "Suggestion:\u00a0"), plainDates(sg.text)),
         sg.why ? hintQ("sgwhy:" + (ctx.where || "") + ":" + sg.id, txt(plainDates(sg.why)).replace(/\.$/, ""), "Why: " + clip(txt(plainDates(sg.text)), 60)) : null),
       h("div", {class: "suggest-acts"}, use,
         btn("No thanks", () => act([{item: sg.id, action: "suggest.dismiss", value: {kind: txt(sg.kind)}, rev: sg.rev}], "No thanks: it will not be suggested again"),
@@ -2052,16 +2056,28 @@
   // 2026-10-29: the bin on one row of "Did these notes go?" "didnt go away"). Undo brings
   // them back.
   function stoppedPeople() {
+    // Mirrors what the chat does with the tap: "Already in touch another way" keeps the
+    // person and drops only the note and its follow-ups, so a reply they are owed stays; a
+    // whole employer closes only the people there nobody has written to yet, so a live
+    // conversation's rows stay.
     const ids = new Set();
     const cos = new Set();
+    const other = new Set();
     for (const [id, d] of allActions()) {
       if (txt(d.action) !== "person.stop") continue;
       const st = actionState(id);
       if (st === "refused" || st === "undone" || st === "failed" || st === "unsaved") continue;
+      const scope = txt(obj(d.value).scope);
+      if (scope === "other") { other.add(txt(d.item)); continue; }
       ids.add(txt(d.item));
-      if (txt(obj(d.value).scope) === "employer" && txt(obj(d.value).employer)) cos.add(txt(obj(d.value).employer).toLowerCase());
+      if (scope === "employer" && txt(obj(d.value).employer)) cos.add(txt(obj(d.value).employer).toLowerCase());
     }
-    return (cid, co) => !!cid && (ids.has(cid) || (!!co && cos.has(txt(co).toLowerCase())));
+    const unwritten = (cid) => {
+      const p = peopleItems().find((x) => txt(x.id) === cid);
+      return !!p && ["", "not_contacted"].includes(txt(p.status)) && !arr(p.thread).length;
+    };
+    return (cid, co, kind) => !!cid && (ids.has(cid) || (other.has(cid) && kind !== "reply")
+      || (!!co && cos.has(txt(co).toLowerCase()) && unwritten(cid)));
   }
   function todoItems() {
     const out = [];
@@ -2090,7 +2106,7 @@
     for (const d of dueItems()) {
       if (PENDING_KINDS.has(txt(d.kind))) continue;   // one card for all of them (withdrawTodo)
       const company = dueEmployer(d);
-      if (stopped(dueContact(d), company)) continue;
+      if (stopped(dueContact(d), company, txt(d.kind))) continue;
       // An interview's prep owed is that interview's own card, never a second one; its
       // thank-you and status note are rows of their own, each with its own button.
       const isPrep = txt(d.kind) === "prep" || (txt(d.kind) === "interview" && txt(d.action) === "work:prep");

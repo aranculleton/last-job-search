@@ -13,6 +13,7 @@ from __future__ import annotations
 import copy
 import json
 import os
+import re
 import shutil
 import subprocess
 import sys
@@ -404,7 +405,9 @@ def test_a_referral_led_screen_with_no_application_names_the_referrer(run, tmp_p
         {"hash": "jobs", "more": "r12-3", "read": '[data-item="r12-3"]'},
     ], vp)
     card = got["after"][0]["text"]
-    assert "Referred by Tamsin" in card
+    # Safari's engine leaves the space before a name link out of innerText, though it lays
+    # the line out as Chrome does (both measured, 2026-10-30): the words are what is checked.
+    assert re.search(r"Referred by ?Tamsin", card), card
     assert "I have applied" not in got["after"][1]["text"], "a process led by a referral has no cold application"
 
 

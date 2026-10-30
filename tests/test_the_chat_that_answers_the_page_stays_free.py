@@ -109,11 +109,34 @@ def test_a_search_says_how_far_its_job_sites_are_and_how_long_is_left(tmp_path):
     assert lines[2] == "progress: Example Jobs 60/80 sent, 0 failed, 10 min left"
     got = page_db.round_progress("\n".join(lines))
     # Each site's last line counts; a finished one counts whole; the longest time left wins.
-    assert got == {"done": 60 + 10 + 32, "total": 80 + 50 + 32, "left_s": 600, "sending": 2}
+    assert got == {"done": 60 + 10 + 32, "total": 80 + 50 + 32, "left_s": 600, "sending": 2, "stage": "scrape"}
     assert page_db.round_progress("+ python3 tools/scrape_wide.py") is None
     done = scrape_wide.Tally("Example Board", 50)
     done.sent, done.stopped = 12, "rate-limited"
-    assert page_db.round_progress(done.line())["left_s"] == 0
+    # No site still sending says nothing about the time left: "0" read as the stage's own
+    # estimate called every round "taking longer than usual" once it was reading and scoring.
+    assert page_db.round_progress(done.line())["left_s"] is None
+
+
+def test_the_round_s_own_step_moves_the_stage_once_the_job_sites_are_done(search, tmp_path):
+    log = str(tmp_path / "round.log")
+    lines = _round_log(log)
+    assert page_db.round_progress("\n".join(lines))["stage"] == "scrape"
+    for tool, stage in [("prefilter", "seen"), ("hydrate", "read"), ("text_screen", "read"), ("fit", "score")]:
+        got = page_db.round_progress("\n".join(lines + ["+ /usr/bin/python3 /repo/tools/%s.py 00_scrape/kept.json" % tool]))
+        assert got["stage"] == stage and got["left_s"] is None, (tool, got)
+    with open(log, "a", encoding="utf-8", newline="\n") as fh:
+        fh.write("+ /usr/bin/python3 /repo/tools/hydrate.py 01_prefiltered.json --out 02_hydrated.json\n")
+    search.put("work", "search~1", _w("search", status="running", claimed_by="cloud-1", stage=1,
+                                      stage_at="2026-10-25T17:40:00Z", left_s=60, left_at="2026-10-25T17:50:00Z",
+                                      lease_until="2026-10-25T18:10:00Z",
+                                      stages=page_db.progress("search")["stages"]), version=3)
+    got = json.loads(search.run("pin", search.dump, "--work", "search~1", "--stage", "scrape",
+                                "--log", log, "--now", NOW))
+    _, body = _writes(got["batches"])[("work", "search~1")]
+    # Reading postings starts its own clock, with no time left carried from the job sites.
+    assert body["stage"] == 3 and body["stage_at"] == NOW
+    assert body["left_s"] is None and body["left_at"] is None
 
 
 def test_a_pin_moves_the_stage_renews_the_lease_and_keeps_the_time_left(search, tmp_path):

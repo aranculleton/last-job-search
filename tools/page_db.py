@@ -715,19 +715,32 @@ def claim(db: dict, chosen: dict, chat_id: str, chat_kind: str, now: dt.datetime
 _PROGRESS = re.compile(r"progress: (?P<name>.+?) (?P<sent>\d+)/(?P<total>\d+) sent(?P<rest>.*)$")
 _FINISHED = re.compile(r", (?:done|stopped: .*)$")
 _LEFT = re.compile(r", (\d+) min left$")
+# The step run_round.py is on, from the "+ <python> tools/<name>.py ..." line it prints before
+# each, as the search stage that step is part of: once the job sites are done, a round goes on
+# setting aside, reading and scoring under the stage the chat last pinned, which is not them.
+_STEP = re.compile(r"^\+ .*?tools[\\/](?P<tool>\w+)\.py\b")
+_STEP_STAGE = {"scrape_wide": "scrape", "prefilter": "seen", "hydrate": "read", "text_screen": "read",
+               "opportunity": "score", "fit": "score", "throttle": "score"}
 
 
 def round_progress(text: str) -> dict | None:
     """How far a search's job sites have got, from run_round.py's round.log: {done, total,
-    left_s, sending}. Each job site's last line counts; one that is done or stopped counts
-    as complete, and the time left is the longest that any site still sending says (a
-    minute at least while one is). None before the first line."""
+    left_s, sending, stage}. Each job site's last line counts; one that is done or stopped
+    counts as complete, and the time left is the longest that any site still sending says (a
+    minute at least while one is), or None once none is: "0 left" read as the stage's own
+    estimate called every normal round "taking longer than usual" while it read and scored
+    (the release review, 2026-10-30). `stage` is the step the round is on (`_STEP_STAGE`), or
+    None before the first. None before a job site's first line, unless the round is past them."""
     last: dict = {}
+    stage = None
     for raw in str(text or "").splitlines():
         m = _PROGRESS.search(raw.strip())
         if m:
             last[m.group("name")] = m
-    if not last:
+        step = _STEP.search(raw.strip())
+        if step and step.group("tool") in _STEP_STAGE:
+            stage = _STEP_STAGE[step.group("tool")]
+    if not last and stage in (None, "scrape"):
         return None
     done = total = sending = 0
     left = None
@@ -742,7 +755,8 @@ def round_progress(text: str) -> dict | None:
         k = _LEFT.search(rest)
         if k:
             left = max(left or 0, int(k.group(1)) * 60, 60)
-    return {"done": done, "total": total, "left_s": left if sending else 0, "sending": sending}
+    return {"done": done, "total": total, "left_s": left if sending and stage in (None, "scrape") else None,
+            "sending": sending, "stage": stage}
 
 
 def stage_index(kind: str, stage, given: list | None = None) -> int:

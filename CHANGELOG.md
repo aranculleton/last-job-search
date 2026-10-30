@@ -22,6 +22,20 @@ make sense to somebody whose repo just received it.
 
 ### Fixed
 
+- **A ruling on where a remote posting is now holds only there.** "Based in the US only" on
+  one board's copy no longer rules out the same role listed for your own country elsewhere.
+- **A search past its job sites says which step it is on**, not "taking longer than usual"
+  while it reads and scores what it found.
+- **An interview time written in CST, AST, NST, AKST, HST or their daylight forms** shows at
+  the right time on the page instead of in your own zone.
+- **The bin on a To do row hides only what the chat will close.** "Not interested in this
+  employer" keeps the rows of people there you are already talking to, and "Already in touch
+  another way" keeps a reply you owe.
+- **An interview ended on the page shows again** when a chat later books a new stage for the
+  same application.
+- **Safari's screen reader reads "Needs fixing:" and "Suggestion:" as words of their own**,
+  not run into the next word.
+- **The page's saved data is written with the same line ends on every computer.**
 - **Chats no longer squeeze their history at 200,000 tokens.** The cap made a chat on a
   1M-window model forget its work every few steps; Claude Code's own default, the model's
   whole window, holds again, and the security guard refuses the cap coming back. A chat

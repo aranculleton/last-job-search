@@ -119,7 +119,10 @@ _ZONE_WORDS = {"UTC": "UTC", "GMT": "Etc/GMT", "BST": "Europe/London", "UK": "Eu
                "WET": "Europe/Lisbon", "WEST": "Europe/Lisbon", "CET": "Europe/Paris",
                "CEST": "Europe/Paris", "EET": "Europe/Athens", "EEST": "Europe/Athens",
                "ET": "America/New_York", "EST": "America/New_York", "EDT": "America/New_York",
-               "CT": "America/Chicago", "CDT": "America/Chicago", "MT": "America/Denver",
+               "CT": "America/Chicago", "CST": "America/Chicago", "CDT": "America/Chicago",
+               "MT": "America/Denver", "AT": "America/Halifax", "AST": "America/Halifax",
+               "ADT": "America/Halifax", "NST": "America/St_Johns", "NDT": "America/St_Johns",
+               "AKST": "America/Anchorage", "AKDT": "America/Anchorage", "HST": "Pacific/Honolulu",
                "MST": "America/Denver", "MDT": "America/Denver", "PT": "America/Los_Angeles",
                "PST": "America/Los_Angeles", "PDT": "America/Los_Angeles",
                "SGT": "Asia/Singapore", "HKT": "Asia/Hong_Kong", "JST": "Asia/Tokyo",
@@ -132,7 +135,8 @@ def interview_when(day, clock="", written="", home="UTC") -> str | None:
     time is known (the page shows it in the person's own zone, and in this device's where
     that differs); its calendar day alone where it is not, which the page shows as "time not
     set". A day with its time sent as a day alone read "time not set" with the time on
-    record (2026-10-29). `written` is a zone the invite gave beside the time; else `home`."""
+    record (2026-10-29). `written` is a zone the invite gave beside the time (a word in
+    `_ZONE_WORDS`, or a name like "America/Chicago"); else `home`."""
     day = str(day or "").strip()
     if not day:
         return None
@@ -141,7 +145,8 @@ def interview_when(day, clock="", written="", home="UTC") -> str | None:
     if not m:
         return day
     written = str(written or "").strip()
-    name = _ZONE_WORDS.get(written.upper()) if written else (str(home or "") or "UTC")
+    name = (_ZONE_WORDS.get(written.upper()) or (written if "/" in written else "")) if written \
+        else (str(home or "") or "UTC")
     if not name:
         return day
     try:
