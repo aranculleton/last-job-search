@@ -495,7 +495,7 @@ dialog.work-sheet { width: min(560px, calc(100vw - 16px)); }
 .choice label { cursor: pointer; }
 /* Short choices as pills side by side: the radio stays, so it reads and works as a choice. */
 .pills .pill-row { display: flex; flex-wrap: wrap; gap: 8px; }
-.pills .choice { align-items: center; gap: 8px; min-height: 0; padding: 6px 12px; border: 1px solid var(--line); border-radius: 99px; }
+.pills .choice { align-items: center; gap: 8px; min-height: 0; padding: 8px 12px; border: 1px solid var(--line); border-radius: 99px; }
 .pills .choice:has(input:checked) { border-color: var(--mark); background: var(--sunk); }
 .pills .choice input { margin-top: 0 !important; width: 16px; height: 16px; }
 .toggle { display: flex; align-items: center; gap: 12px; }

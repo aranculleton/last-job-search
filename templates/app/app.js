@@ -3488,7 +3488,7 @@
   // Every status the contact book holds (tools/network/schema.py THREAD_STATUSES), in plain words.
   const PERSON_STATUS = {not_contacted: ["Not contacted yet", "plain"], awaiting_reply: ["Waiting for a reply", "plain"],
     connected_no_reply: ["Connected, no reply yet", "plain"], replied_needs_response: ["Replied: your turn", "warn"],
-    in_conversation: ["In conversation", "ok"], call_booked: ["Call booked", "info"], referral_in_progress: ["Referral in progress", "held"],
+    in_conversation: ["In conversation", "ok"], call_booked: ["Call booked", "ok"], referral_in_progress: ["Referral in progress", "held"],
     converted_to_application: ["Now an application", "ok"], gone_cold: ["Gone quiet", "plain"], closed: ["Closed", "plain"],
     dropped: ["Set aside", "plain"], cold: ["Gone quiet", "plain"], stopped: ["Stopped", "plain"]};
   const NEEDS_YOU_P = new Set(["replied_needs_response", "in_conversation", "referral_in_progress", "call_booked"]);
