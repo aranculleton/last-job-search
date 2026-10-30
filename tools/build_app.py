@@ -626,8 +626,13 @@ def check(tree: str, when: dict, show: bool = False, ref: str = RELEASED,
         same = personal_paths.same_as_the_app(root)
     except Exception:  # noqa: BLE001  no app ref to compare with: every finding stands
         same = set()
-    findings = [f for f in findings if f.split(":", 1)[0].strip() not in same]
-    return without_aside(findings, entries, when, ref, root)
+    # Set aside first, over every finding, then leave out those in the app's own files. Done the
+    # other way round, an entry found only in such a file (an employer that is also an ordinary
+    # word, "visa" in a market table) was never set aside, so it stayed on the denylist the push
+    # gate scans the app with, and every push failed on files it never touched (2026-10-30).
+    # The rule is unchanged: only an entry the app carried before this repo recorded it.
+    findings, aside = without_aside(findings, entries, when, ref, root)
+    return [f for f in findings if f.split(":", 1)[0].strip() not in same], aside
 
 
 def without_aside(findings: list[str], entries: list[str], when: dict, ref: str = RELEASED,

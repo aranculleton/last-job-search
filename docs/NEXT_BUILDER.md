@@ -3,6 +3,13 @@
 Written at the end of 4.4.0 (2026-10-30) for the chat that builds the next version. Read
 MAINTAINING.md first; this is only what 4.4 left.
 
+## How to work (the maintainer, 2026-10-30)
+
+- **Decide, never ask.** Every design, tooling and gate question is the builder's to settle
+  (MAINTAINING.md, "The builder decides"). Make the call, do it, say it in one line.
+- The push gate scans every patch and every changed file whole; a file identical to the app's
+  master is not rescanned there, as the maintainer's own check already treats it.
+
 ## Left open
 
 - An interview with no application ("Something else" in I have an interview) opens Chat
