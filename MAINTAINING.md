@@ -19,7 +19,7 @@ These apply whenever the change is to the app, whichever repo the session starte
   a card; soft cards with no side lines; plain words), so a page that breaks one fails.
 
 - **The whole suite runs once, on the pull request's CI**, which is free on the public app;
-  before a push, only the scans and the changed tests ("Before pushing"). Never the whole
+  before a push, only the scans, the name guard and the version note ("Before pushing"). Never the whole
   suite again by hand.
 
 - **Windows is never run on a change.** Linux and Mac decide whether a change is green; a
@@ -27,8 +27,8 @@ These apply whenever the change is to the app, whichever repo the session starte
   tests that fake Windows. Its CI jobs run on a release pull request (one titled "Release
   X.Y.Z"), in the weekly Platforms run and by hand, all on the public app, whose minutes are
   free (the maintainer, 2026-10-29: Windows people must be able to use it, at no cost to
-  the maintainer). A release is green on Windows before it merges; a red weekly run is
-  fixed in the next release. Each Windows run took 45
+  the maintainer). Windows and Mac never block a merge or a release ("Releasing"); what
+  they find is fixed in the next release. Each Windows run took 45
   minutes and held 4.0.0 for hours when it ran on every change (the maintainer, 2026-10-26).
 - **Look first at how it is meant to be done, and how others do it**, for every question
   about the app, bug fix, feature and release, without being asked (the maintainer,
@@ -185,41 +185,53 @@ away or works differently enough that they must learn it again. The number says 
 of change a release is, never how soon it came after the last one. Say the number and the
 reason in one line in the reply.
 
-**How**, all of it every time, with no one asking:
+**Under 15 minutes, every time** (the maintainer, 2026-10-29). "Release it" means merge
+and publish, nothing else: the looking, the audit and the rehearsals are done while the
+version is built, before they say it, never after.
 
-0. **Look and audit first.** Claude Code's own documentation and two or three similar
-   projects on GitHub for anything the release touches (Developer rules). Then an
-   independent review of everything in `[Unreleased]`: a reviewer given the diff and the
-   context but not the conclusions, asked for real bugs with concrete inputs. Each finding
-   is checked, the real ones fixed with a test that fails without the fix, the rejected
-   ones named with the reason. Then a bug hunt over the parts the changes touch, not only
-   the lines. The whole suite is the release pull request's own CI run, once, on its final
-   commit (free on the public app); by hand, only "Before pushing". The same run checks
-   everywhere people open the app (`tools/everywhere.sh`, the Everywhere workflow): the
-   page in Safari's engine, Firefox, a Mac's and Windows' type, French and German and the
-   far time zones, and the rest with the clock 30, 90 and 400 days on, in the far time
-   zones, from a folder with spaces and accents and on the newest Python. Each of its two
-   jobs ends in one summary: read those lines, reproduce with
-   `EVERYWHERE_TESTS="<the files>" tools/everywhere.sh page|suite <variant>`, never re-run
-   the whole of it by hand. Title the pull request
-   "Release X.Y.Z: ...", so its Platforms run takes Windows too, and merge it only when
-   Linux, Mac and Windows are green: a Windows failure is fixed in the release, never left.
-1. Before the release PR merges, run the maintainer's own tests against it:
-   `python3 tools/try_personal_tests.py <the maintainer's repo>`. It lays this tree over a
-   copy of that repo, the way a sync would, and changes neither. A failure the release
-   causes is fixed in the app where the app is wrong, and otherwise named in the CHANGELOG
-   entry it comes from, so the sync's message has something to point at. 3.5.0 skipped
-   this and broke dozens of the maintainer's tests on names it removed.
-   Then rehearse the whole update: `python3 tools/rehearse_sync.py <the maintainer's repo>`.
-   On throwaway copies it plays out a cloud chat and a chat on their computer taking the
-   update at once with the copy of the sync they have now, runs the everyday commands and
-   their own tests in each, lands one and merges the other, and fails on any crash, stray
-   file or conflict. Every one is fixed before the release: it is what the person's chats
-   would otherwise find first. Its first run found a computer chat's sync leaving a file
-   uncommitted that stopped the next sync.
-2. A small PR that renames `## [Unreleased]` in `CHANGELOG.md` to
-   `## [X.Y.Z] - <date>` and opens a fresh `## [Unreleased]` above it. Merge it with CI
-   green. It also carries `python3 tools/public_names.py snapshot`, so the names this
+- **Only the fast checks block a merge**: the one check `Fast checks` (`ci.yml`), which
+  waits for Checks, Python 3.9, the Chrome page tests and LaTeX when the change touches it.
+  Safari, Firefox, the language and clock variants, the moved-clock suite and the Windows
+  and Mac set-ups run and are read, and never block a merge or a release: what they find is
+  fixed in the next one.
+- **Never merge between 06:45 and 08:15 UK time**, when the maintainer's own scheduled
+  tasks run.
+- **Never edit a pull request's description while its checks run**: it restarts them.
+  Change it with the push that carries the change (`push_gate.sh --text`), or after the
+  checks finish.
+- **Before every push**, the fast local checks, in seconds: the leak scan on the changed
+  files, `tools/name_guard.py` and `tests/test_build_versions.py`, then
+  `tools/push_gate.sh`, which runs them again with the rest and stops at the first failure.
+  When the page changed, its changed browser tests run in Safari's and Firefox's engines
+  first (`LJS_PW_ENGINE=webkit` and `firefox`).
+- **No browser test reads the page after a fixed number of frames**: it waits for what it
+  checks, with a time limit.
+
+**How**, while the version is built and then at "release it":
+
+0. **Look and audit first, while building.** Claude Code's own documentation and two or
+   three similar projects on GitHub for anything the release touches (Developer rules).
+   Then an independent review of everything in `[Unreleased]`: a reviewer given the diff
+   and the context but not the conclusions, asked for real bugs with concrete inputs. Each
+   finding is checked, the real ones fixed with a test that fails without the fix, the
+   rejected ones named with the reason. The whole suite is the pull request's own CI run
+   (free on the public app); by hand, only "Before pushing". The Everywhere workflow
+   (`tools/everywhere.sh`) checks the page in Safari's engine and Firefox, a Mac's and
+   Windows' type, French and German, the far time zones and the moved clock; each of its
+   two jobs ends in one summary: read those lines, reproduce with
+   `EVERYWHERE_TESTS="<the files>" tools/everywhere.sh page|suite <variant>`, and fix what
+   it finds in this version when there is time, otherwise in the next. Title the pull
+   request "Release X.Y.Z: ..." so its Platforms run takes Windows too.
+1. **Rehearse, while building**: `python3 tools/try_personal_tests.py <the maintainer's
+   repo>` lays this tree over a copy of that repo, the way a sync would, and changes
+   neither; `python3 tools/rehearse_sync.py <the maintainer's repo>` plays out a cloud chat
+   and a chat on their computer taking the update at once, on throwaway copies. A failure
+   the release causes is fixed in the app where the app is wrong, and otherwise named in
+   the CHANGELOG entry it comes from. 3.5.0 skipped this and broke dozens of the
+   maintainer's tests on names it removed.
+2. At "release it": merge the version's pull request with `Fast checks` green, then a
+   small PR that renames `## [Unreleased]` in `CHANGELOG.md` to `## [X.Y.Z] - <date>` and
+   opens a fresh `## [Unreleased]` above it. Merge it with `Fast checks` green. It also carries `python3 tools/public_names.py snapshot`, so the names this
    release ships are the ones the next must keep, or list in `docs/removed_names.json`.
 3. Nothing: merging it is the release. `.github/workflows/release.yml` runs
    `tools/release.py publish`, which tags `vX.Y.Z` on that commit and publishes the
@@ -227,14 +239,13 @@ reason in one line in the reply.
    `python3 tools/release.py newest` says whether the newest version is out. Only if the
    workflow fails: Releases, **Draft a new release**, tag `vX.Y.Z` on master, title
    `vX.Y.Z`, the output of `python3 tools/release.py notes` as the notes, **Publish**.
-4. **Check it reached people.** The release workflow and master's CI green on the merge,
-   the tag on the right commit, the published notes as `release.py notes` makes them, and
-   the rehearsal run once more against the published tag: a cloud chat and a computer chat
-   each take it and run the everyday commands. The maintainer hears the number, the reason,
+4. **Check it reached people.** The release workflow green, the tag on the right commit
+   (`python3 tools/release.py newest`) and the published notes as `release.py notes` makes
+   them. The maintainer hears the number, the reason,
    what changed for them, what was checked with real numbers, and what was not tested.
 5. **Hand over, then stop.** Write `docs/NEXT_BUILDER.md` afresh for the next chat: what
-   the release left (anything unfinished, anything not tested, what Linux, Mac and Windows
-   found, the maintainer's notes not yet built, decisions to keep), in plain words and with
+   the release left (anything unfinished, anything not tested, what Safari, Firefox, Mac and
+   Windows found, the maintainer's notes not yet built, decisions to keep), in plain words and with
    no real person in it (the push gate scans it like any file). Land it on master, then tell
    the maintainer in one line that the release is out, and recommend a new chat for the next
    version: every step of a long chat re-reads all of it, and everything a builder needs is
@@ -252,7 +263,7 @@ You are the builder for last-job-search, the public app at github.com/arancullet
 Before anything else, read MAINTAINING.md ("Developer rules", "Before pushing", "Releasing"), docs/NEXT_BUILDER.md (what the last release left you), and templates/app/DESIGN.md before you touch the page.
 
 How we work:
-- Build what my notes below ask, all of it into [Unreleased] on one branch, with tests. Nothing is released until I say "release it"; then do MAINTAINING.md "Releasing" in full, Linux, Mac and Windows included.
+- Build what my notes below ask, all of it into [Unreleased] on one branch, with tests. Nothing is released until I say "release it"; that means merge and publish, under 15 minutes, as MAINTAINING.md "Releasing" says: only the fast checks block it.
 - Cheap: every step re-reads this chat, so take few steps. Never poll; GitHub wakes you. Read only the failing lines. The whole suite runs on GitHub for free, never by hand. Run tools/push_gate.sh before every push, batch your commits, and push once per round of fixes.
 - Nothing private and no real person's name in the app, ever; the gate passes before any push.
 - Talk to me in plain words: one recommendation, never a question a sensible default answers.
@@ -313,11 +324,12 @@ tools/push_gate.sh <the maintainer's repo> --text <the PR description> --push <b
 ```
 
 One command: it builds the denylist from the maintainer's repo (kept 12 hours), scans the
-exact tree, every patch and commit message since master and the text to be posted, runs the
-name guard, the quick checks and the tests for what changed in parallel workers, and pushes
-only when every step passed. The page's browser tests run in CI's own job (`page` in
-`ci.yml`), beside the rest; a release pull request's Platforms run adds Windows, also beside
-the rest. Batch the commits: each push to an open pull request restarts its runs, and the
+exact tree, every patch and commit message since master and the text to be posted, then runs
+the name guard, the version note (`tests/test_build_versions.py`) and the quick checks,
+stops at the first failure and pushes only when every step passed. It runs no other test:
+the pull request's CI runs them all, the page's browser tests in its own job (`page` in
+`ci.yml`), and `Fast checks` is what a merge waits for; a release pull request's Platforms
+run adds Windows beside them, never blocking. Batch the commits: each push to an open pull request restarts its runs, and the
 Windows ones take the better part of an hour.
 
 Fix what CI finds in one more push. A private copy has no free CI, so

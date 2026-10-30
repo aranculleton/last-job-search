@@ -3,8 +3,8 @@
 Before 4.3 each session rebuilt this gate from memory and ran the whole suite by hand three
 times (an hour, the maintainer, 2026-10-29). What it must always do is pinned here: scan the
 exact tree, every patch, the commit messages and any text to be posted against the
-maintainer's denylist, run the name guard, push only after every step passed, and never force.
-The whole suite, browser tests included, is CI's (ci.yml `page`).
+maintainer's denylist, run the name guard and the version note, stop at the first failure, push
+only after every step passed, and never force. Every other test, browser tests included, is CI's.
 """
 from __future__ import annotations
 
@@ -40,24 +40,23 @@ def test_it_pushes_only_after_every_step_and_never_with_force():
     code = "\n".join(ln for ln in SRC.splitlines() if not ln.lstrip().startswith("#"))
     pushes = [ln for ln in code.splitlines() if "git push" in ln]
     assert len(pushes) == 1 and not any(f in pushes[0] for f in ("--force", " -f ", "+HEAD", "+refs"))
+    # Every step comes before the push, and a step that fails stops the gate there.
     push = code.index("git push")
-    assert code.index('if [ -n "$failed" ]') < push and "exit 1" in code[code.index('if [ -n "$failed" ]'):push]
+    last_step = max(i for i, ln in enumerate(code.splitlines()) if ln.startswith("step "))
+    assert sum(len(ln) + 1 for ln in code.splitlines()[:last_step]) < push
+    body = code[code.index("step() {"):code.index("\n}", code.index("step() {"))]
+    assert "exit 1" in body and "Nothing pushed" in body
 
 
-def test_the_browser_tests_it_leaves_out_are_the_ones_ci_runs():
-    """The gate skips the page's browser tests because CI's page job runs them: the two pick
-    them with the same pattern, so a browser test is never left to neither."""
-    yaml = pytest.importorskip("yaml")
-    ci = yaml.safe_load(open(os.path.join(ROOT, ".github", "workflows", "ci.yml"), encoding="utf-8"))
-    run = ci["jobs"]["page"]["steps"][-1]["run"]
-    pattern = run.split("grep -lE '", 1)[1].split("'", 1)[0]
-    assert pattern in SRC
-
-
-def test_a_follow_up_push_tests_only_what_changed_since_the_last_one():
-    """The branch's last push passed this gate and its CI runs the whole suite, so a one-line
-    fix re-tests that line's tests, not the release's (2026-10-29: five minutes, and a timing
-    test tipped over by the load). The scans still read every patch since master."""
-    assert 'merge-base --is-ancestor "origin/$BRANCH" HEAD' in SRC
-    assert 'git diff --name-only "$TBASE" HEAD' in SRC
-    assert '"$BASE..HEAD"' in SRC and "name_guard.py diff origin/master" in SRC
+def test_it_checks_privacy_then_names_then_the_version_note_and_runs_no_other_tests():
+    """The maintainer, 2026-10-29: the gate stops at the first failure, checks the private data,
+    the names and the version note first, and leaves every other test to CI, which runs the
+    whole suite on the pull request anyway."""
+    order = ['"$WORK/patches.txt" --tokens', "name_guard.py diff origin/master",
+             "tests/test_build_versions.py", "tools/lint_skills.py"]
+    at = [SRC.index(o) for o in order]
+    assert at == sorted(at), order
+    code = "\n".join(ln for ln in SRC.splitlines() if not ln.lstrip().startswith("#"))
+    runs = [ln for ln in code.splitlines() if "pytest" in ln]
+    assert len(runs) == 1 and "tests/test_build_versions.py" in runs[0], runs
+    assert '"$BASE..HEAD"' in SRC, "the scans still read every patch since master"

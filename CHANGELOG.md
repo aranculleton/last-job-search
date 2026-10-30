@@ -22,12 +22,42 @@ make sense to somebody whose repo just received it.
 
 ### Fixed
 
-- Chats no longer squeeze their history at 200,000 tokens. The cap made a chat on a
+- **Chats no longer squeeze their history at 200,000 tokens.** The cap made a chat on a
   1M-window model forget its work every few steps; Claude Code's own default, the model's
-  whole window, holds again, and the security guard refuses the cap coming back.
-- Work a chat does for the page no longer stops at "Allow Claude to edit this artifact's
-  data?", which brought the chat to the front over the page at every write. Writing the
+  whole window, holds again, and the security guard refuses the cap coming back. A chat
+  already open keeps its old setting until it is started again.
+- **Work a chat does for the page no longer stops at "Allow Claude to edit this artifact's
+  data?"**, which brought the chat to the front over the page at every write. Writing the
   page's data and comments is pre-approved; publishing or deleting a page still asks.
+- **The bin on a To do row takes the row away as you choose**, with the person's other rows.
+  "Not interested in" an employer said so and the row stayed until a chat got to it.
+- **Contacts counts as needing you only who does.** A follow-up you could send is counted
+  apart ("4 follow-ups you could send"), never as someone waiting on you, and a call booked
+  a season ago no longer counts as one to prepare for.
+- The round no longer spends about five seconds working out the line about waiting
+  improvements on every call; it is worked out once and again only when your profile or
+  saved files change.
+- A role ruled out as a remote posting ("Remote (Canada)") now stays ruled out when the same
+  role appears on another board, whichever place that board names, and the early filter and
+  the round now agree about it with or without the place.
+- The interview pack asks "Which team is this for?" only when the employer really has
+  another posting for the role, and lists the other postings, not the one the call is for;
+  the same role on two boards counts once, a posting past its deadline is left out, and a
+  single other posting is enough to ask.
+
+### Changed
+
+- **Each screen says when Claude is working on it**: "Claude is on it: ..." at the top, or
+  how many things, with See how it is going a tap away.
+- **Find jobs and Find people never start a second run.** While one is going the button
+  becomes what is going ("Searching now", "Finding people"), and a tap shows it.
+- **Find people takes a note in your own words**, as Find jobs does; left empty it looks at
+  the employers you want.
+- **Finished work says Done**, with no bar beside it, and folds itself into "N finished" a
+  minute later, with nothing to press.
+- **The bin on a job or draft is a row of short choices**, Too old among them, and only "No
+  more from" an employer turns that employer down.
+- The progress bar's shine glides instead of stepping.
 
 ## [4.3.0] - 2026-10-29
 
