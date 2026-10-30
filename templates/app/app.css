@@ -1356,7 +1356,7 @@ body.has-fab .shell { padding-bottom: calc(var(--tabs-h) + env(safe-area-inset-b
 .btn:active:not(:disabled) { transform: translateY(1px); }
 @media (hover: hover) and (pointer: fine) {
   .card, .work-card, .bpanel { transition: box-shadow 0.18s ease, border-color 0.18s ease; }
-  .card:hover, .work-card:hover, .bpanel:hover { box-shadow: 0 2px 12px rgb(0 0 0 / 0.06); }
+  .card:hover, .work-card:hover, .bpanel:hover { box-shadow: var(--shadow); }
 }
 @media (prefers-reduced-motion: reduce) {
   .btn, .chip, .seg-opt, .card, .work-card, .bpanel { transition: none; }
