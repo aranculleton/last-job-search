@@ -167,7 +167,7 @@ def test_a_pin_after_stop_writes_nothing_and_a_finished_item_is_refused(search):
 # ------------------------------------------------------------------ work asked for in a chat
 
 def test_a_chat_says_on_the_page_what_it_is_doing_and_when_it_is_done(search):
-    search.put("chats", "cloud-1", {"kind": "cloud", "title": "Job search (cloud)",
+    search.put("beats", "cloud-1", {"kind": "cloud", "title": "Job search (cloud)",
                                     "seen_at": "2026-10-25T17:00:00Z", "busy": None},
                version=2)
     got = json.loads(search.run("busy", search.dump, "Drafting your reply to Juno",
@@ -201,7 +201,7 @@ def test_a_busy_line_is_plain_words_never_a_work_id(search):
 
 
 def test_a_claim_keeps_the_chats_busy_line_and_never_writes_the_work_id(search):
-    search.put("chats", "cloud-1", {"kind": "cloud", "title": "Job search (cloud)",
+    search.put("beats", "cloud-1", {"kind": "cloud", "title": "Job search (cloud)",
                                     "seen_at": "2026-10-25T17:00:00Z",
                                     "busy": "Drafting your reply to Juno"}, version=4)
     search.put("work", "talk~1", _w("talk"), version=1)
@@ -212,7 +212,7 @@ def test_a_claim_keeps_the_chats_busy_line_and_never_writes_the_work_id(search):
     _, beat = _writes(got["batches"])[("beats", "cloud-1")]
     assert beat["busy"] == "Drafting your reply to Juno"
     # A work id left there by an older version is not a line the page shows.
-    search.put("chats", "cloud-1", {"kind": "cloud", "title": "Job search (cloud)",
+    search.put("beats", "cloud-1", {"kind": "cloud", "title": "Job search (cloud)",
                                     "seen_at": "2026-10-25T17:00:00Z", "busy": "draft~9"},
                version=5)
     got = json.loads(search.run("next", search.dump, "--chat", "cloud-1", "--kind", "cloud",

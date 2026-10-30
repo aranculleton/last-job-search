@@ -34,6 +34,21 @@ make sense to somebody whose repo just received it.
 - **Contacts counts as needing you only who does.** A follow-up you could send is counted
   apart ("4 follow-ups you could send"), never as someone waiting on you, and a call booked
   a season ago no longer counts as one to prepare for.
+- **The page no longer calls a search that is still running "Stalled"**, or blames your
+  plan's usage limit. A search is timed by how long its job sites say is left, slow work
+  says it is taking longer than usual and that Claude is still on it, and Try again shows
+  only when the work has really stopped.
+- **Something you ask for in a chat shows on your page while Claude does it** ("Claude is
+  busy in your chat").
+- **Big jobs run in a chat of their own** (a search, drafts, interview prep, a networking
+  run), so the chat that answers your page stays free for every tap.
+- **Saving your work no longer holds up the page.** The final check runs in the background
+  and runs your own tests once instead of twice; the page says "Saving your work" meanwhile.
+- **An interview's time is kept on the interview.** A time given in a chat, an invite, a
+  message or a contact's note is saved on it, so the page shows the time instead of "time
+  not set", and you are never asked to add it yourself.
+- **A page made before 4.3 moves its records to their new names by itself** the first time
+  its chat wakes, so the first changes after the update are no longer refused.
 - The round no longer spends about five seconds working out the line about waiting
   improvements on every call; it is worked out once and again only when your profile or
   saved files change.

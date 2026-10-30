@@ -3618,11 +3618,11 @@
   {
    "id": "landing-silent",
    "was": "Master is the trunk. Finish on it, start from it.",
-   "rule": "In a person's copy a pull request is opened and merged in the same turn and never watched, timed or reported (the maintainer, 2026-10-29); the copy's rule wins over a chat's own instructions about pull requests.",
-   "bold": "Landing is silent, and it is done in the same turn.",
+   "rule": "In a person's copy a pull request is opened and merged once the local check, run in the background, ends green, and never watched, timed or reported (the maintainer, 2026-10-29); the copy's rule wins over a chat's own instructions about pull requests.",
+   "bold": "Landing is silent, and never waits on GitHub.",
    "home": "CLAUDE.md",
    "anchor": "never subscribe to it, never schedule a check-in for it",
-   "core_bold": "Landing is silent, and it is done in the same turn.",
+   "core_bold": "Landing is silent, and never waits on GitHub.",
    "needed_by": [
     "every chat"
    ]
