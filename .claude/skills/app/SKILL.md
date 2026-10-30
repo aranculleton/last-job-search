@@ -4,7 +4,7 @@ description: >
   The chat's side of the person's job-search page: what to do when the page rings. Triggers
   on: [app], a doorbell from the page, "Artifact comment sent to Claude" on the job-search
   page, a work item, [work:<id>], the app page, the page's actions or receipts.
-allowed-tools: Read, Bash(python3 tools/app.py *), Bash(python3 tools/routines.py *), Bash(python3 tools/tidy.py *), ArtifactData, Artifact, ArtifactComments, Agent, mcp__claude-code-remote__list_sessions, mcp__claude-code-remote__get_session, mcp__claude-code-remote__archive_session, mcp__claude-code-remote__list_triggers, mcp__claude-code-remote__create_trigger, mcp__claude-code-remote__update_trigger, mcp__claude-code-remote__set_session_title
+allowed-tools: Read, Bash(python3 tools/app.py *), Bash(python3 tools/routines.py *), Bash(python3 tools/tidy.py *), ArtifactData, Artifact, ArtifactComments, Agent, mcp__claude-code-remote__create_session, mcp__claude-code-remote__send_message, mcp__claude-code-remote__list_sessions, mcp__claude-code-remote__get_session, mcp__claude-code-remote__archive_session, mcp__claude-code-remote__list_triggers, mcp__claude-code-remote__create_trigger, mcp__claude-code-remote__update_trigger, mcp__claude-code-remote__set_session_title
 ---
 
 # The page's inbox
@@ -72,7 +72,8 @@ python3 tools/app.py next "$D" --chat <your chat id> --kind cloud|computer --on 
 Nothing printed: nothing is yours; end the turn. Otherwise send its claim batch. Refused
 means another chat took it: read `work` again and run `next` once more. Never take an item
 `next` did not give you: it keeps the locks and the heavy-job cap. `run` says where it is
-done: `here`, or `background agent` (below, "Work is done here").
+done: `here`, `child session` or `background agent` (below, "A big job runs in a chat of
+its own").
 
 ## 4. Do the work with the app's own commands
 
@@ -142,24 +143,41 @@ The same applies to a screenshot, message or link pasted into any chat, page or 
 picture is already in front of you there, so read it directly, do the same steps, show the
 result in the reply and on the page (`app.py view`), and never ask which command to run.
 
-Work is done here, in this one chat, the page's helper: never a new chat, for any piece of
-work (the maintainer, 2026-10-28: "new chats keep getting created for every small thing";
-2026-10-29: one helper at most). **A big job never holds this chat**: when `next` prints
-`run: background agent` (a search, drafts, a resume for a contact, an interview prep, a
-networking run), send its claim, then start it as one background agent inside this chat
-(the Agent tool, `run_in_background: true`, `isolation: "worktree"`, `model` as `next`
-printed) with the url, the work id and steps 4 and 5 of this skill in its prompt: it does
-the work, writes its stages, finishes its item, lands its work on master itself, and
-reports in one line. Drafts and a resume for a contact are the exception: their workflow
-(`draft-applications`) already runs in the background, so stage them here, start the
-workflow, and carry the path on here once it reports. Never wait for either: go straight
-back to step 3 for the next item, so a
-search, a networking run and an interview prep run side by side (three at most,
-`page_db.HEAVY_CAP`; `next` keeps the cap and the locks), and `run: here` work (a reply, a
-tweak, a message in the chat) is done in this chat at once. When an agent reports, run `app.py
-view` and send its batch: this chat is the one writer of the page's view, so two agents
-never write it at once. Drafting and audits are never moved below this chat's model. Agents
-are never mentioned to the person; the page shows each job's progress.
+This chat answers the page and does small work itself (`run: here`: a reply, a tweak, a
+message in the chat), at once. **A big job runs in a chat of its own** (a search, drafts, a
+resume for a contact, an interview prep, a networking run): run in this chat, even as
+background agents, a search and a networking run held it for 15 and 23 minutes and the
+page waited on every tap (2026-10-29). `next` never hands one to this chat to run itself:
+
+- `run: child session`: send the claim, then make the `create_session` call exactly as
+  `next` printed it. That chat runs the one item, pins its progress, finishes it, lands it on
+  master and tells this chat. It never publishes, watches or answers the page, and is titled
+  `Job search: <title>`, so the daily tidy archives it once its work is on master.
+- `run: background agent` is the fallback where `create_session` is not available: a chat
+  on a computer, or a chat without that tool (run `next` with `--no-sessions`). Send the
+  claim, then make the Agent call exactly as printed (`run_in_background: true`,
+  `isolation: "worktree"`).
+
+Never wait for either: go straight back to step 3 for the next item, so a search, a
+networking run and an interview prep run side by side (three at most, `page_db.HEAVY_CAP`;
+`next` keeps the cap and the locks). When a big job's chat writes to this one:
+
+- `Progress <id>: <stage> | <line>` (it had no ArtifactData): `python3 tools/app.py pin "$D"
+  --work <id> --stage <stage> --line "<line>"`, and send its batch.
+- `Finished <id>, on master` (or an agent's last line saying so): take master, run `app.py
+  view` (step 5) and send its batch. This chat is the one writer of the page's view, so two
+  chats never write it at once. An item still running finishes here, as step 5 says, from
+  what the message said.
+
+Drafting and audits are never moved below this chat's model. The other chats are never
+mentioned to the person; the page shows each job's progress.
+
+**Work asked for in a chat shows on the page too**, so it is never invisible there. When the
+person asks a chat for something that takes more than a moment (a reply, a resume, a prep),
+first read `beats` into `$D` (ArtifactData `query`), then `python3 tools/app.py busy "$D"
+"<a few plain words>"` (e.g. "Drafting your reply to Juno") and send its batch: the page
+shows "Claude is busy in your chat: <those words>". When it is done, `python3 tools/app.py
+busy "$D" --done`, and send that batch. Refused: read `beats` again and run it once more.
 
 **Once a day, the app's own old chats are tidied** (`listen` prints `tidy:` when it is due):
 `list_sessions` (`mine: true`) and `list_triggers`, every page, each saved to a file, then
@@ -172,20 +190,33 @@ one used lately, or one whose work is not on master. Then `tidy.py done <each ar
 --titles '<the json it printed>'`, and commit. Nothing is said to the person in a chat they
 are not reading: the page says it.
 
-**Progress costs nothing extra.** At each stage boundary (`app.py progress <kind>`), in the
-same message as that stage's first command, one pinned `update` of `work/<id>`: `status:
-running`, `stage`, `stage_at`, one plain line in `steps`; never on a timer. Before each
-stage, on `stop_asked: true`, write `status: stopped`, release its locks and stop. A refused
-pin means it is not yours any more: re-read, and write nothing else.
+**Progress costs nothing extra.** At each stage boundary (`app.py progress <kind>` names
+the stages), in the same message as that stage's first command, `python3 tools/app.py pin
+"$D" --work <id> --stage <stage> --line "<one plain line>"`, and send its batch: it moves
+the stage, adds the line and renews the item's lease. On a long stage, pin it again with a
+new line every ten minutes or so: the page counts a job with no word for half an hour as
+stopped. A search's job sites say how far they are and how long is left: while
+`run_round.py` runs (in the background), every five minutes or so `python3 tools/app.py pin
+"$D" --work <id> --stage scrape --log <the round's folder>/round.log`, so the page times it
+by that and not by the usual minutes. `"stop_asked": true` in what it prints: write `status:
+stopped`, release its locks and stop. A refused pin: read `work` again; still yours, pin
+once more; claimed by another chat, write nothing else.
 
 ## 5. Finish in one batch
 
 - `work/<id>`: `status: done` (or `failed`, `error` in plain words), `finished_at`,
   `result: {summary, links}` (web addresses or repo paths; downloads go to the asset store).
-- its locks deleted, each pinned; your heartbeat `chats/<your id>`, `busy: null`.
+- its locks deleted, each pinned; your heartbeat `chats/<your id>`, `busy: "Saving your
+  work"` while the landing check below runs (`null` when nothing is left to land).
 - from a `talk` thread, a reply there (`from: cloud` or `computer`, plain words).
 
-Then land the work on master, and bring the page up to date:
+Then land the work on master without holding this chat (the landing check took minutes and
+the page waited on every tap, 2026-10-29): commit (`python3 tools/save_state.py`), start
+`./tools/ci_local.sh --quick` in the background (Bash, `run_in_background`), and carry on
+with the page and step 3 while it runs. When it ends green, land it (CLAUDE.md, "Saving"),
+then `python3 tools/app.py busy "$D" --done` and send its batch. Red: leave the work where it
+is, clear `busy` the same way and say nothing; the next chat lands it. Bring the page up to
+date:
 
 ```bash
 python3 tools/app.py view "$D/view" --dump "$D" --chat <your chat id>

@@ -16,6 +16,9 @@ WORKFLOWS.md section 2):
                the most urgent, never one whose employer, contact or search another job holds
   claim()      the claim as one batch: the item pinned to the version read (`if_version`),
                each lock created (refused if it exists), and the chat's own heartbeat
+  pin()        one stage's progress on a running item, and how long is left when it is known
+               (a search's job sites say it themselves: round_progress())
+  busy_beat()  the line the page shows while the chat does something asked in the chat
 
 Pure code, standard library only, no network.
 """
@@ -427,7 +430,11 @@ class Writes:
 # The page has a table of its own for the moment before a chat writes the stages
 # (templates/app/app.js STAGES); a test keeps the two naming the same kinds.
 STAGES = {
-    "search": [("start", "Getting started", 60), ("scrape", "Searching job sites", 300),
+    # A search's job sites and a networking run's finding took 15 and 23 minutes in a real
+    # copy (2026-10-29), against 5 and 4 here, so the page said "Stalled" on work that was
+    # fine. A search says how long is left as it goes (`app.py pin --log`); these are only
+    # the estimates before it does.
+    "search": [("start", "Getting started", 60), ("scrape", "Searching job sites", 900),
                ("seen", "Setting aside ones already seen", 60),
                ("read", "Reading postings", 180), ("score", "Scoring", 120),
                ("shortlist", "Shortlist ready", 30)],
@@ -439,7 +446,7 @@ STAGES = {
                            ("render", "Making the PDF", 45), ("verify", "Final checks", 45)],
     "prep": [("start", "Getting started", 60), ("research", "Research", 120),
              ("build", "Building the pack", 120), ("questions", "Likely questions", 60)],
-    "network": [("start", "Getting started", 60), ("find", "Finding people", 240),
+    "network": [("start", "Getting started", 60), ("find", "Finding people", 900),
                 ("read", "Reading profiles", 150), ("write", "Writing notes", 180),
                 ("check", "Checking", 120)],
     "reply": [("start", "Getting started", 30), ("read", "Reading the thread", 30),
@@ -693,9 +700,153 @@ def claim(db: dict, chosen: dict, chat_id: str, chat_kind: str, now: dt.datetime
               if_version=old["version"] if old else None)
     chats = db.get("chats") or {}
     mine = chats.get(safe_id(chat_id))
-    w.add("set", "chats", chat_id, heartbeat(chat_id, chat_kind, now, busy=chosen["work"]),
+    # `busy` is the line the page shows for work asked in the chat (busy_beat), never a work
+    # id: the page shows the work itself. A line already there is kept.
+    line = plain_busy(((mine or {}).get("data") or {}).get("busy"), db)
+    w.add("set", "chats", chat_id, heartbeat(chat_id, chat_kind, now, busy=line),
           if_version=mine["version"] if mine else None)
     return w.save("claim")
+
+
+# ------------------------------------------------------------------ progress as it goes
+
+# scrape_wide.Tally.line(), as run_round.py copies it into round.log: "progress: <job site>
+# <sent>/<total> sent, <failures>[, ...][, stopped: <why> | , done | , <k> min left]".
+_PROGRESS = re.compile(r"progress: (?P<name>.+?) (?P<sent>\d+)/(?P<total>\d+) sent(?P<rest>.*)$")
+_FINISHED = re.compile(r", (?:done|stopped: .*)$")
+_LEFT = re.compile(r", (\d+) min left$")
+
+
+def round_progress(text: str) -> dict | None:
+    """How far a search's job sites have got, from run_round.py's round.log: {done, total,
+    left_s, sending}. Each job site's last line counts; one that is done or stopped counts
+    as complete, and the time left is the longest that any site still sending says (a
+    minute at least while one is). None before the first line."""
+    last: dict = {}
+    for raw in str(text or "").splitlines():
+        m = _PROGRESS.search(raw.strip())
+        if m:
+            last[m.group("name")] = m
+    if not last:
+        return None
+    done = total = sending = 0
+    left = None
+    for m in last.values():
+        sent, of, rest = int(m.group("sent")), int(m.group("total")), m.group("rest")
+        total += of
+        if _FINISHED.search(rest):
+            done += of
+            continue
+        done += min(sent, of)
+        sending += 1
+        k = _LEFT.search(rest)
+        if k:
+            left = max(left or 0, int(k.group(1)) * 60, 60)
+    return {"done": done, "total": total, "left_s": left if sending else 0, "sending": sending}
+
+
+def stage_index(kind: str, stage, given: list | None = None) -> int:
+    """A stage named by its key (`app.py progress <kind>`) or its number, as a number."""
+    keys = [k for k, _, _ in STAGES.get(kind, [])]
+    n = len(given) if given else len(keys)
+    text = str(stage).strip()
+    if text.isdigit():
+        at = int(text)
+    elif text in keys:
+        at = keys.index(text)
+    else:
+        raise KeyError(f"no stage {text!r} in {kind or 'this work'}; one of {', '.join(keys)}")
+    return max(0, min(at, max(n, 1) - 1))
+
+
+def _keep_dump(dump_dir: str, collection: str, doc_id: str, fields: dict, version: int) -> None:
+    """The dump as it will be once this write lands, so the next pin from it is pinned to
+    the right version without reading the page again. A refused write means read again."""
+    where = os.path.join(dump_dir, STORE.get(collection, collection))
+    if not os.path.isdir(where) and os.path.isdir(os.path.join(dump_dir, collection)):
+        where = os.path.join(dump_dir, collection)
+    os.makedirs(where, exist_ok=True)
+    plain = os.path.join(where, safe_id(doc_id) + ".json")
+    path = os.path.join(where, safe_id(doc_id).replace("~", "@") + ".json")
+    if plain != path and os.path.exists(plain):
+        os.remove(plain)
+    with open(path, "w", encoding="utf-8", newline="\n") as fh:
+        json.dump(dict(fields, **{VERSION_FIELD: version}), fh, ensure_ascii=False, indent=1)
+        fh.write("\n")
+
+
+def pin(db: dict, work_id: str, now: dt.datetime, out_dir: str, stage=None, line: str = "",
+        count: dict | None = None, left_s: int | None = None, dump_dir: str = "") -> dict:
+    """One pinned update of a running item: its stage (stage_at only when the stage moves
+    on), one plain line in its steps, how many of how many are done, how long is left
+    (`left_s`, as of `left_at`), and its lease, renewed, so long work is never taken for
+    stopped. The page reads `left_s` as the stage's own estimate: a search that says
+    "15 min left" is not shown as late at ten. {work, stage, count, left_s, batches}."""
+    import app_model
+    doc = (db.get("work") or {}).get(safe_id(work_id))
+    if doc is None:
+        raise KeyError(f"no work {work_id!r} in the dump; read work again")
+    item = dict(doc["data"])
+    if str(item.get("status") or "") in ("done", "failed", "stopped"):
+        raise KeyError(f"work {work_id!r} has finished; write nothing more to it")
+    if item.get("stop_asked"):
+        # They tapped Stop: no stage is pinned, the work is stopped (the app skill, step 4).
+        return {"work": work_id, "stop_asked": True, "batches": []}
+    at = app_model.stamp(now)
+    fields: dict = {"status": "running",
+                    "lease_until": app_model.stamp(now + dt.timedelta(seconds=LEASE_S))}
+    if stage is not None:
+        idx = stage_index(str(item.get("kind") or ""), stage, item.get("stages"))
+        if idx != item.get("stage") or not item.get("stage_at") \
+                or str(item.get("status") or "") != "running":
+            # A new stage starts with its own count and its own estimate.
+            fields.update(stage=idx, stage_at=at, count=None, left_s=None, left_at=None)
+    if line:
+        fields["steps"] = (list(item.get("steps") or []) + [{"at": at, "text": line}])[-50:]
+    if count and int(count.get("total") or 0) > 0:
+        fields["count"] = {"done": int(count.get("done") or 0), "total": int(count["total"])}
+    if left_s is not None:
+        fields.update(left_s=max(0, int(left_s)), left_at=at)
+    w = Writes(out_dir)
+    w.add("update", "work", work_id, fields, if_version=doc["version"])
+    if dump_dir:
+        _keep_dump(dump_dir, "work", work_id, dict(item, **fields), int(doc["version"] or 1) + 1)
+    return {"work": work_id, "stop_asked": False, "stage": fields.get("stage", item.get("stage")),
+            "count": fields.get("count", item.get("count")),
+            "left_s": fields.get("left_s", item.get("left_s")), "batches": w.save("pin")}
+
+
+def plain_busy(value, db: dict | None = None) -> str | None:
+    """A busy line the page may show: a few words, never a work id (claim wrote the id there
+    before 4.4)."""
+    text = " ".join(str(value or "").split())
+    if not text or " " not in text or text in ((db or {}).get("work") or {}):
+        return None
+    return text[:120]
+
+
+def busy_beat(db: dict, chat_id: str, chat_kind: str, now: dt.datetime, out_dir: str,
+              line: str | None, dump_dir: str = "") -> list[str]:
+    """This chat's heartbeat saying what it is doing for the person in the chat (`line`, a
+    few plain words), or that it is done (None). The page shows "Claude is busy in your
+    chat: <line>" while it is there, so work asked in a chat is never invisible."""
+    import app_model
+    mine = (db.get("chats") or {}).get(safe_id(chat_id))
+    busy = plain_busy(line) if line else None
+    if line and busy is None:
+        raise ValueError("say what it is doing in a few words")
+    w = Writes(out_dir)
+    if mine is None:
+        fields = heartbeat(chat_id, chat_kind, now, busy=busy)
+        w.add("set", "chats", chat_id, fields)
+        version = 1
+    else:
+        beat = {"busy": busy, "seen_at": app_model.stamp(now)}
+        w.add("update", "chats", chat_id, beat, if_version=mine["version"])
+        fields, version = dict(mine["data"], **beat), int(mine["version"] or 1) + 1
+    if dump_dir:
+        _keep_dump(dump_dir, "chats", chat_id, fields, version)
+    return w.save("busy")
 
 
 # ------------------------------------------------------------------ keeping the store small

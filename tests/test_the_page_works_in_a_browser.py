@@ -612,7 +612,10 @@ def test_with_no_chat_listening_it_says_when_it_starts_and_offers_to_start_it_no
 
 # ------------------------------------------------------------------ progress that costs nothing
 
-def test_progress_moves_with_the_clock_marks_a_stall_and_tries_again(run, pages):
+def test_progress_moves_with_the_clock_slow_is_not_stalled_and_only_a_missed_check_in_tries_again(run, pages):
+    # Changed 2026-10-29: past twice its usual time a running search was called "Stalled" with
+    # Try again while it was still working. Past its estimate is now "Taking longer", still
+    # running, with no time left shown; only a lease that ran out says it may have stopped.
     r = run("progress", html=pages["sample"], shot="phone-work-done" if SHOTS else "")
     _clean(r)
     assert r["sheet"], "on a phone the work opens as a sheet"
@@ -627,9 +630,17 @@ def test_progress_moves_with_the_clock_marks_a_stall_and_tries_again(run, pages)
     s2 = r["stage2"]
     assert s2["sentence"] == "Scoring 214 postings, 3 of 4 done", "one live sentence, in words"
     assert any("step-now:Now: Scoring" in s for s in s2["steps"])
+    ov = r["over"]
+    assert ov["status"] == "Taking longer" and ov["now"] == 97, "held below 100 until done"
+    assert ov["warn"] == [], "slower than usual is no warning"
+    assert "Taking longer than usual. Claude is still on it." in ov["time"]
+    assert "left" not in ov["time"] and "left" not in ov["text"], "no time left once it has run past it"
+    assert "Try again" not in ov["buttons"] and "Stop" in ov["buttons"]
+    assert not any("usage limit" in b for b in r["overBanner"]), "slow is never the plan's limit"
+    assert all("minutes left" not in s for s in r["overSum"])
     st = r["stalled"]
-    assert st["status"] == "Stalled" and st["now"] == 97, "held below 100 until done"
-    assert any("more than twice as long as usual" in w for w in st["warn"])
+    assert st["status"] == "May have stopped"
+    assert any("may have stopped" in w for w in st["warn"])
     assert "Try again" in st["buttons"] and "Stop" in st["buttons"]
     w = r["retried"]
     assert w["status"] == "queued" and w["attempt"] == 2 and w["stage"] == 0 and w["claimed_by"] is None
@@ -639,12 +650,42 @@ def test_progress_moves_with_the_clock_marks_a_stall_and_tries_again(run, pages)
     assert r["folded"], "finished work joins the fold a minute after it was on screen"
 
 
-def test_two_stalls_at_once_read_as_the_plan_limit_offer_no_retry_and_pause_everything(run, pages):
+def test_a_search_is_timed_by_the_time_left_its_job_sites_gave(run, pages):
+    # 25 minutes into a stage that usually takes 5, with 10 minutes of it left by its own
+    # count (app.py pin, from the job sites' lines) and 2 of scoring after: on time, never slow.
+    r = run("pinned_left", html=pages["sample"])
+    _clean(r)
+    b = r["bar"]
+    assert b["status"] == "", "on time: no state word"
+    assert b["sentence"] == "Searching 4 job sites, 99 of 162 done"
+    assert "about 12 min left" in b["time"], b["time"]
+    assert "longer" not in b["time"] and b["warn"] == [] and "Try again" not in b["buttons"]
+
+
+def test_slow_work_is_not_the_plan_limit_and_the_limit_shows_only_when_claude_says_so(run, pages):
+    # Changed 2026-10-29: two slow jobs at once used to be read as the plan's usage limit.
     r = run("limit", html=pages["sample"])
     _clean(r)
+    slow = r["slow"]
+    assert not any("usage limit" in b for b in slow["banner"]), "two slow jobs are only slow"
+    for b in (slow["a"], slow["b"]):
+        assert b["status"] == "Taking longer" and "Try again" not in b["buttons"] and b["warn"] == []
+    # A quick answer came back rate_limited: now the limit is said, nothing retries, and
+    # Stop everything pauses both.
     assert any("usage limit" in b and "nothing retries by itself" in b for b in r["banner"])
     assert "Try again" not in r["a"]["buttons"]
     assert r["paused"] == [True, True]
+
+
+def test_work_asked_for_in_a_chat_shows_on_the_page(run, pages):
+    r = run("chat_busy", html=pages["sample"])
+    _clean(r)
+    assert "Claude is busy in your chat: Drafting your reply to Juno" in r["panel"]
+    assert "Claude is busy in your chat." in r["panel"], "nothing else running: the summary says so"
+    assert "Busy in your chat" in r["pill"] or "1 running" in r["pill"]
+    assert "Claude is busy in your chat" not in r["stale"], "an hour-old line is gone"
+    assert "Claude is busy in your chat" not in r["workId"], "a work id is never shown as words"
+    assert "Saving your work" in r["saving"]
 
 
 def test_stop_says_what_is_kept(run, pages):

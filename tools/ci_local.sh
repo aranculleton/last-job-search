@@ -24,7 +24,8 @@
 # for every change made there.
 #
 #     ./tools/ci_local.sh            everything available
-#     ./tools/ci_local.sh --quick    skip the LaTeX compile
+#     ./tools/ci_local.sh --quick    skip the LaTeX compile, and the floor leg's second run
+#                                    of the person's own tests (they ran once already)
 #     ./tools/ci_local.sh --full     everything, even when only the person's own files changed
 #
 # In a person's repo, when every change since master is their own (contacts, tracker,
@@ -268,8 +269,10 @@ FLOOR_VERSION=3.9
 FLOOR_NAME="tests on Python $FLOOR_VERSION (CI's floor leg)"
 FLOOR_PY="$(command -v python$FLOOR_VERSION || true)"
 # Nothing of the app's or of their own tests changed: no floor Python is fetched or built
-# for a leg that would only be skipped (it cost minutes a save on a Windows computer).
-if [ "$DATA_ONLY" = "1" ] && ! printf '%s\n' "$CHANGED" | grep -q '^profile/tests/'; then
+# for a leg that would only be skipped (it cost minutes a save on a Windows computer). With
+# --quick their own tests run once, above, never a second time here: the second run held the
+# chat that answers the page while it saved (2026-10-29).
+if [ "$DATA_ONLY" = "1" ] && { [ "$QUICK" = "1" ] || ! printf '%s\n' "$CHANGED" | grep -q '^profile/tests/'; }; then
   FLOOR_PY="skip"
 fi
 if [ -z "$FLOOR_PY" ] && command -v py >/dev/null 2>&1; then      # Windows' launcher
@@ -301,8 +304,12 @@ else
   if "$FLOOR_ENV_PY" -c "import pytest" >/dev/null 2>&1; then
     app_check run "$FLOOR_NAME" "$FLOOR_ENV_PY" -m pytest tests -q -p no:cacheprovider
     if [ -d profile/tests ] && { [ "$DATA_ONLY" = "0" ] || printf '%s\n' "$CHANGED" | grep -q '^profile/tests/'; }; then
-      PYTHONDONTWRITEBYTECODE=1 run "$FLOOR_NAME, profile/tests" "$FLOOR_ENV_PY" \
-        -m pytest profile/tests -q -p no:cacheprovider
+      if [ "$QUICK" = "1" ]; then
+        skip "$FLOOR_NAME, profile/tests" "--quick: your own tests ran once above"
+      else
+        PYTHONDONTWRITEBYTECODE=1 run "$FLOOR_NAME, profile/tests" "$FLOOR_ENV_PY" \
+          -m pytest profile/tests -q -p no:cacheprovider
+      fi
     fi
   else
     skip "$FLOOR_NAME" "could not build a $FLOOR_VERSION venv with pytest (no venv module or no network)"

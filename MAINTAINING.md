@@ -402,7 +402,7 @@ checks show as skipped and cost nothing. Every check in that file is a script in
 
 ```bash
 ./tools/ci_local.sh            # every check CI runs, under two minutes
-./tools/ci_local.sh --quick    # skips the LaTeX compile
+./tools/ci_local.sh --quick    # skips the LaTeX compile and the second run of your own tests
 ./tools/ci_local.sh --full     # the app's own suites too, when only your own files changed
 ```
 

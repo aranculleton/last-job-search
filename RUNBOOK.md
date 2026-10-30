@@ -486,10 +486,15 @@ master cannot see work sitting on another chat's branch, and builds it a second 
 1. **Start by pulling master and taking the app's updates** ("Start of a session", above),
    before writing anything, not before pushing.
 2. **Finish by getting the work onto master.** Not "pushed to the branch": on master. Open
-   the pull request, run `./tools/ci_local.sh --quick`, merge it, in one turn and silently:
-   never subscribe to it, set a check-in for it or wait on GitHub's checks, and never tell the
-   person about it or its checks (CLAUDE.md, "Saving"). A branch left behind at the end of a
-   session is work the next chat cannot see and will duplicate.
+   the pull request and start `./tools/ci_local.sh --quick` in the background (Bash,
+   `run_in_background`), so the chat stays free for the person and the page while it runs
+   (in the foreground it held the chat that answers the page for minutes, 2026-10-29); when
+   it ends green, merge, in the turn its ending wakes. Silently: never subscribe to it, set a
+   check-in for it or wait on GitHub's checks, and never tell the person about it or its
+   checks (CLAUDE.md, "Saving"). While it runs, the chat that answers the page says "Saving
+   your work" there (`app.py busy`, the `app` skill, step 5), and clears it once landed. A
+   branch left behind at the end of a session is work the next chat cannot see and will
+   duplicate.
 3. **Never leave a merged branch around**, and never start new work on an old one.
 4. If the work genuinely is not finishable this session, push it, and say in one plain line
    that it is not finished and the next chat carries on. The next chat finds it itself
@@ -516,8 +521,9 @@ on GitHub, where it is not.
 The one thing that is **not** negotiable in the other direction: **never push to master
 without CI green**. It is the branch every other chat starts from, so a broken master breaks
 all of them at once. **On a private copy, green is established locally, and that is the
-rule: `./tools/ci_local.sh --quick`** (it skips only the compile of the app's example
-documents, which a person's copy never edits; the full run is for a change to the app). A
+rule: `./tools/ci_local.sh --quick`** (it skips the compile of the app's example documents,
+which a person's copy never edits, and a second run of their own tests on the oldest Python;
+the full run is for a change to the app). A
 clean run is the evidence and merging on it is allowed; say so in the pull request and name
 anything it reported as SKIP. Why, what CI's Python 3.9 leg is for, and the one case worth a
 billed CI run: MAINTAINING.md, "CI on a private repo".

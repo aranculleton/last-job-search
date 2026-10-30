@@ -531,14 +531,16 @@ def _numbered(line: str) -> tuple[str, str] | None:
 
 
 def shape(code: int, lines: list[str], chat: str = "", listen: bool = False,
-          helper: bool = False, on: str = "") -> list[str]:
+          helper: bool = False, on: str = "", work: str = "") -> list[str]:
     """start's lines, with what this chat does about the page: the listener publishes and
-    watches, a chat that may become it asks the page first, any other chat does neither."""
+    watches, a chat that may become it asks the page first, any other chat does neither.
+    `work` is a chat the listener started for one big job (`app.py next`): it does that job
+    and nothing about the page."""
     if code != 0 or len(lines) < 2:
         return lines
     import app_setup
     url = app_setup.page_record().get("url", "") or ""
-    who = role(chat, listen, url)
+    who = "work" if work and url else role(chat, listen, url)
     steps = list(lines[2:])
     text = [(_numbered(ln) or ("", None))[1] for ln in steps]
     found = [i for i, t in enumerate(text) if t is not None and t.startswith(_PUBLISH)]
@@ -555,7 +557,11 @@ def shape(code: int, lines: list[str], chat: str = "", listen: bool = False,
     else:
         at = sum(1 for i in range(at) if i not in gone)
     add: list[str] = []
-    if who == "first":
+    if who == "work":
+        add.append(f"This chat does one job for the page ({work}) and nothing else about it: "
+                   "it never publishes, watches or answers the page, and never writes its "
+                   "view. Carry on with what started it.")
+    elif who == "first":
         if publish:
             add = publish + ["Publishing makes this chat watch the page, which makes it the "
                              "page's listener: the one chat a tap on the page wakes. The "

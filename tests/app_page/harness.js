@@ -849,9 +849,18 @@ S.progress = async (a) => {
   await turn(page, 6);
   r.stage2 = await bar(page, "search~1");
   store.chat("work/search~1", {count: null}, store.version("work/search~1"), "update");
-  // Over twice the stage's estimate (120 s): a stall, with Try again.
+  // Past the stage's estimate (120 s) is slower than usual, never "Stalled": still running,
+  // no warning, no Try again, and no time left once it has run past it.
   await page.clock.runFor(250000);
-  await turn(page, 6);
+  await seeIn(page, workSel("search~1"), "Taking longer");
+  r.over = await bar(page, "search~1");
+  r.overSum = await T(page, "dialog.work-sheet .sum-small");
+  r.overBanner = await T(page, "dialog .banner");
+  // No check-in for half an hour (its lease ran out): it may have stopped, and only now
+  // is there Try again.
+  const pageNow = await page.evaluate(() => Date.now());
+  store.chat("work/search~1", {lease_until: new Date(pageNow - 60000).toISOString()}, store.version("work/search~1"), "update");
+  await seeIn(page, workSel("search~1"), "May have stopped");
   r.stalled = await bar(page, "search~1");
   await page.locator(workSel("search~1")).getByRole("button", {name: "Try again: Finding jobs"}).click();
   await turn(page, 6);
@@ -873,17 +882,81 @@ S.progress = async (a) => {
   return r;
 };
 
+// Waits, with a time limit, until the element holds the words.
+async function seeIn(page, sel, want, ms) {
+  await page.waitForFunction(([s, w]) => { const el = document.querySelector(s); return !!el && el.textContent.includes(w); }, [sel, want], {timeout: ms || 5000}).catch(() => {});
+}
+
+// A search that says how long it has left (app.py pin, from its job sites' own lines) is
+// timed by that: 25 minutes into a stage that usually takes 5, with 10 minutes of it still to
+// go, it is on time.
+S.pinned_left = async (a) => {
+  const at = new Date(Date.parse(T0) + 1200000).toISOString();
+  const o = await open({html: a.html, hash: "work", clock: new Date(Date.parse(T0) + 1500000).toISOString(), seed: {
+    "work/search~1": runningDoc({count: {done: 99, total: 162}, left_s: 900, left_at: at, lease_until: new Date(Date.parse(T0) + 3000000).toISOString()}),
+  }});
+  const {page} = o;
+  await seeIn(page, workSel("search~1"), "99 of 162 done");
+  const r = {bar: await bar(page, "search~1"), sum: await T(page, "dialog.work-sheet .sum-small, .workp .sum-small")};
+  r.errors = o.errors;
+  await o.ctx.close();
+  return r;
+};
+
+// Two slow jobs at once are only slow: no usage-limit banner, nothing to retry. The limit is
+// said only when Claude itself said it (a quick answer came back rate_limited).
 S.limit = async (a) => {
   const old = new Date(Date.parse(T0) - 1500000).toISOString();
   const o = await open({html: a.html, hash: "work", clock: T0, seed: {
     "work/search~1": runningDoc({stage_at: old}),
     "work/draft~r12-2": runningDoc({kind: "draft", title: "CV and letter: Larkspur Retail", stage_at: old}),
-  }});
+  }, fake: {canSend: "available", sample: {error: "rate_limited"}}});
   const {page, store} = o;
-  const r = {banner: await T(page, "dialog .banner"), a: await bar(page, "search~1")};
+  await seeIn(page, workSel("search~1"), "Taking longer");
+  const r = {slow: {banner: await T(page, "dialog .banner"), a: await bar(page, "search~1"), b: await bar(page, "draft~r12-2")}};
+  await page.keyboard.press("Escape");
+  await goto(page, "chat");
+  await page.getByLabel("Ask Claude anything").fill("What is due today?");
+  await page.getByRole("button", {name: "Send", exact: true}).click();
+  await page.waitForFunction(() => /plan's limit/.test((document.querySelector("#main") || {}).textContent || ""), null, {timeout: 5000}).catch(() => {});
+  await goto(page, "work");
+  await page.waitForFunction(() => !!document.querySelector("dialog .banner"), null, {timeout: 5000}).catch(() => {});
+  r.banner = await T(page, "dialog .banner");
+  r.a = await bar(page, "search~1");
   await page.locator("dialog").getByRole("button", {name: "Stop everything"}).click();
   await turn(page, 8);
   r.paused = [store.get("work/search~1").stop_asked, store.get("work/draft~r12-2").stop_asked];
+  r.errors = o.errors;
+  await o.ctx.close();
+  return r;
+};
+
+// Work the person asked for in a chat shows on the page (app.py busy): a few plain words
+// from a check-in in the last hour, never a work id.
+S.chat_busy = async (a) => {
+  const o = await open({html: a.html, hash: "work", clock: T0, seed: {
+    "chats/cloud-1": {kind: "cloud", title: "Your helper", seen_at: T0, busy: "Drafting your reply to Juno"},
+  }});
+  const {page, store} = o;
+  const sheet = "dialog.work-sheet";
+  const panel = async () => (await one(page, sheet)) || "";
+  const gone = (w) => page.waitForFunction(([s, x]) => { const el = document.querySelector(s); return !!el && !el.textContent.includes(x); }, [sheet, w], {timeout: 5000}).catch(() => {});
+  await seeIn(page, sheet, "Claude is busy in your chat: Drafting");
+  const r = {panel: await panel(), pill: (await one(page, "#pill")) || ""};
+  const at = await page.evaluate(() => new Date(Date.now()).toISOString());
+  store.chat("chats/cloud-1", {busy: "Saving your work", seen_at: at}, store.version("chats/cloud-1"), "update");
+  await seeIn(page, sheet, "Claude is busy in your chat: Saving your work");
+  r.saving = await panel();
+  // Each line that must not show is written over one that shows, so its going is seen.
+  const old = await page.evaluate(() => new Date(Date.now() - 2 * 3600000).toISOString());
+  store.chat("chats/cloud-1", {busy: "Drafting your reply to Juno", seen_at: old}, store.version("chats/cloud-1"), "update");
+  await gone("Claude is busy in your chat");
+  r.stale = await panel();
+  store.chat("chats/cloud-1", {busy: "Saving your work", seen_at: at}, store.version("chats/cloud-1"), "update");
+  await seeIn(page, sheet, "Claude is busy in your chat: Saving your work");
+  store.chat("chats/cloud-1", {busy: "search~1", seen_at: at}, store.version("chats/cloud-1"), "update");
+  await gone("Claude is busy in your chat");
+  r.workId = await panel();
   r.errors = o.errors;
   await o.ctx.close();
   return r;
