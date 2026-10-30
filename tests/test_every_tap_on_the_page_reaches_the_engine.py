@@ -221,6 +221,21 @@ def test_a_person_put_in_the_bin_is_never_messaged_again(run, tmp_path):
     assert wren["status"] in ("stopped", "closed"), wren["status"]
 
 
+def test_the_bin_on_a_to_do_row_turns_the_employer_down_in_the_engine(run, tmp_path):
+    # The bin on a To do row (the maintainer, 2026-10-29: "it didnt go away"): the employer
+    # choice is applied by the engine as well as taken off the page.
+    where = Search(str(tmp_path / "s"))
+    got, rec = _round_trip(run, tmp_path, where, "todobin", [
+        {"hash": "todo", "click": "Not Wren?", "exact": False},
+        {"click": "Not interested in Fernhill Freight any more", "role": "radio", "exact": True},
+        {"submit": True},
+    ])
+    (a,) = [x for x in got["actions"] if x["action"] == "person.stop"]
+    assert a["value"]["scope"] == "employer" and a["value"]["employer"] == "Fernhill Freight", a
+    wren = next(p for p in where.model()["people"] if p["id"] == "fernhill_freight_halloway")
+    assert wren["status"] in ("stopped", "closed"), wren["status"]
+
+
 def test_a_suggestion_declined_is_not_offered_again(run, tmp_path):
     where = Search(str(tmp_path / "s"))
     got, rec = _round_trip(run, tmp_path, where, "nothanks", [
