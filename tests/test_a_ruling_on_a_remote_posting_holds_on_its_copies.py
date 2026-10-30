@@ -116,3 +116,18 @@ def test_the_round_drops_the_copy_the_prefilter_drops(tmp_path):
     kept, skipped = throttle.throttle([copy], {}, urls, pairs, "2026-10-25")
     assert skipped and not kept
     assert skipped[0]["skip_reason"].startswith("already ruled out")
+
+
+def test_a_ruling_on_where_a_remote_posting_is_holds_only_there(tmp_path, monkeypatch):
+    # "Remote - US" ruled out for someone in Canada was kept under ANYWHERE, so the same role
+    # posted as "Toronto, ON, Canada" or "Remote - Canada" was dropped with the US reason (the
+    # release review, 2026-10-30). A ruling on the place stays with the place as written.
+    monkeypatch.setattr(throttle, "_place_still_fails", lambda e: "us" in str((e or {}).get("location", "")).lower())
+    path = str(tmp_path / "seen_jobs.json")
+    exclude.add_many([{"url": "https://careers.example.com/ellerwick/1", "title": TITLE, "company": EMPLOYER,
+                       "location": "Remote - US", "reason": "Location: based in the US only"}],
+                     today="2026-10-22", path=path)
+    pairs = _pairs(path)
+    assert throttle.ruled_pair(pairs, _job("Remote - US")), "the same place on another board is still ruled out"
+    for location in ["Toronto, ON, Canada", "Remote - Canada", "Remote", "Canada", "", None]:
+        assert throttle.ruled_pair(pairs, _job(location)) == "", location

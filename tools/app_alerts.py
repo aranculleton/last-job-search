@@ -472,13 +472,20 @@ def _referrer_update(ctx, item: dict):
 def for_interview(ctx, item: dict) -> tuple[list, dict | None]:
     if item.get("past"):
         return [], None
-    when = _soon(item.get("when"), ctx.today)
+    import app_model
+    # The day in the person's own zone: `when` is the moment where the time is known.
+    day = app_model.when_day(item.get("when"), ctx.zone)
+    when = _soon(day, ctx.today)
     if not when or item.get("prep"):
         return [], None
     iid = item["id"]
     stage = item.get("next_stage") or "the next stage"
+    at = ""
+    if item.get("time"):
+        zone = item.get("zone") or ""
+        at = " at %s%s" % (item["time"], " " + zone if zone and zone != ctx.zone else "")
     return [alert("no_prep", iid, f"Your {item['company']} interview is {when} and there is "
-                  "no prep yet.", f"{stage[:1].upper() + stage[1:]} on {item['when']}.",
+                  "no prep yet.", f"{stage[:1].upper() + stage[1:]} on {day}{at}.",
                   work("prep", "Prepare me", f"Interview prep: {item['company']}, "
                        f"{item['role']}", {"interview": iid}, f"prep~{iid}"))], None
 

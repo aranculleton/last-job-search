@@ -117,8 +117,10 @@ def test_an_interview_carries_its_stages_time_who_files_and_practice(search):
     assert "- [ ] Panel interview (scheduled 2026-10-28 14:00, with Shirin Example, Head of " \
            "Risk)" in md
     i = _interview(search)
-    assert (i["when"], i["time"], i["all_day"], i["zone"]) == ("2026-10-28", "14:00", False,
-                                                               "Europe/London")
+    # `when` is the moment once the time is known: the page reads `when` alone, and a day
+    # alone there reads "time not set" (2026-10-29).
+    assert (i["when"], i["time"], i["all_day"], i["zone"]) == (
+        "2026-10-28T14:00:00Z", "14:00", False, "Europe/London")
     # Who it is with, as the page may hold it: a first name and a title, never a surname.
     assert i["with"] == "Shirin, Head of Risk"
     assert [(s["label"], s["done"], s["time"]) for s in i["stages"]] == [

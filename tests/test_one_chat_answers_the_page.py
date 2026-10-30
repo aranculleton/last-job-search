@@ -485,7 +485,8 @@ def test_the_pin_is_offered_once_ever_even_when_nobody_answers(copy):
 def test_no_chat_is_ever_started_for_the_page(copy):
     """A helper chat started for the page had none of the page's tools, published a spare
     page, and each lapse started another (the maintainer, 2026-10-29). The chat that answers
-    the page is one the person opened; nothing starts another."""
+    the page is one the person opened, and it never starts another for itself: a big job
+    gets a chat of its own (tools/app.py next), never the page's work."""
     copy.page()
     assert copy.send(copy.run("listen", copy.dump(), "--chat", "big-chat"))
     said = copy.run("start", "--on", "Opus 5.5", "--tools", "none", "--chat", "big-chat")

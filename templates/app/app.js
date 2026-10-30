@@ -733,7 +733,11 @@
       const e = effective(x, IV_TURNS);
       if (e && (!best || txt(e.doc.at) > txt(best.doc.at))) best = e;
     }
-    return best && IV_ENDS.indexOf(best.doc.action) >= 0 ? best : null;
+    if (!best || IV_ENDS.indexOf(best.doc.action) < 0) return null;
+    // Once the chat has saved the end, the record speaks for itself: a stage a chat books
+    // afterwards puts the process back in interview, and the interview shows again.
+    if (best.state === "applied" && /^(interview|offer)/i.test(txt(obj(iv).status))) return null;
+    return best;
   }
   function settledAction(id, names) {
     const e = effective(id, names);
@@ -902,7 +906,7 @@
     const status = txt(w.status) || "queued";
     const asked = tms(w.asked_at) || t;
     const out = {status, stages, n, i: 0, pct: 0, leftS: total, elapsedS: Math.max(0, (t - asked) / 1000),
-      inStageS: 0, stalled: false, late: false, lapsed: false,
+      inStageS: 0, over: false, late: false, lapsed: false,
       stopping: !!(w.stop_asked || w.cancel) && !TERMINAL.has(status)};
     const at = Math.min(Math.max(parseInt(w.stage, 10) || 0, 0), n - 1);
     if (status === "done") { out.i = n; out.pct = 100; out.leftS = 0; return out; }
@@ -917,7 +921,12 @@
     const before = stages.slice(0, at).reduce((a, s) => a + s.est, 0);
     const since = tms(w.stage_at) || tms(w.claimed_at) || asked;
     const inStage = Math.max(0, (t - since) / 1000);
-    const cur = stages[at].est;
+    let cur = stages[at].est;
+    // A stage that says how long it has left (a search's job sites do: app.py pin) is timed
+    // by what it said, never by the usual seconds: a search with 15 minutes to go was called
+    // "Stalled" at ten (2026-10-29).
+    const leftAt = tms(w.left_at);
+    if (leftAt && leftAt >= since && w.left_s !== null && w.left_s !== undefined && isFinite(Number(w.left_s))) cur = Math.max(5, (leftAt - since) / 1000 + Number(w.left_s));
     let frac = Math.min(inStage, 0.9 * cur) / cur;
     const c = obj(w.count);
     if (Number(c.total) > 0) frac = Math.min(1, Math.max(0, Number(c.done) / Number(c.total)));
@@ -925,13 +934,15 @@
     const after = stages.slice(at + 1).reduce((a, s) => a + s.est, 0);
     out.leftS = Math.max(0, cur - inStage) + after;
     out.inStageS = inStage;
-    out.stalled = inStage > 2 * cur;
+    // Past its estimate is only slower than usual: the work is still going. Only a lease that
+    // ran out (no check-in for half an hour) says it may have stopped.
+    out.over = inStage > cur;
     const lease = tms(w.lease_until);
     out.lapsed = !!(lease && t > lease);
     return out;
   }
   function phaseOf(w, p) {
-    return [p.status, p.stalled, p.late, p.lapsed, p.stopping, p.i, limitHit()].join("|");
+    return [p.status, p.over, p.late, p.lapsed, p.stopping, p.i, limitHit()].join("|");
   }
 
   function allWork() {
@@ -945,15 +956,21 @@
       .sort((a, b) => txt(a[1].asked_at).localeCompare(txt(b[1].asked_at)));
   }
   function finishedAt(w) { return tms(w.finished_at) || tms(w.asked_at) || 0; }
-  function limitHit() {
-    if (S.flags.limit && S.flags.limit > now()) return true;
-    let n = 0;
-    for (const [, w] of allWork()) {
-      if (w.status !== "running" && w.status !== "claimed") continue;
-      const p = progress(w);
-      if (p.stalled || p.lapsed) n++;
+  // The plan's usage limit is claimed only from a real signal: Claude itself said so (a quick
+  // answer came back rate_limited). Two slow jobs at once are just two slow jobs: guessing
+  // from them showed the limit banner over work that was running fine (2026-10-29).
+  function limitHit() { return !!(S.flags.limit && S.flags.limit > now()); }
+  // What the chat that answers the page is doing for the person in a chat (app.py busy): a
+  // few plain words, from a check-in in the last hour; never a work id.
+  function chatBusy() {
+    let best = null;
+    for (const [, c] of S.chats) {
+      const line = txt(c && c.busy).replace(/\s+/g, " ").trim();
+      const seen = tms(c && c.seen_at);
+      if (!line || line.indexOf(" ") < 0 || allWork().has(line) || !seen || now() - seen > 3600000) continue;
+      if (!best || seen > best.seen) best = {line: line.slice(0, 120), seen};
     }
-    return n >= 2;
+    return best ? best.line : "";
   }
   function computerListening() {
     for (const [, c] of S.chats) {
@@ -1863,7 +1880,7 @@
     }
     return h("div", {class: "alert tone-" + (ALERT_TONE[txt(a.kind)] || "warn"), "data-alert": a.id},
       // Why it matters waits behind a "?": the line and its fix are what the card needs.
-      h("div", {class: "alert-body"}, h("div", {class: "hint-line"}, h("p", {class: "alert-text"}, h("span", {class: "sr-only"}, "Needs fixing: "), plainDates(a.text)),
+      h("div", {class: "alert-body"}, h("div", {class: "hint-line"}, h("p", {class: "alert-text"}, h("span", {class: "sr-only"}, "Needs fixing:\u00a0"), plainDates(a.text)),
         a.why ? hintQ("why:" + (ctx.where || "") + ":" + a.id, txt(plainDates(a.why)).replace(/\.$/, ""), "Why: " + clip(txt(plainDates(a.text)), 60)) : null), fix));
   }
   // Three No thanks of one kind in 30 days pause that kind here too, as the engine does.
@@ -1895,7 +1912,7 @@
         paid ? costEl(sg.cost, ac.type === "work" ? ac.kind : null, cid) : null);
     }
     return h("div", {class: "suggest", "data-suggest": sg.id},
-      h("div", {class: "hint-line"}, h("p", {class: "suggest-text"}, h("span", {class: "sr-only"}, "Suggestion: "), plainDates(sg.text)),
+      h("div", {class: "hint-line"}, h("p", {class: "suggest-text"}, h("span", {class: "sr-only"}, "Suggestion:\u00a0"), plainDates(sg.text)),
         sg.why ? hintQ("sgwhy:" + (ctx.where || "") + ":" + sg.id, txt(plainDates(sg.why)).replace(/\.$/, ""), "Why: " + clip(txt(plainDates(sg.text)), 60)) : null),
       h("div", {class: "suggest-acts"}, use,
         btn("No thanks", () => act([{item: sg.id, action: "suggest.dismiss", value: {kind: txt(sg.kind)}, rev: sg.rev}], "No thanks: it will not be suggested again"),
@@ -2039,16 +2056,28 @@
   // 2026-10-29: the bin on one row of "Did these notes go?" "didnt go away"). Undo brings
   // them back.
   function stoppedPeople() {
+    // Mirrors what the chat does with the tap: "Already in touch another way" keeps the
+    // person and drops only the note and its follow-ups, so a reply they are owed stays; a
+    // whole employer closes only the people there nobody has written to yet, so a live
+    // conversation's rows stay.
     const ids = new Set();
     const cos = new Set();
+    const other = new Set();
     for (const [id, d] of allActions()) {
       if (txt(d.action) !== "person.stop") continue;
       const st = actionState(id);
       if (st === "refused" || st === "undone" || st === "failed" || st === "unsaved") continue;
+      const scope = txt(obj(d.value).scope);
+      if (scope === "other") { other.add(txt(d.item)); continue; }
       ids.add(txt(d.item));
-      if (txt(obj(d.value).scope) === "employer" && txt(obj(d.value).employer)) cos.add(txt(obj(d.value).employer).toLowerCase());
+      if (scope === "employer" && txt(obj(d.value).employer)) cos.add(txt(obj(d.value).employer).toLowerCase());
     }
-    return (cid, co) => !!cid && (ids.has(cid) || (!!co && cos.has(txt(co).toLowerCase())));
+    const unwritten = (cid) => {
+      const p = peopleItems().find((x) => txt(x.id) === cid);
+      return !!p && ["", "not_contacted"].includes(txt(p.status)) && !arr(p.thread).length;
+    };
+    return (cid, co, kind) => !!cid && (ids.has(cid) || (other.has(cid) && kind !== "reply")
+      || (!!co && cos.has(txt(co).toLowerCase()) && unwritten(cid)));
   }
   function todoItems() {
     const out = [];
@@ -2077,7 +2106,7 @@
     for (const d of dueItems()) {
       if (PENDING_KINDS.has(txt(d.kind))) continue;   // one card for all of them (withdrawTodo)
       const company = dueEmployer(d);
-      if (stopped(dueContact(d), company)) continue;
+      if (stopped(dueContact(d), company, txt(d.kind))) continue;
       // An interview's prep owed is that interview's own card, never a second one; its
       // thank-you and status note are rows of their own, each with its own button.
       const isPrep = txt(d.kind) === "prep" || (txt(d.kind) === "interview" && txt(d.action) === "work:prep");
@@ -2974,7 +3003,8 @@
     const searching = [...allWork()].find(([id, w]) => w.kind === "search" && ACTIVE.has(w.status));
     const again = h("button", {type: "button", class: "btn link", "data-k": "search-again", onclick: () => askSearch()}, "Search again");
     const addJob = h("button", {type: "button", class: "btn link", "data-k": "add-job", onclick: () => askAddJob()}, "Add a job");
-    let small = searching ? ["Searching now, about " + plural(Math.max(1, Math.round(progress(searching[1]).leftS / 60)), "minute", "minutes") + " left. · ", addJob] :
+    const sp = searching ? progress(searching[1]) : null;
+    let small = searching ? [(sp.over || sp.lapsed ? "Searching now, taking longer than usual. Claude is still on it." : "Searching now, about " + plural(Math.max(1, Math.round(sp.leftS / 60)), "minute", "minutes") + " left.") + " · ", addJob] :
       jb.made_at ? ["Searched " + ago(jb.made_at) + " · ", addJob] : [addJob];
     if (jb.met === false && rows.length && !searching) small = ["Fewer good matches than usual. "].concat(small || []);
     let sum;
@@ -6588,11 +6618,14 @@
     const titleId = "w-" + seg(id);
     const st = p.status;
     const toComputer = w.to === "computer";
-    const slow = p.stalled || p.lapsed;
+    // Slower than usual is still running (a spinner, no warning); only a missed check-in may
+    // mean it stopped.
+    const slow = p.lapsed;
+    const over = p.over && !slow;
     // A state word only where the work is not simply running.
     const place = st === "queued" ? queuePlace(id, w) : null;
     const inLine = !!(place && place.busy && !p.late);
-    const label = p.stopping ? "Stopping after this step" : st === "queued" ? (p.late ? "Not picked up yet" : inLine ? (place.pos === 1 ? "Next" : "In line") : "Waiting to start") : st === "running" || st === "claimed" ? (slow ? "Stalled" : null) : WORK_WORDS[st] || cap1(st);
+    const label = p.stopping ? "Stopping after this step" : st === "queued" ? (p.late ? "Not picked up yet" : inLine ? (place.pos === 1 ? "Next" : "In line") : "Waiting to start") : st === "running" || st === "claimed" ? (slow ? "May have stopped" : over ? "Taking longer" : null) : WORK_WORDS[st] || cap1(st);
     const tone = p.stopping ? "held" : {done: "ok", failed: "bad", stopped: "held", needs_you: "warn"}[st] || (slow || p.late ? "warn" : null);
     const spinning = ACTIVE.has(st) && st !== "needs_you" && st !== "queued" && !slow;
     const waitingDot = st === "queued" && !p.late;
@@ -6620,7 +6653,7 @@
       h("div", {class: "wc-head"}, spinning ? h("span", {class: "spin", "aria-hidden": "true"}) : h("span", {class: "dot tone-" + (tone || (waitingDot ? "plain" : "info")) + (waitingDot ? " is-waiting" : ""), "aria-hidden": "true"}),
         h("h3", {id: titleId, class: "wc-title"}, h("button", {type: "button", class: "wc-toggle", "aria-expanded": String(open), "aria-controls": "steps-" + seg(id), "data-k": "wct:" + id,
           onclick: () => { openState.set("det:steps:" + id, !open); scheduleRender(); }}, txt(w.title).replace(/^Nudge /, "Follow up with ") || "Work")),
-        stateWord(label, tone)));
+        stateWord(label, over && !p.stopping ? "info" : tone)));
     if (now1) put(cardEl, h("p", {class: "wc-now" + (st === "failed" ? " tone-bad" : st === "needs_you" ? " tone-warn" : "")}, now1));
     if (ACTIVE.has(st)) {
       put(cardEl, h("div", {class: "bar" + (spinning ? " is-running" : ""), role: "progressbar", "aria-labelledby": titleId, "aria-valuemin": "0", "aria-valuemax": "100",
@@ -6633,8 +6666,8 @@
     if (st === "needs_you") put(cardEl, h("div", {class: "wc-actions"}, btn("Answer", () => askWorkAnswer(id), {kind: "primary", small: true, key: "wans:" + id, aria: "Answer: " + txt(w.title)})));
     if (slow && ACTIVE.has(st)) {
       put(cardEl, h("p", {class: "wc-warn tone-warn", "data-stall": "1"}, limitHit() ?
-        "Claude may have reached your plan's usage limit. This waits until it resets." :
-        p.lapsed ? "It may have stopped." : "This step is taking more than twice as long as usual."));
+        "Claude has reached your plan's usage limit. This waits until it resets." :
+        "It has not checked in for a while, so it may have stopped."));
     }
     if (st === "done") {
       if (!workSeenAt.has(id)) workSeenAt.set(id, now());
@@ -6672,14 +6705,17 @@
   function barText(p) {
     if (p.status === "done") return "Done";
     if (p.status === "queued") return "Not started";
-    return p.pct + " percent, " + (p.stalled ? "stalled" : dur(p.leftS) + " left");
+    return p.pct + " percent, " + (p.lapsed ? "may have stopped" : p.over ? "taking longer than usual" : dur(p.leftS) + " left");
   }
+  // A time left is never shown once the work has run past it (it said "About 8 minutes
+  // left" 23 minutes in, 2026-10-29).
   function timeText(w, p) {
     if (p.status === "done") return "Finished " + ago(w.finished_at || w.asked_at);
     if (p.status === "queued") return "Asked " + ago(w.asked_at) + ".";
     if (p.status === "needs_you") return "Paused for your answer.";
     const so = dur(p.elapsedS) + " so far";
-    if (p.stalled) return so;
+    if (p.lapsed) return so;
+    if (p.over) return so + ". Taking longer than usual. Claude is still on it.";
     return so + " · " + (p.leftS < 60 ? "under a minute left" : "about " + dur(p.leftS).replace(/^about /, "") + " left");
   }
   const WORK_ORDER = {needs_you: 0, running: 1, claimed: 1, queued: 2};
@@ -6704,14 +6740,19 @@
     const running = active.filter(([, w]) => w.status === "running" || w.status === "claimed").length;
     const queued = active.filter(([, w]) => w.status === "queued").length;
     const ask = active.filter(([, w]) => w.status === "needs_you").length;
+    const going = active.filter(([, w]) => w.status === "running" || w.status === "claimed").map(([, w]) => progress(w));
+    const late = going.some((p) => p.over || p.lapsed);
     const left = Math.max(0, ...active.map(([, w]) => progress(w).leftS || 0));
-    const sum = active.length ? [running ? running + " running" : null, queued ? queued + (running ? " waiting their turn" : " waiting to start") : null, ask ? nWord(ask, "needs", "need") + " you" : null].filter(Boolean).join(", ") + "." : "Nothing running.";
-    const sm = active.length ? (running && queued ? "Claude does one thing at a time in the chat that answers this page. " : "") + "About " + plural(Math.max(1, Math.round(left / 60)), "minute", "minutes") + " left. Nothing is sent." : null;
+    const inChat = chatBusy();
+    const sum = active.length ? [running ? running + " running" : null, queued ? queued + (running ? " waiting their turn" : " waiting to start") : null, ask ? nWord(ask, "needs", "need") + " you" : null].filter(Boolean).join(", ") + "." : inChat ? "Claude is busy in your chat." : "Nothing running.";
+    const sm = active.length ? (running && queued ? "Claude does one thing at a time in the chat that answers this page. " : "") + (late ? "Taking longer than usual. Claude is still on it." : "About " + plural(Math.max(1, Math.round(left / 60)), "minute", "minutes") + " left.") + " Nothing is sent." : null;
     return h("section", {class: "workp", "aria-labelledby": "h-work-" + where},
       h("div", {class: "rail-head"}, h("h2", {id: "h-work-" + where, class: "rail-title", tabindex: "-1"}, "Claude's work")),
       h("div", {class: "summary"}, h("div", {class: "sum-words"}, h("p", {class: "sum"}, sum), sm ? h("p", {class: "sum-small"}, sm) : null)),
-      limit ? h("div", {class: "banner tone-warn"}, h("p", {}, "Claude may have reached your plan's usage limit. Running work waits until it resets; nothing retries by itself."),
+      limit ? h("div", {class: "banner tone-warn"}, h("p", {}, "Claude has reached your plan's usage limit. Running work waits until it resets; nothing retries by itself."),
         active.length ? btn("Stop everything", () => { for (const [id] of active) stopWork(id); }, {small: true, key: "pause-all"}) : null) : null,
+      inChat ? h("article", {class: "work-card st-running", "data-chat-busy": "1"},
+        h("div", {class: "wc-head"}, h("span", {class: "spin", "aria-hidden": "true"}), h("h3", {class: "wc-title"}, "Claude is busy in your chat: " + inChat))) : null,
       helperStartingCard(),
       listView("work", {items, name: "work", live: ([, w]) => ACTIVE.has(txt(w.status) || "queued"),
         fold: ([id, w]) => workFolded(id, w),
@@ -6751,16 +6792,18 @@
     const seen = Number(sget("session", "ljs:work-seen")) || 0;
     const recent = [...allWork()].filter(([id, w]) => (w.status === "done" || w.status === "failed") && finishedAt(w) > Math.max(now() - 600000, seen) && !workFolded(id, w));
     const asking = act.filter(([, w]) => w.status === "needs_you").length;
-    const slow = act.filter(([, w]) => { const p = progress(w); return p.stalled || p.lapsed || p.late; }).length;
+    const slow = act.filter(([, w]) => { const p = progress(w); return p.lapsed || p.late; }).length;
     // Work nobody has picked up is waiting, never "running" (the maintainer, 2026-10-26).
-    const going = act.filter(([, w]) => w.status !== "queued" && w.status !== "needs_you").length;
+    // Work asked for in a chat counts as running too (app.py busy).
+    const inChat = chatBusy();
+    const going = act.filter(([, w]) => w.status !== "queued" && w.status !== "needs_you").length + (inChat ? 1 : 0);
     const queued = act.filter(([, w]) => w.status === "queued");
     const starting = 0;
     const waiting = queued.length - starting;
     const helperGoing = helperAsked() ? 1 : 0;
-    if (!act.length && !recent.length && !helperGoing) return null;
+    if (!act.length && !recent.length && !helperGoing && !inChat) return null;
     // One thing running says what it is ("Finding jobs"); waiting work is counted after it.
-    const one = going === 1 ? txt((act.find(([, w]) => w.status !== "queued" && w.status !== "needs_you") || [null, {}])[1].title) : "";
+    const one = going === 1 ? txt((act.find(([, w]) => w.status !== "queued" && w.status !== "needs_you") || [null, {title: "Busy in your chat"}])[1].title) : "";
     // A phone's top bar has room for the one thing only; the waiting count is in the sheet.
     const narrow = !wide();
     const lead = going ? (one && one.length <= (narrow ? 14 : 18) ? one : going + " running") : "";

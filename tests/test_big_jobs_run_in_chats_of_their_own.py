@@ -1,11 +1,16 @@
-"""Big jobs run side by side in the one helper chat, and never hold it.
+"""Big jobs run in chats of their own, side by side, and never hold the chat that answers
+the page.
 
 The maintainer, 2026-10-29: "are we still able to run networking at the same time as a job
-search? and both at the same time as interview prep?" Before, the helper waited on each big
-job, so a networking run asked for during a search sat "In line" for up to an hour. Now
-`next` says where each job runs, a big one goes to a background agent inside the same chat
-(never a new chat), and the helper goes straight back for the next tap. Three at most
-(`page_db.HEAVY_CAP`), and the page says "In line" only once three are running.
+search? and both at the same time as interview prep?" Then, from a person's copy the same
+day: run inside the chat that answers the page, even as background agents, a search and a
+networking run held it for 15 and 23 minutes, and the page waited on every tap. Changed
+2026-10-29: this file pinned "a background agent inside the same chat, never a new chat";
+now `next` never hands a big job to that chat to run itself. In a cloud chat it prints the
+create_session call for a chat of its own, which runs the one item, pins its progress and
+lands it, and never publishes, watches or answers the page; a background agent is only the
+fallback where no chat can be started. Three at most (`page_db.HEAVY_CAP`), and the page
+says "In line" only once three are running.
 """
 from __future__ import annotations
 
@@ -42,12 +47,19 @@ def test_the_page_knows_the_same_big_jobs_and_the_same_cap_as_the_engine():
     assert f"const HEAVY_CAP = {page_db.HEAVY_CAP};" in js and page_db.HEAVY_CAP == 3
 
 
-def test_next_says_a_big_job_runs_as_a_background_agent_and_light_work_here(search):
+def test_next_sends_a_big_job_to_a_chat_of_its_own_and_keeps_light_work_here(search):
     search.put("work", "network~acme", _w("network", "Kestrel Mutual"), version=1)
     got = json.loads(search.run("next", search.dump, "--chat", "cloud-1", "--kind", "cloud",
                                 "--now", NOW))
     assert got["work"] == "network~acme" and got["heavy"] is True
-    assert got["run"] == "background agent"
+    # A copy with a GitHub address starts a chat; one without falls back to an agent. Never
+    # here, whichever it is.
+    assert got["run"] in ("child session", "background agent")
+    call = got.get("create_session") or got.get("agent")
+    assert "--work network~acme" in call["prompt"] and "app.py pin" in call["prompt"]
+    alone = json.loads(search.run("next", search.dump, "--chat", "cloud-1", "--kind", "cloud",
+                                  "--no-sessions", "--now", NOW))
+    assert alone["run"] == "background agent" and "create_session" not in alone
     search.put("work", "network~acme", _w("network", "Kestrel Mutual", status="done"), version=2)
     search.put("work", "talk~1", _w("talk"), version=1)
     got = json.loads(search.run("next", search.dump, "--chat", "cloud-1", "--kind", "cloud",
@@ -55,15 +67,20 @@ def test_next_says_a_big_job_runs_as_a_background_agent_and_light_work_here(sear
     assert got["work"] == "talk~1" and got["heavy"] is False and got["run"] == "here"
 
 
-def test_the_helper_never_waits_on_a_big_job_and_never_makes_a_chat_for_one():
+def test_the_chat_that_answers_the_page_never_runs_or_waits_on_a_big_job():
     skill = " ".join(_read(".claude/skills/app/SKILL.md").split())
-    assert "A big job never holds this chat" in skill
+    assert "A big job runs in a chat of its own" in skill
+    assert "make the `create_session` call exactly as `next` printed it" in skill
+    assert "It never publishes, watches or answers the page" in skill
+    # The fallback where no chat can be started.
     assert "`run_in_background: true`" in skill and "`isolation: \"worktree\"`" in skill
     assert "Never wait for either: go straight back to step 3" in skill
-    assert "never a new chat" in skill
-    # One writer of the page's view, so two agents never write it at once.
-    assert "this chat is the one writer of the page's view" in skill
+    # One writer of the page's view, so two chats never write it at once.
+    assert "This chat is the one writer of the page's view" in skill
     assert "waited for, with the url" not in skill
+    assert "never a new chat" not in skill
+    head = _read(".claude/skills/app/SKILL.md").split("---", 2)[1]
+    assert "mcp__claude-code-remote__create_session" in head
 
 
 def test_a_job_is_in_line_only_once_three_big_ones_are_running():

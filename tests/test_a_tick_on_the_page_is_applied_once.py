@@ -399,7 +399,9 @@ def test_the_heavy_cap_holds_and_urgent_work_goes_first():
 
 def test_next_writes_its_claim_pinned_with_its_locks(search):
     search.put("work", "draft~abc", _w("draft", "Kestrel Mutual"), version=5)
-    search.put("locks", "emp~kestrel_mutual", {"work": "draft~old", "until": "2026-10-24T00:00:00Z"},
+    # Dumped where the store keeps a lock since 4.3 (`holds`): one under its 4.2 name
+    # (`locks`) has no version a write to `holds` can be pinned to, and is moved instead.
+    search.put("holds", "emp~kestrel_mutual", {"work": "draft~old", "until": "2026-10-24T00:00:00Z"},
                version=2)
     out = search.run("next", search.dump, "--chat", "cloud-1", "--kind", "cloud",
                      "--now", NOW, "--claim-out", os.path.join(search.dump, "claim"))

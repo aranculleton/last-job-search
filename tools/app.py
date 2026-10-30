@@ -6,10 +6,15 @@
     python3 tools/app.py page [--out F]                          the whole page, to publish
     python3 tools/app.py apply <dump dir> [--chat ID] [--claim]  the page's actions, applied
     python3 tools/app.py next <dump dir> --chat ID --kind cloud|computer [--claim-out DIR]
+                                                                 [--no-sessions]: where it runs
+    python3 tools/app.py pin <dump dir> --work ID --stage S [--line L] [--done N --total M]
+                                         [--left-s S] [--log round.log]   progress, as it goes
+    python3 tools/app.py busy <dump dir> "<a few words>" | --done
+                                                                 what this chat does in the chat
     python3 tools/app.py progress <kind of work>                 its stages and their seconds
     python3 tools/app.py check [--model F]                       the model against the contract
     python3 tools/app.py start [--on M] [--tools T] [--page URL] [--chat ID] [--listen]
-                                                                 what this chat does next, in any
+                               [--work ID]                       what this chat does next, in any
                                                                  state: set up, part-way, old, new
     python3 tools/app.py start --paste                           the line for a chat on a computer
     python3 tools/app.py published <url>|none [--chat ID]        the page's address, once published
@@ -122,7 +127,8 @@ def cmd_view(a) -> int:
         old = (db.get("view") or {}).get(doc_id) if db else None
         w.add("set", "view", doc_id, doc, if_version=old["version"] if old else None)
     for doc_id in app_lists.stale(full, db.get("view") or {}):
-        w.add("delete", "view", doc_id, if_version=db["view"][doc_id]["version"])
+        if db["view"][doc_id]["version"] is not None:      # read under 4.2's name: kept
+            w.add("delete", "view", doc_id, if_version=db["view"][doc_id]["version"])
     # The model builds `listener` and `schedule` itself now; each document is written once.
     # A section too big for one document (a long search's jobs, a big contact book) goes as
     # parts the page joins again (page_db.split), never cut short.
@@ -137,7 +143,8 @@ def cmd_view(a) -> int:
             w.add("set", "view", doc_id, doc, if_version=old["version"] if old else None)
             written.append(doc_id)
     for doc_id in page_db.stale_parts(db.get("view") or {}, written):
-        w.add("delete", "view", doc_id, if_version=db["view"][doc_id]["version"])
+        if db["view"][doc_id]["version"] is not None:      # read under 4.2's name: kept
+            w.add("delete", "view", doc_id, if_version=db["view"][doc_id]["version"])
     # Where each message goes (Open profile, Open in email): the address in an owner-only
     # document per contact, read by the page only for its owner and never embedded in it.
     ids = [m["contact"] for m in model.get("messages") or [] if m.get("contact")] + \
@@ -203,8 +210,9 @@ def cmd_apply(a) -> int:
 
 def cmd_next(a) -> int:
     """The queued work this chat should take, with the model a chat started for it gets
-    (tools/model_guide.py for_work). A republish goes to the page's listener alone, and
-    first: the page's own code changed under every open window."""
+    (tools/model_guide.py for_work), and `run`: where it is done (where_it_runs). A big job
+    is never `here`. A republish goes to the page's listener alone, and first: the page's
+    own code changed under every open window."""
     import app_listen
     import app_model
     import model_guide
@@ -217,14 +225,145 @@ def cmd_next(a) -> int:
     if chosen is None:
         return 0
     info = model_guide.for_work(chosen["kind"], a.on)
-    # A big job runs as a background agent inside this chat, so the chat stays free for the
-    # next tap (the app skill, step 4): `run` says which.
     heavy = bool(page_db.WORK_KINDS.get(chosen["kind"], {}).get("heavy"))
-    chosen.update(model=info["model"], effort=info["effort"], heavy=heavy,
-                  run="background agent" if heavy else "here")
+    chosen.update(model=info["model"], effort=info["effort"], heavy=heavy)
+    chosen.update(where_it_runs(chosen, a.chat, a.kind, a.no_sessions))
     if a.claim_out:
         chosen["batches"] = page_db.claim(db, chosen, a.chat, a.kind, now, a.claim_out)
     print(_dump(chosen), end="")
+    return 0
+
+
+# A big job (page_db.WORK_KINDS "heavy": a search, drafts, a resume for a contact, an
+# interview prep, a networking run) never runs in the chat that answers the page. Run there,
+# even as background agents, a search and a networking run held it for 15 and 23 minutes and
+# the page waited on every tap (2026-10-29). Each gets a cloud chat of its own instead.
+CHILD_TITLE = "Job search: {title}"
+
+
+def child_prompt(chosen: dict, parent: str, url: str, session: bool = True) -> str:
+    """What a chat (or, where none can be started, a background agent) is told for one big
+    job: run that item, pin its progress, finish it, land it, and say it is finished. It
+    never publishes, watches or answers the page."""
+    wid, kind = chosen["work"], chosen["kind"]
+    keys = ", ".join(s["key"] for s in chosen.get("stages") or [] if s.get("key"))
+    where = "in a chat of its own" if session else "as a background agent"
+    tell = (f"send_message to {parent}: " if session else "end with one line: ")
+    lines = [
+        f"Do one piece of work for this person's job search page, {where}, so the chat that "
+        f"answers the page stays free. The work: \"{chosen.get('title') or kind}\" (work item "
+        f"{wid}, a {kind}), already claimed for you. The page: {url}. The chat that answers "
+        f"it: {parent}.",
+        f"1. python3 tools/app.py start --on \"<your model>\" --tools none --work {wid}, and do "
+        "what it prints. Never publish, watch or answer the page, and never write its view.",
+        "2. Load ArtifactData (ToolSearch, select:ArtifactData). Read the page's database "
+        f"into a fresh folder in your scratchpad, $D: ArtifactData query, url {url}, "
+        "collection work, then holds, each with out_dir $D.",
+        f"3. Do it as .claude/skills/app/SKILL.md says for a {kind}: step 4 (its row, and "
+        "\"Progress costs nothing extra\") and step 5. Read only those parts.",
+        f"4. At each stage ({keys}): python3 tools/app.py pin \"$D\" --work {wid} --stage "
+        "<stage> --line \"<one plain line>\", and send the batch it prints (ArtifactData "
+        f"batch, url {url}). On a long stage, pin it again with a new line every ten minutes "
+        "or so: the page counts a job with no word for half an hour as stopped. "
+        "\"stop_asked\": true means they tapped Stop: finish it stopped. A refused pin: read "
+        "work again and pin once more; claimed by another chat, write nothing else and stop.",
+    ]
+    if kind == "search":
+        lines.append(
+            f"{len(lines)}. Run run_round.py in the background (Bash, run_in_background). "
+            f"While it runs, every five minutes or so: python3 tools/app.py pin \"$D\" --work "
+            f"{wid} --stage scrape --log <the round's folder>/round.log, and send its batch, "
+            "so the page shows how many job sites are done and how long is left.")
+    if session:
+        lines.append(
+            f"{len(lines)}. No ArtifactData in this chat: instead of each batch, send_message "
+            f"to {parent}: \"Progress {wid}: <stage> | <one plain line>\", and at the end "
+            f"\"Finished {wid}: <what was made, in a line>\". It writes them to the page.")
+    lines.append(
+        f"{len(lines)}. Finish as step 5 says, without its heartbeat line and without app.py "
+        f"view. Save and land your work on master (CLAUDE.md, \"Saving\"). Then {tell}"
+        f"\"Finished {wid}, on master: bring the page up to date.\" Never write to the "
+        "person: the page shows how it went.")
+    return "\n".join(lines)
+
+
+def where_it_runs(chosen: dict, chat: str, kind: str, no_sessions: bool = False) -> dict:
+    """`run`: `here` for light work; for a big job, `child session` with the create_session
+    call to make (its prompt runs the item and pins its progress), or, where a chat cannot
+    start one (a chat on a computer, or no create_session tool), `background agent` with
+    the Agent call. A big job is never `here`."""
+    if not chosen.get("heavy"):
+        return {"run": "here"}
+    import app_setup
+    url = app_setup.page_record().get("url", "") or "<url>"
+    parent = chat or "<your chat id>"
+    owner, name = app_setup.origin()
+    title = CHILD_TITLE.format(title=" ".join(str(chosen.get("title") or chosen["kind"])
+                                              .split())[:60])
+    if kind == "cloud" and not no_sessions and owner and name:
+        call = {"title": title, "prompt": child_prompt(chosen, parent, url),
+                "source_url": f"https://github.com/{owner}/{name}"}
+        if chosen.get("model"):
+            call["model"] = chosen["model"]
+        return {"run": "child session", "create_session": call}
+    agent = {"description": title, "prompt": child_prompt(chosen, parent, url, session=False),
+             "run_in_background": True, "isolation": "worktree"}
+    if chosen.get("model"):
+        agent["model"] = chosen["model"]
+    return {"run": "background agent", "agent": agent}
+
+
+def cmd_pin(a) -> int:
+    """One running item's progress, pinned: its stage, a plain line, a count, the time left
+    (or a search's round.log, which says all three), with its lease renewed."""
+    import app_model
+    import page_db
+    _, now = app_model.clock(None, a.now)
+    db = page_db.load(a.dump)
+    count = {"done": a.done, "total": a.total} if a.total else None
+    left, stage = a.left_s, a.stage
+    if a.log:
+        try:
+            with open(a.log, encoding="utf-8", errors="replace") as fh:
+                seen = page_db.round_progress(fh.read())
+        except OSError:
+            seen = None
+        if seen:
+            count = {"done": seen["done"], "total": seen["total"]}
+            left = seen["left_s"] if seen["left_s"] is not None else left
+            # The round's own log knows which step it is on; the chat pins "scrape" throughout.
+            stage = seen["stage"] or stage
+    try:
+        got = page_db.pin(db, a.work, now, a.out or os.path.join(a.dump, "out"),
+                          stage=stage, line=a.line, count=count, left_s=left, dump_dir=a.dump)
+    except KeyError as e:
+        print(f"app: {e.args[0]}", file=sys.stderr)
+        return 2
+    print(_dump(got), end="")
+    return 0
+
+
+def cmd_busy(a) -> int:
+    """What this chat is doing for the person in the chat, on the page, or (--done) that it
+    has finished."""
+    import app_listen
+    import app_model
+    import page_db
+    if not a.done and not a.line:
+        print("app: say what Claude is doing in a few words, or --done", file=sys.stderr)
+        return 2
+    _, now = app_model.clock(None, a.now)
+    db = page_db.load(a.dump)
+    chat = app_listen.this_chat(a.chat)
+    try:
+        batches = page_db.busy_beat(db, chat, a.kind or app_listen.chat_kind(), now,
+                                    a.out or os.path.join(a.dump, "out"),
+                                    None if a.done else a.line, dump_dir=a.dump)
+    except ValueError as e:
+        print(f"app: {e}", file=sys.stderr)
+        return 2
+    print(_dump({"chat": chat, "busy": None if a.done else page_db.plain_busy(a.line),
+                 "batches": batches}), end="")
     return 0
 
 
@@ -283,7 +422,7 @@ def cmd_start(a) -> int:
         return 0
     code, lines = app_setup.start(on=a.on or "", tools=a.tools or "", page_url=a.page or "")
     lines = app_listen.shape(code, lines, chat=app_listen.this_chat(a.chat), listen=a.listen,
-                             helper=a.helper, on=a.on or "")
+                             helper=a.helper, on=a.on or "", work=a.work or "")
     print("\n".join(lines))
     return code
 
@@ -320,9 +459,30 @@ def cmd_listen(a) -> int:
     import app_model
     import page_db
     _, now = app_model.clock(None, a.now)
-    got = app_listen.decide(page_db.load(a.dump), app_listen.this_chat(a.chat),
-                            a.out or os.path.join(a.dump, "listen_out"), now,
+    out = a.out or os.path.join(a.dump, "listen_out")
+    db = page_db.load(a.dump)
+    # A page a 4.2 chat left keeps its records under the old names: they move to the new
+    # ones once, in code, before anything is written to them (2026-10-29).
+    more = page_db.to_read(a.dump, db)
+    if more:
+        print("listen: this page was made by an older version of the app, and its records "
+              "move to their new names once, now. ArtifactData query, once for each of the "
+              f"collections {', '.join(more)} (url <the page>, out_dir the same folder, limit "
+              "1000), then run this again with the same folder. Say nothing about it to the "
+              "person.")
+        return 0
+    move = page_db.move(db, a.dump, os.path.join(out, "move"),
+                        app_listen._stamp(now), app_listen.this_chat(a.chat))
+    if move["batches"]:
+        page_db.moved_into(a.dump, move)
+    got = app_listen.decide(move["db"], app_listen.this_chat(a.chat), out, now,
                             listen=a.listen, helper=a.helper, hand_to=a.hand)
+    if move["batches"]:
+        print("listen: the page's records take their new names: send these batches first, in "
+              "order, asking nobody. If one is refused, another chat did it already: read "
+              "again into a new folder and run this once more.")
+        for path in move["batches"]:
+            print(path)
     for line in got["lines"]:
         print(line)
     for path in got["batches"]:
@@ -340,6 +500,18 @@ def cmd_listen(a) -> int:
             print(f"upkeep: {len(closed)} application(s) gone quiet were closed as no reply "
                   "(followups.py --close-quiet); save them with the rest, after this wake's "
                   "work (python3 tools/save_state.py)")
+        # An interview's time said in a note or a message goes on the interview's own
+        # record, so the page shows it and nobody is asked to add it (2026-10-29).
+        try:
+            import interview_pack
+            zone = person.home_zone_named(person.directory()) or "UTC"
+            timed = interview_pack.take_times(today=app_model.local_day(now, zone).isoformat())
+        except Exception:  # noqa: BLE001  no profile or no interview yet: nothing to take
+            timed = []
+        if timed:
+            print(f"upkeep: {len(timed)} interview time(s) said in a note or a message were "
+                  "saved on the interview; save them with the rest and bring the page up to "
+                  "date (python3 tools/app.py view), asking nobody")
         # The page's store kept small, in code: finished records over two months old go.
         old = page_db.prune(page_db.load(a.dump), now, os.path.join(a.out or os.path.join(a.dump, "listen_out"), "prune"))
         if old:
@@ -463,6 +635,29 @@ def main(argv=None) -> int:
                    help="also write the claim as a batch file in this folder")
     p.add_argument("--on", default="", help="this chat's model: a child gets the model its "
                                             "work needs")
+    p.add_argument("--no-sessions", dest="no_sessions", action="store_true",
+                   help="this chat cannot start a chat of its own (no create_session): a big "
+                        "job runs as a background agent instead")
+    p.add_argument("--now", default=None)
+    p = sub.add_parser("pin", help="a running item's progress, with its lease renewed")
+    p.add_argument("dump")
+    p.add_argument("--work", required=True, help="the work item's id")
+    p.add_argument("--stage", default=None, help="the stage's key or number")
+    p.add_argument("--line", default="", help="one plain line of what happened")
+    p.add_argument("--done", type=int, default=0)
+    p.add_argument("--total", type=int, default=0)
+    p.add_argument("--left-s", dest="left_s", type=int, default=None,
+                   help="seconds left in this stage, when the work itself says")
+    p.add_argument("--log", default="", help="a search's round.log: the count and time left")
+    p.add_argument("--out", default="", help="where the batch goes (default <dump>/out)")
+    p.add_argument("--now", default=None)
+    p = sub.add_parser("busy", help="what this chat is doing for the person, on the page")
+    p.add_argument("dump")
+    p.add_argument("line", nargs="?", default="", help="a few plain words")
+    p.add_argument("--done", action="store_true", help="it has finished")
+    p.add_argument("--chat", default="")
+    p.add_argument("--kind", default="", choices=("", "cloud", "computer"))
+    p.add_argument("--out", default="", help="where the batch goes (default <dump>/out)")
     p.add_argument("--now", default=None)
     p = sub.add_parser("progress", help="the stages of a kind of work, with their seconds")
     p.add_argument("kind")
@@ -476,6 +671,7 @@ def main(argv=None) -> int:
     p.add_argument("--listen", action="store_true",
                    help="the person asked this chat to look after the page")
     p.add_argument("--helper", action="store_true", help="this chat is the page's helper")
+    p.add_argument("--work", default="", help="this chat was started for one work item")
     p.add_argument("--paste", action="store_true",
                    help="print the line a person pastes into a chat on their computer")
     p = sub.add_parser("published", help="keep the page's address once it is published")
@@ -509,7 +705,8 @@ def main(argv=None) -> int:
         return 2
     # Every command runs before there is a profile too: setup itself is on the page.
     return {"model": cmd_model, "view": cmd_view, "page": cmd_page, "apply": cmd_apply,
-            "next": cmd_next, "progress": cmd_progress, "check": cmd_check,
+            "next": cmd_next, "pin": cmd_pin, "busy": cmd_busy,
+            "progress": cmd_progress, "check": cmd_check,
             "start": cmd_start, "published": cmd_published, "resume-saved": cmd_resume_saved,
             "files-saved": cmd_files_saved, "propose": cmd_propose, "listen": cmd_listen,
             "republish": cmd_republish, "pinned": cmd_pinned}[a.cmd](a)

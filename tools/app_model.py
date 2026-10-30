@@ -112,6 +112,63 @@ def clock(today: str | None = None, now: str | None = None) -> tuple[dt.date, dt
     return day, t
 
 
+# The zones an invite writes beside a time (outcome.md keeps them as written: what_works,
+# _STAGE_WHEN), read as the place they name. One a place does not settle is left out: an
+# interview at a time in a zone not known here keeps its day alone, never a wrong hour.
+_ZONE_WORDS = {"UTC": "UTC", "GMT": "Etc/GMT", "BST": "Europe/London", "UK": "Europe/London",
+               "WET": "Europe/Lisbon", "WEST": "Europe/Lisbon", "CET": "Europe/Paris",
+               "CEST": "Europe/Paris", "EET": "Europe/Athens", "EEST": "Europe/Athens",
+               "ET": "America/New_York", "EST": "America/New_York", "EDT": "America/New_York",
+               "CT": "America/Chicago", "CST": "America/Chicago", "CDT": "America/Chicago",
+               "MT": "America/Denver", "AT": "America/Halifax", "AST": "America/Halifax",
+               "ADT": "America/Halifax", "NST": "America/St_Johns", "NDT": "America/St_Johns",
+               "AKST": "America/Anchorage", "AKDT": "America/Anchorage", "HST": "Pacific/Honolulu",
+               "MST": "America/Denver", "MDT": "America/Denver", "PT": "America/Los_Angeles",
+               "PST": "America/Los_Angeles", "PDT": "America/Los_Angeles",
+               "SGT": "Asia/Singapore", "HKT": "Asia/Hong_Kong", "JST": "Asia/Tokyo",
+               "AEST": "Australia/Sydney", "AEDT": "Australia/Sydney",
+               "NZST": "Pacific/Auckland", "NZDT": "Pacific/Auckland"}
+
+
+def interview_when(day, clock="", written="", home="UTC") -> str | None:
+    """An interview's `when` for the page: the moment, as "YYYY-MM-DDTHH:MM:00Z", where its
+    time is known (the page shows it in the person's own zone, and in this device's where
+    that differs); its calendar day alone where it is not, which the page shows as "time not
+    set". A day with its time sent as a day alone read "time not set" with the time on
+    record (2026-10-29). `written` is a zone the invite gave beside the time (a word in
+    `_ZONE_WORDS`, or a name like "America/Chicago"); else `home`."""
+    day = str(day or "").strip()
+    if not day:
+        return None
+    clock = str(clock or "").strip()
+    m = re.fullmatch(r"(\d{1,2}):(\d{2})", clock)
+    if not m:
+        return day
+    written = str(written or "").strip()
+    name = (_ZONE_WORDS.get(written.upper()) or (written if "/" in written else "")) if written \
+        else (str(home or "") or "UTC")
+    if not name:
+        return day
+    try:
+        import zoneinfo
+        at = dt.datetime.combine(dt.date.fromisoformat(day),
+                                 dt.time(int(m.group(1)), int(m.group(2))),
+                                 tzinfo=zoneinfo.ZoneInfo(name))
+    except Exception:  # noqa: BLE001  no zone data here, or a day that is not one
+        return day
+    return _utc(at).strftime("%Y-%m-%dT%H:%M:00Z")
+
+
+def when_day(when, zone: str) -> str:
+    """The person's own day of an interview's `when`: a moment late in the evening west of
+    London is the next day in UTC."""
+    when = str(when or "")
+    if "T" not in when:
+        return when[:10]
+    t = parse_time(when)
+    return local_day(t, zone).isoformat() if t else when[:10]
+
+
 def local_day(t: dt.datetime, zone: str) -> dt.date:
     """The person's own date at time `t`: a tick at half past midnight in their zone is
     that day, though it is still yesterday in UTC."""
@@ -1961,7 +2018,7 @@ def _interviews(ctx: Ctx, targets: dict) -> list:
     import open_actions
     import throttle
     import app_lists
-    out, full, folded = [], [], 0
+    out, full, folded, order = [], [], 0, {}
     today = ctx.today.isoformat()
     for row, rid in zip(ctx.tracker, tracker_ids(ctx.tracker)):
         st = _status(row)
@@ -1979,7 +2036,9 @@ def _interviews(ctx: Ctx, targets: dict) -> list:
             past = max(held, key=lambda s: s["date"])
             days = app_lists.ago(past["date"], ctx.today)
             full.append({"id": "int-" + rid[4:], "company": row.get("company") or "",
-                         "role": row.get("role") or "", "status": st, "when": past["date"],
+                         "role": row.get("role") or "", "status": st,
+                         "when": interview_when(past["date"], past.get("time"),
+                                                past.get("zone"), ctx.zone),
                          "past": True})
             if days is None or days > app_lists.FOLD_DAYS["interviews"]:
                 folded += 1
@@ -1994,7 +2053,7 @@ def _interviews(ctx: Ctx, targets: dict) -> list:
         item = {"id": iid, "company": row.get("company") or "", "role": row.get("role") or "",
                 "status": st,
                 "next_stage": stage.get("label") or None,
-                "when": stage.get("date") or None,
+                "when": interview_when(stage.get("date"), clock, stage.get("zone"), ctx.zone),
                 "prep": ({"path": rel(prep), "updated": _mtime(prep)} if text else None),
                 "questions": len(re.findall(r"^- \*\*Q\.\*\* ", text, re.M)),
                 # A stage's day is a whole day in the person's own zone; a time shows only
@@ -2018,15 +2077,18 @@ def _interviews(ctx: Ctx, targets: dict) -> list:
                 "past": not live,
                 "rev": rev_of(iid, st, stage.get("label"), stage.get("date"), clock,
                               stage.get("with"), bool(text), live)}
+        order[iid] = (str(stage.get("date") or "9999"), clock)
         _card(ctx, targets, item, "for_interview")
         targets[iid] = dict(_row_target(row, rid), kind="interview", stage=item["next_stage"]
                             or "", rev=item["rev"])
         out.append(item)
         if live:
             full.append({k: item[k] for k in ("id", "company", "role", "status", "when", "past")})
+    # By the day and the time each was booked for, as outcome.md gives them: a moment in UTC
+    # can fall on the next day.
     ahead = sorted((i for i in out if not i["past"]),
-                   key=lambda i: (i["when"] or "9999", i["company"].lower()))
-    done = sorted((i for i in out if i["past"]), key=lambda i: (i["when"] or "", i["company"]),
+                   key=lambda i: (order[i["id"]], i["company"].lower()))
+    done = sorted((i for i in out if i["past"]), key=lambda i: (order[i["id"]], i["company"]),
                   reverse=True)
     out = ahead + done
     _list(ctx, "interviews", full, len(out), folded)

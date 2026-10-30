@@ -2402,6 +2402,8 @@ def _cli_received(argv) -> int:
           + (f"; now {status}" if status else ""))
     if got["said"]:
         print(f"  {got['said']}")
+    _interview_times((already_contacted(contacts, contact_id=a.contact_id) or {}).get("company"),
+                     contacts, threads, a.today)
     return 0
 
 
@@ -3189,7 +3191,22 @@ def _cli_set(argv) -> int:
     save_contacts(contacts, a.contacts)
     print(f"{row.get('contact_id')} ({row.get('name')}, {row.get('company')}): "
           + "; ".join(said))
+    _interview_times(row.get("company"), contacts, threads, a.today)
     return 0
+
+
+def _interview_times(company, contacts, threads, today) -> None:
+    """A day and a time for an interview booked at this employer, said in the note or the
+    message just recorded, go on the interview's own record at once, so the page shows the
+    time and no chat asks the person to add it (interview_pack.take_times, 2026-10-29)."""
+    try:
+        import interview_pack
+        got = interview_pack.take_times(today=today, company=company or "",
+                                        contacts=contacts, threads=threads)
+    except Exception:  # noqa: BLE001  no tracker or no interview yet: nothing to take
+        return
+    for g in got:
+        print(f"  {interview_pack.saved_line(g)}")
 
 
 def _cli_no_reply(argv) -> int:

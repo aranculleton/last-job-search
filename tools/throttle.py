@@ -628,22 +628,31 @@ def ruled_out(entries: dict, today: str = "") -> tuple[dict[str, str],
         n = norm(e.get("url") or u)
         if n:
             urls[n] = why
-        pair = entry_pair(e)
+        pair = entry_pair(e, reason)
         days = _days_seen(e)
         if pair and (own_call or not relist_since or not days or max(days) >= relist_since):
             pairs[pair] = why
     return urls, pairs
 
 
-def entry_pair(e: dict) -> tuple[str, str, str] | None:
-    """The (title, employer key, city) a ruling on this entry covers, or None for one with
-    no title or employer. The city is ANYWHERE for an entry with no location, with no
+def entry_pair(e: dict, reason: str = "") -> tuple[str, str, str] | None:
+    """(title, employer, city) for a seen_jobs entry, the key its ruling is kept under, or None
+    with no title or employer. The city is ANYWHERE for an entry with no location, with no
     place in it, or with a remote one (`place`): see `city`. `ruled_pair` reads a posting
-    against it."""
+    against it. A ruling on where a remote posting is ("Remote - US" for someone in Canada)
+    is about that place, so it is kept under the place as written (`_own_place`) and never
+    covers the same role posted remote in another country or in a city."""
     t, k = title_key(e.get("title")), key(e.get("company"))
     if not (t and k):
         return None
+    if reason and _LOCATION_REASON.search(reason) and city(e.get("location")) == ANYWHERE:
+        return (t, k, _own_place(e.get("location")))
     return (t, k, place(e.get("location")))
+
+
+def _own_place(location) -> str:
+    """A remote location as written, the key a ruling on that place is kept under."""
+    return "@" + " ".join(str(location or "").lower().split())
 
 
 def ruled_pair(pairs: dict, job: dict) -> str:
@@ -657,7 +666,8 @@ def ruled_pair(pairs: dict, job: dict) -> str:
     t, k, c = _posting_key(job.get("title"), job.get("company"), job.get("location"))
     if not (t and k):
         return ""
-    return pairs.get((t, k, c)) or pairs.get((t, k, ANYWHERE)) or ""
+    return (pairs.get((t, k, c)) or pairs.get((t, k, ANYWHERE))
+            or pairs.get((t, k, _own_place(job.get("location")))) or "")
 
 
 # A posting's own date is the portal's, and a portal relisting a posting gives it a

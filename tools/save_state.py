@@ -14,6 +14,10 @@ by file so the build noise the rule says never to commit stays out.
 caches under profile/tests/ with them); everything else is ignored by .gitignore on
 purpose, so it is forced in by path, one existing path at a time, and a file of theirs the
 repo holds that has gone from disk is staged as removed. Exit 0, or 1 when git refused.
+
+After the commit, the landing check (`./tools/ci_local.sh --quick`) runs in the background
+and the work lands on master when it ends green (RUNBOOK.md, "4. Record and persist, then
+land on master"): it held the chat that answers the page for minutes in the foreground.
 """
 from __future__ import annotations
 
@@ -142,7 +146,16 @@ def main(argv: list[str] | None = None, root: str = ROOT) -> int:
         return 1
     staged = _git(root, "diff", "--cached", "--name-only").stdout.split()
     print(f"save_state: staged; {len(staged)} file(s) now waiting to be committed")
+    if staged:
+        print(LAND)
     return 0
+
+
+# What follows the commit: the landing check runs in the background, so the chat that
+# answers the page is never held by it (it was, for minutes, 2026-10-29).
+LAND = ("save_state: then commit, open the pull request and start ./tools/ci_local.sh --quick "
+        "in the background (Bash run_in_background); merge when it ends green. While it runs "
+        "the page says \"Saving your work\" (app.py busy; the app skill, step 5).")
 
 
 if __name__ == "__main__":

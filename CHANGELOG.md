@@ -22,6 +22,20 @@ make sense to somebody whose repo just received it.
 
 ### Fixed
 
+- **A ruling on where a remote posting is now holds only there.** "Based in the US only" on
+  one board's copy no longer rules out the same role listed for your own country elsewhere.
+- **A search past its job sites says which step it is on**, not "taking longer than usual"
+  while it reads and scores what it found.
+- **An interview time written in CST, AST, NST, AKST, HST or their daylight forms** shows at
+  the right time on the page instead of in your own zone.
+- **The bin on a To do row hides only what the chat will close.** "Not interested in this
+  employer" keeps the rows of people there you are already talking to, and "Already in touch
+  another way" keeps a reply you owe.
+- **An interview ended on the page shows again** when a chat later books a new stage for the
+  same application.
+- **Safari's screen reader reads "Needs fixing:" and "Suggestion:" as words of their own**,
+  not run into the next word.
+- **The page's saved data is written with the same line ends on every computer.**
 - **Chats no longer squeeze their history at 200,000 tokens.** The cap made a chat on a
   1M-window model forget its work every few steps; Claude Code's own default, the model's
   whole window, holds again, and the security guard refuses the cap coming back. A chat
@@ -34,6 +48,21 @@ make sense to somebody whose repo just received it.
 - **Contacts counts as needing you only who does.** A follow-up you could send is counted
   apart ("4 follow-ups you could send"), never as someone waiting on you, and a call booked
   a season ago no longer counts as one to prepare for.
+- **The page no longer calls a search that is still running "Stalled"**, or blames your
+  plan's usage limit. A search is timed by how long its job sites say is left, slow work
+  says it is taking longer than usual and that Claude is still on it, and Try again shows
+  only when the work has really stopped.
+- **Something you ask for in a chat shows on your page while Claude does it** ("Claude is
+  busy in your chat").
+- **Big jobs run in a chat of their own** (a search, drafts, interview prep, a networking
+  run), so the chat that answers your page stays free for every tap.
+- **Saving your work no longer holds up the page.** The final check runs in the background
+  and runs your own tests once instead of twice; the page says "Saving your work" meanwhile.
+- **An interview's time is kept on the interview.** A time given in a chat, an invite, a
+  message or a contact's note is saved on it, so the page shows the time instead of "time
+  not set", and you are never asked to add it yourself.
+- **A page made before 4.3 moves its records to their new names by itself** the first time
+  its chat wakes, so the first changes after the update are no longer refused.
 - The round no longer spends about five seconds working out the line about waiting
   improvements on every call; it is worked out once and again only when your profile or
   saved files change.
@@ -47,6 +76,8 @@ make sense to somebody whose repo just received it.
 
 ### Changed
 
+- **A release's Windows check runs in three parts side by side**, so the slowest set-up
+  check finishes in about a third of the time it took.
 - **Each screen says when Claude is working on it**: "Claude is on it: ..." at the top, or
   how many things, with See how it is going a tap away.
 - **Find jobs and Find people never start a second run.** While one is going the button
