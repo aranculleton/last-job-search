@@ -444,8 +444,7 @@ p.count.tone-bad { color: var(--st-failed); }
    even pace, so it glides rather than stepping, and faded at both edges, so no band shows. */
 .bar.is-running .fill { position: relative; overflow: hidden; }
 .bar.is-running .fill::after { content: ""; position: absolute; inset: 0; transform: translateX(-100%); will-change: transform;
-  background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.28), transparent);
-  background: linear-gradient(90deg, transparent 0%, color-mix(in srgb, var(--surface) 10%, transparent) 30%, color-mix(in srgb, var(--surface) 38%, transparent) 50%, color-mix(in srgb, var(--surface) 10%, transparent) 70%, transparent 100%);
+  background: linear-gradient(90deg, transparent, var(--surface) 50%, transparent); opacity: 0.38;
   animation: glide 2.4s linear infinite; }
 @keyframes glide { to { transform: translateX(100%); } }
 /* The brief's bell: the size of Tweak, ink when the brief is on and muted when it is not, so
