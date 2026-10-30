@@ -1360,3 +1360,13 @@ def test_the_page_offers_the_pin_on_the_brief_and_while_the_first_search_runs(ru
             sels=['[data-item="setup"]', ".pin-offer"])
     _clean(r)
     assert r["found"]['[data-item="setup"]'] and r["found"][".pin-offer"] == [], r["found"]
+
+
+def test_the_numbers_on_the_brief_are_never_cut_off(run, pages):
+    """At 1280 by 800 the panel's last line, "How far they got", was half hidden, and opening
+    it showed nothing more (seen on the README's own picture, 2026-10-30)."""
+    for vp in ({"width": 1280, "height": 800}, {"width": 1440, "height": 900}, {"width": 800, "height": 900}):
+        r = run("inside", html=pages["sample"], viewport=vp, clock="2026-10-25T09:00:00Z",
+                inner='[data-k="bp-funnel"]', box=".bp-numbers", tap='[data-k="bp-funnel"]')
+        _clean(r)
+        assert r["closed"] and r["opened"], (vp, r)

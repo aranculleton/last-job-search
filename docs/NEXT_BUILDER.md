@@ -34,7 +34,12 @@ MAINTAINING.md first; this is only what 4.5 left.
 - The 4.2 newcomer journey findings were never closed as a list: the apply link, the
   searching state, applied shown the same everywhere, a double paste, forms rather than chat,
   and the wording.
-- The README's pictures, video and wording predate the 4.5 page and are too long.
+- The README's pictures come from the test sample through the harness's `shots` and `walk`
+  scenarios (1280 by 800 at 1.25, the phone at 390 by 844 at 2), put together with Pillow;
+  no script for it is kept in the app.
+- Windows, on the 4.5.0 release run: `tests/test_research_fetches_once_and_remembers_each_host.py::test_writers_at_the_same_moment_all_land`
+  lost writes from writers at the same moment (facts 1, 4 to 7 missing). 4.5 did not touch
+  the research cache, so it is a Windows race in it: reproduce with the Windows suite.
 
 ## Not tested against the live services
 

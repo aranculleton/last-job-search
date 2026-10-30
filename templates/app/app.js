@@ -2908,7 +2908,7 @@
     const t = Object.keys(obj(obj(M().help).tip)).length ? obj(obj(M().help).tip) : obj(M().tip);
     if (obj(M().help).off || settingOf("tips", "on") === "off") return null;
     const tid = txt(t.id) || "tip";
-    if (txt(t.text) && !effective(tid, ["tip.seen"])) return {text: txt(t.text).replace(/^Tip:\s*/, ""), done: () => act([{item: tid, action: "tip.seen", value: {area: txt(t.area)}, rev: txt(t.rev) || null}], "Tip put away")};
+    if (txt(t.text) && !effective(tid, ["tip.seen"])) return {text: cap1(txt(t.text).replace(/^Tip:\s*/, "")), done: () => act([{item: tid, action: "tip.seen", value: {area: txt(t.area)}, rev: txt(t.rev) || null}], "Tip put away")};
     const day = Math.floor(now() / 86400000);
     const k = "ljs:tip-off:" + day;
     if (sget("local", k)) return null;
@@ -6048,7 +6048,7 @@
     if (at !== tab && !(tab === "drafts" && at === "drafts-messages")) return null;
     const tid = txt(t.id) || "tip";
     if (effective(tid, ["tip.seen"])) return null;
-    return h("p", {class: "tip small muted"}, "Tip: " + txt(t.text).replace(/^Tip:\s*/, ""), " ", btn("Got it", () => act([{item: tid, action: "tip.seen", value: {area: txt(t.area)}, rev: txt(t.rev) || null}], "Tip put away"), {kind: "link", key: "tip-seen"}));
+    return h("p", {class: "tip small muted"}, "Tip: " + cap1(txt(t.text).replace(/^Tip:\s*/, "")), " ", btn("Got it", () => act([{item: tid, action: "tip.seen", value: {area: txt(t.area)}, rev: txt(t.rev) || null}], "Tip put away"), {kind: "link", key: "tip-seen"}));
   }
   const TOUR = [
     ["brief", "Brief", "Your day at a glance. Tap any line to go to it."],

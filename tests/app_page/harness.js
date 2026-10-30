@@ -1037,6 +1037,26 @@ S.look = async (a) => {
   return r;
 };
 
+// Is one thing drawn wholly inside another (not cut off by its box), before and after a tap?
+S.inside = async (a) => {
+  const o = await open({html: a.html, viewport: a.viewport, hash: a.hash || "brief", clock: a.clock, seed: a.seed || {}});
+  const {page} = o;
+  await page.waitForSelector(a.inner, {timeout: 5000});
+  const fits = () => page.evaluate(([i, c]) => {
+    const el = document.querySelector(i);
+    const box = el.closest(c);
+    const r = el.getBoundingClientRect(), b = box.getBoundingClientRect();
+    const clip = el.closest(".bp-body") || box;
+    const k = clip.getBoundingClientRect();
+    return r.bottom <= Math.min(b.bottom, k.bottom) + 0.5 && r.height > 0;
+  }, [a.inner, a.box]);
+  const r = {closed: await fits()};
+  if (a.tap) { await page.locator(a.tap).first().click(); await turn(page, 4); r.opened = await fits(); }
+  r.errors = o.errors;
+  await o.ctx.close();
+  return r;
+};
+
 async function draftViaDialog(page, opts) {
   await page.getByRole("button", {name: "Draft this: Harbourline Bank, Pricing Analyst"}).click();
   await turn(page, 3);
