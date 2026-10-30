@@ -67,10 +67,11 @@ Anything else, ask in **Chat** on the page.
   and every claim against what you told it.
 - **It learns** from what you change, and **updates itself**.
 
-## Your data
+## Your data and security
 
 Everything about you stays in your private copy. Job postings are treated as data, never as
-instructions. [SECURITY.md](SECURITY.md) has the details.
+instructions, and a check fails any change that weakens the permission allowlist.
+[SECURITY.md](SECURITY.md) has the details.
 
 ## For the technically curious
 
@@ -78,6 +79,7 @@ instructions. [SECURITY.md](SECURITY.md) has the details.
 |---|---|
 | Setting up by hand | [SETUP.md](SETUP.md) |
 | What a search does | [RUNBOOK.md](RUNBOOK.md) |
+| The rules every chat follows | [CLAUDE.md](CLAUDE.md) |
 | How it works and what it costs | [ARCHITECTURE.md](ARCHITECTURE.md) |
 | Bugs and ideas | [CONTRIBUTING.md](CONTRIBUTING.md) |
 | Working on the app | [MAINTAINING.md](MAINTAINING.md) |
