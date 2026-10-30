@@ -20,6 +20,8 @@ make sense to somebody whose repo just received it.
 
 ## [Unreleased]
 
+## [4.5.0] - 2026-10-30
+
 ### Fixed
 
 - **A chat no longer asks you to allow every write to your page.** Claude Code read the names
