@@ -1255,7 +1255,9 @@ def test_the_news_says_when_it_was_gathered_and_when_it_is_old(run, pages):
     # A second function named clock() once turned the Today card's time into "498109000H 0M".
     assert not re.search(r"\d{4,}\s*h\b", fresh["bodyText"], re.I), fresh["bodyText"][:400]
     old = run("paint", html=pages["sample"], hash="brief", clock="2026-10-28T09:00:00Z")
-    assert re.search(r"Gathered \w+ 25 Oct\. Your next brief brings fresh news\.", old["bodyText"]), old["bodyText"][:600]
+    # The day as the page writes every day (fmtDay): "Sun 25 Oct", or "Sun, 25 Oct" where the
+    # browser's own date words put a comma (GitHub's Chromium does).
+    assert re.search(r"Gathered \w+,? 25 Oct\. Your next brief brings fresh news\.", old["bodyText"]), old["bodyText"][:600]
 
 
 def test_the_numbers_say_what_they_count_and_each_bar_says_its_week(run, pages):
