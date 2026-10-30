@@ -4,8 +4,9 @@ The maintainer, 2026-10-29, asked that the bin's choices really change things un
 hood. A person's bin: not this person (closed); not the employer any more (them,
 everyone there not yet written to, and the employer turned down by name); in touch another
 way (no note drafted, the route kept). A job's bin: pay, place and field teach the next
-ranking a rule about roles like it, not a note about one posting. Every person and employer
-is invented (tests/app_state.py).
+ranking a rule about roles like it, not a note about one posting. A draft's bin has the job's
+reasons, and only "No more roles from them" turns the employer down. Every person and
+employer is invented (tests/app_state.py).
 """
 from __future__ import annotations
 
@@ -21,7 +22,7 @@ sys.path.insert(0, os.path.join(ROOT, "tests"))
 
 import pytest  # noqa: E402
 
-from test_a_tick_on_the_page_is_applied_once import Search  # noqa: E402
+from test_a_tick_on_the_page_is_applied_once import KESTREL, Search  # noqa: E402
 
 ANSGAR = "kestrel_mutual_ansgar"
 
@@ -112,8 +113,8 @@ def test_a_job_binned_for_its_pay_place_or_field_teaches_the_next_ranking(search
     assert {r["id"]: r["status"] for r in search.model()["jobs"]["rows"]}["r9-1"] == "dismissed"
 
 
-def test_a_closed_posting_or_this_role_alone_teaches_nothing(search):
-    for why in ("closed", "not this role"):
+def test_a_closed_or_old_posting_or_this_role_alone_teaches_nothing(search):
+    for why in ("closed", "old", "not this role"):
         s = search
         a = s.act("job.dismiss", "r9-1", value={"why": why})
         assert s.apply()["ok"] == [a]
@@ -140,3 +141,59 @@ def test_an_interview_and_an_application_put_in_the_bin_are_closed_in_the_tracke
     assert got["ok"] == [b], search.receipt(b)
     after = next(x for x in search.model()["applications"] if x["id"] == app["id"])
     assert after["status"] in ("no_response", "closed"), after["status"]
+
+
+def _learned(search):
+    path = os.path.join(search.profile, "learned.json")
+    if not os.path.exists(path):
+        return []
+    with open(path, encoding="utf-8") as fh:
+        return [e for e in json.load(fh).get("entries", []) if e.get("area") == "jobs"]
+
+
+@pytest.mark.parametrize("why,note,teaches,declines", [
+    ("not this role", "you are not sending this one", "", False),
+    ("pay", "you are not sending this one", "the pay was not enough for them", False),
+    ("place", "you are not sending this one", "the place did not suit them", False),
+    ("field", "you are not sending this one", "Not their field", False),
+    ("employer", "no more roles from Kestrel Mutual", "", True),
+    ("closed", "the job has closed", "", False),
+    ("old", "it is too old now", "", False),
+    ("said on the page", "you are not sending this one", "", False),   # a page before 4.4
+])
+def test_a_draft_binned_records_its_reason_and_undo_puts_all_of_it_back(search, why, note,
+                                                                         teaches, declines):
+    a = search.act("ready.not_applying", KESTREL, value={"why": why})
+    assert search.apply()["ok"] == [a], search.receipt(a)
+    row = search.tracker_row("Kestrel Mutual")
+    assert row["status"] == "withdrawn"
+    said = "the posting closed first" if why == "closed" else "they chose not to send it"
+    assert said in row["notes"], row["notes"]
+    assert note in search.receipt(a)["note"], search.receipt(a)["note"]
+    rules = [e for e in _learned(search) if e.get("status", "active") == "active"]
+    if teaches:
+        assert len(rules) == 1 and teaches in rules[0]["rule"] and "None" not in rules[0]["rule"], rules
+    else:
+        assert not rules, rules
+    assert bool(_declined(search, "Kestrel Mutual")) == declines
+    search.written_back()
+    u = search.act("undo", undoes=a)
+    assert search.apply()["ok"] == [u], search.receipt(u)
+    assert search.tracker_row("Kestrel Mutual")["status"] == "drafted"
+    assert not [e for e in _learned(search) if e.get("status", "active") == "active"]
+    assert not _declined(search, "Kestrel Mutual")
+
+
+@pytest.mark.parametrize("status", ["rejected", "withdrawn", "no_response"])
+def test_each_end_in_an_interviews_bin_closes_it_and_undo_reopens_it(search, status):
+    iv = search.model()["interviews"][0]
+    company = iv["company"]
+    before = search.tracker_row(company)["status"]
+    a = search.act("outcome." + status, iv["id"], value={"on": "2026-10-25"}, rev=iv["rev"])
+    assert search.apply()["ok"] == [a], search.receipt(a)
+    assert search.tracker_row(company)["status"] == status
+    assert all(x["id"] != iv["id"] or x["past"] for x in search.model()["interviews"])
+    search.written_back()
+    u = search.act("undo", undoes=a)
+    assert search.apply()["ok"] == [u], search.receipt(u)
+    assert search.tracker_row(company)["status"] == before

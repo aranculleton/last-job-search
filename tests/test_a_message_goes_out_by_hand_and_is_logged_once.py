@@ -224,6 +224,18 @@ def test_a_note_past_its_day_with_nothing_logged_is_asked_about(search):
     assert len(_threads(search, PELL)) == 1
 
 
+@pytest.mark.parametrize("scope", ["person", "employer"])
+def test_the_bin_on_the_question_ends_it_for_that_person(search, scope):
+    # The maintainer, 2026-10-29: the bin on one row of "Did these notes go?" changed nothing.
+    _set_contact(search, PELL, next_action_due="2026-10-20")
+    q = next(n for n in search.model()["needs_you"] if n["id"] == f"q-sent-{PELL}")
+    co = q["about"]["company"]
+    aid = search.act("person.stop", PELL, value={"why": "not the right person, said on the page", "scope": scope,
+                                                 "employer": co if scope == "employer" else None})
+    assert search.apply()["ok"] == [aid], search.receipt(aid)
+    assert not [n for n in search.model()["needs_you"] if n["id"] == f"q-sent-{PELL}"]
+
+
 def test_not_yet_moves_the_day(search):
     _set_contact(search, PELL, next_action_due="2026-10-20")
     q = next(n for n in search.model()["needs_you"] if n["id"] == f"q-sent-{PELL}")

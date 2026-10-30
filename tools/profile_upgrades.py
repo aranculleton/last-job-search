@@ -1833,8 +1833,89 @@ def block(rows: list[tuple[Upgrade, str]]) -> str:
     return "\n".join(lines)
 
 
+# The round's one line was worked out afresh on every call, and working it out is a look at
+# the whole profile (an interpreter started, the tools imported, sixty checks): about five
+# seconds, paid again by every round and by every test that runs one. The answer only
+# changes when something the checks read changes, so it is kept for the process, under a
+# key of what they read: the profile's files and the search's state files with their
+# times and sizes, the two folders that move them, the day (a "no" is asked again after a
+# number of days) and the registry. A change in the same process (a profile file written,
+# a tracker row added, LJS_PROFILE pointed elsewhere) makes a new key, so it is looked at
+# again; `forget_line()` is the clear reset. Only the no-argument call is kept: a caller
+# that passes its own rows gets its own answer.
+_LINE_KEPT: dict = {}
+_SKIP_NAMES = {"__pycache__", ".git", "node_modules", ".pytest_cache"}
+_STATE_FOLDERS = ("documents", "rounds", "company_research", "networking", "upskill",
+                  "job_scraper", "handoff")
+
+
+def forget_line() -> None:
+    """Drop the kept round line, so the next `line()` looks again."""
+    _LINE_KEPT.clear()
+
+
+def _stamp(path: str) -> tuple:
+    try:
+        st = os.stat(path)
+    except OSError:
+        return (path, None, None)
+    return (path, st.st_mtime_ns, st.st_size)
+
+
+def _stamps(folder: str, depth: int) -> list[tuple]:
+    """Every entry of `folder` and, `depth` levels down, of the folders in it, with its
+    time and size: what changes when a file there is written, added or taken away."""
+    try:
+        with os.scandir(folder) as it:
+            entries = sorted((e for e in it if e.name not in _SKIP_NAMES),
+                             key=lambda e: e.name)
+    except OSError:
+        return [(folder, None, None)]
+    out = []
+    for e in entries:
+        out.append(_stamp(e.path))
+        if depth > 1:
+            try:
+                if e.is_dir(follow_symlinks=False):
+                    out.extend(_stamps(e.path, depth - 1))
+            except OSError:
+                pass
+    return out
+
+
+def _line_key() -> tuple:
+    """What the checks read, as a value that differs when any of it differs. Never raises:
+    a key that cannot be read is one that never matches, so the line is worked out."""
+    try:
+        try:
+            profile = person.directory()
+            files = _stamps(profile, 3)
+        except person.NoProfile:
+            profile, files = "", []
+        state = os.environ.get(person.STATE_ENV) or ROOT
+        state = state if os.path.isabs(state) else os.path.join(ROOT, state)
+        kept = _stamps(state, 1)
+        for name in _STATE_FOLDERS:
+            kept += _stamps(os.path.join(state, name), 2)
+        return (ROOT, profile, state, dt.date.today().isoformat(), id(REGISTRY), len(REGISTRY),
+                tuple(files), tuple(kept))
+    except Exception:  # noqa: BLE001  an unreadable key is a miss, never an error
+        return (object(),)
+
+
 def line(rows: list[tuple[Upgrade, str]] | None = None) -> str:
-    rows = pending() if rows is None else rows
+    if rows is None:
+        key = _line_key()
+        if key in _LINE_KEPT:
+            return _LINE_KEPT[key]
+        text = _line_of(pending())
+        _LINE_KEPT.clear()
+        _LINE_KEPT[key] = text
+        return text
+    return _line_of(rows)
+
+
+def _line_of(rows: list[tuple[Upgrade, str]]) -> str:
     if not rows:
         return ""
     alone = [u.id for u, _ in rows if u.needs == "nobody"]

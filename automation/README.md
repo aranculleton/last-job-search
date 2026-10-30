@@ -175,15 +175,11 @@ It disables itself after it fires. Then check that the reply arrived in the chat
 checks for itself that the run's work was saved (its pull request merged into master), and
 says so in one plain line. A Routines-screen task runs once with **Run now** on its page.
 
-### Keep a long-lived chat small
+### A long-lived chat keeps its whole window
 
-The chat that answers your page lives for weeks, and every tap and every brief re-reads its
-history. On a model with a 1M-token window that history could grow to a million tokens
-before Claude Code squeezed it, and each wake paid for all of it. So the app caps it: its own
-`.claude/settings.json` sets `CLAUDE_CODE_AUTO_COMPACT_WINDOW` to `200000`, the window every
-model had until recently, for every chat in your copy, in the cloud and on your computer
-alike. Nothing to set up. Values below 100,000 are raised to it by Claude Code. See
-[Set the auto-compact window](https://code.claude.com/docs/en/model-config#set-the-auto-compact-window).
+The chat that answers your page lives for weeks, and Claude Code squeezes its history only
+when the model's own window is nearly full. The app sets nothing here on purpose: a smaller
+cap made a chat forget what it was doing every few steps. Nothing to set up.
 
 ### Check the registry
 

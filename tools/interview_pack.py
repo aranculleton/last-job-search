@@ -1998,27 +1998,54 @@ def _same_employer(a, b) -> bool:
     return bool(n) and wa[:n] == wb[:n]
 
 
-def sibling_postings(ctx) -> list:
-    """[(what, source)]: the other postings for this role at this employer or an arm of it,
-    from the jobs the search has seen and the tracker, and what the contact notes say. A
-    pack for an employer with two live postings for one title (its main team and its Labs
-    arm) never asked which the call was for."""
+def _seen_postings(ctx) -> list:
+    """[(what, source)]: the postings in the jobs the search has seen that are for this
+    role at this employer or an arm of it, one for each posting and not this call's own.
+
+    One posting is one employer name in one place: the same role listed on two boards is
+    one posting, not two, and a posting whose deadline has passed (/rank marks it expired)
+    is no longer one. The call's own posting is the one the tracker row links to; where the
+    row holds no link (a process with a recruiter and no application), it is the only
+    posting under the employer's own name. Where the employer has several of those in
+    different places and nothing says which this is, they are all listed, as the call is
+    for one of them. A remote listing and a listing in a named place count as two: a
+    listing does not say if it is a copy."""
     k = company_key(ctx["company"])
-    found, urls = [], set()
     try:
         seen = throttle.load_seen(person.state("job_scraper", "seen_jobs.json")).get("seen") or {}
     except (OSError, ValueError):
         seen = {}
+    link = _text((ctx["row"] or {}).get("source"))
+    mine = throttle.norm(link) if link.lower().startswith(("http://", "https://")) else ""
+    postings, own = {}, None
     for url, e in seen.items():
-        if not isinstance(e, dict) or not _same_employer(k, company_key(e.get("company"))):
+        if not isinstance(e, dict) or _text(e.get("status")).lower() == "expired":
             continue
-        if throttle._same_title(ctx["role"], e.get("title")) and url not in urls:
-            urls.add(url)
-            found.append(("%s, %s%s" % (_text(e.get("title")), _text(e.get("company")),
-                                        " (%s)" % _text(e.get("location")) if _text(e.get("location"))
-                                        else ""), "job_scraper/seen_jobs.json"))
-    if len(found) < 2:
-        found = []
+        employer = company_key(e.get("company"))
+        if not _same_employer(k, employer) or not throttle._same_title(ctx["role"], e.get("title")):
+            continue
+        which = (employer, throttle.place(e.get("location")))
+        place = _text(e.get("location"))
+        postings.setdefault(which, "%s, %s%s" % (_text(e.get("title")), _text(e.get("company")),
+                                                 " (%s)" % place if place else ""))
+        if mine and throttle.norm(e.get("url") or url) == mine:
+            own = which
+    if own is None:
+        theirs = [w for w in postings if w[0] == k]
+        own = theirs[0] if len(theirs) == 1 else None
+    return [(what, "job_scraper/seen_jobs.json") for w, what in postings.items() if w != own]
+
+
+def sibling_postings(ctx) -> list:
+    """[(what, source)]: the other postings for this role at this employer or an arm of it,
+    from the jobs the search has seen, and what the contact notes and the tracker say. A
+    pack for an employer with two live postings for one title (its main team and its Labs
+    arm) never asked which the call was for.
+
+    "Other" is the point: one posting for the role is no question, however many boards list
+    it, and a single other posting is enough to ask, because the role the call is for is
+    itself one, seen in the search or not."""
+    found = _seen_postings(ctx)
     notes = [(_text(c.get(f)), prep.CONTACTS_SOURCE) for c in _here(ctx).values()
              for f in ("next_action", "notes", "outcome")]
     notes += [(_text(ctx["row"].get("notes")), prep.TRACKER_SOURCE),
@@ -2040,9 +2067,14 @@ def ask_lines(ctx) -> list:
     first, out = [], []
     siblings = sibling_postings(ctx)
     if siblings:
-        first.append("- Which team is this %s for? There is more than one posting for it: %s."
+        # The other postings, never this call's own, so the line is only asked where there is
+        # one; past the third, how many more there are.
+        more = len(siblings) - 3
+        first.append("- Which team is this %s for? There is more than one posting for it; "
+                     "besides this one: %s%s."
                      % (ctx["stage"].lower() if ctx["stage"] else "call",
-                        "; ".join("%s (source: %s)" % (w, s) for w, s in siblings[:3])))
+                        "; ".join("%s (source: %s)" % (w, s) for w, s in siblings[:3]),
+                        " (and %d more)" % more if more > 0 else ""))
     if ctx["step"] == "screen":
         out += ["- %s (a screen is where the process is asked about)" % q
                 for q in PROCESS_QUESTIONS]

@@ -671,6 +671,9 @@ S.engine = async (a) => {
     if (st.view) { for (const [k, v] of Object.entries(st.view)) store.chat("view/" + k, {made_at: "2026-10-25T09:00:00Z", data: v}); await turn(page, 8); }
     if (st.hash2) await goto(page, st.hash2);
     await unfold();
+    // What the step checks is waited for, with a time limit, never read after a set number of
+    // turns: a timeout fails the step.
+    if (st.ready) await page.waitForFunction((c) => eval(c), st.ready, {timeout: 5000});
     const entry = {text: (await one(page, st.read || "#main")) || "", dialog: (await one(page, "dialog")) || ""};
     if (st.clip) entry.clip = await copied(page);
     if (st.attr) entry.attr = await page.getAttribute(st.attr[0], st.attr[1]).catch(() => null);
@@ -765,7 +768,7 @@ S.action_receipt = async (a) => {
 S.undo = async (a) => {
   const o = await open({html: a.html, hash: "jobs", clock: "2026-10-25T09:00:00Z"});
   const {page, store} = o;
-  // The bin asks what it is; "Not this role" is already chosen.
+  // The bin asks what it is; "Not this one" is already chosen.
   await clickText(page, "button", "Not for me: Harbourline Bank, Pricing Analyst");
   await clickText(page, "button", "Take it off my list");
   await turn(page, 4);
@@ -779,7 +782,7 @@ S.undo = async (a) => {
   const back = await T(page, "#main .card.job h3");
   await clickText(page, "button", "Not for me: Copperleaf Pay, Data Analyst, Payments");
   // Why, asked once in the bin's sheet: the same action, with its reason.
-  await page.locator("dialog").getByRole("radio", {name: "Not this role: the pay", exact: true}).check();
+  await page.locator("dialog").getByRole("radio", {name: "The pay", exact: true}).check();
   await clickText(page, "button", "Take it off my list");
   await turn(page, 6);
   const reason = actionAt(store, "actions/act~r12-3~job.dismiss");
@@ -858,6 +861,12 @@ S.progress = async (a) => {
   store.chat("work/search~1", {status: "done", finished_at: new Date().toISOString(), result: {summary: "6 roles worth a look", links: []}}, undefined, "update");
   await turn(page, 6);
   r.done = await bar(page, "search~1");
+  // A minute after it was first on screen, finished work joins "N finished", with nothing to
+  // press. Waited for, with a time limit.
+  await page.clock.runFor(61000);
+  const gone = () => !document.querySelector('[data-work="search~1"]') && [...document.querySelectorAll(".fold")].some((f) => /^1 finished/.test(f.textContent.trim()));
+  await page.waitForFunction(gone, null, {timeout: 3000}).catch(() => {});
+  r.folded = await page.evaluate(gone);
   if (a.shot) r.shot = await shot(page, a.shot);
   r.errors = o.errors;
   await o.ctx.close();

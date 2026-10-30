@@ -634,7 +634,9 @@ def test_progress_moves_with_the_clock_marks_a_stall_and_tries_again(run, pages)
     w = r["retried"]
     assert w["status"] == "queued" and w["attempt"] == 2 and w["stage"] == 0 and w["claimed_by"] is None
     assert len(r["rings"]) == 1 and r["rings"][0]["text"] == "[app] [work:search~1]"
-    assert r["done"]["now"] == 100 and r["done"]["status"] == "Ready"
+    # Finished work says Done, with no bar beside it, and folds itself away a minute later.
+    assert r["done"]["status"] == "Done" and r["done"]["now"] is None, r["done"]
+    assert r["folded"], "finished work joins the fold a minute after it was on screen"
 
 
 def test_two_stalls_at_once_read_as_the_plan_limit_offer_no_retry_and_pause_everything(run, pages):
@@ -1118,7 +1120,7 @@ def test_a_busy_week_is_a_few_checklists_not_a_card_each(run, pages):
     assert r["counts"].get("jobs") and r["counts"].get("interviews"), r["counts"]
     assert r["progress"]["recent"].startswith("In the last 30 days: 1 applied, 2 replies")
     assert r["progress"]["all"].startswith("Since you started:")
-    assert r["bin"]["title"] == "Not for you?" and "No more roles from Harbourline Bank" in r["bin"]["options"]
+    assert r["bin"]["title"] == "Not for you?" and "No more from Harbourline Bank" in r["bin"]["options"]
     assert r["gauge"] >= 1, "a cost is a gauge of bars, its words on hover"
 
 

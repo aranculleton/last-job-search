@@ -46,9 +46,10 @@ on:
   push:
     branches: [master]
   pull_request:
-    # "edited": a description changed after the PR opened is checked again (the step
-    # "New names are invented ones" reads it).
-    types: [opened, synchronize, reopened, edited]
+    # Not "edited": a description changed while the checks ran restarted every one of them
+    # (the maintainer, 2026-10-29). tools/push_gate.sh --text scans a description before it
+    # is posted, and the next push checks it again here.
+    types: [opened, synchronize, reopened]
   workflow_dispatch:
     inputs:
       latex:
@@ -392,7 +393,7 @@ jobs:
     # not touch LaTeX at all.
     name: Compile example CV and cover letter (${{ matrix.leg.name }})
     needs: checks
-    if: needs.checks.outputs.latex == 'true'
+    if: ${{ needs.checks.outputs.latex == 'true' && (!github.event.repository.private || github.event_name == 'workflow_dispatch') }}
     runs-on: ubuntu-latest
     timeout-minutes: 20
     container: ${{ matrix.leg.container }}
@@ -468,3 +469,18 @@ jobs:
             --pages 1 \
             --contains 'your.email@example.com' \
             --contains 'Dear [Hiring Manager / Team]'
+
+  fast:
+    # The one check a merge waits for (MAINTAINING.md, "Releasing"): the four fast ones, with
+    # LaTeX counted only when the change touches it. Safari, Firefox, the language and clock
+    # variants and the Windows and Mac set-ups run in their own workflows and never block.
+    name: Fast checks
+    needs: [checks, python-floor, page, latex-smoke]
+    if: ${{ always() && (!github.event.repository.private || github.event_name == 'workflow_dispatch') }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 2
+    steps:
+      - name: Every fast check passed (LaTeX skipped when nothing touches it)
+        if: ${{ contains(needs.*.result, 'failure') || contains(needs.*.result, 'cancelled') }}
+        run: exit 1
+      - run: echo "Fast checks green"
