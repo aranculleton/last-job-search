@@ -20,6 +20,77 @@ make sense to somebody whose repo just received it.
 
 ## [Unreleased]
 
+## [4.5.0] - 2026-10-30
+
+### Fixed
+
+- **A chat no longer asks you to allow every write to your page.** Claude Code read the names
+  of the files a chat writes your page from ("part~jobs~1.json") as possible disguised
+  Windows names, so each write was a safety check only you could allow, one at a time, and no
+  setting could cover it: a new chat asked about 50 times, and a job's own chat asked too.
+  The files are named so that never happens.
+- **The line after an update gives your page's link** ("Your page is up to date: <link>").
+- **An update never waits on a chat that has stopped.** A chat with the update puts your page
+  up itself when the chat that answers it has been quiet for an hour, and publishing clears
+  the "update waiting" notice. The check is asked for once, not twice.
+- **Work Claude has picked up says "Starting"**, not "Waiting to start", and the step it is
+  on shows a clock in seconds that ticks on the page, as a chat does.
+- **No more "Taking longer than usual".** A job past its usual time shows how long it has
+  run; only one that stops checking in gets a warning. "Claude has been told" goes once the
+  job has started.
+- **A finished job says what is ready in one short sentence**, with a bin that puts it away.
+- **Prep asked for after an interview's day has gone is for what comes next**, never the
+  stage you already had.
+- **To do groups like items into one card**: follow-ups, replies and the like, five shown and
+  the rest one tap below. Someone who has not answered two messages is closed, never offered
+  a follow-up to draft.
+- **Your resume's card says one thing to do**: out of date, it offers a fresh one first.
+- **The News card says when it was gathered**, and that it is old when it is.
+- **LinkedIn is checked quietly.** Once it works on a computer, the page checks again only
+  weekly; when you are signed out, it opens LinkedIn's sign-in for you, once a day, and says
+  you can close that tab once you're in.
+- **A finished job's own chat is archived as soon as its work is saved**, not at the daily
+  tidy.
+- **The page fills the screen it is on**, however wide: no more empty sides at full screen.
+- **A recorded reaction says to save it with the turn's work**, so a cloud chat is not held
+  at its end, and a cloud chat takes itself off the pull request it opens.
+- **Find jobs and Find people ask how many**, a few by default: the best 10 jobs (or 25, or
+  every one that fits, up to 60), and 5 people (or 10, or 20). A search no longer leaves
+  hundreds to wade through.
+- **Resumes asked for together are one job in one chat**, faster and cheaper than one chat
+  each; one asked for later starts alongside straight away.
+- **A job's own location decides where it is open.** An employer's office tags passed a US-only
+  role as a Canada one; and a posting up for months says so on its card.
+- **A job a chat finds you can't take leaves the list**, and stops counting on the Brief.
+- **Work that did not finish says "Stopped"** and can be put away; waiting work starts as soon
+  as the job before it ends.
+- **"Tweak" is now "Edit"**, and its "Something else?" box is open, ready to type in.
+- **A practice interview is a clear session**: an empty box to start, "End practice", and one
+  line left when it ends.
+- **The Brief opens on short points, the news reads whole, the bars say what they are**, the
+  counts read right ("1 interview", "people replied"), and how far applications went opens in
+  place.
+- **Contacts say who someone came through**, dates read as dates, the steps show as one row,
+  and nobody in a hiring process is offered a referral ask.
+- **Settings**: your search lists show as chips with short place names; the brief has a time
+  picker and a time zone you can change, which moves your other scheduled task with it; the
+  LinkedIn download has nothing to tick and shows in Claude's work until it is read; each
+  "Left out" rule shows what it left out; Help's questions open the chat bubble where you are;
+  What's new has no Undo; and what you have taught Claude has a "?"-style note and a "Tidy
+  these up".
+- **A long prep scrolls properly on a phone.**
+- **The chat that answers your page renews itself once a day**, at a quiet moment, so it
+  never grows slow and dear; a job's own chat is archived as soon as it is done.
+- **The page offers to pin itself**, on the Brief and while your first search runs, with Pin
+  it and Not now. A Not now comes back a month later, three times at most, and once it is
+  pinned it never asks again; Settings keeps the button. "Something looks wrong" offers, once,
+  a link to suggest a fix for a future update.
+- **Tips are in plain words** ("Tap the bin on any job that's wrong for you and say why").
+- **A follow-up on an application keeps its own card in To do**, with its Done button; only
+  follow-ups to people, replies and people to close share a checklist card.
+- **The daily check no longer calls ordinary words a leak** ("Visa", "Fetch"): it reads your
+  copy's whole history before deciding.
+
 ## [4.4.0] - 2026-10-30
 
 ### Fixed

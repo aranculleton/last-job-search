@@ -804,10 +804,10 @@
   {
    "id": "never-report",
    "was": "App-owned files and personal files",
-   "rule": "Never tell a person who is not the maintainer that the app has a problem, or ask them to report one.",
+   "rule": "Never trouble a person who is not the maintainer with the app's problems; their own \"Something looks wrong\" gets a work-around and, once, a link to report it (the app skill).",
    "bold": null,
    "home": "CLAUDE.md",
-   "anchor": "never tell them the app has a problem or ask them to report one",
+   "anchor": "never trouble them with the app's problems",
    "needed_by": [
     "every chat"
    ]

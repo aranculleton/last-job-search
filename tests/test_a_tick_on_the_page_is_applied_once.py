@@ -92,7 +92,8 @@ class Search:
         return json.loads(self.run("apply", self.dump, "--chat", "cloud-1", "--now", NOW, *extra))
 
     def receipt(self, aid):
-        with open(os.path.join(self.dump, "out", "files", "receipts", aid + ".json"),
+        import page_db
+        with open(page_db.body_path(os.path.join(self.dump, "out"), "receipts", aid),
                   encoding="utf-8") as fh:
             return json.load(fh)
 
@@ -101,7 +102,8 @@ class Search:
         for f in os.listdir(os.path.join(self.dump, "out", "files", "receipts")):
             with open(os.path.join(self.dump, "out", "files", "receipts", f),
                       encoding="utf-8") as fh:
-                self.put("receipts", f[:-5], json.load(fh), version=1)
+                self.put("receipts", f[:-5].replace("@", "~").replace("=", ":"), json.load(fh),
+                         version=1)
 
     def tracker_row(self, company):
         with open(os.path.join(self.state, "job_search_tracker.csv"), encoding="utf-8") as fh:
@@ -350,7 +352,11 @@ def test_next_gives_one_job_per_employer_and_the_oldest_first():
              ("d4", _w("draft", "Fernhill Freight", asked="2026-10-25T10:30:00Z")))
     got = page_db.next_item(db, "cloud", now)
     assert got["work"] == "d4"            # Kestrel is held by d1; d4 was asked before d3
-    assert got["locks"] == ["emp~fernhill_freight"] and got["version"] == 4
+    assert got["version"] == 4
+    # Drafts asked for together are one job since 2026-10-30, each at its own employer: d3
+    # comes with d4, and Kestrel's d2 still waits for d1.
+    assert [w["work"] for w in got["with"]] == ["d3"]
+    assert got["locks"] == ["emp~fernhill_freight", "emp~larkspur_retail"]
 
 
 def test_a_finished_or_stalled_job_frees_its_lock():

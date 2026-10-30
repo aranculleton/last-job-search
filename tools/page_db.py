@@ -343,12 +343,28 @@ def stale_parts(docs: dict, written) -> list[str]:
 # ------------------------------------------------------------------ writing a batch
 
 
+# A body file is named after its record, never spelled as the id is. Claude Code reads a
+# name with "~" and a digit ("part~jobs~1.json") as a short Windows name that can stand for
+# another file, so a write from it was a safety check a person had to allow every time, and
+# no setting or earlier yes covered it: a new chat asked about 50 times (2026-10-30, its
+# prompts read back from the chat). ArtifactData spells "~" as "@" in the files it saves for
+# the same reason; ids never hold "@" or "=" (_SAFE_ID), and ":" is no name on Windows.
+def body_name(part: str) -> str:
+    return str(part).replace("~", "@").replace(":", "=")
+
+
+def body_path(out_dir: str, collection: str, doc_id: str) -> str:
+    """Where `Writes.add` keeps one record's body under `out_dir`."""
+    return os.path.join(out_dir, "files", *[body_name(p) for p in collection.split("/") if p],
+                        body_name(doc_id) + ".json")
+
+
 class Writes:
     """The writes one chat turn sends back, each body in a file of its own.
 
-    `add()` keeps the body under `<out>/files/<collection>/<doc_id>.json` and the entry
-    ({op, collection, doc_id, file_path, if_version}); `save()` writes the entries as
-    batch files of at most 50, and returns their paths."""
+    `add()` keeps the body under `<out>/files/<collection>/<doc_id>.json` (its name spelled by
+    `body_name`) and the entry ({op, collection, doc_id, file_path, if_version}); `save()`
+    writes the entries as batch files of at most 50, and returns their paths."""
 
     def __init__(self, out_dir: str):
         self.out_dir = out_dir
@@ -369,7 +385,7 @@ class Writes:
             if len(body.encode("utf-8")) > DOC_MAX:
                 raise ValueError(f"page_db: {collection}/{doc_id} is over 256 KiB"
                                  " (page_db.split() writes it as parts)")
-            path = os.path.join(self.out_dir, "files", collection, doc_id + ".json")
+            path = body_path(self.out_dir, collection, doc_id)
             os.makedirs(os.path.dirname(path), exist_ok=True)
             with open(path, "w", encoding="utf-8", newline="\n") as fh:
                 fh.write(body + "\n")
@@ -434,7 +450,10 @@ STAGES = {
     # copy (2026-10-29), against 5 and 4 here, so the page said "Stalled" on work that was
     # fine. A search says how long is left as it goes (`app.py pin --log`); these are only
     # the estimates before it does.
-    "search": [("start", "Getting started", 60), ("scrape", "Searching job sites", 900),
+    # The job sites took 31 minutes in a real copy on 2026-10-30 against the 15 above, and the
+    # person asked whether it had stuck: the estimate is the slower one, and the step says it is
+    # the long part. Ten finished searches replace it with their own median.
+    "search": [("start", "Getting started", 60), ("scrape", "Searching job sites, the long part", 1800),
                ("seen", "Setting aside ones already seen", 60),
                ("read", "Reading postings", 180), ("score", "Scoring", 120),
                ("shortlist", "Shortlist ready", 30)],
@@ -655,6 +674,25 @@ def next_item(db: dict, chat_kind: str, now: dt.datetime,
                           and str(((d["data"].get("args") or {}).get("target") or {}).get("id")
                                   or "") == target and target)
             got["with"] = [{"work": w, "version": work[w]["version"]} for _, w in same]
+        elif item["kind"] == "draft":
+            # Drafts queued together are one job: the drafting workflow takes a batch in one
+            # run, so ten resumes asked for at once take one chat, never ten, and never wait
+            # behind the cap one by one (the maintainer, 2026-10-30). Each still has its card.
+            mine = set(got["locks"])
+            same = []
+            for _at, w in sorted((str(d["data"].get("asked_at") or ""), w) for w, d in work.items()
+                                if w != wid and d["data"].get("kind") == "draft"
+                                and str(d["data"].get("status") or "") == "queued"
+                                and not d["data"].get("stop_asked")):
+                theirs = locks_for(work[w]["data"])
+                if any(lk in held and held[lk] != w for lk in theirs) or mine & set(theirs):
+                    continue
+                same.append(w)
+                mine |= set(theirs)
+                if len(same) >= DRAFT_BATCH - 1:
+                    break
+            got["with"] = [{"work": w, "version": work[w]["version"]} for w in same]
+            got["locks"] = sorted(mine)
         return got
     return None
 
@@ -866,6 +904,7 @@ def busy_beat(db: dict, chat_id: str, chat_kind: str, now: dt.datetime, out_dir:
 # ------------------------------------------------------------------ keeping the store small
 
 KEEP_DAYS = 60      # what the page shows of the past: its newest 300 actions and 500 receipts
+DRAFT_BATCH = 10    # drafts one job takes at most: the workflow's own batch
 PRUNE_CAP = 150     # deletes a wake sends at most, so one wake never sends a long batch
 
 

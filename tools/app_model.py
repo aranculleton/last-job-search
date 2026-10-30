@@ -262,10 +262,23 @@ _ROUTE_WORDS = {"alumni": "alumni", "referral": "referral", "recruiter": "recrui
                 "warm": "warm introduction", "intro": "introduction"}
 
 
+_ISO_DAY = re.compile(r"\b(\d{4})-(\d{2})-(\d{2})\b")
+
+
+def _day_words(m) -> str:
+    try:
+        d = dt.date(int(m.group(1)), int(m.group(2)), int(m.group(3)))
+    except ValueError:
+        return m.group(0)
+    return f"{d.strftime('%a')} {d.day} {d.strftime('%b')}"
+
+
 def plain_action(text) -> str:
     """A contact's next step in plain words: the app's own wording turned into a short line,
-    never a command; anything the person wrote is shown as they wrote it."""
-    s = " ".join(str(text or "").split())
+    never a command; anything the person wrote is shown as they wrote it, with a date read as
+    a date ("Thu 29 Oct", never 2026-10-29) and no full stop the page would follow with a
+    comma (2026-10-30)."""
+    s = _ISO_DAY.sub(_day_words, " ".join(str(text or "").split())).rstrip(" .")
     m = _STOPPED.match(s)
     if m:
         n = m.group(1) or "2"
@@ -988,8 +1001,11 @@ def _jobs(ctx: Ctx, targets: dict) -> dict:
         entry = ctx.seen.get(norm(url) or url) if url else None
         tracked = _tracker_match(ctx, company, title)
         st = _status(tracked) if tracked else ""
+        # Ruled out by the person, or by a chat that found it is not one they can take (a draft
+        # stopped on where the job is open): either way it leaves the list and its counts. One
+        # stopped for that stayed in "10 jobs to look at" (2026-10-30).
         if entry and str(entry.get("status") or "").lower() == "excluded" \
-                and entry.get("basis") == "person":
+                and entry.get("basis") in ("person", "rules"):
             status = "dismissed"
         elif tracked and st not in throttle.UNSENT and st:
             status = "applied"
@@ -1781,6 +1797,18 @@ def _call_of(cid: str, status: str, due: str) -> dict | None:
             "prep": {"path": rel(path), "updated": _mtime(path)} if have else None}
 
 
+def _came_through(value, book: dict) -> str:
+    """The first name of whoever the person came through: another contact by id, else the
+    name written there."""
+    v = str(value or "").strip()
+    if not v:
+        return ""
+    other = book.get(v)
+    if isinstance(other, dict) and other.get("first_name"):
+        return str(other["first_name"])
+    return first_name(v)
+
+
 def _people(ctx: Ctx, targets: dict) -> list:
     """Every live contact (a conversation going, a reply or anything else owed, a note
     waiting to go, a message out in the last 60 days), then the rest by recency until the
@@ -1829,6 +1857,9 @@ def _people(ctx: Ctx, targets: dict) -> list:
                 "owed": owed_button(cid, status, due, ctx.today, cid in drafts),
                 "last": last,
                 "next_action": action, "due": due or None, "route": full[cid]["route"],
+                # Who they came through (the book's referred_by: a contact id or a name), so the
+                # page says "Came through Alex" on someone Alex passed them to (2026-10-30).
+                "came_through": _came_through(c.get("referred_by"), full) or None,
                 "who": who_they_are(c, status),
                 "replied": full[cid]["replied"], "live": full[cid]["live"],
                 "call": _call_of(cid, "call_booked" if str(c.get("status") or "") ==
@@ -2622,11 +2653,19 @@ def _search(ctx: Ctx, targets: dict) -> dict:
             and e.get("basis") == "person"]
     import exclude
     groups = Counter(exclude.reason_group(str(e.get("exclusion_reason") or "")) for e in mine)
+    # A few of what each rule left out, newest first, so "cleared from the list · 141" says what
+    # it cleared (the maintainer, 2026-10-30: "surely u should be able to dive into this").
+    seen_by: dict = {}
+    for e in sorted(mine, key=lambda e: str(e.get("date") or e.get("first_seen") or ""), reverse=True):
+        g = exclude.reason_group(str(e.get("exclusion_reason") or ""))
+        title, company = str(e.get("title") or "").strip(), str(e.get("company") or "").strip()
+        if title and len(seen_by.setdefault(g, [])) < 5:
+            seen_by[g].append(f"{title} at {company}" if company else title)
     rules = []
     for words, n in groups.most_common(20):
         rid = f"rule-{seg(words)[:60]}"
         rules.append({"id": rid, "words": words, "count": n, "basis": "person",
-                      "rev": rev_of(rid, n)})
+                      "examples": seen_by.get(words, []), "rev": rev_of(rid, n)})
         targets[rid] = {"kind": "rule", "words": words, "rev": rules[-1]["rev"]}
     dnt = _json(person.state("job_scraper", "do_not_target.json"), {})
     dnt = dnt.get("entries") if isinstance(dnt, dict) and "entries" in dnt else dnt
@@ -3249,6 +3288,13 @@ def build(today: dt.date | None = None, now: dt.datetime | None = None,
         except Exception:  # noqa: BLE001  no profile yet: no buttons, no usual
             model["tweaks"] = {"rows": tweak.table(), "buttons": [], "usual": {}, "rules": {}}
         model["hints"] = tweak.hints()
+        # Whether the page offers to pin itself now (app_listen.pin_due: never once pinned,
+        # and a Not now is asked again a month later, three times at most).
+        try:
+            import app_listen
+            model["pin"] = {"due": app_listen.pin_due(today)}
+        except Exception:  # noqa: BLE001  no profile yet: nothing to offer
+            model["pin"] = {"due": False}
         model["rev"] = model_rev(model)
     return model, targets
 

@@ -35,7 +35,9 @@ on every wake:
 python3 tools/app.py listen "$D" --chat <your chat id>
 ```
 
-Send the batch it prints with the others; batches it prints before its own (a page an older
+A `listen: renew:` line is this chat's daily renewal: make its `create_session` call at once,
+unasked, and say nothing about it; the fresh helper takes the page as it starts, and this chat
+carries on until its next check-in finds that. Send the batch it prints with the others; batches it prints before its own (a page an older
 version made, whose records take their new names once) go first, and a read it asks for is
 made into the same `$D` before running it again. If it says another chat answers the page, stop
 your watch (ArtifactComments, action `watch`, the url, `on: false`), write nothing else and
@@ -82,12 +84,12 @@ page, so never ask it again):
 
 | kind | run |
 |---|---|
-| search | `run_round.py`, then the shortlist (the job-scraper skill); `args.note` is what the person typed about it, followed like any instruction of theirs |
-| draft, resume_for_contact | the drafting path in RUNBOOK.md step 2 (`stage_picks.py stage`, `consent` from the item's `answers`, or from `args.answers` (a list of question and answer) when the page queued it, the workflow, both audits, `assemble`, RUNBOOK step 3). `resume_for_contact`: `stage_picks.py --for-contact <args.contact>` for `args.job`, or the general resume when `job` is null; `args.note` is what they typed |
+| search | `run_round.py --show <args.size>` (10 when it is not given; 0 is every one that fits, up to 60), then the shortlist (the job-scraper skill); `args.note` is what the person typed about it, followed like any instruction of theirs |
+| draft, resume_for_contact | a draft that stops because the role is not one they can take (where it is open, eligibility, a hard cut) also takes the job off Jobs: `python3 tools/exclude.py add <url> --reason "<why, plain>" --title "<title>" --company "<employer>" --basis rules`, so the Brief and Jobs stop counting it (one stopped for Figma stayed in "10 jobs to look at", 2026-10-30); one run for the item and each in `with` (drafts queued together are one batch: `stage_picks.py stage` takes them all), by the drafting path in RUNBOOK.md step 2 (`stage_picks.py stage`, `consent` from the item's `answers`, or from `args.answers` (a list of question and answer) when the page queued it, the workflow, both audits, `assemble`, RUNBOOK step 3). `resume_for_contact`: `stage_picks.py --for-contact <args.contact>` for `args.job`, or the general resume when `job` is null; `args.note` is what they typed |
 | evaluate | /apply Step 1 on `args.url` or `args.text`, then `added_jobs.py add <row.json>`; with `applied_on`, `confirm.py applied --new`; with `contact` (who sent it), that person is the job's referral route: `network/state.py set <contact> --next-action "apply via <first name>'s referral" --note "sent <role> at <employer>"`, never by hand, and `result.summary` says who it is linked to; with `draft: true`, once it is scored queue its `draft` work as tapping Draft does (`app_actions.py` `_job_draft`); with `from_name` (someone not in the contact book), add "sent by <name>" to the role's notes |
 | general_resume | `stage_picks.py general` |
 | prep | `/interview` for `args.interview`; with `args.contact`, `network/prep.py "<contact>"`; `args.note` is what they typed |
-| network, reply, follow_up | `/network` (`args.note`: what the person typed about this run, an employer, a team or a kind of person, followed like any instruction of theirs; `args.company`: one employer's own Find people; `args.rewrite`: that contact's waiting note, rewritten on the profile just read), `/reply` (`args.received` names their logged message, and with none it is their latest one in the log; `args.want`, what they want to say back, in their words; `args.update`, news for a referrer; `args.kind: thank_you` a thank-you, `args.kind: referral_ask` with `args.job` the referral ask for that one role, `compose.referral_ask()`), the networking skill. A `follow_up` with `args.application` (or `args.interview`) is an application's or an interview's follow-up: `/outcome` Step 2b, never the networking skill |
+| network, reply, follow_up | `/network` (`args.count`: how many people this run brings back at most, 5 when not given; `args.note`: what the person typed about this run, an employer, a team or a kind of person, followed like any instruction of theirs; `args.company`: one employer's own Find people; `args.rewrite`: that contact's waiting note, rewritten on the profile just read), `/reply` (`args.received` names their logged message, and with none it is their latest one in the log; `args.want`, what they want to say back, in their words; `args.update`, news for a referrer; `args.kind: thank_you` a thank-you, `args.kind: referral_ask` with `args.job` the referral ask for that one role, `compose.referral_ask()`), the networking skill. A `follow_up` with `args.application` (or `args.interview`) is an application's or an interview's follow-up: `/outcome` Step 2b, never the networking skill |
 | own_profile | `network/own_profile.py check` |
 | profile | the change in `args` (`part`: job, skills, education, certificates or fill; `change`: add, edit or remove), made the way `/setup` writes that part: `01-candidate-profile.md` first, then `roles.py`, `bullets.py`, `skills.py` and the summary in `profile/CLAUDE.md` to match. Only what the person gave goes in, in their words and with their numbers; a job added gets its resume lines written from `args.text`, and anything unclear is asked in the work's thread, never guessed. A removal takes it out everywhere. Then `stage_picks.py general` for a fresh resume; `result.summary` says what changed |
 | brief | the brief's prompt; with `args.setup: true`, turning the brief on in this chat, not running it: `list_triggers` (every page), `python3 tools/routines.py brief --triggers <each page>`, and the calls it prints, which bind the task to this chat so no chat is made (automation/README.md, "For Claude") |
@@ -152,7 +154,7 @@ page waited on every tap (2026-10-29). `next` never hands one to this chat to ru
 - `run: child session`: send the claim, then make the `create_session` call exactly as
   `next` printed it. That chat runs the one item, pins its progress, finishes it, lands it on
   master and tells this chat. It never publishes, watches or answers the page, and is titled
-  `Job search: <title>`, so the daily tidy archives it once its work is on master.
+  `Job search: <title>`, and is archived as soon as it says its work is on master (below).
 - `run: background agent` is the fallback where `create_session` is not available: a chat
   on a computer, or a chat without that tool (run `next` with `--no-sessions`). Send the
   claim, then make the Agent call exactly as printed (`run_in_background: true`,
@@ -167,7 +169,12 @@ networking run and an interview prep run side by side (three at most, `page_db.H
 - `Finished <id>, on master` (or an agent's last line saying so): take master, run `app.py
   view` (step 5) and send its batch. This chat is the one writer of the page's view, so two
   chats never write it at once. An item still running finishes here, as step 5 says, from
-  what the message said.
+  what the message said. Then archive the chat that sent it, at once: `archive_session` with
+  its id (the one `create_session` returned; its message comes from it). A finished job's
+  chat sat in the person's list until the daily tidy, and they asked whether one would pile
+  up after every job (2026-10-30). The daily tidy stays as the backstop. Then step 3 again:
+  work queued while that job ran starts now, never left "not picked up" (a draft waited
+  after the other's chat had closed, 2026-10-30).
 
 Drafting and audits are never moved below this chat's model. The other chats are never
 mentioned to the person; the page shows each job's progress.
@@ -202,10 +209,27 @@ by that and not by the usual minutes. `"stop_asked": true` in what it prints: wr
 stopped`, release its locks and stop. A refused pin: read `work` again; still yours, pin
 once more; claimed by another chat, write nothing else.
 
+**"Something looks wrong"** (the person's own report from the page, in any words): look,
+and fix what is theirs. Where it is the app's own fault, work round it for them now, the best
+honest way the app allows, and add one line, once, never again for it, in plain words for
+someone who has never heard of GitHub: "This one is the app's, not yours: I've worked round
+it. If you'd like it fixed in a future update, tap here and press the green button (it only
+takes a moment): <link>". The link is a new issue on the app's own
+page (`app_setup.APP_REPO` + `/issues/new?title=...&body=...`) with what happened and the
+page's version only, never a name, an employer or anything else of theirs (`tools/name_guard.py
+text` on it first). Never ask them to report it, and never chase it (2026-10-30).
+
+**"Pin my job search page to my sidebar."** (the page's Pin it): Artifact, action `pin`, the
+page's url, then `python3 tools/app.py pinned yes`, and one line: "Pinned: it's in your sidebar
+now." Never offer it again in a chat; the page asks by itself, now and then.
+
 ## 5. Finish in one batch
 
 - `work/<id>`: `status: done` (or `failed`, `error` in plain words), `finished_at`,
   `result: {summary, links}` (web addresses or repo paths; downloads go to the asset store).
+  The summary is one short sentence, at most 15 words, of what is ready ("Your Larkspur Retail
+  pack now covers the technical round."): the page shows its first sentence
+  only (a paragraph was too wordy to read, 2026-10-30). Detail goes in the work itself.
 - its locks deleted, each pinned; your heartbeat `chats/<your id>`, `busy: "Saving your
   work"` while the landing check below runs (`null` when nothing is left to land).
 - from a `talk` thread, a reply there (`from: cloud` or `computer`, plain words).

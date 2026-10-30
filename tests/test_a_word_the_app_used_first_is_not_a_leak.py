@@ -112,6 +112,25 @@ def test_the_scan_reports_only_what_is_left(tmp_path):
     assert aside == {"=Lanternfish": first[:12]}
 
 
+def test_a_word_found_only_in_the_apps_own_files_is_still_set_aside(tmp_path, monkeypatch):
+    """A file exactly as the app has it is left out of the findings, and an entry found only
+    there was then never set aside: it stayed on the list the push gate scans the app with,
+    and every push failed on files it never touched (an employer that is also an ordinary
+    word, 2026-10-30). The rule is the same: only what the app carried before it was
+    recorded is set aside, and nothing else leaves the list."""
+    import personal_paths
+    app, first, _ = _app(tmp_path)
+    tree = tmp_path / "tree"
+    (tree / "docs").mkdir(parents=True)
+    (tree / "docs" / "a.md").write_text("Batch-Lanternfish the postings.\nQuayside Foods\n")
+    monkeypatch.setattr(personal_paths, "same_as_the_app", lambda root: {"docs/a.md"})
+    when = {"=Lanternfish": _ts("2026-02-01"), "=Quayside Foods": _ts("2026-02-01")}
+    findings, aside = build_app.check(str(tree), when, ref="master", root=str(app))
+    assert findings == [], "the app's own file is not a finding"
+    assert aside == {"=Lanternfish": first[:12]}, "set aside by the history, as anywhere else"
+    assert "=Quayside Foods" not in aside, "reached the app after it was recorded: stays listed"
+
+
 def test_the_build_says_what_it_set_aside_and_keeps_it_off_the_list_it_writes(
         tmp_path, monkeypatch, capsys):
     app, first, _ = _app(tmp_path)
@@ -266,3 +285,20 @@ def test_the_allowed_organizations_list_is_closed():
     assert build_app.ALLOWED_ORGANIZATIONS == {
         "Anthropic", "LinkedIn", "GitHub", "eBay", "Docker",
         "Google", "Microsoft", "Apple", "IBM", "Oracle"}
+
+
+def test_a_short_clone_fetches_its_whole_history_before_dating_a_row(tmp_path):
+    """A cloud chat starts from a short clone: a row first seen at its oldest commit had no
+    date and was never set aside, so the daily check called "Visa" a leak (2026-10-30)."""
+    src = tmp_path / "src"
+    src.mkdir()
+    _git(src, "init", "-q", "-b", "master")
+    for n, day in enumerate(("2026-01-10", "2026-02-10", "2026-03-10")):
+        _commit(src, {f"f{n}.txt": "x\n"}, day)
+    clone = tmp_path / "clone"
+    subprocess.run(["git", "clone", "-q", "--depth", "1", f"file://{src}", str(clone)], check=True,
+                   capture_output=True)
+    assert _git(clone, "rev-parse", "--is-shallow-repository") == "true"
+    assert build_app._whole_history(str(clone)) is True
+    assert _git(clone, "rev-parse", "--is-shallow-repository") == "false"
+    assert build_app._whole_history(str(clone)) is True, "a whole history is left as it is"

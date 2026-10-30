@@ -79,6 +79,8 @@ TIPS = (
      "style from what you change."),
     ("tour", ("general",),
      "Tip: say \"show me around\" for a short tour of what else I can do."),
+    ("pin", ("general",),
+     "Tip: say \"pin my page\" and I'll pin your job search page to your sidebar, one tap away."),
     ("reaction-sticks", ("general", "search", "networking"),
      "Tip: a reaction like \"not this kind of company\" or \"too formal\" sticks for every "
      "later round, until you change your mind."),
@@ -193,36 +195,41 @@ PAGE_TOUR = (
 # owe?" is what To do already shows). A pattern over the chat's words garbled these
 # ("Type "shorter" in Chat, "warmer" or ...", 2026-10-29).
 PAGE_FIRST = {
-    "search": "Your first search here, so the ranking won't be perfect yet. Use the bin on a "
-              "job that's off and say why: the next search learns.",
-    "apply": "Your first application here. Tap Tweak on the resume or the letter to change the "
-             "wording, and it sticks for the next one.",
-    "networking": "Your first notes here, so some may be off. Tweak a note to change how it "
-                  "reads, or use the bin on someone you wouldn't write to; both stick.",
-    "reply": "If a reply doesn't sound like you, change it before you send it and paste what "
-             "you sent in Chat: your edits teach it your voice.",
-    "interview": "Your first interview prep. Tap Tweak on it to change what it covers, and the "
-                 "next one fits you better.",
-    "prep": "Your first call prep. After the call, say in Chat how it went.",
-    "brief": "Your first brief. Tap Tweak the brief for more or less of anything.",
-    "general": "Anything made for you can be changed: tap Tweak on it, and it sticks.",
+    # Plain sentences a first-time reader gets at once: "a job that's off ... the next search
+    # learns" read as shorthand nobody could parse (the maintainer, 2026-10-30).
+    "search": "These are your first results, so the order may be a bit off. Tap the bin on any "
+              "job that's wrong for you and say why, and the next search will do better.",
+    "apply": "Your first application. Tap Edit on the resume or the letter to change the "
+             "wording, and the next one will use your changes.",
+    "networking": "Your first messages, so some may be a bit off. Tap Edit to change how one "
+                  "reads, or bin someone you wouldn't contact. Claude remembers both.",
+    "reply": "If a reply doesn't sound like you, change it before you send it, then paste what "
+             "you sent in Chat so Claude learns how you write.",
+    "interview": "Your first interview prep. Tap Edit to change what it covers, and the next one "
+                 "will fit you better.",
+    "prep": "Your first call prep. After the call, tell Claude in Chat how it went.",
+    "brief": "Your first brief. Tap Edit the brief to get more or less of anything.",
+    "general": "You can change anything Claude makes: tap Edit on it, and Claude remembers for "
+               "next time.",
 }
 PAGE_TIPS = {
-    "rephrase": "Tip: tap Tweak on anything Claude writes to make it shorter, warmer or "
-                "reworded. Your changes teach it your style.",
-    "tour": "Tip: Settings, Help, Show me around gives a short tour.",
-    "reaction-sticks": "Tip: the bin on a job asks why. Your answer sticks for every later "
-                       "search, until you change your mind.",
-    "tell-me": "Tip: when you hear back, tap I heard back on the application, or paste their "
-               "message under Got a message. Claude keeps the record and times the follow-ups.",
-    "paste-link": "Tip: paste any job link into Add a job on Jobs, and Claude scores it and can "
-                  "write the application.",
-    "sent-words": "Tip: if you change a note before sending it, paste what you sent in Chat. "
-                  "Your edits teach Claude how you write.",
-    "mock": "Tip: ask for a mock interview in Chat. Claude asks the questions, you answer, and "
-            "it tells you what landed.",
-    "questions-asked": "Tip: after an interview, say in Chat which questions they asked. The "
-                       "next prep uses them.",
+    "rephrase": "Tap Edit on anything Claude writes to make it shorter, warmer or reworded. "
+                "Claude learns your style from your changes.",
+    "tour": "For a short tour of the page, go to Settings, then Help, then Show me around.",
+    "reaction-sticks": "When you bin a job, Claude asks why. Your answer applies to every "
+                       "future search until you change your mind.",
+    "tell-me": "When you hear back, tap I heard back on the application, or paste their message "
+               "under Got a message. Claude updates your records and reminds you to follow up.",
+    "paste-link": "Paste any job link into Add a job on Jobs. Claude scores it and can write "
+                  "the application.",
+    "sent-words": "If you change a message before you send it, paste what you sent in Chat so "
+                  "Claude learns how you write.",
+    "mock": "Ask for a practice interview in Chat. Claude asks the questions, you answer, and it "
+            "tells you what went well.",
+    "questions-asked": "After an interview, tell Claude in Chat which questions they asked. "
+                       "Your next prep will use them.",
+    # Pinning is the page's own offer (app_listen.pin_due) and its button in Settings, so it
+    # is not a tip as well.
 }
 
 

@@ -1484,6 +1484,10 @@ def main(argv=None) -> int:
                                            f" runs to about {n} words" for who, n in per.items()))
         print(f"Say to the person, in one line: From now on, {e['rule']} (you said: "
               f"\"{e['said'][:160]}\").")
+        # A record left unsaved held the end of a cloud chat's turn ("uncommitted changes"),
+        # 2026-10-30: it goes with this turn's work, saved the one way.
+        print("Save it with this turn's work: python3 tools/save_state.py, then commit "
+              "(RUNBOOK.md, \"4. Record and persist, then land on master\").")
         if e.get("overrides"):
             print(f"  outranks the check(s): {', '.join(e['overrides'])}")
         for phrase, setting, line in e.get("own_overlaps") or ():

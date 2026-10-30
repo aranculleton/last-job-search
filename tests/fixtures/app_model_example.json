@@ -1,14 +1,14 @@
 {
  "model": 1,
  "made_at": "2026-10-25T18:00:00Z",
- "rev": "3d0939f8e642",
+ "rev": "c008d442cd3f",
  "app": {
-  "version": "4.3.0",
+  "version": "4.4.0",
   "update_waiting": null,
   "news": [
-   "A Brief page, your home screen.",
-   "Your profile is a page of its own.",
-   "Names open the person."
+   "A ruling on where a remote posting is now holds only there.",
+   "A search past its job sites says which step it is on.",
+   "An interview time written in CST, AST, NST, AKST, HST or their daylight forms."
   ],
   "privacy": "Only you can open this page unless you share it. It holds first names, employers, your drafts and your setup answers, so keep it unshared.",
   "repo": "https://github.com/aranculleton/last-job-search"
@@ -45,7 +45,7 @@
  ],
  "jobs": {
   "round": "r9",
-  "made_at": "2026-10-29T19:10:22Z",
+  "made_at": "2026-10-30T14:14:19Z",
   "met": false,
   "summary": "4 roles on the shortlist, 4 scoring 60 or more and 2 scoring 75 or more. 3 left out, each with its reason.",
   "rows": [
@@ -639,6 +639,7 @@
    "next_action": "send the CV",
    "due": "2026-10-20",
    "route": "alumni",
+   "came_through": null,
    "who": "hiring",
    "replied": true,
    "live": true,
@@ -700,6 +701,7 @@
    "next_action": "One nudge if no reply",
    "due": "2026-09-29",
    "route": "cold",
+   "came_through": null,
    "who": "hiring",
    "replied": false,
    "live": true,
@@ -729,6 +731,7 @@
    "next_action": "Send the first note; call if needed",
    "due": null,
    "route": "alumni",
+   "came_through": null,
    "who": "hiring",
    "replied": false,
    "live": true,
@@ -761,7 +764,7 @@
    "when": "2026-10-28",
    "prep": {
     "path": "documents/applications/thornbury_bank_risk_analyst_thornbury/interview_prep.md",
-    "updated": "2026-10-29T19:10:22Z"
+    "updated": "2026-10-30T14:14:19Z"
    },
    "questions": 2,
    "all_day": true,
@@ -1127,11 +1130,23 @@
   ]
  },
  "updates": {
-  "version": "4.3.0",
-  "newest": "4.3.0",
+  "version": "4.4.0",
+  "newest": "4.4.0",
   "mode": "auto",
   "waiting": null,
   "changed": [
+   {
+    "version": "4.4.0",
+    "date": "2026-10-30",
+    "lines": [
+     "A ruling on where a remote posting is now holds only there.",
+     "A search past its job sites says which step it is on.",
+     "An interview time written in CST, AST, NST, AKST, HST or their daylight forms.",
+     "The bin on a To do row hides only what the chat will close.",
+     "An interview ended on the page shows again.",
+     "Safari's screen reader reads \"Needs fixing:\" and \"Suggestion:\" as words of their own."
+    ]
+   },
    {
     "version": "4.3.0",
     "date": "2026-10-29",
@@ -1142,18 +1157,6 @@
      "A bin on every person.",
      "More job filters, that work.",
      "Add a job."
-    ]
-   },
-   {
-    "version": "4.2.0",
-    "date": "2026-10-29",
-    "lines": [
-     "Your profile, on the page.",
-     "A walkthrough that shows you round.",
-     "The plugin: a front door on your computer.",
-     "Your page wakes Claude by itself.",
-     "Running work reads plainly.",
-     "On a phone, Chat is the tab alone."
     ]
    }
   ],
@@ -1398,7 +1401,7 @@
    "id": "tip-search",
    "area": "search",
    "tab": "jobs",
-   "text": "Your first search here, so the ranking won't be perfect yet. Use the bin on a job that's off and say why: the next search learns.",
+   "text": "These are your first results, so the order may be a bit off. Tap the bin on any job that's wrong for you and say why, and the next search will do better.",
    "rev": "fe7659d1001f"
   },
   "tour": [
@@ -2656,5 +2659,8 @@
  },
  "hints": {
   "tweak": false
+ },
+ "pin": {
+  "due": true
  }
 }

@@ -30,6 +30,13 @@ These apply whenever the change is to the app, whichever repo the session starte
   the maintainer). Windows and Mac never block a merge or a release ("Releasing"); what
   they find is fixed in the next release. Each Windows run took 45
   minutes and held 4.0.0 for hours when it ran on every change (the maintainer, 2026-10-26).
+- **The builder decides; the maintainer is never asked to.** Design, tooling, the push gate,
+  a blocked check, a trade-off: choose the soundest option, do it, and say in one line what
+  was decided and why. A question to the maintainer is only for what is truly theirs (their
+  own data, money, a release). Stopping with "this needs your decision" is the failure (the
+  maintainer, 2026-10-30: "IT SHOULD NEVER NEED MY DECISION. U ARE MEANT TO MAKE THESE
+  DECISIONS"). Where a safety check refuses an action, say so plainly and take the next best
+  way that keeps the safeguard's intent.
 - **Look first at how it is meant to be done, and how others do it**, for every question
   about the app, bug fix, feature and release, without being asked (the maintainer,
   2026-10-23): Claude's own documentation (code.claude.com and docs.claude.com) for anything

@@ -91,10 +91,14 @@ def test_what_a_person_hears_about_their_page_after_an_update_is_one_short_sente
     a safety check, offered the pin again, set up a helper in two sentences and reported a
     timer running out. Each of these is all the person hears about one of those, said whole."""
     import app_listen
+    # Each ends on the page's own link since 2026-10-30 (the person asked for it twice).
+    url = "https://claude.ai/code/artifact/example-page"
     for line in (app_listen.SAY_UPDATED, app_listen.SAY_UPDATING, app_listen.SAY_NOT_UPDATED):
-        _plain(line)
-        assert line.endswith(".") and line.count(". ") == 0 and "?" not in line, line
-        assert len(line.split()) <= 15, line
+        line = app_listen.say(line, url)
+        words = line[:-len(url)]
+        _plain(words)
+        assert line.endswith(": " + url) and words.count(". ") == 0 and "?" not in line, line
+        assert len(words.split()) <= 15, line
         for word in ("listener", "republish", "safety", "timer", "update check", "pin"):
             assert word not in line.lower(), (word, line)
 

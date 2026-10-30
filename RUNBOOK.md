@@ -491,7 +491,9 @@ master cannot see work sitting on another chat's branch, and builds it a second 
    (in the foreground it held the chat that answers the page for minutes, 2026-10-29); when
    it ends green, merge, in the turn its ending wakes. Silently: never subscribe to it, set a
    check-in for it or wait on GitHub's checks, and never tell the person about it or its
-   checks (CLAUDE.md, "Saving"). While it runs, the chat that answers the page says "Saving
+   checks (CLAUDE.md, "Saving"). A cloud chat is subscribed to a pull request it opens by
+   itself: unsubscribe at once (`unsubscribe_pr_activity`), before anything else
+   (2026-10-30). While it runs, the chat that answers the page says "Saving
    your work" there (`app.py busy`, the `app` skill, step 5), and clears it once landed. A
    branch left behind at the end of a session is work the next chat cannot see and will
    duplicate.
@@ -692,6 +694,13 @@ Never one caption listing every file, never a table of file links, and never one
 message per role in place of the index.
 
 ## Learning the person: what a reaction changes
+
+**Tidying what they have taught it** (the page's "Tidy these up", or asked in any words):
+`python3 tools/learned.py list`, then find three kinds: a rule the app now does by itself
+(name the change that made it so), two that say the same thing (one `record --replaces`
+the other, in their words), and one a later rule replaced. Show each with its reason on
+the page, as one To do card, and retire (`learned.py retire`) only what they say yes to.
+Nothing goes unasked (2026-10-30).
 
 The app's defaults (the voice of a first note, the questions an interview pack asks, who is
 worth contacting, how roles rank) are where everyone starts, and they stay. The person's own

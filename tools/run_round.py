@@ -331,7 +331,17 @@ def _read_json(path):
         return json.load(fh)
 
 
-def write_summary(shortlist_path, out_dir, name, scraped_path=None):
+def shown(show) -> int:
+    """How many of the shortlist a search brings back: the person's choice on the page (10,
+    25, or 0 for every one that fits), never more than KEEP_TOP. A search brought back 60 and
+    the list reached 215 (2026-10-30); None keeps every one, as before."""
+    if show is None:
+        return KEEP_TOP
+    n = int(show)
+    return KEEP_TOP if n <= 0 else min(n, KEEP_TOP)
+
+
+def write_summary(shortlist_path, out_dir, name, scraped_path=None, show=None):
     """The compact shortlist, and where it was written. With `scraped_path` (the round's
     scrape), each kept row's apply link is checked against what the round read
     (link_checks), so a card says where to apply and whether it is still listed."""
@@ -341,7 +351,7 @@ def write_summary(shortlist_path, out_dir, name, scraped_path=None):
         return None
     rows = rows if isinstance(rows, list) else list(rows.values())
     rows.sort(key=lambda r: -(r.get("priority") or 0))
-    kept = rows[:KEEP_TOP]
+    kept = rows[:shown(show)]
     if scraped_path:
         try:
             scraped = _read_json(scraped_path)
@@ -614,6 +624,8 @@ def main():
     ap.add_argument("--workers", type=int, default=None,
                     help="default 10 in the cloud and 4 on their own computer (SCRAPE_WORKERS)")
     ap.add_argument("--top", type=int, default=40, help="shortlist length shown")
+    ap.add_argument("--show", type=int, default=None,
+                    help="how many of the strongest the search brings back to the page (0: all, up to 60)")
     ap.add_argument("--today", default=datetime.date.today().isoformat())
     ap.add_argument("--require", default="0.9",
                     help="hydrate: fail below this fraction with a description")
@@ -799,7 +811,8 @@ def main():
     # below returns, so every exit path leaves the same small footprint.
     summary = write_summary(f("06_shortlist.json"),
                             a.summary_dir or person.state(SUMMARY_DIR),
-                            os.path.basename(os.path.abspath(a.out)), scraped_path=scraped)
+                            os.path.basename(os.path.abspath(a.out)), scraped_path=scraped,
+                            show=a.show)
     if summary:
         print(f"shortlist summary: {local_path.rel(summary, ROOT)} "
               f"(top {KEEP_TOP}, no posting bodies) - commit this one")
