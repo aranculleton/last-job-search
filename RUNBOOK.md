@@ -491,7 +491,9 @@ master cannot see work sitting on another chat's branch, and builds it a second 
    (in the foreground it held the chat that answers the page for minutes, 2026-10-29); when
    it ends green, merge, in the turn its ending wakes. Silently: never subscribe to it, set a
    check-in for it or wait on GitHub's checks, and never tell the person about it or its
-   checks (CLAUDE.md, "Saving"). While it runs, the chat that answers the page says "Saving
+   checks (CLAUDE.md, "Saving"). A cloud chat is subscribed to a pull request it opens by
+   itself: unsubscribe at once (`unsubscribe_pr_activity`), before anything else
+   (2026-10-30). While it runs, the chat that answers the page says "Saving
    your work" there (`app.py busy`, the `app` skill, step 5), and clears it once landed. A
    branch left behind at the end of a session is work the next chat cannot see and will
    duplicate.

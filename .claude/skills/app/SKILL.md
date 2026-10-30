@@ -152,7 +152,7 @@ page waited on every tap (2026-10-29). `next` never hands one to this chat to ru
 - `run: child session`: send the claim, then make the `create_session` call exactly as
   `next` printed it. That chat runs the one item, pins its progress, finishes it, lands it on
   master and tells this chat. It never publishes, watches or answers the page, and is titled
-  `Job search: <title>`, so the daily tidy archives it once its work is on master.
+  `Job search: <title>`, and is archived as soon as it says its work is on master (below).
 - `run: background agent` is the fallback where `create_session` is not available: a chat
   on a computer, or a chat without that tool (run `next` with `--no-sessions`). Send the
   claim, then make the Agent call exactly as printed (`run_in_background: true`,
@@ -167,7 +167,10 @@ networking run and an interview prep run side by side (three at most, `page_db.H
 - `Finished <id>, on master` (or an agent's last line saying so): take master, run `app.py
   view` (step 5) and send its batch. This chat is the one writer of the page's view, so two
   chats never write it at once. An item still running finishes here, as step 5 says, from
-  what the message said.
+  what the message said. Then archive the chat that sent it, at once: `archive_session` with
+  its id (the one `create_session` returned; its message comes from it). A finished job's
+  chat sat in the person's list until the daily tidy, and they asked whether one would pile
+  up after every job (2026-10-30). The daily tidy stays as the backstop.
 
 Drafting and audits are never moved below this chat's model. The other chats are never
 mentioned to the person; the page shows each job's progress.
@@ -206,6 +209,9 @@ once more; claimed by another chat, write nothing else.
 
 - `work/<id>`: `status: done` (or `failed`, `error` in plain words), `finished_at`,
   `result: {summary, links}` (web addresses or repo paths; downloads go to the asset store).
+  The summary is one short sentence, at most 15 words, of what is ready ("Your Larkspur Retail
+  pack now covers the technical round."): the page shows its first sentence
+  only (a paragraph was too wordy to read, 2026-10-30). Detail goes in the work itself.
 - its locks deleted, each pinned; your heartbeat `chats/<your id>`, `busy: "Saving your
   work"` while the landing check below runs (`null` when nothing is left to land).
 - from a `talk` thread, a reply there (`from: cloud` or `computer`, plain words).

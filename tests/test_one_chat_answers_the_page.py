@@ -10,7 +10,9 @@ write when its version moved on. Every person, page and chat id is invented.
 """
 from __future__ import annotations
 
+import datetime as dt
 import json
+import re
 import os
 import shutil
 import subprocess
@@ -230,7 +232,10 @@ def test_a_chat_that_is_not_the_listener_says_it_once_and_asks_for_a_republish(c
     copy.send(copy.run("listen", copy.dump(), "--chat", "helper-1", "--listen"))
     copy.run("listen", copy.dump(), "--chat", "big-chat")          # it sees the helper
     said = copy.run("start", "--on", "test", "--tools", "none", "--chat", "big-chat")
-    assert not _publish_steps(said), said
+    # It publishes only if its check finds the listener quiet for an hour (2026-10-30: an
+    # update waited on a listener last heard from 12 hours before); otherwise it asks.
+    assert "--update" in said and all(ln.split(". ", 1)[1].startswith(
+        "If that left this chat as the listener") for ln in _publish_steps(said)), said
     assert "Publishing makes this chat watch" not in said
     assert "python3 tools/app.py republish" in said
     again = copy.run("start", "--on", "test", "--tools", "none", "--chat", "big-chat")
@@ -379,7 +384,7 @@ def _never_asks(said):
     for word in ("Shall I", "Would you like", "Do you want", "pin"):
         assert word not in claude, word
     said_to_them = [ln for ln in claude.splitlines() if "Tell the person" in ln]
-    assert said_to_them and all(app_listen.SAY_UPDATED in ln or app_listen.SAY_UPDATING in ln
+    assert said_to_them and all(app_listen.say(app_listen.SAY_UPDATED, PAGE) in ln or app_listen.say(app_listen.SAY_UPDATING, PAGE) in ln
                                 for ln in said_to_them)
 
 
@@ -393,16 +398,18 @@ def test_an_update_that_changed_the_page_republishes_it_at_once_and_never_asks(c
     assert "Artifact, action publish" in said and f"published {PAGE}" in said
     # A refusal is tried once more, and only a second one is said, in its one line.
     assert "read the page again and publish once more" in said
-    assert app_listen.SAY_NOT_UPDATED in said
+    assert app_listen.say(app_listen.SAY_NOT_UPDATED, PAGE) in said
     # The republish is the sync's own step, never also a background agent's: listed as an
     # upgrade as well, it came back later with nothing changed.
     assert "upgrade.md" not in said and "Profile upgrades: none pending." in said
-    # Any other chat asks the listener at once, and does not wait for it.
+    # Any other chat checks first (--update): a listener heard from lately is asked, at once,
+    # and not waited for; one quiet for an hour never holds the update (2026-10-30).
     copy.run("listen", copy.dump(), "--chat", "big-chat")
     other = _after_sync(copy, "big-chat")
     _never_asks(other)
     assert "python3 tools/app.py republish" in other and "Do not wait for it" in other
-    assert "Artifact, action publish" not in other and app_listen.SAY_UPDATING in other
+    assert "--update" in other and "If it says another chat answers the page" in other
+    assert app_listen.say(app_listen.SAY_UPDATING, PAGE) in other
     # A chat on a new copy, which has seen no chat answer, asks the page which chat does, then
     # does the one that applies: both are printed, neither is a question.
     os.remove(os.path.join(copy.state, "." + app_listen.CACHE))
@@ -420,7 +427,7 @@ def test_an_update_that_left_the_page_code_alone_refreshes_its_data(copy):
     copy.page(current=True)
     said = _after_sync(copy, "big-chat", landed=True)
     _never_asks(said)
-    assert "python3 tools/app.py view" in said and app_listen.SAY_UPDATED in said
+    assert "python3 tools/app.py view" in said and app_listen.say(app_listen.SAY_UPDATED, PAGE) in said
     assert "Artifact, action publish" not in said and "republish" not in said
     # A sync that took nothing says nothing about the page.
     assert "update just landed" not in _after_sync(copy, "big-chat")
@@ -462,7 +469,7 @@ def test_a_start_before_the_days_check_leaves_the_page_to_it(copy, monkeypatch):
     code, lines = app_setup.start(on="test", tools="none")
     said = "\n".join(lines)
     assert _publish_steps(said) and "never asking first" in said
-    assert app_listen.SAY_UPDATED in said and "publish once more" in said
+    assert app_listen.say(app_listen.SAY_UPDATED, PAGE) in said and "publish once more" in said
 
 
 def test_the_pin_is_offered_once_ever_even_when_nobody_answers(copy):
@@ -491,3 +498,62 @@ def test_no_chat_is_ever_started_for_the_page(copy):
     assert copy.send(copy.run("listen", copy.dump(), "--chat", "big-chat"))
     said = copy.run("start", "--on", "Opus 5.5", "--tools", "none", "--chat", "big-chat")
     assert "create_session" not in said and "chat of its own" not in said
+
+
+def test_an_update_never_waits_on_a_listener_that_has_gone_quiet(copy, tmp_path):
+    """An update was queued for a listener last heard from 12 hours before, and the page said
+    it was waiting until the person asked in the chat (2026-10-30). With --update, a chat that
+    has the new code takes the page from one quiet for an hour, and asks one heard lately."""
+    import app_listen
+    import page_db
+    now = dt.datetime(2026, 10, 30, 11, 46, tzinfo=dt.timezone.utc)
+    rec = {"chat": "helper-1", "kind": "cloud", "since": "2026-10-29T08:00:00Z",
+           "answered_at": "2026-10-29T23:06:00Z", "watching": True}
+    db = {"meta": {"listener": {"data": rec, "version": 4}},
+          "chats": {"helper-1": {"data": {"seen_at": "2026-10-29T23:14:00Z"}, "version": 9}}}
+    got = app_listen.decide(db, "big-chat", str(tmp_path / "a"), now, update=True)
+    assert got["role"] == "listener" and got["record"]["chat"] == "big-chat"
+    assert got["record"]["took_from"] == "helper-1" and got["batches"]
+    # Without the update, a quiet listener with nothing waiting keeps the page.
+    assert app_listen.decide(db, "big-chat", str(tmp_path / "b"), now)["role"] == "other"
+    # Heard from ten minutes ago, it keeps the page, and is asked.
+    db["chats"]["helper-1"]["data"]["seen_at"] = "2026-10-30T11:36:00Z"
+    assert app_listen.decide(db, "big-chat", str(tmp_path / "c"), now, update=True)["role"] == "other"
+    assert page_db.BATCH_MAX
+
+
+def test_publishing_closes_the_update_still_waiting_on_the_page(copy, tmp_path):
+    """A request stayed "queued" after another chat put the page up itself, and the page said
+    an update was waiting until the person asked for the notice to go (2026-10-30)."""
+    import app_listen
+    import page_db
+    db = {"work": {"republish~v7": {"data": {"kind": "republish", "status": "queued"}, "version": 1},
+                   "republish~v6": {"data": {"kind": "republish", "status": "done"}, "version": 3},
+                   "search~1": {"data": {"kind": "search", "status": "queued"}, "version": 2}}}
+    got = app_listen.close_republish(db, str(tmp_path / "out"))
+    assert got["closed"] == ["republish~v7"] and len(got["batches"]) == 1
+    (entry,) = json.load(open(got["batches"][0], encoding="utf-8"))
+    assert entry["op"] == "update" and entry["if_version"] == 1
+    body = json.load(open(entry["file_path"], encoding="utf-8"))
+    assert body["status"] == "done" and body["finished_at"] and body["result"]["summary"]
+    assert app_listen.close_republish({"work": {}}, str(tmp_path / "o2"))["batches"] == []
+    assert page_db.BATCH_MAX
+
+
+def test_every_line_after_an_update_gives_the_page_link(copy):
+    """The chat said "Your page is being updated." with no link, and the person asked for it
+    twice (2026-10-30)."""
+    import app_listen
+    for current, landed, chat in ((False, False, "helper-1"), (False, False, "big-chat"),
+                                  (True, True, "helper-1")):
+        copy.page(current=current)
+        if chat == "helper-1":
+            copy.send(copy.run("listen", copy.dump(), "--chat", "helper-1", "--listen"))
+        said = _after_sync(copy, chat, landed=landed)
+        told = [ln for ln in said.splitlines() if "tell the person" in ln.lower()]
+        assert told, said
+        for ln in told:
+            quoted = re.findall(r'"([^"]+)"', ln)
+            assert quoted and all(q.endswith(PAGE) for q in quoted if q.startswith(("Your page", "I couldn't"))), ln
+    for line in (app_listen.SAY_UPDATED, app_listen.SAY_UPDATING, app_listen.SAY_NOT_UPDATED):
+        assert app_listen.say(line, PAGE).endswith(": " + PAGE)

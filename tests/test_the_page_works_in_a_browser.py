@@ -204,6 +204,16 @@ def pages(tmp_path_factory):
         dict(nudge, id="due-nudge-%s" % p["id"], contact=p["id"], item=None, title="Follow up with %s at %s" % (p["first_name"], p["employer"]),
              context="Analyst at %s" % p["employer"], work={"kind": "follow_up", "id": "follow_up~%s" % p["id"], "args": {"contact": p["id"]}},
              rev="bn%d" % i) for i, p in enumerate(ppl)] + [
+        # Like items are grouped by what they ask (2026-10-30): eight replies owed, and two
+        # people to close after two unanswered messages. Invented names.
+        *[dict(nudge, id="due-reply-%d" % i, kind="reply", action="work:reply", contact=ppl[i % 3]["id"], item=None,
+               title="Reply to %s" % name, context="", work={"kind": "reply", "id": "reply~r%d" % i, "args": {"contact": ppl[i % 3]["id"]}},
+               rev="br%d" % i)
+          for i, name in enumerate(("Ines", "Joel", "Kemi", "Lior", "Mara", "Noor", "Otto", "Pia"))],
+        *[dict(nudge, id="due-leave-%d" % i, kind="follow_up", action="work:follow_up", contact=ppl[i]["id"], item=None,
+               title="%s: No reply to 2 messages: leave it unless they write back" % name, context="",
+               done={"action": "due.done", "label": "Done"}, rev="bl%d" % i)
+          for i, name in enumerate(("Quinn", "Rafe"))],
         {"id": "due-hidden", "kind": "hidden", "sub": "hidden", "title": "4 follow-ups at employers you turned down not shown",
          "context": "", "due": None, "company": "", "overdue_days": 0, "action": None, "item": None, "work": None,
          "done": None, "snooze": None, "rev": "bh"}]
@@ -614,8 +624,10 @@ def test_with_no_chat_listening_it_says_when_it_starts_and_offers_to_start_it_no
 
 def test_progress_moves_with_the_clock_slow_is_not_stalled_and_only_a_missed_check_in_tries_again(run, pages):
     # Changed 2026-10-29: past twice its usual time a running search was called "Stalled" with
-    # Try again while it was still working. Past its estimate is now "Taking longer", still
-    # running, with no time left shown; only a lease that ran out says it may have stopped.
+    # Try again while it was still working. Past its usual time it is still running, with no
+    # time left shown and, since 2026-10-30, no words about being slow ("Taking longer" was on
+    # nearly every job and made the app look slow, the maintainer); only a lease that ran out
+    # says it may have stopped.
     r = run("progress", html=pages["sample"], shot="phone-work-done" if SHOTS else "")
     _clean(r)
     assert r["sheet"], "on a phone the work opens as a sheet"
@@ -631,13 +643,13 @@ def test_progress_moves_with_the_clock_slow_is_not_stalled_and_only_a_missed_che
     assert s2["sentence"] == "Scoring 214 postings, 3 of 4 done", "one live sentence, in words"
     assert any("step-now:Now: Scoring" in s for s in s2["steps"])
     ov = r["over"]
-    assert ov["status"] == "Taking longer" and ov["now"] == 97, "held below 100 until done"
+    assert ov["status"] == "" and ov["now"] == 97, "held below 100 until done, and no state word"
     assert ov["warn"] == [], "slower than usual is no warning"
-    assert "Taking longer than usual. Claude is still on it." in ov["time"]
+    assert "so far" in ov["time"] and "longer" not in ov["time"] + ov["text"], ov["time"]
     assert "left" not in ov["time"] and "left" not in ov["text"], "no time left once it has run past it"
     assert "Try again" not in ov["buttons"] and "Stop" in ov["buttons"]
     assert not any("usage limit" in b for b in r["overBanner"]), "slow is never the plan's limit"
-    assert all("minutes left" not in s for s in r["overSum"])
+    assert all("minutes left" not in s and "longer" not in s for s in r["overSum"])
     st = r["stalled"]
     assert st["status"] == "May have stopped"
     assert any("may have stopped" in w for w in st["warn"])
@@ -669,7 +681,8 @@ def test_slow_work_is_not_the_plan_limit_and_the_limit_shows_only_when_claude_sa
     slow = r["slow"]
     assert not any("usage limit" in b for b in slow["banner"]), "two slow jobs are only slow"
     for b in (slow["a"], slow["b"]):
-        assert b["status"] == "Taking longer" and "Try again" not in b["buttons"] and b["warn"] == []
+        assert b["status"] == "" and "Try again" not in b["buttons"] and b["warn"] == []
+        assert "so far" in b["time"] and "longer" not in b["time"], b["time"]
     # A quick answer came back rate_limited: now the limit is said, nothing retries, and
     # Stop everything pauses both.
     assert any("usage limit" in b and "nothing retries by itself" in b for b in r["banner"])
@@ -686,6 +699,22 @@ def test_work_asked_for_in_a_chat_shows_on_the_page(run, pages):
     assert "Claude is busy in your chat" not in r["stale"], "an hour-old line is gone"
     assert "Claude is busy in your chat" not in r["workId"], "a work id is never shown as words"
     assert "Saving your work" in r["saving"]
+
+
+def test_work_claude_has_picked_up_says_so_with_a_clock_like_a_chat(run, pages):
+    """The card said "Waiting to start" while the chat was already on it (the maintainer,
+    2026-10-30), and asked for live steps as a chat shows them: the chat's check-in on waking
+    says it has the work in hand, and the page ticks the step's clock itself."""
+    r = run("picked_up", html=pages["sample"])
+    _clean(r)
+    assert r["picked"]["status"] == "Starting" and r["spins"] == 1, r["picked"]
+    assert r["picked"]["sentence"].startswith("Claude has picked this up"), r["picked"]
+    assert "Don't do it" in " ".join(r["picked"]["buttons"]), "not started yet: it can still be called off"
+    assert r["waiting"]["status"] == "Waiting to start", "asked after the check-in: not seen yet"
+    assert "files~resume-current=30s" in r["clocks"] and "search~1=1m 5s" in r["clocks"], r["clocks"]
+    assert not any(c.startswith("prep~") for c in r["clocks"]), "nothing to time before Claude has it"
+    assert "files~resume-current=35s" in r["after"] and "search~1=1m 10s" in r["after"], r["after"]
+    assert "1 running, 1 starting, 1 waiting their turn." in r["summary"], r["summary"]
 
 
 def test_stop_says_what_is_kept(run, pages):
@@ -1149,6 +1178,14 @@ def test_a_busy_week_is_a_few_checklists_not_a_card_each(run, pages):
     assert follow["title"] == "Follow up with 3 people" and len(follow["rows"]) == 3, follow
     assert all(row["buttons"][:1] == ["Draft"] for row in follow["rows"]), follow
     assert "Draft all 3" in follow["actions"], "one button drafts them all"
+    reply = r["groups"]["grp:work~reply:now"]
+    n = int(re.match(r"Reply to (\d+) people$", reply["title"]).group(1))      # the sample's own, and eight
+    assert n >= 8 and len(reply["rows"]) == 5, reply
+    assert reply["fold"].startswith("%d more" % (n - 5)) and "Draft all %d" % n in reply["actions"], reply
+    leave = r["groups"]["grp:leave:now"]
+    assert leave["title"] == "2 people haven't answered two messages", leave
+    assert all(row["buttons"] == ["Close"] for row in leave["rows"]), leave
+    assert leave["actions"] == ["Close them all"] and "Leave them unless they write back" in leave["sub"], leave
     sent = r["groups"]["grp:sent"]
     assert sent["title"].startswith("Did these notes go?") and len(sent["rows"]) == 2 and "They all went" in sent["actions"]
     warn = [g for k, g in r["groups"].items() if k.startswith("grp:read_first")]
@@ -1207,3 +1244,15 @@ def test_the_tour_walks_each_section_skips_and_opens_one_part_from_its_title(run
     assert r["closed"] == 0 and r["cardAfter"] == 0, "skipped, and never offered again on this device"
     assert r["part"]["title"] == ["How Contacts works"]
     assert "Next part: Interviews" in r["part"]["buttons"] and "Close" in r["part"]["buttons"]
+
+
+def test_the_news_says_when_it_was_gathered_and_when_it_is_old(run, pages):
+    """The News card gave no date, and news from a brief days old read as today's (the
+    maintainer, 2026-10-30). It comes with the brief, so it is as old as the brief."""
+    fresh = run("paint", html=pages["sample"], hash="brief", clock="2026-10-25T09:00:00Z")
+    _clean(fresh)
+    assert "Gathered this morning." in fresh["bodyText"], fresh["bodyText"][:400]
+    # A second function named clock() once turned the Today card's time into "498109000H 0M".
+    assert not re.search(r"\d{4,}\s*h\b", fresh["bodyText"], re.I), fresh["bodyText"][:400]
+    old = run("paint", html=pages["sample"], hash="brief", clock="2026-10-28T09:00:00Z")
+    assert re.search(r"Gathered \w+ 25 Oct\. Your next brief brings fresh news\.", old["bodyText"]), old["bodyText"][:600]

@@ -823,9 +823,9 @@ def _publish_lines(st: dict, n: int) -> list[str]:
                   f"publish the new file to that same url with the capabilities "
                   "`python3 tools/app_page.py --capabilities` prints. If the publish is refused, "
                   "read the page again and publish once more; only if that is refused too, tell "
-                  f"the person \"{app_listen.SAY_NOT_UPDATED}\" and go on. Then python3 "
-                  f"tools/app.py published {url}, and tell the person only: "
-                  f"\"{app_listen.SAY_UPDATED}\""]
+                  f"the person \"{app_listen.say(app_listen.SAY_NOT_UPDATED, url)}\" and go "
+                  f"on. Then python3 tools/app.py published {url}, and tell the person only: "
+                  f"\"{app_listen.say(app_listen.SAY_UPDATED, url)}\""]
     else:
         lines += [f"{n}. Build the person's page: python3 tools/app.py page --out <your "
                   "scratchpad>/page.html",

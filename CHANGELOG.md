@@ -20,6 +20,39 @@ make sense to somebody whose repo just received it.
 
 ## [Unreleased]
 
+### Fixed
+
+- **A chat no longer asks you to allow every write to your page.** Claude Code read the names
+  of the files a chat writes your page from ("part~jobs~1.json") as possible disguised
+  Windows names, so each write was a safety check only you could allow, one at a time, and no
+  setting could cover it: a new chat asked about 50 times, and a job's own chat asked too.
+  The files are named so that never happens.
+- **The line after an update gives your page's link** ("Your page is up to date: <link>").
+- **An update never waits on a chat that has stopped.** A chat with the update puts your page
+  up itself when the chat that answers it has been quiet for an hour, and publishing clears
+  the "update waiting" notice. The check is asked for once, not twice.
+- **Work Claude has picked up says "Starting"**, not "Waiting to start", and the step it is
+  on shows a clock in seconds that ticks on the page, as a chat does.
+- **No more "Taking longer than usual".** A job past its usual time shows how long it has
+  run; only one that stops checking in gets a warning. "Claude has been told" goes once the
+  job has started.
+- **A finished job says what is ready in one short sentence**, with a bin that puts it away.
+- **Prep asked for after an interview's day has gone is for what comes next**, never the
+  stage you already had.
+- **To do groups like items into one card**: follow-ups, replies and the like, five shown and
+  the rest one tap below. Someone who has not answered two messages is closed, never offered
+  a follow-up to draft.
+- **Your resume's card says one thing to do**: out of date, it offers a fresh one first.
+- **The News card says when it was gathered**, and that it is old when it is.
+- **LinkedIn is checked quietly.** Once it works on a computer, the page checks again only
+  weekly; when you are signed out, it opens LinkedIn's sign-in for you, once a day, and says
+  you can close that tab once you're in.
+- **A finished job's own chat is archived as soon as its work is saved**, not at the daily
+  tidy.
+- **The page fills the screen it is on**, however wide: no more empty sides at full screen.
+- **A recorded reaction says to save it with the turn's work**, so a cloud chat is not held
+  at its end, and a cloud chat takes itself off the pull request it opens.
+
 ## [4.4.0] - 2026-10-30
 
 ### Fixed

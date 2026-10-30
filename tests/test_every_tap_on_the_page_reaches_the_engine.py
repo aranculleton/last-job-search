@@ -92,7 +92,8 @@ def _hand_over(where, got):
 def _receipts(where, ids):
     out = {}
     for aid, doc in ids:
-        p = os.path.join(where.dump, "out", "files", "receipts", aid + ".json")
+        import page_db
+        p = page_db.body_path(os.path.join(where.dump, "out"), "receipts", aid)
         with open(p, encoding="utf-8") as fh:
             out[doc["action"] + " " + doc["item"]] = json.load(fh)
     return out

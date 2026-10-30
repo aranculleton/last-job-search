@@ -74,9 +74,17 @@ REPUBLISH_TITLE = "Bringing your page up to date"
 # update (2026-10-26) asked whether to bring the page up, explained that a safety check had
 # blocked its first try, offered the pin again and reported a timer running out; the person
 # had asked for none of it.
-SAY_UPDATED = "Your page is updated."
-SAY_UPDATING = "Your page is being updated."
-SAY_NOT_UPDATED = "I couldn't update your page just now."
+# Each ends on the page's link (CLAUDE.md: "Your page is up to date: <its link>"): a chat
+# said "Your page is being updated." with none, and the person asked for it twice
+# (2026-10-30). `say()` fills it in.
+SAY_UPDATED = "Your page is up to date: {url}"
+SAY_UPDATING = "Your page is being updated: {url}"
+SAY_NOT_UPDATED = "I couldn't update your page just now: {url}"
+# A chat with the page's new code to put up takes the page from a listener quiet this long:
+# a watch Claude Code started by itself can end after hours with nothing happening, and an
+# update queued for a listener last heard from 12 hours before waited until the person asked
+# in the chat whether it was happening (2026-10-30).
+UPDATE_QUIET_S = 60 * 60
 # How every page step after an update is done: at once, unasked, one command at a time (a
 # chained command goes to the desktop app's safety check whole), with nothing left behind.
 NO_ASK = ("Do it now, before anything else, and never ask the person first: bringing their "
@@ -92,6 +100,11 @@ _BEFORE = ("Setup carries on", "The page shows the updates", "Bring the page's d
 
 
 # ------------------------------------------------------------------ who this chat is
+
+
+def say(line: str, url: str) -> str:
+    """One of the SAY_ lines with the page's link in it."""
+    return line.format(url=url or "<the page's link>")
 
 
 def this_chat(given: str = "") -> str:
@@ -245,6 +258,17 @@ def lapsed(rec: dict, db: dict, now: dt.datetime) -> bool:
     return answered is None or answered < since
 
 
+def quiet_s(rec: dict, db: dict, now: dt.datetime) -> float | None:
+    """Seconds since the listener last showed it was there: its last answer, its claim, or
+    its own heartbeat (beats). None when it never has."""
+    times = [_time(rec.get("answered_at")), _time(rec.get("since"))]
+    beat = (db.get("chats") or {}).get(rec.get("chat") or "")
+    if beat:
+        times.append(_time(beat["data"].get("seen_at")))
+    times = [t for t in times if t is not None]
+    return (now - max(times)).total_seconds() if times else None
+
+
 def _ago(value, now: dt.datetime) -> str:
     t = _time(value)
     if t is None:
@@ -259,14 +283,16 @@ def _ago(value, now: dt.datetime) -> str:
 
 def decide(db: dict, chat: str, out_dir: str, now: dt.datetime | None = None,
            listen: bool = False, helper: bool = False, title: str = "",
-           hand_to: str = "") -> dict:
+           hand_to: str = "", update: bool = False) -> dict:
     """Is this chat the page's listener? {"role": "listener" | "other", "lines": [...],
     "batches": [...], "record": the listener as this chat leaves it}.
 
     The chat named in meta/listener answers; this chat writes that it answered just now.
     With no record, or one whose chat stopped answering, or when the person asked this chat
     to look after the page (`listen`), it claims the record with a write only one chat can
-    win. `hand_to` gives the page to another chat (the helper this one just started)."""
+    win. `hand_to` gives the page to another chat (the helper this one just started).
+    `update`: this chat has the page's new code to put up, so a listener quiet for
+    UPDATE_QUIET_S counts as gone, and this chat takes the page and publishes it itself."""
     import page_db
     now = now or dt.datetime.now(dt.timezone.utc)
     rec, version = record(db)
@@ -293,6 +319,9 @@ def decide(db: dict, chat: str, out_dir: str, now: dt.datetime | None = None,
                           "below, then stop this chat's watch: ArtifactComments, action "
                           "watch, url <the page>, on: false."]}
     gone = lapsed(rec, db, now)
+    if update and not gone and rec.get("chat") != chat:
+        q = quiet_s(rec, db, now)
+        gone = q is None or q >= UPDATE_QUIET_S
     # The cloud answers the page; a chat on the person's computer is for what only it can do
     # (the maintainer, 2026-10-29: "99% on the cloud, the computer for signed-in things").
     # So a computer chat never takes the page from a cloud chat that still answers it, even
@@ -418,6 +447,27 @@ def next_republish(db: dict, chat: str, now: dt.datetime) -> dict | None:
             "stages": [{"key": k, "name": n, "est_s": s} for k, n, s in STAGES]}
 
 
+def close_republish(db: dict, out_dir: str, now: dt.datetime | None = None) -> dict:
+    """Every republish request still open, closed: this chat has just put the page up, so
+    none of them is waiting any more. One stayed "queued" after a chat published the page
+    itself, and the page said an update was waiting until the person asked for the notice to
+    go (2026-10-30). {"closed": [ids], "batches": [...]}."""
+    import page_db
+    now = now or dt.datetime.now(dt.timezone.utc)
+    w = page_db.Writes(out_dir)
+    closed = []
+    for wid, d in sorted((db.get("work") or {}).items()):
+        if d["data"].get("kind") != "republish" or \
+                str(d["data"].get("status") or "") not in ("queued", "claimed", "running"):
+            continue
+        w.add("update", "work", wid, {"status": "done", "finished_at": _stamp(now),
+                                       "result": {"summary": "Your page is up to date.",
+                                                  "links": []}},
+              if_version=d["version"])
+        closed.append(wid)
+    return {"closed": closed, "batches": w.save("published") if closed else []}
+
+
 def without_republish(db: dict) -> dict:
     """The dump with republish requests left out, for a chat that may not take them."""
     out = dict(db)
@@ -505,8 +555,10 @@ def pin_line(url: str, n: int | None = None) -> str:
 # ------------------------------------------------------------------ start's steps
 
 
-def _check_in(chat: str, url: str, claim: bool, listen: bool, helper: bool) -> str:
-    flags = (" --listen" if listen else "") + (" --helper" if helper else "")
+def _check_in(chat: str, url: str, claim: bool, listen: bool, helper: bool,
+              update: bool = False) -> str:
+    flags = (" --listen" if listen else "") + (" --helper" if helper else "") + \
+        (" --update" if update else "")
     if claim:
         return (f"Ask the page which chat answers it, before publishing anything: ArtifactData "
                 f"query (url {url}, collection meta) and query (collection work, where "
@@ -582,19 +634,16 @@ def shape(code: int, lines: list[str], chat: str = "", listen: bool = False,
             got["told"] = dict(sorted(told.items(), key=lambda kv: kv[1])[-50:])
             _save_seen(got)
         if behind:
-            add.append("The page's own code changed: ask the chat that answers it to republish "
-                       "it, now and without asking the person. python3 tools/app.py republish "
-                       "<your scratchpad>/republish, then send the batch it prints (ArtifactData "
-                       f"batch, url {url}); do not wait for it. Tell the person only: "
-                       f"\"{SAY_UPDATING}\"")
+            add.append("The page's own code changed. " + _update_check(url, chat))
+            add += [f"If that left this chat as the listener: {p[:1].lower()}{p[1:]}"
+                    for p in publish]
+            add.append("Otherwise: " + _ask_listener(url))
     else:
-        add.append(_check_in(chat, url, who == "claim", listen, helper))
+        add.append(_check_in(chat, url, who == "claim", listen, helper, update=bool(publish)))
         if publish:
             add += [f"If that left this chat as the listener: {p[:1].lower()}{p[1:]}"
                     for p in publish]
-            add.append("Otherwise: python3 tools/app.py republish <your scratchpad>/republish, "
-                       f"send the batch it prints (ArtifactData batch, url {url}), and tell "
-                       f"the person only: \"{SAY_UPDATING}\"")
+            add.append("Otherwise: " + _ask_listener(url))
         # The pin is offered by the publish step alone (`published_lines`), which records it.
         try:
             import routines
@@ -636,6 +685,29 @@ def published_lines(url: str, chat: str, first: bool, out_dir: str,
 # ------------------------------------------------------------------ after an update
 
 
+def _ask_listener(url: str) -> str:
+    """Another chat answers the page and has been heard from lately: ask it, and say so."""
+    return ("python3 tools/app.py republish <your scratchpad>/republish, then send the batch it "
+            f"prints (ArtifactData batch, url {url}); refused means the request is there "
+            "already. Do not wait for it: the page shows its progress. Tell the person this "
+            f"one line, and nothing else about the page or the update: "
+            f"\"{say(SAY_UPDATING, url)}\"")
+
+
+def _update_check(url: str, chat: str) -> str:
+    """Which chat puts the update up: this one, unless another answers the page and has been
+    heard from within UPDATE_QUIET_S. Start's own check-in, where it printed one, is this
+    same step, so it is done once (it was asked for twice, 2026-10-30)."""
+    return ("Which chat answers the page: if python3 tools/app.py start printed a step that asks "
+            "the page this, that step is this one: do it once, adding --update to its listen "
+            f"command. Otherwise: ArtifactData query (url {url}, collection meta) and query "
+            "(collection beats), both with out_dir <your scratchpad>/listen, then python3 "
+            "tools/app.py listen <your scratchpad>/listen --chat "
+            f"{chat or '<this chat id>'} --update, and send the batch it prints. With --update "
+            "this chat takes the page from a chat quiet for an hour or more, so an update "
+            "never waits on a chat that has stopped.")
+
+
 def _publish_now(url: str, n: int) -> list[str]:
     """The republish itself, numbered from `n`: build, read, publish, keep, and one line."""
     return [f"{n}. python3 tools/app.py page --out <your scratchpad>/page.html",
@@ -643,10 +715,13 @@ def _publish_now(url: str, n: int) -> list[str]:
             f"file_path <your scratchpad>/page.html, url {url}, with the capabilities python3 "
             "tools/app_page.py --capabilities prints. If the publish is refused, read the page "
             "again and publish once more; only if that is refused too, tell the person this one "
-            f"line and stop: \"{SAY_NOT_UPDATED}\"",
-            f"{n + 2}. python3 tools/app.py published {url}, and do what it prints.",
+            f"line and stop: \"{say(SAY_NOT_UPDATED, url)}\"",
+            f"{n + 2}. ArtifactData query (url {url}, collection work, where kind == republish, "
+            f"out_dir <your scratchpad>/published), then python3 tools/app.py published {url} "
+            "--dump <your scratchpad>/published, and do what it prints: it closes any request "
+            "for this update still waiting on the page.",
             f"{n + 3}. Tell the person this one line, and nothing else about the page or the "
-            f"update: \"{SAY_UPDATED}\""]
+            f"update: \"{say(SAY_UPDATED, url)}\""]
 
 
 def after_update(landed: bool = False, chat: str = "") -> list[str]:
@@ -673,23 +748,16 @@ def after_update(landed: bool = False, chat: str = "") -> list[str]:
                 "scratchpad>/page-data" + (f" --chat {chat}" if chat else ""),
                 f"3. Send each batch it prints, in order (ArtifactData batch, url {url}). If one "
                 "is refused, do steps 1 to 3 once more; only if it is refused again, tell the "
-                f"person this one line and stop: \"{SAY_NOT_UPDATED}\"",
+                f"person this one line and stop: \"{say(SAY_NOT_UPDATED, url)}\"",
                 "4. Tell the person this one line, and nothing else about the page or the "
-                f"update: \"{SAY_UPDATED}\""]
+                f"update: \"{say(SAY_UPDATED, url)}\""]
     head = f"Claude: the update changed the person's page itself. {NO_ASK}"
-    ask = ("python3 tools/app.py republish <your scratchpad>/republish, then send the batch it "
-           f"prints (ArtifactData batch, url {url}); refused means the request is there "
-           "already. Do not wait for it: the page shows its progress. Tell the person this "
-           f"one line, and nothing else about the page or the update: \"{SAY_UPDATING}\"")
-    if who == "other":
-        return [head, "1. Another chat answers the page, so it republishes it: " + ask]
     if who == "listener":
         return [head + " Republish it:"] + _publish_now(url, 1)
+    # Any other chat checks first: one heard from lately puts it up; a quiet one never holds
+    # it, and this chat publishes it itself.
     return [head + " Republish it:",
-            f"1. Which chat answers the page: ArtifactData query (url {url}, collection "
-            "meta, out_dir <your scratchpad>/listen), then python3 tools/app.py "
-            f"listen <your scratchpad>/listen --chat {chat or '<this chat id>'}, and send the "
-            "batch it prints.",
-            "2. If it says another chat answers the page: " + ask + " Then stop here."] + \
-        _publish_now(url, 3)
+            "1. " + _update_check(url, chat),
+            "2. If it says another chat answers the page: " + _ask_listener(url) +
+            " Then stop here."] + _publish_now(url, 3)
 

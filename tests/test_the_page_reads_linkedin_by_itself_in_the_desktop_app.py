@@ -42,6 +42,30 @@ def test_signed_out_it_says_how_to_sign_in(run, page):
     assert "sign in" in r["panel"].lower()
 
 
+def test_signed_in_it_is_not_checked_again_on_this_device_for_a_week(run, page):
+    """Each opening of the page loaded LinkedIn in Claude's browser to check, and the person
+    had a tab to close every time (2026-10-30)."""
+    import datetime as dt
+    r = run("reading", html=page, signedIn=True)
+    until = dt.datetime.fromisoformat(r["stored"]["okUntil"].replace("Z", "+00:00"))
+    left = until - dt.datetime.fromisoformat(r["stored"]["now"].replace("Z", "+00:00"))   # the page's clock
+    assert dt.timedelta(days=6) < left <= dt.timedelta(days=7), left
+    again = run("reading", html=page, signedIn=True, look={"reading-ok-until": "2099-01-01T00:00:00.000Z"})
+    assert again["browser"] == [] and again["state"]["ok"] is True and not again["errors"]
+
+
+def test_signed_out_it_opens_the_sign_in_itself_and_says_the_tab_can_be_closed(run, page):
+    r = run("reading", html=page, signedIn=False)
+    opened = [c for c in r["browser"] if c["tool"] == "preview_start"]
+    assert len(opened) == 1 and opened[0]["input"]["url"] == "https://www.linkedin.com/login", r["browser"]
+    assert "close that tab" in r["panel"], r["panel"]
+    assert r["stored"]["signinOpened"] and not r["stored"]["okUntil"]
+    # Once a day: opened already today (the page's own day), it waits for the person's tap.
+    again = run("reading", html=page, signedIn=False, look={"reading-signin-opened": r["stored"]["signinOpened"]})
+    assert not [c for c in again["browser"] if c["tool"] == "preview_start"], again["browser"]
+    assert again["state"]["panel"] == "sign_in"
+
+
 def test_outside_the_app_it_never_touches_the_browser(run, page):
     r = run("reading", html=page, inApp=False)
     assert r["browser"] == [] and not r["errors"]

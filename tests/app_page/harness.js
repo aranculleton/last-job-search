@@ -826,7 +826,9 @@ async function bar(page, id) {
     const b = el.querySelector("[role=progressbar]");
     return {now: b ? Number(b.getAttribute("aria-valuenow")) : null, text: b ? b.getAttribute("aria-valuetext") : null,
       time: (el.querySelector("[data-time]") || {}).textContent || "", status: (el.querySelector(".state-word, .chip") || {}).textContent || "",
-      sentence: (el.querySelector(".wc-now") || {}).textContent || "",
+      // The step's ticking clock (2026-10-30) is read on its own, never as part of the sentence.
+      sentence: (() => { const n = el.querySelector(".wc-now"); if (!n) return ""; const c = n.cloneNode(true); for (const x of c.querySelectorAll("[data-step]")) x.remove(); return c.textContent; })(),
+      clock: ((el.querySelector("[data-step]") || {}).textContent || "").replace(/^[\s·]+/, ""),
       warn: [...el.querySelectorAll(".wc-warn")].map((x) => x.textContent), buttons: [...el.querySelectorAll("button, a.btn")].map((x) => x.textContent.trim()),
       steps: [...el.querySelectorAll(".wc-steps li")].map((x) => x.className + ":" + x.textContent.trim())};
   }, id);
@@ -852,7 +854,7 @@ S.progress = async (a) => {
   // Past the stage's estimate (120 s) is slower than usual, never "Stalled": still running,
   // no warning, no Try again, and no time left once it has run past it.
   await page.clock.runFor(250000);
-  await seeIn(page, workSel("search~1"), "Taking longer");
+  await pastUsual(page, workSel("search~1"));
   r.over = await bar(page, "search~1");
   r.overSum = await T(page, "dialog.work-sheet .sum-small");
   r.overBanner = await T(page, "dialog .banner");
@@ -883,6 +885,11 @@ S.progress = async (a) => {
 };
 
 // Waits, with a time limit, until the element holds the words.
+// Past its usual time a job only shows how long it has run: no time left, and no words
+// about being slow (2026-10-30). Waited for, with a time limit.
+async function pastUsual(page, sel) {
+  await page.waitForFunction((x) => { const t = (document.querySelector(x + " [data-time]") || {}).textContent || ""; return /so far/.test(t) && !/left/.test(t); }, sel, {timeout: 5000}).catch(() => {});
+}
 async function seeIn(page, sel, want, ms) {
   await page.waitForFunction(([s, w]) => { const el = document.querySelector(s); return !!el && el.textContent.includes(w); }, [sel, want], {timeout: ms || 5000}).catch(() => {});
 }
@@ -912,7 +919,7 @@ S.limit = async (a) => {
     "work/draft~r12-2": runningDoc({kind: "draft", title: "CV and letter: Larkspur Retail", stage_at: old}),
   }, fake: {canSend: "available", sample: {error: "rate_limited"}}});
   const {page, store} = o;
-  await seeIn(page, workSel("search~1"), "Taking longer");
+  await pastUsual(page, workSel("search~1"));
   const r = {slow: {banner: await T(page, "dialog .banner"), a: await bar(page, "search~1"), b: await bar(page, "draft~r12-2")}};
   await page.keyboard.press("Escape");
   await goto(page, "chat");
@@ -985,6 +992,34 @@ S.stop = async (a) => {
   await turn(page, 6);
   r.queued = store.get("work/prep~int-larkspur-supply");
   r.queuedCard = await bar(page, "prep~int-larkspur-supply");
+  r.errors = o.errors;
+  await o.ctx.close();
+  return r;
+};
+
+// Picked up: the chat that answers the page checked in (meta/listen) after a job was asked,
+// so the card says Claude is on it rather than "Waiting to start", and the step Claude is on
+// has a clock in seconds that ticks on the page, as a chat shows a step (2026-10-30). Each
+// read waits for what it checks, with a time limit.
+S.picked_up = async (a) => {
+  const at = (s) => new Date(Date.parse(T0) + s * 1000).toISOString();
+  const o = await open({html: a.html, hash: "work", clock: T0, seed: {
+    "work/search~1": runningDoc({stage_at: at(-65), steps: [{at: at(-65), text: "Searching 4 job sites"}]}),
+    "work/files~resume-current": {kind: "files", title: "Your resume, ready to download", to: "cloud", args: {}, asked_at: at(-90), status: "queued", stages: [], stage: 0, steps: [], stop_asked: false, attempt: 1},
+    "work/prep~int-larkspur-supply": {kind: "prep", title: "Interview prep: Larkspur Retail", to: "cloud", args: {}, asked_at: at(-10), status: "queued", stages: [], stage: 0, steps: [], stop_asked: false, attempt: 1},
+    "meta/listen": {chat: "cloud-1", kind: "cloud", since: at(-3600), answered_at: at(-30), watching: true},
+  }});
+  const {page} = o;
+  const card = (id) => '[data-work="' + id + '"]';
+  const wait = (fn, arg) => page.waitForFunction(fn, arg, {timeout: 5000}).catch(() => {});
+  await wait((sel) => { const el = document.querySelector(sel + " [data-step]"); return !!el && el.textContent.replace(/^[\s·]+/, "") === "30s"; }, card("files~resume-current"));
+  const r = {picked: await bar(page, "files~resume-current"), waiting: await bar(page, "prep~int-larkspur-supply"), running: await bar(page, "search~1"),
+    spins: await page.$$eval(card("files~resume-current") + " .spin", (x) => x.length).catch(() => 0),
+    clocks: await page.$$eval("[data-step]", (x) => x.map((e) => e.closest("[data-work]").getAttribute("data-work") + "=" + e.textContent.replace(/^[\s·]+/, ""))),
+    summary: await page.$eval(".workp", (x) => x.textContent).catch(() => "")};
+  await page.clock.runFor(5000);
+  await wait((sel) => { const el = document.querySelector(sel + " [data-step]"); return !!el && el.textContent.replace(/^[\s·]+/, "") === "35s"; }, card("files~resume-current"));
+  r.after = await page.$$eval("[data-step]", (x) => x.map((e) => e.closest("[data-work]").getAttribute("data-work") + "=" + e.textContent.replace(/^[\s·]+/, "")));
   r.errors = o.errors;
   await o.ctx.close();
   return r;
@@ -1144,7 +1179,7 @@ S.wake = async (a) => {
 // Reading LinkedIn in the desktop app: the page checks by itself when it opens there, and
 // says how to sign in when signed out (2026-10-29).
 S.reading = async (a) => {
-  const o = await open({html: a.html, hash: a.hash || "todo", seed: a.seed || {}, model: a.model, fake: {canSend: a.canSend || "no_session", mcp: {browser: {inApp: a.inApp !== false, signedIn: !!a.signedIn, askFirst: !!a.askFirst, signInLater: !!a.signInLater, signOutAfter: a.signOutAfter || 0, check: a.check || 0, declined: !!a.declined, slowSections: !!a.slowSections}}}});
+  const o = await open({html: a.html, hash: a.hash || "todo", seed: a.seed || {}, model: a.model, look: a.look, fake: {canSend: a.canSend || "no_session", mcp: {browser: {inApp: a.inApp !== false, signedIn: !!a.signedIn, askFirst: !!a.askFirst, signInLater: !!a.signInLater, signOutAfter: a.signOutAfter || 0, check: a.check || 0, declined: !!a.declined, slowSections: !!a.slowSections}}}});
   await o.page.waitForTimeout(2500);
   // Until the page has finished reading (each page that draws late adds a moment).
   await o.page.waitForFunction(() => { const s = window.LJS.state().reading; return !s.busy && s.panel !== "run" && s.panel !== "check-run"; }, null, {timeout: 30000}).catch(() => {});
@@ -1161,6 +1196,7 @@ S.reading = async (a) => {
   r.state = await o.page.evaluate(() => { const s = window.LJS.state(); return {ok: s.reading.ok, signedOut: s.reading.signedOut, panel: s.reading.panel}; });
   r.acts = [...o.store.docs.entries()].filter(([p]) => p.startsWith("actions/")).map(([p, d]) => ({id: p.slice(8), action: d.data.action, value: d.data.value}));
   r.line = await o.page.evaluate(() => window.LJS.state().reading.line || "");
+  r.stored = await o.page.evaluate(() => { const g = (k) => { try { return localStorage.getItem(k); } catch (e) { return null; } }; return {okUntil: g("ljs:reading-ok-until"), signinOpened: g("ljs:reading-signin-opened"), now: new Date().toISOString()}; });
   r.todo = await o.page.evaluate(() => (document.querySelector("#main") || document.body).textContent);
   r.cards = await o.page.evaluate(() => [...document.querySelectorAll("#main [data-item]")].map((e) => e.getAttribute("data-item")));
   if (a.write) {
@@ -1378,7 +1414,7 @@ S.busy = async (a) => {
     const t = (e) => (e ? e.textContent.trim() : "");
     const groups = Object.fromEntries([...document.querySelectorAll("#main .group-card")].map((c) => [c.getAttribute("data-item"), {
       title: t(c.querySelector(".card-title")), rows: [...c.querySelectorAll(".g-row")].map((row) => ({buttons: [...row.querySelectorAll("button")].map(t)})),
-      actions: [...c.querySelectorAll(".card-actions button")].map(t)}]));
+      actions: [...c.querySelectorAll(".card-actions button")].map(t), fold: t(c.querySelector(".fold")), sub: t(c.querySelector(".small.muted"))}]));
     const counts = {};
     for (const a of document.querySelectorAll('[data-k^="tab:"], [data-k^="side:"]')) {
       const n = a.querySelector(".navcount");

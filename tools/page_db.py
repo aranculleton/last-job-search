@@ -343,12 +343,28 @@ def stale_parts(docs: dict, written) -> list[str]:
 # ------------------------------------------------------------------ writing a batch
 
 
+# A body file is named after its record, never spelled as the id is. Claude Code reads a
+# name with "~" and a digit ("part~jobs~1.json") as a short Windows name that can stand for
+# another file, so a write from it was a safety check a person had to allow every time, and
+# no setting or earlier yes covered it: a new chat asked about 50 times (2026-10-30, its
+# prompts read back from the chat). ArtifactData spells "~" as "@" in the files it saves for
+# the same reason; ids never hold "@" or "=" (_SAFE_ID), and ":" is no name on Windows.
+def body_name(part: str) -> str:
+    return str(part).replace("~", "@").replace(":", "=")
+
+
+def body_path(out_dir: str, collection: str, doc_id: str) -> str:
+    """Where `Writes.add` keeps one record's body under `out_dir`."""
+    return os.path.join(out_dir, "files", *[body_name(p) for p in collection.split("/") if p],
+                        body_name(doc_id) + ".json")
+
+
 class Writes:
     """The writes one chat turn sends back, each body in a file of its own.
 
-    `add()` keeps the body under `<out>/files/<collection>/<doc_id>.json` and the entry
-    ({op, collection, doc_id, file_path, if_version}); `save()` writes the entries as
-    batch files of at most 50, and returns their paths."""
+    `add()` keeps the body under `<out>/files/<collection>/<doc_id>.json` (its name spelled by
+    `body_name`) and the entry ({op, collection, doc_id, file_path, if_version}); `save()`
+    writes the entries as batch files of at most 50, and returns their paths."""
 
     def __init__(self, out_dir: str):
         self.out_dir = out_dir
@@ -369,7 +385,7 @@ class Writes:
             if len(body.encode("utf-8")) > DOC_MAX:
                 raise ValueError(f"page_db: {collection}/{doc_id} is over 256 KiB"
                                  " (page_db.split() writes it as parts)")
-            path = os.path.join(self.out_dir, "files", collection, doc_id + ".json")
+            path = body_path(self.out_dir, collection, doc_id)
             os.makedirs(os.path.dirname(path), exist_ok=True)
             with open(path, "w", encoding="utf-8", newline="\n") as fh:
                 fh.write(body + "\n")

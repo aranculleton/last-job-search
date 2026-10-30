@@ -451,6 +451,12 @@ def cmd_published(a) -> int:
     out = a.out or tempfile.mkdtemp(prefix="ljs-listen-")      # never inside the profile
     for line in app_listen.published_lines(a.url, chat, first, out, now):
         print(line)
+    if a.dump:
+        import page_db
+        got = app_listen.close_republish(page_db.load(a.dump), out, now)
+        if got["batches"]:
+            print("app: the page no longer shows this update as waiting: send this batch "
+                  f"(ArtifactData batch, url {a.url}): " + " ".join(got["batches"]))
     return 0
 
 
@@ -476,7 +482,8 @@ def cmd_listen(a) -> int:
     if move["batches"]:
         page_db.moved_into(a.dump, move)
     got = app_listen.decide(move["db"], app_listen.this_chat(a.chat), out, now,
-                            listen=a.listen, helper=a.helper, hand_to=a.hand)
+                            listen=a.listen, helper=a.helper, hand_to=a.hand,
+                            update=a.update)
     if move["batches"]:
         print("listen: the page's records take their new names: send these batches first, in "
               "order, asking nobody. If one is refused, another chat did it already: read "
@@ -678,10 +685,13 @@ def main(argv=None) -> int:
     p.add_argument("url")
     p.add_argument("--chat", default="")
     p.add_argument("--out", default="", help="where the listener's batch goes")
+    p.add_argument("--dump", default="", help="the page's waiting republish requests, read")
     p = sub.add_parser("listen", help="is this chat the page's listener? and its check-in")
     p.add_argument("dump")
     p.add_argument("--chat", default="")
     p.add_argument("--listen", action="store_true", help="the person asked this chat to")
+    p.add_argument("--update", action="store_true",
+                   help="this chat has the page's new code: it takes the page from a quiet one")
     p.add_argument("--helper", action="store_true")
     p.add_argument("--hand", default="", help="give the page to this chat (the new helper)")
     p.add_argument("--out", default="")
