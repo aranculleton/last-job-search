@@ -20,6 +20,16 @@ make sense to somebody whose repo just received it.
 
 ## [Unreleased]
 
+### Fixed
+
+- **The Brief's numbers are never cut off.** On a laptop screen "How far they got" was half
+  hidden and "Since the last brief" not shown at all; the panel now grows to fit.
+
+### Changed
+
+- **The README is a third of its old length**, with pictures and a walkthrough of the 4.5
+  page.
+
 ## [4.5.0] - 2026-10-30
 
 ### Fixed
