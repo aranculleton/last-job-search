@@ -36,8 +36,11 @@ MAINTAINING.md first; this is only what 4.4 left.
 ## Platforms
 
 - A release's Windows suite now runs in three parts side by side (`LJS_SUITE_SHARD`, split
-  by file size in `tools/platform_check.py`). 4.3's one runner took about 26 minutes; read
-  the parts' times on the 4.4.0 release pull request before changing the count.
+  by file size in `tools/platform_check.py`). 4.3's one runner took about 26 minutes; on
+  4.4's last change each part took 9 to 10 minutes. The release pull request touched no path
+  that starts Windows, so its one Windows fix (the quick landing check's test run under Git
+  Bash, not the Windows Subsystem for Linux) was checked on Linux only: the weekly run is
+  its first on Windows.
 - Safari's engine leaves the space before an inline-block link out of `innerText`, though it
   lays the line out as Chrome does (measured 2026-10-30). A page test that reads words
   around a link allows for it, rather than reading the layout as wrong.
