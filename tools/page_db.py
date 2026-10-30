@@ -188,7 +188,7 @@ def to_read(dump_dir: str, db: dict) -> list[str]:
     if all(os.path.isdir(os.path.join(dump_dir, c)) for c in STORE):
         return []
     missing = [c for c in MOVE_READS if not os.path.isdir(os.path.join(dump_dir, c))]
-    with open(os.path.join(dump_dir, _ASKED), "w", encoding="utf-8") as fh:
+    with open(os.path.join(dump_dir, _ASKED), "w", encoding="utf-8", newline="\n") as fh:
         fh.write("\n".join(missing) + "\n")
     return missing
 
