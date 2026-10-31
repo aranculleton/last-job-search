@@ -7,9 +7,12 @@ MAINTAINING.md first; this is only what 4.5 and 4.5.1 left.
 
 - **Decide, never ask.** Every design, tooling and gate question is the builder's to settle
   (MAINTAINING.md, "The builder decides"). Make the call, do it, say it in one line.
-- **Everything the maintainer sends during a build goes into the same release**, never a
-  later one. When the work is done and green, release it without waiting to be told twice,
-  and prepare the release (CHANGELOG, this file, the rehearsals) while the checks run.
+- **Merge to master when green; release only when the maintainer says, or at once when a
+  fix stops something working for people other than them** (the maintainer, 2026-10-31;
+  MAINTAINING.md, "Releasing", "When"). Their copy follows master, so a fix only they need
+  reaches them without a release, and every release costs the same however small. At
+  "release it", everything sent since the last one goes into it, prepared (CHANGELOG, this
+  file, the rehearsals) while the checks run.
 - **Keep it cheap**: few steps, no polling, the whole suite on GitHub only.
 - The push gate scans every patch and the whole tree. Its denylist is built by the
   maintainer's copy's own `tools/build_app.py`, cached 12 hours in `/tmp/ljs-push-gate`.
