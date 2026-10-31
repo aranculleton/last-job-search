@@ -636,9 +636,9 @@ METHODS: dict[str, dict] = {
             (11, "2026-10-29", False, "the brief is on from the start: set-up turns it on with no question, every day at 7:38, and a copy set up before with none gets it (profile upgrade brief-daily); the bell on the Brief, or Settings, changes it or turns it off; it runs in the chat that answers the page, so no chat is made for it; off and on keep its days and time; a brief that already runs keeps its schedule, and one in a chat of its own from before moves into the page's chat by itself (tools/tidy.py); a brief never makes a chat, and from a chat on the computer it is turned on from the bell, which runs it in the cloud; the app's settings squeeze every chat's history at 200,000 tokens, so the long-lived chat stays cheap"),
             (12, "2026-10-29", False, "chats keep the model's whole window again: the 200,000-token cap made a chat forget its work every few steps, so the app sets nothing and the security guard refuses the cap"),
             (13, "2026-10-30", False, "the brief can move to another time zone from the page, and every scheduled task keeps its clock time there"),
-            (14, "2026-10-31", False, "a brief in the older ops chat moves into the page's chat by itself once that chat is gone (the task had been waking a new empty chat with no copy of the files every morning); a brief back from a break runs in the ops chat, never a new empty one"),
+            (14, "2026-10-31", False, "a brief in the older ops chat moves into the page's chat by itself once that chat is gone (the task had been waking a new empty chat with no copy of the files every morning); a brief back from a break runs in the ops chat, never a new empty one; a brief bound to a chat with a copy of the files is never moved, a moved one follows a new helper, and a time zone move owes an update for every task, not only the last"),
         ),
-        "fingerprint": "415da28bac39e903",
+        "fingerprint": "0f983394ff99420d",
     },
     "expand": {
         "by": "upgrade", "priority": 4, "time": "~15 min",

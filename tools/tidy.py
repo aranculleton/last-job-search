@@ -227,11 +227,20 @@ def plan(chats: list[dict], triggers: list[dict], info: dict, reg: dict, listene
             and brief.get("trigger_id") and brief.get("cron")):
         live = next((t for t in triggers if t.get("id") == brief["trigger_id"]), None)
         # Gone, for the ops chat: not among the person's chats, and the task itself now
-        # names another chat (the empty one it woke instead). Both, so a listing that
-        # missed a page never moves a brief whose ops chat still relays.
-        gone = (home not in {s.get("id") for s in chats}
-                and str((live or {}).get("session") or "") not in ("", home))
-        if live and live.get("enabled") and (setup == "chat_per_briefing" or gone):
+        # names another chat, one that works on no copy at all (the empty one it woke
+        # instead). All three, so a listing that missed a page never moves a brief whose ops
+        # chat still relays, and a brief someone bound to a chat of their own stays there.
+        listed_ids = {s.get("id") for s in chats}
+        woke = str((live or {}).get("session") or "")
+        gone = False
+        if home == ops and home not in listed_ids and woke not in ("", home, helper):
+            if woke not in listed_ids:
+                gone = True
+            elif woke not in info:
+                out["ask"].append(woke)
+            else:
+                gone = not _repo_of(info[woke])
+        if live and live.get("enabled") and (home != ops or gone):
             adopt = home
             stub = routines.stub(reg, brief["key"], own_chat=True)
             out["brief"] = [
@@ -241,7 +250,8 @@ def plan(chats: list[dict], triggers: list[dict], info: dict, reg: dict, listene
                     "initiation": "own_initiative"},
                  "why": "the brief runs in the chat that answers the page from now on"},
                 {"run": f"python3 tools/routines.py record --session {helper} --trigger "
-                        f"<the new task's id> --cron \"{brief['cron']}\"",
+                        f"<the new task's id> --cron \"{brief['cron']}\""
+                        + (" --own-chat" if setup == "ops_relay" else ""),
                  "why": "the registry names the new task and its chat"},
                 {"tool": "update_trigger", "args": {"trigger_id": brief["trigger_id"],
                                                     "enabled": False},
@@ -305,6 +315,9 @@ def plan(chats: list[dict], triggers: list[dict], info: dict, reg: dict, listene
     listed = {s.get("id") for s in chats}
     if adopt and adopt in listed and not any(a["id"] == adopt for a in out["archive"]):
         out["brief"] = []                             # its chat is kept: the brief stays put
+    out["ask"] = list(dict.fromkeys(out["ask"]))
+    if out["ask"]:
+        out["brief"] = []                             # decided once every chat is read
     return out
 
 

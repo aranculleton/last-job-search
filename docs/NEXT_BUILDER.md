@@ -33,6 +33,15 @@ MAINTAINING.md first; this is only what 4.5 and 4.5.1 left.
   and its own `chat` in the registry, which stays `ops_relay`, and a brief back from a break
   runs in the ops chat rather than a new empty one. Tested on the plan and the registry
   only; the real move runs at the maintainer's next daily tidy-up and has not been watched.
+- An independent review found four holes in the first version of that fix, all closed with
+  tests that fail without them: a brief bound to a chat with a copy of the files is never
+  moved, a moved one follows a new helper, `record` names the brief's chat in an ops
+  registry only with `--own-chat`, and `_owe` keeps one call per task (a zone move had
+  dropped the job round's update).
+- Open, not a regression: a break taken after the ops chat is lost binds its welcome-back to
+  that lost chat, so the brief stays off until the person resumes from the page (tidy never
+  moves a resting brief). An ops job round switched back on would also wake an empty chat;
+  nothing moves it.
 - Open: a phone push for a brief in the helper. The empty chat proved a cloud chat can
   push with the `PushNotification` tool; a brief bound to a chat gets no push otherwise.
   Not built: check Claude Code's documentation for it before relying on it.

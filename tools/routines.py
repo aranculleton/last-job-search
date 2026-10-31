@@ -13,7 +13,7 @@ whenever ci_local.sh runs, and the app's tests check the example's.
                                              # is there a brief already? never make a second;
                                              # in a cloud chat, the calls that make one
     python3 tools/routines.py default        # the brief's days, time and zone, and the line
-    python3 tools/routines.py record --session <id> --trigger <id> [--cron "<cron>"]
+    python3 tools/routines.py record --session <id> --trigger <id> [--cron "<cron>"] [--own-chat]
                                              # write the brief made into profile/routines.json
     python3 tools/routines.py move --days weekdays --time 07:38
                                              # the brief's new days and time, written here
@@ -370,10 +370,12 @@ def plan(owner: str, name: str, zone: str = "", now: datetime.datetime | None = 
 
 
 def record(session: str, trigger: str, cron: str = "", path: str | None = None,
-           setup: str = "chat_per_briefing", title: str = "") -> str:
+           setup: str = "chat_per_briefing", title: str = "", own_chat: bool = False) -> str:
     """Write the brief just made into profile/routines.json, keeping every other task. The
     chat it runs in is named only when it was made for it; bound to the chat that answers
-    the page, it is that chat's id alone."""
+    the page, it is that chat's id alone. In the older ops set-up it is named only with
+    `own_chat` (the brief moved out of a lost ops chat): a chat recording a re-listed id
+    names itself, and a `chat` there would stop the relay to the phone."""
     if path is None:
         import person
         path = person.path("routines.json")
@@ -398,7 +400,7 @@ def record(session: str, trigger: str, cron: str = "", path: str | None = None,
         entry["off"] = True
     ops = (reg.get("ops_session") or {}).get("id", "")
     if reg["setup"] == "chat_per_briefing" or (
-            reg["setup"] == "ops_relay" and session and session != ops):
+            reg["setup"] == "ops_relay" and own_chat and session and session != ops):
         entry["chat"] = {"session_id": session, **({"title": title} if title else {})}
     reg["routines"] = [entry] + keep
     with open(path, "w", encoding="utf-8", newline="\n") as fh:
@@ -516,8 +518,12 @@ def _brief(reg: dict) -> dict | None:
 def _owe(reg: dict, call: dict) -> None:
     """Keep a scheduled-task call a chat must make; a newer one for the same task and the
     same kind of change replaces an older one."""
+    def task(c):
+        return (c.get("args") or {}).get("trigger_id")
+    # The same task: a zone move owes one update for the brief and one for the job round.
     owed = [c for c in reg.get("owed") or []
-            if not (c.get("tool") == call.get("tool") and c.get("for") == call.get("for"))]
+            if not (c.get("tool") == call.get("tool") and c.get("for") == call.get("for")
+                    and task(c) == task(call))]
     owed.append(call)
     for n, c in enumerate(owed, 1):
         c["n"] = n
@@ -947,7 +953,7 @@ def main(argv: list[str]) -> int:
             return 2
         path = record(opt.get("--session", ""), opt["--trigger"], opt.get("--cron", ""),
                       setup=opt.get("--setup", "chat_per_briefing"),
-                      title=opt.get("--title", ""))
+                      title=opt.get("--title", ""), own_chat="--own-chat" in argv)
         problems = check(load(path))
         for p_ in problems:
             print(f"routines.json: {p_}")

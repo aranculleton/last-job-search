@@ -237,7 +237,18 @@ def test_an_ops_brief_stays_while_its_chat_may_still_be_there():
 def test_the_moved_ops_brief_is_recorded_and_the_registry_stays_an_ops_one(tmp_path):
     path = tmp_path / "routines.json"
     path.write_text(json.dumps(OPS), encoding="utf-8")
-    routines.record(HELPER, "trig_EXAMPLENEW", "CRON_TZ=Europe/London 56 7 * * *", path=str(path))
+    # A chat recording a re-listed id with its own id: the brief still fires in the ops chat,
+    # so it names no chat of its own and keeps the relay to the phone.
+    routines.record(HELPER, "trig_EXAMPLEB", "CRON_TZ=Europe/London 56 7 * * *", path=str(path))
+    reg = json.loads(path.read_text(encoding="utf-8"))
+    assert "chat" not in next(r for r in reg["routines"] if r["key"] == "morning_brief")
+    assert routines.setup_of(reg) == "ops_relay" and reg["setup"] == "ops_relay"
+    # The move out of a lost ops chat (tidy's run line carries --own-chat).
+    move = _plan(reg=OPS, triggers=[{"id": "trig_EXAMPLEB", "session": "session_EXAMPLEEMPTY",
+                                     "enabled": True}])["brief"][1]["run"]
+    assert move.endswith(" --own-chat")
+    routines.record(HELPER, "trig_EXAMPLENEW", "CRON_TZ=Europe/London 56 7 * * *", path=str(path),
+                    own_chat=True)
     reg = json.loads(path.read_text(encoding="utf-8"))
     assert routines.setup_of(reg) == "ops_relay" and routines.check(reg) == []
     brief = next(r for r in reg["routines"] if r["key"] == "morning_brief")
@@ -264,3 +275,43 @@ def test_an_ops_brief_back_from_a_break_runs_in_the_ops_chat(tmp_path, monkeypat
     # Never a new chat on firing: it would have no copy of the files.
     assert back["persistent_session_id"] == "session_EXAMPLEOPS"
     assert "create_new_session_on_fire" not in back
+
+
+def test_an_ops_brief_bound_to_a_chat_with_a_copy_is_never_moved():
+    # The ops chat is gone, but the task names a chat on this copy (the person's own, made
+    # when they rebuilt it themselves): it runs there, so it stays.
+    own = chat("session_EXAMPLEOWN", "Last job search with Robin")
+    bound = [{"id": "trig_EXAMPLEB", "session": "session_EXAMPLEOWN", "enabled": True}]
+    got = _plan(reg=OPS, triggers=bound)
+    assert got["brief"] == [] and own in CHATS
+    # Bound to the chat that answers the page already: nothing to make.
+    assert _plan(reg=OPS, triggers=[dict(bound[0], session=HELPER)])["brief"] == []
+    # A listed chat that works on no copy is the empty one it woke: moved.
+    empty = chat("session_EXAMPLEEMPTY", "Job search: brief (daily)", updated="2026-10-29T08:00:00Z")
+    woke = [dict(bound[0], session="session_EXAMPLEEMPTY")]
+    info = dict(INFO, session_EXAMPLEEMPTY={"id": "session_EXAMPLEEMPTY", "session_context": {}})
+    got = _plan(reg=OPS, triggers=woke, chats=CHATS + [empty], info=info)
+    assert got["brief"][0]["args"]["persistent_session_id"] == HELPER
+    # Not read yet: read first, nothing moved meanwhile.
+    got = _plan(reg=OPS, triggers=woke, chats=CHATS + [empty])
+    assert got["ask"] == ["session_EXAMPLEEMPTY"] and got["brief"] == []
+
+
+def test_a_moved_ops_brief_follows_a_new_helper():
+    moved = json.loads(json.dumps(OPS))
+    brief = next(r for r in moved["routines"] if r["key"] == "morning_brief")
+    brief.pop("mode")
+    brief["chat"] = {"session_id": "session_EXAMPLEOLDHELPER"}
+    on_old = [{"id": "trig_EXAMPLEB", "session": "session_EXAMPLEOLDHELPER", "enabled": True}]
+    got = _plan(reg=moved, triggers=on_old)
+    assert got["brief"][0]["args"]["persistent_session_id"] == HELPER
+    assert any(c["id"] == "session_EXAMPLEOLDHELPER" and "brief moved" in c["why"]
+               for c in got["archive"])
+
+
+def test_moving_to_another_zone_owes_an_update_for_every_task(tmp_path):
+    path = tmp_path / "routines.json"
+    path.write_text(json.dumps(dict(OPS, setup="ops_relay")), encoding="utf-8")
+    got = routines.move(zone="America/Toronto", path=str(path))
+    ids = sorted(c["args"]["trigger_id"] for c in got["calls"] if c["tool"] == "update_trigger")
+    assert ids == ["trig_EXAMPLEB", "trig_EXAMPLER"]

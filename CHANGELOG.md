@@ -30,6 +30,8 @@ make sense to somebody whose repo just received it.
   daily tidy-up now moves the brief into the chat that answers the page (a new task there,
   the old one turned off, never deleted), and a brief back from a break runs in the shared
   chat rather than a new empty one.
+- **Moving everything to another time zone moves the job round too.** Only the last task's
+  change was kept, so the job round went on running at the old zone's time.
 - **The Brief's numbers are never cut off.** On a laptop screen "How far they got" was half
   hidden and "Since the last brief" not shown at all; the panel now grows to fit.
 
