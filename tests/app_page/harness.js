@@ -2306,8 +2306,10 @@ S.view_overlay = async (a) => {
 S.settings = async (a) => {
   const o = await open({html: a.html, hash: "settings"});
   const {page, store} = o;
-  await openSetting(page, "app_updates");
-  await page.getByLabel("By themselves").focus();
+  // Suggestions: "How updates arrive" is shown only to someone already holding updates
+  // (2026-10-31), and this radio group saves the same way.
+  await openSetting(page, "suggestions");
+  await page.locator("#set-suggestions-0").focus();
   await page.keyboard.press("ArrowDown");
   await turn(page, 2);
   const early = store.list("actions/").length;
@@ -2321,7 +2323,7 @@ S.settings = async (a) => {
     await page.getByRole("button", {name: "Save Days the brief arrives"}).click();
     await turn(page, 6);
   }
-  const r = {early, actions: store.list("actions/").map((p) => store.get(p)), checked: await page.$eval("#set-app_updates-1", (x) => x.checked),
+  const r = {early, actions: store.list("actions/").map((p) => store.get(p)), checked: await page.$eval("#set-suggestions-1", (x) => x.checked),
     names: await T(page, "#main .set-name"), text: await one(page, "#main"), errors: o.errors};
   await o.ctx.close();
   return r;

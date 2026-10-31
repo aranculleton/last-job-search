@@ -536,7 +536,7 @@ def test_settings_save_once_the_person_settles_and_show_the_new_value(run, pages
     _clean(r)
     assert r["early"] == 0, "arrowing through a group does not save on the way"
     got = {(a["item"], json.dumps(a["value"])) for a in r["actions"]}
-    assert ("setting-app_updates", '"when_asked"') in got
+    assert ("setting-suggestions", '"urgent"') in got
     assert ("setting-computer_listen", "true") in got
     assert ("setting-brief_days", '"Tuesday"') in got
     assert r["checked"] is True

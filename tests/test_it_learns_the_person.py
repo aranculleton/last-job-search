@@ -262,8 +262,8 @@ def test_a_rule_that_says_never_where_the_older_did_not_is_never_merged_as_a_rep
 def test_one_question_about_the_rules_at_most_and_seldom(profile):
     """Nearly everything about the rules is decided by itself; where a chat truly cannot tell
     which of two stands, one question may reach the page, never a second while it waits, and
-    not again within a fortnight (the maintainer, 2026-10-31: "ONE AT MOST AND AGAIN
-    SPARSELY")."""
+    not again within a fortnight (the maintainer, 2026-10-31: one at most, and
+    sparsely)."""
     learned.record("messages", "a", "Close with a question about their team.", today="2026-10-01")
     learned.record("messages", "b", "Close with the work-eligibility line.", today="2026-10-02")
     learned.record("messages", "c", "Open with the move.", today="2026-10-03")

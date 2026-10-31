@@ -303,8 +303,8 @@ def clashes() -> list[dict]:
 
 
 # One question at most, and seldom: everything else about the rules is decided by itself (the
-# maintainer, 2026-10-31: "ONE AT MOST AND AGAIN SPARSELY, THE VAST MAJORITY SHOULD BE
-# AUTOMATED"). A pair is asked about only where a chat cannot tell which stands and it
+# maintainer, 2026-10-31: one question at most, and sparsely; the vast majority automated).
+# A pair is asked about only where a chat cannot tell which stands and it
 # matters to what is drafted; never a second while one is open, nor within ASK_GAP_DAYS of
 # the last.
 ASK_GAP_DAYS = 14
