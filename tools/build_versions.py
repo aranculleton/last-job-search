@@ -343,8 +343,9 @@ METHODS: dict[str, dict] = {
             (55, "2026-10-29", False, "an employer researched recently is drafted from its saved research, with no research agent; the outreach note is written by the final check; long work on another model runs as an agent inside the chat that answers the page, never a chat of its own; work from the page goes to whichever chat answers it, cloud or computer; documents render as before"),
             (56, "2026-10-29", False, "RUNBOOK.md says how an interview's time is saved on its record (interview_pack.py book and times); documents render and are checked as before; a big job runs in a chat of its own, never in the chat that answers the page, and the landing check runs in the background with the person's own tests run once; documents render as before"),
             (57, "2026-10-30", False, "RUNBOOK.md says a cloud chat unsubscribes from the pull request it opens at once; a recorded reaction says to save it with the turn's work; documents render and are checked as before"),
+            (58, "2026-10-31", False, "a rule the person says again replaces the older one by itself, keeping what it held; one that may contradict an older rule is judged by the chat recording it, never asked; adding to a list of employers is no longer read as a contradiction; documents render and are checked as before"),
         ),
-        "fingerprint": "1d1591025400cc2c",
+        "fingerprint": "40e75170e0609919",
     },
     "interview": {
         "by": "upgrade", "priority": 2, "applies": "live_interviews", "time": "~15 min",

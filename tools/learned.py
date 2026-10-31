@@ -40,6 +40,8 @@ file and which no sync touches:
     python3 tools/learned.py brief messages --channel inmail --reader peer   # examples first
     python3 tools/learned.py pending             # reactions this chat has not recorded
     python3 tools/learned.py retire <n>          # they changed their mind
+    python3 tools/learned.py restore <n>         # a rule retired for a later one, back
+    python3 tools/learned.py tidy [--dry]        # retire every rule a later one repeats or contradicts
     python3 tools/learned.py locked              # the settings no upgrade may change
     python3 tools/learned.py offers              # app improvements waiting on their choice
     python3 tools/learned.py decide <n> keep|switch
@@ -51,8 +53,10 @@ them until asked. So it is code now. `hook` is the one hook the app ships: on ea
 prompt it notes a reaction in this chat's pending list (`pending`), and the turn cannot
 end while one is there; `compose.py` and `reading.py draft` refuse to draft over one. A
 `record` (or a `skip`, saying why it sets no rule) clears it. A record shows the rule
-back in one line, lists the earlier rules it contradicts, with their dates, so the person
-can say which stands, and may name the checks the rule outranks (`--overrides`): the
+back in one line and retires, by itself, every earlier rule it says again or contradicts:
+the newest thing they said stands, nothing is asked, what the old rule carried comes along,
+and `restore` brings one back (`tidy` does the same for a pile made before). It may name
+the checks the rule outranks (`--overrides`): the
 person's own voice wins over a validator's default once they have said so. An edit the
 person made to a draft before sending it is recorded by itself (`record_edit`), from the
 sent text against the draft.
@@ -193,11 +197,134 @@ def record(area: str, said: str, rule: str, applied_to=(), never_say=(),
         rows[int(n) - 1]["status"] = "retired"
         rows[int(n) - 1]["retired_for"] = entry["date"]
     found = conflicts(entry, rows)
+    # An earlier rule it says again is retired here, and what that rule carried (its bans,
+    # the settings it shaped) comes along. One it may contradict is for the chat recording it
+    # to judge, never the person to be asked: words alone mistook "Adobe is out" for undoing
+    # "KPMG is out" (a dry run on a real list of 195 rules, 2026-10-31). Asking "which
+    # stands?" every time piled up repeats and opposites (the maintainer, 2026-10-31: "if it
+    # can be done in the background and it's not expensive, it's autonomous").
+    replaced = _absorb(entry, rows, [(n, "it says the same") for n in repeats(entry, rows)])
     rows.append(entry)
     _save(rows)
     if answers:
         resolve_pending(entry["said"])
-    return {**entry, "conflicts": found, "own_overlaps": own_overlaps(entry["never_say"])}
+    return {**entry, "conflicts": found, "replaced": replaced,
+            "own_overlaps": own_overlaps(entry["never_say"])}
+
+
+def repeats(entry: dict, rows: list[dict]) -> list[int]:
+    """Numbers of the active entries in the same area that `entry` says again: the same
+    words that carry meaning, or every one of theirs (three or more) inside its own. One the
+    new rule only narrows (it says less) is a different rule and stays."""
+    mine = _content(entry.get("rule") or "")
+    neg = bool(_NEGATES.search(entry.get("rule") or ""))
+    out = []
+    for n, r in enumerate(rows, 1):
+        if r is entry or r.get("status", "active") != "active" or r.get("area") != entry.get("area"):
+            continue
+        theirs = _content(r.get("rule") or "")
+        if not theirs or not mine:
+            continue
+        # Careful (the maintainer, 2026-10-31: "be careful with the rules"): one that says
+        # never where the other does not may be its opposite, so it is left for a chat to
+        # judge; a newer rule that adds more than a few words is a different rule.
+        if bool(_NEGATES.search(r.get("rule") or "")) != neg:
+            continue
+        if theirs == mine or (len(theirs) >= 4 and theirs <= mine and len(mine - theirs) <= 3) or \
+                len(theirs & mine) / len(theirs | mine) >= 0.8:
+            out.append(n)
+    return out
+
+
+_NEGATES = re.compile(r"\b(?:never|no|not|don'?t|do not|stop|avoid|without|cut|drop)\b", re.I)
+
+
+def _absorb(entry: dict, rows: list[dict], gone: list[tuple[int, str]]) -> list[tuple[int, dict, str]]:
+    """Retire each entry numbered in `gone` for `entry`, carrying over what it held that the
+    new one does not contradict: its bans (unless the new one uses them), the settings it
+    shaped, the checks it outranked, its lengths (the new one's win)."""
+    out, seen = [], set()
+    text = " ".join([entry.get("rule") or "", entry.get("said") or ""])
+    for n, why in gone:
+        if n in seen or not 1 <= n <= len(rows):
+            continue
+        seen.add(n)
+        old = rows[n - 1]
+        if old.get("status", "active") != "active":
+            continue
+        for key in ("never_say", "applied_to", "overrides"):
+            have = list(entry.get(key) or [])
+            for x in old.get(key) or ():
+                if x not in have and not (key == "never_say" and _uses(text, str(x))):
+                    have.append(x)
+            if have:
+                entry[key] = have
+        for kind, per in (old.get("length") or {}).items():
+            entry.setdefault("length", {}).setdefault(kind, {})
+            for who, words in per.items():
+                entry["length"][kind].setdefault(who, words)
+        old["status"] = "retired"
+        old["retired_for"] = entry.get("date")
+        old["retired_why"] = why
+        out.append((n, old, why))
+    return out
+
+
+def tidy(dry: bool = False) -> list[dict]:
+    """Every active entry a later one says again, retired for it, oldest first, as `record`
+    does for a new one: a pile made before that is kept to one rule each. [{n, rule, for,
+    why}]; nothing is written with `dry`."""
+    rows = load()
+    done = []
+    for i, later in enumerate(rows):
+        if later.get("status", "active") != "active":
+            continue
+        earlier = [(n, "it says the same") for n in repeats(later, rows) if n <= i]
+        for n, old, why in _absorb(later, rows, earlier):
+            done.append({"n": n, "rule": old.get("rule"), "for": i + 1, "why": why})
+    if done and not dry:
+        _save(rows)
+    return done
+
+
+def clashes() -> list[dict]:
+    """Each active entry that a later active one may contradict, for a chat to judge once:
+    [{n, rule, date, later, later_rule, why}]. Words only find candidates."""
+    rows = load()
+    out = []
+    for i, later in enumerate(rows):
+        if later.get("status", "active") != "active":
+            continue
+        for n, old, why in conflicts(later, rows):
+            if 0 < n <= i:
+                out.append({"n": n, "rule": old.get("rule"), "date": old.get("date"),
+                            "later": i + 1, "later_rule": later.get("rule"), "why": why})
+    return out
+
+
+def reviewed(mark: bool = False, today: str | None = None) -> str:
+    """The day the person's rules were last judged for contradictions; `mark` sets today."""
+    data = file_data()
+    if mark:
+        data["reviewed_on"] = today or dt.date.today().isoformat()
+        path = _writable()
+        with open(path, "w", encoding="utf-8", newline="\n") as fh:
+            json.dump(data, fh, indent=2, ensure_ascii=False)
+            fh.write("\n")
+    return str(data.get("reviewed_on") or "")
+
+
+def restore(n: int) -> dict:
+    """An entry retired for a later one, back in force: the later one is left as it is."""
+    rows = load()
+    if not 1 <= n <= len(rows):
+        raise SystemExit(f"learned: no entry {n}; there are {len(rows)}")
+    r = rows[n - 1]
+    r["status"] = "active"
+    for k in ("retired_for", "retired_why"):
+        r.pop(k, None)
+    _save(rows)
+    return r
 
 
 # Words that change nothing about what a phrase says: "recently moved" and "just moved"
@@ -218,7 +345,7 @@ _content = content_words  # the module's own name for it; other modules call con
 
 # A phrase a rule names only to forbid it ("never describe the move as relocating") is not
 # a use of it: such a rule agrees with every other ban of the phrase.
-_FORBIDS = re.compile(r"\b(?:never|stop|don'?t|do not|no more|avoid|without|not|instead of"
+_FORBIDS = re.compile(r"\b(?:never|stop|don'?t|do not|no more|no|avoid|without|not|instead of"
                       r"|rather than|cut|drop|lose|remove|ban)\b", re.I)
 
 
@@ -250,6 +377,9 @@ def _says(text: str, phrase: str) -> bool:
     return bool(words) and words <= _content(low)
 
 
+# Settings that are lists a rule adds to, never one value two rules can set differently.
+_LISTS = re.compile(r"(?:DECLINED|EXCLUDED|EXCLUDE|BLOCKED|NEVER|AVOID|SKIP|TARGETS|WATCH|"
+                    r"FOLLOW|NAMES|PHRASES|LIST)\b")
 # A setting, as `--applied-to` names one: an upper-case name ("OPENER", "TITLE_SETS").
 _SETTING = re.compile(r"\b[A-Z][A-Z0-9]*_?[A-Z0-9_]{2,}\b")
 _FILE_NAME = re.compile(r"\S+\.(?:md|py|json|csv|txt|tex)\b")
@@ -282,8 +412,10 @@ def conflicts(entry: dict, rows: list[dict] | None = None) -> list[tuple[int, di
             # Two rules that set one setting ("networking.py OPENER") differently ask which
             # stands. Two that only apply to the same file or section ("07-interview-prep.md")
             # are two rules, and were flagged as a contradiction (2026-10-20).
+            # A list ("BAR_DECLINED": employers that are out) grows: "Adobe is out" never
+            # undoes "KPMG is out" (2026-10-31).
             same = {a for a in set(r.get("applied_to") or ()) & set(entry.get("applied_to") or ())
-                    if _SETTING.search(_FILE_NAME.sub(" ", str(a)))}
+                    if _SETTING.search(_FILE_NAME.sub(" ", str(a))) and not _LISTS.search(str(a))}
             if same and (r.get("rule") or "") != (entry.get("rule") or ""):
                 why = f"both set {', '.join(sorted(same))}"
         if why:
@@ -1435,6 +1567,12 @@ def main(argv=None) -> int:
     sub.add_parser("pending")
     t = sub.add_parser("retire")
     t.add_argument("n", type=int, nargs="+")
+    t = sub.add_parser("restore")
+    t.add_argument("n", type=int, nargs="+")
+    t = sub.add_parser("tidy")
+    t.add_argument("--dry", action="store_true")
+    t.add_argument("--clashes", action="store_true")
+    t.add_argument("--reviewed", action="store_true")
     sub.add_parser("locked")
     sub.add_parser("offers")
     d = sub.add_parser("decide")
@@ -1495,23 +1633,21 @@ def main(argv=None) -> int:
                   f"(\"{' '.join(line.split())[:90]}\"), so every draft using it is refused. "
                   "Capitalised as a sentence opens (\"Love to hear\"), it bans only the "
                   "clipped sentence; or change that line.")
+        # The newest thing they said stands, with nothing asked: each earlier rule it repeats
+        # or contradicts is retired, named with its date, and can be brought back.
+        for n, old, why in e.get("replaced") or ():
+            print(f"  Replaced entry {n} ({old.get('date')}: {old.get('rule')}): {why}. "
+                  f"Back if it should not have gone: python3 tools/learned.py restore {n}")
         for n, old, why in e["conflicts"]:
             where = f"entry {n}" if n else "a rule in profile/CLAUDE.md"
-            print(f"  CONTRADICTS {where} ({old.get('date')}: {old.get('rule')}): {why}.")
+            print(f"  MAY CONTRADICT {where} ({old.get('date')}: {old.get('rule')}): {why}.")
         if e["conflicts"]:
-            # Each command names the entry it retires and when that rule was made: "Theirs is
-            # this one: retire 50" was read as "this one is 50", the earlier rule (2026-10-20).
-            new = len(load())
-            olds = [(n, o) for n, o, _w in e["conflicts"] if n]
-            earlier = ", ".join(f"{n} ({o.get('date')})" for n, o in olds)
-            print(f"Ask the person once which stands, with both dates. The new rule is entry "
-                  f"{new} ({e.get('date')}).")
-            print("  If the new rule stands: "
-                  + (f"python3 tools/learned.py retire {' '.join(str(n) for n, _o in olds)} "
-                     f"(retires the earlier entry {earlier})" if olds else
-                     "change the line in profile/CLAUDE.md"))
-            print(f"  If the earlier rule stands: python3 tools/learned.py retire {new} "
-                  f"(retires the new entry {new})")
+            # The newest thing they said stands; whether this one truly undoes the older is
+            # judged here, by the chat, never asked (2026-10-31).
+            print("Judge each yourself, never asking the person: where the new rule truly "
+                  "reverses the older, the newest stands, so retire it (python3 tools/learned.py "
+                  "retire <n>, or change that line in profile/CLAUDE.md) and say so in one line; "
+                  "where they only share words, leave it.")
     elif a.cmd == "skip":
         skip(a.said, a.why, via=a.via, output=a.output)
         print(f"learned: not a rule ({a.why}); {len(pending())} reaction(s) still unrecorded")
@@ -1530,6 +1666,29 @@ def main(argv=None) -> int:
         for n in a.n:
             e = retire(n)
             print(f"retired: {e.get('rule')}")
+    elif a.cmd == "restore":
+        for n in a.n:
+            e = restore(n)
+            print(f"back in force: {e.get('rule')}")
+    elif a.cmd == "tidy" and a.reviewed:
+        print(f"learned: rules judged on {reviewed(mark=True)}")
+    elif a.cmd == "tidy" and a.clashes:
+        got = clashes()
+        for d in got:
+            print(f"  entry {d['n']} ({d['date']}: {d['rule']}) and the later entry {d['later']} "
+                  f"({d['later_rule']}): {d['why']}")
+        print(f"learned: {len(got)} pair(s) to judge. For each, retire the older only where the "
+              "later plainly reverses it (python3 tools/learned.py retire <n>); where they only "
+              "share words, or you are not sure, leave both: a rule wrongly put away is worse "
+              "than two kept. Never ask the person. Then python3 tools/learned.py tidy --reviewed"
+              if got else "learned: nothing to judge")
+    elif a.cmd == "tidy":
+        got = tidy(dry=a.dry)
+        for d in got:
+            print(f"  entry {d['n']} ({d['rule']}) {'would be' if a.dry else ''} retired for entry "
+                  f"{d['for']}: {d['why']}")
+        print(f"learned: {len(got)} rule(s) {'to tidy' if a.dry else 'tidied'}" if got else
+              "learned: nothing to tidy")
     elif a.cmd == "locked":
         for item in locked():
             print(item)

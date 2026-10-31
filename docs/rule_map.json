@@ -3121,10 +3121,10 @@
   {
    "id": "overrides",
    "was": "Learning the person: it grows with them",
-   "rule": "Ask once which wins where their rule and a check disagree; CONTRADICTS: ask which stands.",
+   "rule": "Ask once which wins where their rule and a check disagree; a rule a newer one repeats or contradicts is retired by itself.",
    "bold": null,
    "home": "RUNBOOK.md",
-   "anchor": "When it lists `CONTRADICTS`, ask which stands, with both dates",
+   "anchor": "the new one repeats or contradicts is retired by itself",
    "needed_by": [
     "/apply",
     "/network",

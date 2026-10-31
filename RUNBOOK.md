@@ -727,8 +727,10 @@ The hook and the four steps are in CLAUDE.md ("Learning the person"); this is th
 - **Record it**: `python3 tools/learned.py record --area <voice|messages|questions|people|targets|jobs|documents|search|interview|other> --said "<their words>" --rule "<what is different from now on>" --applied-to "<file SETTING>"`.
   Add `--never-say "<phrase>"` for wording they never want; `tone.py` and `voice_check.py`
   then flag it in everything drafted. Where their rule and a check disagree, ask once which
-  wins and add `--overrides <the check's rule name>` when theirs does. When it lists
-  `CONTRADICTS`, ask which stands, with both dates, and retire the other. An edit made
+  wins and add `--overrides <the check's rule name>` when theirs does. An earlier rule
+  the new one repeats or contradicts is retired by itself (it prints `Replaced entry`): the
+  newest thing they said stands and nothing is asked; `learned.py restore <n>` brings one
+  back if it should not have gone. An edit made
   before sending records itself when the send is logged with its words.
 - **Ask, lightly, and now and then a tip.** After work they will read or send (a shortlist,
   a draft, a batch of notes, an interview pack, a prep, a brief), end with the one line

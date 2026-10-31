@@ -434,6 +434,32 @@ def _profile_never_say() -> str:
     return ""
 
 
+def _learned_tidy() -> str:
+    """Pending where a rule the person taught is said again, or contradicted, by a later one:
+    rules recorded before 2026-10-31 were kept side by side, waiting for the person to say
+    which stood, so the list grew repeats and opposites."""
+    import learned
+    try:
+        got = learned.tidy(dry=True)
+    except Exception:  # noqa: BLE001  no rules file yet: nothing to tidy
+        return ""
+    return (f"{len(got)} of the rules you taught are said again, or contradicted, by a later "
+            "one" if got else "")
+
+
+def _learned_review() -> str:
+    """Pending until the rules made before 2026-10-31, kept side by side while the person was
+    asked which stood, have been judged once for contradictions."""
+    import learned
+    try:
+        if learned.reviewed():
+            return ""
+        got = learned.clashes()
+    except Exception:  # noqa: BLE001  no rules file yet: nothing to judge
+        return ""
+    return f"{len(got)} pair(s) of your rules may contradict each other" if got else ""
+
+
 def _public_holidays() -> str:
     """Pending where no rules cover the person's country and their own list has no date
     in the coming year: follow-ups would count every public holiday as a working day."""
@@ -1245,6 +1271,22 @@ REGISTRY: tuple[Upgrade, ...] = (
             command=("python3", "tools/learned.py", "adopt-profile-rules"),
             paths=("profile/learned.json",),
             priority=2),
+    Upgrade("learned-tidy", "2026-10-31",
+            "the rules you have taught it kept to one each: a rule you said again, or changed "
+            "your mind on, gives way to the newest, and nothing it held is lost",
+            _learned_tidy, "python3 tools/learned.py tidy", "instant",
+            command=("python3", "tools/learned.py", "tidy"),
+            paths=("profile/learned.json",),
+            priority=3),
+    Upgrade("learned-review", "2026-10-31",
+            "where you changed your mind, the rule you gave last is the one followed, with the "
+            "older one put away",
+            _learned_review, "`python3 tools/learned.py tidy --clashes` lists the pairs; for "
+            "each, retire the older only where the later plainly reverses it "
+            "(`python3 tools/learned.py retire <n>`); where they only share words, or it is not "
+            "certain, leave both. Then `python3 tools/learned.py tidy --reviewed`. Never ask "
+            "the person",
+            "edit", "~3 min", priority=3),
     Upgrade("brief-daily", "2026-10-29",
             "a short note every morning on your Brief: what is due today, and news that matters "
             "to your search",
