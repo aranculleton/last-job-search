@@ -20,6 +20,12 @@ make sense to somebody whose repo just received it.
 
 ## [Unreleased]
 
+### Fixed
+
+- **Buttons no longer flash dark in Safari.** Every button a section showed faded in from the
+  text colour over a moment, so its words could not be read; a button now changes colour
+  only under the pointer.
+
 ## [4.5.1] - 2026-10-31
 
 ### Fixed

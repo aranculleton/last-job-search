@@ -972,6 +972,15 @@ def test_reduced_motion_stops_the_spinner_and_the_bar(run, pages):
     assert r["no-preference"]["spin"] == "turn"
     assert r["reduce"]["spin"] == "none"
     assert r["reduce"]["fill"] in ("0s", "0s, 0s")
+    # Nothing fades as it is drawn: Safari faded every control in from the text colour (a
+    # dark flash, and the contrast checks failed), so only a control under the pointer fades.
+    for m in ("no-preference", "reduce"):
+        d = r[m]["drawn"]
+        assert d["btn"] is not None and d["card"] is not None, d
+        assert set(d["btn"].split(", ")) == {"0s"} and set(d["card"].split(", ")) == {"0s"}, (m, d)
+        assert d["fading"] == 0, (m, d)
+    assert r["no-preference"]["hovered"].startswith("0.15s"), r["no-preference"]
+    assert set(r["reduce"]["hovered"].split(", ")) == {"0s"}, r["reduce"]
 
 
 def test_dark_mode_follows_the_viewer_and_the_hosts_choice_wins_both_ways(run, pages):
