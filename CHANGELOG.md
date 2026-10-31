@@ -20,6 +20,8 @@ make sense to somebody whose repo just received it.
 
 ## [Unreleased]
 
+## [4.5.1] - 2026-10-31
+
 ### Fixed
 
 - **A morning brief whose chat was removed runs again by itself.** In the older set-up every
