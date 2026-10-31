@@ -79,6 +79,13 @@ MAINTAINING.md first; this is only what 4.5 and 4.5.1 left.
   lines the app prints, never with real sessions.
 - The pin hand-off ("Pin my job search page to my sidebar." to the Artifact `pin` action):
   tested up to the hand-off.
+- Safari's engine fails the page's contrast checks on 4.5.0 and 4.5.1 alike (8 tests in
+  `test_the_page_works_in_a_browser.py`): "contrast 3.69 < 4.5" on small secondary buttons
+  ("Copy", "See the draft", a navlink button), light and dark. No palette pair is that low
+  (ink on raised is 5.96 light and 11.51 dark, hovered 5.25 and 7.93), so the measure is
+  likely wrong in WebKit rather than the colours: look at the button being read mid-fade
+  (`opacityOf` in `tests/app_page/harness.js` multiplies opacity) or a colour string the
+  harness's `rgba()` cannot parse. Not reproduced: WebKit is not installed here.
 - Safari's and Firefox's engines were not installed in the build container: the page
   changes of 4.5 and 4.5.1 (the Brief's numbers panel) ran in Chromium only. Everywhere
   runs them on each release.
