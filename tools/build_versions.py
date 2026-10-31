@@ -637,8 +637,9 @@ METHODS: dict[str, dict] = {
             (12, "2026-10-29", False, "chats keep the model's whole window again: the 200,000-token cap made a chat forget its work every few steps, so the app sets nothing and the security guard refuses the cap"),
             (13, "2026-10-30", False, "the brief can move to another time zone from the page, and every scheduled task keeps its clock time there"),
             (14, "2026-10-31", False, "a brief in the older ops chat moves into the page's chat by itself once that chat is gone (the task had been waking a new empty chat with no copy of the files every morning); a brief back from a break runs in the ops chat, never a new empty one; a brief bound to a chat with a copy of the files is never moved, a moved one follows a new helper, and a time zone move owes an update for every task, not only the last"),
+            (15, "2026-10-31", False, "a brief's stored prompt says how to get a copy of the files when its chat has none, so it runs in any chat it lands in; the day's tidy-up gives an older stored brief that line, once"),
         ),
-        "fingerprint": "0f983394ff99420d",
+        "fingerprint": "7a09206f051f078f",
     },
     "expand": {
         "by": "upgrade", "priority": 4, "time": "~15 min",
@@ -675,8 +676,9 @@ METHODS: dict[str, dict] = {
             (8, "2026-10-30", True, "no write to the page asks a person: its files are named so Claude Code never reads them as a disguised short name; work Claude has picked up says Starting, and the step it is on has a clock in seconds that ticks on the page; slow work shows how long it has run with no words about being slow; a finished job's summary is one short sentence, with a bin that puts it away; the resume card says one thing to do; like items in To do are one checklist card, five shown and the rest one tap below, and people who have not answered two messages are closed rather than drafted to; the News card says when it was gathered; LinkedIn is checked quietly once a week on a computer where it works, its sign-in page opens by itself when it does not, and the page says the tab can be closed; the line after an update gives the page's link, a chat with the update takes the page from a chat quiet for an hour, and publishing closes the request still waiting; Find jobs and Find people ask how many, a few by default; drafts asked together run as one job; Tweak is Edit; the Brief opens on points with whole news and labelled bars; Contacts say who someone came through; Settings show lists as chips, a time picker and an editable time zone, what each Left out rule left out, and no Undo in What's new; stopped work can be put away; a long prep scrolls on a phone; the chat that answers the page renews itself daily; the page offers to pin itself on the Brief and while the first search runs, a Not now coming back a month later and three answers the last; tips are said in plain words"),
             (9, "2026-10-30", False, "the Brief's numbers grow to fit, so How far they got and Since the last brief are never cut off; a tip from an older version starts with a capital"),
             (10, "2026-10-31", False, "a control or card fades only under the pointer: Safari faded every button a section drew in from the text colour"),
+            (11, "2026-10-31", False, "Refresh asks Claude to bring the page up to date instead of reloading the same data; the work pill opens Claude's work on the Brief; the time a job has run counts from its start; each week of the Brief's chart says its count; News reads in points; What's new links every change; work answered or waiting on a starting helper says so"),
         ),
-        "fingerprint": "954bda40d35260af",
+        "fingerprint": "655208a7ca3d97e4",
     },
     "upskill": {
         "by": "upgrade", "priority": 4, "applies": "upskill_plans", "time": "~10 min",

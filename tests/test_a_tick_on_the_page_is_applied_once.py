@@ -523,3 +523,21 @@ def test_an_update_that_changes_stored_records_waits_for_running_work_and_goes_f
     assert page_db.next_item(db, "cloud", now) is None          # the talk starts after it
     db["work"]["u2"]["data"]["status"] = "done"
     assert page_db.next_item(db, "cloud", now)["work"] == "t1"
+
+
+def test_an_interview_with_no_date_sent_counts_in_the_last_30_days(search):
+    """An application at interview with no date sent was left out of the 30 days, and the
+    Brief said "1 interview" beside an Interviews tab of 2 (the maintainer, 2026-10-31)."""
+    before = search.model()["done"]["recent"]["counts"]["interviews"]
+    path = os.path.join(search.state, "job_search_tracker.csv")
+    with open(path, encoding="utf-8", newline="") as fh:
+        rows = list(csv.DictReader(fh))
+        cols = list(rows[0].keys())
+    rows.append(dict({k: "" for k in cols}, company="Ellerwick Trust", role="Data Analyst", status="interview"))
+    with open(path, "w", encoding="utf-8", newline="") as fh:
+        w = csv.DictWriter(fh, fieldnames=cols)
+        w.writeheader()
+        w.writerows(rows)
+    done = search.model()["done"]
+    assert done["recent"]["counts"]["interviews"] == before + 1
+    assert done["recent"]["counts"]["applied"] <= done["counts"]["applied"], "a date sent is still needed to count as sent"

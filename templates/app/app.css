@@ -1337,7 +1337,12 @@ body.has-fab .shell { padding-bottom: calc(var(--tabs-h) + env(safe-area-inset-b
 .prep-doc { max-width: 76ch; }
 /* The numbers card: what the bars are, and how far applications went, opened in place. */
 .bp-spark-cap { margin: 4px 0 0; }
-.bp-spark rect:focus { outline: 2px solid var(--focus, var(--link)); }
+/* Each week is a column that answers the pointer, a tap or the keyboard; the one pointed at
+   stays full and the others step back, and the line under them says its week. */
+.bp-spark .bp-col { cursor: pointer; }
+.bp-spark .bp-col:focus { outline: none; }
+.bp-spark .bp-col:focus-visible .bp-hit { stroke: var(--focus); stroke-width: 2px; vector-effect: non-scaling-stroke; }
+.bp-spark.has-on .bp-col:not(.is-on) .bp-bar { opacity: 0.45; }
 .bp-funnel-list { display: grid; gap: 8px; margin-top: 8px; }
 .bp-funnel-row { display: grid; gap: 4px; }
 .bp-funnel-bar { display: block; height: 8px; border-radius: 4px; background: var(--sunk); overflow: hidden; }

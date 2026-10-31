@@ -116,7 +116,11 @@ def test_the_plan_binds_the_brief_to_the_chat_that_sets_it_up_and_makes_no_chat(
     task = got["create_trigger"]
     assert task["persistent_session_id"] == "session_EXAMPLEHELPER"
     assert task["cron_expression"] == "CRON_TZ=Europe/London 38 7 * * *"
-    assert task["prompt"] == STUB and task["connectors"] == []
+    # The brief runs in any chat it lands in: where its chat is gone and the task wakes a new,
+    # empty one, the prompt says how to get this copy first (2026-10-31).
+    assert task["prompt"] == routines.with_copy(STUB, "example-owner/my-job-search") and task["connectors"] == []
+    assert "add_repo (owner example-owner, repo my-job-search, access push)" in task["prompt"]
+    assert routines._is_brief_prompt(task["prompt"])
     assert task["initiation"] == "human_request"
     first = got["first_brief"]
     assert first["run_once_at"] == "2026-10-25T14:05:00Z" and first["connectors"] == []

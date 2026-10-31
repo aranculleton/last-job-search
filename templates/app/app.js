@@ -904,8 +904,14 @@
     const n = stages.length;
     const total = stages.reduce((a, s) => a + s.est, 0) || 1;
     const status = txt(w.status) || "queued";
-    const asked = tms(w.asked_at) || t;
-    const out = {status, stages, n, i: 0, pct: 0, leftS: total, elapsedS: Math.max(0, (t - asked) / 1000),
+    // Work sent back with the person's answer waits from the answer, not from the first ask:
+    // a draft answered just now said "Not picked up yet · Asked yesterday" (2026-10-31).
+    const asked = (status === "queued" && tms(w.answered_at)) || tms(w.asked_at) || t;
+    // How long it has run counts from when Claude started it, never from the ask: work asked
+    // for yesterday and started a minute ago said "about 29 hours so far" (the maintainer,
+    // 2026-10-31).
+    const started = Math.min(tms(w.claimed_at) || Infinity, tms(w.stage_at) || Infinity);
+    const out = {status, stages, n, i: 0, pct: 0, leftS: total, elapsedS: Math.max(0, (t - (isFinite(started) ? started : asked)) / 1000),
       inStageS: 0, over: false, late: false, lapsed: false,
       stopping: !!(w.stop_asked || w.cancel) && !TERMINAL.has(status)};
     const at = Math.min(Math.max(parseInt(w.stage, 10) || 0, 0), n - 1);
@@ -960,10 +966,18 @@
   // before. The card said "Waiting to start" while the chat was busy on it (the maintainer,
   // 2026-10-30). Returns when it checked in, or 0.
   function pickedUp(w) {
-    const asked = tms(w.asked_at);
+    // Sent back with an answer: picked up once Claude checks in after the answer.
+    const asked = tms(w.answered_at) || tms(w.asked_at);
     if (!asked) return 0;
     const answered = tms(obj(S.listener)[txt(obj(M().listener).answered) || "answered_at"]) || 0;
     return answered >= asked && now() - answered < HEARTBEAT_MS ? answered : 0;
+  }
+  // A chat has just been handed the page and has not checked in yet: its first start takes a
+  // few minutes, and the cards said "Not picked up yet" meanwhile (2026-10-31).
+  function helperStarting() {
+    const doc = obj(S.listener);
+    const since = tms(doc.since);
+    return !!(doc.chat && !tms(doc.answered_at) && since && now() - since < 15 * 60000);
   }
   // How long the current step has run: since its last line, its stage, its claim or, picked
   // up, since Claude checked in.
@@ -2594,7 +2608,7 @@
     if (!db) return;
     const args = Object.assign({}, obj(w.args));
     args.answers = Object.assign({}, obj(args.answers), {[clip(txt(w.note) || "question", 200)]: text});
-    try { await db.doc("work/" + id).update({args, status: "queued", note: null, claimed_by: null, claimed_at: null, lease_until: null, _v: nextV(workDoc(id))}); }
+    try { await db.doc("work/" + id).update({args, status: "queued", note: null, claimed_by: null, claimed_at: null, lease_until: null, answered_at: iso(), _v: nextV(workDoc(id))}); }
     catch (e) { announce("Not sent. Try again."); return; }
     announce("Sent. Claude carries on.");
     ringNote([id], await rung);
@@ -2922,13 +2936,33 @@
     const W = 120, H = 32, bw = W / w.length;
     // Each bar says its week and its count on hover or a tap, and a line under them says what
     // they are: bars with no words meant nothing (the maintainer, 2026-10-30).
-    const said = (x) => { const st = weekStart(x.week); const v = Number(x.applied) || 0; return (st ? "Week of " + fmtDay(st) + ": " : "") + plural(v, "application", "applications"); };
+    const said = (x) => { const st = isoWeekMonday(x.week); const v = Number(x.applied) || 0; return (st ? "Week of " + fmtDay(st) + ": " : "") + plural(v, "application", "applications"); };
     const now1 = Number(w[w.length - 1].applied) || 0;
-    return h("div", {class: "bp-spark-wrap"},
-      svg("svg", {viewBox: "0 0 " + W + " " + H, preserveAspectRatio: "none", class: "bp-spark", role: "img", "aria-label": "Applications a week, the last " + w.length + " weeks: " + w.map((x) => Number(x.applied) || 0).join(", ")},
-        w.map((x, i) => { const v = Number(x.applied) || 0; const hgt = Math.max(2, (v / max) * (H - 2)); const t = svg("title", {}); t.textContent = said(x);
-          return svg("rect", {x: String(i * bw + 1), y: String(H - hgt), width: String(Math.max(2, bw - 3)), height: String(hgt), rx: "2", fill: "var(--chart-a)", tabindex: "0", "data-k": "spark:" + i}, [t]); })),
-      h("p", {class: "small muted bp-spark-cap"}, "Applications a week, the last " + w.length + " weeks. This week: " + now1 + "."));
+    const base = "Applications a week, the last " + w.length + " weeks. This week: " + now1 + ".";
+    // The line under the bars says the week under the pointer, a tap or the keyboard: an
+    // SVG title alone showed nothing in the Claude app, on a hover or a tap (the maintainer,
+    // 2026-10-31). Each week's whole column answers, so a week with nothing (a 2px bar) can
+    // still be pointed at.
+    const cap = h("p", {class: "small muted bp-spark-cap", "data-k": "spark-cap"}, base);
+    const cols = [];
+    const show = (i) => {
+      cap.textContent = i === null ? base : said(w[i]) + ".";
+      chart.classList.toggle("has-on", i !== null);
+      cols.forEach((c, j) => c.classList.toggle("is-on", j === i));
+    };
+    const chart = svg("svg", {viewBox: "0 0 " + W + " " + H, preserveAspectRatio: "none", class: "bp-spark", role: "group", "aria-label": "Applications a week, the last " + w.length + " weeks: " + w.map((x) => Number(x.applied) || 0).join(", ")},
+      w.map((x, i) => { const v = Number(x.applied) || 0; const hgt = Math.max(2, (v / max) * (H - 2)); const t = svg("title", {}); t.textContent = said(x);
+        const col = svg("g", {class: "bp-col", tabindex: "0", role: "img", "aria-label": said(x), "data-k": "spark:" + i}, [t,
+          svg("rect", {class: "bp-hit", x: String(i * bw), y: "0", width: String(bw), height: String(H), fill: "transparent"}),
+          svg("rect", {class: "bp-bar", x: String(i * bw + 1), y: String(H - hgt), width: String(Math.max(2, bw - 3)), height: String(hgt), rx: "2", fill: "var(--chart-a)"})]);
+        col.addEventListener("pointerenter", () => show(i));
+        col.addEventListener("focus", () => show(i));
+        col.addEventListener("click", () => show(i));
+        col.addEventListener("blur", () => show(null));
+        cols.push(col);
+        return col; }));
+    chart.addEventListener("pointerleave", () => show(null));
+    return h("div", {class: "bp-spark-wrap"}, chart, cap);
   }
   // How far applications went, opened in place: "See your progress" led to a page of its own
   // that read as left over (the maintainer, 2026-10-30). Applied, then interviews, then
@@ -2948,7 +2982,10 @@
       })));
   }
   // The Monday an ISO week ("2026-W44") starts on, as YYYY-MM-DD.
-  function weekStart(wk) {
+  // An ISO week's Monday as a day (2026-10-26). Named apart from the Progress chart's
+  // weekStart, which writes the day in words: sharing the name, that one won, and every bar
+  // said "Week of : 2 applications" (2026-10-31).
+  function isoWeekMonday(wk) {
     const m = /^(\d{4})-W(\d{2})$/.exec(txt(wk));
     if (!m) return "";
     const jan4 = new Date(Date.UTC(Number(m[1]), 0, 4));
@@ -3031,8 +3068,9 @@
         !searching ? h("button", {type: "button", class: "btn link", "data-k": "bp-search", onclick: () => askSearch()}, best.length ? "Search again" : "Find jobs") : null],
       {icon: "jobs", count: best.length || null}));
     // News that matters to the search: the part of the brief people read for itself.
-    if (news.length) put(grid, briefPanel("news", "News", h("ul", {class: "plain bp-list bp-news"}, news.slice(0, 2).map((l) => h("li", {}, h("span", {class: "bp-text"}, inlineMd(txt(obj(l).text)))))),
-      [news.length > 2 ? h("details", {class: "bp-all"}, h("summary", {}, plural(news.length - 2, "more", "more")), h("ul", {class: "plain bp-list bp-news"}, news.slice(2).map((l) => h("li", {}, inlineMd(txt(obj(l).text)))))) : null,
+    // In points, as Today is (the maintainer, 2026-10-31).
+    if (news.length) put(grid, briefPanel("news", "News", h("ul", {class: "bp-lead-list bp-news"}, news.slice(0, 2).map((l) => h("li", {}, h("span", {class: "bp-text"}, inlineMd(txt(obj(l).text)))))),
+      [news.length > 2 ? h("details", {class: "bp-all"}, h("summary", {}, plural(news.length - 2, "more", "more")), h("ul", {class: "bp-lead-list bp-news"}, news.slice(2).map((l) => h("li", {}, inlineMd(txt(obj(l).text)))))) : null,
         newsAsOf(b.date)],
       {wide: true, icon: "k-message"}));
     // The numbers: the last 30 days, a week-by-week line, and what happened since the last brief.
@@ -6885,7 +6923,7 @@
     const place = st === "queued" ? queuePlace(id, w) : null;
     const inLine = !!(place && place.busy && !p.late);
     const picked = st === "queued" && !inLine && !p.stopping && pickedUp(w) > 0;
-    const late = p.late && !picked;
+    const late = p.late && !picked && !helperStarting();
     const label = p.stopping ? "Stopping after this step" : picked ? "Starting" : st === "queued" ? (late ? "Not picked up yet" : inLine ? (place.pos === 1 ? "Next" : "In line") : "Waiting to start") : st === "running" || st === "claimed" ? (slow ? "May have stopped" : null) : WORK_WORDS[st] || cap1(st);
     const tone = p.stopping ? "held" : {done: "ok", failed: "bad", stopped: "held", needs_you: "warn"}[st] || (slow || late ? "warn" : null);
     const spinning = (ACTIVE.has(st) && st !== "needs_you" && st !== "queued" && !slow) || picked;
@@ -6903,7 +6941,9 @@
     } else if (st === "queued") {
       const upd = obj(obj(M().updates).waiting);
       const held = txt(w.kind) !== "update" && txt(upd.waits_for) && txt(upd.hold_line);
-      now1 = held ? txt(upd.hold_line) + "." : toComputer && !computerListening() ? "This needs your computer: open Claude on it." : p.late ? "Claude has not picked this up yet." :
+      now1 = held ? txt(upd.hold_line) + "." : toComputer && !computerListening() ? "This needs your computer: open Claude on it." :
+        helperStarting() ? "Claude's helper is starting up. It takes this in a minute or two." :
+        late ? "Claude has not picked this up yet." : tms(w.answered_at) ? "Your answer is with Claude." :
         inLine ? (place.pos === 1 ? "Starts as soon as one of the " + place.busy + " jobs running now is done." : plural(place.pos - 1, "job", "jobs") + " before it, once one of the " + place.busy + " running now is done.") :
         "Waiting for Claude to start.";
     } else if (st === "stopped") now1 = "Stopped. Anything already saved is kept.";
@@ -6990,7 +7030,7 @@
     // Work that stopped has no time left: "under a minute left" stood on a job that had not
     // finished, its chat already closed (2026-10-30).
     if (TERMINAL.has(p.status)) return "Stopped " + ago(w.finished_at || w.stage_at || w.asked_at);
-    if (p.status === "queued") return "Asked " + ago(w.asked_at) + ".";
+    if (p.status === "queued") return tms(w.answered_at) ? "Answered " + ago(w.answered_at) + "." : "Asked " + ago(w.asked_at) + ".";
     if (p.status === "needs_you") return "Paused for your answer.";
     const so = dur(p.elapsedS) + " so far";
     if (p.lapsed) return so;
@@ -7037,7 +7077,7 @@
     // Big jobs run in a chat of their own (HEAVY_KINDS), so only light work running in the
     // chat that answers the page makes the rest wait behind it.
     const lightRunning = active.some(([, w]) => (w.status === "running" || w.status === "claimed") && !HEAVY_KINDS.has(txt(w.kind)));
-    const sm = active.length ? (lightRunning && queued ? "Claude does one thing at a time in the chat that answers this page. " : "") + (late ? "" : "About " + plural(Math.max(1, Math.round(left / 60)), "minute", "minutes") + " left. ") + "Nothing is sent." : null;
+    const sm = active.length ? (lightRunning && queued ? "Claude does one thing at a time in the chat that answers this page. " : "") + (late || !going.length ? "" : "About " + plural(Math.max(1, Math.round(left / 60)), "minute", "minutes") + " left. ") + "Nothing is sent." : null;
     return h("section", {class: "workp", "aria-labelledby": "h-work-" + where},
       h("div", {class: "rail-head"}, h("h2", {id: "h-work-" + where, class: "rail-title", tabindex: "-1"}, "Claude's work")),
       h("div", {class: "summary"}, h("div", {class: "sum-words"}, h("p", {class: "sum"}, sum), sm ? h("p", {class: "sum-small"}, sm) : null)),
@@ -7073,12 +7113,17 @@
     return out;
   }
   let workDlg = null;
+  // The Work rail is on screen: on a wide screen, except on the Brief, whose panels take its
+  // width. There the pill opens the sheet, as on a phone: it did nothing at all on the Brief
+  // (the maintainer, 2026-10-31).
+  function railShown() { const hd = $("h-work-rail"); return !!(wide() && hd && hd.getClientRects().length); }
   function openWork() {
     sset("session", "ljs:work-seen", String(now()));
-    if (wide()) {
+    if (railShown()) {
       if (S.tweak) closeTweak();
       const hd = $("h-work-rail");
-      if (hd) { try { hd.scrollIntoView({block: "start"}); } catch (e) { /* no scrolling */ } hd.focus(); }
+      try { hd.scrollIntoView({block: "start"}); } catch (e) { /* no scrolling */ }
+      hd.focus();
       return;
     }
     if (workDlg) return;
@@ -7119,7 +7164,7 @@
     const narrow = !wide();
     const lead = going ? (one && one.length <= (narrow ? 14 : 18) ? one : going + " running") : "";
     const words = asking ? plural(asking, "needs you", "need you") : going ? lead + (queued.length && !narrow ? " · " + queued.length + " waiting" : "") : starting + helperGoing ? (starting + helperGoing) + " starting" : waiting ? waiting + " waiting" : recent.length + " done";
-    return h("button", {type: "button", class: "pill" + (asking || slow ? " warn" : ""), id: "pill", "data-k": "pill", "aria-haspopup": wide() ? null : "dialog", onclick: openWork},
+    return h("button", {type: "button", class: "pill" + (asking || slow ? " warn" : ""), id: "pill", "data-k": "pill", "aria-haspopup": wide() && S.section !== "brief" ? null : "dialog", onclick: openWork},
       going && !asking ? h("span", {class: "spin", "aria-hidden": "true"}) : h("span", {class: "dot tone-" + (asking || slow ? "warn" : !recent.length || act.length ? "plain" : "ok") + (!asking && !slow && act.length ? " is-waiting" : ""), "aria-hidden": "true"}),
       h("span", {}, words), h("span", {class: "sr-only"}, ": show the work"));
   }
@@ -7930,7 +7975,12 @@
       infoRow("news", "What's new", waiting ? null : "Up to date", updatesBody()),
       infoRow("learned", "What you have taught it", plural(arr(M().learned).filter((x) => !x.retired && !effective(txt(x.id), ["learned.retire"])).length, "rule", "rules"), learnedRows())]));
     // How the app runs: the usual is right for nearly everyone, so it waits behind one line.
-    const adv = [infoRow("where", "Where Claude works", whereSummary(), whereRows())].concat(pick(["suggestions", "app_updates"]).concat(others).map(settingRow),
+    // "How updates arrive" shows only to someone holding updates, so they can let them in
+    // again: held, a fix never reached them (the brief that stopped, 2026-10-31), and it served
+    // nobody else (the maintainer, 2026-10-31: "is there a genuine point of this setting").
+    // Holding them is still said in a chat, where Claude writes it (CLAUDE.md).
+    const held = txt(settingOf("app_updates", "auto")) !== "auto";
+    const adv = [infoRow("where", "Where Claude works", whereSummary(), whereRows())].concat(pick(held ? ["suggestions", "app_updates"] : ["suggestions"]).concat(others).map(settingRow),
       [keysRow(), infoRow("device", "Check this device", null, deviceList())]).filter(Boolean);
     put(wrap, det("set-advanced", false, {class: "set-group set-advanced"}, h("summary", {class: "group"}, "How the app runs"),
       h("p", {class: "small muted set-intro"}, "The usual settings suit nearly everyone. Change these only if Claude suggests it."), h("div", {class: "set-rows"}, adv)));
@@ -8010,7 +8060,7 @@
     return h("button", {type: "button", class: "setting-row act-row", "data-k": key, onclick: fn}, h("span", {class: "set-name"}, name), h("span", {class: "set-go", "aria-hidden": "true"}, "›"));
   }
   function updateRow(waiting) {
-    const w = [...allWork()].find(([id]) => id.startsWith("update~"));
+    const w = [...allWork()].find(([id, x]) => id.startsWith("update~") && !obj(x.args).refresh);
     const updating = w && ACTIVE.has(w[1].status);
     return h("div", {class: "setting-row update-row"}, h("span", {class: "set-name"}, txt(waiting.line) || "An update is waiting",
       txt(waiting.waits_for) ? h("span", {class: "hint block"}, "It starts once the work running now has finished.") : null),
@@ -8022,12 +8072,17 @@
     const u = obj(M().updates);
     const app = obj(M().app);
     const box = h("div", {class: "updates"});
+    // Which version this page runs, in one line (the maintainer, 2026-10-31).
+    if (txt(u.version)) put(box, h("p", {class: "small muted", "data-k": "version"}, "You're on version " + txt(u.version) + (u.since ? ", with fixes made since." : ".")));
     const changed = arr(u.changed).length ? arr(u.changed) : arr(app.news).length ? [{version: "", date: "", lines: app.news}] : [];
     if (changed.length) {
       put(box, listView("news", {items: changed.map((c, i) => Object.assign({i}, c)), name: "what's new",
         fold: (c) => c.i > 0, foldLabel: (k) => plural(k, "earlier update", "earlier updates"),
         render: (c) => h("div", {class: "news"}, c.date ? h("p", {class: "muted small"}, fmtDay(c.date)) : null, h("ul", {}, arr(c.lines).map((l) => h("li", {}, txt(l)))))}));
     }
+    // Every change ever made, for more than the last few (the maintainer, 2026-10-31).
+    const log = safeUrl(u.changelog);
+    if (log) put(box, h("p", {class: "small"}, h("a", {href: log, target: "_blank", rel: "noopener noreferrer", "data-k": "changelog"}, "See every change", h("span", {class: "sr-only"}, " (opens the full list of changes in a new tab)"))));
     const done = arr(u.done).filter((d) => !d.undone);
     if (done.length) {
       put(box, h("h4", {class: "small-head"}, "Changes made for you"), listView("upgrades", {items: done, name: "changes made for you",
@@ -8224,10 +8279,25 @@
     if (S.meta) t = Math.max(t, tms(S.meta.made_at) || 0);
     return t;
   }
+  // Refresh brings the page up to date, which only a chat can do: reloading the frame read the
+  // same stored data back, so "yesterday" stayed yesterday (the maintainer, 2026-10-31). It
+  // asks the chat that answers the page to take any update the person's setting allows and
+  // write today's data (an update item with args.refresh: the app skill's update row), rung
+  // inside the tap like every ask. Data made minutes ago, or a newer page already published,
+  // is only a reload.
+  const REFRESH_FRESH_MS = 10 * 60 * 1000;
+  const REFRESH_STAGES = [{key: "start", name: "Checking for anything new", est_s: 30}, {key: "take", name: "Bringing your page up to date", est_s: 60}];
+  function refreshPage(newest, newer) {
+    if (newer || (newest && now() - newest < REFRESH_FRESH_MS)) { try { location.reload(); } catch (e) { /* the frame refuses */ } return; }
+    requestWork([{id: "update~refresh-" + todayIso(), kind: "update", title: "Bringing your page up to date", args: {refresh: true}, stages: REFRESH_STAGES, redo: true}]);
+    scheduleRender();
+  }
   function renderTop() {
     const [state, words] = connState();
     const newest = newestData();
-    const old = newest && now() - newest > DAY;
+    // Not from today is said, with Refresh, so a page opened from the sidebar with no chat
+    // running says how old it is (the maintainer, 2026-10-31).
+    const old = newest && (now() - newest > DAY || dayOf(iso(newest)) !== todayIso());
     const age = newest ? ago(newest).replace(/^on /, "").replace(/^just now$/, "a moment ago") : "";
     const meta = S.meta;
     const newer = !!(meta && meta.rev && txt(meta.rev) !== txt(S.model.rev) && (tms(meta.published_at) || 0) > (tms(S.model.made_at) || 0));
@@ -8247,13 +8317,22 @@
     const updating = [...allWork()].find(([, w]) => (txt(w.kind) === "update" || txt(w.kind) === "republish") && ACTIVE.has(txt(w.status) || "queued"));
     if (pulse) {
       const warn = state !== "live" && state !== "connecting";
+      const queuedUp = updating && txt(updating[1].status) === "queued";
+      const refreshing = updating && txt(updating[1].kind) === "update" && !!obj(updating[1].args).refresh;
+      // Nothing heard the ask: said, with the one way to start a chat for the page, never a
+      // spinner over work nobody has.
+      const note = queuedUp ? S.workNote.get(updating[0]) : null;
+      const unheard = !!(note && note.link);
       pulse.hidden = !(S.connOpen || warn || old || newer || updating);
-      pulse.className = "pulse" + (warn || newer ? " tone-warn" : updating ? " is-updating" : "");
+      pulse.className = "pulse" + (warn || newer || unheard ? " tone-warn" : updating ? " is-updating" : "");
       patch(pulse, updating && !warn && !newer && !S.connOpen ?
-        [h("span", {class: "spin", "aria-hidden": "true"}), h("span", {role: "status"}, txt(updating[1].status) === "queued" ? "An update is waiting for Claude. " : "Updating to the newest version. "),
-          h("span", {class: "muted"}, "Keep using the page: it refreshes by itself when it is ready.")] :
+        (unheard ? [h("span", {role: "status"}, note.text + " "),
+          h("a", {href: wakeUrl(), target: "_blank", rel: "noopener noreferrer", class: "btn link", "data-k": "refresh-wake"}, "Open Claude", h("span", {class: "sr-only"}, " (opens Claude in a new tab)"))] :
+          [h("span", {class: "spin", "aria-hidden": "true"}), h("span", {role: "status"}, refreshing ? (queuedUp ? "Claude has been asked to bring your page up to date. " : "Bringing your page up to date. ")
+            : queuedUp ? "An update is waiting for Claude. " : "Updating to the newest version. "),
+          h("span", {class: "muted"}, "Keep using the page: it changes by itself when it is ready.")]) :
         [h("span", {}, words + (age ? " Search data from " + age + "." : "") + (newer ? " A newer version is ready." : "")), " ",
-          h("button", {type: "button", class: "btn link", "data-k": "refresh", onclick: () => { try { location.reload(); } catch (e) { /* the frame refuses */ } }}, "Refresh")]);
+          h("button", {type: "button", class: "btn link", "data-k": "refresh", onclick: () => refreshPage(newest, newer)}, "Refresh")]);
     }
     const tools = $("toptools");
     if (tools) {

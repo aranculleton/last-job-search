@@ -2940,8 +2940,12 @@ def _done(ctx: Ctx, targets: dict) -> dict:
     # the people who answered in them.
     since = ctx.today - dt.timedelta(days=30)
     recent = [r for r, d in sent if d >= since]
-    r_iv = sum(1 for r in recent if _status(r) in throttle.REACHED_INTERVIEW)
-    r_of = sum(1 for r in recent if _status(r) in offers)
+    # An application with no date sent that is at interview or offer now is live, so it
+    # counts in the window too: one with no date was left out, and the Brief said "1
+    # interview" beside an Interviews tab of 2 (the maintainer, 2026-10-31).
+    undated = [r for r in rows if not _date(throttle.applied_on(r))]
+    r_iv = sum(1 for r in recent + undated if _status(r) in throttle.REACHED_INTERVIEW)
+    r_of = sum(1 for r in recent + undated if _status(r) in offers)
     window = {"days": 30, "counts": {"applied": len(recent), "interviews": r_iv, "offers": r_of,
                                      "replies": sum(1 for d in replied.values() if d and d >= since)},
               "funnel": [{"stage": "applied", "n": len(recent)}, {"stage": "interview", "n": r_iv},

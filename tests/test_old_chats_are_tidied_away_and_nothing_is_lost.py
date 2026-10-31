@@ -97,7 +97,9 @@ def test_the_brief_moves_into_the_helper_before_its_chat_is_archived():
     new = calls[0]["args"]
     assert new["persistent_session_id"] == HELPER
     assert new["cron_expression"] == "CRON_TZ=Europe/London 38 7 * * 1,4"   # their own days kept
-    assert new["prompt"] == routines.stub(REG, "morning_brief") and new["connectors"] == []
+    # With the line that gets the files where the chat has none (routines.with_copy).
+    assert new["prompt"] == routines.with_copy(routines.stub(REG, "morning_brief"), REPO)
+    assert new["connectors"] == []
     assert "--session " + HELPER in calls[1]["run"]
     assert calls[2]["args"] == {"trigger_id": "trig_EXAMPLEBRIEF", "enabled": False}  # off, kept
     assert "delete_trigger" not in json.dumps(got)
@@ -206,9 +208,11 @@ def test_an_ops_brief_whose_chat_is_gone_moves_to_the_helper():
     new = got["brief"][0]["args"]
     assert new["persistent_session_id"] == HELPER
     assert new["cron_expression"] == "CRON_TZ=Europe/London 56 7 * * *"
-    # The plain stub: the moved brief is not told it is in the ops chat, nor to relay.
-    assert new["prompt"] == routines.DEFAULT_STUB.format(
-        label="morning brief", Label="Morning brief", prompt_file=routines.BRIEF_FILE, relay_id="")
+    # The plain stub: the moved brief is not told it is in the ops chat, nor to relay; it
+    # says how to get the files where the chat has none.
+    assert new["prompt"] == routines.with_copy(routines.DEFAULT_STUB.format(
+        label="morning brief", Label="Morning brief", prompt_file=routines.BRIEF_FILE, relay_id=""), REPO)
+    assert "ops session" not in new["prompt"] and "add_repo (owner example-owner, repo my-job-search" in new["prompt"]
     assert got["brief"][2]["args"] == {"trigger_id": "trig_EXAMPLEB", "enabled": False}
     assert any(k["id"] == "session_EXAMPLEOPS" and "gone" in k["why"] for k in got["keep"])
     assert all(c["id"] != "session_EXAMPLEEMPTY" for c in got["archive"])
@@ -315,3 +319,29 @@ def test_moving_to_another_zone_owes_an_update_for_every_task(tmp_path):
     got = routines.move(zone="America/Toronto", path=str(path))
     ids = sorted(c["args"]["trigger_id"] for c in got["calls"] if c["tool"] == "update_trigger")
     assert ids == ["trig_EXAMPLEB", "trig_EXAMPLER"]
+
+
+def test_a_brief_that_stays_put_is_given_the_line_that_gets_its_files():
+    """A brief whose chat was deleted woke a new, empty chat each morning and could only say
+    it could not start: no brief for two days (the maintainer, 2026-10-31). Its stored prompt
+    now says how to get the files, so it runs in any chat it lands in; one stored before that
+    is given the line by the day's tidy-up, once."""
+    old = routines.DEFAULT_STUB.format(label="morning brief", Label="Morning brief",
+                                       prompt_file=routines.BRIEF_FILE, relay_id="")
+    reg = {"setup": "chat_per_briefing", "timezone": "Europe/London", "routines": [
+        {"key": "morning_brief", "name": "Job search: morning brief", "trigger_id": "trig_EXAMPLEBRIEF",
+         "cron": "CRON_TZ=Europe/London 38 7 * * *", "prompt_file": routines.BRIEF_FILE}]}
+    live = [{"id": "trig_EXAMPLEBRIEF", "session": HELPER, "enabled": True, "prompt": old}]
+    got = _plan(reg=reg, triggers=live)
+    assert got["brief"] == [{"tool": "update_trigger", "why": got["brief"][0]["why"],
+                             "args": {"trigger_id": "trig_EXAMPLEBRIEF",
+                                      "prompt": routines.with_copy(old, REPO)}}]
+    fixed = got["brief"][0]["args"]["prompt"]
+    assert fixed.startswith("Scheduled run: morning brief. If this chat has no copy of example-owner/my-job-search ")
+    assert routines._is_brief_prompt(fixed), "still found as the brief"
+    # Once: a prompt with the line, a brief turned off or resting, is left alone.
+    assert _plan(reg=reg, triggers=[dict(live[0], prompt=fixed)])["brief"] == []
+    assert _plan(reg=reg, triggers=[dict(live[0], enabled=False)])["brief"] == []
+    assert _plan(reg=dict(reg, pause={"until": "2026-11-09"}), triggers=live)["brief"] == []
+    # Never a copy it cannot name.
+    assert routines.with_copy(old, "") == old and routines.with_copy(old, "not a repo") == old

@@ -25,6 +25,30 @@ make sense to somebody whose repo just received it.
 - **Buttons no longer flash dark in Safari.** Every button a section showed faded in from the
   text colour over a moment, so its words could not be read; a button now changes colour
   only under the pointer.
+- **Refresh brings your page up to date.** It only reloaded the same saved data, so a page
+  opened from the sidebar went on saying "yesterday". It now asks Claude to take any update
+  and write today's data, and the line under the header says when that is under way.
+- **Your morning brief runs whichever chat it lands in.** When its chat was deleted, the
+  brief woke a new, empty chat each morning that had no copy of your search, and stopped.
+  It now gets the copy first. Briefs set up before this get the fix by themselves on the
+  next daily tidy-up.
+- **The work button at the top opens Claude's work on the Brief.** It did nothing there.
+- **A job's time counts from when Claude started it.** Work asked for yesterday and started a
+  minute ago said "about 29 hours so far".
+- **Work you answered says so.** It said "Not picked up yet · Asked yesterday"; it now says
+  your answer is with Claude, and while a new helper chat is starting, it says that.
+  "Minutes left" shows only once something has started.
+- **Each week of the Brief's chart says its count** when you point at it or tap it.
+- **The Brief counts an interview with no date sent.** It said "1 interview" beside an
+  Interviews tab of 2.
+- **News reads in points**, as Today does.
+
+### Changed
+
+- **What's new says which version you are on** and links to every change.
+- **"How updates arrive" is gone from Settings.** Holding updates back only kept fixes from
+  you. If you hold them already, the setting stays until you let them in; you can still ask
+  Claude in a chat to hold them.
 
 ## [4.5.1] - 2026-10-31
 
