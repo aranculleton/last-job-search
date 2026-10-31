@@ -13,7 +13,7 @@ whenever ci_local.sh runs, and the app's tests check the example's.
                                              # is there a brief already? never make a second;
                                              # in a cloud chat, the calls that make one
     python3 tools/routines.py default        # the brief's days, time and zone, and the line
-    python3 tools/routines.py record --session <id> --trigger <id> [--cron "<cron>"]
+    python3 tools/routines.py record --session <id> --trigger <id> [--cron "<cron>"] [--own-chat]
                                              # write the brief made into profile/routines.json
     python3 tools/routines.py move --days weekdays --time 07:38
                                              # the brief's new days and time, written here
@@ -82,13 +82,16 @@ def work(reg: dict) -> list[dict]:
     return [r for r in reg.get("routines", []) if r.get("mode") != "fresh_session"]
 
 
-def stub(reg: dict, key: str) -> str:
-    """The exact prompt to store for the task called `key`."""
+def stub(reg: dict, key: str, own_chat: bool = False) -> str:
+    """The exact prompt to store for the task called `key`. In the older ops set-up, a task
+    that runs in a chat of its own (`own_chat`, or a `chat` in its entry) gets the plain
+    stub: the registry's own one says "You are in the Job search ops session"."""
     r = next(x for x in reg["routines"] if x["key"] == key)
     label = key.replace("_", " ")
     relay = next((x.get("trigger_id", "") for x in reg["routines"]
                   if x.get("mode") == "fresh_session"), "")
-    return reg.get("stub", DEFAULT_STUB).format(
+    plain = setup_of(reg) == "ops_relay" and (own_chat or bool(r.get("chat")))
+    return (DEFAULT_STUB if plain else reg.get("stub", DEFAULT_STUB)).format(
         label=label, Label=label.capitalize(), prompt_file=r["prompt_file"], relay_id=relay)
 
 
@@ -367,10 +370,12 @@ def plan(owner: str, name: str, zone: str = "", now: datetime.datetime | None = 
 
 
 def record(session: str, trigger: str, cron: str = "", path: str | None = None,
-           setup: str = "chat_per_briefing", title: str = "") -> str:
+           setup: str = "chat_per_briefing", title: str = "", own_chat: bool = False) -> str:
     """Write the brief just made into profile/routines.json, keeping every other task. The
     chat it runs in is named only when it was made for it; bound to the chat that answers
-    the page, it is that chat's id alone."""
+    the page, it is that chat's id alone. In the older ops set-up it is named only with
+    `own_chat` (the brief moved out of a lost ops chat): a chat recording a re-listed id
+    names itself, and a `chat` there would stop the relay to the phone."""
     if path is None:
         import person
         path = person.path("routines.json")
@@ -381,7 +386,9 @@ def record(session: str, trigger: str, cron: str = "", path: str | None = None,
     reg.pop("_about", None) if reg.get("_about", "").startswith("The example person's") else None
     cron = cron or default()["cron"]
     m = re.match(r"CRON_TZ=(\S+) ", cron)
-    reg["setup"] = reg.get("setup") or setup
+    # An older ops registry stays one (its relay and other tasks are checked as one); the
+    # brief alone names the chat it moved into.
+    reg["setup"] = setup_of(reg) or setup
     reg["timezone"] = (m.group(1) if m else "") or reg.get("timezone", "")
     keep = [r for r in reg.get("routines") or [] if not _is_brief(r)]
     entry = {"key": "morning_brief", "name": BRIEF_NAME,
@@ -391,7 +398,9 @@ def record(session: str, trigger: str, cron: str = "", path: str | None = None,
     was = next((r for r in reg.get("routines") or [] if _is_brief(r)), None) or {}
     if was.get("off"):
         entry["off"] = True
-    if reg["setup"] == "chat_per_briefing":
+    ops = (reg.get("ops_session") or {}).get("id", "")
+    if reg["setup"] == "chat_per_briefing" or (
+            reg["setup"] == "ops_relay" and own_chat and session and session != ops):
         entry["chat"] = {"session_id": session, **({"title": title} if title else {})}
     reg["routines"] = [entry] + keep
     with open(path, "w", encoding="utf-8", newline="\n") as fh:
@@ -509,8 +518,12 @@ def _brief(reg: dict) -> dict | None:
 def _owe(reg: dict, call: dict) -> None:
     """Keep a scheduled-task call a chat must make; a newer one for the same task and the
     same kind of change replaces an older one."""
+    def task(c):
+        return (c.get("args") or {}).get("trigger_id")
+    # The same task: a zone move owes one update for the brief and one for the job round.
     owed = [c for c in reg.get("owed") or []
-            if not (c.get("tool") == call.get("tool") and c.get("for") == call.get("for"))]
+            if not (c.get("tool") == call.get("tool") and c.get("for") == call.get("for")
+                    and task(c) == task(call))]
     owed.append(call)
     for n, c in enumerate(owed, 1):
         c["n"] = n
@@ -736,7 +749,10 @@ def pause(until: str, today: str = "", path: str | None = None) -> dict:
                 "run_once_at": _instant(end, (read_cron(r.get("cron")) or {}).get("time", ""),
                                         reg.get("timezone") or ""),
                 "prompt": stub(reg, r["key"]), "connectors": [], "initiation": "human_request"}
-        sid = (r.get("chat") or {}).get("session_id")
+        # The chat the brief runs in: a new one on firing has no copy of the files, so an
+        # older ops brief comes back in the ops chat.
+        sid = (r.get("chat") or {}).get("session_id") or (
+            (reg.get("ops_session") or {}).get("id") if setup_of(reg) == "ops_relay" else "")
         if sid:
             back["persistent_session_id"] = sid
         else:
@@ -937,7 +953,7 @@ def main(argv: list[str]) -> int:
             return 2
         path = record(opt.get("--session", ""), opt["--trigger"], opt.get("--cron", ""),
                       setup=opt.get("--setup", "chat_per_briefing"),
-                      title=opt.get("--title", ""))
+                      title=opt.get("--title", ""), own_chat="--own-chat" in argv)
         problems = check(load(path))
         for p_ in problems:
             print(f"routines.json: {p_}")

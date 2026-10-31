@@ -1,7 +1,7 @@
 # Notes for the next builder
 
-Written at the end of 4.5.0 (2026-10-30) for the chat that builds the next version. Read
-MAINTAINING.md first; this is only what 4.5 left.
+Written at the end of 4.5.1 (2026-10-31) for the chat that builds the next version. Read
+MAINTAINING.md first; this is only what 4.5 and 4.5.1 left.
 
 ## How to work (the maintainer, 2026-10-30)
 
@@ -19,6 +19,34 @@ MAINTAINING.md first; this is only what 4.5 left.
   --tokens-out /tmp/ljs-push-gate/tokens`), never by narrowing the gate.
 - A `Fast checks` job can sit queued on GitHub with every check it waits for green, and
   GitHub may refuse to rerun it. A new push starts a fresh run.
+
+## 4.5.1
+
+- The maintainer's daily brief stopped on 2026-10-31: the shared ops chat it fired into
+  (the older `ops_relay` set-up) had been deleted, and the scheduled task woke a new empty
+  chat with no copy of the files. That chat could not load `fire_trigger` either, so the
+  relay never ran; it pushed its own jargon-filled line through the phone notification
+  tool. Nothing in the app archived the ops chat (`tools/tidy.py` keeps it, and the copy has
+  no `profile/tidy.json`); what deleted it is not known.
+- Fixed: the daily tidy-up moves an ops brief to the helper once its chat is gone (missing
+  from the listing and the task names another chat), the moved brief gets the plain stub
+  and its own `chat` in the registry, which stays `ops_relay`, and a brief back from a break
+  runs in the ops chat rather than a new empty one. Tested on the plan and the registry
+  only; the real move runs at the maintainer's next daily tidy-up and has not been watched.
+- An independent review found four holes in the first version of that fix, all closed with
+  tests that fail without them: a brief bound to a chat with a copy of the files is never
+  moved, a moved one follows a new helper, `record` names the brief's chat in an ops
+  registry only with `--own-chat`, and `_owe` keeps one call per task (a zone move had
+  dropped the job round's update).
+- Open, not a regression: a break taken after the ops chat is lost binds its welcome-back to
+  that lost chat, so the brief stays off until the person resumes from the page (tidy never
+  moves a resting brief). An ops job round switched back on would also wake an empty chat;
+  nothing moves it.
+- Open: a phone push for a brief in the helper. The empty chat proved a cloud chat can
+  push with the `PushNotification` tool; a brief bound to a chat gets no push otherwise.
+  Not built: check Claude Code's documentation for it before relying on it.
+- The stored ops stub still says "fire_trigger ... could not start: <reason>" in the
+  maintainer's registry (`stub` in their `profile/routines.json`, theirs, not the app's).
 
 ## Left open
 
@@ -51,8 +79,16 @@ MAINTAINING.md first; this is only what 4.5 left.
   lines the app prints, never with real sessions.
 - The pin hand-off ("Pin my job search page to my sidebar." to the Artifact `pin` action):
   tested up to the hand-off.
-- Safari's and Firefox's engines were not installed in the build container: 4.5's page
-  changes ran in Chromium only. Everywhere runs them on this release.
+- Safari's engine fails the page's contrast checks on 4.5.0 and 4.5.1 alike (8 tests in
+  `test_the_page_works_in_a_browser.py`): "contrast 3.69 < 4.5" on small secondary buttons
+  ("Copy", "See the draft", a navlink button), light and dark. No palette pair is that low
+  (ink on raised is 5.96 light and 11.51 dark, hovered 5.25 and 7.93), so the measure is
+  likely wrong in WebKit rather than the colours: look at the button being read mid-fade
+  (`opacityOf` in `tests/app_page/harness.js` multiplies opacity) or a colour string the
+  harness's `rgba()` cannot parse. Not reproduced: WebKit is not installed here.
+- Safari's and Firefox's engines were not installed in the build container: the page
+  changes of 4.5 and 4.5.1 (the Brief's numbers panel) ran in Chromium only. Everywhere
+  runs them on each release.
 - From 4.4 and still open: the pre-approved writes in a chat that was asked before, big jobs
   in chats of their own side by side, the page reading LinkedIn in the desktop app's browser
   (the whole flow is simulated), the daily tidy-up's session calls, the brief's bell from

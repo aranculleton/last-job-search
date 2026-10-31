@@ -200,10 +200,10 @@ can still make it.
 - **If yours still works, do not archive, delete or rebuild that chat.** A rebuilt one
   cannot relay. `_common.md` still hands each message to the relay in that set-up, and the
   reply stands on its own if the hand-off is refused.
-- **If it is lost, do not rebuild it.** Press the bell on your Brief instead: that is (a). A
-  trigger's bound chat cannot be changed in place, so the old task is read with
-  `get_trigger`, turned off with `update_trigger`, and a new one made from the chat that
-  answers your page.
+- **If it is lost, do not rebuild it.** Nothing to do: the task then wakes a new empty chat
+  with no copy of your files, and the next daily tidy-up in the chat that answers your page
+  moves the brief into that chat (`tools/tidy.py`). A trigger's bound chat cannot be changed
+  in place, so a new task is made there and the old one turned off, never deleted.
 
 ## Changing something: say it to any Claude chat in your repo
 
