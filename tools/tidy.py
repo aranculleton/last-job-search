@@ -23,9 +23,10 @@ and keeps every chat that is:
 
 A brief in a chat of its own (set-up (a), from before 4.3) moves into the chat that answers
 the page first: a task bound to that chat on the same days and time, the old task turned off
-(kept, never deleted), and then its chat archived. Not while the brief is off or resting,
-never for a routine (each run its own chat, with the person's phone notification: the run
-chats are archived, the routine kept).
+(kept, never deleted), and then its chat archived. A brief in the older ops chat moves the
+same way only once that chat is gone (not listed, and the task now names the empty chat it
+woke instead). Not while the brief is off or resting, never for a routine (each run its own
+chat, with the person's phone notification: the run chats are archived, the routine kept).
 
     python3 tools/tidy.py due                        exit 0 when today's tidy-up is due
     python3 tools/tidy.py plan --dump <dir> --sessions <file>... --triggers <file>...
@@ -213,16 +214,26 @@ def plan(chats: list[dict], triggers: list[dict], info: dict, reg: dict, listene
     brief_chat = str((brief.get("chat") or {}).get("session_id") or "")
     out: dict = {"ask": [], "archive": [], "keep": [], "brief": []}
 
-    # The brief in a chat of its own moves into the chat that answers the page.
+    # The brief in a chat of its own moves into the chat that answers the page. A brief in
+    # the older ops chat stays there while that chat lives (it relays to the phone); once
+    # the chat is gone, the task wakes a new empty chat with no copy of the files every
+    # morning ("Morning brief could not start: no git repo", 2026-10-31), so it moves too.
     adopt = ""
     helper = listener.get("chat") or ""
-    if (reg.get("setup") == "chat_per_briefing" and brief_chat and helper.startswith("session_")
-            and brief_chat != helper and not brief.get("off") and not reg.get("pause")
+    setup = routines.setup_of(reg)
+    home = brief_chat or (ops if setup == "ops_relay" else "")
+    if (setup in ("chat_per_briefing", "ops_relay") and home and helper.startswith("session_")
+            and home != helper and not brief.get("off") and not reg.get("pause")
             and brief.get("trigger_id") and brief.get("cron")):
         live = next((t for t in triggers if t.get("id") == brief["trigger_id"]), None)
-        if live and live.get("enabled"):
-            adopt = brief_chat
-            stub = routines.stub(reg, brief["key"])
+        # Gone, for the ops chat: not among the person's chats, and the task itself now
+        # names another chat (the empty one it woke instead). Both, so a listing that
+        # missed a page never moves a brief whose ops chat still relays.
+        gone = (home not in {s.get("id") for s in chats}
+                and str((live or {}).get("session") or "") not in ("", home))
+        if live and live.get("enabled") and (setup == "chat_per_briefing" or gone):
+            adopt = home
+            stub = routines.stub(reg, brief["key"], own_chat=True)
             out["brief"] = [
                 {"tool": "create_trigger", "args": {
                     "name": routines.BRIEF_NAME, "persistent_session_id": helper,

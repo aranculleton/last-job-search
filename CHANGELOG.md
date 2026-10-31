@@ -22,6 +22,12 @@ make sense to somebody whose repo just received it.
 
 ### Fixed
 
+- **A morning brief whose chat was removed runs again by itself.** In the older set-up every
+  scheduled task ran in one shared chat; once that chat was gone, the brief woke a new empty
+  chat each morning with no copy of the search and could only say it could not start. The
+  daily tidy-up now moves the brief into the chat that answers the page (a new task there,
+  the old one turned off, never deleted), and a brief back from a break runs in the shared
+  chat rather than a new empty one.
 - **The Brief's numbers are never cut off.** On a laptop screen "How far they got" was half
   hidden and "Since the last brief" not shown at all; the panel now grows to fit.
 

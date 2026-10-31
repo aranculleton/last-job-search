@@ -178,3 +178,89 @@ def test_a_brief_whose_chat_was_deleted_moves_to_the_helper():
     assert [c.get("tool") or "run" for c in got["brief"]] == ["create_trigger", "run", "update_trigger"]
     assert got["brief"][0]["args"]["persistent_session_id"] == HELPER
     assert all(c["id"] != "session_EXAMPLEBRIEFCHAT" for c in got["archive"])
+
+
+# The older ops set-up: every task fires into one ops chat. Once that chat is gone, the task
+# wakes a new empty chat with no copy of the files each morning (2026-10-31: "Morning brief
+# could not start: no git repo in this session"), so the daily tidy-up moves the brief.
+OPS = {"timezone": "Europe/London",
+       "ops_session": {"id": "session_EXAMPLEOPS", "title": "Scheduled tasks"},
+       "stub": "Scheduled run: {label}. You are in the ops session. Read `"
+               + routines.COMMON + "` and `{prompt_file}`; else relay {relay_id}.",
+       "routines": [
+           {"key": "relay", "name": "Job search: deliver to phone", "trigger_id": "trig_EXAMPLERELAY",
+            "mode": "fresh_session", "cron": None, "notifications": {"push": True},
+            "prompt_file": "automation/prompts/relay.md"},
+           {"key": "morning_brief", "name": "Job search: brief (daily)", "trigger_id": "trig_EXAMPLEB",
+            "mode": "ops_session", "cron": "CRON_TZ=Europe/London 56 7 * * *",
+            "prompt_file": routines.BRIEF_FILE},
+           {"key": "job_round", "name": "Job search: job round", "trigger_id": "trig_EXAMPLER",
+            "mode": "ops_session", "cron": "CRON_TZ=Europe/London 52 6 * * 1,4",
+            "prompt_file": "automation/prompts/job_round.md"}]}
+
+
+def test_an_ops_brief_whose_chat_is_gone_moves_to_the_helper():
+    woke = [{"id": "trig_EXAMPLEB", "session": "session_EXAMPLEEMPTY", "enabled": True}]
+    got = _plan(reg=OPS, triggers=woke)
+    assert [c.get("tool") or "run" for c in got["brief"]] == ["create_trigger", "run", "update_trigger"]
+    new = got["brief"][0]["args"]
+    assert new["persistent_session_id"] == HELPER
+    assert new["cron_expression"] == "CRON_TZ=Europe/London 56 7 * * *"
+    # The plain stub: the moved brief is not told it is in the ops chat, nor to relay.
+    assert new["prompt"] == routines.DEFAULT_STUB.format(
+        label="morning brief", Label="Morning brief", prompt_file=routines.BRIEF_FILE, relay_id="")
+    assert got["brief"][2]["args"] == {"trigger_id": "trig_EXAMPLEB", "enabled": False}
+    assert any(k["id"] == "session_EXAMPLEOPS" and "gone" in k["why"] for k in got["keep"])
+    assert all(c["id"] != "session_EXAMPLEEMPTY" for c in got["archive"])
+
+
+def test_an_ops_brief_stays_while_its_chat_may_still_be_there():
+    # Listed: it relays to the phone, so it stays (and is never archived).
+    live = chat("session_EXAMPLEOPS", "Job search: scheduled tasks")
+    on_ops = [{"id": "trig_EXAMPLEB", "session": "session_EXAMPLEOPS", "enabled": True}]
+    got = _plan(reg=OPS, triggers=on_ops, chats=CHATS + [live],
+                info=dict(INFO, session_EXAMPLEOPS=detail("session_EXAMPLEOPS")))
+    assert got["brief"] == []
+    assert all(c["id"] != "session_EXAMPLEOPS" for c in got["archive"])
+    # Missing from the listing (a page not read) but the task still names it: not moved.
+    assert _plan(reg=OPS, triggers=on_ops)["brief"] == []
+    # The task does not say where it runs: not moved.
+    assert _plan(reg=OPS, triggers=[{"id": "trig_EXAMPLEB", "session": "", "enabled": True}])["brief"] == []
+    # Turned off, or resting on a break: not moved.
+    off = [{"id": "trig_EXAMPLEB", "session": "session_EXAMPLEEMPTY", "enabled": False}]
+    assert _plan(reg=OPS, triggers=off)["brief"] == []
+    rest = dict(OPS, pause={"until": "2026-11-08"})
+    woke = [{"id": "trig_EXAMPLEB", "session": "session_EXAMPLEEMPTY", "enabled": True}]
+    assert _plan(reg=rest, triggers=woke)["brief"] == []
+
+
+def test_the_moved_ops_brief_is_recorded_and_the_registry_stays_an_ops_one(tmp_path):
+    path = tmp_path / "routines.json"
+    path.write_text(json.dumps(OPS), encoding="utf-8")
+    routines.record(HELPER, "trig_EXAMPLENEW", "CRON_TZ=Europe/London 56 7 * * *", path=str(path))
+    reg = json.loads(path.read_text(encoding="utf-8"))
+    assert routines.setup_of(reg) == "ops_relay" and routines.check(reg) == []
+    brief = next(r for r in reg["routines"] if r["key"] == "morning_brief")
+    assert brief["trigger_id"] == "trig_EXAMPLENEW" and brief["chat"] == {"session_id": HELPER}
+    assert "mode" not in brief
+    # Its stub from now on is the plain one; the job round, still in the ops chat, keeps the
+    # registry's own.
+    assert "ops session" not in routines.stub(reg, "morning_brief")
+    assert "ops session" in routines.stub(reg, "job_round")
+    # Brought back into the ops chat itself, it names no chat of its own.
+    routines.record("session_EXAMPLEOPS", "trig_EXAMPLEB", "CRON_TZ=Europe/London 56 7 * * *",
+                    path=str(path))
+    reg = json.loads(path.read_text(encoding="utf-8"))
+    assert "chat" not in next(r for r in reg["routines"] if r["key"] == "morning_brief")
+
+
+def test_an_ops_brief_back_from_a_break_runs_in_the_ops_chat(tmp_path, monkeypatch):
+    monkeypatch.setenv("LJS_STATE", str(tmp_path))
+    monkeypatch.setenv("LJS_PROFILE", os.path.join(ROOT, "profile.example"))   # read only
+    path = tmp_path / "routines.json"
+    path.write_text(json.dumps(OPS), encoding="utf-8")
+    routines.pause("2026-11-08", today="2026-10-31", path=str(path))
+    back = next(c for c in routines.calls(str(path)) if c.get("for") == "back")["args"]
+    # Never a new chat on firing: it would have no copy of the files.
+    assert back["persistent_session_id"] == "session_EXAMPLEOPS"
+    assert "create_new_session_on_fire" not in back

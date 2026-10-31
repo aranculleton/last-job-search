@@ -82,13 +82,16 @@ def work(reg: dict) -> list[dict]:
     return [r for r in reg.get("routines", []) if r.get("mode") != "fresh_session"]
 
 
-def stub(reg: dict, key: str) -> str:
-    """The exact prompt to store for the task called `key`."""
+def stub(reg: dict, key: str, own_chat: bool = False) -> str:
+    """The exact prompt to store for the task called `key`. In the older ops set-up, a task
+    that runs in a chat of its own (`own_chat`, or a `chat` in its entry) gets the plain
+    stub: the registry's own one says "You are in the Job search ops session"."""
     r = next(x for x in reg["routines"] if x["key"] == key)
     label = key.replace("_", " ")
     relay = next((x.get("trigger_id", "") for x in reg["routines"]
                   if x.get("mode") == "fresh_session"), "")
-    return reg.get("stub", DEFAULT_STUB).format(
+    plain = setup_of(reg) == "ops_relay" and (own_chat or bool(r.get("chat")))
+    return (DEFAULT_STUB if plain else reg.get("stub", DEFAULT_STUB)).format(
         label=label, Label=label.capitalize(), prompt_file=r["prompt_file"], relay_id=relay)
 
 
@@ -381,7 +384,9 @@ def record(session: str, trigger: str, cron: str = "", path: str | None = None,
     reg.pop("_about", None) if reg.get("_about", "").startswith("The example person's") else None
     cron = cron or default()["cron"]
     m = re.match(r"CRON_TZ=(\S+) ", cron)
-    reg["setup"] = reg.get("setup") or setup
+    # An older ops registry stays one (its relay and other tasks are checked as one); the
+    # brief alone names the chat it moved into.
+    reg["setup"] = setup_of(reg) or setup
     reg["timezone"] = (m.group(1) if m else "") or reg.get("timezone", "")
     keep = [r for r in reg.get("routines") or [] if not _is_brief(r)]
     entry = {"key": "morning_brief", "name": BRIEF_NAME,
@@ -391,7 +396,9 @@ def record(session: str, trigger: str, cron: str = "", path: str | None = None,
     was = next((r for r in reg.get("routines") or [] if _is_brief(r)), None) or {}
     if was.get("off"):
         entry["off"] = True
-    if reg["setup"] == "chat_per_briefing":
+    ops = (reg.get("ops_session") or {}).get("id", "")
+    if reg["setup"] == "chat_per_briefing" or (
+            reg["setup"] == "ops_relay" and session and session != ops):
         entry["chat"] = {"session_id": session, **({"title": title} if title else {})}
     reg["routines"] = [entry] + keep
     with open(path, "w", encoding="utf-8", newline="\n") as fh:
@@ -736,7 +743,10 @@ def pause(until: str, today: str = "", path: str | None = None) -> dict:
                 "run_once_at": _instant(end, (read_cron(r.get("cron")) or {}).get("time", ""),
                                         reg.get("timezone") or ""),
                 "prompt": stub(reg, r["key"]), "connectors": [], "initiation": "human_request"}
-        sid = (r.get("chat") or {}).get("session_id")
+        # The chat the brief runs in: a new one on firing has no copy of the files, so an
+        # older ops brief comes back in the ops chat.
+        sid = (r.get("chat") or {}).get("session_id") or (
+            (reg.get("ops_session") or {}).get("id") if setup_of(reg) == "ops_relay" else "")
         if sid:
             back["persistent_session_id"] = sid
         else:

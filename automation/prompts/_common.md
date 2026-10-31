@@ -68,7 +68,9 @@ routine, and the ops chat's title (`ops_session.title` in the registry) in the
 older ops set-up.
 
 **The older ops set-up only** (`setup` is `ops_relay`, or the registry has an
-`ops_session`): once the message is finished and before the final reply, hand the same
+`ops_session`), and only for a task with no `chat` of its own in the registry (a brief that
+moved out of a lost ops chat has one, and its reply is the message): once the message is
+finished and before the final reply, hand the same
 text to the relay task, so it reaches the phone. Load `fire_trigger` from the
 Claude_Code_Remote server and call it with `trigger_id` set to the `relay` entry's
 `trigger_id` and `text` set to the message. Then give the same text as the final reply. If
