@@ -729,8 +729,11 @@ The hook and the four steps are in CLAUDE.md ("Learning the person"); this is th
   then flag it in everything drafted. Where their rule and a check disagree, ask once which
   wins and add `--overrides <the check's rule name>` when theirs does. An earlier rule
   the new one repeats or contradicts is retired by itself (it prints `Replaced entry`): the
-  newest thing they said stands and nothing is asked; `learned.py restore <n>` brings one
-  back if it should not have gone. An edit made
+  newest thing they said stands; `learned.py restore <n>` brings one back if it should not
+  have gone. One it may contradict (`MAY CONTRADICT`) you judge yourself, putting the older
+  away only where the new one plainly reverses it; only where you truly cannot tell and it
+  changes what is drafted does `learned.py ask <older> <newer>` put one question on their
+  page, never more than one, and seldom. An edit made
   before sending records itself when the send is logged with its words.
 - **Ask, lightly, and now and then a tip.** After work they will read or send (a shortlist,
   a draft, a batch of notes, an interview pack, a prep, a brief), end with the one line

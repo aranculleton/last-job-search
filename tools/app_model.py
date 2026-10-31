@@ -724,6 +724,26 @@ def _profile_questions(ctx: Ctx, targets: dict) -> list:
             targets[nid] = {"kind": "offer", "n": n, "rev": item["rev"]}
     except Exception:  # noqa: BLE001  no learned.json: no choice waiting
         pass
+    # The one question about the rules they taught, when a chat could not tell which of two
+    # stands (learned.ask): one at most, and seldom.
+    try:
+        import learned
+        q = learned.asked()
+        if q:
+            o, l = q["older_rule"], q["later_rule"]
+            nid = f"q-rule-{q['older']}-{q['later']}"
+            item = {"id": nid, "kind": "question",
+                    "title": "Two things you told Claude may not fit together. Which stands?",
+                    "body": f"Earlier ({o.get('date')}): {o.get('rule')} Later ({l.get('date')}): "
+                            f"{l.get('rule')}",
+                    "options": [{"label": "The later one", "action": "needs.answer", "value": "later"},
+                                {"label": "Both", "action": "needs.answer", "value": "both"},
+                                {"label": "The earlier one", "action": "needs.answer", "value": "older"}],
+                    "about": {}, "rev": rev_of(nid, q.get("asked"))}
+            out.append(item)
+            targets[nid] = {"kind": "rule_ask", "rev": item["rev"]}
+    except Exception:  # noqa: BLE001  no learned.json: nothing asked
+        pass
     try:
         import profile_upgrades
         found = profile_upgrades.unconfirmed()

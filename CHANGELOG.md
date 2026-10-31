@@ -44,8 +44,9 @@ make sense to somebody whose repo just received it.
 - **News reads in points**, as Today does.
 - **The rules you have taught it stay one of each, by themselves.** A rule you say again
   replaces the older copy, keeping everything it held. Where a new rule may undo an older
-  one, Claude judges it as it records it instead of asking you, and puts the older one away
-  only when it plainly reverses it. Adding an employer to the ones that are out no longer
+  one, Claude judges it as it records it and puts the older one away only when it plainly
+  reverses it; only where it truly cannot tell, and it matters, does one question reach your
+  page, and never more than one at a time. Adding an employer to the ones that are out no longer
   reads as undoing the others. Rules made before this are tidied once, in the background.
   Nothing is deleted: a rule put away can be brought back. Profile upgrade: `learned-tidy`,
   `learned-review`.

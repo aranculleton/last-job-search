@@ -1284,8 +1284,9 @@ REGISTRY: tuple[Upgrade, ...] = (
             _learned_review, "`python3 tools/learned.py tidy --clashes` lists the pairs; for "
             "each, retire the older only where the later plainly reverses it "
             "(`python3 tools/learned.py retire <n>`); where they only share words, or it is not "
-            "certain, leave both. Then `python3 tools/learned.py tidy --reviewed`. Never ask "
-            "the person",
+            "certain, leave both. At most one pair you truly cannot call, and that changes what "
+            "is drafted, goes on their page: `python3 tools/learned.py ask <older> <newer>`. "
+            "Then `python3 tools/learned.py tidy --reviewed`",
             "edit", "~3 min", priority=3),
     Upgrade("brief-daily", "2026-10-29",
             "a short note every morning on your Brief: what is due today, and news that matters "

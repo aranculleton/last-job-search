@@ -302,15 +302,83 @@ def clashes() -> list[dict]:
     return out
 
 
+# One question at most, and seldom: everything else about the rules is decided by itself (the
+# maintainer, 2026-10-31: "ONE AT MOST AND AGAIN SPARSELY, THE VAST MAJORITY SHOULD BE
+# AUTOMATED"). A pair is asked about only where a chat cannot tell which stands and it
+# matters to what is drafted; never a second while one is open, nor within ASK_GAP_DAYS of
+# the last.
+ASK_GAP_DAYS = 14
+
+
+def ask(older: int, later: int, today: str | None = None) -> str:
+    """Put the one question on the page: entries `older` and `later` may disagree, which
+    stands? "" when it is asked, else why not (one is open, one was asked lately, or the
+    pair is not two active rules)."""
+    data = file_data()
+    rows = data.get("entries") or []
+    day = today or dt.date.today().isoformat()
+    cur = data.get("ask") or {}
+    if cur and not cur.get("answer"):
+        return "one question about the rules is already waiting"
+    last = str(cur.get("asked") or "")
+    if last and (dt.date.fromisoformat(day) - dt.date.fromisoformat(last)).days < ASK_GAP_DAYS:
+        return f"one was asked on {last}; decide this one, keeping both where unsure"
+    if not (1 <= older < later <= len(rows)) or any(
+            rows[n - 1].get("status", "active") != "active" for n in (older, later)):
+        return "those are not two rules in force, older first"
+    data["ask"] = {"older": older, "later": later, "asked": day, "answer": None}
+    _write_data(data)
+    return ""
+
+
+def asked() -> dict | None:
+    """The one question waiting, with both rules, or None."""
+    data = file_data()
+    cur = data.get("ask") or {}
+    rows = data.get("entries") or []
+    if not cur or cur.get("answer"):
+        return None
+    o, l = int(cur.get("older") or 0), int(cur.get("later") or 0)
+    if not (1 <= o < l <= len(rows)):
+        return None
+    return dict(cur, older_rule=rows[o - 1], later_rule=rows[l - 1])
+
+
+def settle(answer: str, today: str | None = None) -> str:
+    """Their answer to the one question: "later" puts the older rule away, "older" the later,
+    "both" keeps both. Returns what was done, in a line."""
+    if answer not in ("later", "older", "both"):
+        raise SystemExit("learned: the answer is later, older or both")
+    cur = asked()
+    if not cur:
+        return "No question about your rules is waiting."
+    rows = load()
+    gone = {"later": cur["older"], "older": cur["later"]}.get(answer)
+    if gone:
+        rows[gone - 1]["status"] = "retired"
+        rows[gone - 1]["retired_for"] = today or dt.date.today().isoformat()
+        rows[gone - 1]["retired_why"] = "you chose the other"
+        _save(rows)
+    data = file_data()
+    data["ask"] = dict(data.get("ask") or {}, answer=answer)
+    _write_data(data)
+    return {"later": "The newer rule stands.", "older": "The older rule stands.",
+            "both": "Both rules stand."}[answer]
+
+
+def _write_data(data: dict) -> None:
+    path = _writable()
+    with open(path, "w", encoding="utf-8", newline="\n") as fh:
+        json.dump(data, fh, indent=2, ensure_ascii=False)
+        fh.write("\n")
+
+
 def reviewed(mark: bool = False, today: str | None = None) -> str:
     """The day the person's rules were last judged for contradictions; `mark` sets today."""
     data = file_data()
     if mark:
         data["reviewed_on"] = today or dt.date.today().isoformat()
-        path = _writable()
-        with open(path, "w", encoding="utf-8", newline="\n") as fh:
-            json.dump(data, fh, indent=2, ensure_ascii=False)
-            fh.write("\n")
+        _write_data(data)
     return str(data.get("reviewed_on") or "")
 
 
@@ -1567,6 +1635,9 @@ def main(argv=None) -> int:
     sub.add_parser("pending")
     t = sub.add_parser("retire")
     t.add_argument("n", type=int, nargs="+")
+    t = sub.add_parser("ask")
+    t.add_argument("older", type=int)
+    t.add_argument("later", type=int)
     t = sub.add_parser("restore")
     t.add_argument("n", type=int, nargs="+")
     t = sub.add_parser("tidy")
@@ -1644,10 +1715,12 @@ def main(argv=None) -> int:
         if e["conflicts"]:
             # The newest thing they said stands; whether this one truly undoes the older is
             # judged here, by the chat, never asked (2026-10-31).
-            print("Judge each yourself, never asking the person: where the new rule truly "
-                  "reverses the older, the newest stands, so retire it (python3 tools/learned.py "
-                  "retire <n>, or change that line in profile/CLAUDE.md) and say so in one line; "
-                  "where they only share words, leave it.")
+            print("Judge each yourself: where the new rule plainly reverses the older, the newest "
+                  "stands, so retire it (python3 tools/learned.py retire <n>, or change that line "
+                  "in profile/CLAUDE.md) and say so in one line; where they only share words, "
+                  "leave it. Only where you truly cannot tell and it changes what is drafted: "
+                  "python3 tools/learned.py ask <older> <newer> puts one question on their page "
+                  "(it refuses while one waits or one was asked lately; then keep both).")
     elif a.cmd == "skip":
         skip(a.said, a.why, via=a.via, output=a.output)
         print(f"learned: not a rule ({a.why}); {len(pending())} reaction(s) still unrecorded")
@@ -1666,6 +1739,10 @@ def main(argv=None) -> int:
         for n in a.n:
             e = retire(n)
             print(f"retired: {e.get('rule')}")
+    elif a.cmd == "ask":
+        why = ask(a.older, a.later)
+        print("learned: asked on their page; nothing else to say about it" if not why else
+              f"learned: not asked: {why}")
     elif a.cmd == "restore":
         for n in a.n:
             e = restore(n)
@@ -1680,7 +1757,9 @@ def main(argv=None) -> int:
         print(f"learned: {len(got)} pair(s) to judge. For each, retire the older only where the "
               "later plainly reverses it (python3 tools/learned.py retire <n>); where they only "
               "share words, or you are not sure, leave both: a rule wrongly put away is worse "
-              "than two kept. Never ask the person. Then python3 tools/learned.py tidy --reviewed"
+              "than two kept. At most one pair, the one that most changes what is drafted and "
+              "you truly cannot call, may go to the person: python3 tools/learned.py ask <older> "
+              "<newer>. Then python3 tools/learned.py tidy --reviewed"
               if got else "learned: nothing to judge")
     elif a.cmd == "tidy":
         got = tidy(dry=a.dry)

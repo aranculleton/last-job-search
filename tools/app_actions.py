@@ -195,9 +195,10 @@ ACTIONS = {
     "setting.set": (("setting",), "person.json, tips.py, networking.py LINKEDIN_PLAN and "
                     "PROFILE_READS",
                     "setting.set"),
-    "needs.answer": (("offer", "fact", "upgrade_ask"),
+    "needs.answer": (("offer", "fact", "upgrade_ask", "rule_ask"),
                      "learned.py decide; the profile at its mark; an update's question "
-                     "(profile_upgrades.py --no, or a chat to set it up)", "needs.unanswer"),
+                     "(profile_upgrades.py --no, or a chat to set it up); learned.py settle",
+                     "needs.unanswer"),
     "needs.unanswer": (("fact",), "the profile: the mark put back", "needs.answer"),
     "setup.answer": (("setup_step",), "profile/setup_answers.json, read by /setup",
                      "setup.restore"),
@@ -2478,6 +2479,12 @@ def _needs_answer(r: Run) -> dict:
             "stage": 0})
         return {"note": "Claude takes you through it next.",
                 "undo": {"action": "work.stop", "target": {"kind": "work", "id": wid}}}
+    if t["kind"] == "rule_ask":
+        import learned
+        choice = r.words("value")
+        if choice not in ("later", "older", "both"):
+            raise Refused("The later one, both, or the earlier one: which?")
+        return {"note": learned.settle(choice, today=r.day.isoformat()), "undo": None}
     if t["kind"] == "offer":
         import learned
         choice = r.words("value")

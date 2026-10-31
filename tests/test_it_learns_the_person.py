@@ -182,7 +182,8 @@ def test_a_contradiction_says_which_entry_each_command_retires(profile, capsys):
     # The entry it may contradict is named with its number and date, and the chat judges it:
     # the person is never asked which stands (the maintainer, 2026-10-31).
     assert "MAY CONTRADICT entry 1 (" in out and "python3 tools/learned.py retire <n>" in out
-    assert "never asking the person" in out and "Ask the person" not in out
+    assert "Judge each yourself" in out and "Ask the person once which stands" not in out
+    assert "python3 tools/learned.py ask <older> <newer> puts one question" in out
     assert "Theirs is this one" not in out
 
 
@@ -256,3 +257,25 @@ def test_a_rule_that_says_never_where_the_older_did_not_is_never_merged_as_a_rep
     learned.record("messages", "a", "Open every InMail with who he is.", today="2026-10-01")
     e = learned.record("messages", "b", "Never open every InMail with who he is.", today="2026-10-02")
     assert e["replaced"] == [] and learned.load()[0]["status"] == "active"
+
+
+def test_one_question_about_the_rules_at_most_and_seldom(profile):
+    """Nearly everything about the rules is decided by itself; where a chat truly cannot tell
+    which of two stands, one question may reach the page, never a second while it waits, and
+    not again within a fortnight (the maintainer, 2026-10-31: "ONE AT MOST AND AGAIN
+    SPARSELY")."""
+    learned.record("messages", "a", "Close with a question about their team.", today="2026-10-01")
+    learned.record("messages", "b", "Close with the work-eligibility line.", today="2026-10-02")
+    learned.record("messages", "c", "Open with the move.", today="2026-10-03")
+    assert learned.ask(1, 2, today="2026-10-05") == ""
+    q = learned.asked()
+    assert q["older_rule"]["said"] == "a" and q["later_rule"]["said"] == "b"
+    assert "already waiting" in learned.ask(1, 3, today="2026-10-05")
+    assert learned.settle("later", today="2026-10-06") == "The newer rule stands."
+    assert learned.load()[0]["status"] == "retired" and learned.load()[1]["status"] == "active"
+    assert learned.asked() is None
+    assert "asked on 2026-10-05" in learned.ask(2, 3, today="2026-10-10")
+    assert learned.ask(2, 3, today="2026-10-20") == ""
+    assert learned.settle("both") == "Both rules stand."
+    assert [r["status"] for r in learned.load()] == ["retired", "active", "active"]
+    assert "not two rules in force" in learned.ask(1, 2, today="2026-11-30")
