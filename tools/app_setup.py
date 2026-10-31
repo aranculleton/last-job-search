@@ -735,8 +735,27 @@ def updates_section(today: dt.date, targets: dict) -> dict:
                     "needs": by[i].needs} for i in listed if i in by]
     except Exception:  # noqa: BLE001
         pending = []
+    # The whole history, for anyone who wants more than the last few (the maintainer,
+    # 2026-10-31): the app's own changelog, at the address the sync takes updates from.
+    try:
+        import sync_app
+        base = sync_app.app_url().rstrip("/")
+        changelog = base + "/blob/master/CHANGELOG.md" if base.startswith("https://github.com/") else ""
+    except Exception:  # noqa: BLE001  no address: no link
+        changelog = ""
+    # Changes merged since that release (CHANGELOG's [Unreleased] has a line): a copy that
+    # follows master runs them, so "version 4.5.1" alone would undersell it.
+    try:
+        import release
+        with open(release.CHANGELOG, encoding="utf-8") as fh:
+            text = fh.read()
+        m = re.search(r"^## \[Unreleased\][^\n]*\n(.*?)(?=^## \[)", text, re.M | re.S)
+        since = bool(m and re.search(r"^- ", m.group(1), re.M))
+    except Exception:  # noqa: BLE001  no changelog: nothing said
+        since = False
     return {"version": version, "newest": newest, "mode": mode, "waiting": waiting,
-            "changed": changed, "done": done, "pending": pending}
+            "changed": changed, "done": done, "pending": pending, "changelog": changelog,
+            "since": since}
 
 
 def upgrade_questions(targets: dict) -> list:

@@ -73,6 +73,28 @@ DEFAULT_STUB = (
     "be read, reply with one line saying which file and why.")
 
 
+# A task that runs in a cloud chat can land in a chat with no copy of the files: its chat
+# was deleted and the task woke a new, empty one ("Morning brief could not start: no git
+# repo", 2026-10-31, two days of no brief). Its stored prompt says how to get the copy, so it
+# runs in whichever chat it lands in, and moving it (tools/tidy.py) is tidiness, never a fix.
+COPY_MARK = "If this chat has no copy of "
+COPY_LINE = (COPY_MARK + "{repo} (a folder with `" + COMMON + "` in it), get one first: "
+             "add_repo (owner {owner}, repo {name}, access push), clone it as add_repo says, "
+             "and do everything below in that folder. ")
+
+
+def with_copy(text: str, repo: str) -> str:
+    """`text`, a stored prompt, with the line that gets the copy when the chat has none, put
+    after its first sentence. Unchanged without a repo ("owner/name") or with the line in."""
+    if not text or COPY_MARK in text or not re.fullmatch(r"[\w.-]+/[\w.-]+", repo or ""):
+        return text
+    owner, name = repo.split("/", 1)
+    head, sep, rest = text.partition(". ")
+    if not sep:
+        return text
+    return head + sep + COPY_LINE.format(repo=repo, owner=owner, name=name) + rest
+
+
 def setup_of(reg: dict) -> str:
     return reg.get("setup") or ("ops_relay" if "ops_session" in reg else "")
 
@@ -347,8 +369,9 @@ def plan(owner: str, name: str, zone: str = "", now: datetime.datetime | None = 
     starts a new chat with no copy in it). No chat is ever made for it: where this chat's id
     cannot be read, `chat` is empty and the caller asks get_session for it first."""
     d = default(zone)
-    stub_text = DEFAULT_STUB.format(label="morning brief", Label="Morning brief",
-                                    prompt_file=BRIEF_FILE, relay_id="")
+    stub_text = with_copy(DEFAULT_STUB.format(label="morning brief", Label="Morning brief",
+                                              prompt_file=BRIEF_FILE, relay_id=""),
+                          f"{owner}/{name}" if owner and name else "")
     now = now or datetime.datetime.now(datetime.timezone.utc)
     first = (now + datetime.timedelta(minutes=5)).replace(microsecond=0)
     if not chat:

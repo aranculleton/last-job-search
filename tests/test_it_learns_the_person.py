@@ -179,9 +179,11 @@ def test_a_contradiction_says_which_entry_each_command_retires(profile, capsys):
                   "--rule", "open every note with a question about their team",
                   "--applied-to", "networking.py OPENER"])
     out = capsys.readouterr().out
-    assert "CONTRADICTS entry 1" in out and "The new rule is entry 2" in out
-    assert "If the new rule stands: python3 tools/learned.py retire 1 (retires the earlier entry 1" in out
-    assert "If the earlier rule stands: python3 tools/learned.py retire 2 (retires the new entry 2)" in out
+    # The entry it may contradict is named with its number and date, and the chat judges it:
+    # the person is never asked which stands (the maintainer, 2026-10-31).
+    assert "MAY CONTRADICT entry 1 (" in out and "python3 tools/learned.py retire <n>" in out
+    assert "Judge each yourself" in out and "Ask the person once which stands" not in out
+    assert "python3 tools/learned.py ask <older> <newer> puts one question" in out
     assert "Theirs is this one" not in out
 
 
@@ -189,3 +191,91 @@ def test_a_rule_about_which_employers_to_pick_has_its_own_area(profile):
     learned.main(["record", "--area", "targets", "--said", "no more banks this week",
                   "--rule", "pick no new bank employers until next week"])
     assert "no new bank employers" in learned.brief("targets")
+
+
+def test_a_rule_said_again_replaces_the_older_by_itself_and_keeps_what_it_held(profile, capsys):
+    """Rules piled up side by side, said twice or more, while the person was asked which
+    stood (the maintainer, 2026-10-31: "if it can be done in the background and it's not
+    expensive, it's autonomous"). A rule said again retires the older for the newer, with the
+    older's bans and settings carried over, and it can be brought back."""
+    learned.main(["record", "--area", "messages", "--said", "don't name people we both know",
+                  "--rule", "Never name mutual connections in a note.", "--never-say", "we both know",
+                  "--applied-to", "networking.py OPENER"])
+    capsys.readouterr()
+    learned.main(["record", "--area", "messages", "--said", "again: no mutual connections",
+                  "--rule", "Never name mutual connections in a note, ever."])
+    out = capsys.readouterr().out
+    assert "Replaced entry 1 (" in out and "it says the same" in out and "restore 1" in out
+    rows = learned.load()
+    assert rows[0]["status"] == "retired" and rows[0]["retired_why"] == "it says the same"
+    assert rows[1]["never_say"] == ["we both know"] and rows[1]["applied_to"] == ["networking.py OPENER"]
+    learned.main(["restore", "1"])
+    assert learned.load()[0]["status"] == "active"
+
+
+def test_a_rule_that_only_narrows_another_or_adds_to_a_list_is_its_own_rule(profile):
+    """Words alone took "Adobe is out" for undoing "KPMG is out", and a rule that says "no
+    odd phrasing ('the route I'm on')" for one that uses it (a dry run on 195 real rules,
+    2026-10-31). Neither is a contradiction, and neither is a repeat."""
+    learned.record("targets", "KPMG is out", "KPMG is out as an employer.",
+                   applied_to=["profile/search.py BAR_DECLINED"], today="2026-10-20")
+    e = learned.record("targets", "Adobe is out", "Adobe is out as an employer.",
+                       applied_to=["profile/search.py BAR_DECLINED"], today="2026-10-21")
+    assert e["conflicts"] == [] and e["replaced"] == []
+    learned.record("voice", "odd phrase", "never \"the route I'm on\"", never_say=["the route I'm on"],
+                   today="2026-10-22")
+    e = learned.record("messages", "plain", "Lead with his own work; no odd phrasing ('the route I'm on').",
+                       today="2026-10-23")
+    assert e["conflicts"] == []
+    narrow = learned.record("messages", "warm close", "Close warmly.", today="2026-10-24")
+    wider = learned.record("messages", "warm close, about their team",
+                           "Close warmly with a plain ask about their team and their work.", today="2026-10-25")
+    assert narrow["replaced"] == [] and wider["replaced"] == []
+
+
+def test_the_pile_made_before_is_tidied_once_and_contradictions_are_listed_to_judge(profile, capsys):
+    learned.record("messages", "a", "Never name mutual connections in a note.", today="2026-10-01")
+    rows = learned.load()
+    rows.append(dict(rows[0], date="2026-10-05", said="b"))   # made before record merged repeats
+    learned.save_entries(rows)
+    assert [d["n"] for d in learned.tidy(dry=True)] == [1]
+    assert learned.load()[0]["status"] == "active", "a dry run writes nothing"
+    assert [d["for"] for d in learned.tidy()] == [2] and learned.tidy() == []
+    learned.record("voice", "x", "Open with the move.", today="2026-10-06")
+    learned.record("voice", "y", "never \"the move\"", never_say=["the move"], today="2026-10-07")
+    got = learned.clashes()
+    assert [(d["n"], d["later"]) for d in got] == [(3, 4)]
+    assert learned.load()[2]["status"] == "active", "a contradiction is judged, never retired by words"
+    assert learned.reviewed() == ""
+    learned.main(["tidy", "--reviewed"])
+    assert learned.reviewed()
+
+
+def test_a_rule_that_says_never_where_the_older_did_not_is_never_merged_as_a_repeat(profile):
+    """Careful (the maintainer, 2026-10-31): the same words with a "never" may be the
+    opposite rule. Code never puts one away for that; the chat recording it judges."""
+    learned.record("messages", "a", "Open every InMail with who he is.", today="2026-10-01")
+    e = learned.record("messages", "b", "Never open every InMail with who he is.", today="2026-10-02")
+    assert e["replaced"] == [] and learned.load()[0]["status"] == "active"
+
+
+def test_one_question_about_the_rules_at_most_and_seldom(profile):
+    """Nearly everything about the rules is decided by itself; where a chat truly cannot tell
+    which of two stands, one question may reach the page, never a second while it waits, and
+    not again within a fortnight (the maintainer, 2026-10-31: one at most, and
+    sparsely)."""
+    learned.record("messages", "a", "Close with a question about their team.", today="2026-10-01")
+    learned.record("messages", "b", "Close with the work-eligibility line.", today="2026-10-02")
+    learned.record("messages", "c", "Open with the move.", today="2026-10-03")
+    assert learned.ask(1, 2, today="2026-10-05") == ""
+    q = learned.asked()
+    assert q["older_rule"]["said"] == "a" and q["later_rule"]["said"] == "b"
+    assert "already waiting" in learned.ask(1, 3, today="2026-10-05")
+    assert learned.settle("later", today="2026-10-06") == "The newer rule stands."
+    assert learned.load()[0]["status"] == "retired" and learned.load()[1]["status"] == "active"
+    assert learned.asked() is None
+    assert "asked on 2026-10-05" in learned.ask(2, 3, today="2026-10-10")
+    assert learned.ask(2, 3, today="2026-10-20") == ""
+    assert learned.settle("both") == "Both rules stand."
+    assert [r["status"] for r in learned.load()] == ["retired", "active", "active"]
+    assert "not two rules in force" in learned.ask(1, 2, today="2026-11-30")

@@ -523,3 +523,43 @@ def test_an_update_that_changes_stored_records_waits_for_running_work_and_goes_f
     assert page_db.next_item(db, "cloud", now) is None          # the talk starts after it
     db["work"]["u2"]["data"]["status"] = "done"
     assert page_db.next_item(db, "cloud", now)["work"] == "t1"
+
+
+def test_an_interview_with_no_date_sent_counts_in_the_last_30_days(search):
+    """An application at interview with no date sent was left out of the 30 days, and the
+    Brief said "1 interview" beside an Interviews tab of 2 (the maintainer, 2026-10-31)."""
+    before = search.model()["done"]["recent"]["counts"]["interviews"]
+    path = os.path.join(search.state, "job_search_tracker.csv")
+    with open(path, encoding="utf-8", newline="") as fh:
+        rows = list(csv.DictReader(fh))
+        cols = list(rows[0].keys())
+    rows.append(dict({k: "" for k in cols}, company="Ellerwick Trust", role="Data Analyst", status="interview"))
+    with open(path, "w", encoding="utf-8", newline="") as fh:
+        w = csv.DictWriter(fh, fieldnames=cols)
+        w.writeheader()
+        w.writerows(rows)
+    done = search.model()["done"]
+    assert done["recent"]["counts"]["interviews"] == before + 1
+    assert done["recent"]["counts"]["applied"] <= done["counts"]["applied"], "a date sent is still needed to count as sent"
+
+
+def test_the_one_rules_question_reaches_the_page_and_its_answer_puts_one_rule_away(search):
+    """Where a chat cannot tell which of two rules stands, one question goes on the page and
+    the person's tap settles it, with no chat (the maintainer, 2026-10-31)."""
+    env = dict(os.environ, LJS_PROFILE=search.profile, LJS_STATE=search.state)
+    tool = os.path.join(ROOT, "tools", "learned.py")
+    run = lambda *a: subprocess.run([sys.executable, tool, *a], env=env, check=True, capture_output=True,
+                                    encoding="utf-8", timeout=60).stdout
+    before = len(json.load(open(os.path.join(search.profile, "learned.json"), encoding="utf-8")).get("entries") or []) \
+        if os.path.exists(os.path.join(search.profile, "learned.json")) else 0
+    run("record", "--area", "messages", "--said", "close on their team", "--rule", "Close with a question about their team.")
+    run("record", "--area", "messages", "--said", "close on eligibility", "--rule", "Close with the work-eligibility line.")
+    assert "asked on their page" in run("ask", str(before + 1), str(before + 2))
+    qid = f"q-rule-{before + 1}-{before + 2}"
+    card = search.item(qid)
+    assert card["title"].endswith("Which stands?") and [o["value"] for o in card["options"]] == ["later", "both", "older"]
+    a = search.act("needs.answer", qid, value={"value": "later"})
+    assert search.apply()["ok"] == [a]
+    rows = json.load(open(os.path.join(search.profile, "learned.json"), encoding="utf-8"))["entries"]
+    assert rows[before]["status"] == "retired" and rows[before + 1]["status"] == "active"
+    assert not [x for x in search.model()["needs_you"] if x["id"] == qid], "asked once, then gone"
