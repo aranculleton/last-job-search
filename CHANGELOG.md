@@ -53,6 +53,8 @@ make sense to somebody whose repo just received it.
 ### Changed
 
 - **What's new says which version you are on** and links to every change.
+- **Your resume for no job in particular is one tap from Jobs**, and when you have none yet
+  its card offers one. A role you apply for still gets its own, fitted to it.
 - **"How updates arrive" is gone from Settings.** Holding updates back only kept fixes from
   you. If you hold them already, the setting stays until you let them in; you can still ask
   Claude in a chat to hold them.

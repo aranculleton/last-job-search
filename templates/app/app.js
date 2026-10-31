@@ -3205,6 +3205,7 @@
     const sp = searching ? progress(searching[1]) : null;
     let small = searching ? [(sp.over || sp.lapsed ? "Searching now. Claude is on it." : "Searching now, about " + plural(Math.max(1, Math.round(sp.leftS / 60)), "minute", "minutes") + " left.") + " · ", addJob] :
       jb.made_at ? ["Searched " + ago(jb.made_at) + " · ", addJob] : [addJob];
+    small = small.concat([" · ", resumeLink()]);
     if (jb.met === false && rows.length && !searching) small = ["Fewer good matches than usual. "].concat(small || []);
     let sum;
     if (!rows.length && !jb.made_at) sum = "No search yet.";
@@ -5375,7 +5376,7 @@
     const nudge = live.filter((a) => appNudge(a)).length;
     const sum = live.length ? nWord(live.length, "applied", "applied") + (ivs ? ", " + ivs + " with an interview booked" : "") + (nudge ? ", " + nudge + " due a follow-up" : "") + "."
       : "Nothing applied yet. Roles you apply to move here.";
-    const wrap = h("section", {class: "sec", "aria-labelledby": "h-jobs" + (where ? "-" + where : "")}, screenHead("jobs", "Jobs", sum, null, where));
+    const wrap = h("section", {class: "sec", "aria-labelledby": "h-jobs" + (where ? "-" + where : "")}, screenHead("jobs", "Jobs", sum, [resumeLink()], where));
     const lo = {items, name: "applications", one: "application", many: "applications", live: appLive, remote: "applications",
       fold: (a) => !appLive(a) && daysSince(a.last || a.applied_on) !== null && daysSince(a.last || a.applied_on) > 30, foldLabel: (k) => k + " earlier, finished",
       sort: (a, b) => {
@@ -5873,14 +5874,30 @@
       profileBusy());
   }
 
+  // The general resume from every Jobs tab: one quiet link, after what Jobs is for (finding
+  // roles and a resume for each), never a button beside Find jobs.
+  function resumeLink() {
+    return h("button", {type: "button", class: "btn link", "data-k": "jobs-resume", onclick: () => { setPref("drafts:view", "apps"); go("drafts", {focus: true, item: txt(obj(M().resume).id) || "resume-general"}); }}, "Your " + noun());
+  }
   // G12. The resume for when nobody named a role: download it, or make a fresh one (model.resume).
   function generalResumeCard() {
     const r = obj(M().resume);
     const f = obj(r.file);
     const old = !Object.keys(f).length && (txt(r.asset) || txt(r.name));
     const file = old ? {kind: "resume", name: txt(r.name) || txt(r.file).split("/").pop(), asset: r.asset, path: r.file} : {kind: "resume", name: txt(f.name), asset: f.asset, path: f.path, pages: f.pages};
-    if (!txt(file.name) && !txt(file.asset)) return null;
     const w = obj(r.work);
+    // None made yet: the card offers one, so a resume for no job in particular is never
+    // something a person has to know to ask for (the maintainer, 2026-10-31: "people will
+    // want a general way to generate a resume and its hidden atm").
+    if (!txt(file.name) && !txt(file.asset)) {
+      if (settingUp()) return null;
+      return card("article", {class: "card app quiet-card", "aria-labelledby": "gen-resume", "data-item": txt(r.id) || "resume-general"},
+        h("div", {class: "job-top"}, h("h3", {id: "gen-resume", class: "card-title"}, "Your " + noun())),
+        // Never instead of one fitted to each role: the card says where that one comes from.
+        h("p", {class: "meta"}, "One from your profile, to send when a job doesn't need its own. A role you apply for gets one fitted to it: Draft, on its card."),
+        h("div", {class: "card-actions"}, btn("Make one", () => requestWork([{id: txt(w.id) || "general_resume~" + todayIso(), kind: txt(w.kind) || "general_resume", title: "Your " + noun(), args: obj(w.args), redo: true}]), {kind: "secondary", small: true, key: "gen-make"})),
+        h("p", {class: "cost"}, costNode(costLine(txt(w.kind) || "general_resume"))));
+    }
     const g = obj(r.get);
     // One thing to do, said plainly (the maintainer, 2026-10-30: "this is confusing what am
     // i meant to do with this?"): made before the profile changed, the first button makes a

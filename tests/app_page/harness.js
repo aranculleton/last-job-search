@@ -1192,6 +1192,26 @@ S.room = async (a) => {
   return r;
 };
 
+// A resume for no job in particular, from every Jobs tab (the maintainer, 2026-10-31: "it's
+// hidden atm"): the header's quiet link opens Drafts at its card, and with none made yet the
+// card offers one.
+S.general_resume = async (a) => {
+  const o = await open({html: a.html, hash: "jobs", fake: {canSend: "available"}});
+  const {page} = o;
+  const r = {link: await page.evaluate(() => (document.querySelector('#main [data-k="jobs-resume"]') || {}).textContent || "")};
+  await page.locator('#main [data-k="jobs-resume"]').click();
+  await turn(page, 6);
+  r.hash = await page.evaluate(() => location.hash);
+  r.card = await page.evaluate(() => (document.querySelector('#main [data-item="resume-general"], #main #gen-resume') || {}).textContent || "");
+  const make = page.locator('#main [data-k="gen-make"]');
+  r.make = await make.count();
+  if (r.make) { await make.click(); await turn(page, 6); }
+  r.work = o.store.list("work/").map((k) => o.store.get(k)).filter((w) => w.kind === "general_resume").map((w) => w.title);
+  r.errors = o.errors;
+  await o.ctx.close();
+  return r;
+};
+
 // The maintainer's own page on 2026-10-31, opened from the sidebar a day after any chat ran:
 // Refresh only reloaded the same data, the work pill did nothing on the Brief, a job started a
 // minute ago said "29 hours so far", answered work said "Not picked up yet", the chart's bars

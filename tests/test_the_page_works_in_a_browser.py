@@ -1439,3 +1439,20 @@ def test_whats_new_says_the_version_and_links_every_change_and_updates_are_not_h
     assert len(h["found"]['[data-k="set-sum:app_updates"]']) == 1, h["found"]
     assert r["found"]['[data-k="version"]'] == ["You're on version 4.5.1, with fixes made since."], r["found"]
     assert r["found"]['a[data-k="changelog"]'] and r["found"]['a[data-k="changelog"]'][0].startswith("See every change")
+
+
+def test_a_resume_for_no_job_in_particular_is_one_tap_from_jobs_and_offered_when_there_is_none(run, pages, tmp_path):
+    """It sat at the foot of Drafts and in Your profile, and did not show at all until one had
+    been made (the maintainer, 2026-10-31: "people will want a general way to generate a
+    resume and its hidden atm"). Drafting one for each application stays what Jobs is for."""
+    r = run("general_resume", html=pages["sample"])
+    _clean(r)
+    assert r["link"] == "Your CV", r
+    assert r["hash"].startswith("#drafts") and "Your CV" in r["card"], r
+    assert r["make"] == 0 and r["work"] == [], "with a CV made, the card offers it, never a second"
+    none = _sample()
+    none["resume"] = {}
+    r = run("general_resume", html=_write(tmp_path, "no_resume", none))
+    _clean(r)
+    assert "One from your profile" in r["card"] and r["make"] == 1, r
+    assert r["work"] == ["Your CV"], r
