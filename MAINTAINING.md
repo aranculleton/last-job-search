@@ -179,9 +179,15 @@ written for them, and takes it when they say "update" (`sync_app.py --update`). 
 fix reaches them the same way: offered, its headline saying plainly what it protects, and
 never forced.
 
-**When**: the maintainer says so, usually in the chat while working ("release it"). Never
-inside the hours their own scheduled tasks run. Until they say, changes wait in
-`[Unreleased]` on master, where only their own copy takes them.
+**When**: the maintainer says so, usually in the chat while working ("release it"), or at
+once, without being told, when a fix stops something working for people other than the
+maintainer (their brief, a search, a page, a document). Never inside the hours their own
+scheduled tasks run. Everything else merges to master as soon as its fast checks are green,
+so the maintainer's own copy takes it the same day, and waits in `[Unreleased]` for the
+next release. Every release costs the same however small it is (the review, the
+rehearsals, the Safari, Firefox and Windows runs and the chat they wake, the handover and a
+fresh chat), so a fix only the maintainer needs never makes one on its own (the
+maintainer, 2026-10-31, after 4.5.1 shipped a fix for a set-up only they still had).
 
 **The number is the session's call, never a question for the maintainer**, and it is
 semantic versioning as anyone reading a changelog expects it (the maintainer, 2026-10-19).
@@ -270,7 +276,7 @@ You are the builder for last-job-search, the public app at github.com/arancullet
 Before anything else, read MAINTAINING.md ("Developer rules", "Before pushing", "Releasing"), docs/NEXT_BUILDER.md (what the last release left you), and templates/app/DESIGN.md before you touch the page.
 
 How we work:
-- Build what my notes below ask, all of it into [Unreleased] on one branch, with tests. Nothing is released until I say "release it"; that means merge and publish, under 15 minutes, as MAINTAINING.md "Releasing" says: only the fast checks block it.
+- Build what my notes below ask, all of it into [Unreleased], with tests, and merge to master once the fast checks are green: my copy takes master the same day. Nothing is released until I say "release it", except at once when a fix stops something working for people other than me; a release means merge and publish, under 15 minutes, as MAINTAINING.md "Releasing" says: only the fast checks block it.
 - Cheap: every step re-reads this chat, so take few steps. Never poll; GitHub wakes you. Read only the failing lines. The whole suite runs on GitHub for free, never by hand. Run tools/push_gate.sh before every push, batch your commits, and push once per round of fixes.
 - Nothing private and no real person's name in the app, ever; the gate passes before any push.
 - Talk to me in plain words: one recommendation, never a question a sensible default answers.

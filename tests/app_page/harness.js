@@ -1963,6 +1963,18 @@ S.motion = async (a) => {
   for (const m of ["reduce", "no-preference"]) {
     const o = await open({html: a.html, reducedMotion: m, hash: "work", seed: {"work/search~1": runningDoc({asked_at: new Date().toISOString(), stage_at: new Date().toISOString()})}});
     r[m] = await o.page.evaluate(() => { const s = document.querySelector(".work-card .spin"); const f = document.querySelector(".work-card .fill"); return {spin: s ? getComputedStyle(s).animationName : null, fill: f ? getComputedStyle(f).transitionDuration : null}; });
+    // A section just drawn, the pointer away: no control or card fades (Safari faded each one
+    // in from the text colour, 2026-10-31); one under the pointer still does.
+    await o.page.mouse.move(1, 1);
+    await goto(o.page, "jobs");
+    await o.page.waitForSelector("#main .card .btn", {timeout: 5000}).catch(() => null);
+    r[m].drawn = await o.page.evaluate(() => {
+      const b = document.querySelector("#main .card .btn"); const c = document.querySelector("#main .card");
+      return {btn: b ? getComputedStyle(b).transitionDuration : null, card: c ? getComputedStyle(c).transitionDuration : null,
+        fading: [...document.querySelectorAll("#main .btn, #main .chip, #main .card")].reduce((n, e) => n + e.getAnimations().filter((x) => x.transitionProperty).length, 0)};
+    });
+    const hb = o.page.locator("#main .card .btn").first();
+    if (await hb.count()) { await hb.hover(); await turn(o.page, 2); r[m].hovered = await hb.evaluate((b) => getComputedStyle(b).transitionDuration); }
     await o.ctx.close();
   }
   return r;

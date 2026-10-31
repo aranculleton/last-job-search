@@ -7,9 +7,12 @@ MAINTAINING.md first; this is only what 4.5 and 4.5.1 left.
 
 - **Decide, never ask.** Every design, tooling and gate question is the builder's to settle
   (MAINTAINING.md, "The builder decides"). Make the call, do it, say it in one line.
-- **Everything the maintainer sends during a build goes into the same release**, never a
-  later one. When the work is done and green, release it without waiting to be told twice,
-  and prepare the release (CHANGELOG, this file, the rehearsals) while the checks run.
+- **Merge to master when green; release only when the maintainer says, or at once when a
+  fix stops something working for people other than them** (the maintainer, 2026-10-31;
+  MAINTAINING.md, "Releasing", "When"). Their copy follows master, so a fix only they need
+  reaches them without a release, and every release costs the same however small. At
+  "release it", everything sent since the last one goes into it, prepared (CHANGELOG, this
+  file, the rehearsals) while the checks run.
 - **Keep it cheap**: few steps, no polling, the whole suite on GitHub only.
 - The push gate scans every patch and the whole tree. Its denylist is built by the
   maintainer's copy's own `tools/build_app.py`, cached 12 hours in `/tmp/ljs-push-gate`.
@@ -79,16 +82,14 @@ MAINTAINING.md first; this is only what 4.5 and 4.5.1 left.
   lines the app prints, never with real sessions.
 - The pin hand-off ("Pin my job search page to my sidebar." to the Artifact `pin` action):
   tested up to the hand-off.
-- Safari's engine fails the page's contrast checks on 4.5.0 and 4.5.1 alike (8 tests in
-  `test_the_page_works_in_a_browser.py`): "contrast 3.69 < 4.5" on small secondary buttons
-  ("Copy", "See the draft", a navlink button), light and dark. No palette pair is that low
-  (ink on raised is 5.96 light and 11.51 dark, hovered 5.25 and 7.93), so the measure is
-  likely wrong in WebKit rather than the colours: look at the button being read mid-fade
-  (`opacityOf` in `tests/app_page/harness.js` multiplies opacity) or a colour string the
-  harness's `rgba()` cannot parse. Not reproduced: WebKit is not installed here.
-- Safari's and Firefox's engines were not installed in the build container: the page
-  changes of 4.5 and 4.5.1 (the Brief's numbers panel) ran in Chromium only. Everywhere
-  runs them on each release.
+- Fixed after 4.5.1, in `[Unreleased]`: Safari's engine failed the page's contrast checks
+  (8 tests) because 4.5.0 put colour fades on every control and card, and WebKit faded each
+  one in from the text colour as it was drawn. Fades now apply only under the pointer; the
+  motion test checks a just-drawn section has none, in every engine.
+- Safari's and Firefox's engines install in the build container with the Playwright that is
+  already there: `node "$(npm root -g)/playwright/cli.js" install webkit firefox`, then the
+  same with `install-deps webkit firefox`. Chromium is untouched. Run page changes in all
+  three before pushing (`LJS_PW_ENGINE=webkit` and `firefox`).
 - From 4.4 and still open: the pre-approved writes in a chat that was asked before, big jobs
   in chats of their own side by side, the page reading LinkedIn in the desktop app's browser
   (the whole flow is simulated), the daily tidy-up's session calls, the brief's bell from

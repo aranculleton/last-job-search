@@ -1355,13 +1355,15 @@ body.has-fab .shell { padding-bottom: calc(var(--tabs-h) + env(safe-area-inset-b
 /* A light finish (2026-10-30: "slightly more polished, don't go overboard"): cards lift a
    touch under a pointer, buttons answer a press, and nothing moves for someone who asked
    their device for less motion. */
-.btn, .chip, .seg-opt { transition: background-color 0.15s ease, border-color 0.15s ease, box-shadow 0.15s ease, transform 0.08s ease; }
+/* A control fades only under the pointer. Declared on every control, Safari faded each one
+   drawn from the text colour to its own (a dark flash on every button a section showed, and
+   text unreadable for 0.15s: the Safari contrast checks of 4.5.0 and 4.5.1, 2026-10-31). */
 .btn:active:not(:disabled) { transform: translateY(1px); }
 @media (hover: hover) and (pointer: fine) {
-  .card, .work-card, .bpanel { transition: box-shadow 0.18s ease, border-color 0.18s ease; }
-  .card:hover, .work-card:hover, .bpanel:hover { box-shadow: var(--shadow); }
+  .btn:hover, .chip:hover, .seg-opt:hover { transition: background-color 0.15s ease, border-color 0.15s ease, box-shadow 0.15s ease, transform 0.08s ease; }
+  .card:hover, .work-card:hover, .bpanel:hover { box-shadow: var(--shadow); transition: box-shadow 0.18s ease, border-color 0.18s ease; }
 }
 @media (prefers-reduced-motion: reduce) {
-  .btn, .chip, .seg-opt, .card, .work-card, .bpanel { transition: none; }
+  .btn, .chip, .seg-opt, .card, .work-card, .bpanel, .btn:hover, .chip:hover, .seg-opt:hover, .card:hover, .work-card:hover, .bpanel:hover { transition: none; }
   .btn:active:not(:disabled) { transform: none; }
 }
