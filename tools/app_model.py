@@ -724,6 +724,26 @@ def _profile_questions(ctx: Ctx, targets: dict) -> list:
             targets[nid] = {"kind": "offer", "n": n, "rev": item["rev"]}
     except Exception:  # noqa: BLE001  no learned.json: no choice waiting
         pass
+    # The one question about the rules they taught, when a chat could not tell which of two
+    # stands (learned.ask): one at most, and seldom.
+    try:
+        import learned
+        q = learned.asked()
+        if q:
+            o, l = q["older_rule"], q["later_rule"]
+            nid = f"q-rule-{q['older']}-{q['later']}"
+            item = {"id": nid, "kind": "question",
+                    "title": "Two things you told Claude may not fit together. Which stands?",
+                    "body": f"Earlier ({o.get('date')}): {o.get('rule')} Later ({l.get('date')}): "
+                            f"{l.get('rule')}",
+                    "options": [{"label": "The later one", "action": "needs.answer", "value": "later"},
+                                {"label": "Both", "action": "needs.answer", "value": "both"},
+                                {"label": "The earlier one", "action": "needs.answer", "value": "older"}],
+                    "about": {}, "rev": rev_of(nid, q.get("asked"))}
+            out.append(item)
+            targets[nid] = {"kind": "rule_ask", "rev": item["rev"]}
+    except Exception:  # noqa: BLE001  no learned.json: nothing asked
+        pass
     try:
         import profile_upgrades
         found = profile_upgrades.unconfirmed()
@@ -2940,8 +2960,12 @@ def _done(ctx: Ctx, targets: dict) -> dict:
     # the people who answered in them.
     since = ctx.today - dt.timedelta(days=30)
     recent = [r for r, d in sent if d >= since]
-    r_iv = sum(1 for r in recent if _status(r) in throttle.REACHED_INTERVIEW)
-    r_of = sum(1 for r in recent if _status(r) in offers)
+    # An application with no date sent that is at interview or offer now is live, so it
+    # counts in the window too: one with no date was left out, and the Brief said "1
+    # interview" beside an Interviews tab of 2 (the maintainer, 2026-10-31).
+    undated = [r for r in rows if not _date(throttle.applied_on(r))]
+    r_iv = sum(1 for r in recent + undated if _status(r) in throttle.REACHED_INTERVIEW)
+    r_of = sum(1 for r in recent + undated if _status(r) in offers)
     window = {"days": 30, "counts": {"applied": len(recent), "interviews": r_iv, "offers": r_of,
                                      "replies": sum(1 for d in replied.values() if d and d >= since)},
               "funnel": [{"stage": "applied", "n": len(recent)}, {"stage": "interview", "n": r_iv},

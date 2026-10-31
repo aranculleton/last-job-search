@@ -242,7 +242,7 @@ def plan(chats: list[dict], triggers: list[dict], info: dict, reg: dict, listene
                 gone = not _repo_of(info[woke])
         if live and live.get("enabled") and (home != ops or gone):
             adopt = home
-            stub = routines.stub(reg, brief["key"], own_chat=True)
+            stub = routines.with_copy(routines.stub(reg, brief["key"], own_chat=True), repo)
             out["brief"] = [
                 {"tool": "create_trigger", "args": {
                     "name": routines.BRIEF_NAME, "persistent_session_id": helper,
@@ -318,6 +318,18 @@ def plan(chats: list[dict], triggers: list[dict], info: dict, reg: dict, listene
     out["ask"] = list(dict.fromkeys(out["ask"]))
     if out["ask"]:
         out["brief"] = []                             # decided once every chat is read
+    # A brief that stays where it is, stored before its prompt said how to get a copy of the
+    # files, is given that line, so it runs in whichever chat it lands in (routines.with_copy;
+    # two days of no brief, 2026-10-31). Once: the line it gets is how it is found next time.
+    if not out["brief"] and not out["ask"] and brief.get("trigger_id") and not reg.get("pause"):
+        live = next((t for t in triggers if t.get("id") == brief["trigger_id"]), None)
+        prompt = str((live or {}).get("prompt") or "")
+        fixed = routines.with_copy(prompt, repo)
+        if live and live.get("enabled") and routines._is_brief_prompt(prompt) and fixed != prompt:
+            out["brief"] = [{"tool": "update_trigger", "args": {"trigger_id": brief["trigger_id"],
+                                                                "prompt": fixed},
+                             "why": "the brief runs in any chat it lands in, getting the files "
+                                    "first where they are missing"}]
     return out
 
 
@@ -387,9 +399,11 @@ def run_plan(a) -> int:
             print(f"brief {i}: {c['tool']} {json.dumps(c['args'], ensure_ascii=False)} ({c['why']})")
         else:
             print(f"brief {i}: {c['run']} ({c['why']})")
-    if got["brief"]:
+    if len(got["brief"]) > 1:
         print("brief: make these in order and stop at the first that fails; archive the old "
               "brief's chat only once all three are made")
+    elif got["brief"]:
+        print("brief: make this call, then carry on")
     for c in got["archive"]:
         print(f"archive {c['id']}: {c['title']} ({c['why']})")
     if got["archive"]:

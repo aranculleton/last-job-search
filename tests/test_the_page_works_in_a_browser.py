@@ -536,7 +536,7 @@ def test_settings_save_once_the_person_settles_and_show_the_new_value(run, pages
     _clean(r)
     assert r["early"] == 0, "arrowing through a group does not save on the way"
     got = {(a["item"], json.dumps(a["value"])) for a in r["actions"]}
-    assert ("setting-app_updates", '"when_asked"') in got
+    assert ("setting-suggestions", '"urgent"') in got
     assert ("setting-computer_listen", "true") in got
     assert ("setting-brief_days", '"Tuesday"') in got
     assert r["checked"] is True
@@ -1379,3 +1379,80 @@ def test_the_numbers_on_the_brief_are_never_cut_off(run, pages):
                 inner='[data-k="bp-funnel"]', box=".bp-numbers", tap='[data-k="bp-funnel"]')
         _clean(r)
         assert r["closed"] and r["opened"], (vp, r)
+
+
+def test_the_page_opened_with_no_chat_running_brings_itself_up_to_date_and_says_what_is_going_on(run, pages):
+    """The maintainer opened their page from the sidebar a day after any chat ran (2026-10-31):
+    Refresh reloaded the same data so it went on saying "yesterday", the work pill did nothing
+    on the Brief, a job started a minute ago said "about 29 hours so far", work they had just
+    answered said "Not picked up yet · Asked yesterday", the chart's bars said nothing to a
+    pointer, and News was not in points like Today."""
+    r = run("fixes_1031", html=pages["sample"])
+    _clean(r)
+    # Refresh on old data asks Claude for today's data, inside the tap, and says so.
+    assert "Search data from" in r["pulse"] and "Refresh" in r["pulse"], r["pulse"]
+    assert len(r["work"]) == 1, r["work"]
+    w = r["work"][0]
+    assert w["args"] == {"refresh": True} and w["status"] == "queued" and w["title"] == "Bringing your page up to date"
+    assert [s["name"] for s in w["stages"]] == ["Checking for anything new", "Bringing your page up to date"]
+    assert any(w["id"].split("/", 1)[1] in t for t in r["rings"]), r["rings"]
+    assert "bring your page up to date" in r["pulseAfter"], r["pulseAfter"]
+    # Fresh data has nothing newer: a reload, and nobody is asked.
+    assert r["freshWork"] == 0
+    # The pill on the Brief opens Claude's work.
+    assert r["sheet"] is True and "Claude's work" in r["sheetText"]
+    # Time run counts from the start, not the ask a day before.
+    assert "29 hours" not in r["sheetText"] and "1 min so far" in r["sheetText"], r["sheetText"]
+    # Each week of the chart says its count to a pointer and a tap; leaving puts the line back.
+    assert r["capBefore"].startswith("Applications a week")
+    assert re.match(r"Week of .+: \d+ applications?\.$", r["capHover"]), r["capHover"]
+    assert r["capLeft"] == r["capBefore"]
+    assert re.match(r"Week of .+: \d+ applications?\.$", r["capTap"]) and r["capTap"] != r["capHover"]
+    assert r["newsPoints"] >= 1
+    # Answered work says the answer is with Claude, counted from the answer; no time left is
+    # given for work that has not started.
+    assert "Your answer is with Claude." in r["answered"] and "Answered" in r["answered"], r["answered"]
+    assert "Not picked up yet" not in r["answered"] and "Asked yesterday" not in r["answered"]
+    assert "minutes left" not in r["summary"], r["summary"]
+    # Waiting on a helper chat that is starting: said, never "Not picked up yet".
+    assert "helper is starting up" in r["starting"] and "Not picked up yet" not in r["starting"], r["starting"]
+
+
+def test_whats_new_says_the_version_and_links_every_change_and_updates_are_not_held_by_a_setting(run, pages, tmp_path):
+    m = _sample()
+    m["updates"] = {"version": "4.5.1", "newest": "4.5.1", "mode": "auto", "since": True, "waiting": None,
+                    "changelog": "https://github.com/example-owner/last-job-search/blob/master/CHANGELOG.md",
+                    "changed": [{"version": "4.5.1", "date": "2026-10-31", "lines": ["Refresh brings your page up to date."]}],
+                    "done": [], "pending": []}
+    page = _write(tmp_path, "updates", m)
+    r = run("look", html=page, hash="settings", sels=['[data-k="version"]', 'a[data-k="changelog"]', '[data-k="set-sum:app_updates"]', '[data-k="set-sum:suggestions"]'])
+    _clean(r)
+    # Holding updates kept fixes from people and served nobody (2026-10-31): gone from Settings
+    # for everyone on the usual; someone already holding them still sees it, to let them in.
+    assert r["found"]['[data-k="set-sum:app_updates"]'] == [] and r["found"]['[data-k="set-sum:suggestions"]'], r["found"]
+    held = _sample()
+    for st in held["settings"]:
+        if st["key"] == "app_updates":
+            st["value"] = "when_asked"
+    h = run("look", html=_write(tmp_path, "held_updates", held), hash="settings", sels=['[data-k="set-sum:app_updates"]'])
+    _clean(h)
+    assert len(h["found"]['[data-k="set-sum:app_updates"]']) == 1, h["found"]
+    assert r["found"]['[data-k="version"]'] == ["You're on version 4.5.1, with fixes made since."], r["found"]
+    assert r["found"]['a[data-k="changelog"]'] and r["found"]['a[data-k="changelog"]'][0].startswith("See every change")
+
+
+def test_a_resume_for_no_job_in_particular_is_one_tap_from_jobs_and_offered_when_there_is_none(run, pages, tmp_path):
+    """It sat at the foot of Drafts and in Your profile, and did not show at all until one had
+    been made (the maintainer, 2026-10-31: "people will want a general way to generate a
+    resume and its hidden atm"). Drafting one for each application stays what Jobs is for."""
+    r = run("general_resume", html=pages["sample"])
+    _clean(r)
+    assert r["link"] == "Your CV", r
+    assert r["hash"].startswith("#drafts") and "Your CV" in r["card"], r
+    assert r["make"] == 0 and r["work"] == [], "with a CV made, the card offers it, never a second"
+    none = _sample()
+    none["resume"] = {}
+    r = run("general_resume", html=_write(tmp_path, "no_resume", none))
+    _clean(r)
+    assert "One from your profile" in r["card"] and r["make"] == 1, r
+    assert r["work"] == ["Your CV"], r

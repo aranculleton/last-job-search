@@ -1192,6 +1192,94 @@ S.room = async (a) => {
   return r;
 };
 
+// A resume for no job in particular, from every Jobs tab (the maintainer, 2026-10-31: "it's
+// hidden atm"): the header's quiet link opens Drafts at its card, and with none made yet the
+// card offers one.
+S.general_resume = async (a) => {
+  const o = await open({html: a.html, hash: "jobs", fake: {canSend: "available"}});
+  const {page} = o;
+  const r = {link: await page.evaluate(() => (document.querySelector('#main [data-k="jobs-resume"]') || {}).textContent || "")};
+  await page.locator('#main [data-k="jobs-resume"]').click();
+  await turn(page, 6);
+  r.hash = await page.evaluate(() => location.hash);
+  r.card = await page.evaluate(() => (document.querySelector('#main [data-item="resume-general"], #main #gen-resume') || {}).textContent || "");
+  const make = page.locator('#main [data-k="gen-make"]');
+  r.make = await make.count();
+  if (r.make) { await make.click(); await turn(page, 6); }
+  r.work = o.store.list("work/").map((k) => o.store.get(k)).filter((w) => w.kind === "general_resume").map((w) => w.title);
+  r.errors = o.errors;
+  await o.ctx.close();
+  return r;
+};
+
+// The maintainer's own page on 2026-10-31, opened from the sidebar a day after any chat ran:
+// Refresh only reloaded the same data, the work pill did nothing on the Brief, a job started a
+// minute ago said "29 hours so far", answered work said "Not picked up yet", the chart's bars
+// said nothing to a pointer and News was not in points.
+S.fixes_1031 = async (a) => {
+  const T = "2026-10-28T09:00:00.000Z";
+  const at = (sec) => new Date(Date.parse(T) + sec * 1000).toISOString();
+  const doc = (extra) => Object.assign({kind: "draft", title: "Resume and letter: Larkspur Retail", to: "cloud", args: {}, asked_at: at(-29 * 3600),
+    status: "queued", stages: [], stage: 0, steps: [], stop_asked: false, attempt: 1}, extra);
+  const r = {};
+  // 1. The Brief on a wide screen, the data three days old.
+  let o = await open({html: a.html, hash: "brief", viewport: {width: 1440, height: 900}, clock: T, fake: {canSend: "available"}, seed: {
+    "work/draft~started": doc({status: "running", claimed_by: "cloud-1", claimed_at: at(-60), stage_at: at(-60), steps: [{at: at(-60), text: "Starting"}]}),
+    "meta/listen": {chat: "cloud-1", kind: "cloud", since: at(-7200), answered_at: at(-30), watching: true}}});
+  let {page} = o;
+  r.pulse = await page.evaluate(() => (document.getElementById("pulse") || {}).textContent || "");
+  await page.locator('#pulse [data-k="refresh"]').click();
+  await turn(page, 8);
+  r.work = o.store.list("work/").map((k) => Object.assign({id: k}, o.store.get(k))).filter((w) => w.kind === "update");
+  r.rings = (await calls(page)).filter((c) => c.cap === "comments" && c.op === "sendToClaude").map((c) => c.text);
+  r.pulseAfter = await page.evaluate(() => (document.getElementById("pulse") || {}).textContent || "");
+  await page.locator("#pill").click();
+  await turn(page, 4);
+  r.sheet = await page.evaluate(() => !!document.querySelector("dialog.work-sheet[open]"));
+  r.sheetText = await page.evaluate(() => (document.querySelector("dialog.work-sheet") || {}).textContent || "");
+  await page.keyboard.press("Escape");
+  await turn(page, 2);
+  const cap = () => page.evaluate(() => (document.querySelector('[data-k="spark-cap"]') || {}).textContent || "");
+  r.capBefore = await cap();
+  await page.locator('[data-k="spark:6"]').hover();
+  r.capHover = await cap();
+  await page.mouse.move(2, 2);
+  await turn(page, 2);
+  r.capLeft = await cap();
+  await page.locator('[data-k="spark:7"]').click();
+  r.capTap = await cap();
+  r.newsPoints = await page.$$eval("#main .bpanel ul.bp-lead-list.bp-news li", (x) => x.length);
+  r.errors = o.errors.slice();
+  await o.ctx.close();
+  // 2. Data made a few minutes ago: Refresh is a reload, and Claude is not asked.
+  o = await open({html: a.html, hash: "brief", clock: "2026-10-25T08:05:00.000Z", fake: {canSend: "available"}});
+  page = o.page;
+  await page.evaluate(() => { const b = document.querySelector("#conn button"); if (b) b.click(); });
+  await turn(page, 2);
+  await page.locator('#pulse [data-k="refresh"]').click().catch(() => {});
+  await turn(page, 4);
+  r.freshWork = o.store.list("work/").filter((k) => (o.store.get(k) || {}).kind === "update").length;
+  r.errors = r.errors.concat(o.errors);
+  await o.ctx.close();
+  // 3. Work answered by the person, and work waiting on a helper that is starting.
+  o = await open({html: a.html, hash: "work", clock: T, seed: {
+    "work/draft~answered": doc({answered_at: at(-20), args: {answers: {"A second application there?": "no"}}}),
+    "meta/listen": {chat: "cloud-1", kind: "cloud", since: at(-7200), answered_at: at(-30), watching: true}}});
+  page = o.page;
+  r.answered = await page.evaluate(() => (document.querySelector('[data-work="draft~answered"]') || {}).textContent || "");
+  r.summary = await page.evaluate(() => (document.querySelector(".workp .summary") || {}).textContent || "");
+  r.errors = r.errors.concat(o.errors);
+  await o.ctx.close();
+  o = await open({html: a.html, hash: "work", clock: T, seed: {
+    "work/draft~waiting": doc({asked_at: at(-600)}),
+    "meta/listen": {chat: "session_EXAMPLENEW", kind: "cloud", since: at(-240), answered_at: null, helper: true}}});
+  page = o.page;
+  r.starting = await page.evaluate(() => (document.querySelector('[data-work="draft~waiting"]') || {}).textContent || "");
+  r.errors = r.errors.concat(o.errors);
+  await o.ctx.close();
+  return r;
+};
+
 // The page wakes its helper chat by itself (Claude Code Remote send_message), and starts a
 // new one on the person's copy when that fails, never asking anyone to wake Claude.
 S.wake = async (a) => {
@@ -2218,8 +2306,10 @@ S.view_overlay = async (a) => {
 S.settings = async (a) => {
   const o = await open({html: a.html, hash: "settings"});
   const {page, store} = o;
-  await openSetting(page, "app_updates");
-  await page.getByLabel("By themselves").focus();
+  // Suggestions: "How updates arrive" is shown only to someone already holding updates
+  // (2026-10-31), and this radio group saves the same way.
+  await openSetting(page, "suggestions");
+  await page.locator("#set-suggestions-0").focus();
   await page.keyboard.press("ArrowDown");
   await turn(page, 2);
   const early = store.list("actions/").length;
@@ -2233,7 +2323,7 @@ S.settings = async (a) => {
     await page.getByRole("button", {name: "Save Days the brief arrives"}).click();
     await turn(page, 6);
   }
-  const r = {early, actions: store.list("actions/").map((p) => store.get(p)), checked: await page.$eval("#set-app_updates-1", (x) => x.checked),
+  const r = {early, actions: store.list("actions/").map((p) => store.get(p)), checked: await page.$eval("#set-suggestions-1", (x) => x.checked),
     names: await T(page, "#main .set-name"), text: await one(page, "#main"), errors: o.errors};
   await o.ctx.close();
   return r;
