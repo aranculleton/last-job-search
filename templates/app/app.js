@@ -1060,7 +1060,11 @@
     if (!c) return Promise.resolve("none");
     if (S.can.comments !== "available") return Promise.resolve(S.can.comments || "none");
     const bell = S.bell;
+    // A ring is saved only for work the last ring already named: a second ask a minute after
+    // the first was folded into it, and the chat, having read the page before it arrived,
+    // never saw it (2026-11-01).
     if (!force && tag !== "act" && bell && now() - (tms(bell.rung_at) || 0) < RING_COALESCE_MS && arr(bell.ids).length &&
+        ids.every((id) => arr(bell.ids).includes(id)) &&
         arr(bell.ids).every((id) => { const w = workDoc(id); return w && w.status === "queued"; })) return Promise.resolve("coalesced");
     const text = "[app] [" + (tag || "work") + ":" + ids.join(",") + "]";
     const thread = bell ? txt(bell.thread) : "";

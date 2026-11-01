@@ -51,6 +51,12 @@ make sense to somebody whose repo just received it.
   Nothing is deleted: a rule put away can be brought back. Profile upgrade: `learned-tidy`,
   `learned-review`.
 
+- **Two asks a minute apart both reach Claude.** The second was folded into the first and
+  could wait until something else woke Claude.
+- **A job whose chat stopped starts again by itself, once**, and says so on its card; a
+  second stop waits for "Ask Claude again". The morning brief also picks up anything still
+  waiting, so nothing sits until you next tap.
+
 ### Changed
 
 - **What's new says which version you are on** and links to every change.

@@ -678,8 +678,9 @@ METHODS: dict[str, dict] = {
             (9, "2026-10-30", False, "the Brief's numbers grow to fit, so How far they got and Since the last brief are never cut off; a tip from an older version starts with a capital"),
             (10, "2026-10-31", False, "a control or card fades only under the pointer: Safari faded every button a section drew in from the text colour"),
             (11, "2026-10-31", False, "Refresh asks Claude to bring the page up to date instead of reloading the same data; the work pill opens Claude's work on the Brief; the time a job has run counts from its start; each week of the Brief's chart says its count; News reads in points; What's new links every change; work answered or waiting on a starting helper says so; the resume for no job in particular is linked from every Jobs tab and offered when there is none"),
+            (12, "2026-11-01", False, "a second ask soon after the first rings Claude too, instead of being folded into the first ring"),
         ),
-        "fingerprint": "cd6f79d109e38319",
+        "fingerprint": "c364c867c63b924e",
     },
     "upskill": {
         "by": "upgrade", "priority": 4, "applies": "upskill_plans", "time": "~10 min",

@@ -1192,6 +1192,21 @@ S.room = async (a) => {
   return r;
 };
 
+// Two asks a minute apart each ring: the second was folded into the first ring, and the
+// chat, which had read the page before it, never saw it (2026-11-01).
+S.two_asks = async (a) => {
+  const o = await open({html: a.html, hash: "jobs", fake: {canSend: "available"}});
+  const {page} = o;
+  await draftViaDialog(page);
+  await page.evaluate(() => { location.hash = "drafts"; });
+  await turn(page, 6);
+  await page.locator('#main [data-k="gen-make"]').click();
+  await turn(page, 8);
+  const r = {rings: (await calls(page)).filter((c) => c.cap === "comments" && c.op === "sendToClaude").map((c) => c.text), errors: o.errors};
+  await o.ctx.close();
+  return r;
+};
+
 // A resume for no job in particular, from every Jobs tab (the maintainer, 2026-10-31: "it's
 // hidden atm"): the header's quiet link opens Drafts at its card, and with none made yet the
 // card offers one.

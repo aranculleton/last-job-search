@@ -529,6 +529,9 @@ assert set(STAGES) == set(WORK_KINDS)
 # (a search round's stage files, a batch's LaTeX compiles).
 HEAVY_CAP = 3
 ACTIVE = ("claimed", "running")
+# A job whose chat stopped is started again by itself this many times in all (the first try
+# included); after that it waits for the person's "Ask Claude again".
+AUTO_TRIES = 2
 FINISHED = ("done", "failed", "stopped")
 # A claim not moved on in this long is not believed: a lock it holds is free again.
 LEASE_S = 30 * 60
@@ -637,7 +640,15 @@ def next_item(db: dict, chat_kind: str, now: dt.datetime,
     for wid, doc in work.items():
         item = doc["data"]
         kind = WORK_KINDS.get(str(item.get("kind") or ""))
-        if kind is None or str(item.get("status") or "") != "queued" or item.get("stop_asked"):
+        if kind is None or item.get("stop_asked"):
+            continue
+        # A job whose chat stopped (its claim not moved on for LEASE_S) is started again,
+        # once, by the next chat to look: it sat "running" for good, and work for the same
+        # employer could only wait (2026-11-01). A second stop is left for the person's
+        # "Ask Claude again".
+        again = (str(item.get("status") or "") in ACTIVE and not _live_claim(item, now)
+                 and int(item.get("attempt") or 1) < AUTO_TRIES)
+        if str(item.get("status") or "") != "queued" and not again:
             continue
         if not can_take(item, chat_kind):
             continue
@@ -663,6 +674,8 @@ def next_item(db: dict, chat_kind: str, now: dt.datetime,
         got = {"work": wid, "version": work[wid]["version"], "kind": item["kind"],
                "title": item.get("title") or "", "locks": locks_for(item),
                "stages": progress(item["kind"])["stages"]}
+        if str(item.get("status") or "") in ACTIVE:
+            got["again"] = int(item.get("attempt") or 1) + 1
         if item["kind"] == "tweak":
             # Several tweaks queued on one output run as one job: one wake, one render, one
             # audit (TWEAKS.md 5.1). The others are claimed with it and applied together.
@@ -724,9 +737,13 @@ def claim(db: dict, chosen: dict, chat_id: str, chat_kind: str, now: dt.datetime
     w = Writes(out_dir)
     at = app_model.stamp(now)
     until = app_model.stamp(now + dt.timedelta(seconds=LEASE_S))
-    w.add("update", "work", chosen["work"],
-          {"status": "claimed", "claimed_by": chat_id, "claimed_at": at, "lease_until": until},
-          if_version=chosen.get("version"))
+    fields = {"status": "claimed", "claimed_by": chat_id, "claimed_at": at, "lease_until": until}
+    if chosen.get("again"):
+        # Started again after its chat stopped: from the top, with the stop said on its card.
+        fields.update(attempt=chosen["again"], stage=0, stage_at=None,
+                      steps=[{"at": at, "text": "Started again: the last try stopped part way. "
+                                                "Anything it saved is kept."}])
+    w.add("update", "work", chosen["work"], fields, if_version=chosen.get("version"))
     for other in chosen.get("with") or []:
         w.add("update", "work", other["work"],
               {"status": "claimed", "claimed_by": chat_id, "claimed_at": at, "lease_until": until,
