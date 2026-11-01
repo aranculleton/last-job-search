@@ -368,7 +368,13 @@ def test_a_finished_or_stalled_job_frees_its_lock():
     got = page_db.next_item(db, "cloud", now)
     assert got["work"] == "d2"
     db["work"]["d1"]["data"].update(status="running", stage_at="2026-10-25T09:00:00Z")
-    assert page_db.next_item(db, "cloud", now)["work"] == "d2"   # no step for hours: stalled
+    # No step for hours: stalled. Its lock holds nobody back: the stalled job, asked first, is
+    # started again once (page_db.AUTO_TRIES, 2026-11-01), and once it has stalled on its
+    # second try the next one for the same employer goes.
+    again = page_db.next_item(db, "cloud", now)
+    assert again["work"] == "d1" and again["again"] == 2
+    db["work"]["d1"]["data"]["attempt"] = 2
+    assert page_db.next_item(db, "cloud", now)["work"] == "d2"
 
 
 def test_the_chat_that_answers_the_page_takes_its_work_and_a_brief_waits_for_the_cloud():
