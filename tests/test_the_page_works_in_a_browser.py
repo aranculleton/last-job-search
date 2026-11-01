@@ -1456,3 +1456,14 @@ def test_a_resume_for_no_job_in_particular_is_one_tap_from_jobs_and_offered_when
     _clean(r)
     assert "One from your profile" in r["card"] and r["make"] == 1, r
     assert r["work"] == ["Your CV"], r
+
+
+def test_a_second_ask_a_minute_after_the_first_rings_too(run, tmp_path):
+    """The chat that answers the page reads it once a wake; a second ask folded into the
+    first ring arrived after that read and waited until something else woke it (2026-11-01)."""
+    m = _sample()
+    m["resume"] = {}
+    r = run("two_asks", html=_write(tmp_path, "two_asks", m))
+    _clean(r)
+    assert len(r["rings"]) == 2, r["rings"]
+    assert "general_resume" in r["rings"][1] and "draft" in r["rings"][0], r["rings"]

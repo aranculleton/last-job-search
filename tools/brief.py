@@ -965,7 +965,7 @@ def claude_lines(b: dict) -> list[str]:
         out.append("the page, after landing (step 4): ArtifactData query, url %s, collections "
                    "view and meta, out_dir <D>; python3 tools/app.py view <D>/view --dump <D> "
                    "--chat brief; send every batch it prints. Never republish the page: this chat already "
-                   "answers it"
+                   "answers it. Then the app skill's steps 1 to 3, for work still waiting"
                    % b["page"])
     try:
         import routines
