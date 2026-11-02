@@ -902,7 +902,7 @@ def process_channel(contact) -> str:
 
 
 def register_process(company, contact_id, role, stage="", date="", with_="", today=None,
-                     contacts=None, posting="", time="", zone="") -> tuple:
+                     contacts=None, posting="", time="", zone="", minutes=0, due=False) -> tuple:
     """Make a hiring process with no application something every reader can see: a
     tracker row (PROCESS_NOTE) and its folder with an outcome.md, the booked stage on it
     when given. Returns (row, folder, added). Run twice, it changes nothing."""
@@ -973,13 +973,29 @@ def register_process(company, contact_id, role, stage="", date="", with_="", tod
                 "by %s.\n" % (company, role, "" if screen_first else "- [ ] Phone screen\n",
                               today, name))
     if _text(stage):
-        text = _with_stage(text, stage, date, with_, time, zone)
+        text = _with_stage(text, stage, date, with_, time, zone, minutes, due)
     with open(out, "w", encoding="utf-8", newline="\n") as fh:
         fh.write(text)
     return have, folder, added
 
 
-def _with_stage(text, stage, date="", with_="", time="", zone="") -> str:
+def zone_name(zone) -> str:
+    """A zone as a stage line keeps it: the time zone's own name where one is given and the
+    standard library knows it ("America/Toronto"), else the invite's word in capitals (EST),
+    else "". Writing the name is the way: a word is read later, and some words name two
+    zones."""
+    z = _text(zone)
+    if "/" in z:
+        try:
+            import zoneinfo
+            zoneinfo.ZoneInfo(z)
+            return z
+        except Exception:  # noqa: BLE001  not a zone this machine knows
+            return ""
+    return z.upper() if re.fullmatch(r"[A-Za-z]{2,5}", z) else ""
+
+
+def _with_stage(text, stage, date="", with_="", time="", zone="", minutes=0, due=False) -> str:
     """outcome.md's text with this stage booked on its checklist: `- [ ] <stage> (scheduled
     <date> [<HH:MM> [<zone>]], with <who>)`, the line the brief, /outcome, every pack and the
     page read. `zone` is one an invite gives beside the time (EST), when not the person's."""
@@ -996,11 +1012,18 @@ def _with_stage(text, stage, date="", with_="", time="", zone="") -> str:
         was = what_works.outcome_stages("## Interview stages reached\n" + hits[0].group(0))
         if was and was[0]["date"] == _text(date):
             time, zone = was[0].get("time") or "", was[0].get("zone") or ""
-    zone = _text(zone).upper() if re.fullmatch(r"[A-Za-z]{2,5}", _text(zone)) else ""
+    if hits and not (minutes or due):
+        # Rebooked: what it is (a test due by the day) and how long it lasts stay.
+        was = what_works.outcome_stages("## Interview stages reached\n" + hits[0].group(0))
+        if was:
+            minutes, due = was[0].get("minutes") or 0, was[0].get("kind") == "test"
+    zone = zone_name(zone)
     when = ("%s %s%s" % (date, what_works.clock(time), " " + zone if zone else "")
-            if what_works.clock(time) else date)
-    line = "- [ ] %s%s" % (stage, " (scheduled %s%s)" % (
-        when, ", with %s" % with_ if _text(with_) else "") if _text(date) else "")
+            if what_works.clock(time) and not due else date)
+    length = ", %d min" % int(minutes) if minutes and not due else ""
+    line = "- [ ] %s%s" % (stage, " (%s %s%s%s)" % (
+        "due" if due else "scheduled", when, length,
+        ", with %s" % with_ if _text(with_) else "") if _text(date) else "")
     if not hits:
         # A bare template line for the same step ("Phone screen" when a recruiter screen
         # is booked) is this stage under another name: it is replaced, never doubled.
@@ -1024,7 +1047,7 @@ def _with_stage(text, stage, date="", with_="", time="", zone="") -> str:
 
 
 def record_stage(folder, company, role, stage, date, with_="", today=None, time="",
-                 zone="") -> str:
+                 zone="", minutes=0, due=False) -> str:
     """Book a stage given to `pack --write` in the process's outcome.md, the record the
     brief reminds from and every later pack reads: given there with a date, it was used
     for that one pack and recorded nowhere (interview audit, 2026-10-25). An outcome.md not
@@ -1035,7 +1058,7 @@ def record_stage(folder, company, role, stage, date, with_="", today=None, time=
         text = ("# Outcome: %s - %s\n\n**Status:** in_progress\n\n## Interview stages "
                 "reached\n\n## Notes\n- %s: %s booked for %s.\n"
                 % (company, role, _text(today) or dt.date.today().isoformat(), stage, date))
-    text = _with_stage(text, stage, date, with_, time, zone)
+    text = _with_stage(text, stage, date, with_, time, zone, minutes, due)
     os.makedirs(folder, exist_ok=True)
     with open(out, "w", encoding="utf-8", newline="\n") as fh:
         fh.write(text)
@@ -4906,10 +4929,17 @@ def main(argv=None) -> int:
     bk.add_argument("--stage", default="", help="as outcome.md names it; default the next booked")
     bk.add_argument("--date", default="", type=_day, help="default: the day it is booked for")
     bk.add_argument("--time", default="", type=_clock, help="14:00, 2pm or 9.30am")
-    bk.add_argument("--zone", default="", help="a zone the invite gives beside the time (EST), "
+    bk.add_argument("--zone", default="", help="the time zone, as its name where you know it "
+                                               "(America/Toronto), else the invite's word (EST), "
                                                "when it is not the person's own")
     bk.add_argument("--with", dest="with_", default="")
     bk.add_argument("--today", type=_day)
+    for s_ in (p, pr, bk):
+        s_.add_argument("--minutes", type=int, default=0,
+                        help="how long it lasts, as the invite says (45); never guessed")
+        s_.add_argument("--due", action="store_true",
+                        help="something to finish by the day (an online test, a case study), "
+                             "not a meeting at a time")
     tm = sub.add_parser("times", help="every booked interview whose time is said in a note or "
                                       "a message and not yet on its record: saved there")
     tm.add_argument("--company", default="")
@@ -4996,7 +5026,7 @@ def main(argv=None) -> int:
                                  "--date" % company)
             folder = docpaths.app_folder(company, role)
             line = record_stage(folder, company, role, label, date, a.with_, today=today,
-                                time=a.time, zone=a.zone)
+                                time=a.time, zone=a.zone, minutes=a.minutes, due=a.due)
             print("saved in %s/outcome.md: %s" % (_rel(folder), line))
             print("The page shows it once it is brought up to date (python3 tools/app.py view).")
             return 0
@@ -5010,7 +5040,8 @@ def main(argv=None) -> int:
         if a.cmd == "process":
             row, folder, added = register_process(a.company, a.contact, a.role, a.stage, a.date,
                                                   a.with_, today=a.today, posting=a.posting,
-                                                  time=a.time, zone=a.zone)
+                                                  time=a.time, zone=a.zone, minutes=a.minutes,
+                                                  due=a.due)
             print("%s: %s at %s, led by %s; its folder is %s.\n"
                   % ("registered" if added else "already registered", row["role"], row["company"],
                      row["contact_person"], _rel(folder)))
@@ -5111,7 +5142,8 @@ def main(argv=None) -> int:
             folder = docpaths.app_folder(company, role)
             if os.path.isdir(folder):
                 booked = record_stage(folder, company, role, a.stage, a.date, a.with_,
-                                      today=a.today, time=a.time, zone=a.zone)
+                                      today=a.today, time=a.time, zone=a.zone,
+                                      minutes=a.minutes, due=a.due)
                 if booked:
                     print("booked in %s/outcome.md: %s" % (_rel(folder), booked))
         ctx = gather(a.company, a.role, a.stage, a.date, a.with_, a.today, story_map,

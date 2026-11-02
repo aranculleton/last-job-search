@@ -11,6 +11,12 @@ situation? why would you hardcode this." They are right. Each item below is a ru
 decides for everyone where the person's own situation should decide. Fix them before
 anything else in the next version, starting with the news.
 
+**Built in [Unreleased] (2026-11-02): items 1 to 5.** The news watches the person's own list
+(person.json `brief.watch`, `brief.py watch`, Edit the brief); a stage carries its kind,
+length and zone name; the prep window and calendar reminders are Settings; zone words come
+from the standard library's zones; the strip's day letters use `Intl`. Items 6 to 8 remain:
+each needs the maintainer's page or real data, not a guess.
+
 1. **The brief's news is five fixed kinds of search** (`tools/brief.py`, `queries` and
    `NEWS_GROUPS`): employers in play, the right to work, the local market, the central bank's
    interest rates, target employers. The kinds were older than 4.6; 4.6 made them worse by

@@ -534,6 +534,17 @@ def _brief_daily() -> str:
     return "" if any(routines._is_brief(r) for r in routines.work(reg or {})) else "no morning brief yet"
 
 
+def _brief_watch() -> str:
+    """What the brief's news watches, written from the person's own profile (4.7): a copy set
+    up before then searched five fixed kinds of news for everyone (the maintainer, 2026-11-02:
+    "dont different things affect everyones situation? why would you hardcode this")."""
+    try:
+        import brief
+        return brief.watch_needs_writing()
+    except Exception:  # noqa: BLE001  no profile yet: setup writes it
+        return ""
+
+
 def _work_place_retired() -> str:
     """Retired 2026-10-25 with the place question's "if you have one you can use, say yes":
     4.0 recommends no chat on a computer (the page and the cloud chats Claude makes do
@@ -1296,6 +1307,14 @@ REGISTRY: tuple[Upgrade, ...] = (
             "it prints, and the one line it prints to say. In a chat on their computer it prints "
             "the line instead (one press of the bell starts it from the cloud): put it on their "
             "page as a To do", "edit", "~1 min", priority=3),
+    Upgrade("brief-watch", "2026-11-02",
+            "the news in your brief follows what moves your own search, in your words, and you "
+            "can change it in Edit the brief",
+            _brief_watch, "read the person's profile (profile/CLAUDE.md and "
+            "01-candidate-profile.md), then write what their brief watches: `python3 "
+            "tools/brief.py watch --help` says the shape and what belongs on it; `python3 "
+            "tools/brief.py watch write` with the list. Report the list in one plain line",
+            "edit", "~1 min", priority=2),
     Upgrade("work-place", "2026-10-18",
             "nothing: retired, since no chat on a computer is recommended any more",
             _work_place_retired, "nothing to do", "question", "~0 min", priority=4),

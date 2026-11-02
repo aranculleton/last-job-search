@@ -2989,7 +2989,27 @@
   // something due by the end of the day. Days are named in two letters (Tu and Th, Sa and Su
   // were one letter each and read alike); a day says what it holds to a pointer and to a
   // screen reader, and a day with something on it opens it in Coming up.
-  const DAY2 = ["Su", "Mo", "Tu", "We", "Th", "Fr", "Sa"];
+  // In the person's own language, like every other date on the page: two letters where a
+  // language shortens a day by its first letters (Mo, Di, lu, пн), else the form its own
+  // calendars use (月, ن). Worked out once per language.
+  let DAY2 = null;
+  function dayLetters() {
+    if (DAY2 && DAY2.loc === LOC) return DAY2.names;
+    const names = [];
+    for (let i = 0; i < 7; i++) {
+      const at = new Date(Date.UTC(2026, 10, 1 + i, 12));            // 1 Nov 2026 was a Sunday
+      let w = "";
+      try {
+        const short = new Intl.DateTimeFormat(LOC, {weekday: "short", timeZone: "UTC"}).format(at).replace(/\.$/, "");
+        const g = Array.from(short);
+        if (/^[\p{Script=Latin}\p{Script=Cyrillic}\p{Script=Greek}]/u.test(short)) w = g.slice(0, 2).join("");
+        else w = g.length <= 2 ? short : new Intl.DateTimeFormat(LOC, {weekday: "narrow", timeZone: "UTC"}).format(at);
+      } catch (e) { w = ""; }
+      names.push(w || ["Su", "Mo", "Tu", "We", "Th", "Fr", "Sa"][i]);
+    }
+    DAY2 = {loc: LOC, names};
+    return names;
+  }
   function weekStrip(list) {
     const today = todayIso();
     const days = [];
@@ -3003,7 +3023,7 @@
       return h("button", {type: "button", class: "bp-day" + (i === 0 ? " is-today" : "") + (xs.length ? " has" : ""), "data-k": "week:" + d, "aria-label": said(d), title: said(d),
         // A day with something on it opens it; a free day adds something to it, as a calendar does.
         onclick: () => { if (xs.length) go("interviews", {focus: true, item: txt(xs[0].id)}); else askAddUpcoming(d); }},
-        h("span", {class: "bp-day-w", "aria-hidden": "true"}, DAY2[wd]),
+        h("span", {class: "bp-day-w", "aria-hidden": "true"}, dayLetters()[wd]),
         h("span", {class: "bp-day-n", "aria-hidden": "true"}, String(Number(d.slice(8, 10)))),
         h("span", {class: "bp-day-dots", "aria-hidden": "true"}, xs.slice(0, 3).map((u) => h("i", {class: u.kind === "test" || u.kind === "deadline" ? "due" : "meet"}))));
     }));
@@ -3157,7 +3177,8 @@
     // tap away: a week is how long good prep takes, and a day's notice is too late for it (the
     // maintainer: "what if we have an important interview that needs more than one day to
     // prepare"). With none, the first of the steps leads, with the way to it.
-    const weekIv = interviewItems().filter((i) => { const n = dayDiff(dayOf(i.when)); return n !== null && n >= 0 && n <= 7 && !isPast(i.when) && txt(i.status) !== "done"; })
+    const prepDays = Number(settingOf("prep_days", "7")) || 7;          // Settings: the person's own
+    const weekIv = interviewItems().filter((i) => { const n = dayDiff(dayOf(i.when)); return n !== null && n >= 0 && n <= prepDays && !isPast(i.when) && txt(i.status) !== "done"; })
       .sort((x, y) => txt(x.when).localeCompare(txt(y.when)))[0];
     const jobsShown = jobRows().some(jobToLook);
     const stepsFrom = (next.length ? next : owed).filter((l) => !(jobsShown && !txt(obj(l).item) && txt(obj(l).section) === "jobs"))
@@ -4587,13 +4608,20 @@
       {p: "I5", label: "Draft answers for me", values: vals([["1", "1"], ["3", "3"], ["5", "5"]], 2), writes: "draft answers", hint: "Each is marked Draft until you confirm it, and written from your profile only."},
     ]},
     brief: {what: () => "your brief", plural: () => "briefs", area: ["other"], rows: [
-      {p: "B1", label: "Length", values: vals([["short", "Short"], ["standard", "Standard"], ["long", "Long"]], 0), page: true, hint: "How many lines this page shows of each brief."},
+      // What the news watches is the person's own list (person.json brief.watch), written by
+      // Claude from their profile: never a fixed set of kinds (the maintainer, 2026-11-02).
+      {p: "B6", label: "Also watch", text: true, max: 80, state: 1, placeholder: "A pay deal, a rule change, an employer", hint: "Something that moves your search, in your own words. Each brief searches for it, as often as you choose below."},
+      {p: "B7", label: "How often", values: vals([["day", "Every day"], ["week", "Every week"], ["month", "Every month"]], 1), hint: "As often as it really changes: most things move weekly at most.",
+        rec: {v: "week", why: "Most news that moves a search comes weekly at most; a daily search mostly finds the same thing again."}},
+      {p: "B3", label: "Stop watching", multi: true, values: (it) => arr(obj(it).watch).filter((w) => txt(obj(w).what)).map((w) => ({v: txt(w.what), label: txt(w.what) + " · " + (WATCH_EVERY[txt(w.every)] || "weekly"), state: 1})),
+        hint: "What your brief searches for now. Tap any it should stop searching for, and Claude will not add it back."},
       {p: "B2", label: "News items", values: vals([["0", "None"], ["1", "1"], ["3", "3"], ["5", "5"]], 1), hint: "Fewer is quicker to read. From the next brief.",
         rec: {v: "3", why: "Three is enough to catch what moved this week without a long read."}},
-      {p: "B3", label: "Also watch", multi: true, values: vals([["employers", "Employers you're in touch with"], ["market", "Hiring and layoffs near you"], ["bank", "Interest rates"], ["targets", "Your target employers"]], 1), hint: "Which news is searched. News about your right to work is watched too, when you are on a visa or permit."},
       {p: "B4", label: "Days it comes", multi: true, values: vals([["1", "Mon"], ["2", "Tue"], ["3", "Wed"], ["4", "Thu"], ["5", "Fri"], ["6", "Sat"], ["0", "Sun"]], 1), hint: "At most once a day."},
+      {p: "B1", label: "Length", values: vals([["short", "Short"], ["standard", "Standard"], ["long", "Long"]], 0), page: true, hint: "How many lines this page shows of each brief."},
     ]},
   };
+  const WATCH_EVERY = {day: "daily", week: "weekly", month: "monthly"};
   const TWEAK_WORD = {resume: () => noun(), letter: () => "letter", message: () => "message", jobs: () => "search", prep: () => "prep", brief: () => "brief"};
 
   // Rows for one item: the engine's own (item.tweaks.rows) refine the table where present.
@@ -4632,7 +4660,7 @@
     const eng = all.filter((r) => txt(r.p).startsWith(lead)).concat(all.filter((r) => !txt(r.p).startsWith(lead)));
     if (!eng.length) {
       return spec.rows.map((r) => Object.assign({}, r, {values: typeof r.values === "function" ? r.values(item) : r.values, hint: typeof r.hint === "function" ? r.hint(item) : r.hint,
-        rec: recOf(r.p, r.rec)}));
+        rec: recOf(r.p, r.rec)})).filter((r) => r.text || arr(r.values).length);
     }
     return eng.map((r, n) => {
       const own = spec.rows.find((x) => x.p === txt(r.p)) || {};
@@ -8383,10 +8411,12 @@
     tips: {label: "Tips now and then"},
     linkedin_plan: {label: "Your LinkedIn plan"},
     profile_reads: {label: "Reading their profiles", hint: "Claude reads them in the Claude app on your computer. Or paste each one yourself.", choices: {browser: ["Claude reads them"], paste: ["I paste them"]}},
+    prep_days: {label: "Your next interview on the Brief", hint: "From when it leads your Brief, with its prep. Earlier gives more time to prepare."},
+    calendar_reminder: {label: "Calendar reminders", hint: "When an interview or call you add to your calendar reminds you. A day with no time reminds you the afternoon before."},
   };
   const SYNTH = [{key: "suggestions", label: "Suggestions", kind: "choice", value: "on", choices: [["on", "On"], ["urgent", "Only urgent"], ["off", "Off"]]}];
   // The usual value of each setting, for the summary's "changed from the usual".
-  const USUAL = {suggestions: "on", app_updates: "auto", tips: "on"};
+  const USUAL = {suggestions: "on", app_updates: "auto", tips: "on", prep_days: "7", calendar_reminder: "60"};
   function settingLabel(s) { return (SETTING_COPY[txt(s.key)] || {}).label || txt(s.label); }
   function allSettings() {
     const list = arr(M().settings).slice();
@@ -8415,7 +8445,7 @@
     const wrap = h("section", {class: "sec", "aria-labelledby": "h-settings" + (where ? "-" + where : "")}, screenHead("settings", "Settings", sum, null, where));
     const byKey = new Map(all.map((s) => [txt(s.key), s]));
     const pick = (keys) => keys.map((k) => byKey.get(k)).filter(Boolean);
-    const known = new Set(["suggestions", "app_updates", "tips", "linkedin_plan", "profile_reads"]);
+    const known = new Set(["suggestions", "app_updates", "tips", "linkedin_plan", "profile_reads", "prep_days", "calendar_reminder"]);
     const others = all.filter((s) => !known.has(txt(s.key)));
     if (waiting) put(wrap, settingsGroup("", [updateRow(waiting)]));
     // Questions an update brought live here, never in To do: nothing is late about them.
@@ -8429,7 +8459,9 @@
       h("span", {class: "set-name"}, "Your profile", h("span", {class: "hint block"}, profileSummary())), h("span", {class: "set-go", "aria-hidden": "true"}, "›"))]));
     const search = searchRows().filter(Boolean);
     if (search.length) put(wrap, settingsGroup("Your search", search));
-    put(wrap, settingsGroup("Your brief", briefRows()));
+    put(wrap, settingsGroup("Your brief", briefRows().concat(pick(["prep_days"]).map(settingRow))));
+    const cal = pick(["calendar_reminder"]).map(settingRow);
+    if (cal.length) put(wrap, settingsGroup("Coming up", cal));
     put(wrap, settingsGroup("Look", [lookRow(), sizeRow()]));
     put(wrap, settingsGroup("LinkedIn", linkedinRows().concat(pick(["profile_reads", "linkedin_plan"]).map(settingRow))));
     put(wrap, settingsGroup("Help", [actionRow("Show me around", () => showTour(0), "help-tour"),
@@ -8760,8 +8792,67 @@
   // is only a reload.
   const REFRESH_FRESH_MS = 10 * 60 * 1000;
   const REFRESH_STAGES = [{key: "start", name: "Checking for anything new", est_s: 30}, {key: "take", name: "Bringing your page up to date", est_s: 60}];
+  // A page published since this one was opened: its version (meta/now `page`, written by
+  // app.py view from the version recorded at the last publish) is above the one built into
+  // this page. Before 4.7 this read a field nothing wrote, so an open page never knew.
+  function newerPage() {
+    const have = Number(obj(obj(S.model).app).page) || 0;
+    const out = Number(obj(S.meta).page) || 0;
+    return have > 0 && out > have;
+  }
+  // It reloads itself to the newer one, once per version, never while the person is typing
+  // or has a sheet open (then the line under the header says it, with Refresh).
+  function reloadToNewer() {
+    const v = String(Number(obj(S.meta).page) || 0);
+    if (sget("session", "ljs:reloaded-to") === v) return;
+    const a = document.activeElement;
+    if ((a && /^(INPUT|TEXTAREA|SELECT)$/.test(a.tagName)) || S.tweak || document.querySelector("dialog[open]")) return;
+    sset("session", "ljs:reloaded-to", v);
+    // Only where the page can remember it tried: with storage refused, a frame that keeps
+    // serving the older page would reload for ever. Refresh, under the header, stays.
+    if (sget("session", "ljs:reloaded-to") !== v) return;
+    try { location.reload(); } catch (e) { /* the frame refuses: Refresh stays */ }
+  }
+  // A live subscription can stop without an error (a laptop asleep, a tab in the background
+  // for hours), and the page went on saying "Connected." over a brief four days old
+  // (2026-11-02). So whenever the page is looked at again (shown, focused, back online), and
+  // every few minutes while it is, it reads the store's own stamp once; when that is newer
+  // than what it shows, or the read fails, every subscription is made afresh: a fresh
+  // onSnapshot is the only recovery (db.d.ts).
+  let DB = null;
+  let lastCheck = 0;
+  const CHECK_EVERY_MS = 5 * 60 * 1000;
+  function resubscribe() {
+    if (!DB || S.flags.dbError === "revoked") return;
+    for (const key of [...unsubs.keys()]) unsub(key);
+    SUB_RETRY.clear();
+    subscribe(DB);
+  }
+  async function freshen(force) {
+    if (!DB || document.hidden || S.flags.dbError === "revoked") return;
+    const t = now();
+    if (!force && t - lastCheck < 60000) return;
+    lastCheck = t;
+    try {
+      const d = await DB.doc("meta/now").get();
+      const m = d && d.exists ? (typeof d.data === "function" ? d.data() : d.data) : null;
+      const behind = !!m && (txt(m.rev) !== txt(obj(S.meta).rev) || (tms(m.made_at) || 0) > newestData());
+      if (behind || force || S.flags.dbError) resubscribe();
+    } catch (e) { onDbError(e); resubscribe(); }
+  }
+  // Whether Refresh needs Claude: only for data from before today. Today's came from a chat
+  // that had already taken the day's update, so looking again at what is saved is free, and
+  // waking a chat for it spent the person's allowance on nothing (2026-11-02). Never past the
+  // plan's limit: that would only queue work that waits.
+  function refreshAsks(newest, newer) {
+    if (newer || (newest && now() - newest < REFRESH_FRESH_MS) || limitHit()) return false;
+    return !(newest && dayOf(iso(newest)) === todayIso());
+  }
   function refreshPage(newest, newer) {
     if (newer || (newest && now() - newest < REFRESH_FRESH_MS)) { try { location.reload(); } catch (e) { /* the frame refuses */ } return; }
+    // What the store already holds first, at once; a chat is asked only for what it does not.
+    resubscribe();
+    if (!refreshAsks(newest, newer)) { lastCheck = 0; freshen(true); scheduleRender(); return; }
     requestWork([{id: "update~refresh-" + todayIso(), kind: "update", title: "Bringing your page up to date", args: {refresh: true}, stages: REFRESH_STAGES, redo: true}]);
     scheduleRender();
   }
@@ -8773,7 +8864,8 @@
     const old = newest && (now() - newest > DAY || dayOf(iso(newest)) !== todayIso());
     const age = newest ? ago(newest).replace(/^on /, "").replace(/^just now$/, "a moment ago") : "";
     const meta = S.meta;
-    const newer = !!(meta && meta.rev && txt(meta.rev) !== txt(S.model.rev) && (tms(meta.published_at) || 0) > (tms(S.model.made_at) || 0));
+    const newer = newerPage();
+    if (newer) reloadToNewer();
     const phone = window.innerWidth < 760;
     const screen = $("screen");
     // The header names the tab a screen belongs to: Messages are Contacts, Drafts are Jobs.
@@ -8805,7 +8897,11 @@
             : queuedUp ? "An update is waiting for Claude. " : "Updating to the newest version. "),
           h("span", {class: "muted"}, "Keep using the page: it changes by itself when it is ready.")]) :
         [h("span", {}, words + (age ? " Search data from " + age + "." : "") + (newer ? " A newer version is ready." : "")), " ",
-          h("button", {type: "button", class: "btn link", "data-k": "refresh", onclick: () => refreshPage(newest, newer)}, "Refresh")]);
+          // A soft pill, the page's secondary button, not a link lost in the line (the
+          // maintainer, 2026-11-02: "make the refresh button slightly more prominent").
+          h("button", {type: "button", class: "btn secondary small refresh-btn", "data-k": "refresh", onclick: () => refreshPage(newest, newer)}, "Refresh"),
+          // What it costs, as every ask says it: the gauge, its words on hover and read aloud.
+          refreshAsks(newest, newer) ? [" ", costEl({state: 1}, "", "refresh-cost")] : null]);
     }
     const tools = $("toptools");
     if (tools) {
@@ -9127,14 +9223,15 @@
     window.addEventListener("popstate", fromAddress);
     document.addEventListener("fullscreenchange", () => scheduleRender());
     window.addEventListener("hashchange", fromAddress);
-    window.addEventListener("online", () => { S.online = true; scheduleRender(); });
+    window.addEventListener("online", () => { S.online = true; scheduleRender(); freshen(true); });
     window.addEventListener("offline", () => { S.online = false; scheduleRender(); });
     let lastWide = wide();
     // Re-laid out where the frame changes: the phone below 760px, the rail from 1280px.
     let lastBand = window.innerWidth < 760 ? 0 : wide() ? 2 : 1;
     window.addEventListener("resize", () => { const w = wide(); const band = window.innerWidth < 760 ? 0 : w ? 2 : 1; if (w !== lastWide || band !== lastBand) { if ((band === 0) !== (lastBand === 0)) applySize(S.size); lastWide = w; lastBand = band; if (w) closeWork(); render(); } });
-    window.addEventListener("focus", () => { refreshCanSend(); recheckReading().catch(() => {}); });
-    document.addEventListener("visibilitychange", () => { if (!document.hidden) { refreshCanSend(); liveRender(); recheckReading().catch(() => {}); } });
+    window.addEventListener("focus", () => { refreshCanSend(); recheckReading().catch(() => {}); freshen(false); });
+    document.addEventListener("visibilitychange", () => { if (!document.hidden) { refreshCanSend(); liveRender(); recheckReading().catch(() => {}); freshen(false); } });
+    setInterval(() => { if (now() - lastCheck >= CHECK_EVERY_MS) freshen(false); }, 60000);
     document.addEventListener("keydown", onKey);
     setInterval(tick, 1000);
     setInterval(liveRender, 60000);
@@ -9156,7 +9253,9 @@
     CAP.db.then((db) => {
       if (!db) { S.flags.readOnly = true; scheduleRender(); return; }
       S.flags.live = true;
+      DB = db;
       subscribe(db);
+      lastCheck = now();
       scheduleRender();
     });
     CAP.comments.then((x) => { if (x) refreshCanSend(); });

@@ -350,6 +350,11 @@ JSON_NAMES = {
     # over adds other chats' ids, never a different value for one already there.
     "tidy.json": "written by the chat that answers the page alone, once a day, a list only "
                  "added to: two chats never write one entry differently",
+    # documents/briefs/watched.json (tools/brief.py, 4.7): the day each thing the brief's news
+    # watches was last searched, written by the brief once a day.
+    "watched.json": "written by the brief once a day, a day per watched thing: two chats can "
+                    "differ only by a day, and either value moves the next search by a day at "
+                    "most, so this side's stands",
     **dict.fromkeys(("tools/app_setup.py: .json", "tools/bar.py: *.json",
                      "tools/build_app.py: .json", "tools/company_research.py: *.json",
                      "tools/followup_drafts.py: *.json", "tools/stage_picks.py: .json",

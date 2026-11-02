@@ -642,6 +642,7 @@ chat has lost it.
 | An employer turns out to have no relevant presence at all | `job_scraper/do_not_target.json`, with a `review_after` |
 | A posting was ruled out | `job_scraper/seen_jobs.json`, through `tools/exclude.py add` (a reason, and what it rests on) |
 | A fact about the candidate: a skill, a gap, a date, a constraint | `01-candidate-profile.md`, and `profile/CLAUDE.md` if it belongs in the summary |
+| They want the brief's news to watch something, or stop ("watch the visa news", "no more rate news") | `python3 tools/brief.py watch add "<their words>" --every day\|week\|month`, or `watch drop "<what>"` (person.json `brief.watch`); never a kind of news decided for them |
 | They told one employer a different place from the profile's | `python3 tools/told.py "<Employer>" "<place>"` (person.json `identity.places_told`) |
 | A reaction or preference: a message, a person, a job, the voice, the questions | the setting it governs, and `profile/learned.json` via `tools/learned.py record` ("Learning the person", below) |
 | Company research that cost a fetch | `company_research/<key>.json` |

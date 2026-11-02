@@ -69,16 +69,71 @@ _ONE = re.compile(r"(?<![\d:.])(\d{1,2})(?:[:.h](\d{2}))?\s*" + _MER + _ZONE, re
 
 
 def _zone_word(word: str, home: str) -> str | None:
-    """The zone a written word names, `home` where none is written, None where the word reads
-    as a zone the app does not know ("IST", "BRT"): a time read in the wrong zone is worse
-    than no time."""
+    """The zone a written word names, `home` where none is written, None where it names no
+    zone this can place: a time read in the wrong zone is worse than no time. A zone's own
+    name ("America/Toronto", which a stage booked since 4.7 carries) is taken as it is; a
+    word (EST, IST) is looked up in the standard library's own zones, the person's zone first
+    where it uses the word, and a word two zones share at different hours places nothing."""
     import app_model
-    w = str(word or "").upper()
-    if not w:
+    raw = str(word or "").strip()
+    if not raw:
         return home
+    if "/" in raw:
+        return raw if _known_zone(raw) else None
+    w = raw.upper()
     if w in app_model._ZONE_WORDS:
         return app_model._ZONE_WORDS[w]
-    return None if w.endswith("T") else home
+    names = _zone_abbreviations().get(w)
+    if not names:
+        return None
+    if home in names:
+        return home
+    offsets = {o for n in names for o in [_offsets(n)]}
+    return min(names) if len(offsets) == 1 else None
+
+
+def _known_zone(name: str) -> bool:
+    try:
+        import zoneinfo
+        zoneinfo.ZoneInfo(name)
+        return True
+    except Exception:  # noqa: BLE001
+        return False
+
+
+def _offsets(name: str) -> tuple:
+    import zoneinfo
+    z = zoneinfo.ZoneInfo(name)
+    year = dt.date.today().year
+    return tuple(dt.datetime(year, m, 15, 12, tzinfo=z).utcoffset() for m in (1, 7))
+
+
+_ABBR: dict | None = None
+
+
+def _zone_abbreviations() -> dict:
+    """{"EST": {zone names}, ...}: every abbreviation the standard library's zones use, in
+    January or July, built once. Numeric ones ("-03") are left out: nobody writes those."""
+    global _ABBR
+    if _ABBR is None:
+        out: dict = {}
+        try:
+            import zoneinfo
+            year = dt.date.today().year
+            for name in zoneinfo.available_timezones():
+                if not ("/" in name and name.split("/")[0] in (
+                        "Africa", "America", "Antarctica", "Asia", "Atlantic", "Australia",
+                        "Europe", "Indian", "Pacific")):
+                    continue
+                z = zoneinfo.ZoneInfo(name)
+                for m in (1, 7):
+                    abbr = dt.datetime(year, m, 15, 12, tzinfo=z).tzname() or ""
+                    if re.fullmatch(r"[A-Z]{2,5}", abbr):
+                        out.setdefault(abbr, set()).add(name)
+        except Exception:  # noqa: BLE001  no zone data on this machine (Windows without tzdata)
+            out = {}
+        _ABBR = out
+    return _ABBR
 
 
 def _clock(h, m, mer) -> str | None:
@@ -315,7 +370,10 @@ def build(ctx, page_url: str = "") -> list[dict]:
                 continue
             label = str(s.get("label") or "Interview")
             day = str(s["date"])
-            test = bool(_TEST.search(label))
+            # What it is and how long it lasts, as the stage was booked; only a stage booked
+            # before 4.7, which says neither, is read from its English words.
+            kind = str(s.get("kind") or "")
+            test = kind == "test" if kind else bool(_TEST.search(label))
             time_ = str(s.get("time") or "")
             zone = (_zone_word(s.get("zone"), home) if s.get("zone") else
                     call_zone.get((ckey(company), day, time_), home))
@@ -328,7 +386,8 @@ def build(ctx, page_url: str = "") -> list[dict]:
                           f"{label}: {company}"), day, time_, zone,
                          with_=company, go={"to": "interviews", "item": "int-" + rid[4:]},
                          note=(f"{role}" + (f", with {who}" if who else "")) or None,
-                         minutes=30 if _SHORT.search(label) else 60, home=home)
+                         minutes=int(s.get("minutes") or 0) or (30 if _SHORT.search(label) else 60),
+                         home=home)
             if ahead(item["day"]):
                 out.append(item)
                 seen_days.setdefault((ckey(company), day), set()).add(time_)
@@ -423,6 +482,16 @@ def _fold(line: str) -> str:
     return "\r\n ".join(out)
 
 
+def reminder_minutes() -> int | None:
+    """How long before a timed event its calendar reminder comes, in minutes, from the
+    person's setting (person.json `calendar_reminder`); None for no reminder at all."""
+    try:
+        got = str(person.get("calendar_reminder", "60") or "60")
+    except Exception:  # noqa: BLE001  no profile: the usual hour
+        got = "60"
+    return None if got == "off" else int(got) if got in ("15", "60", "1440") else 60
+
+
 def vevent(item: dict, page_url: str = "", stamp: dt.datetime | dt.date | None = None) -> str:
     """One VEVENT, CRLF lines; `calendar()` wraps one or more. Its UID is the item's own, so
     adding it again where a calendar keeps UIDs updates it rather than adding a second. Its
@@ -433,6 +502,9 @@ def vevent(item: dict, page_url: str = "", stamp: dt.datetime | dt.date | None =
     else:
         stamp = (stamp or dt.datetime.now(dt.timezone.utc).date()).strftime("%Y%m%dT000000Z")
     lines = ["BEGIN:VEVENT", f"UID:{item['id']}.last-job-search", f"DTSTAMP:{stamp}"]
+    # When it reminds them is theirs (Settings, Calendar reminders): an hour before unless they
+    # chose otherwise, none at all if they said so; a day with no time, the afternoon before.
+    remind = reminder_minutes()
     if item["all_day"]:
         a, b = _days(item)
         lines += [f"DTSTART;VALUE=DATE:{a.replace('-', '')}", f"DTEND;VALUE=DATE:{b.replace('-', '')}"]
@@ -440,7 +512,8 @@ def vevent(item: dict, page_url: str = "", stamp: dt.datetime | dt.date | None =
     else:
         fmt = lambda s: s.replace("-", "").replace(":", "")  # noqa: E731
         lines += [f"DTSTART:{fmt(item['start'])}", f"DTEND:{fmt(item['end'])}"]
-        alarm = "-PT1H"
+        alarm = ({15: "-PT15M", 60: "-PT1H", 1440: "-P1D"}.get(remind, f"-PT{remind}M")
+                 if remind else "")
     lines.append("SUMMARY:" + _esc(item["title"]))
     body = _details(item, page_url)
     if body:
@@ -449,8 +522,10 @@ def vevent(item: dict, page_url: str = "", stamp: dt.datetime | dt.date | None =
         lines.append("LOCATION:" + _esc(item["place"]))
     if page_url:
         lines.append("URL;VALUE=URI:" + page_url)
-    lines += ["BEGIN:VALARM", "ACTION:DISPLAY", "DESCRIPTION:" + _esc(item["title"]),
-              f"TRIGGER:{alarm}", "END:VALARM", "END:VEVENT"]
+    if remind is not None and alarm:
+        lines += ["BEGIN:VALARM", "ACTION:DISPLAY", "DESCRIPTION:" + _esc(item["title"]),
+                  f"TRIGGER:{alarm}", "END:VALARM"]
+    lines.append("END:VEVENT")
     return "\r\n".join(_fold(x) for x in lines) + "\r\n"
 
 

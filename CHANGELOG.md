@@ -20,6 +20,42 @@ make sense to somebody whose repo just received it.
 
 ## [Unreleased]
 
+### Fixed
+
+- **Your page shows what is new without you doing anything.** An open page could stop
+  hearing about new data without saying so: it kept saying "Connected" over a brief days old,
+  and Refresh did not reload it. Now it checks for anything new whenever you come back to it
+  and every few minutes while it is open, and Refresh shows what is already saved at once.
+  Refresh only uses your Claude allowance when your data is from before today, and then shows
+  it with the same small gauge every other ask has.
+- **A new version reaches your page by itself.** When an update changed the page, only a chat
+  you opened yourself published it again: the morning brief was told never to, so a page could
+  stay several versions behind. The brief now publishes it again first, and an open page
+  reloads itself to the newer one.
+- **The brief's opening shows on your Brief again**, and a tip for your first search, first
+  application or first interview is never shown to someone well past it.
+
+### Changed
+
+- **Your brief's news watches what moves your own search, in your words.** It used to search
+  the same five kinds of news for everyone (your right to work, your market, your country's
+  interest rates, your target employers and the employers you are in touch with). Now it
+  searches the employers you are in touch with, then a short list written for you from your
+  profile: a pay deal, a rule change, your local market for your kind of role, whatever
+  actually moves your search, each as often as it really changes. Edit the brief shows the
+  list: add something in your own words and say how often, or stop watching anything, and
+  Claude never adds back what you took off. When your profile changes, the list is written
+  again, keeping what you added. Profile upgrade: brief-watch.
+- **Your settings decide what the app used to fix for everyone.** Settings has how early your
+  next interview leads your Brief (a week before, unless you choose 2 days or two weeks) and
+  when calendar reminders come (an hour before, unless you choose 15 minutes, the day before
+  or none). The days on the Brief's two-week strip are in your own language.
+- **An interview is saved with what it is, how long it lasts and its time zone**, from the
+  invite, so Coming up never guesses them from English words: a stage written in French or
+  German gets its length and kind, and a time zone like IST, which three countries use, gives
+  no time rather than a wrong one.
+- **Names your own checks might have used were retired**: `brief.CENTRAL_BANK`, `brief.BANK_DECISION`, `brief.EURO`, `brief.COUNTRY`, `brief.LANGUAGE`, `brief.NEVER_OFF`, `brief.country_name`, `brief.rights_term` and `brief.target_names`. The brief no longer decides any kind of news for anyone, so its tables of central banks and countries went with the fixed searches.
+
 ## [4.6.0] - 2026-11-02
 
 ### Added

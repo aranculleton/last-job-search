@@ -140,89 +140,132 @@ def test_news_goes_into_the_record_once_and_a_freeze_is_noted_on_a_live_applicat
     assert "Since 2026-09-20." in record
 
 
-def test_the_searches_come_from_the_profile_and_stay_at_six():
-    md = ("### Target Sectors\n- Banking and fintech: Harbourline Bank, Kestrel Mutual, Copperleaf "
-          "Pay (a lender), Ellerwick Trust\n- Pensions: Brackenhollow Mutual\n\n### Deal-breakers\n- x\n")
-    names, sectors = brief.target_names(md)
-    assert names == ["Harbourline Bank", "Kestrel Mutual", "Copperleaf Pay", "Ellerwick Trust",
-                     "Brackenhollow Mutual"]
-    assert sectors == ["Banking and fintech", "Pensions"]
-    q = brief.queries(dt.date(2026, 10, 25), ["Larkspur Retail", "Fernhill Freight", "Quayside"], md)
-    assert len(q) <= 6 and q[0].startswith("Larkspur Retail") and q[1].startswith("Fernhill")
-    assert any("Bank of England" in x for x in q)          # the example person is in the UK
-    # A different pair of targets on another day, so every one is looked at over a few weeks.
-    later = brief.queries(dt.date(2026, 10, 29), [], md)
-    assert later != brief.queries(dt.date(2026, 10, 25), [], md)
+# What the news watches is each person's own (the maintainer, 2026-11-02: "dont different
+# things affect everyones situation? why would you hardcode this"). 4.6 searched five fixed
+# kinds for everyone, from tables of central banks and countries; now the brief searches the
+# employers in play, then the person's own list, in their words and their order.
+def _with(monkeypatch, location="Somewhere, Elsewhere", watch=(), leave_out=None):
+    got = {"identity.location": location, "brief.watch": list(watch),
+           "brief.leave_out": leave_out}
+    monkeypatch.setattr(brief.person, "get", lambda k, d=None: got.get(k, d) if got.get(k) is not None else d)
 
 
-# Every person's news fits their own country, city and field, whichever of the countries the
-# app carries market tables for (the maintainer, 2026-11-02: "is country agnostic like the job
-# board etc or industry agnostic"). Before, a nurse in Brazil got "BR" for a country, no
-# central bank and "data and analytics" for a field.
-_NURSE = "### Target Sectors\n- Hospitals and clinics: Vale Verde Hospital, Ribeira Clinic\n\n### Deal-breakers\n- x\n"
+_DAY = dt.date(2026, 10, 25)
 
 
-def _somewhere(monkeypatch, cc, status="work permit", city="Somewhere"):
-    monkeypatch.setattr(brief.person, "country", lambda: cc)
-    monkeypatch.setattr(brief, "_net", lambda a, d="": {"HOME_CITY": city, "STATUS_NAME": status}.get(a, d))
-
-
-@pytest.mark.parametrize("cc, name, bank", [
-    ("BR", "Brazil", "Banco Central do Brasil interest rate decision"),
-    ("SE", "Sweden", "Riksbank interest rate decision"),
-    ("ZA", "South Africa", "South African Reserve Bank interest rate decision"),
-    ("DE", "Germany", "European Central Bank interest rate decision"),
-    ("SG", "Singapore", "Monetary Authority of Singapore monetary policy statement"),
-    ("CA", "Canada", "Bank of Canada interest rate decision"),
+@pytest.mark.parametrize("watch", [
+    [{"what": "NHS band 5 pay talks", "every": "month"},
+     {"what": "Leeds hospital nursing jobs", "every": "day"}],
+    [{"what": "Graduate visa rule changes", "every": "week"},
+     {"what": "trainee solicitor intake Bristol", "every": "week"}],
+    [{"what": "Lisboa tecnologia contratações", "every": "day"}],
 ])
-def test_the_searches_name_the_persons_own_country_bank_and_field(monkeypatch, cc, name, bank):
-    _somewhere(monkeypatch, cc)
-    q = brief.queries(dt.date(2026, 10, 25), ["Vale Verde Hospital"], _NURSE)
-    assert q[0] == "Vale Verde Hospital %s news October 2026" % name
-    assert "%s work permit rule changes 2026" % name in q
-    assert "Somewhere hospitals and clinics hiring or layoffs October 2026" in q
-    assert "%s October 2026" % bank in q
-    assert not any("data and analytics" in x or re.search(r"\b%s\b" % cc, x) for x in q)
+def test_each_person_is_searched_for_what_their_own_list_says(monkeypatch, watch):
+    _with(monkeypatch, watch=watch)
+    q = brief.queries(_DAY, ["Vale Verde Hospital"], searched={})
+    assert q[0] == "Vale Verde Hospital Elsewhere news October 2026"   # placed by their words
+    assert q[1:] == ["%s October 2026" % w["what"] for w in watch]
+    assert not any(re.search(r"\b(?:bank|interest rate|central)\b", x, re.I) for x in q)
 
 
-def test_every_country_with_a_market_table_has_a_name_and_a_bank():
-    import markets
-    for cc in markets.countries():
-        code = cc.upper()
-        assert brief.country_name(code), code
-        assert code in brief.EURO or brief.CENTRAL_BANK.get(code), code
+def test_no_kind_of_news_is_decided_for_anyone(monkeypatch):
+    for gone in ("CENTRAL_BANK", "BANK_DECISION", "EURO", "COUNTRY", "LANGUAGE", "NEVER_OFF",
+                 "rights_term", "country_name", "target_names"):
+        assert not hasattr(brief, gone), gone
+    _with(monkeypatch, location="")
+    assert brief.queries(_DAY, [], searched={}) == []                   # nothing said: nothing searched
+    assert brief.queries(_DAY, ["Quayside"], searched={}) == ["Quayside news October 2026"]
 
 
-def test_a_part_the_profile_does_not_say_is_left_out_never_guessed(monkeypatch):
-    _somewhere(monkeypatch, "", status="", city="")
-    monkeypatch.setattr(brief.person, "get", lambda k, d=None: d)
-    assert brief.queries(dt.date(2026, 10, 25), [], "") == []
-    _somewhere(monkeypatch, "GB", status="")
-    q = brief.queries(dt.date(2026, 10, 25), [], "")
-    # No Target Sectors: the field is the first job title searched, never a stock one.
-    assert "Somewhere supply chain analyst hiring or layoffs October 2026" in q
-    assert not any("rule changes" in x for x in q)
+def test_the_searches_stay_at_six_with_the_employers_in_play_first(monkeypatch):
+    watch = [{"what": "thing %d" % n, "every": "day"} for n in range(8)]
+    _with(monkeypatch, watch=watch)
+    q = brief.queries(_DAY, ["Larkspur Retail", "Fernhill Freight", "Quayside"], searched={})
+    assert len(q) == 6 and q[0].startswith("Larkspur Retail") and q[1].startswith("Fernhill")
+    assert q[2:] == ["thing %d October 2026" % n for n in range(4)]
+    _with(monkeypatch, watch=watch, leave_out=["employers"])
+    assert brief.queries(_DAY, ["Larkspur Retail"], searched={})[0] == "thing 0 October 2026"
 
 
-def test_the_slow_news_is_searched_once_a_week_not_every_morning(monkeypatch):
-    _somewhere(monkeypatch, "CA")
-    wed = dt.date(2026, 10, 28)
-    daily = brief.queries(wed, [], _NURSE, since=dt.date(2026, 10, 27))
-    assert not any("rule changes" in x or "Bank of Canada" in x for x in daily)
-    first = brief.queries(dt.date(2026, 10, 26), [], _NURSE, since=dt.date(2026, 10, 25))
-    assert any("rule changes" in x for x in first) and any("Bank of Canada" in x for x in first)
+def test_each_watched_thing_is_searched_as_often_as_it_changes(monkeypatch):
+    watch = [{"what": "daily thing", "every": "day"}, {"what": "weekly thing", "every": "week"},
+             {"what": "monthly thing", "every": "month"}, {"what": "new thing", "every": "month"}]
+    seen = {"daily thing": _DAY - dt.timedelta(days=1), "weekly thing": _DAY - dt.timedelta(days=3),
+            "monthly thing": _DAY - dt.timedelta(days=20)}
+    due = [w["what"] for w in brief.due_watch(_DAY, watch, seen)]
+    assert due == ["daily thing", "new thing"]
+    later = _DAY + dt.timedelta(days=8)
+    assert [w["what"] for w in brief.due_watch(later, watch, seen)] == [
+        "daily thing", "weekly thing", "monthly thing", "new thing"]
 
 
-@pytest.mark.parametrize("line, want", [
-    ("- **Work authorization:** Canadian citizen.", ""),
-    ("- **Right to work:** UK settled status. Not a British citizen.", "work visa and permit"),
-    ("- **Work authorization:** IEC Working Holiday work permit, no sponsorship needed.", "work visa and permit"),
-    ("- **Right to work:** Irish passport holder, a national.", ""),
-    ("- **Location:** Leeds", ""),
-])
-def test_the_right_to_work_news_follows_what_the_profile_says(monkeypatch, line, want):
-    _somewhere(monkeypatch, "GB", status="")
-    assert brief.rights_term("## Identity\n" + line + "\n") == want
+def test_a_list_from_anywhere_is_checked_never_trusted(monkeypatch):
+    got = brief.watch_list([{"what": "  pay   talks ", "every": "fortnight"}, "a plain string",
+                            {"what": ""}, {"what": "PAY TALKS"}, 7, {"what": "mine", "by": "you"}])
+    assert got == [{"what": "pay talks", "every": "week"}, {"what": "a plain string", "every": "week"},
+                   {"what": "mine", "every": "week", "by": "you"}]
+
+
+def _person_json(state) -> str:
+    return os.path.join(_profile(state), "person.json")
+
+
+def _watch_of(state) -> list:
+    import json
+    return json.load(open(_person_json(state), encoding="utf-8"))["brief"].get("watch")
+
+
+def test_claude_writes_the_list_and_the_persons_own_choices_stand(tmp_path):
+    import json
+    state = _state(tmp_path)
+    r = _run(state, "watch", "add", "Manchester tram strike", "--every", "day")
+    assert r.returncode == 0, r.stderr
+    r = _run(state, "watch", "drop", "UK settled status rule changes")
+    assert r.returncode == 0, r.stderr
+    rewrite = [{"what": "UK settled status rule changes", "every": "week"},
+               {"what": "Salford logistics hiring", "every": "day"}]
+    r = _run(state, "watch", "write", stdin=json.dumps(rewrite))
+    assert r.returncode == 0, r.stderr
+    whats = [w["what"] for w in _watch_of(state)]
+    # The person's own stays, what they took off is not written back, Claude's earlier go.
+    assert whats == ["Manchester tram strike", "Salford logistics hiring"]
+    assert "theirs" in r.stdout
+    assert _run(state, "watch", "write", stdin="[]").returncode == 2
+    assert _run(state, "watch", "drop", "never on it").returncode == 2
+
+
+def test_the_list_is_written_again_when_the_profile_it_came_from_changes(tmp_path):
+    import json
+    state = _state(tmp_path)
+    r = _run(state)
+    assert "what the news watches needs writing (the profile" not in r.stdout
+    assert "needs writing (none written yet)" not in r.stdout       # the example has a list
+    _run(state, "watch", "write", stdin=json.dumps([{"what": "UK freight outlook", "every": "month"}]))
+    assert "needs writing" not in _run(state, "watch").stdout
+    md = os.path.join(_profile(state), "CLAUDE.md")
+    text = open(md, encoding="utf-8").read()
+    with open(md, "w", encoding="utf-8") as fh:
+        fh.write(text.replace("Manchester", "Glasgow", 1))
+    assert "needs writing: the profile changed" in _run(state, "watch").stdout
+    out = _run(state, "--today", TODAY).stdout
+    assert "what the news watches needs writing (the profile changed since it was written)" in out
+    # An older profile with no list at all is asked for one, never left with no news.
+    p = _person_json(state)
+    d = json.load(open(p, encoding="utf-8"))
+    d.pop("brief")
+    json.dump(d, open(p, "w", encoding="utf-8"))
+    assert "needs writing (none written yet)" in _run(state, "--today", TODAY).stdout
+
+
+def test_what_a_brief_searched_waits_its_turn_at_the_next(tmp_path):
+    state = _state(tmp_path)
+    first = _run(state, "--today", "2026-10-26", "--write").stdout
+    assert "UK settled status rule changes October 2026" in first
+    nxt = _run(state, "--today", "2026-10-27").stdout
+    assert "Manchester supply chain and logistics analyst hiring or layoffs October 2026" in nxt
+    assert "settled status" not in nxt.split("given these searches: ", 1)[1].split("\n", 1)[0]
+    week = _run(state, "--today", "2026-11-02").stdout
+    assert "UK settled status rule changes November 2026" in week
 
 
 def test_what_counts_is_the_persons_own_line_where_they_wrote_one():
@@ -230,6 +273,7 @@ def test_what_counts_is_the_persons_own_line_where_they_wrote_one():
           "employers in process; the permit, which outranks everything.\n")
     assert brief.what_counts(md).startswith("Morning brief, what counts")
     assert brief.what_counts("# nothing here\n") == brief.WHAT_COUNTS
+    assert brief.what_counts("", [{"what": "NHS band 5 pay talks"}]).endswith(": NHS band 5 pay talks")
 
 
 # ------------------------------------------------------------------ the sync's output

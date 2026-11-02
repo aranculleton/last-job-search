@@ -357,8 +357,36 @@ DONE_BEFORE = {
 }
 
 
+# The same from the tracker and the brief's records, for the rest: someone fifty applications
+# in was told "these are your first results" on their page (2026-11-02), because the tip's
+# own record began after their search did. More than one, so the first time still hears it.
+DONE_ENOUGH = 2
+
+
+def _tracker_done(area: str) -> bool:
+    import csv_store
+    try:
+        rows = csv_store.dict_rows(person.state("job_search_tracker.csv"), refuse=False)
+    except (OSError, csv.Error):
+        return False
+    if area == "search":
+        return len(rows) > DONE_ENOUGH
+    if area == "apply":
+        return sum(bool(str(r.get("cv_file") or "").strip()) for r in rows) >= DONE_ENOUGH
+    if area == "interview":
+        return sum(str(r.get("status") or "").strip().lower() in ("interview", "offer", "hired")
+                   for r in rows) >= DONE_ENOUGH
+    return False
+
+
 def done_before(area: str) -> bool:
-    """Has the person done this kind of work before, by the message log?"""
+    """Has the person done this kind of work before, by their own records (the message log,
+    the tracker, the brief's records)?"""
+    if area in ("search", "apply", "interview") and _tracker_done(area):
+        return True
+    if area == "brief":
+        import glob
+        return len(glob.glob(person.state("documents", "briefs", "????-??-??.md"))) >= DONE_ENOUGH
     scenarios = DONE_BEFORE.get(area)
     if not scenarios:
         return False

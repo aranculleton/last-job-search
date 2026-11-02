@@ -46,6 +46,7 @@ from __future__ import annotations
 import argparse
 import datetime as dt
 import glob
+import hashlib
 import json
 import os
 import re
@@ -68,14 +69,20 @@ RECORD_OWED = 30       # the record lists this many owed; the pack holds every o
 NEWS_MAX = 5           # in the record; the message carries at most three
 MESSAGE_NEWS = 3
 QUERIES_MAX = 6
-# The person's own settings for the brief (person.json `brief`, set from the page's Tweak
-# panel): how many owed items the message lists (B1), how many news items (B2), which news
-# searches run (B3, never the work-rights one), and which parts it shows (B5, never Owed).
+# The person's own settings for the brief (person.json `brief`, set from the page's Edit the
+# brief panel): how many owed items the message lists (B1), how many news items (B2), what its
+# news watches (`watch`: B3 takes one off, B6 and B7 add one), and which parts it shows (B5,
+# never Owed). The employers in play are searched first unless `leave_out` names them.
 LENGTHS = {"short": 2, "standard": 4, "long": 6}
 NEWS_CHOICES = (0, 1, 3, 5)
-NEWS_GROUPS = ("employers", "rights", "market", "bank", "targets")
-NEVER_OFF = ("rights",)
+NEWS_GROUPS = ("employers",)
 PARTS = ("since", "next_three", "tip")
+# How often a watched thing is searched: as often as it changes, in days since it was last
+# searched. A brief that missed a day, or had no room for it, searches it at the next.
+EVERY = {"day": 1, "week": 7, "month": 28}
+WATCH_MAX = 8            # what the list holds; a brief runs at most QUERIES_MAX searches
+WATCH_LEN = 80
+WATCHED = ("documents", "briefs", "watched.json")   # when each was last searched
 
 
 def setting(name: str):
@@ -86,7 +93,7 @@ def setting(name: str):
     if name == "news":
         return got if got in NEWS_CHOICES else MESSAGE_NEWS
     if name == "leave_out":
-        return [g for g in (got or []) if g in NEWS_GROUPS and g not in NEVER_OFF]
+        return [g for g in (got or []) if g in NEWS_GROUPS]
     if name == "hide":
         return [p for p in (got or []) if p in PARTS]
     return got
@@ -99,45 +106,8 @@ NEWS_HOLD = re.compile(r"\b(?:lay ?offs?|laid off|job cuts|cuts? \d+|hiring free
 _LINK = re.compile(r"https?://[^\s)>\]]+")
 _DATE_IN = re.compile(r"\b(\d{4}-\d{2}-\d{2})\b")
 
-# The central bank whose decisions move a market, by the person's country: one for every
-# country the market tables carry (tools/markets/), so nobody's search goes without one.
-CENTRAL_BANK = {"CA": "Bank of Canada", "GB": "Bank of England", "UK": "Bank of England",
-                "US": "Federal Reserve", "AU": "Reserve Bank of Australia",
-                "NZ": "Reserve Bank of New Zealand", "IN": "Reserve Bank of India",
-                "CH": "Swiss National Bank", "JP": "Bank of Japan",
-                "AE": "Central Bank of the UAE", "BR": "Banco Central do Brasil",
-                "MX": "Banco de Mexico", "PL": "National Bank of Poland",
-                "SE": "Riksbank", "SG": "Monetary Authority of Singapore",
-                "ZA": "South African Reserve Bank", "DK": "Danmarks Nationalbank",
-                "NO": "Norges Bank", "CZ": "Czech National Bank", "IL": "Bank of Israel",
-                "KR": "Bank of Korea", "HK": "Hong Kong Monetary Authority",
-                "CN": "People's Bank of China", "HU": "Magyar Nemzeti Bank",
-                "RO": "National Bank of Romania", "TR": "Central Bank of Turkey"}
-# Where a bank sets policy some other way than a rate, the words its decisions go by.
-BANK_DECISION = {"SG": "monetary policy statement"}
-# A language's name in English, for the news-reader's request.
-LANGUAGE = {"fr": "French", "de": "German", "es": "Spanish", "pt": "Portuguese",
-            "it": "Italian", "nl": "Dutch", "pl": "Polish", "sv": "Swedish", "ja": "Japanese",
-            "ar": "Arabic"}
-EURO = {"IE", "FR", "DE", "NL", "ES", "IT", "PT", "BE", "AT", "FI", "LU", "GR", "SK", "SI",
-        "EE", "LV", "LT", "MT", "CY", "HR"}
-# How a country is named in a search: these, else its market table's name (tools/markets/).
-COUNTRY = {"GB": "UK", "UK": "UK", "US": "US", "AT": "Austria", "BE": "Belgium",
-           "CH": "Switzerland", "CN": "China", "CZ": "Czechia", "DK": "Denmark",
-           "FI": "Finland", "GR": "Greece", "HK": "Hong Kong", "HU": "Hungary", "IL": "Israel",
-           "KR": "South Korea", "LU": "Luxembourg", "MY": "Malaysia", "NO": "Norway",
-           "PH": "Philippines", "PT": "Portugal", "RO": "Romania", "AR": "Argentina",
-           "CL": "Chile", "CO": "Colombia", "EG": "Egypt", "NG": "Nigeria", "KE": "Kenya",
-           "SA": "Saudi Arabia", "QA": "Qatar", "TR": "Turkey", "UA": "Ukraine",
-           "VN": "Vietnam", "TH": "Thailand", "ID": "Indonesia", "TW": "Taiwan",
-           "EE": "Estonia", "LT": "Lithuania", "LV": "Latvia", "SK": "Slovakia",
-           "SI": "Slovenia", "HR": "Croatia", "BG": "Bulgaria", "RS": "Serbia",
-           "IS": "Iceland", "MT": "Malta", "CY": "Cyprus"}
-WHAT_COUNTS = ("employers the person is in process with or has a live thread at; their target "
-               "employers, in their market; their market for the roles they want (hiring or "
-               "layoff waves, a central-bank decision, sector earnings, a big funding round at a "
-               "local company in their field); any change to their work authorization, which "
-               "outranks everything else")
+WHAT_COUNTS = ("employers the person is in process with or has a live thread at, first; then "
+               "what they asked the brief to watch, in the order they gave")
 
 
 # ---------------------------------------------------------------- reading the state
@@ -265,34 +235,15 @@ def _section(text: str, heading: str) -> str:
     return rest[:end.start()] if end else rest
 
 
-def target_names(claude_md: str) -> tuple[list[str], list[str]]:
-    """(named employers, sectors) from the profile summary's Target Sectors."""
-    body = _section(claude_md, "Target Sectors")
-    names, sectors = [], []
-    for line in body.splitlines():
-        if not line.startswith("- "):
-            continue
-        line = re.sub(r"\([^)]*\)", "", line[2:])
-        line = re.sub(r"\*\*", "", line)
-        if ":" in line:
-            head, tail = line.split(":", 1)
-            sectors.append(head.strip())
-            first = re.split(r"\.\s", tail, maxsplit=1)[0]
-            for n in first.split(","):
-                n = n.strip(" .;")
-                if n and n[:1].isupper() and len(n) <= 40 and len(n.split()) <= 4:
-                    names.append(n)
-        else:
-            sectors.append(line.split(".")[0].strip())
-    return list(dict.fromkeys(names)), [s for s in sectors if s]
-
-
-def what_counts(claude_md: str) -> str:
+def what_counts(claude_md: str, watch: list[dict] | None = None) -> str:
+    """For the news reader: the person's own "what counts" line where their profile has one,
+    else the app's, naming what they watch in their own words."""
     body = _section(claude_md, "This search's automation")
     for line in body.splitlines():
         if re.search(r"what counts", line, re.I):
             return re.sub(r"\*\*", "", line.lstrip("- ")).strip()[:600]
-    return WHAT_COUNTS
+    whats = [w["what"] for w in (watch or [])]
+    return WHAT_COUNTS + (": " + "; ".join(whats) if whats else "")
 
 
 def _profile_text(name: str) -> str:
@@ -318,89 +269,173 @@ def _market(code: str) -> dict:
         return {}
 
 
-def country_name(code: str) -> str:
-    """How the person's country is named in a search: "" where it is not known, so no search
-    carries a bare code ("BR rule changes") or a gap."""
-    code = str(code or "").upper()
-    return COUNTRY.get(code) or str(_market(code).get("name") or "")
-
-
 def news_language(code: str) -> str:
-    """The language the person's market reads its news in, where it is not English: ""."""
+    """The language the person's market reads its news in, as its code ("fr"), where it is
+    not English: "". The news reader knows the codes, so no table of names is kept here."""
     langs = [str(x) for x in (_market(code).get("languages") or [])]
-    return "" if not langs or "en" in langs[:1] else LANGUAGE.get(langs[0], "")
+    return "" if not langs or "en" in langs[:1] else langs[0]
 
 
-def rights_term(claude_md: str) -> str:
-    """What the person's right to work is called, for its news: networking.py STATUS_NAME;
-    else, where the profile's right-to-work line names a visa, a permit or a status, "work
-    visa and permit"; else "" (a citizen's rules do not change week to week, and a search for
-    them is spent for nothing). What the line says the person is not ("not a citizen", "no
-    visa needed") is set aside first."""
-    status = str(_net("STATUS_NAME", "") or "").strip()
-    if status:
-        return "" if re.search(r"\bcitizen", status, re.I) else status
-    for line in claude_md.splitlines():
-        m = re.match(r"\s*[-*]\s*\*\*(?:right to work|work authori[sz]ation|work rights)[^*]*\*\*:?\s*(.*)",
-                     line, re.I)
-        if not m:
+# ---------------------------------------------------------------- what the news watches
+
+def _clean_what(text) -> str:
+    return " ".join(str(text or "").split())[:WATCH_LEN].strip(" .;,")
+
+
+def watch_list(raw=None) -> list[dict]:
+    """What the person's brief watches, in their order, each {what, every} and "by": "you"
+    where they added it themselves: person.json `brief.watch`, written by Claude from their
+    profile (`brief.py watch write`) and changed on their page. Checked, never guessed: an
+    item with no words is dropped, an unknown "every" is a week."""
+    got = person.get("brief.watch", None) if raw is None else raw
+    out, seen = [], set()
+    for x in got if isinstance(got, list) else []:
+        x = {"what": x} if isinstance(x, str) else x
+        if not isinstance(x, dict):
             continue
-        said = re.sub(r"\bnot\s+(?:an?\s+)?[\w\s-]*?(?:citizen\w*|permanent resident\w*|national\w*)"
-                      r"(?:\s+or\s+(?:an?\s+)?[\w\s-]*?(?:citizen\w*|permanent resident\w*))?", " ", m.group(1), flags=re.I)
-        said = re.sub(r"\bno\s+(?:visa|permit|sponsorship)\b[^.;,]*", " ", said, flags=re.I)
-        if re.search(r"\b(?:visa|permit|settled status|pre-settled|residence|working holiday|"
-                     r"blue card|green card|H-?1B|status)\b", said, re.I):
-            return "work visa and permit"
+        what = _clean_what(x.get("what"))
+        if not what or what.lower() in seen:
+            continue
+        seen.add(what.lower())
+        item = {"what": what, "every": x.get("every") if x.get("every") in EVERY else "week"}
+        if x.get("by") == "you":
+            item["by"] = "you"
+        out.append(item)
+    return out[:WATCH_MAX]
+
+
+def dropped() -> list[str]:
+    """What the person took off their watch list: Claude never writes it back."""
+    got = person.get("brief.watch_dropped", None)
+    return [_clean_what(x) for x in got if _clean_what(x)] if isinstance(got, list) else []
+
+
+def watch_basis(claude_md: str | None = None) -> str:
+    """A fingerprint of what the watch list is written from: the person's place, their right
+    to work and the rest of Identity, and what they are after (Target Sectors). When it moves,
+    the list is written again; the person's own items and what they took off stay as they are."""
+    md = _profile_text("CLAUDE.md") if claude_md is None else claude_md
+    parts = [str(person.country() or ""), str(person.get("identity.location", "") or ""),
+             _section(md, "Identity"), _section(md, "Target Sectors")]
+    return hashlib.md5("\n".join(" ".join(p.split()) for p in parts).encode("utf-8")).hexdigest()[:12]
+
+
+def watch_needs_writing(claude_md: str | None = None) -> str:
+    """Why the watch list should be written now, or "": never written, or written from a
+    profile that has changed since."""
+    if not person.exists():
         return ""
+    stamp = person.get("brief.watch_from", None)
+    if not stamp and not watch_list():
+        return "none written yet"
+    if stamp and stamp != watch_basis(claude_md):
+        return "the profile changed since it was written"
     return ""
 
 
-def queries(today: dt.date, live_employers: list[str], claude_md: str,
-            since: dt.date | None = None) -> list[str]:
-    """At most six searches, in the order the brief values them: the employers in play,
-    the person's work authorization, their market, their central bank, then their targets
-    (a different pair each run, so every target is looked at over a few weeks). Built from
-    the person's own country, city, field and employers, so they fit anyone anywhere; a
-    part the profile does not say is left out rather than guessed. The right-to-work and
-    the central-bank searches, whose news comes a few times a year, run in the first brief
-    of each week only (`since` in an earlier week), never every morning."""
-    month = today.strftime("%B %Y")
-    country_code = person.country()
-    country = country_name(country_code)
-    city = str(_net("HOME_CITY", "") or str(person.get("identity.location", "") or "").split(",")[0]).strip()
-    names, sectors = target_names(claude_md)
+def write_watch(items: list, by_person: bool = False) -> list[dict]:
+    """Claude's list, from the profile: it replaces Claude's earlier items, keeps every one the
+    person added, and leaves out whatever they took off. With `by_person`, the items are the
+    person's own (said in a chat), added to the list as it is."""
+    import profile_set
+    off = {x.lower() for x in dropped()}
+    now = watch_list()
+    mine = [w for w in now if w.get("by") == "you"]
+    new = [w for w in watch_list(items) if w["what"].lower() not in off]
+    if by_person:
+        new = [dict(w, by="you") for w in new]
+        kept = now + [w for w in new if w["what"].lower() not in {x["what"].lower() for x in now}]
+    else:
+        kept = mine + [w for w in new if w["what"].lower() not in {x["what"].lower() for x in mine}]
+    kept = watch_list(kept)
+    profile_set.set_json("brief.watch", kept)
+    if not by_person:
+        profile_set.set_json("brief.watch_from", watch_basis())
+    person.reset()
+    return kept
+
+
+def drop_watch(what: str) -> bool:
+    """One item off the list, by its words, and remembered as taken off."""
+    import profile_set
+    want = _clean_what(what).lower()
+    now = watch_list()
+    left = [w for w in now if w["what"].lower() != want]
+    if len(left) == len(now):
+        return False
+    profile_set.set_json("brief.watch", left)
+    profile_set.set_json("brief.watch_dropped", list(dict.fromkeys(dropped() + [_clean_what(what)])))
+    person.reset()
+    return True
+
+
+def _watched_path() -> str:
+    return person.state(*WATCHED)
+
+
+def last_searched() -> dict:
+    """{what (lower case): the day it was last searched}, from the brief's own record."""
     try:
-        watched = [str(n).strip() for n in (getattr(person.module("search"), "SCRAPE_EMPLOYERS", None) or [])
-                   if str(n).strip()]
-    except Exception:  # noqa: BLE001  no search.py yet
-        watched = []
-    names = list(dict.fromkeys(watched + names))
+        with open(_watched_path(), encoding="utf-8") as fh:
+            got = json.load(fh)
+    except (OSError, ValueError):
+        return {}
+    return {str(k).lower(): _d(v) for k, v in (got or {}).items() if _d(v)} if isinstance(got, dict) else {}
+
+
+def note_searched(whats: list[str], today: dt.date) -> None:
+    """The day each watched thing was searched, so the next brief knows what is due."""
+    have = {k: v.isoformat() for k, v in last_searched().items()}
+    for w in whats:
+        have[w.lower()] = today.isoformat()
+    path = _watched_path()
+    os.makedirs(os.path.dirname(path), exist_ok=True)
+    with open(path, "w", encoding="utf-8", newline="\n") as fh:
+        json.dump(dict(sorted(have.items())), fh, indent=1, ensure_ascii=False)
+        fh.write("\n")
+
+
+def due_watch(today: dt.date, watch: list[dict] | None = None,
+              searched: dict | None = None) -> list[dict]:
+    """The watched things this brief searches, in the person's order: each whose days since it
+    was last searched have reached how often it changes, or that was never searched."""
+    watch = watch_list() if watch is None else watch
+    searched = last_searched() if searched is None else searched
+    out = []
+    for w in watch:
+        last = searched.get(w["what"].lower())
+        if last is None or (today - last).days >= EVERY[w["every"]]:
+            out.append(w)
+    return out
+
+
+def home_place() -> str:
+    """Where the person's employer news is placed, in their own words: the last part of their
+    location ("Toronto, ON, Canada" gives "Canada"), so a common name finds its local news."""
+    loc = str(person.get("identity.location", "") or "")
+    return loc.split(",")[-1].strip()[:40] if "," in loc else ""
+
+
+def queries(today: dt.date, live_employers: list[str], watch: list[dict] | None = None,
+            searched: dict | None = None) -> list[str]:
+    """At most six searches: the employers in play (two at most), then what the person's brief
+    watches that is due today, in their own words and their order. Nothing else: no kind of
+    news is decided here for anyone, and what matters to a nurse, a lawyer or a student on a
+    visa is what their own list says (person.json `brief.watch`)."""
+    month = today.strftime("%B %Y")
     off = set(setting("leave_out"))
-    weekly = since is None or since.isocalendar()[:2] != today.isocalendar()[:2]
-    where = (" " + country) if country else ""
-    out = ["%s%s news %s" % (n, where, month) for n in live_employers[:2]] if "employers" not in off else []
-    status = rights_term(claude_md)
-    if status and country and weekly:
-        out.append("%s %s rule changes %s" % (country, status, today.year))
-    field = re.split(r",|;", sectors[0])[0].strip() if sectors else ""
-    if not field:
-        try:
-            field = str((getattr(person.module("search"), "SCRAPE_QUERIES", None) or [""])[0]).strip()
-        except Exception:  # noqa: BLE001
-            field = ""
-    if city and "market" not in off:
-        out.append(" ".join(x for x in (city, field.lower(), "hiring or layoffs", month) if x))
-    bank = "European Central Bank" if country_code in EURO else CENTRAL_BANK.get(country_code, "")
-    if bank and "bank" not in off and weekly:
-        out.append("%s %s %s" % (bank, BANK_DECISION.get(country_code, "interest rate decision"), month))
-    targets = [n for n in names if company_key(n) not in {company_key(x) for x in live_employers}
-               ] if "targets" not in off else []
-    room = max(QUERIES_MAX - len(out), 1 if targets else 0)
-    if targets:
-        start = (today.toordinal() // 3) % len(targets)
-        pick = [targets[(start + i) % len(targets)] for i in range(min(room, len(targets)))]
-        out += ["%s%s news %s" % (n, where, month) for n in pick]
+    where = home_place()
+    out = ["%s%s news %s" % (n, " " + where if where else "", month)
+           for n in live_employers[:2]] if "employers" not in off else []
+    for w in due_watch(today, watch, searched):
+        out.append("%s %s" % (w["what"], month))
     return list(dict.fromkeys(out))[:QUERIES_MAX]
+
+
+def searched_whats(qs: list[str], watch: list[dict], today: dt.date) -> list[str]:
+    """Which watched things the searches handed on carry, to note them as searched."""
+    month = today.strftime("%B %Y")
+    return [w["what"] for w in watch if "%s %s" % (w["what"], month) in qs]
 
 
 def links_sent(paths: list[str]) -> list[str]:
@@ -628,6 +663,8 @@ def _gather(today: dt.date, write: bool) -> dict:
 
     live_names = _live_employers(tracker, contacts, threads, today)
     claude_md = _profile_text("CLAUDE.md")
+    watch = watch_list()
+    qs = queries(today, live_names, watch)
     b = {
         "date": iso, "weekday": today.strftime("%A"), "since": since.isoformat(),
         "counts": {"owed": len(live), **{k: v for k, v in counts.items() if k != "processes"}},
@@ -636,9 +673,9 @@ def _gather(today: dt.date, write: bool) -> dict:
         "set_aside": _set_aside(asks, old, held),
         "lines": lines, "next_three": three,
         "drafts": got, "pack": pack, "closed": closed, "preps": preps,
-        "queries": queries(today, live_names, claude_md, since),
+        "queries": qs, "watch": watch, "watch_due": watch_needs_writing(claude_md),
         "language": news_language(person.country()),
-        "what_counts": what_counts(claude_md), "skip_links": links_sent(earlier),
+        "what_counts": what_counts(claude_md, watch), "skip_links": links_sent(earlier),
         "sync": sync, "export_line": export_line, "profile_line": profile_line,
         "write_here": followup_drafts.to_write_here(got),
         "url": _brief_url(iso), "page": page_url(), "tip": "", "written": write,
@@ -647,6 +684,8 @@ def _gather(today: dt.date, write: bool) -> dict:
     if write:
         b["tip"] = _tip(today)
         write_record(b)
+        if setting("news") and not b["paused"]:
+            note_searched(searched_whats(qs, watch, today), today)
     return b
 
 
@@ -1044,11 +1083,17 @@ def claude_lines(b: dict) -> list[str]:
     if tidy_line:
         out.append(tidy_line)
     n = setting("news")
+    if b.get("watch_due") and n:
+        out.append("what the news watches needs writing (%s): read the person's profile, then "
+                   "write the few things that move their own search, in their terms, each with "
+                   "how often it changes, with python3 tools/brief.py watch write (its --help "
+                   "says how); then python3 tools/brief.py watch searches prints today's "
+                   "searches, which replace the ones below" % b["watch_due"])
     if n and b["queries"]:
         out.append("news: the news-reader agent, given these searches: %s; at most %d item%s in the "
                    "message (the person's setting)%s" % (
                        " | ".join(b["queries"]), n, "" if n == 1 else "s",
-                       "; news in %s counts as much as in English" % b["language"]
+                       "; news in the language %s counts as much as in English" % b["language"]
                        if b.get("language") else ""))
     else:
         out.append("news: run no news search (%s)" % (
@@ -1058,11 +1103,21 @@ def claude_lines(b: dict) -> list[str]:
         b["since"], " ".join(b["skip_links"][:10]) or "none"))
     out.append("what counts: " + b["what_counts"])
     if b.get("page"):
+        behind = page_behind()
+        if behind:
+            # The brief is the only chat many people have: an update that changed the page's
+            # own code reached nobody's open page until some other chat ran (2026-11-02: a
+            # page two versions behind, showing a brief four days old).
+            # The first brief after an update read its prompt before the update came in, and
+            # an older prompt says never to republish: this line is the newer rule.
+            out.append("the page's own code is older than this version (%s): republish it now, "
+                       "before its data, whatever the prompt you read before this run's update "
+                       "says (an older one said never to republish; this update replaced that "
+                       "rule): %s" % (behind, " ".join(behind_steps(b["page"]))))
         out.append("the page, after landing (step 4): ArtifactData query, url %s, collections "
-                   "view and meta, out_dir <D>; python3 tools/app.py view <D>/view --dump <D> "
-                   "--chat brief; send every batch it prints. Never republish the page: this chat already "
-                   "answers it. Then the app skill's steps 1 to 3, for work still waiting"
-                   % b["page"])
+                   "screen, meta and addr, out_dir <D>, limit 1000; python3 tools/app.py view "
+                   "<D>/view --dump <D> --chat brief; send every batch it prints. "
+                   "Then the app skill's steps 1 to 3, for work still waiting" % b["page"])
     try:
         import routines
         owed = routines.calls()
@@ -1085,6 +1140,26 @@ def claude_lines(b: dict) -> list[str]:
                    + "; ".join(names[:8]) + ("; and %d more (bar.py unjudged --contacts)"
                                               % (len(names) - 8) if len(names) > 8 else ""))
     return out
+
+
+def page_behind() -> str:
+    """Why the person's published page needs publishing again (its code is older than this
+    version, or it was published under another name), or ""."""
+    try:
+        import app_setup
+        return "" if app_setup._page_current() else "an update changed the page itself"
+    except Exception:  # noqa: BLE001  no page record: nothing to publish again
+        return ""
+
+
+def behind_steps(url: str) -> list[str]:
+    try:
+        import app_listen
+        return app_listen._publish_now(url, 1)
+    except Exception:  # noqa: BLE001
+        return ["python3 tools/app.py page --out <your scratchpad>/page.html, then Artifact "
+                "publish it to %s with the capabilities python3 tools/app_page.py "
+                "--capabilities prints" % url]
 
 
 def render_text(b: dict) -> str:
@@ -1219,6 +1294,78 @@ def _utf8() -> None:
             pass
 
 
+WATCH_HELP = """What the person's brief watches, in their own terms (person.json brief.watch).
+
+  watch                  the list, and whether it needs writing
+  watch write            Claude's list from the profile, as JSON on stdin:
+                         [{"what": "<words to search>", "every": "day|week|month"}, ...]
+                         A few things (at most %d) that move THIS person's search, most
+                         important first, each as often as it really changes: their right to
+                         work where it can change, the pay talks, rules or exams of their
+                         field, their local market for their roles, an employer group they
+                         follow. Never a kind of news because others watch it. It replaces
+                         Claude's earlier items; the person's own and what they took off stay.
+  watch add "<what>" [--every week]   one the person asked for in a chat (theirs)
+  watch drop "<what>"    one off, and never written back
+  watch searches         today's searches, for the news reader, each noted as searched""" % WATCH_MAX
+
+
+def watch_main(argv: list[str]) -> int:
+    ap = argparse.ArgumentParser(prog="brief.py watch", description=WATCH_HELP,
+                                 formatter_class=argparse.RawDescriptionHelpFormatter)
+    ap.add_argument("do", nargs="?", default="show",
+                    choices=("show", "write", "add", "drop", "searches"))
+    ap.add_argument("what", nargs="?", default="")
+    ap.add_argument("--every", default="week", choices=tuple(EVERY))
+    ap.add_argument("--today", default="")
+    a = ap.parse_args(argv)
+    if not person.exists():
+        print("No profile yet, so there is nothing to watch: set the search up first.")
+        return 1
+    if a.do == "write":
+        try:
+            items = json.loads(sys.stdin.read() or "[]")
+        except ValueError as e:
+            print("watch write: not JSON (%s)" % e, file=sys.stderr)
+            return 2
+        if not isinstance(items, list) or not watch_list(items):
+            print("watch write: give a list of {\"what\", \"every\"}, at least one", file=sys.stderr)
+            return 2
+        kept = write_watch(items)
+    elif a.do == "add":
+        if not _clean_what(a.what):
+            print("watch add: say what to watch", file=sys.stderr)
+            return 2
+        kept = write_watch([{"what": a.what, "every": a.every}], by_person=True)
+    elif a.do == "drop":
+        if not drop_watch(a.what):
+            print("watch drop: %r is not on the list" % a.what, file=sys.stderr)
+            return 2
+        kept = watch_list()
+    elif a.do == "searches":
+        today = _today(a.today)
+        import open_actions
+        from network import state
+        contacts, threads = state.load_contacts(), state.load_threads()
+        tracker = open_actions._tracker()
+        watch = watch_list()
+        qs = queries(today, _live_employers(tracker, contacts, threads, today), watch)
+        note_searched(searched_whats(qs, watch, today), today)
+        for q in qs:
+            print(q)
+        return 0
+    else:
+        kept = watch_list()
+        why = watch_needs_writing()
+        if why:
+            print("needs writing: %s (python3 tools/brief.py watch --help)" % why)
+    for w in kept:
+        print("- %s (every %s)%s" % (w["what"], w["every"], ", theirs" if w.get("by") else ""))
+    if not kept:
+        print("Nothing watched yet.")
+    return 0
+
+
 def main(argv=None) -> int:
     _utf8()
     argv = sys.argv[1:] if argv is None else list(argv)
@@ -1234,6 +1381,8 @@ def main(argv=None) -> int:
             "; %d left out, already sent in an earlier brief" % len(got["dropped"]) if got["dropped"] else "",
             "; noted on the tracker for %s" % ", ".join(got["noted"]) if got["noted"] else ""))
         return 0
+    if argv[:1] == ["watch"]:
+        return watch_main(argv[1:])
     ap = argparse.ArgumentParser(description=__doc__.split("\n")[0])
     ap.add_argument("--write", action="store_true", help="do the day's upkeep and write the records")
     ap.add_argument("--start", action="store_true", help="a scheduled run's start, then the brief")

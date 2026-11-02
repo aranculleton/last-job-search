@@ -345,8 +345,9 @@ METHODS: dict[str, dict] = {
             (57, "2026-10-30", False, "RUNBOOK.md says a cloud chat unsubscribes from the pull request it opens at once; a recorded reaction says to save it with the turn's work; documents render and are checked as before"),
             (58, "2026-10-31", False, "a rule the person says again replaces the older one by itself, keeping what it held; one that may contradict an older rule is judged by the chat recording it, and only one it truly cannot call reaches the page as a single, seldom question; adding to a list of employers is no longer read as a contradiction; documents render and are checked as before"),
             (59, "2026-11-02", False, "the RUNBOOK says where a booking goes: a call's time and zone in its next action, and anything else booked into Coming up with upcoming.py add"),
+            (60, "2026-11-02", False, "the RUNBOOK says where a request to watch something in the brief's news goes (brief.py watch); documents render and are checked as before"),
         ),
-        "fingerprint": "f0733af0e0f9602e",
+        "fingerprint": "059d832914ce91a6",
     },
     "interview": {
         "by": "upgrade", "priority": 2, "applies": "live_interviews", "time": "~15 min",
@@ -384,8 +385,9 @@ METHODS: dict[str, dict] = {
             (24, "2026-10-29", False, "interview prep reads the saved employer research first and starts a research agent only when none is recent; no separate chat is offered for an employer, and a campaign chat started before carries on"),
             (25, "2026-10-29", False, "the pack asks which team the call is for only when the employer has another posting for the role, and lists the other postings, not the one the call is for; the same role on two boards is one posting and a posting past its deadline is none; an interview's time said in the chat, an invite, a message or a contact's note is saved on its record (interview_pack.py book and times, and --time when a stage is booked), so the page shows it instead of time not set; packs already made stay as they are"),
             (26, "2026-10-30", True, "a prep the page asks for after a booked stage's day has gone is for what comes next, never the stage already held, and the pack says which stage it is for in its first line"),
+            (27, "2026-11-02", False, "a stage is booked with its kind (due by a day, or a meeting), its length and its time zone's own name (interview_pack.py book --due --minutes, --zone America/Toronto), so Coming up reads them rather than guessing from English words; packs are built as before"),
         ),
-        "fingerprint": "d0bdc6dea5441445",
+        "fingerprint": "9b5861f28acf0651",
     },
     "research": {
         "by": "upgrade", "priority": 3, "applies": "live_applications", "time": "~5 min each",
@@ -642,8 +644,9 @@ METHODS: dict[str, dict] = {
             (15, "2026-10-31", False, "a brief's stored prompt says how to get a copy of the files when its chat has none, so it runs in any chat it lands in; the day's tidy-up gives an older stored brief that line, once"),
             (16, "2026-11-02", False, "a silent daily upkeep where the brief does not run every day, made and kept bound to the chat that answers the page by the daily tidy-up; a brief or upkeep moved off the helper that chat replaced is deleted there, not left turned off"),
             (17, "2026-11-02", False, "the cost note says what the news costs now: the smallest model, six searches at most, the slow ones weekly"),
+            (18, "2026-11-02", False, "the brief searches what the person's own list watches (person.json brief.watch) and the employers in play, no fixed kinds of news; it republishes the page when an update changed the page's code, and asks for the watch list where none is written"),
         ),
-        "fingerprint": "f2e6313d3c7e75d9",
+        "fingerprint": "f41263834c811696",
     },
     "expand": {
         "by": "upgrade", "priority": 4, "time": "~15 min",
@@ -683,8 +686,9 @@ METHODS: dict[str, dict] = {
             (11, "2026-10-31", False, "Refresh asks Claude to bring the page up to date instead of reloading the same data; the work pill opens Claude's work on the Brief; the time a job has run counts from its start; each week of the Brief's chart says its count; News reads in points; What's new links every change; work answered or waiting on a starting helper says so; the resume for no job in particular is linked from every Jobs tab and offered when there is none"),
             (12, "2026-11-01", False, "a second ask soon after the first rings Claude too, instead of being folded into the first ring"),
             (13, "2026-11-02", True, "Coming up: everything booked or due in one place by day (interview stages, tests due, calls booked, the closing day of anything drafted and not sent, and anything you add yourself), each into Google Calendar, Outlook, Apple Calendar or any other app with its calendar-with-a-plus and nothing connected, an interview's title opening its prep, with an Interviews view of each card; the Brief says each thing once (Today the interview this week with its prep and likely questions, then Coming up, Next three, Waiting on you, Jobs, the news and your numbers, each leaving out what another shows), fits one laptop screen with lists that grow or shrink to the room, and reads in the order a day is acted on on a phone; a call's time shows on the person; old news no longer promises a next brief; an icon-only button says what it does under the pointer; a free day on the Brief's two weeks adds something to it"),
+            (14, "2026-11-02", True, "Edit the brief shows and changes what the news watches; Settings has when the next interview leads the Brief and when calendar reminders come; the strip's day letters follow the person's language; an open page checks for new data when it is looked at again, and reloads itself to a newer version; Refresh asks Claude only for data older than today, shows what that costs, and is a soft button where it shows; the brief's opening section shows"),
         ),
-        "fingerprint": "720e3e5a8e521f2b",
+        "fingerprint": "70cef962de4baf2f",
     },
     "upskill": {
         "by": "upgrade", "priority": 4, "applies": "upskill_plans", "time": "~10 min",

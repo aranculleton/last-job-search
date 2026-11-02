@@ -61,7 +61,9 @@ when the local check passed.
 `brief.py news` puts the news in the day's record, leaves out any link an earlier brief
 sent, and notes a freeze or layoffs at an employer with a live application on that row.
 Then open the PR and merge it, as `_common.md` "Landing work" says. With a page, bring it up
-to date as its FOR CLAUDE line says. Never republish the page: this chat already answers it.
+to date as its FOR CLAUDE line says. Where a FOR CLAUDE line says the page's own code is older
+than this version, republish it first, exactly as that line says: this chat answers the page,
+so no other chat will, and an open page keeps the old code until it is.
 
 ## 5. The message
 

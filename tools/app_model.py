@@ -503,7 +503,18 @@ def _app(ctx: Ctx, targets: dict) -> dict:
             "update_waiting": waiting["line"] if waiting and u.get("mode") == "when_asked"
             else None, "news": news, "privacy": _privacy_line(),
             # The copy the page belongs to, so the page can start its helper chat itself.
-            "repo": f"https://github.com/{owner}/{name}" if owner and name else None}
+            "repo": f"https://github.com/{owner}/{name}" if owner and name else None,
+            # The page's own code version, built into it when it is published: an open page
+            # older than the one published since reloads itself (meta/now `page`, app.py view).
+            "page": _page_version()}
+
+
+def _page_version() -> int:
+    try:
+        import build_versions
+        return int(build_versions.current("page"))
+    except Exception:  # noqa: BLE001
+        return 0
 
 
 def _privacy_line() -> str:
@@ -3064,6 +3075,10 @@ def setting_values() -> dict:
         out["linkedin_plan"] = "free"
     import app_alerts
     out["suggestions"] = app_alerts.setting()
+    for key, default in SETTING_DEFAULTS.items():
+        got = str(person.get(key, default) or default)
+        allowed = [c[0] for k, _, ch in SETTINGS if k == key for c in ch]
+        out[key] = got if got in allowed else default
     # "off" is shown as paste: either way Claude's browser reads nothing, and the page offers
     # only the two (the bin's "Never", or Settings).
     try:
@@ -3083,7 +3098,17 @@ SETTINGS = (
     # networking.py PROFILE_READS: Claude's browser in the desktop app, or the person pastes.
     ("profile_reads", "Reading LinkedIn profiles", [["browser", "Claude reads them"],
                                                     ["paste", "I paste them"]]),
+    # The person's, not the app's (4.7): how early the Brief puts the next interview first,
+    # and when the calendar events the page makes remind them. The values 4.6 fixed are the
+    # defaults.
+    ("prep_days", "Your next interview on the Brief", [["2", "From 2 days before"],
+                                                        ["7", "From a week before"],
+                                                        ["14", "From two weeks before"]]),
+    ("calendar_reminder", "Calendar reminders", [["15", "15 minutes before"],
+                                                 ["60", "An hour before"],
+                                                 ["1440", "The day before"], ["off", "None"]]),
 )
+SETTING_DEFAULTS = {"prep_days": "7", "calendar_reminder": "60"}
 
 
 def _settings(ctx: Ctx, targets: dict) -> list:
@@ -3116,11 +3141,20 @@ def _brief(ctx: Ctx, targets: dict) -> dict | None:
                             for t in re.split(r"(?<=[.!?])\s+(?=[A-Z*])", sec["text"]) if t.strip()]
     return {"date": os.path.basename(path)[:10], "lines": lines,
             "items": [dict(text=x, **brief_link(ctx, x)) for x in lines],
-            "sections": sections}
+            "sections": sections, "watch": _watch()}
+
+
+def _watch() -> list[dict]:
+    """What the brief's news watches, the person's own list, for Edit the brief."""
+    try:
+        import brief
+        return brief.watch_list()
+    except Exception:  # noqa: BLE001  an unreadable profile: the panel shows no list
+        return []
 
 
 # Which panel each of the brief's headings is (automation/prompts/brief.md writes them).
-BRIEF_KINDS = (("lead", r"lead|today|headline|summary"), ("owed", r"owed|to send|due"),
+BRIEF_KINDS = (("lead", r"lead|today|headline|summary|where the search"), ("owed", r"owed|to send|due"),
                ("next", r"next"), ("news", r"news|market|world"),
                ("since", r"since|numbers|week|so far"))
 
