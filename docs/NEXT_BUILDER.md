@@ -29,7 +29,18 @@ MAINTAINING.md first; this is only what 4.7 left.
    left, background-position) stutters on a busy page, where a `transform` on its own layer
    does not. Check it while the page is busy (a long To do, a search running), in Chromium and
    Safari, and keep reduced motion stilling it.
-5. **Left from 4.6's list, still to look at with real data**: the choices made for the
+5. **The Brief looked broken on a quiet day** (the maintainer's page, 2 November, after 4.7.0):
+   - **News vanishes when the reader found nothing** ("why is news empty?"; "is this not
+     missing a panel?"). With a brief every day each search covers one day, so quiet days
+     are common, and the bottom row was then one panel stretched across. Recommended: always
+     draw News; on a quiet day it says "Nothing new since <the last brief>" and lists what
+     the brief watches (`model.brief.watch`), which also shows the person what is watched.
+   - **Coming up was a strip over empty space** when its only item was the one Today shows,
+     and **Today's right half was empty** with no opening sentences and no likely questions.
+     Say "Nothing else in the next two weeks" under the strip and let the row size to its
+     content, and let Today's card take the panel's width when nothing sits beside it.
+   Check each with a sample like that page: one booked item, no news, no questions.
+6. **Left from 4.6's list, still to look at with real data**: the choices made for the
    person on the Brief (the Jobs count, "Waiting on you", "contacts replied", what Next three
    skips, which opening sentences show), and one Outlook link. The fit's numbers were
    reworked in 4.7 (below).
