@@ -1291,7 +1291,7 @@
     dlg._submit = submit;
     const cancel = h("button", {type: "button", class: "btn quiet", "data-k": "sheet-cancel", onclick: () => close()}, o.cancel || "Cancel");
     add(form, [h("h2", {id: "sheet-title", class: "sheet-title"}, o.title), o.lead || null, o.intro ? h("p", {class: "sheet-intro"}, o.intro) : null,
-      o.cost ? h("p", {class: "sheet-cost"}, costNode(o.cost)) : null, errBox, fields.map((f) => f.el), (syncShown(), null), o.note ? h("p", {class: "hint"}, o.note) : null, h("div", {class: "sheet-actions"}, submit, cancel)]);
+      o.cost ? h("p", {class: "sheet-cost"}, costNode(o.cost)) : null, errBox, fields.map((f) => f.el), (syncShown(), null), o.note ? h("p", {class: "hint"}, o.note) : null, o.after || null, h("div", {class: "sheet-actions"}, submit, cancel)]);
     dlg.appendChild(form);
     function close() { try { dlg.close(); } catch (e) { /* already closed */ } }
     // The card the sheet was opened from: where focus goes when its button is gone (a job set
@@ -1347,7 +1347,7 @@
         return h("div", {class: "choice"}, h("input", {type: "radio", name: id, id: oid, value: op[0], checked: f.value === op[0],
           onchange: () => { if (f.onChange) f.onChange(op[0], el); }}), h("label", {for: oid}, op[1]));
       });
-      el = h("fieldset", {class: "field" + (f.pills ? " pills" : ""), "aria-describedby": id + "-e"}, h("legend", {}, f.label), f.hint ? h("p", {class: "hint"}, f.hint) : null, err,
+      el = h("fieldset", {class: "field" + (f.pills ? " pills" : ""), "aria-describedby": id + "-e"}, h("legend", {}, f.label, f.optional ? h("span", {class: "optional"}, " (if you like)") : null), f.hint ? h("p", {class: "hint"}, f.hint) : null, err,
         f.pills ? h("div", {class: "pill-row"}, opts) : opts, f.extra || null);
       read = () => { const c = el.querySelector("input[type=radio]:checked"); return c ? c.value : null; };
     } else if (f.type === "pick") {
@@ -1417,13 +1417,15 @@
       const dateIn = h("input", {type: "date", id: "applied-on", value: todayIso()});
       put(dateField, h("label", {for: "applied-on"}, "When did you apply?"), dateIn);
       let dlg = null;
-      let appliedNow = null;
-      fields.push({id: "applied", type: "radio", label: "Have you already applied for this role?", required: true,
+      // "No, draft it" is already chosen: the person pressed Draft this, so one more tap drafts
+      // (a question nothing had answered held a tired person up, 2026-11-02).
+      fields.push({id: "applied", type: "radio", label: "Have you already applied for this role?", required: true, value: "no",
         options: [["no", "No, draft it"], ["yes", "Yes, I have applied"]],
-        onChange: (v) => { appliedNow = v; dateField.hidden = v !== "yes"; if (dlg && dlg._submit) dlg._submit.textContent = v === "yes" ? "Mark as applied" : "Draft it"; }, extra: dateField, error: "Say whether you have applied."});
-      // The questions about the role matter only for a draft: marking it applied asks none of them.
+        onChange: (v) => { dateField.hidden = v !== "yes"; if (dlg && dlg._submit) dlg._submit.textContent = v === "yes" ? "Mark as applied" : "Draft it"; }, extra: dateField, error: "Say whether you have applied."});
+      // The posting's own questions help the draft and never hold it up: one left unanswered
+      // goes ahead without it. Marking it applied asks none of them.
       const qs = arr(r.questions).filter((q) => !appliedQ(q));
-      qs.forEach((q, i) => fields.push({id: "q" + i, type: "radio", label: txt(q), required: () => appliedNow !== "yes", options: [["yes", "Yes"], ["no", "No"]]}));
+      qs.forEach((q, i) => fields.push({id: "q" + i, type: "radio", label: txt(q), optional: true, options: [["yes", "Yes"], ["no", "No"]]}));
       const ref = referralAt(r.company, r);
       const lead = ref ? h("p", {class: "warm"}, txt(ref.first_name) + " has put your name forward here. Ask " + txt(ref.first_name) + " before you send anything yourself.")
         : r.warm ? h("p", {class: "warm"}, h("span", {class: "warm-k"}, "Before you apply: "), txt(r.warm)) : null;
@@ -1435,15 +1437,14 @@
             act([{item: r.id, action: "job.applied", value: {on: dateIn.value || todayIso()}, rev: r.rev}], "Marked as applied: " + txt(r.company));
             return;
           }
-          const answers = arr(r.questions).filter((q) => !appliedQ(q)).map((q, i) => ({q: txt(q), a: v["q" + i]}));
-          requestWork([draftSpec(r, answers)]);
+          requestWork([draftSpec(r, draftAnswers(r, (i) => v["q" + i]))]);
         }});
       return;
     }
     fields.push({id: "applied", type: "checks", label: "Have you already applied for any of these?", hint: "Tick the ones you have. They are marked as applied and not drafted.",
       options: rows.map((r) => [r.id, txt(r.company) + ", " + txt(r.title)])});
     rows.forEach((r, ri) => arr(r.questions).filter((q) => !appliedQ(q)).forEach((q, i) =>
-      fields.push({id: "r" + ri + "q" + i, type: "radio", label: txt(r.company) + ": " + txt(q), required: true, options: [["yes", "Yes"], ["no", "No"]]})));
+      fields.push({id: "r" + ri + "q" + i, type: "radio", label: txt(r.company) + ": " + txt(q), optional: true, options: [["yes", "Yes"], ["no", "No"]]})));
     sheet({title: "Draft " + rows.length + " applications",
       intro: "Each gets a " + noun() + " and a cover letter, checked, in Jobs under Drafts.", cost: costLine("draft").replace(/^About \d+ minutes?\. /, "About " + plural(rows.length * 9, "minute", "minutes") + " in all. "),
       fields, submit: "Draft " + rows.length,
@@ -1453,13 +1454,16 @@
         if (done.length) act(done.map((r) => ({item: r.id, action: "job.applied", value: {on: todayIso()}, rev: r.rev})), "Marked " + plural(done.length, "role", "roles") + " as applied");
         const specs = rows.filter((r) => !applied.has(r.id)).map((r) => {
           const ri = rows.indexOf(r);
-          const answers = arr(r.questions).filter((q) => !appliedQ(q)).map((q, i) => ({q: txt(q), a: v["r" + ri + "q" + i]}));
-          return draftSpec(r, answers);
+          return draftSpec(r, draftAnswers(r, (i) => v["r" + ri + "q" + i]));
         });
         if (specs.length) requestWork(specs);
         S.sel.jobs.clear();
         scheduleRender();
       }});
+  }
+  // What the person said to the posting's own questions: only the ones answered go with it.
+  function draftAnswers(r, answerOf) {
+    return arr(r.questions).filter((q) => !appliedQ(q)).map((q, i) => ({q: txt(q), a: answerOf(i)})).filter((x) => x.a === "yes" || x.a === "no");
   }
   function draftSpec(r, answers) {
     return {id: draftWorkId(r), kind: "draft", title: Noun() + " and letter: " + txt(r.company) + ", " + txt(r.title),
@@ -2019,8 +2023,8 @@
   }
   // The alerts after the first, said inside the card's More.
   // The alerts the card itself did not show: all of them when a question took its place.
-  function moreAlerts(item, ctx, all) {
-    const list = alertsOf(item).slice(all ? 0 : 1);
+  function moreAlerts(item, ctx, all, shownId) {
+    const list = alertsOf(item).slice(all ? 0 : 1).filter((a) => !shownId || a.id !== shownId);
     return list.length ? h("div", {class: "more-alerts"}, list.map((a) => alertLine(a, ctx))) : null;
   }
 
@@ -2106,6 +2110,8 @@
   const DUE_KIND = {reply: "message", nudge: "message", first_message: "message", resume: "message", request_pending: "message",
     interview: "interview", prep: "interview", thank_you: "interview", status_note: "interview", follow_up: "application"};
   const BANDS = [["answer", "Needs your answer"], ["now", "Due or late"], ["week", "Next 7 days"], ["later", "Later"]];
+  // To do's own order once the search runs: what is late or due today before the questions.
+  const TODAY_FIRST = ["now", "answer", "week", "later"];
   const TAB_WORDS = {jobs: "Jobs", drafts: "Jobs", "drafts-messages": "Contacts", contacts: "Contacts", interviews: "Coming up"};
 
   function kindMark(kind) {
@@ -2339,8 +2345,39 @@
     for (const k of Object.keys(m)) if (Number(m[k]) < now()) delete m[k];
     m[key] = now() + 7 * DAY;
     sset("local", HIDE_KEY, JSON.stringify(m));
-    toast({text: "Hidden for a week: " + clip(label, 60) + ".", ids: [], see: () => { const n = hiddenMap(); delete n[key]; sset("local", HIDE_KEY, JSON.stringify(n)); scheduleRender(); }, seeLabel: "Undo"});
+    toast({text: "Hidden for a week: " + clip(label, 60) + ".", ids: [], see: () => unhideTodo(key), seeLabel: "Undo"});
     scheduleRender();
+  }
+  function unhideTodo(key) {
+    const m = hiddenMap();
+    delete m[key];
+    sset("local", HIDE_KEY, JSON.stringify(m));
+    scheduleRender();
+  }
+  // A card hidden by mistake comes back from the end of To do whenever the person looks, not
+  // only in the toast's few seconds (2026-11-02), as Jobs has "1 set aside: Show".
+  function hiddenTodos(settingUp, every) {
+    if (settingUp) return [];
+    const list = every.filter(todoHidden);
+    if (todoHidden({key: "you-finish"}) && finishProfileCard()) list.push({key: "you-finish", node: () => finishProfileCard()});
+    return list;
+  }
+  function hiddenFold(list) {
+    if (!list.length) return null;
+    const st = listState("todo:hidden");
+    const words = list.length + " hidden this week";
+    return [h("p", {class: "fold todo-hidden"}, h("span", {}, words + ": "),
+      btn(st.open ? "Hide" : "Show", () => { st.open = !st.open; scheduleRender(); }, {kind: "link", key: "fold:hidden", aria: (st.open ? "Hide " : "Show ") + words})),
+    st.open ? h("div", {class: "stack todo-hidden-list"}, list.map((i) => withUnhide(i, i.node({where: "hidden", section: "todo"})))) : null];
+  }
+  function withUnhide(i, node) {
+    if (!node || !node.querySelector) return node;
+    const title = (node.querySelector(".card-title, h3") || {}).textContent || "this";
+    const b = btn("Bring back", () => { unhideTodo(i.key); toast({text: "Back on To do: " + clip(title, 60) + ".", ids: []}); },
+      {kind: "quiet", small: true, key: "unhide:" + i.key, aria: "Bring back: " + title});
+    const top = node.querySelector(".todo-top");
+    if (top) top.appendChild(b); else node.insertBefore(b, node.firstChild);
+    return node;
   }
   // One bin on every card in the app, never an x beside it (the maintainer, 2026-10-29: "why
   // are some Xs and some bins?"). On a card about one person it asks the person's usual
@@ -2360,7 +2397,8 @@
     return node;
   }
   function renderTodo() {
-    const all = todoItems().filter((i) => !todoHidden(i));
+    const every = todoItems();
+    const all = every.filter((i) => !todoHidden(i));
     const n = todayCounts(all);
     const week = all.filter((i) => i.band === "week").length;
     const soonN = all.filter((i) => i.band === "week" || i.band === "later").length;
@@ -2412,15 +2450,19 @@
       put(wrap, empty("Nothing needs you right now.", "New questions and follow-ups appear here first.",
         h("div", {class: "card-actions"}, btn("Find jobs", askSearch, {kind: "primary", small: true, key: "todo-find"}))));
     }
-    // Today's things: the first TODO_FIRST show, in band order, and the rest of today's wait
-    // behind one fold under their band's heading. What is not due yet waits behind a second
+    // Today's things: the first TODO_FIRST show, and the rest of today's wait behind one fold
+    // under their band's heading. What is late or due today comes first, then the questions:
+    // a thank-you two days late, today's reply and today's resume waited behind four small
+    // questions while "Finish your profile" sat open (2026-11-02). Setting-up cards wait
+    // behind the fold once the search is running. What is not due yet waits behind a second
     // fold, "Coming up", open by itself only when nothing is due today.
     let shown = 0;
     const rest = h("div", {class: "todo-rest"});
     const soon = h("div", {class: "todo-rest"});
     let restN = 0;
     let soonCount = 0;
-    for (const [band, label] of BANDS) {
+    const order = settingUp ? BANDS : TODAY_FIRST.map((b) => BANDS.find(([k]) => k === b));
+    for (const [band, label] of order) {
       const items = all.filter((i) => i.band === band);
       if (!items.length || settingUp && band !== "answer") continue;
       const today = settingUp || band === "answer" || band === "now";
@@ -2433,20 +2475,24 @@
         // item already names its employer.
         const head = g.list.length > 1 && g.key.startsWith("e:") ? h("h4", {class: "todo-employer"}, h("bdi", {}, g.title)) : null;
         const node = h("div", {class: "todo-group" + (head ? " by-employer" : "")}, head, h("div", {class: "stack"}, g.list.map((i) => withHide(i, i.node({where: "todo", section: "todo"})))));
-        if (today && (settingUp || shown < TODO_FIRST)) { put(box, node); shown += g.list.length; here++; } else { put(restBox, node); there += g.list.length; }
+        const setupOnly = !settingUp && g.list.every((i) => i.kind === "setup");
+        if (today && (settingUp || shown < TODO_FIRST) && !setupOnly) { put(box, node); shown += g.list.length; here++; } else { put(restBox, node); there += g.list.length; }
       }
       if (here) put(wrap, box);
       if (there && today) { put(rest, restBox); restN += there; }
       if (there && !today) { put(soon, restBox); soonCount += there; }
     }
-    if (restN) put(wrap, det("todo-rest", false, {class: "band-more"}, h("summary", {class: "band-more-sum"}, "Show " + restN + " more"), rest));
-    // Hideable for a week like every other card: the gaps stay listed in Your profile.
+    // Hideable for a week like every other card: the gaps stay listed in Your profile. With
+    // today's things folded, it waits at the end of the fold with them.
     const finish = settingUp || todoHidden({key: "you-finish"}) ? null : finishProfileCard();
-    if (finish) put(wrap, withHide({key: "you-finish"}, finish));
+    const finishNode = finish ? withHide({key: "you-finish"}, finish) : null;
+    if (restN && finishNode) put(rest, finishNode);
+    if (restN) put(wrap, det("todo-rest", false, {class: "band-more"}, h("summary", {class: "band-more-sum"}, "Show " + (restN + (finishNode ? 1 : 0)) + " more"), rest));
+    else if (finishNode) put(wrap, finishNode);
     if (soonCount) put(wrap, det("todo-soon", !shown && !top, {class: "band-more soon-more"}, h("summary", {class: "band-more-sum"}, "Coming up: " + soonCount + " not due yet"), soon));
     const hidden = dueItems().find((d) => txt(d.kind) === "hidden");
     if (!settingUp) put(wrap, hidden ? h("p", {class: "muted small hidden-note"}, txt(hidden.title) + ".") : null,
-      recentChanges(), tipLine("todo"));
+      hiddenFold(hiddenTodos(settingUp, every)), recentChanges(), tipLine("todo"));
     return wrap;
   }
   // The to-dos that belong to one section, at its top: the same items, done in either place.
@@ -2476,7 +2522,18 @@
         busy ? btn("See its progress", openWork, {small: true, key: "soonwork:" + iv.id}) :
           has ? btn("Read your prep", () => openDetail("interview", iv.id), {kind: "primary", small: true, key: "soonmock:" + iv.id, aria: "Read your prep for " + txt(iv.company) + " (from To do)"}) :
             btn("Prepare me", () => askPrep(iv), {kind: "primary", small: true, key: "soonprep:" + iv.id, aria: "Prepare me for " + txt(iv.company) + " (from To do)"}),
+        calButton(iv, "soon-cal:" + (ctx.where || "") + ":" + iv.id),
         tabLink("interviews", iv.id)));
+  }
+  // An interview into the person's calendar, in words, wherever the interview is: a small
+  // calendar icon on Coming up's rows was all there was, and people missed it (2026-11-02).
+  // Its own row in Coming up carries the calendar links, so the same sheet opens.
+  function interviewCal(iv) {
+    return upcomingItems().find((u) => u.kind === "interview" && txt(obj(u.go).item) === txt(iv.id) && obj(u.cal).ics) || null;
+  }
+  function calButton(iv, key) {
+    const u = interviewCal(iv);
+    return u ? btn("Add to calendar", () => calSheet([u]), {kind: "quiet", small: true, icon: "cal-add", key, aria: "Add to calendar: " + txt(u.title)}) : null;
   }
 
   // A question never steers its answer: every option has the same weight, and the one chosen
@@ -3741,7 +3798,7 @@
     const dismissing = pending && st === "dismissed" ? effective(r.id, ["job.dismiss"]) : null;
     const given = dismissing && txt(obj(dismissing.doc.value).why || "");
     const why = dismissing && !given ? h("div", {class: "why-aside", role: "group", "aria-label": "Why set it aside? (if you like)"}, h("span", {class: "muted small"}, "Why? "),
-      SET_ASIDE_WHY.map(([v, l]) => btn(l, () => act([{item: r.id, action: "job.dismiss", value: {why: v}, rev: r.rev}], "Set aside: " + txt(r.company) + " (" + l.toLowerCase() + ")"),
+      SET_ASIDE_WHY.map(([v, l]) => btn(l, () => act([{item: r.id, action: "job.dismiss", value: {why: v}, rev: r.rev}], ASIDE_TEACHES[v] ? asideWords(v, txt(r.company)) : "Set aside: " + txt(r.company) + " (" + l.toLowerCase() + ")"),
         {kind: "filter", small: true, pressed: txt(obj(dismissing.doc.value).why || dismissing.doc.value) === v, key: "why:" + r.id + ":" + v}))) : null;
     const scoreWords = "Fit " + txt(r.score) + " out of 100" + (band ? ", " + band : "");
     const place = txt(r.place);
@@ -3839,9 +3896,15 @@
         const w = txt(v.why);
         if (w === "applied") { markApplied(); return; }
         const value = w === "employer" ? {why: "employer", scope: "employer"} : w === "role" ? {why: "not this role"} : {why: w};
-        act([{item: r.id, action: "job.dismiss", value, rev: r.rev}], w === "employer" ? "No more roles from " + co : "Set aside: " + co);
+        act([{item: r.id, action: "job.dismiss", value, rev: r.rev}], w === "employer" ? "No more roles from " + co : asideWords(w, co));
       }});
   }
+  // What a reason in the job bin changes, said as it is set aside: pay, place and field teach
+  // the next ranking (tools/app_actions.py _dismiss_rule), and a toast that said only
+  // "Set aside" left the person wondering whether the reason did anything (2026-11-02).
+  const ASIDE_TEACHES = {field: "Fewer jobs outside your field from now on.", pay: "Fewer jobs paying like this from now on.",
+    place: "Fewer jobs in places like this from now on."};
+  function asideWords(w, co) { return ASIDE_TEACHES[w] ? "Set aside. " + ASIDE_TEACHES[w] : "Set aside: " + co; }
   function filteredBlock() {
     const f = obj(jobsBlock().filtered);
     const groups = arr(f.groups);
@@ -4013,6 +4076,9 @@
     const screen = arr(a.screening);
     const checkAlert = alertsOf(a).find((x) => x.kind === "checks" && obj(x.action).type);
     const asks = live ? readyQuestions(a) : [];
+    // A failed check is said on the card, under its question, never folded into More: Drafts
+    // said "1 needs a fix first" and no card showed the fix (2026-11-02).
+    const fixOut = live && asks.length && checkAlert ? checkAlert : null;
     const forWho = a.for_contact ? peopleItems().find((p) => txt(p.id) === txt(obj(a.for_contact).id || a.for_contact)) || obj(a.for_contact) : null;
     // A resume made for the referrer is the referral's own paper: no hold line on it.
     const ref0 = referralAt(a.company, a);
@@ -4046,7 +4112,7 @@
           return h("div", {}, h("dt", {}, txt(qa.q)), h("dd", {}, h("span", {id: qid, class: "sendtext"}, txt(qa.a)), " ",
             copyButton(txt(qa.a), "Copy answer: " + clip(txt(qa.q), 40), "copy:" + qid, qid), noteFor("copy:" + qid)));
         })) : null) : null,
-      moreAlerts(a, {where: "drafts", section: "drafts", item: a.id}, asks.length > 0),
+      moreAlerts(a, {where: "drafts", section: "drafts", item: a.id}, asks.length > 0, fixOut ? fixOut.id : null),
       linkHint(a.apply),
       relatedLinks(a.company, a.id, a),
       live ? tweakSlot([["resume", "Edit the " + noun()]].concat(letter.length ? [["letter", "Edit the letter"]] : []), a) : null,
@@ -4065,6 +4131,7 @@
         forWho ? h("p", {class: "meta"}, (txt(a.route) === "portal" ? "For the portal, naming " : "Made for ") + txt(forWho.first_name) + (txt(a.route) === "portal" ? " as your referrer." : ", who asked for it.")) : null,
         ref && live && !alertsOf(a).some((x) => x.kind === "referral_hold") ? h("p", {class: "warm"}, itemLink("contacts", ref.id, txt(ref.first_name), "warmapp:" + a.id), " has put your name forward here: ask before you apply yourself.") : null,
         live ? (asks.length ? questionBlock(asks[0], {where: "drafts", item: a.id}) : cardNotes(a, {where: "drafts", section: "drafts", item: a.id, bare: true}, true)) : null,
+        fixOut ? alertLine(fixOut, {where: "drafts", section: "drafts", item: a.id}) : null,
         // What was checked is under More: one "?" a card at most, and this line needs none.
         live && !checkAlert && !asks.length && checks.passed ? h("p", {class: "checks", title: txt(checks.line)}, h("span", {"aria-hidden": "true"}, "✓ "), "Checked") : null,
         live && !checkAlert && !asks.length && !checks.passed && checks.line ? h("p", {class: "checks tone-warn"}, txt(checks.line)) : null,
@@ -4830,7 +4897,9 @@
         hint: "Which sentence opens the note.", rec: {v: "them_first", why: "Opening on them shows you read about them; a batch of notes that all open on you reads as a template."}},
       {p: "M6", label: "Also say", multi: true, values: vals([["work_rights", "I can work here, no sponsorship needed"], ["role", "The role I'm after"]], 1), hint: "The words for your right to work are fixed, so they stay true."},
     ]},
-    jobs: {what: () => "the search", plural: () => "searches", area: ["search"], search: true, rows: [
+    // One name for the search's panel, the same as the button that opens it (2026-11-02:
+    // "Change the search" opened a panel titled "Edit the search").
+    jobs: {what: () => "the search", name: "Change the search", plural: () => "searches", area: ["search"], search: true, rows: [
       {p: "J7", label: "Also search in", text: true, max: 80, state: 2, placeholder: "A town or city", hint: "Adds a place to search and to keep. Remote roles are kept as they are now."},
       {p: "J8", label: "Also search for", text: true, max: 80, state: 2, placeholder: "A job title", hint: "A title is searched and then checked against your title filter, so Claude adds it to both."},
       {p: "J6", label: "Posted in the last", values: vals([["7", "7 days"], ["14", "14 days"], ["30", "30 days"]], 2), hint: "Longer finds older postings, and more of them have closed.",
@@ -5114,7 +5183,7 @@
     const usual = tweakUsual(spec);
     const panel = h("section", {class: "tweak-panel", "aria-labelledby": "tweak-title", "data-output": st.output},
       h("div", {class: "tweak-head"},
-        h("div", {class: "sum-words"}, h("h2", {class: "tweak-title", id: "tweak-title"}, "Edit " + spec.what(item)),
+        h("div", {class: "sum-words"}, h("h2", {class: "tweak-title", id: "tweak-title"}, spec.name ? spec.name : "Edit " + spec.what(item)),
           h("div", {class: "summary"}, h("div", {class: "sum-words"}, h("p", {class: "sum"}, "Choose what to change, then Apply. Nothing is sent."),
             usual.map((u) => h("p", {class: "sum-small"}, u))))),
         h("button", {type: "button", class: "btn quiet small tweak-close", "data-k": "tweak-close", onclick: closeTweak}, "Close")),
@@ -6022,7 +6091,8 @@
       h("div", {class: "card-actions"},
         busy ? btn("See its progress", openWork, {small: true, key: "dprep-work:" + iv.id}) : has ? null : btn("Prepare me", () => askPrep(iv), {kind: "primary", small: true, key: "dprep:" + iv.id}),
         has && !busy ? btn("Practise with Claude", () => { closeDetail(true); startMock(iv); }, {small: true, key: "dmock:" + iv.id}) : null,
-        has && !busy ? btn("Update my prep", () => askPrep(iv), {kind: "quiet", small: true, key: "dprep2:" + iv.id}) : null),
+        has && !busy ? btn("Update my prep", () => askPrep(iv), {kind: "quiet", small: true, key: "dprep2:" + iv.id}) : null,
+        calButton(iv, "dcal:" + iv.id)),
       // The prep is read here, on the page: a reading column, its one screen first as a card,
       // then the whole of it; what was sent and the stages beside it, never under a wall of
       // text (the maintainer, 2026-10-29).
@@ -6475,7 +6545,11 @@
     // reader, and the data is untouched (the maintainer, 2026-10-30).
     const chips = (items, full) => h("ul", {class: "plain chip-list"}, [...new Set(items.filter(Boolean))].map((x, i) => h("li", {class: "chip", title: full ? txt(full[i]) : null}, x)));
     const plain = (what, name, value, items, full) => infoRow("search-" + what, name, few(value, items) || "Not set", h("div", {class: "d-stack"}, items && items.length > 1 ? chips(items, full) : h("p", {}, value || "Not set"),
-      ["roles", "places", "pay"].includes(what) ? change(what, name, value) : h("p", {class: "small muted"}, "To leave out a kind of job, use the bin on it in Jobs."), stateLine(sid, "search:" + what)));
+      ["roles", "places", "pay"].includes(what) ? change(what, name, value) : avoidChange(), stateLine(sid, "search:" + what)));
+    // What to avoid is changed where the search is changed, in the person's own words; the
+    // bin on a job teaches it too (2026-11-02: the row had no Change, only "use the bin").
+    const avoidChange = () => [btn("Change", () => openTweak("jobs", jobsBlock()), {small: true, key: "search-change:avoid", aria: "Change what to avoid"}),
+      h("p", {class: "small muted"}, "Say what to leave out under Something else. The bin on a job in Jobs leaves out ones like it too.")];
     const portals = arr(s.portals);
     const boards = arr(s.boards);
     const rules = arr(s.rules).filter((r) => !effective(txt(r.id), ["rule.lift"]));
@@ -6723,7 +6797,13 @@
         }});
     }
     const set = BRIEF_DAY_SETS.find(([, , v]) => v.join() === [...st.days].sort().join());
-    return sheet({title: "Your brief", cls: "brief-sheet",
+    // A break from here too, the same sheet Settings opens: this one closes first, so one
+    // sheet is open at a time and focus goes back to the bell after it.
+    let dlg = null;
+    const then = (fn) => () => { if (!dlg) return; dlg.addEventListener("close", () => setTimeout(fn, 0), {once: true}); try { dlg.close(); } catch (e) { fn(); } };
+    const brk = h("p", {class: "sheet-break"}, st.paused ? btn("Start again", then(endBreak), {kind: "link", key: "bell-resume"})
+      : btn("Take a break until…", then(askBreak), {kind: "link", key: "bell-pause"}));
+    dlg = sheet({title: "Your brief", cls: "brief-sheet", after: brk,
       lead: st.paused && st.on ? h("p", {class: "sheet-intro"}, "Resting until " + fmtDay(st.paused) + ", while you take a break. It starts again by itself then.") : null,
       fields: [
         {id: "when", type: "radio", label: "When", required: true, value: !st.on ? "off" : set ? set[0] : "some",
@@ -6750,6 +6830,7 @@
         if (!same) out.push(doc(txt(acts.move) || "brief.move", Object.assign({days, time: txt(v.time)}, zone ? {zone} : {})));
         if (out.length) act(out, "Your brief: " + briefWhen(days.map((x) => x % 7), txt(v.time)));
       }});
+    return dlg;
   }
   // The time zones a person is likely to be in, by place, and their own where it is not one.
   const ZONES = [["Europe/London", "UK"], ["Europe/Dublin", "Ireland"], ["Europe/Paris", "Central Europe"], ["America/St_Johns", "Newfoundland"],
@@ -6796,11 +6877,30 @@
         stateLine(item, "brief-move"))),
       infoRow("brief-pause", "Take a break", paused ? "Until " + fmtDay(paused) : "Off", h("div", {class: "d-stack"},
         h("p", {}, "Nothing is chased and no brief comes while you are away. Nothing is lost, and it all starts again by itself on the day you choose."),
-        paused ? btn("Start again", () => act([{item, action: txt(acts.resume) || "brief.resume", value: null, rev: txt(sc.rev) || null}], "Your search carries on"), {small: true, key: "brief-resume"}) :
-          btn("Take a break until…", () => sheet({title: "Take a break", fields: [{id: "until", type: "date", label: "Until", value: plusDays(14), required: true}], submit: "Take the break",
-            onSubmit: (v) => act([{item, action: txt(acts.pause) || "brief.pause", value: {until: v.until || plusDays(14)}, rev: txt(sc.rev) || null}], "Paused until " + fmtDay(v.until || plusDays(14)))}), {small: true, key: "brief-pause"}),
+        paused ? btn("Start again", endBreak, {small: true, key: "brief-resume"}) : btn("Take a break until…", askBreak, {small: true, key: "brief-pause"}),
         stateLine(item, "brief-pause"))),
     ];
+  }
+  // A break: one sheet, from Settings and from the Brief's bell alike, so the two can never
+  // disagree (DESIGN.md, "Each setting has one home"). A week or two in one tap, or a day.
+  function askBreak() {
+    const st = briefState();
+    const acts = obj(st.sc.actions);
+    const dlg = sheet({title: "Take a break", intro: "Nothing is chased and no brief comes while you are away. It all starts again by itself on the day you choose.",
+      fields: [{id: "len", type: "radio", pills: true, label: "How long", value: "14", options: [["7", "One week"], ["14", "Two weeks"]],
+        onChange: (v, el) => { const d = el && el.closest("form") ? el.closest("form").querySelector("input[type=date]") : null; if (d) d.value = plusDays(Number(v)); }},
+      {id: "until", type: "date", label: "Until", value: plusDays(14), required: true}],
+      submit: "Take the break",
+      validate: (v) => (dayDiff(v.until) !== null && dayDiff(v.until) < 1 ? "Choose a day after today." : null),
+      onSubmit: (v) => act([{item: st.item, action: txt(acts.pause) || "brief.pause", value: {until: v.until || plusDays(14)}, rev: txt(st.sc.rev) || null}], "Paused until " + fmtDay(v.until || plusDays(14)))});
+    // A day typed in is the answer: neither length stays chosen beside it.
+    const day = dlg.querySelector("input[type=date]");
+    if (day) day.addEventListener("input", () => dlg.querySelectorAll("input[type=radio]").forEach((r) => { r.checked = false; }));
+    return dlg;
+  }
+  function endBreak() {
+    const st = briefState();
+    act([{item: st.item, action: txt(obj(st.sc.actions).resume) || "brief.resume", value: null, rev: txt(st.sc.rev) || null}], "Your search carries on");
   }
   // One break, whichever screen set it (Settings writes the brief's item, To do the
   // search's): the latest tap on either wins, then what the engine says.

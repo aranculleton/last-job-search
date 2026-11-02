@@ -410,7 +410,8 @@ def test_text_from_the_model_is_text_never_markup(run, pages):
     r = run("paint", html=pages["hostile"], hash="jobs")
     _clean(r)
     assert "</script><script>window.__pwned=1</script>" in r["bodyText"]
-    r2 = run("paint", html=pages["hostile"], hash="todo")
+    # A question waits behind "Show N more" while things are late or due today (2026-11-02).
+    r2 = run("paint", html=pages["hostile"], hash="todo", unfold=True)
     assert "<img src=x onerror=window.__pwned=2>" in r2["bodyText"]
 
 
@@ -427,14 +428,16 @@ def test_to_do_groups_by_when_then_by_employer_in_the_order_things_are_done(run,
     r = run("todo", html=pages["sample"])
     _clean(r)
     assert r["first"] == "Phone screen with Larkspur Retail", "the soonest interview within 14 days is the first card"
-    # Five show first; a band split by the fold heads its rest again inside it (4.3).
-    assert list(dict.fromkeys(b["band"] for b in r["bands"])) == ["Needs your answer", "Due or late", "Next 7 days", "Later"]
+    # Five show first; a band split by the fold heads its rest again inside it (4.3). What is
+    # late or due today comes before the questions (2026-11-02: a thank-you two days late
+    # waited behind four small questions).
+    assert list(dict.fromkeys(b["band"] for b in r["bands"])) == ["Due or late", "Needs your answer", "Next 7 days", "Later"]
     for b in r["bands"]:
         for g in b["groups"]:
             assert g["employer"] is None or len(g["titles"]) >= 2, ("an employer heads only two or more", b["band"], g)
-    answer = r["bands"][0]["groups"]
+    answer = next(b for b in r["bands"] if b["band"] == "Needs your answer")["groups"]
     assert answer[0]["employer"] == "Fernhill Freight" and len(answer[0]["titles"]) == 2, "one employer's two questions together"
-    late = r["bands"][1]["groups"]
+    late = next(b for b in r["bands"] if b["band"] == "Due or late")["groups"]
     assert late[0]["titles"][0].startswith("Follow up with Fernhill Freight"), "the late thing first"
     titles = [t for b in r["bands"] for g in b["groups"] for t in g["titles"]]
     assert "Prepare for the Larkspur Retail phone screen" not in titles, "the interview's own card is its prep, never a second card"
@@ -566,7 +569,10 @@ def test_draft_this_asks_its_questions_first_says_what_it_costs_and_rings_with_n
     assert any("fixed term" in x for x in r["legends"])
     # The gauge's own words, then the time (4.3).
     assert "About 9 minutes." in r["cost"] and "Nothing is sent." in r["cost"]
-    assert r["stillOpen"] and len(r["errors"]) == 2, "unanswered questions are named, nothing is asked of a chat"
+    # "No, draft it" is chosen for the person, and the posting's own question is theirs to
+    # leave (2026-11-02): one more tap drafts. Answered, it goes with the draft.
+    assert r["chosen"] == ["No, draft it"] and r["errors"] == [], r
+    assert any("fixed term" in x and "(if you like)" in x for x in r["legends"])
     assert r["submitWhenApplied"] == "Mark as applied" and r["submitWhenNot"] == "Draft it", "the button says what it will do"
     assert r["closed"]
     w = r["work"]
