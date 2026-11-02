@@ -755,7 +755,7 @@ S.tweak = async (a) => {
 S.action_receipt = async (a) => {
   const o = await open({html: a.html, hash: "drafts-messages"});
   const {page, store} = o;
-  await clickText(page, "button", "I sent the message to Juno");
+  await clickText(page, "button", "I sent it: the message to Juno");
   await turn(page, 4);
   const ids = store.list("actions/");
   const doc = ids.length ? store.get(ids[0]) : null;
@@ -820,7 +820,7 @@ S.undo = async (a) => {
 S.write_fail = async (a) => {
   const o = await open({html: a.html, hash: "drafts-messages", fake: {failWrites: true}});
   const {page} = o;
-  await clickText(page, "button", "I sent the message to Juno");
+  await clickText(page, "button", "I sent it: the message to Juno");
   await turn(page, 8);
   // The alert is emptied, then written 30ms later so a screen reader says it again; a busy
   // machine read it in between (CI, 2026-10-29). Waited for, never assumed.
@@ -1192,10 +1192,10 @@ S.two_tabs = async (a) => {
   await p1.evaluate(() => { location.hash = "drafts-messages"; });
   await p2.evaluate(() => { location.hash = "drafts-messages"; });
   await turn(p1, 4); await turn(p2, 4);
-  await p1.getByRole("button", {name: "I sent the message to Juno"}).click();
+  await p1.getByRole("button", {name: "I sent it: the message to Juno"}).click();
   await turn(p1, 6); await turn(p2, 6);
   // The other window shows it marked at once, live, with nothing left to press twice.
-  r.otherWindow = {chip: await T(p2, "#main .card.msg.is-marked .state-word"), buttons: await p2.$$eval('#main button[aria-label="I sent the message to Juno"]', (x) => x.length)};
+  r.otherWindow = {chip: await T(p2, "#main .card.msg.is-marked .state-word"), buttons: await p2.$$eval('#main button[aria-label="I sent it: the message to Juno"]', (x) => x.length)};
   r.actions = o.store.list("actions/");
   r.errors = o.errors;
   await o.ctx.close();
