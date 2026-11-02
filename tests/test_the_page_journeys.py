@@ -505,10 +505,12 @@ def test_the_brief_opens_its_items(run, tmp_path, vp):
         {"hash": "brief", "eval": "(() => !!document.querySelector('#main .brief-page .bp-next'))()"},
         {"click": "Reply to Juno at Larkspur Retail.", "role": "link"},
         {"hash": "brief", "click": "Follow up with Fernhill Freight about the Operations Analyst role", "role": "link"},
-        # The interview this week is Today's, its prep one tap away (4.6: each thing once).
-        {"hash": "brief", "click": "Read your prep", "read": "dialog.detail"},
+        # The interview this week, its prep ready, is a step, its prep one tap away; Today is
+        # what has rolled over (2026-11-02: "the most pressing task").
+        {"hash": "brief", "click": "Read the prep for the Larkspur Retail phone screen.", "role": "link"},
     ], vp, clock="2026-10-25T07:30:00Z")
     assert got["after"][0]["eval"], "the Brief has its own page, with the next three"
     assert got["after"][1]["hash"] == "#contacts/larkspur_retail_castellan"
     assert got["after"][2]["hash"] == "#todo/due-fernhill-nudge"
-    assert "Phone screen with Larkspur Retail" in got["after"][3]["text"]
+    assert got["after"][3]["hash"].startswith("#interviews"), got["after"][3]["hash"]
+    assert "Larkspur Retail" in got["after"][3]["text"]

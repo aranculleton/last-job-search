@@ -96,7 +96,7 @@ def test_a_reader_that_brought_nothing_carries_the_last_items_with_their_day(tmp
     _run(state, "--today", "2026-10-28", "--write")
     items = ("- Larkspur Retail opens a Leeds data hub (Example Times, 2026-10-27, "
              "https://example.com/n/1). Worth a line to Juno at Larkspur Retail.\n"
-             "- Rates held (Example Wire, 2026-10-27, https://example.com/n/2). A point for any "
+             "- Rates held (Example Times, 2026-10-27, https://example.com/n/2). A point for any "
              "interview this month.\n")
     _run(state, "news", "--today", "2026-10-28", stdin=items)
     _run(state, "--today", "2026-11-02", "--write")
@@ -162,3 +162,39 @@ def test_the_lines_for_claude_are_never_cut(tmp_path, monkeypatch):
     out = brief.render_text({})
     assert out.rstrip().endswith("- the page, last") and "cut at" not in out
     assert out.count("owed") == 2
+
+
+def test_a_stage_the_record_marks_done_reaches_the_tracker_row_once(tmp_path):
+    """A test taken on 29 October was marked done in the application's record, while its
+    tracker row's last note was still the invite and its deadline; a chat reading the row read
+    the test as due (2026-11-02). The brief's upkeep writes the stage onto the row, once."""
+    import csv
+    sys.path.insert(0, os.path.join(ROOT, "tools"))
+    state = _state(tmp_path)
+    path = os.path.join(state, "job_search_tracker.csv")
+    rows = list(csv.DictReader(open(path, encoding="utf-8")))
+    cols = list(rows[0].keys())
+    rows.append({c: "" for c in cols})
+    rows[-1].update(date="2026-10-01", company="Kestrel Mutual", role="Claims Analyst", status="interview",
+                    notes="2026-10-21: screen done 2026-10-20 | 2026-10-23: invited to an online test, "
+                          "deadline 2026-11-02")
+    with open(path, "w", newline="", encoding="utf-8") as fh:
+        w = csv.DictWriter(fh, fieldnames=cols)
+        w.writeheader()
+        w.writerows(rows)
+    env = dict(os.environ, LJS_PROFILE=os.path.join(os.path.dirname(state), "profile"), LJS_STATE=state)
+    folder = subprocess.run([sys.executable, "-c", "import docpaths; print(docpaths.app_folder("
+                             "'Kestrel Mutual', 'Claims Analyst'))"], cwd=os.path.join(ROOT, "tools"),
+                            env=env, capture_output=True, text=True).stdout.strip()
+    os.makedirs(folder, exist_ok=True)
+    with open(os.path.join(folder, "outcome.md"), "w", encoding="utf-8") as fh:
+        fh.write("# Outcome: Kestrel Mutual - Claims Analyst\n\n**Status:** in_progress\n\n"
+                 "## Interview stages reached\n- [x] Recruiter screen (2026-10-20)\n"
+                 "- [x] Online test (2026-10-29): taken\n- [ ] Final interview (date to be confirmed)\n")
+    for _ in range(2):
+        _run(state, "--today", "2026-11-02", "--write")
+    notes = next(r for r in csv.DictReader(open(path, encoding="utf-8"))
+                 if r["company"] == "Kestrel Mutual")["notes"]
+    assert notes.count("2026-10-29: Online test done (from the application's record)") == 1, notes
+    # The screen, older than the row's own notes, is not written again.
+    assert "Recruiter screen done" not in notes

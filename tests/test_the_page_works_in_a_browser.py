@@ -1493,12 +1493,14 @@ def test_everything_booked_is_one_tap_from_any_calendar_and_the_brief_shows_the_
     assert r["overflow"] == [], r["overflow"]
     assert r["afterTap"] == {"section": True, "focus": "up-call-harbourline-bank-bea-2026-10-29"}, r["afterTap"]
     # Each thing once (the maintainer, 2026-11-02: "if we're just saying the same thing ten
-    # times it can be a bit overwhelming"): the interview this week is Today's, with its
-    # calendar button and the questions it will bring, and no other panel repeats it; Juno,
-    # a step, is not also a row under Waiting on you.
+    # times it can be a bit overwhelming"), and Today is the most pressing thing (the same day:
+    # "things that have rolled over or are urgent"): the follow-up two days late leads, the
+    # interview three days out with its prep ready is Coming up's, and no other panel repeats
+    # it; Juno, a step, is not also a row under Waiting on you.
     p = r["panels"]
-    assert "Phone screen with Larkspur Retail" in p["bp:today"] and "Likely to come up" in p["bp:today"] and r["heroCal"]
-    assert not any("Larkspur" in t and "screen" in t for k, t in p.items() if k != "bp:today"), p
+    assert "Rolled over" in p["bp:today"] and "Fernhill Freight" in p["bp:today"], p["bp:today"]
+    shown = [k for k, t in p.items() if "Larkspur" in t and "screen" in t]
+    assert len(shown) == 1 and shown != ["bp:today"], shown
     assert "Reply to Juno" in p["bp:next"] and "Juno" not in p["bp:people"], (p["bp:next"], p["bp:people"])
     assert r["cards"] and not any("Larkspur" in c for c in r["cards"]), r["cards"]
     assert r["phoneWide"] <= 0 and r["phoneStrip"] is True

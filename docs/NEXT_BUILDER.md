@@ -16,6 +16,11 @@ Built into [Unreleased] on 2026-11-02, not released (the maintainer: release onl
   motion (its own Firefox with `ui.prefersReducedMotion`, and a skip saying so where the
   engine ignores it); the update line moves by transform; a quiet day fills Today ("Then",
   the next step) and Coming up (what is due next); a due item keys its person by `item`.
+  Then, at the maintainer's word the same day: Today is the one most pressing thing (today's
+  booked thing, an interview tomorrow, one in the prep window with no prep, rolled over,
+  due today, then the prepared interview) with facts beside it, and may be in Next three;
+  news points split into what, use and source (`app_model.news_parts`); the brief's upkeep
+  copies a stage `outcome.md` marks done onto its tracker row (`brief.stages_into_tracker`).
 - **Still to check**: the first brief after these land (07:56 UK) republishes the
   maintainer's page and fills News with three items that each say how to use them
   (`list_events` on their helper chat). The Firefox reduced-motion and reload fixes are

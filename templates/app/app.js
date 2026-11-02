@@ -3211,61 +3211,99 @@
       .sort((x, y) => txt(x.due).localeCompare(txt(y.due)))
       .map((d) => ({keys: dueKeys(d), d, node: () => h("li", {}, h("a", {href: "#todo/" + d.id, class: "bp-text bp-link", "data-k": "bp-due:" + d.id, onclick: (e) => { e.preventDefault(); go("todo", {focus: true, item: d.id}); }},
         h("span", {}, txt(d.title), h("span", {class: "bp-when"}, " · " + dueWord(d.due)))))}));
-    let hero = null;
-    // Today's card is what comes next today, before anything later in the week: a call or a
-    // test due today beat an interview three days out, which read as the day's one thing
-    // (the maintainer, 2026-11-02: "the most upcoming event"). Untimed things today come
-    // after timed ones; anything already over has left.
+    let hero = null, heroKeys = [], facts = [], heroIv = null;
+    // Today is the one most pressing thing, with what matters about it beside it (the
+    // maintainer, 2026-11-02: "the most pressing task ... things that have rolled over or are
+    // urgent ... if there are multiple things today then the most important one like an
+    // interview or a call"). In order: what is happening today (an interview, a call, a test,
+    // anything else booked, by time); an interview tomorrow; an interview inside the prep
+    // window (Settings) with no prep yet; what has rolled over (a reply someone is waiting on
+    // first, then the longest late); what is due today; that interview with its prep ready;
+    // the brief's first step. It can be in Next three too.
     const upAt = (u) => (txt(u.start) ? tms(u.start) : null) ?? (tms(txt(u.day) + "T23:59:00") || Infinity);
-    const todayUp = upcomingItems().filter((u) => txt(u.day) === todayIso() && ["call", "test", "event"].includes(txt(u.kind))
-      && !(txt(u.end) && isPast(u.end))).sort((x, y) => upAt(x) - upAt(y));
-    const ivAt = weekIv ? (tms(weekIv.when) || Infinity) : Infinity;
-    const ivToday = !!weekIv && dayDiff(dayOf(weekIv.when)) === 0;
-    const upHero = todayUp.find((u) => isFree(upKeys(u)) && (!ivToday || upAt(u) < ivAt));
-    if (upHero) {
-      take(upKeys(upHero));
-      const g = obj(upHero.go);
-      const who = txt(g.to) === "contacts" ? peopleItems().find((x) => x.id === txt(g.item)) : null;
-      const iv = txt(g.to) === "interviews" ? interviewItems().find((x) => x.id === txt(g.item)) : null;
-      const open = who ? () => openDetail("person", who.id) : iv ? () => openDetail("interview", iv.id) : null;
-      hero = h("div", {class: "bp-iv"},
-        h("p", {class: "bp-iv-when"}, h("span", {}, "Today" + (timeOf(upHero.start) ? ", " + timeOf(upHero.start) : "")),
-          obj(upHero.cal).ics ? btn("", () => calSheet([upHero]), {kind: "quiet icon-only", small: true, icon: "cal-add", key: "bp-cal-hero", aria: "Add to your calendar: " + txt(upHero.title)}) : null),
-        h("p", {class: "bp-iv-what"}, h("bdi", {}, txt(upHero.title))),
-        txt(upHero.note) ? h("p", {class: "bp-iv-role"}, txt(upHero.note)) : null,
-        open ? btn(who ? "Open " + txt(who.first_name) : obj(iv.prep).updated ? "Read your prep" : "Open it", open, {kind: "primary", small: true, key: "bp-up:" + upHero.id}) : null);
-    } else if (weekIv) {
-      take(["iv:" + weekIv.id]);
-      const heroUp = upcomingItems().find((u) => txt(obj(u.go).item) === weekIv.id && obj(u.cal).ics);
-      hero = h("div", {class: "bp-iv"},
-        h("p", {class: "bp-iv-when"}, h("span", {}, fmtDay(dayOf(weekIv.when)) + (timeOf(weekIv.when) ? ", " + timeOf(weekIv.when) : "") + " · " + lc1(relWhen(weekIv.when))),
+    const KIND_RANK = {interview: 0, call: 1, test: 2, deadline: 3, event: 4};
+    const todayUp = upcomingItems().filter((u) => txt(u.day) === todayIso() && !(txt(u.end) && isPast(u.end)))
+      .sort((x, y) => (KIND_RANK[txt(x.kind)] ?? 5) - (KIND_RANK[txt(y.kind)] ?? 5) || upAt(x) - upAt(y));
+    const ivOf = (u) => txt(obj(u.go).to) === "interviews" ? interviewItems().find((x) => x.id === txt(obj(u.go).item)) : null;
+    const whoOf = (id) => peopleItems().find((x) => x.id === txt(id)) || null;
+    const lateSteps = dueSteps.filter((x) => (dayDiff(x.d.due) ?? 0) < 0)
+      .sort((x, y) => (txt(x.d.kind) === "reply" ? 0 : 1) - (txt(y.d.kind) === "reply" ? 0 : 1) || txt(x.d.due).localeCompare(txt(y.d.due)));
+    const todaySteps = dueSteps.filter((x) => dayDiff(x.d.due) === 0);
+    const tomorrowIv = weekIv && dayDiff(dayOf(weekIv.when)) === 1 ? weekIv : null;
+    // Facts about a person, in a few words each: who they are, where it stands, a draft.
+    const personFacts = (p, d) => {
+      const out = [];
+      if (d && txt(d.context)) out.push(...txt(d.context).split(" · ").slice(0, 2));
+      else if (p && txt(p.employer)) out.push(txt(p.employer));
+      if (d && Number(d.overdue_days) > 0) out.push(plural(Number(d.overdue_days), "day", "days") + " since it was due");
+      if (p && messageItems().some((m) => txt(m.contact) === p.id)) out.push("A draft is ready in Messages");
+      return out;
+    };
+    const ivHero = (iv, whenWords) => {
+      heroIv = iv;
+      heroKeys = ["iv:" + iv.id];
+      const heroUp = upcomingItems().find((u) => txt(obj(u.go).item) === iv.id && obj(u.cal).ics);
+      return h("div", {class: "bp-iv"},
+        h("p", {class: "bp-iv-when"}, h("span", {}, whenWords),
           heroUp ? btn("", () => calSheet([heroUp]), {kind: "quiet icon-only", small: true, icon: "cal-add", key: "bp-cal-hero", aria: "Add to your calendar: " + txt(heroUp.title)}) : null),
-        h("p", {class: "bp-iv-what"}, (txt(weekIv.next_stage) || "Interview") + " with ", h("bdi", {}, txt(weekIv.company))),
-        txt(weekIv.role) ? h("p", {class: "bp-iv-role"}, txt(weekIv.role)) : null,
-        obj(weekIv.prep).updated ? btn("Read your prep", () => openDetail("interview", weekIv.id), {kind: "primary", small: true, key: "bp-prep:" + weekIv.id})
-          : btn("Prepare me", () => askPrep(weekIv), {kind: "primary", small: true, key: "bp-askprep:" + weekIv.id}));
+        h("p", {class: "bp-iv-what"}, (txt(iv.next_stage) || "Interview") + " with ", h("bdi", {}, txt(iv.company))),
+        txt(iv.role) ? h("p", {class: "bp-iv-role"}, txt(iv.role)) : null,
+        obj(iv.prep).updated ? btn("Read your prep", () => openDetail("interview", iv.id), {kind: "primary", small: true, key: "bp-prep:" + iv.id})
+          : btn("Prepare me", () => askPrep(iv), {kind: "primary", small: true, key: "bp-askprep:" + iv.id}));
+    };
+    const ivWhen = (iv) => fmtDay(dayOf(iv.when)) + (timeOf(iv.when) ? ", " + timeOf(iv.when) : "") + " · " + lc1(relWhen(iv.when));
+    const dueHero = (x, when) => {
+      heroKeys = x.keys;
+      const pid = x.keys.find((k) => k.startsWith("p:"));
+      const who = pid ? whoOf(pid.slice(2)) : null;
+      facts = personFacts(who, x.d);
+      return h("div", {class: "bp-iv"},
+        h("p", {class: "bp-iv-when"}, when),
+        h("p", {class: "bp-iv-what"}, inlineMd(txt(x.d.title))),
+        btn(who ? "Open " + txt(who.first_name) : "Open in To do", () => (who ? openDetail("person", who.id) : go("todo", {focus: true, item: x.d.id})), {kind: "primary", small: true, key: "bp-first"}));
+    };
+    const upNow = todayUp[0];
+    if (upNow && ivOf(upNow)) {
+      hero = ivHero(ivOf(upNow), "Today" + (timeOf(upNow.start) ? ", " + timeOf(upNow.start) : ""));
+      heroKeys = heroKeys.concat(upKeys(upNow));
+    } else if (upNow) {
+      heroKeys = upKeys(upNow);
+      const g = obj(upNow.go);
+      const who = txt(g.to) === "contacts" ? whoOf(g.item) : null;
+      const open = who ? () => openDetail("person", who.id) : null;
+      facts = (txt(upNow.note) ? [txt(upNow.note)] : []).concat(who ? personFacts(who, dueItems().find((d) => txt(d.item) === who.id)) : []);
+      hero = h("div", {class: "bp-iv"},
+        h("p", {class: "bp-iv-when"}, h("span", {}, (txt(upNow.kind) === "test" ? "Due today" : "Today") + (timeOf(upNow.start) ? ", " + timeOf(upNow.start) : "")),
+          obj(upNow.cal).ics ? btn("", () => calSheet([upNow]), {kind: "quiet icon-only", small: true, icon: "cal-add", key: "bp-cal-hero", aria: "Add to your calendar: " + txt(upNow.title)}) : null),
+        h("p", {class: "bp-iv-what"}, h("bdi", {}, txt(upNow.title))),
+        open ? btn("Open " + txt(who.first_name), open, {kind: "primary", small: true, key: "bp-up:" + upNow.id}) : null);
+    } else if (tomorrowIv) {
+      hero = ivHero(tomorrowIv, ivWhen(tomorrowIv));
+    } else if (weekIv && !obj(weekIv.prep).updated) {
+      hero = ivHero(weekIv, ivWhen(weekIv));
+    } else if (lateSteps.length) {
+      hero = dueHero(lateSteps[0], "Rolled over · " + dueWord(lateSteps[0].d.due));
+    } else if (todaySteps.length) {
+      hero = dueHero(todaySteps[0], "Due today");
+    } else if (weekIv) {
+      hero = ivHero(weekIv, ivWhen(weekIv));
     } else {
-      const first = stepsFrom.concat(dueSteps).find((x) => isFree(x.keys));
+      const first = stepsFrom[0];
       if (first) {
-        take(first.keys);
-        const it = first.l ? obj(first.l) : null;
+        heroKeys = first.keys;
+        const it = obj(first.l);
         const pid = first.keys.find((k) => k.startsWith("p:"));
-        const person = pid ? peopleItems().find((x) => x.id === pid.slice(2)) : null;
-        const label = person ? "Open " + txt(person.first_name) : first.d ? "Open in To do" : "Open it";
-        const open = () => (person ? openDetail("person", person.id) : first.d ? go("todo", {focus: true, item: first.d.id}) : go(resolveSection(txt(it.section)) ? resolveSection(txt(it.section)).section : "todo", {focus: true, item: txt(it.item) || null}));
+        const person = pid ? whoOf(pid.slice(2)) : null;
+        facts = person ? personFacts(person, dueItems().find((d) => txt(d.item) === person.id)) : [];
+        const open = () => (person ? openDetail("person", person.id) : go(resolveSection(txt(it.section)) ? resolveSection(txt(it.section)).section : "todo", {focus: true, item: txt(it.item) || null}));
         hero = h("div", {class: "bp-iv"},
-          h("p", {class: "bp-iv-when"}, first.d ? "First · " + dueWord(first.d.due) : "First"),
-          h("p", {class: "bp-iv-what"}, inlineMd(txt(it ? it.text : first.d.title))),
-          btn(label, open, {kind: "primary", small: true, key: "bp-first"}));
+          h("p", {class: "bp-iv-when"}, "First"),
+          h("p", {class: "bp-iv-what"}, inlineMd(txt(it.text))),
+          btn(person ? "Open " + txt(person.first_name) : "Open it", open, {kind: "primary", small: true, key: "bp-first"}));
       }
     }
+    const upHero = upNow && !ivOf(upNow) ? upNow : null;
 
-    // Today's "Then": the person's next step, beside a booked thing that has nothing else
-    // beside it; settled below, once the sentences and questions are known, and taken first
-    // so Next three goes on from the one after.
-    const quietHero = !!hero && !!(upHero || weekIv) && !(weekIv && !upHero && (arr(obj(weekIv.one_screen).questions).some((q) => txt(obj(q).q)) || !obj(weekIv.prep).updated));
-    const thenStep = quietHero ? stepsFrom.concat(dueSteps).find((x) => isFree(x.keys)) : null;
-    if (thenStep) take(thenStep.keys);
     // Next three: what to do next, the brief's steps first, then To do's, each once.
     const steps = [];
     for (const x of stepsFrom.concat(dueSteps)) {
@@ -3274,6 +3312,7 @@
       take(x.keys);
       steps.push(x.node());
     }
+    take(heroKeys);
     // Coming up: the next things booked that no panel above shows.
     const allUp = upcomingItems();
     const upCards = allUp.filter((u) => isFree(upKeys(u))).slice(0, 4);
@@ -3294,18 +3333,17 @@
     // the cue for the answer, as many as the room holds. Nowhere else on the Brief says them,
     // and the panel's spare room said nothing (the maintainer, 2026-11-02). With no prep yet,
     // what Prepare me gives.
-    const shot = weekIv && !upHero ? obj(weekIv.one_screen) : {};
+    const shot = heroIv ? obj(heroIv.one_screen) : {};
     const qs = arr(shot.questions).filter((q) => txt(obj(q).q)).slice(0, 5);
-    const ready = !weekIv || upHero ? null : qs.length ? h("div", {class: "bp-ready"}, h("p", {class: "bp-ready-t"}, "Likely to come up"),
+    const ready = !heroIv ? null : qs.length ? h("div", {class: "bp-ready"}, h("p", {class: "bp-ready-t"}, "Likely to come up"),
       h("ul", {class: "plain bp-qs", "data-fit": "2,3,0"}, qs.map((q) => h("li", {}, h("span", {class: "bp-q"}, txt(q.q)), txt(q.with) ? h("span", {class: "bp-q-with"}, txt(q.with)) : null))))
-      : !obj(weekIv.prep).updated ? h("p", {class: "bp-ready muted"}, "No prep yet. Prepare me writes the questions they are likely to ask, the answer to each from your own work, and what to ask them.") : null;
-    const leadList = parts.length ? h("ul", {class: "bp-lead bp-lead-list"}, parts.slice(0, ready || thenStep ? 1 : 3).map((x) => h("li", {}, inlineMd(txt(obj(x).text))))) : null;
-    // Beside a booked thing with no likely questions to show, the person's next step, taken
-    // from Next three: Today's right half sat empty on a quiet day (the maintainer's page,
-    // 2026-11-02). With nothing at all to put there, no half is drawn and the card takes the
-    // width.
-    const thenBox = thenStep ? h("div", {class: "bp-ready"}, h("p", {class: "bp-ready-t"}, "Then"), h("ul", {class: "plain bp-list bp-steps"}, thenStep.node())) : null;
-    const side = leadList || ready || thenBox ? h("div", {class: "bp-today-side"}, leadList, ready, thenBox) : null;
+      : !obj(heroIv.prep).updated ? h("p", {class: "bp-ready muted"}, "No prep yet. Prepare me writes the questions they are likely to ask, the answer to each from your own work, and what to ask them.") : null;
+    const leadList = parts.length ? h("ul", {class: "bp-lead bp-lead-list"}, parts.slice(0, ready || facts.length ? 1 : 3).map((x) => h("li", {}, inlineMd(txt(obj(x).text))))) : null;
+    // Beside it, what matters about it: the likely questions for an interview, else a few
+    // facts (who they are, how late, a draft ready). With nothing to say, no half is drawn
+    // and the card takes the width (Today's right half sat empty, 2026-11-02).
+    const factList = facts.length ? h("ul", {class: "bp-lead bp-lead-list bp-facts"}, facts.slice(0, 3).map((f) => h("li", {}, f))) : null;
+    const side = leadList || ready || factList ? h("div", {class: "bp-today-side"}, factList, leadList, ready) : null;
     put(grid, briefPanel("today", "Today", [hero,
       hero ? side : leadList || (legacy.length ? briefItems(legacy, "legacy", 5) : null),
       !hero && !parts.length && !legacy.length ? h("p", {class: "muted"}, "Nothing booked or owed today.") : null],
@@ -3340,8 +3378,18 @@
         !searching ? h("button", {type: "button", class: "btn link", "data-k": "bp-search", onclick: () => askSearch()}, best.length ? "Search again" : "Find jobs") : null],
       {icon: "jobs", w: 4}));
     // News that matters to the search, in points (the maintainer, 2026-10-31).
-    if (news.length) put(grid, briefPanel("news", "News", h("ul", {class: "bp-lead-list bp-news"}, news.slice(0, 3).map((l) => h("li", {}, h("span", {class: "bp-text"}, inlineMd(txt(obj(l).text)))))),
-      [news.length > 3 ? h("details", {class: "bp-all"}, h("summary", {}, plural(news.length - 3, "more", "more")), h("ul", {class: "bp-lead-list bp-news"}, news.slice(3).map((l) => h("li", {}, inlineMd(txt(obj(l).text)))))) : null,
+    // Each point: what happened, then what to do with it, then where it is from, so a point
+    // reads at a glance rather than as a paragraph (the maintainer, 2026-11-02).
+    const newsPoint = (l) => {
+      const it = obj(l);
+      if (!txt(it.what)) return h("li", {}, h("span", {class: "bp-text"}, inlineMd(txt(it.text))));
+      const src = txt(it.url) ? inlineMd("[" + txt(it.src).replace(/[\[\]]/g, "") + (txt(it.date) ? ", " + fmtDay(txt(it.date)) : "") + "](" + txt(it.url) + ")") : null;
+      return h("li", {}, h("span", {class: "bp-text"}, inlineMd(txt(it.what))),
+        txt(it.use) ? h("span", {class: "bp-use"}, inlineMd(txt(it.use))) : null,
+        src ? h("span", {class: "bp-src"}, src) : null);
+    };
+    if (news.length) put(grid, briefPanel("news", "News", h("ul", {class: "bp-lead-list bp-news"}, news.slice(0, 3).map(newsPoint)),
+      [news.length > 3 ? h("details", {class: "bp-all"}, h("summary", {}, plural(news.length - 3, "more", "more")), h("ul", {class: "bp-lead-list bp-news"}, news.slice(3).map(newsPoint))) : null,
         newsAsOf(b.news_date || b.date)],
       {icon: "k-message", w: 6, m: 2}));
     // The numbers: the last 30 days, how far applications got, and the weeks. A share is said

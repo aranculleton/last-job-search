@@ -276,39 +276,46 @@ def test_today_leads_with_what_is_on_today_and_the_strip_marks_today_and_tomorro
     assert today and tomorrow and red and later and red != later      # today's dot is its own colour
 
 
-# A quiet day leaves no empty space: one booked thing and no likely questions, and Today's
-# right half was empty while Coming up was a strip over nothing, its one item being Today's
-# (the maintainer's page, 2026-11-02). Today gives the next step beside it, taken from Next
-# three; Coming up gives what is due next from To do, each with its day; nothing is shown twice.
-QUIET = ("(() => { const t = document.querySelector('#main .bp-today'); const u = document.querySelector('#main .bp-upcoming'); "
-         "const side = t.querySelector('.bp-today-side'); const ids = [...document.querySelectorAll('#main .bpanel [data-k^=\"bp-\"]')].map((a) => a.getAttribute('data-k')).filter((k) => /^bp-(due|next|person|job):/.test(k)); "
-         "return {side: !!side, then: side ? (side.querySelector('.bp-ready-t') || {}).textContent : null, thenRows: side ? side.querySelectorAll('.bp-steps li').length : 0, "
+# Today is the one most pressing thing, with what matters about it beside it (the maintainer,
+# 2026-11-02): with no booked thing today and an interview whose prep is ready, what has rolled
+# over leads, with who it is and how late; Today's right half is never left empty, Coming up is
+# never a strip over nothing, and Today's thing may be in Next three too.
+TODAY = ("(() => { const t = document.querySelector('#main .bp-today'); const u = document.querySelector('#main .bp-upcoming'); "
+         "const side = t.querySelector('.bp-today-side'); "
+         "return {when: t.querySelector('.bp-iv-when').textContent, what: t.querySelector('.bp-iv-what').textContent, "
+         "facts: side ? [...side.querySelectorAll('.bp-facts li')].map((l) => l.textContent) : [], "
          "empty: [...t.querySelectorAll('.bp-body > *')].filter((e) => !e.textContent.trim()).length, "
-         "upRows: u.querySelectorAll('.bp-up li, .bp-up-due li').length, dup: ids.length - new Set(ids).size, "
+         "next: [...document.querySelectorAll('#main .bp-next li')].map((l) => l.textContent), "
+         "upRows: u.querySelectorAll('.bp-up li, .bp-up-due li').length, "
          "heroWide: side ? null : t.querySelector('.bp-iv').getBoundingClientRect().width / t.querySelector('.bp-body').getBoundingClientRect().width}; })()")
 
 
-def test_a_quiet_day_fills_today_and_coming_up_with_something_useful(run, tmp_path, vp):
+def test_today_is_the_most_pressing_thing_with_what_matters_beside_it(run, tmp_path, vp):
     model = copy.deepcopy(_sample())
     one = model["upcoming"][0]
     model["upcoming"] = [one]
     iv = next(i for i in model["interviews"] if i["id"] == one["go"]["item"])
     iv["one_screen"] = {"questions": []}
     iv.setdefault("prep", {})["updated"] = "2026-10-24"
-    for sec in model["brief"]["sections"]:
-        if sec.get("kind") == "lead":
-            sec["parts"], sec["text"] = [], ""
-    got = _go(run, tmp_path, [{"hash": "brief", "eval": QUIET}], vp, model=model, clock=T)
+    late = min((d for d in model["due"] if d.get("due", "9999") < "2026-10-25" and d.get("kind") not in ("request_pending", "withdraw", "hidden")),
+               key=lambda d: ((d.get("kind") != "reply"), d["due"]))
+    late["context"] = "Operations lead at Fernhill Freight \u00b7 met at a meetup"
+    got = _go(run, tmp_path, [{"hash": "brief", "eval": TODAY}], vp, model=model, clock=T)
     r = got["after"][0]["eval"]
-    assert r["side"] and r["then"] == "Then" and r["thenRows"] == 1, r
-    assert r["empty"] == 0, r
-    assert r["upRows"] >= 1, r
-    assert r["dup"] == 0, r
-    # With nothing to put beside it, the booked thing takes the card's width.
-    model["due"], model["brief"]["sections"] = [], [s for s in model["brief"]["sections"] if s.get("kind") not in ("next", "owed")]
-    got = _go(run, tmp_path, [{"hash": "brief", "eval": QUIET}], vp, model=model, clock=T)
+    assert r["when"].startswith("Rolled over"), r
+    assert late["title"] in r["what"], r
+    assert "Operations lead at Fernhill Freight" in r["facts"], r
+    assert r["empty"] == 0 and r["upRows"] >= 1, r
+    # Prep not written yet: the interview leads instead, inside the prep window.
+    iv["prep"] = {}
+    got = _go(run, tmp_path, [{"hash": "brief", "eval": TODAY}], vp, model=model, clock=T)
+    assert iv["company"] in got["after"][0]["eval"]["what"], got["after"][0]["eval"]
+    # With nothing to put beside it, the thing takes the card's width.
+    iv["prep"] = {"updated": "2026-10-24"}
+    model["due"], model["brief"]["sections"] = [], [s for s in model["brief"]["sections"] if s.get("kind") not in ("next", "owed", "lead")]
+    got = _go(run, tmp_path, [{"hash": "brief", "eval": TODAY}], vp, model=model, clock=T)
     r = got["after"][0]["eval"]
-    assert not r["side"] and r["empty"] == 0 and r["heroWide"] > 0.9, r
+    assert r["empty"] == 0 and (r["heroWide"] is None or r["heroWide"] > 0.9), r
 
 
 # A reply owed in To do names its person by `item`, as the model sends it, and the Brief shows

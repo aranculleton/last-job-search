@@ -708,7 +708,8 @@ def _gather(today: dt.date, write: bool) -> dict:
 
     # The day's upkeep first, so everything below reads the state it leaves.
     closed = followups.close_quiet(today=today, write=write)
-    if closed and write:
+    staged = stages_into_tracker(today) if write else []
+    if (closed or staged) and write:
         tracker = open_actions._tracker()
     preps = _preps(iso) if write else {"line": "", "rebuilt": 0, "research": []}
 
@@ -793,6 +794,43 @@ def _gather(today: dt.date, write: bool) -> dict:
         if setting("news") and not b["paused"]:
             plan_searched(searched_whats(qs, watch, today), today)
     return b
+
+
+_NOTE_DAY = re.compile(r"(?:^|[|;]\s*)(\d{4}-\d{2}-\d{2}):")
+
+
+def stages_into_tracker(today: dt.date) -> list[str]:
+    """Each stage a live process's record (its outcome.md) marks done after the row's last
+    dated note goes onto that tracker row's notes too, once, with its day. The page and the
+    brief read the record; a chat reading the row by hand read a test as still due five days
+    after it was taken, because only the record said so (2 November: a test taken on 29
+    October, the row's last note still its invite and deadline). Returns the employers."""
+    import csv_store
+    import open_actions
+    import throttle
+    path = person.state("job_search_tracker.csv")
+    if not os.path.exists(path):
+        return []
+    rows = csv_store.read_rows(path)
+    live = set(throttle.LIVE_PROCESS)
+    added = []
+    for r in rows:
+        if _status(r) not in live:
+            continue
+        notes = str(r.get("notes") or "")
+        written = max(_NOTE_DAY.findall(notes) or [""])
+        for st in open_actions.stages(r)[2]:
+            day = st.get("date") or ""
+            if not st.get("done") or not _d(day) or day <= written or _d(day) > today:
+                continue
+            line = "%s: %s done (from the application's record)" % (day, st["label"].rstrip(" :"))
+            if line not in notes:
+                notes = (notes.rstrip() + " | " + line).strip(" |")
+                added.append(str(r.get("company") or ""))
+        r["notes"] = notes
+    if added:
+        csv_store.write_rows(path, rows, csv_store.header(path))
+    return list(dict.fromkeys(added))
 
 
 def _break(today: dt.date, write: bool) -> dict:

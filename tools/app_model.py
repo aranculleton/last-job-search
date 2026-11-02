@@ -3223,6 +3223,26 @@ def brief_line(text: str) -> str:
     return scrub(t, ())
 
 
+# A news line as the news reader writes it: what happened (publisher, date, link). How to use it.
+_NEWS_LINE = re.compile(r"^(?P<what>.+?)\s*\((?P<src>[^()]{2,80}?),\s*(?P<date>\d{4}-\d{2}-\d{2}),\s*"
+                        r"(?P<url>https?://[^\s()]+)\)\.?\s*(?P<use>.*)$")
+
+
+def news_parts(line: str) -> dict:
+    """A news point in its parts, so the page sets what happened, how to use it and where it
+    is from apart: {what, use, src, date, url}, or {} for a line in another shape, shown as
+    it is."""
+    m = _NEWS_LINE.match(str(line or "").strip())
+    if not m:
+        return {}
+    what, use = brief_line(m.group("what")).rstrip(" ."), brief_line(m.group("use")).rstrip(" .")
+    if not what:
+        return {}
+    return {"what": what + ".", "use": (use[:1].upper() + use[1:] + ".") if use else "",
+            "src": scrub(m.group("src").strip(), ()), "date": m.group("date"),
+            "url": m.group("url").rstrip(".,;")}
+
+
 def brief_sections(text: str) -> list[dict]:
     """The brief in its parts, each {title, kind, text, items: [{text}]}: a heading's own
     sentences as `text`, its bullets or numbered steps as items. A line about a file or a
@@ -3252,7 +3272,8 @@ def brief_sections(text: str) -> list[dict]:
         if item:
             said = brief_line(item.group(1))
             if said:
-                cur["items"].append({"text": said})
+                cur["items"].append(dict({"text": said}, **(
+                    news_parts(item.group(1)) if cur["kind"] == "news" else {})))
         else:
             said = brief_line(ln)
             if said:

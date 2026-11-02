@@ -30,9 +30,15 @@ make sense to somebody whose repo just received it.
   point to raise on a call, a question for an interview there, a reason to write to someone.
   If the search cannot run, the last brief's items stay, marked with their day, and the page
   shows them with the day they were gathered.
-- **A quiet day on the Brief leaves no empty space.** Beside a booked call or interview with
-  no likely questions, Today gives your next step; when Coming up's only booked thing is the
-  one Today shows, it lists what is due next from To do, each with its day.
+- **Today on your Brief is the one most pressing thing, with what matters about it beside
+  it.** An interview, call or test happening today comes first (an interview before a call),
+  then an interview tomorrow, then one inside your prep window with no prep yet, then what has
+  rolled over (someone waiting on a reply first), then what is due today. Beside it: the
+  questions an interview is likely to bring, or who the person is, how late it is and whether
+  a draft is ready. It can be in Next three as well. When Coming up's only booked thing is
+  the one Today shows, it lists what is due next instead of an empty strip.
+- **News reads as tidy points**: what happened, then what to do with it, then where it is
+  from, and the panel is never cut off at the bottom.
 - **The moving line under the header glides** while an update runs, instead of stuttering on
   a busy page.
 - **Today and tomorrow stand out at a glance in green and gold** on the Brief's two-week strip
@@ -45,8 +51,10 @@ make sense to somebody whose repo just received it.
   their length limit and were cut, and the cut fell on the steps that publish a newer page and
   bring its data up to date, so the page could stay days behind. Only the phone message is
   shortened now; the steps are never cut.
-- **One person is shown once on the Brief.** A reply owed could lead Today and come again in
-  Next three.
+- **One person is shown once on the Brief.** A reply owed could appear twice on it.
+- **A stage you finished reaches your tracker by itself.** When an application's record marks
+  a stage done (a test taken, an interview held) after the tracker row's last note, the
+  morning brief writes it onto the row too, so nothing reading the row thinks it is still due.
 
 ## [4.7.0] - 2026-11-02
 
