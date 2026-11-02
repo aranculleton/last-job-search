@@ -3,6 +3,67 @@
 Written at the end of 4.6.0 (2026-11-02) for the chat that builds the next version. Read
 MAINTAINING.md first; this is only what 4.6 left.
 
+## Do first, for [Unreleased]: fixed rules 4.6 built in that should come from the person
+
+The maintainer, reading the 4.6 notes (2026-11-02): "i thought that was AN example why do we
+have dedicated searches or calculations for this... dont different things affect everyones
+situation? why would you hardcode this." They are right. Each item below is a rule the app
+decides for everyone where the person's own situation should decide. Fix them before
+anything else in the next version, starting with the news.
+
+1. **The brief's news is five fixed kinds of search** (`tools/brief.py`, `queries` and
+   `NEWS_GROUPS`): employers in play, the right to work, the local market, the central bank's
+   interest rates, target employers. The kinds were older than 4.6; 4.6 made them worse by
+   building them in further: a hand-written table of central banks (`CENTRAL_BANK`,
+   `BANK_DECISION`, `EURO`), a table of country names (`COUNTRY`, `LANGUAGE`), a regex that
+   reads the profile's right-to-work line for "visa", "permit" or "status" (`rights_term`),
+   a stock field taken from Target Sectors or the first search title, and a weekly rule for
+   the rights and bank searches (`since` in an earlier ISO week). A nurse, a lawyer or a
+   student on a visa each has different things that move their search, and an interest rate
+   is one example, not a category. **Build instead**: what to watch comes from the person.
+   When the profile is made or changes, Claude writes the few things that matter to this
+   person's search, in their own terms and each with how often it changes (for example
+   "NHS band 5 pay talks, monthly", "Graduate visa rule changes, weekly"), into their profile
+   (person.json `brief.watch`), shown and editable on the page in Edit the brief, which today
+   offers the five fixed kinds under "Also watch". `queries` then reads that list and the
+   employers in play, and nothing else; the tables go. An older profile gets its list from
+   a profile upgrade, written once in the background, never asked about. Keep the cost where
+   it is (at most six searches a brief).
+2. **Coming up's English word lists** (`tools/upcoming.py`): a stage is a test if its label
+   has "test", "assessment", "case study" and the like (`_TEST`); a screen or a call is 30
+   minutes and anything else an hour (`_SHORT`, `minutes`); a place is read from "teams",
+   "zoom", "phone", "office" (`_PLACES`). Someone writing their stages in French or German
+   gets none of it. The length and the kind should be written on the stage when it is
+   recorded (`/outcome`, `register_process`), which knows the invite, not guessed from words.
+3. **Fixed windows**: Coming up looks 60 days ahead (`WINDOW_DAYS`); a closing day shows from
+   21 days out (`DEADLINE_DAYS`); Today's interview card is the nearest within 7 days, called
+   "the prep window" (`weekIv` in `renderBrief`); calendar reminders are an hour before and
+   the afternoon before an all-day item (`vevent`'s `VALARM`). None is the person's choice.
+   At least the reminders and the prep window belong in their settings, with these as
+   defaults.
+4. **A time zone word the app does not know gives no time** (`_zone_word`): a guess that any
+   upper-case word ending in T is a zone. The zones should come from a full table (the
+   standard library's zone names, or the person's own country's zones), not `_ZONE_WORDS`
+   plus a rule of thumb.
+5. **The strip's day letters are English** ("Mo", "Tu", `DAY2` in `weekStrip`); every other
+   date on the page goes through `Intl` in the person's locale. Use `Intl` here too.
+6. **Choices made for the person on the Brief**, each reasonable, none asked for: the Jobs
+   count in the menu now means only new postings not in a process (`jobToLook`, it used to
+   count drafting and ready ones too); the People panel is "Waiting on you" and leaves out
+   anyone a step above names; "people replied" became "contacts replied"; Next three tops up
+   from To do but skips connection requests and withdrawals (`DUE_SKIP`) and drops a brief
+   step that only says to look at jobs when the Jobs panel shows them; the brief's opening
+   sentences show only where `brief_link` finds them about nothing shown (one item per
+   sentence, so a sentence about two things is judged by one). Check each with the
+   maintainer's page before building on it.
+7. **One Outlook**: the work-or-school link was dropped on the reasoning that a job search
+   does not belong in the calendar of the job being left. Sound for most, wrong for someone
+   whose only calendar is a school or work one; if anyone asks, bring it back as a second
+   choice under the first.
+8. **The fit's numbers** (`fitBrief`): 64px kept clear for the Chat button, each list's fewest
+   and starting counts in `data-fit` ("2,3" for People and Jobs, "1,3" for the questions,
+   "2,2" for Coming up). Tuned on the sample at three window sizes, not on real data.
+
 ## How to work (the maintainer, 2026-10-30 and 2026-11-02)
 
 - **Decide, never ask.** Every design, tooling and gate question is the builder's to settle
