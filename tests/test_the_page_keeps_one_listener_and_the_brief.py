@@ -255,15 +255,27 @@ def test_today_leads_with_what_is_on_today_and_the_strip_marks_today_and_tomorro
     assert today and tomorrow and red and later and red != later      # today's dot is its own colour
 
 
-# Fitting the Brief to a short window never hides a person or a job, and leaves Today at
-# least two likely questions: a list cut to two on a big screen read as a broken panel
-# (the maintainer, 2026-11-02).
-def test_fitting_the_brief_keeps_three_people_and_jobs_and_two_questions(run, tmp_path):
-    got = _go(run, tmp_path, [{"hash": "brief", "eval": "[...document.querySelectorAll('#main [data-fit]')].map((l) => [l.className, l.getAttribute('data-fit'), "
-                                                       "[...l.children].slice(0, 3).filter((li) => li.hidden).length])"}],
-              {"width": 1280, "height": 700}, clock=T)
-    lists = {c: (f, hidden) for c, f, hidden in got["after"][0]["eval"]}
-    assert lists["plain bp-list bp-people"] == ("3,3", 0), lists
-    assert lists["plain bp-list"] == ("3,3", 0), lists
+# Fitting the Brief to the window is by what each item really saves: nothing is hidden beside
+# white space, Today gives a likely question before People or Jobs lose anyone, and Today keeps
+# two (the maintainer, 2026-11-02: "dynamic based on screen size ... be smart").
+FITS = ("[...document.querySelectorAll('#main [data-fit]')].map((l) => [l.className, l.getAttribute('data-fit'), "
+        "[...l.children].filter((li) => li.hidden).length, [...l.children].filter((li) => !li.hidden).length])")
+
+
+@pytest.mark.parametrize("size", [{"width": 1440, "height": 1000}, {"width": 1280, "height": 700},
+                                  {"width": 1100, "height": 620}])
+def test_fitting_the_brief_takes_what_saves_most_and_keeps_today_useful(run, tmp_path, size):
+    got = _go(run, tmp_path, [{"hash": "brief", "eval": FITS}], size, clock=T)
+    lists = {c: (f, hidden, shown) for c, f, hidden, shown in got["after"][0]["eval"]}
     q = next((v for c, v in lists.items() if "bp-qs" in c), None)
-    assert q is None or (q[0] == "2,3" and q[1] <= 1), lists
+    people, jobs = lists["plain bp-list bp-people"], lists["plain bp-list"]
+    assert people[0] == "2,3,3" and jobs[0] == "2,3,2" and (q is None or q[0] == "2,3,0"), lists
+    start = lambda v: min(int(v[0].split(",")[1]), v[1] + v[2])  # noqa: E731
+    if size["height"] >= 1000:
+        # Room to spare: every list shows at least what it starts with, and more where its row
+        # has room (extra items beyond the start count stay folded only where they would grow it).
+        assert all(v[2] >= start(v) for v in lists.values()), lists
+    if q is not None:
+        assert q[2] >= 2, lists                                   # Today never below two questions
+        if people[2] < start(people) or jobs[2] < start(jobs):
+            assert q[2] == 2, lists                               # Today gave first

@@ -3007,7 +3007,7 @@
       } catch (e) { w = ""; }
       names.push(w || ["Su", "Mo", "Tu", "We", "Th", "Fr", "Sa"][i]);
     }
-    // Two letters that name two days (Portuguese se, Hungarian Sz, Vietnamese Th): the
+    // Two letters that name two days ("se" twice in Portuguese, "sz" in Hungarian): the
     // language's own short form for every day instead, which never repeats.
     if (new Set(names).size < 7) {
       for (let i = 0; i < 7; i++) {
@@ -3050,7 +3050,9 @@
     const grid = document.querySelector("#main .brief-grid");
     if (!grid) return;
     const lists = [...grid.querySelectorAll("[data-fit]")];
-    const fit = (l) => { const [min, base] = txt(l.getAttribute("data-fit")).split(",").map(Number); return {min: min || 1, base: base || 3}; };
+    // data-fit "fewest,start,keep": `keep` orders what gives first when nothing else decides
+    // (0 Today's likely questions, then Coming up, Jobs, People).
+    const fit = (l) => { const [min, base, keep] = txt(l.getAttribute("data-fit")).split(",").map(Number); return {min: min || 1, base: base || 3, keep: keep || 1}; };
     const name = (l) => txt((l.closest(".bpanel") || {getAttribute: () => ""}).getAttribute("data-k")) + ":" + txt(l.className);
     const key = window.innerWidth + "x" + window.innerHeight + ":" + txt(M().rev);
     if (fitMemo.key === key && fitMemo.counts) {
@@ -3071,21 +3073,26 @@
         if (panel.getBoundingClientRect().height > before + 1 || panel.scrollHeight > panel.clientHeight + 1) { li.hidden = true; break; }
       }
     }
-    // Shrink: while the Brief runs past the bottom of the window, the longest list gives one
-    // up, kept hidden only if that made the Brief shorter (a card beside another, or a row in
-    // a panel shorter than its neighbour, saves nothing, and is put back). Only Today's likely
-    // questions can give (never below two); People and Jobs keep three, and News and Next three
-    // never shrink: a Brief a little taller than the window scrolls rather than hide a person
-    // or a job (the maintainer, 2026-11-02: "be smart", and keep Today useful).
+    // Shrink: while the Brief runs past the bottom of the window, one item gives way at a
+    // time: of every list's last item, the one whose going makes the Brief shortest, and
+    // between equals the least needed (`keep`). An item in a panel shorter than its row-mates
+    // saves nothing and is never taken, so nothing is hidden beside white space: a long Today
+    // gives a question before People or Jobs lose anyone (the maintainer, 2026-11-02: "not
+    // unnecessarily omit things if we have clear white space ... be smart"). Each list keeps
+    // its fewest, so Today never empties and a short window scrolls rather than crams.
     const room = window.innerHeight - 64;   // clear of the Chat button in the corner
-    const done = new Set();
     for (let guard = 0; guard < 16 && grid.getBoundingClientRect().bottom > room; guard++) {
-      const l = lists.filter((x) => !done.has(x) && shown(x).length > fit(x).min).sort((a, b) => shown(b).length - shown(a).length)[0];
-      if (!l) break;
       const before = grid.getBoundingClientRect().bottom;
-      const li = shown(l).slice(-1)[0];
-      li.hidden = true;
-      if (grid.getBoundingClientRect().bottom >= before - 1) { li.hidden = false; done.add(l); }
+      let best = null;
+      for (const l of lists.filter((x) => shown(x).length > fit(x).min)) {
+        const li = shown(l).slice(-1)[0];
+        li.hidden = true;
+        const saved = before - grid.getBoundingClientRect().bottom;
+        li.hidden = false;
+        if (saved > 1 && (!best || saved > best.saved + 1 || (Math.abs(saved - best.saved) <= 1 && fit(l).keep < fit(best.l).keep))) best = {l, li, saved};
+      }
+      if (!best) break;
+      best.li.hidden = true;
     }
     remember();
   }
@@ -3280,7 +3287,7 @@
     const shot = weekIv && !upHero ? obj(weekIv.one_screen) : {};
     const qs = arr(shot.questions).filter((q) => txt(obj(q).q)).slice(0, 5);
     const ready = !weekIv || upHero ? null : qs.length ? h("div", {class: "bp-ready"}, h("p", {class: "bp-ready-t"}, "Likely to come up"),
-      h("ul", {class: "plain bp-qs", "data-fit": "2,3"}, qs.map((q) => h("li", {}, h("span", {class: "bp-q"}, txt(q.q)), txt(q.with) ? h("span", {class: "bp-q-with"}, txt(q.with)) : null))))
+      h("ul", {class: "plain bp-qs", "data-fit": "2,3,0"}, qs.map((q) => h("li", {}, h("span", {class: "bp-q"}, txt(q.q)), txt(q.with) ? h("span", {class: "bp-q-with"}, txt(q.with)) : null))))
       : !obj(weekIv.prep).updated ? h("p", {class: "bp-ready muted"}, "No prep yet. Prepare me writes the questions they are likely to ask, the answer to each from your own work, and what to ask them.") : null;
     const leadList = parts.length ? h("ul", {class: "bp-lead bp-lead-list"}, parts.slice(0, ready ? 1 : 3).map((x) => h("li", {}, inlineMd(txt(obj(x).text))))) : null;
     put(grid, briefPanel("today", "Today", [hero,
@@ -3294,7 +3301,7 @@
       {icon: "interviews", w: 6, m: 2}));
     put(grid, briefPanel("next", steps.length === 3 ? "Next three" : "Next", steps.length ? h("ol", {class: "plain bp-list bp-steps"}, steps) : h("p", {class: "muted"}, "Nothing else needs you today."),
       navLink("todo", need ? "All " + need + " in To do" : "All of it in To do"), {icon: "k-update", w: 4}));
-    put(grid, briefPanel("people", "Waiting on you", ppl.length ? h("ul", {class: "plain bp-list bp-people", "data-fit": "3,3"}, ppl.map((p) => {
+    put(grid, briefPanel("people", "Waiting on you", ppl.length ? h("ul", {class: "plain bp-list bp-people", "data-fit": "2,3,3"}, ppl.map((p) => {
       const move = txt(p.next_action) && txt(p.next_action).length <= 28 ? txt(p.next_action) : (BRIEF_PERSON_WORD[txt(p.status)] || "Follow up");
       return h("li", {}, h("a", {href: "#contacts/" + p.id, class: "bp-text bp-link", "data-k": "bp-person:" + p.id, onclick: (e) => { e.preventDefault(); openDetail("person", p.id); }},
         h("span", {class: "bp-avatar", "aria-hidden": "true"}, txt(p.first_name).slice(0, 1).toUpperCase()),
@@ -3303,7 +3310,7 @@
     })) : h("p", {class: "muted"}, "Nobody else is waiting on you."),
       navLink("contacts", "Everyone in Contacts"), {icon: "contacts", w: 4}));
     const searching = [...allWork()].some(([, w]) => w.kind === "search" && ACTIVE.has(w.status));
-    put(grid, briefPanel("jobs", "Jobs", best.length ? h("ul", {class: "plain bp-list", "data-fit": "3,3"}, best.slice(0, 5).map((r) => h("li", {},
+    put(grid, briefPanel("jobs", "Jobs", best.length ? h("ul", {class: "plain bp-list", "data-fit": "2,3,2"}, best.slice(0, 5).map((r) => h("li", {},
       h("a", {href: "#jobs/" + r.id, class: "bp-text bp-link", "data-k": "bp-job:" + r.id, onclick: (e) => { e.preventDefault(); go("jobs", {focus: true, item: r.id}); }},
         h("strong", {}, txt(r.title)), h("span", {class: "bp-at"}, txt(r.company))),
       r.score != null ? h("span", {class: "bp-score tone-" + (txt(r.band) || "plain"), title: SCORE_MEANS}, String(r.score)) : null)))
