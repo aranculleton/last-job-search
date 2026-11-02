@@ -49,6 +49,8 @@ make sense to somebody whose repo just received it.
 - **Today on your Brief is what comes next today.** A call or a test due this afternoon leads
   the panel, ahead of an interview later in the week, and the two-week strip marks today's
   things in red and tomorrow's in amber.
+- **The Brief never hides a person or a job to fit your window.** Waiting on you and Jobs keep
+  three each; only Today's likely questions give way on a short screen, and never below two.
 - **Your settings decide what the app used to fix for everyone.** Settings has how early your
   next interview leads your Brief (a week before, unless you choose 2 days or two weeks) and
   when calendar reminders come (an hour before, unless you choose 15 minutes, the day before

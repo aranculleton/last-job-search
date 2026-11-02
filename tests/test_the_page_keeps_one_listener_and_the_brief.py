@@ -253,3 +253,17 @@ def test_today_leads_with_what_is_on_today_and_the_strip_marks_today_and_tomorro
     assert got["after"][0]["eval"] == call["title"], got["after"][0]["eval"]
     today, tomorrow, red, later = got["after"][1]["eval"]
     assert today and tomorrow and red and later and red != later      # today's dot is its own colour
+
+
+# Fitting the Brief to a short window never hides a person or a job, and leaves Today at
+# least two likely questions: a list cut to two on a big screen read as a broken panel
+# (the maintainer, 2026-11-02).
+def test_fitting_the_brief_keeps_three_people_and_jobs_and_two_questions(run, tmp_path):
+    got = _go(run, tmp_path, [{"hash": "brief", "eval": "[...document.querySelectorAll('#main [data-fit]')].map((l) => [l.className, l.getAttribute('data-fit'), "
+                                                       "[...l.children].slice(0, 3).filter((li) => li.hidden).length])"}],
+              {"width": 1280, "height": 700}, clock=T)
+    lists = {c: (f, hidden) for c, f, hidden in got["after"][0]["eval"]}
+    assert lists["plain bp-list bp-people"] == ("3,3", 0), lists
+    assert lists["plain bp-list"] == ("3,3", 0), lists
+    q = next((v for c, v in lists.items() if "bp-qs" in c), None)
+    assert q is None or (q[0] == "2,3" and q[1] <= 1), lists

@@ -3066,7 +3066,10 @@
     }
     // Shrink: while the Brief runs past the bottom of the window, the longest list gives one
     // up, kept hidden only if that made the Brief shorter (a card beside another, or a row in
-    // a panel shorter than its neighbour, saves nothing, and is put back).
+    // a panel shorter than its neighbour, saves nothing, and is put back). Only Today's likely
+    // questions can give (never below two); People and Jobs keep three, and News and Next three
+    // never shrink: a Brief a little taller than the window scrolls rather than hide a person
+    // or a job (the maintainer, 2026-11-02: "be smart", and keep Today useful).
     const room = window.innerHeight - 64;   // clear of the Chat button in the corner
     const done = new Set();
     for (let guard = 0; guard < 16 && grid.getBoundingClientRect().bottom > room; guard++) {
@@ -3270,7 +3273,7 @@
     const shot = weekIv && !upHero ? obj(weekIv.one_screen) : {};
     const qs = arr(shot.questions).filter((q) => txt(obj(q).q)).slice(0, 5);
     const ready = !weekIv || upHero ? null : qs.length ? h("div", {class: "bp-ready"}, h("p", {class: "bp-ready-t"}, "Likely to come up"),
-      h("ul", {class: "plain bp-qs", "data-fit": "1,3"}, qs.map((q) => h("li", {}, h("span", {class: "bp-q"}, txt(q.q)), txt(q.with) ? h("span", {class: "bp-q-with"}, txt(q.with)) : null))))
+      h("ul", {class: "plain bp-qs", "data-fit": "2,3"}, qs.map((q) => h("li", {}, h("span", {class: "bp-q"}, txt(q.q)), txt(q.with) ? h("span", {class: "bp-q-with"}, txt(q.with)) : null))))
       : !obj(weekIv.prep).updated ? h("p", {class: "bp-ready muted"}, "No prep yet. Prepare me writes the questions they are likely to ask, the answer to each from your own work, and what to ask them.") : null;
     const leadList = parts.length ? h("ul", {class: "bp-lead bp-lead-list"}, parts.slice(0, ready ? 1 : 3).map((x) => h("li", {}, inlineMd(txt(obj(x).text))))) : null;
     put(grid, briefPanel("today", "Today", [hero,
@@ -3284,7 +3287,7 @@
       {icon: "interviews", w: 6, m: 2}));
     put(grid, briefPanel("next", steps.length === 3 ? "Next three" : "Next", steps.length ? h("ol", {class: "plain bp-list bp-steps"}, steps) : h("p", {class: "muted"}, "Nothing else needs you today."),
       navLink("todo", need ? "All " + need + " in To do" : "All of it in To do"), {icon: "k-update", w: 4}));
-    put(grid, briefPanel("people", "Waiting on you", ppl.length ? h("ul", {class: "plain bp-list bp-people", "data-fit": "2,3"}, ppl.map((p) => {
+    put(grid, briefPanel("people", "Waiting on you", ppl.length ? h("ul", {class: "plain bp-list bp-people", "data-fit": "3,3"}, ppl.map((p) => {
       const move = txt(p.next_action) && txt(p.next_action).length <= 28 ? txt(p.next_action) : (BRIEF_PERSON_WORD[txt(p.status)] || "Follow up");
       return h("li", {}, h("a", {href: "#contacts/" + p.id, class: "bp-text bp-link", "data-k": "bp-person:" + p.id, onclick: (e) => { e.preventDefault(); openDetail("person", p.id); }},
         h("span", {class: "bp-avatar", "aria-hidden": "true"}, txt(p.first_name).slice(0, 1).toUpperCase()),
@@ -3293,7 +3296,7 @@
     })) : h("p", {class: "muted"}, "Nobody else is waiting on you."),
       navLink("contacts", "Everyone in Contacts"), {icon: "contacts", w: 4}));
     const searching = [...allWork()].some(([, w]) => w.kind === "search" && ACTIVE.has(w.status));
-    put(grid, briefPanel("jobs", "Jobs", best.length ? h("ul", {class: "plain bp-list", "data-fit": "2,3"}, best.slice(0, 5).map((r) => h("li", {},
+    put(grid, briefPanel("jobs", "Jobs", best.length ? h("ul", {class: "plain bp-list", "data-fit": "3,3"}, best.slice(0, 5).map((r) => h("li", {},
       h("a", {href: "#jobs/" + r.id, class: "bp-text bp-link", "data-k": "bp-job:" + r.id, onclick: (e) => { e.preventDefault(); go("jobs", {focus: true, item: r.id}); }},
         h("strong", {}, txt(r.title)), h("span", {class: "bp-at"}, txt(r.company))),
       r.score != null ? h("span", {class: "bp-score tone-" + (txt(r.band) || "plain"), title: SCORE_MEANS}, String(r.score)) : null)))
