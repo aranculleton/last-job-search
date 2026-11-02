@@ -22,8 +22,9 @@ make sense to somebody whose repo just received it.
 
 ### Changed
 
-- **Today and tomorrow on the Brief's two-week strip are in calm colours**, not red and amber,
-  which read as a warning.
+- **Today and tomorrow stand out in calm colours** on the Brief's two-week strip and on the
+  Coming up screen, where their day headings carry a small dot, never red or amber, which
+  read as a warning.
 
 ## [4.7.0] - 2026-11-02
 

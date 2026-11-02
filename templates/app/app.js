@@ -4272,7 +4272,10 @@
       if (last && last[0] === u.day) last[1].push(u); else days.push([u.day, [u]]);
     }
     const prepped = new Set();
-    return [h("ol", {class: "plain up-days", "data-k": "up-days"}, days.map(([day, rows]) => h("li", {class: "up-day"},
+    // Today and tomorrow marked in the strip's calm colours (pine, iris), never an alarm one
+    // (the maintainer, 2026-11-02: red "promotes alarmism").
+    const dayMark = (day) => { const n = dayDiff(day); return n === 0 ? " is-today" : n === 1 ? " is-tomorrow" : ""; };
+    return [h("ol", {class: "plain up-days", "data-k": "up-days"}, days.map(([day, rows]) => h("li", {class: "up-day" + dayMark(day)},
       h("h3", {class: "group"}, upDayLabel(day)), h("ul", {class: "plain up-list"}, rows.map((u) => upRow(u, "", prepped)))))),
       later.length ? h("p", {class: "up-later"}, btn("Show " + later.length + " more, to " + fmtDay(later[later.length - 1].day), () => { S.upLater = true; render(); }, {kind: "secondary", small: true, key: "up-later"})) : null];
   }

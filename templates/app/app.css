@@ -1436,6 +1436,10 @@ dialog.sheet .sheet-body { display: grid; gap: 16px; }
 .bp-day.is-today .bp-day-dots i.due { background: transparent; box-shadow: inset 0 0 0 1.5px var(--st-done); }
 .bp-day.is-tomorrow .bp-day-dots i { background: var(--st-held); }
 .bp-day.is-tomorrow .bp-day-dots i.due { background: transparent; box-shadow: inset 0 0 0 1.5px var(--st-held); }
+/* Coming up's own day headings carry the same two marks: a dot before Today and Tomorrow. */
+.up-day.is-today > .group, .up-day.is-tomorrow > .group { display: flex; align-items: center; gap: 8px; }
+.up-day.is-today > .group::before, .up-day.is-tomorrow > .group::before { content: ""; width: 8px; height: 8px; border-radius: 50%; background: var(--st-done); flex: none; }
+.up-day.is-tomorrow > .group::before { background: var(--st-held); }
 /* On a phone, the coming week: fourteen days do not fit a thumb. */
 @media (max-width: 559px) { .bp-week { grid-template-columns: repeat(7, minmax(0, 1fr)); } .bp-week > .bp-day:nth-child(n+8) { display: none; } }
 
