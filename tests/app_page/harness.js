@@ -658,6 +658,9 @@ async function evalThrough(page, code) {
 S.engine = async (a) => {
   const o = await open({html: a.html, viewport: a.viewport, scheme: a.scheme, seed: a.seed || {}, fake: a.fake, clipboard: a.clipboard, clock: a.clock});
   const {page, store} = o;
+  // A page expected to reload itself first (a newer version published): wait for that load,
+  // so no step's own navigation or read lands in the middle of it (Firefox, 4.7).
+  if (a.settle) { await page.waitForEvent("load", {timeout: 4000}).catch(() => {}); await page.waitForLoadState("load").catch(() => {}); }
   const out = {texts: {}, after: [], shots: []};
   // To do shows five first: what a test reads is the whole list, the rest unfolded.
   const unfold = async () => { await page.$$eval("details.band-more:not([open])", (ds) => ds.forEach((d) => { d.open = true; })); await turn(page, 2); };

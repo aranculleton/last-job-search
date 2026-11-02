@@ -66,12 +66,13 @@ def _sample():
         return json.load(fh)
 
 
-def _go(run, tmp_path, steps, vp, model=None, seed=None, fake=None, clock=None):
+def _go(run, tmp_path, steps, vp, model=None, seed=None, fake=None, clock=None, settle=False):
     model = model or _sample()
     path = os.path.join(str(tmp_path), "page.html")
     with open(path, "w", encoding="utf-8") as fh:
         fh.write(app_page.standalone(app_page.render(model)))
-    got = run("engine", html=path, viewport=vp, steps=steps, seed=seed or {}, fake=fake or {"canSend": "available"}, clock=clock)
+    got = run("engine", html=path, viewport=vp, steps=steps, seed=seed or {}, fake=fake or {"canSend": "available"}, clock=clock,
+              **({"settle": True} if settle else {}))
     assert not got["errors"], got["errors"]
     return got
 
