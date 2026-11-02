@@ -46,6 +46,9 @@ make sense to somebody whose repo just received it.
   list: add something in your own words and say how often, or stop watching anything, and
   Claude never adds back what you took off. When your profile changes, the list is written
   again, keeping what you added. Profile upgrade: brief-watch.
+- **Today on your Brief is what comes next today.** A call or a test due this afternoon leads
+  the panel, ahead of an interview later in the week, and the two-week strip marks today's
+  things in red and tomorrow's in amber.
 - **Your settings decide what the app used to fix for everyone.** Settings has how early your
   next interview leads your Brief (a week before, unless you choose 2 days or two weeks) and
   when calendar reminders come (an hour before, unless you choose 15 minutes, the day before

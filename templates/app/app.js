@@ -3020,7 +3020,9 @@
     return h("div", {class: "bp-week", role: "group", "aria-label": "The next two weeks", "data-k": "week"}, days.map((d, i) => {
       const xs = on.get(d);
       const wd = new Date(d + "T12:00:00Z").getUTCDay();
-      return h("button", {type: "button", class: "bp-day" + (i === 0 ? " is-today" : "") + (xs.length ? " has" : ""), "data-k": "week:" + d, "aria-label": said(d), title: said(d),
+      // Today's dots red and tomorrow's amber, the rest as they are: what is close stands out
+      // (the maintainer, 2026-11-02), and only two days ever carry a colour.
+      return h("button", {type: "button", class: "bp-day" + (i === 0 ? " is-today" : i === 1 ? " is-tomorrow" : "") + (xs.length ? " has" : ""), "data-k": "week:" + d, "aria-label": said(d), title: said(d),
         // A day with something on it opens it; a free day adds something to it, as a calendar does.
         onclick: () => { if (xs.length) go("interviews", {focus: true, item: txt(xs[0].id)}); else askAddUpcoming(d); }},
         h("span", {class: "bp-day-w", "aria-hidden": "true"}, dayLetters()[wd]),
@@ -3189,7 +3191,29 @@
       .map((d) => ({keys: dueKeys(d), d, node: () => h("li", {}, h("a", {href: "#todo/" + d.id, class: "bp-text bp-link", "data-k": "bp-due:" + d.id, onclick: (e) => { e.preventDefault(); go("todo", {focus: true, item: d.id}); }},
         h("span", {}, txt(d.title), h("span", {class: "bp-when"}, " · " + dueWord(d.due)))))}));
     let hero = null;
-    if (weekIv) {
+    // Today's card is what comes next today, before anything later in the week: a call or a
+    // test due today beat an interview three days out, which read as the day's one thing
+    // (the maintainer, 2026-11-02: "the most upcoming event"). Untimed things today come
+    // after timed ones; anything already over has left.
+    const upAt = (u) => (txt(u.start) ? tms(u.start) : null) ?? (tms(txt(u.day) + "T23:59:00") || Infinity);
+    const todayUp = upcomingItems().filter((u) => txt(u.day) === todayIso() && ["call", "test", "event"].includes(txt(u.kind))
+      && !(txt(u.end) && isPast(u.end))).sort((x, y) => upAt(x) - upAt(y));
+    const ivAt = weekIv ? (tms(weekIv.when) || Infinity) : Infinity;
+    const ivToday = !!weekIv && dayDiff(dayOf(weekIv.when)) === 0;
+    const upHero = todayUp.find((u) => isFree(upKeys(u)) && (!ivToday || upAt(u) < ivAt));
+    if (upHero) {
+      take(upKeys(upHero));
+      const g = obj(upHero.go);
+      const who = txt(g.to) === "contacts" ? peopleItems().find((x) => x.id === txt(g.item)) : null;
+      const iv = txt(g.to) === "interviews" ? interviewItems().find((x) => x.id === txt(g.item)) : null;
+      const open = who ? () => openDetail("person", who.id) : iv ? () => openDetail("interview", iv.id) : null;
+      hero = h("div", {class: "bp-iv"},
+        h("p", {class: "bp-iv-when"}, h("span", {}, "Today" + (timeOf(upHero.start) ? ", " + timeOf(upHero.start) : "")),
+          obj(upHero.cal).ics ? btn("", () => calSheet([upHero]), {kind: "quiet icon-only", small: true, icon: "cal-add", key: "bp-cal-hero", aria: "Add to your calendar: " + txt(upHero.title)}) : null),
+        h("p", {class: "bp-iv-what"}, h("bdi", {}, txt(upHero.title))),
+        txt(upHero.note) ? h("p", {class: "bp-iv-role"}, txt(upHero.note)) : null,
+        open ? btn(who ? "Open " + txt(who.first_name) : obj(iv.prep).updated ? "Read your prep" : "Open it", open, {kind: "primary", small: true, key: "bp-up:" + upHero.id}) : null);
+    } else if (weekIv) {
       take(["iv:" + weekIv.id]);
       const heroUp = upcomingItems().find((u) => txt(obj(u.go).item) === weekIv.id && obj(u.cal).ics);
       hero = h("div", {class: "bp-iv"},
@@ -3243,9 +3267,9 @@
     // the cue for the answer, as many as the room holds. Nowhere else on the Brief says them,
     // and the panel's spare room said nothing (the maintainer, 2026-11-02). With no prep yet,
     // what Prepare me gives.
-    const shot = weekIv ? obj(weekIv.one_screen) : {};
+    const shot = weekIv && !upHero ? obj(weekIv.one_screen) : {};
     const qs = arr(shot.questions).filter((q) => txt(obj(q).q)).slice(0, 5);
-    const ready = !weekIv ? null : qs.length ? h("div", {class: "bp-ready"}, h("p", {class: "bp-ready-t"}, "Likely to come up"),
+    const ready = !weekIv || upHero ? null : qs.length ? h("div", {class: "bp-ready"}, h("p", {class: "bp-ready-t"}, "Likely to come up"),
       h("ul", {class: "plain bp-qs", "data-fit": "1,3"}, qs.map((q) => h("li", {}, h("span", {class: "bp-q"}, txt(q.q)), txt(q.with) ? h("span", {class: "bp-q-with"}, txt(q.with)) : null))))
       : !obj(weekIv.prep).updated ? h("p", {class: "bp-ready muted"}, "No prep yet. Prepare me writes the questions they are likely to ask, the answer to each from your own work, and what to ask them.") : null;
     const leadList = parts.length ? h("ul", {class: "bp-lead bp-lead-list"}, parts.slice(0, ready ? 1 : 3).map((x) => h("li", {}, inlineMd(txt(obj(x).text))))) : null;

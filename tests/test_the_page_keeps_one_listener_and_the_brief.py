@@ -233,3 +233,23 @@ def test_refresh_asks_claude_only_when_the_data_is_older_than_today(run, tmp_pat
         {"eval": count}], vp, model=model, clock="2026-10-25T15:00:00Z")
     assert got["after"][1]["eval"] is bool(asks)          # the gauge only where Claude is asked
     assert got["after"][3]["eval"] == asks
+
+
+# Today's card is what comes next today: a call this afternoon leads, ahead of an interview
+# three days out (the maintainer, 2026-11-02: "the most upcoming event"), and the strip
+# marks today's things red and tomorrow's amber, nothing else.
+def test_today_leads_with_what_is_on_today_and_the_strip_marks_today_and_tomorrow(run, tmp_path, vp):
+    model = copy.deepcopy(_sample())
+    call = copy.deepcopy(next(u for u in model["upcoming"] if u["kind"] == "call"))
+    call.update(id="up-call-today", day="2026-10-25", time="15:00", start="2026-10-25T15:00:00Z",
+                end="2026-10-25T15:30:00Z")
+    model["upcoming"].insert(0, call)
+    got = _go(run, tmp_path, [
+        {"hash": "brief", "eval": "document.querySelector('#main .bp-iv .bp-iv-what').textContent"},
+        {"eval": "(() => { const d = (n) => document.querySelectorAll('#main .bp-day')[n]; const c = (n) => d(n).querySelector('.bp-day-dots i'); "
+                 "return [d(0).classList.contains('is-today'), d(1).classList.contains('is-tomorrow'), "
+                 "c(0) ? getComputedStyle(c(0)).backgroundColor : null, d(4).querySelector('.bp-day-dots i') ? getComputedStyle(d(4).querySelector('.bp-day-dots i')).backgroundColor : null]; })()"}],
+        vp, model=model, clock=T)
+    assert got["after"][0]["eval"] == call["title"], got["after"][0]["eval"]
+    today, tomorrow, red, later = got["after"][1]["eval"]
+    assert today and tomorrow and red and later and red != later      # today's dot is its own colour
