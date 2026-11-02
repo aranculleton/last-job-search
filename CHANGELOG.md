@@ -39,8 +39,10 @@ make sense to somebody whose repo just received it.
   questions an interview is likely to bring, or who the person is, how late it is and whether
   a draft is ready, each on its own line with a small dot. It can be in Next three as well. When Coming up's only booked thing is
   the one Today shows, it lists what is due next instead of an empty strip.
-- **News reads as tidy points**: what happened, then what to do with it, then where it is
-  from, and the panel is never cut off at the bottom.
+- **News reads as tidy points**: what happened, then on a quiet grey line what to do with it
+  and where it is from, with no bold or underlines, and the panel is never cut off.
+- **The weekly bars are clearer**: proper bars on a baseline, each labelled with the date its
+  week starts, this week's the strongest.
 - **Your progress fits its panel at any width**: two by two on a phone, four across
   otherwise, and with the weekly bars beside the numbers when it has a whole row, instead of
   empty space to the right or squeezed numbers.

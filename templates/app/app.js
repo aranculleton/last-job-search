@@ -410,6 +410,13 @@
     if (n === null) return "";
     return n === 0 ? "Today" : n === 1 ? "Tomorrow" : n > 1 ? "In " + n + " days" : "Passed";
   }
+  // "23 Oct": a day and a month, for a source's date and a week's label.
+  function fmtDayMonth(s) {
+    const d = parseDay(dayOf(s));
+    if (d === null) return "";
+    try { return new Intl.DateTimeFormat(LOC, {day: "numeric", month: "short", timeZone: "UTC"}).format(new Date(d)); }
+    catch (e) { return txt(s).slice(5, 10); }
+  }
   function fmtDay(s) {
     const d = parseDay(dayOf(s));
     if (d === null) return "";
@@ -2945,7 +2952,6 @@
     const w = arr(weeks).slice(-8);
     if (w.filter((x) => Number(x.applied)).length < 2) return null;
     const max = Math.max(1, ...w.map((x) => Number(x.applied) || 0));
-    const W = 120, H = 32, bw = W / w.length;
     // Each bar says its week and its count on hover or a tap, and a line under them says what
     // they are: bars with no words meant nothing (the maintainer, 2026-10-30).
     const said = (x) => { const st = isoWeekMonday(x.week); const v = Number(x.applied) || 0; return (st ? "Week of " + fmtDay(st) + ": " : "") + plural(v, "application", "applications"); };
@@ -2954,7 +2960,7 @@
     // nothing to compare it to says little (2026-11-02).
     const before = w.slice(0, -1).map((x) => Number(x.applied) || 0).sort((x, y) => x - y);
     const usual = before.length ? before[Math.floor(before.length / 2)] : null;
-    const base = "Applications a week. This week " + now1 + (usual !== null ? ", usually " + usual : "") + ".";
+    const base = "Applications each week. This week " + now1 + (usual !== null ? ", usually " + usual : "") + ".";
     // The line under the bars says the week under the pointer, a tap or the keyboard: an
     // SVG title alone showed nothing in the Claude app, on a hover or a tap (the maintainer,
     // 2026-10-31). Each week's whole column answers, so a week with nothing (a 2px bar) can
@@ -2966,11 +2972,18 @@
       chart.classList.toggle("has-on", i !== null);
       cols.forEach((c, j) => c.classList.toggle("is-on", j === i));
     };
-    const chart = svg("svg", {viewBox: "0 0 " + W + " " + H, preserveAspectRatio: "none", class: "bp-spark", role: "group", "aria-label": "Applications a week, the last " + w.length + " weeks: " + w.map((x) => Number(x.applied) || 0).join(", ")},
-      w.map((x, i) => { const v = Number(x.applied) || 0; const hgt = Math.max(2, (v / max) * (H - 2)); const t = svg("title", {}); t.textContent = said(x);
-        const col = svg("g", {class: "bp-col", tabindex: "0", role: "img", "aria-label": said(x), "data-k": "spark:" + i}, [t,
-          svg("rect", {class: "bp-hit", x: String(i * bw), y: "0", width: String(bw), height: String(H), fill: "transparent"}),
-          svg("rect", {class: "bp-bar" + (i === w.length - 1 ? " is-now" : ""), x: String(i * bw + bw * 0.18), y: String(H - hgt), width: String(Math.max(2, bw * 0.64)), height: String(hgt), rx: "2", fill: i === w.length - 1 ? "var(--mark)" : "var(--chart-a)"})]);
+    // Bars drawn as boxes on a baseline, each its own width at any size: an SVG stretched to
+    // the panel turned them into blobs with squashed corners (the maintainer, 2026-11-02: "the
+    // chart design looks weird").
+    const labels = [];
+    const chart = h("div", {class: "bp-spark", role: "group", "aria-label": "Applications a week, the last " + w.length + " weeks: " + w.map((x) => Number(x.applied) || 0).join(", ")},
+      w.map((x, i) => { const v = Number(x.applied) || 0; const pct = v ? Math.max(6, Math.round((v / max) * 100)) : 0;
+        const col = h("div", {class: "bp-col" + (i === w.length - 1 ? " is-now" : ""), tabindex: "0", role: "img", "aria-label": said(x), title: said(x), "data-k": "spark:" + i},
+          h("span", {class: "bp-bar" + (v ? "" : " is-zero"), style: "height:" + (v ? pct + "%" : "2px")}));
+        // Under each bar, the day its week starts (the maintainer, 2026-11-02: "days of week or
+        // dates of month or something ... idk what its measuring").
+        const st = isoWeekMonday(x.week);
+        labels.push(h("span", {class: "bp-wk" + (i === w.length - 1 ? " is-now" : ""), "aria-hidden": "true"}, st ? fmtDayMonth(st) : ""));
         col.addEventListener("pointerenter", () => show(i));
         col.addEventListener("focus", () => show(i));
         col.addEventListener("click", () => show(i));
@@ -2978,7 +2991,7 @@
         cols.push(col);
         return col; }));
     chart.addEventListener("pointerleave", () => show(null));
-    return h("div", {class: "bp-spark-wrap"}, chart, cap);
+    return h("div", {class: "bp-spark-wrap"}, chart, h("div", {class: "bp-wks", "aria-hidden": "true"}, labels), cap);
   }
   // How far applications went, opened in place: "See your progress" led to a page of its own
   // that read as left over (the maintainer, 2026-10-30). Applied, then interviews, then
@@ -3383,10 +3396,13 @@
     const newsPoint = (l) => {
       const it = obj(l);
       if (!txt(it.what)) return h("li", {}, h("span", {class: "bp-text"}, inlineMd(txt(it.text))));
-      const src = txt(it.url) ? inlineMd("[" + txt(it.src).replace(/[\[\]]/g, "") + (txt(it.date) ? ", " + fmtDay(txt(it.date)) : "") + "](" + txt(it.url) + ")") : null;
+      // Two quiet lines: the news, then what to do with it and where it is from, in grey
+      // with no underline or bold (the maintainer, 2026-11-02: "weird lines and underlines and
+      // bold spammed").
+      const src = txt(it.url) ? inlineMd("[" + txt(it.src).replace(/[\[\]]/g, "") + (txt(it.date) ? ", " + fmtDayMonth(txt(it.date)) : "") + "](" + txt(it.url) + ")") : null;
       return h("li", {}, h("span", {class: "bp-text"}, inlineMd(txt(it.what))),
-        txt(it.use) ? h("span", {class: "bp-use"}, inlineMd(txt(it.use))) : null,
-        src ? h("span", {class: "bp-src"}, src) : null);
+        txt(it.use) || src ? h("span", {class: "bp-meta"}, txt(it.use) ? h("span", {class: "bp-use"}, inlineMd(txt(it.use).replace(/\.$/, ""))) : null,
+          txt(it.use) && src ? " \u00b7 " : null, src ? h("span", {class: "bp-src"}, src) : null) : null);
     };
     if (news.length) put(grid, briefPanel("news", "News", h("ul", {class: "bp-lead-list bp-news"}, news.slice(0, 3).map(newsPoint)),
       [news.length > 3 ? h("details", {class: "bp-all"}, h("summary", {}, plural(news.length - 3, "more", "more")), h("ul", {class: "bp-lead-list bp-news"}, news.slice(3).map(newsPoint))) : null,

@@ -1282,7 +1282,6 @@ body.has-fab .shell { padding-bottom: calc(var(--tabs-h) + env(safe-area-inset-b
 .brief-page strong, .brief-page b { font-weight: 600; }
 .bp-n { font-size: 1.375rem; font-weight: 700; line-height: 1.15; font-variant-numeric: tabular-nums; }
 .bp-l { font-size: var(--t-sm); color: var(--muted); overflow-wrap: normal; word-break: normal; hyphens: none; }
-.bp-spark { width: 100%; height: 32px; display: block; }
 .bp-foot { display: flex; flex-wrap: wrap; align-items: baseline; gap: 4px 16px; margin-top: auto; font-size: var(--t-sm); }
 .bp-iv { display: flex; flex-direction: column; align-items: flex-start; gap: 4px; padding: 12px 16px; background: var(--surface); border: 1px solid var(--line); border-radius: var(--r-sm); }
 .bp-iv p { margin: 0; }
@@ -1294,8 +1293,10 @@ body.has-fab .shell { padding-bottom: calc(var(--tabs-h) + env(safe-area-inset-b
 @media (min-width: 760px) { .bpanel.bp-today, .bpanel.bp-upcoming, .bpanel.bp-news { max-height: none; } }
 /* A news point: what happened, what to do with it, where it is from. Never cut by the panel's
    height: News was clipped at its bottom once each point said how to use it (2026-11-02). */
-.bp-news .bp-use { display: block; margin-top: 2px; color: var(--ink); font-weight: 600; font-size: var(--t-sm); }
-.bp-news .bp-src { display: block; margin-top: 2px; font-size: var(--t-sm); color: var(--muted); }
+ul.bp-news { gap: 12px; }
+.bp-news .bp-meta { display: block; margin-top: 2px; font-size: var(--t-sm); color: var(--muted); }
+.bp-news .bp-src a { color: inherit; text-decoration: none; }
+@media (hover: hover) { .bp-news .bp-src a:hover { text-decoration: underline; } }
 .bp-all > summary { cursor: pointer; font-size: var(--t-sm); color: var(--muted); }
 .bp-all[open] > summary { margin-bottom: 8px; }
 .bp-tip { display: flex; align-items: baseline; gap: 8px 12px; flex-wrap: wrap; margin: 0; padding: 12px 16px; border-radius: var(--r-sm); background: var(--sunk); font-size: var(--t-sm); }
@@ -1373,29 +1374,40 @@ body.has-fab .shell { padding-bottom: calc(var(--tabs-h) + env(safe-area-inset-b
 .prep-doc { max-width: 76ch; }
 /* The numbers card: what the bars are, and how far applications went, opened in place. */
 .bp-spark-cap { margin: 4px 0 0; }
+/* The weekly bars: boxes on a baseline, each at most 20px wide and rounded only at the top,
+   this week in the accent, a week with none a flat line. */
+.bp-spark { display: grid; grid-auto-flow: column; grid-auto-columns: minmax(0, 1fr); align-items: end; gap: 4px; height: 48px; border-bottom: 1px solid var(--line); }
+.bp-spark .bp-col { height: 100%; display: flex; align-items: flex-end; justify-content: center; cursor: pointer; }
+.bp-spark .bp-bar { display: block; width: 100%; max-width: 28px; border-radius: 3px 3px 0 0; background: var(--chart-a); opacity: 0.55; transition: opacity 0.15s; }
+.bp-spark .bp-col.is-now .bp-bar, .bp-spark .bp-col.is-on .bp-bar { background: var(--mark); opacity: 1; }
+.bp-spark .bp-bar.is-zero { background: var(--line); }
+.bp-spark .bp-col:focus { outline: none; }
+.bp-spark .bp-col:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; border-radius: 4px; }
+.bp-spark.has-on .bp-col:not(.is-on) .bp-bar { opacity: 0.3; }
+/* The week each bar is, the same columns as the bars. */
+.bp-wks { display: grid; grid-auto-flow: column; grid-auto-columns: minmax(0, 1fr); gap: 4px; margin-top: 4px; }
+.bp-wk { text-align: center; font-size: 0.6875rem; line-height: 1.2; color: var(--muted); white-space: nowrap; overflow: hidden; }
+.bp-wk.is-now { color: var(--ink); font-weight: 600; }
 /* Each week is a column that answers the pointer, a tap or the keyboard; the one pointed at
    stays full and the others step back, and the line under them says its week. */
-.bp-spark .bp-col { cursor: pointer; }
-.bp-spark .bp-col:focus { outline: none; }
-.bp-spark .bp-col:focus-visible .bp-hit { stroke: var(--focus); stroke-width: 2px; vector-effect: non-scaling-stroke; }
-.bp-spark.has-on .bp-col:not(.is-on) .bp-bar { opacity: 0.45; }
 /* Where a conversation is, as one row of steps: done ones filled, the rest outlined. Plain
    lines read as a list of words (2026-10-30). */
 .stepper { display: flex; flex-wrap: wrap; gap: 8px; margin: 4px 0; }
 .stepper li { padding: 4px 12px; border-radius: 999px; border: 1px solid var(--line-strong); font-size: var(--t-sm); color: var(--muted); }
 .stepper li.done { background: var(--sunk); color: var(--ink); border-color: transparent; }
 .d-next { margin: 0; }
-.bp-lead-list { display: grid; gap: 8px; margin: 0; padding-left: 1.1em; }
-.bp-lead-list li { line-height: 1.45; }
+/* Every point on the Brief has the same small dot, centred on its first line whatever its
+   size, in place of the browser's own bullet beside a dot of ours (the maintainer,
+   2026-11-02: "the bullets ... look clunky and misspaced"). */
+.bp-lead-list { display: grid; gap: 8px; margin: 0; padding-left: 0; list-style: none; }
+.bp-lead-list > li { position: relative; padding-left: 16px; line-height: 1.45; }
+.bp-lead-list > li::before { content: ""; position: absolute; left: 2px; top: calc(0.725em - 3px); width: 6px; height: 6px; border-radius: 50%; background: var(--line); }
+.bp-news > li::before, .bp-facts > li::before { background: var(--pc); }
 /* Today's facts beside its one thing: who first, in ink, then each fact on its own line with a
    small dot in the panel's colour, not a list of plain bullets (the maintainer, 2026-11-02:
    "slightly prettier appearance of the bullets in today"). */
-.bp-today-side .bp-lead-list { list-style: none; padding-left: 0; }
-.bp-today-side .bp-lead-list li { display: flex; align-items: baseline; gap: 8px; }
-.bp-today-side .bp-lead-list li::before { content: ""; flex: none; width: 6px; height: 6px; border-radius: 50%; background: var(--line); transform: translateY(-2px); }
 .bp-lead-list.bp-facts { gap: 4px; }
 .bp-facts li { font-size: var(--t-sm); color: var(--muted); }
-.bp-today-side .bp-facts li::before { background: var(--pc); }
 .bp-facts li:first-child { font-size: 1rem; font-weight: 600; color: var(--ink); }
 .chip-list { display: flex; flex-wrap: wrap; gap: 8px; margin: 0; }
 .chip-list .chip { padding: 4px 12px; border-radius: 999px; background: var(--sunk); color: var(--ink); font-size: var(--t-sm); }
@@ -1482,7 +1494,6 @@ ul.bp-news { max-width: 80ch; }
 .bp-steps > .bp-step-iv { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 8px; }
 .bp-steps > .bp-step-iv > .bp-link { flex: 1 1 12rem; min-width: 0; }
 .bp-steps > .bp-step-iv .bp-at { display: block; }
-.bp-spark { height: 40px; }
 /* Each row of the Brief filled, whichever panels a person has (fillRows): twelve columns
    on a laptop, two on a tablet, one on a phone. */
 @media (min-width: 760px) and (max-width: 1099px) {

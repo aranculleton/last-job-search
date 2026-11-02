@@ -1284,7 +1284,7 @@ def test_the_numbers_say_what_they_count_and_each_bar_says_its_week(run, pages):
     r = run("paint", html=pages["sample"], hash="brief", clock="2026-10-25T09:00:00Z")
     _clean(r)
     # This week beside the usual one: a number with nothing to compare it to says little.
-    assert re.search(r"Applications a week\. This week \d+, usually \d+\.", r["bodyText"]), r["bodyText"][-800:]
+    assert re.search(r"Applications each week\. This week \d+, usually \d+\.", r["bodyText"]), r["bodyText"][-800:]
     assert "contacts replied" in r["bodyText"] or "contact replied" in r["bodyText"]
     assert not re.search(r"\b1\s+interviews\b", r["bodyText"])
 
@@ -1418,7 +1418,7 @@ def test_the_page_opened_with_no_chat_running_brings_itself_up_to_date_and_says_
     # Time run counts from the start, not the ask a day before.
     assert "29 hours" not in r["sheetText"] and "1 min so far" in r["sheetText"], r["sheetText"]
     # Each week of the chart says its count to a pointer and a tap; leaving puts the line back.
-    assert r["capBefore"].startswith("Applications a week")
+    assert r["capBefore"].startswith("Applications each week")
     assert re.match(r"Week of .+: \d+ applications?\.$", r["capHover"]), r["capHover"]
     assert r["capLeft"] == r["capBefore"]
     assert re.match(r"Week of .+: \d+ applications?\.$", r["capTap"]) and r["capTap"] != r["capHover"]
