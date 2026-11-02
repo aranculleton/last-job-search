@@ -22,7 +22,14 @@ MAINTAINING.md first; this is only what 4.7 left.
    `brief.claude_lines` prints says it replaces the old "never republish" rule. Check the
    next morning's run (`list_events` on their brief session) did publish, and that the page
    then reloads itself on the release after.
-4. **Left from 4.6's list, still to look at with real data**: the choices made for the
+4. **The moving line under the header stutters** (the maintainer, 2026-11-02, after tapping
+   Refresh on their own page: "this loading animation is quite laggy"). It is the update
+   line `.pulse.is-updating` draws while work of kind update or republish runs. Find what
+   animates it: a property that makes the browser lay out or repaint each frame (width,
+   left, background-position) stutters on a busy page, where a `transform` on its own layer
+   does not. Check it while the page is busy (a long To do, a search running), in Chromium and
+   Safari, and keep reduced motion stilling it.
+5. **Left from 4.6's list, still to look at with real data**: the choices made for the
    person on the Brief (the Jobs count, "Waiting on you", "contacts replied", what Next three
    skips, which opening sentences show), and one Outlook link. The fit's numbers were
    reworked in 4.7 (below).

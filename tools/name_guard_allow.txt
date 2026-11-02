@@ -535,3 +535,4 @@ South Korea                 # a country, tools/brief.py
 Saudi Arabia                # a country, tools/brief.py
 Vale Verde Hospital         # invented employer, tests/test_brief.py
 Ribeira Clinic              # invented employer, tests/test_brief.py
+Apple Calendar              # a product, docs/NEXT_BUILDER.md
