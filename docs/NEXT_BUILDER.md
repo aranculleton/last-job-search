@@ -85,8 +85,8 @@ MAINTAINING.md first; this is only what 4.7 left.
 - **The Brief**: Today leads with what is on today (a call or a test due today before a
   later interview); the strip and Coming up's day headings mark today in a clear green
   and tomorrow in gold (palettes `day-today`, `day-tomorrow`), never red, which read as a
-  threat; nothing else. Compared before choosing (2026-11-02): Apple Calendar's red circle
-  is its brand colour, not a warning; Google Calendar marks today with its accent; Asana shows
+  threat; nothing else. Compared before choosing (2026-11-02): the red circle in Apple Calendar
+  is that brand's own colour, not a warning; Google Calendar marks today with its accent; Asana shows
   due today and tomorrow in green and keeps red for overdue. The colour is never the only
   sign: today is boxed on the strip, and Coming up says "Today" and "Tomorrow" in words, so a
   green and gold someone cannot tell apart lose nothing; each
