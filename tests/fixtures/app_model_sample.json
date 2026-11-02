@@ -2503,7 +2503,7 @@
     {
       "id": "up-ev20261020120000",
       "kind": "event",
-      "title": "Careers fair at the Corn Exchange",
+      "title": "Careers fair at the town hall",
       "with": null,
       "day": "2026-11-12",
       "time": "11:00",
@@ -2516,9 +2516,9 @@
       "note": null,
       "own": "ev20261020120000",
       "cal": {
-        "google": "https://calendar.google.com/calendar/render?action=TEMPLATE&text=Careers%20fair%20at%20the%20Corn%20Exchange&dates=20261112T110000Z/20261112T120000Z&details=",
-        "outlook": "https://outlook.live.com/calendar/action/compose?path=%2Fcalendar%2Faction%2Fcompose&rru=addevent&startdt=2026-11-12T11%3A00%3A00Z&enddt=2026-11-12T12%3A00%3A00Z&allday=false&subject=Careers%20fair%20at%20the%20Corn%20Exchange&body=",
-        "ics": "BEGIN:VEVENT\r\nUID:up-ev20261020120000.last-job-search\r\nDTSTAMP:20261025T080000Z\r\nDTSTART:20261112T110000Z\r\nDTEND:20261112T120000Z\r\nSUMMARY:Careers fair at the Corn Exchange\r\nBEGIN:VALARM\r\nACTION:DISPLAY\r\nDESCRIPTION:Careers fair at the Corn Exchange\r\nTRIGGER:-PT1H\r\nEND:VALARM\r\nEND:VEVENT\r\n"
+        "google": "https://calendar.google.com/calendar/render?action=TEMPLATE&text=Careers%20fair%20at%20the%20town%20hall&dates=20261112T110000Z/20261112T120000Z&details=",
+        "outlook": "https://outlook.live.com/calendar/action/compose?path=%2Fcalendar%2Faction%2Fcompose&rru=addevent&startdt=2026-11-12T11%3A00%3A00Z&enddt=2026-11-12T12%3A00%3A00Z&allday=false&subject=Careers%20fair%20at%20the%20town%20hall&body=",
+        "ics": "BEGIN:VEVENT\r\nUID:up-ev20261020120000.last-job-search\r\nDTSTAMP:20261025T080000Z\r\nDTSTART:20261112T110000Z\r\nDTEND:20261112T120000Z\r\nSUMMARY:Careers fair at the town hall\r\nBEGIN:VALARM\r\nACTION:DISPLAY\r\nDESCRIPTION:Careers fair at the town hall\r\nTRIGGER:-PT1H\r\nEND:VALARM\r\nEND:VEVENT\r\n"
       },
       "rev": "1b117298106f"
     }

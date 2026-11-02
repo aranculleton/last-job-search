@@ -1448,7 +1448,7 @@ def test_everything_booked_is_one_tap_from_any_calendar_and_the_brief_shows_the_
     # One count in the nav, the screen and the Brief.
     assert r["nav"].startswith("7") and r["sum"].startswith("7 things booked or due"), (r["nav"], r["sum"])
     assert "All 7 coming up" in r["upFoot"], r["upFoot"]
-    # One Outlook; Google's link carries the time in UTC; the file is a zip holding the event.
+    # A single Outlook; Google's link carries the time in UTC; the file is a zip holding the event.
     assert r["choices"] == ["cal-google", "cal-outlook", "cal-file", "cal-copy"], r["choices"]
     assert "calendar.google.com/calendar/render" in r["google"] and "dates=20261028T130000Z/20261028T133000Z" in r["google"], r["google"]
     assert "outlook.live.com" in r["outlook"]

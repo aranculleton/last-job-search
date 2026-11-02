@@ -90,7 +90,7 @@ def test_a_time_written_in_a_next_action_is_read_with_its_zone(said, home, want)
 # person's own (a time in the wrong zone is worse than none).
 @pytest.mark.parametrize("said, want", [
     ("Call 2pm at their office", ("14:00", None, "Europe/London")),
-    ("Coffee 10:00 at Union Station", ("10:00", None, "Europe/London")),
+    ("Coffee 10:00 at the station", ("10:00", None, "Europe/London")),
     ("Call 2:30-3pm ET", ("14:30", "15:00", "America/New_York")),
     ("2-3pm", ("14:00", "15:00", "Europe/London")),
     ("2:30 - 3:00 pm", ("14:30", "15:00", "Europe/London")),

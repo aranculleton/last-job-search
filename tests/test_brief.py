@@ -157,9 +157,9 @@ def test_the_searches_come_from_the_profile_and_stay_at_six():
 
 # Every person's news fits their own country, city and field, whichever of the countries the
 # app carries market tables for (the maintainer, 2026-11-02: "is country agnostic like the job
-# board etc or industry agnostic"). Before, a nurse in Sao Paulo got "BR" for a country, no
+# board etc or industry agnostic"). Before, a nurse in Brazil got "BR" for a country, no
 # central bank and "data and analytics" for a field.
-_NURSE = "### Target Sectors\n- Hospitals and clinics: Fleury, Rede D'Or\n\n### Deal-breakers\n- x\n"
+_NURSE = "### Target Sectors\n- Hospitals and clinics: Vale Verde Hospital, Ribeira Clinic\n\n### Deal-breakers\n- x\n"
 
 
 def _somewhere(monkeypatch, cc, status="work permit", city="Somewhere"):
@@ -177,8 +177,8 @@ def _somewhere(monkeypatch, cc, status="work permit", city="Somewhere"):
 ])
 def test_the_searches_name_the_persons_own_country_bank_and_field(monkeypatch, cc, name, bank):
     _somewhere(monkeypatch, cc)
-    q = brief.queries(dt.date(2026, 10, 25), ["Hospital Sirio"], _NURSE)
-    assert q[0] == "Hospital Sirio %s news October 2026" % name
+    q = brief.queries(dt.date(2026, 10, 25), ["Vale Verde Hospital"], _NURSE)
+    assert q[0] == "Vale Verde Hospital %s news October 2026" % name
     assert "%s work permit rule changes 2026" % name in q
     assert "Somewhere hospitals and clinics hiring or layoffs October 2026" in q
     assert "%s October 2026" % bank in q
