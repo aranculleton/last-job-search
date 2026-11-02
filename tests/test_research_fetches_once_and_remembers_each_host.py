@@ -331,3 +331,35 @@ def test_a_host_asking_to_slow_down_is_not_read_another_way(tmp_path):
                "https://www.oakmere.example/about": (429, {}, "slow down")})
     _fetch(web, tmp_path, "https://www.oakmere.example/about")
     assert not web.got("https://www.oakmere.example/feed")
+
+
+
+def test_a_lock_windows_refuses_for_a_moment_is_waited_for_not_lost(tmp_path, monkeypatch):
+    """Windows answers access denied, not "exists", when a lock is created while its last
+    holder deletes it, and refuses to delete or replace a file another writer has open: each
+    killed a writer with its fact unsaved (4.7.0's Windows run, 2026-11-02). Faked here."""
+    real_open, real_remove, real_replace = os.open, os.remove, os.replace
+    refused = {"open": 2, "remove": 2, "replace": 2}
+
+    def refuse(kind, real):
+        def f(path, *a, **k):
+            if refused[kind] and (str(path).endswith(".lock") or kind == "replace"):
+                refused[kind] -= 1
+                raise PermissionError(13, "Access is denied", str(path))
+            return real(path, *a, **k)
+        return f
+
+    monkeypatch.setattr(C.os, "open", refuse("open", real_open))
+    monkeypatch.setattr(C.os, "remove", refuse("remove", real_remove))
+    monkeypatch.setattr(C.os, "replace", refuse("replace", real_replace))
+    C.save("Oakmere Foods", {"facts": [{"claim": "fact a", "quote": "Quote a.", "url": "https://a.example/a"}]},
+           root=str(tmp_path))
+    monkeypatch.setattr(C.os, "open", real_open)
+    monkeypatch.setattr(C.os, "remove", real_remove)
+    monkeypatch.setattr(C.os, "replace", real_replace)
+    data, _, _ = C.load("Oakmere Foods", root=str(tmp_path))
+    assert [f["claim"] for f in data["facts"]] == ["fact a"]
+    assert refused == {"open": 0, "remove": 0, "replace": 0}
+    folder = os.path.join(C.tempfile.gettempdir(), "ljs-research-locks")
+    assert not [n for n in os.listdir(folder) if n.endswith(".lock")
+                and os.path.getmtime(os.path.join(folder, n)) > time.time() - 5]

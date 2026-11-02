@@ -456,11 +456,26 @@ def _locked(name: str, wait: float = 20.0):
             if time.monotonic() > deadline:
                 raise TimeoutError("another writer holds %s" % name) from None
             time.sleep(0.05)
+        except PermissionError:
+            # Windows: a lock its last holder is deleting refuses to be created for a moment,
+            # with access denied rather than "exists", and the writer died with its fact
+            # unsaved (4.7.0's Windows run, 2026-11-02). It is busy: wait, as for one that exists.
+            if time.monotonic() > deadline:
+                raise TimeoutError("another writer holds %s" % name) from None
+            time.sleep(0.05)
     try:
         yield
     finally:
-        with contextlib.suppress(OSError):
-            os.remove(lock)
+        # Windows refuses to delete a file another writer has open to read its time: try again
+        # for a moment, or the lock outlived its writer and every other writer timed out.
+        for _ in range(40):
+            try:
+                os.remove(lock)
+                break
+            except FileNotFoundError:
+                break
+            except OSError:
+                time.sleep(0.05)
 
 
 def _write_json(target_path: str, data) -> None:
@@ -469,7 +484,15 @@ def _write_json(target_path: str, data) -> None:
     with open(tmp, "w", encoding="utf-8", newline="\n") as fh:
         json.dump(data, fh, indent=2, ensure_ascii=False)
         fh.write("\n")
-    os.replace(tmp, target_path)
+    # Windows refuses to replace a file a reader has open for a moment: try again.
+    for n in range(40):
+        try:
+            os.replace(tmp, target_path)
+            return
+        except PermissionError:
+            if n == 39:
+                raise
+            time.sleep(0.05)
 
 
 class QuoteNotFound(ValueError):

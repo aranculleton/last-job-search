@@ -66,6 +66,8 @@ make sense to somebody whose repo just received it.
   their length limit and were cut, and the cut fell on the steps that publish a newer page and
   bring its data up to date, so the page could stay days behind. Only the phone message is
   shortened now; the steps are never cut.
+- **On Windows, two research notes saved at the same moment both land.** Windows refuses a
+  lock for a moment where other systems say it is taken, and one note was lost.
 - **One person is shown once in the Brief's lists.** A reply owed could appear twice below
   Today (Today's one thing may also be in Next three, on purpose).
 - **The brief's news, fixed from the release review**: a link sent up to four weeks ago is not

@@ -410,8 +410,9 @@ METHODS: dict[str, dict] = {
             (9, "2026-10-25", False, "research file names work for any script and on Windows (no reserved names, a short hash where a name has no Latin letters); a path printed across two Windows drives no longer stops it; the researcher starts without the app's CLAUDE.md, which it never needed; works in folders with brackets in their names"),
             (10, "2026-10-26", False, "every file it writes has plain line ends on Windows too"),
             (11, "2026-10-29", False, "profile reading is written on wherever setup runs, and the LinkedIn download is asked for on the page; nothing researched changes; a research lock read before its time is written waits for it, so two writers at once both land"),
+            (12, "2026-11-02", False, "two research writers at one moment on Windows both land: a lock refused for a moment is waited for, never a lost fact"),
         ),
-        "fingerprint": "0bc143373cd3d095",
+        "fingerprint": "5329e38d55fcc1ca",
     },
     "networking": {
         "by": "upgrade", "priority": 3, "applies": "contacts", "time": "~15 min",
