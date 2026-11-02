@@ -191,7 +191,7 @@ async function settle(page) {
   // (a section set in the address) is read by a page that has not started (Firefox under load,
   // the Everywhere check, 2026-10-29).
   await page.waitForFunction(() => !!window.LJS, null, {timeout: 15000}).catch(() => {});
-  await page.evaluate(() => (window.LJS && window.LJS.settled) || null);
+  await throughNav(page, () => page.evaluate(() => (window.LJS && window.LJS.settled) || null));
   await turn(page, 4);
 }
 async function shot(page, name, full) {
@@ -205,7 +205,8 @@ async function shot(page, name, full) {
 async function goto(page, id) {
   // Set to the address it already has, nothing happens: no hashchange. After a reload the
   // address is already the section's, while the page may have opened on its first one.
-  await page.evaluate((h) => { if (location.hash === "#" + h) location.hash = "_"; location.hash = h; }, id);
+  // A page reloading itself to a newer version is waited for (Safari lost this read, 4.8.0).
+  await throughNav(page, () => page.evaluate((h) => { if (location.hash === "#" + h) location.hash = "_"; location.hash = h; }, id));
   await turn(page, 4);
   // To do shows five first (4.3); a scenario that goes there reads and taps the whole list.
   if (id === "todo") {
@@ -718,7 +719,7 @@ S.engine = async (a) => {
   out.actions = store.list("actions/").map((k) => store.get(k));
   out.work = store.list("work/").map((k) => store.get(k));
   out.rings = (await calls(page)).filter((c) => c.cap === "comments" && c.text).map((c) => c.text);
-  out.assets = (await page.evaluate(() => (window.__ljsAssets || []).slice())) || [];
+  out.assets = (await throughNav(page, () => page.evaluate(() => (window.__ljsAssets || []).slice()))) || [];
   out.errors = o.errors;
   await o.ctx.close();
   return out;
