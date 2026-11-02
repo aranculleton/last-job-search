@@ -10,6 +10,7 @@ registry, `profile/routines.json` (`profile.example/routines.json` shows the sha
 | Task | What it delivers |
 |---|---|
 | **Job search: morning brief**, every morning once it is turned on (weekdays or other days in one tap) | Led by where the search is (an interview to prep, replies owed, applications waiting, or too little going out), then what is owed with the replies and nudges drafted, the counts since the last brief, three things to do before the next one, and the news that matters. Every run also takes the app's updates, so the copy stays current when no chat is opened (`prompts/morning_brief.md`). |
+| **Job search: daily upkeep**, made by itself where the brief does not run every day | Nothing to read: once a day, silently, it takes the app's updates, brings the page's data up to date and starts any work still waiting, so a page opened with no chat running is today's. The chat that answers the page makes it in its daily tidy-up, moves it with itself as it renews (deleting the old copy, never piling copies up), and takes it away once a brief runs every day (`prompts/upkeep.md`). |
 | **Job search: shortlist**, optional and off by default | A scored round of new postings, best first (`prompts/job_round.md`). Reply with picks in the same chat and it drafts, verifies and records them. |
 
 **If no brief has arrived two hours after its time on one of its days, the automation is

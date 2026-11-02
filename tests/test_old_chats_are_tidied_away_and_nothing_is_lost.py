@@ -345,3 +345,79 @@ def test_a_brief_that_stays_put_is_given_the_line_that_gets_its_files():
     assert _plan(reg=dict(reg, pause={"until": "2026-11-09"}), triggers=live)["brief"] == []
     # Never a copy it cannot name.
     assert routines.with_copy(old, "") == old and routines.with_copy(old, "not a repo") == old
+
+
+DAILY = {"setup": "chat_per_briefing", "timezone": "Europe/London", "routines": [
+    {"key": "morning_brief", "name": "Job search: morning brief", "trigger_id": "trig_EXAMPLEDAILY",
+     "cron": "CRON_TZ=Europe/London 56 7 * * *", "prompt_file": routines.BRIEF_FILE,
+     "chat": {"session_id": HELPER}}]}
+LIVE_DAILY = [{"id": "trig_EXAMPLEDAILY", "session": HELPER, "enabled": True,
+               "prompt": routines.with_copy(routines.stub(DAILY, "morning_brief"), REPO)}]
+
+
+def test_a_copy_with_no_daily_brief_gets_a_silent_daily_upkeep_bound_to_the_helper():
+    """Only a chat takes the app's updates and writes the page's data, and a page wakes a chat
+    only from a tap: a person who opens only their page had nothing kept current (the
+    maintainer, 2026-11-02). Where the brief does not run every day, a silent task does it."""
+    got = _plan()                                  # a brief on Mondays and Thursdays only
+    up = got["upkeep"]
+    assert [c.get("tool") or "run" for c in up] == ["create_trigger", "run"]
+    new = up[0]["args"]
+    assert new["name"] == routines.UPKEEP_NAME and new["persistent_session_id"] == HELPER
+    assert new["cron_expression"].startswith("CRON_TZ=Europe/London ") and new["cron_expression"].endswith(" * * *")
+    assert routines.at_most_daily(new["cron_expression"]) and new["connectors"] == []
+    assert "automation/prompts/upkeep.md" in new["prompt"] and "add_repo (owner example-owner" in new["prompt"]
+    assert "upkeep-record --session " + HELPER in up[1]["run"]
+    # None at all yet (no brief ever set up): the upkeep is made too.
+    assert [c.get("tool") or "run" for c in _plan(reg={})["upkeep"]] == ["create_trigger", "run"]
+
+
+def test_a_daily_brief_needs_no_upkeep_and_one_made_before_is_taken_away():
+    assert _plan(reg=DAILY, triggers=LIVE_DAILY)["upkeep"] == []
+    with_up = json.loads(json.dumps(DAILY))
+    with_up["routines"].append({"key": "upkeep", "name": routines.UPKEEP_NAME, "trigger_id": "trig_EXAMPLEUP",
+                                "cron": "CRON_TZ=Europe/London 39 5 * * *", "prompt_file": routines.UPKEEP_FILE,
+                                "chat": {"session_id": HELPER}})
+    got = _plan(reg=with_up, triggers=LIVE_DAILY + [{"id": "trig_EXAMPLEUP", "session": HELPER, "enabled": True}])
+    assert [c.get("tool") or "run" for c in got["upkeep"]] == ["delete_trigger", "run"]
+    assert got["upkeep"][0]["args"] == {"trigger_id": "trig_EXAMPLEUP"} and "upkeep-forget" in got["upkeep"][1]["run"]
+
+
+def test_the_upkeep_follows_a_renewed_helper_and_its_old_copy_is_deleted_not_piled_up():
+    reg = json.loads(json.dumps(REG))
+    reg["routines"].append({"key": "upkeep", "name": routines.UPKEEP_NAME, "trigger_id": "trig_EXAMPLEUP",
+                            "cron": "CRON_TZ=Europe/London 39 5 * * *", "prompt_file": routines.UPKEEP_FILE,
+                            "chat": {"session_id": "session_EXAMPLEOLDHELPER"}})
+    trig = TRIGGERS + [{"id": "trig_EXAMPLEUP", "session": "session_EXAMPLEOLDHELPER", "enabled": True}]
+    got = _plan(reg=reg, triggers=trig)["upkeep"]
+    assert [c.get("tool") or "run" for c in got] == ["create_trigger", "run", "delete_trigger"]
+    assert got[0]["args"]["persistent_session_id"] == HELPER and got[0]["args"]["cron_expression"] == "CRON_TZ=Europe/London 39 5 * * *"
+    assert got[2]["args"] == {"trigger_id": "trig_EXAMPLEUP"}
+    # Bound to the helper already, and on: nothing to do.
+    reg["routines"][-1]["chat"] = {"session_id": HELPER}
+    trig[-1] = dict(trig[-1], session=HELPER)
+    assert _plan(reg=reg, triggers=trig)["upkeep"] == []
+
+
+def test_a_brief_moved_off_the_helper_this_one_replaced_is_deleted_there_not_left_off():
+    """Each daily renewal of the helper moved the brief and left the old copy turned off: one
+    a day piled up in the person's list of scheduled tasks (2026-11-02)."""
+    moved = json.loads(json.dumps(REG))
+    brief = next(r for r in moved["routines"] if r["key"] == "morning_brief")
+    brief["chat"] = {"session_id": "session_EXAMPLEOLDHELPER"}
+    on_old = [{"id": "trig_EXAMPLEBRIEF", "session": "session_EXAMPLEOLDHELPER", "enabled": True}]
+    calls = _plan(reg=moved, triggers=on_old)["brief"]
+    assert [c.get("tool") or "run" for c in calls] == ["create_trigger", "run", "delete_trigger"]
+    assert calls[2]["args"] == {"trigger_id": "trig_EXAMPLEBRIEF"}
+    # A brief moved out of a chat of the person's own is still only turned off, never deleted.
+    assert _plan()["brief"][2]["tool"] == "update_trigger"
+
+
+def test_a_registry_with_the_upkeep_in_it_is_clean(tmp_path, monkeypatch):
+    path = tmp_path / "routines.json"
+    routines.record_upkeep(HELPER, "trig_EXAMPLEUP", "CRON_TZ=Europe/London 39 5 * * *", path=str(path))
+    reg = json.loads(path.read_text(encoding="utf-8"))
+    assert routines.check(reg) == [], routines.check(reg)
+    assert routines.upkeep_entry(reg)["chat"] == {"session_id": HELPER}
+    routines.forget_upkeep(path=str(path))
+    assert routines.upkeep_entry(json.loads(path.read_text(encoding="utf-8"))) is None

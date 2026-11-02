@@ -57,6 +57,15 @@ make sense to somebody whose repo just received it.
   second stop waits for "Ask Claude again". The morning brief also picks up anything still
   waiting, so nothing sits until you next tap.
 
+- **Updates arrive with nothing for you to do.** Your page and your copy were only brought
+  up to date when a chat ran, so a page opened on its own could stay a version behind. Now:
+  every chat checks for the day's update on its first message of the day, even one left open
+  for weeks; the chat that looks after your page checks each time it wakes; and where your
+  brief does not run every day, a silent daily upkeep does it before you are up. Nothing is
+  asked and nothing is said.
+- **No pile-up of old scheduled tasks.** Each time the chat that looks after your page renews,
+  the brief moved with it and left a switched-off copy behind; that copy is now removed.
+
 ### Changed
 
 - **What's new says which version you are on** and links to every change.
