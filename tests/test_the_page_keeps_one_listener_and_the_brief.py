@@ -262,7 +262,7 @@ FITS = ("[...document.querySelectorAll('#main [data-fit]')].map((l) => [l.classN
         "[...l.children].filter((li) => li.hidden).length, [...l.children].filter((li) => !li.hidden).length])")
 
 
-@pytest.mark.parametrize("size", [{"width": 1440, "height": 1000}, {"width": 1280, "height": 700},
+@pytest.mark.parametrize("size", [{"width": 1440, "height": 1400}, {"width": 1280, "height": 700},
                                   {"width": 1100, "height": 620}])
 def test_fitting_the_brief_takes_what_saves_most_and_keeps_today_useful(run, tmp_path, size):
     got = _go(run, tmp_path, [{"hash": "brief", "eval": FITS}], size, clock=T)
@@ -271,7 +271,7 @@ def test_fitting_the_brief_takes_what_saves_most_and_keeps_today_useful(run, tmp
     people, jobs = lists["plain bp-list bp-people"], lists["plain bp-list"]
     assert people[0] == "2,3,3" and jobs[0] == "2,3,2" and (q is None or q[0] == "2,3,0"), lists
     start = lambda v: min(int(v[0].split(",")[1]), v[1] + v[2])  # noqa: E731
-    if size["height"] >= 1000:
+    if size["height"] >= 1400:          # room to spare in every engine's type, Firefox's taller
         # Room to spare: every list shows at least what it starts with, and more where its row
         # has room (extra items beyond the start count stay folded only where they would grow it).
         assert all(v[2] >= start(v) for v in lists.values()), lists

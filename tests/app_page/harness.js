@@ -640,6 +640,21 @@ S.layout = async (a) => {
   return out;
 };
 
+// A read that a page's own reload cuts off (it reloads itself to a newer version: Firefox
+// navigated in the middle of the read, 4.7's Everywhere run) is read again once the new page
+// has loaded, never lost.
+async function evalThrough(page, code) {
+  for (let i = 0; i < 3; i++) {
+    try { return await page.evaluate((c) => eval(c), code); }
+    catch (e) {
+      if (!/context was destroyed|navigat/i.test(String(e && e.message || e))) throw e;
+      await page.waitForLoadState("load").catch(() => {});
+      await turn(page, 2);
+    }
+  }
+  return page.evaluate((c) => eval(c), code);
+}
+
 S.engine = async (a) => {
   const o = await open({html: a.html, viewport: a.viewport, scheme: a.scheme, seed: a.seed || {}, fake: a.fake, clipboard: a.clipboard, clock: a.clock});
   const {page, store} = o;
@@ -679,11 +694,11 @@ S.engine = async (a) => {
     if (st.attr) entry.attr = await page.getAttribute(st.attr[0], st.attr[1]).catch(() => null);
     if (st.count) entry.count = (await page.$$(st.count)).length;
     if (st.calls) entry.calls = (await calls(page)).filter((c) => c.cap === st.calls);
-    if (st.eval) entry.eval = await page.evaluate((c) => eval(c), st.eval);
+    if (st.eval) entry.eval = await evalThrough(page, st.eval);
     // Going back is not done when history.back() returns: Safari's engine moved later than the
     // read on a busy machine (CI, 2026-10-29). A step that changes the address waits for it.
     if (st.until) await page.waitForFunction((c) => eval(c), st.until, {timeout: 5000}).catch(() => {});
-    entry.hash = await page.evaluate(() => location.hash);
+    entry.hash = await evalThrough(page, "location.hash");
     entry.work = store.list("work/").map((k) => Object.assign({id: k.split("/")[1]}, store.get(k)));
     out.after.push(entry);
     if (a.shots && st.shot) out.shots.push(await shot(page, a.shots + "-" + st.shot, !!st.full));
@@ -2187,6 +2202,9 @@ S.motion = async (a) => {
   const r = {};
   for (const m of ["reduce", "no-preference"]) {
     const o = await open({html: a.html, reducedMotion: m, hash: "work", seed: {"work/search~1": runningDoc({asked_at: new Date().toISOString(), stage_at: new Date().toISOString()})}});
+    // Set on the page as well as the context: Firefox's runs read the spinner still turning
+    // with the context's setting alone (4.6 and 4.7's Everywhere runs).
+    await o.page.emulateMedia({reducedMotion: m}).catch(() => {});
     // Wait for what is checked, with a time limit, never the first frame: under load Firefox
     // drew the card before the reduced-motion rule applied (4.6's Everywhere run).
     await o.page.waitForFunction((mode) => {
