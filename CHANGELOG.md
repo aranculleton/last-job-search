@@ -20,6 +20,8 @@ make sense to somebody whose repo just received it.
 
 ## [Unreleased]
 
+## [4.7.0] - 2026-11-02
+
 ### Fixed
 
 - **Your page shows what is new without you doing anything.** An open page could stop
@@ -43,9 +45,16 @@ make sense to somebody whose repo just received it.
   searches the employers you are in touch with, then a short list written for you from your
   profile: a pay deal, a rule change, your local market for your kind of role, whatever
   actually moves your search, each as often as it really changes. Edit the brief shows the
-  list: add something in your own words and say how often, or stop watching anything, and
-  Claude never adds back what you took off. When your profile changes, the list is written
-  again, keeping what you added. Profile upgrade: brief-watch.
+  list: add something in your own words and say how often, stop watching anything, or bring
+  it back, and Claude never adds back what you took off. What you turned off before stays
+  off. When your profile changes, the list is written again, keeping what you added.
+  Profile upgrade: brief-watch.
+- **Today on your Brief is what comes next today.** A call or a test due this afternoon leads
+  the panel, ahead of an interview later in the week, and the two-week strip marks today's
+  things in red and tomorrow's in amber.
+- **The Brief fits your screen by what really saves room.** Nothing is hidden beside empty
+  space; on a shorter screen Today's likely questions give way first (never below two), and
+  Waiting on you and Jobs lose an item only when the window still cannot fit them.
 - **Your settings decide what the app used to fix for everyone.** Settings has how early your
   next interview leads your Brief (a week before, unless you choose 2 days or two weeks) and
   when calendar reminders come (an hour before, unless you choose 15 minutes, the day before

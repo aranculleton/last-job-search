@@ -233,3 +233,60 @@ def test_refresh_asks_claude_only_when_the_data_is_older_than_today(run, tmp_pat
         {"eval": count}], vp, model=model, clock="2026-10-25T15:00:00Z")
     assert got["after"][1]["eval"] is bool(asks)          # the gauge only where Claude is asked
     assert got["after"][3]["eval"] == asks
+
+
+# Today's card is what comes next today: a call this afternoon leads, ahead of an interview
+# three days out (the maintainer, 2026-11-02: "the most upcoming event"), and the strip
+# marks today's things red and tomorrow's amber, nothing else.
+def test_today_leads_with_what_is_on_today_and_the_strip_marks_today_and_tomorrow(run, tmp_path, vp):
+    model = copy.deepcopy(_sample())
+    call = copy.deepcopy(next(u for u in model["upcoming"] if u["kind"] == "call"))
+    call.update(id="up-call-today", day="2026-10-25", time="15:00", start="2026-10-25T15:00:00Z",
+                end="2026-10-25T15:30:00Z")
+    model["upcoming"].insert(0, call)
+    got = _go(run, tmp_path, [
+        {"hash": "brief", "eval": "document.querySelector('#main .bp-iv .bp-iv-what').textContent"},
+        {"eval": "(() => { const d = (n) => document.querySelectorAll('#main .bp-day')[n]; const c = (n) => d(n).querySelector('.bp-day-dots i'); "
+                 "return [d(0).classList.contains('is-today'), d(1).classList.contains('is-tomorrow'), "
+                 "c(0) ? getComputedStyle(c(0)).backgroundColor : null, d(4).querySelector('.bp-day-dots i') ? getComputedStyle(d(4).querySelector('.bp-day-dots i')).backgroundColor : null]; })()"}],
+        vp, model=model, clock=T)
+    assert got["after"][0]["eval"] == call["title"], got["after"][0]["eval"]
+    today, tomorrow, red, later = got["after"][1]["eval"]
+    assert today and tomorrow and red and later and red != later      # today's dot is its own colour
+
+
+# Fitting the Brief to the window is by what each item really saves: nothing is hidden beside
+# white space, Today gives a likely question before People or Jobs lose anyone, and Today keeps
+# two (the maintainer, 2026-11-02: "dynamic based on screen size ... be smart").
+FITS = ("[...document.querySelectorAll('#main [data-fit]')].map((l) => [l.className, l.getAttribute('data-fit'), "
+        "[...l.children].filter((li) => li.hidden).length, [...l.children].filter((li) => !li.hidden).length])")
+
+
+@pytest.mark.parametrize("size", [{"width": 1440, "height": 1400}, {"width": 1280, "height": 700},
+                                  {"width": 1100, "height": 620}])
+def test_fitting_the_brief_takes_what_saves_most_and_keeps_today_useful(run, tmp_path, size):
+    got = _go(run, tmp_path, [{"hash": "brief", "eval": FITS}], size, clock=T)
+    lists = {c: (f, hidden, shown) for c, f, hidden, shown in got["after"][0]["eval"]}
+    q = next((v for c, v in lists.items() if "bp-qs" in c), None)
+    people, jobs = lists["plain bp-list bp-people"], lists["plain bp-list"]
+    assert people[0] == "2,3,3" and jobs[0] == "2,3,2" and (q is None or q[0] == "2,3,0"), lists
+    start = lambda v: min(int(v[0].split(",")[1]), v[1] + v[2])  # noqa: E731
+    if size["height"] >= 1400:          # room to spare in every engine's type, Firefox's taller
+        # Room to spare: every list shows at least what it starts with, and more where its row
+        # has room (extra items beyond the start count stay folded only where they would grow it).
+        assert all(v[2] >= start(v) for v in lists.values()), lists
+    if q is not None:
+        assert q[2] >= 2, lists                                   # Today never below two questions
+        if people[2] < start(people) or jobs[2] < start(jobs):
+            assert q[2] == 2, lists                               # Today gave first
+
+# Each person's next step sits in one column: every step, and the day under it, starts at the
+# same edge, so steps of different lengths never jut out (the maintainer, 2026-11-02).
+def test_every_persons_step_and_day_start_at_one_edge(run, tmp_path, vp):
+    got = _go(run, tmp_path, [{"hash": "brief", "eval": "[...document.querySelectorAll('#main .bp-people .bp-state')].map((s) => { "
+                                                       "const w = s.querySelector('.bp-when'); const r = document.createRange(); r.selectNodeContents(s.firstChild); "
+                                                       "return [Math.round(r.getBoundingClientRect().left), w ? Math.round(w.getBoundingClientRect().left) : null]; })"}], vp, clock=T)
+    rows = got["after"][0]["eval"]
+    assert len(rows) >= 2, rows
+    lefts = {left for left, _day in rows} | {day for _left, day in rows if day is not None}
+    assert max(lefts) - min(lefts) <= 1, rows

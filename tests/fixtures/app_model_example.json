@@ -1,7 +1,7 @@
 {
  "model": 1,
  "made_at": "2026-10-25T18:00:00Z",
- "rev": "7ae281ba30c7",
+ "rev": "92c3c176197a",
  "app": {
   "version": "4.6.0",
   "update_waiting": null,
@@ -46,7 +46,7 @@
  ],
  "jobs": {
   "round": "r9",
-  "made_at": "2026-11-02T10:32:30Z",
+  "made_at": "2026-11-02T11:50:27Z",
   "met": false,
   "summary": "4 roles on the shortlist, 4 scoring 60 or more and 2 scoring 75 or more. 3 left out, each with its reason.",
   "rows": [
@@ -765,7 +765,7 @@
    "when": "2026-10-28",
    "prep": {
     "path": "documents/applications/thornbury_bank_risk_analyst_thornbury/interview_prep.md",
-    "updated": "2026-11-02T10:32:30Z"
+    "updated": "2026-11-02T11:50:27Z"
    },
    "questions": 2,
    "all_day": true,
@@ -1146,7 +1146,8 @@
     "what": "UK freight and logistics sector outlook",
     "every": "month"
    }
-  ]
+  ],
+  "watch_again": []
  },
  "setup": {
   "state": "done",
@@ -2688,6 +2689,21 @@
     "page_only": false,
     "model_values": [],
     "hint": "How often what you add is searched: as often as it really changes."
+   },
+   {
+    "p": "B8",
+    "outputs": [
+     "brief"
+    ],
+    "label": "Watch again",
+    "control": "watch-again",
+    "values": [],
+    "state": 1,
+    "cost": "A little Claude, about 30 seconds",
+    "code": true,
+    "page_only": false,
+    "model_values": [],
+    "hint": "What you stopped watching, to bring back."
    },
    {
     "p": "P1",

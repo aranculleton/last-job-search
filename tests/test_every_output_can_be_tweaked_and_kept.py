@@ -55,7 +55,7 @@ def test_the_table_has_every_row_the_release_promises():
     want = {"R1", "R2", "R3", "R4", "R5", "R6", "R7", "R8", "R9", "L1", "L2", "L4", "L5",
             "M1", "M2", "M3", "M4", "M5", "M6", "M7", "M8", "J1", "J2", "J3", "J4", "J5", "J6", "J7",
             "J8", "J9", "J10", "J11", "J12", "I1", "I2", "I3", "I4", "I5", "B1", "B2", "B3",
-            "B4", "B5", "B6", "B7", "P1", "P2", "P3", "P5"}
+            "B4", "B5", "B6", "B7", "B8", "P1", "P2", "P3", "P5"}
     assert set(tweak.BY_P) == want
     hows = {r["how"] for r in tweak.TWEAKS}
     assert hows == {"design", "style", "bullets", "fill", "skills", "letter_length",
@@ -270,6 +270,17 @@ def test_the_brief_is_shorter_shows_less_news_and_watches_what_the_person_says(t
     assert alone["status"] == "refused" and "Write what to watch" in alone["summary"]
     gone = t.tweak("apply", "brief", "brief", [{"p": "B3", "v": ["interest rates"]}])
     assert gone["status"] == "refused"
+    # A stop and an addition in one Apply both stand (the release review: the second write
+    # replaced the first), and what was stopped can be watched again.
+    both = t.tweak("apply", "brief", "brief", [{"p": "B6", "v": "Manchester tram strike"},
+                                                {"p": "B3", "v": ["UK freight and logistics sector outlook"]}])
+    assert both["status"] == "done", both
+    whats = [w["what"] for w in _person(t)["brief"]["watch"]]
+    assert "Manchester tram strike" in whats and "UK freight and logistics sector outlook" not in whats
+    again = t.tweak("apply", "brief", "brief", [{"p": "B8", "v": ["UK settled status rule changes"]}])
+    assert again["status"] == "done", again
+    assert "UK settled status rule changes" in [w["what"] for w in _person(t)["brief"]["watch"]]
+    assert "UK settled status rule changes" not in _person(t)["brief"]["watch_dropped"]
     # The 4.6 page's toggles are refused in words, never half applied.
     old = t.tweak("apply", "brief", "brief", [{"p": "B3", "v": {"bank": False}}])
     assert old["status"] == "refused"

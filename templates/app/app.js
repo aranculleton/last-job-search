@@ -3007,6 +3007,13 @@
       } catch (e) { w = ""; }
       names.push(w || ["Su", "Mo", "Tu", "We", "Th", "Fr", "Sa"][i]);
     }
+    // Two letters that name two days ("se" twice in Portuguese, "sz" in Hungarian): the
+    // language's own short form for every day instead, which never repeats.
+    if (new Set(names).size < 7) {
+      for (let i = 0; i < 7; i++) {
+        try { names[i] = new Intl.DateTimeFormat(LOC, {weekday: "short", timeZone: "UTC"}).format(new Date(Date.UTC(2026, 10, 1 + i, 12))).replace(/\.$/, "") || names[i]; } catch (e) { /* kept */ }
+      }
+    }
     DAY2 = {loc: LOC, names};
     return names;
   }
@@ -3020,7 +3027,9 @@
     return h("div", {class: "bp-week", role: "group", "aria-label": "The next two weeks", "data-k": "week"}, days.map((d, i) => {
       const xs = on.get(d);
       const wd = new Date(d + "T12:00:00Z").getUTCDay();
-      return h("button", {type: "button", class: "bp-day" + (i === 0 ? " is-today" : "") + (xs.length ? " has" : ""), "data-k": "week:" + d, "aria-label": said(d), title: said(d),
+      // Today's dots red and tomorrow's amber, the rest as they are: what is close stands out
+      // (the maintainer, 2026-11-02), and only two days ever carry a colour.
+      return h("button", {type: "button", class: "bp-day" + (i === 0 ? " is-today" : i === 1 ? " is-tomorrow" : "") + (xs.length ? " has" : ""), "data-k": "week:" + d, "aria-label": said(d), title: said(d),
         // A day with something on it opens it; a free day adds something to it, as a calendar does.
         onclick: () => { if (xs.length) go("interviews", {focus: true, item: txt(xs[0].id)}); else askAddUpcoming(d); }},
         h("span", {class: "bp-day-w", "aria-hidden": "true"}, dayLetters()[wd]),
@@ -3041,7 +3050,9 @@
     const grid = document.querySelector("#main .brief-grid");
     if (!grid) return;
     const lists = [...grid.querySelectorAll("[data-fit]")];
-    const fit = (l) => { const [min, base] = txt(l.getAttribute("data-fit")).split(",").map(Number); return {min: min || 1, base: base || 3}; };
+    // data-fit "fewest,start,keep": `keep` orders what gives first when nothing else decides
+    // (0 Today's likely questions, then Coming up, Jobs, People).
+    const fit = (l) => { const [min, base, keep] = txt(l.getAttribute("data-fit")).split(",").map(Number); return {min: min || 1, base: base || 3, keep: keep || 1}; };
     const name = (l) => txt((l.closest(".bpanel") || {getAttribute: () => ""}).getAttribute("data-k")) + ":" + txt(l.className);
     const key = window.innerWidth + "x" + window.innerHeight + ":" + txt(M().rev);
     if (fitMemo.key === key && fitMemo.counts) {
@@ -3062,18 +3073,26 @@
         if (panel.getBoundingClientRect().height > before + 1 || panel.scrollHeight > panel.clientHeight + 1) { li.hidden = true; break; }
       }
     }
-    // Shrink: while the Brief runs past the bottom of the window, the longest list gives one
-    // up, kept hidden only if that made the Brief shorter (a card beside another, or a row in
-    // a panel shorter than its neighbour, saves nothing, and is put back).
+    // Shrink: while the Brief runs past the bottom of the window, one item gives way at a
+    // time: of every list's last item, the one whose going makes the Brief shortest, and
+    // between equals the least needed (`keep`). An item in a panel shorter than its row-mates
+    // saves nothing and is never taken, so nothing is hidden beside white space: a long Today
+    // gives a question before People or Jobs lose anyone (the maintainer, 2026-11-02: "not
+    // unnecessarily omit things if we have clear white space ... be smart"). Each list keeps
+    // its fewest, so Today never empties and a short window scrolls rather than crams.
     const room = window.innerHeight - 64;   // clear of the Chat button in the corner
-    const done = new Set();
     for (let guard = 0; guard < 16 && grid.getBoundingClientRect().bottom > room; guard++) {
-      const l = lists.filter((x) => !done.has(x) && shown(x).length > fit(x).min).sort((a, b) => shown(b).length - shown(a).length)[0];
-      if (!l) break;
       const before = grid.getBoundingClientRect().bottom;
-      const li = shown(l).slice(-1)[0];
-      li.hidden = true;
-      if (grid.getBoundingClientRect().bottom >= before - 1) { li.hidden = false; done.add(l); }
+      let best = null;
+      for (const l of lists.filter((x) => shown(x).length > fit(x).min)) {
+        const li = shown(l).slice(-1)[0];
+        li.hidden = true;
+        const saved = before - grid.getBoundingClientRect().bottom;
+        li.hidden = false;
+        if (saved > 1 && (!best || saved > best.saved + 1 || (Math.abs(saved - best.saved) <= 1 && fit(l).keep < fit(best.l).keep))) best = {l, li, saved};
+      }
+      if (!best) break;
+      best.li.hidden = true;
     }
     remember();
   }
@@ -3189,7 +3208,29 @@
       .map((d) => ({keys: dueKeys(d), d, node: () => h("li", {}, h("a", {href: "#todo/" + d.id, class: "bp-text bp-link", "data-k": "bp-due:" + d.id, onclick: (e) => { e.preventDefault(); go("todo", {focus: true, item: d.id}); }},
         h("span", {}, txt(d.title), h("span", {class: "bp-when"}, " · " + dueWord(d.due)))))}));
     let hero = null;
-    if (weekIv) {
+    // Today's card is what comes next today, before anything later in the week: a call or a
+    // test due today beat an interview three days out, which read as the day's one thing
+    // (the maintainer, 2026-11-02: "the most upcoming event"). Untimed things today come
+    // after timed ones; anything already over has left.
+    const upAt = (u) => (txt(u.start) ? tms(u.start) : null) ?? (tms(txt(u.day) + "T23:59:00") || Infinity);
+    const todayUp = upcomingItems().filter((u) => txt(u.day) === todayIso() && ["call", "test", "event"].includes(txt(u.kind))
+      && !(txt(u.end) && isPast(u.end))).sort((x, y) => upAt(x) - upAt(y));
+    const ivAt = weekIv ? (tms(weekIv.when) || Infinity) : Infinity;
+    const ivToday = !!weekIv && dayDiff(dayOf(weekIv.when)) === 0;
+    const upHero = todayUp.find((u) => isFree(upKeys(u)) && (!ivToday || upAt(u) < ivAt));
+    if (upHero) {
+      take(upKeys(upHero));
+      const g = obj(upHero.go);
+      const who = txt(g.to) === "contacts" ? peopleItems().find((x) => x.id === txt(g.item)) : null;
+      const iv = txt(g.to) === "interviews" ? interviewItems().find((x) => x.id === txt(g.item)) : null;
+      const open = who ? () => openDetail("person", who.id) : iv ? () => openDetail("interview", iv.id) : null;
+      hero = h("div", {class: "bp-iv"},
+        h("p", {class: "bp-iv-when"}, h("span", {}, "Today" + (timeOf(upHero.start) ? ", " + timeOf(upHero.start) : "")),
+          obj(upHero.cal).ics ? btn("", () => calSheet([upHero]), {kind: "quiet icon-only", small: true, icon: "cal-add", key: "bp-cal-hero", aria: "Add to your calendar: " + txt(upHero.title)}) : null),
+        h("p", {class: "bp-iv-what"}, h("bdi", {}, txt(upHero.title))),
+        txt(upHero.note) ? h("p", {class: "bp-iv-role"}, txt(upHero.note)) : null,
+        open ? btn(who ? "Open " + txt(who.first_name) : obj(iv.prep).updated ? "Read your prep" : "Open it", open, {kind: "primary", small: true, key: "bp-up:" + upHero.id}) : null);
+    } else if (weekIv) {
       take(["iv:" + weekIv.id]);
       const heroUp = upcomingItems().find((u) => txt(obj(u.go).item) === weekIv.id && obj(u.cal).ics);
       hero = h("div", {class: "bp-iv"},
@@ -3243,10 +3284,10 @@
     // the cue for the answer, as many as the room holds. Nowhere else on the Brief says them,
     // and the panel's spare room said nothing (the maintainer, 2026-11-02). With no prep yet,
     // what Prepare me gives.
-    const shot = weekIv ? obj(weekIv.one_screen) : {};
+    const shot = weekIv && !upHero ? obj(weekIv.one_screen) : {};
     const qs = arr(shot.questions).filter((q) => txt(obj(q).q)).slice(0, 5);
-    const ready = !weekIv ? null : qs.length ? h("div", {class: "bp-ready"}, h("p", {class: "bp-ready-t"}, "Likely to come up"),
-      h("ul", {class: "plain bp-qs", "data-fit": "1,3"}, qs.map((q) => h("li", {}, h("span", {class: "bp-q"}, txt(q.q)), txt(q.with) ? h("span", {class: "bp-q-with"}, txt(q.with)) : null))))
+    const ready = !weekIv || upHero ? null : qs.length ? h("div", {class: "bp-ready"}, h("p", {class: "bp-ready-t"}, "Likely to come up"),
+      h("ul", {class: "plain bp-qs", "data-fit": "2,3,0"}, qs.map((q) => h("li", {}, h("span", {class: "bp-q"}, txt(q.q)), txt(q.with) ? h("span", {class: "bp-q-with"}, txt(q.with)) : null))))
       : !obj(weekIv.prep).updated ? h("p", {class: "bp-ready muted"}, "No prep yet. Prepare me writes the questions they are likely to ask, the answer to each from your own work, and what to ask them.") : null;
     const leadList = parts.length ? h("ul", {class: "bp-lead bp-lead-list"}, parts.slice(0, ready ? 1 : 3).map((x) => h("li", {}, inlineMd(txt(obj(x).text))))) : null;
     put(grid, briefPanel("today", "Today", [hero,
@@ -3260,7 +3301,7 @@
       {icon: "interviews", w: 6, m: 2}));
     put(grid, briefPanel("next", steps.length === 3 ? "Next three" : "Next", steps.length ? h("ol", {class: "plain bp-list bp-steps"}, steps) : h("p", {class: "muted"}, "Nothing else needs you today."),
       navLink("todo", need ? "All " + need + " in To do" : "All of it in To do"), {icon: "k-update", w: 4}));
-    put(grid, briefPanel("people", "Waiting on you", ppl.length ? h("ul", {class: "plain bp-list bp-people", "data-fit": "2,3"}, ppl.map((p) => {
+    put(grid, briefPanel("people", "Waiting on you", ppl.length ? h("ul", {class: "plain bp-list bp-people", "data-fit": "2,3,3"}, ppl.map((p) => {
       const move = txt(p.next_action) && txt(p.next_action).length <= 28 ? txt(p.next_action) : (BRIEF_PERSON_WORD[txt(p.status)] || "Follow up");
       return h("li", {}, h("a", {href: "#contacts/" + p.id, class: "bp-text bp-link", "data-k": "bp-person:" + p.id, onclick: (e) => { e.preventDefault(); openDetail("person", p.id); }},
         h("span", {class: "bp-avatar", "aria-hidden": "true"}, txt(p.first_name).slice(0, 1).toUpperCase()),
@@ -3269,7 +3310,7 @@
     })) : h("p", {class: "muted"}, "Nobody else is waiting on you."),
       navLink("contacts", "Everyone in Contacts"), {icon: "contacts", w: 4}));
     const searching = [...allWork()].some(([, w]) => w.kind === "search" && ACTIVE.has(w.status));
-    put(grid, briefPanel("jobs", "Jobs", best.length ? h("ul", {class: "plain bp-list", "data-fit": "2,3"}, best.slice(0, 5).map((r) => h("li", {},
+    put(grid, briefPanel("jobs", "Jobs", best.length ? h("ul", {class: "plain bp-list", "data-fit": "2,3,2"}, best.slice(0, 5).map((r) => h("li", {},
       h("a", {href: "#jobs/" + r.id, class: "bp-text bp-link", "data-k": "bp-job:" + r.id, onclick: (e) => { e.preventDefault(); go("jobs", {focus: true, item: r.id}); }},
         h("strong", {}, txt(r.title)), h("span", {class: "bp-at"}, txt(r.company))),
       r.score != null ? h("span", {class: "bp-score tone-" + (txt(r.band) || "plain"), title: SCORE_MEANS}, String(r.score)) : null)))
@@ -4615,6 +4656,8 @@
         rec: {v: "week", why: "Most news that moves a search comes weekly at most; a daily search mostly finds the same thing again."}},
       {p: "B3", label: "Stop watching", multi: true, values: (it) => arr(obj(it).watch).filter((w) => txt(obj(w).what)).map((w) => ({v: txt(w.what), label: txt(w.what) + " · " + (WATCH_EVERY[txt(w.every)] || "weekly"), state: 1})),
         hint: "What your brief searches for now. Tap any it should stop searching for, and Claude will not add it back."},
+      {p: "B8", label: "Watch again", multi: true, values: (it) => arr(obj(it).watch_again).filter((w) => txt(obj(w).v)).map((w) => ({v: txt(w.v), label: txt(w.label) || txt(w.v), state: 1})),
+        hint: "What you stopped watching. Tap any to bring it back."},
       {p: "B2", label: "News items", values: vals([["0", "None"], ["1", "1"], ["3", "3"], ["5", "5"]], 1), hint: "Fewer is quicker to read. From the next brief.",
         rec: {v: "3", why: "Three is enough to catch what moved this week without a long read."}},
       {p: "B4", label: "Days it comes", multi: true, values: vals([["1", "Mon"], ["2", "Tue"], ["3", "Wed"], ["4", "Thu"], ["5", "Fri"], ["6", "Sat"], ["0", "Sun"]], 1), hint: "At most once a day."},
@@ -8837,8 +8880,10 @@
       const d = await DB.doc("meta/now").get();
       const m = d && d.exists ? (typeof d.data === "function" ? d.data() : d.data) : null;
       const behind = !!m && (txt(m.rev) !== txt(obj(S.meta).rev) || (tms(m.made_at) || 0) > newestData());
-      if (behind || force || S.flags.dbError) resubscribe();
-    } catch (e) { onDbError(e); resubscribe(); }
+      // While the store is failing, each subscription's own backoff retries it: making them
+      // all again on every look would undo that wait and read everything again each time.
+      if (behind || (force && !S.flags.dbError)) resubscribe();
+    } catch (e) { onDbError(e); }
   }
   // Whether Refresh needs Claude: only for data from before today. Today's came from a chat
   // that had already taken the day's update, so looking again at what is saved is free, and
@@ -8852,7 +8897,8 @@
     if (newer || (newest && now() - newest < REFRESH_FRESH_MS)) { try { location.reload(); } catch (e) { /* the frame refuses */ } return; }
     // What the store already holds first, at once; a chat is asked only for what it does not.
     resubscribe();
-    if (!refreshAsks(newest, newer)) { lastCheck = 0; freshen(true); scheduleRender(); return; }
+    lastCheck = now();
+    if (!refreshAsks(newest, newer)) { scheduleRender(); return; }
     requestWork([{id: "update~refresh-" + todayIso(), kind: "update", title: "Bringing your page up to date", args: {refresh: true}, stages: REFRESH_STAGES, redo: true}]);
     scheduleRender();
   }

@@ -193,10 +193,10 @@ def test_each_watched_thing_is_searched_as_often_as_it_changes(monkeypatch):
     seen = {"daily thing": _DAY - dt.timedelta(days=1), "weekly thing": _DAY - dt.timedelta(days=3),
             "monthly thing": _DAY - dt.timedelta(days=20)}
     due = [w["what"] for w in brief.due_watch(_DAY, watch, seen)]
-    assert due == ["daily thing", "new thing"]
+    assert due == ["new thing", "daily thing"]           # the longest waiting first
     later = _DAY + dt.timedelta(days=8)
     assert [w["what"] for w in brief.due_watch(later, watch, seen)] == [
-        "daily thing", "weekly thing", "monthly thing", "new thing"]
+        "new thing", "monthly thing", "weekly thing", "daily thing"]
 
 
 def test_a_list_from_anywhere_is_checked_never_trusted(monkeypatch):
@@ -261,6 +261,10 @@ def test_what_a_brief_searched_waits_its_turn_at_the_next(tmp_path):
     state = _state(tmp_path)
     first = _run(state, "--today", "2026-10-26", "--write").stdout
     assert "UK settled status rule changes October 2026" in first
+    # Planned at the gather, and searched only once the news step took what the reader found.
+    assert "settled status" in _run(state, "--today", "2026-10-27").stdout.split(
+        "given these searches: ", 1)[1].split("\n", 1)[0]
+    _run(state, "news", "--today", "2026-10-26", stdin="Nothing new.\n")
     nxt = _run(state, "--today", "2026-10-27").stdout
     assert "Manchester supply chain and logistics analyst hiring or layoffs October 2026" in nxt
     assert "settled status" not in nxt.split("given these searches: ", 1)[1].split("\n", 1)[0]
@@ -451,3 +455,54 @@ def test_a_search_with_nothing_in_it_still_gets_a_brief_with_three_things(tmp_pa
     assert "Nothing owed" in r.stdout and "Nothing has gone out in 14 days" in r.stdout
     three = r.stdout.split("Next three\n", 1)[1].split("\n\n", 1)[0].splitlines()
     assert len(three) == 3
+
+
+# ---- the release review's findings (2026-11-02), each with the input that showed it
+
+def test_a_list_rewritten_mid_brief_still_searches_the_persons_own_items(tmp_path):
+    import json
+    state = _state(tmp_path)
+    _run(state, "watch", "add", "Manchester tram strike", "--every", "week")
+    _run(state, "--today", "2026-10-26", "--write")
+    _run(state, "watch", "write", stdin=json.dumps([{"what": "Salford logistics hiring", "every": "day"}]))
+    out = _run(state, "watch", "searches", "--today", "2026-10-26").stdout
+    assert "Manchester tram strike October 2026" in out and "Salford logistics hiring" in out
+
+
+def test_nothing_waits_for_ever_when_there_is_no_room(monkeypatch):
+    watch = [{"what": "daily %d" % n, "every": "day"} for n in range(4)] + [
+        {"what": "weekly", "every": "week"}, {"what": "monthly", "every": "month"}]
+    _with(monkeypatch, watch=watch)
+    seen, ran = {}, set()
+    for n in range(30):
+        day = _DAY + dt.timedelta(days=n)
+        q = brief.queries(day, ["Larkspur Retail", "Fernhill Freight"], searched=seen)
+        for w in brief.searched_whats(q, watch, day):
+            seen[w.lower()] = day
+            ran.add(w)
+    assert {"weekly", "monthly"} <= ran, ran
+
+
+def test_a_person_who_added_one_thing_first_still_gets_a_list_written(tmp_path):
+    import json
+    state = _state(tmp_path)
+    p = _person_json(state)
+    d = json.load(open(p, encoding="utf-8"))
+    d["brief"] = {"leave_out": ["bank", "targets"]}
+    json.dump(d, open(p, "w", encoding="utf-8"))
+    _run(state, "watch", "add", "Manchester tram strike")
+    shown = _run(state, "watch").stdout
+    assert "needs writing: none written yet" in shown
+    # What they turned off in 4.6 is passed on, so the new list leaves it out.
+    assert "leave out: interest rate decisions; news of their target employers" in shown
+
+
+def test_watching_again_what_was_stopped_works_from_a_chat(tmp_path):
+    state = _state(tmp_path)
+    _run(state, "watch", "drop", "UK settled status rule changes")
+    r = _run(state, "watch", "add", "UK settled status rule changes")
+    assert r.returncode == 0 and "UK settled status rule changes" in [w["what"] for w in _watch_of(state)]
+    for n in range(8):
+        _run(state, "watch", "add", "thing %d" % n)
+    full = _run(state, "watch", "add", "one too many")
+    assert full.returncode == 2 and "stop one first" in full.stderr

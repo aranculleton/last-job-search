@@ -60,6 +60,8 @@ def test_an_older_line_still_reads_as_it_did():
     ("IST", "Asia/Kolkata", "Asia/Kolkata"),        # the person's own zone says it
     ("BRT", "Europe/London", None),                 # no zone uses it any more
     ("", "Europe/Berlin", "Europe/Berlin"),
+    ("CST", "Asia/Shanghai", "Asia/Shanghai"),      # the person's own zone before the short list
+    ("AEST", "Australia/Brisbane", "Australia/Brisbane"),
 ])
 def test_a_zone_comes_from_the_standard_librarys_own_zones(word, home, want):
     assert upcoming._zone_word(word, home) == want
@@ -70,3 +72,16 @@ def test_a_zone_is_kept_by_its_name_or_its_word_never_as_anything_else():
     assert interview_pack.zone_name("Not/AZone") == ""
     assert interview_pack.zone_name("est") == "EST"
     assert interview_pack.zone_name("eastern time") == ""
+
+
+def test_a_time_given_on_rebooking_a_test_makes_it_a_meeting():
+    text = interview_pack._with_stage(HEAD, "Case study", "2026-11-05", due=True)
+    s = _read(interview_pack._with_stage(text, "Case study", "2026-11-06", time="15:00"))
+    assert (s["kind"], s["time"], s["date"]) == ("", "15:00", "2026-11-06") or s["kind"] == "meeting"
+    assert s["time"] == "15:00"
+
+
+def test_a_zone_it_cannot_place_gives_no_time_rather_than_a_wrong_one():
+    s = _read(interview_pack._with_stage(HEAD, "Final round", "2026-11-05", time="14:00",
+                                         zone="Pacific Time"))
+    assert (s["date"], s["time"], s["zone"]) == ("2026-11-05", "", "")
