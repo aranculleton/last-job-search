@@ -1,113 +1,90 @@
 # Notes for the next builder
 
-Written at the end of 4.5.1 (2026-10-31) for the chat that builds the next version. Read
-MAINTAINING.md first; this is only what 4.5 and 4.5.1 left.
+Written at the end of 4.6.0 (2026-11-02) for the chat that builds the next version. Read
+MAINTAINING.md first; this is only what 4.6 left.
 
-## How to work (the maintainer, 2026-10-30)
+## How to work (the maintainer, 2026-10-30 and 2026-11-02)
 
 - **Decide, never ask.** Every design, tooling and gate question is the builder's to settle
-  (MAINTAINING.md, "The builder decides"). Make the call, do it, say it in one line.
-- **Merge to master when green; release only when the maintainer says, or at once when a
-  fix stops something working for people other than them** (the maintainer, 2026-10-31;
-  MAINTAINING.md, "Releasing", "When"). Their copy follows master, so a fix only they need
-  reaches them without a release, and every release costs the same however small. At
-  "release it", everything sent since the last one goes into it, prepared (CHANGELOG, this
-  file, the rehearsals) while the checks run.
+  (MAINTAINING.md, "The builder decides"). Make the call, do it, say it in one line, and have
+  a reason for it: the maintainer asked in capitals to "genuinely think about things in
+  detail from all perspectives", and twice caught a change made without one.
+- **Look at the page as a tired job seeker would before calling it done.** For anything the
+  person sees, take the screenshots (the harness's `shots` scenario) at 1280x760, 1440x900, a
+  tablet and a phone, look at them, and for anything sizeable send a reviewer the pictures
+  and ask what a person would misread. In 4.6 that found the same interview shown three
+  times, a prep link on the wrong row and a phone tap landing on the wrong link, none of
+  which any test caught.
+- **Merge to master when green; release only when the maintainer says**, or at once when a
+  fix stops something working for people other than them (MAINTAINING.md, "Releasing").
 - **Keep it cheap**: few steps, no polling, the whole suite on GitHub only.
-- The push gate scans every patch and the whole tree. Its denylist is built by the
-  maintainer's copy's own `tools/build_app.py`, cached 12 hours in `/tmp/ljs-push-gate`.
-  Until that copy runs 4.5, its builder lacks 4.5's set-aside fix and flags "Visa", "Fetch"
-  and "Mozilla" on files that never changed: build the tokens with this tree's builder from a
-  throwaway clone of the copy (`python3 tools/build_app.py /tmp/ljs-push-gate/app
-  --tokens-out /tmp/ljs-push-gate/tokens`), never by narrowing the gate.
-- A `Fast checks` job can sit queued on GitHub with every check it waits for green, and
-  GitHub may refuse to rerun it. A new push starts a fresh run.
+- The push gate's denylist is built by the maintainer's copy's own `tools/build_app.py`,
+  cached 12 hours in `/tmp/ljs-push-gate`. The name guard stops on any proper noun the app
+  never carried: an invented one or an institution goes in `tools/name_guard_allow.txt` with
+  what it is; a real place or person in test data is replaced with an invented one.
 
-## 4.5.1
+## What 4.6 decided, to keep
 
-- The maintainer's daily brief stopped on 2026-10-31: the shared ops chat it fired into
-  (the older `ops_relay` set-up) had been deleted, and the scheduled task woke a new empty
-  chat with no copy of the files. That chat could not load `fire_trigger` either, so the
-  relay never ran; it pushed its own jargon-filled line through the phone notification
-  tool. Nothing in the app archived the ops chat (`tools/tidy.py` keeps it, and the copy has
-  no `profile/tidy.json`); what deleted it is not known.
-- Fixed: the daily tidy-up moves an ops brief to the helper once its chat is gone (missing
-  from the listing and the task names another chat), the moved brief gets the plain stub
-  and its own `chat` in the registry, which stays `ops_relay`, and a brief back from a break
-  runs in the ops chat rather than a new empty one. Tested on the plan and the registry
-  only; the real move runs at the maintainer's next daily tidy-up and has not been watched.
-- An independent review found four holes in the first version of that fix, all closed with
-  tests that fail without them: a brief bound to a chat with a copy of the files is never
-  moved, a moved one follows a new helper, `record` names the brief's chat in an ops
-  registry only with `--own-chat`, and `_owe` keeps one call per task (a zone move had
-  dropped the job round's update).
-- Open, not a regression: a break taken after the ops chat is lost binds its welcome-back to
-  that lost chat, so the brief stays off until the person resumes from the page (tidy never
-  moves a resting brief). An ops job round switched back on would also wake an empty chat;
-  nothing moves it.
-- Open: a phone push for a brief in the helper. The empty chat proved a cloud chat can
-  push with the `PushNotification` tool; a brief bound to a chat gets no push otherwise.
-  Not built: check Claude Code's documentation for it before relying on it.
-- The stored ops stub still says "fire_trigger ... could not start: <reason>" in the
-  maintainer's registry (`stub` in their `profile/routines.json`, theirs, not the app's).
+- **Coming up is built from the records on every run** (`tools/upcoming.py`), never stored.
+  The only thing kept is what the person adds (`documents/upcoming.json`, merged by id).
+  Follow-ups never appear there: they are To do's.
+- **Calendars without an account.** A Google link, one Outlook link (outlook.live.com: a
+  job search does not belong in the calendar of the job being left) and an RFC 5545 event.
+  The host's downloads refuse `.ics`, so the file is a stored zip holding one; if the host
+  ever allows `.ics`, save it directly and drop `zipOne`.
+- **The Brief says each thing once, by id** (`renderBrief`: `taken`, `itemKeys`, `dueKeys`,
+  `upKeys`), in this order: Today's interview (the nearest within 7 days, the prep window),
+  Next three, Coming up, Waiting on you, Jobs; the brief's opening sentences last, and only
+  those about something no panel shows (the model gives each sentence an item through
+  `brief_link`). Never match by words.
+- **No panel across a laptop's full width** (the maintainer disliked stretched bars). The
+  grid is 12 columns on a laptop and 2 on a tablet; `fillRows` widens the last panel of a
+  short row. `fitBrief` grows a list into a row's spare height and shrinks it, only where
+  that saves height, to fit the window less 64px for the Chat button; it is worked out once
+  per window size and model rev, so nothing moves while the page is used.
+- **One button a row on Coming up**: the title opens the thing (an interview its prep), the
+  calendar-with-a-plus adds it; "Prepare me" shows only where there is no prep.
+- **Jobs counted one way**: `jobToLook` is both the nav's count and the Brief's list.
+- **News is the profile's own**: `brief.queries` takes the country's name and central bank
+  from the market tables and its own tables, the field from Target Sectors or the first
+  search title, and runs the right-to-work and central-bank searches once a week.
 
-## Left open
+## Left, on purpose, with the reason
 
-- The "?" explainer is on the rules Claude has learned only; other Settings have none yet.
-- Icons were kept to the ones the page had; none were added.
-- Pre-approving the GitHub tools a landing chat uses (merge, create pull request) was
-  refused by Claude Code's own safety check when written into the settings; a chat may still
-  be asked about them once.
-- An interview with no application ("Something else" in I have an interview) opens Chat
-  rather than a form.
-- "Employers you follow" can be added on the page but not taken off there.
-- No page door yet for `/expand`, `/upskill`, `/add-portal` or `/add-template`.
-- The 4.2 newcomer journey findings were never closed as a list: the apply link, the
-  searching state, applied shown the same everywhere, a double paste, forms rather than chat,
-  and the wording.
-- The README's pictures come from the test sample through the harness's `shots` and `walk`
-  scenarios (1280 by 800 at 1.25, the phone at 390 by 844 at 2), put together with Pillow;
-  no script for it is kept in the app.
-- Windows, on the 4.5.0 release run: `tests/test_research_fetches_once_and_remembers_each_host.py::test_writers_at_the_same_moment_all_land`
-  lost writes from writers at the same moment (facts 1, 4 to 7 missing). 4.5 did not touch
-  the research cache, so it is a Windows race in it: reproduce with the Windows suite.
+- **The Interviews view's cards were not reworked.** A user's-eye review said the bin on a
+  card (it records "not going ahead") reads as delete, and that `demotePrimaries` leaves
+  "Read your prep" dark on a prepared interview while "Prepare me" on the unprepared ones
+  goes grey. Both are older than 4.6 and need their own look; the bin is worth moving into
+  More with words.
+- **The two-week strip has no legend** for a filled dot (a meeting) against a ring (due by
+  the end of the day), and a day's contents are said to a screen reader and a pointer
+  (`title`) only, not on a touch tap, where a busy day opens Coming up and a free day opens
+  Add something.
+- **A tablet (760 to 1099 wide) can leave one panel alone on a row**, drawn at both columns.
+  Seven panels in two columns leave one over whichever way they fall.
+- **Whether the Brief shows a third Coming up card can depend on load timing**: `fitBrief`
+  first runs when the Brief draws, and the header's work pill can arrive after. It is stable
+  once worked out; the sweep test counts a row the fit hid as fitted, not broken.
+- **Coming up is not in the phone's bottom bar**; it is reached from the Brief's panel and
+  the footer. Five tabs is the most the bar holds well.
+- **The right-to-work news needs a word for the person's status.** `STATUS_NAME` in
+  `networking.py` first; else the profile's "Right to work" or "Work authorization" line is
+  read for a visa, permit or status. Setup does not write `STATUS_NAME`.
+- **A page-only person gets news only when the brief runs**; the daily upkeep never
+  searches, to stay cheap.
 
-## Not tested against the live services
+## Not tested
 
-- The page writes that no longer ask (4.5): the cause is proven from a real chat's prompt
-  log (a `~` and a digit in a file name), and the names are fixed and tested; a live chat
-  with the new names has not run yet.
-- The chat that answers the page renewing itself daily, a new chat taking the page from a
-  quiet one, and the archiving of a finished job's chat or a replaced helper: tested on the
-  lines the app prints, never with real sessions.
-- The pin hand-off ("Pin my job search page to my sidebar." to the Artifact `pin` action):
-  tested up to the hand-off.
-- Fixed after 4.5.1, in `[Unreleased]`: Safari's engine failed the page's contrast checks
-  (8 tests) because 4.5.0 put colour fades on every control and card, and WebKit faded each
-  one in from the text colour as it was drawn. Fades now apply only under the pointer; the
-  motion test checks a just-drawn section has none, in every engine.
-- Safari's and Firefox's engines install in the build container with the Playwright that is
-  already there: `node "$(npm root -g)/playwright/cli.js" install webkit firefox`, then the
-  same with `install-deps webkit firefox`. Chromium is untouched. Run page changes in all
-  three before pushing (`LJS_PW_ENGINE=webkit` and `firefox`).
-- From 4.4 and still open: the pre-approved writes in a chat that was asked before, big jobs
-  in chats of their own side by side, the page reading LinkedIn in the desktop app's browser
-  (the whole flow is simulated), the daily tidy-up's session calls, the brief's bell from
-  inside the Claude app, and the page store beyond the probe page.
-
-## Platforms
-
-- A release's Windows suite runs in three parts side by side (`LJS_SUITE_SHARD`), about 10
-  minutes each. Windows runs on a release pull request, weekly and by hand.
-- Safari's engine leaves the space before an inline-block link out of `innerText`; a page
-  test that reads words around a link allows for it.
-- GitHub's Chromium writes a day as "Sun, 25 Oct" with a comma; a test reading a date the
-  page wrote with `fmtDay` allows for either form.
-- Everywhere (`tools/everywhere.sh`, on releases and weekly) checks the page in Safari's
-  engine, Firefox, a Mac's and Windows' type, French and German and the far time zones, and
-  the rest with the clock moved on, from an odd folder and on the newest Python.
-
-## The maintainer's own copy
-
-- `tools/try_personal_tests.py` and `tools/rehearse_sync.py` pass on 4.5 against it (cloud
-  and computer chats taking the update at once, its own tests, the quick local CI).
+- The add-to-calendar links were checked for their shape, not opened in Google Calendar or
+  Outlook; the zip's `.ics` was read back and checked for the standard, not imported into
+  Apple Calendar on a real phone.
+- `fitBrief` on a real Claude app window, whose frame is smaller than a browser's.
+- What the Everywhere workflow found on the release PR, not fixed in 4.6:
+  - Safari (the runner's WebKit 26.0, build 2215), phone, dark only: `test_8` says the To do
+    LinkedIn download card now meets promise 8 ("met now: take these out of KNOWN"). It
+    passes locally in WebKit in both themes and fails in Chromium if taken out, so KNOWN
+    keeps it; look at whether that card's step buttons draw differently in that build.
+  - Firefox: `test_reduced_motion_stops_the_spinner_and_the_bar` read the spinner still
+    turning once under load; it passes locally on master and on 4.6. Make the test wait for
+    the reduced-motion rule to apply rather than read the first frame.
+  - The far time zones caught a 4.6 test assuming the device's zone; fixed before merging.
