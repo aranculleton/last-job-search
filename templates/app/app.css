@@ -1387,6 +1387,16 @@ body.has-fab .shell { padding-bottom: calc(var(--tabs-h) + env(safe-area-inset-b
 .d-next { margin: 0; }
 .bp-lead-list { display: grid; gap: 8px; margin: 0; padding-left: 1.1em; }
 .bp-lead-list li { line-height: 1.45; }
+/* Today's facts beside its one thing: who first, in ink, then each fact on its own line with a
+   small dot in the panel's colour, not a list of plain bullets (the maintainer, 2026-11-02:
+   "slightly prettier appearance of the bullets in today"). */
+.bp-today-side .bp-lead-list { list-style: none; padding-left: 0; }
+.bp-today-side .bp-lead-list li { display: flex; align-items: baseline; gap: 8px; }
+.bp-today-side .bp-lead-list li::before { content: ""; flex: none; width: 6px; height: 6px; border-radius: 50%; background: var(--line); transform: translateY(-2px); }
+.bp-lead-list.bp-facts { gap: 4px; }
+.bp-facts li { font-size: var(--t-sm); color: var(--muted); }
+.bp-today-side .bp-facts li::before { background: var(--pc); }
+.bp-facts li:first-child { font-size: 1rem; font-weight: 600; color: var(--ink); }
 .chip-list { display: flex; flex-wrap: wrap; gap: 8px; margin: 0; }
 .chip-list .chip { padding: 4px 12px; border-radius: 999px; background: var(--sunk); color: var(--ink); font-size: var(--t-sm); }
 /* A light finish (2026-10-30: "slightly more polished, don't go overboard"): cards lift a

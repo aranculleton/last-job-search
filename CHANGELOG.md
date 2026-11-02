@@ -37,7 +37,7 @@ make sense to somebody whose repo just received it.
   then an interview tomorrow, then one inside your prep window with no prep yet, then what has
   rolled over (someone waiting on a reply first), then what is due today. Beside it: the
   questions an interview is likely to bring, or who the person is, how late it is and whether
-  a draft is ready. It can be in Next three as well. When Coming up's only booked thing is
+  a draft is ready, each on its own line with a small dot. It can be in Next three as well. When Coming up's only booked thing is
   the one Today shows, it lists what is due next instead of an empty strip.
 - **News reads as tidy points**: what happened, then what to do with it, then where it is
   from, and the panel is never cut off at the bottom.
