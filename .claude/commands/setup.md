@@ -241,7 +241,7 @@ Then the state files (setup-sections.md, the last section), and commit and push.
 ## Step 5: The brief, and the end
 
 - **What the brief's news watches comes from them.** From the profile you just wrote, the
-  few things that move this person's own search, in their terms and each as often as it
+  few things that move this person's own search, in their own words and each as often as it
   changes (`python3 tools/brief.py watch --help` says what belongs), written with `python3
   tools/brief.py watch write`. Asking nothing: they see it and change it in Edit the brief.
 - **The brief is on from the start, every day.** Turn it on now, asking nothing: the chat

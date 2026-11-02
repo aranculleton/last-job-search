@@ -1,17 +1,18 @@
 {
  "model": 1,
  "made_at": "2026-10-25T18:00:00Z",
- "rev": "a19d44824ade",
+ "rev": "7ae281ba30c7",
  "app": {
-  "version": "4.5.1",
+  "version": "4.6.0",
   "update_waiting": null,
   "news": [
-   "A morning brief whose chat was removed runs again by itself.",
-   "Moving everything to another time zone moves the job round too.",
-   "The Brief's numbers are never cut off."
+   "Coming up: everything booked or due, in one place.",
+   "Add anything to your calendar in a tap, with nothing connected.",
+   "A call's time shows on the person."
   ],
   "privacy": "Only you can open this page unless you share it. It holds first names, employers, your drafts and your setup answers, so keep it unshared.",
-  "repo": "https://github.com/aranculleton/last-job-search"
+  "repo": "https://github.com/aranculleton/last-job-search",
+  "page": 14
  },
  "person": {
   "first_name": "Morgan",
@@ -45,7 +46,7 @@
  ],
  "jobs": {
   "round": "r9",
-  "made_at": "2026-11-02T02:20:36Z",
+  "made_at": "2026-11-02T10:32:30Z",
   "met": false,
   "summary": "4 roles on the shortlist, 4 scoring 60 or more and 2 scoring 75 or more. 3 left out, each with its reason.",
   "rows": [
@@ -764,7 +765,7 @@
    "when": "2026-10-28",
    "prep": {
     "path": "documents/applications/thornbury_bank_risk_analyst_thornbury/interview_prep.md",
-    "updated": "2026-11-02T02:20:36Z"
+    "updated": "2026-11-02T10:32:30Z"
    },
    "questions": 2,
    "all_day": true,
@@ -1045,6 +1046,54 @@
     ]
    ],
    "rev": "4ae7ef73cc5a"
+  },
+  {
+   "id": "setting-prep_days",
+   "key": "prep_days",
+   "label": "Your next interview on the Brief",
+   "kind": "choice",
+   "value": "7",
+   "choices": [
+    [
+     "2",
+     "From 2 days before"
+    ],
+    [
+     "7",
+     "From a week before"
+    ],
+    [
+     "14",
+     "From two weeks before"
+    ]
+   ],
+   "rev": "27cdbf7324d7"
+  },
+  {
+   "id": "setting-calendar_reminder",
+   "key": "calendar_reminder",
+   "label": "Calendar reminders",
+   "kind": "choice",
+   "value": "60",
+   "choices": [
+    [
+     "15",
+     "15 minutes before"
+    ],
+    [
+     "60",
+     "An hour before"
+    ],
+    [
+     "1440",
+     "The day before"
+    ],
+    [
+     "off",
+     "None"
+    ]
+   ],
+   "rev": "638415eb3385"
   }
  ],
  "brief": {
@@ -1082,6 +1131,20 @@
       "section": "ready"
      }
     ]
+   }
+  ],
+  "watch": [
+   {
+    "what": "Manchester supply chain and logistics analyst hiring or layoffs",
+    "every": "day"
+   },
+   {
+    "what": "UK settled status rule changes",
+    "every": "week"
+   },
+   {
+    "what": "UK freight and logistics sector outlook",
+    "every": "month"
    }
   ]
  },
@@ -1130,11 +1193,23 @@
   ]
  },
  "updates": {
-  "version": "4.5.1",
-  "newest": "4.5.1",
+  "version": "4.6.0",
+  "newest": "4.6.0",
   "mode": "auto",
   "waiting": null,
   "changed": [
+   {
+    "version": "4.6.0",
+    "date": "2026-11-02",
+    "lines": [
+     "Coming up: everything booked or due, in one place.",
+     "Add anything to your calendar in a tap, with nothing connected.",
+     "A call's time shows on the person.",
+     "Your news fits your country and your field.",
+     "Adding something on Coming up is never refused.",
+     "Old news no longer promises a next brief."
+    ]
+   },
    {
     "version": "4.5.1",
     "date": "2026-10-31",
@@ -1143,18 +1218,6 @@
      "Moving everything to another time zone moves the job round too.",
      "The Brief's numbers are never cut off.",
      "The README is a third of its old length."
-    ]
-   },
-   {
-    "version": "4.5.0",
-    "date": "2026-10-30",
-    "lines": [
-     "A chat no longer asks you to allow every write to your page.",
-     "The line after an update gives your page's link.",
-     "An update never waits on a chat that has stopped.",
-     "Work Claude has picked up says \"Starting\".",
-     "No more \"Taking longer than usual\".",
-     "A finished job says what is ready in one short sentence."
     ]
    }
   ],
@@ -1401,8 +1464,8 @@
    "id": "tip-search",
    "area": "search",
    "tab": "jobs",
-   "text": "These are your first results, so the order may be a bit off. Tap the bin on any job that's wrong for you and say why, and the next search will do better.",
-   "rev": "fe7659d1001f"
+   "text": "Tap Edit on anything Claude writes to make it shorter, warmer or reworded. Claude learns your style from your changes.",
+   "rev": "cf41ba3338e1"
   },
   "tour": [
    {
@@ -2548,20 +2611,15 @@
     "outputs": [
      "brief"
     ],
-    "label": "What counts",
-    "control": "toggles",
-    "values": [
-     "employers",
-     "market",
-     "bank",
-     "targets"
-    ],
+    "label": "Stop watching",
+    "control": "watch",
+    "values": [],
     "state": 1,
     "cost": "A little Claude, about 30 seconds",
     "code": true,
     "page_only": false,
     "model_values": [],
-    "hint": "Which news gets searched. The news on your right to work is always looked for."
+    "hint": "Tap any the brief should stop searching for. Claude will not add it back."
    },
    {
     "p": "B4",
@@ -2596,6 +2654,40 @@
     "page_only": false,
     "model_values": [],
     "hint": "What is owed is always shown."
+   },
+   {
+    "p": "B6",
+    "outputs": [
+     "brief"
+    ],
+    "label": "Also watch",
+    "control": "text",
+    "values": [],
+    "state": 1,
+    "cost": "A little Claude, about 30 seconds",
+    "code": true,
+    "page_only": false,
+    "model_values": [],
+    "hint": "Something that moves your search, in your own words: a pay deal, a rule change, an employer. Searched in each brief, as often as you choose."
+   },
+   {
+    "p": "B7",
+    "outputs": [
+     "brief"
+    ],
+    "label": "How often",
+    "control": "choice",
+    "values": [
+     "day",
+     "week",
+     "month"
+    ],
+    "state": 1,
+    "cost": "A little Claude, about 30 seconds",
+    "code": true,
+    "page_only": false,
+    "model_values": [],
+    "hint": "How often what you add is searched: as often as it really changes."
    },
    {
     "p": "P1",
