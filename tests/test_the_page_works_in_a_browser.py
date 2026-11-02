@@ -1439,7 +1439,8 @@ def test_everything_booked_is_one_tap_from_any_calendar_and_the_brief_shows_the_
     _clean(r)
     # Safari's engine writes "Wed, 28 Oct": the day is the same either way.
     assert [d.replace(",", "") for d in r["days"]] == ["Wed 28 Oct", "Thu 29 Oct", "Fri 30 Oct", "Mon 2 Nov", "Wed 4 Nov", "Fri 6 Nov", "Thu 12 Nov"], r["days"]
-    assert r["when"][:3] == ["13:00", "15:00", "10:00"] and "End of day" in r["when"] and "Time not set" in r["when"], r["when"]
+    # The person's own clock first; on a device somewhere else, the time there too ("13:00 (3:00 here)").
+    assert [w.split(" (")[0] for w in r["when"][:3]] == ["13:00", "15:00", "10:00"] and "End of day" in r["when"] and "Time not set" in r["when"], r["when"]
     # Each interview says whether its prep is ready, on its own row only (never on a test
     # due in the same process): read it from there, or ask for it.
     assert r["prep"] == ["up-read:up-app-larkspur-supply-phone-screen-2026-10-28=Prep ready",
