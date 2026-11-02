@@ -78,7 +78,11 @@ MAINTAINING.md first; this is only what 4.7 left.
 - **The Brief**: Today leads with what is on today (a call or a test due today before a
   later interview); the strip and Coming up's day headings mark today in a clear green
   and tomorrow in gold (palettes `day-today`, `day-tomorrow`), never red, which read as a
-  threat; nothing else; each
+  threat; nothing else. Compared before choosing (2026-11-02): Apple Calendar's red circle
+  is its brand colour, not a warning; Google Calendar marks today with its accent; Asana shows
+  due today and tomorrow in green and keeps red for overdue. The colour is never the only
+  sign: today is boxed on the strip, and Coming up says "Today" and "Tomorrow" in words, so a
+  green and gold someone cannot tell apart lose nothing; each
   person's step and day sit in one column (subgrid). `fitBrief` takes, while the Brief runs
   past the window, the one last item whose going saves most, never one beside white space,
   with `data-fit` "fewest,start,keep" (Today's questions 2,3,0; Coming up 2,2; Jobs 2,3,2;
