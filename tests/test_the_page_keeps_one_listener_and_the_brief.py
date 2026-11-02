@@ -206,7 +206,7 @@ def test_an_open_page_reloads_itself_to_a_newer_version_once(run, tmp_path, vp):
     seed = {"meta/now": {"rev": "newer", "made_at": T, "model": 1, "by": "brief", "page": 6}}
     got = _go(run, tmp_path, [{"hash": "brief", "eval": "sessionStorage.getItem('ljs:reloaded-to')",
                                "until": "sessionStorage.getItem('ljs:reloaded-to') === '6'"}],
-              vp, model=model, seed=seed, clock=T)
+              vp, model=model, seed=seed, clock=T, settle=True)
     assert got["after"][0]["eval"] == "6"
     # The same version is never reloaded to twice, and an equal one not at all.
     same = copy.deepcopy(model)
