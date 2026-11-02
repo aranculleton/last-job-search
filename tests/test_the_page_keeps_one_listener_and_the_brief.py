@@ -321,6 +321,28 @@ def test_today_is_the_most_pressing_thing_with_what_matters_beside_it(run, tmp_p
     assert r["empty"] == 0 and (r["heroWide"] is None or r["heroWide"] > 0.9), r
 
 
+# Your progress fits its panel at any width: no strip of numbers with empty space beside it on
+# a full row, nothing squeezed on a phone (the maintainer, 2026-11-02: "leaves white space or
+# gets weirdly cramped"). With News, it shares a row; without, it has the row to itself.
+PROGRESS = ("(() => { const p = document.querySelector('#main .bp-numbers'); const b = p.querySelector('.bp-body').getBoundingClientRect(); "
+            "const st = p.querySelector('.bp-stats').getBoundingClientRect(); const sp = p.querySelector('.bp-spark-wrap'); "
+            "const tiles = [...p.querySelectorAll('.bp-stat')].map((t) => t.getBoundingClientRect().width); "
+            "return {gap: Math.round(b.right - Math.max(st.right, sp ? sp.getBoundingClientRect().right : 0)), narrowest: Math.round(Math.min(...tiles)), "
+            "overflow: p.scrollWidth > p.clientWidth}; })()")
+
+
+@pytest.mark.parametrize("news", [True, False], ids=["with-news", "alone"])
+def test_your_progress_fills_its_panel_without_crowding(run, tmp_path, vp, news):
+    model = copy.deepcopy(_sample())
+    if not news:
+        model["brief"]["sections"] = [s for s in model["brief"]["sections"] if s.get("kind") != "news"]
+    got = _go(run, tmp_path, [{"hash": "brief", "eval": PROGRESS}], vp, model=model, clock=T)
+    r = got["after"][0]["eval"]
+    assert r["gap"] <= 2, r            # nothing left empty at its right
+    assert r["narrowest"] >= 88, r     # no number squeezed
+    assert not r["overflow"], r
+
+
 # A reply owed in To do names its person by `item`, as the model sends it, and the Brief shows
 # that person once: the same reply led Today and came third in Next three on the maintainer's
 # page (2026-11-02), because only a `contact` field the model never sends was read.

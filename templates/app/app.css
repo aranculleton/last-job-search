@@ -1264,7 +1264,18 @@ body.has-fab .shell { padding-bottom: calc(var(--tabs-h) + env(safe-area-inset-b
 .bp-score.tone-good { color: var(--st-running); background: var(--st-running-bg); }
 .bp-score.tone-fair { color: var(--st-waiting); background: var(--st-waiting-bg); }
 /* The counts never stretch: where their panel is wide (a day with no news) they keep their size. */
-.bp-stats { display: grid; grid-template-columns: repeat(auto-fit, minmax(72px, 1fr)); gap: 8px; max-width: 520px; }
+/* Your progress fits its panel at any width, by the panel's own width rather than the
+   window's (the maintainer, 2026-11-02: "leaves white space or gets weirdly cramped"): two by
+   two when narrow, four across filling the panel otherwise, and on a full row the bars sit
+   beside the numbers instead of a short strip under them with empty space to the right. */
+.bpanel.bp-numbers { container-type: inline-size; }
+.bp-stats { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 8px; }
+@container (max-width: 431px) { .bp-stats { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+@container (min-width: 792px) {
+  .bp-numbers .bp-body { display: grid; grid-template-columns: minmax(0, 3fr) minmax(0, 2fr); column-gap: 24px; row-gap: 12px; align-items: end; }
+  .bp-numbers .bp-body > :not(.bp-stats):not(.bp-spark-wrap) { grid-column: 1 / -1; }
+  .bp-numbers .bp-body > .bp-stats:last-child { grid-column: 1 / -1; }
+}
 .bp-stat { display: flex; flex-direction: column; gap: 2px; padding: 8px 12px; background: var(--sunk); border-radius: var(--r-sm); min-width: 0; }
 /* The Brief keeps to a few type styles: one bold weight for its greeting and numbers, 600 for
    every emphasis, so a glance reads one voice (LAYOUT_SPEC 7.10). */
@@ -1461,7 +1472,7 @@ ul.bp-news { max-width: 80ch; }
 .bp-steps > .bp-step-iv { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 8px; }
 .bp-steps > .bp-step-iv > .bp-link { flex: 1 1 12rem; min-width: 0; }
 .bp-steps > .bp-step-iv .bp-at { display: block; }
-.bp-spark { max-width: 360px; }
+.bp-spark { height: 40px; }
 /* Each row of the Brief filled, whichever panels a person has (fillRows): twelve columns
    on a laptop, two on a tablet, one on a phone. */
 @media (min-width: 760px) and (max-width: 1099px) {

@@ -691,7 +691,7 @@ METHODS: dict[str, dict] = {
             (15, "2026-11-02", True, "today and tomorrow stand out in a clear green and gold on the strip and on Coming up's day headings, never red"),
             (16, "2026-11-02", True, "the News panel is never empty while a recent brief had news, and each point says what happened, how to use it and where it is from; Today is the most pressing thing with what matters about it beside it; Coming up lists what is due next when nothing else is booked; a person is shown once; the update line glides"),
         ),
-        "fingerprint": "9445750051adbd79",
+        "fingerprint": "2d9d5f0b6984851d",
     },
     "upskill": {
         "by": "upgrade", "priority": 4, "applies": "upskill_plans", "time": "~10 min",

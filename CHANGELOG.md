@@ -41,6 +41,9 @@ make sense to somebody whose repo just received it.
   the one Today shows, it lists what is due next instead of an empty strip.
 - **News reads as tidy points**: what happened, then what to do with it, then where it is
   from, and the panel is never cut off at the bottom.
+- **Your progress fits its panel at any width**: two by two on a phone, four across
+  otherwise, and with the weekly bars beside the numbers when it has a whole row, instead of
+  empty space to the right or squeezed numbers.
 - **Refresh always says what it did.** With today's data already on the page it checks again
   for free and now says "Up to date" instead of changing nothing you can see.
 - **The moving line under the header glides** while an update runs, instead of stuttering on
