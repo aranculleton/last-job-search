@@ -3027,8 +3027,8 @@
     return h("div", {class: "bp-week", role: "group", "aria-label": "The next two weeks", "data-k": "week"}, days.map((d, i) => {
       const xs = on.get(d);
       const wd = new Date(d + "T12:00:00Z").getUTCDay();
-      // Today's dots red and tomorrow's amber, the rest as they are: what is close stands out
-      // (the maintainer, 2026-11-02), and only two days ever carry a colour.
+      // Today's and tomorrow's dots in their own calm colours, the rest as they are: what is
+      // close stands out (the maintainer, 2026-11-02), and only two days ever carry a colour.
       return h("button", {type: "button", class: "bp-day" + (i === 0 ? " is-today" : i === 1 ? " is-tomorrow" : "") + (xs.length ? " has" : ""), "data-k": "week:" + d, "aria-label": said(d), title: said(d),
         // A day with something on it opens it; a free day adds something to it, as a calendar does.
         onclick: () => { if (xs.length) go("interviews", {focus: true, item: txt(xs[0].id)}); else askAddUpcoming(d); }},
@@ -4272,7 +4272,10 @@
       if (last && last[0] === u.day) last[1].push(u); else days.push([u.day, [u]]);
     }
     const prepped = new Set();
-    return [h("ol", {class: "plain up-days", "data-k": "up-days"}, days.map(([day, rows]) => h("li", {class: "up-day"},
+    // Today and tomorrow marked in the strip's calm colours (pine, iris), never an alarm one
+    // (the maintainer, 2026-11-02: red "promotes alarmism").
+    const dayMark = (day) => { const n = dayDiff(day); return n === 0 ? " is-today" : n === 1 ? " is-tomorrow" : ""; };
+    return [h("ol", {class: "plain up-days", "data-k": "up-days"}, days.map(([day, rows]) => h("li", {class: "up-day" + dayMark(day)},
       h("h3", {class: "group"}, upDayLabel(day)), h("ul", {class: "plain up-list"}, rows.map((u) => upRow(u, "", prepped)))))),
       later.length ? h("p", {class: "up-later"}, btn("Show " + later.length + " more, to " + fmtDay(later[later.length - 1].day), () => { S.upLater = true; render(); }, {kind: "secondary", small: true, key: "up-later"})) : null];
   }

@@ -107,6 +107,10 @@ DAWN = {
     "doc-plum": ("#4b2a6b", "[D] the plum a resume can take (templates/doc_style.py STYLES), shown as itself"),
     "doc-slate": ("#2f4858", "[D] the slate a resume can take (templates/doc_style.py STYLES), shown as itself"),
     "doc-blue": ("#3873b2", "[D] the blue a resume can take (templates/doc_style.py STYLES), shown as itself"),
+    # Today and tomorrow on the strip and Coming up: seen at a glance, never red (the
+    # maintainer, 2026-11-02: red "promotes alarmism", pine and iris were too faint).
+    "day-today": ("#16a34a", "[D] a clear green for today, 3.3:1 on surface"),
+    "day-tomorrow": ("#b7791f", "[D] a clear gold for tomorrow, 3.6:1 on surface"),
 }
 MAIN = {
     "bg": ("#191724", "[P] main base: the primary background, the page around the cards"),
@@ -153,6 +157,8 @@ MAIN = {
     "doc-plum": ("#4b2a6b", "[D] the plum a resume can take (templates/doc_style.py STYLES), shown as itself"),
     "doc-slate": ("#2f4858", "[D] the slate a resume can take (templates/doc_style.py STYLES), shown as itself"),
     "doc-blue": ("#3873b2", "[D] the blue a resume can take (templates/doc_style.py STYLES), shown as itself"),
+    "day-today": ("#4ade80", "[D] a bright green for today, 9.5:1 on surface"),
+    "day-tomorrow": ("#facc15", "[D] a bright yellow for tomorrow, 10.8:1 on surface"),
 }
 
 PALETTES = {"light": DAWN, "dark": MAIN}
@@ -178,7 +184,9 @@ def pairs() -> list:
             ("toast-ink", "toast-bg", 4.5, "a message"), ("toast-ink", "toast-hover", 4.5, "a message's button, hovered"),
             ("ink", "selection", 4.5, "selected text"),
             ("chart-a", "surface", 3.0, "chart bars"), ("chart-b", "surface", 3.0, "chart bars"), ("chart-a", "sunk", 3.0, "a bar on its track"),
-            ("chart-b", "sunk", 3.0, "a slow bar on its track"), ("mark", "sunk", 3.0, "progress on its track")]
+            ("chart-b", "sunk", 3.0, "a slow bar on its track"), ("mark", "sunk", 3.0, "progress on its track"),
+            ("day-today", "surface", 3.0, "today's dots"), ("day-today", "bg", 3.0, "today's mark on Coming up"),
+            ("day-tomorrow", "surface", 3.0, "tomorrow's dots"), ("day-tomorrow", "bg", 3.0, "tomorrow's mark on Coming up")]
     for st in STATUSES:
         out += [(f"st-{st}", f"st-{st}-bg", 4.5, f"{st}: a status word on its tint")]
         out += [(f"st-{st}", s, 4.5, f"{st}: a status line") for s in SURFACES]

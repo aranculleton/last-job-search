@@ -290,3 +290,18 @@ def test_every_persons_step_and_day_start_at_one_edge(run, tmp_path, vp):
     assert len(rows) >= 2, rows
     lefts = {left for left, _day in rows} | {day for _left, day in rows if day is not None}
     assert max(lefts) - min(lefts) <= 1, rows
+
+
+# Coming up's own day headings mark today and tomorrow in the strip's calm colours.
+def test_coming_up_marks_today_and_tomorrow_calmly(run, tmp_path, vp):
+    model = copy.deepcopy(_sample())
+    for n, day in enumerate(("2026-10-25", "2026-10-26")):
+        call = copy.deepcopy(next(u for u in model["upcoming"] if u["kind"] == "call"))
+        call.update(id="up-call-%d" % n, day=day, start=day + "T15:00:00Z", end=day + "T15:30:00Z")
+        model["upcoming"].insert(n, call)
+    got = _go(run, tmp_path, [{"hash": "interviews", "eval": "[...document.querySelectorAll('#main .up-day')].slice(0, 3).map((d) => [d.className, "
+                                                            "getComputedStyle(d.querySelector('.group'), '::before').backgroundColor])"}],
+              vp, model=model, clock=T)
+    (c0, today), (c1, tomorrow), (c2, later) = got["after"][0]["eval"]
+    assert "is-today" in c0 and "is-tomorrow" in c1 and "is-to" not in c2, got["after"][0]["eval"]
+    assert today != tomorrow and today not in ("rgba(0, 0, 0, 0)", "") and tomorrow not in ("rgba(0, 0, 0, 0)", "")

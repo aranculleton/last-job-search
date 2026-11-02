@@ -39,6 +39,8 @@ linkedin_Profile.pdf
 *.jpeg
 *.png
 !cover_letters/OpenFonts/fonts/**
+# The README's own pictures, made from the invented test sample: never a person's photo.
+!docs/images/*.png
 
 # OS files
 .DS_Store

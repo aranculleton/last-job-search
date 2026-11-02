@@ -20,6 +20,12 @@ make sense to somebody whose repo just received it.
 
 ## [Unreleased]
 
+### Changed
+
+- **Today and tomorrow stand out at a glance in green and gold** on the Brief's two-week strip
+  and on the Coming up screen, where their day headings carry a small dot. Never red, which
+  read as a warning.
+
 ## [4.7.0] - 2026-11-02
 
 ### Fixed
