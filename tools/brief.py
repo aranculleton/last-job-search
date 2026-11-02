@@ -471,19 +471,25 @@ def home_place() -> str:
     return loc.split(",")[-1].strip()[:40] if "," in loc else ""
 
 
+def _dated(what: str, today: dt.date) -> str:
+    """A search with the month on it, to bring this month's news first; none in a month's
+    first week, when "November 2026" on the 2nd found almost nothing and the brief said
+    "Quiet week" (2026-11-01 and 02). The reader's own date check keeps it fresh."""
+    return what if today.day <= 7 else "%s %s" % (what, today.strftime("%B %Y"))
+
+
 def queries(today: dt.date, live_employers: list[str], watch: list[dict] | None = None,
             searched: dict | None = None) -> list[str]:
     """At most six searches: the employers in play (two at most), then what the person's brief
     watches that is due today, in their own words and their order. Nothing else: no kind of
     news is decided here for anyone, and what matters to a nurse, a lawyer or a student on a
     visa is what their own list says (person.json `brief.watch`)."""
-    month = today.strftime("%B %Y")
     off = set(setting("leave_out"))
     where = home_place()
-    out = ["%s%s news %s" % (n, " " + where if where else "", month)
+    out = [_dated("%s%s news" % (n, " " + where if where else ""), today)
            for n in live_employers[:2]] if "employers" not in off else []
     for w in due_watch(today, watch, searched):
-        out.append("%s %s" % (w["what"], month))
+        out.append(_dated(w["what"], today))
     return list(dict.fromkeys(out))[:QUERIES_MAX]
 
 
@@ -500,8 +506,7 @@ def wider(today: dt.date, live_employers: list[str], watch: list[dict] | None = 
     room = SEARCHES_MAX - len(qs)
     if room <= 0 or not qs:
         return []
-    month = today.strftime("%B %Y")
-    due = {w["what"] for w in watch if "%s %s" % (w["what"], month) in qs}
+    due = {w["what"] for w in watch if _dated(w["what"], today) in qs}
     where = home_place()
     out = [w["what"] for w in watch if w["what"] not in due]
     if "employers" not in set(setting("leave_out")):
@@ -538,8 +543,7 @@ def in_play(tracker, contacts, threads, live_employers: list[str]) -> list[str]:
 
 def searched_whats(qs: list[str], watch: list[dict], today: dt.date) -> list[str]:
     """Which watched things the searches handed on carry, to note them as searched."""
-    month = today.strftime("%B %Y")
-    return [w["what"] for w in watch if "%s %s" % (w["what"], month) in qs]
+    return [w["what"] for w in watch if _dated(w["what"], today) in qs]
 
 
 def links_sent(paths: list[str]) -> list[str]:

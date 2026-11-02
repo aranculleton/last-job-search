@@ -274,7 +274,10 @@ def test_what_a_brief_searched_waits_its_turn_at_the_next(tmp_path):
     assert "Manchester supply chain and logistics analyst hiring or layoffs October 2026" in nxt
     assert "settled status" not in nxt.split("given these searches: ", 1)[1].split("\n", 1)[0]
     week = _run(state, "--today", "2026-11-02").stdout
-    assert "UK settled status rule changes November 2026" in week
+    # In a month's first week a search carries no month: "November 2026" on the 2nd found
+    # almost nothing (2026-11-02).
+    line = week.split("given these searches: ", 1)[1].split("\n", 1)[0]
+    assert "UK settled status rule changes" in line and "November 2026" not in line, line
 
 
 def test_what_counts_is_the_persons_own_line_where_they_wrote_one():

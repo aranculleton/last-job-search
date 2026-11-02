@@ -26,7 +26,9 @@ make sense to somebody whose repo just received it.
   bring "Quiet week" and hide the News panel. Now the brief always brings three to five items:
   what is new since the last one first, and when that is thin, the freshest from the last week
   and then the last month that it has not sent before, about your employers, your targets,
-  your field, your market and your right to work. Each item ends in what to do with it: a
+  your field, your market and your right to work (a search in a month's first week no longer
+  asks for that month by name, which found almost nothing on the 1st and 2nd). Each item ends
+  in what to do with it: a
   point to raise on a call, a question for an interview there, a reason to write to someone.
   If the search cannot run, the last brief's items stay, marked with their day, and the page
   shows them with the day they were gathered.

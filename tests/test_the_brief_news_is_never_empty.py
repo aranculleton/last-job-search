@@ -53,14 +53,18 @@ def _claude(out: str) -> list[str]:
 
 
 def test_a_thin_day_widens_inside_the_one_reader_call(tmp_path):
-    out = _run(_state(tmp_path), "--today", "2026-11-02").stdout
+    state = _state(tmp_path)
+    # A month's first week: no search carries the month, which found almost nothing on the 2nd.
+    early = _claude(_run(state, "--today", "2026-11-02").stdout)
+    assert "November 2026" not in next(x for x in early if "given these searches: " in x)
+    out = _run(state, "--today", "2026-11-12").stdout
     assert len(out) <= brief.TEXT_MAX
     lines = _claude(out)
     first = next(x for x in lines if "given these searches: " in x)
     fresh = first.split("given these searches: ", 1)[1].split("; at most", 1)[0].split(" | ")
     wide = next(x for x in lines if x.startswith("- news, never none: "))
     # Three to five items, back a week and then a month from the day, never none.
-    assert "3 to 5 items" in wide and "back to 2026-10-26, then 2026-10-05" in wide
+    assert "3 to 5 items" in wide and "back to 2026-11-05, then 2026-10-15" in wide
     more = wide.split("with these searches too: ", 1)[1].split(" | ")
     # The wider ones carry no month (a "November 2026" search on the 2nd finds almost
     # nothing), repeat none of today's, and keep the reader within eight searches in all.
@@ -82,7 +86,7 @@ def test_each_employer_in_play_says_how_the_person_is_in_touch_and_is_never_sear
 
 def test_wider_never_exceeds_the_reader_cap_and_needs_searches_to_widen():
     watch = [{"what": "Thing %d" % n, "every": "week"} for n in range(8)]
-    today = dt.date(2026, 11, 2)
+    today = dt.date(2026, 11, 12)
     qs = ["Thing %d November 2026" % n for n in range(6)]
     got = brief.wider(today, [], watch, qs)
     # A subject today's searches leave out comes first: a new subject brings new items.
