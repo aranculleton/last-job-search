@@ -87,11 +87,15 @@ bdi { unicode-bidi: isolate; }
 .pulse .refresh-btn { margin-left: 8px; vertical-align: middle; }
 .pulse.tone-warn { color: var(--st-overdue); }
 /* An update on its way: one moving line under the header, the page still usable. */
-.pulse.is-updating { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; color: var(--ink); position: relative; padding-top: 4px; }
+/* The line is a short glow moved by transform on its own layer, clipped to the header: it was
+   a background-position sweep, repainted every frame, and it stuttered on a busy page (the
+   maintainer, 2026-11-02: "this loading animation is quite laggy"). */
+.pulse.is-updating { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; color: var(--ink); position: relative; padding-top: 4px; overflow: hidden; overflow: clip; }
 .pulse.is-updating .spin { width: 14px; height: 14px; border-width: 2px; }
-.pulse.is-updating::after { content: ""; position: absolute; left: 0; right: 0; bottom: 0; height: 2px; border-radius: 2px;
-  background: linear-gradient(90deg, transparent, var(--mark), transparent); background-size: 40% 100%; background-repeat: no-repeat; animation: sweep-bg 1.6s ease-in-out infinite; }
-@keyframes sweep-bg { from { background-position: -40% 0; } to { background-position: 140% 0; } }
+.pulse.is-updating::after { content: ""; position: absolute; left: 0; bottom: 0; width: 40%; height: 2px; border-radius: 2px;
+  background: linear-gradient(90deg, transparent, var(--mark), transparent); transform: translateX(-100%); will-change: transform;
+  animation: sweep 1.6s ease-in-out infinite; }
+@keyframes sweep { from { transform: translateX(-100%); } to { transform: translateX(250%); } }
 .pill {
   display: inline-flex; align-items: center; gap: 8px; min-height: var(--target); padding: 8px 12px; white-space: nowrap; flex: none;
   border-radius: 999px; border: 1px solid var(--line-strong); background: var(--surface); color: var(--ink); font-weight: 600; font-size: var(--t-sm); cursor: pointer;

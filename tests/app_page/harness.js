@@ -183,7 +183,7 @@ async function open(o) {
 }
 async function turn(page, n) {
   for (let i = 0; i < (n || 3); i++) {
-    await page.evaluate(() => new Promise((r) => { const c = new MessageChannel(); c.port1.onmessage = () => r(); c.port2.postMessage(0); }));
+    await throughNav(page, () => page.evaluate(() => new Promise((r) => { const c = new MessageChannel(); c.port1.onmessage = () => r(); c.port2.postMessage(0); })));
   }
 }
 async function settle(page) {
@@ -218,7 +218,22 @@ async function goto(page, id) {
   }
 }
 const T = (page, sel) => page.$$eval(sel, (els) => els.map((e) => e.innerText.trim()));
-const one = async (page, sel) => { const el = await page.$(sel); return el ? (await el.innerText()).trim() : null; };
+// A read that a page reloading itself interrupts is read again once the new page is up:
+// Firefox's engine destroys the old page's context later than Chromium's, and a reload test
+// lost its read there three times running (4.7.0's Everywhere run, 2026-11-02).
+const NAVIGATING = /context was destroyed|navigat|Target page, context or browser has been closed|frame was detached/i;
+async function throughNav(page, read) {
+  const until = Date.now() + 8000;
+  for (;;) {
+    try { return await read(); }
+    catch (e) {
+      if (!NAVIGATING.test(String(e && e.message || e)) || Date.now() > until) throw e;
+      await page.waitForLoadState("load").catch(() => {});
+      await page.waitForTimeout(150);
+    }
+  }
+}
+const one = (page, sel) => throughNav(page, async () => { const el = await page.$(sel); return el ? (await el.innerText()).trim() : null; });
 // A list's quiet actions sit behind its ⋯ menu (LAYOUT_SPEC 5.2): open it, pick one.
 async function menuPick(page, name) {
   await page.locator("#main summary.menu-btn").first().click();
@@ -234,7 +249,7 @@ async function openSetting(page, key) {
   const open = await sum.evaluate((el) => el.parentElement.open);
   if (!open) { await sum.click(); await turn(page, 3); }
 }
-const calls = (page) => page.evaluate(() => window.__calls.slice());
+const calls = (page) => throughNav(page, () => page.evaluate(() => window.__calls.slice()));
 const overflow = (page) => page.evaluate(() => ({sw: document.documentElement.scrollWidth, cw: document.documentElement.clientWidth}));
 const visible = (page, sel) => page.evaluate((s) => { const el = document.querySelector(s); if (!el) return false; const st = getComputedStyle(el); return st.display !== "none" && st.visibility !== "hidden" && el.getClientRects().length > 0; }, sel);
 async function clickText(page, role, name, opts) {
@@ -644,15 +659,7 @@ S.layout = async (a) => {
 // navigated in the middle of the read, 4.7's Everywhere run) is read again once the new page
 // has loaded, never lost.
 async function evalThrough(page, code) {
-  for (let i = 0; i < 3; i++) {
-    try { return await page.evaluate((c) => eval(c), code); }
-    catch (e) {
-      if (!/context was destroyed|navigat/i.test(String(e && e.message || e))) throw e;
-      await page.waitForLoadState("load").catch(() => {});
-      await turn(page, 2);
-    }
-  }
-  return page.evaluate((c) => eval(c), code);
+  return throughNav(page, () => page.evaluate((c) => eval(c), code));
 }
 
 S.engine = async (a) => {
@@ -663,7 +670,7 @@ S.engine = async (a) => {
   if (a.settle) { await page.waitForEvent("load", {timeout: 4000}).catch(() => {}); await page.waitForLoadState("load").catch(() => {}); }
   const out = {texts: {}, after: [], shots: []};
   // To do shows five first: what a test reads is the whole list, the rest unfolded.
-  const unfold = async () => { await page.$$eval("details.band-more:not([open])", (ds) => ds.forEach((d) => { d.open = true; })); await turn(page, 2); };
+  const unfold = async () => { await throughNav(page, () => page.$$eval("details.band-more:not([open])", (ds) => ds.forEach((d) => { d.open = true; }))); await turn(page, 2); };
   for (const id of a.hashes || []) {
     await goto(page, id);
     await unfold();
@@ -2204,9 +2211,16 @@ S.budget = async (a) => {
 S.motion = async (a) => {
   const r = {};
   for (const m of ["reduce", "no-preference"]) {
-    const o = await open({html: a.html, reducedMotion: m, hash: "work", seed: {"work/search~1": runningDoc({asked_at: new Date().toISOString(), stage_at: new Date().toISOString()})}});
-    // Set on the page as well as the context: Firefox's runs read the spinner still turning
-    // with the context's setting alone (4.6 and 4.7's Everywhere runs).
+    // Firefox on the runner ignored reduced motion given to the context and to the page (4.6
+    // and 4.7's Everywhere runs): there it is a Firefox of its own, started with the
+    // preference itself, and the page says whether the setting reached it at all.
+    const own = m === "reduce" && ENGINE === "firefox"
+      ? await playwright.firefox.launch({firefoxUserPrefs: {"ui.prefersReducedMotion": 1}}).catch(() => null) : null;
+    const shared = browser;
+    if (own) browser = own;
+    let o;
+    try { o = await open({html: a.html, reducedMotion: m, hash: "work", seed: {"work/search~1": runningDoc({asked_at: new Date().toISOString(), stage_at: new Date().toISOString()})}}); }
+    finally { browser = shared; }
     await o.page.emulateMedia({reducedMotion: m}).catch(() => {});
     // Wait for what is checked, with a time limit, never the first frame: under load Firefox
     // drew the card before the reduced-motion rule applied (4.6's Everywhere run).
@@ -2214,7 +2228,8 @@ S.motion = async (a) => {
       const s = document.querySelector(".work-card .spin");
       return !!s && (mode !== "reduce" || getComputedStyle(s).animationName === "none");
     }, m, {timeout: 5000}).catch(() => null);
-    r[m] = await o.page.evaluate(() => { const s = document.querySelector(".work-card .spin"); const f = document.querySelector(".work-card .fill"); return {spin: s ? getComputedStyle(s).animationName : null, fill: f ? getComputedStyle(f).transitionDuration : null}; });
+    r[m] = await o.page.evaluate(() => { const s = document.querySelector(".work-card .spin"); const f = document.querySelector(".work-card .fill"); return {spin: s ? getComputedStyle(s).animationName : null, fill: f ? getComputedStyle(f).transitionDuration : null, matches: matchMedia("(prefers-reduced-motion: reduce)").matches}; });
+    r[m].engine = ENGINE;
     // A section just drawn, the pointer away: no control or card fades (Safari faded each one
     // in from the text colour, 2026-10-31); one under the pointer still does.
     await o.page.mouse.move(1, 1);
@@ -2228,6 +2243,7 @@ S.motion = async (a) => {
     const hb = o.page.locator("#main .card .btn").first();
     if (await hb.count()) { await hb.hover(); await turn(o.page, 2); r[m].hovered = await hb.evaluate((b) => getComputedStyle(b).transitionDuration); }
     await o.ctx.close();
+    if (own) await own.close().catch(() => {});
   }
   return r;
 };

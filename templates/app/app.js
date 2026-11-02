@@ -3175,7 +3175,11 @@
     const taken = new Set();
     const isFree = (keys) => !keys.some((k) => taken.has(k));
     const take = (keys) => keys.forEach((k) => taken.add(k));
-    const dueKeys = (d) => ["d:" + txt(d.id)].concat(d.contact ? ["p:" + txt(d.contact)] : [], d.interview ? ["iv:" + txt(d.interview)] : []);
+    // A due item names who or what it is about by `item` (a reply owed points at the person):
+    // read only by `contact`, which the model never sends, the same reply led Today and came
+    // again third in Next three (the maintainer's page, 2026-11-02).
+    const dueKeys = (d) => ["d:" + txt(d.id)].concat(d.contact ? ["p:" + txt(d.contact)] : [], d.interview ? ["iv:" + txt(d.interview)] : [],
+      txt(d.item) && !txt(d.item).startsWith("due-") ? itemKeys(d.item) : []);
     const itemKeys = (id, section, text) => {
       id = txt(id);
       if (!id) return ["s:" + txt(section) + ":" + txt(text)];
@@ -3256,6 +3260,12 @@
       }
     }
 
+    // Today's "Then": the person's next step, beside a booked thing that has nothing else
+    // beside it; settled below, once the sentences and questions are known, and taken first
+    // so Next three goes on from the one after.
+    const quietHero = !!hero && !!(upHero || weekIv) && !(weekIv && !upHero && (arr(obj(weekIv.one_screen).questions).some((q) => txt(obj(q).q)) || !obj(weekIv.prep).updated));
+    const thenStep = quietHero ? stepsFrom.concat(dueSteps).find((x) => isFree(x.keys)) : null;
+    if (thenStep) take(thenStep.keys);
     // Next three: what to do next, the brief's steps first, then To do's, each once.
     const steps = [];
     for (const x of stepsFrom.concat(dueSteps)) {
@@ -3289,12 +3299,23 @@
     const ready = !weekIv || upHero ? null : qs.length ? h("div", {class: "bp-ready"}, h("p", {class: "bp-ready-t"}, "Likely to come up"),
       h("ul", {class: "plain bp-qs", "data-fit": "2,3,0"}, qs.map((q) => h("li", {}, h("span", {class: "bp-q"}, txt(q.q)), txt(q.with) ? h("span", {class: "bp-q-with"}, txt(q.with)) : null))))
       : !obj(weekIv.prep).updated ? h("p", {class: "bp-ready muted"}, "No prep yet. Prepare me writes the questions they are likely to ask, the answer to each from your own work, and what to ask them.") : null;
-    const leadList = parts.length ? h("ul", {class: "bp-lead bp-lead-list"}, parts.slice(0, ready ? 1 : 3).map((x) => h("li", {}, inlineMd(txt(obj(x).text))))) : null;
+    const leadList = parts.length ? h("ul", {class: "bp-lead bp-lead-list"}, parts.slice(0, ready || thenStep ? 1 : 3).map((x) => h("li", {}, inlineMd(txt(obj(x).text))))) : null;
+    // Beside a booked thing with no likely questions to show, the person's next step, taken
+    // from Next three: Today's right half sat empty on a quiet day (the maintainer's page,
+    // 2026-11-02). With nothing at all to put there, no half is drawn and the card takes the
+    // width.
+    const thenBox = thenStep ? h("div", {class: "bp-ready"}, h("p", {class: "bp-ready-t"}, "Then"), h("ul", {class: "plain bp-list bp-steps"}, thenStep.node())) : null;
+    const side = leadList || ready || thenBox ? h("div", {class: "bp-today-side"}, leadList, ready, thenBox) : null;
     put(grid, briefPanel("today", "Today", [hero,
-      hero ? h("div", {class: "bp-today-side"}, leadList, ready) : leadList || (legacy.length ? briefItems(legacy, "legacy", 5) : null),
+      hero ? side : leadList || (legacy.length ? briefItems(legacy, "legacy", 5) : null),
       !hero && !parts.length && !legacy.length ? h("p", {class: "muted"}, "Nothing booked or owed today.") : null],
       null, {icon: "todo", w: 6, m: 2}));
+    // With nothing booked that Today does not already show, what is due next from To do, each
+    // with its day: Coming up was a strip over nothing when its one booked thing led Today.
+    const dueNext = !upCards.length && allUp.length ? dueSteps.filter((x) => isFree(x.keys)).slice(0, 2) : [];
+    dueNext.forEach((x) => take(x.keys));
     put(grid, briefPanel("upcoming", "Coming up", [weekStrip(allUp), upCards.length ? (() => { const seen = new Set(); return h("ul", {class: "plain bp-up", "data-fit": "2,2"}, upCards.map((u) => upRow(u, "brief", seen))); })()
+      : dueNext.length ? h("ul", {class: "plain bp-list bp-up-due"}, dueNext.map((x) => x.node()))
       : !allUp.length ? h("p", {class: "muted"}, "Nothing booked in the next two weeks.") : null],
       [navLink("interviews", allUp.length ? "All " + allUp.length + " coming up" : "Coming up"),
         h("button", {type: "button", class: "btn link", "data-k": "bp-up-add", onclick: () => askAddUpcoming()}, "Add something")],
@@ -3321,7 +3342,7 @@
     // News that matters to the search, in points (the maintainer, 2026-10-31).
     if (news.length) put(grid, briefPanel("news", "News", h("ul", {class: "bp-lead-list bp-news"}, news.slice(0, 3).map((l) => h("li", {}, h("span", {class: "bp-text"}, inlineMd(txt(obj(l).text)))))),
       [news.length > 3 ? h("details", {class: "bp-all"}, h("summary", {}, plural(news.length - 3, "more", "more")), h("ul", {class: "bp-lead-list bp-news"}, news.slice(3).map((l) => h("li", {}, inlineMd(txt(obj(l).text)))))) : null,
-        newsAsOf(b.date)],
+        newsAsOf(b.news_date || b.date)],
       {icon: "k-message", w: 6, m: 2}));
     // The numbers: the last 30 days, how far applications got, and the weeks. A share is said
     // where there is something to share (never "0 0%"), and what it is a share of.

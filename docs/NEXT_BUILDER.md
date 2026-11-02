@@ -5,65 +5,24 @@ MAINTAINING.md first; this is only what 4.7 left.
 
 ## Do first, for [Unreleased]
 
-0. **Fix the news before anything else: it must never be empty.** On 2 November the brief's
-   news reader returned "Quiet week.", the page hid the News panel, and the maintainer, in
-   capitals: "what is the point of showing a quiet week? anytime someone logs in they want to
-   have something that helps ... anything that's related and news or anything that could be
-   used as anecdotes ... it should never say nothing new or some random useless placeholder."
-   Every brief brings three to five items worth reading, always:
-   - **New since the last brief first**: the employers in play, then what the person's list
-     watches (`brief.watch`).
-   - **When that is thin, widen, never stop**: the freshest items not sent before from the
-     last week, then the last month, about their field, their employers and targets, their
-     market, their right to work: a product launch, results, a funding round, a hiring push,
-     a regulator's change, a trade-press piece on their kind of work.
-   - **Each item says how to use it**: a talking point for a call with someone they are in
-     touch with, an anecdote or a question for an interview at that employer, a reason to
-     write to someone (in the sample: "worth a line to Tamsin at Copperleaf Pay").
-   - **Never "Nothing new", "Quiet week" or any placeholder**, in the message, the record or
-     on the page. The News panel is always drawn with real items.
-   Where it lives: `.claude/agents/news-reader.md` (its "Nothing new." return, the since
-   date as a hard cut, the six-search limit), `automation/prompts/morning_brief.md` step 3,
-   `tools/brief.py` (`queries`, `take_news`, `claude_lines`'s news line, `NEWS_MAX`,
-   `MESSAGE_NEWS`) and the page's News panel (`renderBrief`, drawn only `if (news.length)`).
-   Keep it cheap: one reader call, its searches widened inside that call, at most eight.
-   Test it with a person whose last day had no news: the brief still carries three useful
-   items, each with what to do with it.
+Built into [Unreleased] on 2026-11-02, not released (the maintainer: release only when they say):
 
-1. **Read what the release's own runs found.** The Safari, Mac and Windows type, French,
-   German and far time zones page runs, the moved-clock suite and the Windows and Mac set-ups
-   on aranculleton/last-job-search#153 were still running when 4.7.0 merged (they never
-   block). Read each one's summary line and fix what is real.
-2. **Firefox ignores reduced motion on the runner.** `test_reduced_motion_stops_the_spinner_and_the_bar`
-   reads the spinner turning and the bar's 0.8s transition under "reduce" in Firefox, with
-   the setting given to the context and, since 4.7, to the page (`emulateMedia`): neither
-   reaches it. Waiting for the rule did not help, so the query is not matching at all. Try a
-   Firefox launched with the preference `ui.prefersReducedMotion: 1` for that one test (a
-   second browser in the harness), and check `matchMedia('(prefers-reduced-motion: reduce)')`
-   first so the test says when the engine cannot be set. Not a page bug: Chromium and the
-   CSS agree.
-3. **Watch the first brief after 4.7.0 republish the maintainer's page.** Their copy's brief
-   at 07:56 UK reads its prompt before its own start takes the update; the republish line
-   `brief.claude_lines` prints says it replaces the old "never republish" rule. Check the
-   next morning's run (`list_events` on their brief session) did publish, and that the page
-   then reloads itself on the release after.
-4. **The moving line under the header stutters** (the maintainer, 2026-11-02, after tapping
-   Refresh on their own page: "this loading animation is quite laggy"). It is the update
-   line `.pulse.is-updating` draws while work of kind update or republish runs. Find what
-   animates it: a property that makes the browser lay out or repaint each frame (width,
-   left, background-position) stutters on a busy page, where a `transform` on its own layer
-   does not. Check it while the page is busy (a long To do, a search running), in Chromium and
-   Safari, and keep reduced motion stilling it.
-5. **Today and Coming up had empty space on a quiet day** (the maintainer's page, 2
-   November): Coming up was a strip over nothing when its only item was the one Today shows,
-   and Today's right half was empty with no opening sentences and no likely questions. Fill
-   it with something useful (the next thing after today, the person's next step), never a
-   placeholder, and let the row size to its content. Check with a sample like that page: one
-   booked item, no questions.
-6. **Left from 4.6's list, still to look at with real data**: the choices made for the
-   person on the Brief (the Jobs count, "Waiting on you", "contacts replied", what Next three
-   skips, which opening sentences show), and one Outlook link. The fit's numbers were
-   reworked in 4.7 (below).
+- **Done**: item 0, the news never empty (the reader widens to a week and a month inside its
+  one call, each item ends in how to use it, nothing new carries the last items with their
+  day, the page shows the newest earlier brief's news with `news_date`); the brief's FOR
+  CLAUDE lines are never cut at `TEXT_MAX` (the cut dropped the republish and the page's
+  update on the maintainer's real state); 4.7.0's runs read (Windows set-up step given 45
+  minutes; the harness reads survive a page reloading itself in Firefox); Firefox reduced
+  motion (its own Firefox with `ui.prefersReducedMotion`, and a skip saying so where the
+  engine ignores it); the update line moves by transform; a quiet day fills Today ("Then",
+  the next step) and Coming up (what is due next); a due item keys its person by `item`.
+- **Still to check**: the first brief after these land (07:56 UK) republishes the
+  maintainer's page and fills News with three items that each say how to use them
+  (`list_events` on their helper chat). The Firefox reduced-motion and reload fixes are
+  untested locally (no Firefox in the container): read the next Everywhere run.
+- **Looked at with real data, left as is**: "contacts replied" counts everyone who wrote back
+  in a thread in the last 30 days (47 on the maintainer's data, plausible with two live
+  processes); the Outlook link was not looked at.
 
 ## How to work (the maintainer, 2026-10-30 to 2026-11-02)
 

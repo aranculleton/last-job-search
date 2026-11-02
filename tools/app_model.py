@@ -3130,6 +3130,7 @@ def _brief(ctx: Ctx, targets: dict) -> dict | None:
         return None
     path = files[-1]
     sections = brief_sections(_read(path))
+    news_date = _news_fallback(ctx, sections, files[:-1])
     lines = [i["text"] for sec in sections for i in sec["items"]][:8]
     for sec in sections:
         sec["items"] = [dict(i, **brief_link(ctx, i["text"])) for i in sec["items"]]
@@ -3139,9 +3140,39 @@ def _brief(ctx: Ctx, targets: dict) -> dict | None:
         if sec["kind"] == "lead" and sec.get("text"):
             sec["parts"] = [dict(text=t, **brief_link(ctx, t))
                             for t in re.split(r"(?<=[.!?])\s+(?=[A-Z*])", sec["text"]) if t.strip()]
-    return {"date": os.path.basename(path)[:10], "lines": lines,
-            "items": [dict(text=x, **brief_link(ctx, x)) for x in lines],
-            "sections": sections, "watch": _watch(), "watch_again": _watch_again()}
+    out = {"date": os.path.basename(path)[:10], "lines": lines,
+           "items": [dict(text=x, **brief_link(ctx, x)) for x in lines],
+           "sections": sections, "watch": _watch(), "watch_again": _watch_again()}
+    if news_date:
+        out["news_date"] = news_date
+    return out
+
+
+def _news_fallback(ctx: Ctx, sections: list[dict], earlier: list[str]) -> str:
+    """The News panel is never empty while a brief of the last four weeks had news (the
+    maintainer, 2026-11-02: "it should never say nothing new"): a brief whose search is still
+    running, or an older one that said "Quiet week", shows the newest earlier brief's items,
+    and the day they were gathered. Returns that day, or "" when today's brief has its own."""
+    news = [s for s in sections if s["kind"] == "news"]
+    if any(s["items"] for s in news):
+        return ""
+    import brief
+    for p in reversed(earlier):
+        day = os.path.basename(p)[:10]
+        try:
+            age = (ctx.today - dt.date.fromisoformat(day)).days
+        except ValueError:
+            continue
+        if age > brief.CARRY_DAYS:
+            break
+        got = [s for s in brief_sections(_read(p)) if s["kind"] == "news" and s["items"]]
+        if got:
+            if news:
+                news[0]["items"], news[0]["text"] = got[0]["items"], got[0]["text"]
+            else:
+                sections.append(got[0])
+            return day
+    return ""
 
 
 def _watch_again() -> list[dict]:

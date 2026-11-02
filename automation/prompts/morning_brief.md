@@ -38,16 +38,15 @@ once on its findings and checked again; still refused, it stays listed as needs 
 
 ## 3. The news: one call
 
-The `news-reader` agent, given the searches, the since date, the links already sent and
-"what counts" exactly as FOR CLAUDE printed them. It returns at most six lines or "Quiet
-week.". Use nothing else for the news; if it cannot run, the news is "No news this time:
-the search did not run."
+The `news-reader` agent, given every FOR CLAUDE news line as printed. It returns three to six
+lines, each ending in how the person can use it, widening rather than coming back empty.
+Nothing else finds the news; if it cannot run, step 4 gives `brief.py news` nothing.
 
 ## 4. Record and land: two commands
 
 ```
 python3 tools/brief.py news <<'EOF'
-<the news-reader's lines, as they came, best first, at most five>
+<the news-reader's lines, as they came, best first, at most five; nothing if it could not run>
 EOF
 python3 tools/save_state.py
 git commit -qm "Brief <YYYY-MM-DD>"
@@ -67,9 +66,9 @@ so no other chat will, and an open page keeps the old code until it is.
 
 ## 5. The message
 
-Your final reply: the message brief.py printed, as it is, with `<NEWS>` replaced by at most
-three of the news lines, each one line ending in what it means for the person, with no
-links (the full brief has them), or "Nothing new". Add only what a FOR CLAUDE line asks for
+Your final reply: the message brief.py printed, as it is, with `<NEWS>` replaced by the lines
+`brief.py news` printed for the message, without links; carried ones say their day. Never
+"Nothing new", "Quiet week" or any stand-in for news. Add only what a FOR CLAUDE line asks for
 (an upgrade's changes, the questions), and where step 2 put a draft in the pack, its Owed
 line says "draft ready". Change a line it printed only where you know it is wrong, and say
 nothing about how the brief was made. Under 200 words, for a phone. It is

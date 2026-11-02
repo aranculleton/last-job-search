@@ -89,6 +89,27 @@ def test_a_republish_is_said_in_plain_words(run, tmp_path, vp):
     assert "Updating your page" in text and "republish" not in text.lower()
 
 
+# The moving line under the header glides: it moves by transform alone, on its own layer, and
+# stays inside the header. It was a background-position sweep, repainted every frame, and it
+# stuttered on a busy page (the maintainer, 2026-11-02: "this loading animation is quite laggy").
+LINE = ("(() => { const p = document.getElementById('pulse'); const a = document.getAnimations().find((x) => x.animationName === 'sweep'); "
+        "const keys = a ? [...new Set(a.effect.getKeyframes().flatMap((k) => Object.keys(k)))].filter((k) => !['offset', 'easing', 'composite', 'computedOffset'].includes(k)) : null; "
+        "return [p.classList.contains('is-updating'), getComputedStyle(p, '::after').animationName, keys, p.scrollWidth <= p.clientWidth, "
+        "document.documentElement.scrollWidth <= document.documentElement.clientWidth]; })()")
+
+
+def test_the_update_line_glides_by_transform_and_stays_in_the_header(run, tmp_path, vp):
+    seed = {"work/republish~v4": {"kind": "republish", "title": "Updating your page", "to": "either", "args": {"version": 4}, "asked_at": "2026-10-25T08:59:30Z",
+                                  "status": "running", "claimed_by": "cloud-1", "claimed_at": "2026-10-25T08:59:40Z", "stages": [], "stage": 0,
+                                  "stage_at": "2026-10-25T08:59:40Z", "steps": [], "stop_asked": False, "attempt": 1}}
+    got = _go(run, tmp_path, [{"hash": "brief", "ready": "document.getElementById('pulse').classList.contains('is-updating')",
+                               "eval": LINE}], vp, seed=seed, clock=T)
+    updating, name, keys, inside, page_inside = got["after"][0]["eval"]
+    assert updating and name == "sweep"
+    assert keys == ["transform"], keys
+    assert inside and page_inside
+
+
 def test_your_brief_moves_rests_and_starts_again_from_settings(run, tmp_path, vp):
     m = _sample()
     got = _go(run, tmp_path, [
@@ -253,6 +274,57 @@ def test_today_leads_with_what_is_on_today_and_the_strip_marks_today_and_tomorro
     assert got["after"][0]["eval"] == call["title"], got["after"][0]["eval"]
     today, tomorrow, red, later = got["after"][1]["eval"]
     assert today and tomorrow and red and later and red != later      # today's dot is its own colour
+
+
+# A quiet day leaves no empty space: one booked thing and no likely questions, and Today's
+# right half was empty while Coming up was a strip over nothing, its one item being Today's
+# (the maintainer's page, 2026-11-02). Today gives the next step beside it, taken from Next
+# three; Coming up gives what is due next from To do, each with its day; nothing is shown twice.
+QUIET = ("(() => { const t = document.querySelector('#main .bp-today'); const u = document.querySelector('#main .bp-upcoming'); "
+         "const side = t.querySelector('.bp-today-side'); const ids = [...document.querySelectorAll('#main .bpanel [data-k^=\"bp-\"]')].map((a) => a.getAttribute('data-k')).filter((k) => /^bp-(due|next|person|job):/.test(k)); "
+         "return {side: !!side, then: side ? (side.querySelector('.bp-ready-t') || {}).textContent : null, thenRows: side ? side.querySelectorAll('.bp-steps li').length : 0, "
+         "empty: [...t.querySelectorAll('.bp-body > *')].filter((e) => !e.textContent.trim()).length, "
+         "upRows: u.querySelectorAll('.bp-up li, .bp-up-due li').length, dup: ids.length - new Set(ids).size, "
+         "heroWide: side ? null : t.querySelector('.bp-iv').getBoundingClientRect().width / t.querySelector('.bp-body').getBoundingClientRect().width}; })()")
+
+
+def test_a_quiet_day_fills_today_and_coming_up_with_something_useful(run, tmp_path, vp):
+    model = copy.deepcopy(_sample())
+    one = model["upcoming"][0]
+    model["upcoming"] = [one]
+    iv = next(i for i in model["interviews"] if i["id"] == one["go"]["item"])
+    iv["one_screen"] = {"questions": []}
+    iv.setdefault("prep", {})["updated"] = "2026-10-24"
+    for sec in model["brief"]["sections"]:
+        if sec.get("kind") == "lead":
+            sec["parts"], sec["text"] = [], ""
+    got = _go(run, tmp_path, [{"hash": "brief", "eval": QUIET}], vp, model=model, clock=T)
+    r = got["after"][0]["eval"]
+    assert r["side"] and r["then"] == "Then" and r["thenRows"] == 1, r
+    assert r["empty"] == 0, r
+    assert r["upRows"] >= 1, r
+    assert r["dup"] == 0, r
+    # With nothing to put beside it, the booked thing takes the card's width.
+    model["due"], model["brief"]["sections"] = [], [s for s in model["brief"]["sections"] if s.get("kind") not in ("next", "owed")]
+    got = _go(run, tmp_path, [{"hash": "brief", "eval": QUIET}], vp, model=model, clock=T)
+    r = got["after"][0]["eval"]
+    assert not r["side"] and r["empty"] == 0 and r["heroWide"] > 0.9, r
+
+
+# A reply owed in To do names its person by `item`, as the model sends it, and the Brief shows
+# that person once: the same reply led Today and came third in Next three on the maintainer's
+# page (2026-11-02), because only a `contact` field the model never sends was read.
+def test_a_reply_owed_is_shown_once_when_a_step_names_the_same_person(run, tmp_path, vp):
+    model = copy.deepcopy(_sample())
+    d = next(x for x in model["due"] if x["id"] == "due-juno-reply")
+    d.pop("contact")
+    d["item"] = "larkspur_retail_castellan"
+    got = _go(run, tmp_path, [{"hash": "brief", "eval": "[document.querySelectorAll('#main [data-k=\"bp-due:due-juno-reply\"]').length, "
+                                                       "[...document.querySelectorAll('#main .bp-today, #main .bp-next, #main .bp-upcoming, #main .bp-people')].filter((p) => p.textContent.includes('Juno')).map((p) => p.getAttribute('data-k'))]"}],
+              vp, model=model, clock=T)
+    due_rows, junos = got["after"][0]["eval"]
+    # The person is in one panel, once: the due row for them is not drawn beside the step.
+    assert due_rows == 0 and len(junos) == 1, (due_rows, junos)
 
 
 # Fitting the Brief to the window is by what each item really saves: nothing is hidden beside

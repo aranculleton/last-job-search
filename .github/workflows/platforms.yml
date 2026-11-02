@@ -252,7 +252,9 @@ jobs:
       - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
 
       - name: A copy already set up, the chat's ordinary day, a general resume and a seed
-        timeout-minutes: 30
+        # Every design compiled on Windows passed but ran past 30 minutes on 4.7.0's run
+        # (2026-11-02); the suite after it took 8, inside the job's 75.
+        timeout-minutes: 45
         run: |
           chcp.com 1252 || true
           unset PYTHONUTF8 PYTHONIOENCODING

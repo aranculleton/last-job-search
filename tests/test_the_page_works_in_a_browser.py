@@ -970,6 +970,13 @@ def test_no_side_by_side_menu_and_a_second_column_closes_plainly(run, pages):
 def test_reduced_motion_stops_the_spinner_and_the_bar(run, pages):
     r = run("motion", html=pages["sample"])
     assert r["no-preference"]["spin"] == "turn"
+    # Whether the setting reached the page at all comes first: Firefox on the runner ignored it
+    # given every way a test can give it, which says nothing about the page. Chrome's engine,
+    # what most people's Claude app draws with besides Safari's, must take it.
+    if not r["reduce"]["matches"]:
+        assert r["reduce"]["engine"] != "chromium", "Chrome's engine ignored reduced motion"
+        pytest.skip("%s on this machine ignores reduced motion: the page's rule is not reached"
+                    % r["reduce"]["engine"])
     assert r["reduce"]["spin"] == "none"
     assert r["reduce"]["fill"] in ("0s", "0s, 0s")
     # Nothing fades as it is drawn: Safari faded every control in from the text colour (a

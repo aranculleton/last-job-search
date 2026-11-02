@@ -22,9 +22,31 @@ make sense to somebody whose repo just received it.
 
 ### Changed
 
+- **Your brief's news is never empty, and each item says how to use it.** A quiet day used to
+  bring "Quiet week" and hide the News panel. Now the brief always brings three to five items:
+  what is new since the last one first, and when that is thin, the freshest from the last week
+  and then the last month that it has not sent before, about your employers, your targets,
+  your field, your market and your right to work. Each item ends in what to do with it: a
+  point to raise on a call, a question for an interview there, a reason to write to someone.
+  If the search cannot run, the last brief's items stay, marked with their day, and the page
+  shows them with the day they were gathered.
+- **A quiet day on the Brief leaves no empty space.** Beside a booked call or interview with
+  no likely questions, Today gives your next step; when Coming up's only booked thing is the
+  one Today shows, it lists what is due next from To do, each with its day.
+- **The moving line under the header glides** while an update runs, instead of stuttering on
+  a busy page.
 - **Today and tomorrow stand out at a glance in green and gold** on the Brief's two-week strip
   and on the Coming up screen, where their day headings carry a small dot. Never red, which
   read as a warning.
+
+### Fixed
+
+- **The brief brings your page up to date again.** On a busy search its instructions ran past
+  their length limit and were cut, and the cut fell on the steps that publish a newer page and
+  bring its data up to date, so the page could stay days behind. Only the phone message is
+  shortened now; the steps are never cut.
+- **One person is shown once on the Brief.** A reply owed could lead Today and come again in
+  Next three.
 
 ## [4.7.0] - 2026-11-02
 
