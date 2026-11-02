@@ -152,6 +152,9 @@ ALLOWED_IGNORE_NEGATIONS = {
     "!cv/main_example.tex",
     "!cover_letters/cover_example.tex",
     "!documents/**/.gitkeep",
+    # The README's pictures, made from the invented test sample (2026-11-02: as PNG, since
+    # GitHub's phone app does not open WebP); a person's copy has no docs/images of its own.
+    "!docs/images/*.png",
 }
 
 # Hook commands the template legitimately ships, as "<Event>:<command>" strings.
