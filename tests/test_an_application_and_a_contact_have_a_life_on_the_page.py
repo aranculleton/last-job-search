@@ -136,7 +136,8 @@ def test_a_call_booked_is_the_contacts_and_its_prep_is_the_calls(search):
     assert search.apply()["ok"] == [aid], search.receipt(aid)
     after = next(p for p in search.model()["people"] if p["id"] == WREN)
     assert after["status"] == "call_booked" and after["status_word"] == "Call booked"
-    assert after["call"] == {"day": "2026-10-30", "prep": None}
+    # Its time is on the person too, in their own zone (4.6: a call said "Thursday" and no time).
+    assert after["call"] == {"day": "2026-10-30", "time": "12:30", "prep": None}
     assert after["owed"] == {"label": "Prepare for the call", "kind": "prep",
                              "id": f"prep~call~{WREN}", "args": {"contact": WREN, "call": True}}
     # A call booked with someone whose reply is owed is still booked on their row.

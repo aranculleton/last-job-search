@@ -86,7 +86,7 @@ def test_a_messages_bin_sets_the_note_aside_first(run, tmp_path):
 
 def test_an_interviews_bin_records_how_it_ended(run, tmp_path):
     got = _go(run, tmp_path, [
-        {"hash": "interviews", "open": "ivbin:int-harbourline-risk", "read": "dialog[open]"},
+        {"hash": "interviews/int-harbourline-risk", "open": "ivbin:int-harbourline-risk", "read": "dialog[open]"},
         {"click": "I withdrew", "role": "radio", "exact": True},
         {"submit": True, "wait": 300},
     ], PHONE, clock=T)

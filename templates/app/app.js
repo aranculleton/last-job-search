@@ -123,7 +123,7 @@
     {id: "drafts", label: "Drafts", key: "d"},
     {id: "contacts", label: "Contacts", key: "c"},
     {id: "chat", label: "Chat", key: "h"},
-    {id: "interviews", label: "Interviews", key: "i"},
+    {id: "interviews", label: "Coming up", key: "i"},
     {id: "progress", label: "Progress", key: "p"},
     {id: "settings", label: "Settings", key: "s"},
     {id: "profile", label: "Your profile", key: "y"},
@@ -178,6 +178,7 @@
     owner: null,
     tab: tabId(),
     section: "todo",
+    upLater: false,        // Coming up: the folded later days shown
     split: null,
     work: new Map(),
     actions: new Map(),
@@ -380,6 +381,8 @@
     }
   }
   function todayIso() { return ymdIn(now(), zone()); }
+  // A day `n` days after the day `iso` (both YYYY-MM-DD), by the calendar, never the clock.
+  function addDays(iso, n) { const t = parseDay(iso); return t === null ? iso : new Date(t + n * DAY).toISOString().slice(0, 10); }
   function dayOf(s) {
     s = txt(s).trim();
     if (!s) return null;
@@ -663,6 +666,7 @@
   // ------------------------------------------------------------------ actions and receipts
 
   const ACTION_WORDS = {
+    "upcoming.add": "Added to Coming up", "upcoming.remove": "Taken off Coming up",
     "job.dismiss": "Set aside", "job.restore": "Brought back", "job.applied": "Marked as applied",
     "job.not_applied": "Marked as not applied", "ready.applied": "Marked as applied",
     "ready.not_applied": "Marked as not applied yet", "ready.not_applying": "Marked as not applying",
@@ -1714,7 +1718,10 @@
     o = o || {};
     return h("button", {type: "button", class: "btn " + (o.kind || "secondary") + (o.small ? " small" : ""), "data-k": o.key || null,
       disabled: o.disabled || null, "aria-pressed": o.pressed === undefined ? null : String(!!o.pressed),
-      "aria-label": o.aria || null, "aria-describedby": o.describedby || null, "data-primary": o.kind === "primary" ? "1" : null, onclick}, o.icon ? [icon(o.icon), label] : label);
+      "aria-label": o.aria || null, "aria-describedby": o.describedby || null, "data-primary": o.kind === "primary" ? "1" : null,
+      // A button that is only an icon says what it does under the pointer too, not only to a
+      // screen reader (the calendar-with-a-plus was found by nobody, 2026-11-02).
+      title: !label && o.aria ? o.aria : null, onclick}, o.icon ? [icon(o.icon), label] : label);
   }
   // A button that starts a whole run (a search, a networking run) shows the run already going
   // instead, and a tap shows its progress: nothing asks for a second one (the maintainer,
@@ -2086,7 +2093,7 @@
   const DUE_KIND = {reply: "message", nudge: "message", first_message: "message", resume: "message", request_pending: "message",
     interview: "interview", prep: "interview", thank_you: "interview", status_note: "interview", follow_up: "application"};
   const BANDS = [["answer", "Needs your answer"], ["now", "Due or late"], ["week", "Next 7 days"], ["later", "Later"]];
-  const TAB_WORDS = {jobs: "Jobs", drafts: "Jobs", "drafts-messages": "Contacts", contacts: "Contacts", interviews: "Interviews"};
+  const TAB_WORDS = {jobs: "Jobs", drafts: "Jobs", "drafts-messages": "Contacts", contacts: "Contacts", interviews: "Coming up"};
 
   function kindMark(kind) {
     return h("span", {class: "kind kind-" + kind}, icon("k-" + kind), h("span", {}, KINDS[kind] || "To do"));
@@ -2895,7 +2902,8 @@
   }
   function briefPanel(key, title, body, foot, opts) {
     opts = opts || {};
-    return h("section", {class: "bpanel bp-" + key + (opts.wide ? " wide" : "") + (opts.cls ? " " + opts.cls : ""), "aria-labelledby": "bp-" + key, "data-k": "bp:" + key},
+    return h("section", {class: "bpanel bp-" + key + (opts.cls ? " " + opts.cls : ""), "aria-labelledby": "bp-" + key, "data-k": "bp:" + key,
+      "data-w": String(opts.w || 4), "data-m": String(opts.m || 1)},
       h("h3", {id: "bp-" + key, class: "bp-title"}, opts.icon ? h("span", {class: "bp-ic"}, icon(opts.icon)) : null, h("span", {}, title), opts.count ? h("span", {class: "bp-count"}, String(opts.count)) : null),
       h("div", {class: "bp-body"}, body),
       foot ? h("div", {class: "bp-foot"}, foot) : null);
@@ -2942,7 +2950,11 @@
     // they are: bars with no words meant nothing (the maintainer, 2026-10-30).
     const said = (x) => { const st = isoWeekMonday(x.week); const v = Number(x.applied) || 0; return (st ? "Week of " + fmtDay(st) + ": " : "") + plural(v, "application", "applications"); };
     const now1 = Number(w[w.length - 1].applied) || 0;
-    const base = "Applications a week, the last " + w.length + " weeks. This week: " + now1 + ".";
+    // This week against the usual one (the middle of the weeks before it): a number with
+    // nothing to compare it to says little (2026-11-02).
+    const before = w.slice(0, -1).map((x) => Number(x.applied) || 0).sort((x, y) => x - y);
+    const usual = before.length ? before[Math.floor(before.length / 2)] : null;
+    const base = "Applications a week. This week " + now1 + (usual !== null ? ", usually " + usual : "") + ".";
     // The line under the bars says the week under the pointer, a tap or the keyboard: an
     // SVG title alone showed nothing in the Claude app, on a hover or a tap (the maintainer,
     // 2026-10-31). Each week's whole column answers, so a week with nothing (a 2px bar) can
@@ -2958,7 +2970,7 @@
       w.map((x, i) => { const v = Number(x.applied) || 0; const hgt = Math.max(2, (v / max) * (H - 2)); const t = svg("title", {}); t.textContent = said(x);
         const col = svg("g", {class: "bp-col", tabindex: "0", role: "img", "aria-label": said(x), "data-k": "spark:" + i}, [t,
           svg("rect", {class: "bp-hit", x: String(i * bw), y: "0", width: String(bw), height: String(H), fill: "transparent"}),
-          svg("rect", {class: "bp-bar", x: String(i * bw + 1), y: String(H - hgt), width: String(Math.max(2, bw - 3)), height: String(hgt), rx: "2", fill: "var(--chart-a)"})]);
+          svg("rect", {class: "bp-bar" + (i === w.length - 1 ? " is-now" : ""), x: String(i * bw + bw * 0.18), y: String(H - hgt), width: String(Math.max(2, bw * 0.64)), height: String(hgt), rx: "2", fill: i === w.length - 1 ? "var(--mark)" : "var(--chart-a)"})]);
         col.addEventListener("pointerenter", () => show(i));
         col.addEventListener("focus", () => show(i));
         col.addEventListener("click", () => show(i));
@@ -2971,20 +2983,99 @@
   // How far applications went, opened in place: "See your progress" led to a page of its own
   // that read as left over (the maintainer, 2026-10-30). Applied, then interviews, then
   // offers, each a bar against the applications, with its number and share.
-  function funnelMore(funnel) {
-    const f = arr(funnel).filter((x) => obj(x).stage);
-    const top = Number(obj(f[0]).n) || 0;
-    if (!top) return null;
-    const word = {applied: "applied", interview: "got an interview", offer: "got an offer"};
-    return h("details", {class: "bp-all bp-funnel"}, h("summary", {"data-k": "bp-funnel"}, "How far they got"),
-      h("ul", {class: "plain bp-funnel-list"}, f.map((x) => {
-        const n = Number(x.n) || 0;
-        const pct = Math.round((n / top) * 100);
-        return h("li", {class: "bp-funnel-row"},
-          h("span", {class: "bp-funnel-l"}, n + " " + (word[txt(x.stage)] || txt(x.stage)) + (txt(x.stage) === "applied" ? "" : " (" + pct + "%)")),
-          h("span", {class: "bp-funnel-bar", "aria-hidden": "true"}, h("span", {class: "fill", style: "width:" + Math.max(n ? 2 : 0, pct) + "%"})));
-      })));
+  // The next two weeks at a glance, a dot for each thing booked or due that day: a calendar
+  // on the Brief (the maintainer, 2026-11-02: "should we have another panel on the brief like
+  // calendar?"). A filled dot is a meeting (an interview, a call, something of yours), a ring
+  // something due by the end of the day. Days are named in two letters (Tu and Th, Sa and Su
+  // were one letter each and read alike); a day says what it holds to a pointer and to a
+  // screen reader, and a day with something on it opens it in Coming up.
+  const DAY2 = ["Su", "Mo", "Tu", "We", "Th", "Fr", "Sa"];
+  function weekStrip(list) {
+    const today = todayIso();
+    const days = [];
+    for (let i = 0; i < 14; i++) days.push(addDays(today, i));
+    const on = new Map(days.map((d) => [d, []]));
+    for (const u of list) if (on.has(txt(u.day))) on.get(txt(u.day)).push(u);
+    const said = (d) => { const xs = on.get(d); return upDayLabel(d) + ": " + (xs.length ? xs.map((u) => txt(u.title)).join("; ") : "nothing booked. Add something on this day"); };
+    return h("div", {class: "bp-week", role: "group", "aria-label": "The next two weeks", "data-k": "week"}, days.map((d, i) => {
+      const xs = on.get(d);
+      const wd = new Date(d + "T12:00:00Z").getUTCDay();
+      return h("button", {type: "button", class: "bp-day" + (i === 0 ? " is-today" : "") + (xs.length ? " has" : ""), "data-k": "week:" + d, "aria-label": said(d), title: said(d),
+        // A day with something on it opens it; a free day adds something to it, as a calendar does.
+        onclick: () => { if (xs.length) go("interviews", {focus: true, item: txt(xs[0].id)}); else askAddUpcoming(d); }},
+        h("span", {class: "bp-day-w", "aria-hidden": "true"}, DAY2[wd]),
+        h("span", {class: "bp-day-n", "aria-hidden": "true"}, String(Number(d.slice(8, 10)))),
+        h("span", {class: "bp-day-dots", "aria-hidden": "true"}, xs.slice(0, 3).map((u) => h("i", {class: u.kind === "test" || u.kind === "deadline" ? "due" : "meet"}))));
+    }));
   }
+  // Each list on the Brief shows as many as its room allows (`data-fit`: the fewest, then how
+  // many to start with; every item is drawn): a row another panel makes tall lets a shorter
+  // one show a fourth or fifth instead of leaving a gap, and a short window takes each list
+  // down towards its fewest so the whole Brief is read without scrolling where it can be
+  // (the maintainer, 2026-11-02: "maybe more panels can be dynamic to reduce white space").
+  // One column (a phone) scrolls by nature: there the lists keep their start.
+  // Worked out once for a window size and a set of data, then kept: a list that changed length
+  // while the person used the page (each tap redraws it) would move what they reached for.
+  let fitMemo = {key: "", counts: null};
+  function fitBrief() {
+    const grid = document.querySelector("#main .brief-grid");
+    if (!grid) return;
+    const lists = [...grid.querySelectorAll("[data-fit]")];
+    const fit = (l) => { const [min, base] = txt(l.getAttribute("data-fit")).split(",").map(Number); return {min: min || 1, base: base || 3}; };
+    const name = (l) => txt((l.closest(".bpanel") || {getAttribute: () => ""}).getAttribute("data-k")) + ":" + txt(l.className);
+    const key = window.innerWidth + "x" + window.innerHeight + ":" + txt(M().rev);
+    if (fitMemo.key === key && fitMemo.counts) {
+      for (const l of lists) { const n = fitMemo.counts[name(l)]; const {base} = fit(l); [...l.children].forEach((li, i) => { li.hidden = i >= (n === undefined ? base : n); }); }
+      return;
+    }
+    const remember = () => { fitMemo = {key, counts: Object.fromEntries(lists.map((l) => [name(l), [...l.children].filter((li) => !li.hidden).length]))}; };
+    for (const l of lists) { const {base} = fit(l); [...l.children].forEach((li, i) => { li.hidden = i >= base; }); }
+    if (window.innerWidth < 760 || getComputedStyle(grid).gridTemplateColumns.split(" ").length < 2) { remember(); return; }
+    const shown = (l) => [...l.children].filter((li) => !li.hidden);
+    // Grow: one more at a time, kept only while its panel neither grows the row nor overflows.
+    for (const l of lists) {
+      const panel = l.closest(".bpanel");
+      if (!panel) continue;
+      for (const li of [...l.children].filter((x) => x.hidden)) {
+        const before = panel.getBoundingClientRect().height;
+        li.hidden = false;
+        if (panel.getBoundingClientRect().height > before + 1 || panel.scrollHeight > panel.clientHeight + 1) { li.hidden = true; break; }
+      }
+    }
+    // Shrink: while the Brief runs past the bottom of the window, the longest list gives one
+    // up, kept hidden only if that made the Brief shorter (a card beside another, or a row in
+    // a panel shorter than its neighbour, saves nothing, and is put back).
+    const room = window.innerHeight - 64;   // clear of the Chat button in the corner
+    const done = new Set();
+    for (let guard = 0; guard < 16 && grid.getBoundingClientRect().bottom > room; guard++) {
+      const l = lists.filter((x) => !done.has(x) && shown(x).length > fit(x).min).sort((a, b) => shown(b).length - shown(a).length)[0];
+      if (!l) break;
+      const before = grid.getBoundingClientRect().bottom;
+      const li = shown(l).slice(-1)[0];
+      li.hidden = true;
+      if (grid.getBoundingClientRect().bottom >= before - 1) { li.hidden = false; done.add(l); }
+    }
+    remember();
+  }
+  let fitTimer = null;
+  window.addEventListener("resize", () => { clearTimeout(fitTimer); fitTimer = setTimeout(fitBrief, 120); });
+  function fillRows(grid) {
+    const panels = [...grid.children];
+    for (const [cols, attr] of [[12, "data-w"], [2, "data-m"]]) {
+      let used = 0, rowLast = null;
+      const span = new Map(panels.map((p) => [p, Math.min(cols, Number(p.getAttribute(attr)) || 1)]));
+      for (const p of panels) {
+        const s = span.get(p);
+        if (used + s > cols) { if (rowLast) span.set(rowLast, span.get(rowLast) + cols - used); used = 0; }
+        used += s;
+        rowLast = p;
+        if (used === cols) { used = 0; rowLast = null; }
+      }
+      if (used && rowLast) span.set(rowLast, span.get(rowLast) + cols - used);
+      for (const p of panels) p.classList.add("c" + cols + "-s" + span.get(p));
+    }
+  }
+
   // The Monday an ISO week ("2026-W44") starts on, as YYYY-MM-DD.
   // An ISO week's Monday as a day (2026-10-26). Named apart from the Progress chart's
   // weekStart, which writes the day in words: sharing the name, that one won, and every bar
@@ -3011,9 +3102,9 @@
     const d = txt(date);
     if (!d) return null;
     const n = dayDiff(d);
-    const old = n !== null && n < -1;
-    return h("p", {class: "small" + (old ? " tone-warn" : " muted"), "data-k": "news-asof"},
-      (n === 0 ? "Gathered this morning" : n === -1 ? "Gathered yesterday" : "Gathered " + fmtDay(d)) + "." + (old ? " Your next brief brings fresh news." : ""));
+    // The day it was gathered, and no promise about the next: a brief that is off brings none.
+    return h("p", {class: "small muted", "data-k": "news-asof"},
+      (n === 0 ? "Gathered this morning" : n === -1 ? "Gathered yesterday" : "Gathered " + fmtDay(d)) + ".");
   }
   function renderBrief(where) {
     const b = obj(M().brief);
@@ -3035,60 +3126,154 @@
         h("div", {class: "brief-hello"}, h("h2", {id: "h-brief" + (where ? "-" + where : ""), tabindex: "-1", class: "screen-title"}, hello), h("div", {class: "summary"}, h("p", {class: "sum-small"}, dayLine))),
         bell || tweak ? h("div", {class: "head-tools"}, bell, tweak) : null));
     const grid = h("div", {class: "brief-grid"});
-    // Today: the next interview or call, the brief's lead, and what needs the person.
-    const soon = interviewItems().filter((i) => !isPast(i.when) && txt(i.status) !== "done").sort((x, y) => txt(x.when).localeCompare(txt(y.when)))[0];
+    // ---- Each thing once (2026-11-02). The maintainer: "if we're just saying the same thing
+    // ten times it can be a bit overwhelming", and a job-seeker's read of the Brief counted the
+    // next interview three times and the person waiting three times: the same thing seen
+    // thrice reads as three tasks. So each panel takes its things in this order, by their ids
+    // (never by their words), and a later panel leaves out what an earlier one shows and fills
+    // the space from its own list: Today's one thing, Next three, Coming up, People, Jobs. The
+    // brief's own opening sentences go last, and only those about something not shown stay.
+    const taken = new Set();
+    const isFree = (keys) => !keys.some((k) => taken.has(k));
+    const take = (keys) => keys.forEach((k) => taken.add(k));
+    const dueKeys = (d) => ["d:" + txt(d.id)].concat(d.contact ? ["p:" + txt(d.contact)] : [], d.interview ? ["iv:" + txt(d.interview)] : []);
+    const itemKeys = (id, section, text) => {
+      id = txt(id);
+      if (!id) return ["s:" + txt(section) + ":" + txt(text)];
+      if (id.startsWith("int-")) return ["iv:" + id];
+      if (id.startsWith("app-")) return ["a:" + id, "iv:int-" + id.slice(4)];
+      if (id.startsWith("msg-")) { const m = messageItems().find((x) => x.id === id); return m && m.contact ? ["p:" + txt(m.contact)] : ["m:" + id]; }
+      if (id.startsWith("due-")) { const d = dueItems().find((x) => x.id === id); return d ? dueKeys(d) : ["d:" + id]; }
+      if (peopleItems().some((x) => x.id === id)) return ["p:" + id];
+      return ["j:" + id];
+    };
+    const stepKeys = (l) => itemKeys(obj(l).item, obj(l).section, obj(l).text);
+    const upKeys = (u) => { const g = obj(u.go); return g.to === "interviews" ? ["iv:" + txt(g.item)] : g.to === "contacts" ? ["p:" + txt(g.item)] : g.to === "drafts" ? ["a:" + txt(g.item)] : ["u:" + txt(u.id)]; };
     const need = todoBadge();
-    const ivRow = soon ? h("div", {class: "bp-iv"},
-      h("p", {class: "bp-iv-when"}, relWhen(soon.when) + (timeOf(soon.when) ? " · " + timeOf(soon.when) : "")),
-      h("p", {class: "bp-iv-what"}, (txt(soon.next_stage) || "Interview") + " with ", h("bdi", {}, txt(soon.company))),
-      obj(soon.prep).updated ? btn("Read your prep", () => openDetail("interview", soon.id), {kind: "primary", small: true, key: "bp-prep:" + soon.id})
-        : btn("Prepare me", () => askPrep(soon), {small: true, key: "bp-askprep:" + soon.id})) : null;
-    put(grid, briefPanel("today", "Today", [
-      ivRow,
-      lead && txt(lead.text) ? leadPoints(txt(lead.text)) : legacy.length ? briefItems(legacy, "legacy", soon ? 3 : 5) : null,
-      !lead && !legacy.length && !soon ? h("p", {class: "muted"}, need ? "Nothing booked today." : "Nothing booked, and nothing needs you.") : null],
-      need ? navLink("todo", plural(need, "thing needs you", "things need you")) : null, {icon: "todo", wide: true}));
-    // Next: the brief's three next steps, else what is owed.
-    const steps = next.length ? next : owed;
-    if (steps.length) put(grid, briefPanel("next", next.length ? "Next three" : "Owed", h("ol", {class: "plain bp-list bp-steps"}, steps.slice(0, 3).map((l, i) => briefRow(l, "next:" + i))),
-      navLink("todo", "All of it in To do"), {icon: "k-update"}));
-    // People: who is waiting on the person, by name; a name opens everything about them.
-    const ppl = peopleItems().filter((p) => personRank(p) === 0).sort((x, y) => (BRIEF_PERSON_WORD[txt(x.status)] ? 0 : 1) - (BRIEF_PERSON_WORD[txt(y.status)] ? 0 : 1) || txt(x.due || "9999").localeCompare(txt(y.due || "9999"))).slice(0, 3);
-    put(grid, briefPanel("people", "People", ppl.length ? h("ul", {class: "plain bp-list bp-people"}, ppl.map((p) => h("li", {},
-      h("a", {href: "#contacts/" + p.id, class: "bp-text bp-link", "data-k": "bp-person:" + p.id, onclick: (e) => { e.preventDefault(); openDetail("person", p.id); }},
+    // When something is due, in two words: "today", "2 days late", "Thursday".
+    const dueWord = (day) => { const n = dayDiff(day); return n === null ? "" : n < 0 ? plural(-n, "day late", "days late") : n === 0 ? "today" : n === 1 ? "tomorrow" : fmtDay(day).split(/[ ,]/)[0]; };
+
+    // Today: the one thing to get right. An interview within the week leads, with its prep a
+    // tap away: a week is how long good prep takes, and a day's notice is too late for it (the
+    // maintainer: "what if we have an important interview that needs more than one day to
+    // prepare"). With none, the first of the steps leads, with the way to it.
+    const weekIv = interviewItems().filter((i) => { const n = dayDiff(dayOf(i.when)); return n !== null && n >= 0 && n <= 7 && !isPast(i.when) && txt(i.status) !== "done"; })
+      .sort((x, y) => txt(x.when).localeCompare(txt(y.when)))[0];
+    const jobsShown = jobRows().some(jobToLook);
+    const stepsFrom = (next.length ? next : owed).filter((l) => !(jobsShown && !txt(obj(l).item) && txt(obj(l).section) === "jobs"))
+      .map((l, i) => ({keys: stepKeys(l), node: () => briefRow(l, "next:" + i), l}));
+    const DUE_SKIP = new Set(["request_pending", "withdraw", "hidden"]);
+    const dueSteps = dueItems().filter((d) => !DUE_SKIP.has(txt(d.kind)) && dayDiff(d.due) !== null)
+      .sort((x, y) => txt(x.due).localeCompare(txt(y.due)))
+      .map((d) => ({keys: dueKeys(d), d, node: () => h("li", {}, h("a", {href: "#todo/" + d.id, class: "bp-text bp-link", "data-k": "bp-due:" + d.id, onclick: (e) => { e.preventDefault(); go("todo", {focus: true, item: d.id}); }},
+        h("span", {}, txt(d.title), h("span", {class: "bp-when"}, " · " + dueWord(d.due)))))}));
+    let hero = null;
+    if (weekIv) {
+      take(["iv:" + weekIv.id]);
+      const heroUp = upcomingItems().find((u) => txt(obj(u.go).item) === weekIv.id && obj(u.cal).ics);
+      hero = h("div", {class: "bp-iv"},
+        h("p", {class: "bp-iv-when"}, h("span", {}, fmtDay(dayOf(weekIv.when)) + (timeOf(weekIv.when) ? ", " + timeOf(weekIv.when) : "") + " · " + lc1(relWhen(weekIv.when))),
+          heroUp ? btn("", () => calSheet([heroUp]), {kind: "quiet icon-only", small: true, icon: "cal-add", key: "bp-cal-hero", aria: "Add to your calendar: " + txt(heroUp.title)}) : null),
+        h("p", {class: "bp-iv-what"}, (txt(weekIv.next_stage) || "Interview") + " with ", h("bdi", {}, txt(weekIv.company))),
+        txt(weekIv.role) ? h("p", {class: "bp-iv-role"}, txt(weekIv.role)) : null,
+        obj(weekIv.prep).updated ? btn("Read your prep", () => openDetail("interview", weekIv.id), {kind: "primary", small: true, key: "bp-prep:" + weekIv.id})
+          : btn("Prepare me", () => askPrep(weekIv), {kind: "primary", small: true, key: "bp-askprep:" + weekIv.id}));
+    } else {
+      const first = stepsFrom.concat(dueSteps).find((x) => isFree(x.keys));
+      if (first) {
+        take(first.keys);
+        const it = first.l ? obj(first.l) : null;
+        const pid = first.keys.find((k) => k.startsWith("p:"));
+        const person = pid ? peopleItems().find((x) => x.id === pid.slice(2)) : null;
+        const label = person ? "Open " + txt(person.first_name) : first.d ? "Open in To do" : "Open it";
+        const open = () => (person ? openDetail("person", person.id) : first.d ? go("todo", {focus: true, item: first.d.id}) : go(resolveSection(txt(it.section)) ? resolveSection(txt(it.section)).section : "todo", {focus: true, item: txt(it.item) || null}));
+        hero = h("div", {class: "bp-iv"},
+          h("p", {class: "bp-iv-when"}, first.d ? "First · " + dueWord(first.d.due) : "First"),
+          h("p", {class: "bp-iv-what"}, inlineMd(txt(it ? it.text : first.d.title))),
+          btn(label, open, {kind: "primary", small: true, key: "bp-first"}));
+      }
+    }
+
+    // Next three: what to do next, the brief's steps first, then To do's, each once.
+    const steps = [];
+    for (const x of stepsFrom.concat(dueSteps)) {
+      if (steps.length >= 3) break;
+      if (!isFree(x.keys)) continue;
+      take(x.keys);
+      steps.push(x.node());
+    }
+    // Coming up: the next things booked that no panel above shows.
+    const allUp = upcomingItems();
+    const upCards = allUp.filter((u) => isFree(upKeys(u))).slice(0, 4);
+    upCards.forEach((u) => take(upKeys(u)));
+    // People: whose move it is, and what the move is, leaving out who a step above names.
+    const ppl = peopleItems().filter((p) => personRank(p) === 0 && !["not_contacted", "closed"].includes(txt(p.status)) && isFree(["p:" + p.id]))
+      .sort((x, y) => (txt(x.status) === "replied_needs_response" ? 0 : 1) - (txt(y.status) === "replied_needs_response" ? 0 : 1) || txt(x.due || "9999").localeCompare(txt(y.due || "9999"))).slice(0, 5);
+    ppl.forEach((p) => take(["p:" + p.id]));
+    // Jobs: postings that are new, and only new: none already drafting, applied to or at the
+    // interview stage (a Brief that offered the role behind Friday's call as new).
+    const best = jobRows().filter((r) => jobToLook(r) && isFree(["j:" + r.id])).sort((x, y) => (Number(y.score) || 0) - (Number(x.score) || 0));
+    // The opening sentences: those about something no panel shows, two at most.
+    const leadSec = obj(lead);
+    const parts = arr(leadSec.parts).length ? arr(leadSec.parts).filter((x) => isFree(itemKeys(obj(x).item, "", "lead:" + txt(obj(x).text))))
+      : (txt(leadSec.text) ? txt(leadSec.text).split(/(?<=[.!?])\s+(?=[A-Z*])/).filter(Boolean).map((t) => ({text: t})) : []);
+
+    // Beside the interview, what helps get it right: the questions its prep expects, each with
+    // the cue for the answer, as many as the room holds. Nowhere else on the Brief says them,
+    // and the panel's spare room said nothing (the maintainer, 2026-11-02). With no prep yet,
+    // what Prepare me gives.
+    const shot = weekIv ? obj(weekIv.one_screen) : {};
+    const qs = arr(shot.questions).filter((q) => txt(obj(q).q)).slice(0, 5);
+    const ready = !weekIv ? null : qs.length ? h("div", {class: "bp-ready"}, h("p", {class: "bp-ready-t"}, "Likely to come up"),
+      h("ul", {class: "plain bp-qs", "data-fit": "1,3"}, qs.map((q) => h("li", {}, h("span", {class: "bp-q"}, txt(q.q)), txt(q.with) ? h("span", {class: "bp-q-with"}, txt(q.with)) : null))))
+      : !obj(weekIv.prep).updated ? h("p", {class: "bp-ready muted"}, "No prep yet. Prepare me writes the questions they are likely to ask, the answer to each from your own work, and what to ask them.") : null;
+    const leadList = parts.length ? h("ul", {class: "bp-lead bp-lead-list"}, parts.slice(0, ready ? 1 : 3).map((x) => h("li", {}, inlineMd(txt(obj(x).text))))) : null;
+    put(grid, briefPanel("today", "Today", [hero,
+      hero ? h("div", {class: "bp-today-side"}, leadList, ready) : leadList || (legacy.length ? briefItems(legacy, "legacy", 5) : null),
+      !hero && !parts.length && !legacy.length ? h("p", {class: "muted"}, "Nothing booked or owed today.") : null],
+      null, {icon: "todo", w: 6, m: 2}));
+    put(grid, briefPanel("upcoming", "Coming up", [weekStrip(allUp), upCards.length ? (() => { const seen = new Set(); return h("ul", {class: "plain bp-up", "data-fit": "2,2"}, upCards.map((u) => upRow(u, "brief", seen))); })()
+      : !allUp.length ? h("p", {class: "muted"}, "Nothing booked in the next two weeks.") : null],
+      [navLink("interviews", allUp.length ? "All " + allUp.length + " coming up" : "Coming up"),
+        h("button", {type: "button", class: "btn link", "data-k": "bp-up-add", onclick: () => askAddUpcoming()}, "Add something")],
+      {icon: "interviews", w: 6, m: 2}));
+    put(grid, briefPanel("next", steps.length === 3 ? "Next three" : "Next", steps.length ? h("ol", {class: "plain bp-list bp-steps"}, steps) : h("p", {class: "muted"}, "Nothing else needs you today."),
+      navLink("todo", need ? "All " + need + " in To do" : "All of it in To do"), {icon: "k-update", w: 4}));
+    put(grid, briefPanel("people", "Waiting on you", ppl.length ? h("ul", {class: "plain bp-list bp-people", "data-fit": "2,3"}, ppl.map((p) => {
+      const move = txt(p.next_action) && txt(p.next_action).length <= 28 ? txt(p.next_action) : (BRIEF_PERSON_WORD[txt(p.status)] || "Follow up");
+      return h("li", {}, h("a", {href: "#contacts/" + p.id, class: "bp-text bp-link", "data-k": "bp-person:" + p.id, onclick: (e) => { e.preventDefault(); openDetail("person", p.id); }},
         h("span", {class: "bp-avatar", "aria-hidden": "true"}, txt(p.first_name).slice(0, 1).toUpperCase()),
         h("span", {class: "bp-who"}, h("strong", {}, txt(p.first_name)), h("span", {class: "bp-at"}, txt(p.employer))),
-        h("span", {class: "bp-state"}, BRIEF_PERSON_WORD[txt(p.status)] || (personDueSoon(p) ? "Follow up" : "")))))) : h("p", {class: "muted"}, "Nobody is waiting on you."),
-      navLink("contacts", "Everyone in Contacts"), {icon: "contacts"}));
-    // Jobs worth a look: the three best new ones, with their scores.
-    const best = jobRows().filter((r) => inTab(jobStatus(r), "new") && Number(r.score) >= 60).sort((x, y) => (Number(y.score) || 0) - (Number(x.score) || 0));
+        h("span", {class: "bp-state"}, move, p.due ? h("span", {class: "bp-when"}, dueWord(p.due)) : null)));
+    })) : h("p", {class: "muted"}, "Nobody else is waiting on you."),
+      navLink("contacts", "Everyone in Contacts"), {icon: "contacts", w: 4}));
     const searching = [...allWork()].some(([, w]) => w.kind === "search" && ACTIVE.has(w.status));
-    put(grid, briefPanel("jobs", "Jobs", best.length ? h("ul", {class: "plain bp-list"}, best.slice(0, 3).map((r) => h("li", {},
+    put(grid, briefPanel("jobs", "Jobs", best.length ? h("ul", {class: "plain bp-list", "data-fit": "2,3"}, best.slice(0, 5).map((r) => h("li", {},
       h("a", {href: "#jobs/" + r.id, class: "bp-text bp-link", "data-k": "bp-job:" + r.id, onclick: (e) => { e.preventDefault(); go("jobs", {focus: true, item: r.id}); }},
         h("strong", {}, txt(r.title)), h("span", {class: "bp-at"}, txt(r.company))),
       r.score != null ? h("span", {class: "bp-score tone-" + (txt(r.band) || "plain"), title: SCORE_MEANS}, String(r.score)) : null)))
       : h("p", {class: "muted"}, searching ? "Searching now." : "Nothing new to look at."),
-      [best.length ? navLink("jobs", best.length > 3 ? plural(best.length, "job to look at", "jobs to look at") : "All jobs") : null,
+      [best.length ? navLink("jobs", "All " + best.length + " new") : null,
         !searching ? h("button", {type: "button", class: "btn link", "data-k": "bp-search", onclick: () => askSearch()}, best.length ? "Search again" : "Find jobs") : null],
-      {icon: "jobs", count: best.length || null}));
-    // News that matters to the search: the part of the brief people read for itself.
-    // In points, as Today is (the maintainer, 2026-10-31).
-    if (news.length) put(grid, briefPanel("news", "News", h("ul", {class: "bp-lead-list bp-news"}, news.slice(0, 2).map((l) => h("li", {}, h("span", {class: "bp-text"}, inlineMd(txt(obj(l).text)))))),
-      [news.length > 2 ? h("details", {class: "bp-all"}, h("summary", {}, plural(news.length - 2, "more", "more")), h("ul", {class: "bp-lead-list bp-news"}, news.slice(2).map((l) => h("li", {}, inlineMd(txt(obj(l).text)))))) : null,
+      {icon: "jobs", w: 4}));
+    // News that matters to the search, in points (the maintainer, 2026-10-31).
+    if (news.length) put(grid, briefPanel("news", "News", h("ul", {class: "bp-lead-list bp-news"}, news.slice(0, 3).map((l) => h("li", {}, h("span", {class: "bp-text"}, inlineMd(txt(obj(l).text)))))),
+      [news.length > 3 ? h("details", {class: "bp-all"}, h("summary", {}, plural(news.length - 3, "more", "more")), h("ul", {class: "bp-lead-list bp-news"}, news.slice(3).map((l) => h("li", {}, inlineMd(txt(obj(l).text)))))) : null,
         newsAsOf(b.date)],
-      {wide: true, icon: "k-message"}));
-    // The numbers: the last 30 days, a week-by-week line, and what happened since the last brief.
+      {icon: "k-message", w: 6, m: 2}));
+    // The numbers: the last 30 days, how far applications got, and the weeks. A share is said
+    // where there is something to share (never "0 0%"), and what it is a share of.
     const d = obj(M().done);
     const c = obj(obj(d.recent).counts || d.counts);
-    // Words that agree with the number ("1 interview"), and replies said for what they are:
-    // people who answered a message of yours, not employers (2026-10-30).
-    const tile = (k, one, many) => { const v = Number(c[k]) || 0; return h("div", {class: "bp-stat"}, h("span", {class: "bp-n"}, String(v)), h("span", {class: "bp-l"}, v === 1 ? one : many)); };
-    put(grid, briefPanel("numbers", obj(d.recent).counts ? "Last " + (Number(obj(d.recent).days) || 30) + " days" : "So far", [
-      h("div", {class: "bp-stats"}, tile("applied", "applied", "applied"), tile("replies", "person replied", "people replied"), tile("interviews", "interview", "interviews"), tile("offers", "offer", "offers")),
+    const sent = Number(c.applied) || 0;
+    const tile = (k, one, many, share) => { const v = Number(c[k]) || 0; return h("div", {class: "bp-stat"}, h("span", {class: "bp-n"}, String(v)), h("span", {class: "bp-l"}, v === 1 ? one : many),
+      share && sent && v ? h("span", {class: "bp-share"}, Math.round((v / sent) * 100) + "% of applied") : null); };
+    put(grid, briefPanel("numbers", obj(d.recent).counts ? "Your last " + (Number(obj(d.recent).days) || 30) + " days" : "Your progress", [
+      h("div", {class: "bp-stats"}, tile("applied", "applied", "applied"), tile("replies", "contact replied", "contacts replied"), tile("interviews", "interview", "interviews", true), tile("offers", "offer", "offers", true)),
       sparkBars(d.weeks),
-      funnelMore(obj(d.recent).funnel || d.funnel),
-      since && arr(since.items).length ? h("details", {class: "bp-all"}, h("summary", {}, txt(since.title) || "Since the last brief"), briefItems(since.items, "since", 6)) : null],
-      null, {icon: "progress"}));
+      since && arr(since.items).length ? h("details", {class: "bp-all"}, h("summary", {"data-k": "bp-since"}, "Since your last brief"), briefItems(since.items, "since", 6)) : null],
+      null, {icon: "progress", w: 6}));
+    fillRows(grid);
     const su = txt(obj(M().setup).state);
     const pin = !su || su === "done" ? pinOffer("brief") : null;
     if (pin) put(wrap, pin);
@@ -3154,6 +3339,14 @@
   function sameJob(a) { return jobRows().find((r) => txt(a.job) === txt(r.id) || sameKey(a.company, a.role) === sameKey(r.company, r.title)) || null; }
   // Set aside or marked applied, and not yet done by Claude: it stays where it was, marked,
   // with its Undo, and moves once Claude has done it.
+  // A job worth a look: new (not drafting, sent or set aside), scored 60 or more, and not one
+  // already in a process (a Brief once offered the role behind Friday's call as new). The
+  // nav's count and the Brief's Jobs panel are this one list, so they never differ.
+  function jobToLook(r) {
+    if (jobStatus(r) !== "new" || !(Number(r.score) >= 60)) return false;
+    return !interviewItems().some((i) => txt(i.company) === txt(r.company) && txt(i.role) === txt(r.title))
+      && !readyItems().some((a) => txt(a.company) === txt(r.company) && txt(a.role) === txt(r.title));
+  }
   function jobPending(r) {
     const a = effective(r.id, ["job.dismiss", "job.applied"]);
     return !!(a && a.state !== "applied" && txt(r.status) !== "dismissed" && txt(r.status) !== "applied");
@@ -3893,6 +4086,228 @@
 
   // ------------------------------------------------------------------ Interviews
 
+  // ------------------------------------------------------------------ coming up
+  // Everything booked or due ahead, in one place (model.upcoming, tools/upcoming.py):
+  // interview stages, tests due, calls booked, the closing day of anything drafted and not
+  // sent, and what the person added. Never a follow-up: those are To do's. The maintainer,
+  // 2026-11-02: "I keep losing track of things... there's no consistent way to view upcoming
+  // things I've booked." Each goes into a calendar in a tap, with no account connected: a
+  // link that opens Google Calendar or Outlook filled in, or a small file for Apple
+  // Calendar or any other app (a page may not save an .ics itself, so the file is a zip
+  // holding one), or the details copied.
+  const UP_WORDS = {interview: "Interview", test: "Due", call: "Call", deadline: "Closes", event: "Added by you"};
+  function upcomingItems() {
+    // An interview ended on this page leaves at once, with every row of it.
+    const ended = new Set(allInterviews().filter(ivEnd).map((i) => txt(i.id)));
+    const out = arr(M().upcoming).filter((u) => {
+      if (!u || !txt(u.day)) return false;
+      if (ended.has(txt(obj(u.go).item))) return false;
+      // The last word on one the person added: a removal hides it, Change back shows it again.
+      const last = u.own ? effective(txt(u.id), ["upcoming.remove", "upcoming.add", "undo"]) : null;
+      if (last && txt(last.doc.action) === "upcoming.remove") return false;
+      const n = dayDiff(u.day);
+      return n !== null && n >= 0;
+    });
+    // An interview the list does not hold yet (booked since the list was made, or a list from
+    // before Coming up): its row from the interview itself, until the next one brings its
+    // calendar links.
+    const have = new Set(out.map((u) => txt(obj(u.go).item)).filter(Boolean));
+    for (const iv of interviewItems()) {
+      const day = dayOf(iv.when);
+      const n = day ? dayDiff(day) : null;
+      if (n === null || n < 0 || have.has(txt(iv.id)) || txt(iv.status) === "done") continue;
+      const timed = !isDateOnly(iv.when) && tms(iv.when) !== null;
+      out.push({id: "up-iv-" + txt(iv.id), title: (txt(iv.next_stage) || "Interview") + ": " + txt(iv.company), kind: "interview", day,
+        start: timed ? new Date(tms(iv.when)).toISOString() : null, all_day: !timed, note: txt(iv.role) || null, go: {to: "interviews", item: txt(iv.id)}});
+    }
+    // Added on this page and not saved yet: shown at once, marked as saving.
+    for (const [id, d] of allActions()) {
+      if (txt(d.action) !== "upcoming.add" || S.receipts.has(id)) continue;
+      const v = obj(d.value);
+      if (!txt(v.title) || !txt(v.on)) continue;
+      if (out.some((u) => u.own && txt(u.title) === txt(v.title) && txt(u.day) === txt(v.on))) continue;
+      out.push({id: "pending:" + id, title: txt(v.title), kind: "event", day: txt(v.on), time: txt(v.time) || null, all_day: !txt(v.time), pending: true});
+    }
+    return out.sort((a, b) => (txt(a.day) + (a.start || (a.time ? "T" + a.time : ""))).localeCompare(txt(b.day) + (b.start || (b.time ? "T" + b.time : ""))));
+  }
+  function upDayLabel(day) {
+    const n = dayDiff(day);
+    return n === 0 ? "Today" : n === 1 ? "Tomorrow" : fmtDay(day);
+  }
+  function upWhen(u) {
+    if (u.start) {
+      // On a device somewhere else, the time here as well, as every other time on the page.
+      const t = tms(u.start);
+      const main = clock(t, zone());
+      return DEVICE_TZ && zone() && zone() !== DEVICE_TZ && main !== clock(t, DEVICE_TZ) ? main + " (" + clock(t, DEVICE_TZ) + " here)" : main;
+    }
+    if (u.time) return txt(u.time);
+    return u.kind === "test" || u.kind === "deadline" ? "End of day" : u.kind === "event" ? "All day" : "Time not set";
+  }
+  // Tapping a row opens what it is: an interview its prep (the maintainer, 2026-11-02:
+  // "clicking the calendar item for an interview opens prep"), a call its person, a closing
+  // day its draft. Something the person added opens nothing: its calendar button is all.
+  function upGo(u) {
+    const g = obj(u.go);
+    const to = txt(g.to), id = txt(g.item);
+    if (!to) return h("span", {class: "up-plain"}, txt(u.title));
+    const iv = to === "interviews" ? interviewItems().find((i) => i.id === id) : null;
+    return h("a", {href: "#" + to + (id ? "/" + id : ""), class: "up-link", "data-k": "up-go:" + u.id,
+      onclick: (e) => {
+        e.preventDefault();
+        if (iv) { openDetail("interview", iv.id); return; }
+        if (to === "contacts") { openDetail("person", id); return; }
+        if (to === "drafts") setPref("drafts:view", "apps");
+        go(to, {focus: true, item: id || null});
+      }}, txt(u.title));
+  }
+  // Whether an interview's prep is ready, said under it, with "Prepare me" only where it is
+  // not: reading it is the row's own tap (one per interview, on its first row).
+  function upPrep(u, prepped) {
+    // An interview's own row only: a test due in the same process is not what the prep is for.
+    if (u.kind !== "interview") return null;
+    const id = txt(obj(u.go).item);
+    if (!id || prepped.has(id)) return null;
+    const iv = interviewItems().find((i) => i.id === id);
+    if (!iv) return null;
+    prepped.add(id);
+    const w = workDoc("prep~" + seg(iv.id));
+    if (w && ACTIVE.has(w.status)) return h("span", {class: "up-prep"}, "Preparing your prep");
+    if (obj(iv.prep).updated) return h("span", {class: "up-prep"}, btn("Prep ready", () => openDetail("interview", iv.id), {kind: "link", key: "up-read:" + u.id, aria: "Read your prep for " + txt(iv.company)}));
+    return h("span", {class: "up-prep"}, "No prep yet · ",
+      btn("Prepare me", () => askPrep(iv), {kind: "link", key: "up-prep:" + u.id, aria: "Prepare me for " + txt(iv.company)}));
+  }
+  // A row: when, what (its tap opens it), whether it is ready, and a calendar with a plus to
+  // add it to yours. One button a row, never a row of them (the maintainer, 2026-11-02).
+  function upRow(u, where, prepped) {
+    const brief = where === "brief";
+    const add = u.pending ? stateWord("Saving", null) : !obj(u.cal).ics ? null : btn("", () => calSheet([u]),
+      {kind: "quiet icon-only", small: true, icon: "cal-add", key: (brief ? "bp-cal:" : "cal:") + u.id, aria: "Add to your calendar: " + txt(u.title)});
+    const rm = u.own && !brief && !u.pending ? btn("", () => act([{item: txt(u.id), action: "upcoming.remove", rev: txt(u.rev)}], "Taken off: " + txt(u.title)),
+      {kind: "quiet icon-only", small: true, icon: "bin", key: "up-rm:" + u.id, aria: "Take off: " + txt(u.title)}) : null;
+    const prep = upPrep(u, prepped || new Set());
+    if (brief) return h("li", {class: "bp-up-row"},
+      h("span", {class: "up-main"}, h("span", {class: "up-when"}, upDayLabel(u.day) + " · " + upWhen(u)), h("span", {class: "up-title"}, upGo(u)), prep), add);
+    const sub = [UP_WORDS[txt(u.kind)] || "", txt(u.note), txt(u.place)].filter(Boolean).join(" · ");
+    return h("li", {class: "up-row", "data-item": u.id, "data-card": "1", tabindex: "-1"},
+      h("span", {class: "up-when"}, upWhen(u)),
+      h("span", {class: "up-main"}, h("span", {class: "up-title"}, upGo(u)), sub ? h("span", {class: "up-note small muted"}, sub) : null, prep),
+      h("span", {class: "up-acts"}, add, rm));
+  }
+  // The first week open; past that, folded behind one button once the list is long.
+  const UP_OPEN = 8;
+  function upAgenda(list) {
+    let shown = list;
+    let later = [];
+    if (list.length > UP_OPEN && !S.upLater) {
+      const cut = Math.max(Math.min(UP_OPEN, list.length), list.filter((u) => { const n = dayDiff(u.day); return n !== null && n <= 7; }).length);
+      shown = list.slice(0, cut);
+      later = list.slice(cut);
+    }
+    const days = [];
+    for (const u of shown) {
+      const last = days[days.length - 1];
+      if (last && last[0] === u.day) last[1].push(u); else days.push([u.day, [u]]);
+    }
+    const prepped = new Set();
+    return [h("ol", {class: "plain up-days", "data-k": "up-days"}, days.map(([day, rows]) => h("li", {class: "up-day"},
+      h("h3", {class: "group"}, upDayLabel(day)), h("ul", {class: "plain up-list"}, rows.map((u) => upRow(u, "", prepped)))))),
+      later.length ? h("p", {class: "up-later"}, btn("Show " + later.length + " more, to " + fmtDay(later[later.length - 1].day), () => { S.upLater = true; render(); }, {kind: "secondary", small: true, key: "up-later"})) : null];
+  }
+  function askAddUpcoming(day) {
+    sheet({title: "Add something booked", intro: "Anything Claude does not know of yet: a coffee chat, a careers fair, a call set up elsewhere. It shows in Coming up, ready to add to your calendar. An interview? Use I have an interview, so Claude prepares you for it.",
+      fields: [{id: "title", type: "text", label: "What it is", required: true, max: 120},
+        {id: "on", type: "date", label: "The day", required: true, value: txt(day) || todayIso()},
+        {id: "time", type: "time", label: "The time, if there is one"}],
+      validate: (v) => (txt(v.time) && !/^([01]?\d|2[0-3]):[0-5]\d$/.test(txt(v.time)) ? "Write the time like 14:30, or leave it empty." : dayDiff(v.on) !== null && dayDiff(v.on) < 0 ? "Choose today or a day ahead." : null),
+      submit: "Add it",
+      onSubmit: (v) => act([{item: "upcoming-add", action: "upcoming.add", value: Object.assign({title: txt(v.title), on: txt(v.on)}, txt(v.time) ? {time: txt(v.time)} : {}), rev: "add"}], "Added: " + txt(v.title))});
+  }
+  // Where it goes, in the order this device last chose: one tap after the first time.
+  const CAL_CHOICES = [["google", "Google Calendar"], ["outlook", "Outlook"],
+    ["file", "Apple Calendar or another app"], ["copy", "Copy the details"]];
+  const CAL_HEAD = "BEGIN:VCALENDAR\r\nVERSION:2.0\r\nPRODID:-//last-job-search//Coming up//EN\r\nCALSCALE:GREGORIAN\r\nMETHOD:PUBLISH\r\n";
+  let calDlg = null;
+  function calSheet(list) {
+    list = list.filter((u) => u && !u.pending && obj(u.cal).ics);
+    if (!list.length || calDlg) return;
+    const one = list.length === 1 ? list[0] : null;
+    const last = txt(sget("local", "ljs:cal"));
+    const choices = CAL_CHOICES.filter(([k]) => one || k === "file" || k === "copy");
+    choices.sort((a, b) => (a[0] === last ? -1 : b[0] === last ? 1 : 0));
+    const opener = document.activeElement;
+    const note = h("p", {class: "small", role: "status", "data-k": "cal-note"});
+    const keep = (k) => sset("local", "ljs:cal", k);
+    const rows = choices.map(([k, label]) => {
+      const first = k === choices[0][0];
+      if (k === "file") return h("div", {class: "cal-file"}, btn(label, () => { keep(k); saveCalendar(list, note); }, {kind: first ? "primary" : "secondary", key: "cal-file"}),
+        h("p", {class: "hint"}, "Saves a small file: open it, then the event inside, and your calendar asks to add it."));
+      if (k === "copy") return btn(label, () => { keep(k); copyText(calText(list), "The details", "cal-copy"); note.textContent = "Copied: paste them into any calendar."; }, {kind: first ? "primary" : "secondary", key: "cal-copy"});
+      return h("a", {href: safeUrl(obj(one.cal)[k]) || "#", target: "_blank", rel: "noopener noreferrer", class: "btn " + (first ? "primary" : "secondary"), "data-k": "cal-" + k,
+        onclick: () => { keep(k); note.textContent = "Opened " + label + " with it filled in: save it there."; }}, label, h("span", {class: "sr-only"}, " (opens in a new tab)"));
+    });
+    calDlg = h("dialog", {class: "sheet cal-sheet", "aria-labelledby": "cal-title"}, h("div", {class: "sheet-body"},
+      h("h2", {id: "cal-title", class: "sheet-title"}, one ? "Add to your calendar" : "Add all " + list.length + " to your calendar"),
+      h("p", {class: "sheet-intro"}, one ? txt(one.title) + ": " + upDayLabel(one.day) + (one.start ? ", " + upWhen(one) : "") : "One file for every item: open it, and your calendar asks to add them all."),
+      h("div", {class: "cal-choices"}, rows),
+      h("p", {class: "hint"}, "Nothing is connected and nothing is sent: each one opens or saves the event for you to keep."),
+      note,
+      h("div", {class: "sheet-actions"}, h("button", {type: "button", class: "btn secondary", "data-k": "cal-close", onclick: () => { try { calDlg.close(); } catch (e) { /* gone */ } }}, "Done"))));
+    calDlg.addEventListener("close", () => { const d = calDlg; calDlg = null; if (d) d.remove(); if (opener && opener.isConnected && opener.focus) opener.focus(); });
+    document.body.appendChild(calDlg);
+    try { calDlg.showModal(); } catch (e) { calDlg.setAttribute("open", ""); }
+    const f = calDlg.querySelector("a, button");
+    if (f) f.focus();
+  }
+  function calText(list) {
+    return list.map((u) => [txt(u.title), fmtDay(u.day) + (u.start ? ", " + upWhen(u) : ""), txt(u.place)].filter(Boolean).join("\n")).join("\n\n");
+  }
+  // The .ics, in a zip of one file: a page may save a zip, never an .ics. Opened, the zip
+  // gives the file, and the file opens the calendar.
+  async function saveCalendar(list, note) {
+    const dl = await CAP.downloads;
+    const say = (t) => { if (note) note.textContent = t; };
+    if (!dl) { say("Saving files is not available in this view. Open the page in the Claude app or on claude.ai, or copy the details."); return; }
+    const ics = CAL_HEAD + list.map((u) => txt(obj(u.cal).ics)).join("") + "END:VCALENDAR\r\n";
+    const name = list.length === 1 ? (seg(txt(list[0].title)).replace(/[^A-Za-z0-9-]+/g, "-").replace(/^-+|-+$/g, "").slice(0, 60) || "event") : "coming-up";
+    try {
+      await dl.save({filename: name + ".zip", data: zipOne(name + ".ics", ics)});
+      say("Saved. Open the file, then the event in it: your calendar asks to add it.");
+    } catch (e) {
+      const code = (e && e.code) || "unavailable";
+      say(code === "declined" ? "Not saved: you said no." : code === "rate_limited" ? "Another save is waiting for your answer." : "Saving files is not available in this view: copy the details instead.");
+    }
+  }
+  let CRC_T = null;
+  function crc32(bytes) {
+    if (!CRC_T) { CRC_T = new Uint32Array(256); for (let n = 0; n < 256; n++) { let c = n; for (let k = 0; k < 8; k++) c = c & 1 ? 0xEDB88320 ^ (c >>> 1) : c >>> 1; CRC_T[n] = c >>> 0; } }
+    let c = 0xFFFFFFFF;
+    for (let i = 0; i < bytes.length; i++) c = CRC_T[(c ^ bytes[i]) & 0xFF] ^ (c >>> 8);
+    return (c ^ 0xFFFFFFFF) >>> 0;
+  }
+  // A zip holding one file, stored as it is (no compression): enough for any unzip.
+  function zipOne(name, text) {
+    const enc = new TextEncoder();
+    const data = enc.encode(text);
+    const nm = enc.encode(name);
+    const crc = crc32(data);
+    const d = new Date(now());
+    const time = (d.getHours() << 11) | (d.getMinutes() << 5) | (d.getSeconds() >> 1);
+    const date = ((Math.max(1980, d.getFullYear()) - 1980) << 9) | ((d.getMonth() + 1) << 5) | d.getDate();
+    const local = new DataView(new ArrayBuffer(30));
+    [[0, 0x04034b50, 4], [4, 20, 2], [6, 0x0800, 2], [8, 0, 2], [10, time, 2], [12, date, 2], [14, crc, 4], [18, data.length, 4], [22, data.length, 4], [26, nm.length, 2], [28, 0, 2]]
+      .forEach(([o, v, n]) => (n === 4 ? local.setUint32(o, v, true) : local.setUint16(o, v, true)));
+    const central = new DataView(new ArrayBuffer(46));
+    [[0, 0x02014b50, 4], [4, 20, 2], [6, 20, 2], [8, 0x0800, 2], [10, 0, 2], [12, time, 2], [14, date, 2], [16, crc, 4], [20, data.length, 4], [24, data.length, 4], [28, nm.length, 2],
+      [30, 0, 2], [32, 0, 2], [34, 0, 2], [36, 0, 2], [38, 0, 4], [42, 0, 4]]
+      .forEach(([o, v, n]) => (n === 4 ? central.setUint32(o, v, true) : central.setUint16(o, v, true)));
+    const cdStart = 30 + nm.length + data.length;
+    const cdSize = 46 + nm.length;
+    const end = new DataView(new ArrayBuffer(22));
+    [[0, 0x06054b50, 4], [4, 0, 2], [6, 0, 2], [8, 1, 2], [10, 1, 2], [12, cdSize, 4], [16, cdStart, 4], [20, 0, 2]]
+      .forEach(([o, v, n]) => (n === 4 ? end.setUint32(o, v, true) : end.setUint16(o, v, true)));
+    return new Blob([local, nm, data, central, nm, end], {type: "application/zip"});
+  }
   function renderInterviews(where) {
     const items = interviewItems();
     // Ended here: off the list at once, one line each while the page still holds it, so its
@@ -3908,23 +4323,53 @@
       const rel = relDay(next.when);
       sum = plural(ahead.length, "interview", "interviews") + " coming up" + (rel ? ", the next " + rel : "") + ".";
       const unprepped = ahead.filter((i) => !obj(i.prep).updated).length;
-      small = unprepped ? nWord(unprepped, "has", "have") + " no prep yet." : "Your prep is ready for each one.";
+      small = unprepped ? plural(unprepped, "interview has", "interviews have") + " no prep yet." : "Your prep is ready for each one.";
     }
-    const wrap = h("section", {class: "sec", "aria-labelledby": "h-interviews" + (where ? "-" + where : "")}, screenHead("interviews", "Interviews", sum, small, where,
-      items.length ? h("div", {class: "head-tools"}, btn("I have an interview", () => haveInterview(), {small: true, key: "iv-head-add"})) : null));
-    if (!items.length) {
-      put(wrap, empty("No interviews booked.", "Got one? Say which application it is for: it appears here, and Claude writes your prep for it.",
-        h("div", {class: "card-actions"}, btn("I have an interview", () => haveInterview(), {kind: "secondary", small: true, key: "iv-empty-chat"}))));
+    // Two views, so neither buries the other (the maintainer, 2026-11-02: "if you have loads
+    // of calls booked you really need to scroll down for the interviews and vice versa"):
+    // By day, everything in order with each interview's prep a tap from its row, the first
+    // week open and the rest folded; and Interviews, each one's card with its prep, practice
+    // and outcome. A calendar's schedule view and its event, as Google and Apple lay them out.
+    const up = upcomingItems();
+    if (up.length) {
+      const first = up[0];
+      sum = plural(up.length, "thing", "things") + " booked or due, the next " + (dayDiff(first.day) === 0 ? "today" : dayWords(first.day)) + ".";
+    } else if (!next) sum = "Nothing booked.";
+    const none = !items.length && !up.length;
+    const tools = h("div", {class: "head-tools"}, btn("Add something", () => askAddUpcoming(), {small: true, key: "up-add"}),
+      none ? null : btn("I have an interview", () => haveInterview(), {small: true, kind: "quiet", key: "iv-head-add"}));
+    const wrap = h("section", {class: "sec", "aria-labelledby": "h-interviews" + (where ? "-" + where : "")}, screenHead("interviews", "Coming up", sum, small, where, tools));
+    if (none) {
+      put(wrap, empty("Nothing booked.", "Interviews, calls, tests and closing days show here by day, each a tap from your calendar.",
+        btn("I have an interview", () => haveInterview(), {kind: "secondary", small: true, key: "iv-empty-chat"})));
       if (ended.length) put(wrap, h("div", {class: "stack"}, ended));
       return wrap;
     }
-    put(wrap, listView("interviews", {items, name: "interviews", live: (i) => !past(i), remote: "interviews", box: (kids) => h("div", {class: "stack list-panel"}, kids),
-      fold: (i) => past(i) && daysSince(i.when) !== null && daysSince(i.when) > 14,
-      sort: (a, b) => (past(a) ? 1 : 0) - (past(b) ? 1 : 0) || (past(a) ? txt(b.when).localeCompare(txt(a.when)) : txt(a.when || "9999").localeCompare(txt(b.when || "9999"))),
-      render: interviewCard}));
+    const both = items.length && up.length;
+    const view = !up.length ? "interviews" : !items.length ? "day" : upView();
+    const pick = (v) => { setPref("up:view", v); render(); };
+    // Every item into a calendar at once, under the list: a thing done once, not a control
+    // beside the switch (the two never lined up at large text).
+    const addAll = view === "day" && up.filter((u) => obj(u.cal).ics).length > 1 ? h("p", {class: "up-all"}, btn("Add all to your calendar", () => calSheet(up), {kind: "quiet", small: true, icon: "cal-add", key: "cal-all"})) : null;
+    if (both) put(wrap, controlRow([segmented("Show", [["day", "By day"], ["interviews", "Interviews"]], view, pick, "up-view")]));
+    if (view === "day") {
+      put(wrap, h("section", {class: "up-agenda", "aria-label": "Booked or due, by day"}, upAgenda(up), addAll));
+      // What has no day on the list, said once with the way to it.
+      const undated = ahead.filter((i) => !dayOf(i.when)).length;
+      const waiting = items.filter((i) => past(i) && !ivEnd(i) && (daysSince(i.when) === null || daysSince(i.when) <= 14)).length;
+      const more = [undated ? plural(undated, "interview has", "interviews have") + " no day yet" : "", waiting ? plural(waiting, "interview", "interviews") + " waiting to hear back" : ""].filter(Boolean);
+      if (more.length) put(wrap, h("p", {class: "small up-more"}, more.join("; ") + ". ",
+        btn("See your interviews", () => pick("interviews"), {kind: "link", key: "up-to-iv"})));
+    } else {
+      put(wrap, listView("interviews", {items, name: "interviews", live: (i) => !past(i), remote: "interviews", box: (kids) => h("div", {class: "stack list-panel"}, kids),
+        fold: (i) => past(i) && daysSince(i.when) !== null && daysSince(i.when) > 14,
+        sort: (a, b) => (past(a) ? 1 : 0) - (past(b) ? 1 : 0) || (past(a) ? txt(b.when).localeCompare(txt(a.when)) : txt(a.when || "9999").localeCompare(txt(b.when || "9999"))),
+        render: interviewCard}));
+    }
     if (ended.length) put(wrap, h("div", {class: "stack"}, ended));
     return wrap;
   }
+  function upView() { return txt(pref("up:view", "day")) === "interviews" ? "interviews" : "day"; }
   function endedInterview(iv, e) {
     return h("div", {class: "ended", "data-item": iv.id},
       h("p", {class: "muted small"}, (txt(iv.next_stage) || "Interview") + " with ", h("bdi", {}, txt(iv.company)), ": " + lc1(ACTION_WORDS[e.doc.action] || "over") + "."),
@@ -4145,7 +4590,7 @@
       {p: "B1", label: "Length", values: vals([["short", "Short"], ["standard", "Standard"], ["long", "Long"]], 0), page: true, hint: "How many lines this page shows of each brief."},
       {p: "B2", label: "News items", values: vals([["0", "None"], ["1", "1"], ["3", "3"], ["5", "5"]], 1), hint: "Fewer is quicker to read. From the next brief.",
         rec: {v: "3", why: "Three is enough to catch what moved this week without a long read."}},
-      {p: "B3", label: "Also watch", multi: true, values: vals([["employers", "Employers you're in touch with"], ["market", "Hiring and layoffs near you"], ["bank", "Interest rates"], ["targets", "Your target employers"]], 1), hint: "Which news is searched. News about your right to work is always watched."},
+      {p: "B3", label: "Also watch", multi: true, values: vals([["employers", "Employers you're in touch with"], ["market", "Hiring and layoffs near you"], ["bank", "Interest rates"], ["targets", "Your target employers"]], 1), hint: "Which news is searched. News about your right to work is watched too, when you are on a visa or permit."},
       {p: "B4", label: "Days it comes", multi: true, values: vals([["1", "Mon"], ["2", "Tue"], ["3", "Wed"], ["4", "Thu"], ["5", "Fri"], ["6", "Sat"], ["0", "Sun"]], 1), hint: "At most once a day."},
     ]},
   };
@@ -6114,7 +6559,7 @@
     ["todo", "To do", "What needs you, five at a time, most urgent first. Each card has one button, and a bin."],
     ["jobs", "Jobs", "Every role from found to applied: Found, each with a number out of 100 for how well it fits you (75 or more is a strong fit); Drafts, your resume and letter; Applied, each one tracked."],
     ["contacts", "Contacts", "Someone inside who puts your name forward beats applying cold. Claude finds who to write to and drafts the note; you send it yourself. Tap a name to see everything about them."],
-    ["interviews", "Interviews", "Your prep for each interview, to read before it."],
+    ["interviews", "Coming up", "Everything booked, by day: interviews, calls, tests and closing days, each ready to add to your calendar, and your prep for each interview."],
     ["settings", "Settings", "Your profile first: jobs, skills, education. Change them any time."],
     ["chat", "Chat", "Ask anything, or paste a link, a message or a screenshot."],
   ];
@@ -8166,6 +8611,9 @@
     } else if (S.section === "drafts") {
       if (messageItems().some((m) => m.id === id)) setPref("drafts:view", "messages");
       else if (readyItems().some((a) => a.id === id)) setPref("drafts:view", "apps");
+    } else if (S.section === "interviews") {
+      if (id.startsWith("int-")) setPref("up:view", "interviews");
+      else if (id.startsWith("up-")) { setPref("up:view", "day"); S.upLater = true; }
     } else if (S.section === "contacts") {
       const p = peopleItems().find((x) => x.id === id);
       const anyNeeds = peopleItems().some((x) => personRank(x) === 0);
@@ -8245,6 +8693,8 @@
     contacts: "M9 11a4 4 0 1 0 0-8a4 4 0 0 0 0 8zM2 21a7 7 0 0 1 14 0M16 3.5a4 4 0 0 1 0 7M18 14a6 6 0 0 1 4 7",
     chat: "M4 5h16v11H9l-5 4z",
     interviews: "M5 5h14v15H5zM5 9h14M9 3v4M15 3v4",
+    // A calendar with a plus in it: add to your calendar.
+    "cal-add": "M5 5h14v15H5zM5 9h14M9 3v4M15 3v4M12 12v6M9 15h6",
     progress: "M4 20V10M10 20V4M16 20v-7M22 20H2",
     expand: "M4 9V4h5M20 9V4h-5M4 15v5h5M20 15v5h-5",
     settings: "M12 9a3 3 0 1 0 0 6a3 3 0 0 0 0-6zM10.3 3h3.4l.5 2.4 1.9.8 2-1.4 2.4 2.4-1.4 2 .8 1.9 2.4.5v3.4l-2.4.5-.8 1.9 1.4 2-2.4 2.4-2-1.4-1.9.8-.5 2.4h-3.4l-.5-2.4-1.9-.8-2 1.4-2.4-2.4 1.4-2-.8-1.9L3 13.7v-3.4l2.4-.5.8-1.9-1.4-2 2.4-2.4 2 1.4 1.9-.8z",
@@ -8262,9 +8712,11 @@
   const NAV_COUNT_WORDS = {jobs: " to look at", drafts: " to send", interviews: " coming up"};
   function navCount(id) {
     let n = 0;
-    if (id === "jobs") n = jobRows().filter((r) => jobPending(r) || (inTab(jobStatus(r), "new") && Number(r.score) >= 60)).length;
+    if (id === "jobs") n = jobRows().filter((r) => jobPending(r) || jobToLook(r)).length;
     else if (id === "drafts") n = readyItems().filter(readyLive).length + messageItems().filter((m) => !settledAction(m.id, ["msg.sent", "msg.skip"]) && msgStatus(m) === "to_send").length;
-    else if (id === "interviews") n = interviewItems().filter((i) => !isPast(i.when) && txt(i.status) !== "done").length;
+    // Coming up: the one number its screen and the Brief also say (2026-10-29: a count that
+    // differs between two places reads as a bug).
+    else if (id === "interviews") n = Array.isArray(M().upcoming) ? upcomingItems().length : interviewItems().filter((i) => !isPast(i.when) && txt(i.status) !== "done").length;
     return n ? h("span", {class: "navcount"}, String(n), h("span", {class: "sr-only"}, NAV_COUNT_WORDS[id])) : null;
   }
   function renderNav() {
@@ -8385,7 +8837,7 @@
     const foot = $("foot");
     if (!foot) return;
     patch(foot, [h("p", {class: "foot-line"},
-      h("span", {class: "foot-links"}, [["interviews", "Interviews"], ["settings", "Settings"]].filter(([id]) => navOwner(S.tab) !== id && S.section !== id).map(([id, l]) => [navLink(id, l), " · "])),
+      h("span", {class: "foot-links"}, [["interviews", "Coming up"], ["settings", "Settings"]].filter(([id]) => navOwner(S.tab) !== id && S.section !== id).map(([id, l]) => [navLink(id, l), " · "])),
       "Private to you. ", h("button", {type: "button", class: "btn link", "aria-expanded": String(!!S.footOpen), "data-k": "foot-details", onclick: () => { S.footOpen = !S.footOpen; render(); }}, S.footOpen ? "Hide" : "Details")),
       S.footOpen ? h("p", {class: "foot-text"}, privacyText()) : null]);
   }
@@ -8517,6 +8969,7 @@
     demotePrimaries();
     nameByItem();
     renderToasts();
+    fitBrief();
     const n = todoBadge();
     const base = $("brand") ? $("brand").textContent : document.title;
     document.title = (n ? "(" + n + ") " : "") + base;
@@ -8542,7 +8995,7 @@
   let gAt = 0;
   function openKeys() {
     const rows = [["?", "This list"], ["g then t", "To do"], ["g then j", "Jobs"], ["g then d", "Drafts"], ["g then c", "Contacts"], ["g then h", "Chat"],
-      ["g then i", "Interviews"], ["g then p", "Progress"], ["g then s", "Settings"], ["j and k", "Next and previous card"], ["Enter", "A card's main button"],
+      ["g then i", "Coming up"], ["g then p", "Progress"], ["g then s", "Settings"], ["j and k", "Next and previous card"], ["Enter", "A card's main button"],
       ["1, 2, 3", "Answer a question you are on"], ["Esc", "Close what is open"]];
     const dlg = h("dialog", {class: "sheet keys", "aria-labelledby": "keys-title"},
       h("h2", {id: "keys-title", class: "sheet-title"}, "Keyboard shortcuts"),

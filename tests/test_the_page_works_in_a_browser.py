@@ -289,7 +289,7 @@ def test_without_a_store_the_page_says_it_is_read_only(run, pages):
 # Drafts are a view of Jobs, the messages to send a view of Contacts, and the Brief greets the
 # person by name (4.3).
 LABELS = {"brief": "Good morning, Morgan", "todo": "To do", "jobs": "Jobs", "drafts": "Jobs", "drafts-messages": "Contacts",
-          "contacts": "Contacts", "interviews": "Interviews", "progress": "Progress", "chat": "Chat", "settings": "Settings",
+          "contacts": "Contacts", "interviews": "Coming up", "progress": "Progress", "chat": "Chat", "settings": "Settings",
           "profile": "Your profile"}
 JARGON = re.compile(r"\b(?:repository|repo|branch|worktree|commit|pull request|PR|git|json|database|db|artifact|webhook|"
                     r"session id|config\w*|null|undefined|NaN|your chat|cloud chat|computer chat|downloadable|applies)\b", re.I)
@@ -361,7 +361,7 @@ def test_every_section_empty_says_what_will_appear_and_offers_one_step(run, page
     r = run("sections", html=pages["nothing"], viewport=PHONE)
     _clean(r)
     expect = {"jobs": "No shortlist yet.", "drafts": "Nothing drafted yet.", "drafts-messages": "No messages to send.",
-              "contacts": "Nobody here yet.", "interviews": "No interviews booked.", "progress": "Nothing counted yet."}
+              "contacts": "Nobody here yet.", "interviews": "Nothing booked.", "progress": "Nothing counted yet."}
     for sid, title in expect.items():
         assert r[sid]["empty"] == [title], (sid, r[sid]["empty"])
         assert r[sid]["overflow"]["sw"] <= r[sid]["overflow"]["cw"], sid
@@ -1252,7 +1252,7 @@ def test_the_tour_walks_each_section_skips_and_opens_one_part_from_its_title(run
     assert r["second"]["title"] == ["To do (2 of 7)"] and r["second"]["hash"] == "#todo", "each step opens its section"
     assert r["closed"] == 0 and r["cardAfter"] == 0, "skipped, and never offered again on this device"
     assert r["part"]["title"] == ["How Contacts works"]
-    assert "Next part: Interviews" in r["part"]["buttons"] and "Close" in r["part"]["buttons"]
+    assert "Next part: Coming up" in r["part"]["buttons"] and "Close" in r["part"]["buttons"]
 
 
 def test_the_news_says_when_it_was_gathered_and_when_it_is_old(run, pages):
@@ -1266,7 +1266,9 @@ def test_the_news_says_when_it_was_gathered_and_when_it_is_old(run, pages):
     old = run("paint", html=pages["sample"], hash="brief", clock="2026-10-28T09:00:00Z")
     # The day as the page writes every day (fmtDay): "Sun 25 Oct", or "Sun, 25 Oct" where the
     # browser's own date words put a comma (GitHub's Chromium does).
-    assert re.search(r"Gathered \w+,? 25 Oct\. Your next brief brings fresh news\.", old["bodyText"]), old["bodyText"][:600]
+    # The day it was gathered, and no promise of a next brief: one that is off brings none.
+    assert re.search(r"Gathered \w+,? 25 Oct\.", old["bodyText"]), old["bodyText"][:600]
+    assert "Your next brief brings" not in old["bodyText"]
 
 
 def test_the_numbers_say_what_they_count_and_each_bar_says_its_week(run, pages):
@@ -1274,15 +1276,19 @@ def test_the_numbers_say_what_they_count_and_each_bar_says_its_week(run, pages):
     "applied" read as employers when it counts people who answered a message (2026-10-30)."""
     r = run("paint", html=pages["sample"], hash="brief", clock="2026-10-25T09:00:00Z")
     _clean(r)
-    assert re.search(r"Applications a week, the last \d weeks\. This week: \d+\.", r["bodyText"]), r["bodyText"][-800:]
-    assert "people replied" in r["bodyText"] or "person replied" in r["bodyText"]
+    # This week beside the usual one: a number with nothing to compare it to says little.
+    assert re.search(r"Applications a week\. This week \d+, usually \d+\.", r["bodyText"]), r["bodyText"][-800:]
+    assert "contacts replied" in r["bodyText"] or "contact replied" in r["bodyText"]
     assert not re.search(r"\b1\s+interviews\b", r["bodyText"])
 
 
-def test_how_far_applications_went_opens_in_place_with_no_page_of_its_own(run, pages):
+def test_how_far_applications_went_is_said_on_the_brief_with_no_page_of_its_own(run, pages):
+    """How far applications got is the share beside each count (4.6): a fold of bars across
+    the panel, "How far they got", was opened by nobody and stretched the page."""
     r = run("paint", html=pages["sample"], hash="brief", clock="2026-10-25T09:00:00Z")
     _clean(r)
-    assert "How far they got" in r["bodyText"] and "See your progress" not in r["bodyText"]
+    assert re.search(r"\b\d+% of applied\b", r["bodyText"]) and "See your progress" not in r["bodyText"]
+    assert not re.search(r"\b0% of applied", r["bodyText"])    # nothing to share is not a share
 
 
 def test_the_brief_opens_on_short_points_and_reads_its_news_whole(run, pages):
@@ -1372,11 +1378,12 @@ def test_the_page_offers_the_pin_on_the_brief_and_while_the_first_search_runs(ru
 
 
 def test_the_numbers_on_the_brief_are_never_cut_off(run, pages):
-    """At 1280 by 800 the panel's last line, "How far they got", was half hidden, and opening
-    it showed nothing more (seen on the README's own picture, 2026-10-30)."""
+    """At 1280 by 800 the panel's last line was half hidden, and opening it showed nothing
+    more (seen on the README's own picture, 2026-10-30). Its last line is now Since your last
+    brief, and it holds at every size."""
     for vp in ({"width": 1280, "height": 800}, {"width": 1440, "height": 900}, {"width": 800, "height": 900}):
         r = run("inside", html=pages["sample"], viewport=vp, clock="2026-10-25T09:00:00Z",
-                inner='[data-k="bp-funnel"]', box=".bp-numbers", tap='[data-k="bp-funnel"]')
+                inner='[data-k="bp-since"]', box=".bp-numbers", tap='[data-k="bp-since"]')
         _clean(r)
         assert r["closed"] and r["opened"], (vp, r)
 
@@ -1416,6 +1423,81 @@ def test_the_page_opened_with_no_chat_running_brings_itself_up_to_date_and_says_
     assert "minutes left" not in r["summary"], r["summary"]
     # Waiting on a helper chat that is starting: said, never "Not picked up yet".
     assert "helper is starting up" in r["starting"] and "Not picked up yet" not in r["starting"], r["starting"]
+
+
+def test_everything_booked_is_one_tap_from_any_calendar_and_the_brief_shows_the_next_two_weeks(run, pages):
+    """The maintainer, 2026-11-02: "I keep losing track of things... there's no consistent way
+    to view upcoming things I've booked", then "do we need 2 for outlook?" and "if you have
+    loads of calls booked you really need to scroll down for the interviews and vice versa".
+    Coming up lists everything by day with one count everywhere; a calendar takes each item
+    with nothing connected (Google, Outlook, a file for Apple Calendar or any other app, or
+    the words copied), the last choice first next time; something added shows at once; the
+    Interviews view is the cards alone; the Brief shows the next two weeks and fills its rows."""
+    import io
+    import zipfile
+    r = run("coming_up", html=pages["sample"])
+    _clean(r)
+    # Safari's engine writes "Wed, 28 Oct": the day is the same either way.
+    assert [d.replace(",", "") for d in r["days"]] == ["Wed 28 Oct", "Thu 29 Oct", "Fri 30 Oct", "Mon 2 Nov", "Wed 4 Nov", "Fri 6 Nov", "Thu 12 Nov"], r["days"]
+    assert r["when"][:3] == ["13:00", "15:00", "10:00"] and "End of day" in r["when"] and "Time not set" in r["when"], r["when"]
+    # Each interview says whether its prep is ready, on its own row only (never on a test
+    # due in the same process): read it from there, or ask for it.
+    assert r["prep"] == ["up-read:up-app-larkspur-supply-phone-screen-2026-10-28=Prep ready",
+                         "up-prep:up-app-copperleaf-payments-recruiter-call-2026-10-30=Prepare me",
+                         "up-prep:up-app-harbourline-risk-second-interview-2026-11-04=Prepare me"], r["prep"]
+    # One count in the nav, the screen and the Brief.
+    assert r["nav"].startswith("7") and r["sum"].startswith("7 things booked or due"), (r["nav"], r["sum"])
+    assert "All 7 coming up" in r["upFoot"], r["upFoot"]
+    # One Outlook; Google's link carries the time in UTC; the file is a zip holding the event.
+    assert r["choices"] == ["cal-google", "cal-outlook", "cal-file", "cal-copy"], r["choices"]
+    assert "calendar.google.com/calendar/render" in r["google"] and "dates=20261028T130000Z/20261028T133000Z" in r["google"], r["google"]
+    assert "outlook.live.com" in r["outlook"]
+    save = r["saves"][0]
+    assert save["filename"].endswith(".zip") and save["blob"], save
+    with zipfile.ZipFile(io.BytesIO(base64.b64decode(save["bytes"]))) as z:
+        names = z.namelist()
+        ics = z.read(names[0]).decode("utf-8")
+    assert len(names) == 1 and names[0].endswith(".ics")
+    assert ics.startswith("BEGIN:VCALENDAR\r\n") and ics.endswith("END:VCALENDAR\r\n") and ics.count("BEGIN:VEVENT") == 1
+    assert "DTSTART:20261028T130000Z" in ics
+    assert "Open the file" in r["fileNote"] and r["closed"]
+    # The choice made is first the next time; copying gives the words.
+    assert r["firstAfter"] == "cal-file"
+    assert "Call with Bea" in r["copied"] and "15:00" in r["copied"], r["copied"]
+    # Everything at once: a file or the words, one event each.
+    assert r["allChoices"] == ["cal-copy", "cal-file"]          # copy, chosen last, comes first
+    with zipfile.ZipFile(io.BytesIO(base64.b64decode(r["allSave"]["bytes"]))) as z:
+        assert z.read(z.namelist()[0]).decode("utf-8").count("BEGIN:VEVENT") == 7
+    # Added: the engine's own shape, shown at once while it saves.
+    assert [a["value"] for a in r["added"]] == [{"title": "Coffee with a former colleague", "on": "2026-10-27", "time": "09:30"}]
+    assert r["added"][0]["item"] == "upcoming-add" and r["added"][0]["rev_seen"] == "add"
+    assert r["saving"] and "Saving" in r["saving"][0], r["saving"]
+    # Taken off: its action carries the item's rev, and it leaves the list at once.
+    assert [(a["item"], a["rev_seen"]) for a in r["removed"]] == [("up-ev20261020120000", _item_rev("up-ev20261020120000"))]
+    assert r["ownLeft"] is False
+    # The Interviews view is each interview's card, and nothing else.
+    assert r["ivCards"] == 3 and r["agendaGone"]
+    # The Brief: fourteen days, the busy ones marked, a day said to a screen reader and opening
+    # in Coming up; every row full; nothing cut off.
+    assert r["strip"] == 14 and r["busy"] == 6, (r["strip"], r["busy"])
+    assert r["dayLabel"].replace(",", "", 1) == "Thu 29 Oct: Call with Bea (Harbourline Bank)", r["dayLabel"]
+    assert r["rowsFull"] is True
+    assert r["overflow"] == [], r["overflow"]
+    assert r["afterTap"] == {"section": True, "focus": "up-call-harbourline-bank-bea-2026-10-29"}, r["afterTap"]
+    # Each thing once (the maintainer, 2026-11-02: "if we're just saying the same thing ten
+    # times it can be a bit overwhelming"): the interview this week is Today's, with its
+    # calendar button and the questions it will bring, and no other panel repeats it; Juno,
+    # a step, is not also a row under Waiting on you.
+    p = r["panels"]
+    assert "Phone screen with Larkspur Retail" in p["bp:today"] and "Likely to come up" in p["bp:today"] and r["heroCal"]
+    assert not any("Larkspur" in t and "screen" in t for k, t in p.items() if k != "bp:today"), p
+    assert "Reply to Juno" in p["bp:next"] and "Juno" not in p["bp:people"], (p["bp:next"], p["bp:people"])
+    assert r["cards"] and not any("Larkspur" in c for c in r["cards"]), r["cards"]
+    assert r["phoneWide"] <= 0 and r["phoneStrip"] is True
+
+
+def _item_rev(item_id):
+    return next(u["rev"] for u in _sample()["upcoming"] if u["id"] == item_id)
 
 
 def test_whats_new_says_the_version_and_links_every_change_and_updates_are_not_held_by_a_setting(run, pages, tmp_path):

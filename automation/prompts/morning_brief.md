@@ -67,7 +67,7 @@ to date as its FOR CLAUDE line says. Never republish the page: this chat already
 
 Your final reply: the message brief.py printed, as it is, with `<NEWS>` replaced by at most
 three of the news lines, each one line ending in what it means for the person, with no
-links (the full brief has them), or "Quiet week". Add only what a FOR CLAUDE line asks for
+links (the full brief has them), or "Nothing new". Add only what a FOR CLAUDE line asks for
 (an upgrade's changes, the questions), and where step 2 put a draft in the pack, its Owed
 line says "draft ready". Change a line it printed only where you know it is wrong, and say
 nothing about how the brief was made. Under 200 words, for a phone. It is

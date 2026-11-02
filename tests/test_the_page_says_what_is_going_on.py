@@ -215,5 +215,5 @@ def test_an_interview_ended_on_the_page_comes_back_when_a_chat_books_a_new_stage
     # application never showed. Once the chat has saved the end, the record decides.
     for status, shown in [("no_response", False), ("interview", True)]:
         model, seed, card = _ended(status)
-        got = _go(run, tmp_path, [{"hash": "interviews", "eval": card}], PHONE, model=model, seed=seed, clock=T)
+        got = _go(run, tmp_path, [{"hash": "interviews/int-harbourline-risk", "eval": card}], PHONE, model=model, seed=seed, clock=T)
         assert got["after"][0]["eval"] is shown, (status, got["after"][0]["text"][:300])

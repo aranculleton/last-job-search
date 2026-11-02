@@ -11,6 +11,7 @@ from __future__ import annotations
 import datetime as dt
 import os
 import random
+import re
 import shutil
 import subprocess
 import sys
@@ -69,7 +70,7 @@ def test_the_text_is_the_message_then_the_lines_for_claude(tmp_path):
     claude = out.split("FOR CLAUDE, never in the message:\n", 1)[1]
     searches = claude.split("given these searches: ", 1)[1].split("\n", 1)[0].split(" | ")
     assert 1 <= len(searches) <= 6
-    assert "Larkspur Retail news" in searches[0]      # an employer in play comes first
+    assert "Larkspur Retail UK news" in searches[0]   # an employer in play comes first, placed
     assert "—" not in out
 
 
@@ -131,7 +132,10 @@ def test_news_goes_into_the_record_once_and_a_freeze_is_noted_on_a_live_applicat
     r = _run(state, "news", "--today", "2026-09-24", stdin=items)
     assert "news: 0 kept; 2 left out, already sent" in r.stdout
     record = open(os.path.join(state, "documents", "briefs", "2026-09-24.md"), encoding="utf-8").read()
-    assert record.rstrip().endswith("Quiet week.")
+    assert record.rstrip().endswith("Nothing new.")
+    # The reader's own "Nothing new." is no news item (it was kept as a sourced one, 2026-11-02).
+    r = _run(state, "news", "--today", "2026-09-24", stdin="Nothing new.\n")
+    assert "news: 0 kept" in r.stdout, r.stdout
     # The since date is the last brief's.
     assert "Since 2026-09-20." in record
 
@@ -149,6 +153,76 @@ def test_the_searches_come_from_the_profile_and_stay_at_six():
     # A different pair of targets on another day, so every one is looked at over a few weeks.
     later = brief.queries(dt.date(2026, 10, 29), [], md)
     assert later != brief.queries(dt.date(2026, 10, 25), [], md)
+
+
+# Every person's news fits their own country, city and field, whichever of the countries the
+# app carries market tables for (the maintainer, 2026-11-02: "is country agnostic like the job
+# board etc or industry agnostic"). Before, a nurse in Sao Paulo got "BR" for a country, no
+# central bank and "data and analytics" for a field.
+_NURSE = "### Target Sectors\n- Hospitals and clinics: Fleury, Rede D'Or\n\n### Deal-breakers\n- x\n"
+
+
+def _somewhere(monkeypatch, cc, status="work permit", city="Somewhere"):
+    monkeypatch.setattr(brief.person, "country", lambda: cc)
+    monkeypatch.setattr(brief, "_net", lambda a, d="": {"HOME_CITY": city, "STATUS_NAME": status}.get(a, d))
+
+
+@pytest.mark.parametrize("cc, name, bank", [
+    ("BR", "Brazil", "Banco Central do Brasil interest rate decision"),
+    ("SE", "Sweden", "Riksbank interest rate decision"),
+    ("ZA", "South Africa", "South African Reserve Bank interest rate decision"),
+    ("DE", "Germany", "European Central Bank interest rate decision"),
+    ("SG", "Singapore", "Monetary Authority of Singapore monetary policy statement"),
+    ("CA", "Canada", "Bank of Canada interest rate decision"),
+])
+def test_the_searches_name_the_persons_own_country_bank_and_field(monkeypatch, cc, name, bank):
+    _somewhere(monkeypatch, cc)
+    q = brief.queries(dt.date(2026, 10, 25), ["Hospital Sirio"], _NURSE)
+    assert q[0] == "Hospital Sirio %s news October 2026" % name
+    assert "%s work permit rule changes 2026" % name in q
+    assert "Somewhere hospitals and clinics hiring or layoffs October 2026" in q
+    assert "%s October 2026" % bank in q
+    assert not any("data and analytics" in x or re.search(r"\b%s\b" % cc, x) for x in q)
+
+
+def test_every_country_with_a_market_table_has_a_name_and_a_bank():
+    import markets
+    for cc in markets.countries():
+        code = cc.upper()
+        assert brief.country_name(code), code
+        assert code in brief.EURO or brief.CENTRAL_BANK.get(code), code
+
+
+def test_a_part_the_profile_does_not_say_is_left_out_never_guessed(monkeypatch):
+    _somewhere(monkeypatch, "", status="", city="")
+    monkeypatch.setattr(brief.person, "get", lambda k, d=None: d)
+    assert brief.queries(dt.date(2026, 10, 25), [], "") == []
+    _somewhere(monkeypatch, "GB", status="")
+    q = brief.queries(dt.date(2026, 10, 25), [], "")
+    # No Target Sectors: the field is the first job title searched, never a stock one.
+    assert "Somewhere supply chain analyst hiring or layoffs October 2026" in q
+    assert not any("rule changes" in x for x in q)
+
+
+def test_the_slow_news_is_searched_once_a_week_not_every_morning(monkeypatch):
+    _somewhere(monkeypatch, "CA")
+    wed = dt.date(2026, 10, 28)
+    daily = brief.queries(wed, [], _NURSE, since=dt.date(2026, 10, 27))
+    assert not any("rule changes" in x or "Bank of Canada" in x for x in daily)
+    first = brief.queries(dt.date(2026, 10, 26), [], _NURSE, since=dt.date(2026, 10, 25))
+    assert any("rule changes" in x for x in first) and any("Bank of Canada" in x for x in first)
+
+
+@pytest.mark.parametrize("line, want", [
+    ("- **Work authorization:** Canadian citizen.", ""),
+    ("- **Right to work:** UK settled status. Not a British citizen.", "work visa and permit"),
+    ("- **Work authorization:** IEC Working Holiday work permit, no sponsorship needed.", "work visa and permit"),
+    ("- **Right to work:** Irish passport holder, a national.", ""),
+    ("- **Location:** Leeds", ""),
+])
+def test_the_right_to_work_news_follows_what_the_profile_says(monkeypatch, line, want):
+    _somewhere(monkeypatch, "GB", status="")
+    assert brief.rights_term("## Identity\n" + line + "\n") == want
 
 
 def test_what_counts_is_the_persons_own_line_where_they_wrote_one():
