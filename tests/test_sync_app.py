@@ -721,3 +721,5 @@ def test_the_days_check_is_kept_by_one_clock_whoever_writes_it():
     assert sync_app._stale_day("2000-01-01", None)
     assert not sync_app._stale_day(dt.date.today().isoformat(), None)
     assert sync_app._stale_day("", None)
+
+

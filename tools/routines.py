@@ -433,6 +433,86 @@ def record(session: str, trigger: str, cron: str = "", path: str | None = None,
 
 
 
+# ------------------------------------------------------------------ the daily upkeep
+
+# A person who opens only their page, never a chat, had a copy and a page nothing kept current:
+# only a chat takes the app's updates and writes the page's data, and a page can wake a chat
+# only from a tap (the maintainer, 2026-11-02: "it just hasnt updated... i need to go into chat
+# myself or press a button"). The brief does it every morning it runs; where it does not run
+# every day, this silent task, bound to the chat that answers the page, does it once a day.
+# tools/tidy.py makes it, keeps it bound to that chat as it renews, and takes it away once a
+# daily brief does the same.
+UPKEEP_KEY = "upkeep"
+UPKEEP_NAME = "Job search: daily upkeep"
+UPKEEP_FILE = "automation/prompts/upkeep.md"
+
+
+def upkeep_entry(reg: dict) -> dict | None:
+    return next((r for r in reg.get("routines") or [] if r.get("key") == UPKEEP_KEY), None)
+
+
+def brief_every_day(reg: dict) -> bool:
+    """Is the brief on, with a task, every day of the week? Then it keeps things current."""
+    r = _brief(reg)
+    if not r or r.get("off") or not r.get("trigger_id"):
+        return False
+    return read_cron(r.get("cron") or "").get("days") == list(range(7))
+
+
+def needs_upkeep(reg: dict) -> bool:
+    return not brief_every_day(reg)
+
+
+def upkeep_cron(reg: dict) -> str:
+    """Once a day, before the person is up: 5-something in their zone, off the hour."""
+    zone = reg.get("timezone") or home_zone()
+    if not zone:
+        return ""
+    h, m = brief_minute(UPKEEP_NAME, hour=6)
+    return f"CRON_TZ={zone} {m} {h} * * *"
+
+
+def upkeep_stub(repo: str = "") -> str:
+    return with_copy(DEFAULT_STUB.format(label="daily upkeep", Label="Daily upkeep",
+                                         prompt_file=UPKEEP_FILE, relay_id=""), repo)
+
+
+def record_upkeep(session: str, trigger: str, cron: str, path: str | None = None) -> str:
+    """Write the upkeep task just made (or moved to a new chat) into profile/routines.json."""
+    if path is None:
+        import person
+        path = person.path("routines.json")
+    try:
+        reg = load(path)
+    except (OSError, ValueError):
+        reg = {}
+    m = re.match(r"CRON_TZ=(\S+) ", cron or "")
+    reg["setup"] = setup_of(reg) or "chat_per_briefing"
+    reg["timezone"] = reg.get("timezone") or (m.group(1) if m else "")
+    keep = [r for r in reg.get("routines") or [] if r.get("key") != UPKEEP_KEY]
+    keep.append({"key": UPKEEP_KEY, "name": UPKEEP_NAME, "trigger_id": trigger, "cron": cron,
+                 "prompt_file": UPKEEP_FILE, "chat": {"session_id": session},
+                 "what": "Once a day, silently: the app's updates, the page's data, and any "
+                         "work still waiting. Only where the brief does not run every day."})
+    reg["routines"] = keep
+    with open(path, "w", encoding="utf-8", newline="\n") as fh:
+        json.dump(reg, fh, indent=2, ensure_ascii=False)
+        fh.write("\n")
+    return path
+
+
+def forget_upkeep(path: str | None = None) -> str:
+    if path is None:
+        import person
+        path = person.path("routines.json")
+    reg = load(path)
+    reg["routines"] = [r for r in reg.get("routines") or [] if r.get("key") != UPKEEP_KEY]
+    with open(path, "w", encoding="utf-8", newline="\n") as fh:
+        json.dump(reg, fh, indent=2, ensure_ascii=False)
+        fh.write("\n")
+    return path
+
+
 # ------------------------------------------------------------------ the brief's schedule
 
 DAY_WORDS = {"sun": 0, "mon": 1, "tue": 2, "wed": 3, "thu": 4, "fri": 5, "sat": 6}
@@ -907,11 +987,19 @@ def main(argv: list[str]) -> int:
               + __doc__.split("\n\n")[1])
         return 0
     if not argv or argv[0] not in ("check", "stub", "brief", "default", "record", "move",
-                                   "pause", "resume", "off", "on", "calls", "called"):
+                                   "pause", "resume", "off", "on", "calls", "called",
+                                   "upkeep-record", "upkeep-forget"):
         print(__doc__.split("\n\n")[1])
         return 2
     if argv[0] in ("move", "pause", "resume", "off", "on", "calls", "called"):
         return _schedule_cli(argv)
+    if argv[0] == "upkeep-record":
+        got = {argv[i][2:]: argv[i + 1] for i in range(1, len(argv) - 1, 2) if argv[i].startswith("--")}
+        print(record_upkeep(got.get("session", ""), got.get("trigger", ""), got.get("cron", "")))
+        return 0
+    if argv[0] == "upkeep-forget":
+        print(forget_upkeep())
+        return 0
     if argv[0] == "brief":
         triggers, more, chat_arg = None, False, ""
         for i, a in enumerate(argv):

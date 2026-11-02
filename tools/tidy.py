@@ -253,9 +253,13 @@ def plan(chats: list[dict], triggers: list[dict], info: dict, reg: dict, listene
                         f"<the new task's id> --cron \"{brief['cron']}\""
                         + (" --own-chat" if setup == "ops_relay" else ""),
                  "why": "the registry names the new task and its chat"},
-                {"tool": "update_trigger", "args": {"trigger_id": brief["trigger_id"],
-                                                    "enabled": False},
-                 "why": "the old task is turned off, never deleted"}]
+                ({"tool": "delete_trigger", "args": {"trigger_id": brief["trigger_id"]},
+                  "why": "the copy made for the helper this one replaced: one a day piled up "
+                         "turned off in their list of scheduled tasks"}
+                 if home == (listener.get("took_from") or "") and home != ops else
+                 {"tool": "update_trigger", "args": {"trigger_id": brief["trigger_id"],
+                                                     "enabled": False},
+                  "why": "the old task is turned off, never deleted"})]
 
     if adopt and adopt not in {s.get("id") for s in chats}:
         # Its chat was deleted: the task fails every morning, so it moves to the helper, and
@@ -318,6 +322,7 @@ def plan(chats: list[dict], triggers: list[dict], info: dict, reg: dict, listene
     out["ask"] = list(dict.fromkeys(out["ask"]))
     if out["ask"]:
         out["brief"] = []                             # decided once every chat is read
+    out["upkeep"] = [] if out["ask"] else _upkeep_calls(reg, triggers, helper, listener, repo)
     # A brief that stays where it is, stored before its prompt said how to get a copy of the
     # files, is given that line, so it runs in whichever chat it lands in (routines.with_copy;
     # two days of no brief, 2026-10-31). Once: the line it gets is how it is found next time.
@@ -330,6 +335,44 @@ def plan(chats: list[dict], triggers: list[dict], info: dict, reg: dict, listene
                                                                 "prompt": fixed},
                              "why": "the brief runs in any chat it lands in, getting the files "
                                     "first where they are missing"}]
+    return out
+
+
+def _upkeep_calls(reg: dict, triggers: list[dict], helper: str, listener: dict,
+                  repo: str) -> list[dict]:
+    """The calls that keep the daily upkeep right (tools/routines.py "the daily upkeep"):
+    made where nothing else keeps the copy and the page current every day, bound to the chat
+    that answers the page and moved with it as it renews (the copy for the chat it replaced
+    deleted, not piled up), and taken away once a daily brief does the same."""
+    import routines
+    up = routines.upkeep_entry(reg)
+    live = next((t for t in triggers if up and t.get("id") == up.get("trigger_id")), None)
+    if not routines.needs_upkeep(reg):
+        if not up:
+            return []
+        return ([{"tool": "delete_trigger", "args": {"trigger_id": up["trigger_id"]},
+                  "why": "the brief now runs every day and does the same"}] if live else []) + \
+               [{"run": "python3 tools/routines.py upkeep-forget",
+                 "why": "the registry no longer names it"}]
+    if not helper.startswith("session_"):
+        return []
+    bound = str(((up or {}).get("chat") or {}).get("session_id") or "")
+    if up and live and live.get("enabled") is not False and bound == helper:
+        return []
+    cron = (up or {}).get("cron") or routines.upkeep_cron(reg)
+    if not cron:
+        return []
+    out = [{"tool": "create_trigger", "args": {
+               "name": routines.UPKEEP_NAME, "persistent_session_id": helper,
+               "cron_expression": cron, "prompt": routines.upkeep_stub(repo), "connectors": [],
+               "initiation": "own_initiative"},
+            "why": "once a day, silently, the copy and the page kept current"},
+           {"run": f"python3 tools/routines.py upkeep-record --session {helper} --trigger "
+                   f"<the new task's id> --cron \"{cron}\"",
+            "why": "the registry names the task and its chat"}]
+    if live:
+        out.append({"tool": "delete_trigger", "args": {"trigger_id": live["id"]},
+                    "why": "the copy made for the chat this one replaced"})
     return out
 
 
@@ -399,6 +442,13 @@ def run_plan(a) -> int:
             print(f"brief {i}: {c['tool']} {json.dumps(c['args'], ensure_ascii=False)} ({c['why']})")
         else:
             print(f"brief {i}: {c['run']} ({c['why']})")
+    for i, c in enumerate(got.get("upkeep") or [], 1):
+        if c.get("tool"):
+            print(f"upkeep {i}: {c['tool']} {json.dumps(c['args'], ensure_ascii=False)} ({c['why']})")
+        else:
+            print(f"upkeep {i}: {c['run']} ({c['why']})")
+    if got.get("upkeep"):
+        print("upkeep: make these in order and stop at the first that fails; say nothing about it")
     if len(got["brief"]) > 1:
         print("brief: make these in order and stop at the first that fails; archive the old "
               "brief's chat only once all three are made")

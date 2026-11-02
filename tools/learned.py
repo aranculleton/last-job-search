@@ -1575,10 +1575,38 @@ def hook(event: dict) -> dict:
     return {"decision": "block", "reason": refuse_over_pending("Not finished")}
 
 
+def _update_due(event: dict) -> str:
+    """The day's update check, said beside the day's first message in any chat, a chat left
+    open for weeks included: the line in CLAUDE.md asking for it was missed, and a copy
+    stayed on an old version (the maintainer, 2026-11-02: "with ZERO PROMPTING even if its
+    the same chat thats been used this entire time"). Files only: the check itself runs in
+    the turn, never here, where a prompt hook is cut off after 30 seconds, mid-merge. This is
+    the app's one hook, so it says this too, rather than a second hook."""
+    if (event.get("hook_event_name") or "") != "UserPromptSubmit":
+        return ""
+    try:
+        import sync_app
+        return sync_app.HOOK_LINE if sync_app.stale() else ""
+    except Exception:  # noqa: BLE001  a hook must never break the chat it runs in
+        return ""
+
+
+def _with_update(out: dict, due: str) -> dict:
+    if not due:
+        return out
+    if not out:
+        return {"hookSpecificOutput": {"hookEventName": "UserPromptSubmit", "additionalContext": due}}
+    spec = out.get("hookSpecificOutput") or {}
+    spec["additionalContext"] = (due + "\n\n" + str(spec.get("additionalContext") or "")).strip()
+    out["hookSpecificOutput"] = dict(spec, hookEventName="UserPromptSubmit")
+    return out
+
+
 def _cli_hook() -> int:
     try:
         event = json.loads(sys.stdin.read() or "{}")
-        out = hook(event if isinstance(event, dict) else {})
+        event = event if isinstance(event, dict) else {}
+        out = _with_update(hook(event), _update_due(event))
     except Exception as e:  # noqa: BLE001  a hook must never break the chat it runs in
         print(f"learned.py hook: {type(e).__name__}: {e}", file=sys.stderr)
         return 0

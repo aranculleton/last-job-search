@@ -639,8 +639,9 @@ METHODS: dict[str, dict] = {
             (13, "2026-10-30", False, "the brief can move to another time zone from the page, and every scheduled task keeps its clock time there"),
             (14, "2026-10-31", False, "a brief in the older ops chat moves into the page's chat by itself once that chat is gone (the task had been waking a new empty chat with no copy of the files every morning); a brief back from a break runs in the ops chat, never a new empty one; a brief bound to a chat with a copy of the files is never moved, a moved one follows a new helper, and a time zone move owes an update for every task, not only the last"),
             (15, "2026-10-31", False, "a brief's stored prompt says how to get a copy of the files when its chat has none, so it runs in any chat it lands in; the day's tidy-up gives an older stored brief that line, once"),
+            (16, "2026-11-02", False, "a silent daily upkeep where the brief does not run every day, made and kept bound to the chat that answers the page by the daily tidy-up; a brief or upkeep moved off the helper that chat replaced is deleted there, not left turned off"),
         ),
-        "fingerprint": "7a09206f051f078f",
+        "fingerprint": "6b0cb881d4a7b3f6",
     },
     "expand": {
         "by": "upgrade", "priority": 4, "time": "~15 min",
