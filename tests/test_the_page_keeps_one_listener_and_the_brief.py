@@ -451,7 +451,7 @@ def test_a_person_with_nothing_yet_is_shown_the_first_search(run, tmp_path, vp):
                                                        "(document.querySelector('#main .bp-today [data-k=\"bp-first-search\"]') || {}).textContent]"}],
               vp, model=model, clock=T)
     what, button = got["after"][0]["eval"]
-    assert what == "Find your first jobs" and button == "Find jobs", (what, button)
+    assert what == "Find your first jobs" and button == "Start the search", (what, button)
 
 
 # A reply owed in To do names its person by `item`, as the model sends it, and the Brief shows

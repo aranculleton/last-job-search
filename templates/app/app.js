@@ -3318,7 +3318,7 @@
       hero = h("div", {class: "bp-iv"},
         h("p", {class: "bp-iv-when"}, busy ? "Searching now" : "First"),
         h("p", {class: "bp-iv-what"}, busy ? "Claude is finding your first jobs. They show here when the search is done." : "Find your first jobs"),
-        busy ? null : btn("Find jobs", () => askSearch(), {kind: "primary", small: true, key: "bp-first-search"}));
+        busy ? null : btn("Start the search", () => askSearch(), {kind: "primary", small: true, key: "bp-first-search"}));
     } else {
       const first = stepsFrom[0];
       if (first) {

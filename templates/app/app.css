@@ -192,7 +192,7 @@ bdi { unicode-bidi: isolate; }
 @media (min-width: 760px) {
   .nav-mini .shell { grid-template-columns: 56px minmax(0, 1fr); column-gap: 24px; }
   .nav-mini .side-list a, .nav-mini .side-toggle { justify-content: center; padding-inline: 8px; }
-  .nav-mini .side .side-label { position: absolute; width: 1px; height: 1px; margin: -1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
+  .nav-mini .side .side-label { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
   .nav-mini .side-list .navcount { display: none; }
   .nav-mini .side-list .badge { position: absolute; top: 2px; right: 2px; margin: 0; }
 }
@@ -1411,7 +1411,7 @@ ul.bp-news { gap: 12px; }
 .bp-spark.has-on .bp-col:not(.is-on) .bp-bar { opacity: 0.3; }
 /* The week each bar is, the same columns as the bars. */
 .bp-wks { display: grid; grid-auto-flow: column; grid-auto-columns: minmax(0, 1fr); gap: 4px; margin-top: 4px; }
-.bp-wk { text-align: center; font-size: 0.6875rem; line-height: 1.2; color: var(--muted); white-space: nowrap; overflow: hidden; }
+.bp-wk { text-align: center; font-size: var(--t-sm); line-height: 1.2; color: var(--muted); white-space: nowrap; overflow: hidden; }
 .bp-wk.is-now { color: var(--ink); font-weight: 600; }
 /* Each week is a column that answers the pointer, a tap or the keyboard; the one pointed at
    stays full and the others step back, and the line under them says its week. */
