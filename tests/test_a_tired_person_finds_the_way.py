@@ -226,3 +226,24 @@ def test_to_do_opens_on_what_is_late_or_due_today_and_folds_the_setup(run, tmp_p
         assert bands.index("Needs your answer") > last_owed, ("questions come after what is owed", r["cards"])
     assert r["youFolded"], "Finish your profile waits behind the fold while today's things show"
     assert r["fold"].startswith("Show "), r
+
+
+# Found along the way, 2026-11-02. "Did your note to Wren go?" is answered once the note is
+# marked sent in Messages, never asked again.
+UNFOLD = "(() => { [...document.querySelectorAll('#main button')].filter((b) => /^Show \\d+ more/.test(b.textContent.trim())).forEach((b) => b.click()); return 1; })()"
+ASKED = "document.querySelector('#main').innerText.includes('Did your note to Wren go?')"
+
+
+def test_a_note_marked_sent_is_no_longer_asked_about(run, tmp_path, vp):
+    got = _go(run, tmp_path, [{"hash": "todo", "eval": UNFOLD}, {"eval": ASKED},
+                              {"hash": "messages", "eval": "(() => { document.querySelector('[data-k=\"sent:msg-wren-2\"]').click(); return 1; })()"},
+                              {"hash": "todo", "eval": UNFOLD}, {"eval": ASKED}], vp, clock=T)
+    assert got["after"][1]["eval"] is True and got["after"][4]["eval"] is False, [a["eval"] for a in got["after"]]
+
+
+def test_a_message_ranks_first_in_its_group_and_a_text_box_asks_to_be_filled_in():
+    js = open(os.path.join(ROOT, "templates", "app", "app.js"), encoding="utf-8").read()
+    # A message ranks 0: with || it became 9 and fell behind a hold at the same employer.
+    assert "KIND_RANK[a.kind] || 9" not in js and "KIND_RANK[a.kind] ?? 9" in js
+    # An empty box to type in says to fill it in, not "Choose one.".
+    assert '"Choose one." : "Fill this in."' in js

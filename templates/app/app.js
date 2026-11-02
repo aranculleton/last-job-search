@@ -1336,7 +1336,9 @@
   let fieldN = 0;
   function field(f) {
     const id = "f" + (++fieldN);
-    const err = h("p", {class: "field-error", id: id + "-e", hidden: true}, f.error || "Choose one.");
+    // A box to type in is filled in, a choice is chosen: "Choose one." under an empty text box
+    // asked for the wrong thing (the walk-through, 2026-11-02).
+    const err = h("p", {class: "field-error", id: id + "-e", hidden: true}, f.error || (["radio", "select", "check"].includes(txt(f.type)) ? "Choose one." : "Fill this in."));
     let el;
     let read;
     let firstId = id;
@@ -2190,6 +2192,9 @@
       // Questions from updates live in Settings, never in To do (the maintainer, 2026-10-26).
       if (needKind(n) === "update") continue;
       if (stopped(txt(obj(n.about).contact) || txt(n.contact), txt(obj(n.about).company))) continue;
+      // "Did your note go?" is answered once the note is marked sent in Messages: asking again
+      // left a question for something already done (the walk-through, 2026-11-02).
+      if (/^q-sent-/.test(txt(n.id)) && sentHere(personMessage(txt(obj(n.about).contact) || txt(n.contact)))) continue;
       out.push({key: "need:" + n.id, kind: needKind(n), band: "answer", employer: txt(obj(n.about).company) || null, tab: needTab(n), need: n,
         group: /^q-sent-/.test(txt(n.id)) ? "sent" : null,
         counts: !effective(n.id), node: (ctx) => (txt(n.kind) === "setup" ? setupNeedCard(n, ctx) : needCard(n, ctx))});
@@ -2301,7 +2306,8 @@
   const todayCounts = (list) => list.filter((i) => TODAY_BANDS.has(i.band) && i.counts).length;
   function todoBadge() { return todayCounts(todoItems().filter((i) => !todoHidden(i))); }
   function itemSort(a, b) {
-    const r = (KIND_RANK[a.kind] || 9) - (KIND_RANK[b.kind] || 9);
+    // ?? not ||: a message ranks 0, and || made it 9, after a hold at the same employer.
+    const r = (KIND_RANK[a.kind] ?? 9) - (KIND_RANK[b.kind] ?? 9);
     if (r) return r;
     return txt(a.due || "9999").localeCompare(txt(b.due || "9999")) || a.key.localeCompare(b.key);
   }

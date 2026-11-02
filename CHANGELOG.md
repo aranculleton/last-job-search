@@ -74,6 +74,27 @@ make sense to somebody whose repo just received it.
   as its interview, which stays in Coming up.
 - **Refresh says when your Claude allowance stopped it**, instead of "Up to date".
 - **Today's late follow-up with a draft ready opens the draft**, not the person's page.
+- **From using the app as a tired job seeker would** (every change below was found that way):
+  - A message already drafted opens from To do, Contacts and the person's page, and is never
+    drafted again on your allowance; "I sent it" counts everywhere at once, and a note marked
+    sent is no longer asked about.
+  - Draft this works in one tap: "No, draft it" is chosen, and the posting's own questions
+    are optional.
+  - To do opens on what is late or due today; setting-up cards wait below. A card hidden by
+    mistake comes back from the end of To do.
+  - Add to calendar, in words, on an interview's To do card and in its prep.
+  - The job bin says what its reason changes ("Fewer jobs outside your field from now on");
+    what to avoid can be changed in Settings, in the panel now called "Change the search" like
+    its button.
+  - Take a break from the brief's bell, for one week, two, or until a day you choose.
+  - A draft that needs a fix says so on its card, not inside More.
+  - A person's page says where things stand in words, shows the conversation and the draft,
+    and its back link names where you came from.
+  - Jobs to look at is one number everywhere, and a closed posting is never offered as new.
+  - Plain words: "UK time", "Posted too long ago", "Start" for a new person, "Messages" titled
+    Messages, and an empty box asks to be filled in.
+  - On a phone, a message's close button stays on its line, and Chat's footer clears the tab
+    bar.
 - **A stage you finished reaches your tracker by itself.** When an application's record marks
   a stage done (a test taken, an interview held) after the tracker row's last note, the
   morning brief writes it onto the row too, so nothing reading the row thinks it is still due.
