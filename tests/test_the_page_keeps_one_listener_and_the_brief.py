@@ -19,6 +19,7 @@ import pytest  # noqa: E402
 
 import test_the_page_journeys as journeys  # noqa: E402
 from test_the_page_journeys import PHONE, WIDE, _go, _one, _sample  # noqa: E402
+from test_the_page_works_in_a_browser import EMPTY  # noqa: E402
 
 
 @pytest.fixture(scope="module")
@@ -87,6 +88,27 @@ def test_a_republish_is_said_in_plain_words(run, tmp_path, vp):
     got = _go(run, tmp_path, [{"hash": "work", "read": '[data-work="republish~v4"]'}], vp, seed=seed, clock=T)
     text = got["after"][0]["text"]
     assert "Updating your page" in text and "republish" not in text.lower()
+
+
+# The moving line under the header glides: it moves by transform alone, on its own layer, and
+# stays inside the header. It was a background-position sweep, repainted every frame, and it
+# stuttered on a busy page (the maintainer, 2026-11-02: "this loading animation is quite laggy").
+LINE = ("(() => { const p = document.getElementById('pulse'); const a = document.getAnimations().find((x) => x.animationName === 'sweep'); "
+        "const keys = a ? [...new Set(a.effect.getKeyframes().flatMap((k) => Object.keys(k)))].filter((k) => !['offset', 'easing', 'composite', 'computedOffset'].includes(k)) : null; "
+        "return [p.classList.contains('is-updating'), getComputedStyle(p, '::after').animationName, keys, p.scrollWidth <= p.clientWidth, "
+        "document.documentElement.scrollWidth <= document.documentElement.clientWidth]; })()")
+
+
+def test_the_update_line_glides_by_transform_and_stays_in_the_header(run, tmp_path, vp):
+    seed = {"work/republish~v4": {"kind": "republish", "title": "Updating your page", "to": "either", "args": {"version": 4}, "asked_at": "2026-10-25T08:59:30Z",
+                                  "status": "running", "claimed_by": "cloud-1", "claimed_at": "2026-10-25T08:59:40Z", "stages": [], "stage": 0,
+                                  "stage_at": "2026-10-25T08:59:40Z", "steps": [], "stop_asked": False, "attempt": 1}}
+    got = _go(run, tmp_path, [{"hash": "brief", "ready": "document.getElementById('pulse').classList.contains('is-updating')",
+                               "eval": LINE}], vp, seed=seed, clock=T)
+    updating, name, keys, inside, page_inside = got["after"][0]["eval"]
+    assert updating and name == "sweep"
+    assert keys == ["transform"], keys
+    assert inside and page_inside
 
 
 def test_your_brief_moves_rests_and_starts_again_from_settings(run, tmp_path, vp):
@@ -230,9 +252,12 @@ def test_refresh_asks_claude_only_when_the_data_is_older_than_today(run, tmp_pat
          "until": "!!document.querySelector('[data-k=\"refresh\"]')"},
         {"eval": "!!document.getElementById('refresh-cost')"},
         {"eval": "(() => { document.querySelector('[data-k=\"refresh\"]').click(); return 1; })()"},
-        {"eval": count}], vp, model=model, clock="2026-10-25T15:00:00Z")
+        {"eval": count}, {"eval": "document.getElementById('toasts').textContent"}], vp, model=model, clock="2026-10-25T15:00:00Z")
     assert got["after"][1]["eval"] is bool(asks)          # the gauge only where Claude is asked
     assert got["after"][3]["eval"] == asks
+    # A free re-check says so: a Refresh that changed nothing on screen read as broken (the
+    # maintainer, 2026-11-02: "it doesnt seem to do anything").
+    assert ("Up to date" in got["after"][4]["eval"]) is (not asks), got["after"][4]["eval"]
 
 
 # Today's card is what comes next today: a call this afternoon leads, ahead of an interview
@@ -253,6 +278,199 @@ def test_today_leads_with_what_is_on_today_and_the_strip_marks_today_and_tomorro
     assert got["after"][0]["eval"] == call["title"], got["after"][0]["eval"]
     today, tomorrow, red, later = got["after"][1]["eval"]
     assert today and tomorrow and red and later and red != later      # today's dot is its own colour
+
+
+# Today is the one most pressing thing, with what matters about it beside it (the maintainer,
+# 2026-11-02): with no booked thing today and an interview whose prep is ready, what has rolled
+# over leads, with who it is and how late; Today's right half is never left empty, Coming up is
+# never a strip over nothing, and Today's thing may be in Next three too.
+TODAY = ("(() => { const t = document.querySelector('#main .bp-today'); const u = document.querySelector('#main .bp-upcoming'); "
+         "const side = t.querySelector('.bp-today-side'); "
+         "return {when: t.querySelector('.bp-iv-when').textContent, what: t.querySelector('.bp-iv-what').textContent, "
+         "facts: side ? [...side.querySelectorAll('.bp-facts li')].map((l) => l.textContent) : [], "
+         "empty: [...t.querySelectorAll('.bp-body > *')].filter((e) => !e.textContent.trim()).length, "
+         "next: [...document.querySelectorAll('#main .bp-next li')].map((l) => l.textContent), "
+         "upRows: u.querySelectorAll('.bp-up li, .bp-up-due li').length, "
+         "heroWide: side ? null : t.querySelector('.bp-iv').getBoundingClientRect().width / t.querySelector('.bp-body').getBoundingClientRect().width}; })()")
+
+
+def test_today_is_the_most_pressing_thing_with_what_matters_beside_it(run, tmp_path, vp):
+    model = copy.deepcopy(_sample())
+    one = model["upcoming"][0]
+    model["upcoming"] = [one]
+    iv = next(i for i in model["interviews"] if i["id"] == one["go"]["item"])
+    iv["one_screen"] = {"questions": []}
+    iv.setdefault("prep", {})["updated"] = "2026-10-24"
+    late = min((d for d in model["due"] if d.get("due", "9999") < "2026-10-25" and d.get("kind") not in ("request_pending", "withdraw", "hidden")),
+               key=lambda d: ((d.get("kind") != "reply"), d["due"]))
+    late["context"] = "Operations lead at Fernhill Freight \u00b7 met at a meetup"
+    got = _go(run, tmp_path, [{"hash": "brief", "eval": TODAY}], vp, model=model, clock=T)
+    r = got["after"][0]["eval"]
+    assert r["when"].startswith("Rolled over"), r
+    assert late["title"] in r["what"], r
+    assert "Operations lead at Fernhill Freight" in r["facts"], r
+    assert r["empty"] == 0 and r["upRows"] >= 1, r
+    # Prep not written yet: the interview leads instead, inside the prep window.
+    iv["prep"] = {}
+    got = _go(run, tmp_path, [{"hash": "brief", "eval": TODAY}], vp, model=model, clock=T)
+    assert iv["company"] in got["after"][0]["eval"]["what"], got["after"][0]["eval"]
+    # With nothing to put beside it, the thing takes the card's width.
+    iv["prep"] = {"updated": "2026-10-24"}
+    model["due"], model["brief"]["sections"] = [], [s for s in model["brief"]["sections"] if s.get("kind") not in ("next", "owed", "lead")]
+    got = _go(run, tmp_path, [{"hash": "brief", "eval": TODAY}], vp, model=model, clock=T)
+    r = got["after"][0]["eval"]
+    assert r["empty"] == 0 and (r["heroWide"] is None or r["heroWide"] > 0.9), r
+
+
+# Your progress fits its panel at any width: no strip of numbers with empty space beside it on
+# a full row, nothing squeezed on a phone (the maintainer, 2026-11-02: "leaves white space or
+# gets weirdly cramped"). With News, it shares a row; without, it has the row to itself.
+PROGRESS = ("(() => { const p = document.querySelector('#main .bp-numbers'); const b = p.querySelector('.bp-body').getBoundingClientRect(); "
+            "const st = p.querySelector('.bp-stats').getBoundingClientRect(); const sp = p.querySelector('.bp-spark-wrap'); "
+            "const tiles = [...p.querySelectorAll('.bp-stat')].map((t) => t.getBoundingClientRect().width); "
+            "return {gap: Math.round(b.right - Math.max(st.right, sp ? sp.getBoundingClientRect().right : 0)), narrowest: Math.round(Math.min(...tiles)), "
+            "overflow: p.scrollWidth > p.clientWidth}; })()")
+
+
+@pytest.mark.parametrize("news", [True, False], ids=["with-news", "alone"])
+def test_your_progress_fills_its_panel_without_crowding(run, tmp_path, vp, news):
+    model = copy.deepcopy(_sample())
+    if not news:
+        model["brief"]["sections"] = [s for s in model["brief"]["sections"] if s.get("kind") != "news"]
+    got = _go(run, tmp_path, [{"hash": "brief", "eval": PROGRESS}], vp, model=model, clock=T)
+    r = got["after"][0]["eval"]
+    assert r["gap"] <= 2, r            # nothing left empty at its right
+    assert r["narrowest"] >= 88, r     # no number squeezed
+    assert not r["overflow"], r
+
+
+# The menu folds to its icons for more room, and back (the maintainer, 2026-11-02: "an option
+# to minimise the side panel so it only shows the icons"): each name is still read out and
+# shown on hover, To do keeps its badge, the choice is kept on this device, and a phone, which
+# has no side menu, has no such button.
+SIDE = ("(() => { const s = document.getElementById('side'); const m = document.getElementById('main'); const t = document.querySelector('[data-k=\"side-toggle\"]'); "
+        "const a = document.querySelector('[data-k=\"side:jobs\"]'); "
+        "return {side: Math.round(s.getBoundingClientRect().width), main: Math.round(m.getBoundingClientRect().width), "
+        "shown: !!t && t.getBoundingClientRect().width > 0, pressed: t ? t.getAttribute('aria-pressed') : null, name: a.textContent.trim(), title: a.getAttribute('title'), "
+        "badge: !!document.querySelector('#side [data-k=\"side:todo\"] .badge'), kept: localStorage.getItem('ljs:p:nav:mini')}; })()")
+
+
+def test_the_menu_folds_to_its_icons_and_back(run, tmp_path, vp):
+    click = "(() => { document.querySelector('[data-k=\"side-toggle\"]').click(); return 1; })()"
+    got = _go(run, tmp_path, [{"hash": "brief", "eval": SIDE}, {"eval": click}, {"eval": SIDE}, {"eval": click}, {"eval": SIDE}], vp, clock=T)
+    before, mini, after = got["after"][0]["eval"], got["after"][2]["eval"], got["after"][4]["eval"]
+    if vp == PHONE:
+        assert not before["shown"], before
+        return
+    assert before["shown"] and before["pressed"] == "false" and before["side"] >= 180, before
+    assert mini["pressed"] == "true" and mini["side"] <= 64 and mini["main"] > before["main"], mini
+    assert mini["name"].startswith("Jobs") and mini["title"] == "Jobs" and mini["badge"], mini
+    assert mini["kept"] == "true", mini
+    assert after["side"] == before["side"] and after["pressed"] == "false" and after["title"] is None, after
+
+
+# The release review and the walk-through (2026-11-02). A test due today is itself on Today,
+# never the interview it belongs to, and that interview stays in Coming up.
+def test_a_test_due_today_leads_as_itself_and_its_interview_stays_coming_up(run, tmp_path, vp):
+    got = _go(run, tmp_path, [{"hash": "brief", "eval": "[document.querySelector('#main .bp-today .bp-iv-when').textContent, "
+                                                       "document.querySelector('#main .bp-today .bp-iv-what').textContent, "
+                                                       "document.querySelector('#main .bp-upcoming').textContent]"}],
+              vp, clock="2026-11-02T08:30:00Z")
+    when, what, coming = got["after"][0]["eval"]
+    assert when.startswith("Due today") and "Online test" in what, (when, what)
+    assert "Second interview" in coming, coming
+
+
+# A late reply or follow-up with a draft ready leads to the draft, not to the person's page,
+# which has no draft on it.
+def test_todays_late_follow_up_opens_its_draft(run, tmp_path, vp):
+    got = _go(run, tmp_path, [{"hash": "brief", "eval": "document.querySelector('#main .bp-today .bp-iv .btn').textContent"},
+                              {"eval": "(() => { document.querySelector('#main .bp-today .bp-iv .btn').click(); return 1; })()"},
+                              {"eval": "location.hash"}], vp, clock=T)
+    assert got["after"][0]["eval"] == "See the draft", got["after"][0]["eval"]
+    assert "messages/msg-wren" in got["after"][2]["eval"], got["after"][2]["eval"]   # on the draft itself
+
+
+# Refresh with yesterday's data and the Claude allowance used up says so, never "Up to date".
+def test_refresh_says_when_the_allowance_stopped_it(run, tmp_path, vp):
+    model = copy.deepcopy(_sample())
+    model["made_at"] = "2026-10-24T07:00:00Z"
+    got = _go(run, tmp_path, [
+        {"hash": "brief", "eval": "(() => { LJS.state().flags.limit = Date.now() + 3600000; document.querySelector('[data-k=\"conn\"]').click(); return 1; })()",
+         "until": "!!document.querySelector('[data-k=\"refresh\"]')"},
+        {"eval": "(() => { document.querySelector('[data-k=\"refresh\"]').click(); return 1; })()"},
+        {"eval": "document.getElementById('toasts').textContent"}], vp, model=model, clock="2026-10-25T15:00:00Z")
+    toast = got["after"][2]["eval"]
+    assert "allowance" in toast and "Up to date" not in toast, toast
+
+
+# A new person's progress, with no weekly bars yet, still fills its panel.
+def test_your_progress_with_no_bars_yet_fills_its_panel(run, tmp_path, vp):
+    model = copy.deepcopy(_sample())
+    model["done"]["weeks"] = []
+    model["brief"]["sections"] = [s for s in model["brief"]["sections"] if s.get("kind") != "news"]
+    got = _go(run, tmp_path, [{"hash": "brief", "eval": PROGRESS}], vp, model=model, clock=T)
+    assert got["after"][0]["eval"]["gap"] <= 2, got["after"][0]["eval"]
+
+
+# From the walk-through (2026-11-02). Every count of jobs to look at is the same number, and a
+# closed posting is never one of them.
+def test_every_count_of_jobs_to_look_at_agrees_and_leaves_out_a_closed_one(run, tmp_path, vp):
+    js = ("(() => { const n = (s) => { const m = /(\\d+)/.exec(s || ''); return m ? Number(m[1]) : 0; }; "
+          "return {nav: n((document.querySelector('[data-k=\"side:jobs\"] .navcount, [data-k=\"tab:jobs\"] .navcount') || {}).textContent), "
+          "brief: document.querySelectorAll('#main .bp-jobs li').length}; })()")
+    got = _go(run, tmp_path, [{"hash": "brief", "eval": js},
+                              {"hash": "jobs", "eval": "document.querySelector('#main .summary, #main .sum, #main p').textContent"},
+                              {"hash": "todo", "eval": "(document.querySelector('[data-k=\"todo-jobs\"]') || {}).textContent || ''"},
+                              {"hash": "brief", "eval": "document.querySelector('#main .bp-jobs').textContent"}], vp, clock=T)
+    a = got["after"][0]["eval"]
+    jobs_line, todo_line, panel = got["after"][1]["eval"], got["after"][2]["eval"], got["after"][3]["eval"]
+    assert a["nav"] == a["brief"] and jobs_line.startswith("%d to look at" % a["nav"]), (a, jobs_line)
+    assert (not todo_line) or todo_line.startswith("%d new" % a["nav"]), todo_line
+    assert "Analytics Consultant" not in panel, panel      # its posting has closed
+
+
+# Today's thing comes again in Next three only where there is room: the thank-you two days
+# late is on the Brief, and Wednesday's phone screen says when it is.
+def test_next_three_keeps_room_for_others_and_an_interview_says_when(run, tmp_path, vp):
+    got = _go(run, tmp_path, [{"hash": "brief", "eval": "[document.querySelector('#main .bp-today .bp-iv-what').textContent, "
+                                                       "[...document.querySelectorAll('#main .bp-next li')].map((l) => l.textContent)]"}], vp, clock=T)
+    today, steps = got["after"][0]["eval"]
+    assert not any(today.strip() in s for s in steps), (today, steps)
+    assert any("Larkspur" in s and "28 Oct" in s and "13:00" in s for s in steps), steps
+    # A thank-you owed after a round is not given the next round's day.
+    assert not any("Thank-you" in s and "4 Nov" in s for s in steps), steps
+
+
+# Set up with nothing found yet: Today's one thing is the first search, with a filled button.
+def test_a_person_with_nothing_yet_is_shown_the_first_search(run, tmp_path, vp):
+    model = copy.deepcopy(_sample())
+    for k in ("due", "messages", "ready", "upcoming", "interviews", "people"):
+        if isinstance(model.get(k), list):
+            model[k] = []
+    model["jobs"]["rows"] = []
+    model["brief"]["sections"] = [s for s in model["brief"]["sections"] if s.get("kind") not in ("next", "owed", "lead")]
+    got = _go(run, tmp_path, [{"hash": "brief", "eval": "[document.querySelector('#main .bp-today .bp-iv-what').textContent, "
+                                                       "(document.querySelector('#main .bp-today [data-k=\"bp-first-search\"]') || {}).textContent]"}],
+              vp, model=model, clock=T)
+    what, button = got["after"][0]["eval"]
+    assert what == "Find your first jobs" and button == "Start the search", (what, button)
+
+
+# A reply owed in To do names its person by `item`, as the model sends it, and the Brief shows
+# that person once: the same reply led Today and came third in Next three on the maintainer's
+# page (2026-11-02), because only a `contact` field the model never sends was read.
+def test_a_reply_owed_is_shown_once_when_a_step_names_the_same_person(run, tmp_path, vp):
+    model = copy.deepcopy(_sample())
+    d = next(x for x in model["due"] if x["id"] == "due-juno-reply")
+    d.pop("contact")
+    d["item"] = "larkspur_retail_castellan"
+    got = _go(run, tmp_path, [{"hash": "brief", "eval": "[document.querySelectorAll('#main [data-k=\"bp-due:due-juno-reply\"]').length, "
+                                                       "[...document.querySelectorAll('#main .bp-today, #main .bp-next, #main .bp-upcoming, #main .bp-people')].filter((p) => p.textContent.includes('Juno')).map((p) => p.getAttribute('data-k'))]"}],
+              vp, model=model, clock=T)
+    due_rows, junos = got["after"][0]["eval"]
+    # The person is in one panel, once: the due row for them is not drawn beside the step.
+    assert due_rows == 0 and len(junos) == 1, (due_rows, junos)
 
 
 # Fitting the Brief to the window is by what each item really saves: nothing is hidden beside
@@ -305,3 +523,148 @@ def test_coming_up_marks_today_and_tomorrow_calmly(run, tmp_path, vp):
     (c0, today), (c1, tomorrow), (c2, later) = got["after"][0]["eval"]
     assert "is-today" in c0 and "is-tomorrow" in c1 and "is-to" not in c2, got["after"][0]["eval"]
     assert today != tomorrow and today not in ("rgba(0, 0, 0, 0)", "") and tomorrow not in ("rgba(0, 0, 0, 0)", "")
+
+
+# ------------------------------------------------------------------ a draft already made is shown, never made again
+
+# A message already drafted is opened, never drafted a second time (2026-11-02): To do's
+# "Follow up with Fernhill Freight" queued new work while the follow-up sat ready in Messages.
+def test_a_follow_up_already_drafted_opens_from_to_do_and_is_never_drafted_again(run, tmp_path, vp):
+    row = '[data-item="due-fernhill-nudge"]'
+    got = _go(run, tmp_path, [
+        {"hash": "todo", "read": row},
+        {"click": "See the draft", "within": row, "until": "location.hash === '#drafts-messages/msg-wren-2'"},
+    ], vp, clock=T)
+    text = got["after"][0]["text"]
+    assert "See the draft" in text and "Draft the follow-up" not in text, text
+    assert got["after"][1]["hash"] == "#drafts-messages/msg-wren-2"
+    assert not [w for w in got["work"] if w and w.get("kind") in ("follow_up", "nudge")], got["work"]
+
+
+# A reply drafted for Juno and a thank-you for Marisol: their To do row, their Contacts row and
+# their own page each open the draft, and nothing offers "Draft a reply" over it.
+def test_a_reply_already_drafted_opens_from_to_do_contacts_and_their_page(run, tmp_path, vp):
+    juno, marisol = '[data-item="larkspur_retail_castellan"]', '[data-item="ellerwick_trust_priya"]'
+    got = _go(run, tmp_path, [
+        {"hash": "todo", "read": '[data-item="due-juno-reply"]'},
+        {"hash": "contacts", "read": juno},
+        {"read": marisol},
+        {"hash": "drafts-messages", "click": "Juno", "role": "link", "within": '[data-item="msg-juno-1"]', "read": "dialog.detail"},
+        {"click": "See the draft", "within": "dialog.detail", "until": "location.hash === '#drafts-messages/msg-juno-1'",
+         "eval": "document.querySelectorAll('dialog.detail[open]').length"},
+    ], vp, clock=T)
+    for n in (0, 1, 2):
+        text = got["after"][n]["text"]
+        assert "See the draft" in text and "Draft a reply" not in text, (n, text)
+    assert "Next: Thank-you note" in got["after"][2]["text"]
+    page = got["after"][3]["text"]
+    assert "See the draft" in page and "Draft a reply" not in page, page
+    assert "Thursday at 12 suits me well" in page, "their page shows the draft that is ready"
+    assert got["after"][4]["eval"] == 0 and got["after"][4]["hash"] == "#drafts-messages/msg-juno-1"
+    assert not [w for w in got["work"] if w and w.get("kind") in ("reply", "follow_up")], got["work"]
+
+
+# "I sent it" counts everywhere at once, before Claude catches up (2026-11-02): Contacts said
+# "Replied: your turn" with "Draft a reply", To do still asked to reply, and the badge stayed.
+BADGE = "(() => { const b = document.querySelector('#tabs .badge, #side .badge'); return b ? Number(b.firstChild.textContent) : 0; })()"
+
+
+def test_i_sent_it_is_done_in_contacts_to_do_and_the_brief_at_once(run, tmp_path, vp):
+    juno = '[data-item="larkspur_retail_castellan"]'
+    got = _go(run, tmp_path, [
+        {"hash": "todo", "eval": BADGE},
+        {"hash": "brief", "read": "#main .bp-next"},
+        {"hash": "drafts-messages", "click": "Copy", "within": '[data-item="msg-juno-1"]'},
+        {"click": "I sent it", "within": '[data-item="msg-juno-1"]'},
+        {"hash": "contacts", "read": "#main .sec-head"},
+        {"open": "fold:contacts", "read": juno},
+        {"hash": "todo", "count": '[data-item="due-juno-reply"]', "eval": BADGE},
+        {"hash": "brief", "read": "#main .bp-next", "eval": "(document.querySelector('#main .bp-people') || {}).textContent || ''"},
+    ], vp, clock=T)
+    assert _one(got, "msg.sent")["item"] == "msg-juno-1"
+    assert "Reply to Juno" in got["after"][1]["text"], "the Brief asked for the reply before it went"
+    assert "one of them a reply" not in got["after"][4]["text"], got["after"][4]["text"]
+    row = got["after"][5]["text"]
+    assert "Message sent" in row and "Replied: your turn" not in row and "Draft a reply" not in row, row
+    assert got["after"][6]["count"] == 0, "To do no longer asks for the reply"
+    assert got["after"][6]["eval"] == got["after"][0]["eval"] - 1, (got["after"][0]["eval"], got["after"][6]["eval"])
+    assert "Juno" not in got["after"][7]["text"] and "Juno" not in got["after"][7]["eval"], got["after"][7]
+
+
+# A person's page: where it stands is a line of words with ticks, never outlined pills that
+# look like the buttons under them; its blocks stand apart; and Back names Messages when that
+# is where the person came from.
+STEPS = ("(() => { const p = document.querySelector('dialog.detail .d-steps'); if (!p) return null; const c = p.cloneNode(true); "
+         "c.querySelectorAll('.sr-only').forEach((s) => s.remove()); "
+         "return [c.textContent, [...p.querySelectorAll('*')].some((e) => parseFloat(getComputedStyle(e).borderTopWidth) > 0)]; })()")
+GAPS = ("(() => { const kids = [...document.querySelector('dialog.detail .detail-body > div').children].filter((e) => e.getBoundingClientRect().height > 0); "
+        "return Math.min(...kids.slice(1).map((e, i) => Math.round(e.getBoundingClientRect().top - kids[i].getBoundingClientRect().bottom))); })()")
+
+
+def test_a_persons_page_says_where_it_stands_in_words_and_back_names_messages(run, tmp_path, vp):
+    got = _go(run, tmp_path, [
+        {"hash": "drafts-messages", "click": "Juno", "role": "link", "within": '[data-item="msg-juno-1"]', "read": '[data-k="detail-back"]', "eval": STEPS},
+        {"eval": GAPS},
+        {"eval": "document.querySelectorAll('dialog.detail .stepper').length"},
+    ], vp, clock=T)
+    assert got["after"][0]["text"].replace("‹", "").strip() == "Messages", got["after"][0]["text"]
+    assert got["after"][0]["eval"], "the stages are a line of words"
+    words, bordered = got["after"][0]["eval"]
+    assert " ".join(words.split()) == "Written to ✓ · Replied ✓ · Talked · Referral", words
+    assert not bordered, "no stage is drawn as a pill"
+    assert got["after"][1]["eval"] >= 12, "the page's blocks stand apart: %r" % got["after"][1]["eval"]
+    assert got["after"][2]["eval"] == 0
+
+
+# ------------------------------------------------------------------ words a person reads and hears
+
+
+def test_the_brief_time_is_said_as_the_sheet_says_it(run, tmp_path, vp):
+    got = _go(run, tmp_path, [{"hash": "settings", "open": "info-sum:brief-when", "read": "#main"}], vp, clock=T)
+    text = got["after"][0]["text"]
+    assert "UK time" in text and "Europe/London" not in text, text
+
+
+def test_the_bin_says_posted_too_long_ago_not_too_old(run, tmp_path):
+    got = _go(run, tmp_path, [{"hash": "jobs", "click": "Not for me: Harbourline Bank, Pricing Analyst", "read": "dialog[open]"}], PHONE, clock=T)
+    sheet = got["after"][0]["text"]
+    assert "Posted too long ago" in sheet and "Too old" not in sheet, sheet
+
+
+ALERT_WORDS = "[...document.querySelectorAll('#main [data-alert]')].map((a) => [a.getAttribute('data-alert'), a.querySelector('.sr-only').textContent.trim()])"
+
+
+def test_a_screen_reader_hears_note_before_what_is_not_a_fix(run, tmp_path):
+    got = _go(run, tmp_path, [{"hash": "jobs", "eval": ALERT_WORDS}, {"hash": "todo", "eval": ALERT_WORDS}], PHONE, clock=T)
+    said = dict(got["after"][0]["eval"] + got["after"][1]["eval"])
+    assert said["al-closed-r12-5"] == "Note:" and said["al-referral_hold-r12-3"] == "Note:", said
+    assert all(v == "Needs fixing:" for k, v in said.items() if k.startswith("al-checks-")), said
+
+
+def test_i_sent_it_is_named_by_its_visible_words_first(run, tmp_path, vp):
+    names = "['msg-juno-1', 'msg-ash-1'].map((id) => document.querySelector('[data-k=\"sent:' + id + '\"]').getAttribute('aria-label'))"
+    got = _go(run, tmp_path, [{"hash": "drafts-messages", "eval": names}], vp, clock=T)
+    assert got["after"][0]["eval"] == ["I sent it: the message to Juno", "I sent it: the note to Ash"]
+
+
+# ------------------------------------------------------------------ a brand-new person
+
+BUTTONS = "[...document.querySelectorAll('#main .card-actions button')].map((b) => b.textContent)"
+
+
+@pytest.mark.parametrize("section", ["brief", "jobs", "contacts", "interviews"])
+def test_a_new_person_is_asked_to_start_everywhere_until_a_step_is_done(run, tmp_path, section):
+    got = _go(run, tmp_path, [{"hash": section, "eval": BUTTONS}, {"hash": "todo", "eval": BUTTONS}], PHONE, model=copy.deepcopy(EMPTY), clock=T)
+    assert got["after"][0]["eval"] == ["Start"] and got["after"][1]["eval"] == ["Start"], got["after"]
+    # One step done: Continue, as To do says it.
+    part = copy.deepcopy(EMPTY)
+    part["setup"] = {"state": "running", "next": "work", "progress": {"done": 1, "total": 2},
+                     "steps": [{"id": "setup-resume", "step": "resume", "question": "Your CV", "status": "done", "rev": "s1"},
+                               {"id": "setup-work", "step": "work", "question": "What work do you want next?", "status": "next", "rev": "s2"}]}
+    got = _go(run, tmp_path, [{"hash": section, "eval": BUTTONS}], PHONE, model=part, clock=T)
+    assert got["after"][0]["eval"] == ["Continue setting up"], got["after"]
+
+
+def test_messages_opened_by_its_own_link_is_called_messages(run, tmp_path):
+    got = _go(run, tmp_path, [{"hash": "messages", "eval": "document.querySelector('#main h2').textContent"}], PHONE, model=copy.deepcopy(EMPTY), clock=T)
+    assert got["after"][0]["eval"] == "Messages"

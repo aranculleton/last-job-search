@@ -132,7 +132,12 @@ def test_news_goes_into_the_record_once_and_a_freeze_is_noted_on_a_live_applicat
     r = _run(state, "news", "--today", "2026-09-24", stdin=items)
     assert "news: 0 kept; 2 left out, already sent" in r.stdout
     record = open(os.path.join(state, "documents", "briefs", "2026-09-24.md"), encoding="utf-8").read()
-    assert record.rstrip().endswith("Nothing new.")
+    # Never "Nothing new" (the maintainer, 2026-11-02): with nothing new, the last brief's
+    # items are carried, with the day they are from, and the message gets them too.
+    assert "Nothing new" not in record and "Carried from the brief of 2026-09-20." in record
+    assert record.rstrip().endswith("Your market.")
+    assert "carried 2 from the brief of 2026-09-20" in r.stdout
+    assert "for the message" in r.stdout and "- Bank of England holds rates" in r.stdout
     # The reader's own "Nothing new." is no news item (it was kept as a sourced one, 2026-11-02).
     r = _run(state, "news", "--today", "2026-09-24", stdin="Nothing new.\n")
     assert "news: 0 kept" in r.stdout, r.stdout
@@ -269,7 +274,10 @@ def test_what_a_brief_searched_waits_its_turn_at_the_next(tmp_path):
     assert "Manchester supply chain and logistics analyst hiring or layoffs October 2026" in nxt
     assert "settled status" not in nxt.split("given these searches: ", 1)[1].split("\n", 1)[0]
     week = _run(state, "--today", "2026-11-02").stdout
-    assert "UK settled status rule changes November 2026" in week
+    # In a month's first week a search carries no month: "November 2026" on the 2nd found
+    # almost nothing (2026-11-02).
+    line = week.split("given these searches: ", 1)[1].split("\n", 1)[0]
+    assert "UK settled status rule changes" in line and "November 2026" not in line, line
 
 
 def test_what_counts_is_the_persons_own_line_where_they_wrote_one():
@@ -416,7 +424,11 @@ def test_a_large_state_is_gathered_in_under_two_seconds_and_stays_short(tmp_path
     took = time.monotonic() - start
     assert r.returncode == 0, r.stderr
     assert took - fixed < 2.0, f"{took:.2f}s, of which {fixed:.2f}s any run takes"
-    assert len(r.stdout) <= brief.TEXT_MAX
+    # The message stays short; the lines for Claude are never cut (a cut at TEXT_MAX fell on
+    # the republish and the page's update, 2026-11-02), and stay cheap.
+    message, claude = r.stdout.split("FOR CLAUDE, never in the message:", 1)
+    assert len(message) <= brief.TEXT_MAX and "cut at" not in r.stdout
+    assert len(claude) <= 2000, len(claude)
     assert r.stdout.count("\n- ") >= 4
 
 

@@ -8,7 +8,7 @@ compose's gate), the counts since the last brief, where the search is, three thi
 before the next one, the LinkedIn download and own-profile reminders, an update waiting,
 and the news searches to run. The model's part of a run is the news and the message.
 
-    python3 tools/brief.py                     # the brief, as text for a chat (under 2,500 characters)
+    python3 tools/brief.py                     # the brief, as text for a chat (its message under 2,500 characters)
     python3 tools/brief.py --write             # also the day's upkeep and records (below)
     python3 tools/brief.py --start --on "<model>" --write   # a scheduled run's whole start
     python3 tools/brief.py --write --page-applied           # after the page's ticks are applied
@@ -69,6 +69,16 @@ RECORD_OWED = 30       # the record lists this many owed; the pack holds every o
 NEWS_MAX = 5           # in the record; the message carries at most three
 MESSAGE_NEWS = 3
 QUERIES_MAX = 6
+# The news is never empty (the maintainer, 2026-11-02, after a brief said "Quiet week": "it
+# should never say nothing new or some random useless placeholder"). A thin day widens inside
+# the one reader call: the wider searches below, back a week and then a month, never a link
+# sent before, up to SEARCHES_MAX searches in all; a reader that brought nothing carries the
+# last items forward with their day, so the page's News panel is always drawn.
+SEARCHES_MAX = 8
+NEWS_MIN = 3
+WIDEN_DAYS = (7, 28)
+CARRY_DAYS = 28
+IN_PLAY_MAX = 6
 # The person's own settings for the brief (person.json `brief`, set from the page's Edit the
 # brief panel): how many owed items the message lists (B1), how many news items (B2), what its
 # news watches (`watch`: B3 takes one off, B6 and B7 add one), and which parts it shows (B5,
@@ -461,32 +471,92 @@ def home_place() -> str:
     return loc.split(",")[-1].strip()[:40] if "," in loc else ""
 
 
+def _dated(what: str, today: dt.date) -> str:
+    """A search with the month on it, to bring this month's news first; none in a month's
+    first week, when "November 2026" on the 2nd found almost nothing and the brief said
+    "Quiet week" (2026-11-01 and 02). The reader's own date check keeps it fresh."""
+    return what if today.day <= 7 else "%s %s" % (what, today.strftime("%B %Y"))
+
+
 def queries(today: dt.date, live_employers: list[str], watch: list[dict] | None = None,
             searched: dict | None = None) -> list[str]:
     """At most six searches: the employers in play (two at most), then what the person's brief
     watches that is due today, in their own words and their order. Nothing else: no kind of
     news is decided here for anyone, and what matters to a nurse, a lawyer or a student on a
     visa is what their own list says (person.json `brief.watch`)."""
-    month = today.strftime("%B %Y")
     off = set(setting("leave_out"))
     where = home_place()
-    out = ["%s%s news %s" % (n, " " + where if where else "", month)
+    out = [_dated("%s%s news" % (n, " " + where if where else ""), today)
            for n in live_employers[:2]] if "employers" not in off else []
     for w in due_watch(today, watch, searched):
-        out.append("%s %s" % (w["what"], month))
+        out.append(_dated(w["what"], today))
     return list(dict.fromkeys(out))[:QUERIES_MAX]
+
+
+def wider(today: dt.date, live_employers: list[str], watch: list[dict] | None = None,
+          qs: list[str] | None = None) -> list[str]:
+    """The searches the news reader widens with when today's bring fewer than NEWS_MIN items
+    not sent before, each with no month, so last week's and last month's news is found (a
+    "November 2026" search on the 2nd finds almost nothing): what the person's list watches
+    that today's searches leave out first, as a new subject brings new items, then the
+    employers in play, then the rest of the list. Only as many as keep the reader within
+    SEARCHES_MAX."""
+    watch = watch_list() if watch is None else watch
+    qs = list(qs or [])
+    room = SEARCHES_MAX - len(qs)
+    if room <= 0 or not qs:
+        return []
+    due = {w["what"] for w in watch if _dated(w["what"], today) in qs}
+    where = home_place()
+    out = [w["what"] for w in watch if w["what"] not in due]
+    if "employers" not in set(setting("leave_out")):
+        out += ["%s%s news" % (n, " " + where if where else "") for n in live_employers[:2]]
+    out += [w["what"] for w in watch if w["what"] in due]
+    return [q for q in dict.fromkeys(out) if q not in qs][:room]
+
+
+def in_play(tracker, contacts, threads, live_employers: list[str]) -> list[str]:
+    """How the person is in touch with each employer in play, so each news item can say how to
+    use it (a talking point for a call, a question for an interview, a reason to write): the
+    stage and the first names of the people they talk to there. For the reader's use lines
+    only, never searched (its own file says so)."""
+    import throttle
+    stage, names = {}, {}
+    for r in tracker:
+        k, st = company_key(r.get("company") or ""), _status(r)
+        # The furthest stage wins, whatever order the rows are in (the release review).
+        if k and st in set(throttle.LIVE_PROCESS) and stage.get(k) in (None, "applied"):
+            stage[k] = "interviewing" if "interview" in st else st.replace("_", " ")
+        elif k and st == "applied" and k not in stage:
+            stage[k] = "applied"
+    for w in _warm_routes(contacts, threads):
+        k, first = company_key(w["company"]), first_name(w["name"])
+        if k and first and first not in names.setdefault(k, []):
+            names[k].append(first)
+    out = []
+    for n in live_employers[:IN_PLAY_MAX]:
+        k = company_key(n)
+        bits = ([stage[k]] if k in stage else []) + (
+            ["talking to " + " and ".join(names[k][:2])] if names.get(k) else [])
+        out.append("%s (%s)" % (n, ", ".join(bits)) if bits else n)
+    return out
 
 
 def searched_whats(qs: list[str], watch: list[dict], today: dt.date) -> list[str]:
     """Which watched things the searches handed on carry, to note them as searched."""
-    month = today.strftime("%B %Y")
-    return [w["what"] for w in watch if "%s %s" % (w["what"], month) in qs]
+    return [w["what"] for w in watch if _dated(w["what"], today) in qs]
 
 
 def links_sent(paths: list[str]) -> list[str]:
-    """Every link the news sections of the last two briefs carried, so none is sent twice."""
+    """Every link the news sections of the briefs of the last four weeks carried, so none is
+    sent twice: the news widens back a month, and with only the last two briefs read, a link
+    sent three briefs ago came back as new (the release review, 2026-11-02)."""
     out = []
-    for p in paths[-2:]:
+    days = [(_d(os.path.basename(p)[:10]), p) for p in paths]
+    newest = max((d for d, _p in days if d), default=None)
+    for d, p in days:
+        if newest and d and (newest - d).days > CARRY_DAYS:
+            continue
         out += _LINK.findall(_section(_read(p), "News"))
     return list(dict.fromkeys(u.rstrip(".,;") for u in out))
 
@@ -649,7 +719,8 @@ def _gather(today: dt.date, write: bool) -> dict:
 
     # The day's upkeep first, so everything below reads the state it leaves.
     closed = followups.close_quiet(today=today, write=write)
-    if closed and write:
+    staged = stages_into_tracker(today) if write else []
+    if (closed or staged) and write:
         tracker = open_actions._tracker()
     preps = _preps(iso) if write else {"line": "", "rebuilt": 0, "research": []}
 
@@ -710,6 +781,7 @@ def _gather(today: dt.date, write: bool) -> dict:
     claude_md = _profile_text("CLAUDE.md")
     watch = watch_list()
     qs = queries(today, live_names, watch)
+    wide = wider(today, live_names, watch, qs)
     b = {
         "date": iso, "weekday": today.strftime("%A"), "since": since.isoformat(),
         "counts": {"owed": len(live), **{k: v for k, v in counts.items() if k != "processes"}},
@@ -718,7 +790,8 @@ def _gather(today: dt.date, write: bool) -> dict:
         "set_aside": _set_aside(asks, old, held),
         "lines": lines, "next_three": three,
         "drafts": got, "pack": pack, "closed": closed, "preps": preps,
-        "queries": qs, "watch": watch, "watch_due": watch_needs_writing(claude_md),
+        "queries": qs, "wider": wide, "watch": watch,
+        "in_play": in_play(tracker, contacts, threads, live_names), "watch_due": watch_needs_writing(claude_md),
         "language": news_language(person.country()),
         "what_counts": what_counts(claude_md, watch), "skip_links": links_sent(earlier),
         "sync": sync, "export_line": export_line, "profile_line": profile_line,
@@ -732,6 +805,60 @@ def _gather(today: dt.date, write: bool) -> dict:
         if setting("news") and not b["paused"]:
             plan_searched(searched_whats(qs, watch, today), today)
     return b
+
+
+_NOTE_DAY = re.compile(r"(?:^|[|;]\s*)(\d{4}-\d{2}-\d{2}):\s*([^|;]*)")
+STAGE_NOTE = "(from the application's record)"
+
+
+def _person_note_day(notes: str) -> str:
+    """The day of the row's last note that is not the app's own (a news line the brief noted,
+    a stage this upkeep wrote): those are written after the fact, and a news note on 30 October
+    hid a test ticked done for the 29th (the release review, 2026-11-02)."""
+    days = [m.group(1) for m in _NOTE_DAY.finditer(notes or "")
+            if not m.group(2).lstrip().startswith("news:") and STAGE_NOTE not in m.group(2)]
+    return max(days or [""])
+
+
+def stages_into_tracker(today: dt.date) -> list[str]:
+    """Each stage a live process's record (its outcome.md) marks done after the row's last
+    dated note goes onto that tracker row's notes too, once, with its day. The page and the
+    brief read the record; a chat reading the row by hand read a test as still due five days
+    after it was taken, because only the record said so (2 November: a test taken on 29
+    October, the row's last note still its invite and deadline). Returns the employers."""
+    import csv_store
+    import open_actions
+    import throttle
+    path = person.state("job_search_tracker.csv")
+    if not os.path.exists(path):
+        return []
+    rows = csv_store.read_rows(path)
+    live = set(throttle.LIVE_PROCESS)
+    added = []
+    for r in rows:
+        if _status(r) not in live:
+            continue
+        notes = str(r.get("notes") or "")
+        written = _person_note_day(notes)
+        folder, _files, stages = open_actions.stages(r)
+        # Only a ticked box on the record's checklist: a hand-written record's dated heading is
+        # read as done once its day has passed, and "Final interview - 30 Oct (cancelled by them)"
+        # was written as done (the release review, 2026-11-02).
+        if not re.search(r"^##\s*Interview stages reached\s*$", _read(os.path.join(folder, "outcome.md")),
+                         re.M | re.I):
+            continue
+        for st in stages:
+            day = st.get("date") or ""
+            if not st.get("done") or not _d(day) or day <= written or _d(day) > today:
+                continue
+            line = "%s: %s done %s" % (day, st["label"].rstrip(" :"), STAGE_NOTE)
+            if line not in notes:
+                notes = (notes.rstrip() + " | " + line).strip(" |")
+                added.append(str(r.get("company") or ""))
+        r["notes"] = notes
+    if added:
+        csv_store.write_rows(path, rows, csv_store.header(path))
+    return list(dict.fromkeys(added))
 
 
 def _break(today: dt.date, write: bool) -> dict:
@@ -1142,12 +1269,23 @@ def claude_lines(b: dict) -> list[str]:
                        " | ".join(b["queries"]), n, "" if n == 1 else "s",
                        "; news in the language %s counts as much as in English" % b["language"]
                        if b.get("language") else ""))
+        today = _d(b["date"]) or dt.date.today()
+        week, month = (today - dt.timedelta(days=d) for d in WIDEN_DAYS)
+        out.append("news, never none: %d to %d items, each ending in how the person can use it; "
+                   "when fewer than %d are new since the since date, it widens back to %s, then "
+                   "%s%s" % (
+                       NEWS_MIN, NEWS_MAX, NEWS_MIN, week.isoformat(), month.isoformat(),
+                       ", with these searches too: " + " | ".join(b["wider"])
+                       if b.get("wider") else ""))
+        if b.get("in_play"):
+            out.append("news, in play (for how to use each item, never searched): "
+                       + "; ".join(b["in_play"]))
     else:
         out.append("news: run no news search (%s)" % (
             "none in the message, by the person's setting" if not n else
             "the profile does not say enough yet for one"))
     out.append("since %s; links already sent: %s" % (
-        b["since"], " ".join(b["skip_links"][:10]) or "none"))
+        b["since"], " ".join(b["skip_links"][-20:]) or "none"))
     out.append("what counts: " + b["what_counts"])
     if b.get("page"):
         behind = page_behind()
@@ -1210,15 +1348,18 @@ def behind_steps(url: str) -> list[str]:
 
 
 def render_text(b: dict) -> str:
-    """The brief for a chat, under TEXT_MAX characters: the message, then the lines for Claude."""
+    """The brief for a chat: the message, shortened to keep the whole under TEXT_MAX where it
+    can be, then the lines for Claude, whole. Those were cut with the rest at TEXT_MAX, and on
+    a real state (2026-11-02: a page behind, six employers in play) the cut fell on the
+    republish and the page's update, so the brief did neither and nothing said so."""
     start = LENGTHS[setting("length")]
+    tail = "\n".join(["", "FOR CLAUDE, never in the message:"] + ["- " + x for x in claude_lines(b)])
     for owed_max in [n for n in (6, 4, 3, 2) if n <= start] or [2]:
         body = "\n".join(message_lines(b, owed_max))
-        tail = "\n".join(["", "FOR CLAUDE, never in the message:"] + ["- " + x for x in claude_lines(b)])
         text = body + "\n" + tail + "\n"
         if len(text) <= TEXT_MAX:
             return text
-    return text[:TEXT_MAX - 40].rsplit("\n", 1)[0] + "\n... (cut at %d characters)\n" % TEXT_MAX
+    return text
 
 
 # ---------------------------------------------------------------- the record
@@ -1282,7 +1423,9 @@ def take_news(text: str, today: dt.date) -> dict:
         s = s.lstrip("-*• ").strip()
         if s:
             items.append(s)
-    seen = set(links_sent(earlier_briefs(today) + [brief_path(today.isoformat())]))
+    # Earlier briefs only: today's own record is replaced below, and counting it sent every
+    # item of a second run that day as already sent (the release review, 2026-11-02).
+    seen = set(links_sent(earlier_briefs(today)))
     kept, dropped = [], []
     for s in items:
         links = [u.rstrip(".,;") for u in _LINK.findall(s)]
@@ -1293,17 +1436,57 @@ def take_news(text: str, today: dt.date) -> dict:
             kept.append(s)
     path = brief_path(today.isoformat())
     body = _read(path)
-    news = ([NEWS_SOURCE, ""] + ["- " + s for s in kept]) if kept else ["Nothing new."]
+    carried, day = ([], "") if kept else carry_news(today)
+    if kept:
+        news = [NEWS_SOURCE, ""] + ["- " + s for s in kept]
+    elif carried:
+        news = ["Carried from the brief of %s. %s" % (day, NEWS_SOURCE), ""] + [
+            "- " + s for s in carried]
+    else:
+        # Nothing found and nothing to carry (a first brief whose search did not run): the
+        # section is left out rather than filled with a line saying so.
+        news = []
     if body:
         head = body.split("\n## News", 1)[0].rstrip()
-        new = head + "\n\n## News\n\n" + "\n".join(news) + "\n"
+        new = head + ("\n\n## News\n\n" + "\n".join(news) if news else "") + "\n"
     else:
-        new = "# Brief, %s\n\n## News\n\n%s\n" % (today.isoformat(), "\n".join(news))
+        new = "# Brief, %s\n%s" % (today.isoformat(), "\n## News\n\n%s\n" % "\n".join(news)
+                                     if news else "")
     os.makedirs(os.path.dirname(path), exist_ok=True)
     with open(path, "w", encoding="utf-8", newline="\n") as fh:
         fh.write(new)
     noted = _note_news(kept, today)
-    return {"kept": kept, "dropped": dropped, "noted": noted, "path": path}
+    return {"kept": kept, "dropped": dropped, "noted": noted, "path": path,
+            "carried": carried, "carried_from": day}
+
+
+def news_items(text: str) -> list[str]:
+    """A brief record's news lines, as written, without their bullets."""
+    return [ln[2:].strip() for ln in _section(text, "News").splitlines()
+            if ln.startswith("- ") and ln[2:].strip()]
+
+
+def carry_news(today: dt.date) -> tuple[list[str], str]:
+    """The newest earlier brief's news, within CARRY_DAYS, and its day: what a brief whose
+    reader brought nothing new shows instead of an empty panel."""
+    for p in reversed(earlier_briefs(today)):
+        d = _d(os.path.basename(p)[:10])
+        if not d or (today - d).days > CARRY_DAYS:
+            break
+        text = _read(p)
+        got = news_items(text)
+        if got:
+            # Already carried: the day it was gathered, so a carry never renews it (news from
+            # 1 October read as from 10 November on the 25th, the release review).
+            was = _CARRIED.search(_section(text, "News"))
+            d = _d(was.group(1)) if was else d
+            if (today - d).days > CARRY_DAYS:
+                return [], ""
+            return got[:NEWS_MAX], d.isoformat()
+    return [], ""
+
+
+_CARRIED = re.compile(r"Carried from the brief of (\d{4}-\d{2}-\d{2})")
 
 
 def _note_news(kept: list[str], today: dt.date) -> list[str]:
@@ -1432,10 +1615,17 @@ def main(argv=None) -> int:
         a = ap.parse_args(argv[1:])
         text = _read(a.file) if a.file else sys.stdin.read()
         got = take_news(text, _today(a.today))
-        print("news: %d kept%s%s" % (
+        print("news: %d kept%s%s%s" % (
             len(got["kept"]),
             "; %d left out, already sent in an earlier brief" % len(got["dropped"]) if got["dropped"] else "",
-            "; noted on the tracker for %s" % ", ".join(got["noted"]) if got["noted"] else ""))
+            "; noted on the tracker for %s" % ", ".join(got["noted"]) if got["noted"] else "",
+            "; carried %d from the brief of %s" % (len(got["carried"]), got["carried_from"])
+            if got["carried"] else ""))
+        lines = got["kept"] or got["carried"]
+        if lines:
+            print("for the message, the first %d without their links:" % setting("news"))
+            for ln in lines[:setting("news")]:
+                print("- " + ln)
         return 0
     if argv[:1] == ["watch"]:
         return watch_main(argv[1:])

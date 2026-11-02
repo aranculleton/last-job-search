@@ -3130,6 +3130,7 @@ def _brief(ctx: Ctx, targets: dict) -> dict | None:
         return None
     path = files[-1]
     sections = brief_sections(_read(path))
+    news_date = _news_fallback(ctx, sections, files[:-1])
     lines = [i["text"] for sec in sections for i in sec["items"]][:8]
     for sec in sections:
         sec["items"] = [dict(i, **brief_link(ctx, i["text"])) for i in sec["items"]]
@@ -3139,9 +3140,42 @@ def _brief(ctx: Ctx, targets: dict) -> dict | None:
         if sec["kind"] == "lead" and sec.get("text"):
             sec["parts"] = [dict(text=t, **brief_link(ctx, t))
                             for t in re.split(r"(?<=[.!?])\s+(?=[A-Z*])", sec["text"]) if t.strip()]
-    return {"date": os.path.basename(path)[:10], "lines": lines,
-            "items": [dict(text=x, **brief_link(ctx, x)) for x in lines],
-            "sections": sections, "watch": _watch(), "watch_again": _watch_again()}
+    out = {"date": os.path.basename(path)[:10], "lines": lines,
+           "items": [dict(text=x, **brief_link(ctx, x)) for x in lines],
+           "sections": sections, "watch": _watch(), "watch_again": _watch_again()}
+    if news_date:
+        out["news_date"] = news_date
+    return out
+
+
+def _news_fallback(ctx: Ctx, sections: list[dict], earlier: list[str]) -> str:
+    """The News panel is never empty while a brief of the last four weeks had news (the
+    maintainer, 2026-11-02: "it should never say nothing new"): a brief whose search is still
+    running, or an older one that said "Quiet week", shows the newest earlier brief's items,
+    and the day they were gathered. Returns that day, or "" when today's brief has its own."""
+    news = [s for s in sections if s["kind"] == "news"]
+    if any(s["items"] for s in news):
+        # Carried by a brief whose search brought nothing: the day they were gathered, never
+        # "this morning" (the release review, 2026-11-02).
+        was = re.search(r"Carried from the brief of (\d{4}-\d{2}-\d{2})", " ".join(s["text"] for s in news))
+        return was.group(1) if was else ""
+    import brief
+    for p in reversed(earlier):
+        day = os.path.basename(p)[:10]
+        try:
+            age = (ctx.today - dt.date.fromisoformat(day)).days
+        except ValueError:
+            continue
+        if age > brief.CARRY_DAYS:
+            break
+        got = [s for s in brief_sections(_read(p)) if s["kind"] == "news" and s["items"]]
+        if got:
+            if news:
+                news[0]["items"], news[0]["text"] = got[0]["items"], got[0]["text"]
+            else:
+                sections.append(got[0])
+            return day
+    return ""
 
 
 def _watch_again() -> list[dict]:
@@ -3192,6 +3226,26 @@ def brief_line(text: str) -> str:
     return scrub(t, ())
 
 
+# A news line as the news reader writes it: what happened (publisher, date, link). How to use it.
+_NEWS_LINE = re.compile(r"^(?P<what>.+?)\s*\((?P<src>[^()]{2,80}?),\s*(?P<date>\d{4}-\d{2}-\d{2}),\s*"
+                        r"(?P<url>https?://[^\s()]+)\)\.?\s*(?P<use>.*)$")
+
+
+def news_parts(line: str) -> dict:
+    """A news point in its parts, so the page sets what happened, how to use it and where it
+    is from apart: {what, use, src, date, url}, or {} for a line in another shape, shown as
+    it is."""
+    m = _NEWS_LINE.match(str(line or "").strip())
+    if not m:
+        return {}
+    what, use = brief_line(m.group("what")).rstrip(" ."), brief_line(m.group("use")).rstrip(" .")
+    if not what:
+        return {}
+    return {"what": what + ".", "use": (use[:1].upper() + use[1:] + ".") if use else "",
+            "src": scrub(m.group("src").strip(), ()), "date": m.group("date"),
+            "url": m.group("url").rstrip(".,;")}
+
+
 def brief_sections(text: str) -> list[dict]:
     """The brief in its parts, each {title, kind, text, items: [{text}]}: a heading's own
     sentences as `text`, its bullets or numbered steps as items. A line about a file or a
@@ -3221,7 +3275,8 @@ def brief_sections(text: str) -> list[dict]:
         if item:
             said = brief_line(item.group(1))
             if said:
-                cur["items"].append({"text": said})
+                cur["items"].append(dict({"text": said}, **(
+                    news_parts(item.group(1)) if cur["kind"] == "news" else {})))
         else:
             said = brief_line(ln)
             if said:

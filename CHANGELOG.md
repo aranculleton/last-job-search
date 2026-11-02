@@ -22,9 +22,84 @@ make sense to somebody whose repo just received it.
 
 ### Changed
 
+- **Your brief's news is never empty, and each item says how to use it.** A quiet day used to
+  bring "Quiet week" and hide the News panel. Now the brief always brings three to five items:
+  what is new since the last one first, and when that is thin, the freshest from the last week
+  and then the last month that it has not sent before, about your employers, your targets,
+  your field, your market and your right to work (a search in a month's first week no longer
+  asks for that month by name, which found almost nothing on the 1st and 2nd). Each item ends
+  in what to do with it: a
+  point to raise on a call, a question for an interview there, a reason to write to someone.
+  If the search cannot run, the last brief's items stay, marked with their day, and the page
+  shows them with the day they were gathered.
+- **Today on your Brief is the one most pressing thing, with what matters about it beside
+  it.** An interview, call or test happening today comes first (an interview before a call),
+  then an interview tomorrow, then one inside your prep window with no prep yet, then what has
+  rolled over (someone waiting on a reply first), then what is due today. Beside it: the
+  questions an interview is likely to bring, or who the person is, how late it is and whether
+  a draft is ready, each on its own line with a small dot. It can be in Next three as well. When Coming up's only booked thing is
+  the one Today shows, it lists what is due next instead of an empty strip.
+- **News reads as tidy points**: what happened, then on a quiet grey line what to do with it
+  and where it is from, with no bold or underlines, and the panel is never cut off.
+- **The weekly bars are clearer**: proper bars on a baseline, each labelled with the date its
+  week starts, this week's the strongest.
+- **Fold the side menu to its icons** ("Icons only", at its top) for more room on a laptop;
+  each name still shows on hover, and the choice is kept on that device. Icons are now sharp
+  at every size.
+- **Your progress fits its panel at any width**: two by two on a phone, four across
+  otherwise, and with the weekly bars beside the numbers when it has a whole row, instead of
+  empty space to the right or squeezed numbers.
+- **Every screen tidied**: the spinner beside "Claude is on it" was a thin line, a closed
+  posting's card had two rows of buttons, the resume card touched the card above it, first
+  notes were in smaller text than follow-ups, and "Prep ready" sat out of line.
+- **Refresh always says what it did.** With today's data already on the page it checks again
+  for free and now says "Up to date" instead of changing nothing you can see.
+- **The moving line under the header glides** while an update runs, instead of stuttering on
+  a busy page.
 - **Today and tomorrow stand out at a glance in green and gold** on the Brief's two-week strip
   and on the Coming up screen, where their day headings carry a small dot. Never red, which
   read as a warning.
+
+### Fixed
+
+- **The brief brings your page up to date again.** On a busy search its instructions ran past
+  their length limit and were cut, and the cut fell on the steps that publish a newer page and
+  bring its data up to date, so the page could stay days behind. Only the phone message is
+  shortened now; the steps are never cut.
+- **On Windows, two research notes saved at the same moment both land.** Windows refuses a
+  lock for a moment where other systems say it is taken, and one note was lost.
+- **One person is shown once in the Brief's lists.** A reply owed could appear twice below
+  Today (Today's one thing may also be in Next three, on purpose).
+- **The brief's news, fixed from the release review**: a link sent up to four weeks ago is not
+  sent again; carried news keeps the day it was gathered and ends after four weeks; running the
+  news step twice in a day keeps that day's news; a test due today leads Today as itself, not
+  as its interview, which stays in Coming up.
+- **Refresh says when your Claude allowance stopped it**, instead of "Up to date".
+- **Today's late follow-up with a draft ready opens the draft**, not the person's page.
+- **From using the app as a tired job seeker would** (every change below was found that way):
+  - A message already drafted opens from To do, Contacts and the person's page, and is never
+    drafted again on your allowance; "I sent it" counts everywhere at once, and a note marked
+    sent is no longer asked about.
+  - Draft this works in one tap: "No, draft it" is chosen, and the posting's own questions
+    are optional.
+  - To do opens on what is late or due today; setting-up cards wait below. A card hidden by
+    mistake comes back from the end of To do.
+  - Add to calendar, in words, on an interview's To do card and in its prep.
+  - The job bin says what its reason changes ("Fewer jobs outside your field from now on");
+    what to avoid can be changed in Settings, in the panel now called "Change the search" like
+    its button.
+  - Take a break from the brief's bell, for one week, two, or until a day you choose.
+  - A draft that needs a fix says so on its card, not inside More.
+  - A person's page says where things stand in words, shows the conversation and the draft,
+    and its back link names where you came from.
+  - Jobs to look at is one number everywhere, and a closed posting is never offered as new.
+  - Plain words: "UK time", "Posted too long ago", "Start" for a new person, "Messages" titled
+    Messages, and an empty box asks to be filled in.
+  - On a phone, a message's close button stays on its line, and Chat's footer clears the tab
+    bar.
+- **A stage you finished reaches your tracker by itself.** When an application's record marks
+  a stage done (a test taken, an interview held) after the tracker row's last note, the
+  morning brief writes it onto the row too, so nothing reading the row thinks it is still due.
 
 ## [4.7.0] - 2026-11-02
 

@@ -254,7 +254,7 @@ def test_a_first_note_is_copied_exactly_opened_and_logged_with_the_words_that_we
     edited = "Hello Ash, I saw you moved to Copperleaf Pay from Quayside Foods. " + "I work on supply chain analytics in Manchester. " * 6
     got = _go(run, tmp_path, [
         {"hash": "contacts", "open": "contsw:messages", "click": "Copy note to Ash", "clip": True, "read": '[data-item="msg-ash-1"]'},
-        {"click": "I sent the note to Ash", "read": '[data-item="msg-ash-1"]'},
+        {"click": "I sent it: the note to Ash", "read": '[data-item="msg-ash-1"]'},
     ], vp)
     note = _item(m, "msg-ash-1")
     assert got["after"][0]["clip"] == note["text"], "exactly the words, no label, no count"
@@ -311,12 +311,15 @@ def test_a_wave_of_first_notes_is_grouped_by_employer_with_the_week_s_budget(run
 
 def test_a_reply_owed_says_so_and_drafts_from_their_words_already_kept(run, tmp_path, vp):
     """Juno's reply is in the conversation already: drafting the answer asks only what to say
-    back, never for their words a second time (2026-10-29)."""
+    back, never for their words a second time (2026-10-29). With no reply drafted yet: one
+    already drafted is opened instead (tests/test_the_page_keeps_one_listener_and_the_brief.py)."""
+    m = _sample()
+    m["messages"] = [x for x in m["messages"] if x["id"] != "msg-juno-1"]
     got = _go(run, tmp_path, [
         {"hash": "contacts", "read": '[data-item="larkspur_retail_castellan"]'},
         {"click": "Draft a reply to Juno", "read": "dialog"},
         {"fill": {"Anything you want to say back": "Yes, Thursday at 12 works."}, "submit": True},
-    ], vp)
+    ], vp, model=m)
     assert "Replied: your turn" in got["after"][0]["text"]
     assert "Paste what Juno said" not in got["after"][1]["dialog"]
     w = [x for x in got["work"] if x and x.get("kind") == "reply"]
@@ -504,11 +507,15 @@ def test_the_brief_opens_its_items(run, tmp_path, vp):
     got = _go(run, tmp_path, [
         {"hash": "brief", "eval": "(() => !!document.querySelector('#main .brief-page .bp-next'))()"},
         {"click": "Reply to Juno at Larkspur Retail.", "role": "link"},
-        {"hash": "brief", "click": "Follow up with Fernhill Freight about the Operations Analyst role", "role": "link"},
-        # The interview this week is Today's, its prep one tap away (4.6: each thing once).
-        {"hash": "brief", "click": "Read your prep", "read": "dialog.detail"},
+        # The late follow-up leads Today, and its button opens its draft (4.8: Today's one thing
+        # comes again in Next three only where there is room).
+        {"hash": "brief", "click": "See the draft"},
+        # The interview this week, its prep ready, is a step, its prep one tap away; Today is
+        # what has rolled over (2026-11-02: "the most pressing task").
+        {"hash": "brief", "click": "Read the prep for the Larkspur Retail phone screen.", "role": "link"},
     ], vp, clock="2026-10-25T07:30:00Z")
     assert got["after"][0]["eval"], "the Brief has its own page, with the next three"
     assert got["after"][1]["hash"] == "#contacts/larkspur_retail_castellan"
-    assert got["after"][2]["hash"] == "#todo/due-fernhill-nudge"
-    assert "Phone screen with Larkspur Retail" in got["after"][3]["text"]
+    assert "messages/msg-wren" in got["after"][2]["hash"], got["after"][2]["hash"]
+    assert got["after"][3]["hash"].startswith("#interviews"), got["after"][3]["hash"]
+    assert "Larkspur Retail" in got["after"][3]["text"]

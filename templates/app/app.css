@@ -87,11 +87,15 @@ bdi { unicode-bidi: isolate; }
 .pulse .refresh-btn { margin-left: 8px; vertical-align: middle; }
 .pulse.tone-warn { color: var(--st-overdue); }
 /* An update on its way: one moving line under the header, the page still usable. */
-.pulse.is-updating { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; color: var(--ink); position: relative; padding-top: 4px; }
+/* The line is a short glow moved by transform on its own layer, clipped to the header: it was
+   a background-position sweep, repainted every frame, and it stuttered on a busy page (the
+   maintainer, 2026-11-02: "this loading animation is quite laggy"). */
+.pulse.is-updating { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; color: var(--ink); position: relative; padding-top: 4px; overflow: hidden; overflow: clip; }
 .pulse.is-updating .spin { width: 14px; height: 14px; border-width: 2px; }
-.pulse.is-updating::after { content: ""; position: absolute; left: 0; right: 0; bottom: 0; height: 2px; border-radius: 2px;
-  background: linear-gradient(90deg, transparent, var(--mark), transparent); background-size: 40% 100%; background-repeat: no-repeat; animation: sweep-bg 1.6s ease-in-out infinite; }
-@keyframes sweep-bg { from { background-position: -40% 0; } to { background-position: 140% 0; } }
+.pulse.is-updating::after { content: ""; position: absolute; left: 0; bottom: 0; width: 40%; height: 2px; border-radius: 2px;
+  background: linear-gradient(90deg, transparent, var(--mark), transparent); transform: translateX(-100%); will-change: transform;
+  animation: sweep 1.6s ease-in-out infinite; }
+@keyframes sweep { from { transform: translateX(-100%); } to { transform: translateX(250%); } }
 .pill {
   display: inline-flex; align-items: center; gap: 8px; min-height: var(--target); padding: 8px 12px; white-space: nowrap; flex: none;
   border-radius: 999px; border: 1px solid var(--line-strong); background: var(--surface); color: var(--ink); font-weight: 600; font-size: var(--t-sm); cursor: pointer;
@@ -131,7 +135,10 @@ bdi { unicode-bidi: isolate; }
 .tab[aria-current="page"]::before { content: ""; position: absolute; top: 0; left: 28%; right: 28%; height: 3px; border-radius: 0 0 3px 3px; background: var(--mark); }
 .tab[aria-current="page"] .ic { stroke-width: 2.4; }
 .tab-label { max-width: 100%; }
-.ic { width: 22px; height: 22px; flex: none; }
+/* Icons are drawn on a 24-point grid and shown at 24px unless a control sets a smaller size,
+   so each line falls on a whole pixel: at 22px the menu's were soft on an ordinary screen
+   (the maintainer, 2026-11-02: "are those icons blurry"). */
+.ic { width: 24px; height: 24px; flex: none; }
 .badge { min-width: 20px; height: 20px; padding: 0 8px; border-radius: 10px; background: var(--accent); color: var(--accent-ink); font: 600 0.75rem/20px var(--font-data); text-align: center; }
 .tab .badge { position: absolute; top: 5px; left: calc(50% + 6px); }
 /* A quiet count: the section's own number, never a call to act. */
@@ -174,6 +181,22 @@ bdi { unicode-bidi: isolate; }
 .side-label { margin-right: auto; }
 .count { font: 600 var(--t-sm) var(--font-data); color: var(--muted); }
 .side-foot { margin-top: 8px; padding-top: 8px; border-top: 1px solid var(--line); }
+/* Fold the menu to its icons: a quiet row at its top, under a rule like the one above Coming
+   up and Settings, the same height as a menu item. */
+.side-top { padding-bottom: 8px; border-bottom: 1px solid var(--line); margin-bottom: -12px; }
+.side-top .side-toggle { width: 100%; }
+
+.side-toggle { display: flex; align-items: center; gap: 12px; min-height: var(--target); padding: 8px 12px; border: 0; border-radius: var(--r-sm); background: none; color: var(--muted); font: inherit; font-size: var(--t-sm); cursor: pointer; text-align: left; }
+@media (hover: hover) { .side-toggle:hover { background: var(--raised); color: var(--ink); } }
+.side-toggle:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }
+@media (min-width: 760px) {
+  .nav-mini .shell { grid-template-columns: 56px minmax(0, 1fr); column-gap: 24px; }
+  .nav-mini .side-list a, .nav-mini .side-toggle { justify-content: center; padding-inline: 8px; }
+  .nav-mini .side .side-label { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
+  .nav-mini .side-list .navcount { display: none; }
+  .nav-mini .side-list .badge { position: absolute; top: 2px; right: 2px; margin: 0; }
+}
+@media (min-width: 1280px) { .nav-mini .shell { grid-template-columns: 56px minmax(0, 1fr) 360px; } }
 
 /* ------------------------------------------------------------------ sections */
 .sec { display: grid; grid-template-columns: minmax(0, 1fr); gap: 20px; max-width: 760px; }
@@ -376,6 +399,7 @@ details.send { border-top: 1px solid var(--line); }
 .stack.jobs, ul.people, .stack.list-panel { gap: 8px; background: transparent; border: 0; box-shadow: none; }
 .stack.jobs > .card.job, ul.people > li.person, .stack.list-panel > .card { border: 1px solid var(--line); border-radius: var(--r); box-shadow: none; background: var(--surface); padding: 16px; }
 .stack.list-panel > .card.is-marked, .stack.list-panel > .card.quiet-card { background: var(--sunk); }
+.after-list { margin-top: 8px; }
 .stack.jobs > .card.job.st-dismissed, .stack.jobs > .card.job.st-applied { background: var(--sunk); }
 @media (hover: hover) { .stack.jobs > .card.job:hover, ul.people > li.person:hover { background: var(--bg); } }
 .stack.jobs .card-actions .btn:not(.primary):not(.icon-only):not(.link), .people .card-actions .btn:not(.primary):not(.icon-only):not(.link), .list-panel .card-actions .btn:not(.primary):not(.icon-only):not(.link) { background: var(--sunk); border-color: transparent; }
@@ -432,7 +456,9 @@ p.count.tone-bad { color: var(--st-failed); }
 .wc-steps li.step-now { color: var(--ink); font-weight: 600; }
 .wc-steps li.step-now::before { border-color: var(--mark); border-top-color: transparent; animation: turn 1s linear infinite; }
 .wc-log { display: grid; gap: 4px; font-size: var(--t-sm); padding-bottom: 8px; }
-.spin { width: 16px; height: 16px; border-radius: 50%; border: 2.5px solid var(--accent-soft); border-top-color: var(--mark); animation: turn 0.9s linear infinite; flex: none; }
+/* A box of its own wherever it sits: inside a line of text a span ignores its size, and the
+   spinner drew as a thin bar before "Claude is on it" (2026-11-02). */
+.spin { display: inline-block; vertical-align: -3px; width: 16px; height: 16px; border-radius: 50%; border: 2.5px solid var(--accent-soft); border-top-color: var(--mark); animation: turn 0.9s linear infinite; flex: none; }
 .btn .spin { width: 13px; height: 13px; border-width: 2px; }
 .dot { width: 12px; height: 12px; border-radius: 50%; flex: none; background: var(--line-strong); }
 .dot.tone-ok { background: var(--st-done); }
@@ -594,6 +620,9 @@ textarea { width: 100%; resize: vertical; line-height: 1.45; }
 .alert.tone-held .alert-text::before { background: var(--st-held); }
 
 .alert .cost { color: var(--muted); }
+/* A note's one fix sits on the note's own line when there is room, not in a row of its own
+   above the card's actions (a closed posting's card had two rows of buttons, 2026-11-02). */
+.alert .alert-body { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 12px; }
 /* A suggestion reads like a question on a card: a soft box, never a line down its side. */
 .suggest { background: var(--sunk); color: var(--ink); padding: 12px; gap: 8px; border: 0; border-radius: var(--r-sm); }
 .suggest .hint, .suggest .cost { color: var(--muted); }
@@ -859,7 +888,7 @@ dialog.sheet form { display: grid; gap: 16px; }
 .sheet-cost { color: var(--muted); font-size: var(--t-sm); }
 .field { border: 0; margin: 0; padding: 0; display: grid; gap: 8px; }
 .field legend, .field > label { font-weight: 600; padding: 0; margin-bottom: 2px; }
-.field.has-error { padding-left: 12px; border-left: 4px solid var(--st-failed); }
+/* A field to answer says so in red words above it, never a bar down its side (DESIGN.md). */
 .field-error { color: var(--st-failed); font-weight: 600; font-size: var(--t-sm); }
 .optional { font-weight: 400; color: var(--muted); }
 .reveal { margin-top: 8px; padding-left: 32px; }
@@ -867,6 +896,9 @@ dialog.sheet form { display: grid; gap: 16px; }
 .errors-title { font-weight: 600; color: var(--st-failed); }
 .errors ul { margin: 4px 0 0; padding-left: 20px; }
 .errors a { color: var(--st-failed); font-weight: 600; }
+/* Each line of the list reads from its bullet, on a phone too, where a link is centred in
+   its tap area: centred, the words floated away from their bullets (2026-11-02). */
+.errors ul a { text-align: left; }
 .keys-list { margin: 0; display: grid; gap: 8px; }
 .keys-list div { display: grid; grid-template-columns: 9em minmax(0, 1fr); gap: 12px; }
 .keys-list dd { margin: 0; }
@@ -883,7 +915,9 @@ kbd { font: 600 var(--t-sm) var(--font-data); background: var(--raised); color: 
   pointer-events: auto; display: flex; align-items: center; gap: 4px 8px; flex-wrap: wrap;
   background: var(--toast-bg); color: var(--toast-ink); border-radius: var(--r); padding: 8px 8px 8px 16px; box-shadow: var(--shadow);
 }
-.toast-text { flex: 1 1 200px; font-weight: 600; }
+/* The words take what the buttons leave and wrap inside it, so Close stays on their row on a
+   phone (at 200px they pushed it to a line of its own, 2026-11-02). */
+.toast-text { flex: 1 1 0; min-width: 0; font-weight: 600; }
 .toast .btn.quiet { color: var(--toast-ink); text-decoration-color: currentColor; }
 @media (hover: hover) { .toast .btn.quiet:hover { background: var(--toast-hover); } }
 .toast :focus-visible { outline-color: var(--toast-ink); }
@@ -1154,6 +1188,16 @@ body.has-fab .shell { padding-bottom: calc(var(--tabs-h) + env(safe-area-inset-b
   .person .top-end .icon-only { position: absolute; top: 4px; right: 4px; }
   .person .job-top h3 { padding-right: 44px; }
   .person .top-end { margin-left: 0; flex-basis: 100%; }
+  /* A draft's or an application's state the same way: its bin in the corner and "Needs your
+     answer" under the title, at its start. Pushed to the right of a line of its own, it left
+     a gap under the title (2026-11-02). */
+  .card.app, .card.app-record { position: relative; }
+  .card.app .top-end .icon-only, .card.app-record .top-end .icon-only { position: absolute; top: 4px; right: 4px; }
+  .card.app .job-top:has(.top-end .icon-only) h3, .card.app-record .job-top:has(.top-end .icon-only) h3 { padding-right: 44px; }
+  .card.app .top-end:has(.state-word), .card.app-record .top-end:has(.state-word) { margin-left: 0; flex-basis: 100%; }
+  /* Chat fills the first screen down to the tab bar; the footer starts below it, never half
+     under the tab bar (2026-11-02), and is read above it once scrolled to. */
+  .talk.sec { margin-bottom: calc(var(--tabs-h) + env(safe-area-inset-bottom, 0px)); }
 }
 /* A cost's gauge says its words on hover and on focus (the maintainer, 2026-10-29). */
 .has-tip { position: relative; }
@@ -1260,14 +1304,24 @@ body.has-fab .shell { padding-bottom: calc(var(--tabs-h) + env(safe-area-inset-b
 .bp-score.tone-good { color: var(--st-running); background: var(--st-running-bg); }
 .bp-score.tone-fair { color: var(--st-waiting); background: var(--st-waiting-bg); }
 /* The counts never stretch: where their panel is wide (a day with no news) they keep their size. */
-.bp-stats { display: grid; grid-template-columns: repeat(auto-fit, minmax(72px, 1fr)); gap: 8px; max-width: 520px; }
+/* Your progress fits its panel at any width, by the panel's own width rather than the
+   window's (the maintainer, 2026-11-02: "leaves white space or gets weirdly cramped"): two by
+   two when narrow, four across filling the panel otherwise, and on a full row the bars sit
+   beside the numbers instead of a short strip under them with empty space to the right. */
+.bpanel.bp-numbers { container-type: inline-size; }
+.bp-stats { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 8px; }
+@container (max-width: 431px) { .bp-stats { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+@container (min-width: 792px) {
+  .bp-numbers .bp-body { display: grid; grid-template-columns: minmax(0, 3fr) minmax(0, 2fr); column-gap: 24px; row-gap: 12px; align-items: end; }
+  .bp-numbers .bp-body > :not(.bp-stats):not(.bp-spark-wrap) { grid-column: 1 / -1; }
+  .bp-numbers .bp-body > .bp-stats:last-child, .bp-numbers .bp-body > .bp-stats.is-alone { grid-column: 1 / -1; }
+}
 .bp-stat { display: flex; flex-direction: column; gap: 2px; padding: 8px 12px; background: var(--sunk); border-radius: var(--r-sm); min-width: 0; }
 /* The Brief keeps to a few type styles: one bold weight for its greeting and numbers, 600 for
    every emphasis, so a glance reads one voice (LAYOUT_SPEC 7.10). */
 .brief-page strong, .brief-page b { font-weight: 600; }
 .bp-n { font-size: 1.375rem; font-weight: 700; line-height: 1.15; font-variant-numeric: tabular-nums; }
 .bp-l { font-size: var(--t-sm); color: var(--muted); overflow-wrap: normal; word-break: normal; hyphens: none; }
-.bp-spark { width: 100%; height: 32px; display: block; }
 .bp-foot { display: flex; flex-wrap: wrap; align-items: baseline; gap: 4px 16px; margin-top: auto; font-size: var(--t-sm); }
 .bp-iv { display: flex; flex-direction: column; align-items: flex-start; gap: 4px; padding: 12px 16px; background: var(--surface); border: 1px solid var(--line); border-radius: var(--r-sm); }
 .bp-iv p { margin: 0; }
@@ -1276,7 +1330,13 @@ body.has-fab .shell { padding-bottom: calc(var(--tabs-h) + env(safe-area-inset-b
 .bp-iv .btn { margin-top: 4px; }
 @media (min-width: 1100px) { .bp-today .bp-body { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1.2fr); align-items: start; } .bp-today .bp-body > :only-child { grid-column: 1 / -1; } }
 /* The top row, Today and Coming up, is as tall as what they hold: never cut. */
-@media (min-width: 760px) { .bpanel.bp-today, .bpanel.bp-upcoming { max-height: none; } }
+@media (min-width: 760px) { .bpanel.bp-today, .bpanel.bp-upcoming, .bpanel.bp-news { max-height: none; } }
+/* A news point: what happened, what to do with it, where it is from. Never cut by the panel's
+   height: News was clipped at its bottom once each point said how to use it (2026-11-02). */
+ul.bp-news { gap: 12px; }
+.bp-news .bp-meta { display: block; margin-top: 2px; font-size: var(--t-sm); color: var(--muted); }
+.bp-news .bp-src a { color: inherit; text-decoration: none; }
+@media (hover: hover) { .bp-news .bp-src a:hover { text-decoration: underline; } }
 .bp-all > summary { cursor: pointer; font-size: var(--t-sm); color: var(--muted); }
 .bp-all[open] > summary { margin-bottom: 8px; }
 .bp-tip { display: flex; align-items: baseline; gap: 8px 12px; flex-wrap: wrap; margin: 0; padding: 12px 16px; border-radius: var(--r-sm); background: var(--sunk); font-size: var(--t-sm); }
@@ -1354,20 +1414,46 @@ body.has-fab .shell { padding-bottom: calc(var(--tabs-h) + env(safe-area-inset-b
 .prep-doc { max-width: 76ch; }
 /* The numbers card: what the bars are, and how far applications went, opened in place. */
 .bp-spark-cap { margin: 4px 0 0; }
+/* The weekly bars: boxes on a baseline, each at most 20px wide and rounded only at the top,
+   this week in the accent, a week with none a flat line. */
+.bp-spark { display: grid; grid-auto-flow: column; grid-auto-columns: minmax(0, 1fr); align-items: end; gap: 4px; height: 48px; border-bottom: 1px solid var(--line); }
+.bp-spark .bp-col { height: 100%; display: flex; align-items: flex-end; justify-content: center; cursor: pointer; }
+.bp-spark .bp-bar { display: block; width: 100%; max-width: 28px; border-radius: 3px 3px 0 0; background: var(--chart-a); opacity: 0.55; transition: opacity 0.15s; }
+.bp-spark .bp-col.is-now .bp-bar, .bp-spark .bp-col.is-on .bp-bar { background: var(--mark); opacity: 1; }
+.bp-spark .bp-bar.is-zero { background: var(--line); }
+.bp-spark .bp-col:focus { outline: none; }
+.bp-spark .bp-col:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; border-radius: 4px; }
+.bp-spark.has-on .bp-col:not(.is-on) .bp-bar { opacity: 0.3; }
+/* The week each bar is, the same columns as the bars. */
+.bp-wks { display: grid; grid-auto-flow: column; grid-auto-columns: minmax(0, 1fr); gap: 4px; margin-top: 4px; }
+.bp-wk { text-align: center; font-size: var(--t-sm); line-height: 1.2; color: var(--muted); white-space: nowrap; overflow: hidden; }
+.bp-wk.is-now { color: var(--ink); font-weight: 600; }
 /* Each week is a column that answers the pointer, a tap or the keyboard; the one pointed at
    stays full and the others step back, and the line under them says its week. */
-.bp-spark .bp-col { cursor: pointer; }
-.bp-spark .bp-col:focus { outline: none; }
-.bp-spark .bp-col:focus-visible .bp-hit { stroke: var(--focus); stroke-width: 2px; vector-effect: non-scaling-stroke; }
-.bp-spark.has-on .bp-col:not(.is-on) .bp-bar { opacity: 0.45; }
-/* Where a conversation is, as one row of steps: done ones filled, the rest outlined. Plain
-   lines read as a list of words (2026-10-30). */
-.stepper { display: flex; flex-wrap: wrap; gap: 8px; margin: 4px 0; }
-.stepper li { padding: 4px 12px; border-radius: 999px; border: 1px solid var(--line-strong); font-size: var(--t-sm); color: var(--muted); }
-.stepper li.done { background: var(--sunk); color: var(--ink); border-color: transparent; }
+/* Where a conversation is, as one line of words with ticks: outlined pills beside the buttons
+   read as buttons that did nothing (2026-11-02). */
+.d-steps { font-size: var(--t-sm); color: var(--muted); }
+.d-steps .d-step.done { color: var(--ink); }
 .d-next { margin: 0; }
-.bp-lead-list { display: grid; gap: 8px; margin: 0; padding-left: 1.1em; }
-.bp-lead-list li { line-height: 1.45; }
+/* A person's page: each block apart, as cards are, never run together (2026-11-02). */
+.d-person { display: grid; gap: 16px; }
+.d-person .d-block { display: grid; gap: 8px; }
+.d-person .timeline { display: grid; gap: 12px; }
+.d-person .timeline li { display: grid; gap: 2px; }
+.d-person .t-draft .t-text { white-space: pre-wrap; background: var(--sunk); border-radius: var(--r-sm); padding: 12px 16px; }
+/* Every point on the Brief has the same small dot, centred on its first line whatever its
+   size, in place of the browser's own bullet beside a dot of ours (the maintainer,
+   2026-11-02: "the bullets ... look clunky and misspaced"). */
+.bp-lead-list { display: grid; gap: 8px; margin: 0; padding-left: 0; list-style: none; }
+.bp-lead-list > li { position: relative; padding-left: 16px; line-height: 1.45; }
+.bp-lead-list > li::before { content: ""; position: absolute; left: 2px; top: calc(0.725em - 3px); width: 6px; height: 6px; border-radius: 50%; background: var(--line); }
+.bp-news > li::before, .bp-facts > li::before { background: var(--pc); }
+/* Today's facts beside its one thing: who first, in ink, then each fact on its own line with a
+   small dot in the panel's colour, not a list of plain bullets (the maintainer, 2026-11-02:
+   "slightly prettier appearance of the bullets in today"). */
+.bp-lead-list.bp-facts { gap: 4px; }
+.bp-facts li { font-size: var(--t-sm); color: var(--muted); }
+
 .chip-list { display: flex; flex-wrap: wrap; gap: 8px; margin: 0; }
 .chip-list .chip { padding: 4px 12px; border-radius: 999px; background: var(--sunk); color: var(--ink); font-size: var(--t-sm); }
 /* A light finish (2026-10-30: "slightly more polished, don't go overboard"): cards lift a
@@ -1453,7 +1539,6 @@ ul.bp-news { max-width: 80ch; }
 .bp-steps > .bp-step-iv { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 8px; }
 .bp-steps > .bp-step-iv > .bp-link { flex: 1 1 12rem; min-width: 0; }
 .bp-steps > .bp-step-iv .bp-at { display: block; }
-.bp-spark { max-width: 360px; }
 /* Each row of the Brief filled, whichever panels a person has (fillRows): twelve columns
    on a laptop, two on a tablet, one on a phone. */
 @media (min-width: 760px) and (max-width: 1099px) {
@@ -1480,6 +1565,9 @@ ul.bp-news { max-width: 80ch; }
 .bp-when { color: var(--muted); font-size: var(--t-sm); }
 .bp-state .bp-when { display: block; font-weight: 400; }
 .up-prep { display: block; font-size: var(--t-sm); color: var(--muted); }
+/* A link that starts the line lines up with the lines above it: a link's own 4px of padding
+   pushed "Prep ready" in from its card's other lines (2026-11-02). */
+.up-prep > .btn.link:first-child { padding-left: 0; }
 .up-plain { color: var(--ink); }
 /* On a phone the Brief reads in the order a day is acted on: the one thing, the steps, then
    what is booked, who, the jobs, the numbers and the news. */

@@ -68,7 +68,11 @@ class Runner:
         line = self.lines.get(timeout=timeout)
         return json.loads(line) if line else {"ready": False, "error": "the runner exited"}
 
-    def __call__(self, scenario, **args):
+    def __call__(self, scenario, _wait=180, **args):
+        # How long one answer may take: three minutes, longer only for a scenario that taps every
+        # control on a busy screen, which ran past three in Safari's engine on a busy runner
+        # (4.8.0's run: To do took 47s in Chrome's engine here).
+        wait = _wait
         self.n += 1
         self.proc.stdin.write(json.dumps({"id": self.n, "scenario": scenario, "args": args}) + "\n")
         self.proc.stdin.flush()
@@ -76,7 +80,7 @@ class Runner:
         # and taking that late answer for the next question failed every test after it with
         # someone else's result (Safari, 2026-10-29): an older answer is passed over.
         while True:
-            line = self.lines.get(timeout=180)
+            line = self.lines.get(timeout=wait)
             assert line, "the browser runner stopped"
             got = json.loads(line)
             if got.get("id") is None or got["id"] >= self.n:
@@ -198,7 +202,9 @@ def pages(tmp_path_factory):
     # may have gone, the same warning on three messages, a question from an update, and
     # follow-ups hidden at employers turned down.
     busy = _sample()
-    ppl = busy["people"][:3]
+    # People with no message drafted to them yet: one already drafted is opened, never
+    # drafted again, so it is never a row of a "Draft all" (2026-11-02).
+    ppl = [p for p in busy["people"] if p["status"] != "closed" and not any(m["contact"] == p["id"] for m in busy["messages"])][:3]
     nudge = next(d for d in busy["due"] if d["kind"] == "nudge")
     busy["due"] = [d for d in busy["due"] if d["kind"] != "nudge"] + [
         dict(nudge, id="due-nudge-%s" % p["id"], contact=p["id"], item=None, title="Follow up with %s at %s" % (p["first_name"], p["employer"]),
@@ -349,7 +355,7 @@ def test_every_control_on_every_screen_does_something_and_nothing_throws(run, pa
     # Each control tapped on a fresh page (the maintainer, 2026-10-29: "I'm starting to doubt
     # even some of the buttons work"): it opens, sends, moves or changes something on screen,
     # nothing throws, and every link to another site has a real address.
-    r = run("sweep", html=pages["sample"], viewport=PHONE, clock="2026-10-25T09:00:00Z", sections=[section])
+    r = run("sweep", html=pages["sample"], viewport=PHONE, clock="2026-10-25T09:00:00Z", sections=[section], _wait=600)
     assert r["tapped"] == r["perSection"][section] or r["tapped"] == 80, r
     assert not r["errors"], r["errors"]
     assert not r["unclickable"], r["unclickable"]
@@ -361,7 +367,7 @@ def test_every_section_empty_says_what_will_appear_and_offers_one_step(run, page
     r = run("sections", html=pages["nothing"], viewport=PHONE)
     _clean(r)
     expect = {"jobs": "No shortlist yet.", "drafts": "Nothing drafted yet.", "drafts-messages": "No messages to send.",
-              "contacts": "Nobody here yet.", "interviews": "Nothing booked.", "progress": "Nothing counted yet."}
+              "contacts": "Who could refer you?", "interviews": "Your interviews and calls show here", "progress": "Nothing counted yet."}
     for sid, title in expect.items():
         assert r[sid]["empty"] == [title], (sid, r[sid]["empty"])
         assert r[sid]["overflow"]["sw"] <= r[sid]["overflow"]["cw"], sid
@@ -375,7 +381,8 @@ def test_a_first_run_offers_setup_everywhere_and_never_an_empty_list(run, pages)
     assert "Start" in r["todo"]["text"]
     for sid in ("jobs", "drafts", "contacts", "interviews"):
         assert r[sid]["empty"] == ["Your search is not set up yet"], (sid, r[sid]["empty"])
-        assert "Continue setting up" in r[sid]["text"], sid
+        # Nothing begun yet: Start, as To do says it, never "Continue" (2026-11-02).
+        assert "Start" in r[sid]["text"] and "Continue setting up" not in r[sid]["text"], sid
 
 
 def test_sixty_jobs_render_select_and_fit_a_phone(run, pages):
@@ -407,7 +414,8 @@ def test_text_from_the_model_is_text_never_markup(run, pages):
     r = run("paint", html=pages["hostile"], hash="jobs")
     _clean(r)
     assert "</script><script>window.__pwned=1</script>" in r["bodyText"]
-    r2 = run("paint", html=pages["hostile"], hash="todo")
+    # A question waits behind "Show N more" while things are late or due today (2026-11-02).
+    r2 = run("paint", html=pages["hostile"], hash="todo", unfold=True)
     assert "<img src=x onerror=window.__pwned=2>" in r2["bodyText"]
 
 
@@ -424,33 +432,38 @@ def test_to_do_groups_by_when_then_by_employer_in_the_order_things_are_done(run,
     r = run("todo", html=pages["sample"])
     _clean(r)
     assert r["first"] == "Phone screen with Larkspur Retail", "the soonest interview within 14 days is the first card"
-    # Five show first; a band split by the fold heads its rest again inside it (4.3).
-    assert list(dict.fromkeys(b["band"] for b in r["bands"])) == ["Needs your answer", "Due or late", "Next 7 days", "Later"]
+    # Five show first; a band split by the fold heads its rest again inside it (4.3). What is
+    # late or due today comes before the questions (2026-11-02: a thank-you two days late
+    # waited behind four small questions).
+    assert list(dict.fromkeys(b["band"] for b in r["bands"])) == ["Due or late", "Needs your answer", "Next 7 days", "Later"]
     for b in r["bands"]:
         for g in b["groups"]:
             assert g["employer"] is None or len(g["titles"]) >= 2, ("an employer heads only two or more", b["band"], g)
-    answer = r["bands"][0]["groups"]
+    answer = next(b for b in r["bands"] if b["band"] == "Needs your answer")["groups"]
     assert answer[0]["employer"] == "Fernhill Freight" and len(answer[0]["titles"]) == 2, "one employer's two questions together"
-    late = r["bands"][1]["groups"]
+    late = next(b for b in r["bands"] if b["band"] == "Due or late")["groups"]
     assert late[0]["titles"][0].startswith("Follow up with Fernhill Freight"), "the late thing first"
     titles = [t for b in r["bands"] for g in b["groups"] for t in g["titles"]]
     assert "Prepare for the Larkspur Retail phone screen" not in titles, "the interview's own card is its prep, never a second card"
     assert "Thank-you note after your Harbourline Bank first interview" in titles
     assert r["dueButtons"]["Thank-you note after your Harbourline Bank first interview"][0] == "Draft the thank-you"
     assert r["dueButtons"]["Send your CV to Tamsin"][0] == "Choose the role"
-    assert r["dueButtons"]["Reply to Juno at Larkspur Retail"][0] == "Draft a reply"
+    # The reply is drafted already: the row opens it, never drafts it again (2026-11-02).
+    assert r["dueButtons"]["Reply to Juno at Larkspur Retail"][0] == "See the draft"
     assert all("Done" in b for b in r["dueButtons"].values()), "every due row can be marked done"
     assert titles.count("3 first notes ready to send") == 1, "a wave of first notes is one card"
     assert r["chips"] == 0, "no kind chips on To do"
     assert r["filled"] == 0 and r["answers"] >= 8, "a question never fills one of its answers"
     assert r["jobsQuestion"] and "Have you used Looker?" in r["jobsQuestion"], "Jobs asks its question on the role's own card"
-    assert r["juno"]["state"] == "Replied: your turn" and "Draft a reply" in r["juno"]["buttons"], r["juno"]
+    assert r["juno"]["state"] == "Replied: your turn" and "See the draft" in r["juno"]["buttons"], r["juno"]
+    assert "Draft a reply" not in r["juno"]["buttons"], r["juno"]
 
 
 def test_an_alert_is_a_line_with_one_button_and_a_suggestion_can_be_declined_for_good(run, pages):
     r = run("alerts", html=pages["sample"])
     _clean(r)
-    assert [" ".join(x.split()) for x in r["closed"]] == ["Needs fixing: This posting has closed."]
+    # A closed posting is a note, not a fix (2026-11-02).
+    assert [" ".join(x.split()) for x in r["closed"]] == ["Note: This posting has closed."]
     assert r["cost"] == [], "a free fix says no cost on the card"
     assert r["fixed"]["action"] == "job.dismiss" and r["fixed"]["item"] == "r12-5"
     assert r["suggest"] and " ".join(r["suggest"][0].split()).startswith("Suggestion: The posting asks for Tableau")
@@ -560,7 +573,10 @@ def test_draft_this_asks_its_questions_first_says_what_it_costs_and_rings_with_n
     assert any("fixed term" in x for x in r["legends"])
     # The gauge's own words, then the time (4.3).
     assert "About 9 minutes." in r["cost"] and "Nothing is sent." in r["cost"]
-    assert r["stillOpen"] and len(r["errors"]) == 2, "unanswered questions are named, nothing is asked of a chat"
+    # "No, draft it" is chosen for the person, and the posting's own question is theirs to
+    # leave (2026-11-02): one more tap drafts. Answered, it goes with the draft.
+    assert r["chosen"] == ["No, draft it"] and r["errors"] == [], r
+    assert any("fixed term" in x and "(if you like)" in x for x in r["legends"])
     assert r["submitWhenApplied"] == "Mark as applied" and r["submitWhenNot"] == "Draft it", "the button says what it will do"
     assert r["closed"]
     w = r["work"]
@@ -970,6 +986,13 @@ def test_no_side_by_side_menu_and_a_second_column_closes_plainly(run, pages):
 def test_reduced_motion_stops_the_spinner_and_the_bar(run, pages):
     r = run("motion", html=pages["sample"])
     assert r["no-preference"]["spin"] == "turn"
+    # Whether the setting reached the page at all comes first: Firefox on the runner ignored it
+    # given every way a test can give it, which says nothing about the page. Chrome's engine,
+    # what most people's Claude app draws with besides Safari's, must take it.
+    if not r["reduce"]["matches"]:
+        assert r["reduce"]["engine"] != "chromium", "Chrome's engine ignored reduced motion"
+        pytest.skip("%s on this machine ignores reduced motion: the page's rule is not reached"
+                    % r["reduce"]["engine"])
     assert r["reduce"]["spin"] == "none"
     assert r["reduce"]["fill"] in ("0s", "0s, 0s")
     # Nothing fades as it is drawn: Safari faded every control in from the text colour (a
@@ -979,7 +1002,10 @@ def test_reduced_motion_stops_the_spinner_and_the_bar(run, pages):
         assert d["btn"] is not None and d["card"] is not None, d
         assert set(d["btn"].split(", ")) == {"0s"} and set(d["card"].split(", ")) == {"0s"}, (m, d)
         assert d["fading"] == 0, (m, d)
-    assert r["no-preference"]["hovered"].startswith("0.15s"), r["no-preference"]
+    # The fade under the pointer is for devices that hover: Firefox on the runner reports none,
+    # so the rule is not reached there, which says nothing about the page (4.8.0's run).
+    if r["no-preference"].get("hover", True):
+        assert r["no-preference"]["hovered"].startswith("0.15s"), r["no-preference"]
     assert set(r["reduce"]["hovered"].split(", ")) == {"0s"}, r["reduce"]
 
 
@@ -1277,7 +1303,7 @@ def test_the_numbers_say_what_they_count_and_each_bar_says_its_week(run, pages):
     r = run("paint", html=pages["sample"], hash="brief", clock="2026-10-25T09:00:00Z")
     _clean(r)
     # This week beside the usual one: a number with nothing to compare it to says little.
-    assert re.search(r"Applications a week\. This week \d+, usually \d+\.", r["bodyText"]), r["bodyText"][-800:]
+    assert re.search(r"Applications each week\. This week \d+, usually \d+\.", r["bodyText"]), r["bodyText"][-800:]
     assert "contacts replied" in r["bodyText"] or "contact replied" in r["bodyText"]
     assert not re.search(r"\b1\s+interviews\b", r["bodyText"])
 
@@ -1411,7 +1437,7 @@ def test_the_page_opened_with_no_chat_running_brings_itself_up_to_date_and_says_
     # Time run counts from the start, not the ask a day before.
     assert "29 hours" not in r["sheetText"] and "1 min so far" in r["sheetText"], r["sheetText"]
     # Each week of the chart says its count to a pointer and a tap; leaving puts the line back.
-    assert r["capBefore"].startswith("Applications a week")
+    assert r["capBefore"].startswith("Applications each week")
     assert re.match(r"Week of .+: \d+ applications?\.$", r["capHover"]), r["capHover"]
     assert r["capLeft"] == r["capBefore"]
     assert re.match(r"Week of .+: \d+ applications?\.$", r["capTap"]) and r["capTap"] != r["capHover"]
@@ -1486,12 +1512,14 @@ def test_everything_booked_is_one_tap_from_any_calendar_and_the_brief_shows_the_
     assert r["overflow"] == [], r["overflow"]
     assert r["afterTap"] == {"section": True, "focus": "up-call-harbourline-bank-bea-2026-10-29"}, r["afterTap"]
     # Each thing once (the maintainer, 2026-11-02: "if we're just saying the same thing ten
-    # times it can be a bit overwhelming"): the interview this week is Today's, with its
-    # calendar button and the questions it will bring, and no other panel repeats it; Juno,
-    # a step, is not also a row under Waiting on you.
+    # times it can be a bit overwhelming"), and Today is the most pressing thing (the same day:
+    # "things that have rolled over or are urgent"): the follow-up two days late leads, the
+    # interview three days out with its prep ready is Coming up's, and no other panel repeats
+    # it; Juno, a step, is not also a row under Waiting on you.
     p = r["panels"]
-    assert "Phone screen with Larkspur Retail" in p["bp:today"] and "Likely to come up" in p["bp:today"] and r["heroCal"]
-    assert not any("Larkspur" in t and "screen" in t for k, t in p.items() if k != "bp:today"), p
+    assert "Rolled over" in p["bp:today"] and "Fernhill Freight" in p["bp:today"], p["bp:today"]
+    shown = [k for k, t in p.items() if "Larkspur" in t and "screen" in t]
+    assert len(shown) == 1 and shown != ["bp:today"], shown
     assert "Reply to Juno" in p["bp:next"] and "Juno" not in p["bp:people"], (p["bp:next"], p["bp:people"])
     assert r["cards"] and not any("Larkspur" in c for c in r["cards"]), r["cards"]
     assert r["phoneWide"] <= 0 and r["phoneStrip"] is True

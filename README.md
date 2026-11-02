@@ -9,7 +9,7 @@ private page. It never sends anything for you.
 
 <p align="center">
   <img src="docs/images/page-brief.png" width="720"
-       alt="The Brief: today's interview, the next three things to do, who is waiting on you, the best new jobs, news and your numbers">
+       alt="The Brief: today's most pressing thing with what matters about it, the next three things to do, who is waiting on you, the best new jobs, news with what to do with each item, and your numbers by week">
   <br>
   <sub><b>The Brief</b>: your day at a glance</sub>
 </p>

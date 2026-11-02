@@ -183,7 +183,7 @@ async function open(o) {
 }
 async function turn(page, n) {
   for (let i = 0; i < (n || 3); i++) {
-    await page.evaluate(() => new Promise((r) => { const c = new MessageChannel(); c.port1.onmessage = () => r(); c.port2.postMessage(0); }));
+    await throughNav(page, () => page.evaluate(() => new Promise((r) => { const c = new MessageChannel(); c.port1.onmessage = () => r(); c.port2.postMessage(0); })));
   }
 }
 async function settle(page) {
@@ -218,7 +218,22 @@ async function goto(page, id) {
   }
 }
 const T = (page, sel) => page.$$eval(sel, (els) => els.map((e) => e.innerText.trim()));
-const one = async (page, sel) => { const el = await page.$(sel); return el ? (await el.innerText()).trim() : null; };
+// A read that a page reloading itself interrupts is read again once the new page is up:
+// Firefox's engine destroys the old page's context later than Chromium's, and a reload test
+// lost its read there three times running (4.7.0's Everywhere run, 2026-11-02).
+const NAVIGATING = /context was destroyed|navigat|Target page, context or browser has been closed|frame was detached/i;
+async function throughNav(page, read) {
+  const until = Date.now() + 8000;
+  for (;;) {
+    try { return await read(); }
+    catch (e) {
+      if (!NAVIGATING.test(String(e && e.message || e)) || Date.now() > until) throw e;
+      await page.waitForLoadState("load").catch(() => {});
+      await page.waitForTimeout(150);
+    }
+  }
+}
+const one = (page, sel) => throughNav(page, async () => { const el = await page.$(sel); return el ? (await el.innerText()).trim() : null; });
 // A list's quiet actions sit behind its ⋯ menu (LAYOUT_SPEC 5.2): open it, pick one.
 async function menuPick(page, name) {
   await page.locator("#main summary.menu-btn").first().click();
@@ -234,7 +249,7 @@ async function openSetting(page, key) {
   const open = await sum.evaluate((el) => el.parentElement.open);
   if (!open) { await sum.click(); await turn(page, 3); }
 }
-const calls = (page) => page.evaluate(() => window.__calls.slice());
+const calls = (page) => throughNav(page, () => page.evaluate(() => window.__calls.slice()));
 const overflow = (page) => page.evaluate(() => ({sw: document.documentElement.scrollWidth, cw: document.documentElement.clientWidth}));
 const visible = (page, sel) => page.evaluate((s) => { const el = document.querySelector(s); if (!el) return false; const st = getComputedStyle(el); return st.display !== "none" && st.visibility !== "hidden" && el.getClientRects().length > 0; }, sel);
 async function clickText(page, role, name, opts) {
@@ -413,6 +428,8 @@ S.paint = async (a) => {
   const o = await open({html: a.html, fake: a.fake, viewport: a.viewport, scheme: a.scheme, hash: a.hash, hostTheme: a.hostTheme, look: a.look, timezoneId: a.timezoneId, clock: a.clock});
   const {page} = o;
   if (a.wait) await page.waitForTimeout(a.wait);
+  // What waits behind To do's "Show N more" is read too, where a scenario asks for all of it.
+  if (a.unfold) { await page.$$eval("details.band-more:not([open])", (ds) => ds.forEach((d) => { d.open = true; })); await turn(page, 2); }
   const r = {
     bg: await page.evaluate(() => getComputedStyle(document.body).backgroundColor),
     title: await page.title(), brand: await one(page, "#brand"), heading: await one(page, "#main h2"),
@@ -644,15 +661,7 @@ S.layout = async (a) => {
 // navigated in the middle of the read, 4.7's Everywhere run) is read again once the new page
 // has loaded, never lost.
 async function evalThrough(page, code) {
-  for (let i = 0; i < 3; i++) {
-    try { return await page.evaluate((c) => eval(c), code); }
-    catch (e) {
-      if (!/context was destroyed|navigat/i.test(String(e && e.message || e))) throw e;
-      await page.waitForLoadState("load").catch(() => {});
-      await turn(page, 2);
-    }
-  }
-  return page.evaluate((c) => eval(c), code);
+  return throughNav(page, () => page.evaluate((c) => eval(c), code));
 }
 
 S.engine = async (a) => {
@@ -663,7 +672,7 @@ S.engine = async (a) => {
   if (a.settle) { await page.waitForEvent("load", {timeout: 4000}).catch(() => {}); await page.waitForLoadState("load").catch(() => {}); }
   const out = {texts: {}, after: [], shots: []};
   // To do shows five first: what a test reads is the whole list, the rest unfolded.
-  const unfold = async () => { await page.$$eval("details.band-more:not([open])", (ds) => ds.forEach((d) => { d.open = true; })); await turn(page, 2); };
+  const unfold = async () => { await throughNav(page, () => page.$$eval("details.band-more:not([open])", (ds) => ds.forEach((d) => { d.open = true; }))); await turn(page, 2); };
   for (const id of a.hashes || []) {
     await goto(page, id);
     await unfold();
@@ -755,7 +764,7 @@ S.tweak = async (a) => {
 S.action_receipt = async (a) => {
   const o = await open({html: a.html, hash: "drafts-messages"});
   const {page, store} = o;
-  await clickText(page, "button", "I sent the message to Juno");
+  await clickText(page, "button", "I sent it: the message to Juno");
   await turn(page, 4);
   const ids = store.list("actions/");
   const doc = ids.length ? store.get(ids[0]) : null;
@@ -820,7 +829,7 @@ S.undo = async (a) => {
 S.write_fail = async (a) => {
   const o = await open({html: a.html, hash: "drafts-messages", fake: {failWrites: true}});
   const {page} = o;
-  await clickText(page, "button", "I sent the message to Juno");
+  await clickText(page, "button", "I sent it: the message to Juno");
   await turn(page, 8);
   // The alert is emptied, then written 30ms later so a screen reader says it again; a busy
   // machine read it in between (CI, 2026-10-29). Waited for, never assumed.
@@ -1097,10 +1106,10 @@ S.draft = async (a) => {
   const dlg = page.locator("dialog.sheet");
   const r = {open: await dlg.isVisible(), legends: await dlg.locator("legend").allInnerTexts(), focusInDialog: await page.evaluate(() => !!document.activeElement.closest("dialog")),
     cost: await one(page, "dialog .sheet-cost")};
-  await dlg.getByRole("button", {name: "Draft it"}).click();
-  await turn(page, 3);
+  // Drafting is already chosen, and the posting's own question may be left open (2026-11-02):
+  // nothing stands between the tap and the draft.
+  r.chosen = await dlg.locator("input[type=radio]:checked").evaluateAll((xs) => xs.map((x) => x.labels[0].textContent));
   r.errors = await dlg.locator(".errors li").allInnerTexts();
-  r.stillOpen = await dlg.isVisible();
   await dlg.getByLabel("Yes, I have applied").check();
   await turn(page, 2);
   r.submitWhenApplied = (await dlg.locator("button[type=submit]").innerText()).trim();
@@ -1192,10 +1201,10 @@ S.two_tabs = async (a) => {
   await p1.evaluate(() => { location.hash = "drafts-messages"; });
   await p2.evaluate(() => { location.hash = "drafts-messages"; });
   await turn(p1, 4); await turn(p2, 4);
-  await p1.getByRole("button", {name: "I sent the message to Juno"}).click();
+  await p1.getByRole("button", {name: "I sent it: the message to Juno"}).click();
   await turn(p1, 6); await turn(p2, 6);
   // The other window shows it marked at once, live, with nothing left to press twice.
-  r.otherWindow = {chip: await T(p2, "#main .card.msg.is-marked .state-word"), buttons: await p2.$$eval('#main button[aria-label="I sent the message to Juno"]', (x) => x.length)};
+  r.otherWindow = {chip: await T(p2, "#main .card.msg.is-marked .state-word"), buttons: await p2.$$eval('#main button[aria-label="I sent it: the message to Juno"]', (x) => x.length)};
   r.actions = o.store.list("actions/");
   r.errors = o.errors;
   await o.ctx.close();
@@ -1485,6 +1494,9 @@ S.you = async (a) => {
   const o = await open({html: a.html, hash: "todo"});
   const {page, store} = o;
   const works = () => store.list("work/").map((k) => store.get(k)).filter((w) => w && w.kind === "profile");
+  // Finish your profile waits at the end of "Show N more" while today's things show (2026-11-02).
+  await page.$$eval("details.band-more:not([open])", (ds) => ds.forEach((d) => { d.open = true; }));
+  await turn(page, 2);
   const r = {card: await T(page, '#main [data-item="you"] .card-title')};
   await page.locator('#main [data-item="you"]').getByRole("button", {name: "Add what you did"}).click();
   await turn(page, 3);
@@ -2204,9 +2216,16 @@ S.budget = async (a) => {
 S.motion = async (a) => {
   const r = {};
   for (const m of ["reduce", "no-preference"]) {
-    const o = await open({html: a.html, reducedMotion: m, hash: "work", seed: {"work/search~1": runningDoc({asked_at: new Date().toISOString(), stage_at: new Date().toISOString()})}});
-    // Set on the page as well as the context: Firefox's runs read the spinner still turning
-    // with the context's setting alone (4.6 and 4.7's Everywhere runs).
+    // Firefox on the runner ignored reduced motion given to the context and to the page (4.6
+    // and 4.7's Everywhere runs): there it is a Firefox of its own, started with the
+    // preference itself, and the page says whether the setting reached it at all.
+    const own = m === "reduce" && ENGINE === "firefox"
+      ? await playwright.firefox.launch({firefoxUserPrefs: {"ui.prefersReducedMotion": 1}}).catch(() => null) : null;
+    const shared = browser;
+    if (own) browser = own;
+    let o;
+    try { o = await open({html: a.html, reducedMotion: m, hash: "work", seed: {"work/search~1": runningDoc({asked_at: new Date().toISOString(), stage_at: new Date().toISOString()})}}); }
+    finally { browser = shared; }
     await o.page.emulateMedia({reducedMotion: m}).catch(() => {});
     // Wait for what is checked, with a time limit, never the first frame: under load Firefox
     // drew the card before the reduced-motion rule applied (4.6's Everywhere run).
@@ -2214,7 +2233,8 @@ S.motion = async (a) => {
       const s = document.querySelector(".work-card .spin");
       return !!s && (mode !== "reduce" || getComputedStyle(s).animationName === "none");
     }, m, {timeout: 5000}).catch(() => null);
-    r[m] = await o.page.evaluate(() => { const s = document.querySelector(".work-card .spin"); const f = document.querySelector(".work-card .fill"); return {spin: s ? getComputedStyle(s).animationName : null, fill: f ? getComputedStyle(f).transitionDuration : null}; });
+    r[m] = await o.page.evaluate(() => { const s = document.querySelector(".work-card .spin"); const f = document.querySelector(".work-card .fill"); return {spin: s ? getComputedStyle(s).animationName : null, fill: f ? getComputedStyle(f).transitionDuration : null, matches: matchMedia("(prefers-reduced-motion: reduce)").matches, hover: matchMedia("(hover: hover)").matches}; });
+    r[m].engine = ENGINE;
     // A section just drawn, the pointer away: no control or card fades (Safari faded each one
     // in from the text colour, 2026-10-31); one under the pointer still does.
     await o.page.mouse.move(1, 1);
@@ -2228,6 +2248,7 @@ S.motion = async (a) => {
     const hb = o.page.locator("#main .card .btn").first();
     if (await hb.count()) { await hb.hover(); await turn(o.page, 2); r[m].hovered = await hb.evaluate((b) => getComputedStyle(b).transitionDuration); }
     await o.ctx.close();
+    if (own) await own.close().catch(() => {});
   }
   return r;
 };

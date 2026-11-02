@@ -163,7 +163,9 @@ def test_the_stylesheet_names_tokens_and_never_a_colour():
 def test_the_script_writes_no_colour_either():
     js = open(JS, encoding="utf-8").read()
     assert not re.search(r"['\"]#[0-9a-fA-F]{3,8}['\"]|\brgba?\(|\bhsla?\(", js)
-    assert set(re.findall(r'style: "([^"]*)', js)) == {"width:"}, "inline styles set widths only"
+    # Inline styles set sizes only, never a colour: a bar's width, and since 4.8 a weekly bar's
+    # height (the chart drawn as boxes on a baseline, not a stretched picture).
+    assert set(re.findall(r'style: "([^"]*)', js)) <= {"width:", "height:"}, "inline styles set sizes only"
 
 
 def test_the_generated_css_follows_the_hosts_contract_and_the_persons_choice():
