@@ -859,7 +859,7 @@ dialog.sheet form { display: grid; gap: 16px; }
 .sheet-cost { color: var(--muted); font-size: var(--t-sm); }
 .field { border: 0; margin: 0; padding: 0; display: grid; gap: 8px; }
 .field legend, .field > label { font-weight: 600; padding: 0; margin-bottom: 2px; }
-.field.has-error { padding-left: 12px; border-left: 4px solid var(--st-failed); }
+/* A field to answer says so in red words above it, never a bar down its side (DESIGN.md). */
 .field-error { color: var(--st-failed); font-weight: 600; font-size: var(--t-sm); }
 .optional { font-weight: 400; color: var(--muted); }
 .reveal { margin-top: 8px; padding-left: 32px; }
@@ -867,6 +867,9 @@ dialog.sheet form { display: grid; gap: 16px; }
 .errors-title { font-weight: 600; color: var(--st-failed); }
 .errors ul { margin: 4px 0 0; padding-left: 20px; }
 .errors a { color: var(--st-failed); font-weight: 600; }
+/* Each line of the list reads from its bullet, on a phone too, where a link is centred in
+   its tap area: centred, the words floated away from their bullets (2026-11-02). */
+.errors ul a { text-align: left; }
 .keys-list { margin: 0; display: grid; gap: 8px; }
 .keys-list div { display: grid; grid-template-columns: 9em minmax(0, 1fr); gap: 12px; }
 .keys-list dd { margin: 0; }
@@ -883,7 +886,9 @@ kbd { font: 600 var(--t-sm) var(--font-data); background: var(--raised); color: 
   pointer-events: auto; display: flex; align-items: center; gap: 4px 8px; flex-wrap: wrap;
   background: var(--toast-bg); color: var(--toast-ink); border-radius: var(--r); padding: 8px 8px 8px 16px; box-shadow: var(--shadow);
 }
-.toast-text { flex: 1 1 200px; font-weight: 600; }
+/* The words take what the buttons leave and wrap inside it, so Close stays on their row on a
+   phone (at 200px they pushed it to a line of its own, 2026-11-02). */
+.toast-text { flex: 1 1 0; min-width: 0; font-weight: 600; }
 .toast .btn.quiet { color: var(--toast-ink); text-decoration-color: currentColor; }
 @media (hover: hover) { .toast .btn.quiet:hover { background: var(--toast-hover); } }
 .toast :focus-visible { outline-color: var(--toast-ink); }
@@ -1154,6 +1159,16 @@ body.has-fab .shell { padding-bottom: calc(var(--tabs-h) + env(safe-area-inset-b
   .person .top-end .icon-only { position: absolute; top: 4px; right: 4px; }
   .person .job-top h3 { padding-right: 44px; }
   .person .top-end { margin-left: 0; flex-basis: 100%; }
+  /* A draft's or an application's state the same way: its bin in the corner and "Needs your
+     answer" under the title, at its start. Pushed to the right of a line of its own, it left
+     a gap under the title (2026-11-02). */
+  .card.app, .card.app-record { position: relative; }
+  .card.app .top-end .icon-only, .card.app-record .top-end .icon-only { position: absolute; top: 4px; right: 4px; }
+  .card.app .job-top:has(.top-end .icon-only) h3, .card.app-record .job-top:has(.top-end .icon-only) h3 { padding-right: 44px; }
+  .card.app .top-end:has(.state-word), .card.app-record .top-end:has(.state-word) { margin-left: 0; flex-basis: 100%; }
+  /* Chat fills the first screen down to the tab bar; the footer starts below it, never half
+     under the tab bar (2026-11-02), and is read above it once scrolled to. */
+  .talk.sec { margin-bottom: calc(var(--tabs-h) + env(safe-area-inset-bottom, 0px)); }
 }
 /* A cost's gauge says its words on hover and on focus (the maintainer, 2026-10-29). */
 .has-tip { position: relative; }

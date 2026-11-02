@@ -15,6 +15,8 @@ next?" in its first lines, and nothing asks for a decision a default could make.
 - A long list opens on its first few and folds the rest one tap below ("Show 6 more"): To do
   five today, Drafts and Messages five, Contacts who needs you. Never a filter left on.
   (layout 2, crowd tests)
+- To do's five are what is late or due today first, then the questions; setting-up cards wait
+  behind the fold. (tired-person tests)
 
 ## Cards and lists
 
@@ -38,7 +40,10 @@ next?" in its first lines, and nothing asks for a decision a default could make.
   already applied, closed); a draft (won't apply, already applied, closed); a message (set it
   aside, or the person's choices); a person (don't contact, not that employer any more, in
   touch another way); an interview or an application (they said no, I withdrew, stopped
-  waiting); a reminder in To do (hide it for a week).
+  waiting); a reminder in To do (hide it for a week, and "1 hidden this week: Show" at the end
+  of To do brings it back, as "1 set aside: Show" does in Jobs).
+- A reason that changes something says so when it is given ("Set aside. Fewer jobs outside
+  your field from now on.").
 
 ## Buttons, links and taps
 

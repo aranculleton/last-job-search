@@ -413,6 +413,8 @@ S.paint = async (a) => {
   const o = await open({html: a.html, fake: a.fake, viewport: a.viewport, scheme: a.scheme, hash: a.hash, hostTheme: a.hostTheme, look: a.look, timezoneId: a.timezoneId, clock: a.clock});
   const {page} = o;
   if (a.wait) await page.waitForTimeout(a.wait);
+  // What waits behind To do's "Show N more" is read too, where a scenario asks for all of it.
+  if (a.unfold) { await page.$$eval("details.band-more:not([open])", (ds) => ds.forEach((d) => { d.open = true; })); await turn(page, 2); }
   const r = {
     bg: await page.evaluate(() => getComputedStyle(document.body).backgroundColor),
     title: await page.title(), brand: await one(page, "#brand"), heading: await one(page, "#main h2"),
@@ -1097,10 +1099,10 @@ S.draft = async (a) => {
   const dlg = page.locator("dialog.sheet");
   const r = {open: await dlg.isVisible(), legends: await dlg.locator("legend").allInnerTexts(), focusInDialog: await page.evaluate(() => !!document.activeElement.closest("dialog")),
     cost: await one(page, "dialog .sheet-cost")};
-  await dlg.getByRole("button", {name: "Draft it"}).click();
-  await turn(page, 3);
+  // Drafting is already chosen, and the posting's own question may be left open (2026-11-02):
+  // nothing stands between the tap and the draft.
+  r.chosen = await dlg.locator("input[type=radio]:checked").evaluateAll((xs) => xs.map((x) => x.labels[0].textContent));
   r.errors = await dlg.locator(".errors li").allInnerTexts();
-  r.stillOpen = await dlg.isVisible();
   await dlg.getByLabel("Yes, I have applied").check();
   await turn(page, 2);
   r.submitWhenApplied = (await dlg.locator("button[type=submit]").innerText()).trim();
@@ -1485,6 +1487,9 @@ S.you = async (a) => {
   const o = await open({html: a.html, hash: "todo"});
   const {page, store} = o;
   const works = () => store.list("work/").map((k) => store.get(k)).filter((w) => w && w.kind === "profile");
+  // Finish your profile waits at the end of "Show N more" while today's things show (2026-11-02).
+  await page.$$eval("details.band-more:not([open])", (ds) => ds.forEach((d) => { d.open = true; }));
+  await turn(page, 2);
   const r = {card: await T(page, '#main [data-item="you"] .card-title')};
   await page.locator('#main [data-item="you"]').getByRole("button", {name: "Add what you did"}).click();
   await turn(page, 3);
