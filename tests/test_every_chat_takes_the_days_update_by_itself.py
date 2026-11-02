@@ -28,7 +28,8 @@ def _said(out):
     return ((out or {}).get("hookSpecificOutput") or {}).get("additionalContext") or ""
 
 
-def test_the_days_first_message_carries_the_check_and_later_ones_do_not(monkeypatch):
+def test_the_days_first_message_carries_the_check_and_later_ones_do_not(monkeypatch, tmp_path):
+    monkeypatch.setattr(learned, "_path", lambda: str(tmp_path / "learned.json"))
     monkeypatch.setattr(sync_app, "stale", lambda: True)
     out = learned._with_update(learned.hook(PROMPT), learned._update_due(PROMPT))
     assert out["hookSpecificOutput"]["hookEventName"] == "UserPromptSubmit"
@@ -37,7 +38,8 @@ def test_the_days_first_message_carries_the_check_and_later_ones_do_not(monkeypa
     assert learned._with_update(learned.hook(PROMPT), learned._update_due(PROMPT)) == {}
 
 
-def test_a_reaction_and_the_check_on_one_message_are_both_said(monkeypatch):
+def test_a_reaction_and_the_check_on_one_message_are_both_said(monkeypatch, tmp_path):
+    monkeypatch.setattr(learned, "_path", lambda: str(tmp_path / "learned.json"))
     monkeypatch.setattr(sync_app, "stale", lambda: True)
     reacted = {"hookSpecificOutput": {"hookEventName": "UserPromptSubmit",
                                       "additionalContext": "The person reacted (\"too formal\")."}}
@@ -45,7 +47,8 @@ def test_a_reaction_and_the_check_on_one_message_are_both_said(monkeypatch):
     assert said.startswith("The app's daily update check") and "The person reacted" in said
 
 
-def test_only_the_prompt_carries_it_and_a_broken_check_never_breaks_the_chat(monkeypatch):
+def test_only_the_prompt_carries_it_and_a_broken_check_never_breaks_the_chat(monkeypatch, tmp_path):
+    monkeypatch.setattr(learned, "_path", lambda: str(tmp_path / "learned.json"))
     monkeypatch.setattr(sync_app, "stale", lambda: True)
     assert learned._update_due({"hook_event_name": "Stop"}) == ""
     def boom():
@@ -54,8 +57,11 @@ def test_only_the_prompt_carries_it_and_a_broken_check_never_breaks_the_chat(mon
     assert learned._update_due(PROMPT) == ""
 
 
-def test_in_the_app_itself_nothing_is_said():
+def test_in_the_app_itself_and_before_setup_nothing_is_said(monkeypatch):
     assert sync_app.stale() is False         # this checkout is the app
+    monkeypatch.setattr(sync_app, "stale", lambda: True)
+    monkeypatch.setattr(learned, "_path", lambda: None)   # no profile yet: its start syncs
+    assert learned._update_due(PROMPT) == ""
 
 
 def test_the_chat_that_answers_the_page_checks_on_every_wake():

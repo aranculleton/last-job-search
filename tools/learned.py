@@ -1584,6 +1584,9 @@ def _update_due(event: dict) -> str:
     the app's one hook, so it says this too, rather than a second hook."""
     if (event.get("hook_event_name") or "") != "UserPromptSubmit":
         return ""
+    path = _path()
+    if path is None or person.in_example(path):
+        return ""                     # the app, before /setup (its start syncs), the example person
     try:
         import sync_app
         return sync_app.HOOK_LINE if sync_app.stale() else ""
