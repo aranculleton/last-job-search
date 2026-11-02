@@ -9,9 +9,9 @@ private page. It never sends anything for you.
 
 <p align="center">
   <img src="docs/images/page-brief.webp" width="720"
-       alt="The Brief: today's interview, the next three things to do, who is waiting on you, the best new jobs, news and your numbers">
+       alt="The Brief in dark mode: today's interview, the next three things to do, who is waiting on you, the best new jobs, news and your numbers">
   <br>
-  <sub><b>The Brief</b>: your day at a glance</sub>
+  <sub><b>The Brief</b>: your day at a glance, here in dark mode (light or dark, your choice)</sub>
 </p>
 
 ## What you need
