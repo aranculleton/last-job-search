@@ -142,6 +142,8 @@ def test_a_page_left_behind_by_an_update_is_published_again_by_the_brief(monkeyp
     data = next(i for i, ln in enumerate(lines) if "the page, after landing" in ln)
     assert first < data                               # the new code first, then today's data
     assert "app.py page --out" in lines[first] and PAGE in lines[first]
+    # The first brief after the update read the older prompt, which said never to: this wins.
+    assert "whatever the prompt you read before this run's update says" in lines[first]
 
 
 # ------------------------------------------------------------------ moving the brief

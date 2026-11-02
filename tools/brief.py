@@ -1108,8 +1108,12 @@ def claude_lines(b: dict) -> list[str]:
             # The brief is the only chat many people have: an update that changed the page's
             # own code reached nobody's open page until some other chat ran (2026-11-02: a
             # page two versions behind, showing a brief four days old).
+            # The first brief after an update read its prompt before the update came in, and
+            # an older prompt says never to republish: this line is the newer rule.
             out.append("the page's own code is older than this version (%s): republish it now, "
-                       "before its data: %s" % (behind, " ".join(behind_steps(b["page"]))))
+                       "before its data, whatever the prompt you read before this run's update "
+                       "says (an older one said never to republish; this update replaced that "
+                       "rule): %s" % (behind, " ".join(behind_steps(b["page"]))))
         out.append("the page, after landing (step 4): ArtifactData query, url %s, collections "
                    "screen, meta and addr, out_dir <D>, limit 1000; python3 tools/app.py view "
                    "<D>/view --dump <D> --chat brief; send every batch it prints. "
