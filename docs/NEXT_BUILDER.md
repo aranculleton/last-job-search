@@ -5,11 +5,22 @@ MAINTAINING.md first; this is only what 4.8 left.
 
 ## Do first, for [Unreleased]
 
-1. **Read what 4.8.0's last runs found.** At the merge, every platform had passed on the
-   version's final tree (Windows parts 1 to 3, Mac, Firefox, German and far time zones, the
-   Mac and Windows type in French) except two still running: the Windows Git Bash set-up (its
-   long step now has 45 minutes) and the moved-clock suite. The release pull request runs all
-   of them again: read each summary line and fix what is real.
+1. **Four tests fail only in the Windows Git Bash set-up** ("windows (a computer chat, Git
+   Bash, cp1252)", its step "A copy already set up ...", inside `ci_local.sh --quick`). That
+   step reached its end for the first time in 4.8 (its limit went from 30 to 45 minutes), so
+   these were hidden before, and the same tests pass in all three ordinary Windows legs. Each
+   needs a look on that leg (`EVERYWHERE`-style: run the one file there by hand from the
+   Actions page, `workflow_dispatch`):
+   - `test_nothing_extra_is_needed_to_read_a_pdf.py::test_a_pdfinfo_that_cannot_open_the_file_leaves_the_count_to_pdftotext`:
+     Git's own `ucrt64\bin\pdftotext.EXE` answered exit 0 with no page count.
+   - `test_python_is_found_on_every_computer.py::test_the_shipped_hook_runs_where_python3_is_a_store_stand_in[UserPromptSubmit]`:
+     the hook printed its JSON where nothing was expected.
+   - `test_one_chat_answers_the_page.py::test_a_chat_answering_the_page_for_a_day_starts_a_fresh_helper_at_a_quiet_moment`.
+   - `test_set_me_up_is_the_only_thing_said_in_a_chat.py::test_making_the_copy_from_the_page_is_always_private`:
+     the action `act01` was not applied (`[] == ['act01']`).
+   Every other platform was green on 4.8's final tree: Windows parts 1 to 3, Mac, Firefox,
+   German and far time zones, the Mac and Windows type in French; Safari's one failure (the
+   self-reload test) is fixed in the release pull request.
 2. **Check the first brief after 4.8 on the maintainer's copy** (07:56 UK the next morning;
    `list_events` on their helper chat): the page republished (the FOR CLAUDE lines are no
    longer cut at 2,500 characters, which had dropped the republish and the page update on
