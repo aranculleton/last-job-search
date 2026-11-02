@@ -154,6 +154,9 @@ JSON_FILES = {
                            "indent": 2, "ascii": True},
     # The scheduled tasks (routines.record): one entry a task, known by its key.
     "profile/routines.json": {"lists": {"routines": ("key",)}, "indent": 2},
+    # What the person booked that the app did not know of (upcoming.add): one entry each,
+    # known by its id, so the page and a chat adding one each on the same day keep both.
+    "documents/upcoming.json": {"lists": {"events": ("id",)}, "indent": 2},
     # The findings the person read and kept (profile_consistency.keep): only ever added to.
     "profile/consistency_reviewed.json": {
         "lists": {"reviewed": {"key": ("file", "fact", "said", "sentence"), "keep": True}},

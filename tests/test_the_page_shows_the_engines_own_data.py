@@ -223,7 +223,7 @@ def test_every_section_shows_the_engines_items_in_plain_words(run, built):
     fern = t["drafts"].split("Operations Analyst", 1)[1].split("Claims Forecasting Analyst", 1)[0]
     assert "Get the files" not in fern, "a file not made yet is not offered"
     assert "Replied: your turn" in t["contacts"], "every status the contact book holds has words"
-    assert "Panel interview with Thornbury Bank" in t["interviews"]
+    assert "Panel interview: Thornbury Bank" in t["interviews"]    # Coming up, by day (4.6)
     assert "1 earlier, finished: Show" in t["progress"]
 
 

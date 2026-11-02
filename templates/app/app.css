@@ -515,7 +515,7 @@ dialog.work-sheet { width: min(560px, calc(100vw - 16px)); }
 .recent-list { display: grid; gap: 12px; font-size: var(--t-sm); padding-bottom: 8px; }
 .recent-list li { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 8px; }
 .brief { background: var(--surface); border: 1px solid var(--line); border-radius: var(--r); padding: 4px 20px 16px; display: grid; gap: 8px; }
-input[type="text"], input[type="number"], input[type="date"], input[type="search"], select, textarea {
+input[type="text"], input[type="number"], input[type="date"], input[type="time"], input[type="search"], select, textarea {
   border: 1px solid var(--line-strong); border-radius: var(--r-sm); background: var(--surface); padding: 8px 12px; min-height: var(--target); max-width: 100%;
 }
 textarea { width: 100%; resize: vertical; line-height: 1.45; }
@@ -921,6 +921,10 @@ a.navlink, .applylink, .btn.link, .fold .btn.link, .bp-foot a { text-decoration-
   .card-actions .btn.link, .controls .btn.link { margin-block: 0; }
   a.back-link, a.bp-go { display: inline-flex; align-items: center; min-height: var(--target); min-width: var(--target); }
   a.bp-link { min-height: var(--target); }
+  /* A Coming up title and the prep line under it are each a whole target of their own: an
+     enlarged link reaching into the line above took a tap meant for the title (4.6). */
+  a.up-link { display: flex; align-items: center; min-height: var(--target); }
+  .up-prep .btn.link { margin-block: 0; }
   /* A one-line row is centred in its target, never a line of text over an empty one. */
   a.bp-text.bp-link { display: flex; align-items: center; }
   .bp-jobs a.bp-text.bp-link, .bp-jobs .bp-link { align-items: flex-start; justify-content: center; }
@@ -1206,7 +1210,7 @@ body.has-fab .shell { padding-bottom: calc(var(--tabs-h) + env(safe-area-inset-b
 .brief-hello .sum-small { margin: 4px 0 0; }
 .brief-grid { display: grid; grid-template-columns: minmax(0, 1fr); gap: 12px; }
 @media (min-width: 760px) { .brief-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
-@media (min-width: 1100px) { .brief-grid { grid-template-columns: repeat(4, minmax(0, 1fr)); } }
+@media (min-width: 1100px) { .brief-grid { grid-template-columns: repeat(12, minmax(0, 1fr)); } }
 .bpanel { --pc: var(--accent); --pcbg: var(--accent-soft); background: var(--surface); border: 1px solid var(--line); border-radius: var(--r); padding: 16px; display: flex; flex-direction: column; gap: 12px; min-width: 0; box-shadow: var(--shadow); }
 .bp-today { --pc: var(--mark); --pcbg: var(--accent-soft); background: linear-gradient(135deg, var(--accent-soft), var(--surface) 70%); }
 .bp-next { --pc: var(--st-held); --pcbg: var(--st-held-bg); }
@@ -1214,7 +1218,7 @@ body.has-fab .shell { padding-bottom: calc(var(--tabs-h) + env(safe-area-inset-b
 .bp-jobs { --pc: var(--st-done); --pcbg: var(--st-done-bg); }
 .bp-news { --pc: var(--st-overdue); --pcbg: var(--st-overdue-bg); }
 .bp-numbers { --pc: var(--chart-a); --pcbg: var(--accent-soft); }
-@media (min-width: 760px) { .bpanel { max-height: 300px; } .bpanel.wide { grid-column: span 2; } }
+@media (min-width: 760px) { .bpanel { max-height: 300px; } }
 /* The numbers grow with what they show: "How far they got" was cut off at 1280 by 800, and
    clipped when opened (2026-10-30). */
 @media (min-width: 760px) { .bpanel.bp-numbers { max-height: none; } }
@@ -1245,13 +1249,14 @@ body.has-fab .shell { padding-bottom: calc(var(--tabs-h) + env(safe-area-inset-b
 .bp-score { flex: none; min-width: 32px; text-align: center; padding: 2px 8px; border-radius: 999px; font-variant-numeric: tabular-nums; font-weight: 600; font-size: var(--t-sm); color: var(--st-done); background: var(--st-done-bg); }
 .bp-score.tone-good { color: var(--st-running); background: var(--st-running-bg); }
 .bp-score.tone-fair { color: var(--st-waiting); background: var(--st-waiting-bg); }
-.bp-stats { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; }
+/* The counts never stretch: where their panel is wide (a day with no news) they keep their size. */
+.bp-stats { display: grid; grid-template-columns: repeat(auto-fit, minmax(72px, 1fr)); gap: 8px; max-width: 520px; }
 .bp-stat { display: flex; flex-direction: column; gap: 2px; padding: 8px 12px; background: var(--sunk); border-radius: var(--r-sm); min-width: 0; }
 /* The Brief keeps to a few type styles: one bold weight for its greeting and numbers, 600 for
    every emphasis, so a glance reads one voice (LAYOUT_SPEC 7.10). */
 .brief-page strong, .brief-page b { font-weight: 600; }
 .bp-n { font-size: 1.375rem; font-weight: 700; line-height: 1.15; font-variant-numeric: tabular-nums; }
-.bp-l { font-size: var(--t-sm); color: var(--muted); }
+.bp-l { font-size: var(--t-sm); color: var(--muted); overflow-wrap: normal; word-break: normal; hyphens: none; }
 .bp-spark { width: 100%; height: 32px; display: block; }
 .bp-foot { display: flex; flex-wrap: wrap; align-items: baseline; gap: 4px 16px; margin-top: auto; font-size: var(--t-sm); }
 .bp-iv { display: flex; flex-direction: column; align-items: flex-start; gap: 4px; padding: 12px 16px; background: var(--surface); border: 1px solid var(--line); border-radius: var(--r-sm); }
@@ -1260,6 +1265,8 @@ body.has-fab .shell { padding-bottom: calc(var(--tabs-h) + env(safe-area-inset-b
 .bp-iv-what { font-weight: 600; font-size: 1rem; }
 .bp-iv .btn { margin-top: 4px; }
 @media (min-width: 1100px) { .bp-today .bp-body { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1.2fr); align-items: start; } .bp-today .bp-body > :only-child { grid-column: 1 / -1; } }
+/* The top row, Today and Coming up, is as tall as what they hold: never cut. */
+@media (min-width: 760px) { .bpanel.bp-today, .bpanel.bp-upcoming { max-height: none; } }
 .bp-all > summary { cursor: pointer; font-size: var(--t-sm); color: var(--muted); }
 .bp-all[open] > summary { margin-bottom: 8px; }
 .bp-tip { display: flex; align-items: baseline; gap: 8px 12px; flex-wrap: wrap; margin: 0; padding: 12px 16px; border-radius: var(--r-sm); background: var(--sunk); font-size: var(--t-sm); }
@@ -1343,10 +1350,6 @@ body.has-fab .shell { padding-bottom: calc(var(--tabs-h) + env(safe-area-inset-b
 .bp-spark .bp-col:focus { outline: none; }
 .bp-spark .bp-col:focus-visible .bp-hit { stroke: var(--focus); stroke-width: 2px; vector-effect: non-scaling-stroke; }
 .bp-spark.has-on .bp-col:not(.is-on) .bp-bar { opacity: 0.45; }
-.bp-funnel-list { display: grid; gap: 8px; margin-top: 8px; }
-.bp-funnel-row { display: grid; gap: 4px; }
-.bp-funnel-bar { display: block; height: 8px; border-radius: 4px; background: var(--sunk); overflow: hidden; }
-.bp-funnel-bar .fill { display: block; height: 100%; background: var(--mark); border-radius: 4px; }
 /* Where a conversation is, as one row of steps: done ones filled, the rest outlined. Plain
    lines read as a list of words (2026-10-30). */
 .stepper { display: flex; flex-wrap: wrap; gap: 8px; margin: 4px 0; }
@@ -1372,3 +1375,112 @@ body.has-fab .shell { padding-bottom: calc(var(--tabs-h) + env(safe-area-inset-b
   .btn, .chip, .seg-opt, .card, .work-card, .bpanel, .btn:hover, .chip:hover, .seg-opt:hover, .card:hover, .work-card:hover, .bpanel:hover { transition: none; }
   .btn:active:not(:disabled) { transform: none; }
 }
+
+/* Coming up: by day, each row its time, what it is, and the way into a calendar. */
+.up-agenda { display: grid; gap: 12px; }
+.up-days { display: grid; gap: 16px; }
+.up-day { display: grid; gap: 8px; }
+.up-list { display: grid; gap: 8px; }
+.up-row { display: grid; grid-template-columns: 6.5rem minmax(0, 1fr) auto; align-items: center; gap: 8px 12px; padding: 12px 16px;
+  background: var(--surface); border: 1px solid var(--line); border-radius: var(--r); }
+.up-when { font-weight: 600; font-variant-numeric: tabular-nums; }
+.up-main { display: grid; gap: 2px; min-width: 0; }
+.up-title { overflow-wrap: anywhere; }
+.up-acts { display: flex; flex-wrap: wrap; align-items: center; justify-content: flex-end; gap: 8px; }
+/* On a phone: the time and the calendar button on one line, what it is under them. */
+@media (max-width: 759px) {
+  .up-row { grid-template-columns: minmax(0, 1fr) auto; grid-template-areas: "when acts" "main main"; padding: 12px; }
+  .up-row > .up-when { grid-area: when; }
+  .up-row > .up-main { grid-area: main; }
+  .up-row > .up-acts { grid-area: acts; }
+}
+.bp-up-row { display: flex; align-items: center; gap: 8px; }
+.bp-up-row .up-main { flex: 1; display: grid; gap: 2px; min-width: 0; }
+.bp-up-row .up-when { font-size: var(--t-sm); color: var(--muted); }
+.bp-up-row .up-title { overflow-wrap: anywhere; }
+.bp-upcoming { --pc: var(--st-running); --pcbg: var(--st-running-bg); }
+dialog.sheet .sheet-body { display: grid; gap: 16px; }
+.cal-choices { display: grid; gap: 8px; }
+.cal-choices .btn { justify-content: flex-start; }
+
+/* Coming up's views: an interview row's prep under its title; the later days folded. */
+.up-main > .btn, .up-main > .state { justify-self: start; margin-top: 4px; }
+.up-later, .up-all { margin: 4px 0 0; }
+.up-more { margin: 4px 0 0; }
+
+/* The Brief's two weeks: a day a cell, a dot for each thing that day, a ring for one due. */
+.bp-week { display: grid; grid-template-columns: repeat(14, minmax(0, 1fr)); gap: 2px; }
+.bp-day { display: grid; justify-items: center; gap: 2px; padding: 4px 0 8px; min-height: var(--target); border: 0; border-radius: 8px; background: transparent; color: var(--muted); font: inherit; cursor: pointer; }
+.bp-day.has { cursor: pointer; color: var(--ink); }
+.bp-day.is-today { box-shadow: inset 0 0 0 2px var(--pc); color: var(--ink); }
+.bp-day:focus-visible { outline: 2px solid var(--focus); outline-offset: 1px; }
+.bp-day-w { font-size: var(--t-sm); line-height: 1; }
+.bp-day-n { font-size: var(--t-sm); font-weight: 600; line-height: 1.1; font-variant-numeric: tabular-nums; }
+.bp-day-dots { display: flex; gap: 2px; min-height: 6px; }
+.bp-day-dots i { width: 6px; height: 6px; border-radius: 50%; background: var(--pc); }
+.bp-day-dots i.due { background: transparent; box-shadow: inset 0 0 0 1.5px var(--pc); }
+/* On a phone, the coming week: fourteen days do not fit a thumb. */
+@media (max-width: 559px) { .bp-week { grid-template-columns: repeat(7, minmax(0, 1fr)); } .bp-week > .bp-day:nth-child(n+8) { display: none; } }
+
+/* Coming up's next three, as small cards side by side where there is room. */
+.bp-up { display: grid; gap: 8px; margin: 0; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); }
+.bp-up-row { padding: 8px 8px 8px 12px; border-radius: var(--r-sm); background: var(--sunk); align-items: flex-start; }
+.bp-up-row .up-title { display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+.bp-share { display: block; font-size: var(--t-sm); font-weight: 600; color: var(--ink); }
+
+ul.bp-news { max-width: 80ch; }
+/* Today's steps: an interview among them is its card. */
+.bp-steps > .bp-step-iv { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 8px; }
+.bp-steps > .bp-step-iv > .bp-link { flex: 1 1 12rem; min-width: 0; }
+.bp-steps > .bp-step-iv .bp-at { display: block; }
+.bp-spark { max-width: 360px; }
+/* Each row of the Brief filled, whichever panels a person has (fillRows): twelve columns
+   on a laptop, two on a tablet, one on a phone. */
+@media (min-width: 760px) and (max-width: 1099px) {
+  .brief-grid > .c2-s1 { grid-column: span 1; }
+  .brief-grid > .c2-s2 { grid-column: span 2; }
+}
+@media (min-width: 1100px) {
+  .brief-grid > .c12-s1 { grid-column: span 1; }
+  .brief-grid > .c12-s2 { grid-column: span 2; }
+  .brief-grid > .c12-s3 { grid-column: span 3; }
+  .brief-grid > .c12-s4 { grid-column: span 4; }
+  .brief-grid > .c12-s5 { grid-column: span 5; }
+  .brief-grid > .c12-s6 { grid-column: span 6; }
+  .brief-grid > .c12-s7 { grid-column: span 7; }
+  .brief-grid > .c12-s8 { grid-column: span 8; }
+  .brief-grid > .c12-s9 { grid-column: span 9; }
+  .brief-grid > .c12-s10 { grid-column: span 10; }
+  .brief-grid > .c12-s11 { grid-column: span 11; }
+  .brief-grid > .c12-s12 { grid-column: span 12; }
+}
+
+/* The Brief's rows say when and whose move, quietly beside what. */
+.bp-iv-role { margin: 0; font-size: var(--t-sm); color: var(--muted); }
+.bp-when { color: var(--muted); font-size: var(--t-sm); }
+.bp-state .bp-when { display: block; font-weight: 400; }
+.up-prep { display: block; font-size: var(--t-sm); color: var(--muted); }
+.up-plain { color: var(--ink); }
+/* On a phone the Brief reads in the order a day is acted on: the one thing, the steps, then
+   what is booked, who, the jobs, the numbers and the news. */
+@media (max-width: 759px) {
+  .brief-grid > .bp-today { order: 1; } .brief-grid > .bp-next { order: 2; } .brief-grid > .bp-upcoming { order: 3; }
+  .brief-grid > .bp-people { order: 4; } .brief-grid > .bp-jobs { order: 5; } .brief-grid > .bp-numbers { order: 6; } .brief-grid > .bp-news { order: 7; }
+}
+/* Today: beside the interview, the questions it is likely to bring. */
+.bp-today-side { display: grid; gap: 12px; align-content: start; min-width: 0; }
+.bp-ready { margin: 0; display: grid; gap: 4px; }
+.bp-ready-t { margin: 0; font-size: var(--t-sm); font-weight: 600; color: var(--muted); }
+.bp-qs { display: grid; gap: 8px; margin: 0; }
+.bp-qs li { display: grid; gap: 2px; }
+.bp-q { font-weight: 600; }
+.bp-q-with { font-size: var(--t-sm); color: var(--muted); display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+/* Every title on Coming up reads as the thing it is, in the text colour, underlined only
+   under the pointer, as the Brief's rows do: a page of red underlines read as errors. */
+.up-link { color: inherit; text-decoration: none; }
+.up-link:hover, .up-link:focus-visible { text-decoration: underline; }
+.bp-iv-when { display: flex; align-items: center; justify-content: space-between; gap: 8px; text-transform: none; letter-spacing: 0; }
+/* A phone shows two of the likely questions; the prep holds the rest. */
+@media (max-width: 759px) { .bp-qs > li:nth-child(n+3) { display: none; } }
+.cal-file { display: grid; gap: 4px; }
+.cal-file .hint { margin: 0; }

@@ -1791,7 +1791,19 @@
         "title": "Lead",
         "kind": "lead",
         "text": "A phone screen with **Larkspur Retail** on Wednesday at 1pm, and Juno at Larkspur has replied and is waiting on you. Two applications from last week are still quiet.",
-        "items": []
+        "items": [],
+        "parts": [
+          {
+            "text": "A phone screen with **Larkspur Retail** on Wednesday at 1pm, and Juno at Larkspur has replied and is waiting on you.",
+            "item": "app-larkspur-supply",
+            "section": "ready"
+          },
+          {
+            "text": "Two applications from last week are still quiet.",
+            "item": null,
+            "section": "jobs"
+          }
+        ]
       },
       {
         "title": "Next three",
@@ -2342,5 +2354,173 @@
       }
     ],
     "rev": "you-sample-1"
-  }
+  },
+  "upcoming": [
+    {
+      "id": "up-app-larkspur-supply-phone-screen-2026-10-28",
+      "kind": "interview",
+      "title": "Phone screen: Larkspur Retail",
+      "with": "Larkspur Retail",
+      "day": "2026-10-28",
+      "time": "13:00",
+      "zone": "Europe/London",
+      "start": "2026-10-28T13:00:00Z",
+      "end": "2026-10-28T13:30:00Z",
+      "all_day": false,
+      "place": null,
+      "go": {
+        "to": "interviews",
+        "item": "int-larkspur-supply"
+      },
+      "note": "Supply Chain Analyst",
+      "cal": {
+        "google": "https://calendar.google.com/calendar/render?action=TEMPLATE&text=Phone%20screen%3A%20Larkspur%20Retail&dates=20261028T130000Z/20261028T133000Z&details=Supply%20Chain%20Analyst",
+        "outlook": "https://outlook.live.com/calendar/action/compose?path=%2Fcalendar%2Faction%2Fcompose&rru=addevent&startdt=2026-10-28T13%3A00%3A00Z&enddt=2026-10-28T13%3A30%3A00Z&allday=false&subject=Phone%20screen%3A%20Larkspur%20Retail&body=Supply%20Chain%20Analyst",
+        "ics": "BEGIN:VEVENT\r\nUID:up-app-larkspur-supply-phone-screen-2026-10-28.last-job-search\r\nDTSTAMP:20261025T080000Z\r\nDTSTART:20261028T130000Z\r\nDTEND:20261028T133000Z\r\nSUMMARY:Phone screen: Larkspur Retail\r\nDESCRIPTION:Supply Chain Analyst\r\nBEGIN:VALARM\r\nACTION:DISPLAY\r\nDESCRIPTION:Phone screen: Larkspur Retail\r\nTRIGGER:-PT1H\r\nEND:VALARM\r\nEND:VEVENT\r\n"
+      },
+      "rev": "3b233e778f93"
+    },
+    {
+      "id": "up-call-harbourline-bank-bea-2026-10-29",
+      "kind": "call",
+      "title": "Call with Bea (Harbourline Bank)",
+      "with": "Harbourline Bank",
+      "day": "2026-10-29",
+      "time": "15:00",
+      "zone": "Europe/London",
+      "start": "2026-10-29T15:00:00Z",
+      "end": "2026-10-29T15:30:00Z",
+      "all_day": false,
+      "place": "Microsoft Teams",
+      "go": {
+        "to": "contacts",
+        "item": "harbourline_bank_bea"
+      },
+      "note": null,
+      "cal": {
+        "google": "https://calendar.google.com/calendar/render?action=TEMPLATE&text=Call%20with%20Bea%20%28Harbourline%20Bank%29&dates=20261029T150000Z/20261029T153000Z&details=&location=Microsoft%20Teams",
+        "outlook": "https://outlook.live.com/calendar/action/compose?path=%2Fcalendar%2Faction%2Fcompose&rru=addevent&startdt=2026-10-29T15%3A00%3A00Z&enddt=2026-10-29T15%3A30%3A00Z&allday=false&subject=Call%20with%20Bea%20%28Harbourline%20Bank%29&body=&location=Microsoft%20Teams",
+        "ics": "BEGIN:VEVENT\r\nUID:up-call-harbourline-bank-bea-2026-10-29.last-job-search\r\nDTSTAMP:20261025T080000Z\r\nDTSTART:20261029T150000Z\r\nDTEND:20261029T153000Z\r\nSUMMARY:Call with Bea (Harbourline Bank)\r\nLOCATION:Microsoft Teams\r\nBEGIN:VALARM\r\nACTION:DISPLAY\r\nDESCRIPTION:Call with Bea (Harbourline Bank)\r\nTRIGGER:-PT1H\r\nEND:VALARM\r\nEND:VEVENT\r\n"
+      },
+      "rev": "10977735052a"
+    },
+    {
+      "id": "up-app-copperleaf-payments-recruiter-call-2026-10-30",
+      "kind": "interview",
+      "title": "Recruiter call: Copperleaf Pay",
+      "with": "Copperleaf Pay",
+      "day": "2026-10-30",
+      "time": "10:00",
+      "zone": "Europe/London",
+      "start": "2026-10-30T10:00:00Z",
+      "end": "2026-10-30T10:30:00Z",
+      "all_day": false,
+      "place": null,
+      "go": {
+        "to": "interviews",
+        "item": "int-copperleaf-payments"
+      },
+      "note": "Data Analyst, Payments",
+      "cal": {
+        "google": "https://calendar.google.com/calendar/render?action=TEMPLATE&text=Recruiter%20call%3A%20Copperleaf%20Pay&dates=20261030T100000Z/20261030T103000Z&details=Data%20Analyst%2C%20Payments",
+        "outlook": "https://outlook.live.com/calendar/action/compose?path=%2Fcalendar%2Faction%2Fcompose&rru=addevent&startdt=2026-10-30T10%3A00%3A00Z&enddt=2026-10-30T10%3A30%3A00Z&allday=false&subject=Recruiter%20call%3A%20Copperleaf%20Pay&body=Data%20Analyst%2C%20Payments",
+        "ics": "BEGIN:VEVENT\r\nUID:up-app-copperleaf-payments-recruiter-call-2026-10-30.last-job-search\r\nDTSTAMP:20261025T080000Z\r\nDTSTART:20261030T100000Z\r\nDTEND:20261030T103000Z\r\nSUMMARY:Recruiter call: Copperleaf Pay\r\nDESCRIPTION:Data Analyst\\, Payments\r\nBEGIN:VALARM\r\nACTION:DISPLAY\r\nDESCRIPTION:Recruiter call: Copperleaf Pay\r\nTRIGGER:-PT1H\r\nEND:VALARM\r\nEND:VEVENT\r\n"
+      },
+      "rev": "0fc33889447f"
+    },
+    {
+      "id": "up-app-harbourline-risk-online-test-2026-11-02",
+      "kind": "test",
+      "title": "Online test due: Harbourline Bank",
+      "with": "Harbourline Bank",
+      "day": "2026-11-02",
+      "time": null,
+      "zone": null,
+      "start": null,
+      "end": null,
+      "all_day": true,
+      "place": null,
+      "go": {
+        "to": "interviews",
+        "item": "int-harbourline-risk"
+      },
+      "note": "Risk Analyst",
+      "cal": {
+        "google": "https://calendar.google.com/calendar/render?action=TEMPLATE&text=Online%20test%20due%3A%20Harbourline%20Bank&dates=20261102/20261103&details=Risk%20Analyst",
+        "outlook": "https://outlook.live.com/calendar/action/compose?path=%2Fcalendar%2Faction%2Fcompose&rru=addevent&startdt=2026-11-02&enddt=2026-11-03&allday=true&subject=Online%20test%20due%3A%20Harbourline%20Bank&body=Risk%20Analyst",
+        "ics": "BEGIN:VEVENT\r\nUID:up-app-harbourline-risk-online-test-2026-11-02.last-job-search\r\nDTSTAMP:20261025T080000Z\r\nDTSTART;VALUE=DATE:20261102\r\nDTEND;VALUE=DATE:20261103\r\nSUMMARY:Online test due: Harbourline Bank\r\nDESCRIPTION:Risk Analyst\r\nBEGIN:VALARM\r\nACTION:DISPLAY\r\nDESCRIPTION:Online test due: Harbourline Bank\r\nTRIGGER:-PT9H\r\nEND:VALARM\r\nEND:VEVENT\r\n"
+      },
+      "rev": "e2dcb301f7ce"
+    },
+    {
+      "id": "up-app-harbourline-risk-second-interview-2026-11-04",
+      "kind": "interview",
+      "title": "Second interview: Harbourline Bank",
+      "with": "Harbourline Bank",
+      "day": "2026-11-04",
+      "time": null,
+      "zone": null,
+      "start": null,
+      "end": null,
+      "all_day": true,
+      "place": null,
+      "go": {
+        "to": "interviews",
+        "item": "int-harbourline-risk"
+      },
+      "note": "Risk Analyst",
+      "cal": {
+        "google": "https://calendar.google.com/calendar/render?action=TEMPLATE&text=Second%20interview%3A%20Harbourline%20Bank&dates=20261104/20261105&details=Risk%20Analyst",
+        "outlook": "https://outlook.live.com/calendar/action/compose?path=%2Fcalendar%2Faction%2Fcompose&rru=addevent&startdt=2026-11-04&enddt=2026-11-05&allday=true&subject=Second%20interview%3A%20Harbourline%20Bank&body=Risk%20Analyst",
+        "ics": "BEGIN:VEVENT\r\nUID:up-app-harbourline-risk-second-interview-2026-11-04.last-job-search\r\nDTSTAMP:20261025T080000Z\r\nDTSTART;VALUE=DATE:20261104\r\nDTEND;VALUE=DATE:20261105\r\nSUMMARY:Second interview: Harbourline Bank\r\nDESCRIPTION:Risk Analyst\r\nBEGIN:VALARM\r\nACTION:DISPLAY\r\nDESCRIPTION:Second interview: Harbourline Bank\r\nTRIGGER:-PT9H\r\nEND:VALARM\r\nEND:VEVENT\r\n"
+      },
+      "rev": "bdbf9602d54f"
+    },
+    {
+      "id": "up-dl-app-quayside-demand",
+      "kind": "deadline",
+      "title": "Apply by: Demand Planning Analyst, Quayside Foods",
+      "with": "Quayside Foods",
+      "day": "2026-11-06",
+      "time": null,
+      "zone": null,
+      "start": null,
+      "end": null,
+      "all_day": true,
+      "place": null,
+      "go": {
+        "to": "drafts",
+        "item": "app-quayside-demand"
+      },
+      "note": "The application is drafted and not sent yet.",
+      "cal": {
+        "google": "https://calendar.google.com/calendar/render?action=TEMPLATE&text=Apply%20by%3A%20Demand%20Planning%20Analyst%2C%20Quayside%20Foods&dates=20261106/20261107&details=The%20application%20is%20drafted%20and%20not%20sent%20yet.",
+        "outlook": "https://outlook.live.com/calendar/action/compose?path=%2Fcalendar%2Faction%2Fcompose&rru=addevent&startdt=2026-11-06&enddt=2026-11-07&allday=true&subject=Apply%20by%3A%20Demand%20Planning%20Analyst%2C%20Quayside%20Foods&body=The%20application%20is%20drafted%20and%20not%20sent%20yet.",
+        "ics": "BEGIN:VEVENT\r\nUID:up-dl-app-quayside-demand.last-job-search\r\nDTSTAMP:20261025T080000Z\r\nDTSTART;VALUE=DATE:20261106\r\nDTEND;VALUE=DATE:20261107\r\nSUMMARY:Apply by: Demand Planning Analyst\\, Quayside Foods\r\nDESCRIPTION:The application is drafted and not sent yet.\r\nBEGIN:VALARM\r\nACTION:DISPLAY\r\nDESCRIPTION:Apply by: Demand Planning Analyst\\, Quayside Foods\r\nTRIGGER:-PT9H\r\nEND:VALARM\r\nEND:VEVENT\r\n"
+      },
+      "rev": "6d20cd4faba2"
+    },
+    {
+      "id": "up-ev20261020120000",
+      "kind": "event",
+      "title": "Careers fair at the town hall",
+      "with": null,
+      "day": "2026-11-12",
+      "time": "11:00",
+      "zone": "Europe/London",
+      "start": "2026-11-12T11:00:00Z",
+      "end": "2026-11-12T12:00:00Z",
+      "all_day": false,
+      "place": null,
+      "go": null,
+      "note": null,
+      "own": "ev20261020120000",
+      "cal": {
+        "google": "https://calendar.google.com/calendar/render?action=TEMPLATE&text=Careers%20fair%20at%20the%20town%20hall&dates=20261112T110000Z/20261112T120000Z&details=",
+        "outlook": "https://outlook.live.com/calendar/action/compose?path=%2Fcalendar%2Faction%2Fcompose&rru=addevent&startdt=2026-11-12T11%3A00%3A00Z&enddt=2026-11-12T12%3A00%3A00Z&allday=false&subject=Careers%20fair%20at%20the%20town%20hall&body=",
+        "ics": "BEGIN:VEVENT\r\nUID:up-ev20261020120000.last-job-search\r\nDTSTAMP:20261025T080000Z\r\nDTSTART:20261112T110000Z\r\nDTEND:20261112T120000Z\r\nSUMMARY:Careers fair at the town hall\r\nBEGIN:VALARM\r\nACTION:DISPLAY\r\nDESCRIPTION:Careers fair at the town hall\r\nTRIGGER:-PT1H\r\nEND:VALARM\r\nEND:VEVENT\r\n"
+      },
+      "rev": "1b117298106f"
+    }
+  ]
 }

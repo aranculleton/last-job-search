@@ -55,7 +55,7 @@ CLOCK_KEYS = frozenset({"made_at", "updated", "seen_at", "seen_recently"})
 SECTIONS = ("app", "person", "needs_you", "jobs", "ready", "messages", "due", "people",
             "interviews", "done", "settings", "brief", "setup", "updates", "applications",
             "referrals", "message_budget", "linkedin", "learned", "help", "resume",
-            "search", "where", "listener", "schedule", "you")
+            "search", "where", "listener", "schedule", "you", "upcoming")
 # The page shows every live contact, then the rest by recency up to a size budget
 # (tools/app_lists.py PEOPLE_BYTES); the whole book is in the page's database for "Show".
 DUE_MAX = 100
@@ -1806,14 +1806,29 @@ def _paste(cid: str, first: str, raw) -> dict | None:
         if rests else None
 
 
-def _call_of(cid: str, status: str, due: str) -> dict | None:
-    """A networking call booked (on the row: a reply owed since does not unbook it), and
-    its prep (tools/network/prep.py) where it is made."""
+def _call_of(cid: str, status: str, due: str, said: str = "", home: str = "") -> dict | None:
+    """A networking call booked (on the row: a reply owed since does not unbook it), its
+    time in the person's own zone where its next action writes one ("2pm ET": the page said
+    "Call Thursday" with no time, 2026-11-02), and its prep (tools/network/prep.py) where it
+    is made."""
     path = person.state("documents", "network", cid, "prep.md")
     have = os.path.isfile(path)
     if status != "call_booked" and not have:
         return None
+    clock = None
+    if status == "call_booked" and due and said:
+        import upcoming
+        w = upcoming.call_time(said, home or "UTC")
+        at = upcoming._moment(str(due)[:10], w["time"], w["zone"]) if w else None
+        if at:
+            try:
+                import zoneinfo
+                local = at.astimezone(zoneinfo.ZoneInfo(home or "UTC"))
+                clock, due = local.strftime("%H:%M"), local.date().isoformat()
+            except Exception:  # noqa: BLE001  no zone data: the time as written
+                clock = w["time"]
     return {"day": (due or None) if status == "call_booked" else None,
+            **({"time": clock} if clock else {}),
             "prep": {"path": rel(path), "updated": _mtime(path)} if have else None}
 
 
@@ -1883,7 +1898,7 @@ def _people(ctx: Ctx, targets: dict) -> list:
                 "who": who_they_are(c, status),
                 "replied": full[cid]["replied"], "live": full[cid]["live"],
                 "call": _call_of(cid, "call_booked" if str(c.get("status") or "") ==
-                                 "call_booked" else status, due),
+                                 "call_booked" else status, due, c.get("next_action"), ctx.zone),
                 "paste": _paste(cid, first_name(c.get("name")), None) if cid in drafts
                 else None,
                 "is_process_stage": _is_process_stage(ctx, c, status),
@@ -2043,6 +2058,9 @@ def _due(ctx: Ctx, targets: dict) -> list:
         n = len(ids)
         item = {"id": did, "kind": "withdraw", "sub": "withdraw",
                 "title": f"{n} connection request{'s' if n != 1 else ''} nobody accepted",
+                # Every due item carries `context` (the contract, _ITEM_KEYS): this one was the
+                # only one without, and `app.py check` failed every real model that had it.
+                "context": "Withdrawing them keeps your request count clear for new notes.",
                 "due": min(i["due"] for i in pending), "company": "",
                 "overdue_days": max(int(i.get("late") or 0) for i in pending),
                 "action": "requests.withdrawn", "item": None, "work": None,
@@ -2578,6 +2596,31 @@ def _plain_list(value) -> list:
     return [x for x in (tex_plain(p) for p in parts) if x]
 
 
+def _upcoming(ctx: Ctx, targets: dict) -> list:
+    """Everything booked or due ahead, by day (tools/upcoming.py): interview stages, tests
+    due, calls booked, closing days of drafted applications, and what the person added,
+    each with the ways to put it in a calendar. Never a follow-up. `upcoming-add` is the
+    target of the page's "Add something"; each added one is its own, to take away."""
+    import upcoming
+    try:
+        import app_setup
+        url = str(app_setup.page_record().get("url") or "")
+    except Exception:  # noqa: BLE001  no page yet: no link in the calendar entry
+        url = ""
+    targets["upcoming-add"] = {"kind": "upcoming", "rev": "add"}
+    try:
+        out = upcoming.build(ctx, url)
+    except person.NoProfile:
+        raise                     # no profile yet: the section is empty, as every other is
+    except Exception as e:  # noqa: BLE001  the rest of the page still comes; the chat sees why
+        print(f"upcoming: Coming up could not be built ({type(e).__name__}: {e})", file=sys.stderr)
+        return []
+    for i in out:
+        if i.get("own"):
+            targets[i["id"]] = {"kind": "upcoming", "own": i["own"], "rev": i["rev"]}
+    return out
+
+
 def _you(ctx: Ctx, targets: dict) -> dict | None:
     """What the profile holds, as the person would list it: their jobs (with how many lines
     each has to choose from), skills, education and certificates, and what is still missing.
@@ -3065,6 +3108,12 @@ def _brief(ctx: Ctx, targets: dict) -> dict | None:
     lines = [i["text"] for sec in sections for i in sec["items"]][:8]
     for sec in sections:
         sec["items"] = [dict(i, **brief_link(ctx, i["text"])) for i in sec["items"]]
+        # The opening sentences, each with what it is about, so the page can leave out one
+        # that a panel beside it already shows (the same interview read four times on one
+        # screen, 2026-11-02). A sentence about nothing in particular always stays.
+        if sec["kind"] == "lead" and sec.get("text"):
+            sec["parts"] = [dict(text=t, **brief_link(ctx, t))
+                            for t in re.split(r"(?<=[.!?])\s+(?=[A-Z*])", sec["text"]) if t.strip()]
     return {"date": os.path.basename(path)[:10], "lines": lines,
             "items": [dict(text=x, **brief_link(ctx, x)) for x in lines],
             "sections": sections}
@@ -3233,7 +3282,7 @@ BUILDERS = {"app": _app, "person": _person, "needs_you": _needs_you, "jobs": _jo
             "referrals": _referrals, "message_budget": _message_budget,
             "linkedin": _linkedin, "learned": _learned, "help": _help, "resume": _resume,
             "search": _search, "where": _where, "listener": _listener,
-            "schedule": _schedule, "you": _you}
+            "schedule": _schedule, "you": _you, "upcoming": _upcoming}
 
 # What a section is before there is a profile to build it from: a setup still running, or
 # none started. The page shows the setup then, and every other section empty.
@@ -3252,7 +3301,7 @@ EMPTY = {
                              "checked_at": None, "last_read_at": None, "reads": 0,
                              "queue": [], "rev": "none"}},
     "learned": [], "help": {"tip": None, "tour": [], "off": False}, "resume": None,
-    "search": None, "where": None, "schedule": None,
+    "search": None, "where": None, "schedule": None, "upcoming": [],
     "jobs": {"round": "", "made_at": None, "met": False, "summary": "No search has run yet.",
              "rows": [], "filtered": {"count": 0, "groups": []}},
     "done": {"counts": {"applied": 0, "interviews": 0, "offers": 0, "replies": 0},
@@ -3329,6 +3378,7 @@ _REQUIRED = {
     "model": int, "made_at": str, "rev": str, "app": dict, "person": dict, "needs_you": list,
     "jobs": dict, "ready": list, "messages": list, "due": list, "people": list,
     "interviews": list, "done": dict, "settings": list, "setup": dict, "updates": dict,
+    "upcoming": list,
 }
 _ITEM_KEYS = {
     "needs_you": ("id", "kind", "title", "body", "options", "about", "rev"),
@@ -3342,6 +3392,8 @@ _ITEM_KEYS = {
     "interviews": ("id", "company", "role", "next_stage", "when", "prep", "questions",
                    "alerts", "suggest", "rev"),
     "settings": ("id", "key", "label", "kind", "value", "choices", "rev"),
+    "upcoming": ("id", "kind", "title", "day", "time", "start", "end", "all_day", "place",
+                 "go", "note", "cal", "rev"),
 }
 _JOB_KEYS = ("id", "rank", "score", "band", "company", "title", "place", "remote", "pay",
              "deadline", "warm", "apply", "notes", "status", "questions", "alerts", "suggest",
@@ -3352,6 +3404,7 @@ _ENUMS = {
     ("messages", "channel"): {"linkedin_note", "linkedin_message", "inmail", "email"},
     ("messages", "kind"): {"first_note", "follow_up", "reply", "referral_ask"},
     ("due", "kind"): {"follow_up", "reply", "interview", "nudge", "withdraw"},
+    ("upcoming", "kind"): {"interview", "test", "call", "deadline", "event"},
 }
 _JOB_STATUS = {"new", "drafting", "ready", "applied", "dismissed"}
 _ISO_DAY = re.compile(r"^\d{4}-\d{2}-\d{2}$")
@@ -3474,6 +3527,14 @@ def check(model: dict) -> list[str]:
     for item in model.get("due") or []:
         if not _ISO_DAY.match(str(item.get("due") or "")):
             bad.append(f"due {item.get('id')}: due is not a date")
+    for item in model.get("upcoming") or []:
+        if not _ISO_DAY.match(str(item.get("day") or "")):
+            bad.append(f"upcoming {item.get('id')}: day is not a date")
+        if bool(item.get("start")) == bool(item.get("all_day")) or any(
+                item.get(k) and not _ISO_TIME.match(str(item[k])) for k in ("start", "end")):
+            bad.append(f"upcoming {item.get('id')}: a time with no start, or a start not in UTC")
+        if sorted(item.get("cal") or {}) != ["google", "ics", "outlook"]:
+            bad.append(f"upcoming {item.get('id')}: cal needs google, outlook and ics")
     done = model["done"]
     for key in ("counts", "funnel", "weeks", "applications"):
         if key not in done:

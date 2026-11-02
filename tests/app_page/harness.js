@@ -1227,6 +1227,114 @@ S.general_resume = async (a) => {
   return r;
 };
 
+// Coming up (2026-11-02): everything booked or due by day, each into a calendar with nothing
+// connected, something added and taken off, the Interviews view, and on the Brief the next
+// two weeks, the next four, and rows with no gap whichever panels there are.
+S.coming_up = async (a) => {
+  const r = {errors: []};
+  const caps = ["user", "db", "comments", "room", "downloads", "assets"];
+  let o = await open({html: a.html, hash: "interviews", viewport: {width: 1440, height: 900}, fake: {canSend: "available", caps}});
+  let {page, store} = o;
+  const txt = (sel) => page.evaluate((s) => (document.querySelector(s) || {}).textContent || "", sel);
+  r.days = await page.$$eval('[data-k="up-days"] > li h3', (x) => x.map((e) => e.textContent));
+  r.rows = await page.$$eval('[data-k="up-days"] .up-row', (x) => x.map((e) => e.getAttribute("data-item")));
+  r.when = await page.$$eval('[data-k="up-days"] .up-row .up-when', (x) => x.map((e) => e.textContent));
+  r.prep = await page.$$eval('[data-k^="up-prep:"], [data-k^="up-read:"]', (x) => x.map((e) => e.getAttribute("data-k") + "=" + e.textContent));
+  r.nav = await txt('[data-k="side:interviews"] .navcount');
+  r.sum = await txt("#main .summary");
+  // One item into a calendar: the choices, Google's link, the file, and the choice kept.
+  await page.locator('[data-k="cal:up-app-larkspur-supply-phone-screen-2026-10-28"]').click();
+  await turn(page, 2);
+  const keys = (sel) => page.$$eval(sel, (x) => x.map((e) => e.getAttribute("data-k") || (e.querySelector("[data-k]") || {getAttribute: () => ""}).getAttribute("data-k")));
+  r.choices = await keys("dialog.cal-sheet .cal-choices > *");
+  r.google = await page.evaluate(() => (document.querySelector('[data-k="cal-google"]') || {}).href || "");
+  r.outlook = await page.evaluate(() => (document.querySelector('[data-k="cal-outlook"]') || {}).href || "");
+  await page.locator('[data-k="cal-file"]').click();
+  await turn(page, 6);
+  r.saves = (await calls(page)).filter((c) => c.cap === "downloads");
+  r.fileNote = await txt('[data-k="cal-note"]');
+  await page.locator('[data-k="cal-close"]').click();
+  await turn(page, 2);
+  r.closed = await page.evaluate(() => !document.querySelector("dialog.cal-sheet"));
+  await page.locator('[data-k="cal:up-call-harbourline-bank-bea-2026-10-29"]').click();
+  await turn(page, 2);
+  r.firstAfter = (await keys("dialog.cal-sheet .cal-choices > *"))[0] || "";
+  await page.locator('[data-k="cal-copy"]').click();
+  await turn(page, 2);
+  r.copied = await copied(page);
+  await page.keyboard.press("Escape");
+  await turn(page, 2);
+  // Every item at once: one file holding them all.
+  await page.locator('[data-k="cal-all"]').click();
+  await turn(page, 2);
+  r.allChoices = await keys("dialog.cal-sheet .cal-choices > *");
+  await page.locator('[data-k="cal-file"]').click();
+  await turn(page, 6);
+  r.allSave = (await calls(page)).filter((c) => c.cap === "downloads").slice(-1)[0] || null;
+  await page.keyboard.press("Escape");
+  await turn(page, 2);
+  // Something added: shown at once as saving, then its action is the engine's own shape.
+  await page.locator('[data-k="up-add"]').click();
+  await turn(page, 2);
+  await page.locator("dialog.sheet input[type=text]").first().fill("Coffee with a former colleague");
+  await page.locator("dialog.sheet input[type=date]").fill("2026-10-27");
+  await page.locator("dialog.sheet input[type=time]").fill("09:30");
+  await page.locator('[data-k="sheet-go"]').click();
+  await turn(page, 6);
+  r.added = store.list("actions/").map((k) => store.get(k)).filter((d) => d.action === "upcoming.add");
+  r.saving = await page.$$eval('[data-k="up-days"] .up-row', (x) => x.map((e) => e.textContent).filter((t) => t.includes("Coffee with")));
+  // The person's own one taken off.
+  await page.locator('[data-k="up-rm:up-ev20261020120000"]').click();
+  await turn(page, 6);
+  r.removed = store.list("actions/").map((k) => store.get(k)).filter((d) => d.action === "upcoming.remove");
+  r.ownLeft = await page.evaluate(() => !!document.querySelector('[data-item="up-ev20261020120000"]'));
+  // The Interviews view: each one's card, and the day list gone.
+  await page.locator('[data-k="up-view:interviews"]').click();
+  await turn(page, 4);
+  r.ivCards = await page.$$eval("#main .card.interview", (x) => x.length);
+  r.agendaGone = await page.evaluate(() => !document.querySelector('[data-k="up-days"]'));
+  r.errors = r.errors.concat(o.errors);
+  await o.ctx.close();
+  // The Brief: the two weeks, a day under the pointer, a tap that opens it, the next four.
+  o = await open({html: a.html, hash: "brief", viewport: {width: 1440, height: 900}});
+  page = o.page;
+  r.strip = await page.$$eval('[data-k^="week:"]', (x) => x.length);
+  r.busy = await page.$$eval(".bp-day.has", (x) => x.length);
+  r.dayLabel = await page.evaluate(() => (document.querySelector('[data-k="week:2026-10-29"]') || {getAttribute: () => ""}).getAttribute("aria-label"));
+  r.cards = await page.$$eval(".bp-upcoming .bp-up-row", (x) => x.filter((e) => !e.hidden).map((e) => e.querySelector(".up-title").textContent));
+  r.upFoot = await page.evaluate(() => (document.querySelector(".bp-upcoming .bp-foot") || {}).textContent || "");
+  // Each thing once (4.6): what each panel holds, to count the interview and the person in it.
+  r.panels = await page.evaluate(() => Object.fromEntries([...document.querySelectorAll(".brief-grid > .bpanel")].map((p) => [p.getAttribute("data-k"), p.innerText])));
+  r.heroCal = await page.evaluate(() => !!document.querySelector('[data-k="bp-cal-hero"]'));
+  // Every row of panels is full: each starts at the grid's left and ends at its right.
+  r.rowsFull = await page.evaluate(() => {
+    const g = document.querySelector(".brief-grid").getBoundingClientRect();
+    const rows = new Map();
+    for (const p of document.querySelectorAll(".brief-grid > .bpanel")) {
+      const b = p.getBoundingClientRect();
+      const k = Math.round(b.top);
+      const row = rows.get(k) || {l: Infinity, r: -Infinity};
+      row.l = Math.min(row.l, b.left); row.r = Math.max(row.r, b.right);
+      rows.set(k, row);
+    }
+    return [...rows.values()].every((x) => Math.abs(x.l - g.left) < 2 && Math.abs(x.r - g.right) < 2);
+  });
+  r.overflow = await page.evaluate(() => [...document.querySelectorAll(".brief-grid > .bpanel")].filter((p) => p.scrollHeight > p.clientHeight + 1).map((p) => p.getAttribute("data-k")));
+  await page.locator('[data-k="week:2026-10-29"]').click();
+  await turn(page, 4);
+  r.afterTap = await page.evaluate(() => ({section: !!document.querySelector('[data-k="up-days"]'), focus: (document.activeElement || {}).getAttribute ? document.activeElement.getAttribute("data-item") : null}));
+  r.errors = r.errors.concat(o.errors);
+  await o.ctx.close();
+  // A phone: the two weeks fit, nothing scrolls sideways.
+  o = await open({html: a.html, hash: "brief", viewport: {width: 360, height: 780}});
+  page = o.page;
+  r.phoneWide = await page.evaluate(() => document.documentElement.scrollWidth - document.documentElement.clientWidth);
+  r.phoneStrip = await page.evaluate(() => { const s = document.querySelector('[data-k="week"]'); const p = s && s.closest(".bpanel"); return s && p ? s.getBoundingClientRect().right <= p.getBoundingClientRect().right + 1 : false; });
+  r.errors = r.errors.concat(o.errors);
+  await o.ctx.close();
+  return r;
+};
+
 // The maintainer's own page on 2026-10-31, opened from the sidebar a day after any chat ran:
 // Refresh only reloaded the same data, the work pill did nothing on the Brief, a job started a
 // minute ago said "29 hours so far", answered work said "Not picked up yet", the chart's bars
@@ -1781,8 +1889,15 @@ S.chat_pics = async (a) => {
   return r;
 };
 
+// Coming up opens By day; each interview's card is its Interviews view (4.6).
+async function interviewCards(page) {
+  const sw = page.locator('[data-k="up-view:interviews"]');
+  if (await sw.count()) { await sw.first().click(); await turn(page, 2); }
+}
+
 S.mock = async (a) => {
   const o = await open({html: a.html, hash: "interviews", fake: {sample: {reply: "First question: tell me about a forecast you built."}}});
+  await interviewCards(o.page);
   await o.page.getByRole("button", {name: "Practise with Claude for Larkspur Retail"}).click();
   await o.page.waitForTimeout(50);
   await turn(o.page, 10);
@@ -1891,6 +2006,7 @@ S.history = async (a) => {
 // a date with no time shown as a day.
 S.zones = async (a) => {
   const o = await open({html: a.html, hash: "interviews", timezoneId: a.timezoneId || "America/Toronto"});
+  await interviewCards(o.page);
   const r = {whens: await T(o.page, "#main .when"), chips: await T(o.page, "#main .card.interview .chip"), errors: o.errors};
   await o.ctx.close();
   return r;
@@ -1965,6 +2081,9 @@ S.sweep = async (a) => {
       // opening is something happening.
       let el = page.locator('#main [data-k="' + k + '"]').first();
       if (await el.evaluate((e) => e.matches("input") && !!e.closest("label"))) el = page.locator('#main label:has([data-k="' + k + '"])').first();
+      // A row the Brief left out for want of room on this page (its lists fit the window, 4.6)
+      // is not there for a person to tap either: noted, never counted as broken.
+      if (await el.evaluate((e) => !!e.closest("[data-fit] > [hidden]")).catch(() => false)) { out.fitted = (out.fitted || 0) + 1; out.tapped++; await o.ctx.close(); continue; }
       let chose = false;
       page.on("filechooser", () => { chose = true; });
       const before = await snap(page);
@@ -1982,7 +2101,10 @@ S.sweep = async (a) => {
         const moved = chose || after.h !== b2.h || after.hash !== b2.hash || after.dialogs !== b2.dialogs || after.calls !== b2.calls || after.opened !== b2.opened || (after.focus !== b2.focus && after.focus !== k && after.focus !== "BODY");
         if (!moved) out.dead.push([id, k]);
         void before;
-      } catch (e) { out.unclickable.push([id, k, String(e.message || e).split("\n")[0].slice(0, 120)]); }
+      } catch (e) {
+        if (await el.evaluate((x) => !!x.closest("[data-fit] > [hidden]")).catch(() => false)) out.fitted = (out.fitted || 0) + 1;
+        else out.unclickable.push([id, k, String(e.message || e).split("\n")[0].slice(0, 120)]);
+      }
       if (o.errors.length) out.errors.push([id, k, o.errors.slice(0, 2)]);
       out.tapped++;
       await o.ctx.close();

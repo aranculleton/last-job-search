@@ -219,7 +219,8 @@ can still make it.
 
 ## Cost
 
-Each run is one turn on the chat's model. News gathering for the TLDR is done by a sonnet
-subagent with a cap of about ten searches. An empty run in a fresh chat cost $0.82 in a
+Each run is one turn on the chat's model. News gathering is done by the news-reader subagent
+on the smallest model, with at most six searches built and eight run; the right-to-work and
+central-bank searches run in the first brief of each week only. An empty run in a fresh chat cost $0.82 in a
 test, most of it loading the repo's instructions; a chat that is bound to its task reuses
 that context from cache on later runs, and is compacted automatically as it grows.

@@ -522,3 +522,16 @@ The Tweak           # the page's Tweak panel, named in a test's docstring, not a
 The Brief's        # the page's home screen, not a person
 Rosé Pine          # a product: the colour theme the dark look uses
 Zoë Quillfeather's      # invented, the person whose folder has a space and an accent (platforms.yml, tools/everywhere.sh)
+Banco Central               # a central bank, tools/brief.py
+Banco de Mexico             # a central bank, tools/brief.py
+Monetary Authority          # a central bank, tools/brief.py
+Hong Kong Monetary Authority# a central bank, tools/brief.py
+Danmarks Nationalbank       # a central bank, tools/brief.py
+Norges Bank                 # a central bank, tools/brief.py
+Czech National Bank         # a central bank, tools/brief.py
+People's Bank               # a central bank, tools/brief.py
+Magyar Nemzeti Bank         # a central bank, tools/brief.py
+South Korea                 # a country, tools/brief.py
+Saudi Arabia                # a country, tools/brief.py
+Vale Verde Hospital         # invented employer, tests/test_brief.py
+Ribeira Clinic              # invented employer, tests/test_brief.py

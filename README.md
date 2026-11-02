@@ -33,7 +33,7 @@ No resume yet? Say "build one with me". [START_HERE.md](START_HERE.md) has each 
 
 <p align="center">
   <img src="docs/images/page-demo.webp" width="720"
-       alt="A walk through the page: the Brief, To do, Jobs, Contacts, Chat, Interviews, then an interview prep opened">
+       alt="A walk through the page: the Brief, To do, Jobs, Contacts, Chat, Coming up, then an interview prep opened">
   <br>
   <sub>A walk through the page. Every name is made up.</sub>
 </p>
@@ -42,7 +42,7 @@ No resume yet? Say "build one with me". [START_HERE.md](START_HERE.md) has each 
   <img src="docs/images/page-contacts.webp" width="62%"
        alt="Contacts on a computer: who needs you first, with Claude's work alongside">
   &nbsp;
-  <img src="docs/images/page-interviews-phone.webp" width="18%" alt="Interviews on a phone">
+  <img src="docs/images/page-coming-up-phone.webp" width="18%" alt="Coming up on a phone">
 </p>
 
 ## What you do

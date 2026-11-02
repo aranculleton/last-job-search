@@ -99,16 +99,40 @@ NEWS_HOLD = re.compile(r"\b(?:lay ?offs?|laid off|job cuts|cuts? \d+|hiring free
 _LINK = re.compile(r"https?://[^\s)>\]]+")
 _DATE_IN = re.compile(r"\b(\d{4}-\d{2}-\d{2})\b")
 
-# The central bank whose decisions move a market, by the person's country.
+# The central bank whose decisions move a market, by the person's country: one for every
+# country the market tables carry (tools/markets/), so nobody's search goes without one.
 CENTRAL_BANK = {"CA": "Bank of Canada", "GB": "Bank of England", "UK": "Bank of England",
                 "US": "Federal Reserve", "AU": "Reserve Bank of Australia",
                 "NZ": "Reserve Bank of New Zealand", "IN": "Reserve Bank of India",
-                "CH": "Swiss National Bank", "JP": "Bank of Japan"}
+                "CH": "Swiss National Bank", "JP": "Bank of Japan",
+                "AE": "Central Bank of the UAE", "BR": "Banco Central do Brasil",
+                "MX": "Banco de Mexico", "PL": "National Bank of Poland",
+                "SE": "Riksbank", "SG": "Monetary Authority of Singapore",
+                "ZA": "South African Reserve Bank", "DK": "Danmarks Nationalbank",
+                "NO": "Norges Bank", "CZ": "Czech National Bank", "IL": "Bank of Israel",
+                "KR": "Bank of Korea", "HK": "Hong Kong Monetary Authority",
+                "CN": "People's Bank of China", "HU": "Magyar Nemzeti Bank",
+                "RO": "National Bank of Romania", "TR": "Central Bank of Turkey"}
+# Where a bank sets policy some other way than a rate, the words its decisions go by.
+BANK_DECISION = {"SG": "monetary policy statement"}
+# A language's name in English, for the news-reader's request.
+LANGUAGE = {"fr": "French", "de": "German", "es": "Spanish", "pt": "Portuguese",
+            "it": "Italian", "nl": "Dutch", "pl": "Polish", "sv": "Swedish", "ja": "Japanese",
+            "ar": "Arabic"}
 EURO = {"IE", "FR", "DE", "NL", "ES", "IT", "PT", "BE", "AT", "FI", "LU", "GR", "SK", "SI",
         "EE", "LV", "LT", "MT", "CY", "HR"}
-COUNTRY = {"CA": "Canada", "GB": "UK", "UK": "UK", "US": "US", "AU": "Australia",
-           "NZ": "New Zealand", "IE": "Ireland", "IN": "India", "SG": "Singapore",
-           "DE": "Germany", "FR": "France", "NL": "Netherlands", "ES": "Spain"}
+# How a country is named in a search: these, else its market table's name (tools/markets/).
+COUNTRY = {"GB": "UK", "UK": "UK", "US": "US", "AT": "Austria", "BE": "Belgium",
+           "CH": "Switzerland", "CN": "China", "CZ": "Czechia", "DK": "Denmark",
+           "FI": "Finland", "GR": "Greece", "HK": "Hong Kong", "HU": "Hungary", "IL": "Israel",
+           "KR": "South Korea", "LU": "Luxembourg", "MY": "Malaysia", "NO": "Norway",
+           "PH": "Philippines", "PT": "Portugal", "RO": "Romania", "AR": "Argentina",
+           "CL": "Chile", "CO": "Colombia", "EG": "Egypt", "NG": "Nigeria", "KE": "Kenya",
+           "SA": "Saudi Arabia", "QA": "Qatar", "TR": "Turkey", "UA": "Ukraine",
+           "VN": "Vietnam", "TH": "Thailand", "ID": "Indonesia", "TW": "Taiwan",
+           "EE": "Estonia", "LT": "Lithuania", "LV": "Latvia", "SK": "Slovakia",
+           "SI": "Slovenia", "HR": "Croatia", "BG": "Bulgaria", "RS": "Serbia",
+           "IS": "Iceland", "MT": "Malta", "CY": "Cyprus"}
 WHAT_COUNTS = ("employers the person is in process with or has a live thread at; their target "
                "employers, in their market; their market for the roles they want (hiring or "
                "layoff waves, a central-bank decision, sector earnings, a big funding round at a "
@@ -285,33 +309,97 @@ def _net(attr: str, default=""):
         return default
 
 
-def queries(today: dt.date, live_employers: list[str], claude_md: str) -> list[str]:
+def _market(code: str) -> dict:
+    """The person's country's market table (tools/markets/<cc>.json), or {}."""
+    try:
+        import markets
+        return markets.countries().get(str(code or "").lower()) or {}
+    except Exception:  # noqa: BLE001  no table for that country: the search goes without
+        return {}
+
+
+def country_name(code: str) -> str:
+    """How the person's country is named in a search: "" where it is not known, so no search
+    carries a bare code ("BR rule changes") or a gap."""
+    code = str(code or "").upper()
+    return COUNTRY.get(code) or str(_market(code).get("name") or "")
+
+
+def news_language(code: str) -> str:
+    """The language the person's market reads its news in, where it is not English: ""."""
+    langs = [str(x) for x in (_market(code).get("languages") or [])]
+    return "" if not langs or "en" in langs[:1] else LANGUAGE.get(langs[0], "")
+
+
+def rights_term(claude_md: str) -> str:
+    """What the person's right to work is called, for its news: networking.py STATUS_NAME;
+    else, where the profile's right-to-work line names a visa, a permit or a status, "work
+    visa and permit"; else "" (a citizen's rules do not change week to week, and a search for
+    them is spent for nothing). What the line says the person is not ("not a citizen", "no
+    visa needed") is set aside first."""
+    status = str(_net("STATUS_NAME", "") or "").strip()
+    if status:
+        return "" if re.search(r"\bcitizen", status, re.I) else status
+    for line in claude_md.splitlines():
+        m = re.match(r"\s*[-*]\s*\*\*(?:right to work|work authori[sz]ation|work rights)[^*]*\*\*:?\s*(.*)",
+                     line, re.I)
+        if not m:
+            continue
+        said = re.sub(r"\bnot\s+(?:an?\s+)?[\w\s-]*?(?:citizen\w*|permanent resident\w*|national\w*)"
+                      r"(?:\s+or\s+(?:an?\s+)?[\w\s-]*?(?:citizen\w*|permanent resident\w*))?", " ", m.group(1), flags=re.I)
+        said = re.sub(r"\bno\s+(?:visa|permit|sponsorship)\b[^.;,]*", " ", said, flags=re.I)
+        if re.search(r"\b(?:visa|permit|settled status|pre-settled|residence|working holiday|"
+                     r"blue card|green card|H-?1B|status)\b", said, re.I):
+            return "work visa and permit"
+        return ""
+    return ""
+
+
+def queries(today: dt.date, live_employers: list[str], claude_md: str,
+            since: dt.date | None = None) -> list[str]:
     """At most six searches, in the order the brief values them: the employers in play,
     the person's work authorization, their market, their central bank, then their targets
-    (a different pair each run, so every target is looked at over a few weeks)."""
+    (a different pair each run, so every target is looked at over a few weeks). Built from
+    the person's own country, city, field and employers, so they fit anyone anywhere; a
+    part the profile does not say is left out rather than guessed. The right-to-work and
+    the central-bank searches, whose news comes a few times a year, run in the first brief
+    of each week only (`since` in an earlier week), never every morning."""
     month = today.strftime("%B %Y")
     country_code = person.country()
-    country = COUNTRY.get(country_code, country_code)
+    country = country_name(country_code)
     city = str(_net("HOME_CITY", "") or str(person.get("identity.location", "") or "").split(",")[0]).strip()
     names, sectors = target_names(claude_md)
+    try:
+        watched = [str(n).strip() for n in (getattr(person.module("search"), "SCRAPE_EMPLOYERS", None) or [])
+                   if str(n).strip()]
+    except Exception:  # noqa: BLE001  no search.py yet
+        watched = []
+    names = list(dict.fromkeys(watched + names))
     off = set(setting("leave_out"))
-    out = ["%s news %s" % (n, month) for n in live_employers[:2]] if "employers" not in off else []
-    status = str(_net("STATUS_NAME", "") or "").strip()
-    if status and not re.search(r"citizen", status, re.I):
-        out.append("%s %s rule changes %s" % (status, country, today.year))
-    field = re.split(r",|;", sectors[0])[0].strip() if sectors else "data and analytics"
+    weekly = since is None or since.isocalendar()[:2] != today.isocalendar()[:2]
+    where = (" " + country) if country else ""
+    out = ["%s%s news %s" % (n, where, month) for n in live_employers[:2]] if "employers" not in off else []
+    status = rights_term(claude_md)
+    if status and country and weekly:
+        out.append("%s %s rule changes %s" % (country, status, today.year))
+    field = re.split(r",|;", sectors[0])[0].strip() if sectors else ""
+    if not field:
+        try:
+            field = str((getattr(person.module("search"), "SCRAPE_QUERIES", None) or [""])[0]).strip()
+        except Exception:  # noqa: BLE001
+            field = ""
     if city and "market" not in off:
-        out.append("%s %s hiring or layoffs %s" % (city, field.lower(), month))
+        out.append(" ".join(x for x in (city, field.lower(), "hiring or layoffs", month) if x))
     bank = "European Central Bank" if country_code in EURO else CENTRAL_BANK.get(country_code, "")
-    if bank and "bank" not in off:
-        out.append("%s interest rate decision %s" % (bank, month))
+    if bank and "bank" not in off and weekly:
+        out.append("%s %s %s" % (bank, BANK_DECISION.get(country_code, "interest rate decision"), month))
     targets = [n for n in names if company_key(n) not in {company_key(x) for x in live_employers}
                ] if "targets" not in off else []
     room = max(QUERIES_MAX - len(out), 1 if targets else 0)
     if targets:
         start = (today.toordinal() // 3) % len(targets)
         pick = [targets[(start + i) % len(targets)] for i in range(min(room, len(targets)))]
-        out += ["%s news %s" % (n, month) for n in pick]
+        out += ["%s%s news %s" % (n, where, month) for n in pick]
     return list(dict.fromkeys(out))[:QUERIES_MAX]
 
 
@@ -548,7 +636,8 @@ def _gather(today: dt.date, write: bool) -> dict:
         "set_aside": _set_aside(asks, old, held),
         "lines": lines, "next_three": three,
         "drafts": got, "pack": pack, "closed": closed, "preps": preps,
-        "queries": queries(today, live_names, claude_md),
+        "queries": queries(today, live_names, claude_md, since),
+        "language": news_language(person.country()),
         "what_counts": what_counts(claude_md), "skip_links": links_sent(earlier),
         "sync": sync, "export_line": export_line, "profile_line": profile_line,
         "write_here": followup_drafts.to_write_here(got),
@@ -955,9 +1044,16 @@ def claude_lines(b: dict) -> list[str]:
     if tidy_line:
         out.append(tidy_line)
     n = setting("news")
-    out.append("news: the news-reader agent, given these searches: %s; at most %d item%s in the "
-               "message (the person's setting)" % (" | ".join(b["queries"]), n, "" if n == 1 else "s")
-               if n else "news: none in the message, by the person's setting: run no news search")
+    if n and b["queries"]:
+        out.append("news: the news-reader agent, given these searches: %s; at most %d item%s in the "
+                   "message (the person's setting)%s" % (
+                       " | ".join(b["queries"]), n, "" if n == 1 else "s",
+                       "; news in %s counts as much as in English" % b["language"]
+                       if b.get("language") else ""))
+    else:
+        out.append("news: run no news search (%s)" % (
+            "none in the message, by the person's setting" if not n else
+            "the profile does not say enough yet for one"))
     out.append("since %s; links already sent: %s" % (
         b["since"], " ".join(b["skip_links"][:10]) or "none"))
     out.append("what counts: " + b["what_counts"])
@@ -1057,7 +1153,7 @@ def take_news(text: str, today: dt.date) -> dict:
     items = []
     for ln in text.splitlines():
         s = ln.strip()
-        if not s or s.lower().startswith(("quiet week", "none", "no news")):
+        if not s or s.lower().startswith(("quiet week", "nothing new", "none", "no news")):
             continue
         s = s.lstrip("-*• ").strip()
         if s:
@@ -1073,7 +1169,7 @@ def take_news(text: str, today: dt.date) -> dict:
             kept.append(s)
     path = brief_path(today.isoformat())
     body = _read(path)
-    news = ([NEWS_SOURCE, ""] + ["- " + s for s in kept]) if kept else ["Quiet week."]
+    news = ([NEWS_SOURCE, ""] + ["- " + s for s in kept]) if kept else ["Nothing new."]
     if body:
         head = body.split("\n## News", 1)[0].rstrip()
         new = head + "\n\n## News\n\n" + "\n".join(news) + "\n"
