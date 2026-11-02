@@ -8970,7 +8970,9 @@
     // What the store already holds first, at once; a chat is asked only for what it does not.
     resubscribe();
     lastCheck = now();
-    if (!refreshAsks(newest, newer)) { scheduleRender(); return; }
+    // Today's data needs no chat: it is read again, free, and said, so the tap is never a
+    // button that did nothing (the maintainer, 2026-11-02: "it doesnt seem to do anything").
+    if (!refreshAsks(newest, newer)) { toast({text: "Up to date: nothing newer to show yet. It updates by itself when Claude does something new.", ids: []}); scheduleRender(); return; }
     requestWork([{id: "update~refresh-" + todayIso(), kind: "update", title: "Bringing your page up to date", args: {refresh: true}, stages: REFRESH_STAGES, redo: true}]);
     scheduleRender();
   }

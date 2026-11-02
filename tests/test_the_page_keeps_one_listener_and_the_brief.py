@@ -251,9 +251,12 @@ def test_refresh_asks_claude_only_when_the_data_is_older_than_today(run, tmp_pat
          "until": "!!document.querySelector('[data-k=\"refresh\"]')"},
         {"eval": "!!document.getElementById('refresh-cost')"},
         {"eval": "(() => { document.querySelector('[data-k=\"refresh\"]').click(); return 1; })()"},
-        {"eval": count}], vp, model=model, clock="2026-10-25T15:00:00Z")
+        {"eval": count}, {"eval": "document.getElementById('toasts').textContent"}], vp, model=model, clock="2026-10-25T15:00:00Z")
     assert got["after"][1]["eval"] is bool(asks)          # the gauge only where Claude is asked
     assert got["after"][3]["eval"] == asks
+    # A free re-check says so: a Refresh that changed nothing on screen read as broken (the
+    # maintainer, 2026-11-02: "it doesnt seem to do anything").
+    assert ("Up to date" in got["after"][4]["eval"]) is (not asks), got["after"][4]["eval"]
 
 
 # Today's card is what comes next today: a call this afternoon leads, ahead of an interview
