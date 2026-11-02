@@ -412,6 +412,48 @@ def test_your_progress_with_no_bars_yet_fills_its_panel(run, tmp_path, vp):
     assert got["after"][0]["eval"]["gap"] <= 2, got["after"][0]["eval"]
 
 
+# From the walk-through (2026-11-02). Every count of jobs to look at is the same number, and a
+# closed posting is never one of them.
+def test_every_count_of_jobs_to_look_at_agrees_and_leaves_out_a_closed_one(run, tmp_path, vp):
+    js = ("(() => { const n = (s) => { const m = /(\\d+)/.exec(s || ''); return m ? Number(m[1]) : 0; }; "
+          "return {nav: n((document.querySelector('[data-k=\"side:jobs\"] .navcount, [data-k=\"tab:jobs\"] .navcount') || {}).textContent), "
+          "brief: document.querySelectorAll('#main .bp-jobs li').length}; })()")
+    got = _go(run, tmp_path, [{"hash": "brief", "eval": js},
+                              {"hash": "jobs", "eval": "document.querySelector('#main .summary, #main .sum, #main p').textContent"},
+                              {"hash": "todo", "eval": "(document.querySelector('[data-k=\"todo-jobs\"]') || {}).textContent || ''"},
+                              {"hash": "brief", "eval": "document.querySelector('#main .bp-jobs').textContent"}], vp, clock=T)
+    a = got["after"][0]["eval"]
+    jobs_line, todo_line, panel = got["after"][1]["eval"], got["after"][2]["eval"], got["after"][3]["eval"]
+    assert a["nav"] == a["brief"] and jobs_line.startswith("%d to look at" % a["nav"]), (a, jobs_line)
+    assert (not todo_line) or todo_line.startswith("%d new" % a["nav"]), todo_line
+    assert "Analytics Consultant" not in panel, panel      # its posting has closed
+
+
+# Today's thing comes again in Next three only where there is room: the thank-you two days
+# late is on the Brief, and Wednesday's phone screen says when it is.
+def test_next_three_keeps_room_for_others_and_an_interview_says_when(run, tmp_path, vp):
+    got = _go(run, tmp_path, [{"hash": "brief", "eval": "[document.querySelector('#main .bp-today .bp-iv-what').textContent, "
+                                                       "[...document.querySelectorAll('#main .bp-next li')].map((l) => l.textContent)]"}], vp, clock=T)
+    today, steps = got["after"][0]["eval"]
+    assert not any(today.strip() in s for s in steps), (today, steps)
+    assert any("Larkspur" in s and "Wed 28 Oct, 13:00" in s for s in steps), steps
+
+
+# Set up with nothing found yet: Today's one thing is the first search, with a filled button.
+def test_a_person_with_nothing_yet_is_shown_the_first_search(run, tmp_path, vp):
+    model = copy.deepcopy(_sample())
+    for k in ("due", "messages", "ready", "upcoming", "interviews", "people"):
+        if isinstance(model.get(k), list):
+            model[k] = []
+    model["jobs"]["rows"] = []
+    model["brief"]["sections"] = [s for s in model["brief"]["sections"] if s.get("kind") not in ("next", "owed", "lead")]
+    got = _go(run, tmp_path, [{"hash": "brief", "eval": "[document.querySelector('#main .bp-today .bp-iv-what').textContent, "
+                                                       "(document.querySelector('#main .bp-today [data-k=\"bp-first-search\"]') || {}).textContent]"}],
+              vp, model=model, clock=T)
+    what, button = got["after"][0]["eval"]
+    assert what == "Find your first jobs" and button == "Find jobs", (what, button)
+
+
 # A reply owed in To do names its person by `item`, as the model sends it, and the Brief shows
 # that person once: the same reply led Today and came third in Next three on the maintainer's
 # page (2026-11-02), because only a `contact` field the model never sends was read.

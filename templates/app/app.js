@@ -2385,7 +2385,7 @@
     // Nothing more pressing to say: the shortlist waiting in Jobs, so To do never reads as
     // "nothing to do" while new roles sit unlooked at.
     if (!settingUp && !small) {
-      const fresh = jobRows().filter((r) => jobStatus(r) === "new").length;
+      const fresh = jobRows().filter(jobToLook).length;
       if (fresh) small = btn(nWord(fresh, "new job", "new jobs") + " to look at", () => go("jobs", {focus: true}), {kind: "link", key: "todo-jobs"});
     }
     const paused = pausedUntil();
@@ -3273,7 +3273,9 @@
       heroKeys = x.keys;
       const pid = x.keys.find((k) => k.startsWith("p:"));
       const who = pid ? whoOf(pid.slice(2)) : null;
-      facts = personFacts(who, x.d).filter((f) => f !== "A draft is ready in Messages");
+      // Never a fact the title already says ("Fernhill Freight" beside "Follow up with Fernhill
+      // Freight", the walk-through, 2026-11-02).
+      facts = personFacts(who, x.d).filter((f) => f !== "A draft is ready in Messages" && !txt(x.d.title).toLowerCase().includes(txt(f).toLowerCase()));
       // A draft ready for them is where the work is: "Open Wren" led to their page, which has no
       // draft on it (the walk-through, 2026-11-02).
       const draft = who ? messageItems().find((m) => txt(m.contact) === who.id) : null;
@@ -3309,6 +3311,14 @@
       hero = dueHero(todaySteps[0], "Due today");
     } else if (weekIv) {
       hero = ivHero(weekIv, ivWhen(weekIv));
+    } else if (!stepsFrom.length && !dueSteps.length && !jobRows().length && (!txt(obj(M().setup).state) || txt(obj(M().setup).state) === "done")) {
+      // Set up, with nothing found yet: the first search is the one thing to do, not five cards
+      // saying "Nothing" (the walk-through, 2026-11-02).
+      const busy = [...allWork()].some(([, w]) => w.kind === "search" && ACTIVE.has(w.status));
+      hero = h("div", {class: "bp-iv"},
+        h("p", {class: "bp-iv-when"}, busy ? "Searching now" : "First"),
+        h("p", {class: "bp-iv-what"}, busy ? "Claude is finding your first jobs. They show here when the search is done." : "Find your first jobs"),
+        busy ? null : btn("Find jobs", () => askSearch(), {kind: "primary", small: true, key: "bp-first-search"}));
     } else {
       const first = stepsFrom[0];
       if (first) {
@@ -3326,12 +3336,27 @@
     }
 
     // Next three: what to do next, the brief's steps first, then To do's, each once.
+    // Today's thing comes again only where Next three has room, so it never pushes out another
+    // that is waiting (the walk-through: a thank-you two days late was on neither first screen).
     const steps = [];
-    for (const x of stepsFrom.concat(dueSteps)) {
+    const isHero = (x) => x.keys.some((k) => heroKeys.includes(k));
+    const stepNode = (x) => {
+      const node = x.node();
+      // An interview a step names says when it is: the Brief never said Wednesday's phone screen
+      // was Wednesday at 13:00 (the walk-through, 2026-11-02).
+      const ivk = x.keys.find((k) => k.startsWith("iv:"));
+      const iv = ivk ? interviewItems().find((i) => i.id === ivk.slice(3)) : null;
+      if (iv && txt(iv.when) && !isPast(iv.when) && node && node.appendChild) {
+        node.appendChild(h("span", {class: "bp-when"}, " \u00b7 " + fmtDay(dayOf(iv.when)) + (timeOf(iv.when) ? ", " + timeOf(iv.when) : "")));
+      }
+      return node;
+    };
+    const pool = stepsFrom.concat(dueSteps);
+    for (const x of pool.filter((y) => !isHero(y)).concat(pool.filter(isHero))) {
       if (steps.length >= 3) break;
       if (!isFree(x.keys)) continue;
       take(x.keys);
-      steps.push(x.node());
+      steps.push(stepNode(x));
     }
     take(heroKeys);
     // Coming up: the next things booked that no panel above shows.
@@ -3497,8 +3522,13 @@
   // A job worth a look: new (not drafting, sent or set aside), scored 60 or more, and not one
   // already in a process (a Brief once offered the role behind Friday's call as new). The
   // nav's count and the Brief's Jobs panel are this one list, so they never differ.
+  // A job to look at: new, a good enough fit, not closed, not already in a process or
+  // drafted, and not just set aside. Every count of "to look at" is this one (the walk-through,
+  // 2026-11-02: the tab, the Brief, To do and Jobs said 2, 2, 3 and 5, and a closed posting was
+  // offered as new).
   function jobToLook(r) {
     if (jobStatus(r) !== "new" || !(Number(r.score) >= 60)) return false;
+    if (txt(obj(r.apply).status) === "closed" || jobPending(r)) return false;
     return !interviewItems().some((i) => txt(i.company) === txt(r.company) && txt(i.role) === txt(r.title))
       && !readyItems().some((a) => txt(a.company) === txt(r.company) && txt(a.role) === txt(r.title));
   }
@@ -3562,7 +3592,7 @@
     let sum;
     if (!rows.length && !jb.made_at) sum = "No search yet.";
     else if (tab === "new") {
-      const live = inThis.filter((r) => Number(r.score) >= 60 || jobPending(r));
+      const live = inThis.filter(jobToLook);
       const strong = live.filter((r) => txt(r.band) === "strong").length;
       const ask = live.filter((r) => jobQuestions(r).length).length;
       const soon = live.filter((r) => r.deadline && dayDiff(r.deadline) !== null && dayDiff(r.deadline) >= 0 && dayDiff(r.deadline) <= 7).length;
@@ -8888,7 +8918,7 @@
   const NAV_COUNT_WORDS = {jobs: " to look at", drafts: " to send", interviews: " coming up"};
   function navCount(id) {
     let n = 0;
-    if (id === "jobs") n = jobRows().filter((r) => jobPending(r) || jobToLook(r)).length;
+    if (id === "jobs") n = jobRows().filter(jobToLook).length;
     else if (id === "drafts") n = readyItems().filter(readyLive).length + messageItems().filter((m) => !settledAction(m.id, ["msg.sent", "msg.skip"]) && msgStatus(m) === "to_send").length;
     // Coming up: the one number its screen and the Brief also say (2026-10-29: a count that
     // differs between two places reads as a bug).
