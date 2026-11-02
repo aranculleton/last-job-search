@@ -5,6 +5,31 @@ MAINTAINING.md first; this is only what 4.7 left.
 
 ## Do first, for [Unreleased]
 
+0. **Fix the news before anything else: it must never be empty.** On 2 November the brief's
+   news reader returned "Quiet week.", the page hid the News panel, and the maintainer, in
+   capitals: "what is the point of showing a quiet week? anytime someone logs in they want to
+   have something that helps ... anything that's related and news or anything that could be
+   used as anecdotes ... it should never say nothing new or some random useless placeholder."
+   Every brief brings three to five items worth reading, always:
+   - **New since the last brief first**: the employers in play, then what the person's list
+     watches (`brief.watch`).
+   - **When that is thin, widen, never stop**: the freshest items not sent before from the
+     last week, then the last month, about their field, their employers and targets, their
+     market, their right to work: a product launch, results, a funding round, a hiring push,
+     a regulator's change, a trade-press piece on their kind of work.
+   - **Each item says how to use it**: a talking point for a call with someone they are in
+     touch with, an anecdote or a question for an interview at that employer, a reason to
+     write to someone (in the sample: "worth a line to Tamsin at Copperleaf Pay").
+   - **Never "Nothing new", "Quiet week" or any placeholder**, in the message, the record or
+     on the page. The News panel is always drawn with real items.
+   Where it lives: `.claude/agents/news-reader.md` (its "Nothing new." return, the since
+   date as a hard cut, the six-search limit), `automation/prompts/morning_brief.md` step 3,
+   `tools/brief.py` (`queries`, `take_news`, `claude_lines`'s news line, `NEWS_MAX`,
+   `MESSAGE_NEWS`) and the page's News panel (`renderBrief`, drawn only `if (news.length)`).
+   Keep it cheap: one reader call, its searches widened inside that call, at most eight.
+   Test it with a person whose last day had no news: the brief still carries three useful
+   items, each with what to do with it.
+
 1. **Read what the release's own runs found.** The Safari, Mac and Windows type, French,
    German and far time zones page runs, the moved-clock suite and the Windows and Mac set-ups
    on aranculleton/last-job-search#153 were still running when 4.7.0 merged (they never
@@ -29,17 +54,12 @@ MAINTAINING.md first; this is only what 4.7 left.
    left, background-position) stutters on a busy page, where a `transform` on its own layer
    does not. Check it while the page is busy (a long To do, a search running), in Chromium and
    Safari, and keep reduced motion stilling it.
-5. **The Brief looked broken on a quiet day** (the maintainer's page, 2 November, after 4.7.0):
-   - **News vanishes when the reader found nothing** ("why is news empty?"; "is this not
-     missing a panel?"). With a brief every day each search covers one day, so quiet days
-     are common, and the bottom row was then one panel stretched across. Recommended: always
-     draw News; on a quiet day it says "Nothing new since <the last brief>" and lists what
-     the brief watches (`model.brief.watch`), which also shows the person what is watched.
-   - **Coming up was a strip over empty space** when its only item was the one Today shows,
-     and **Today's right half was empty** with no opening sentences and no likely questions.
-     Say "Nothing else in the next two weeks" under the strip and let the row size to its
-     content, and let Today's card take the panel's width when nothing sits beside it.
-   Check each with a sample like that page: one booked item, no news, no questions.
+5. **Today and Coming up had empty space on a quiet day** (the maintainer's page, 2
+   November): Coming up was a strip over nothing when its only item was the one Today shows,
+   and Today's right half was empty with no opening sentences and no likely questions. Fill
+   it with something useful (the next thing after today, the person's next step), never a
+   placeholder, and let the row size to its content. Check with a sample like that page: one
+   booked item, no questions.
 6. **Left from 4.6's list, still to look at with real data**: the choices made for the
    person on the Brief (the Jobs count, "Waiting on you", "contacts replied", what Next three
    skips, which opening sentences show), and one Outlook link. The fit's numbers were
