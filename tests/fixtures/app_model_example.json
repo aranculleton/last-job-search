@@ -1,14 +1,14 @@
 {
  "model": 1,
  "made_at": "2026-10-25T18:00:00Z",
- "rev": "c008d442cd3f",
+ "rev": "a19d44824ade",
  "app": {
-  "version": "4.4.0",
+  "version": "4.5.1",
   "update_waiting": null,
   "news": [
-   "A ruling on where a remote posting is now holds only there.",
-   "A search past its job sites says which step it is on.",
-   "An interview time written in CST, AST, NST, AKST, HST or their daylight forms."
+   "A morning brief whose chat was removed runs again by itself.",
+   "Moving everything to another time zone moves the job round too.",
+   "The Brief's numbers are never cut off."
   ],
   "privacy": "Only you can open this page unless you share it. It holds first names, employers, your drafts and your setup answers, so keep it unshared.",
   "repo": "https://github.com/aranculleton/last-job-search"
@@ -45,7 +45,7 @@
  ],
  "jobs": {
   "round": "r9",
-  "made_at": "2026-10-30T14:14:19Z",
+  "made_at": "2026-11-02T02:20:36Z",
   "met": false,
   "summary": "4 roles on the shortlist, 4 scoring 60 or more and 2 scoring 75 or more. 3 left out, each with its reason.",
   "rows": [
@@ -764,7 +764,7 @@
    "when": "2026-10-28",
    "prep": {
     "path": "documents/applications/thornbury_bank_risk_analyst_thornbury/interview_prep.md",
-    "updated": "2026-10-30T14:14:19Z"
+    "updated": "2026-11-02T02:20:36Z"
    },
    "questions": 2,
    "all_day": true,
@@ -1130,38 +1130,38 @@
   ]
  },
  "updates": {
-  "version": "4.4.0",
-  "newest": "4.4.0",
+  "version": "4.5.1",
+  "newest": "4.5.1",
   "mode": "auto",
   "waiting": null,
   "changed": [
    {
-    "version": "4.4.0",
-    "date": "2026-10-30",
+    "version": "4.5.1",
+    "date": "2026-10-31",
     "lines": [
-     "A ruling on where a remote posting is now holds only there.",
-     "A search past its job sites says which step it is on.",
-     "An interview time written in CST, AST, NST, AKST, HST or their daylight forms.",
-     "The bin on a To do row hides only what the chat will close.",
-     "An interview ended on the page shows again.",
-     "Safari's screen reader reads \"Needs fixing:\" and \"Suggestion:\" as words of their own."
+     "A morning brief whose chat was removed runs again by itself.",
+     "Moving everything to another time zone moves the job round too.",
+     "The Brief's numbers are never cut off.",
+     "The README is a third of its old length."
     ]
    },
    {
-    "version": "4.3.0",
-    "date": "2026-10-29",
+    "version": "4.5.0",
+    "date": "2026-10-30",
     "lines": [
-     "A Brief page, your home screen.",
-     "Your profile is a page of its own.",
-     "Names open the person.",
-     "A bin on every person.",
-     "More job filters, that work.",
-     "Add a job."
+     "A chat no longer asks you to allow every write to your page.",
+     "The line after an update gives your page's link.",
+     "An update never waits on a chat that has stopped.",
+     "Work Claude has picked up says \"Starting\".",
+     "No more \"Taking longer than usual\".",
+     "A finished job says what is ready in one short sentence."
     ]
    }
   ],
   "done": [],
-  "pending": []
+  "pending": [],
+  "changelog": "https://github.com/aranculleton/last-job-search/blob/master/CHANGELOG.md",
+  "since": true
  },
  "applications": [
   {
@@ -1432,8 +1432,8 @@
    {
     "key": "interviews",
     "tab": "interviews",
-    "title": "Interviews",
-    "text": "Got an interview? Tap I heard back on the application, and the prep follows. Your prep is here to read: what they will ask, your answers, your questions."
+    "title": "Coming up",
+    "text": "Everything booked or due, by day: interviews, calls, tests and closing days. Add any of it to your calendar in a tap, and add anything else with Add something. Interviews shows each one's prep: what they will ask, your answers, your questions."
    },
    {
     "key": "settings",
@@ -1633,6 +1633,32 @@
   "missing": [],
   "rev": "6c8230af07ed"
  },
+ "upcoming": [
+  {
+   "id": "up-app-thornbury_bank_risk_analyst-panel-interview-2026-10-28",
+   "kind": "interview",
+   "title": "Panel interview: Thornbury Bank",
+   "with": "Thornbury Bank",
+   "day": "2026-10-28",
+   "time": null,
+   "zone": null,
+   "start": null,
+   "end": null,
+   "all_day": true,
+   "place": null,
+   "go": {
+    "to": "interviews",
+    "item": "int-thornbury_bank_risk_analyst"
+   },
+   "note": "Risk Analyst, with the head of risk",
+   "cal": {
+    "google": "https://calendar.google.com/calendar/render?action=TEMPLATE&text=Panel%20interview%3A%20Thornbury%20Bank&dates=20261028/20261029&details=Risk%20Analyst%2C%20with%20the%20head%20of%20risk",
+    "outlook": "https://outlook.live.com/calendar/action/compose?path=%2Fcalendar%2Faction%2Fcompose&rru=addevent&startdt=2026-10-28&enddt=2026-10-29&allday=true&subject=Panel%20interview%3A%20Thornbury%20Bank&body=Risk%20Analyst%2C%20with%20the%20head%20of%20risk",
+    "ics": "BEGIN:VEVENT\r\nUID:up-app-thornbury_bank_risk_analyst-panel-interview-2026-10-28.last-job-\r\n search\r\nDTSTAMP:20261025T000000Z\r\nDTSTART;VALUE=DATE:20261028\r\nDTEND;VALUE=DATE:20261029\r\nSUMMARY:Panel interview: Thornbury Bank\r\nDESCRIPTION:Risk Analyst\\, with the head of risk\r\nBEGIN:VALARM\r\nACTION:DISPLAY\r\nDESCRIPTION:Panel interview: Thornbury Bank\r\nTRIGGER:-PT9H\r\nEND:VALARM\r\nEND:VEVENT\r\n"
+   },
+   "rev": "205c22b25fa6"
+  }
+ ],
  "people_count": {
   "shown": 3,
   "all": 3,

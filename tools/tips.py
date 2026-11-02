@@ -180,9 +180,11 @@ PAGE_TOUR = (
              "interviews than applying cold. Claude finds who to write to and drafts a short "
              "note; you send it on LinkedIn yourself. Messages holds the notes ready to send. "
              "Tap a name to see everything about that person."},
-    {"key": "interviews", "tab": "interviews", "title": "Interviews",
-     "text": "Got an interview? Tap I heard back on the application, and the prep follows. "
-             "Your prep is here to read: what they will ask, your answers, your questions."},
+    {"key": "interviews", "tab": "interviews", "title": "Coming up",
+     "text": "Everything booked or due, by day: interviews, calls, tests and closing days. "
+             "Add any of it to your calendar in a tap, and add anything else with Add "
+             "something. Interviews shows each one's prep: what they will ask, your answers, "
+             "your questions."},
     {"key": "settings", "tab": "settings", "title": "Settings",
      "text": "Your profile is the first thing here: your jobs, skills, education and "
              "certificates. Change them any time, and every new resume picks from them."},

@@ -630,7 +630,9 @@ chat has lost it.
 |---|---|
 | Applied to something, anywhere, including outside this repo | `job_search_tracker.csv`, a new row |
 | An application changed status (interview, offer, rejection, silence) | `job_search_tracker.csv` `status`, via `/outcome` |
-| An interview was booked | that application's `outcome.md`, as a scheduled stage line, via `/outcome` |
+| An interview was booked | that application's `outcome.md`, as a scheduled stage line with its time and zone, via `/outcome` |
+| A networking call was booked | that contact's `status` `call_booked`, its day as `--due` and its time and zone in `--next-action` ("Call 2pm ET on Teams") |
+| Anything else booked that is not one of those (a careers fair, a coffee with someone not in Contacts, a call set up elsewhere) | `python3 tools/upcoming.py add "<what>" <YYYY-MM-DD> [HH:MM]`, so it shows in Coming up |
 | The questions an interview asked, and which stories landed | `documents/interview/question_bank.csv`, via `/outcome` (`interview_pack.py asked`) |
 | Anything learned about a role, employer or process | `job_search_tracker.csv` `notes`, appended with the date |
 | Messaged someone, or they replied | `network_threads.csv`, one row per message |

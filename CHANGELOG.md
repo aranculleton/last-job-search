@@ -20,7 +20,29 @@ make sense to somebody whose repo just received it.
 
 ## [Unreleased]
 
+### Added
+
+- **Coming up: everything booked or due, in one place.** Interviews, online tests, calls you
+  booked with people, the closing day of anything drafted and not sent yet, and anything you
+  add yourself with Add something, by day. Follow-ups stay in To do, so nothing here nags.
+  It replaces the Interviews screen: By day shows everything in order (tap an interview to
+  open its prep; each says whether its prep is ready), and Interviews shows each one's card.
+  A time written in another zone shows on the day it falls for you.
+- **Add anything to your calendar in a tap, with nothing connected.** The calendar-with-a-plus
+  on each item opens Google Calendar or Outlook filled in, saves a small file for Apple
+  Calendar or any other app, or copies the details. Your last choice comes first next time,
+  and Add all puts everything in at once with a reminder before each.
+- **A call's time shows on the person**, in your own time zone, where Claude wrote it down.
+
 ### Fixed
+
+- **Your news fits your country and your field.** It searched "data and analytics" for
+  anyone whose profile did not list sectors, gave seven countries no central bank and named
+  some by a code. It now uses your own country, city, field and the employers you watch,
+  leaves out what your profile does not say, and checks the slow-moving news (interest
+  rates, work-permit rules) once a week instead of every morning, which saves searches.
+- **Adding something on Coming up is never refused** as "no longer on the page".
+- **Old news no longer promises a next brief** that may not be coming.
 
 - **Buttons no longer flash dark in Safari.** Every button a section showed faded in from the
   text colour over a moment, so its words could not be read; a button now changes colour
@@ -68,6 +90,15 @@ make sense to somebody whose repo just received it.
 
 ### Changed
 
+- **The Brief says each thing once, and fits your screen.** Today holds the interview you
+  have this week, with your prep and the questions it is likely to bring; Coming up shows
+  your next two weeks at a glance; Next three, Waiting on you and Jobs each leave out what
+  another part already shows, so one interview or one person is never three tasks. Jobs
+  lists only postings that are new, the same number the menu shows. Your numbers say what
+  share of applications reached an interview, and how this week compares with your usual.
+  Lists show more where there is room and fewer on a short screen, so the Brief fits one
+  laptop screen, and a phone reads it in the order a day is acted on. Tap a busy day on the
+  two weeks to open it, or a free one to add something to it.
 - **What's new says which version you are on** and links to every change.
 - **Your resume for no job in particular is one tap from Jobs**, and when you have none yet
   its card offers one. A role you apply for still gets its own, fitted to it.

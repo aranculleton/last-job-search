@@ -193,7 +193,10 @@
     save: async (req) => {
       const d = req.data;
       const size = d && (d.size !== undefined ? d.size : d.byteLength !== undefined ? d.byteLength : String(d).length);
-      calls.push({cap: "downloads", op: "save", filename: req.filename, size, blob: d instanceof Blob});
+      // A small file's bytes too, so a test can open what was saved (a calendar's zip).
+      let bytes = null;
+      if (d instanceof Blob && d.size < 65536) { const u = new Uint8Array(await d.arrayBuffer()); let t = ""; for (const x of u) t += String.fromCharCode(x); bytes = btoa(t); }
+      calls.push({cap: "downloads", op: "save", filename: req.filename, size, blob: d instanceof Blob, bytes});
       if (cfg.downloadError) throw {code: cfg.downloadError, message: "test"};
       return {status: "saved"};
     },

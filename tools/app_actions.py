@@ -95,6 +95,10 @@ ACTIONS = {
                                      "history", "learned.unretire"),
     "learned.unretire": (("learned",), "the rule applying again", "learned.retire"),
     "tip.seen": (("tip",), "profile/tips.json: this tip shown, by tips.py's own rules", ""),
+    "upcoming.add": (("upcoming",), "upcoming.py add: something booked the app did not know "
+                                    "of, in documents/upcoming.json", "upcoming.remove"),
+    "upcoming.remove": (("upcoming",), "upcoming.py remove: one the person added, taken away",
+                        "upcoming.add"),
     "requests.withdrawn": (("due",), "state.py withdraw: the requests nobody accepted, "
                                      "withdrawn on LinkedIn", "requests.unwithdrawn"),
     "requests.unwithdrawn": (("due",), "the withdrawals taken off network_threads.csv",
@@ -305,6 +309,8 @@ def _sections_for(item_id: str) -> tuple:
         return ("schedule",)
     if item_id.startswith("resume-"):
         return ("resume",)
+    if item_id == "upcoming-add" or item_id.startswith("up-"):
+        return ("upcoming",)
     if item_id.startswith("setting-"):
         return ("settings",)
     if re.search(r"-f?\d+$", item_id):
@@ -443,7 +449,7 @@ BARE = {
     "outcome.interview": "stage", "outcome.rejected": "why", "outcome.offer": "on",
     "outcome.withdrawn": "why", "outcome.no_response": "why", "referral.agreed": "role",
     "referral.ended": "why", "due.snooze": "until", "reading.done": "text",
-    "brief.pause": "until", "tip.seen": "area", "pin.answer": "answer", "job.add": "text", "brief.move": "time",
+    "brief.pause": "until", "tip.seen": "area", "upcoming.add": "title", "pin.answer": "answer", "job.add": "text", "brief.move": "time",
     "interview.rework": "question", "profile.pasted": "text", "ready.sent_to_contact": "text",
 }
 DATED = {"job.applied", "ready.applied", "msg.sent", "msg.received", "outcome.interview",
@@ -1642,6 +1648,35 @@ def _tip_seen(r: Run) -> dict:
     return {"note": "Got it.", "undo": None}
 
 
+# ---- what is coming up
+
+
+def _upcoming_add(r: Run) -> dict:
+    """Something booked the app did not know of: what, its day and, where given, its time.
+    Its undo takes it away; an undo of a removal puts the same one back."""
+    import upcoming
+    eid = str(r.value.get("id") or "")
+    try:
+        row = upcoming.add(r.words("title"), str(r.value.get("on") or r.value.get("day") or ""),
+                           r.words("time"), r.words("note"), eid=eid)
+    except ValueError as e:
+        raise Refused(str(e)[:1].upper() + str(e)[1:] + ".") from None
+    when = row["day"] + (f" at {row['time']}" if row.get("time") else "")
+    return {"note": f"Added: {row['title']}, {when}.",
+            "undo": {"action": "upcoming.remove", "target": {"kind": "upcoming", "own": row["id"]}}}
+
+
+def _upcoming_remove(r: Run) -> dict:
+    import upcoming
+    gone = upcoming.remove(str(r.target.get("own") or ""))
+    if not gone:
+        raise Refused("That one is gone already.")
+    return {"note": f"Taken off: {gone['title']}.",
+            "undo": {"action": "upcoming.add", "target": {"kind": "upcoming", "rev": "add"},
+                     "value": {"id": gone["id"], "title": gone["title"], "on": gone["day"],
+                               "time": gone.get("time") or "", "note": gone.get("note") or ""}}}
+
+
 # ---- requests nobody accepted
 
 
@@ -2829,6 +2864,7 @@ HANDLERS = {
     "reading.done": _reading_done,
     "learned.retire": _learned_retire, "learned.unretire": lambda r: _learned_retire(r, False),
     "tip.seen": _tip_seen, "requests.withdrawn": _withdrawn,
+    "upcoming.add": _upcoming_add, "upcoming.remove": _upcoming_remove,
     "requests.unwithdrawn": _unwithdrawn, "search.set": _search_set,
     "search.unset": _search_unset, "rule.lift": _rule_lift, "rule.restore": _rule_restore,
     "brief.move": _brief_move, "brief.pause": _brief_pause, "brief.resume": _brief_resume,

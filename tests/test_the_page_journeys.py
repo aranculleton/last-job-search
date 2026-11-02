@@ -160,7 +160,7 @@ def test_hearing_back_books_an_interview_and_one_prep_card_follows(run, tmp_path
         {"fill": {"Which stage": "Phone screen", "The day": "2026-10-26", "The time": "13:00", "With whom": "the recruiter"}},
         {"click": "Save", "exact": True, "receipts": True, "view": {"interviews": nxt["interviews"], "due": nxt["due"]}},
         {"hash": "todo", "eval": "[document.querySelectorAll('#main [data-item=\"soon:int-quayside-ops\"]').length, document.querySelectorAll('#main [data-item=\"due-quayside-prep\"]').length, document.querySelector('#main [data-card]').dataset.item]"},
-        {"hash": "interviews"},
+        {"hash": "interviews/int-quayside-ops"},
     ], vp, clock="2026-10-25T09:00:00Z")
     a = _one(got, "outcome.interview")
     assert a["item"] == "app-quayside-ops"
@@ -197,7 +197,7 @@ def test_an_interview_binned_leaves_interviews_at_once_and_undo_brings_it_back(r
     line = "document.querySelector('#main .ended[data-item=\"int-harbourline-risk\"]')"
     soon = "document.querySelectorAll('#main [data-item=\"soon:int-harbourline-risk\"]').length"
     binned = [
-        {"hash": "interviews", "open": "ivbin:int-harbourline-risk"},
+        {"hash": "interviews/int-harbourline-risk", "open": "ivbin:int-harbourline-risk"},
         {"click": "No reply, and I have stopped waiting", "role": "radio"},
         {"submit": True, "ready": "!" + card + " && !!" + line},
     ]
@@ -207,10 +207,10 @@ def test_an_interview_binned_leaves_interviews_at_once_and_undo_brings_it_back(r
     before, ended, todo = got["after"][0], got["after"][3], got["after"][4]
     assert before["eval"] == 1 and todo["eval"] == 0, (before["eval"], todo["eval"])
     assert "Second interview with Harbourline Bank: marked as no reply." in ended["text"], ended["text"]
-    assert "Saved. Claude will pick this up." in ended["text"] and "2 interviews coming up" in ended["text"], ended["text"]
+    assert "Saved. Claude will pick this up." in ended["text"] and "5 things booked or due" in ended["text"], ended["text"]
     # Undo, before a chat has seen it: the card is back and nothing is left to apply.
     got = _go(run, tmp_path, binned + [{"open": "undo:ivend:int-harbourline-risk", "ready": "!!" + card + " && !" + line}], vp)
-    assert "3 interviews coming up" in got["after"][3]["text"] and "marked as no reply" not in got["after"][3]["text"]
+    assert "7 things booked or due" in got["after"][3]["text"] and "marked as no reply" not in got["after"][3]["text"]
     assert not [x for x in got["actions"] if x["action"] == "outcome.no_response"]
 
 
@@ -401,7 +401,7 @@ def test_a_resume_asked_for_is_made_for_that_person_and_logged_with_its_file(run
 
 def test_a_referral_led_screen_with_no_application_names_the_referrer(run, tmp_path, vp):
     got = _go(run, tmp_path, [
-        {"hash": "interviews", "read": '[data-item="int-copperleaf-payments"]'},
+        {"hash": "interviews/int-copperleaf-payments", "read": '[data-item="int-copperleaf-payments"]'},
         {"hash": "jobs", "more": "r12-3", "read": '[data-item="r12-3"]'},
     ], vp)
     card = got["after"][0]["text"]
@@ -503,8 +503,11 @@ def test_the_brief_opens_its_items(run, tmp_path, vp):
     got = _go(run, tmp_path, [
         {"hash": "brief", "eval": "(() => !!document.querySelector('#main .brief-page .bp-next'))()"},
         {"click": "Reply to Juno at Larkspur Retail.", "role": "link"},
-        {"hash": "brief", "click": "Read the prep for the Larkspur Retail phone screen.", "role": "link"},
+        {"hash": "brief", "click": "Follow up with Fernhill Freight about the Operations Analyst role", "role": "link"},
+        # The interview this week is Today's, its prep one tap away (4.6: each thing once).
+        {"hash": "brief", "click": "Read your prep", "read": "dialog.detail"},
     ], vp, clock="2026-10-25T07:30:00Z")
     assert got["after"][0]["eval"], "the Brief has its own page, with the next three"
     assert got["after"][1]["hash"] == "#contacts/larkspur_retail_castellan"
-    assert got["after"][2]["hash"] == "#interviews/int-larkspur-supply"
+    assert got["after"][2]["hash"] == "#todo/due-fernhill-nudge"
+    assert "Phone screen with Larkspur Retail" in got["after"][3]["text"]
