@@ -20,6 +20,8 @@ make sense to somebody whose repo just received it.
 
 ## [Unreleased]
 
+## [4.8.0] - 2026-11-02
+
 ### Changed
 
 - **Your brief's news is never empty, and each item says how to use it.** A quiet day used to
