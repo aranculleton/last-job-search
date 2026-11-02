@@ -262,8 +262,10 @@ version is built, before they say it, never after.
    no real person in it (the push gate scans it like any file). Land it on master, then tell
    the maintainer in one line that the release is out, and recommend a new chat for the next
    version: every step of a long chat re-reads all of it, and everything a builder needs is
-   in the repo. Never start that chat yourself; the maintainer starts it with the builder
-   prompt below, when they choose.
+   in the repo. **In that same message, give them the builder prompt below, whole, in one
+   copyable block**, so the next chat is a paste away and never something they have to ask
+   for (the maintainer, 2026-11-02: "where's the builder prompt"). Never start that chat
+   yourself; the maintainer starts it with that prompt, when they choose.
 
 ## The builder prompt
 
@@ -280,7 +282,7 @@ How we work:
 - Cheap: every step re-reads this chat, so take few steps. Never poll; GitHub wakes you. Read only the failing lines. The whole suite runs on GitHub for free, never by hand. Run tools/push_gate.sh before every push, batch your commits, and push once per round of fixes.
 - Nothing private and no real person's name in the app, ever; the gate passes before any push.
 - Talk to me in plain words: one recommendation, never a question a sensible default answers.
-- When the release is out, write docs/NEXT_BUILDER.md, tell me in one line, and recommend a new chat for the next version.
+- When the release is out, write docs/NEXT_BUILDER.md, tell me in one line, recommend a new chat for the next version, and in that same message give me this whole prompt again in one copyable block, ready to paste into the new chat.
 
 My notes for this version:
 ```
