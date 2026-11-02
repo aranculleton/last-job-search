@@ -998,7 +998,10 @@ def test_reduced_motion_stops_the_spinner_and_the_bar(run, pages):
         assert d["btn"] is not None and d["card"] is not None, d
         assert set(d["btn"].split(", ")) == {"0s"} and set(d["card"].split(", ")) == {"0s"}, (m, d)
         assert d["fading"] == 0, (m, d)
-    assert r["no-preference"]["hovered"].startswith("0.15s"), r["no-preference"]
+    # The fade under the pointer is for devices that hover: Firefox on the runner reports none,
+    # so the rule is not reached there, which says nothing about the page (4.8.0's run).
+    if r["no-preference"].get("hover", True):
+        assert r["no-preference"]["hovered"].startswith("0.15s"), r["no-preference"]
     assert set(r["reduce"]["hovered"].split(", ")) == {"0s"}, r["reduce"]
 
 

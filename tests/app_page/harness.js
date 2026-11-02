@@ -2233,7 +2233,7 @@ S.motion = async (a) => {
       const s = document.querySelector(".work-card .spin");
       return !!s && (mode !== "reduce" || getComputedStyle(s).animationName === "none");
     }, m, {timeout: 5000}).catch(() => null);
-    r[m] = await o.page.evaluate(() => { const s = document.querySelector(".work-card .spin"); const f = document.querySelector(".work-card .fill"); return {spin: s ? getComputedStyle(s).animationName : null, fill: f ? getComputedStyle(f).transitionDuration : null, matches: matchMedia("(prefers-reduced-motion: reduce)").matches}; });
+    r[m] = await o.page.evaluate(() => { const s = document.querySelector(".work-card .spin"); const f = document.querySelector(".work-card .fill"); return {spin: s ? getComputedStyle(s).animationName : null, fill: f ? getComputedStyle(f).transitionDuration : null, matches: matchMedia("(prefers-reduced-motion: reduce)").matches, hover: matchMedia("(hover: hover)").matches}; });
     r[m].engine = ENGINE;
     // A section just drawn, the pointer away: no control or card fades (Safari faded each one
     // in from the text colour, 2026-10-31); one under the pointer still does.
