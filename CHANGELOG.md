@@ -20,6 +20,8 @@ make sense to somebody whose repo just received it.
 
 ## [Unreleased]
 
+## [4.6.0] - 2026-11-02
+
 ### Added
 
 - **Coming up: everything booked or due, in one place.** Interviews, online tests, calls you
