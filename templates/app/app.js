@@ -3344,7 +3344,9 @@
       const node = x.node();
       // An interview a step names says when it is: the Brief never said Wednesday's phone screen
       // was Wednesday at 13:00 (the walk-through, 2026-11-02).
-      const ivk = x.keys.find((k) => k.startsWith("iv:"));
+      // Only a step that is about the interview itself: a thank-you note owed after the first
+      // round was given the second round's day.
+      const ivk = x.d ? null : x.keys.find((k) => k.startsWith("iv:"));
       const iv = ivk ? interviewItems().find((i) => i.id === ivk.slice(3)) : null;
       if (iv && txt(iv.when) && !isPast(iv.when) && node && node.appendChild) {
         node.appendChild(h("span", {class: "bp-when"}, " \u00b7 " + fmtDay(dayOf(iv.when)) + (timeOf(iv.when) ? ", " + timeOf(iv.when) : "")));

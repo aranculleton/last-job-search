@@ -436,7 +436,9 @@ def test_next_three_keeps_room_for_others_and_an_interview_says_when(run, tmp_pa
                                                        "[...document.querySelectorAll('#main .bp-next li')].map((l) => l.textContent)]"}], vp, clock=T)
     today, steps = got["after"][0]["eval"]
     assert not any(today.strip() in s for s in steps), (today, steps)
-    assert any("Larkspur" in s and "Wed 28 Oct, 13:00" in s for s in steps), steps
+    assert any("Larkspur" in s and "28 Oct" in s and "13:00" in s for s in steps), steps
+    # A thank-you owed after a round is not given the next round's day.
+    assert not any("Thank-you" in s and "4 Nov" in s for s in steps), steps
 
 
 # Set up with nothing found yet: Today's one thing is the first search, with a filled button.
