@@ -346,8 +346,9 @@ METHODS: dict[str, dict] = {
             (58, "2026-10-31", False, "a rule the person says again replaces the older one by itself, keeping what it held; one that may contradict an older rule is judged by the chat recording it, and only one it truly cannot call reaches the page as a single, seldom question; adding to a list of employers is no longer read as a contradiction; documents render and are checked as before"),
             (59, "2026-11-02", False, "the RUNBOOK says where a booking goes: a call's time and zone in its next action, and anything else booked into Coming up with upcoming.py add"),
             (60, "2026-11-02", False, "the RUNBOOK says where a request to watch something in the brief's news goes (brief.py watch); documents render and are checked as before"),
+            (61, "2026-11-02", False, "the page's palette gains a green for today and a gold for tomorrow; documents render and are checked as before"),
         ),
-        "fingerprint": "059d832914ce91a6",
+        "fingerprint": "e0e4d4efedc9094a",
     },
     "interview": {
         "by": "upgrade", "priority": 2, "applies": "live_interviews", "time": "~15 min",
@@ -687,9 +688,9 @@ METHODS: dict[str, dict] = {
             (12, "2026-11-01", False, "a second ask soon after the first rings Claude too, instead of being folded into the first ring"),
             (13, "2026-11-02", True, "Coming up: everything booked or due in one place by day (interview stages, tests due, calls booked, the closing day of anything drafted and not sent, and anything you add yourself), each into Google Calendar, Outlook, Apple Calendar or any other app with its calendar-with-a-plus and nothing connected, an interview's title opening its prep, with an Interviews view of each card; the Brief says each thing once (Today the interview this week with its prep and likely questions, then Coming up, Next three, Waiting on you, Jobs, the news and your numbers, each leaving out what another shows), fits one laptop screen with lists that grow or shrink to the room, and reads in the order a day is acted on on a phone; a call's time shows on the person; old news no longer promises a next brief; an icon-only button says what it does under the pointer; a free day on the Brief's two weeks adds something to it"),
             (14, "2026-11-02", True, "Edit the brief shows and changes what the news watches; Settings has when the next interview leads the Brief and when calendar reminders come; the strip's day letters follow the person's language; an open page checks for new data when it is looked at again, and reloads itself to a newer version; Refresh asks Claude only for data older than today, shows what that costs, and is a soft button where it shows; Today leads with what is on today, and the strip marks today red and tomorrow amber; fitting the Brief to the window takes the item whose going saves most, never one beside white space, and keeps Today two questions; each person's next step and its day sit in one column; the brief's opening section shows; Edit the brief can watch again what was stopped; day names that would repeat use the language's short form"),
-            (15, "2026-11-02", True, "today and tomorrow are in calm colours on the strip and on Coming up's day headings, never red and amber"),
+            (15, "2026-11-02", True, "today and tomorrow stand out in a clear green and gold on the strip and on Coming up's day headings, never red"),
         ),
-        "fingerprint": "aac9f94d884aa824",
+        "fingerprint": "7efaab099a78c5b4",
     },
     "upskill": {
         "by": "upgrade", "priority": 4, "applies": "upskill_plans", "time": "~10 min",

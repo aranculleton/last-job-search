@@ -76,8 +76,9 @@ MAINTAINING.md first; this is only what 4.7 left.
 - **Settings**: `prep_days` (the next interview leads the Brief from 2, 7 or 14 days) and
   `calendar_reminder` (15, 60, 1440 minutes or none; all-day items the afternoon before).
 - **The Brief**: Today leads with what is on today (a call or a test due today before a
-  later interview); the strip marks today in pine and tomorrow in iris, never an alarm colour
-  (red read as a threat), nothing else; each
+  later interview); the strip and Coming up's day headings mark today in a clear green
+  and tomorrow in gold (palettes `day-today`, `day-tomorrow`), never red, which read as a
+  threat; nothing else; each
   person's step and day sit in one column (subgrid). `fitBrief` takes, while the Brief runs
   past the window, the one last item whose going saves most, never one beside white space,
   with `data-fit` "fewest,start,keep" (Today's questions 2,3,0; Coming up 2,2; Jobs 2,3,2;

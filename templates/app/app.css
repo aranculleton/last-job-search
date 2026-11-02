@@ -1429,17 +1429,16 @@ dialog.sheet .sheet-body { display: grid; gap: 16px; }
 .bp-day-dots { display: flex; gap: 2px; min-height: 6px; }
 .bp-day-dots i { width: 6px; height: 6px; border-radius: 50%; background: var(--pc); }
 .bp-day-dots i.due { background: transparent; box-shadow: inset 0 0 0 1.5px var(--pc); }
-/* Today and tomorrow stand out in calm colours, never the alarm ones: red read as a threat
-   (the maintainer, 2026-11-02: "promotes alarmism"). Pine for today, iris for tomorrow, the
-   panel's own foam for every other day. */
-.bp-day.is-today .bp-day-dots i { background: var(--st-done); }
-.bp-day.is-today .bp-day-dots i.due { background: transparent; box-shadow: inset 0 0 0 1.5px var(--st-done); }
-.bp-day.is-tomorrow .bp-day-dots i { background: var(--st-held); }
-.bp-day.is-tomorrow .bp-day-dots i.due { background: transparent; box-shadow: inset 0 0 0 1.5px var(--st-held); }
-/* Coming up's own day headings carry the same two marks: a dot before Today and Tomorrow. */
+/* Today and tomorrow stand out at a glance, never in red (the maintainer, 2026-11-02: red
+   "promotes alarmism", and pine and iris were too faint): a clear green and gold, the panel's
+   own colour for every other day. Coming up's day headings carry the same as a dot. */
+.bp-day.is-today .bp-day-dots i { background: var(--day-today); }
+.bp-day.is-today .bp-day-dots i.due { background: transparent; box-shadow: inset 0 0 0 1.5px var(--day-today); }
+.bp-day.is-tomorrow .bp-day-dots i { background: var(--day-tomorrow); }
+.bp-day.is-tomorrow .bp-day-dots i.due { background: transparent; box-shadow: inset 0 0 0 1.5px var(--day-tomorrow); }
 .up-day.is-today > .group, .up-day.is-tomorrow > .group { display: flex; align-items: center; gap: 8px; }
-.up-day.is-today > .group::before, .up-day.is-tomorrow > .group::before { content: ""; width: 8px; height: 8px; border-radius: 50%; background: var(--st-done); flex: none; }
-.up-day.is-tomorrow > .group::before { background: var(--st-held); }
+.up-day.is-today > .group::before, .up-day.is-tomorrow > .group::before { content: ""; width: 8px; height: 8px; border-radius: 50%; background: var(--day-today); flex: none; }
+.up-day.is-tomorrow > .group::before { background: var(--day-tomorrow); }
 /* On a phone, the coming week: fourteen days do not fit a thumb. */
 @media (max-width: 559px) { .bp-week { grid-template-columns: repeat(7, minmax(0, 1fr)); } .bp-week > .bp-day:nth-child(n+8) { display: none; } }
 
