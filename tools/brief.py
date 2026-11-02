@@ -320,15 +320,27 @@ def watch_basis(claude_md: str | None = None) -> str:
     return hashlib.md5("\n".join(" ".join(p.split()) for p in parts).encode("utf-8")).hexdigest()[:12]
 
 
+# What 4.6's fixed kinds the person turned off (person.json brief.leave_out), in words: a list
+# written for them leaves these out, as they asked then.
+OLD_KINDS = {"market": "hiring and layoffs near them", "bank": "interest rate decisions",
+             "targets": "news of their target employers"}
+
+
+def turned_off_before() -> list[str]:
+    got = person.get("brief.leave_out", None)
+    return [OLD_KINDS[g] for g in (got if isinstance(got, list) else []) if g in OLD_KINDS]
+
+
 def watch_needs_writing(claude_md: str | None = None) -> str:
     """Why the watch list should be written now, or "": never written, or written from a
     profile that has changed since."""
     if not person.exists():
         return ""
     stamp = person.get("brief.watch_from", None)
-    if not stamp and not watch_list():
+    if not stamp:
+        # Claude's own list was never written, whatever the person added themselves first.
         return "none written yet"
-    if stamp and stamp != watch_basis(claude_md):
+    if stamp != watch_basis(claude_md):
         return "the profile changed since it was written"
     return ""
 
@@ -341,11 +353,19 @@ def write_watch(items: list, by_person: bool = False) -> list[dict]:
     off = {x.lower() for x in dropped()}
     now = watch_list()
     mine = [w for w in now if w.get("by") == "you"]
-    new = [w for w in watch_list(items) if w["what"].lower() not in off]
     if by_person:
-        new = [dict(w, by="you") for w in new]
-        kept = now + [w for w in new if w["what"].lower() not in {x["what"].lower() for x in now}]
+        # Their own word wins over a stop they gave before: it is watched again.
+        new = [dict(w, by="you") for w in watch_list(items)]
+        have = {x["what"].lower() for x in now}
+        add = [w for w in new if w["what"].lower() not in have]
+        if len(now) + len(add) > WATCH_MAX:
+            raise ValueError("the brief watches %d things already: stop one first" % WATCH_MAX)
+        kept = now + add
+        back = {w["what"].lower() for w in new}
+        if back & off:
+            profile_set.set_json("brief.watch_dropped", [x for x in dropped() if x.lower() not in back])
     else:
+        new = [w for w in watch_list(items) if w["what"].lower() not in off]
         kept = mine + [w for w in new if w["what"].lower() not in {x["what"].lower() for x in mine}]
     kept = watch_list(kept)
     profile_set.set_json("brief.watch", kept)
@@ -373,26 +393,48 @@ def _watched_path() -> str:
     return person.state(*WATCHED)
 
 
-def last_searched() -> dict:
-    """{what (lower case): the day it was last searched}, from the brief's own record."""
+def _watched_file() -> dict:
     try:
         with open(_watched_path(), encoding="utf-8") as fh:
             got = json.load(fh)
     except (OSError, ValueError):
         return {}
-    return {str(k).lower(): _d(v) for k, v in (got or {}).items() if _d(v)} if isinstance(got, dict) else {}
+    return got if isinstance(got, dict) else {}
 
 
-def note_searched(whats: list[str], today: dt.date) -> None:
-    """The day each watched thing was searched, so the next brief knows what is due."""
-    have = {k: v.isoformat() for k, v in last_searched().items()}
-    for w in whats:
-        have[w.lower()] = today.isoformat()
+def _save_watched(got: dict) -> None:
     path = _watched_path()
     os.makedirs(os.path.dirname(path), exist_ok=True)
     with open(path, "w", encoding="utf-8", newline="\n") as fh:
-        json.dump(dict(sorted(have.items())), fh, indent=1, ensure_ascii=False)
+        json.dump(dict(sorted(got.items())), fh, indent=1, ensure_ascii=False)
         fh.write("\n")
+
+
+def last_searched() -> dict:
+    """{what (lower case): the day it was last searched}, from the brief's own record."""
+    return {str(k).lower(): _d(v) for k, v in _watched_file().items()
+            if not str(k).startswith("_") and _d(v)}
+
+
+def plan_searched(whats: list[str], today: dt.date) -> None:
+    """The watched things today's searches carry, kept until the news step says they ran
+    (`brief.py news`): marked searched at the gather, a search the run never made, or one a
+    rewritten list replaced, waited a week or a month for nothing."""
+    got = _watched_file()
+    got["_planned"] = {"day": today.isoformat(), "whats": list(whats)}
+    _save_watched(got)
+
+
+def note_searched(whats: list[str] | None, today: dt.date) -> None:
+    """The day each watched thing was searched, so the next brief knows what is due: those
+    given, or (None) today's planned ones, once the news reader has run them."""
+    got = _watched_file()
+    plan = got.pop("_planned", None) or {}
+    if whats is None:
+        whats = plan.get("whats") or [] if plan.get("day") == today.isoformat() else []
+    for w in whats:
+        got[str(w).lower()] = today.isoformat()
+    _save_watched(got)
 
 
 def due_watch(today: dt.date, watch: list[dict] | None = None,
@@ -402,11 +444,14 @@ def due_watch(today: dt.date, watch: list[dict] | None = None,
     watch = watch_list() if watch is None else watch
     searched = last_searched() if searched is None else searched
     out = []
-    for w in watch:
+    for n, w in enumerate(watch):
         last = searched.get(w["what"].lower())
         if last is None or (today - last).days >= EVERY[w["every"]]:
-            out.append(w)
-    return out
+            out.append((last or dt.date.min, n, w))
+    # The longest waiting first, the person's order between equals: a brief with no room for
+    # one leaves it the oldest, so the next brief takes it (the release review: a daily item
+    # early in the list took every slot, and a monthly one later in it never ran).
+    return [w for _l, _n, w in sorted(out, key=lambda x: (x[0], x[1]))]
 
 
 def home_place() -> str:
@@ -685,7 +730,7 @@ def _gather(today: dt.date, write: bool) -> dict:
         b["tip"] = _tip(today)
         write_record(b)
         if setting("news") and not b["paused"]:
-            note_searched(searched_whats(qs, watch, today), today)
+            plan_searched(searched_whats(qs, watch, today), today)
     return b
 
 
@@ -1088,7 +1133,9 @@ def claude_lines(b: dict) -> list[str]:
                    "write the few things that move their own search, in their terms, each with "
                    "how often it changes, with python3 tools/brief.py watch write (its --help "
                    "says how); then python3 tools/brief.py watch searches prints today's "
-                   "searches, which replace the ones below" % b["watch_due"])
+                   "searches, which replace the ones below%s" % (
+                       b["watch_due"], "; they turned off before, so leave out: " +
+                       "; ".join(turned_off_before()) if turned_off_before() else ""))
     if n and b["queries"]:
         out.append("news: the news-reader agent, given these searches: %s; at most %d item%s in the "
                    "message (the person's setting)%s" % (
@@ -1225,6 +1272,8 @@ def take_news(text: str, today: dt.date) -> dict:
     """The news reader's items into today's record: at most NEWS_MAX, none whose link an
     earlier brief carried, and a dated note on a live application's row for a freeze or
     layoffs at that employer. {"kept", "dropped", "noted", "path"}."""
+    # The news reader ran today's searches, whatever it found: what they carried is searched.
+    note_searched(None, today)
     items = []
     for ln in text.splitlines():
         s = ln.strip()
@@ -1307,7 +1356,8 @@ WATCH_HELP = """What the person's brief watches, in their own terms (person.json
                          Claude's earlier items; the person's own and what they took off stay.
   watch add "<what>" [--every week]   one the person asked for in a chat (theirs)
   watch drop "<what>"    one off, and never written back
-  watch searches         today's searches, for the news reader, each noted as searched""" % WATCH_MAX
+  watch searches         today's searches, for the news reader; noted as searched when
+                         brief.py news takes what it found""" % WATCH_MAX
 
 
 def watch_main(argv: list[str]) -> int:
@@ -1336,7 +1386,11 @@ def watch_main(argv: list[str]) -> int:
         if not _clean_what(a.what):
             print("watch add: say what to watch", file=sys.stderr)
             return 2
-        kept = write_watch([{"what": a.what, "every": a.every}], by_person=True)
+        try:
+            kept = write_watch([{"what": a.what, "every": a.every}], by_person=True)
+        except ValueError as e:
+            print("watch add: %s" % e, file=sys.stderr)
+            return 2
     elif a.do == "drop":
         if not drop_watch(a.what):
             print("watch drop: %r is not on the list" % a.what, file=sys.stderr)
@@ -1350,7 +1404,7 @@ def watch_main(argv: list[str]) -> int:
         tracker = open_actions._tracker()
         watch = watch_list()
         qs = queries(today, _live_employers(tracker, contacts, threads, today), watch)
-        note_searched(searched_whats(qs, watch, today), today)
+        plan_searched(searched_whats(qs, watch, today), today)
         for q in qs:
             print(q)
         return 0
@@ -1359,6 +1413,8 @@ def watch_main(argv: list[str]) -> int:
         why = watch_needs_writing()
         if why:
             print("needs writing: %s (python3 tools/brief.py watch --help)" % why)
+        if turned_off_before():
+            print("they turned off before, so leave out: " + "; ".join(turned_off_before()))
     for w in kept:
         print("- %s (every %s)%s" % (w["what"], w["every"], ", theirs" if w.get("by") else ""))
     if not kept:

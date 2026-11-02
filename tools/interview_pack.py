@@ -1013,11 +1013,18 @@ def _with_stage(text, stage, date="", with_="", time="", zone="", minutes=0, due
         if was and was[0]["date"] == _text(date):
             time, zone = was[0].get("time") or "", was[0].get("zone") or ""
     if hits and not (minutes or due):
-        # Rebooked: what it is (a test due by the day) and how long it lasts stay.
+        # Rebooked: what it is and how long it lasts stay, except that a time given now makes
+        # it a meeting at that time, never a test that drops it (the release review).
         was = what_works.outcome_stages("## Interview stages reached\n" + hits[0].group(0))
         if was:
-            minutes, due = was[0].get("minutes") or 0, was[0].get("kind") == "test"
+            minutes = was[0].get("minutes") or 0
+            due = was[0].get("kind") == "test" and not what_works.clock(time)
+    given = _text(zone)
     zone = zone_name(zone)
+    if given and not zone:
+        # A zone this cannot place ("Pacific Time", a misspelt name): no time rather than one
+        # read later in the person's own zone, hours out.
+        time = ""
     when = ("%s %s%s" % (date, what_works.clock(time), " " + zone if zone else "")
             if what_works.clock(time) and not due else date)
     length = ", %d min" % int(minutes) if minutes and not due else ""
@@ -5024,6 +5031,9 @@ def main(argv=None) -> int:
             if not (label and date):
                 raise ValueError("no interview is booked at %s yet: give it with --stage and "
                                  "--date" % company)
+            if _text(a.zone) and not zone_name(a.zone):
+                raise ValueError("%r is not a time zone this can place: give its name, like "
+                                 "America/Toronto or Europe/London" % a.zone)
             folder = docpaths.app_folder(company, role)
             line = record_stage(folder, company, role, label, date, a.with_, today=today,
                                 time=a.time, zone=a.zone, minutes=a.minutes, due=a.due)

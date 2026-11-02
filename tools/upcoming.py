@@ -81,13 +81,15 @@ def _zone_word(word: str, home: str) -> str | None:
     if "/" in raw:
         return raw if _known_zone(raw) else None
     w = raw.upper()
-    if w in app_model._ZONE_WORDS:
-        return app_model._ZONE_WORDS[w]
-    names = _zone_abbreviations().get(w)
-    if not names:
-        return None
+    names = _zone_abbreviations().get(w) or set()
+    # The person's own zone first, before the app's short list: in Shanghai CST is China's,
+    # never Chicago's, and in Brisbane AEST is Brisbane's (the release review).
     if home in names:
         return home
+    if w in app_model._ZONE_WORDS:
+        return app_model._ZONE_WORDS[w]
+    if not names:
+        return None
     offsets = {o for n in names for o in [_offsets(n)]}
     return min(names) if len(offsets) == 1 else None
 

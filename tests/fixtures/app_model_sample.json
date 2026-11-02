@@ -1937,6 +1937,12 @@
         "every": "month",
         "by": "you"
       }
+    ],
+    "watch_again": [
+      {
+        "v": "Regional freight rates",
+        "label": "Regional freight rates"
+      }
     ]
   },
   "learned": [

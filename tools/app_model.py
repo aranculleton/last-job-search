@@ -3141,7 +3141,20 @@ def _brief(ctx: Ctx, targets: dict) -> dict | None:
                             for t in re.split(r"(?<=[.!?])\s+(?=[A-Z*])", sec["text"]) if t.strip()]
     return {"date": os.path.basename(path)[:10], "lines": lines,
             "items": [dict(text=x, **brief_link(ctx, x)) for x in lines],
-            "sections": sections, "watch": _watch()}
+            "sections": sections, "watch": _watch(), "watch_again": _watch_again()}
+
+
+def _watch_again() -> list[dict]:
+    """What the person stopped watching, to bring back from Edit the brief: each thing they
+    took off, and the employers they are in touch with where they turned those off."""
+    try:
+        import brief
+        out = [{"v": x, "label": x} for x in brief.dropped()]
+        if "employers" in brief.setting("leave_out"):
+            out.insert(0, {"v": "employers", "label": "The employers you are in touch with"})
+        return out
+    except Exception:  # noqa: BLE001
+        return []
 
 
 def _watch() -> list[dict]:

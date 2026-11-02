@@ -3007,6 +3007,13 @@
       } catch (e) { w = ""; }
       names.push(w || ["Su", "Mo", "Tu", "We", "Th", "Fr", "Sa"][i]);
     }
+    // Two letters that name two days (Portuguese se, Hungarian Sz, Vietnamese Th): the
+    // language's own short form for every day instead, which never repeats.
+    if (new Set(names).size < 7) {
+      for (let i = 0; i < 7; i++) {
+        try { names[i] = new Intl.DateTimeFormat(LOC, {weekday: "short", timeZone: "UTC"}).format(new Date(Date.UTC(2026, 10, 1 + i, 12))).replace(/\.$/, "") || names[i]; } catch (e) { /* kept */ }
+      }
+    }
     DAY2 = {loc: LOC, names};
     return names;
   }
@@ -4642,6 +4649,8 @@
         rec: {v: "week", why: "Most news that moves a search comes weekly at most; a daily search mostly finds the same thing again."}},
       {p: "B3", label: "Stop watching", multi: true, values: (it) => arr(obj(it).watch).filter((w) => txt(obj(w).what)).map((w) => ({v: txt(w.what), label: txt(w.what) + " · " + (WATCH_EVERY[txt(w.every)] || "weekly"), state: 1})),
         hint: "What your brief searches for now. Tap any it should stop searching for, and Claude will not add it back."},
+      {p: "B8", label: "Watch again", multi: true, values: (it) => arr(obj(it).watch_again).filter((w) => txt(obj(w).v)).map((w) => ({v: txt(w.v), label: txt(w.label) || txt(w.v), state: 1})),
+        hint: "What you stopped watching. Tap any to bring it back."},
       {p: "B2", label: "News items", values: vals([["0", "None"], ["1", "1"], ["3", "3"], ["5", "5"]], 1), hint: "Fewer is quicker to read. From the next brief.",
         rec: {v: "3", why: "Three is enough to catch what moved this week without a long read."}},
       {p: "B4", label: "Days it comes", multi: true, values: vals([["1", "Mon"], ["2", "Tue"], ["3", "Wed"], ["4", "Thu"], ["5", "Fri"], ["6", "Sat"], ["0", "Sun"]], 1), hint: "At most once a day."},
@@ -8864,8 +8873,10 @@
       const d = await DB.doc("meta/now").get();
       const m = d && d.exists ? (typeof d.data === "function" ? d.data() : d.data) : null;
       const behind = !!m && (txt(m.rev) !== txt(obj(S.meta).rev) || (tms(m.made_at) || 0) > newestData());
-      if (behind || force || S.flags.dbError) resubscribe();
-    } catch (e) { onDbError(e); resubscribe(); }
+      // While the store is failing, each subscription's own backoff retries it: making them
+      // all again on every look would undo that wait and read everything again each time.
+      if (behind || (force && !S.flags.dbError)) resubscribe();
+    } catch (e) { onDbError(e); }
   }
   // Whether Refresh needs Claude: only for data from before today. Today's came from a chat
   // that had already taken the day's update, so looking again at what is saved is free, and
@@ -8879,7 +8890,8 @@
     if (newer || (newest && now() - newest < REFRESH_FRESH_MS)) { try { location.reload(); } catch (e) { /* the frame refuses */ } return; }
     // What the store already holds first, at once; a chat is asked only for what it does not.
     resubscribe();
-    if (!refreshAsks(newest, newer)) { lastCheck = 0; freshen(true); scheduleRender(); return; }
+    lastCheck = now();
+    if (!refreshAsks(newest, newer)) { scheduleRender(); return; }
     requestWork([{id: "update~refresh-" + todayIso(), kind: "update", title: "Bringing your page up to date", args: {refresh: true}, stages: REFRESH_STAGES, redo: true}]);
     scheduleRender();
   }

@@ -180,6 +180,8 @@ TWEAKS = (
          "employer. Searched in each brief, as often as you choose."),
     _row("B7", ("brief",), "How often", "choice", ("day", "week", "month"), 1, "brief",
          "How often what you add is searched: as often as it really changes."),
+    _row("B8", ("brief",), "Watch again", "watch-again", (), 1, "brief",
+         "What you stopped watching, to bring back."),
     _row("P1", ("page",), "Theme", "choice", ("system", "light", "dark"), 0, "page", ""),
     _row("P2", ("page",), "Text size", "choice", ("small", "standard", "large"), 0, "page", ""),
     _row("P3", ("page",), "Density", "choice", ("comfortable", "compact"), 0, "page", ""),
@@ -388,6 +390,17 @@ def _invalid(row: dict, v) -> str:
             return "say which to stop watching"
         bad = [x for x in v if x.strip().lower() not in have]
         return "" if not bad else f"{', '.join(bad)} is not on what your brief watches"
+    if control == "watch-again":
+        try:
+            import brief
+            have = {x.lower() for x in brief.dropped()} | (
+                {"employers"} if "employers" in brief.setting("leave_out") else set())
+        except Exception:  # noqa: BLE001
+            have = set()
+        if not (isinstance(v, list) and v and all(isinstance(x, str) for x in v)):
+            return "say which to watch again"
+        bad = [x for x in v if x.strip().lower() not in have]
+        return "" if not bad else f"{', '.join(bad)} was never stopped"
     if control == "toggles" and not values:
         return "" if isinstance(v, dict) and v and all(isinstance(x, bool) for x in v.values()) \
             else "say which to turn on or off"
@@ -1048,28 +1061,46 @@ def _writes(c: dict, where: dict, keep: bool) -> tuple[list, list, list]:
         return [("json", "brief.length", v)], [], [f"a {v} brief"]
     if p == "B2":
         return [("json", "brief.news", int(v))], [], [f"{v} news item{'s' if v != '1' else ''}"]
-    if p == "B3":
+    if p in ("B3", "B6", "B8"):
+        # One list for the whole Apply (`where["watch_state"]`, set by _apply_settings): each row
+        # changes it in turn and writes it whole, so a stop and an addition in one Apply both
+        # stand (the release review: the second write replaced the first).
         import brief
-        stop = {x.strip().lower() for x in v}
-        now = brief.watch_list()
-        left = [w for w in now if w["what"].lower() not in stop]
-        gone = [w["what"] for w in now if w["what"].lower() in stop]
-        return [("json", "brief.watch", left),
-                ("json", "brief.watch_dropped", list(dict.fromkeys(brief.dropped() + gone)))], [], \
-            [f"no longer watching {g}" for g in gone]
-    if p == "B6":
-        import brief
-        what = brief._clean_what(v)
-        every = where.get("watch_every") or "week"
-        now = brief.watch_list()
-        if what.lower() in {w["what"].lower() for w in now}:
-            raise Refused(f"Your brief already watches {what}.")
-        if len(now) >= brief.WATCH_MAX:
-            raise Refused(f"Your brief watches {brief.WATCH_MAX} things already: stop one first.")
-        return [("json", "brief.watch", now + [{"what": what, "every": every, "by": "you"}]),
-                ("json", "brief.watch_dropped",
-                 [x for x in brief.dropped() if x.lower() != what.lower()])], [], \
-            [f"watching {what}, every {every}"]
+        st = where["watch_state"]
+        if p == "B3":
+            stop = {x.strip().lower() for x in v}
+            gone = [w["what"] for w in st["watch"] if w["what"].lower() in stop]
+            st["watch"] = [w for w in st["watch"] if w["what"].lower() not in stop]
+            st["dropped"] = list(dict.fromkeys(st["dropped"] + gone))
+            said = [f"no longer watching {g}" for g in gone]
+        elif p == "B8":
+            back = {x.strip().lower() for x in v}
+            said = []
+            if "employers" in back:
+                st["leave_out"] = [g for g in st["leave_out"] if g != "employers"]
+                said.append("watching the employers you are in touch with again")
+            again = [x for x in st["dropped"] if x.lower() in back]
+            for what in again:
+                if len(st["watch"]) >= brief.WATCH_MAX:
+                    raise Refused(f"Your brief watches {brief.WATCH_MAX} things already: stop one first.")
+                st["watch"].append({"what": what, "every": where.get("watch_every") or "week", "by": "you"})
+                said.append(f"watching {what} again")
+            st["dropped"] = [x for x in st["dropped"] if x.lower() not in back]
+        else:
+            what = brief._clean_what(v)
+            every = where.get("watch_every") or "week"
+            if what.lower() in {w["what"].lower() for w in st["watch"]}:
+                raise Refused(f"Your brief already watches {what}.")
+            if len(st["watch"]) >= brief.WATCH_MAX:
+                raise Refused(f"Your brief watches {brief.WATCH_MAX} things already: stop one first.")
+            st["watch"].append({"what": what, "every": every, "by": "you"})
+            st["dropped"] = [x for x in st["dropped"] if x.lower() != what.lower()]
+            said = [f"watching {what}, every {every}"]
+        writes = [("json", "brief.watch", [dict(w) for w in st["watch"]]),
+                  ("json", "brief.watch_dropped", list(st["dropped"]))]
+        if p == "B8":
+            writes.append(("json", "brief.leave_out", list(st["leave_out"])))
+        return writes, [], said
     if p == "B7":
         return [], [], []
     if p == "B5":
@@ -1208,9 +1239,13 @@ def _apply_settings(work: dict, where: dict, p: dict) -> dict:
     keep = bool((work.get("args") or {}).get("keep"))
     changes = [dict(c, row=BY_P[c["p"]]) for c in p["changes"]]
     every = next((c["v"] for c in changes if c["p"] == "B7"), None)
-    if every and not any(c["p"] == "B6" for c in changes):
+    if every and not any(c["p"] in ("B6", "B8") for c in changes):
         return {"status": "refused", "summary": "Write what to watch, then how often."}
     where = dict(where, watch_every=every) if every else where
+    if any(c["p"] in ("B3", "B6", "B8") for c in changes):
+        import brief
+        where = dict(where, watch_state={"watch": brief.watch_list(), "dropped": brief.dropped(),
+                                         "leave_out": brief.setting("leave_out")})
     writes, then, said = [], [], []
     for c in changes:
         if c["p"] == "I1":
