@@ -84,6 +84,7 @@ bdi { unicode-bidi: isolate; }
 .dot.conn-offline, .dot.conn-readonly, .dot.conn-stopped { background: var(--st-overdue); }
 .top-tools { margin-left: auto; display: flex; align-items: center; gap: 8px; }
 .pulse { font-size: var(--t-sm); color: var(--muted); padding-bottom: 4px; }
+.pulse .refresh-btn { margin-left: 8px; vertical-align: middle; }
 .pulse.tone-warn { color: var(--st-overdue); }
 /* An update on its way: one moving line under the header, the page still usable. */
 .pulse.is-updating { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; color: var(--ink); position: relative; padding-top: 4px; }

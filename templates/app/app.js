@@ -8897,7 +8897,9 @@
             : queuedUp ? "An update is waiting for Claude. " : "Updating to the newest version. "),
           h("span", {class: "muted"}, "Keep using the page: it changes by itself when it is ready.")]) :
         [h("span", {}, words + (age ? " Search data from " + age + "." : "") + (newer ? " A newer version is ready." : "")), " ",
-          h("button", {type: "button", class: "btn link", "data-k": "refresh", onclick: () => refreshPage(newest, newer)}, "Refresh"),
+          // A soft pill, the page's secondary button, not a link lost in the line (the
+          // maintainer, 2026-11-02: "make the refresh button slightly more prominent").
+          h("button", {type: "button", class: "btn secondary small refresh-btn", "data-k": "refresh", onclick: () => refreshPage(newest, newer)}, "Refresh"),
           // What it costs, as every ask says it: the gauge, its words on hover and read aloud.
           refreshAsks(newest, newer) ? [" ", costEl({state: 1}, "", "refresh-cost")] : null]);
     }
