@@ -19,6 +19,7 @@ import pytest  # noqa: E402
 
 import test_the_page_journeys as journeys  # noqa: E402
 from test_the_page_journeys import PHONE, WIDE, _go, _one, _sample  # noqa: E402
+from test_the_page_works_in_a_browser import EMPTY  # noqa: E402
 
 
 @pytest.fixture(scope="module")
@@ -522,3 +523,148 @@ def test_coming_up_marks_today_and_tomorrow_calmly(run, tmp_path, vp):
     (c0, today), (c1, tomorrow), (c2, later) = got["after"][0]["eval"]
     assert "is-today" in c0 and "is-tomorrow" in c1 and "is-to" not in c2, got["after"][0]["eval"]
     assert today != tomorrow and today not in ("rgba(0, 0, 0, 0)", "") and tomorrow not in ("rgba(0, 0, 0, 0)", "")
+
+
+# ------------------------------------------------------------------ a draft already made is shown, never made again
+
+# A message already drafted is opened, never drafted a second time (2026-11-02): To do's
+# "Follow up with Fernhill Freight" queued new work while the follow-up sat ready in Messages.
+def test_a_follow_up_already_drafted_opens_from_to_do_and_is_never_drafted_again(run, tmp_path, vp):
+    row = '[data-item="due-fernhill-nudge"]'
+    got = _go(run, tmp_path, [
+        {"hash": "todo", "read": row},
+        {"click": "See the draft", "within": row, "until": "location.hash === '#drafts-messages/msg-wren-2'"},
+    ], vp, clock=T)
+    text = got["after"][0]["text"]
+    assert "See the draft" in text and "Draft the follow-up" not in text, text
+    assert got["after"][1]["hash"] == "#drafts-messages/msg-wren-2"
+    assert not [w for w in got["work"] if w and w.get("kind") in ("follow_up", "nudge")], got["work"]
+
+
+# A reply drafted for Juno and a thank-you for Marisol: their To do row, their Contacts row and
+# their own page each open the draft, and nothing offers "Draft a reply" over it.
+def test_a_reply_already_drafted_opens_from_to_do_contacts_and_their_page(run, tmp_path, vp):
+    juno, marisol = '[data-item="larkspur_retail_castellan"]', '[data-item="ellerwick_trust_priya"]'
+    got = _go(run, tmp_path, [
+        {"hash": "todo", "read": '[data-item="due-juno-reply"]'},
+        {"hash": "contacts", "read": juno},
+        {"read": marisol},
+        {"hash": "drafts-messages", "click": "Juno", "role": "link", "within": '[data-item="msg-juno-1"]', "read": "dialog.detail"},
+        {"click": "See the draft", "within": "dialog.detail", "until": "location.hash === '#drafts-messages/msg-juno-1'",
+         "eval": "document.querySelectorAll('dialog.detail[open]').length"},
+    ], vp, clock=T)
+    for n in (0, 1, 2):
+        text = got["after"][n]["text"]
+        assert "See the draft" in text and "Draft a reply" not in text, (n, text)
+    assert "Next: Thank-you note" in got["after"][2]["text"]
+    page = got["after"][3]["text"]
+    assert "See the draft" in page and "Draft a reply" not in page, page
+    assert "Thursday at 12 suits me well" in page, "their page shows the draft that is ready"
+    assert got["after"][4]["eval"] == 0 and got["after"][4]["hash"] == "#drafts-messages/msg-juno-1"
+    assert not [w for w in got["work"] if w and w.get("kind") in ("reply", "follow_up")], got["work"]
+
+
+# "I sent it" counts everywhere at once, before Claude catches up (2026-11-02): Contacts said
+# "Replied: your turn" with "Draft a reply", To do still asked to reply, and the badge stayed.
+BADGE = "(() => { const b = document.querySelector('#tabs .badge, #side .badge'); return b ? Number(b.firstChild.textContent) : 0; })()"
+
+
+def test_i_sent_it_is_done_in_contacts_to_do_and_the_brief_at_once(run, tmp_path, vp):
+    juno = '[data-item="larkspur_retail_castellan"]'
+    got = _go(run, tmp_path, [
+        {"hash": "todo", "eval": BADGE},
+        {"hash": "brief", "read": "#main .bp-next"},
+        {"hash": "drafts-messages", "click": "Copy", "within": '[data-item="msg-juno-1"]'},
+        {"click": "I sent it", "within": '[data-item="msg-juno-1"]'},
+        {"hash": "contacts", "read": "#main .sec-head"},
+        {"open": "fold:contacts", "read": juno},
+        {"hash": "todo", "count": '[data-item="due-juno-reply"]', "eval": BADGE},
+        {"hash": "brief", "read": "#main .bp-next", "eval": "(document.querySelector('#main .bp-people') || {}).textContent || ''"},
+    ], vp, clock=T)
+    assert _one(got, "msg.sent")["item"] == "msg-juno-1"
+    assert "Reply to Juno" in got["after"][1]["text"], "the Brief asked for the reply before it went"
+    assert "one of them a reply" not in got["after"][4]["text"], got["after"][4]["text"]
+    row = got["after"][5]["text"]
+    assert "Message sent" in row and "Replied: your turn" not in row and "Draft a reply" not in row, row
+    assert got["after"][6]["count"] == 0, "To do no longer asks for the reply"
+    assert got["after"][6]["eval"] == got["after"][0]["eval"] - 1, (got["after"][0]["eval"], got["after"][6]["eval"])
+    assert "Juno" not in got["after"][7]["text"] and "Juno" not in got["after"][7]["eval"], got["after"][7]
+
+
+# A person's page: where it stands is a line of words with ticks, never outlined pills that
+# look like the buttons under them; its blocks stand apart; and Back names Messages when that
+# is where the person came from.
+STEPS = ("(() => { const p = document.querySelector('dialog.detail .d-steps'); if (!p) return null; const c = p.cloneNode(true); "
+         "c.querySelectorAll('.sr-only').forEach((s) => s.remove()); "
+         "return [c.textContent, [...p.querySelectorAll('*')].some((e) => parseFloat(getComputedStyle(e).borderTopWidth) > 0)]; })()")
+GAPS = ("(() => { const kids = [...document.querySelector('dialog.detail .detail-body > div').children].filter((e) => e.getBoundingClientRect().height > 0); "
+        "return Math.min(...kids.slice(1).map((e, i) => Math.round(e.getBoundingClientRect().top - kids[i].getBoundingClientRect().bottom))); })()")
+
+
+def test_a_persons_page_says_where_it_stands_in_words_and_back_names_messages(run, tmp_path, vp):
+    got = _go(run, tmp_path, [
+        {"hash": "drafts-messages", "click": "Juno", "role": "link", "within": '[data-item="msg-juno-1"]', "read": '[data-k="detail-back"]', "eval": STEPS},
+        {"eval": GAPS},
+        {"eval": "document.querySelectorAll('dialog.detail .stepper').length"},
+    ], vp, clock=T)
+    assert got["after"][0]["text"].replace("‹", "").strip() == "Messages", got["after"][0]["text"]
+    assert got["after"][0]["eval"], "the stages are a line of words"
+    words, bordered = got["after"][0]["eval"]
+    assert " ".join(words.split()) == "Written to ✓ · Replied ✓ · Talked · Referral", words
+    assert not bordered, "no stage is drawn as a pill"
+    assert got["after"][1]["eval"] >= 12, "the page's blocks stand apart: %r" % got["after"][1]["eval"]
+    assert got["after"][2]["eval"] == 0
+
+
+# ------------------------------------------------------------------ words a person reads and hears
+
+
+def test_the_brief_time_is_said_as_the_sheet_says_it(run, tmp_path, vp):
+    got = _go(run, tmp_path, [{"hash": "settings", "open": "info-sum:brief-when", "read": "#main"}], vp, clock=T)
+    text = got["after"][0]["text"]
+    assert "UK time" in text and "Europe/London" not in text, text
+
+
+def test_the_bin_says_posted_too_long_ago_not_too_old(run, tmp_path):
+    got = _go(run, tmp_path, [{"hash": "jobs", "click": "Not for me: Harbourline Bank, Pricing Analyst", "read": "dialog[open]"}], PHONE, clock=T)
+    sheet = got["after"][0]["text"]
+    assert "Posted too long ago" in sheet and "Too old" not in sheet, sheet
+
+
+ALERT_WORDS = "[...document.querySelectorAll('#main [data-alert]')].map((a) => [a.getAttribute('data-alert'), a.querySelector('.sr-only').textContent.trim()])"
+
+
+def test_a_screen_reader_hears_note_before_what_is_not_a_fix(run, tmp_path):
+    got = _go(run, tmp_path, [{"hash": "jobs", "eval": ALERT_WORDS}, {"hash": "todo", "eval": ALERT_WORDS}], PHONE, clock=T)
+    said = dict(got["after"][0]["eval"] + got["after"][1]["eval"])
+    assert said["al-closed-r12-5"] == "Note:" and said["al-referral_hold-r12-3"] == "Note:", said
+    assert all(v == "Needs fixing:" for k, v in said.items() if k.startswith("al-checks-")), said
+
+
+def test_i_sent_it_is_named_by_its_visible_words_first(run, tmp_path, vp):
+    names = "['msg-juno-1', 'msg-ash-1'].map((id) => document.querySelector('[data-k=\"sent:' + id + '\"]').getAttribute('aria-label'))"
+    got = _go(run, tmp_path, [{"hash": "drafts-messages", "eval": names}], vp, clock=T)
+    assert got["after"][0]["eval"] == ["I sent it: the message to Juno", "I sent it: the note to Ash"]
+
+
+# ------------------------------------------------------------------ a brand-new person
+
+BUTTONS = "[...document.querySelectorAll('#main .card-actions button')].map((b) => b.textContent)"
+
+
+@pytest.mark.parametrize("section", ["brief", "jobs", "contacts", "interviews"])
+def test_a_new_person_is_asked_to_start_everywhere_until_a_step_is_done(run, tmp_path, section):
+    got = _go(run, tmp_path, [{"hash": section, "eval": BUTTONS}, {"hash": "todo", "eval": BUTTONS}], PHONE, model=copy.deepcopy(EMPTY), clock=T)
+    assert got["after"][0]["eval"] == ["Start"] and got["after"][1]["eval"] == ["Start"], got["after"]
+    # One step done: Continue, as To do says it.
+    part = copy.deepcopy(EMPTY)
+    part["setup"] = {"state": "running", "next": "work", "progress": {"done": 1, "total": 2},
+                     "steps": [{"id": "setup-resume", "step": "resume", "question": "Your CV", "status": "done", "rev": "s1"},
+                               {"id": "setup-work", "step": "work", "question": "What work do you want next?", "status": "next", "rev": "s2"}]}
+    got = _go(run, tmp_path, [{"hash": section, "eval": BUTTONS}], PHONE, model=part, clock=T)
+    assert got["after"][0]["eval"] == ["Continue setting up"], got["after"]
+
+
+def test_messages_opened_by_its_own_link_is_called_messages(run, tmp_path):
+    got = _go(run, tmp_path, [{"hash": "messages", "eval": "document.querySelector('#main h2').textContent"}], PHONE, model=copy.deepcopy(EMPTY), clock=T)
+    assert got["after"][0]["eval"] == "Messages"

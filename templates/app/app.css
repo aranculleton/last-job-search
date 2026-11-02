@@ -1415,12 +1415,17 @@ ul.bp-news { gap: 12px; }
 .bp-wk.is-now { color: var(--ink); font-weight: 600; }
 /* Each week is a column that answers the pointer, a tap or the keyboard; the one pointed at
    stays full and the others step back, and the line under them says its week. */
-/* Where a conversation is, as one row of steps: done ones filled, the rest outlined. Plain
-   lines read as a list of words (2026-10-30). */
-.stepper { display: flex; flex-wrap: wrap; gap: 8px; margin: 4px 0; }
-.stepper li { padding: 4px 12px; border-radius: 999px; border: 1px solid var(--line-strong); font-size: var(--t-sm); color: var(--muted); }
-.stepper li.done { background: var(--sunk); color: var(--ink); border-color: transparent; }
+/* Where a conversation is, as one line of words with ticks: outlined pills beside the buttons
+   read as buttons that did nothing (2026-11-02). */
+.d-steps { font-size: var(--t-sm); color: var(--muted); }
+.d-steps .d-step.done { color: var(--ink); }
 .d-next { margin: 0; }
+/* A person's page: each block apart, as cards are, never run together (2026-11-02). */
+.d-person { display: grid; gap: 16px; }
+.d-person .d-block { display: grid; gap: 8px; }
+.d-person .timeline { display: grid; gap: 12px; }
+.d-person .timeline li { display: grid; gap: 2px; }
+.d-person .t-draft .t-text { white-space: pre-wrap; background: var(--sunk); border-radius: var(--r-sm); padding: 12px 16px; }
 /* Every point on the Brief has the same small dot, centred on its first line whatever its
    size, in place of the browser's own bullet beside a dot of ours (the maintainer,
    2026-11-02: "the bullets ... look clunky and misspaced"). */

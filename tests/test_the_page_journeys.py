@@ -254,7 +254,7 @@ def test_a_first_note_is_copied_exactly_opened_and_logged_with_the_words_that_we
     edited = "Hello Ash, I saw you moved to Copperleaf Pay from Quayside Foods. " + "I work on supply chain analytics in Manchester. " * 6
     got = _go(run, tmp_path, [
         {"hash": "contacts", "open": "contsw:messages", "click": "Copy note to Ash", "clip": True, "read": '[data-item="msg-ash-1"]'},
-        {"click": "I sent the note to Ash", "read": '[data-item="msg-ash-1"]'},
+        {"click": "I sent it: the note to Ash", "read": '[data-item="msg-ash-1"]'},
     ], vp)
     note = _item(m, "msg-ash-1")
     assert got["after"][0]["clip"] == note["text"], "exactly the words, no label, no count"
@@ -311,12 +311,15 @@ def test_a_wave_of_first_notes_is_grouped_by_employer_with_the_week_s_budget(run
 
 def test_a_reply_owed_says_so_and_drafts_from_their_words_already_kept(run, tmp_path, vp):
     """Juno's reply is in the conversation already: drafting the answer asks only what to say
-    back, never for their words a second time (2026-10-29)."""
+    back, never for their words a second time (2026-10-29). With no reply drafted yet: one
+    already drafted is opened instead (tests/test_the_page_keeps_one_listener_and_the_brief.py)."""
+    m = _sample()
+    m["messages"] = [x for x in m["messages"] if x["id"] != "msg-juno-1"]
     got = _go(run, tmp_path, [
         {"hash": "contacts", "read": '[data-item="larkspur_retail_castellan"]'},
         {"click": "Draft a reply to Juno", "read": "dialog"},
         {"fill": {"Anything you want to say back": "Yes, Thursday at 12 works."}, "submit": True},
-    ], vp)
+    ], vp, model=m)
     assert "Replied: your turn" in got["after"][0]["text"]
     assert "Paste what Juno said" not in got["after"][1]["dialog"]
     w = [x for x in got["work"] if x and x.get("kind") == "reply"]

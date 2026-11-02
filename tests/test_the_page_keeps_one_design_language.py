@@ -59,7 +59,7 @@ T = "2026-10-25T09:00:00Z"
     ("The pay", "pay", "Not applying: Ellerwick Trust"),
     ("The place", "place", "Not applying: Ellerwick Trust"),
     ("Not my field", "field", "Not applying: Ellerwick Trust"),
-    ("Too old", "old", "Not applying: Ellerwick Trust"),
+    ("Posted too long ago", "old", "Not applying: Ellerwick Trust"),
     ("No more from Ellerwick Trust", "employer", "No more roles from Ellerwick Trust"),
     ("It has closed", "closed", "Not applying: Ellerwick Trust"),
 ])

@@ -198,7 +198,9 @@ def pages(tmp_path_factory):
     # may have gone, the same warning on three messages, a question from an update, and
     # follow-ups hidden at employers turned down.
     busy = _sample()
-    ppl = busy["people"][:3]
+    # People with no message drafted to them yet: one already drafted is opened, never
+    # drafted again, so it is never a row of a "Draft all" (2026-11-02).
+    ppl = [p for p in busy["people"] if p["status"] != "closed" and not any(m["contact"] == p["id"] for m in busy["messages"])][:3]
     nudge = next(d for d in busy["due"] if d["kind"] == "nudge")
     busy["due"] = [d for d in busy["due"] if d["kind"] != "nudge"] + [
         dict(nudge, id="due-nudge-%s" % p["id"], contact=p["id"], item=None, title="Follow up with %s at %s" % (p["first_name"], p["employer"]),
@@ -375,7 +377,8 @@ def test_a_first_run_offers_setup_everywhere_and_never_an_empty_list(run, pages)
     assert "Start" in r["todo"]["text"]
     for sid in ("jobs", "drafts", "contacts", "interviews"):
         assert r[sid]["empty"] == ["Your search is not set up yet"], (sid, r[sid]["empty"])
-        assert "Continue setting up" in r[sid]["text"], sid
+        # Nothing begun yet: Start, as To do says it, never "Continue" (2026-11-02).
+        assert "Start" in r[sid]["text"] and "Continue setting up" not in r[sid]["text"], sid
 
 
 def test_sixty_jobs_render_select_and_fit_a_phone(run, pages):
@@ -438,19 +441,22 @@ def test_to_do_groups_by_when_then_by_employer_in_the_order_things_are_done(run,
     assert "Thank-you note after your Harbourline Bank first interview" in titles
     assert r["dueButtons"]["Thank-you note after your Harbourline Bank first interview"][0] == "Draft the thank-you"
     assert r["dueButtons"]["Send your CV to Tamsin"][0] == "Choose the role"
-    assert r["dueButtons"]["Reply to Juno at Larkspur Retail"][0] == "Draft a reply"
+    # The reply is drafted already: the row opens it, never drafts it again (2026-11-02).
+    assert r["dueButtons"]["Reply to Juno at Larkspur Retail"][0] == "See the draft"
     assert all("Done" in b for b in r["dueButtons"].values()), "every due row can be marked done"
     assert titles.count("3 first notes ready to send") == 1, "a wave of first notes is one card"
     assert r["chips"] == 0, "no kind chips on To do"
     assert r["filled"] == 0 and r["answers"] >= 8, "a question never fills one of its answers"
     assert r["jobsQuestion"] and "Have you used Looker?" in r["jobsQuestion"], "Jobs asks its question on the role's own card"
-    assert r["juno"]["state"] == "Replied: your turn" and "Draft a reply" in r["juno"]["buttons"], r["juno"]
+    assert r["juno"]["state"] == "Replied: your turn" and "See the draft" in r["juno"]["buttons"], r["juno"]
+    assert "Draft a reply" not in r["juno"]["buttons"], r["juno"]
 
 
 def test_an_alert_is_a_line_with_one_button_and_a_suggestion_can_be_declined_for_good(run, pages):
     r = run("alerts", html=pages["sample"])
     _clean(r)
-    assert [" ".join(x.split()) for x in r["closed"]] == ["Needs fixing: This posting has closed."]
+    # A closed posting is a note, not a fix (2026-11-02).
+    assert [" ".join(x.split()) for x in r["closed"]] == ["Note: This posting has closed."]
     assert r["cost"] == [], "a free fix says no cost on the card"
     assert r["fixed"]["action"] == "job.dismiss" and r["fixed"]["item"] == "r12-5"
     assert r["suggest"] and " ".join(r["suggest"][0].split()).startswith("Suggestion: The posting asks for Tableau")
