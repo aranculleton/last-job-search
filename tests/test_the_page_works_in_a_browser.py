@@ -68,7 +68,11 @@ class Runner:
         line = self.lines.get(timeout=timeout)
         return json.loads(line) if line else {"ready": False, "error": "the runner exited"}
 
-    def __call__(self, scenario, **args):
+    def __call__(self, scenario, _wait=180, **args):
+        # How long one answer may take: three minutes, longer only for a scenario that taps every
+        # control on a busy screen, which ran past three in Safari's engine on a busy runner
+        # (4.8.0's run: To do took 47s in Chrome's engine here).
+        wait = _wait
         self.n += 1
         self.proc.stdin.write(json.dumps({"id": self.n, "scenario": scenario, "args": args}) + "\n")
         self.proc.stdin.flush()
@@ -76,7 +80,7 @@ class Runner:
         # and taking that late answer for the next question failed every test after it with
         # someone else's result (Safari, 2026-10-29): an older answer is passed over.
         while True:
-            line = self.lines.get(timeout=180)
+            line = self.lines.get(timeout=wait)
             assert line, "the browser runner stopped"
             got = json.loads(line)
             if got.get("id") is None or got["id"] >= self.n:
@@ -351,7 +355,7 @@ def test_every_control_on_every_screen_does_something_and_nothing_throws(run, pa
     # Each control tapped on a fresh page (the maintainer, 2026-10-29: "I'm starting to doubt
     # even some of the buttons work"): it opens, sends, moves or changes something on screen,
     # nothing throws, and every link to another site has a real address.
-    r = run("sweep", html=pages["sample"], viewport=PHONE, clock="2026-10-25T09:00:00Z", sections=[section])
+    r = run("sweep", html=pages["sample"], viewport=PHONE, clock="2026-10-25T09:00:00Z", sections=[section], _wait=600)
     assert r["tapped"] == r["perSection"][section] or r["tapped"] == 80, r
     assert not r["errors"], r["errors"]
     assert not r["unclickable"], r["unclickable"]
