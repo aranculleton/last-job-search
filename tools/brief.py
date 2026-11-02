@@ -524,7 +524,8 @@ def in_play(tracker, contacts, threads, live_employers: list[str]) -> list[str]:
     stage, names = {}, {}
     for r in tracker:
         k, st = company_key(r.get("company") or ""), _status(r)
-        if k and st in set(throttle.LIVE_PROCESS) and k not in stage:
+        # The furthest stage wins, whatever order the rows are in (the release review).
+        if k and st in set(throttle.LIVE_PROCESS) and stage.get(k) in (None, "applied"):
             stage[k] = "interviewing" if "interview" in st else st.replace("_", " ")
         elif k and st == "applied" and k not in stage:
             stage[k] = "applied"
@@ -547,9 +548,15 @@ def searched_whats(qs: list[str], watch: list[dict], today: dt.date) -> list[str
 
 
 def links_sent(paths: list[str]) -> list[str]:
-    """Every link the news sections of the last two briefs carried, so none is sent twice."""
+    """Every link the news sections of the briefs of the last four weeks carried, so none is
+    sent twice: the news widens back a month, and with only the last two briefs read, a link
+    sent three briefs ago came back as new (the release review, 2026-11-02)."""
     out = []
-    for p in paths[-2:]:
+    days = [(_d(os.path.basename(p)[:10]), p) for p in paths]
+    newest = max((d for d, _p in days if d), default=None)
+    for d, p in days:
+        if newest and d and (newest - d).days > CARRY_DAYS:
+            continue
         out += _LINK.findall(_section(_read(p), "News"))
     return list(dict.fromkeys(u.rstrip(".,;") for u in out))
 
@@ -800,7 +807,17 @@ def _gather(today: dt.date, write: bool) -> dict:
     return b
 
 
-_NOTE_DAY = re.compile(r"(?:^|[|;]\s*)(\d{4}-\d{2}-\d{2}):")
+_NOTE_DAY = re.compile(r"(?:^|[|;]\s*)(\d{4}-\d{2}-\d{2}):\s*([^|;]*)")
+STAGE_NOTE = "(from the application's record)"
+
+
+def _person_note_day(notes: str) -> str:
+    """The day of the row's last note that is not the app's own (a news line the brief noted,
+    a stage this upkeep wrote): those are written after the fact, and a news note on 30 October
+    hid a test ticked done for the 29th (the release review, 2026-11-02)."""
+    days = [m.group(1) for m in _NOTE_DAY.finditer(notes or "")
+            if not m.group(2).lstrip().startswith("news:") and STAGE_NOTE not in m.group(2)]
+    return max(days or [""])
 
 
 def stages_into_tracker(today: dt.date) -> list[str]:
@@ -822,12 +839,19 @@ def stages_into_tracker(today: dt.date) -> list[str]:
         if _status(r) not in live:
             continue
         notes = str(r.get("notes") or "")
-        written = max(_NOTE_DAY.findall(notes) or [""])
-        for st in open_actions.stages(r)[2]:
+        written = _person_note_day(notes)
+        folder, _files, stages = open_actions.stages(r)
+        # Only a ticked box on the record's checklist: a hand-written record's dated heading is
+        # read as done once its day has passed, and "Final interview - 30 Oct (cancelled by them)"
+        # was written as done (the release review, 2026-11-02).
+        if not re.search(r"^##\s*Interview stages reached\s*$", _read(os.path.join(folder, "outcome.md")),
+                         re.M | re.I):
+            continue
+        for st in stages:
             day = st.get("date") or ""
             if not st.get("done") or not _d(day) or day <= written or _d(day) > today:
                 continue
-            line = "%s: %s done (from the application's record)" % (day, st["label"].rstrip(" :"))
+            line = "%s: %s done %s" % (day, st["label"].rstrip(" :"), STAGE_NOTE)
             if line not in notes:
                 notes = (notes.rstrip() + " | " + line).strip(" |")
                 added.append(str(r.get("company") or ""))
@@ -1261,7 +1285,7 @@ def claude_lines(b: dict) -> list[str]:
             "none in the message, by the person's setting" if not n else
             "the profile does not say enough yet for one"))
     out.append("since %s; links already sent: %s" % (
-        b["since"], " ".join(b["skip_links"][:10]) or "none"))
+        b["since"], " ".join(b["skip_links"][-20:]) or "none"))
     out.append("what counts: " + b["what_counts"])
     if b.get("page"):
         behind = page_behind()
@@ -1399,7 +1423,9 @@ def take_news(text: str, today: dt.date) -> dict:
         s = s.lstrip("-*• ").strip()
         if s:
             items.append(s)
-    seen = set(links_sent(earlier_briefs(today) + [brief_path(today.isoformat())]))
+    # Earlier briefs only: today's own record is replaced below, and counting it sent every
+    # item of a second run that day as already sent (the release review, 2026-11-02).
+    seen = set(links_sent(earlier_briefs(today)))
     kept, dropped = [], []
     for s in items:
         links = [u.rstrip(".,;") for u in _LINK.findall(s)]
@@ -1447,10 +1473,20 @@ def carry_news(today: dt.date) -> tuple[list[str], str]:
         d = _d(os.path.basename(p)[:10])
         if not d or (today - d).days > CARRY_DAYS:
             break
-        got = news_items(_read(p))
+        text = _read(p)
+        got = news_items(text)
         if got:
+            # Already carried: the day it was gathered, so a carry never renews it (news from
+            # 1 October read as from 10 November on the 25th, the release review).
+            was = _CARRIED.search(_section(text, "News"))
+            d = _d(was.group(1)) if was else d
+            if (today - d).days > CARRY_DAYS:
+                return [], ""
             return got[:NEWS_MAX], d.isoformat()
     return [], ""
+
+
+_CARRIED = re.compile(r"Carried from the brief of (\d{4}-\d{2}-\d{2})")
 
 
 def _note_news(kept: list[str], today: dt.date) -> list[str]:

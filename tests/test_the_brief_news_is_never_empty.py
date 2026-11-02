@@ -202,3 +202,95 @@ def test_a_stage_the_record_marks_done_reaches_the_tracker_row_once(tmp_path):
     assert notes.count("2026-10-29: Online test done (from the application's record)") == 1, notes
     # The screen, older than the row's own notes, is not written again.
     assert "Recruiter screen done" not in notes
+
+
+
+# ------------------------------------------------------------------ the release review, 2026-11-02
+
+def _tracker_row(state, **row):
+    import csv
+    path = os.path.join(state, "job_search_tracker.csv")
+    rows = list(csv.DictReader(open(path, encoding="utf-8")))
+    cols = list(rows[0].keys())
+    rows.append(dict({c: "" for c in cols}, **row))
+    with open(path, "w", newline="", encoding="utf-8") as fh:
+        w = csv.DictWriter(fh, fieldnames=cols)
+        w.writeheader()
+        w.writerows(rows)
+    return path
+
+
+def _outcome(state, company, role, text):
+    env = dict(os.environ, LJS_PROFILE=os.path.join(os.path.dirname(state), "profile"), LJS_STATE=state)
+    folder = subprocess.run([sys.executable, "-c", "import docpaths; print(docpaths.app_folder(%r, %r))" % (company, role)],
+                            cwd=os.path.join(ROOT, "tools"), env=env, capture_output=True, text=True,
+                            encoding="utf-8").stdout.strip()
+    os.makedirs(folder, exist_ok=True)
+    with open(os.path.join(folder, "outcome.md"), "w", encoding="utf-8") as fh:
+        fh.write(text)
+
+
+def _notes(path, company):
+    import csv
+    return next(r for r in csv.DictReader(open(path, encoding="utf-8")) if r["company"] == company)["notes"]
+
+
+def test_a_news_note_never_hides_a_stage_and_a_written_heading_is_not_done(tmp_path):
+    state = _state(tmp_path)
+    path = _tracker_row(state, date="2026-10-01", company="Kestrel Mutual", role="Claims Analyst", status="interview",
+                        notes="2026-10-23: invited to an online test | 2026-10-30: news: Kestrel Mutual pauses hiring "
+                              "(the brief, from a search result)")
+    _outcome(state, "Kestrel Mutual", "Claims Analyst", "# Outcome\n\n## Interview stages reached\n"
+             "- [x] Online test (2026-10-29)\n")
+    _tracker_row(state, date="2026-10-01", company="Fernhill Freight", role="Planner", status="interview",
+                 notes="2026-10-20: screen booked")
+    _outcome(state, "Fernhill Freight", "Planner", "# Outcome\n\n## Final interview - 2026-10-30 (cancelled by them, "
+             "to be rebooked)\n")
+    _run(state, "--today", "2026-11-01", "--write")
+    assert "2026-10-29: Online test done" in _notes(path, "Kestrel Mutual")
+    assert "done" not in _notes(path, "Fernhill Freight")
+
+
+def test_a_link_sent_weeks_ago_is_not_sent_again(tmp_path):
+    state = _state(tmp_path)
+    for day, line in (("2026-11-03", "A hub opens (Example Times, 2026-11-02, https://example.com/a). Use it."),
+                      ("2026-11-04", "Rates held (Example Times, 2026-11-03, https://example.com/b). Use it."),
+                      ("2026-11-05", "Grocers grow (Example Times, 2026-11-04, https://example.com/c). Use it.")):
+        _run(state, "--today", day, "--write")
+        _run(state, "news", "--today", day, stdin="- " + line + "\n")
+    _run(state, "--today", "2026-11-06", "--write")
+    r = _run(state, "news", "--today", "2026-11-06",
+             stdin="- A hub opens (Example Times, 2026-11-02, https://example.com/a). Use it.\n")
+    assert "0 kept; 1 left out" in r.stdout, r.stdout
+
+
+def test_a_second_run_the_same_day_keeps_its_own_news(tmp_path):
+    state = _state(tmp_path)
+    _run(state, "--today", "2026-11-04", "--write")
+    line = "- A hub opens (Example Times, 2026-11-03, https://example.com/z). Use it.\n"
+    _run(state, "news", "--today", "2026-11-04", stdin=line)
+    r = _run(state, "news", "--today", "2026-11-04", stdin=line)
+    assert "news: 1 kept" in r.stdout and "carried" not in r.stdout, r.stdout
+
+
+def test_carried_news_keeps_the_day_it_was_gathered_and_ends_after_four_weeks(tmp_path):
+    state = _state(tmp_path)
+    _run(state, "--today", "2026-10-01", "--write")
+    _run(state, "news", "--today", "2026-10-01", stdin="- Old (Example Times, 2026-09-30, https://example.com/o). Use it.\n")
+    for day in ("2026-10-10", "2026-10-20"):
+        _run(state, "--today", day, "--write")
+        _run(state, "news", "--today", day, stdin="")
+    rec = open(os.path.join(state, "documents", "briefs", "2026-10-20.md"), encoding="utf-8").read()
+    assert "Carried from the brief of 2026-10-01." in rec
+    secs = app_model.brief_sections(rec)
+    assert app_model._news_fallback(types.SimpleNamespace(today=dt.date(2026, 10, 20)), secs, []) == "2026-10-01"
+    _run(state, "--today", "2026-11-02", "--write")
+    _run(state, "news", "--today", "2026-11-02", stdin="")
+    late = open(os.path.join(state, "documents", "briefs", "2026-11-02.md"), encoding="utf-8").read()
+    assert "Old" not in late.split("## News", 1)[-1] if "## News" in late else True
+
+
+def test_the_furthest_stage_says_how_the_person_is_in_touch_whatever_the_rows_order():
+    rows = [{"company": "Kestrel Mutual", "status": "applied"}, {"company": "Kestrel Mutual", "status": "interview"}]
+    for order in (rows, rows[::-1]):
+        assert brief.in_play(order, [], [], ["Kestrel Mutual"]) == ["Kestrel Mutual (interviewing)"]

@@ -361,7 +361,7 @@ def test_every_section_empty_says_what_will_appear_and_offers_one_step(run, page
     r = run("sections", html=pages["nothing"], viewport=PHONE)
     _clean(r)
     expect = {"jobs": "No shortlist yet.", "drafts": "Nothing drafted yet.", "drafts-messages": "No messages to send.",
-              "contacts": "Nobody here yet.", "interviews": "Nothing booked.", "progress": "Nothing counted yet."}
+              "contacts": "Who could refer you?", "interviews": "Your interviews and calls show here", "progress": "Nothing counted yet."}
     for sid, title in expect.items():
         assert r[sid]["empty"] == [title], (sid, r[sid]["empty"])
         assert r[sid]["overflow"]["sw"] <= r[sid]["overflow"]["cw"], sid

@@ -3155,7 +3155,10 @@ def _news_fallback(ctx: Ctx, sections: list[dict], earlier: list[str]) -> str:
     and the day they were gathered. Returns that day, or "" when today's brief has its own."""
     news = [s for s in sections if s["kind"] == "news"]
     if any(s["items"] for s in news):
-        return ""
+        # Carried by a brief whose search brought nothing: the day they were gathered, never
+        # "this morning" (the release review, 2026-11-02).
+        was = re.search(r"Carried from the brief of (\d{4}-\d{2}-\d{2})", " ".join(s["text"] for s in news))
+        return was.group(1) if was else ""
     import brief
     for p in reversed(earlier):
         day = os.path.basename(p)[:10]

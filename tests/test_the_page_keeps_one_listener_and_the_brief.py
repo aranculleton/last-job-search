@@ -343,6 +343,75 @@ def test_your_progress_fills_its_panel_without_crowding(run, tmp_path, vp, news)
     assert not r["overflow"], r
 
 
+# The menu folds to its icons for more room, and back (the maintainer, 2026-11-02: "an option
+# to minimise the side panel so it only shows the icons"): each name is still read out and
+# shown on hover, To do keeps its badge, the choice is kept on this device, and a phone, which
+# has no side menu, has no such button.
+SIDE = ("(() => { const s = document.getElementById('side'); const m = document.getElementById('main'); const t = document.querySelector('[data-k=\"side-toggle\"]'); "
+        "const a = document.querySelector('[data-k=\"side:jobs\"]'); "
+        "return {side: Math.round(s.getBoundingClientRect().width), main: Math.round(m.getBoundingClientRect().width), "
+        "shown: !!t && t.getBoundingClientRect().width > 0, pressed: t ? t.getAttribute('aria-pressed') : null, name: a.textContent.trim(), title: a.getAttribute('title'), "
+        "badge: !!document.querySelector('#side [data-k=\"side:todo\"] .badge'), kept: localStorage.getItem('ljs:p:nav:mini')}; })()")
+
+
+def test_the_menu_folds_to_its_icons_and_back(run, tmp_path, vp):
+    click = "(() => { document.querySelector('[data-k=\"side-toggle\"]').click(); return 1; })()"
+    got = _go(run, tmp_path, [{"hash": "brief", "eval": SIDE}, {"eval": click}, {"eval": SIDE}, {"eval": click}, {"eval": SIDE}], vp, clock=T)
+    before, mini, after = got["after"][0]["eval"], got["after"][2]["eval"], got["after"][4]["eval"]
+    if vp == PHONE:
+        assert not before["shown"], before
+        return
+    assert before["shown"] and before["pressed"] == "false" and before["side"] >= 180, before
+    assert mini["pressed"] == "true" and mini["side"] <= 64 and mini["main"] > before["main"], mini
+    assert mini["name"].startswith("Jobs") and mini["title"] == "Jobs" and mini["badge"], mini
+    assert mini["kept"] == "true", mini
+    assert after["side"] == before["side"] and after["pressed"] == "false" and after["title"] is None, after
+
+
+# The release review and the walk-through (2026-11-02). A test due today is itself on Today,
+# never the interview it belongs to, and that interview stays in Coming up.
+def test_a_test_due_today_leads_as_itself_and_its_interview_stays_coming_up(run, tmp_path, vp):
+    got = _go(run, tmp_path, [{"hash": "brief", "eval": "[document.querySelector('#main .bp-today .bp-iv-when').textContent, "
+                                                       "document.querySelector('#main .bp-today .bp-iv-what').textContent, "
+                                                       "document.querySelector('#main .bp-upcoming').textContent]"}],
+              vp, clock="2026-11-02T08:30:00Z")
+    when, what, coming = got["after"][0]["eval"]
+    assert when.startswith("Due today") and "Online test" in what, (when, what)
+    assert "Second interview" in coming, coming
+
+
+# A late reply or follow-up with a draft ready leads to the draft, not to the person's page,
+# which has no draft on it.
+def test_todays_late_follow_up_opens_its_draft(run, tmp_path, vp):
+    got = _go(run, tmp_path, [{"hash": "brief", "eval": "document.querySelector('#main .bp-today .bp-iv .btn').textContent"},
+                              {"eval": "(() => { document.querySelector('#main .bp-today .bp-iv .btn').click(); return 1; })()"},
+                              {"eval": "location.hash"}], vp, clock=T)
+    assert got["after"][0]["eval"] == "See the draft", got["after"][0]["eval"]
+    assert "messages/msg-wren" in got["after"][2]["eval"], got["after"][2]["eval"]   # on the draft itself
+
+
+# Refresh with yesterday's data and the Claude allowance used up says so, never "Up to date".
+def test_refresh_says_when_the_allowance_stopped_it(run, tmp_path, vp):
+    model = copy.deepcopy(_sample())
+    model["made_at"] = "2026-10-24T07:00:00Z"
+    got = _go(run, tmp_path, [
+        {"hash": "brief", "eval": "(() => { LJS.state().flags.limit = Date.now() + 3600000; document.querySelector('[data-k=\"conn\"]').click(); return 1; })()",
+         "until": "!!document.querySelector('[data-k=\"refresh\"]')"},
+        {"eval": "(() => { document.querySelector('[data-k=\"refresh\"]').click(); return 1; })()"},
+        {"eval": "document.getElementById('toasts').textContent"}], vp, model=model, clock="2026-10-25T15:00:00Z")
+    toast = got["after"][2]["eval"]
+    assert "allowance" in toast and "Up to date" not in toast, toast
+
+
+# A new person's progress, with no weekly bars yet, still fills its panel.
+def test_your_progress_with_no_bars_yet_fills_its_panel(run, tmp_path, vp):
+    model = copy.deepcopy(_sample())
+    model["done"]["weeks"] = []
+    model["brief"]["sections"] = [s for s in model["brief"]["sections"] if s.get("kind") != "news"]
+    got = _go(run, tmp_path, [{"hash": "brief", "eval": PROGRESS}], vp, model=model, clock=T)
+    assert got["after"][0]["eval"]["gap"] <= 2, got["after"][0]["eval"]
+
+
 # A reply owed in To do names its person by `item`, as the model sends it, and the Brief shows
 # that person once: the same reply led Today and came third in Next three on the maintainer's
 # page (2026-11-02), because only a `contact` field the model never sends was read.

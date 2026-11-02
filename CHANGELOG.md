@@ -43,6 +43,9 @@ make sense to somebody whose repo just received it.
   and where it is from, with no bold or underlines, and the panel is never cut off.
 - **The weekly bars are clearer**: proper bars on a baseline, each labelled with the date its
   week starts, this week's the strongest.
+- **Fold the side menu to its icons** ("Icons only", at its top) for more room on a laptop;
+  each name still shows on hover, and the choice is kept on that device. Icons are now sharp
+  at every size.
 - **Your progress fits its panel at any width**: two by two on a phone, four across
   otherwise, and with the weekly bars beside the numbers when it has a whole row, instead of
   empty space to the right or squeezed numbers.
@@ -63,7 +66,14 @@ make sense to somebody whose repo just received it.
   their length limit and were cut, and the cut fell on the steps that publish a newer page and
   bring its data up to date, so the page could stay days behind. Only the phone message is
   shortened now; the steps are never cut.
-- **One person is shown once on the Brief.** A reply owed could appear twice on it.
+- **One person is shown once in the Brief's lists.** A reply owed could appear twice below
+  Today (Today's one thing may also be in Next three, on purpose).
+- **The brief's news, fixed from the release review**: a link sent up to four weeks ago is not
+  sent again; carried news keeps the day it was gathered and ends after four weeks; running the
+  news step twice in a day keeps that day's news; a test due today leads Today as itself, not
+  as its interview, which stays in Coming up.
+- **Refresh says when your Claude allowance stopped it**, instead of "Up to date".
+- **Today's late follow-up with a draft ready opens the draft**, not the person's page.
 - **A stage you finished reaches your tracker by itself.** When an application's record marks
   a stage done (a test taken, an interview held) after the tracker row's last note, the
   morning brief writes it onto the row too, so nothing reading the row thinks it is still due.

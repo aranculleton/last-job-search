@@ -135,7 +135,10 @@ bdi { unicode-bidi: isolate; }
 .tab[aria-current="page"]::before { content: ""; position: absolute; top: 0; left: 28%; right: 28%; height: 3px; border-radius: 0 0 3px 3px; background: var(--mark); }
 .tab[aria-current="page"] .ic { stroke-width: 2.4; }
 .tab-label { max-width: 100%; }
-.ic { width: 22px; height: 22px; flex: none; }
+/* Icons are drawn on a 24-point grid and shown at 24px unless a control sets a smaller size,
+   so each line falls on a whole pixel: at 22px the menu's were soft on an ordinary screen
+   (the maintainer, 2026-11-02: "are those icons blurry"). */
+.ic { width: 24px; height: 24px; flex: none; }
 .badge { min-width: 20px; height: 20px; padding: 0 8px; border-radius: 10px; background: var(--accent); color: var(--accent-ink); font: 600 0.75rem/20px var(--font-data); text-align: center; }
 .tab .badge { position: absolute; top: 5px; left: calc(50% + 6px); }
 /* A quiet count: the section's own number, never a call to act. */
@@ -178,6 +181,22 @@ bdi { unicode-bidi: isolate; }
 .side-label { margin-right: auto; }
 .count { font: 600 var(--t-sm) var(--font-data); color: var(--muted); }
 .side-foot { margin-top: 8px; padding-top: 8px; border-top: 1px solid var(--line); }
+/* Fold the menu to its icons: a quiet row at its top, under a rule like the one above Coming
+   up and Settings, the same height as a menu item. */
+.side-top { padding-bottom: 8px; border-bottom: 1px solid var(--line); margin-bottom: -12px; }
+.side-top .side-toggle { width: 100%; }
+
+.side-toggle { display: flex; align-items: center; gap: 12px; min-height: var(--target); padding: 8px 12px; border: 0; border-radius: var(--r-sm); background: none; color: var(--muted); font: inherit; font-size: var(--t-sm); cursor: pointer; text-align: left; }
+@media (hover: hover) { .side-toggle:hover { background: var(--raised); color: var(--ink); } }
+.side-toggle:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }
+@media (min-width: 760px) {
+  .nav-mini .shell { grid-template-columns: 56px minmax(0, 1fr); column-gap: 24px; }
+  .nav-mini .side-list a, .nav-mini .side-toggle { justify-content: center; padding-inline: 8px; }
+  .nav-mini .side .side-label { position: absolute; width: 1px; height: 1px; margin: -1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
+  .nav-mini .side-list .navcount { display: none; }
+  .nav-mini .side-list .badge { position: absolute; top: 2px; right: 2px; margin: 0; }
+}
+@media (min-width: 1280px) { .nav-mini .shell { grid-template-columns: 56px minmax(0, 1fr) 360px; } }
 
 /* ------------------------------------------------------------------ sections */
 .sec { display: grid; grid-template-columns: minmax(0, 1fr); gap: 20px; max-width: 760px; }
@@ -1280,7 +1299,7 @@ body.has-fab .shell { padding-bottom: calc(var(--tabs-h) + env(safe-area-inset-b
 @container (min-width: 792px) {
   .bp-numbers .bp-body { display: grid; grid-template-columns: minmax(0, 3fr) minmax(0, 2fr); column-gap: 24px; row-gap: 12px; align-items: end; }
   .bp-numbers .bp-body > :not(.bp-stats):not(.bp-spark-wrap) { grid-column: 1 / -1; }
-  .bp-numbers .bp-body > .bp-stats:last-child { grid-column: 1 / -1; }
+  .bp-numbers .bp-body > .bp-stats:last-child, .bp-numbers .bp-body > .bp-stats.is-alone { grid-column: 1 / -1; }
 }
 .bp-stat { display: flex; flex-direction: column; gap: 2px; padding: 8px 12px; background: var(--sunk); border-radius: var(--r-sm); min-width: 0; }
 /* The Brief keeps to a few type styles: one bold weight for its greeting and numbers, 600 for

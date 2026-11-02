@@ -2375,7 +2375,8 @@
       sum = "Nothing needs you now." + (week ? " " + week + " this week." : "");
       if (!week) {
         const next = all.filter((i) => i.band === "later" || i.band === "top").sort((a, b) => txt(a.due || "9999").localeCompare(txt(b.due || "9999")))[0];
-        if (next && next.due) small = "Next: " + todoWhat(next) + ", " + dayWords(next.due) + ".";
+        // A day gone by is said as late, never "on Sat 24 Oct" the day after (2026-11-02).
+        if (next && next.due) small = "Next: " + todoWhat(next) + ", " + (dayDiff(next.due) !== null && dayDiff(next.due) < 0 ? "was due " + relDay(next.due) : dayWords(next.due)) + ".";
       }
     } else sum = "You're up to date.";
     if (!settingUp && !top && iv && dayDiff(iv.when) !== null && dayDiff(iv.when) <= 3) {
@@ -3204,7 +3205,10 @@
       return ["j:" + id];
     };
     const stepKeys = (l) => itemKeys(obj(l).item, obj(l).section, obj(l).text);
-    const upKeys = (u) => { const g = obj(u.go); return g.to === "interviews" ? ["iv:" + txt(g.item)] : g.to === "contacts" ? ["p:" + txt(g.item)] : g.to === "drafts" ? ["a:" + txt(g.item)] : ["u:" + txt(u.id)]; };
+    // A test or a closing day booked for an interview is a thing of its own: keyed as the
+    // interview, the test due today led Today as "Second interview" and took that interview out
+    // of Coming up (the release review, 2026-11-02).
+    const upKeys = (u) => { const g = obj(u.go); return g.to === "interviews" && (txt(u.kind) === "interview" || !txt(u.kind)) ? ["iv:" + txt(g.item)] : g.to === "contacts" ? ["p:" + txt(g.item)] : g.to === "drafts" ? ["a:" + txt(g.item)] : ["u:" + txt(u.id)]; };
     const need = todoBadge();
     // When something is due, in two words: "today", "2 days late", "Thursday".
     const dueWord = (day) => { const n = dayDiff(day); return n === null ? "" : n < 0 ? plural(-n, "day late", "days late") : n === 0 ? "today" : n === 1 ? "tomorrow" : fmtDay(day).split(/[ ,]/)[0]; };
@@ -3237,7 +3241,7 @@
     const KIND_RANK = {interview: 0, call: 1, test: 2, deadline: 3, event: 4};
     const todayUp = upcomingItems().filter((u) => txt(u.day) === todayIso() && !(txt(u.end) && isPast(u.end)))
       .sort((x, y) => (KIND_RANK[txt(x.kind)] ?? 5) - (KIND_RANK[txt(y.kind)] ?? 5) || upAt(x) - upAt(y));
-    const ivOf = (u) => txt(obj(u.go).to) === "interviews" ? interviewItems().find((x) => x.id === txt(obj(u.go).item)) : null;
+    const ivOf = (u) => txt(obj(u.go).to) === "interviews" && (txt(u.kind) === "interview" || !txt(u.kind)) ? interviewItems().find((x) => x.id === txt(obj(u.go).item)) : null;
     const whoOf = (id) => peopleItems().find((x) => x.id === txt(id)) || null;
     const lateSteps = dueSteps.filter((x) => (dayDiff(x.d.due) ?? 0) < 0)
       .sort((x, y) => (txt(x.d.kind) === "reply" ? 0 : 1) - (txt(y.d.kind) === "reply" ? 0 : 1) || txt(x.d.due).localeCompare(txt(y.d.due)));
@@ -3269,11 +3273,15 @@
       heroKeys = x.keys;
       const pid = x.keys.find((k) => k.startsWith("p:"));
       const who = pid ? whoOf(pid.slice(2)) : null;
-      facts = personFacts(who, x.d);
+      facts = personFacts(who, x.d).filter((f) => f !== "A draft is ready in Messages");
+      // A draft ready for them is where the work is: "Open Wren" led to their page, which has no
+      // draft on it (the walk-through, 2026-11-02).
+      const draft = who ? messageItems().find((m) => txt(m.contact) === who.id) : null;
       return h("div", {class: "bp-iv"},
         h("p", {class: "bp-iv-when"}, when),
         h("p", {class: "bp-iv-what"}, inlineMd(txt(x.d.title))),
-        btn(who ? "Open " + txt(who.first_name) : "Open in To do", () => (who ? openDetail("person", who.id) : go("todo", {focus: true, item: x.d.id})), {kind: "primary", small: true, key: "bp-first"}));
+        btn(draft ? "See the draft" : who ? "Open " + txt(who.first_name) : "Open in To do",
+          () => (draft ? go("messages", {focus: true, item: draft.id}) : who ? openDetail("person", who.id) : go("todo", {focus: true, item: x.d.id})), {kind: "primary", small: true, key: "bp-first"}));
     };
     const upNow = todayUp[0];
     if (upNow && ivOf(upNow)) {
@@ -3283,13 +3291,14 @@
       heroKeys = upKeys(upNow);
       const g = obj(upNow.go);
       const who = txt(g.to) === "contacts" ? whoOf(g.item) : null;
-      const open = who ? () => openDetail("person", who.id) : null;
+      const ofIv = txt(g.to) === "interviews" ? interviewItems().find((x) => x.id === txt(g.item)) : null;
+      const open = who ? () => openDetail("person", who.id) : ofIv ? () => openDetail("interview", ofIv.id) : null;
       facts = (txt(upNow.note) ? [txt(upNow.note)] : []).concat(who ? personFacts(who, dueItems().find((d) => txt(d.item) === who.id)) : []);
       hero = h("div", {class: "bp-iv"},
         h("p", {class: "bp-iv-when"}, h("span", {}, (txt(upNow.kind) === "test" ? "Due today" : "Today") + (timeOf(upNow.start) ? ", " + timeOf(upNow.start) : "")),
           obj(upNow.cal).ics ? btn("", () => calSheet([upNow]), {kind: "quiet icon-only", small: true, icon: "cal-add", key: "bp-cal-hero", aria: "Add to your calendar: " + txt(upNow.title)}) : null),
         h("p", {class: "bp-iv-what"}, h("bdi", {}, txt(upNow.title))),
-        open ? btn("Open " + txt(who.first_name), open, {kind: "primary", small: true, key: "bp-up:" + upNow.id}) : null);
+        open ? btn(who ? "Open " + txt(who.first_name) : "Open it", open, {kind: "primary", small: true, key: "bp-up:" + upNow.id}) : null);
     } else if (tomorrowIv) {
       hero = ivHero(tomorrowIv, ivWhen(tomorrowIv));
     } else if (weekIv && !obj(weekIv.prep).updated) {
@@ -3315,7 +3324,6 @@
           btn(person ? "Open " + txt(person.first_name) : "Open it", open, {kind: "primary", small: true, key: "bp-first"}));
       }
     }
-    const upHero = upNow && !ivOf(upNow) ? upNow : null;
 
     // Next three: what to do next, the brief's steps first, then To do's, each once.
     const steps = [];
@@ -3416,7 +3424,7 @@
     const tile = (k, one, many, share) => { const v = Number(c[k]) || 0; return h("div", {class: "bp-stat"}, h("span", {class: "bp-n"}, String(v)), h("span", {class: "bp-l"}, v === 1 ? one : many),
       share && sent && v ? h("span", {class: "bp-share"}, Math.round((v / sent) * 100) + "% of applied") : null); };
     put(grid, briefPanel("numbers", obj(d.recent).counts ? "Your last " + (Number(obj(d.recent).days) || 30) + " days" : "Your progress", [
-      h("div", {class: "bp-stats"}, tile("applied", "applied", "applied"), tile("replies", "contact replied", "contacts replied"), tile("interviews", "interview", "interviews", true), tile("offers", "offer", "offers", true)),
+      h("div", {class: "bp-stats" + (sparkBars(d.weeks) ? "" : " is-alone")}, tile("applied", "applied", "applied"), tile("replies", "contact replied", "contacts replied"), tile("interviews", "interview", "interviews", true), tile("offers", "offer", "offers", true)),
       sparkBars(d.weeks),
       since && arr(since.items).length ? h("details", {class: "bp-all"}, h("summary", {"data-k": "bp-since"}, "Since your last brief"), briefItems(since.items, "since", 6)) : null],
       null, {icon: "progress", w: 6}));
@@ -4141,7 +4149,7 @@
       screenHead("contacts", "Contacts", sum, phoneNow() ? null : gotMessage(where), where, h("div", {class: "head-tools"},
         runBtn("network", "Find people", () => askFindPeople(), {small: true, key: "head-find-people", icon: "k-search"}))));
     if (!items.length) {
-      put(wrap, empty("Nobody here yet.", "Someone inside who refers you beats applying cold. Find people looks at the employers you want."));
+      put(wrap, empty("Who could refer you?", "Someone inside who refers you beats applying cold. Find people looks at the employers you want."));
       return wrap;
     }
     // The switch has a row of its own: beside a search box it was squeezed on a phone.
@@ -4492,7 +4500,7 @@
       none ? null : btn("I have an interview", () => haveInterview(), {small: true, kind: "quiet", key: "iv-head-add"}));
     const wrap = h("section", {class: "sec", "aria-labelledby": "h-interviews" + (where ? "-" + where : "")}, screenHead("interviews", "Coming up", sum, small, where, tools));
     if (none) {
-      put(wrap, empty("Nothing booked.", "Interviews, calls, tests and closing days show here by day, each a tap from your calendar.",
+      put(wrap, empty("Your interviews and calls show here", "Interviews, calls, tests and closing days, by day, each a tap from your calendar.",
         btn("I have an interview", () => haveInterview(), {kind: "secondary", small: true, key: "iv-empty-chat"})));
       if (ended.length) put(wrap, h("div", {class: "stack"}, ended));
       return wrap;
@@ -8843,6 +8851,8 @@
   }
 
   const ICON = {
+    "side-hide": "M5 4h14a2 2 0 0 1 2 2v12a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2z M9 4v16 M16 9l-3 3 3 3",
+    "side-show": "M5 4h14a2 2 0 0 1 2 2v12a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2z M9 4v16 M13 9l3 3-3 3",
     todo: "M12 3a9 9 0 1 0 0 18a9 9 0 0 0 0-18zM8 12l3 3l5-6",
     brief: "M4 4h7v7H4zM13 4h7v4h-7zM13 10h7v10h-7zM4 13h7v7H4z",
     // A pencil, so Tweak never looks like Settings' sliders (the maintainer, 2026-10-26).
@@ -8885,17 +8895,29 @@
     else if (id === "interviews") n = Array.isArray(M().upcoming) ? upcomingItems().length : interviewItems().filter((i) => !isPast(i.when) && txt(i.status) !== "done").length;
     return n ? h("span", {class: "navcount"}, String(n), h("span", {class: "sr-only"}, NAV_COUNT_WORDS[id])) : null;
   }
+  // The menu folded to its icons, for more room on a laptop (the maintainer, 2026-11-02:
+  // "an option to minimise the side panel so it only shows the icons"). Kept on this device,
+  // each name still read out and shown on hover.
+  function navMini() { return pref("nav:mini", false) === true; }
+  function applyNavMini() { try { document.documentElement.classList.toggle("nav-mini", navMini()); } catch (e) { /* no document */ } }
   function renderNav() {
     const side = $("side");
     const badge = todoBadge();
+    const mini = navMini();
+    applyNavMini();
     // One coloured badge, on To do; the other counts are quiet (navCount).
     const badgeEl = () => (badge ? h("span", {class: "badge"}, String(badge), h("span", {class: "sr-only"}, " need you")) : null);
     if (side) {
-      patch(side, [h("ul", {class: "plain side-list"}, NAV.map((id) => h("li", {}, h("a", {href: "#" + id, "data-k": "side:" + id, "aria-current": navOwner(S.section) === id ? "page" : null,
+      patch(side, [h("div", {class: "side-top"},
+        h("button", {type: "button", class: "side-toggle", "data-k": "side-toggle", "aria-pressed": String(mini), title: mini ? "Show the names" : "Icons only",
+          onclick: () => { setPref("nav:mini", !mini); renderNav(); }}, icon(mini ? "side-show" : "side-hide"), h("span", {class: "side-label"}, mini ? "Show the names" : "Icons only"))),
+      h("ul", {class: "plain side-list"}, NAV.map((id) => h("li", {}, h("a", {href: "#" + id, "data-k": "side:" + id, "aria-current": navOwner(S.section) === id ? "page" : null,
+        title: mini ? labelOf(id) : null,
         onclick: (e) => { e.preventDefault(); go(id, {focus: true}); }}, icon(id), h("span", {class: "side-label"}, labelOf(id)), id === "todo" ? badgeEl() : navCount(id))))),
       // The other sections are full items too, under a rule: small grey words without icons
       // read as hidden (the maintainer, 2026-10-26).
       h("ul", {class: "plain side-list side-foot"}, FOOT_NAV.map((id) => h("li", {}, h("a", {href: "#" + id, "data-k": "side:" + id, "aria-current": navOwner(S.section) === id ? "page" : null,
+        title: mini ? labelOf(id) : null,
         onclick: (e) => { e.preventDefault(); go(id, {focus: true}); }}, icon(id), h("span", {class: "side-label"}, labelOf(id)), navCount(id)))))]);
     }
     const tabs = $("tabs");
@@ -8991,7 +9013,12 @@
     lastCheck = now();
     // Today's data needs no chat: it is read again, free, and said, so the tap is never a
     // button that did nothing (the maintainer, 2026-11-02: "it doesnt seem to do anything").
-    if (!refreshAsks(newest, newer)) { toast({text: "Up to date: nothing newer to show yet. It updates by itself when Claude does something new.", ids: []}); scheduleRender(); return; }
+    if (!refreshAsks(newest, newer)) {
+      const stale = !(newest && dayOf(iso(newest)) === todayIso());
+      toast({text: stale && limitHit() ? "Claude was not asked: your Claude allowance is used up for now. This page updates by itself once it is back."
+        : "Up to date: nothing newer to show yet. It updates by itself when Claude does something new.", ids: []});
+      scheduleRender(); return;
+    }
     requestWork([{id: "update~refresh-" + todayIso(), kind: "update", title: "Bringing your page up to date", args: {refresh: true}, stages: REFRESH_STAGES, redo: true}]);
     scheduleRender();
   }
