@@ -55,13 +55,14 @@ def test_the_table_has_every_row_the_release_promises():
     want = {"R1", "R2", "R3", "R4", "R5", "R6", "R7", "R8", "R9", "L1", "L2", "L4", "L5",
             "M1", "M2", "M3", "M4", "M5", "M6", "M7", "M8", "J1", "J2", "J3", "J4", "J5", "J6", "J7",
             "J8", "J9", "J10", "J11", "J12", "I1", "I2", "I3", "I4", "I5", "B1", "B2", "B3",
-            "B4", "B5", "P1", "P2", "P3", "P5"}
+            "B4", "B5", "B6", "B7", "P1", "P2", "P3", "P5"}
     assert set(tweak.BY_P) == want
     hows = {r["how"] for r in tweak.TWEAKS}
     assert hows == {"design", "style", "bullets", "fill", "skills", "letter_length",
                     "contact_person", "parts", "redraft", "search", "pack", "brief", "page"}
-    # The work-rights news is never offered as off, and Owed is never a part to hide.
-    assert "rights" not in tweak.BY_P["B3"]["values"]
+    # What the news watches is the person's own list, never a fixed set of kinds to toggle,
+    # and Owed is never a part to hide.
+    assert tweak.BY_P["B3"]["values"] == () and tweak.BY_P["B3"]["control"] == "watch"
     assert "owed" not in tweak.BY_P["B5"]["values"]
 
 
@@ -237,13 +238,17 @@ def test_the_pack_shows_less_and_is_built_again(t):
 # ------------------------------------------------------------------ the brief
 
 
-def test_the_brief_is_shorter_shows_less_news_and_never_drops_the_work_rights_watch(t):
+def test_the_brief_is_shorter_shows_less_news_and_watches_what_the_person_says(t):
     got = t.tweak("apply", "brief", "brief", [{"p": "B1", "v": "short"}, {"p": "B2", "v": "1"},
-                                               {"p": "B3", "v": {"targets": False}},
+                                               {"p": "B3", "v": ["UK settled status rule changes"]},
                                                {"p": "B5", "v": ["tip"]}])
     assert got["status"] == "done", got
     b = _person(t)["brief"]
-    assert (b["length"], b["news"], b["leave_out"], b["hide"]) == ("short", 1, ["targets"], ["tip"])
+    assert (b["length"], b["news"], b["hide"]) == ("short", 1, ["tip"])
+    assert [w["what"] for w in b["watch"]] == [
+        "Manchester supply chain and logistics analyst hiring or layoffs",
+        "UK freight and logistics sector outlook"]
+    assert b["watch_dropped"] == ["UK settled status rule changes"]
     lines = json.loads(_py(t, "import brief\n"
                               "b = {'weekday': 'Mon', 'counts': {'owed': 5, 'applications': 1, "
                               "'interviews': 0}, 'lead': 'x', 'owed': [{'text': str(i)} for i in "
@@ -252,8 +257,22 @@ def test_the_brief_is_shorter_shows_less_news_and_never_drops_the_work_rights_wa
                               "'lines': [], 'next_three': ['a'], 'url': '', 'tip': 'A tip.'}\n"
                               "print(json.dumps(brief.message_lines(b, 2)))"))
     assert "A tip." not in lines and "<NEWS>" in lines
-    rights = t.tweak("apply", "brief", "brief", [{"p": "B3", "v": {"rights": False}}])
-    assert rights["status"] == "refused"
+    # Something of their own, as often as they say; taken back exactly.
+    add = t.tweak("apply", "brief", "brief", [{"p": "B6", "v": "Manchester tram strike"},
+                                               {"p": "B7", "v": "day"}])
+    assert add["status"] == "done", add
+    assert _person(t)["brief"]["watch"][-1] == {"what": "Manchester tram strike", "every": "day",
+                                                "by": "you"}
+    assert t.tweak("undo", "brief", "brief", undo=add["key"])["status"] == "done"
+    assert all(w["what"] != "Manchester tram strike" for w in _person(t)["brief"]["watch"])
+    # How often alone, or a thing not on the list, says what to do instead.
+    alone = t.tweak("apply", "brief", "brief", [{"p": "B7", "v": "day"}])
+    assert alone["status"] == "refused" and "Write what to watch" in alone["summary"]
+    gone = t.tweak("apply", "brief", "brief", [{"p": "B3", "v": ["interest rates"]}])
+    assert gone["status"] == "refused"
+    # The 4.6 page's toggles are refused in words, never half applied.
+    old = t.tweak("apply", "brief", "brief", [{"p": "B3", "v": {"bank": False}}])
+    assert old["status"] == "refused"
 
 
 def test_the_briefs_days_and_time_change_the_schedule_and_name_the_call_to_make(t):

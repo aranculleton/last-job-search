@@ -107,6 +107,20 @@ def cmd_model(a) -> int:
     return 0
 
 
+def _published() -> dict:
+    """The page version last published and when, for meta/now: an open page whose own code is
+    older reloads itself to it (templates/app/app.js, `newerPage`). Without it nothing ever
+    told an open page a newer one was out (2026-11-02)."""
+    try:
+        import app_setup
+        import build_versions
+        rec = app_setup.page_record()
+        return {"page": int(build_versions.recorded().get("page") or 0),
+                "published_at": str(rec.get("published_at") or "")}
+    except Exception:  # noqa: BLE001  no page record yet
+        return {}
+
+
 def cmd_view(a) -> int:
     """The model as one document a section (`view/<section>`, in parts when it is too big for
     one: page_db.split) plus `meta/current` (stored as `meta/now`), so an open page updates live with no republish.
@@ -169,7 +183,8 @@ def cmd_view(a) -> int:
             w.add("delete", "addr", doc_id, if_version=old["version"])
     old = (db.get("meta") or {}).get("current") if db else None
     w.add("set", "meta", "current", {"rev": model["rev"], "made_at": model["made_at"],
-                                     "model": model["model"], "by": a.chat},
+                                     "model": model["model"], "by": a.chat,
+                                     **_published()},
           if_version=old["version"] if old else None)
     print(_dump({"rev": model["rev"], "batches": w.save("view")}), end="")
     return 0

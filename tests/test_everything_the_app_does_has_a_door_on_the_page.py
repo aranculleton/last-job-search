@@ -289,8 +289,11 @@ def test_a_break_holds_every_follow_up_until_its_day_and_resume_lifts_it(search)
 def test_one_tip_in_the_page_words_and_the_tour(search):
     h = search.model()["help"]
     tip = h["tip"]
-    # The page's own words: a button where the page has one (tips.PAGE_FIRST), never "Tell me".
-    assert tip["area"] == "search" and "bin" in tip["text"] and "Tell me" not in tip["text"]
+    # The page's own words: a button where the page has one (tips.PAGE_FIRST, PAGE_TIPS), never
+    # "Tell me". The example person is well into their search, so it is not a first-time line.
+    import tips
+    assert tip["area"] == "search" and "Tell me" not in tip["text"]
+    assert tip["text"] in set(tips.PAGE_TIPS.values()) and tip["text"] != tips.PAGE_FIRST["search"]
     assert [t["key"] for t in h["tour"]][:3] == ["brief", "todo", "jobs"]
     aid = search.act("tip.seen", tip["id"], rev=tip["rev"])
     assert search.apply()["ok"] == [aid], search.receipt(aid)

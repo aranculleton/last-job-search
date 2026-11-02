@@ -30,6 +30,10 @@ def profile(tmp_path, monkeypatch):
     d.mkdir()
     (d / "person.json").write_text("{}", encoding="utf-8")
     monkeypatch.setenv(person.ENV, str(d))
+    # A person with no records yet: a tracker or briefs already there mean the work was done
+    # before, and its first-time line is not said (tips.done_before).
+    (tmp_path / "no-records").mkdir()
+    monkeypatch.setenv("LJS_STATE", str(tmp_path / "no-records"))
     return d
 
 
@@ -261,3 +265,14 @@ def test_nothing_is_kept_in_the_example_person(monkeypatch, capsys):
     finally:
         if os.path.exists(kept):
             os.remove(kept)
+
+
+def test_someone_well_into_their_search_never_hears_it_is_their_first(profile, tmp_path):
+    # Fifty applications in, the page said "These are your first results" (2026-11-02): the
+    # tip's own record began after the search did. Their tracker says otherwise.
+    rows = "date,company,role,status,cv_file\n" + "".join(
+        "2026-10-%02d,Quayside %d,Analyst,applied,cv_%d.pdf\n" % (n, n, n) for n in range(1, 6))
+    (tmp_path / "no-records" / "job_search_tracker.csv").write_text(rows, encoding="utf-8")
+    assert tips.line("search", DAY, {}) != tips.FIRST["search"]
+    assert tips.line("apply", DAY, {}) != tips.FIRST["apply"]
+    assert tips.line("interview", DAY, {}) == tips.FIRST["interview"]   # none reached one

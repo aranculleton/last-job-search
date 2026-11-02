@@ -280,6 +280,7 @@ Before anything else, read MAINTAINING.md ("Developer rules", "Before pushing", 
 How we work:
 - Build what my notes below ask, all of it into [Unreleased], with tests, and merge to master once the fast checks are green: my copy takes master the same day. Nothing is released until I say "release it", except at once when a fix stops something working for people other than me; a release means merge and publish, under 15 minutes, as MAINTAINING.md "Releasing" says: only the fast checks block it.
 - Cheap: every step re-reads this chat, so take few steps. Never poll; GitHub wakes you. Read only the failing lines. The whole suite runs on GitHub for free, never by hand. Run tools/push_gate.sh before every push, batch your commits, and push once per round of fixes.
+- Works everywhere: every change reaches a new install and an existing one by itself (a profile upgrade or a build version where an existing person would otherwise miss it), through the day's sync and the brief alone, on a pinned page left open with no chat running, and in a cloud chat and a chat on a computer alike. Rehearse it (tools/rehearse_sync.py) before calling it done.
 - Nothing private and no real person's name in the app, ever; the gate passes before any push.
 - Talk to me in plain words: one recommendation, never a question a sensible default answers.
 - When the release is out, write docs/NEXT_BUILDER.md, tell me in one line, recommend a new chat for the next version, and in that same message give me this whole prompt again in one copyable block, ready to paste into the new chat.

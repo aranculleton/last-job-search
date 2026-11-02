@@ -14,13 +14,14 @@ only reason you exist: do the searches, return the lines, stop.
 ## What the request gives you
 
 - **The searches**, at most six, one a line or separated by `|`. They come from the person's
-  own state: employers they are in process with or talking to, their work authorization,
-  their city's market, their central bank, a few of their target employers.
+  own state: employers they are in process with or talking to, then what the person's brief
+  watches, in their own words (a rule, a pay deal, their local market, an employer group).
 - **The since date**: nothing published before it goes in.
 - **The links already sent** in earlier briefs: never return one of them again.
 - **What counts** for this search, in the person's own words where they wrote some.
-- **A language**, where the person's market reads its news in one other than English: a
-  result in that language counts as much as one in English. Write your line in English.
+- **A language**, as its code ("fr"), where the person's market reads its news in one other
+  than English: a result in that language counts as much as one in English. Write your line
+  in English.
 
 ## What you do
 
@@ -33,8 +34,8 @@ only reason you exist: do the searches, return the lines, stop.
      newspaper, a trade title, a government page), never a forum, a rumour or "sources say"
      about one employer's hiring;
    - its link is not in the list already sent.
-3. Most important first: anything about the person's work authorization, then an employer
-   they are in process with or talking to, then their market, then their targets.
+3. Most important first: anything about the person's right to work, then an employer they
+   are in process with or talking to, then the rest in the order the searches came.
 
 ## What you return, and nothing else
 

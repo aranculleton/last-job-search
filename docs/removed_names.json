@@ -203,6 +203,69 @@
    "date": "2026-10-29",
    "reason": "nothing raised or caught it",
    "changelog": "**Names your own checks might have used were retired**: `app_listen.setup_done`, `ats_boards.workday_paths`, `interview_pack.campaign_offer`, `reading.last_browser_read`, `reading.reads_today`, `page_db.where` (now `page_db.can_take`), `place.CLOUD_LINK_NOT`, `place.QUESTION`, `place.TRADE_OFF`, `place.TWO_CHATS`, `safe_name.short_hash` and `scrape_wide.PortalDown`. Nothing in the app used them any more: setup asks nobody where they will work, no separate chat is offered for an interview, and work goes to the chat that answers your page."
+  },
+  {
+   "module": "tools/brief.py",
+   "name": "BANK_DECISION",
+   "date": "2026-11-02",
+   "reason": "the brief decides no kind of news for anyone: what it watches is the person's own list (person.json brief.watch)",
+   "changelog": "**Names your own checks might have used were retired**: `brief.CENTRAL_BANK`, `brief.BANK_DECISION`, `brief.EURO`, `brief.COUNTRY`, `brief.LANGUAGE`, `brief.NEVER_OFF`, `brief.country_name`, `brief.rights_term` and `brief.target_names`. The brief no longer decides any kind of news for anyone, so its tables of central banks and countries went with the fixed searches."
+  },
+  {
+   "module": "tools/brief.py",
+   "name": "CENTRAL_BANK",
+   "date": "2026-11-02",
+   "reason": "the brief decides no kind of news for anyone: what it watches is the person's own list (person.json brief.watch)",
+   "changelog": "**Names your own checks might have used were retired**: `brief.CENTRAL_BANK`, `brief.BANK_DECISION`, `brief.EURO`, `brief.COUNTRY`, `brief.LANGUAGE`, `brief.NEVER_OFF`, `brief.country_name`, `brief.rights_term` and `brief.target_names`. The brief no longer decides any kind of news for anyone, so its tables of central banks and countries went with the fixed searches."
+  },
+  {
+   "module": "tools/brief.py",
+   "name": "COUNTRY",
+   "date": "2026-11-02",
+   "reason": "the brief decides no kind of news for anyone: what it watches is the person's own list (person.json brief.watch)",
+   "changelog": "**Names your own checks might have used were retired**: `brief.CENTRAL_BANK`, `brief.BANK_DECISION`, `brief.EURO`, `brief.COUNTRY`, `brief.LANGUAGE`, `brief.NEVER_OFF`, `brief.country_name`, `brief.rights_term` and `brief.target_names`. The brief no longer decides any kind of news for anyone, so its tables of central banks and countries went with the fixed searches."
+  },
+  {
+   "module": "tools/brief.py",
+   "name": "EURO",
+   "date": "2026-11-02",
+   "reason": "the brief decides no kind of news for anyone: what it watches is the person's own list (person.json brief.watch)",
+   "changelog": "**Names your own checks might have used were retired**: `brief.CENTRAL_BANK`, `brief.BANK_DECISION`, `brief.EURO`, `brief.COUNTRY`, `brief.LANGUAGE`, `brief.NEVER_OFF`, `brief.country_name`, `brief.rights_term` and `brief.target_names`. The brief no longer decides any kind of news for anyone, so its tables of central banks and countries went with the fixed searches."
+  },
+  {
+   "module": "tools/brief.py",
+   "name": "LANGUAGE",
+   "date": "2026-11-02",
+   "reason": "the brief decides no kind of news for anyone: what it watches is the person's own list (person.json brief.watch)",
+   "changelog": "**Names your own checks might have used were retired**: `brief.CENTRAL_BANK`, `brief.BANK_DECISION`, `brief.EURO`, `brief.COUNTRY`, `brief.LANGUAGE`, `brief.NEVER_OFF`, `brief.country_name`, `brief.rights_term` and `brief.target_names`. The brief no longer decides any kind of news for anyone, so its tables of central banks and countries went with the fixed searches."
+  },
+  {
+   "module": "tools/brief.py",
+   "name": "NEVER_OFF",
+   "date": "2026-11-02",
+   "reason": "the brief decides no kind of news for anyone: what it watches is the person's own list (person.json brief.watch)",
+   "changelog": "**Names your own checks might have used were retired**: `brief.CENTRAL_BANK`, `brief.BANK_DECISION`, `brief.EURO`, `brief.COUNTRY`, `brief.LANGUAGE`, `brief.NEVER_OFF`, `brief.country_name`, `brief.rights_term` and `brief.target_names`. The brief no longer decides any kind of news for anyone, so its tables of central banks and countries went with the fixed searches."
+  },
+  {
+   "module": "tools/brief.py",
+   "name": "country_name",
+   "date": "2026-11-02",
+   "reason": "the brief decides no kind of news for anyone: what it watches is the person's own list (person.json brief.watch)",
+   "changelog": "**Names your own checks might have used were retired**: `brief.CENTRAL_BANK`, `brief.BANK_DECISION`, `brief.EURO`, `brief.COUNTRY`, `brief.LANGUAGE`, `brief.NEVER_OFF`, `brief.country_name`, `brief.rights_term` and `brief.target_names`. The brief no longer decides any kind of news for anyone, so its tables of central banks and countries went with the fixed searches."
+  },
+  {
+   "module": "tools/brief.py",
+   "name": "rights_term",
+   "date": "2026-11-02",
+   "reason": "the brief decides no kind of news for anyone: what it watches is the person's own list (person.json brief.watch)",
+   "changelog": "**Names your own checks might have used were retired**: `brief.CENTRAL_BANK`, `brief.BANK_DECISION`, `brief.EURO`, `brief.COUNTRY`, `brief.LANGUAGE`, `brief.NEVER_OFF`, `brief.country_name`, `brief.rights_term` and `brief.target_names`. The brief no longer decides any kind of news for anyone, so its tables of central banks and countries went with the fixed searches."
+  },
+  {
+   "module": "tools/brief.py",
+   "name": "target_names",
+   "date": "2026-11-02",
+   "reason": "the brief decides no kind of news for anyone: what it watches is the person's own list (person.json brief.watch)",
+   "changelog": "**Names your own checks might have used were retired**: `brief.CENTRAL_BANK`, `brief.BANK_DECISION`, `brief.EURO`, `brief.COUNTRY`, `brief.LANGUAGE`, `brief.NEVER_OFF`, `brief.country_name`, `brief.rights_term` and `brief.target_names`. The brief no longer decides any kind of news for anyone, so its tables of central banks and countries went with the fixed searches."
   }
  ]
 }

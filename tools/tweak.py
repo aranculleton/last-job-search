@@ -169,13 +169,17 @@ TWEAKS = (
          "How many owed items it lists."),
     _row("B2", ("brief",), "News items", "choice", ("0", "1", "3", "5"), 1, "brief",
          "Fewer is quicker to read."),
-    _row("B3", ("brief",), "What counts", "toggles",
-         ("employers", "market", "bank", "targets"), 1, "brief",
-         "Which news gets searched. The news on your right to work is always looked for."),
+    _row("B3", ("brief",), "Stop watching", "watch", (), 1, "brief",
+         "Tap any the brief should stop searching for. Claude will not add it back."),
     _row("B4", ("brief",), "Days and time", "schedule", (), 1, "brief",
          "At most once a day."),
     _row("B5", ("brief",), "Parts shown", "ticks", ("since", "next_three", "tip"), 1, "brief",
          "What is owed is always shown."),
+    _row("B6", ("brief",), "Also watch", "text", (), 1, "brief",
+         "Something that moves your search, in your own words: a pay deal, a rule change, an "
+         "employer. Searched in each brief, as often as you choose."),
+    _row("B7", ("brief",), "How often", "choice", ("day", "week", "month"), 1, "brief",
+         "How often what you add is searched: as often as it really changes."),
     _row("P1", ("page",), "Theme", "choice", ("system", "light", "dark"), 0, "page", ""),
     _row("P2", ("page",), "Text size", "choice", ("small", "standard", "large"), 0, "page", ""),
     _row("P3", ("page",), "Density", "choice", ("comfortable", "compact"), 0, "page", ""),
@@ -374,6 +378,16 @@ def _invalid(row: dict, v) -> str:
             return "" if isinstance(val, bool) else "remote is on or off"
         return "" if what in ("add", "remove") and isinstance(val, str) and 1 < len(val) <= 80 \
             else "add or remove one at a time"
+    if control == "watch":
+        try:
+            import brief
+            have = {w["what"].lower() for w in brief.watch_list()}
+        except Exception:  # noqa: BLE001
+            have = set()
+        if not (isinstance(v, list) and v and all(isinstance(x, str) for x in v)):
+            return "say which to stop watching"
+        bad = [x for x in v if x.strip().lower() not in have]
+        return "" if not bad else f"{', '.join(bad)} is not on what your brief watches"
     if control == "toggles" and not values:
         return "" if isinstance(v, dict) and v and all(isinstance(x, bool) for x in v.values()) \
             else "say which to turn on or off"
@@ -1036,11 +1050,28 @@ def _writes(c: dict, where: dict, keep: bool) -> tuple[list, list, list]:
         return [("json", "brief.news", int(v))], [], [f"{v} news item{'s' if v != '1' else ''}"]
     if p == "B3":
         import brief
-        off = set(brief.setting("leave_out"))
-        for group, on in v.items():
-            (off.discard if on else off.add)(group)
-        return [("json", "brief.leave_out", sorted(off))], [], \
-            [f"{g} news {'on' if on else 'off'}" for g, on in v.items()]
+        stop = {x.strip().lower() for x in v}
+        now = brief.watch_list()
+        left = [w for w in now if w["what"].lower() not in stop]
+        gone = [w["what"] for w in now if w["what"].lower() in stop]
+        return [("json", "brief.watch", left),
+                ("json", "brief.watch_dropped", list(dict.fromkeys(brief.dropped() + gone)))], [], \
+            [f"no longer watching {g}" for g in gone]
+    if p == "B6":
+        import brief
+        what = brief._clean_what(v)
+        every = where.get("watch_every") or "week"
+        now = brief.watch_list()
+        if what.lower() in {w["what"].lower() for w in now}:
+            raise Refused(f"Your brief already watches {what}.")
+        if len(now) >= brief.WATCH_MAX:
+            raise Refused(f"Your brief watches {brief.WATCH_MAX} things already: stop one first.")
+        return [("json", "brief.watch", now + [{"what": what, "every": every, "by": "you"}]),
+                ("json", "brief.watch_dropped",
+                 [x for x in brief.dropped() if x.lower() != what.lower()])], [], \
+            [f"watching {what}, every {every}"]
+    if p == "B7":
+        return [], [], []
     if p == "B5":
         return [("json", "brief.hide", sorted(set(v)))], [], \
             [("hidden from the brief: " + ", ".join(v)) if v else "every part shown"]
@@ -1176,6 +1207,10 @@ def _apply_settings(work: dict, where: dict, p: dict) -> dict:
     every write kept so the tweak can be taken back exactly."""
     keep = bool((work.get("args") or {}).get("keep"))
     changes = [dict(c, row=BY_P[c["p"]]) for c in p["changes"]]
+    every = next((c["v"] for c in changes if c["p"] == "B7"), None)
+    if every and not any(c["p"] == "B6" for c in changes):
+        return {"status": "refused", "summary": "Write what to watch, then how often."}
+    where = dict(where, watch_every=every) if every else where
     writes, then, said = [], [], []
     for c in changes:
         if c["p"] == "I1":

@@ -589,9 +589,13 @@ _STAGE_LINE = re.compile(r"^\s*[-*]\s*\[( |x|X)\]\s*(.+?)\s*$")
 # wrote "(scheduled 2026-10-27 10:00, with ...)", and the stage read back with no date, so
 # no "no pack yet" and no thank-you reminder ever reached the due list (networking audit,
 # 2026-10-25).
-_STAGE_WHEN = re.compile(r"\((?P<sched>scheduled\s+)?(?P<date>\d{4}-\d{2}-\d{2})"
+# Written when it is booked (4.7), never guessed from the label's words: "due" for something
+# to finish by the day (an online test), its length ("45 min"), and its zone as the time
+# zone's own name ("America/Toronto") as well as the invite's word (EST).
+_STAGE_WHEN = re.compile(r"\((?:(?P<sched>scheduled\s+)|(?P<due>due\s+))?(?P<date>\d{4}-\d{2}-\d{2})"
                          r"(?:,?\s*(?:at\s+)?(?P<time>\d{1,2}(?:[:.]\d{2})?\s*"
-                         r"(?:[ap]\.?m\.?)?)(?:\s*(?-i:(?P<zone>[A-Z]{2,5}))\b)?(?=\s*[,)]))?"
+                         r"(?:[ap]\.?m\.?)?)(?:\s*(?-i:(?P<zone>[A-Z]{2,5}\b|[A-Z][A-Za-z_]+(?:/[A-Za-z0-9_+-]+)+)))?(?=\s*[,)]))?"
+                         r"(?:\s*,\s*(?P<minutes>\d{1,3})\s*min\w*)?"
                          r"(?:\s*,\s*with\s+(?P<with>[^)]*))?\)", re.I)
 
 
@@ -639,7 +643,8 @@ def _heading_stages(text: str, today: str) -> list[dict]:
             continue
         held = date < today
         out.append({"label": label, "step": stage_step(label), "done": held, "date": date,
-                    "scheduled": not held, "with": "", "time": "", "zone": ""})
+                    "scheduled": not held, "with": "", "time": "", "zone": "", "kind": "",
+                    "minutes": 0})
     return out
 
 
@@ -670,7 +675,10 @@ def outcome_stages(text: str, today: str = "") -> list[dict]:
         out.append({"label": label, "step": stage_step(label),
                     "done": hit.group(1).lower() == "x",
                     "date": when.group("date") if when else "",
-                    "scheduled": bool(when and when.group("sched")),
+                    "scheduled": bool(when and (when.group("sched") or when.group("due"))),
+                    "kind": ("test" if when.group("due") else "meeting") if when and
+                    (when.group("due") or when.group("minutes")) else "",
+                    "minutes": int(when.group("minutes")) if when and when.group("minutes") else 0,
                     "with": " ".join((when.group("with") or "").split()) if when else "",
                     "time": clock(when.group("time")) if when else "",
                     "zone": (when.group("zone") or "") if when else ""})

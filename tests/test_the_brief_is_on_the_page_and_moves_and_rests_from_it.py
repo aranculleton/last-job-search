@@ -85,7 +85,7 @@ def test_the_message_links_the_page_and_its_questions_wait_there(tmp_path):
     assert "notice period" not in message
     assert "the questions are on the page as To do cards" in claude
     assert "app.py view <D>/view --dump <D> --chat brief" in claude
-    assert "Never republish the page: this chat already answers it" in claude
+    assert "collections screen, meta and addr" in claude      # the page's own collections
     # With no page, the record on GitHub and the questions at the end, as before.
     bare = Search(tmp_path / "bare", page=False)
     _questions(bare.sync)
@@ -119,13 +119,29 @@ def test_the_ticks_on_the_page_are_applied_before_anything_is_counted(monkeypatc
     assert str(calls[-1][1]).endswith("brief.py")
 
 
-def test_the_prompt_says_the_page_comes_first_and_is_never_republished():
-    # The brief runs in the chat that answers the page (4.3), which already watches it.
+def test_the_prompt_says_the_page_comes_first_and_is_republished_when_left_behind():
+    # The brief runs in the chat that answers the page (4.3), so it is the one that publishes
+    # it again after an update changed the page's own code: told never to, it left an open
+    # page two versions behind, showing a brief four days old (2026-11-02).
     with open(os.path.join(ROOT, "automation", "prompts", "morning_brief.md"),
               encoding="utf-8") as fh:
         text = fh.read()
     assert "PAGE\nFIRST" in text or "PAGE FIRST" in text
-    assert "Never republish the page: this chat already answers it" in text
+    assert "Never republish" not in text and "republish it first" in text
+
+
+def test_a_page_left_behind_by_an_update_is_published_again_by_the_brief(monkeypatch):
+    b = {"sync": {}, "page": PAGE, "queries": [], "watch": [], "since": "2026-10-20",
+         "skip_links": [], "what_counts": "x", "write_here": [], "profile_line": "",
+         "pack": "", "paused": "", "written": False}
+    monkeypatch.setattr(brief, "page_behind", lambda: "")
+    assert not any("republish" in ln for ln in brief.claude_lines(dict(b)))
+    monkeypatch.setattr(brief, "page_behind", lambda: "an update changed the page itself")
+    lines = brief.claude_lines(dict(b))
+    first = next(i for i, ln in enumerate(lines) if "republish it now" in ln)
+    data = next(i for i, ln in enumerate(lines) if "the page, after landing" in ln)
+    assert first < data                               # the new code first, then today's data
+    assert "app.py page --out" in lines[first] and PAGE in lines[first]
 
 
 # ------------------------------------------------------------------ moving the brief

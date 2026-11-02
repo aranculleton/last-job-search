@@ -12,6 +12,7 @@ Every person and employer here is invented (tests/app_state.py).
 from __future__ import annotations
 
 import csv
+import datetime as dt
 import os
 import re
 import sys
@@ -362,3 +363,20 @@ def test_every_item_on_the_sample_page_matches_what_the_engine_makes():
     for u in sample["upcoming"]:
         assert re.fullmatch(r"\d{4}-\d{2}-\d{2}", u["day"])
         assert u["cal"]["ics"].startswith("BEGIN:VEVENT\r\n")
+
+
+# When a reminder comes is the person's (Settings, Calendar reminders), with 4.6's hour as the
+# default: a fixed hour was decided for everyone (docs/NEXT_BUILDER.md, 4.6 item 3).
+@pytest.mark.parametrize("chosen, want", [(None, "TRIGGER:-PT1H"), ("15", "TRIGGER:-PT15M"),
+                                          ("1440", "TRIGGER:-P1D"), ("off", None),
+                                          ("90", "TRIGGER:-PT1H")])
+def test_a_calendar_reminder_comes_when_the_person_chose(monkeypatch, chosen, want):
+    import upcoming
+    monkeypatch.setattr(upcoming.person, "get", lambda k, d=None: chosen if k == "calendar_reminder" and chosen else d)
+    item = {"id": "up-x", "title": "Call", "all_day": False, "start": "2026-10-28T18:00:00Z",
+            "end": "2026-10-28T18:30:00Z", "note": None, "place": None, "day": "2026-10-28"}
+    ev = upcoming.vevent(item, "", dt.date(2026, 10, 20))
+    if want:
+        assert want + "\r\n" in ev and ev.count("BEGIN:VALARM") == 1
+    else:
+        assert "VALARM" not in ev and ev.endswith("END:VEVENT\r\n")
