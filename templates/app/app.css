@@ -380,6 +380,7 @@ details.send { border-top: 1px solid var(--line); }
 .stack.jobs, ul.people, .stack.list-panel { gap: 8px; background: transparent; border: 0; box-shadow: none; }
 .stack.jobs > .card.job, ul.people > li.person, .stack.list-panel > .card { border: 1px solid var(--line); border-radius: var(--r); box-shadow: none; background: var(--surface); padding: 16px; }
 .stack.list-panel > .card.is-marked, .stack.list-panel > .card.quiet-card { background: var(--sunk); }
+.after-list { margin-top: 8px; }
 .stack.jobs > .card.job.st-dismissed, .stack.jobs > .card.job.st-applied { background: var(--sunk); }
 @media (hover: hover) { .stack.jobs > .card.job:hover, ul.people > li.person:hover { background: var(--bg); } }
 .stack.jobs .card-actions .btn:not(.primary):not(.icon-only):not(.link), .people .card-actions .btn:not(.primary):not(.icon-only):not(.link), .list-panel .card-actions .btn:not(.primary):not(.icon-only):not(.link) { background: var(--sunk); border-color: transparent; }
@@ -436,7 +437,9 @@ p.count.tone-bad { color: var(--st-failed); }
 .wc-steps li.step-now { color: var(--ink); font-weight: 600; }
 .wc-steps li.step-now::before { border-color: var(--mark); border-top-color: transparent; animation: turn 1s linear infinite; }
 .wc-log { display: grid; gap: 4px; font-size: var(--t-sm); padding-bottom: 8px; }
-.spin { width: 16px; height: 16px; border-radius: 50%; border: 2.5px solid var(--accent-soft); border-top-color: var(--mark); animation: turn 0.9s linear infinite; flex: none; }
+/* A box of its own wherever it sits: inside a line of text a span ignores its size, and the
+   spinner drew as a thin bar before "Claude is on it" (2026-11-02). */
+.spin { display: inline-block; vertical-align: -3px; width: 16px; height: 16px; border-radius: 50%; border: 2.5px solid var(--accent-soft); border-top-color: var(--mark); animation: turn 0.9s linear infinite; flex: none; }
 .btn .spin { width: 13px; height: 13px; border-width: 2px; }
 .dot { width: 12px; height: 12px; border-radius: 50%; flex: none; background: var(--line-strong); }
 .dot.tone-ok { background: var(--st-done); }
@@ -598,6 +601,9 @@ textarea { width: 100%; resize: vertical; line-height: 1.45; }
 .alert.tone-held .alert-text::before { background: var(--st-held); }
 
 .alert .cost { color: var(--muted); }
+/* A note's one fix sits on the note's own line when there is room, not in a row of its own
+   above the card's actions (a closed posting's card had two rows of buttons, 2026-11-02). */
+.alert .alert-body { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 12px; }
 /* A suggestion reads like a question on a card: a soft box, never a line down its side. */
 .suggest { background: var(--sunk); color: var(--ink); padding: 12px; gap: 8px; border: 0; border-radius: var(--r-sm); }
 .suggest .hint, .suggest .cost { color: var(--muted); }
@@ -1520,6 +1526,9 @@ ul.bp-news { max-width: 80ch; }
 .bp-when { color: var(--muted); font-size: var(--t-sm); }
 .bp-state .bp-when { display: block; font-weight: 400; }
 .up-prep { display: block; font-size: var(--t-sm); color: var(--muted); }
+/* A link that starts the line lines up with the lines above it: a link's own 4px of padding
+   pushed "Prep ready" in from its card's other lines (2026-11-02). */
+.up-prep > .btn.link:first-child { padding-left: 0; }
 .up-plain { color: var(--ink); }
 /* On a phone the Brief reads in the order a day is acted on: the one thing, the steps, then
    what is booked, who, the jobs, the numbers and the news. */

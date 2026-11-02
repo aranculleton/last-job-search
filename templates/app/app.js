@@ -3876,7 +3876,9 @@
       sort: (a, b) => ((readyLive(a) ? 0 : 1) - (readyLive(b) ? 0 : 1)) || (first(a) - first(b))}));
     // Your resume for when nobody named a role: after the applications, which are what Drafts
     // is for, never between the page's first lines and them.
-    put(box, generalResumeCard());
+    // Its own card, 8px below the list like every card, not touching the last one (2026-11-02).
+    const cvCard = generalResumeCard();
+    if (cvCard) put(box, h("div", {class: "after-list"}, cvCard));
     if (gone.length) put(box, h("p", {class: "muted small"}, nWord(gone.length, "application", "applications") + " already sent: in ",
       h("a", {href: "#jobs", class: "navlink", "data-k": "drafts-to-applied", onclick: (e) => { e.preventDefault(); setPref("jobs:tab", "applied"); go("jobs", {focus: true}); }}, "Applied"), "."));
     const n = S.sel.ready.size;
@@ -5489,7 +5491,8 @@
       h("div", {class: "sendbox"},
         h("button", {type: "button", class: "btn small copy bubble-copy" + (copied ? "" : " primary"), "data-k": "copy:" + tid, "data-primary": copied ? null : "1", "aria-label": copied ? null : "Copy note to " + txt(m.first_name),
           onclick: () => { S.copied.add(m.id); copyText(txt(m.text), "note to " + txt(m.first_name), "copy:" + tid, tid); }}, icon("copy"), copied ? (fresh ? "Copied" : "Copy again") : "Copy"),
-        h("p", {class: "sendtext", id: tid}, txt(m.text))),
+        // The same size as every other message to send (first notes were smaller, 2026-11-02).
+        h("p", {class: "sendtext big", id: tid}, txt(m.text))),
       h("div", {class: "card-actions"},
         btn("I sent it", () => act([{item: m.id, action: "msg.sent", value: msgSentValue(m, m.text), rev: m.rev}], "Marked as sent: " + txt(m.first_name)),
           {kind: copied ? "primary" : "secondary", small: true, key: "sent:" + m.id, aria: "I sent the note to " + txt(m.first_name)}),
@@ -8542,7 +8545,7 @@
     tips: {label: "Tips now and then"},
     linkedin_plan: {label: "Your LinkedIn plan"},
     profile_reads: {label: "Reading their profiles", hint: "Claude reads them in the Claude app on your computer. Or paste each one yourself.", choices: {browser: ["Claude reads them"], paste: ["I paste them"]}},
-    prep_days: {label: "Your next interview on the Brief", hint: "From when it leads your Brief, with its prep. Earlier gives more time to prepare."},
+    prep_days: {label: "Your next interview on the Brief", hint: "From when it can lead your Brief: at once while it has no prep, otherwise when nothing more pressing is due. Earlier gives more time to prepare."},
     calendar_reminder: {label: "Calendar reminders", hint: "When an interview or call you add to your calendar reminds you. A day with no time reminds you the afternoon before."},
   };
   const SYNTH = [{key: "suggestions", label: "Suggestions", kind: "choice", value: "on", choices: [["on", "On"], ["urgent", "Only urgent"], ["off", "Off"]]}];

@@ -46,6 +46,9 @@ make sense to somebody whose repo just received it.
 - **Your progress fits its panel at any width**: two by two on a phone, four across
   otherwise, and with the weekly bars beside the numbers when it has a whole row, instead of
   empty space to the right or squeezed numbers.
+- **Every screen tidied**: the spinner beside "Claude is on it" was a thin line, a closed
+  posting's card had two rows of buttons, the resume card touched the card above it, first
+  notes were in smaller text than follow-ups, and "Prep ready" sat out of line.
 - **Refresh always says what it did.** With today's data already on the page it checks again
   for free and now says "Up to date" instead of changing nothing you can see.
 - **The moving line under the header glides** while an update runs, instead of stuttering on
