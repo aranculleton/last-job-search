@@ -214,3 +214,22 @@ def test_an_open_page_reloads_itself_to_a_newer_version_once(run, tmp_path, vp):
     got = _go(run, tmp_path, [{"hash": "brief", "eval": "sessionStorage.getItem('ljs:reloaded-to')"}],
               vp, model=same, seed=seed, clock=T)
     assert got["after"][0]["eval"] is None
+
+
+# Refresh wakes Claude only for data from before today, and says so with the cost gauge every
+# ask carries; data a chat wrote this morning is looked at again for free (2026-11-02: a
+# Refresh on the day's own data spent the person's allowance on nothing).
+@pytest.mark.parametrize("made, asks", [("2026-10-25T07:00:00Z", 0), ("2026-10-24T07:00:00Z", 1)])
+def test_refresh_asks_claude_only_when_the_data_is_older_than_today(run, tmp_path, vp, made, asks):
+    model = copy.deepcopy(_sample())
+    model["made_at"] = made
+    count = ("[...LJS.state().localWork.keys(), ...LJS.state().work.keys()]"
+             ".filter((k) => String(k).indexOf('update~refresh') >= 0).length")
+    got = _go(run, tmp_path, [
+        {"hash": "brief", "eval": "(() => { document.querySelector('[data-k=\"conn\"]').click(); return 1; })()",
+         "until": "!!document.querySelector('[data-k=\"refresh\"]')"},
+        {"eval": "!!document.getElementById('refresh-cost')"},
+        {"eval": "(() => { document.querySelector('[data-k=\"refresh\"]').click(); return 1; })()"},
+        {"eval": count}], vp, model=model, clock="2026-10-25T15:00:00Z")
+    assert got["after"][1]["eval"] is bool(asks)          # the gauge only where Claude is asked
+    assert got["after"][3]["eval"] == asks

@@ -26,6 +26,8 @@ make sense to somebody whose repo just received it.
   hearing about new data without saying so: it kept saying "Connected" over a brief days old,
   and Refresh did not reload it. Now it checks for anything new whenever you come back to it
   and every few minutes while it is open, and Refresh shows what is already saved at once.
+  Refresh only uses your Claude allowance when your data is from before today, and then shows
+  it with the same small gauge every other ask has.
 - **A new version reaches your page by itself.** When an update changed the page, only a chat
   you opened yourself published it again: the morning brief was told never to, so a page could
   stay several versions behind. The brief now publishes it again first, and an open page

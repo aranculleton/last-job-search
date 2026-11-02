@@ -8840,10 +8840,19 @@
       if (behind || force || S.flags.dbError) resubscribe();
     } catch (e) { onDbError(e); resubscribe(); }
   }
+  // Whether Refresh needs Claude: only for data from before today. Today's came from a chat
+  // that had already taken the day's update, so looking again at what is saved is free, and
+  // waking a chat for it spent the person's allowance on nothing (2026-11-02). Never past the
+  // plan's limit: that would only queue work that waits.
+  function refreshAsks(newest, newer) {
+    if (newer || (newest && now() - newest < REFRESH_FRESH_MS) || limitHit()) return false;
+    return !(newest && dayOf(iso(newest)) === todayIso());
+  }
   function refreshPage(newest, newer) {
     if (newer || (newest && now() - newest < REFRESH_FRESH_MS)) { try { location.reload(); } catch (e) { /* the frame refuses */ } return; }
     // What the store already holds first, at once; a chat is asked only for what it does not.
     resubscribe();
+    if (!refreshAsks(newest, newer)) { lastCheck = 0; freshen(true); scheduleRender(); return; }
     requestWork([{id: "update~refresh-" + todayIso(), kind: "update", title: "Bringing your page up to date", args: {refresh: true}, stages: REFRESH_STAGES, redo: true}]);
     scheduleRender();
   }
@@ -8888,7 +8897,9 @@
             : queuedUp ? "An update is waiting for Claude. " : "Updating to the newest version. "),
           h("span", {class: "muted"}, "Keep using the page: it changes by itself when it is ready.")]) :
         [h("span", {}, words + (age ? " Search data from " + age + "." : "") + (newer ? " A newer version is ready." : "")), " ",
-          h("button", {type: "button", class: "btn link", "data-k": "refresh", onclick: () => refreshPage(newest, newer)}, "Refresh")]);
+          h("button", {type: "button", class: "btn link", "data-k": "refresh", onclick: () => refreshPage(newest, newer)}, "Refresh"),
+          // What it costs, as every ask says it: the gauge, its words on hover and read aloud.
+          refreshAsks(newest, newer) ? [" ", costEl({state: 1}, "", "refresh-cost")] : null]);
     }
     const tools = $("toptools");
     if (tools) {
