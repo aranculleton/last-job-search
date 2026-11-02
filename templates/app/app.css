@@ -1453,7 +1453,7 @@ ul.bp-news { gap: 12px; }
    "slightly prettier appearance of the bullets in today"). */
 .bp-lead-list.bp-facts { gap: 4px; }
 .bp-facts li { font-size: var(--t-sm); color: var(--muted); }
-.bp-facts li:first-child { font-size: 1rem; font-weight: 600; color: var(--ink); }
+
 .chip-list { display: flex; flex-wrap: wrap; gap: 8px; margin: 0; }
 .chip-list .chip { padding: 4px 12px; border-radius: 999px; background: var(--sunk); color: var(--ink); font-size: var(--t-sm); }
 /* A light finish (2026-10-30: "slightly more polished, don't go overboard"): cards lift a

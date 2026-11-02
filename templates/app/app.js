@@ -3436,7 +3436,9 @@
       const ivk = x.d ? null : x.keys.find((k) => k.startsWith("iv:"));
       const iv = ivk ? interviewItems().find((i) => i.id === ivk.slice(3)) : null;
       if (iv && txt(iv.when) && !isPast(iv.when) && node && node.appendChild) {
-        node.appendChild(h("span", {class: "bp-when"}, " \u00b7 " + fmtDay(dayOf(iv.when)) + (timeOf(iv.when) ? ", " + timeOf(iv.when) : "")));
+        // Inside the step's own words, as a due step's day is, never a column of its own.
+        const into = (node.querySelector && node.querySelector(".bp-text, a")) || node;
+        into.appendChild(h("span", {class: "bp-when"}, " \u00b7 " + fmtDay(dayOf(iv.when)) + (timeOf(iv.when) ? ", " + timeOf(iv.when) : "")));
       }
       return node;
     };
