@@ -280,11 +280,13 @@ def test_fitting_the_brief_takes_what_saves_most_and_keeps_today_useful(run, tmp
         if people[2] < start(people) or jobs[2] < start(jobs):
             assert q[2] == 2, lists                               # Today gave first
 
-# Under each person's next step its day lines up with the step, at the end of the line, never
-# at the start of a longer step above it (the maintainer, 2026-11-02: "this weird alignment").
-def test_a_persons_day_lines_up_under_their_step(run, tmp_path, vp):
-    got = _go(run, tmp_path, [{"hash": "brief", "eval": "[...document.querySelectorAll('#main .bp-people .bp-state')].filter((s) => s.querySelector('.bp-when')).map((s) => { "
-                                                       "const r = s.getBoundingClientRect(), w = s.querySelector('.bp-when'), range = document.createRange(); range.selectNodeContents(w); "
-                                                       "return Math.abs(range.getBoundingClientRect().right - r.right); })"}], vp, clock=T)
-    gaps = got["after"][0]["eval"]
-    assert gaps and all(g <= 1 for g in gaps), gaps
+# Each person's next step sits in one column: every step, and the day under it, starts at the
+# same edge, so steps of different lengths never jut out (the maintainer, 2026-11-02).
+def test_every_persons_step_and_day_start_at_one_edge(run, tmp_path, vp):
+    got = _go(run, tmp_path, [{"hash": "brief", "eval": "[...document.querySelectorAll('#main .bp-people .bp-state')].map((s) => { "
+                                                       "const w = s.querySelector('.bp-when'); const r = document.createRange(); r.selectNodeContents(s.firstChild); "
+                                                       "return [Math.round(r.getBoundingClientRect().left), w ? Math.round(w.getBoundingClientRect().left) : null]; })"}], vp, clock=T)
+    rows = got["after"][0]["eval"]
+    assert len(rows) >= 2, rows
+    lefts = {left for left, _day in rows} | {day for _left, day in rows if day is not None}
+    assert max(lefts) - min(lefts) <= 1, rows
