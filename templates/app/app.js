@@ -3027,8 +3027,8 @@
     return h("div", {class: "bp-week", role: "group", "aria-label": "The next two weeks", "data-k": "week"}, days.map((d, i) => {
       const xs = on.get(d);
       const wd = new Date(d + "T12:00:00Z").getUTCDay();
-      // Today's dots red and tomorrow's amber, the rest as they are: what is close stands out
-      // (the maintainer, 2026-11-02), and only two days ever carry a colour.
+      // Today's and tomorrow's dots in their own calm colours, the rest as they are: what is
+      // close stands out (the maintainer, 2026-11-02), and only two days ever carry a colour.
       return h("button", {type: "button", class: "bp-day" + (i === 0 ? " is-today" : i === 1 ? " is-tomorrow" : "") + (xs.length ? " has" : ""), "data-k": "week:" + d, "aria-label": said(d), title: said(d),
         // A day with something on it opens it; a free day adds something to it, as a calendar does.
         onclick: () => { if (xs.length) go("interviews", {focus: true, item: txt(xs[0].id)}); else askAddUpcoming(d); }},

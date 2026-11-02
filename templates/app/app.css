@@ -1429,10 +1429,13 @@ dialog.sheet .sheet-body { display: grid; gap: 16px; }
 .bp-day-dots { display: flex; gap: 2px; min-height: 6px; }
 .bp-day-dots i { width: 6px; height: 6px; border-radius: 50%; background: var(--pc); }
 .bp-day-dots i.due { background: transparent; box-shadow: inset 0 0 0 1.5px var(--pc); }
-.bp-day.is-today .bp-day-dots i { background: var(--st-failed); }
-.bp-day.is-today .bp-day-dots i.due { background: transparent; box-shadow: inset 0 0 0 1.5px var(--st-failed); }
-.bp-day.is-tomorrow .bp-day-dots i { background: var(--st-overdue); }
-.bp-day.is-tomorrow .bp-day-dots i.due { background: transparent; box-shadow: inset 0 0 0 1.5px var(--st-overdue); }
+/* Today and tomorrow stand out in calm colours, never the alarm ones: red read as a threat
+   (the maintainer, 2026-11-02: "promotes alarmism"). Pine for today, iris for tomorrow, the
+   panel's own foam for every other day. */
+.bp-day.is-today .bp-day-dots i { background: var(--st-done); }
+.bp-day.is-today .bp-day-dots i.due { background: transparent; box-shadow: inset 0 0 0 1.5px var(--st-done); }
+.bp-day.is-tomorrow .bp-day-dots i { background: var(--st-held); }
+.bp-day.is-tomorrow .bp-day-dots i.due { background: transparent; box-shadow: inset 0 0 0 1.5px var(--st-held); }
 /* On a phone, the coming week: fourteen days do not fit a thumb. */
 @media (max-width: 559px) { .bp-week { grid-template-columns: repeat(7, minmax(0, 1fr)); } .bp-week > .bp-day:nth-child(n+8) { display: none; } }
 

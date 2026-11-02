@@ -20,6 +20,11 @@ make sense to somebody whose repo just received it.
 
 ## [Unreleased]
 
+### Changed
+
+- **Today and tomorrow on the Brief's two-week strip are in calm colours**, not red and amber,
+  which read as a warning.
+
 ## [4.7.0] - 2026-11-02
 
 ### Fixed

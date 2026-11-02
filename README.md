@@ -9,9 +9,9 @@ private page. It never sends anything for you.
 
 <p align="center">
   <img src="docs/images/page-brief.webp" width="720"
-       alt="The Brief in dark mode: today's interview, the next three things to do, who is waiting on you, the best new jobs, news and your numbers">
+       alt="The Brief: today's interview, the next three things to do, who is waiting on you, the best new jobs, news and your numbers">
   <br>
-  <sub><b>The Brief</b>: your day at a glance, here in dark mode (light or dark, your choice)</sub>
+  <sub><b>The Brief</b>: your day at a glance</sub>
 </p>
 
 ## What you need
@@ -40,9 +40,11 @@ No resume yet? Say "build one with me". [START_HERE.md](START_HERE.md) has each 
 
 <p align="center">
   <img src="docs/images/page-contacts.webp" width="62%"
-       alt="Contacts on a computer: who needs you first, with Claude's work alongside">
+       alt="Contacts on a computer in dark mode: who needs you first, with Claude's work alongside">
   &nbsp;
   <img src="docs/images/page-coming-up-phone.webp" width="18%" alt="Coming up on a phone">
+  <br>
+  <sub>Contacts in dark mode (light or dark, your choice), and Coming up on a phone</sub>
 </p>
 
 ## What you do
