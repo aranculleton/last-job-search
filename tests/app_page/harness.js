@@ -2187,6 +2187,12 @@ S.motion = async (a) => {
   const r = {};
   for (const m of ["reduce", "no-preference"]) {
     const o = await open({html: a.html, reducedMotion: m, hash: "work", seed: {"work/search~1": runningDoc({asked_at: new Date().toISOString(), stage_at: new Date().toISOString()})}});
+    // Wait for what is checked, with a time limit, never the first frame: under load Firefox
+    // drew the card before the reduced-motion rule applied (4.6's Everywhere run).
+    await o.page.waitForFunction((mode) => {
+      const s = document.querySelector(".work-card .spin");
+      return !!s && (mode !== "reduce" || getComputedStyle(s).animationName === "none");
+    }, m, {timeout: 5000}).catch(() => null);
     r[m] = await o.page.evaluate(() => { const s = document.querySelector(".work-card .spin"); const f = document.querySelector(".work-card .fill"); return {spin: s ? getComputedStyle(s).animationName : null, fill: f ? getComputedStyle(f).transitionDuration : null}; });
     // A section just drawn, the pointer away: no control or card fades (Safari faded each one
     // in from the text colour, 2026-10-31); one under the pointer still does.

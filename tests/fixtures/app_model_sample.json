@@ -11,7 +11,8 @@
     ],
     "url": "https://claude.ai/code/artifact/00000000-0000-4000-8000-000000000000",
     "privacy": "Only you can open this page unless you share it. It holds first names, employers, your drafts and your setup answers, so keep it unshared.",
-    "repo": "https://github.com/morgan-example/job-search"
+    "repo": "https://github.com/morgan-example/job-search",
+    "page": 14
   },
   "person": {
     "first_name": "Morgan",
@@ -1768,6 +1769,54 @@
       ],
       "id": "setting-suggestions",
       "rev": "st5"
+    },
+    {
+      "id": "setting-prep_days",
+      "key": "prep_days",
+      "label": "Your next interview on the Brief",
+      "kind": "choice",
+      "value": "7",
+      "choices": [
+        [
+          "2",
+          "From 2 days before"
+        ],
+        [
+          "7",
+          "From a week before"
+        ],
+        [
+          "14",
+          "From two weeks before"
+        ]
+      ],
+      "rev": "s-prep_days"
+    },
+    {
+      "id": "setting-calendar_reminder",
+      "key": "calendar_reminder",
+      "label": "Calendar reminders",
+      "kind": "choice",
+      "value": "60",
+      "choices": [
+        [
+          "15",
+          "15 minutes before"
+        ],
+        [
+          "60",
+          "An hour before"
+        ],
+        [
+          "1440",
+          "The day before"
+        ],
+        [
+          "off",
+          "None"
+        ]
+      ],
+      "rev": "s-calendar_reminder"
     }
   ],
   "brief": {
@@ -1872,6 +1921,21 @@
             "section": "people"
           }
         ]
+      }
+    ],
+    "watch": [
+      {
+        "what": "Manchester supply chain hiring or layoffs",
+        "every": "day"
+      },
+      {
+        "what": "UK settled status rule changes",
+        "every": "week"
+      },
+      {
+        "what": "Logistics sector outlook",
+        "every": "month",
+        "by": "you"
       }
     ]
   },
