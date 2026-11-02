@@ -185,7 +185,7 @@ def test_a_stage_the_record_marks_done_reaches_the_tracker_row_once(tmp_path):
     env = dict(os.environ, LJS_PROFILE=os.path.join(os.path.dirname(state), "profile"), LJS_STATE=state)
     folder = subprocess.run([sys.executable, "-c", "import docpaths; print(docpaths.app_folder("
                              "'Kestrel Mutual', 'Claims Analyst'))"], cwd=os.path.join(ROOT, "tools"),
-                            env=env, capture_output=True, text=True).stdout.strip()
+                            env=env, capture_output=True, text=True, encoding="utf-8").stdout.strip()
     os.makedirs(folder, exist_ok=True)
     with open(os.path.join(folder, "outcome.md"), "w", encoding="utf-8") as fh:
         fh.write("# Outcome: Kestrel Mutual - Claims Analyst\n\n**Status:** in_progress\n\n"
