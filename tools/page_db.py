@@ -918,6 +918,155 @@ def busy_beat(db: dict, chat_id: str, chat_kind: str, now: dt.datetime, out_dir:
     return w.save("busy")
 
 
+# ------------------------------------------------------------------ finishing and asking, by code
+
+# A chat wrote these by hand, a write at a time, and looked up their shape each time (a
+# pasted reply took about fifteen steps before the person saw the draft, 2026-11-03). Now
+# one command makes each batch: `app.py done` and `reply.py finish` the finished item,
+# `app.py ask` a new one, the same documents the page itself writes.
+SUMMARY_WORDS = 15
+_SENTENCE_END = re.compile(r"[.!?]+(?:\s|$)")
+
+
+def summary_problem(summary: str) -> str:
+    """Why a finished item's summary will not do, or "": one short sentence of what is
+    ready, SUMMARY_WORDS words at most. The page shows its first sentence only; a paragraph
+    was too wordy to read (2026-10-30)."""
+    s = " ".join(str(summary or "").split())
+    if not s:
+        return "say what is ready in one short sentence"
+    if len(s.split()) > SUMMARY_WORDS:
+        return (f"the summary has {len(s.split())} words: one short sentence of what is ready, "
+                f"{SUMMARY_WORDS} words at most (the detail goes in the work itself)")
+    if len([p for p in _SENTENCE_END.split(s) if p.strip()]) > 1:
+        return "the summary is one sentence: the detail goes in the work itself"
+    return ""
+
+
+def _drop_from_dump(dump_dir: str, collection: str, doc_id: str) -> None:
+    where = os.path.join(dump_dir, STORE.get(collection, collection))
+    for name in (safe_id(doc_id), safe_id(doc_id).replace("~", "@")):
+        try:
+            os.remove(os.path.join(where, name + ".json"))
+        except OSError:
+            pass
+
+
+def message_id(now: dt.datetime) -> str:
+    """A new message's id, the way the page makes one: "m", the time, four random letters."""
+    import random
+    import string
+    return "m" + now.strftime("%Y%m%dT%H%M") + "".join(
+        random.choice(string.ascii_lowercase + string.digits) for _ in range(4))
+
+
+def finish(db: dict, work_id: str, now: dt.datetime, out_dir: str, summary: str = "",
+           status: str = "done", error: str = "", links=(), reply: str = "", thread: str = "",
+           chat_kind: str = "cloud", dump_dir: str = "") -> dict:
+    """The batch that finishes one work item (the app skill, step 5): the item `done` (or
+    `failed`, with `error` in plain words), its one-sentence summary and links, pinned to
+    the version read; each of its locks the dump holds, deleted and pinned; and with `reply`,
+    the chat's answer in the thread, `talk/<thread>/messages/<id>` (`thread` defaults to the
+    item's own, for work from the page's chat). {work, status, thread, message, locks,
+    batches}. Raises ValueError, in plain words, for a summary that will not do or a reply
+    with no thread; KeyError for an item not in the dump or already finished."""
+    import app_model
+    doc = (db.get("work") or {}).get(safe_id(work_id))
+    if doc is None:
+        raise KeyError(f"no work {work_id!r} in the dump; read work again")
+    item = dict(doc["data"])
+    if str(item.get("status") or "") in FINISHED:
+        raise KeyError(f"work {work_id!r} has already finished; write nothing more to it")
+    if status not in ("done", "failed"):
+        raise ValueError(f"a finished item is done or failed, not {status!r}")
+    error = " ".join(str(error or "").split())
+    if status == "failed" and not error:
+        raise ValueError("say what went wrong, in plain words")
+    summary = " ".join(str(summary or "").split()) or (error if status == "failed" else "")
+    problem = summary_problem(summary) if status == "done" or summary != error else ""
+    if problem:
+        raise ValueError(problem)
+    args = item.get("args") if isinstance(item.get("args"), dict) else {}
+    thread = str(thread or "").strip() or (str(args.get("thread") or "").strip()
+                                           if reply else "")
+    if str(reply or "").strip() and not thread:
+        raise ValueError("which conversation is the answer for? Name its thread (--thread)")
+    at = app_model.stamp(now)
+    fields = {"status": status, "finished_at": at, "lease_until": None,
+              "result": {"summary": summary, "links": [dict(x) for x in links or ()]},
+              "error": error or None}
+    w = Writes(out_dir)
+    mid = ""
+    if str(reply or "").strip():
+        mid = message_id(now)
+        w.add("set", f"talk/{safe_id(thread)}/messages", mid,
+              {"from": chat_kind if chat_kind in ("cloud", "computer") else "cloud",
+               "text": str(reply).strip(), "at": at, "work": work_id})
+    w.add("update", "work", work_id, fields, if_version=doc["version"])
+    freed = []
+    for lid, lock in sorted((db.get("locks") or {}).items()):
+        if str((lock.get("data") or {}).get("work") or "") == work_id and not lock.get("old"):
+            w.add("delete", "locks", lid, if_version=lock["version"])
+            freed.append(lid)
+    if dump_dir:
+        _keep_dump(dump_dir, "work", work_id, dict(item, **fields), int(doc["version"] or 1) + 1)
+        for lid in freed:
+            _drop_from_dump(dump_dir, "locks", lid)
+    return {"work": work_id, "status": status, "thread": thread or None, "message": mid or None,
+            "locks": freed, "batches": w.save("finish")}
+
+
+# Kinds the page runs one at a time (templates/app/app.js KIND_CAP_ONE).
+ONE_AT_A_TIME = ("search", "update", "network")
+
+
+def work_id(kind: str, now: dt.datetime) -> str:
+    """A new item's id, the way the page makes one: its kind, the time, four random letters."""
+    import random
+    import string
+    return f"{kind}~{now.strftime('%Y%m%dT%H%M')}-" + "".join(
+        random.choice(string.ascii_lowercase + string.digits) for _ in range(4))
+
+
+def ask(db: dict, kind: str, title: str, now: dt.datetime, out_dir: str, args: dict | None = None,
+        to: str = "", chat_id: str = "", item_id: str = "", dump_dir: str = "") -> dict:
+    """A new work item, queued from a chat as the page's own Ask would queue it
+    (templates/app/app.js createWork): the same fields, the kind's own stages, and, for a
+    kind the page runs one at a time, refused while one is going. {work, batches}. Raises
+    ValueError, in plain words, for a kind there is none of, no title, or one already going."""
+    import app_model
+    if kind not in WORK_KINDS:
+        raise ValueError(f"there is no kind of work {kind!r}; one of "
+                         f"{', '.join(sorted(WORK_KINDS))}")
+    title = " ".join(str(title or "").split())
+    if not title:
+        raise ValueError("say what it is, in a few plain words (--title)")
+    if args is not None and not isinstance(args, dict):
+        raise ValueError("args is a JSON object, like {\"contact\": \"<contact id>\"}")
+    if kind in ONE_AT_A_TIME:
+        for d in (db.get("work") or {}).values():
+            w = d["data"]
+            if w.get("kind") == kind and str(w.get("status") or "") in ("queued",) + ACTIVE:
+                raise ValueError(f"one at a time: \"{w.get('title') or kind}\" is still going")
+    wid = safe_id(item_id) if item_id else work_id(kind, now)
+    if wid in (db.get("work") or {}):
+        raise ValueError(f"work {wid!r} is already there")
+    to = to or ("cloud" if WORK_KINDS[kind]["to"] == "cloud" else "either")
+    if to not in ("cloud", "computer", "either") or (
+            to != "either" and to not in WORK_KINDS[kind]["can"]):
+        raise ValueError(f"a {kind} runs in " + " or ".join(WORK_KINDS[kind]["can"]))
+    fields = {"kind": kind, "title": title[:140], "to": to, "args": dict(args or {}),
+              "asked_at": app_model.stamp(now), "asked_from": {"tab": chat_id or "chat"},
+              "priority": 0, "status": "queued", "stages": progress(kind)["stages"], "stage": 0,
+              "stage_at": None, "steps": [], "claimed_by": None, "claimed_at": None,
+              "stop_asked": False, "attempt": 1}
+    w = Writes(out_dir)
+    w.add("set", "work", wid, fields)
+    if dump_dir:
+        _keep_dump(dump_dir, "work", wid, fields, 1)
+    return {"work": wid, "batches": w.save("ask")}
+
+
 # ------------------------------------------------------------------ keeping the store small
 
 KEEP_DAYS = 60      # what the page shows of the past: its newest 300 actions and 500 receipts
