@@ -54,8 +54,11 @@ make sense to somebody whose repo just received it.
   tokens at every step. Now a page update by that chat, the brief's included, hands over at
   its next quiet moment once a day has passed or its history has grown by 200,000 tokens, never
   while a job runs, and at most once a day.
-- **Saving checks your own tests in parallel**, about 41 seconds where it took nearly five
-  minutes, and the answer goes to you before any saving starts.
+- **Saving is one quick step in the background, after your answer.** Saving your work took a
+  chat about fourteen steps and, at times, held your answer for minutes; it is now one command
+  that runs once a turn, after the answer is out, and checks your own tests in parallel (about
+  41 seconds where it took nearly five minutes). The morning brief reaches you before its notes
+  are saved.
 - **News is at least three points while the last four weeks have them**, filled from as many
   earlier briefs as it takes, each split into what happened, how to use it and where it is
   from (lines from before 4.8 included), and as many as your screen has room for.
