@@ -846,6 +846,8 @@ KEEPS_NOTHING: dict[str, str] = {
     "tools/name_guard_allow.txt": "the name guard's list of invented names; keeps nothing",
     "tools/build_app.py": "development tooling",
     "tools/save_state.py": "stages the person's files for a commit; leaves nothing of its own",
+    "tools/land.py": "lands a chat's work on master (save, commit, merge, check, push); leaves "
+                     "nothing of its own",
     "tools/security_guards.py": "development tooling",
     "tools/lint_skills.py": "development tooling",
     "tools/ci_local.sh": "development tooling",
