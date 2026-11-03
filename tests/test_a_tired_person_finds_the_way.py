@@ -40,14 +40,13 @@ T = "2026-10-25T09:00:00Z"
 
 
 def test_draft_this_drafts_in_one_tap_with_no_chosen_and_the_postings_question_left_open(run, tmp_path, vp):
+    """One tap drafts, with no sheet at all (the maintainer, 2026-11-03: "when i press draft
+    this, it doesnt draft, it brings up this then i have to press draft again")."""
     got = _go(run, tmp_path, [
-        {"hash": "jobs", "click": "Draft this: Harbourline Bank, Pricing Analyst", "read": "dialog",
-         "eval": "(() => { const c = document.querySelector('dialog input[type=radio]:checked'); return c ? c.labels[0].textContent : null; })()"},
-        {"submit": True, "read": "dialog"},
+        {"hash": "jobs", "click": "Draft this: Harbourline Bank, Pricing Analyst",
+         "eval": "!!document.querySelector('dialog.sheet')"},
     ], vp, clock=T)
-    assert got["after"][0]["eval"] == "No, draft it", "the person pressed Draft this: drafting is already chosen"
-    assert "Are you happy with a 12 month fixed term? (if you like)" in got["after"][0]["text"]
-    assert "Answer these first" not in got["after"][1]["dialog"]
+    assert got["after"][0]["eval"] is False, "no sheet between the tap and the draft"
     w = [x for x in got["work"] if x and x.get("kind") == "draft"]
     assert w, "the draft is asked for, the posting's own question left unanswered"
     assert w[-1]["args"]["already_applied"] == "no" and w[-1]["args"]["job"] == "r12-1"
