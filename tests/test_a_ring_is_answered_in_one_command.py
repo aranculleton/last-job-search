@@ -238,7 +238,7 @@ def _updated(ring, d, current):
         fh.write("sync_app: updated to the newest version.\nClaude: the update changed the "
                  "person's page itself. Republish it:\n1. python3 tools/app.py page --out x\n")
     head = subprocess.run(["git", "-C", ROOT, "rev-parse", "HEAD"], capture_output=True,
-                          text=True).stdout.strip()
+                          text=True, encoding="utf-8").stdout.strip()
     return ring.run("wake", d, "--chat", CHAT, "--now", NOW,
                     **{app.WAKE_UPDATED: head, app.WAKE_SAID: said})
 

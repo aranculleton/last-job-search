@@ -214,7 +214,7 @@ def test_a_message_someone_else_wrote_pasted_in_is_not_the_persons_reaction(prof
     for text in ("Hi Morgan, thanks!\n\nBest,\nJuno\n\nyour last draft was too formal",
                  "Juno replied and I don't like your draft\nmake it shorter",
                  "I replied to her already\nstop suggesting follow-ups to her",
-                 "move it to 10:30\ntoo formal though", "Hi Claude, that's too long",
+                 "move it to 10:30\ntoo formal though", "Hey, that's too long",
                  "Here's what I sent\nHi Juno, thanks!"):
         assert learned.reaction(text), text
     got = learned.hook({"hook_event_name": "UserPromptSubmit",

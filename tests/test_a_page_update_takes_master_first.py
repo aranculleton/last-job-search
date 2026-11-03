@@ -18,7 +18,7 @@ import app_setup  # noqa: E402
 
 
 def _git(cwd, *args):
-    return subprocess.run(["git", "-C", str(cwd), *args], capture_output=True, text=True, check=True,
+    return subprocess.run(["git", "-C", str(cwd), *args], capture_output=True, text=True, check=True, encoding="utf-8",
                           env=dict(os.environ, GIT_AUTHOR_NAME="t", GIT_AUTHOR_EMAIL="t@example.com",
                                    GIT_COMMITTER_NAME="t", GIT_COMMITTER_EMAIL="t@example.com"))
 
