@@ -54,13 +54,13 @@ def search(tmp_path):
     return s
 
 
-def run(search, *args):
+def run(search, *args, given=None):
     env = dict(os.environ, LJS_PROFILE=search.profile, LJS_STATE=search.state,
                LJS_COPY="private", LJS_CHAT="chat-test")
     env.pop("LJS_TODAY", None)
     env.pop("CLAUDE_CODE_REMOTE", None)
     r = subprocess.run([sys.executable, *args], env=env, capture_output=True, encoding="utf-8",
-                       errors="replace", timeout=120, cwd=ROOT)
+                       errors="replace", timeout=120, cwd=ROOT, input=given)
     return r.returncode, r.stdout + r.stderr
 
 
@@ -121,7 +121,7 @@ def test_prepare_logs_their_message_and_brings_everything_the_draft_needs(search
                  "scenario: ", "reply owed: yes, they wrote last.", "move: ", "length: ",
                  "the thread, oldest first", "them (email): Hi Morgan, thanks for your patience",
                  "before drafting, what the person has taught it",
-                 f"reply.py finish {JUNO} --draft-file <file>"):
+                 f"reply.py finish {JUNO} --draft-file - with the reply on its input"):
         assert said in out, (said, out)
 
     # Run again (another chat, or a second look): logged once, and the person's own rules
@@ -166,10 +166,10 @@ def test_an_out_of_office_and_a_promise_to_come_back_owe_no_reply(search):
                     "--text-file", away, "--today", "2026-11-03")
     assert code == 0, out
     assert "reply owed: no, it is an automatic reply" in out and "Nothing to draft." in out
-    later = write(search, "later.txt", "Thanks Morgan, I'll get back to you next week once "
-                                       "I've spoken to the team.")
-    code, out = run(search, "tools/network/reply.py", "prepare", WREN, "--text-file", later,
-                    "--today", "2026-11-04")
+    # Their words on the command's input: one step, with no file written first.
+    code, out = run(search, "tools/network/reply.py", "prepare", WREN, "--text-file", "-",
+                    "--today", "2026-11-04", given="Thanks Morgan, I'll get back to you next "
+                                                  "week once I've spoken to the team.")
     assert code == 0, out
     assert "reply owed: probably not" in out and f"state.py no-reply {WREN}" in out
 
@@ -200,11 +200,10 @@ def test_finish_saves_the_draft_for_the_page_and_writes_the_finishing_batch(sear
                               "status": "running", "stage": 1}, 3)
     put(search, "holds", f"contact~{LARKSPUR}", {"work": wid, "chat": "chat-test"}, 2)
     put(search, "holds", "search", {"work": "search~other", "chat": "chat-test"}, 5)
-    good = write(search, "good.txt", "Thanks Juno, that is kind of you. I have sent my CV to "
-                                     "your email.")
-    code, out = run(search, "tools/network/reply.py", "finish", LARKSPUR, "--draft-file", good,
+    code, out = run(search, "tools/network/reply.py", "finish", LARKSPUR, "--draft-file", "-",
                     "--work", wid, "--dump", search.dump, "--kind", "cloud", "--now", NOW,
-                    "--today", "2026-10-25")
+                    "--today", "2026-10-25",
+                    given="Thanks Juno, that is kind of you. I have sent my CV to your email.\n")
     assert code == 0, out
     assert "check: passed" in out and "Nothing is sent" in out
     # The page's Messages shows it, with Copy and "I sent it"; nothing is logged as sent.

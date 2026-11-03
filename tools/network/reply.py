@@ -1632,6 +1632,13 @@ def _reader(c) -> str:
         return ""
 
 
+def _words(path, prog):
+    """A file's words, or the command's input for "-" (a heredoc: one step, not two)."""
+    if path == "-":
+        return sys.stdin.read()
+    return state._words_from(path, prog)
+
+
 def needs_no_answer(text, scenario="") -> str:
     """The words that say they will come back to the person ("I'll get back to you"), in a
     message that asks nothing and owes no action, or "": /reply step 2's message that needs
@@ -1653,8 +1660,8 @@ def prepare(argv) -> int:
                     "reply is owed, the guidance, the thread, and the person's own rules.")
     ap.add_argument("who", help="their contact id, or their name as it appears")
     ap.add_argument("--text-file", default="",
-                    help="their message, as it came (none: their newest logged message, as "
-                         "for the page's Reply)")
+                    help="their message, as it came; - reads it from the input (none: their "
+                         "newest logged message, as for the page's Reply)")
     ap.add_argument("--company", default="", help="their employer, when two people share a name")
     ap.add_argument("--date", default="", help="the day it came (default today)")
     ap.add_argument("--channel", default="", choices=("",) + state.RECEIVED_CHANNELS,
@@ -1665,7 +1672,7 @@ def prepare(argv) -> int:
     ap.add_argument("--threads", default=state.THREADS_CSV)
     ap.add_argument("--today", default=datetime.date.today().isoformat())
     a = ap.parse_args(argv)
-    text = state._words_from(a.text_file, "prepare") if a.text_file else ""
+    text = _words(a.text_file, "prepare") if a.text_file else ""
     if text is None:
         return 2
     contacts = state.load_contacts(a.contacts)
@@ -1777,8 +1784,8 @@ def prepare(argv) -> int:
                                                   "apply)").splitlines()))
     if waiting:
         print(f"first: {waiting}")
-    print("then: write the reply in a file and run python3 tools/network/reply.py finish "
-          f"{cid} --draft-file <file> (for the page's work: --work <id> --dump \"$D\").")
+    print(f"then: python3 tools/network/reply.py finish {cid} --draft-file - with the reply "
+          "on its input (for the page's work: --work <id> --dump \"$D\").")
     return 0
 
 
@@ -1811,7 +1818,8 @@ def finish(argv) -> int:
                     "finds anything), the draft put where the page shows it, what drew their "
                     "reply, and, for the page's work, its finishing batch. Nothing is sent.")
     ap.add_argument("contact_id")
-    ap.add_argument("--draft-file", required=True, help="the reply as drafted")
+    ap.add_argument("--draft-file", required=True,
+                    help="the reply as drafted; - reads it from the input")
     ap.add_argument("--work", default="", help="the page's work item this answers")
     ap.add_argument("--thread", default="", help="the page's conversation (default: the item's own)")
     ap.add_argument("--dump", default="", help="the page's database, as read ($D)")
@@ -1826,7 +1834,7 @@ def finish(argv) -> int:
     if a.work and not a.dump:
         print("finish: --work needs the page's database as read (--dump \"$D\")")
         return 2
-    draft = state._words_from(a.draft_file, "finish")
+    draft = _words(a.draft_file, "finish")
     if draft is None:
         return 2
     draft = draft.strip()

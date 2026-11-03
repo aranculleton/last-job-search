@@ -649,7 +649,9 @@ def cmd_done(a) -> int:
     _, now = app_model.clock(None, a.now)
     db = page_db.load(a.dump)
     reply = ""
-    if a.reply_file:
+    if a.reply_file == "-":
+        reply = sys.stdin.read().strip()
+    elif a.reply_file:
         try:
             with open(a.reply_file, encoding="utf-8") as fh:
                 reply = fh.read().strip()
@@ -802,7 +804,8 @@ def main(argv=None) -> int:
     p.add_argument("--work", required=True, help="the work item's id")
     p.add_argument("--summary", default="", help="one short sentence of what is ready")
     p.add_argument("--reply-file", dest="reply_file", default="",
-                   help="the answer for the person, shown in the conversation")
+                   help="the answer for the person, shown in the conversation; - reads it "
+                        "from the input")
     p.add_argument("--thread", default="", help="the conversation (default: the item's own)")
     p.add_argument("--failed", default="", help="it did not finish: why, in plain words")
     p.add_argument("--link", action="append", default=[],

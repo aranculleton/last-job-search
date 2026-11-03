@@ -133,17 +133,17 @@ messages (ArtifactData `query`, collection `talk/<thread>/messages`, `out_dir: $
   a gap, and run `reading.py read <contact> <file> --source screenshot`; then rewrite their
   waiting note on it (`/network`, `args.rewrite`) and put it in the thread, ready to copy.
 - **Someone wrote to them**: two commands, with nothing to look up first (`/reply` says
-  what each does). Save their words to a file, as they came, and run `python3
-  tools/network/reply.py prepare "<their name or contact id>" --text-file <file>`
-  (`--company <employer>` when it says two people share the name; `--date`, `--channel
-  email` when it came another day or way). It finds them, logs their message, saves an
-  interview day or time it gives, and prints what it is, whether a reply is owed, the
-  guidance, the thread and the person's own rules, which outrank every default. Draft the
-  reply from that, then `python3 tools/network/reply.py finish <contact id> --draft-file
-  <file> --work <id> --dump "$D"`: it refuses while the draft check finds anything or a
-  reaction of theirs is unrecorded, saves the draft where Messages shows it, and writes this
-  item's finishing batch with the draft in the thread in full, ready to copy. Send that
-  batch. Nothing is ever sent.
+  what each does). Run `python3 tools/network/reply.py prepare "<their name or contact id>"
+  --text-file -` with their words, as they came, on its input (a heredoc; a file's path
+  works too), `--company <employer>` when it says two people share the name, `--date` and
+  `--channel email` when it came another day or way. It finds them, logs their message,
+  saves an interview day or time it gives, and prints what it is, whether a reply is owed,
+  the guidance, the thread and the person's own rules, which outrank every default. Draft
+  the reply from that, then run `python3 tools/network/reply.py finish <contact id>
+  --draft-file - --work <id> --dump "$D"` with the draft on its input. It refuses while the
+  draft check finds anything or a reaction of theirs is unrecorded, saves the draft where
+  Messages shows it, and writes this item's finishing batch with the draft in the thread in
+  full, ready to copy. Send that batch. Nothing is ever sent.
 - **Someone proposed a time for a call** ("how about 2pm ET Thursday?"): `reply.py
   prepare` logs their message; record the call booked on that day with `network/state.py
   set <contact> --status call_booked --due <day>`, draft the short yes (`reply.py finish`),
@@ -154,8 +154,8 @@ messages (ArtifactData `query`, collection `talk/<thread>/messages`, `out_dir: $
   "<Company>" --stage "<stage>" --date <day> --time <HH:MM> [--zone <as written>]`, so the
   page shows it. Logging a message or a note already saves a time it gives; never tell the
   person to add a time, or fix any record, themselves.
-- **Anything else** is answered in the thread in plain words: write the answer to a file and
-  `python3 tools/app.py done "$D" --work <id> --summary "<one sentence>" --reply-file <file>`
+- **Anything else** is answered in the thread in plain words: `python3 tools/app.py done
+  "$D" --work <id> --summary "<one sentence>" --reply-file -`, with the answer on its input,
   writes it, the item done and its locks removed, in one batch. Work it starts is queued
   with `python3 tools/app.py ask "$D" --kind <kind> --title "<a few plain words>" --args
   '<json>'` (the args step 4's table names), the item the page's own Ask writes, never one
@@ -247,8 +247,8 @@ now." Never offer it again in a chat; the page asks by itself, now and then.
 ## 5. Finish in one batch
 
 `python3 tools/app.py done "$D" --work <id> --summary "<one sentence>"` writes the item's
-part of it, so none is written by hand: `--reply-file <file>` for the answer in its `talk`
-thread, `--failed "<why, in plain words>"` when it did not finish, `--link
+part of it, so none is written by hand: `--reply-file -` (or a file) for the answer in its
+`talk` thread, `--failed "<why, in plain words>"` when it did not finish, `--link
 "<label>=<address>"` for each link (a reply's own is `reply.py finish ... --work <id>
 --dump "$D"`). A summary past one sentence or 15 words is refused. A finish holds:
 

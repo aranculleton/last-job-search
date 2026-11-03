@@ -517,7 +517,7 @@ METHODS: dict[str, dict] = {
             (64, "2026-10-30", False, "a run the page asked for brings back as many people as the person chose, 5 when not given"),
             (65, "2026-11-03", False, "a reply is two commands: reply.py prepare finds who wrote, logs their message, saves an interview time it gives and prints everything the draft needs; reply.py finish checks the draft, saves it for the page and writes the page's finishing batch"),
         ),
-        "fingerprint": "07d0840439d79097",
+        "fingerprint": "a8209412e81cfd07",
     },
     "network-notes": {
         "by": "network", "priority": 2, "applies": "queued_notes", "time": "~10 min",
