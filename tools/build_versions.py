@@ -619,8 +619,9 @@ METHODS: dict[str, dict] = {
             (32, "2026-10-26", True, "bar.py lists the employers of people with a follow-up owed that nobody has judged (unjudged --contacts), for the brief to judge once; money about the employer (revenue, funding, valuation) is never pay, and a single labelled figure in the person's currency is read"),
             (33, "2026-10-29", False, "an unused helper removed from the free filters; screening is as before"),
             (34, "2026-10-29", False, "a ruling on a remote posting holds for the same role on another board, whichever place that board names, except a ruling on where the posting is, which holds only for that place; and a posting read without its place is ruled out exactly when it would be with it"),
+            (35, "2026-11-03", False, "the search window holds for an employer's own board as for every other source, read from the posting's own date where the board gives one; nothing ruled out before needs looking at again"),
         ),
-        "fingerprint": "aceef0677d5bfee6",
+        "fingerprint": "4cfb5052ce587662",
     },
     "routines": {
         "by": "you", "priority": 3, "applies": "routines",
