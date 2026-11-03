@@ -2448,6 +2448,9 @@
     return [...groups.entries()].map(([k, list]) => ({key: k, title: k.startsWith("e:") ? k.slice(2) : (NO_EMPLOYER[k.slice(2)] || "Other things"), list: list.sort(itemSort)}))
       .sort((a, b) => groupScore(a.list).localeCompare(groupScore(b.list)) || a.title.localeCompare(b.title));
   }
+  // A name, with "at <employer>" only when there is one: "Andrijana at" and "Find more people
+  // at" showed for someone whose employer was never recorded (2026-11-03).
+  function whoAt(name, employer) { return txt(name) + (txt(employer) ? " at " + txt(employer) : ""); }
   function tabLink(tab, item) {
     if (!tab) return null;
     const r = resolveSection(tab) || {};
@@ -2702,6 +2705,13 @@
     "work~reply": {title: (n) => "Reply to " + plural(n, "person", "people"), all: "Draft all", row: "Draft", strip: /^Reply to /},
     leave: {title: (n) => plural(n, "person hasn't", "people haven't") + " answered two messages", sub: "Leave them unless they write back: close each, or all of them.", all: "Close them all", row: "Close", strip: NO_REPLY},
   };
+  // Who someone is, on a row about them: a list of names with only "first wrote 10 Sep" left
+  // the person asking who they all were (2026-11-03). With no employer on record, it says so.
+  function dueWho(d) {
+    const c = txt(d.context);
+    if (txt(d.company) || d.company === undefined) return c;
+    return c ? "Employer not on record · " + c : "Employer not on record";
+  }
   function dueGroup(list, ctx, g) {
     const where = (ctx && ctx.where) || "";
     const band = txt(list[0].band);
@@ -2721,7 +2731,7 @@
       const cid = peopleItems().some((p) => p.id === dueContact(d)) ? dueContact(d) : "";
       return h("li", {class: "g-row" + (marked ? " is-marked" : ""), "data-item": d.id},
         h("div", {class: "g-main"}, h("p", {class: "g-name"}, cid ? personName(cid, name, "fg:" + d.id) : name),
-          txt(d.context) ? h("p", {class: "muted small"}, txt(d.context)) : null, stateLine(d.id, "due:" + where + ":" + d.id)),
+          dueWho(d) ? h("p", {class: "muted small"}, dueWho(d)) : null, stateLine(d.id, "due:" + where + ":" + d.id)),
         h("div", {class: "g-acts"}, busy(d) ? btn("See it", openWork, {small: true, kind: "quiet", key: "fgsee:" + where + ":" + d.id}) :
           leave ? btn(words.row, () => close(d), {small: true, pressed: marked, key: "fgclose:" + where + ":" + d.id, aria: "Close: " + name}) :
           btn(words.row, () => askDue(d), {small: true, key: "fgdo:" + where + ":" + d.id, aria: words.row + ": " + title}),
@@ -2971,7 +2981,7 @@
     return card("article", {class: "card todo due-row" + (late ? " late" : "") + (marked ? " is-marked" : ""), "aria-labelledby": hid, "data-item": d.id, "data-k": "card:" + (ctx.where || "") + ":" + d.id},
       h("div", {class: "todo-top"}, kindMark(dueKind(d)), when ? h("span", {class: late ? "chip tone-warn" : "muted small"}, when) : null),
       h("p", {class: "card-title", id: hid}, txt(d.title)),
-      txt(d.context) ? h("p", {class: "muted small due-context"}, txt(d.context)) : null,
+      dueWho(d) ? h("p", {class: "muted small due-context"}, dueWho(d)) : null,
       h("div", {class: "card-actions"},
         busy ? btn("See its progress", openWork, {small: true, key: "duesee:" + (ctx.where || "") + ":" + d.id}) :
           draft ? seeDraftBtn(draft, "duedraft:" + (ctx.where || "") + ":" + d.id) :
@@ -4482,7 +4492,7 @@
     else if (sent) owed = null;
     else if (st === "replied_needs_response" || txt(obj(p.owed).kind) === "reply") owed = btn(txt(obj(p.owed).label) || "Draft a reply", () => logReply(p, true), {kind: "primary", small: true, key: "reply:" + p.id, aria: "Draft a reply to " + name});
     else if (p.is_process_stage) owed = btn("Make it an interview", () => act([{item: p.id, action: "process.register", value: {contact: txt(p.id)}, rev: p.rev}], "Now an interview: " + txt(p.employer)), {kind: "primary", small: true, key: "process:" + p.id, aria: "Make the call with " + name + " an interview"});
-    else if (st === "call_booked" && callPast(p)) owed = btn("Draft the thank-you", () => requestWork([{id: "reply~" + seg(p.id) + "~thanks", kind: "reply", to: "either", title: "Thank-you to " + name + " at " + txt(p.employer), args: {contact: txt(p.id), kind: "thank_you"}}]), {kind: "primary", small: true, key: "callthanks:" + p.id, aria: "Draft the thank-you to " + name});
+    else if (st === "call_booked" && callPast(p)) owed = btn("Draft the thank-you", () => requestWork([{id: "reply~" + seg(p.id) + "~thanks", kind: "reply", to: "either", title: "Thank-you to " + whoAt(name, p.employer), args: {contact: txt(p.id), kind: "thank_you"}}]), {kind: "primary", small: true, key: "callthanks:" + p.id, aria: "Draft the thank-you to " + name});
     else if (st === "call_booked") owed = btn("Prepare for the call", () => askCallPrep(p), {kind: "primary", small: true, key: "callprep:" + p.id, aria: "Prepare for the call with " + name});
     else if (due && PENDING_KINDS.has(txt(due.kind))) owed = null;
     else if (due && txt(due.action).startsWith("work:")) owed = btn(dueLabel(due, kind), () => askDue(due), {kind: "primary", small: true, key: "pdue:" + p.id, aria: dueLabel(due, kind) + ": " + txt(due.title)});
@@ -4534,7 +4544,7 @@
         // friend reads as that friend's introduction (2026-10-30).
         txt(p.came_through) ? h("p", {class: "small muted"}, "Came through " + txt(p.came_through)) : null,
         nextLine ? h("p", {class: "meta"}, nextLine) : null,
-        h("div", {class: "card-actions"}, owed, replyOut ? btn("They replied", () => logReply(p, false), {small: true, key: "plog:" + p.id, aria: "Log " + name + "'s reply"}) : null, more("person:" + p.id, name + " at " + txt(p.employer), extra)),
+        h("div", {class: "card-actions"}, owed, replyOut ? btn("They replied", () => logReply(p, false), {small: true, key: "plog:" + p.id, aria: "Log " + name + "'s reply"}) : null, more("person:" + p.id, whoAt(name, p.employer), extra)),
         noteFor("reply:" + p.id), due ? stateLine(due.id, "pdue:" + p.id) : null, stateLine(p.id, "person:" + p.id)));
   }
 
@@ -5145,7 +5155,7 @@
   }
   function tweakTitle(output, item) {
     const word = cap1(TWEAK_WORD[output]());
-    if (output === "message") return "Edit message: " + txt(item.first_name) + " at " + txt(item.employer);
+    if (output === "message") return "Edit message: " + whoAt(item.first_name, item.employer);
     if (output === "jobs") return "Search again with your changes";
     if (output === "brief") return "Edit the brief";
     if (output === "prep") return "Edit prep: " + txt(item.company);
@@ -5375,7 +5385,7 @@
     const live = output === "resume" || output === "letter" ? readyLive(item) : output === "message" ? msgLive(item) : true;
     if (!live) return null;
     // The visible words are the start of the name, and the item ends it (WCAG 2.5.3).
-    const whose = output === "message" ? txt(item.first_name) + " at " + txt(item.employer) : txt(item.company);
+    const whose = output === "message" ? whoAt(item.first_name, item.employer) : txt(item.company);
     const b = btn([icon("tweak"), h("span", {}, label || "Edit"), whose ? h("span", {class: "sr-only"}, ": " + whose) : null], () => openTweak(output, item),
       {small: true, kind: "secondary", key: "tweak:" + output + ":" + txt(item.id || output)});
     b.setAttribute("title", "Change how this looks or reads");
@@ -6063,7 +6073,7 @@
   }
   function detailOf(kind, id) {
     if (kind === "interview") { const iv = allInterviews().find((x) => x.id === id); return iv ? [stageShort(iv.next_stage) + " with " + txt(iv.company), interviewDetail(iv), "interviews", "wide"] : null; }
-    if (kind === "person") { const p = peopleItems().find((x) => x.id === id); return p ? [txt(p.first_name) + " at " + txt(p.employer), personDetail(p), "contacts", ""] : null; }
+    if (kind === "person") { const p = peopleItems().find((x) => x.id === id); return p ? [whoAt(p.first_name, p.employer), personDetail(p), "contacts", ""] : null; }
     if (kind === "application") { const a = applicationItems().find((x) => x.id === id); return a ? [txt(a.role) + " at " + txt(a.company), applicationDetail(a), "jobs", ""] : null; }
     return null;
   }
@@ -6270,7 +6280,7 @@
         st === "call_booked" ? btn("Prepare for the call", () => askCallPrep(p), {small: true, key: "dcallprep:" + p.id}) : null,
         st === "referral_in_progress" ? btn("The referral is over", () => referralEnded(p), {small: true, key: "dref-end:" + p.id}) : talking ? btn("They put my name forward", () => referralAgreed(p), {small: true, key: "dref:" + p.id}) : null,
         btn("Make a " + noun() + " for " + txt(p.first_name), () => askContactResume(p), {small: true, key: "dres:" + p.id}),
-        runBtn("network", "Find more people at " + txt(p.employer), () => findPeople(p.employer), {kind: "quiet", small: true, key: "dfind:" + p.id, one: true}),
+        txt(p.employer) ? runBtn("network", "Find more people at " + txt(p.employer), () => findPeople(p.employer), {kind: "quiet", small: true, key: "dfind:" + p.id, one: true}) : null,
         pasteProfileBtn(p, "dpaste:" + p.id),
         btn("Don't contact again", () => act([{item: p.id, action: "person.stop", value: {why: "stopped on the page"}, rev: p.rev}], "Not contacted again: " + txt(p.first_name)), {kind: "quiet", small: true, key: "dstop:" + p.id})),
       // A block takes a list: the thread handed over bare was dropped, and a page with a whole

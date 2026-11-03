@@ -51,6 +51,9 @@ make sense to somebody whose repo just received it.
 - **News is at least three points while the last four weeks have them**, filled from as many
   earlier briefs as it takes, each split into what happened, how to use it and where it is
   from (lines from before 4.8 included), and as many as your screen has room for.
+- **Someone whose employer was never recorded is shown by name alone**, never "Andrijana at"
+  with nothing after it, with no "Find more people at" button, and a row about them says
+  "Employer not on record".
 - **Today says what the person last said** ("They said: ..."), in the page's normal size,
   rather than only when it was due.
 
