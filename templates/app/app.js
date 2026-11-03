@@ -1728,15 +1728,21 @@
     if (w.id) { requestWork([{id: txt(w.id), kind, title: txt(d.title), args: Object.assign({due: txt(d.id)}, obj(w.args)), redo: true}]); return; }
     requestWork([{id: kind + "~due~" + seg(d.id), kind, title: txt(d.title), args: {due: txt(d.id), contact: dueContact(d) || null}, redo: true}]);
   }
+  // Every draft whose files are not here yet goes with the one tapped, in one piece of work, so
+  // Claude is woken once for all of them (the maintainer, 2026-10-29: "combine a lot of tasks to
+  // save usage"); each of their cards then says its files are on their way (filesWorkFor).
   function askFiles(a) {
-    requestWork([{id: "files~" + seg(a.id), kind: "files", title: "Make the files downloadable: " + txt(a.company),
-      args: {application: txt(a.id), files: arr(a.files).filter((f) => !f.asset).map((f) => txt(f.name))}, redo: true}]);
+    const others = readyItems().filter((x) => x.id !== a.id && readyLive(x) && filesMissing(x) && !readyQuestions(x).length && !filesWorkFor(x));
+    const list = [a].concat(others);
+    requestWork([{id: "files~" + seg(a.id), kind: "files", title: "Make the files downloadable: " + (others.length ? plural(list.length, "application", "applications") : txt(a.company)),
+      args: Object.assign({application: txt(a.id), files: list.flatMap((x) => arr(x.files).filter((f) => !f.asset).map((f) => txt(f.name)))},
+        others.length ? {applications: list.map((x) => txt(x.id))} : {}), redo: true}]);
   }
-  // Every missing file in one piece of work, so the chat wakes once for all of them, not once
-  // an application (the maintainer, 2026-10-29: "combine a lot of tasks to save usage").
-  function askFilesAll(list) {
-    requestWork([{id: "files~all", kind: "files", title: "Make the files downloadable: " + plural(list.length, "application", "applications"),
-      args: {applications: list.map((a) => txt(a.id)), files: list.flatMap((a) => arr(a.files).filter((f) => !f.asset).map((f) => txt(f.name)))}, redo: true}]);
+  // The files work a draft is waiting on: its own, or one that took it with the others.
+  function filesWorkFor(a) {
+    const own = workDoc("files~" + seg(a.id));
+    if (own && ACTIVE.has(own.status)) return own;
+    return [...allWork()].map(([, w]) => w).find((w) => txt(w.kind) === "files" && ACTIVE.has(w.status) && arr(obj(w.args).applications).includes(txt(a.id))) || null;
   }
   // A card's alert or suggestion runs what the model says, the same way its own buttons do.
   function runAction(a, from) {
@@ -4397,8 +4403,7 @@
     // A resume made for the referrer is the referral's own paper: no hold line on it.
     const ref0 = referralAt(a.company, a);
     const ref = ref0 && !(forWho && txt(obj(ref0).id || ref0.contact) === txt(forWho.id)) ? ref0 : null;
-    const filesWork = workDoc("files~" + seg(a.id));
-    const gettingFiles = filesWork && ACTIVE.has(filesWork.status);
+    const gettingFiles = !!filesWorkFor(a);
     const markApplied = () => confirmApplied([a], () => act([{item: a.id, action: "ready.applied", value: {on: todayIso()}, rev: a.rev}], "Marked as applied: " + txt(a.company)));
     const toCopy = (out.text ? 1 : 0) + screen.length;
     const fileWord = files.length === 2 ? "Get both files" : files.length === 1 ? "Get the " + (files[0].kind === "letter" ? "cover letter" : noun()) : "Get the files";

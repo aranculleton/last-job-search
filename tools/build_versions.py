@@ -700,7 +700,7 @@ METHODS: dict[str, dict] = {
             (16, "2026-11-02", True, "the News panel is never empty while a recent brief had news, and each point says what happened, how to use it and where it is from; Today is the most pressing thing with what matters about it beside it; Coming up lists what is due next when nothing else is booked; a person is shown once; the update line glides"),
             (17, "2026-11-03", True, "a message to Claude that fails on an old thread goes again on a fresh one, and anything not sent goes with the next tap, so nothing waits for next time and there is no Ask Claude again; work says Not sent yet, Waking Claude with its clock, or No answer yet; a request typed in Chat goes to Claude in the same tap; a pasted message is always saved and sent; a booking shows in Coming up at once and can have no day yet; Today says what the person last said; News fits the window; someone with no employer on record is shown by name alone; one tap drafts, with an Undo in its toast; a job put in the bin leaves the list at once; ten big jobs run at once in the cloud; every reason in a bin is one tap; a card you finish leaves its list, its one Undo in the toast; what someone asked for leads, with its button (Make a CV for them); one date a card, said one way; counts that agree; a draft's files are its one filled button; Coming up sits with the main places in the side menu; no Pay not stated, no Not now beside the bin, no tour after the first visit"),
         ),
-        "fingerprint": "630f76121147d9e1",
+        "fingerprint": "46f2b0f2c6a21089",
     },
     "upskill": {
         "by": "upgrade", "priority": 4, "applies": "upskill_plans", "time": "~10 min",

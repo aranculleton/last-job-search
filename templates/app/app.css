@@ -1365,7 +1365,6 @@ ul.bp-news { gap: 12px; }
 @media (max-width: 759px) { .sum .help-q { width: var(--target); height: var(--target); min-width: var(--target); min-height: var(--target); margin: calc((var(--target) - 20px) / -2) -8px calc((var(--target) - 20px) / -2) -4px; border: 0; vertical-align: middle;
   background: radial-gradient(circle at center, transparent 0 10px, var(--line-strong) 10px 11px, transparent 11.5px); } }
 .af-x { margin-left: 4px; }
-.files-line { margin: 0; font-size: var(--t-sm); color: var(--muted); }
 
 /* Your profile, a page of its own */
 .sec.profile-page { max-width: 960px; }
