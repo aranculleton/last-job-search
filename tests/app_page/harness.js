@@ -773,7 +773,7 @@ S.action_receipt = async (a) => {
   const text = (sel) => page.$eval(sel, (e) => e.textContent.trim()).catch(() => null);
   const saved = await text('#main [data-item="msg-juno-1"] .state');
   const toast = await one(page, ".toast");
-  const focusAfter = await page.evaluate(() => { const e = document.activeElement; return {k: e.dataset ? e.dataset.k : null, inCard: !!(e.closest && e.closest('[data-item="msg-juno-1"]'))}; });
+  const focusAfter = await page.evaluate(() => { const e = document.activeElement; return {k: e.dataset ? e.dataset.k : null, inCard: !!(e.closest && e.closest('[data-item="msg-juno-1"]')), tag: e.tagName, inMain: !!(e.closest && e.closest("#main"))}; });
   const id = ids[0].split("/")[1];
   store.chat("receipts/" + id, {applied_at: new Date().toISOString(), by: "cloud-1", result: "ok", note: "", undo: {action: "msg.unsent", target: "msg-juno-1", value: null}});
   await turn(page, 6);
@@ -797,9 +797,10 @@ S.action_receipt = async (a) => {
 S.undo = async (a) => {
   const o = await open({html: a.html, hash: "jobs", clock: "2026-10-25T09:00:00Z"});
   const {page, store} = o;
-  // The bin asks what it is; "Not this one" is already chosen.
+  // The bin asks what it is, each reason a button that does it (2026-11-03: a reason already
+  // chosen and then a second button took two taps).
   await clickText(page, "button", "Not for me: Harbourline Bank, Pricing Analyst");
-  await clickText(page, "button", "Take it off my list");
+  await clickText(page, "button", "Not this one");
   await turn(page, 4);
   const before = store.list("actions/");
   const marked = await page.$eval('#main [data-item="r12-1"]', (x) => x.classList.contains("is-marked")).catch(() => false);
@@ -810,9 +811,9 @@ S.undo = async (a) => {
   const after = store.list("actions/");
   const back = await T(page, "#main .card.job h3");
   await clickText(page, "button", "Not for me: Copperleaf Pay, Data Analyst, Payments");
-  // Why, asked once in the bin's sheet: the same action, with its reason.
-  await page.locator("dialog").getByRole("radio", {name: "The pay", exact: true}).check();
-  await clickText(page, "button", "Take it off my list");
+  // Why, asked once in the bin's sheet: the same action, with its reason, in one tap.
+  await page.locator("dialog").getByRole("button", {name: "The pay", exact: true}).click();
+  await turn(page, 4);
   await turn(page, 6);
   const reason = actionAt(store, "actions/act~r12-3~job.dismiss");
   const during = (await page.$$(".toast button:text-is('Undo')")).length + (await page.$$("#main button.undo")).length;
@@ -1197,7 +1198,8 @@ S.two_tabs = async (a) => {
   await p1.getByRole("button", {name: "I sent it: the message to Juno"}).click();
   await turn(p1, 6); await turn(p2, 6);
   // The other window shows it marked at once, live, with nothing left to press twice.
-  r.otherWindow = {chip: await T(p2, "#main .card.msg.is-marked .state-word"), buttons: await p2.$$eval('#main button[aria-label="I sent it: the message to Juno"]', (x) => x.length)};
+  r.otherWindow = {chip: await T(p2, "#main .card.msg.is-marked .state-word"), buttons: await p2.$$eval('#main button[aria-label="I sent it: the message to Juno"]', (x) => x.length),
+    gone: await T(p2, "#main .gone li")};
   r.actions = o.store.list("actions/");
   r.errors = o.errors;
   await o.ctx.close();
@@ -1293,9 +1295,13 @@ S.coming_up = async (a) => {
   r.allSave = (await calls(page)).filter((c) => c.cap === "downloads").slice(-1)[0] || null;
   await page.keyboard.press("Escape");
   await turn(page, 2);
-  // Something added: shown at once as saving, then its action is the engine's own shape.
+  // Something added: shown at once as saving, then its action is the engine's own shape. One
+  // "Add something", an interview its first choice (2026-11-03): this is the other choice.
   await page.locator('[data-k="up-add"]').click();
   await turn(page, 2);
+  r.addChoices = await T(page, "dialog.sheet .choice-btn");
+  await page.locator('[data-k="sheet-choice:other"]').click();
+  await turn(page, 4);
   await page.locator("dialog.sheet input[type=text]").first().fill("Coffee with a former colleague");
   await page.locator("dialog.sheet input[type=date]").fill("2026-10-27");
   await page.locator("dialog.sheet input[type=time]").fill("09:30");
@@ -1472,8 +1478,8 @@ S.reading = async (a) => {
   if (a.bin) {
     await o.page.$eval('[data-k="reading-bin"]', (b) => b.click());
     await o.page.waitForTimeout(300);
-    await o.page.check('input[type="radio"][value="' + a.bin + '"]');
-    await o.page.click('[data-k="sheet-go"]');
+    // Each answer is a button that does it (2026-11-03).
+    await o.page.click('[data-k="sheet-choice:when-' + a.bin + '"]');
     await o.page.waitForTimeout(900);
     r.acts = [...o.store.docs.entries()].filter(([p]) => p.startsWith("actions/")).map(([p, d]) => ({id: p.slice(8), action: d.data.action, value: d.data.value, item: d.data.item}));
   }
@@ -1575,9 +1581,10 @@ S.downloads = async (a) => {
   r.noLetter = await T(page, '#main .card.app[aria-labelledby="app-app-quayside-demand"] .muted.small');
   r.askButtons = await T(page, '#main .card.app[aria-labelledby="app-app-quayside-demand"] button');
   r.primary = await T(page, '#main .card.app[aria-labelledby="app-app-quayside-demand"] .card-actions .btn[data-primary]');
-  // Files not on the page yet are said once, above the drafts (4.3).
+  // Files not on the page yet: the card's own "Get my files ready", never a line over the
+  // list as well (2026-11-03).
   r.filesLine = await T(page, "#main .files-line");
-  await page.locator('[data-k="files-all"]').first().click();
+  await page.locator('[data-k="files:app-quayside-demand"]').first().click();
   await turn(page, 8);
   r.work = store.get("work/files~app-quayside-demand");
   r.errors = o.errors;
@@ -1680,13 +1687,14 @@ S.busy = async (a) => {
     const t = (e) => (e ? e.textContent.trim() : "");
     const groups = Object.fromEntries([...document.querySelectorAll("#main .group-card")].map((c) => [c.getAttribute("data-item"), {
       title: t(c.querySelector(".card-title")), rows: [...c.querySelectorAll(".g-row")].map((row) => ({buttons: [...row.querySelectorAll("button")].map(t)})),
-      actions: [...c.querySelectorAll(".card-actions button")].map(t), fold: t(c.querySelector(".fold")), sub: t(c.querySelector(".small.muted"))}]));
+      actions: [...c.querySelectorAll(".card-actions button")].map(t), fold: t(c.querySelector(".fold")), sub: t(c.querySelector(".small.muted")),
+      chip: t(c.querySelector(".todo-top .chip")), cost: t(c.querySelector(".card-actions .cost > span[aria-hidden]")), who: [...c.querySelectorAll(".g-row .g-main .muted.small")].map(t)}]));
     const counts = {};
     for (const a of document.querySelectorAll('[data-k^="tab:"], [data-k^="side:"]')) {
       const n = a.querySelector(".navcount");
       if (n) counts[a.getAttribute("data-k").split(":")[1]] = n.firstChild.textContent;
     }
-    return {groups, counts, hidden: t(document.querySelector("#main .hidden-note")), text: document.getElementById("main").innerText,
+    return {groups, counts, hidden: t(document.querySelector("#main .hidden-note")), text: document.getElementById("main").innerText, sum: t(document.querySelector("#main .sum")),
       gauge: document.querySelectorAll("#main .cost .gauge").length};
   });
   await goto(page, "settings");
@@ -1698,7 +1706,8 @@ S.busy = async (a) => {
   r.progress.all = await page.evaluate(() => document.querySelector("#main .sum").textContent);
   await goto(page, "jobs");
   await clickText(page, "button", "Not for me: Harbourline Bank, Pricing Analyst");
-  r.bin = await page.evaluate(() => { const d = document.querySelector("dialog[open]"); return d ? {title: d.querySelector("#sheet-title").textContent, options: [...d.querySelectorAll("label")].map((l) => l.textContent)} : null; });
+  // Its reasons are buttons, each done in the tap (2026-11-03).
+  r.bin = await page.evaluate(() => { const d = document.querySelector("dialog[open]"); return d ? {title: d.querySelector("#sheet-title").textContent, options: [...d.querySelectorAll(".choice-btn")].map((l) => l.textContent)} : null; });
   r.errors = o.errors;
   await o.ctx.close();
   return r;
