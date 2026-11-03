@@ -37,6 +37,21 @@ make sense to somebody whose repo just received it.
   command, and tapping Draft starts the draft straight away instead of at Claude's next look.
   A long job like a search no longer stops part way through to take an update.
 
+- **Putting something in the bin takes one tap**: each reason is its own button, and only the
+  reasons that are true are offered.
+- **What you finish leaves the list straight away** (a message sent, a question answered, a
+  follow-up done), with Undo in the message at the bottom.
+- **When someone asks you for something, the page says so** ("Juno asked for your CV") and
+  offers the button that does it. Each card shows one date, written the same way everywhere.
+- **A draft whose files are not on your page yet has one button to get them**, and new drafts
+  arrive with their files ready to download.
+- **The numbers agree with each other**: jobs to look at, things to do, and the time it takes
+  to draft them all.
+- **Coming up sits with the main places in the side menu**, Settings alone at the bottom, and
+  one "Add something" adds an interview or anything else.
+- **Less clutter**: no "Pay not stated", no "Not now" beside the bin, the tour only on your
+  first visit, the LinkedIn card one step at a time.
+
 ### Fixed
 
 - **What you ask for on your page reaches Claude, and the page says honestly where it is.**
