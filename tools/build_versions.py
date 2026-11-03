@@ -348,8 +348,9 @@ METHODS: dict[str, dict] = {
             (60, "2026-11-02", False, "the RUNBOOK says where a request to watch something in the brief's news goes (brief.py watch); documents render and are checked as before"),
             (61, "2026-11-02", False, "the page's palette gains a green for today and a gold for tomorrow; documents render and are checked as before"),
             (62, "2026-11-03", False, "the RUNBOOK lands a chat's work with one background command, tools/land.py, once the answer is out; independent commands go together as separate calls; documents render and are checked as before"),
+            (63, "2026-11-03", False, "filling the page stops before the margin the verification checks, so a fitted resume never fails it for text too near the edge"),
         ),
-        "fingerprint": "160ed796e247c8c4",
+        "fingerprint": "cf1f4db27c3a72f9",
     },
     "interview": {
         "by": "upgrade", "priority": 2, "applies": "live_interviews", "time": "~15 min",

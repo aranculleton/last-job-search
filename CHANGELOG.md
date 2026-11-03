@@ -85,6 +85,9 @@ make sense to somebody whose repo just received it.
   asked there.
 - **A message you paste in from someone else is never taken for your own feedback.** "Please
   don't use my work email" in their message no longer changes how Claude writes for you.
+- **A resume fitted to its page always passes its own check.** Filling the page to its last
+  line put text within the margin the check fails ("text near the edge"), so a resume reported
+  as fitted was then turned back; filling now stops before that margin.
 - **A search follows your rules all the way to the list.** Jobs from employers' own career pages
   follow your search window too, so a posting months old no longer reaches your list; a public
   body you have ruled out is caught from what its own posting says it is, even when it is not
