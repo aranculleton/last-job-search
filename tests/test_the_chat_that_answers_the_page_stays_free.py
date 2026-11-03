@@ -265,8 +265,10 @@ def test_a_big_job_is_never_run_by_the_chat_that_answers_the_page(monkeypatch):
         said = call["prompt"]
         assert f"--work {kind}~1" in said and "app.py pin" in said and PAGE in said
         assert "Never publish, watch or answer the page" in said
-        assert "send_message to listener-1" in said
-        assert f"\"Finished {kind}~1, on master: bring the page up to date.\"" in said
+        # A cloud chat cannot message another one: it brings the page up to date itself
+        # (2026-11-03: a search's ten jobs sat off the page).
+        assert "send_message" not in said and "tools/app.py view" in said and PAGE in said
+        assert said.index("tools/app.py view") < said.index("land your work on master")
         assert ("--log" in said) == (kind == "search")
         # Where no chat can be started: a chat on a computer, no create_session, no address.
         for args in ((chosen, "listener-1", "cloud", True), (chosen, "listener-1", "computer")):
@@ -275,6 +277,7 @@ def test_a_big_job_is_never_run_by_the_chat_that_answers_the_page(monkeypatch):
             agent = got["agent"]
             assert agent["run_in_background"] is True and agent["isolation"] == "worktree"
             assert "app.py pin" in agent["prompt"] and "send_message" not in agent["prompt"]
+            assert f"\"Finished {kind}~1, on master: bring the page up to date.\"" in agent["prompt"]
     monkeypatch.setattr(app_setup, "origin", lambda: ("", ""))
     assert app.where_it_runs(chosen, "listener-1", "cloud")["run"] == "background agent"
     long = dict(chosen, title="An analyst role " * 10)

@@ -39,6 +39,10 @@ make sense to somebody whose repo just received it.
 - **A booked interview shows in Coming up and on the Brief straight away**, and reaches Claude
   in the same tap. An invitation with no day yet asks for the day, or is booked as "the day
   still to choose" (it was refused, quoting a day already past, while the page said "Saved").
+- **A job that runs in a chat of its own puts its results on your page itself.** A search
+  finished its ten jobs, but was told to ask the chat that answers your page to show them, and
+  a chat in the cloud cannot message another one, so the jobs never appeared. It now brings the
+  page up to date before it saves.
 - **The chat that answers your page stays quick.** It handed over to a fresh helper only at a
   check-in the morning brief never made, so one helper ran for days and re-read some 535,000
   tokens at every step. Every page update by that chat now counts as its check-in, and it

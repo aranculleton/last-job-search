@@ -267,14 +267,13 @@ def child_prompt(chosen: dict, parent: str, url: str, session: bool = True) -> s
     wid, kind = chosen["work"], chosen["kind"]
     keys = ", ".join(s["key"] for s in chosen.get("stages") or [] if s.get("key"))
     where = "in a chat of its own" if session else "as a background agent"
-    tell = (f"send_message to {parent}: " if session else "end with one line: ")
     lines = [
         f"Do one piece of work for this person's job search page, {where}, so the chat that "
         f"answers the page stays free. The work: \"{chosen.get('title') or kind}\" (work item "
         f"{wid}, a {kind}), already claimed for you. The page: {url}. The chat that answers "
         f"it: {parent}.",
         f"1. python3 tools/app.py start --on \"<your model>\" --tools none --work {wid}, and do "
-        "what it prints. Never publish, watch or answer the page, and never write its view.",
+        "what it prints. Never publish, watch or answer the page.",
         "2. Load ArtifactData (ToolSearch, select:ArtifactData). Read the page's database "
         f"into a fresh folder in your scratchpad, $D: ArtifactData query, url {url}, "
         "collection work, then holds, each with out_dir $D.",
@@ -294,15 +293,25 @@ def child_prompt(chosen: dict, parent: str, url: str, session: bool = True) -> s
             f"{wid} --stage scrape --log <the round's folder>/round.log, and send its batch, "
             "so the page shows how many job sites are done and how long is left.")
     if session:
+        # A chat in the cloud cannot message another one (send_message: "a cloud session
+        # receives your message but cannot message any session back yet"): a search told to
+        # ask the chat that answers the page to bring it up to date found both ways refused,
+        # and its ten jobs sat off the page (2026-11-03). It brings the page up to date itself.
         lines.append(
-            f"{len(lines)}. No ArtifactData in this chat: instead of each batch, send_message "
-            f"to {parent}: \"Progress {wid}: <stage> | <one plain line>\", and at the end "
-            f"\"Finished {wid}: <what was made, in a line>\". It writes them to the page.")
-    lines.append(
-        f"{len(lines)}. Finish as step 5 says, without its heartbeat line and without app.py "
-        f"view. Save and land your work on master (CLAUDE.md, \"Saving\"). Then {tell}"
-        f"\"Finished {wid}, on master: bring the page up to date.\" Never write to the "
-        "person: the page shows how it went.")
+            f"{len(lines)}. Finish as step 5 says, without its heartbeat line. Then bring the "
+            f"page up to date yourself, before saving, so the person sees it at once: "
+            f"ArtifactData query, url {url}, collections view, meta and addr, out_dir $D; "
+            f"python3 tools/app.py view \"$D/view\" --dump \"$D\" --chat <this chat's id>; "
+            "and send every batch it prints (ArtifactData batch). A refused batch: read those "
+            "three again and run it once more. No chat will do it for you: a chat in the cloud "
+            "cannot message another one. Then save and land your work on master (CLAUDE.md, "
+            "\"Saving\"). Never write to the person: the page shows how it went.")
+    else:
+        lines.append(
+            f"{len(lines)}. Finish as step 5 says, without its heartbeat line and without app.py "
+            f"view. Save and land your work on master (CLAUDE.md, \"Saving\"). Then end with "
+            f"one line: \"Finished {wid}, on master: bring the page up to date.\" Never write "
+            "to the person: the page shows how it went.")
     return "\n".join(lines)
 
 
