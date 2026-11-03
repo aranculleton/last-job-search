@@ -224,8 +224,12 @@ def test_every_section_shows_the_engines_items_in_plain_words(run, built):
     assert "Juno at Larkspur Retail replied to you on 12 Sep" in t["jobs"] and "Write to Juno" in t["jobs"]
     assert "Pay not stated" not in t["jobs"] + t["drafts"], "said on nearly every card, it said nothing"
     assert "Uses some of your Claude allowance, about" in t["jobs"], "a suggestion's cost is the amount and its real time"
-    # The check that passed says what it checked (2026-11-03: "✓ Checked" said nothing of what).
-    assert "Made, right length: CV 1 page, letter 1 page" in t["drafts"] and "\nChecked\n" not in t["drafts"], t["drafts"]
+    # The check that passed says what it checked (2026-11-03: "✓ Checked" said nothing of what);
+    # where no PDF reader is installed (the browser job on GitHub) it says the count was not read.
+    import pdftext
+    said = ("Made, right length: CV 1 page, letter 1 page" if pdftext.reader() or shutil.which("pdfinfo")
+            else "Made; page count not read here")
+    assert said in t["drafts"] and "\nChecked\n" not in t["drafts"], t["drafts"]
     fern = t["drafts"].split("Operations Analyst", 1)[1].split("Claims Forecasting Analyst", 1)[0]
     assert "Get the files" not in fern and "Get my files ready" not in fern, "a file not made yet is not offered"
     assert "Needs a fix" not in fern and "still to make" in t["drafts"], "a draft never made is still to make, never a fix"

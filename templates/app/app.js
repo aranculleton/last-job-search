@@ -4247,14 +4247,20 @@
     if (je && je.doc.action === "job.applied") return "applied";
     return txt(a.status) || "drafted";
   }
-  // A draft whose files were never made: none has pages or is on the page.
+  // A file is made when the engine found it (`made`), whether or not this computer could count
+  // its pages: a computer with no PDF reader read every page count as unknown, so a finished
+  // application offered no way to get its files (2026-11-03). Pages or an asset also mean made.
+  function fileMade(f) {
+    return f.made === true || !!f.asset || Number(f.pages) > 0;
+  }
+  // A draft whose files were never made: none is made or on the page.
   function draftUnmade(a) {
     const files = arr(a.files);
-    return /^Not made yet\b/i.test(txt(obj(a.checks).line)) || (files.length > 0 && !files.some((f) => f.asset || Number(f.pages) > 0));
+    return /^Not made yet\b/i.test(txt(obj(a.checks).line)) || (files.length > 0 && !files.some(fileMade));
   }
   // Files made but not on the page yet: the draft's one next step is to get them here.
   function filesMissing(a) {
-    const made = arr(a.files).filter((f) => f.asset || Number(f.pages) > 0);
+    const made = arr(a.files).filter(fileMade);
     return made.length > 0 && made.some((f) => !f.asset);
   }
   const CHANNEL = {linkedin_note: "LinkedIn connection note", linkedin_message: "LinkedIn message", inmail: "LinkedIn InMail", email: "Email"};
@@ -4389,8 +4395,8 @@
     const checks = obj(a.checks);
     const live = readyLive(a);
     const about = txt(a.company) + ", " + txt(a.role);
-    // Files that exist but are not on the page yet; a file not made has no pages and no asset.
-    const made = files.filter((f) => f.asset || Number(f.pages) > 0);
+    // Files that exist but are not on the page yet.
+    const made = files.filter(fileMade);
     const missing = made.filter((f) => !f.asset).length;
     const out = obj(a.outreach);
     const outId = "out-" + seg(a.id);

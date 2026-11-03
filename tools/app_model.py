@@ -1405,7 +1405,7 @@ def _ready(ctx: Ctx, targets: dict) -> list:
                 "company": row.get("company") or "", "role": row.get("role") or "",
                 "pay": pay, "place": str(draft.get("location") or ""),
                 "apply": apply_link(_link_on_row(row, draft)),
-                "files": [{k: f[k] for k in ("kind", "name", "asset", "path", "pages")}
+                "files": [{k: f[k] for k in ("kind", "name", "asset", "path", "pages", "made")}
                           for f in files],
                 "checks": _with_verify(_checks(files, expect, noun), verify_items(folder)),
                 "outreach": _outreach(folder, names),
