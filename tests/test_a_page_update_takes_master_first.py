@@ -85,8 +85,13 @@ def test_a_merge_being_settled_by_hand_is_never_thrown_away(tmp_path, monkeypatc
     (a / "job_search_tracker.csv").write_text("company\nKestrel Mutual\nQuayside Foods\n")
     _git(a, "commit", "-qam", "this chat's row")
     _git(a, "fetch", "-q", "origin", "master")
+    # Stops on the conflict. With a name to commit as: without one, git refuses before it
+    # begins, and no merge is in progress at all (CI's Python 3.9 leg, 2026-11-03).
     subprocess.run(["git", "-C", str(a), "merge", "--no-edit", "origin/master"],
-                   capture_output=True)                       # stops on the conflict
+                   capture_output=True, text=True, encoding="utf-8",
+                   env=dict(os.environ, GIT_AUTHOR_NAME="t", GIT_AUTHOR_EMAIL="t@example.com",
+                            GIT_COMMITTER_NAME="t", GIT_COMMITTER_EMAIL="t@example.com"))
+    assert (a / ".git" / "MERGE_HEAD").exists(), "the test's own merge stopped part way"
     settled = "company\nKestrel Mutual\nLarkspur Retail\nQuayside Foods\n"
     (a / "job_search_tracker.csv").write_text(settled)      # settled by hand, not yet added
     _here(monkeypatch, a)
