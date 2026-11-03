@@ -360,19 +360,41 @@ def test_the_quick_landing_check_runs_their_own_tests_once(tmp_path, quick, data
 
 
 def test_the_landing_check_runs_in_the_background_and_the_page_says_so():
+    # The check runs inside tools/land.py, one background command that also saves, merges
+    # master and pushes (2026-11-03: landing took about fourteen steps).
     runbook = _read("RUNBOOK.md")
     four = runbook[runbook.index("## 4. Record and persist, then land on master"):]
     four = " ".join(four[:four.index("\n## 5.")].split())
-    assert "start `./tools/ci_local.sh --quick` in the background (Bash, `run_in_background`)" \
-        in four
+    assert ("start `python3 tools/land.py --message \"<what changed>\"` in the background "
+            "(Bash, `run_in_background`)") in four
+    assert "runs `./tools/ci_local.sh --quick`, and only when that is green" in four
     assert "\"Saving your work\"" in four
+    assert "at most once a turn" in four and "never subscribe to it" in four
+    assert "**Independent commands go together, as separate calls.**" in four
+    assert "A push or a merge never goes before its check has ended green." in four
     skill = _read(".claude/skills/app/SKILL.md")
     five = " ".join(skill[skill.index("## 5. Finish in one batch"):].split())
     assert "`busy: \"Saving your work\"` while the landing check below runs" in five
-    assert "`./tools/ci_local.sh --quick` in the background (Bash, `run_in_background`)" in five
+    assert ("`python3 tools/land.py --message \"<what changed>\"` in the background (Bash, "
+            "`run_in_background`; it saves, commits, merges master and runs "
+            "`./tools/ci_local.sh --quick`)") in five
     assert "python3 tools/app.py busy \"$D\" --done" in five
+    # The answer first: the page is brought up to date before the landing starts.
+    assert five.index("python3 tools/app.py view") < five.index("python3 tools/land.py")
+    message = " ".join(skill[skill.index("### A message in the chat"):
+                             skill.index("## 5. Finish in one batch")].split())
+    assert "**The answer goes out first.**" in message and "once a turn" in message
+    core = " ".join(_read("CLAUDE.md").split())
+    assert "`python3 tools/land.py` in the background" in core
+    assert "independent ones as separate calls in one message, never a push or a merge before " \
+        "its check" in core
+    brief = _read("automation/prompts/morning_brief.md")
+    assert brief.index("## 5. The message") < brief.index("tools/land.py")
+    assert "it goes out before anything lands" in " ".join(brief.split())
+    assert "python3 tools/land.py" in _read("automation/prompts/_common.md")
     import save_state
     assert "in the background" in save_state.LAND and "Saving your work" in save_state.LAND
+    assert "tools/land.py" in save_state.LAND
     usage = " ".join(_read("tools/ci_local.sh").replace("\n#", "\n").split())
     assert "the floor leg's second run of the person's own tests" in usage
     assert "--quick    # skips the LaTeX compile and the second run of your own tests" in \

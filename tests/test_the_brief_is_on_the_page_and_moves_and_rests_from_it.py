@@ -85,7 +85,7 @@ def test_the_message_links_the_page_and_its_questions_wait_there(tmp_path):
     assert "notice period" not in message
     assert "the questions are on the page as To do cards" in claude
     assert "app.py view <D>/view --dump <D> --chat brief" in claude
-    assert "collections screen, meta and addr" in claude      # the page's own collections
+    assert "collections screen, meta, addr and work" in claude      # the page's own collections
     # With no page, the record on GitHub and the questions at the end, as before.
     bare = Search(tmp_path / "bare", page=False)
     _questions(bare.sync)
@@ -139,7 +139,8 @@ def test_a_page_left_behind_by_an_update_is_published_again_by_the_brief(monkeyp
     monkeypatch.setattr(brief, "page_behind", lambda: "an update changed the page itself")
     lines = brief.claude_lines(dict(b))
     first = next(i for i, ln in enumerate(lines) if "republish it now" in ln)
-    data = next(i for i, ln in enumerate(lines) if "the page, after landing" in ln)
+    # The page, then the message, and only then the landing (morning_brief.md steps 4 to 6).
+    data = next(i for i, ln in enumerate(lines) if "the page, once the news is recorded" in ln)
     assert first < data                               # the new code first, then today's data
     assert "app.py page --out" in lines[first] and PAGE in lines[first]
     # The first brief after the update read the older prompt, which said never to: this wins.
