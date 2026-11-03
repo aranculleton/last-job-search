@@ -2756,8 +2756,17 @@
   };
   // Who someone is, on a row about them: a list of names with only "first wrote 10 Sep" left
   // the person asking who they all were (2026-11-03). With no employer on record, it says so.
+  // The person's one date where it is what the row is about: the day they wrote on a reply
+  // owed, the day you wrote on a follow-up; never "you wrote ... no reply" under "Reply to".
+  function dueWhen(d) {
+    const pw = personWhen(personOf(dueContact(d)));
+    if (!pw) return null;
+    const reply = txt(d.kind) === "reply" || txt(d.sub) === "reply";
+    const follow = !reply && (isFollowUp(d) || ["nudge", "follow_up"].includes(txt(d.kind)));
+    return (reply && pw.theirs) || (follow && !pw.theirs) ? pw : null;
+  }
   function dueWho(d) {
-    const when = personWhen(personOf(dueContact(d)));
+    const when = dueWhen(d);
     // The engine's "first wrote 10 Sep" gives way to the one date the card is about.
     const c = txt(d.context).split(" · ").filter((x) => x && !(when && /^first wrote /i.test(x))).concat(when ? [when.text] : []).join(" · ");
     if (txt(d.company) || d.company === undefined) return c;
@@ -3084,7 +3093,7 @@
     const title = asked ? asked.title : txt(d.title);
     // One date a card: a row about someone says the day they wrote (or you did) in its line,
     // so the corner says only that it is overdue.
-    const pw = personWhen(personOf(dueContact(d)));
+    const pw = dueWhen(d);
     const chipWords = late && pw ? "Overdue" : when;
     const doneBtn = done.action && !busy ? btn(txt(done.label) || "Done", () => act([{item: d.id, action: txt(done.action), value: {on: todayIso()}, rev: d.rev}], "Done: " + txt(d.title)),
       {kind: hasWork ? "secondary" : "primary", small: true, pressed: marked, key: "duedone:" + (ctx.where || "") + ":" + d.id, aria: (txt(done.label) || "Done") + ": " + txt(d.title)}) : null;
@@ -3556,7 +3565,7 @@
     const DUE_SKIP = new Set(["request_pending", "withdraw", "hidden"]);
     // A step about someone says the one date it is about, as their To do card does; anything
     // else says when it is due. What they asked for leads where the record says it.
-    const dueStepWhen = (d) => { const pw = personWhen(personOf(dueContact(d))); return pw ? (dueAsk(d) ? pw.day : pw.text) : dueWord(d.due); };
+    const dueStepWhen = (d) => { const pw = dueWhen(d); return pw ? (dueAsk(d) ? pw.day : pw.text) : dueWord(d.due); };
     const dueSteps = dueItems().filter((d) => !DUE_SKIP.has(txt(d.kind)) && dayDiff(d.due) !== null && !dueSentHere(d) && !effective(d.id, ["due.done", "due.snooze"]))
       .sort((x, y) => txt(x.due).localeCompare(txt(y.due)))
       .map((d) => ({keys: dueKeys(d), d, node: () => h("li", {}, h("a", {href: "#todo/" + d.id, class: "bp-text bp-link", "data-k": "bp-due:" + d.id, onclick: (e) => { e.preventDefault(); go("todo", {focus: true, item: d.id}); }},
@@ -3590,7 +3599,7 @@
       if (said) out.push("They said: “" + said + "”");
       // Then the day it is about, in the one form every card uses, and who they are: their
       // title and how they were found alone told the person nothing (2026-11-03).
-      const pw = personWhen(p);
+      const pw = d ? dueWhen(d) : personWhen(p);
       if (pw) out.push(cap1(pw.text));
       const bits = d ? txt(d.context).split(" · ").filter((x) => x && !/^first wrote /i.test(x)) : [];
       if (bits.length) out.push(...bits.slice(0, 2));
@@ -3655,7 +3664,7 @@
       // "5 days late", never "Rolled over · 5 days late"; a step about someone says "Overdue"
       // and its one date beside it, in the facts (2026-11-03).
       const ld = lateSteps[0].d;
-      hero = dueHero(lateSteps[0], personWhen(personOf(dueContact(ld))) ? "Overdue" : cap1(dueWord(ld.due)));
+      hero = dueHero(lateSteps[0], dueWhen(ld) ? "Overdue" : cap1(dueWord(ld.due)));
     } else if (todaySteps.length) {
       hero = dueHero(todaySteps[0], "Due today");
     } else if (weekIv) {
