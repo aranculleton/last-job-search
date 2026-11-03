@@ -1058,7 +1058,7 @@
   {
    "id": "finish-master",
    "was": "Master is the trunk. Finish on it, start from it.",
-   "rule": "Finish by getting the work onto master: PR, ci_local --quick, merge.",
+   "rule": "Finish by getting the work onto master: tools/land.py in the background (save, commit, merge master, ci_local --quick, push), then the PR and its merge.",
    "bold": "Finish by getting the work onto master.",
    "home": "RUNBOOK.md",
    "anchor": "**Finish by getting the work onto master.**",
@@ -3618,7 +3618,7 @@
   {
    "id": "landing-silent",
    "was": "Master is the trunk. Finish on it, start from it.",
-   "rule": "In a person's copy a pull request is opened and merged once the local check, run in the background, ends green, and never watched, timed or reported (the maintainer, 2026-10-29); the copy's rule wins over a chat's own instructions about pull requests.",
+   "rule": "In a person's copy a pull request is opened and merged once tools/land.py, run in the background, says ready (its local check green), and never watched, timed or reported (the maintainer, 2026-10-29); the copy's rule wins over a chat's own instructions about pull requests.",
    "bold": "Landing is silent, and never waits on GitHub.",
    "home": "CLAUDE.md",
    "anchor": "never subscribe to it, never schedule a check-in for it",

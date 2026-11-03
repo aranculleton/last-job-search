@@ -40,28 +40,34 @@ T = "2026-10-25T09:00:00Z"
 
 
 def test_draft_this_drafts_in_one_tap_with_no_chosen_and_the_postings_question_left_open(run, tmp_path, vp):
+    # One tap drafts, with no sheet first (2026-11-03, the session's "one tap drafts"), and its
+    # toast carries an Undo that calls the draft off before Claude starts, as "Don't do it" does.
+    toast = "(() => [...document.querySelectorAll('[data-toast]')].map((t) => t.textContent).join(' | '))()"
     got = _go(run, tmp_path, [
         {"hash": "jobs", "click": "Draft this: Harbourline Bank, Pricing Analyst", "read": "dialog",
-         "eval": "(() => { const c = document.querySelector('dialog input[type=radio]:checked'); return c ? c.labels[0].textContent : null; })()"},
-        {"submit": True, "read": "dialog"},
+         "ready": "[...document.querySelectorAll('[data-toast]')].some((t) => t.textContent.includes('Drafting Harbourline Bank'))", "eval": toast},
+        {"click": "Undo", "exact": True, "within": "#toasts", "eval": toast},
     ], vp, clock=T)
-    assert got["after"][0]["eval"] == "No, draft it", "the person pressed Draft this: drafting is already chosen"
-    assert "Are you happy with a 12 month fixed term? (if you like)" in got["after"][0]["text"]
-    assert "Answer these first" not in got["after"][1]["dialog"]
+    assert got["after"][0]["dialog"] == "", "no sheet: the person pressed Draft this"
+    assert "Undo" in got["after"][0]["eval"], got["after"][0]["eval"]
     w = [x for x in got["work"] if x and x.get("kind") == "draft"]
     assert w, "the draft is asked for, the posting's own question left unanswered"
     assert w[-1]["args"]["already_applied"] == "no" and w[-1]["args"]["job"] == "r12-1"
     assert w[-1]["args"]["answers"] == [], "a question left open is not sent as an answer"
+    assert w[-1]["status"] == "stopped" and w[-1]["stop_asked"], ("Undo calls the draft off", w[-1])
+    assert "Not drafting Harbourline Bank" in got["after"][1]["eval"], got["after"][1]["eval"]
     assert not got["actions"], "nothing is marked as applied"
 
 
 def test_a_field_to_answer_is_listed_from_its_bullet_with_no_bar_down_its_side(run, tmp_path, vp):
     got = _go(run, tmp_path, [
+        # "Add something" asks what first, an interview or anything else (2026-11-03).
         {"hash": "interviews", "open": "up-add"},
+        {"open": "sheet-choice:other"},
         {"submit": True, "eval": "(() => { const a = document.querySelector('dialog .errors ul a'); const f = document.querySelector('dialog .field.has-error');"
          " const s = getComputedStyle(a), fs = getComputedStyle(f); return {align: s.textAlign, side: fs.borderLeftWidth, pad: fs.paddingLeft, words: a.textContent}; })()"},
     ], vp, clock=T)
-    r = got["after"][1]["eval"]
+    r = got["after"][2]["eval"]
     assert r["words"] == "What it is"
     assert r["align"] in ("left", "start"), ("each line reads from its bullet, never centred away from it", r)
     assert r["side"] == "0px" and r["pad"] == "0px", ("nothing has a line down its side", r)
@@ -110,12 +116,13 @@ def test_an_interview_goes_into_the_calendar_from_its_to_do_card_and_its_prep(ru
                                          ("The pay", "Set aside. Fewer jobs paying like this from now on."),
                                          ("The place", "Set aside. Fewer jobs in places like this from now on.")])
 def test_the_job_bin_says_what_its_reason_changes(run, tmp_path, reason, said):
+    # Each reason is its own button and acts at once (2026-11-03: a reason, then "Take it off my
+    # list", was two taps for one thing).
     got = _go(run, tmp_path, [
         {"hash": "jobs", "click": "Not for me: Harbourline Bank, Pricing Analyst"},
-        {"click": reason, "role": "radio", "exact": True},
-        {"click": "Take it off my list", "read": ".toasts"},
+        {"click": reason, "exact": True, "within": "dialog", "read": ".toasts"},
     ], PHONE, clock=T)
-    assert said in got["after"][2]["text"], got["after"][2]["text"]
+    assert said in got["after"][1]["text"], got["after"][1]["text"]
     assert _one(got, "job.dismiss")["value"]["why"] in ("field", "pay", "place")
 
 
@@ -135,7 +142,7 @@ def test_what_to_avoid_is_changed_in_the_search_panel_which_has_one_name(run, tm
 def test_a_phone_toast_keeps_close_on_its_words_row(run, tmp_path):
     got = _go(run, tmp_path, [
         {"hash": "jobs", "click": "Not for me: Harbourline Bank, Pricing Analyst"},
-        {"click": "Take it off my list", "eval": "(() => { const t = document.querySelector('.toast'); const x = t.querySelector('[data-k^=\"toast-x\"]').getBoundingClientRect();"
+        {"click": "Not this one", "within": "dialog", "eval": "(() => { const t = document.querySelector('.toast'); const x = t.querySelector('[data-k^=\"toast-x\"]').getBoundingClientRect();"
          " const w = t.querySelector('.toast-text').getBoundingClientRect(); return {h: Math.round(t.getBoundingClientRect().height), row: x.top < w.bottom && x.bottom > w.top}; })()"},
     ], PHONE, clock=T)
     r = got["after"][1]["eval"]

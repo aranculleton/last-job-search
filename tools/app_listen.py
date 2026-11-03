@@ -91,6 +91,13 @@ UPDATE_QUIET_S = 60 * 60
 # maintainer, 2026-10-30). Until the new one has taken it, the old one still answers: a fresh
 # chat that never starts changes nothing.
 RENEW_S = 20 * 3600
+# A helper whose history has grown by more than this since its first turn answers slowly:
+# one answering the page since three days before re-read some 535,000 tokens a step, and a
+# one-line LinkedIn reply took minutes that a fresh chat does at once (the maintainer,
+# 2026-11-03: "the entire app is so unnecessarily slow"). Past it, the helper hands over at
+# its next quiet moment. Growth, not size: a fresh chat already starts near 100,000, and a
+# size of 150,000 would have started a new helper about every hour (the release review).
+RENEW_TOKENS = 200_000
 # How every page step after an update is done: at once, unasked, one command at a time (a
 # chained command goes to the desktop app's safety check whole), with nothing left behind.
 NO_ASK = ("Do it now, before anything else, and never ask the person first: bringing their "
@@ -348,11 +355,7 @@ def decide(db: dict, chat: str, out_dir: str, now: dt.datetime | None = None,
     if mine:
         renew = renewal(rec, db, chat, now)
         if renew:
-            lines.append("listen: renew: this chat has answered the page for a day, and nothing "
-                         "is waiting. Start its fresh helper now, unasked and saying nothing to "
-                         "the person: create_session " + json.dumps(renew, ensure_ascii=False) +
-                         ". The new chat takes the page as it starts; until then this one still "
-                         "answers, and its next check-in finds the new one and stops its watch.")
+            lines.append(renew_line(renew))
         fresh = {"answered_at": at, "watching": True, **({"helper": True} if helper else {})}
         if version is None:
             # Read only under its 4.2 name (page_db.load): the new record is made, whole.
@@ -399,13 +402,78 @@ def decide(db: dict, chat: str, out_dir: str, now: dt.datetime | None = None,
     return {"role": "listener", "lines": lines, "batches": w.save("listen"), "record": rec}
 
 
+def renew_line(renew: dict) -> str:
+    """What the listener does when its day is up: start its fresh helper, unasked."""
+    return ("listen: renew: this chat has answered the page for a day, and nothing "
+            "is waiting. Start its fresh helper now, unasked and saying nothing to "
+            "the person: create_session " + json.dumps(renew, ensure_ascii=False) +
+            ". The new chat takes the page as it starts; until then this one still "
+            "answers, and its next check-in finds the new one and stops its watch.")
+
+
+def view_renewal(db: dict, chat: str, now: dt.datetime) -> list[str]:
+    """The renewal line when a page update by the chat that answers the page finds its day
+    or its size up: the morning brief runs in that chat and brings the page up to date, but
+    the renewal was printed only at a check-in the brief never made, so one helper ran for
+    days (2026-11-03). It writes nothing: `answered_at` says the chat took the work waiting,
+    and a page update takes none (the release review). Only with the work queue in the dump,
+    so a job still running is never handed over; and the chat is this session's own id
+    whatever `--chat` says (the brief passes a word, not an id)."""
+    chat = this_chat("") or this_chat(chat)
+    rec, _ = record(db)
+    if not chat or rec.get("chat") != chat or "work" not in db:
+        return []
+    renew = renewal(rec, db, chat, now)
+    return [renew_line(renew)] if renew else []
+
+
+def context_tokens() -> int:
+    """How much this chat's history has grown since its first turn: its last turn's input
+    less its first's, from the newest session file Claude Code keeps under ~/.claude/projects
+    (CLAUDE_CONFIG_DIR where set). 0 when there is none or it cannot be read: then only the
+    day decides."""
+    root = os.path.join(os.environ.get("CLAUDE_CONFIG_DIR") or os.path.expanduser("~/.claude"),
+                        "projects")
+    try:
+        files = [os.path.join(root, d, f) for d in os.listdir(root)
+                 if os.path.isdir(os.path.join(root, d))
+                 for f in os.listdir(os.path.join(root, d)) if f.endswith(".jsonl")]
+        newest = max(files, key=os.path.getmtime) if files else ""
+        if not newest:
+            return 0
+        size = os.path.getsize(newest)
+        with open(newest, "rb") as fh:
+            head = fh.read(min(size, 262144)).decode("utf-8", "replace")
+            fh.seek(max(0, size - 262144))
+            tail = fh.read().decode("utf-8", "replace")
+    except OSError:
+        return 0
+
+    def used(lines):
+        for line in lines:
+            if '"usage"' not in line:
+                continue
+            try:
+                u = json.loads(line)["message"]["usage"]
+                return sum(int(u.get(k) or 0) for k in ("input_tokens", "cache_read_input_tokens",
+                                                       "cache_creation_input_tokens"))
+            except (ValueError, KeyError, TypeError):
+                continue
+        return None
+    last, first = used(reversed(tail.splitlines())), used(head.splitlines())
+    return max(0, (last or 0) - (first or 0)) if last is not None else 0
+
+
 def renewal(rec: dict, db: dict, chat: str, now: dt.datetime) -> dict | None:
     """The create_session call for a fresh helper, or None. Only a cloud chat answering the
     page for RENEW_S, with nothing queued or running, and not renewed in the last RENEW_S."""
     if not chat or rec.get("chat") != chat or chat_kind() != "cloud":
         return None
     since = _time(rec.get("since"))
-    if since is None or (now - since).total_seconds() < RENEW_S:
+    if since is None:
+        return None
+    big = context_tokens() >= RENEW_TOKENS
+    if (now - since).total_seconds() < RENEW_S and not big:
         return None
     for doc in (db.get("work") or {}).values():
         if str(doc["data"].get("status") or "") in ("queued", "claimed", "running"):
@@ -423,8 +491,11 @@ def renewal(rec: dict, db: dict, chat: str, now: dt.datetime) -> dict | None:
         return None
     got["renewed_at"] = _stamp(now)
     _save_seen(got)
+    # The page's own tools carried over (create_session's extra_allowed_tools), so the fresh
+    # helper never stops on a permission prompt while the person is away (2026-11-03).
     return {"title": HELPER_CHAT_TITLE, "prompt": WAKE_PROMPT,
-            "source_url": f"https://github.com/{owner}/{name}"}
+            "source_url": f"https://github.com/{owner}/{name}",
+            "extra_allowed_tools": ["ArtifactData", "ArtifactComments", "Artifact"]}
 
 
 def first_claim(chat: str, out_dir: str, now: dt.datetime | None = None,

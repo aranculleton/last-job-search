@@ -42,25 +42,17 @@ The `news-reader` agent, given every FOR CLAUDE news line as printed. It returns
 lines, each ending in how the person can use it, widening rather than coming back empty.
 Nothing else finds the news; if it cannot run, step 4 gives `brief.py news` nothing.
 
-## 4. Record and land: two commands
+## 4. Record: one command
 
 ```
 python3 tools/brief.py news <<'EOF'
 <the news-reader's lines, as they came, best first, at most five; nothing if it could not run>
 EOF
-python3 tools/save_state.py
-git commit -qm "Brief <YYYY-MM-DD>"
-./tools/ci_local.sh --quick
-git push -u origin HEAD
 ```
-
-Each command on its own, never chained: a chain goes to the safety check whole. Push only
-when the local check passed.
 
 `brief.py news` puts the news in the day's record, leaves out any link an earlier brief
 sent, and notes a freeze or layoffs at an employer with a live application on that row.
-Then open the PR and merge it, as `_common.md` "Landing work" says. With a page, bring it up
-to date as its FOR CLAUDE line says. Where a FOR CLAUDE line says the page's own code is older
+With a page, bring it up to date as its FOR CLAUDE line says. Where a FOR CLAUDE line says the page's own code is older
 than this version, republish it first, exactly as that line says: this chat answers the page,
 so no other chat will, and an open page keeps the old code until it is.
 
@@ -78,3 +70,10 @@ With a page, they answer there (its To do), and the message links it. When they 
 this chat later, record each answer the way the line asks:
 `python3 tools/confirm.py applied|not-applied "<Employer>::<role>"` for an application they
 say went or did not, `/outcome` for a result, `/reply <name>` for a reply.
+
+## 6. Land, after the message
+
+With the message ready, the one call before your final reply starts `python3 tools/land.py
+--message "Brief <YYYY-MM-DD>"` in the background (Bash, `run_in_background`), and the
+message follows at once: it goes out before anything lands. When it wakes you, `_common.md`
+"Landing work".

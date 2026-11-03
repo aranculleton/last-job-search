@@ -234,6 +234,14 @@ table, then a line only for what is off. Never more.
 
 - **Sorted by score, highest first**, with the score shown. Never alphabetically, by portal or
   by posting date, and never an unscored posting.
+- **The number asked for is filled from the next rows that pass every rule.** The round's cut
+  passes over a row failing a hard rule (the search window, the candidate's bar, a ruling) and
+  takes the next, and says how many it found when it runs out (`shortlist: found 7 of the 10
+  asked for`): pass that on. A row you find fails a rule the round could not see is ruled out
+  with `python3 tools/exclude.py add <url> --title "<title>" --company "<company>" --reason
+  "<why>"`, then `python3 tools/run_round.py --out <the round's folder> --recut --show <N>`
+  cuts the round again and refills it. Never drop a row from the table by hand: it leaves the
+  shortlist short with good rows below it.
 - **Every row carries a working apply link**, and so does every posting you later draft
   documents for. The link is the posting URL stored in `seen_jobs.json`, which already
   resolves to the posting itself rather than to a listing page. When documents are produced

@@ -2042,9 +2042,17 @@ DRAFT_TODO = ("a draft you have not confirmed yet: make it true (or change it to
               "happened), then delete its Draft line")
 DRAFT = "Draft"
 # A reason only the person can give (why they are looking, why each move), which Claude
-# asks them before anything is written: the interview pack's ASK YOU FIRST line.
+# asks them before anything is written: the interview pack's "Claude asks you first" line.
+# Said in plain words, not shouted: the person reads it on their page (2026-11-03). The
+# capitals it was written in before are still read as the same mark.
 ASK = "Ask"
-ASK_MARK = "ASK YOU FIRST (Claude asks, once):"
+ASK_MARK = "Claude asks you first:"
+ASK_MARKS = (ASK_MARK, "ASK YOU FIRST (Claude asks, once):")
+
+
+def asks_first(text) -> bool:
+    """Does this answer still wait on a reason Claude asks the person first?"""
+    return any(m in str(text or "") for m in ASK_MARKS)
 
 
 # A quoted line: a note beside an answer, except where the whole answer is quoted, which is
@@ -2093,7 +2101,7 @@ def check_answers(text, company="") -> list:
         if a == NARRATIVE_POINTER:
             continue
         lines = a.split("\n")
-        if ASK_MARK in a:
+        if asks_first(a):
             out.append((ASK, q))
             continue
         # A call is a conversation: an answer has about a screen answer's time.

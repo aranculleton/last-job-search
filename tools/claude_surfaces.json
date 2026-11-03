@@ -339,7 +339,7 @@
     },
     {
       "id": "cloud-setup-script",
-      "claim": "A cloud environment's setup script runs when a new chat's cloud computer is built, and is kept for later chats, so tools it installs are there from the start. It is in the same settings as network access. A change reaches the next new chat; one already running gets it only when its computer is rebuilt.",
+      "claim": "A cloud environment's setup script runs the first time a chat starts in that environment; when it finishes within about five minutes, a snapshot of what it installed is reused by later chats, which skip it, until the script or the network settings change or about seven days pass. A chat woken after a quiet spell does not run it again. It is in the same settings as network access. A change reaches the next new chat; one already running gets it only when its computer is rebuilt.",
       "goal": "make each new chat start with the PDF tools in place",
       "how": "in the same settings (the small arrow after this chat's title, then Edit cloud environment), the line pasted into Setup script and saved",
       "steps": [
@@ -356,11 +356,13 @@
       ],
       "sources": [
         {"url": "https://code.claude.com/docs/en/cloud-environments", "quote": "open the environment settings dialog and enter your script in the Setup script field"},
-        {"url": "https://code.claude.com/docs/en/cloud-environments", "quote": "select the caret after the session title at the top, then select Edit cloud environment ."}
+        {"url": "https://code.claude.com/docs/en/cloud-environments", "quote": "select the caret after the session title at the top, then select Edit cloud environment ."},
+        {"url": "https://code.claude.com/docs/en/cloud-environments", "quote": "The setup script runs the first time you start a session in an environment."},
+        {"url": "https://code.claude.com/docs/en/cloud-environments", "quote": "the setup script doesn't run when a session's VM is restored after being idle"}
       ],
       "status": "documented",
-      "verified_on": "2026-10-20",
-      "verified_against": "code.claude.com docs read 2026-10-20",
+      "verified_on": "2026-11-03",
+      "verified_against": "code.claude.com docs read 2026-11-03",
       "ui_sensitive": true
     },
     {

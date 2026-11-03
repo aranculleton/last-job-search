@@ -20,6 +20,135 @@ make sense to somebody whose repo just received it.
 
 ## [Unreleased]
 
+### Changed
+
+- **Draft this drafts, in one tap.** No sheet asks first whether you have applied: that is
+  "I have applied" under the card's More (one tap, today, with "Another day?" in its message)
+  or the bin's "Already applied".
+- **A job you put in the bin leaves the list at once**, with Undo in its message and then under
+  "set aside". Why you set it aside is asked once, in the bin, never again on the card.
+- **Ten applications draft at once, and a longer queue keeps moving by itself.** Each draft
+  runs in a chat of its own, so ten run side by side where three did; when one finishes, its
+  chat starts the next one waiting, so twenty drafts finish one after another with nobody
+  having to start them.
+- **A job's own chat never stops to ask your permission** to write to your page while you are
+  away, and nor does a fresh helper.
+- **Your page answers faster.** When you tap something, Claude does its bookkeeping in one
+  command, and tapping Draft starts the draft straight away instead of at Claude's next look.
+  A long job like a search no longer stops part way through to take an update.
+
+- **Putting something in the bin takes one tap**: each reason is its own button, and only the
+  reasons that are true are offered.
+- **What you finish leaves the list straight away** (a message sent, a question answered, a
+  follow-up done), with Undo in the message at the bottom.
+- **When someone asks you for something, the page says so** ("Juno asked for your CV") and
+  offers the button that does it. Each card shows one date, written the same way everywhere.
+- **A draft whose files are not on your page yet has one button to get them**, and new drafts
+  arrive with their files ready to download.
+- **The numbers agree with each other**: jobs to look at, things to do, and the time it takes
+  to draft them all.
+- **Coming up sits with the main places in the side menu**, Settings alone at the bottom, and
+  one "Add something" adds an interview or anything else.
+- **Less clutter**: no "Pay not stated", no "Not now" beside the bin, the tour only on your
+  first visit, the LinkedIn card one step at a time.
+
+- **Your interview prep reads in plain words.** What to say, what to ask, and one or two things
+  to be careful of come first, in big type; the rest folds away, one tap each. No file names,
+  links to your own files or commands anywhere in it; "Draft" shows only above an answer that
+  is a draft for you to check. Preps made before this update are remade by themselves.
+- **An interview that ended says how it ended** (they said no, you withdrew, no reply), never
+  "Passed"; an offer shows as your offer; a round with nothing booked after it shows as waiting
+  to hear. The Brief shows the likely questions for an interview today or tomorrow, the
+  practice interview asks your prep's own questions, and no thank-you is asked for after an
+  offer.
+- **A person's page shows your conversation with them**, and drafting a reply never asks for
+  their words again. Someone new, like a recruiter who wrote to you first, is added to your
+  contacts by Claude, never twice; "they accepted my request" is recorded and your follow-up
+  counts from that day.
+- **After two messages with no reply, Contacts offers Close, never another follow-up**, and
+  Close closes it. Contacts and To do count the same follow-ups, and the first notes from
+  finding people are one card in To do. A person in your LinkedIn download is listed once.
+
+### Fixed
+
+- **What you ask for on your page reaches Claude, and the page says honestly where it is.**
+  After your page was published again, its message to Claude could fail on the old line it
+  used, and the card said "Saved. It starts next time" while nothing had been sent. Now a
+  failed message goes again at once on a fresh line, anything still not sent goes with your
+  next tap anywhere on the page, and something left unanswered is sent again the same way, so
+  there is no "Ask Claude again" button. A card says "Not sent yet", "Waking Claude" with a
+  clock and how long a wake usually takes on your page, "Sent", or "No answer yet", and the
+  chat says the same. A late answer waits ten minutes, not three, since a chat woken after a
+  quiet spell first builds its computer.
+- **A request typed in Chat goes to Claude in the same tap.** "Find me ten more jobs" or "draft
+  a reply to her" used to go to the quick helper first, which could only pass it on once the
+  tap had expired, so it sat unsent. A question still gets the quick answer.
+- **A pasted message is never lost.** An invitation or a reply pasted into Chat is saved and
+  sent to Claude in the same tap; an interview invitation still offers to book it at once.
+- **A booked interview shows in Coming up and on the Brief straight away**, and reaches Claude
+  in the same tap; a later round shows beside an earlier one still to come. An invitation with
+  no day yet asks for the day, or is booked as "the day still to choose" (it was refused,
+  quoting a day already past, while the page said "Saved"); a stage already booked for a day
+  keeps it.
+- **A job that runs in a chat of its own puts its results on your page itself.** A search
+  finished its ten jobs, but was told to ask the chat that answers your page to show them, and
+  a chat in the cloud cannot message another one, so the jobs never appeared. It now saves its
+  work and then brings the page up to date.
+- **Two chats can never undo each other's work on your page.** Every page update first takes
+  in what the other chats have saved, so a finished search can no longer hide a finished
+  draft, and the reverse. Where it cannot, the page is left as it was.
+- **Bringing your page up to date writes only what changed**, not all of it every time.
+- **The chat that answers your page stays quick.** It handed over to a fresh helper only at a
+  check-in the morning brief never made, so one helper ran for days and re-read some 535,000
+  tokens at every step. Now a page update by that chat, the brief's included, hands over at
+  its next quiet moment once a day has passed or its history has grown by 200,000 tokens, never
+  while a job runs, and at most once a day.
+- **Saving is one quick step in the background, after your answer.** Saving your work took a
+  chat about fourteen steps and, at times, held your answer for minutes; it is now one command
+  that runs once a turn, after the answer is out, and checks your own tests in parallel (about
+  41 seconds where it took nearly five minutes). The morning brief reaches you before its notes
+  are saved.
+- **News is at least three points while the last four weeks have them**, filled from as many
+  earlier briefs as it takes, each split into what happened, how to use it and where it is
+  from (lines from before 4.8 included), and as many as your screen has room for.
+- **Answering someone who wrote to you is quicker.** Claude logs their message, works out what
+  kind it is, checks its draft and puts it on your page in two steps instead of about fifteen.
+  Work Claude starts from something you said in a chat shows on your page exactly as if you had
+  asked there.
+- **A message you paste in from someone else is never taken for your own feedback.** "Please
+  don't use my work email" in their message no longer changes how Claude writes for you.
+- **Nothing Claude saves is lost when a check fails.** Work that could not be saved to your
+  main copy (its check failed, or two chats saved at once) now waits on its own branch on
+  GitHub, and the next chat or brief brings it in; before, a cloud chat's work could vanish
+  when it ended. A page update never throws away a merge being settled, and waits while a save
+  runs.
+- **Well-known employers are never wrongly ruled out as public bodies.** A posting that
+  mentions public-sector clients or a regulator no longer excludes a bank or a consultancy you
+  target.
+- **A rule you write under a request is kept.** "Draft a reply to Juno's message. Keep it
+  short." no longer loses the "keep it short".
+- **A job chat never finishes a job another chat has taken on**, and its next job gets its own
+  steps.
+- **A resume fitted to its page always passes its own check.** Filling the page to its last
+  line put text within the margin the check fails ("text near the edge"), so a resume reported
+  as fitted was then turned back; filling now stops before that margin.
+- **A search follows your rules all the way to the list.** Jobs from employers' own career pages
+  follow your search window too, so a posting months old no longer reaches your list; a public
+  body you have ruled out is caught from what its own posting says it is, even when it is not
+  on your list of names; and when you ask for ten jobs you get ten that pass every rule, or
+  Claude tells you how many it found.
+- **Match scores no longer bunch up at 100.** A posting that only names your skills now tops
+  out below 100; a contact there or an earlier interview is what takes a role to 100. Scores
+  of 90 or under are unchanged.
+- **You can see who each person is.** People added from your LinkedIn export came in with no
+  employer, so a follow-up list showed only first names and "first wrote 10 Sep". Your next
+  export fills in each one's employer and title where their record has none. Until then,
+  someone with no employer on record is shown by name alone, never "Name at" with nothing
+  after it, and a row about them says "Employer not on record".
+- **Today says what the person last said** ("They said: ..."), in the page's normal size,
+  rather than only when it was due. Their words are kept with their address, readable by you
+  alone, never in the page's shared data.
+
 ## [4.8.0] - 2026-11-02
 
 ### Changed

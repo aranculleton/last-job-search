@@ -112,8 +112,8 @@ changed: record `learned.py offer` for it instead. Then
 In the background, at once, none waiting on another (Bash with `run_in_background`):
 
 - **Land the day's sync**: the first sync in a new copy brings the app in, and the local
-  check is slow until that is on master (RUNBOOK.md, "Landing on master"). Open its pull
-  request, run `./tools/ci_local.sh --quick`, and merge it, all in the background.
+  check is slow until that is on master (RUNBOOK.md, "Landing on master"). Start `python3
+  tools/land.py` in the background, and make the calls it prints when it ends.
 - **The tools**: in a cloud chat `./tools/setup_env.sh`; on their computer
   `python3 tools/env_check.py --fix`. Nothing is asked of them for either.
 - **Job sites**: in a cloud chat, `python3 tools/env_check.py --say` prints the words to pass

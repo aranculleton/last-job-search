@@ -822,8 +822,13 @@ def take(srcs, contacts_path: str | None = None, threads_path: str | None = None
                  f"{people} {'person' if people == 1 else 'people'} in the contact book. "
                  "Nothing was sent.")
     if plan["unmatched"]:
-        lines.append(f"{len(plan['unmatched'])} people in the history are not in the contact "
-                     f"book ({len(wrote)} of them written to): `export.py history` lists them.")
+        n_out = len(plan["unmatched"])
+        lines.append(
+            f"1 person in the history is not in the contact book"
+            f"{' (you wrote to them)' if wrote else ''}: `export.py history` names them."
+            if n_out == 1 else
+            f"{n_out} people in the history are not in the contact book ({len(wrote)} of them "
+            "written to): `export.py history` lists them.")
     if dated:
         lines.append(f"Follow-up dates written on {len(dated)} contact"
                      f"{'s' if len(dated) != 1 else ''} ({st.schema.follow_up_rule()}).")
@@ -1183,7 +1188,7 @@ def plan_history(contacts, threads, src=None, mine=None) -> dict:
         mine = (next((st.profile_handle(r.get("SENDER PROFILE URL")) for r in msgs["rows"]
                       if name_key(r.get("FROM")) == mine[1]
                       and st.profile_handle(r.get("SENDER PROFILE URL"))), ""), mine[1])
-    out = {"add": [], "fill": [], "redate": [], "mark": [],
+    out = {"add": [], "fill": [], "redate": [], "mark": [], "who": [],
            "joined": {"profile address": 0, "name": 0},
            "unmatched": [], "ambiguous": [], "groups": 0, "drafts": 0, "tables": tables,
            "problem": ""}
@@ -1421,6 +1426,18 @@ def plan_history(contacts, threads, src=None, mine=None) -> dict:
             asked = [x for x in rows if st.is_request(x)
                      and (st.as_date(x.get("date")) or datetime.date.max)
                      <= when + datetime.timedelta(days=MESSAGE_SLACK_DAYS)]
+            # Their employer and title as the export gives them, onto a record that has none:
+            # twenty-four people added from an export showed as a first name and "first wrote
+            # 10 Sep", and the person asked who they all were (2026-11-03). Never over a
+            # record's own, and only where the export's row is surely this person: their
+            # profile address, or their name with a request to them in the log. A name alone
+            # gave a not-contacted record a same-name stranger's employer (the release
+            # review, 2026-11-03).
+            co, ti = (r.get("Company") or "").strip(), (r.get("Position") or "").strip()
+            sure = _how == "profile address" or (_how == "name" and bool(asked))
+            if sure and ((co and not str(c.get("company") or "").strip()) or
+                         (ti and not str(c.get("title") or "").strip())):
+                out["who"].append((c, co, ti))
             if not asked:
                 continue           # connected before any request: nothing to accept
             since = st.as_date(asked[-1].get("date"))
@@ -1443,7 +1460,21 @@ def plan_history(contacts, threads, src=None, mine=None) -> dict:
         how = joined_ids.get(cid)
         if how in out["joined"]:
             out["joined"][how] += 1
-    out["unmatched"].sort(key=lambda u: u["last"], reverse=True)
+    # One person, one line: their messages in two conversations (a message, then a reply in
+    # a new one) were two lines and counted as two people (2026-11-03).
+    merged: dict = {}
+    for u in out["unmatched"]:
+        k = _who(u["name"], u["url"]) or f"row{len(merged)}"
+        had = merged.get(k)
+        if had is None:
+            merged[k] = dict(u)
+            continue
+        had["sent"] += u["sent"]
+        had["received"] += u["received"]
+        if u["last"] > had["last"]:
+            had.update(last=u["last"], last_from=u["last_from"])
+        had["name"], had["url"] = had["name"] or u["name"], had["url"] or u["url"]
+    out["unmatched"] = sorted(merged.values(), key=lambda u: u["last"], reverse=True)
     return out
 
 
@@ -1456,6 +1487,12 @@ def apply_history(threads, plan, contacts=None) -> int:
     behind put every imported thread in front of the person as a contradiction."""
     for row, text in plan["fill"]:
         row["full_text"] = text
+    who = 0
+    for c, co, ti in plan.get("who") or ():
+        if co and not str(c.get("company") or "").strip():
+            c["company"], who = co, who + 1
+        if ti and not str(c.get("title") or "").strip():
+            c["title"], who = ti, who + 1
     for row, summary in plan.get("mark") or ():
         row["summary"] = summary
     redate = plan.get("redate") or []
@@ -1472,7 +1509,7 @@ def apply_history(threads, plan, contacts=None) -> int:
         settle(contacts, threads, {r["contact_id"] for r in plan["add"]}
                | {str(r.get("contact_id") or "") for r, _ in plan["fill"]}
                | {str(r.get("contact_id") or "") for r, _ in redate})
-    return len(plan["add"]) + len(plan["fill"]) + len(redate) + len(plan.get("mark") or ())
+    return len(plan["add"]) + len(plan["fill"]) + len(redate) + len(plan.get("mark") or ()) + who
 
 
 def settle(contacts, threads, ids) -> list:
@@ -1781,8 +1818,9 @@ def _cli_history(a) -> int:
     if plan["unmatched"]:
         wrote = [u for u in plan["unmatched"] if u["sent"]]
         print(f"NOT IN YOUR CONTACT BOOK ({len(plan['unmatched'])}, {len(wrote)} of them you "
-              "wrote to), newest first. Add any worth keeping to network_contacts.csv with "
-              "their LinkedIn address, then run this again and their messages join them:")
+              "wrote to), newest first. Add any worth keeping with their LinkedIn address "
+              "(python3 tools/network/state.py add \"<name>\" --company \"<employer>\" "
+              "--linkedin <address>), then run this again and their messages join them:")
         for u in plan["unmatched"][:25]:
             print(f"  {u['name'] or u['url']}: last message {u['last'] or 'undated'}, from "
                   f"{u['last_from']}; {u['sent']} sent, {u['received']} received"

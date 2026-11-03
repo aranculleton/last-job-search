@@ -282,3 +282,50 @@ def test_a_repeat_of_a_file_sent_with_no_name_is_not_read_as_its_file():
     assert state.attached(row) == []
     row = {"summary": "From LinkedIn's export; an attachment attached; sent at 16:40"}
     assert state.attached(row) == []
+
+
+def test_an_export_fills_an_employer_and_title_a_record_lacks_and_never_one_it_has(tmp_path):
+    """People added from an export showed as a first name and "first wrote 10 Sep", and the
+    person asked who they all were (2026-11-03): Connections.csv names each one's employer
+    and title, and a record without its own takes them."""
+    conns = tmp_path / "Connections.csv"
+    conns.write_text("First Name,Last Name,URL,Email Address,Company,Position,Connected On\n"
+                     "Ottilie,Brandt,https://www.linkedin.com/in/example-ottilie-brandt,,Quayside Foods,"
+                     "Data Lead,12 Sep 2026\n"
+                     "Wren,Halloway,https://www.linkedin.com/in/example-wren-halloway,,Another Name,"
+                     "Another Title,01 Mar 2024\n", encoding="utf-8")
+    book = [{"contact_id": "brandt", "name": "Ottilie Brandt",
+             "linkedin_url": "https://www.linkedin.com/in/example-ottilie-brandt", "company": "", "title": ""},
+            {"contact_id": "halloway", "name": "Wren Halloway",
+             "linkedin_url": "https://www.linkedin.com/in/example-wren-halloway",
+             "company": "Fernhill Freight", "title": "Head of Planning"}]
+    (tmp_path / "messages.csv").write_text("CONVERSATION ID,FROM,SENDER PROFILE URL,TO,DATE,CONTENT\n",
+                                           encoding="utf-8")
+    plan = E.plan_history(book, [], str(tmp_path), mine=("example-morgan-ellis", "morgan ellis"))
+    E.apply_history([], plan, book)
+    assert (book[0]["company"], book[0]["title"]) == ("Quayside Foods", "Data Lead")
+    assert (book[1]["company"], book[1]["title"]) == ("Fernhill Freight", "Head of Planning")
+
+
+def test_a_name_alone_never_gives_a_record_a_strangers_employer(tmp_path):
+    """The fill took a name-only match with no request in the log, so a same-name stranger's
+    employer and title filled a not-contacted record (the release review, 2026-11-03). By
+    name, it fills only with a request to them logged before they connected."""
+    conns = tmp_path / "Connections.csv"
+    conns.write_text("First Name,Last Name,URL,Email Address,Company,Position,Connected On\n"
+                     "Wren,Halloway,https://www.linkedin.com/in/example-another-wren,,Brackenhollow Foods,"
+                     "Field Title,12 Sep 2026\n", encoding="utf-8")
+    (tmp_path / "messages.csv").write_text("CONVERSATION ID,FROM,SENDER PROFILE URL,TO,DATE,CONTENT\n",
+                                           encoding="utf-8")
+    mine = ("example-morgan-ellis", "morgan ellis")
+    book = [{"contact_id": "halloway", "name": "Wren Halloway", "linkedin_url": "",
+             "company": "", "title": ""}]
+    plan = E.plan_history(book, [], str(tmp_path), mine=mine)
+    E.apply_history([], plan, book)
+    assert (book[0]["company"], book[0]["title"]) == ("", ""), "not contacted: nothing joins them"
+    asked = [{"contact_id": "halloway", "date": "2026-09-08", "direction": "out",
+              "channel": "connection", "scenario": "connection_request",
+              "summary": "Request sent", "full_text": "", "subject": ""}]
+    plan = E.plan_history(book, asked, str(tmp_path), mine=mine)
+    E.apply_history(asked, plan, book)
+    assert (book[0]["company"], book[0]["title"]) == ("Brackenhollow Foods", "Field Title")

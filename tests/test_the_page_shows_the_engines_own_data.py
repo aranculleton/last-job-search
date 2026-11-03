@@ -215,13 +215,26 @@ def test_every_section_shows_the_engines_items_in_plain_words(run, built):
     got = _go(run, built, "small", hashes=["todo", "jobs", "drafts", "contacts", "interviews", "progress"])
     t = got["texts"]
     assert "Panel interview with Thornbury Bank" in t["todo"] and "Did you apply to Dovecote Freight?" in t["todo"]
-    assert "Reply to Juno at Larkspur Retail" in t["todo"] and "Not made yet" in t["todo"]
+    # What Juno asked for leads, with its button, and the one day it is about (the walk-through,
+    # 2026-11-03: "Reply to Juno" with "Draft a reply" over a request for the CV).
+    assert "Juno at Larkspur Retail asked for your CV" in t["todo"] and "Make a CV for Juno" in t["todo"], t["todo"]
+    assert "asked 12 Sep" in t["todo"] and "first wrote" not in t["todo"] and "Not made yet" in t["todo"]
+    assert "Operations Analyst at Fernhill Freight" in t["todo"], "a draft's To do card names its employer"
     assert "Brindle Hart Logistics · Manchester (hybrid)\n" in t["jobs"], "hybrid is said once"
-    assert "Juno at Larkspur Retail replied to you" in t["jobs"] and "Write to Juno" in t["jobs"]
+    assert "Juno at Larkspur Retail replied to you on 12 Sep" in t["jobs"] and "Write to Juno" in t["jobs"]
+    assert "Pay not stated" not in t["jobs"] + t["drafts"], "said on nearly every card, it said nothing"
     assert "Uses some of your Claude allowance, about" in t["jobs"], "a suggestion's cost is the amount and its real time"
-    assert "Checked" in t["drafts"], "the check that passed is one word, its detail behind ?"
+    # The check that passed says what it checked (2026-11-03: "✓ Checked" said nothing of what);
+    # where no PDF reader is installed (the browser job on GitHub) it says the count was not read.
+    import pdftext
+    said = ("Made, right length: CV 1 page, letter 1 page" if pdftext.reader() or shutil.which("pdfinfo")
+            else "Made; page count not read here")
+    assert said in t["drafts"] and "\nChecked\n" not in t["drafts"], t["drafts"]
     fern = t["drafts"].split("Operations Analyst", 1)[1].split("Claims Forecasting Analyst", 1)[0]
-    assert "Get the files" not in fern, "a file not made yet is not offered"
+    assert "Get the files" not in fern and "Get my files ready" not in fern, "a file not made yet is not offered"
+    assert "Needs a fix" not in fern and "still to make" in t["drafts"], "a draft never made is still to make, never a fix"
+    kestrel = t["drafts"].split("Claims Forecasting Analyst", 1)[1]
+    assert "Get my files ready" in kestrel and "files are not on this page yet" not in t["drafts"], "the card's own button, said once"
     assert "Replied: your turn" in t["contacts"], "every status the contact book holds has words"
     assert "Panel interview: Thornbury Bank" in t["interviews"]    # Coming up, by day (4.6)
     assert "1 earlier, finished: Show" in t["progress"]

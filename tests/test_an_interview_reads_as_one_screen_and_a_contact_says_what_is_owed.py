@@ -74,7 +74,12 @@ def test_the_one_screen_practice_and_format_are_read_as_the_pack_wrote_them(app)
     assert got["questions"][0]["answer"] == "story: One report in place of eleven spreadsheets"
     assert len(got["hooks"]) == P.HOOKS and all(h["source"] for h in got["hooks"])
     assert got["money"] and got["assessing"] and got["hear"]
-    assert got["do_not_say"][-1]["text"].startswith("No claim in the room beyond the paper")
+    # 2026-11-03: the one or two that matter, and never the rule every interview keeps, which
+    # is said once under What the paper says; what to say and what to ask are read as well.
+    assert 1 <= len(got["do_not_say"]) <= P.MAX_DO_NOT
+    assert not any(d["text"].startswith("No claim in the room") for d in got["do_not_say"])
+    assert P.PAPER_RULE in _section(text, "What the paper says")
+    assert got["say"] and got["ask"][-1]["text"] == P.CLOSE_QUESTION
     practice = P.practice(text)
     asked = [ln for ln in _section(text, "Likely questions") if ln.startswith("- **Q.** ")]
     assert len(practice["questions"]) == len(asked)
@@ -159,7 +164,9 @@ def test_keep_this_to_work_on_is_kept_once_and_undo_takes_it_off(search):
 
 def test_a_reply_owed_more_than_three_days_is_an_alert_on_the_contact(search):
     (a,) = _person(search.model(), JUNO)["alerts"]
-    assert a["kind"] == "reply_owed" and a["text"].startswith("Juno replied 43 days ago")
+    # The day it was said, never "43 days ago": the page shows every past day one way, "12 Sept"
+    # (2026-11-03: four forms of one wait on one person).
+    assert a["kind"] == "reply_owed" and a["text"].startswith("Juno replied on 2026-09-12")
     assert a["action"]["kind"] == "reply" and a["action"]["id"] == f"reply~{JUNO}"
     _add_threads(search, [{"contact_id": JUNO, "date": "2026-10-23", "direction": "inbound",
                            "channel": "linkedin", "scenario": "detailed_generous",

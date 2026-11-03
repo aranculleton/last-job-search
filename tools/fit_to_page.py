@@ -530,6 +530,18 @@ def _render_letter(a):
     return compile_letter(a["abbr"])
 
 
+def _too_close(abbr) -> bool:
+    """Text within design_check's margin of the page's edge: what verify_batch.py fails as
+    EDGE. Filling to the last line passed here and failed there, at 270mm and 274mm down a
+    Letter page (2026-11-03), so a fill that reaches the margin is a fill too far. False
+    where the check cannot run (no pypdf): the page count still holds."""
+    try:
+        import design_check
+        return any(str(f).startswith("EDGE") for f in design_check.check(resume_pdf(abbr), pages=PAGES))
+    except Exception:  # noqa: BLE001  no pypdf, or no PDF yet: nothing to say
+        return False
+
+
 def fit(a):
     """Returns ((resume_pages, resume_lines), letter_pages), each the last
     measurement of the document that is on disk when this returns."""
@@ -558,6 +570,15 @@ def fit(a):
     while pages > PAGES and R.gen.doc_design.step_down(R.build(a)["design"]) is not None:
         a["design_step"] = int(a.get("design_step") or 0) + 1
         pages = _render_resume(a)
+    # Within its pages but into the margin the check fails: one line less, as often as it takes.
+    for _ in range(3):
+        if pages > PAGES or not _too_close(abbr):
+            break
+        before = {b for j in a["jobs"] for b in j["bullets"]}
+        if not trim_resume(a):
+            break
+        trimmed |= before - {b for j in a["jobs"] for b in j["bullets"]}
+        pages = _render_resume(a)
     # Fill the page. Add a bullet, recompile, and keep it only if the resume is
     # still within its pages; otherwise put the page back the way it was and stop.
     # "Leave some space" (Tweak R7): the page is not filled back up to its last line.
@@ -569,7 +590,7 @@ def fit(a):
         if not grow_resume(a, caps, skip=trimmed):
             break
         grown = _render_resume(a)
-        if grown > PAGES:
+        if grown > PAGES or _too_close(abbr):
             # snapshot is taken from a["jobs"], so a length mismatch is a
             # bug, and silently dropping a job's bullets is the quiet kind
             # that ships. Checked by hand: zip's strict keyword is Python 3.10+.

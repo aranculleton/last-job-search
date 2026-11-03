@@ -893,14 +893,17 @@ def _ready_reopen(r: Run) -> dict:
 
 
 def _stage_day(r: Run) -> str:
-    """The day an interview stage is booked for: any day, since it is usually to come."""
+    """The day an interview stage is booked for: any day, since it is usually to come, or ""
+    for an invitation whose day is still to be chosen. That was refused with "Which day is
+    it? Give it as 2026-10-28", a day already past, while the page said "Saved" (2026-11-03);
+    a stage with no day is booked as one, and its day is given when it is known."""
     given = r.words("on") or r.words("date")
     if not given:
-        raise Refused("Which day is it? Give it as 2026-10-28.")
+        return ""
     try:
         return dt.date.fromisoformat(given[:10]).isoformat()
     except ValueError:
-        raise Refused(f"{given} is not a day: give it as 2026-10-28.") from None
+        raise Refused(f"{given} is not a day: give it as {r.day.isoformat()}.") from None
 
 
 def _outcome(r: Run, status: str) -> dict:
@@ -924,14 +927,25 @@ def _outcome(r: Run, status: str) -> dict:
             day = _stage_day(r)
             stage = " ".join(str(r.value.get("stage") or r.target.get("stage") or
                                  "Interview").split())[:60]
-            clock = what_works.clock(r.words("time"))
-            when = f" at {clock}" if clock else ""
+            clock = what_works.clock(r.words("time")) if day else ""
+            if not day:
+                # "No day yet" on a stage already booked for a day never wipes that day (the
+                # release review, 2026-11-03).
+                had = [x for x in what_works.outcome_stages(before["md"] or "")
+                       if x["label"].lower() == stage.lower() and x["date"]]
+                if had:
+                    return {"note": f"Already booked for {had[0]['date']}.", "undo": None}
+            who = r.words("with")
+            when = (f" for {day}" + (f" at {clock}" if clock else "")) if day else \
+                ", the day still to choose" + (f", with {who}" if who else "")
             changed = confirm.record_outcome(row, "interview", r.day,
-                                             note=f"{stage} booked for {day}{when}",
+                                             note=f"{stage} booked{when}",
                                              source="page", now=r.local)
             interview_pack.record_stage(folder, company, role, stage, day, r.words("with"),
                                         today=r.day.isoformat(), time=clock)
-            said = f"Booked: {stage} with {company} on {day}{when}."
+            said = (f"Booked: {stage} with {company} on {day}" + (f" at {clock}." if clock else ".")
+                    if day else f"Booked: {stage} with {company}, the day still to choose. "
+                    "Add the day in Coming up once you have it.")
         else:
             day = r.on()
             changed = confirm.record_outcome(row, status, r.day, note=r.words("why"),
@@ -951,7 +965,7 @@ def _outcome(r: Run, status: str) -> dict:
         return {"note": "Already recorded.", "undo": None}
     if status == "interview" and not changed:
         # The row was at interview already: a later stage, dated on the row as the first was.
-        confirm.add_note(row, f"{r.day.isoformat()}: {stage} booked for {day}{when} (page)")
+        confirm.add_note(row, f"{r.day.isoformat()}: {stage} booked{when} (page)")
     path = person.state("job_search_tracker.csv")
     csv_store.write_rows(path, rows, list(dict.fromkeys(
         csv_store.header(path) + list(throttle.CONFIRM_COLUMNS))))
@@ -1290,16 +1304,21 @@ def _msg_received(r: Run) -> dict:
             code, out = _cli(state, argv)
     finally:
         os.remove(path)
-    if code:
+    # Their words already kept (pasted again with "Draft a reply", or logged by a chat): the
+    # message is not logged twice, and the reply asked for is still drafted, never refused.
+    kept = bool(code) and "already logged" in out
+    if code and not kept:
         raise Refused(_said(out))
     # Their words are in the log now: the page's database keeps none of them.
     if r.version is not None and not str(r.act.get("claimed_by") or ""):
         r.w.add("update", "actions", r.aid, {"value": {"__delete__": True}},
                 if_version=r.version)
     who = _first(cid)
-    got = {"note": f"Logged: {who} wrote on {day}. A reply is owed.",
-           "undo": {"action": "msg.unreceived", "target": {"kind": "person", "contact": cid},
-                    "value": {"on": day}}}
+    got = ({"note": f"{who}'s message was already kept, so it is not logged twice.",
+            "undo": None} if kept else
+           {"note": f"Logged: {who} wrote on {day}. A reply is owed.",
+            "undo": {"action": "msg.unreceived", "target": {"kind": "person", "contact": cid},
+                     "value": {"on": day}}})
     if r.value.get("draft"):
         wid = page_db.safe_id(f"reply~{cid}")
         have = (r.db.get("work") or {}).get(wid)
@@ -2431,11 +2450,21 @@ def _due_done(r: Run) -> dict:
     if row is None:
         raise Refused("They are no longer in your contact book.")
     before = {"next_action": row.get("next_action") or "", "due": row.get("next_action_due") or ""}
-    code, out = _cli(_state(), ["set", cid, "--next-action", "", "--due", "", "--note",
-                                "done, said on the page", "--today", day])
+    # "Close" on a thread whose limit of unanswered messages is reached closes it, as the
+    # row's own words say (state.CLOSE_IT): only clearing the line left them "Connected" and
+    # waiting, counted among people waiting to hear back (2026-11-03).
+    leave = app_model.stopped(row.get("next_action"))
+    argv = ["set", cid, "--next-action", "", "--due", "", "--note",
+            "closed after no reply, said on the page" if leave else "done, said on the page",
+            "--today", day]
+    if leave:
+        before["status"] = row.get("status") or ""
+        argv[2:2] = ["--status", "gone_cold"]
+    code, out = _cli(_state(), argv)
     if code:
         raise Refused(_said(out))
-    return {"note": f"Done: {_first(cid)}.",
+    return {"note": f"Closed: {_first(cid)}. A reply from them opens it again." if leave
+            else f"Done: {_first(cid)}.",
             "undo": {"action": "due.undo", "target": dict(t), "value": before}}
 
 
@@ -2461,9 +2490,12 @@ def _due_undo(r: Run) -> dict:
         return {"note": f"The follow-up is due again: {t.get('company')}.",
                 "undo": {"action": "due.done", "target": dict(t)}}
     cid = t.get("contact") or ""
-    code, out = _cli(_state(), ["set", cid, "--next-action", str(r.value.get("next_action") or ""),
-                                "--due", str(r.value.get("due") or ""), "--note",
-                                "brought back on the page", "--today", r.day.isoformat()])
+    argv = ["set", cid, "--next-action", str(r.value.get("next_action") or ""),
+            "--due", str(r.value.get("due") or ""), "--note",
+            "brought back on the page", "--today", r.day.isoformat()]
+    if str(r.value.get("status") or "").strip():
+        argv[2:2] = ["--status", str(r.value["status"]).strip()]
+    code, out = _cli(_state(), argv)
     if code:
         raise Refused(_said(out))
     return {"note": f"Due again: {_first(cid)}.", "undo": {"action": "due.done", "target": dict(t)}}
@@ -3070,6 +3102,13 @@ def claim(dump_dir: str, chat: str, now: dt.datetime, out_dir: str) -> dict:
                              if isinstance(raw, dict) and "text" in raw and "answers" not in raw
                              else {"__delete__": True})
         w.add("update", "actions", aid, data, if_version=version)
+        # The dump as it will be once the claim lands, words kept: `apply` from this folder
+        # then knows the claim took them off the page, and pins nothing to the version the
+        # claim moved on. It wrote a second pinned removal of a pasted profile's words, to
+        # the version read before the claim, and the store refused the whole batch with the
+        # receipt in it (2026-11-03).
+        page_db._keep_dump(dump_dir, "actions", aid,
+                           dict(act, claimed_by=chat, claimed_until=until), int(version) + 1)
     return {"claimed": [a for a, _, v in todo if v is not None], "unpinned": unpinned,
             "batches": w.save("claim")}
 

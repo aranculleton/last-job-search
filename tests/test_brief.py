@@ -443,8 +443,10 @@ def test_the_start_keeps_the_syncs_output_and_gathers_in_a_fresh_process(tmp_pat
         calls.append(list(argv))
         if "sync_app.py" in " ".join(argv):
             return Done(0, '  An update is waiting: small fixes. Say "update" when you want it.\n')
-        if argv[:2] == ["git", "branch"]:
-            return Done(0, "  origin/claude/ops-2026-10-22-morning_brief\n")
+        if argv[:1] == ["git"] and "for-each-ref" in argv:      # land.waiting
+            return Done(0, "origin/claude/ops-2026-10-22-morning_brief\n")
+        if argv[:1] == ["git"] and "diff" in argv:
+            return Done(0, "documents/briefs/2026-10-22.md\0")
         return Done(0)
 
     log = str(tmp_path / "sync.txt")

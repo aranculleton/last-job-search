@@ -2,6 +2,32 @@
 
 Usage: `/reply <contact name or company>`, then paste their message.
 
+## Two commands
+
+The draft is yours; everything around it is two commands, so nothing is looked up first.
+Nothing is ever sent.
+
+1. **Prepare.** Run `python3 tools/network/reply.py prepare "<their name or contact id>"
+   --text-file -` with their message, as it came, on its input (a heredoc, or a file's path)
+   (`--company <employer>` when it says two people share the name; `--date`, `--channel
+   email` when it came another day or way; `--scenario <name>` where its reading is wrong;
+   no `--text-file` for their newest message already logged, as the page's Reply). It does
+   steps 1 to 4 below and step 6's logging of their message, by `state.py received`'s own
+   path, saves an interview day or time it gives, and prints all of it: the scenario and its
+   evidence, whether a reply is owed, the guidance, the thread, and the person's own rules
+   (`learned.py brief`), which outrank every default. Not sure who it is, it logs nothing
+   and names who it could be: run it again with their id.
+2. **Draft** the reply from what it printed, or nothing where it says none is owed.
+3. **Finish.** Run `python3 tools/network/reply.py finish <contact id> --draft-file -`
+   with the draft on its input (from the page's work: `--work <id> --dump "$D"`, and
+   `--thread <t>` for a message in its chat). It runs step 5's check, and refuses, saving
+   nothing, while the check finds anything or a reaction of theirs waits unrecorded
+   (`learned.py record` or `skip` first): rewrite and run it again. Passed, it saves the
+   draft where the page's Messages shows it with Copy and "I sent it", prints step 7's line
+   and the tip to end with, and with `--work` writes the page's finishing batch: send it.
+
+The steps the two commands carry, for when one is done by hand:
+
 ## Run it
 
 1. **Load the thread.** `state.load_threads()` for that contact. The thread
@@ -57,7 +83,9 @@ Usage: `/reply <contact name or company>`, then paste their message.
    in a reply. If the person reacts to the draft, the reaction is recorded before the next
    draft (`learned.py record` or `skip`): the composers refuse to draft over one.
 
-6. **Record.** Their message goes into `network_threads.csv` now, by command, with their
+6. **Record.** Someone not in the contact book yet (a recruiter who wrote first) is added
+   first, never by hand: `python3 tools/network/state.py add "<name>" [--company "<employer>"]
+   [--title "<title>"]`, which prints their id. Their message goes into `network_threads.csv` now, by command, with their
    words as they came: `python3 tools/network/state.py received <contact_id> --text-file
    <file>` (`--scenario <the scenario from step 2>`; `--date` when it came another day;
    `--channel` when it came another way than the thread runs). Never by hand. Ours goes in only when

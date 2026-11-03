@@ -68,14 +68,6 @@
  ],
  "ranked": [
   {
-   "id": "4000000101",
-   "url": "https://www.linkedin.com/jobs/view/4000000101",
-   "fit": 97,
-   "opportunity": 47,
-   "priority": 79,
-   "priority_exact": 78.603
-  },
-  {
    "id": "9101",
    "url": "https://jobs.example/freehire/9101",
    "fit": 91,
@@ -84,12 +76,12 @@
    "priority_exact": 78.448
   },
   {
-   "id": "gh-7001",
-   "url": "https://boards.greenhouse.io/wrenfield/jobs/7001",
-   "fit": 95,
-   "opportunity": 45,
-   "priority": 74,
-   "priority_exact": 73.707
+   "id": "4000000101",
+   "url": "https://www.linkedin.com/jobs/view/4000000101",
+   "fit": 94,
+   "opportunity": 47,
+   "priority": 76,
+   "priority_exact": 76.172
   },
   {
    "id": "9104",
@@ -106,6 +98,14 @@
    "opportunity": 43,
    "priority": 73,
    "priority_exact": 72.655
+  },
+  {
+   "id": "gh-7001",
+   "url": "https://boards.greenhouse.io/wrenfield/jobs/7001",
+   "fit": 93,
+   "opportunity": 45,
+   "priority": 72,
+   "priority_exact": 72.155
   },
   {
    "id": "n-41",
@@ -142,10 +142,10 @@
   {
    "id": "9107",
    "url": "https://jobs.example/freehire/9107",
-   "fit": 94,
+   "fit": 92,
    "opportunity": 40,
-   "priority": 65,
-   "priority_exact": 64.828
+   "priority": 63,
+   "priority_exact": 63.448
   },
   {
    "id": "c-303",
@@ -294,15 +294,6 @@
  ],
  "shortlist": [
   {
-   "id": "4000000101",
-   "url": "https://www.linkedin.com/jobs/view/4000000101",
-   "fit": 97,
-   "opportunity": 47,
-   "priority": 79,
-   "priority_exact": 78.603,
-   "bar": "pay"
-  },
-  {
    "id": "9101",
    "url": "https://jobs.example/freehire/9101",
    "fit": 91,
@@ -312,12 +303,12 @@
    "bar": "pay"
   },
   {
-   "id": "gh-7001",
-   "url": "https://boards.greenhouse.io/wrenfield/jobs/7001",
-   "fit": 95,
-   "opportunity": 45,
-   "priority": 74,
-   "priority_exact": 73.707,
+   "id": "4000000101",
+   "url": "https://www.linkedin.com/jobs/view/4000000101",
+   "fit": 94,
+   "opportunity": 47,
+   "priority": 76,
+   "priority_exact": 76.172,
    "bar": "pay"
   },
   {
@@ -330,6 +321,15 @@
    "bar": "none",
    "warm_route_note": "DO NOT APPLY COLD. Juno Castellan (replied_needs_response): send the CV",
    "throttle_override_note": "OVERRIDE: fit 98 against 72 for Senior Supply Chain Analyst, already applied at this employer. Surfaced because it clears the open application by 26 points."
+  },
+  {
+   "id": "gh-7001",
+   "url": "https://boards.greenhouse.io/wrenfield/jobs/7001",
+   "fit": 93,
+   "opportunity": 45,
+   "priority": 72,
+   "priority_exact": 72.155,
+   "bar": "pay"
   },
   {
    "id": "n-41",

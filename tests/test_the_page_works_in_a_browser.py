@@ -317,7 +317,9 @@ def test_every_section_full_shows_its_items_in_plain_words(run, pages):
     for sid, n in {"todo": 8, "jobs": 3, "drafts": 2, "drafts-messages": 2, "contacts": 4, "interviews": 2, "progress": 10}.items():
         assert r[sid]["items"] >= n, (sid, r[sid]["items"])
     jobs = r["jobs"]["text"]
-    assert "Pay not stated" in jobs, "a job with no pay says so and loses nothing"
+    # A job with no pay loses nothing and says nothing: "Pay not stated" stood on nearly every
+    # card (the walk-through, 2026-11-03).
+    assert "Pay not stated" not in jobs, "said on nearly every card, it said nothing"
     assert "£46,000 to £52,000" in jobs, "pay in the person's own money"
     assert "Before you apply: Juno at Larkspur Retail replied last week" in jobs
     assert "This posting has closed." in jobs and "41 left out by the search" in jobs
@@ -483,7 +485,9 @@ def test_a_referral_in_flight_asks_before_a_draft_or_an_application(run, pages):
     assert "the referral can be lost" in r["confirm"]["intro"] and r["confirm"]["go"] == "Mark as applied anyway"
     assert r["afterNo"] == [], "Not now records nothing"
     assert r["draftConfirm"] == "Draft it anyway"
-    assert r["draftSheet"].startswith("Draft this: Copperleaf Pay") and "Tamsin" in r["lead"]
+    # Asked once, then drafted at once, the referral said in the toast.
+    assert r["draftSheet"] in ("", None) and any("Tamsin put your name forward" in t for t in r["toast"]), r["toast"]
+    assert any(p.startswith("work/draft~") for p in r["work"])
     assert r["warmLink"] == "#contacts/larkspur_retail_castellan", "the warm note links to the person it names"
 
 
@@ -496,9 +500,11 @@ def test_a_tap_is_saved_only_when_it_is_and_done_when_its_receipt_arrives(run, p
     doc = r["doc"]
     assert doc["item"] == "msg-juno-1" and doc["action"] == "msg.sent" and doc["rev_seen"] == "m1"
     assert doc["tab"] and doc["at"].endswith("Z")
-    assert r["saved"].startswith("Saved. Claude will pick this up.")
-    assert "Marked as sent: Juno" in r["toast"]
-    assert r["focusAfter"]["inCard"], "focus stays with the item that changed"
+    # A message marked sent leaves Messages at once, its Undo in the toast and never a second
+    # one on a card left standing (the walk-through, 2026-11-03).
+    assert r["saved"] is None, "the card left the list: nothing says Saved under the toast"
+    assert "Marked as sent: Juno" in r["toast"] and "Undo" in r["toast"]
+    assert r["focusAfter"]["inMain"] and r["focusAfter"]["tag"] != "BODY", ("the card gone, focus is on what took its place, never lost", r["focusAfter"])
     assert r["done"].startswith("Done.") and r["moved"] == 3, "once done it moves to Sent or skipped: three of four cards left"
     assert "Change back" in r["back"], "and where the chat left a way back, it can be changed back"
     assert r["refused"].startswith("Not done: this changed since you saw it.")
@@ -518,14 +524,14 @@ def test_undo_stays_on_the_item_until_claude_has_done_it(run, pages):
     r = run("undo", html=pages["sample"])
     _clean(r)
     assert _base(r["before"]) == ["actions/act~r12-1~job.dismiss"]
-    assert r["marked"], "a role set aside stays in place, marked, until it is done"
-    assert r["focus"] == "Undo", "focus moves to the item's Undo"
+    assert not r["marked"], "a role put in the bin leaves the list at once (2026-11-03)"
+    assert r["focus"] == "Jobs", "the card gone, focus is on the list's heading, never lost"
     assert r["undoShown"] == 1
     assert r["after"] == [], "Undo deletes the action before any chat applied it"
     assert "Pricing Analyst" in r["back"]
     assert r["reason"]["value"] == {"why": "pay"}, "a reason, if they give one, goes with the same action"
     assert r["during"] >= 1
-    assert r["later"] == {"toast": 0, "item": 1}, "the toast goes; the item's Undo stays"
+    assert r["later"] == {"toast": 0, "item": 0}, "the toast goes; its Undo is then under set aside"
     assert _base(r["kept"]) == ["actions/act~r12-3~job.dismiss"]
 
 
@@ -557,33 +563,29 @@ def test_settings_save_once_the_person_settles_and_show_the_new_value(run, pages
     # Then Your profile, a page of its own (4.3); then the search, the brief, the look; how
     # the app runs last, folded.
     assert r["names"][1].startswith("Your profile"), r["names"]
-    look = r["names"].index("Look")
-    assert r["names"][look:look + 2] == ["Look", "Size"]
+    # The row is "Light or dark" under the group Look: a row named as its group read "Look /
+    # Look" (the walk-through, 2026-11-03).
+    look = r["names"].index("Light or dark")
+    assert r["names"][look:look + 2] == ["Light or dark", "Size"] and "Look" not in r["names"], r["names"]
     adv = r["names"].index("Where Claude works")
     assert adv > look and r["names"][adv:adv + 2] == ["Where Claude works", "Suggestions"], r["names"]
 
 
 # ------------------------------------------------------------------ asking a chat for work
 
-def test_draft_this_asks_its_questions_first_says_what_it_costs_and_rings_with_no_words(run, pages):
+def test_draft_this_drafts_at_once_says_what_it_costs_and_rings_with_no_words(run, pages):
+    """One tap drafts (the maintainer, 2026-11-03: "when i press draft this, it doesnt draft,
+    it brings up this then i have to press draft again"): no sheet, a toast saying where it
+    will be and how long it takes."""
     r = run("draft", html=pages["sample"], shot="phone-draft" if SHOTS else "")
     _clean({"errors": r["pageErrors"]})
-    assert r["open"] and r["focusInDialog"]
-    assert r["legends"][0] == "Have you already applied for this role?"
-    assert any("fixed term" in x for x in r["legends"])
-    # The gauge's own words, then the time (4.3).
-    assert "About 9 minutes." in r["cost"] and "Nothing is sent." in r["cost"]
-    # "No, draft it" is chosen for the person, and the posting's own question is theirs to
-    # leave (2026-11-02): one more tap drafts. Answered, it goes with the draft.
-    assert r["chosen"] == ["No, draft it"] and r["errors"] == [], r
-    assert any("fixed term" in x and "(if you like)" in x for x in r["legends"])
-    assert r["submitWhenApplied"] == "Mark as applied" and r["submitWhenNot"] == "Draft it", "the button says what it will do"
-    assert r["closed"]
+    assert not r["sheet"], "no sheet between the tap and the draft"
+    assert any("Drafting Harbourline Bank" in t and "under Drafts" in t and "Nothing is sent." in t for t in r["toast"]), r["toast"]
     w = r["work"]
     assert w["kind"] == "draft" and w["status"] == "queued" and w["to"] == "cloud"
     assert w["title"] == "CV and letter: Harbourline Bank, Pricing Analyst"
     assert w["args"]["already_applied"] == "no" and w["args"]["job"] == "r12-1"
-    assert w["args"]["answers"] == [{"q": "Are you happy with a 12 month fixed term?", "a": "yes"}]
+    assert w["args"]["answers"] == [], "the posting's own questions never hold a draft up"
     assert [s["name"] for s in w["stages"]][0] == "Getting started" and all(s["est_s"] > 0 for s in w["stages"])
     rings = [c for c in r["calls"] if c["cap"] == "comments"]
     assert len(rings) == 1 and rings[0]["text"] == "[app] [work:draft~r12-1]"
@@ -596,7 +598,8 @@ def test_already_applied_is_recorded_and_nothing_is_drafted(run, pages):
     r = run("applied_first", html=pages["sample"])
     _clean(r)
     assert r["work"] == []
-    assert [(a["item"], a["action"], a["value"]) for a in r["actions"]] == [("r12-1", "job.applied", {"on": "2026-10-20"})]
+    got = [(a["item"], a["action"]) for a in r["actions"]]
+    assert got == [("r12-1", "job.applied")] and r["actions"][0]["value"]["on"], r["actions"]
 
 
 def test_two_windows_pressing_draft_at_once_make_one_job_and_one_ring(run, pages):
@@ -610,7 +613,10 @@ def test_two_windows_pressing_draft_at_once_make_one_job_and_one_ring(run, pages
     assert r["tabs"][0] != r["tabs"][1], "each window has its own id for its actions"
     assert all(s and "1 waiting" in s for s in r["seen"]), r["seen"]
     assert _base(r["actions"]) == ["actions/act~msg-juno-1~msg.sent"]
-    assert r["otherWindow"] == {"chip": ["Marked as sent"], "buttons": 0}, "the other window cannot tick it again"
+    # Sent, it leaves Messages in every window at once and is listed under Sent or skipped
+    # (2026-11-03: a finished card leaves its list); the other window cannot tick it again.
+    assert r["otherWindow"]["buttons"] == 0 and r["otherWindow"]["chip"] == [], "the other window cannot tick it again"
+    assert any(g.startswith("To Juno") and "sent" in g for g in r["otherWindow"]["gone"]), r["otherWindow"]
 
 
 def test_a_tap_rings_the_doorbell_inside_the_click_once_and_never_asks_send_this(run, pages):
@@ -726,19 +732,38 @@ def test_work_claude_has_picked_up_says_so_with_a_clock_like_a_chat(run, pages):
     assert r["picked"]["status"] == "Starting" and r["spins"] == 1, r["picked"]
     assert r["picked"]["sentence"].startswith("Claude has picked this up"), r["picked"]
     assert "Don't do it" in " ".join(r["picked"]["buttons"]), "not started yet: it can still be called off"
-    assert r["waiting"]["status"] == "Waiting to start", "asked after the check-in: not seen yet"
+    # One honest word for waiting work, its sentence saying when it was asked: "Waiting to
+    # start", "Waiting for Claude to start." and "Asked just now." said three things and none
+    # said when (the walk-through, 2026-11-03).
+    assert r["waiting"]["status"] == "Waiting for Claude", "asked after the check-in: not seen yet"
+    assert r["waiting"]["sentence"].startswith("Asked at "), r["waiting"]
     assert "files~resume-current=30s" in r["clocks"] and "search~1=1m 5s" in r["clocks"], r["clocks"]
     assert not any(c.startswith("prep~") for c in r["clocks"]), "nothing to time before Claude has it"
     assert "files~resume-current=35s" in r["after"] and "search~1=1m 10s" in r["after"], r["after"]
     assert "1 running, 1 starting, 1 waiting their turn." in r["summary"], r["summary"]
 
 
+def test_calling_off_work_never_sent_wakes_nobody(run, pages):
+    r = run("stop_unsent", html=pages["sample"])
+    _clean(r)
+    assert r["rings"] == 0 and r["work"]["status"] == "stopped", r
+
+
 def test_stop_says_what_is_kept(run, pages):
+    """Work never asks the person to ask again (the maintainer, 2026-11-03: "get rid of the
+    ask claude again button ... fix the app so that the button is redundant"): what has not
+    reached Claude says so and goes with the next tap anywhere, and what went unanswered
+    goes again the same way."""
     r = run("stop", html=pages["sample"])
     _clean(r)
-    assert r["late"]["status"] == "Not picked up yet"
-    assert "Ask Claude again" in r["rewake"]
-    assert "Claude has been told" in r["told"], "asked again, the doorbell rang and the card says so"
+    assert r["unsent"]["status"] == "Not sent yet", r["unsent"]
+    assert r["unsent"]["sentence"].startswith("Not sent to Claude yet"), r["unsent"]
+    assert "Send to Claude" in r["unsent"]["buttons"]
+    assert r["late"]["status"] == "No answer yet" and "No answer from Claude in 11 minutes" in r["late"]["sentence"], r["late"]
+    assert not any("again" in b.lower() for b in r["unsent"]["buttons"] + r["late"]["buttons"]), "no Ask Claude again"
+    assert len(r["rings"]) == 1 and "prep~int-larkspur-supply" in r["rings"][0] and "files~resume-current" in r["rings"][0], r["rings"]
+    assert r["sent"]["status"] in ("Waking Claude", "Sent") and r["sent"]["sentence"].startswith("Sent to Claude"), r["sent"]
+    assert set(r["bell"]["rung"]) >= {"prep~int-larkspur-supply", "files~resume-current"}
     assert r["running"]["stop_asked"] is True and r["running"]["status"] == "running"
     assert r["runningCard"]["status"] == "Stopping after this step"
     assert "Stop" not in r["runningCard"]["buttons"]
@@ -755,8 +780,10 @@ def test_both_files_download_in_one_tap_and_a_draft_with_none_asks_for_them(run,
     assert [s["filename"] for s in r["saves"]] == ["Morgan_Ellis_CV_Ellerwick.pdf", "Morgan_Ellis_Cover_Letter_Ellerwick.pdf"]
     assert all(s["blob"] and s["size"] > 100 for s in r["saves"])
     assert any("Saved." in n for n in r["note"])
-    # Said once for every draft, above them, with one button (4.3).
-    assert r["filesLine"] and r["filesLine"][0].startswith("1 application's files are not on this page yet.")
+    # Said on the draft's own card, as its button, never in a line over the list and again
+    # under More (the walk-through, 2026-11-03). With a check to fix first, the fix is filled.
+    assert r["filesLine"] == [], r["filesLine"]
+    assert "Get my files ready" in r["askButtons"], r["askButtons"]
     assert not any(b.startswith(("Download", "Get both")) for b in r["askButtons"])
     assert r["primary"] == ["Make it again"]
     assert r["work"]["kind"] == "files" and r["work"]["args"]["files"] == ["Morgan_Ellis_CV_Quayside.pdf"]
@@ -794,14 +821,14 @@ def test_chat_is_one_box_and_quick_answers_read_the_page(run, pages):
 
 
 def test_a_question_the_page_cannot_answer_goes_to_claude_in_one_tap(run, pages):
-    """Handed on seconds after the tap, the doorbell cannot ring by itself (comments.d.ts:
-    only from the person's own recent tap): the note's one button sends it (2026-10-29)."""
+    """The doorbell rings only from the person's own recent tap (comments.d.ts): a hand-off
+    while the Send tap still counts goes at once, with nothing more to press (2026-11-03: a
+    request sat unsent behind a second button); a later one goes with the next tap."""
     r = run("talk", html=pages["sample"], question="Can you check the employer's website?",
             sample={"toolCalls": [{"name": "needs_chat", "input": {"reason": "It needs the employer's own website"}}],
                     "reply": "Your cloud chat can look that up."})
     _clean(r)
-    assert any("This needs Claude itself" in t for t in r["quick"]) and not any("It needs the employer" in t for t in r["quick"]), "Claude's own reasoning is never shown"
-    assert any("Sent to Claude" in t for t in r["afterSend"])
+    assert any("Sent to Claude" in t for t in r["quick"]) and not any("It needs the employer" in t for t in r["quick"]), "Claude's own reasoning is never shown"
     assert not any("Your cloud chat can look that up." in t for t in r["quick"])
     sent = [w for w in r["work"] if w["kind"] == "talk"]
     assert len(sent) == 1 and sent[0]["to"] == "cloud"
@@ -949,7 +976,7 @@ def test_keyboard_alone_reaches_and_works_everything_and_the_shortcuts_can_be_sw
     assert r["reachedDraft"]
     assert r["visibleFocus"] not in ("none", "")
     assert r["dialog"] and r["dialogGone"]
-    assert r["backOn"] == "Draft this: Harbourline Bank, Pricing Analyst"
+    assert r["backOn"] == "Not for me: Harbourline Bank, Pricing Analyst"
     assert r["help"] == "Keyboard shortcuts"
     assert r["afterGT"] == "To do" and r["afterGJ"] == "Jobs"
     assert r["cardFocus"] == "r12-1", "j moves to the first card: the best match by its number (4.3)"
@@ -969,7 +996,10 @@ def test_times_are_the_persons_own_with_the_zone_named_and_a_date_is_a_day(run, 
     away = run("zones", html=pages["sample"])
     _clean(away)
     assert any("London time" in w and "here" in w for w in away["whens"]), away["whens"]
-    assert any("time not set" in w for w in away["whens"]), "a date with no time is a calendar day"
+    # A date with no time is a calendar day, said as the day alone: ", time not set" offered no
+    # way to set it (the walk-through, 2026-11-03); Coming up's row has "Add the time".
+    assert not any("time not set" in w.lower() for w in away["whens"]), away["whens"]
+    assert any(re.fullmatch(r"\w{3},? \d{1,2} \w{3,4}\.?", w.split(" · ")[0].strip()) for w in away["whens"]), away["whens"]
     home = run("zones", html=pages["sample"], timezoneId="Europe/London")
     assert not any("London time" in w for w in home["whens"])
     assert not any("Passed" in c for c in home["chips"])
@@ -1060,7 +1090,8 @@ def test_light_or_dark_is_chosen_in_settings_kept_for_this_viewer_and_followed_b
     _clean(r)
     assert r["before"] == _rgb("light")
     # The look, then this device's size (2026-10-29).
-    assert r["legends"] == ["Look", "Size"] and r["choices"] == ["Auto", "Light", "Dark", "Smaller", "Standard", "Larger"]
+    # "Light or dark" under the group Look, never "Look" twice (2026-11-03).
+    assert r["legends"] == ["Light or dark", "Size"] and r["choices"] == ["Auto", "Light", "Dark", "Smaller", "Standard", "Larger"]
     assert r["after"] == {"bg": _rgb("dark"), "look": "dark", "stored": "dark", "scheme": "dark"}
     assert r["actions"] == [], "a look is the viewer's own: nothing is asked of a chat"
     assert r["otherWindow"]["bg"] == _rgb("dark") and "dark" in r["otherWindow"]["checked"]
@@ -1213,10 +1244,18 @@ def test_a_busy_week_is_a_few_checklists_not_a_card_each(run, pages):
     assert follow["title"] == "Follow up with 3 people" and len(follow["rows"]) == 3, follow
     assert all(row["buttons"][:1] == ["Draft"] for row in follow["rows"]), follow
     assert "Draft all 3" in follow["actions"], "one button drafts them all"
+    # The walk-through of 2026-11-03: no "Not now" on every row (the bin hides one for a week),
+    # the chip says how many are overdue ("25 late" read as 25 days), and a checklist of people
+    # is that many things to do in To do's count.
+    assert not any("Not now" in row["buttons"] for g in r["groups"].values() for row in g["rows"]), r["groups"]
+    assert all(g["chip"] == "" or g["chip"].endswith(" overdue") for g in r["groups"].values()), [g["chip"] for g in r["groups"].values()]
     reply = r["groups"]["grp:work~reply:now"]
     n = int(re.match(r"Reply to (\d+) people$", reply["title"]).group(1))      # the sample's own, and eight
     assert n >= 8 and len(reply["rows"]) == 5, reply
     assert reply["fold"].startswith("%d more" % (n - 5)) and "Draft all %d" % n in reply["actions"], reply
+    # Drafting them all takes each one's time, added up: "Draft all 25" said one draft's minutes.
+    assert int(re.match(r"(\d+)", reply["cost"]).group(1)) >= n or reply["cost"].startswith("about"), reply["cost"]
+    assert int(re.match(r"(\d+)", r["sum"]).group(1)) >= len(follow["rows"]) + n, ("a checklist of people counts each person", r["sum"])
     leave = r["groups"]["grp:leave:now"]
     assert leave["title"] == "2 people haven't answered two messages", leave
     assert all(row["buttons"] == ["Close"] for row in leave["rows"]), leave
@@ -1303,7 +1342,9 @@ def test_the_numbers_say_what_they_count_and_each_bar_says_its_week(run, pages):
     r = run("paint", html=pages["sample"], hash="brief", clock="2026-10-25T09:00:00Z")
     _clean(r)
     # This week beside the usual one: a number with nothing to compare it to says little.
-    assert re.search(r"Applications each week\. This week \d+, usually \d+\.", r["bodyText"]), r["bodyText"][-800:]
+    # How many weeks the bars cover is said with them: "Your last 30 days" over an eight-week
+    # chart left it to be guessed (the walk-through, 2026-11-03).
+    assert re.search(r"Applications each week, the last \d+ weeks\. This week \d+, usually \d+\.", r["bodyText"]), r["bodyText"][-800:]
     assert "contacts replied" in r["bodyText"] or "contact replied" in r["bodyText"]
     assert not re.search(r"\b1\s+interviews\b", r["bodyText"])
 
@@ -1466,7 +1507,10 @@ def test_everything_booked_is_one_tap_from_any_calendar_and_the_brief_shows_the_
     # Safari's engine writes "Wed, 28 Oct": the day is the same either way.
     assert [d.replace(",", "") for d in r["days"]] == ["Wed 28 Oct", "Thu 29 Oct", "Fri 30 Oct", "Mon 2 Nov", "Wed 4 Nov", "Fri 6 Nov", "Thu 12 Nov"], r["days"]
     # The person's own clock first; on a device somewhere else, the time there too ("13:00 (3:00 here)").
-    assert [w.split(" (")[0] for w in r["when"][:3]] == ["13:00", "15:00", "10:00"] and "End of day" in r["when"] and "Time not set" in r["when"], r["when"]
+    # An interview with no time gives the way to add it, never "Time not set" with no way to
+    # set it (the walk-through, 2026-11-03).
+    assert [w.split(" (")[0] for w in r["when"][:3]] == ["13:00", "15:00", "10:00"] and "End of day" in r["when"] and "Add the time" in r["when"], r["when"]
+    assert "Time not set" not in r["when"], r["when"]
     # Each interview says whether its prep is ready, on its own row only (never on a test
     # due in the same process): read it from there, or ask for it.
     assert r["prep"] == ["up-read:up-app-larkspur-supply-phone-screen-2026-10-28=Prep ready",
@@ -1496,6 +1540,9 @@ def test_everything_booked_is_one_tap_from_any_calendar_and_the_brief_shows_the_
     with zipfile.ZipFile(io.BytesIO(base64.b64decode(r["allSave"]["bytes"]))) as z:
         assert z.read(z.namelist()[0]).decode("utf-8").count("BEGIN:VEVENT") == 7
     # Added: the engine's own shape, shown at once while it saves.
+    # One door to add anything, an interview first (2026-11-03: "Add something" beside "I have an
+    # interview" were two ways to one thing).
+    assert r["addChoices"][0] == "An interview" and len(r["addChoices"]) == 2, r["addChoices"]
     assert [a["value"] for a in r["added"]] == [{"title": "Coffee with a former colleague", "on": "2026-10-27", "time": "09:30"}]
     assert r["added"][0]["item"] == "upcoming-add" and r["added"][0]["rev_seen"] == "add"
     assert r["saving"] and "Saving" in r["saving"][0], r["saving"]
@@ -1517,7 +1564,8 @@ def test_everything_booked_is_one_tap_from_any_calendar_and_the_brief_shows_the_
     # interview three days out with its prep ready is Coming up's, and no other panel repeats
     # it; Juno, a step, is not also a row under Waiting on you.
     p = r["panels"]
-    assert "Rolled over" in p["bp:today"] and "Fernhill Freight" in p["bp:today"], p["bp:today"]
+    # Said "Overdue", its one day in its facts, never "Rolled over · 2 days late" (2026-11-03).
+    assert "Overdue" in p["bp:today"] and "Rolled over" not in p["bp:today"] and "Fernhill Freight" in p["bp:today"], p["bp:today"]
     shown = [k for k, t in p.items() if "Larkspur" in t and "screen" in t]
     assert len(shown) == 1 and shown != ["bp:today"], shown
     assert "Reply to Juno" in p["bp:next"] and "Juno" not in p["bp:people"], (p["bp:next"], p["bp:people"])

@@ -81,9 +81,9 @@ Each site is judged alone and only the best ones are kept.
 them. A board that answers 429 is left alone for the rest of the run, and a big board is
 searched by title variant instead of paged whole.
 
-An employer's own board is a live board: a posting still listed is still open, so the
-age limit (14 days by default), which exists for aggregator listings nobody took down, does
-not apply.
+An employer's own board keeps the same age limit as every other source (the person's
+search window, 14 days by default), read from the posting's own date where the board gives
+one: a posting still listed is still open, but the window is how old a posting may be.
 
 ### The filter is deliberately timid
 

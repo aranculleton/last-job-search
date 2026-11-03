@@ -204,6 +204,15 @@ fi
 
 echo
 echo "tests"
+# Parallel workers where pytest-xdist is installed: the suite in about a third of the time,
+# each file kept together. A cloud chat puts it in for itself, in seconds, once a container:
+# the person's own tests alone took nearly five minutes in one process at every save, and the
+# person waited on them (2026-11-03).
+if [ "${CLAUDE_CODE_REMOTE:-}" = "true" ] && ! "$PY" -c "import xdist" > /dev/null 2>&1; then
+  "$PY" -m pip install --quiet pytest-xdist > /dev/null 2>&1 || true
+fi
+PAR=""
+"$PY" -c "import xdist" > /dev/null 2>&1 && PAR="-n auto --dist loadfile"
 if [ "$DATA_ONLY" = "1" ] && [ "${APP_RELEASE:-0}" = "1" ]; then
   echo "  the app's files that changed are exactly its release, which its own checks passed on"
   echo "  Linux, a Mac and Windows before it shipped, so its suites are skipped (--full runs them)"
@@ -213,10 +222,6 @@ elif [ "$DATA_ONLY" = "1" ]; then
   echo "  own suites test the app, which did not change, so they are skipped (--full runs them)"
   skip "pytest (the app's suite, on the example person)" "only your own files changed"
 else
-  # Parallel workers where pytest-xdist is installed (the maintainer's machines; a person's
-  # computer rarely has it): the suite in about a third of the time, each file kept together.
-  PAR=""
-  "$PY" -c "import xdist" > /dev/null 2>&1 && PAR="-n auto --dist loadfile"
   # shellcheck disable=SC2086
   run_py_module pytest "pytest (the app's suite, on the example person)" "$PY" -m pytest tests -q $PAR
 fi
@@ -242,12 +247,19 @@ for f in sorted(glob.glob(person.path("*.py"))):
 '
 fi
 # The person's own suite, against their profile, in its own process: the tools
-# read the profile once at import, so the two suites cannot share one.
+# read the profile once at import, so the two suites cannot share one. In parallel where it
+# can be (41 seconds against nearly five minutes for one person's 1,600 tests, the same
+# results, 2026-11-03), and once more in one process only when that fails, so a test that
+# fails only beside another never holds up a save.
+own_tests() {
+  # shellcheck disable=SC2086
+  if [ -n "$PAR" ] && "$PY" -m pytest profile/tests -q $PAR > /dev/null 2>&1; then return 0; fi
+  "$PY" -m pytest profile/tests -q
+}
 if [ -d profile/tests ]; then
   before=$FAIL
   # No compiled copies in profile/tests/__pycache__ for a forced add to commit.
-  PYTHONDONTWRITEBYTECODE=1 run_py_module pytest "pytest (profile/tests, on this person)" \
-    "$PY" -m pytest profile/tests -q
+  PYTHONDONTWRITEBYTECODE=1 run_py_module pytest "pytest (profile/tests, on this person)" own_tests
   # A failure here is often an update that changed or removed what the test pinned: say
   # which, and what to do, rather than leave a list of names to guess from.
   if [ "$FAIL" -gt "$before" ]; then

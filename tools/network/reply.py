@@ -36,6 +36,9 @@ nothing.
 
 Usage:
     python3 tools/network/reply.py "sure, send your resume to wren@example.com"
+    python3 tools/network/reply.py prepare "<name or contact id>" --text-file <their message>
+    python3 tools/network/reply.py finish <contact id> --draft-file <the reply>
+        [--work <id> --dump <dir> [--thread <thread>]]
 """
 
 from __future__ import annotations
@@ -1554,10 +1557,385 @@ def nudge_due(threads, today, new_development="") -> dict:
                 reason="%d business days of silence, past %s" % (waited, schema.follow_up_rule()))
 
 
+# ---------------------------------------------------------------- one command each side of the draft
+
+# A reply pasted into a chat took about fifteen steps before the person saw the draft, five
+# of them spent finding how a received message is logged (2026-11-03), and every step reads
+# the whole chat again. `prepare` is everything before the draft in one command: who it is,
+# their message logged, what it is, whether a reply is owed, the guidance, the thread and
+# what the person has taught it. `finish` is everything after: the draft check, the draft
+# put where the page shows it, what drew the reply, and the page's finishing batch. The
+# draft between them is the chat's own.
+
+THREAD_SHOWN = 6
+TEXT_SHOWN = 400
+
+
+def find_contact(contacts, who, company="") -> dict:
+    """{"row", "sure", "how", "others"}: the contact `who` names, by their id, their profile
+    address or their name (`company` narrows it to one employer). `sure` only for an id, an
+    address or a name one row carries; otherwise `row` is None and `others` holds who it
+    could be (two rows with the name; a nickname, an initial or a letter out; the first name
+    alone), each as (row, why), so nothing is logged to the wrong person's thread."""
+    want = " ".join(str(who or "").split())
+    pool = list(contacts or ())
+    if company:
+        key = state.company_key(company)
+        pool = [c for c in pool if state.row_company_key(c) == key]
+    out = {"row": None, "sure": False, "how": "", "others": []}
+    if not want:
+        return out
+    row = state.already_contacted(pool, contact_id=want)
+    if row is None and "linkedin.com/" in want.lower():
+        row = state.already_contacted(pool, linkedin_url=want)
+        if row is not None:
+            return dict(out, row=row, sure=True, how="profile address")
+    if row is not None:
+        return dict(out, row=row, sure=True, how="contact id")
+    key = state._match_name(want)
+    same = [c for c in pool if key and state._match_name(c.get("name")) == key]
+    if len(same) == 1:
+        return dict(out, row=same[0], sure=True, how="name")
+    if same:
+        return dict(out, how="the same name", others=[(c, "the same name") for c in same])
+    words = state.person_name(want).split()
+    near = []
+    for c in pool:
+        if len(words) >= 2:
+            _how, why = state._why_same(want, c.get("name"))
+            if why:
+                near.append((c, why))
+        elif len(words) == 1:
+            given, _mid, surname, _gen = state._name_parts(c.get("name"))
+            w = state._bare(words[0])
+            if w and (w in (given, surname) or (given and state.same_given_name(w, given))):
+                near.append((c, "one name only"))
+    return dict(out, how="near", others=near)
+
+
+def _one_line(text, most=TEXT_SHOWN) -> str:
+    t = " ".join(str(text or "").split())
+    return t if len(t) <= most else t[:most - 3].rstrip() + "..."
+
+
+def _who_line(c) -> str:
+    title, company = str(c.get("title") or "").strip(), str(c.get("company") or "").strip()
+    return ", ".join(x for x in (str(c.get("name") or "").strip(),
+                                 " at ".join(y for y in (title, company) if y)) if x)
+
+
+def _reader(c) -> str:
+    try:
+        import compose
+        return compose.reader_type(c.get("title") or "")
+    except Exception:  # noqa: BLE001  the brief still reads without a reader
+        return ""
+
+
+def _words(path, prog):
+    """A file's words, or the command's input for "-" (a heredoc: one step, not two)."""
+    if path == "-":
+        return sys.stdin.read()
+    return state._words_from(path, prog)
+
+
+def needs_no_answer(text, scenario="") -> str:
+    """The words that say they will come back to the person ("I'll get back to you"), in a
+    message that asks nothing and owes no action, or "": /reply step 2's message that needs
+    no answer. A short thanks back is the person's call, never a reply owed."""
+    sc = SCENARIOS.get(str(scenario or ""))
+    if (sc is not None and sc.owes_action) or "?" in str(text or ""):
+        return ""
+    m = _COMMITMENT.search(str(text or ""))
+    return m.group(0) if m else ""
+
+
+def prepare(argv) -> int:
+    import argparse
+    import datetime
+    ap = argparse.ArgumentParser(
+        prog="reply.py prepare",
+        description="Everything before a reply is drafted, in one go: who wrote, their "
+                    "message logged with its words, what kind of message it is, whether a "
+                    "reply is owed, the guidance, the thread, and the person's own rules.")
+    ap.add_argument("who", help="their contact id, or their name as it appears")
+    ap.add_argument("--text-file", default="",
+                    help="their message, as it came; - reads it from the input (none: their "
+                         "newest logged message, as for the page's Reply)")
+    ap.add_argument("--company", default="", help="their employer, when two people share a name")
+    ap.add_argument("--date", default="", help="the day it came (default today)")
+    ap.add_argument("--channel", default="", choices=("",) + state.RECEIVED_CHANNELS,
+                    help="default: the way the thread runs (a message on LinkedIn)")
+    ap.add_argument("--scenario", default="", help="what it is, where the reading here is wrong")
+    ap.add_argument("--subject", default="")
+    ap.add_argument("--contacts", default=state.CONTACTS_CSV)
+    ap.add_argument("--threads", default=state.THREADS_CSV)
+    ap.add_argument("--today", default=datetime.date.today().isoformat())
+    a = ap.parse_args(argv)
+    text = _words(a.text_file, "prepare") if a.text_file else ""
+    if text is None:
+        return 2
+    contacts = state.load_contacts(a.contacts)
+    threads = state.load_threads(a.threads) if os.path.exists(a.threads) else []
+    found = find_contact(contacts, a.who, a.company)
+    if not found["sure"]:
+        if not found["others"]:
+            print(f"prepare: nobody called {a.who!r} is in the contact book"
+                  + (f" at {a.company}" if a.company else "") + ". Add them the networking "
+                  "skill's way, then run this again. Nothing was logged.")
+            return 2
+        print(f"prepare: not sure who {a.who!r} is ({found['how']}), so nothing was logged. "
+              "Run it again with their contact id:")
+        for c, why in found["others"][:8]:
+            print(f"  {c.get('contact_id')}: {_who_line(c)} ({why})")
+        return 2
+    c = found["row"]
+    cid = str(c.get("contact_id") or "").strip()
+    day = state.as_date(a.date or a.today) or datetime.date.today()
+    before = [r for r in state.threads_for(threads, cid) if _direction(r)]
+    theirs = [r for r in before if _direction(r) == "in" and _inbound(r)]
+    reader = _reader(c)
+    print(f"contact: {_who_line(c)} ({cid}), found by {found['how']}"
+          + (f"; writes as a {reader.replace('_', '-')}" if reader else ""))
+    body = state._paragraphs(text)
+    if not body:
+        # The page's Reply, or "draft my reply to Juno": their newest message, already logged.
+        if not theirs or not _they_spoke_last(before):
+            print("reply owed: no: nothing of theirs is waiting, the last word is yours. A "
+                  "follow-up, if one is due, is python3 tools/followup_drafts.py --contact "
+                  f"{cid}.")
+            return 0
+        body = _row_text(theirs[-1]).strip()
+        day = state.as_date(theirs[-1].get("date")) or day
+    read = classify(body, before, day)
+    scen = re.sub(r"[\s-]+", "_", a.scenario.strip().lower()) or read["scenario"]
+    logged = bool(text.strip())
+    # Their newest message carrying these words is this one, logged already (by another chat,
+    # the page, or the LinkedIn download): never a second row for it.
+    if logged and theirs and state._same_words_sent(theirs[-1].get("full_text"), body):
+        logged = False
+        print(f"received: already logged on {theirs[-1].get('date') or '?'}; nothing logged "
+              "twice")
+    if logged:
+        try:
+            got = state.received(contacts, threads, cid, a.today, text=text,
+                                 date=a.date or None, channel=a.channel, scenario=scen,
+                                 subject=a.subject)
+        except ValueError as e:
+            if not str(e).startswith("already logged"):
+                print(f"prepare: not recorded: {e}")
+                return 1
+            print(f"received: {e}; nothing logged twice")
+            logged = False
+    if logged:
+        state.save_threads(threads, a.threads)
+        state.save_contacts(contacts, a.contacts)
+        row = got["row"]
+        print(f"received: {row['summary']} on {row['date']}, read as {row['scenario'] or '?'}; "
+              f"now {c.get('status') or '?'}")
+        if got["said"]:
+            print(f"  {got['said']}")
+        state._interview_times(c.get("company"), contacts, threads, a.today)
+    print("scenario: %s (confidence %.2f)" % (scen, read["confidence"] if scen == read["scenario"]
+                                               else 1.0))
+    for line in read["evidence"] if scen == read["scenario"] else ["given with --scenario"]:
+        print(f"  evidence: {line}")
+    for other in read["runners_up"]:
+        print("  also matched: %s (%.2f)" % (other["scenario"], other["confidence"]))
+    machine = scen in state.AUTO_REPLY_SCENARIOS or state.auto_reply(body, a.subject, day)
+    if machine:
+        print("reply owed: no, it is an automatic reply. "
+              + auto_reply_action(body, sent_on=day.isoformat()))
+        print("Nothing to draft.")
+        return 0
+    advice = guidance(dict(read, scenario=scen), body, contact_id=cid)
+    go_on, why = should_continue(c, threads)
+    cue = needs_no_answer(body, scen)
+    if not go_on:
+        print(f"reply owed: not another ask: {why}. A short warm close, if anything.")
+    elif cue:
+        print(f"reply owed: probably not: they said they will come back to the person "
+              f"(\"{cue}\"). If so, draft nothing: python3 tools/network/state.py no-reply "
+              f"{cid} --why \"<what they said>\". A short thanks is the person's call.")
+    else:
+        print("reply owed: yes, they wrote last.")
+    print(f"move: {advice['move']}")
+    print(f"length: {advice['target_sentences']} sentences")
+    if advice["next_action"]:
+        print(f"owed outside the thread: {advice['next_action']}")
+    if advice.get("which_resume"):
+        print("which %s: %s" % (_NOUN, advice["which_resume"].split(": ", 1)[-1]))
+    for line in advice["do_not"]:
+        print(f"  avoid: {line}")
+    rows = [r for r in state.threads_for(threads, cid) if _direction(r)]
+    print(f"the thread, oldest first (the last {min(len(rows), THREAD_SHOWN)} of {len(rows)}):")
+    for r in rows[-THREAD_SHOWN:]:
+        who = "them" if _direction(r) == "in" else "you"
+        print(f"  {r.get('date') or '?'} {who} ({state.channel_of(r) or '?'}): "
+              f"{_one_line(_row_text(r)) or '(no words logged)'}")
+    try:
+        import learned
+        rules = learned.brief("messages", channel="reply", reader=reader or None)
+        waiting = learned.refuse_over_pending("drafting")
+    except Exception:  # noqa: BLE001  the app itself, with no profile: the defaults apply
+        rules, waiting = "", ""
+    print("before drafting, what the person has taught it (follow these over any default):")
+    print("\n".join("  " + ln for ln in (rules or "(nothing learned yet: the defaults "
+                                                  "apply)").splitlines()))
+    if waiting:
+        print(f"first: {waiting}")
+    print(f"then: python3 tools/network/reply.py finish {cid} --draft-file - with the reply "
+          "on its input (for the page's work: --work <id> --dump \"$D\").")
+    return 0
+
+
+def _first(c) -> str:
+    try:
+        return tone.first_name(c.get("name")) or "them"
+    except Exception:  # noqa: BLE001
+        return (str(c.get("name") or "").split() or ["them"])[0]
+
+
+def save_draft(contact_id: str, text: str) -> str:
+    """The reply, saved where the page's Messages shows it with Copy and "I sent it"
+    (documents/network/<id>/draft.md), as it stands: a reply rests on their message, never
+    on a profile read, so it carries no marker. Logged only once they say it went."""
+    import reading
+    path = reading.draft_path(contact_id)
+    os.makedirs(os.path.dirname(path), exist_ok=True)
+    with open(path, "w", encoding="utf-8", newline="\n") as fh:
+        fh.write(str(text).strip() + "\n")
+    return path
+
+
+def finish(argv) -> int:
+    import argparse
+    import datetime
+    import json
+    ap = argparse.ArgumentParser(
+        prog="reply.py finish",
+        description="Everything after a reply is drafted: the draft check (refused while it "
+                    "finds anything), the draft put where the page shows it, what drew their "
+                    "reply, and, for the page's work, its finishing batch. Nothing is sent.")
+    ap.add_argument("contact_id")
+    ap.add_argument("--draft-file", required=True,
+                    help="the reply as drafted; - reads it from the input")
+    ap.add_argument("--work", default="", help="the page's work item this answers")
+    ap.add_argument("--thread", default="", help="the page's conversation (default: the item's own)")
+    ap.add_argument("--dump", default="", help="the page's database, as read ($D)")
+    ap.add_argument("--summary", default="", help="one short sentence (default: the reply is ready)")
+    ap.add_argument("--kind", default="", choices=("", "cloud", "computer"))
+    ap.add_argument("--out", default="", help="where the batch goes (default <dump>/out)")
+    ap.add_argument("--contacts", default=state.CONTACTS_CSV)
+    ap.add_argument("--threads", default=state.THREADS_CSV)
+    ap.add_argument("--today", default=datetime.date.today().isoformat())
+    ap.add_argument("--now", default=None)
+    a = ap.parse_args(argv)
+    if a.work and not a.dump:
+        print("finish: --work needs the page's database as read (--dump \"$D\")")
+        return 2
+    draft = _words(a.draft_file, "finish")
+    if draft is None:
+        return 2
+    draft = draft.strip()
+    contacts = state.load_contacts(a.contacts)
+    threads = state.load_threads(a.threads) if os.path.exists(a.threads) else []
+    c = state.already_contacted(contacts, contact_id=a.contact_id.strip())
+    if c is None:
+        print(f"finish: no contact {a.contact_id!r} in the contact book (prepare names their id)")
+        return 2
+    cid = str(c.get("contact_id")).strip()
+    if not draft:
+        print("finish: the draft file is empty")
+        return 2
+    try:
+        import learned
+        waiting = learned.refuse_over_pending("finish")
+    except (ImportError, SystemExit):
+        waiting = ""
+    if waiting:
+        # What the person said about a draft is recorded before any draft is saved, as every
+        # composer refuses to draft over it.
+        print(f"REFUSED, nothing saved. {waiting}")
+        return 1
+    import followup_drafts
+    got = followup_drafts.check([{"id": cid, "text": draft, "kind": "reply"}], contacts,
+                                threads, a.today)[0]
+    if got["findings"]:
+        print("finish: REFUSED, nothing saved: the draft check found what must change first.")
+        for f in got["findings"]:
+            print(f"  fix: {f}")
+        print("Rewrite it and run finish again.")
+        return 1
+    print(f"check: passed ({len(draft)} characters)")
+    for w in got["warnings"]:
+        print(f"  warning: {w}")
+    if got["warnings"]:
+        print("  Rewrite what a warning is right about before it is shown; a soft close is "
+              "allowed in a reply.")
+    path = save_draft(cid, draft)
+    import local_path
+    print(f"saved: {local_path.rel(path, person.state())}, shown in the page's Messages with "
+          "Copy and \"I sent it\". Nothing is sent; it is logged only once they say it went.")
+    extra = []
+    try:
+        import what_works
+        said = what_works.event_contact(contacts, threads, cid, a.today)
+    except Exception:  # noqa: BLE001  counting must never stop a reply
+        said = ""
+    if said:
+        extra.append(said)
+        print(f"what worked: {said}")
+    try:
+        import tips
+        tip = ""
+        if person.exists("person.json"):
+            kept = tips.load()
+            tip = tips.line("reply", state=kept)
+            if tip:
+                tips.save(kept)
+    except Exception:  # noqa: BLE001
+        tip = ""
+    if tip:
+        extra.append(tip)
+        print(f"end with: {tip}")
+    print("Show the draft in full, ready to copy, never only where it was saved.")
+    if not a.work:
+        return 0
+    import app_listen
+    import app_model
+    import page_db
+    _, now = app_model.clock(None, a.now)
+    db = page_db.load(a.dump)
+    first = _first(c)
+    answer = "\n\n".join([f"Your reply to {first}, ready to copy (nothing is sent):", draft]
+                         + extra)
+    item = ((db.get("work") or {}).get(page_db.safe_id(a.work)) or {}).get("data") or {}
+    args = item.get("args") if isinstance(item.get("args"), dict) else {}
+    thread = a.thread or str(args.get("thread") or "")
+    summary = a.summary or (f"Your reply to {first} is ready to copy"
+                            + ("." if thread else " in Messages."))
+    try:
+        done = page_db.finish(db, a.work, now, a.out or os.path.join(a.dump, "out"),
+                              summary=summary, reply=answer if thread else "", thread=thread,
+                              chat_kind=a.kind or app_listen.chat_kind(), dump_dir=a.dump)
+    except (KeyError, ValueError) as e:
+        print(f"finish: the page's work not finished: {e.args[0] if e.args else e}")
+        return 2
+    print("page: send each batch (ArtifactData batch), then bring the page up to date "
+          "(app.py view, the app skill's step 5):")
+    print(json.dumps(done, ensure_ascii=False, indent=1))
+    return 0
+
+
 # ---------------------------------------------------------------- CLI
 
 
 def main() -> int:
+    if sys.argv[1:2] == ["prepare"]:
+        return prepare(sys.argv[2:])
+    if sys.argv[1:2] == ["finish"]:
+        return finish(sys.argv[2:])
     if sys.argv[1:2] in (["-h"], ["--help"]):
         print('usage: python3 tools/network/reply.py "<their message>" (or on stdin): what kind '
               "of reply it is, and the evidence")

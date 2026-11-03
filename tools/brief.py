@@ -511,6 +511,10 @@ def wider(today: dt.date, live_employers: list[str], watch: list[dict] | None = 
     out = [w["what"] for w in watch if w["what"] not in due]
     if "employers" not in set(setting("leave_out")):
         out += ["%s%s news" % (n, " " + where if where else "") for n in live_employers[:2]]
+    # The local job market, which has news every week: widening only by the same employers
+    # and watched things found nothing new three mornings running (2026-11-03).
+    if where:
+        out += ["%s job market news" % where, "%s hiring layoffs this week" % where]
     out += [w["what"] for w in watch if w["what"] in due]
     return [q for q in dict.fromkeys(out) if q not in qs][:room]
 
@@ -645,10 +649,13 @@ def start(argv: list[str], model: str) -> int:
                            capture_output=True, encoding="utf-8", errors="replace")
         if s.returncode:
             setup = ((s.stderr or s.stdout or "").strip().splitlines() or ["failed"])[-1][:200]
-    earlier = subprocess.run(["git", "branch", "-r", "--no-merged", "origin/master", "--list",
-                              "origin/claude/ops-*"], cwd=ROOT, text=True, capture_output=True,
-                             encoding="utf-8", errors="replace")
-    branches = " ".join(b.strip() for b in (earlier.stdout or "").splitlines() if b.strip())
+    # Every branch a landing left waiting, a chat's as well as a run's: one that was not green
+    # or stopped on a conflict pushes its branch, and only claude/ops-* was looked for here.
+    try:
+        import land
+        branches = " ".join(land.waiting(ROOT))
+    except Exception:  # noqa: BLE001  the brief goes on; the next run looks again
+        branches = ""
     with open(sync_log_path(), "w", encoding="utf-8", newline="\n") as fh:
         fh.write("date: %s\nexit: %d\nearlier: %s\nsetup: %s\n---\n%s%s"
                  % (today.isoformat(), r.returncode, branches, setup, r.stdout or "",
@@ -1299,9 +1306,11 @@ def claude_lines(b: dict) -> list[str]:
                        "before its data, whatever the prompt you read before this run's update "
                        "says (an older one said never to republish; this update replaced that "
                        "rule): %s" % (behind, " ".join(behind_steps(b["page"]))))
-        out.append("the page, after landing (step 4): ArtifactData query, url %s, collections "
-                   "screen, meta and addr, out_dir <D>, limit 1000; python3 tools/app.py view "
-                   "<D>/view --dump <D> --chat brief; send every batch it prints. "
+        out.append("the page, once the news is recorded (step 4): ArtifactData query, url %s, "
+                   "collections screen, meta, addr and work, out_dir <D>, limit 1000; python3 "
+                   "tools/app.py view <D>/view --dump <D> --chat brief; send every batch it "
+                   "prints, and do any for_claude line it prints at once, unasked (a fresh "
+                   "helper when this chat's day is up). "
                    "Then the app skill's steps 1 to 3, for work still waiting" % b["page"])
     try:
         import routines
@@ -1437,8 +1446,12 @@ def take_news(text: str, today: dt.date) -> dict:
     path = brief_path(today.isoformat())
     body = _read(path)
     carried, day = ([], "") if kept else carry_news(today)
+    # Fewer than NEWS_MIN new: the newest earlier items fill it to NEWS_MIN, after a line
+    # that says so. One point on its own read as an empty panel (the maintainer, 2026-11-03).
+    more = carry_news(today, NEWS_MIN - len(kept), skip=kept)[0] if 0 < len(kept) < NEWS_MIN else []
     if kept:
-        news = [NEWS_SOURCE, ""] + ["- " + s for s in kept]
+        news = [NEWS_SOURCE, ""] + ["- " + s for s in kept] + (
+            ["", NEWS_ALSO, ""] + ["- " + s for s in more] if more else [])
     elif carried:
         news = ["Carried from the brief of %s. %s" % (day, NEWS_SOURCE), ""] + [
             "- " + s for s in carried]
@@ -1466,27 +1479,56 @@ def news_items(text: str) -> list[str]:
             if ln.startswith("- ") and ln[2:].strip()]
 
 
-def carry_news(today: dt.date) -> tuple[list[str], str]:
-    """The newest earlier brief's news, within CARRY_DAYS, and its day: what a brief whose
-    reader brought nothing new shows instead of an empty panel."""
-    for p in reversed(earlier_briefs(today)):
+NEWS_ALSO = "Also from earlier briefs."
+
+
+def gathered_news(text: str) -> list[str]:
+    """The news a brief's own search found, never what it carried from an earlier one, so a
+    carried item is never renewed by being carried again (news from 1 October read as from
+    10 November on the 25th, the release review)."""
+    sec = _section(text, "News")
+    if _CARRIED.search(sec):
+        return []
+    out = []
+    for ln in sec.splitlines():
+        if ln.strip() == NEWS_ALSO:
+            break
+        if ln.startswith("- ") and ln[2:].strip():
+            out.append(ln[2:].strip())
+    return out
+
+
+def carry_news(today: dt.date, need: int = NEWS_MAX, skip=(), paths=None) -> tuple[list[str], str]:
+    """Up to `need` news items the briefs of the last CARRY_DAYS found, newest first, none
+    already in `skip` by its words or its link, and the day the newest of them was found:
+    what a brief whose reader brought nothing new shows instead of an empty panel. It reached
+    back to one brief only, so one old point stood alone for days (2026-11-03)."""
+    items, day = [], ""
+    texts = set(skip)
+    links = {u.rstrip(".,;") for s in skip for u in _LINK.findall(s)}
+    for p in reversed(earlier_briefs(today) if paths is None else list(paths)):
         d = _d(os.path.basename(p)[:10])
         if not d or (today - d).days > CARRY_DAYS:
             break
-        text = _read(p)
-        got = news_items(text)
-        if got:
-            # Already carried: the day it was gathered, so a carry never renews it (news from
-            # 1 October read as from 10 November on the 25th, the release review).
-            was = _CARRIED.search(_section(text, "News"))
-            d = _d(was.group(1)) if was else d
-            if (today - d).days > CARRY_DAYS:
-                return [], ""
-            return got[:NEWS_MAX], d.isoformat()
-    return [], ""
+        for s in gathered_news(_read(p)):
+            got = {u.rstrip(".,;") for u in _LINK.findall(s)}
+            if s in texts or got & links:
+                continue
+            texts.add(s)
+            # A line written without its day keeps the day it was found, so a carried point
+            # never reads as today's (the release review, 2026-11-03).
+            s = _UNDATED_SOURCE.sub(r"(\1, %s, \2)" % d.isoformat(), s, count=1)
+            items.append(s)
+            texts.add(s)
+            links |= got
+            day = day or d.isoformat()
+            if len(items) >= need:
+                return items, day
+    return items, day
 
 
 _CARRIED = re.compile(r"Carried from the brief of (\d{4}-\d{2}-\d{2})")
+_UNDATED_SOURCE = re.compile(r"\(([^(),]{2,80}),\s*(https?://[^\s()]+)\)")
 
 
 def _note_news(kept: list[str], today: dt.date) -> list[str]:

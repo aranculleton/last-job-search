@@ -410,7 +410,11 @@ def interview_items(tracker, today):
                         else "in %d days" % days)
                 what = "interview %s (%s), no pack yet: /interview %s" % (when, what, company)
                 due, late = today, 0
-            elif days < 0 and -days <= THANKS_DAYS and not _thanked(files, held_on):
+            elif days < 0 and -days <= THANKS_DAYS and not _thanked(files, held_on) \
+                    and st["step"] != "offer":
+                # An offer received is not a meeting to thank anyone for: it asked for a
+                # thank-you note after the offer, beside the one for the final round
+                # (2026-11-03).
                 what = ("thank-you not logged after the %s: /outcome %s records the stage "
                         "and drafts one" % (what, company))
                 due = held_on + dt.timedelta(days=1)

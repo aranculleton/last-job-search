@@ -391,3 +391,29 @@ def test_a_font_reached_through_a_folder_with_a_space_is_put_beside_the_document
     inside = app / "cv"
     inside.mkdir()
     assert doc_design._font_path("lato", str(inside)) == "../cover_letters/OpenFonts/fonts/lato/"
+
+
+def test_filling_the_page_stops_before_the_margin_the_check_fails(monkeypatch):
+    """Filled to the last line, a resume passed the fitter and failed verification with EDGE,
+    text 270mm and 274mm down a Letter page (2026-11-03): a bullet that reaches the margin is
+    taken back, as one that spills onto a second page is."""
+    import fit_to_page as F
+    a = copy.deepcopy(DRAFT)
+    a["jobs"] = [{"employer": "Brindle & Hart Logistics", "bullets": ["BH_FORECAST"]}]
+    grown = []
+
+    def grow(draft, caps=None, skip=()):
+        draft["jobs"][0]["bullets"].append("EXTRA%d" % len(grown))
+        grown.append(1)
+        return True
+    monkeypatch.setattr(F, "_render_resume", lambda a: 1)
+    monkeypatch.setattr(F, "grow_resume", grow)
+    monkeypatch.setattr(F, "_too_close", lambda abbr: len(grown) >= 2)   # the second bullet reaches it
+    monkeypatch.setattr(F, "trim_resume", lambda a: False)
+    monkeypatch.setattr(F, "_render_letter", lambda a: 1)
+    monkeypatch.setattr(F, "compile_resume", lambda abbr, passes=1: 1)
+    monkeypatch.setattr(F, "font_problems", lambda pdf: [])
+    monkeypatch.setattr(F, "_lines", lambda pdf: 40)
+    monkeypatch.setattr(F, "body_words", lambda a: 100)
+    F.fit(a)
+    assert a["jobs"][0]["bullets"] == ["BH_FORECAST", "EXTRA0"], a["jobs"][0]["bullets"]

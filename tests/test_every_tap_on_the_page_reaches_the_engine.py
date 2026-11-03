@@ -138,7 +138,7 @@ def test_every_action_the_page_sends_is_one_the_engine_applies_or_is_named_as_st
 def test_the_page_never_sends_an_action_without_its_items_rev():
     with open(APP_JS, encoding="utf-8") as fh:
         js = fh.read()
-    body = js[js.index("async function act(list, label)"):]
+    body = js[js.index("async function act(list, label"):]
     body = body[:body.index("\n  }\n")]
     assert "M().rev" not in body, "a missing rev is never filled in with the model's own"
 
@@ -149,10 +149,11 @@ def test_the_page_never_sends_an_action_without_its_items_rev():
 def test_marking_a_job_applied_records_the_day_given(run, tmp_path):
     where = Search(str(tmp_path / "s"))
     got, rec = _round_trip(run, tmp_path, where, "applied", [
-        {"hash": "jobs", "click": "Draft this: Brindle Hart Logistics, Demand Planning Analyst"},
-        {"click": "Yes, I have applied", "role": "radio"},
-        {"fill": {"When did you apply?": "2026-10-20"}},
-        {"click": "Mark as applied"},
+        {"hash": "jobs", "moreText": "Demand Planning Analyst"},
+        {"click": "I have applied: Brindle Hart Logistics, Demand Planning Analyst"},
+        {"click": "Another day?"},
+        {"fill": {"The day": "2026-10-20"}},
+        {"click": "Save", "exact": True},
     ])
     (a,) = [x for x in got["actions"] if x["action"] == "job.applied"]
     assert a["value"] == {"on": "2026-10-20"} and a["rev_seen"]
@@ -164,7 +165,8 @@ def test_setting_a_job_aside_keeps_the_reason_given(run, tmp_path):
     where = Search(str(tmp_path / "s"))
     got, rec = _round_trip(run, tmp_path, where, "aside", [
         {"hash": "jobs", "click": "Not for me: Dovecote Freight, Inventory Analyst"},
-        {"click": "The pay", "role": "radio", "exact": True}, {"click": "Take it off my list"},
+        # Each reason a button of its own, done in the tap (2026-11-03).
+        {"click": "The pay", "exact": True, "within": "dialog"},
     ])
     acts = [x for x in got["actions"] if x["action"] == "job.dismiss"]
     assert acts and acts[-1]["value"] == {"why": "pay"}
@@ -210,11 +212,12 @@ def test_a_person_put_in_the_bin_is_never_messaged_again(run, tmp_path):
     # choice in its own sheet, applied by the engine, and the person shows as stopped.
     where = Search(str(tmp_path / "s"))
     got, rec = _round_trip(run, tmp_path, where, "bin", [
-        # Wren owes nothing today, so is one tap below the people who do.
-        {"hash": "contacts", "click": "more people, nothing owed to them now", "exact": False},
+        # Wren is owed only a follow-up, so is one tap below the people who need the person
+        # now; the fold says so ("1 with a follow-up you could send"), never "nothing owed".
+        {"hash": "contacts", "click": "more people, 1 with a follow-up you could send", "exact": False},
         {"click": "Not Wren?", "exact": True},
-        {"click": "Don't contact Wren", "role": "radio", "exact": True},
-        {"submit": True},
+        # The choice is the tap that does it (2026-11-03: a choice and then Done was two).
+        {"click": "Don't contact Wren", "exact": True, "within": "dialog"},
     ])
     (a,) = [x for x in got["actions"] if x["action"] == "person.stop"]
     assert a["item"] == "fernhill_freight_halloway" and a["rev_seen"] and a["value"]["why"], a
@@ -228,8 +231,8 @@ def test_the_bin_on_a_to_do_row_turns_the_employer_down_in_the_engine(run, tmp_p
     where = Search(str(tmp_path / "s"))
     got, rec = _round_trip(run, tmp_path, where, "todobin", [
         {"hash": "todo", "click": "Not Wren?", "exact": False},
-        {"click": "Not interested in Fernhill Freight any more", "role": "radio", "exact": True},
-        {"submit": True},
+        # The choice is the tap that does it (2026-11-03).
+        {"click": "Not interested in Fernhill Freight any more", "exact": True, "within": "dialog"},
     ])
     (a,) = [x for x in got["actions"] if x["action"] == "person.stop"]
     assert a["value"]["scope"] == "employer" and a["value"]["employer"] == "Fernhill Freight", a

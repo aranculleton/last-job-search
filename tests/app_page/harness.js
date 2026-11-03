@@ -683,6 +683,7 @@ S.engine = async (a) => {
   for (const st of a.steps || []) {
     if (st.hash) await goto(page, st.hash);
     if (st.more) await openMore(page, st.more);
+    if (st.moreText) { await page.locator("#main [data-item]", {hasText: st.moreText}).first().locator("summary.more-btn").first().click(); await turn(page, 3); }
     if (st.open) { await page.locator('[data-k="' + st.open + '"]').first().click(); await turn(page, 3); }
     // To do shows five first; what a step taps may wait behind "Show the other N".
     if (st.click) { await page.$$eval("details.band-more:not([open])", (ds) => ds.forEach((d) => { d.open = true; })); await turn(page, 2);
@@ -772,7 +773,7 @@ S.action_receipt = async (a) => {
   const text = (sel) => page.$eval(sel, (e) => e.textContent.trim()).catch(() => null);
   const saved = await text('#main [data-item="msg-juno-1"] .state');
   const toast = await one(page, ".toast");
-  const focusAfter = await page.evaluate(() => { const e = document.activeElement; return {k: e.dataset ? e.dataset.k : null, inCard: !!(e.closest && e.closest('[data-item="msg-juno-1"]'))}; });
+  const focusAfter = await page.evaluate(() => { const e = document.activeElement; return {k: e.dataset ? e.dataset.k : null, inCard: !!(e.closest && e.closest('[data-item="msg-juno-1"]')), tag: e.tagName, inMain: !!(e.closest && e.closest("#main"))}; });
   const id = ids[0].split("/")[1];
   store.chat("receipts/" + id, {applied_at: new Date().toISOString(), by: "cloud-1", result: "ok", note: "", undo: {action: "msg.unsent", target: "msg-juno-1", value: null}});
   await turn(page, 6);
@@ -796,9 +797,10 @@ S.action_receipt = async (a) => {
 S.undo = async (a) => {
   const o = await open({html: a.html, hash: "jobs", clock: "2026-10-25T09:00:00Z"});
   const {page, store} = o;
-  // The bin asks what it is; "Not this one" is already chosen.
+  // The bin asks what it is, each reason a button that does it (2026-11-03: a reason already
+  // chosen and then a second button took two taps).
   await clickText(page, "button", "Not for me: Harbourline Bank, Pricing Analyst");
-  await clickText(page, "button", "Take it off my list");
+  await clickText(page, "button", "Not this one");
   await turn(page, 4);
   const before = store.list("actions/");
   const marked = await page.$eval('#main [data-item="r12-1"]', (x) => x.classList.contains("is-marked")).catch(() => false);
@@ -809,9 +811,9 @@ S.undo = async (a) => {
   const after = store.list("actions/");
   const back = await T(page, "#main .card.job h3");
   await clickText(page, "button", "Not for me: Copperleaf Pay, Data Analyst, Payments");
-  // Why, asked once in the bin's sheet: the same action, with its reason.
-  await page.locator("dialog").getByRole("radio", {name: "The pay", exact: true}).check();
-  await clickText(page, "button", "Take it off my list");
+  // Why, asked once in the bin's sheet: the same action, with its reason, in one tap.
+  await page.locator("dialog").getByRole("button", {name: "The pay", exact: true}).click();
+  await turn(page, 4);
   await turn(page, 6);
   const reason = actionAt(store, "actions/act~r12-3~job.dismiss");
   const during = (await page.$$(".toast button:text-is('Undo')")).length + (await page.$$("#main button.undo")).length;
@@ -997,23 +999,43 @@ S.chat_busy = async (a) => {
   return r;
 };
 
-S.stop = async (a) => {
-  const late = new Date(Date.parse(T0) - 240000).toISOString();
+// "Don't do it" on work that never reached Claude calls it off and wakes nobody: the tap's
+// catch-up skipped the card it was on (the release review, 2026-11-03).
+S.stop_unsent = async (a) => {
+  const asked = new Date(Date.parse(T0) - 60000).toISOString();
   const o = await open({html: a.html, hash: "work", clock: T0, seed: {
-    "work/search~1": runningDoc(),
-    "work/prep~int-larkspur-supply": {kind: "prep", title: "Interview prep: Larkspur Retail", to: "cloud", args: {}, asked_at: late, status: "queued", stages: [], stage: 0, steps: [], stop_asked: false, attempt: 1},
+    "work/prep~int-larkspur-supply": {kind: "prep", title: "Interview prep: Larkspur Retail", to: "cloud", args: {}, asked_at: asked, asked_from: {tab: "t0"}, status: "queued", stages: [], stage: 0, steps: [], stop_asked: false, attempt: 1},
   }, fake: {canSend: "available"}});
   const {page, store} = o;
-  const r = {late: await bar(page, "prep~int-larkspur-supply")};
-  // Late: the page asks its helper again first; only when that cannot be reached (no
-  // connector here) is the link to start a chat by hand offered.
-  r.rewake = (await bar(page, "prep~int-larkspur-supply")).buttons;
-  await page.locator(workSel("prep~int-larkspur-supply")).getByRole("button", {name: "Ask Claude again: Interview prep: Larkspur Retail"}).click();
+  await page.locator(workSel("prep~int-larkspur-supply")).getByRole("button", {name: "Don't do it: Interview prep: Larkspur Retail"}).click();
   await turn(page, 8);
-  r.told = await page.$eval(workSel("prep~int-larkspur-supply"), (x) => x.textContent).catch(() => "");
+  const r = {rings: await page.evaluate(() => window.__calls.filter((c) => c.op === "sendToClaude").length), work: store.get("work/prep~int-larkspur-supply")};
+  r.errors = o.errors;
+  await o.ctx.close();
+  return r;
+};
+
+S.stop = async (a) => {
+  const asked = new Date(Date.parse(T0) - 240000).toISOString();
+  const rang = new Date(Date.parse(T0) - 11 * 60000).toISOString();
+  const o = await open({html: a.html, hash: "work", clock: T0, seed: {
+    "work/search~1": runningDoc(),
+    // Asked on this page, and its ring never went (one refused on an old thread, 2026-11-03).
+    "work/prep~int-larkspur-supply": {kind: "prep", title: "Interview prep: Larkspur Retail", to: "cloud", args: {}, asked_at: asked, asked_from: {tab: "t0"}, status: "queued", stages: [], stage: 0, steps: [], stop_asked: false, attempt: 1},
+    // Sent eleven minutes ago, and no word back since.
+    "work/files~resume-current": {kind: "files", title: "Your resume as a file", to: "cloud", args: {}, asked_at: rang, asked_from: {tab: "t0"}, status: "queued", stages: [], stage: 0, steps: [], stop_asked: false, attempt: 1},
+    "meta/doorbell": {rung_at: rang, ids: ["files~resume-current"], rung: {"files~resume-current": rang}, thread: "thread-old"},
+  }, fake: {canSend: "available"}});
+  const {page, store} = o;
+  const r = {unsent: await bar(page, "prep~int-larkspur-supply"), late: await bar(page, "files~resume-current")};
   r.runningBefore = (await bar(page, "search~1")).buttons;
+  // Any tap on the page sends what has not gone, and sends again what went unanswered: here,
+  // the Stop on another card. Nobody is asked to send anything twice.
   await page.locator(workSel("search~1")).getByRole("button", {name: "Stop: Finding jobs"}).click();
-  await turn(page, 6);
+  await turn(page, 8);
+  r.rings = await page.evaluate(() => window.__calls.filter((c) => c.op === "sendToClaude").map((c) => c.text));
+  r.sent = await bar(page, "prep~int-larkspur-supply");
+  r.bell = store.get("meta/doorbell");
   r.running = store.get("work/search~1");
   r.runningCard = await bar(page, "search~1");
   await page.locator(workSel("prep~int-larkspur-supply")).getByRole("button", {name: "Don't do it: Interview prep: Larkspur Retail"}).click();
@@ -1085,17 +1107,9 @@ S.inside = async (a) => {
   return r;
 };
 
-async function draftViaDialog(page, opts) {
+// One tap drafts (2026-11-03): no sheet stands between Draft this and the draft.
+async function draftViaDialog(page) {
   await page.getByRole("button", {name: "Draft this: Harbourline Bank, Pricing Analyst"}).click();
-  await turn(page, 3);
-  const dlg = page.locator("dialog.sheet");
-  if (opts && opts.submitEmpty) {
-    await dlg.getByRole("button", {name: "Draft it"}).click();
-    await turn(page, 3);
-  }
-  await dlg.getByLabel("No, draft it").check();
-  await dlg.getByRole("group", {name: /fixed term/}).getByLabel("Yes").check();
-  await dlg.getByRole("button", {name: "Draft it"}).click();
   await turn(page, 8);
 }
 
@@ -1103,24 +1117,8 @@ S.draft = async (a) => {
   const o = await open({html: a.html, hash: "jobs", fake: a.fake || {canSend: "available"}});
   const {page, store} = o;
   await page.getByRole("button", {name: "Draft this: Harbourline Bank, Pricing Analyst"}).click();
-  await turn(page, 3);
-  const dlg = page.locator("dialog.sheet");
-  const r = {open: await dlg.isVisible(), legends: await dlg.locator("legend").allInnerTexts(), focusInDialog: await page.evaluate(() => !!document.activeElement.closest("dialog")),
-    cost: await one(page, "dialog .sheet-cost")};
-  // Drafting is already chosen, and the posting's own question may be left open (2026-11-02):
-  // nothing stands between the tap and the draft.
-  r.chosen = await dlg.locator("input[type=radio]:checked").evaluateAll((xs) => xs.map((x) => x.labels[0].textContent));
-  r.errors = await dlg.locator(".errors li").allInnerTexts();
-  await dlg.getByLabel("Yes, I have applied").check();
-  await turn(page, 2);
-  r.submitWhenApplied = (await dlg.locator("button[type=submit]").innerText()).trim();
-  await dlg.getByLabel("No, draft it").check();
-  await turn(page, 2);
-  r.submitWhenNot = (await dlg.locator("button[type=submit]").innerText()).trim();
-  await dlg.getByRole("group", {name: /fixed term/}).getByLabel("Yes").check();
-  await dlg.getByRole("button", {name: "Draft it"}).click();
   await turn(page, 8);
-  r.closed = !(await page.$("dialog.sheet"));
+  const r = {sheet: !!(await page.$("dialog.sheet")), toast: await page.$$eval(".toast", (x) => x.map((e) => e.textContent))};
   r.work = store.get("work/draft~r12-1");
   r.calls = (await calls(page)).filter((c) => c.cap === "comments" || c.cap === "room");
   r.doorbell = store.get("meta/doorbell");
@@ -1152,9 +1150,8 @@ S.referral = async (a) => {
   await page.waitForTimeout(50);
   await turn(page, 6);
   r.draftSheet = await one(page, "dialog .sheet-title");
-  r.lead = await one(page, "dialog .warm");
-  await page.keyboard.press("Escape");
-  await turn(page, 3);
+  r.toast = await page.$$eval(".toast", (x) => x.map((e) => e.textContent));
+  r.work = store.list("work/");
   // The warm note on another role links to the person it names.
   r.warmLink = await page.$eval('#main [data-item="r12-2"] .warm a', (x) => x.getAttribute("href")).catch(() => null);
   r.errors = o.errors;
@@ -1162,16 +1159,19 @@ S.referral = async (a) => {
   return r;
 };
 
+// Already applied is said where it belongs, under the card's More, never asked before a draft.
 S.applied_first = async (a) => {
   const o = await open({html: a.html, hash: "jobs"});
   const {page, store} = o;
-  await page.getByRole("button", {name: "Draft this: Harbourline Bank, Pricing Analyst"}).click();
-  await turn(page, 3);
+  await openMore(page, "r12-1");
+  await page.locator('#main [data-item="r12-1"]').getByRole("button", {name: "I have applied: Harbourline Bank, Pricing Analyst"}).click();
+  await turn(page, 4);
   const dlg = page.locator("dialog.sheet");
-  await dlg.getByLabel("Yes, I have applied").check();
-  await dlg.getByLabel("When did you apply?").fill("2026-10-20");
-  await dlg.getByRole("group", {name: /fixed term/}).getByLabel("No").check();
-  await dlg.getByRole("button", {name: "Mark as applied"}).click();
+  if (await dlg.count()) {
+    const day = dlg.locator("input[type=date]");
+    if (await day.count()) await day.first().fill("2026-10-20");
+    await dlg.locator("button[type=submit]").click();
+  }
   await turn(page, 8);
   const r = {work: store.list("work/"), actions: store.list("actions/").map((p) => store.get(p)), errors: o.errors};
   await o.ctx.close();
@@ -1181,14 +1181,7 @@ S.applied_first = async (a) => {
 S.two_tabs = async (a) => {
   const o = await open({html: a.html, hash: "jobs", tabs: 2, fake: {canSend: "available"}});
   const [p1, p2] = o.pages;
-  for (const p of [p1, p2]) {
-    await p.getByRole("button", {name: "Draft this: Harbourline Bank, Pricing Analyst"}).click();
-    await turn(p, 3);
-    const dlg = p.locator("dialog.sheet");
-    await dlg.getByLabel("No, draft it").check();
-    await dlg.getByRole("group", {name: /fixed term/}).getByLabel("Yes").check();
-  }
-  await Promise.all([p1, p2].map((p) => p.locator("dialog.sheet").getByRole("button", {name: "Draft it"}).click()));
+  await Promise.all([p1, p2].map((p) => p.getByRole("button", {name: "Draft this: Harbourline Bank, Pricing Analyst"}).click()));
   for (const p of [p1, p2]) await turn(p, 10);
   const r = {
     work: o.store.list("work/"),
@@ -1205,7 +1198,8 @@ S.two_tabs = async (a) => {
   await p1.getByRole("button", {name: "I sent it: the message to Juno"}).click();
   await turn(p1, 6); await turn(p2, 6);
   // The other window shows it marked at once, live, with nothing left to press twice.
-  r.otherWindow = {chip: await T(p2, "#main .card.msg.is-marked .state-word"), buttons: await p2.$$eval('#main button[aria-label="I sent it: the message to Juno"]', (x) => x.length)};
+  r.otherWindow = {chip: await T(p2, "#main .card.msg.is-marked .state-word"), buttons: await p2.$$eval('#main button[aria-label="I sent it: the message to Juno"]', (x) => x.length),
+    gone: await T(p2, "#main .gone li")};
   r.actions = o.store.list("actions/");
   r.errors = o.errors;
   await o.ctx.close();
@@ -1301,9 +1295,13 @@ S.coming_up = async (a) => {
   r.allSave = (await calls(page)).filter((c) => c.cap === "downloads").slice(-1)[0] || null;
   await page.keyboard.press("Escape");
   await turn(page, 2);
-  // Something added: shown at once as saving, then its action is the engine's own shape.
+  // Something added: shown at once as saving, then its action is the engine's own shape. One
+  // "Add something", an interview its first choice (2026-11-03): this is the other choice.
   await page.locator('[data-k="up-add"]').click();
   await turn(page, 2);
+  r.addChoices = await T(page, "dialog.sheet .choice-btn");
+  await page.locator('[data-k="sheet-choice:other"]').click();
+  await turn(page, 4);
   await page.locator("dialog.sheet input[type=text]").first().fill("Coffee with a former colleague");
   await page.locator("dialog.sheet input[type=date]").fill("2026-10-27");
   await page.locator("dialog.sheet input[type=time]").fill("09:30");
@@ -1480,8 +1478,8 @@ S.reading = async (a) => {
   if (a.bin) {
     await o.page.$eval('[data-k="reading-bin"]', (b) => b.click());
     await o.page.waitForTimeout(300);
-    await o.page.check('input[type="radio"][value="' + a.bin + '"]');
-    await o.page.click('[data-k="sheet-go"]');
+    // Each answer is a button that does it (2026-11-03).
+    await o.page.click('[data-k="sheet-choice:when-' + a.bin + '"]');
     await o.page.waitForTimeout(900);
     r.acts = [...o.store.docs.entries()].filter(([p]) => p.startsWith("actions/")).map(([p, d]) => ({id: p.slice(8), action: d.data.action, value: d.data.value, item: d.data.item}));
   }
@@ -1583,9 +1581,10 @@ S.downloads = async (a) => {
   r.noLetter = await T(page, '#main .card.app[aria-labelledby="app-app-quayside-demand"] .muted.small');
   r.askButtons = await T(page, '#main .card.app[aria-labelledby="app-app-quayside-demand"] button');
   r.primary = await T(page, '#main .card.app[aria-labelledby="app-app-quayside-demand"] .card-actions .btn[data-primary]');
-  // Files not on the page yet are said once, above the drafts (4.3).
+  // Files not on the page yet: the card's own "Get my files ready", never a line over the
+  // list as well (2026-11-03).
   r.filesLine = await T(page, "#main .files-line");
-  await page.locator('[data-k="files-all"]').first().click();
+  await page.locator('[data-k="files:app-quayside-demand"]').first().click();
   await turn(page, 8);
   r.work = store.get("work/files~app-quayside-demand");
   r.errors = o.errors;
@@ -1688,13 +1687,14 @@ S.busy = async (a) => {
     const t = (e) => (e ? e.textContent.trim() : "");
     const groups = Object.fromEntries([...document.querySelectorAll("#main .group-card")].map((c) => [c.getAttribute("data-item"), {
       title: t(c.querySelector(".card-title")), rows: [...c.querySelectorAll(".g-row")].map((row) => ({buttons: [...row.querySelectorAll("button")].map(t)})),
-      actions: [...c.querySelectorAll(".card-actions button")].map(t), fold: t(c.querySelector(".fold")), sub: t(c.querySelector(".small.muted"))}]));
+      actions: [...c.querySelectorAll(".card-actions button")].map(t), fold: t(c.querySelector(".fold")), sub: t(c.querySelector(".small.muted")),
+      chip: t(c.querySelector(".todo-top .chip")), cost: t(c.querySelector(".card-actions .cost > span[aria-hidden]")), who: [...c.querySelectorAll(".g-row .g-main .muted.small")].map(t)}]));
     const counts = {};
     for (const a of document.querySelectorAll('[data-k^="tab:"], [data-k^="side:"]')) {
       const n = a.querySelector(".navcount");
       if (n) counts[a.getAttribute("data-k").split(":")[1]] = n.firstChild.textContent;
     }
-    return {groups, counts, hidden: t(document.querySelector("#main .hidden-note")), text: document.getElementById("main").innerText,
+    return {groups, counts, hidden: t(document.querySelector("#main .hidden-note")), text: document.getElementById("main").innerText, sum: t(document.querySelector("#main .sum")),
       gauge: document.querySelectorAll("#main .cost .gauge").length};
   });
   await goto(page, "settings");
@@ -1706,7 +1706,8 @@ S.busy = async (a) => {
   r.progress.all = await page.evaluate(() => document.querySelector("#main .sum").textContent);
   await goto(page, "jobs");
   await clickText(page, "button", "Not for me: Harbourline Bank, Pricing Analyst");
-  r.bin = await page.evaluate(() => { const d = document.querySelector("dialog[open]"); return d ? {title: d.querySelector("#sheet-title").textContent, options: [...d.querySelectorAll("label")].map((l) => l.textContent)} : null; });
+  // Its reasons are buttons, each done in the tap (2026-11-03).
+  r.bin = await page.evaluate(() => { const d = document.querySelector("dialog[open]"); return d ? {title: d.querySelector("#sheet-title").textContent, options: [...d.querySelectorAll(".choice-btn")].map((l) => l.textContent)} : null; });
   r.errors = o.errors;
   await o.ctx.close();
   return r;
@@ -1934,6 +1935,57 @@ S.mock = async (a) => {
   await turn(o.page, 10);
   const r = {heading: await one(o.page, "#main h2"), msgs: await T(o.page, "#main .talk-msg .talk-text"),
     first: (await calls(o.page)).filter((c) => c.cap === "sample").map((c) => String(c.input[0].content).slice(0, 200)), errors: o.errors};
+  // The whole of the interviewer's instructions: the questions it is to ask are in it.
+  r.prompt = (await calls(o.page)).filter((c) => c.cap === "sample").map((c) => String(c.input[0].content))[0] || "";
+  await o.ctx.close();
+  return r;
+};
+
+// An interview's prep, read on the page (2026-11-03): what the minutes before show, the parts
+// folded below it, and everything in it once every fold is open, at the size asked for.
+S.prep_reader = async (a) => {
+  const o = await open({html: a.html, viewport: a.viewport, scheme: a.scheme, hash: "interviews", clock: a.clock});
+  await throughNav(o.page, () => o.page.evaluate((h) => { location.hash = h; }, "interviews/" + a.id + "/open"));
+  await turn(o.page, 8);
+  const r = {errors: o.errors};
+  r.title = await one(o.page, "dialog[open] .detail-title");
+  r.when = await one(o.page, "dialog[open] .d-stack > .when");
+  r.glance = await one(o.page, "dialog[open] .prep-glance");
+  r.glanceH = await one(o.page, "dialog[open] .prep-glance-h");
+  r.say = await T(o.page, "dialog[open] .prep-glance .pg-part:first-of-type .pg-list > li");
+  r.parts = await o.page.$$eval("dialog[open] .prep-glance .pg-part", (ps) => ps.map((p) => ({label: (p.querySelector(".pg-label") || {}).textContent, n: p.querySelectorAll("li").length})));
+  r.folds = await T(o.page, "dialog[open] .prep-fold > summary .prep-fold-t");
+  r.openAtFirst = await o.page.$$eval("dialog[open] details.prep-fold[open]", (d) => d.length);
+  // A fold opens with a tap on its name.
+  if (r.folds.length) { await o.page.locator("dialog[open] .prep-fold > summary").first().click(); await turn(o.page, 4); }
+  r.openAfterTap = await o.page.$$eval("dialog[open] details.prep-fold[open]", (d) => d.length);
+  await o.page.$$eval("dialog[open] details.prep-fold:not([open])", (ds) => ds.forEach((d) => { d.open = true; }));
+  await turn(o.page, 4);
+  r.text = await one(o.page, "dialog[open] .detail-body");
+  r.drafts = await o.page.$$eval("dialog[open] .pq", (qs) => qs.filter((q) => /\bDraft\b/.test(q.textContent)).map((q) => q.querySelector(".pq-q").textContent));
+  r.links = await o.page.$$eval("dialog[open] .detail-body a[href]", (as) => as.map((x) => x.getAttribute("href")));
+  r.glanceFont = await o.page.$eval("dialog[open] .pg-list", (e) => parseFloat(getComputedStyle(e).fontSize)).catch(() => 0);
+  r.bodyFont = await o.page.$eval("dialog[open] .pq-a, dialog[open] .pi-list", (e) => parseFloat(getComputedStyle(e).fontSize)).catch(() => 0);
+  r.overflow = await o.page.evaluate(() => { const b = document.querySelector("dialog[open] .detail-body"); return b ? {sw: b.scrollWidth, cw: b.clientWidth} : null; });
+  if (a.shot) await shot(o.page, a.shot, false);
+  await o.ctx.close();
+  return r;
+};
+
+// Coming up's Interviews view, card by card: its title, its pill, its facts, whether it has a
+// bin and the buttons it shows; and the Brief's Today panel.
+S.iv_cards = async (a) => {
+  const o = await open({html: a.html, viewport: a.viewport, hash: "interviews", clock: a.clock});
+  await interviewCards(o.page);
+  const r = {errors: o.errors};
+  r.cards = await o.page.$$eval("#main article.card.interview", (cs) => cs.map((c) => ({
+    title: (c.querySelector("h3") || {}).textContent, pill: (c.querySelector(".top-end .state-word") || {}).textContent || "",
+    when: (c.querySelector(".when") || {}).textContent || "", meta: (c.querySelector(".meta") || {}).textContent || "",
+    bin: !!c.querySelector('[data-k^="ivbin:"]'), buttons: [...c.querySelectorAll(".card-actions > button")].map((b) => b.textContent)})));
+  await throughNav(o.page, () => o.page.evaluate(() => { location.hash = "brief"; }));
+  await turn(o.page, 6);
+  r.today = await one(o.page, ".bp-today");
+  r.likely = await T(o.page, ".bp-today .bp-qs li");
   await o.ctx.close();
   return r;
 };
@@ -1958,7 +2010,8 @@ S.keyboard = async (a) => {
   let found = false;
   for (let i = 0; i < 40 && !found; i++) {
     await page.keyboard.press("Tab");
-    found = await page.evaluate(() => (document.activeElement.getAttribute("aria-label") || "") === "Draft this: Harbourline Bank, Pricing Analyst");
+    // A sheet opened from the keyboard: the bin's (Draft this drafts at once, 2026-11-03).
+    found = await page.evaluate(() => (document.activeElement.getAttribute("aria-label") || "") === "Not for me: Harbourline Bank, Pricing Analyst");
   }
   r.reachedDraft = found;
   r.visibleFocus = await page.evaluate(() => getComputedStyle(document.activeElement).outlineStyle);

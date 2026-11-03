@@ -28,15 +28,16 @@ def _screen(text):
 
 def test_a_reason_they_wrote_is_no_longer_asked_for_on_the_one_screen(app):
     before = _screen(P.pack_markdown(_ctx(stage="Final round"), never_say=[]))
-    assert "Why Fernhill Freight? -> ask you first" in before
+    # 2026-11-03: said as what it is ("your own reasons"), never "ask you first", "below".
+    assert "Why Fernhill Freight? -> your own reasons: Claude asks you first" in before
     with open(os.path.join(app, P.LIVING), "w", encoding="utf-8") as fh:
         fh.write("# Interview prep\n\n## Your answers\n\n### Why Fernhill Freight?\n"
                  "I want to plan stock for a network that is still growing, and the "
                  "Warrington site shows it is.\n")
     after = _screen(P.pack_markdown(_ctx(stage="Final round"), never_say=[]))
-    assert "Why Fernhill Freight? -> your answer, below" in after
+    assert "Why Fernhill Freight? -> your answer\n" in after
     # A reason still unwritten is still asked for.
-    assert "Where do you see yourself in five years? -> ask you first" in after
+    assert "Where do you see yourself in five years? -> your own reasons: Claude asks you first" in after
 
 
 def test_a_question_recorded_without_a_role_takes_the_applications(app, capsys):

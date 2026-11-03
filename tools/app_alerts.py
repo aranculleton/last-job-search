@@ -430,7 +430,10 @@ def for_person(ctx, item: dict) -> tuple[list, dict | None]:
         said = _their_last_word(ctx, cid)
         days = (ctx.today - said).days if said else None
         if days is not None and days > REPLY_OWED_DAYS:
-            out.append(alert("reply_owed", cid, f"{name} replied {days} days ago and is "
+            # The day itself, which the page says the way every card says a day ("12 Sept"):
+            # "replied 43 days ago" beside "5 days late" and "first wrote 10 Sep" were three
+            # forms of one wait (the walk-through, 2026-11-03).
+            out.append(alert("reply_owed", cid, f"{name} replied on {said.isoformat()} and is "
                              "waiting for your answer.",
                              "A reply left for a week reads as lost interest, and this "
                              "conversation is the way to a referral.",

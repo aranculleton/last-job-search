@@ -36,6 +36,7 @@ import re
 import shutil
 import subprocess
 import sys
+import time
 
 _HERE = os.path.dirname(os.path.abspath(__file__))
 for _p in (os.path.join(_HERE, "network"), _HERE):
@@ -137,14 +138,63 @@ def record_page(url: str, chat: str = "", now: dt.datetime | None = None) -> str
 
 
 def _git(*args, timeout: int = 30, root: str = "") -> tuple[int, str]:
-    try:
-        r = subprocess.run(["git", "-C", root or ROOT, *args], capture_output=True, text=True,
-                           encoding="utf-8", errors="replace", timeout=timeout,
-                           stdin=subprocess.DEVNULL,
-                           env=dict(os.environ, GIT_TERMINAL_PROMPT="0"))
-    except (OSError, subprocess.TimeoutExpired):
-        return 1, ""
+    # A git command another one holds index.lock against (a landing's commit, the update
+    # check) is refused at once: tried again for a few seconds, as tools/land.py does.
+    for wait in (0.5, 1, 2, None):
+        try:
+            r = subprocess.run(["git", "-C", root or ROOT, *args], capture_output=True,
+                               text=True, encoding="utf-8", errors="replace", timeout=timeout,
+                               stdin=subprocess.DEVNULL,
+                               env=dict(os.environ, GIT_TERMINAL_PROMPT="0"))
+        except (OSError, subprocess.TimeoutExpired):
+            return 1, ""
+        if r.returncode == 0 or wait is None or "index.lock" not in (r.stderr or ""):
+            return r.returncode, r.stdout
+        time.sleep(wait)
     return r.returncode, r.stdout
+
+
+def take_master() -> str:
+    """Bring what other chats have landed on master into this copy before the page is drawn
+    from it. A chat's copy holds other chats' work only once it takes master, and a page
+    update drawn from a copy behind master dropped another chat's results: a finished search
+    could undo a finished draft, and the next update the search (the release review,
+    2026-11-03). "" when nothing was needed, it was taken, or it cannot be checked (no
+    network, not a person's copy); otherwise the line saying why the page was left as it
+    is. Never in the app itself, whose copies are not a person's."""
+    if not os.path.isfile(os.path.join(ROOT, "profile", "person.json")):
+        return ""
+    owner, name = origin()
+    if not owner or f"{owner}/{name}" == APP_REPO:
+        return ""
+    try:
+        import land
+        if land.landing(ROOT):
+            # The landing merges master itself, and two merges at once fought over git's
+            # index (the release review, 2026-11-03): the page is drawn from the copy as it is.
+            return ""
+    except Exception:  # noqa: BLE001
+        pass
+    if _merging():
+        # A merge being settled by hand: a merge here failed on it, and the abort that
+        # followed threw the settling away (the release review, 2026-11-03).
+        return ("app: a merge is being settled in this copy: finish it (or git merge --abort), "
+                "then run this again. The page was left as it is.")
+    if _git("fetch", "-q", "origin", "master", timeout=60)[0] != 0:
+        return ""
+    if _git("merge-base", "--is-ancestor", "origin/master", "HEAD")[0] == 0:
+        return ""
+    if _git("merge", "--no-edit", "-q", "origin/master", timeout=120)[0] == 0:
+        return ""
+    if _merging():                       # only the merge this started, never one before it
+        _git("merge", "--abort")
+    return ("app: this copy is behind master, and taking master stopped on a change of this "
+            "chat's own in the same file: save this chat's work first, then run this again. The "
+            "page was left as it is, so nothing another chat saved is lost from it.")
+
+
+def _merging() -> bool:
+    return _git("rev-parse", "-q", "--verify", "MERGE_HEAD")[0] == 0
 
 
 def origin() -> tuple[str, str]:
@@ -856,20 +906,33 @@ def _publish_lines(st: dict, n: int) -> list[str]:
     return lines
 
 
+# How start words the day's update check, and `app.py wake` the same check it ran itself.
+SYNC_DO = "the day's update check; do what it prints, then carry on"
+SYNC_PAGE = ". What it says about the person's page is done at once, and is never a question"
+
+
 NO_PUBLISH = ("If this chat cannot publish (no Artifact tool, or the publish is refused again "
               "after one more try), run "
               "python3 tools/app.py published none, ask setup's questions in this chat instead, "
               "as .claude/commands/setup.md says, and say nothing about a page.")
 
 
-def start(on: str = "", tools: str = "", page_url: str = "", runner=None) -> tuple[int, list[str]]:
+def start(on: str = "", tools: str = "", page_url: str = "", runner=None, work: str = "",
+          data_current: bool = False) -> tuple[int, list[str]]:
     """(exit code, the lines a chat follows): what this chat does next, whatever the copy's
-    state. Exit 0 with steps to follow; 1 when nothing may be written here."""
+    state. Exit 0 with steps to follow; 1 when nothing may be written here.
+
+    `work`: a chat started for one big job (`app.py next`). It takes no update check: the
+    chat that answers the page took the day's already, and a job must not take an update
+    part way through. It never writes the page's view either. `data_current`: the page's
+    `meta/current` already carries the model this copy makes now, so its data is not
+    written again."""
     st = state(runner)
     kind = st["repo"]["kind"]
     sync = (["python3 tools/sync_app.py --pull",
              f"python3 tools/sync_app.py --on \"{on or '<this chat model>'}\" --tools "
-             f"\"{tools or '<the browser tools this chat has>'}\""] if st["stale"] else [])
+             f"\"{tools or '<the browser tools this chat has>'}\""]
+            if st["stale"] and not work else [])
     if page_url and not st["page"].get("url") and kind == "private":
         try:
             record_page(page_url)
@@ -919,10 +982,8 @@ def start(on: str = "", tools: str = "", page_url: str = "", runner=None) -> tup
                      "is private.")
         n += 1
     for i, cmd in enumerate(sync):
-        page = (". What it says about the person's page is done at once, and is never a "
-                "question" if i == len(sync) - 1 and st["page"].get("url") else "")
-        steps.append(f"{n}. {cmd}   (the day's update check; do what it prints, then carry "
-                     f"on{page})")
+        page = (SYNC_PAGE if i == len(sync) - 1 and st["page"].get("url") else "")
+        steps.append(f"{n}. {cmd}   ({SYNC_DO}{page})")
         n += 1
     if setup in ("landed", "branch"):
         steps.append(f"{n}. The search is set up on another chat's work: bring it in first "
@@ -979,17 +1040,36 @@ def start(on: str = "", tools: str = "", page_url: str = "", runner=None) -> tup
         head = "app start: " + ("setting up" if setup in ("none", "partial", "") else
                                 f"setup {setup}")
         return 0, [head, "Claude, do this, in order:"] + steps
+    waits = [] if work else _waiting_branches()
+    if waits:
+        # A landing that was not green or stopped on a conflict pushed its chat's branch to
+        # wait there, and nothing brought it in (the release review, 2026-11-03).
+        steps.append(f"{n}. Work an earlier chat could not land waits on {', '.join(waits)}: "
+                     "bring each in with git merge --no-edit <it>, a command of its own (one "
+                     "that stops: git merge --abort, and leave it), and this chat's landing "
+                     "takes it to master. Say nothing about it to the person.")
+        n += 1
     steps.append(f"{n}. The page shows the updates and what each one did. If the update check "
                  "listed improvements Claude applies itself, start the background /upgrade "
                  "(.claude/commands/upgrade.md); its progress goes on the page.")
     n += 1
-    if st["page"].get("url"):
+    if st["page"].get("url") and not work and not (data_current and not sync):
         steps.append(f"{n}. " + ("Unless the update check above just did it, b" if sync else "B") +
                      "ring the page's data up to date: python3 tools/app.py view <your "
                      "scratchpad>/view --dump <a dump of the page's view and meta> and send the "
                      "batch it prints. Then carry on with what the person asked.")
     head = "app start: set up" + ("" if st["page_current"] else ", page to publish")
     return 0, [head, "Claude, do this:"] + steps
+
+
+def _waiting_branches() -> list[str]:
+    """The branches whose work an earlier chat or run could not land (land.waiting), from
+    what this copy last fetched; [] in the app itself, or when it cannot be told."""
+    try:
+        import land
+        return [] if land._the_app(ROOT) else land.waiting(ROOT)
+    except Exception:  # noqa: BLE001  the start goes on; the next one looks again
+        return []
 
 
 def _no_page_recently(rec: dict, today: dt.date | None = None) -> bool:

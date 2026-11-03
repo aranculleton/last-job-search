@@ -71,7 +71,9 @@ to with that command; a reply that comes later reopens the thread by itself.
 date, what was said) is written the same turn with
 `python3 tools/network/state.py set <contact> --status <status> --next-action "<what>"
 --due <YYYY-MM-DD> --note "<what happened>"`, never by editing the contact book: a note
-with line breaks typed into the file broke it.
+with line breaks typed into the file broke it. "They accepted my request" is
+`python3 tools/network/state.py accepted <contact>` (`--date <day>`), which moves the
+follow-up to count from that day; someone new is `state.py add "<name>" --company "<employer>"`.
 
 **Linked** last: threads and applications at the same employer, so a referral in
 progress can be pointed at a live application.

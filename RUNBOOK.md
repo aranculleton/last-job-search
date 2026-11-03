@@ -450,11 +450,10 @@ underneath, never as markdown links, which do not open from the desktop app.
 
 `python3 tools/record_drafts.py "$SCRATCH/r1/drafts.json" "$SCRATCH/r1/apps_in.json" --round r1`
 adds a row per application at `status=drafted` (fit in `fit_rating`, never priority) and
-writes each `screening_answers.md`. Then:
-
-Then `python3 tools/save_state.py` (CLAUDE.md, "Saving"), which
-stages each path that exists and no build noise, in any shell, then `git commit -m "<what
-changed>"` and, as a command of its own, `git push -u origin HEAD`.
+writes each `screening_answers.md`. Then land it with one command, `python3 tools/land.py
+--message "<what changed>"` (CLAUDE.md, "Saving"; "Landing on master", below). Its first
+step is `python3 tools/save_state.py`, which stages each path that exists and no build
+noise, in any shell.
 
 **What it stages, and why it is forced.** A person's copy is **private** and the search runs
 in cloud containers that are gone when the chat ends, so nothing persists unless it is
@@ -484,23 +483,44 @@ works only if every branch lands on master before its chat ends: a chat that sta
 master cannot see work sitting on another chat's branch, and builds it a second time. So:
 
 1. **Start by pulling master and taking the app's updates** ("Start of a session", above),
-   before writing anything, not before pushing.
-2. **Finish by getting the work onto master.** Not "pushed to the branch": on master. Open
-   the pull request and start `./tools/ci_local.sh --quick` in the background (Bash,
+   before writing anything, not before pushing. Then bring in what an earlier chat could
+   not land: `python3 tools/land.py --waiting` lists each branch whose work waits (the
+   start command names them too); `git merge --no-edit <each>`, a command of its own, and
+   this chat's landing takes it to master. One that stops on a conflict: `git merge
+   --abort`, and leave it.
+2. **Finish by getting the work onto master.** Not "pushed to the branch": on master. Once
+   the answer is out (the reply, the page brought up to date), and at most once a turn,
+   start `python3 tools/land.py --message "<what changed>"` in the background (Bash,
    `run_in_background`), so the chat stays free for the person and the page while it runs
-   (in the foreground it held the chat that answers the page for minutes, 2026-10-29); when
-   it ends green, merge, in the turn its ending wakes. Silently: never subscribe to it, set a
-   check-in for it or wait on GitHub's checks, and never tell the person about it or its
-   checks (CLAUDE.md, "Saving"). A cloud chat is subscribed to a pull request it opens by
-   itself: unsubscribe at once (`unsubscribe_pr_activity`), before anything else
-   (2026-10-30). While it runs, the chat that answers the page says "Saving
-   your work" there (`app.py busy`, the `app` skill, step 5), and clears it once landed. A
-   branch left behind at the end of a session is work the next chat cannot see and will
-   duplicate.
-3. **Never leave a merged branch around**, and never start new work on an old one.
+   (in the foreground the check held the chat that answers the page for minutes,
+   2026-10-29). It does every step on this side, each git command on its own: saves and
+   commits, `git fetch origin master` and `git merge --no-edit origin/master`, runs
+   `./tools/ci_local.sh --quick`, and only when that is green `git push -u origin HEAD`
+   (a network failure is retried; nothing is ever forced). In the turn its ending wakes:
+   - `land: ready <branch>`: make the calls it prints, each its own step:
+     `create_pull_request` (head that branch, base master); then `merge_pull_request`,
+     with `unsubscribe_pr_activity` in the same message as a separate call (a cloud chat is
+     subscribed to a pull request it opens by itself, 2026-10-30); then `python3
+     tools/land.py --after-merge`, which starts this same branch from master again, so the
+     next piece of work needs no stash and no checkout of master. **merge refused** (not
+     mergeable: two chats landed at once, and GitHub's merge has no row-by-row driver): run
+     `python3 tools/land.py` again, which merges master here, with the driver, and pushes the
+     same branch; then merge the same pull request again.
+   - `land: not green` or `land: a conflict`: the work waits on this chat's branch, pushed
+     with no pull request (a conflict pushes it as it was before the merge), so it outlives
+     this container. Open no pull request, leave it and say nothing; the next chat lands it.
+     `land: nothing to land`: done.
+
+   Silently: never subscribe to it, set a check-in for it or wait on GitHub's checks, and
+   never tell the person about it or its checks (CLAUDE.md, "Saving"). While it runs, the
+   chat that answers the page says "Saving your work" there (`app.py busy`, the `app`
+   skill, step 5), and clears it once landed. A branch left behind at the end of a session
+   is work the next chat cannot see and will duplicate.
+3. **Never leave a merged branch around**, and never start new work on an old one. A
+   branch `--after-merge` has brought back to master is current, not old.
 4. If the work genuinely is not finishable this session, push it, and say in one plain line
    that it is not finished and the next chat carries on. The next chat finds it itself
-   (`git branch -r --no-merged origin/master`); the person is never given a branch name.
+   (`python3 tools/land.py --waiting`); the person is never given a branch name.
 
 **Commit and push whenever a unit of work finishes**, not once at the end: a session that
 runs out of context mid-task loses everything uncommitted. Batch the commits and push once a
@@ -518,7 +538,7 @@ word outranks it. A line ending "nothing to tell the person" is the app's own re
 stops only where neither change is later. Before
 merging a pull request, `git fetch origin master` and then `git merge origin/master`, each a
 command of its own, so that merge happens in the container, where the driver is set, and not
-on GitHub, where it is not.
+on GitHub, where it is not. `land.py` does both before its check.
 
 The one thing that is **not** negotiable in the other direction: **never push to master
 without CI green**. It is the branch every other chat starts from, so a broken master breaks
@@ -527,7 +547,7 @@ rule: `./tools/ci_local.sh --quick`** (it skips the compile of the app's example
 which a person's copy never edits, and a second run of their own tests on the oldest Python;
 the full run is for a change to the app). A
 clean run is the evidence and merging on it is allowed; say so in the pull request and name
-anything it reported as SKIP. Why, what CI's Python 3.9 leg is for, and the one case worth a
+anything it reported as SKIP (the body `land.py` prints does both). Why, what CI's Python 3.9 leg is for, and the one case worth a
 billed CI run: MAINTAINING.md, "CI on a private repo".
 
 **On a computer of your own** (no GitHub tools in the chat; `gh` is the route, and
@@ -539,7 +559,9 @@ first line says so when another chat is working in the main folder):
 where Claude Code keeps its own, on a new, unique branch from master), and every command runs
 there: `cd` into it once, and since it is inside the project the chat stays there. Two chats in one folder switch branches under each
 other and fight over git's index. Files git does not carry (the connections export) are read
-from the main folder. Then, from that folder, commit, and:
+from the main folder. Then, from that folder, land as above: `python3 tools/land.py` prints
+the `gh` lines to use in place of the GitHub calls. By hand, each line pre-approved, it is
+commit, and:
 
 ```bash
 git fetch origin master
@@ -563,6 +585,12 @@ edit ...; gh pr merge 164 --merge`, 2026-10-23) goes to that check whole, and it
 merge as "Merge Without Review". The merge alone matches `Bash(gh pr merge:*)` and runs.
 To change a pull request's text, run `gh pr edit` on its own line before it, never in the
 same command.
+
+**Independent commands go together, as separate calls.** Commands that do not wait on each
+other's result are sent in one message as separate calls, never chained into one: each saves
+a whole step, since every step re-reads the chat (the merge and the unsubscribe above, two
+reads, a busy line and a save). A push or a merge never goes before its check has ended
+green.
 
 `gh pr merge` can exit non-zero after a merge that worked: it tries to fast-forward a local
 master that has fallen behind and prints "fatal: Not possible to fast-forward". Keep no
@@ -840,7 +868,7 @@ slash command** are the table below, each with what it does, its flags and its e
 | `python3 tools/network/export.py due` | One line once the last LinkedIn download is a fortnight old (`EXPORT_EVERY_DAYS`), for the brief; nothing otherwise. |
 | `python3 tools/open_actions.py` | Everything owed, employers first, derived from the three state files: live applications, contacts owed a reply, and **follow-ups due** on applications that have gone quiet. `--company <name>` for one employer. **`--due`** prints only what is due today or overdue, both halves, most urgent first, with the counts on line one and the first five lines written to stand alone: it is what the daily routine pastes into a push notification. A contact whose `next_action` opens on HOLD or FREEZE is not due until the date after "until" arrives. Requests nobody accepted are one section to withdraw together, and anything owed more than 45 days with nothing done (`state.OLD_OWED_DAYS`, most often old LinkedIn history) is counted on line one, not listed; `state.py` still lists each, and a date of the person's own on the row keeps it live. An interview booked in an application's `outcome.md` is due once it is a week away with no pack for that stage, and its thank-you for a week after it until one is on file. This is the one view; `tools/followups.py` is the nudge half of it and still runs on its own when that is all you want. |
 | `python3 tools/what_works.py brief <messages\|documents\|search\|interviews>` | What has worked, counted from the state files with no model call: reply rates and the messages that drew replies, the applications that reached an interview with the resume and letter they used, the interview rate by fit band and route, and (`interviews`) how far applications get by the stages ticked in each `outcome.md`, with the questions the bank says keep coming up and the stories that landed. A difference is reported only when the groups are big enough and the gap is unlikely to be chance. `event --contact <id>` and `event --company <name>` are the one-line audit when a result arrives. |
-| `python3 tools/interview_pack.py pack "<company>"` | The one living prep document `/interview` builds for a hiring process, one screen first (what they are assessing and want to hear, likely questions with the story or answer for each, hooks, the money, what not to say), then your answers to write as said, what the employer's people and papers have been told (conflicts flagged), who you are meeting and the question for each, the format, and the detail, every fact sourced. `--stage`, `--date`, `--time`, `--with`, `--format` (case, coding, behavioural, technical, presentation, screen), `--map <json>` and `--write` (beside the application, as `interview_prep.md`, keeping what the person wrote). `book "<company>" [--stage ...] [--date ...] --time HH:MM [--zone <as written>]` saves an interview's day and time on its record (its `outcome.md` line), the one place the page reads it: a time said in the chat, an invite or a message is saved this way at once, never left for the person to add. `times` saves every time a note or a logged message gives for a booked interview that has none (logging a message or a note, and every wake of the chat that answers the page, run it). `process "<company>" --contact <id> --role "<role>" [--time HH:MM] [--posting <file or link>]` registers a process with no application (a referral or a recruiter's call) and writes its document in one command; `postings` gives every process folder that has none a `job_posting.md`. `motive "<question>" --answer "<their words>" [--suits ...] [--not-for ...]` keeps the person's own reasons in `profile/07-interview-prep.md` for every later employer. `check` exits 1 while an answer is unwritten or reads as written, a question waits on the person's own reasons, or research is still to do. `campaign --yes "<chat>"\|--no` records the one-time offer of a chat for that employer. `asked` adds a question an interview asked to `documents/interview/question_bank.csv`; `rework` adds an answer to work on, which a rebuild keeps. |
+| `python3 tools/interview_pack.py pack "<company>"` | The one living prep document `/interview` builds for a hiring process, one screen first (what they are assessing and want to hear, three to five things to say, likely questions with the story or answer for each, two or three questions to ask, hooks, the money, the one or two things not to say), in plain words with no file, command or status code in it, then your answers to write as said, what the employer's people and papers have been told (conflicts flagged), who you are meeting and the question for each, the format, and the detail, every fact sourced. `--stage`, `--date`, `--time`, `--with`, `--format` (case, coding, behavioural, technical, presentation, screen), `--map <json>` and `--write` (beside the application, as `interview_prep.md`, keeping what the person wrote). `book "<company>" [--stage ...] [--date ...] --time HH:MM [--zone <as written>]` saves an interview's day and time on its record (its `outcome.md` line), the one place the page reads it: a time said in the chat, an invite or a message is saved this way at once, never left for the person to add. `times` saves every time a note or a logged message gives for a booked interview that has none (logging a message or a note, and every wake of the chat that answers the page, run it). `process "<company>" --contact <id> --role "<role>" [--time HH:MM] [--posting <file or link>]` registers a process with no application (a referral or a recruiter's call) and writes its document in one command; `postings` gives every process folder that has none a `job_posting.md`. `motive "<question>" --answer "<their words>" [--suits ...] [--not-for ...]` keeps the person's own reasons in `profile/07-interview-prep.md` for every later employer. `check` exits 1 while an answer is unwritten or reads as written, a question waits on the person's own reasons, or research is still to do. `campaign --yes "<chat>"\|--no` records the one-time offer of a chat for that employer. `asked` adds a question an interview asked to `documents/interview/question_bank.csv`; `rework` adds an answer to work on, which a rebuild keeps. |
 | `python3 tools/profile_consistency.py` | The pay band, the walk-away floor, the notice period, the sponsorship position and the permit-disclosure rule, said the same way across the profile: names every other place that says one differently from its source (the rubric's salary table, the candidate profile's notice line, the summary's sponsorship sentence). Exit 1 when anything disagrees; the `profile-consistency` upgrade asks the person which is right. |
 | `python3 tools/followups.py` | The application nudges alone, on the schedule in step 5, "After the user applies": each one due, who it goes to, the held ones with their reason, and where the chase stops (at the throttle's 45 days of silence, `throttle.SILENCE_DAYS`, or a week after the second follow-up). `--close-quiet` closes each application past the chase as `no_response` with a dated note, recorded as the search's call (`confirmed_by` "the search") and printed as "closing as no reply" with the `confirm.py applied` line that keeps one open; the brief runs it. |
 | `python3 tools/confirm.py applied\|not-applied\|skip\|closed <rows...>` | What the person says happened to an application, on exactly the rows they meant: a file's ABBR, the employer, `Employer::title words`, or `all from round <name> except ...`. `--on <date>` is the day it went, `--source chat\|page` where they said it; `applied --new --company --role --url` adds one made outside the app. It never moves `date` (part of the tracker's merge key), writes `applied_on`, `confirmed_by` and `confirmed_at`, prints each row it changed, and refuses (exit 1, nothing written) a name that could be two rows, listing them. `check` lists an application nobody confirmed, a draft whose notes say it went, and a page tick the tracker disagrees with (`--ticks <file>`). |

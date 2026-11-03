@@ -113,10 +113,12 @@ def test_a_job_goes_from_draft_this_to_applied_on_the_day_given(run, tmp_path, v
     nxt["applications"].insert(0, {"id": "app-harbourline-pricing", "company": "Harbourline Bank", "role": "Pricing Analyst", "applied_on": "2026-10-20",
                                    "status": "applied", "last": "2026-10-20", "rev": "apx", "stages": [{"name": "Applied", "on": "2026-10-20", "done": True}]})
     got = _go(run, tmp_path, [
-        {"hash": "jobs", "click": "Draft this: Harbourline Bank, Pricing Analyst"},
-        {"click": "Yes, I have applied", "role": "radio"},
-        {"fill": {"When did you apply?": "2026-10-20"}},
-        {"click": "Mark as applied", "receipts": True, "view": {"jobs": nxt["jobs"], "applications": nxt["applications"]}},
+        # Applied, said under More in one tap, and another day from its toast (2026-11-03).
+        {"hash": "jobs", "more": "r12-1"},
+        {"click": "I have applied: Harbourline Bank, Pricing Analyst"},
+        {"click": "Another day?"},
+        {"fill": {"The day": "2026-10-20"}},
+        {"click": "Save", "exact": True, "receipts": True, "view": {"jobs": nxt["jobs"], "applications": nxt["applications"]}},
         {"hash": "jobs", "open": "jobsw:applied", "read": '[data-item="app-harbourline-pricing"]'},
     ], vp)
     a = _one(got, "job.applied")
@@ -197,10 +199,12 @@ def test_an_interview_binned_leaves_interviews_at_once_and_undo_brings_it_back(r
     card = "document.querySelector('#main article[data-item=\"int-harbourline-risk\"]')"
     line = "document.querySelector('#main .ended[data-item=\"int-harbourline-risk\"]')"
     soon = "document.querySelectorAll('#main [data-item=\"soon:int-harbourline-risk\"]').length"
+    # Each answer in the bin is a button that does it (2026-11-03); the step after only reads.
+    toasts = "[...document.querySelectorAll('[data-toast]')].map((t) => t.textContent).join(' | ')"
     binned = [
         {"hash": "interviews/int-harbourline-risk", "open": "ivbin:int-harbourline-risk"},
-        {"click": "No reply, and I have stopped waiting", "role": "radio"},
-        {"submit": True, "ready": "!" + card + " && !!" + line},
+        {"click": "No reply, and I have stopped waiting", "within": "dialog"},
+        {"ready": "!" + card + " && !!" + line, "eval": toasts},
     ]
     got = _go(run, tmp_path, [{"hash": "todo", "eval": soon}] + binned + [{"hash": "todo", "eval": soon}], vp)
     a = _one(got, "outcome.no_response")
@@ -208,29 +212,36 @@ def test_an_interview_binned_leaves_interviews_at_once_and_undo_brings_it_back(r
     before, ended, todo = got["after"][0], got["after"][3], got["after"][4]
     assert before["eval"] == 1 and todo["eval"] == 0, (before["eval"], todo["eval"])
     assert "Second interview with Harbourline Bank: marked as no reply." in ended["text"], ended["text"]
-    assert "Saved. Claude will pick this up." in ended["text"] and "5 things booked or due" in ended["text"], ended["text"]
+    assert "5 things booked or due" in ended["text"], ended["text"]
+    # Its Undo is in the toast while the toast is up, never a second one on its line (2026-11-03).
+    assert "Undo" in ended["eval"] and "Saved. Claude will pick this up." not in ended["text"], (ended["eval"], ended["text"])
     # Undo, before a chat has seen it: the card is back and nothing is left to apply.
-    got = _go(run, tmp_path, binned + [{"open": "undo:ivend:int-harbourline-risk", "ready": "!!" + card + " && !" + line}], vp)
+    got = _go(run, tmp_path, binned + [{"click": "Undo", "exact": True, "within": "#toasts", "ready": "!!" + card + " && !" + line}], vp)
     assert "7 things booked or due" in got["after"][3]["text"] and "marked as no reply" not in got["after"][3]["text"]
     assert not [x for x in got["actions"] if x["action"] == "outcome.no_response"]
 
 
 def test_the_prep_is_read_on_the_page_and_practice_uses_its_questions(run, tmp_path, vp):
+    # 2026-11-03: the prep opens on what to say and ask, and its likely questions are one tap
+    # below, folded: the questions are read once that fold is open.
     got = _go(run, tmp_path, [
-        {"hash": "interviews", "click": "Read your prep", "read": "dialog.detail"},
+        {"hash": "interviews", "click": "Read your prep"},
+        {"open": "prep-fold:int-larkspur-supply:q", "read": "dialog.detail"},
         {"click": "Practise with Claude", "within": "dialog.detail", "read": "#main", "wait": 300, "calls": "sample"},
         {"eval": "(() => { const t = document.querySelector('#talk-text'); t.value = 'I have three years of store and supplier data behind me, turned into weekly plans.'; t.dispatchEvent(new Event('input', {bubbles: true})); return 1; })()"},
         {"click": "Send", "exact": True, "wait": 300, "read": "#main .talk-list"},
     ], vp, fake={"canSend": "available", "sample": {"replies": [
         "Tell me about yourself.",
         "Band: Solid\n- You said \"three years of store and supplier data\": lead with it.\n- Say more about the regional team.\nWhy Larkspur Retail?"]}})
-    read = got["after"][0]["text"]
+    read = got["after"][1]["text"]
     for q in ("Tell me about yourself.", "Why Larkspur Retail?", "Tell me about a forecast that was wrong."):
         assert q in read, q
-    first = got["after"][1]["calls"][0]
+    assert read.count("Draft") == 1, "Draft only above the one answer that is a draft"
+    first = got["after"][2]["calls"][0]
     asked = json.dumps(first)
     assert "Tell me about yourself." in asked and "Why Larkspur Retail?" in asked, "the practice is given the pack's own questions"
-    feedback = got["after"][3]["text"]
+    assert "[object Object]" not in asked
+    feedback = got["after"][4]["text"]
     assert "Band: Solid" in feedback and "three years of store and supplier data" in feedback
     assert "Say more about the regional team" not in feedback, "a point that does not quote the answer is never shown"
 
@@ -435,9 +446,9 @@ def test_links_are_the_model_s_own_so_spelling_differences_still_join(run, tmp_p
 def test_changing_your_mind_keeps_the_reason_and_brings_things_back(run, tmp_path, vp):
     got = _go(run, tmp_path, [
         {"hash": "jobs", "click": "Not for me: Harbourline Bank, Pricing Analyst"},
-        # Why is asked once, in the bin's own sheet (2026-10-29: never a second "Why?").
-        {"click": "The pay", "role": "radio", "exact": True},
-        {"click": "Take it off my list"},
+        # Why is asked once, in the bin's own sheet (2026-10-29: never a second "Why?"), and the
+        # reason is the tap that does it (2026-11-03).
+        {"click": "The pay", "exact": True, "within": "dialog"},
         {"click": "41 left out by the search", "exact": False},
         {"click": "Bring back Transport Planning Analyst at Fernhill Freight"},
         {"click": "Set it aside", "exact": True},

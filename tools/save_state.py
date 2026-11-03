@@ -15,9 +15,10 @@ caches under profile/tests/ with them); everything else is ignored by .gitignore
 purpose, so it is forced in by path, one existing path at a time, and a file of theirs the
 repo holds that has gone from disk is staged as removed. Exit 0, or 1 when git refused.
 
-After the commit, the landing check (`./tools/ci_local.sh --quick`) runs in the background
-and the work lands on master when it ends green (RUNBOOK.md, "4. Record and persist, then
-land on master"): it held the chat that answers the page for minutes in the foreground.
+`tools/land.py` runs this first, then commits, merges master, runs the landing check
+(`./tools/ci_local.sh --quick`) and pushes, all in the background (RUNBOOK.md, "4. Record
+and persist, then land on master"): the check held the chat that answers the page for
+minutes in the foreground.
 """
 from __future__ import annotations
 
@@ -151,11 +152,13 @@ def main(argv: list[str] | None = None, root: str = ROOT) -> int:
     return 0
 
 
-# What follows the commit: the landing check runs in the background, so the chat that
-# answers the page is never held by it (it was, for minutes, 2026-10-29).
-LAND = ("save_state: then commit, open the pull request and start ./tools/ci_local.sh --quick "
-        "in the background (Bash run_in_background); merge when it ends green. While it runs "
-        "the page says \"Saving your work\" (app.py busy; the app skill, step 5).")
+# What follows: one command lands it, in the background, so the chat that answers the page
+# is never held by the check (it was, for minutes, 2026-10-29), and a landing is one step,
+# not fourteen (2026-11-03).
+LAND = ("save_state: landing is one command, python3 tools/land.py --message \"<what changed>\", "
+        "run in the background (Bash run_in_background) once the answer is out: it commits, "
+        "merges master, runs the check, pushes, and prints the calls left. While it runs the "
+        "page says \"Saving your work\" (app.py busy; the app skill, step 5).")
 
 
 if __name__ == "__main__":

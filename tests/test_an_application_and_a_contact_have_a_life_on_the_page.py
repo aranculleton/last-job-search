@@ -63,6 +63,24 @@ def test_every_application_that_went_is_a_record_with_its_drafts_id(search):
     assert KESTREL not in apps
 
 
+def test_an_invitation_with_no_day_yet_is_booked_with_the_day_still_to_choose(search):
+    """An invitation that asks the person to choose a slot was refused with "Which day is
+    it? Give it as 2026-10-28", a day already past, while the page said "Saved"
+    (2026-11-03). It is booked as a stage with no day, which the day joins later."""
+    a = _app(search, LARKSPUR)
+    aid = search.act("outcome.interview", LARKSPUR, rev=a["rev"],
+                     value={"stage": "Initial round", "on": ""})
+    got = search.apply()
+    assert got["ok"] == [aid], search.receipt(aid)
+    assert "the day still to choose" in search.receipt(aid)["note"]
+    assert "initial round booked, the day still to choose" in \
+        search.tracker_row("Larkspur Retail")["notes"].lower()
+    folder = os.path.join(search.state, "documents", "applications")
+    md = next(os.path.join(folder, d, "outcome.md") for d in os.listdir(folder)
+              if d.startswith("larkspur_retail_senior"))
+    assert "- [ ] Initial round\n" in open(md, encoding="utf-8").read()
+
+
 def test_an_interview_booked_on_the_page_is_the_stage_line_outcome_writes(search):
     a = _app(search, LARKSPUR)
     aid = search.act("outcome.interview", LARKSPUR, rev=a["rev"],
@@ -291,3 +309,21 @@ def test_the_checks_a_draft_got_are_said_in_plain_words(search):
 def test_the_model_still_keeps_the_contract(search):
     assert app_model.check(search.model()) == []
     _ = app_state
+
+
+def test_no_day_yet_never_wipes_a_day_already_booked(search):
+    """"Book it, no day yet" on a stage already booked for a day left that day blank (the
+    release review, 2026-11-03): the day stays, and the person is told it is there."""
+    a = _app(search, LARKSPUR)
+    first = search.act("outcome.interview", LARKSPUR, rev=a["rev"],
+                       value={"stage": "Phone screen", "on": "2026-10-30", "with": "the recruiter"})
+    assert search.apply()["ok"] == [first]
+    a = _app(search, LARKSPUR)
+    again = search.act("outcome.interview", LARKSPUR, rev=a["rev"], value={"stage": "Phone screen", "on": ""})
+    search.written_back()
+    assert search.apply()["ok"] == [again]
+    assert search.receipt(again)["note"] == "Already booked for 2026-10-30."
+    folder = os.path.join(search.state, "documents", "applications")
+    md = next(os.path.join(folder, d, "outcome.md") for d in os.listdir(folder)
+              if d.startswith("larkspur_retail_senior"))
+    assert "- [ ] Phone screen (scheduled 2026-10-30, with the recruiter)" in open(md, encoding="utf-8").read()

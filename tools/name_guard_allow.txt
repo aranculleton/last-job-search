@@ -13,6 +13,9 @@ Brannock Quillfeather  # invented, tests/test_people_are_matched_by_where_they_w
 Larkspur Casino Group   # invented employer, tests/test_the_bar_by_name_runs_before_the_fetch.py
 Northgate Council       # invented employer, tests/test_the_bar_by_name_runs_before_the_fetch.py
 Wexmoor Council         # invented employer, tests/test_the_bar_by_name_runs_before_the_fetch.py
+Northmere Energy Board  # invented employer, tests/test_a_public_body_is_known_by_what_its_posting_says.py
+Northmere Council       # invented employer, tests/test_a_shortlist_of_n_is_refilled.py
+Wexmoor Lending         # invented employer, tests/test_naming_skills_alone_never_scores_100.py
 Placeholder         # a word that opened a commit subject ("Placeholder LinkedIn links"), not a name
 Looker Studio       # a product: Google's dashboard tool
 Azure Data Factory  # a product: Microsoft's data pipeline service
@@ -536,3 +539,15 @@ Saudi Arabia                # a country, tools/brief.py
 Vale Verde Hospital         # invented employer, tests/test_brief.py
 Ribeira Clinic              # invented employer, tests/test_brief.py
 Apple Calendar              # a product, docs/NEXT_BUILDER.md
+Waking Claude
+Ottilie Brandt              # invented, tests/test_linkedin_export.py
+Exampleshire Public Service # invented, tests/test_a_public_body_is_known_by_what_its_posting_says.py
+Sam Tate                # invented recruiter with no employer, tests/test_contacts_are_recorded_and_shown_as_they_happened.py
+Dev Raman               # invented, the same test
+Hi Dev                  # the invented Dev Raman greeted, the same test
+Rosa Lindqvist          # invented, the same test
+Hi Rosa                 # the invented Rosa Lindqvist greeted, the same test
+Ivo Haddad             # invented, the same test
+Hi Ivo                  # the invented Ivo Haddad greeted, the same test
+Bea Novak               # invented, the same test
+Tobias Brightwell       # invented, the same test

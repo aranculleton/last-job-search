@@ -1354,47 +1354,120 @@
         }
       ],
       "one_screen": {
+        "assessing": "whether the basics hold and your story makes sense, in about twenty minutes",
+        "hear": "a clear story that matches your CV, and a specific reason for Larkspur",
         "questions": [
           {
-            "q": "Tell me about yourself.",
-            "with": "Three years of store and supplier data turned into weekly plans, then why Larkspur."
+            "question": "Tell me about yourself.",
+            "answer": "Three years of store and supplier data turned into weekly plans, then why Larkspur."
           },
           {
-            "q": "Why Larkspur Retail?",
-            "with": "Their move to store-level forecasting, and your own forecasting work."
+            "question": "Why Larkspur Retail?",
+            "answer": "Their move to store-level forecasting, and your own forecasting work."
           },
           {
-            "q": "Tell me about a forecast that was wrong.",
-            "with": "The bank holiday miss, what you changed, and the next quarter's error."
+            "question": "Tell me about a forecast that was wrong.",
+            "answer": "The bank holiday miss, what you changed, and the next quarter's error."
           },
           {
-            "q": "How do you explain a model to a store manager?",
-            "with": "The one-page plan you made for the regional team."
+            "question": "How do you explain a model to a store manager?",
+            "answer": "The one-page plan you made for the regional team."
           },
           {
-            "q": "What do you need from a manager?",
-            "with": "Clear priorities, and room to fix the data under a report."
+            "question": "What do you need from a manager?",
+            "answer": "Clear priorities, and room to fix the data under a report."
           }
         ],
         "hooks": [
-          "The weekly plan the regional team still uses",
-          "Cutting stock-outs on chilled lines",
-          "Your Leeds degree"
+          {
+            "text": "The weekly plan the regional team still uses",
+            "source": null
+          },
+          {
+            "text": "Cutting stock-outs on chilled lines",
+            "source": null
+          },
+          {
+            "text": "Your Leeds degree",
+            "source": null
+          }
         ],
-        "money": "GBP 44,000 is the posted figure, and it suits you.",
-        "avoid": [
-          "Calling the last employer's data a mess"
+        "money": "say GBP 44,000, the posted figure, which suits you",
+        "do_not_say": [
+          {
+            "text": "Calling the last employer's data a mess",
+            "source": null
+          }
+        ],
+        "say": [
+          {
+            "text": "Lead with your strongest result: stock-outs on chilled lines down by a third.",
+            "source": null
+          },
+          {
+            "text": "Why them: they have just moved to store-level forecasting.",
+            "source": null
+          },
+          {
+            "text": "The basics: you are in Leeds; notice: one month; no sponsorship needed.",
+            "source": null
+          }
+        ],
+        "ask": [
+          {
+            "text": "What are the stages from here?",
+            "source": null
+          },
+          {
+            "text": "What does a good first quarter look like?",
+            "source": null
+          },
+          {
+            "text": "Is there anything about my background you'd like me to go into more?",
+            "source": null
+          }
         ]
       },
       "practice": {
         "questions": [
-          "Tell me about yourself.",
-          "Why Larkspur Retail?",
-          "Tell me about a forecast that was wrong.",
-          "How do you explain a model to a store manager?",
-          "What do you need from a manager?"
+          {
+            "question": "Tell me about yourself.",
+            "why": "what a screen usually asks",
+            "answer": "I turn store and supplier data into weekly plans people use, and this role does that closer to the shelf.",
+            "draft": false
+          },
+          {
+            "question": "Why Larkspur Retail?",
+            "why": "what a screen usually asks",
+            "answer": "You've just moved forecasting to store level, and that's the problem I've been working on.",
+            "draft": true
+          },
+          {
+            "question": "Tell me about a forecast that was wrong.",
+            "why": "what a screen usually asks",
+            "answer": null,
+            "draft": false
+          },
+          {
+            "question": "How do you explain a model to a store manager?",
+            "why": "what a screen usually asks",
+            "answer": null,
+            "draft": false
+          },
+          {
+            "question": "What do you need from a manager?",
+            "why": "what a screen usually asks",
+            "answer": null,
+            "draft": false
+          }
         ],
-        "reworked": 0
+        "reworked": [],
+        "bands": [
+          "Strong",
+          "Solid",
+          "Gap"
+        ],
+        "min_quote_words": 3
       },
       "related": {
         "jobs": [
@@ -1410,7 +1483,125 @@
         ]
       },
       "draft": null,
-      "prep_text": "# Larkspur Retail: Senior Supply Chain Analyst\n\nLast updated Mon 26 Oct. Next: the phone screen on Wednesday at 13:00.\n\n*Before and after, never during: nothing here is open while you are on the call.*\n\n## What they will ask\n\n- Why supply chain analytics, and why Larkspur.\n- A forecast you built and what changed because of it.\n  - Say the SKU count and the error before and after.\n  - Name who used it.\n- How you handle a stakeholder who disagrees with the numbers.\n\n## The forecasting skeleton to know\n\nType this once from memory:\n\n```python\nimport pandas as pd\ndef clean(df):\n    df = df.copy()\n    # parse dates, drop duplicates\n    return df.drop_duplicates()\n```\n\n## Your plan\n\n| Day | Do |\n|---|---|\n| Mon 26 | Read the job posting again; write three stories. |\n| Tue 27 | Say each story out loud, two minutes each. |\n\n> Ask them what a good first quarter looks like.\n"
+      "prep_read": {
+        "glance": {
+          "assessing": "whether the basics hold and your story makes sense, in about twenty minutes",
+          "hear": "a clear story that matches your CV, and a specific reason for Larkspur",
+          "say": [
+            "Lead with your strongest result: stock-outs on chilled lines down by a third.",
+            "Why them: they have just moved to store-level forecasting.",
+            "The basics: you are in Leeds; notice: one month; no sponsorship needed."
+          ],
+          "ask": [
+            "What are the stages from here?",
+            "What does a good first quarter look like?",
+            "Is there anything about my background you'd like me to go into more?"
+          ],
+          "money": "say GBP 44,000, the posted figure, which suits you",
+          "careful": [
+            "Calling the last employer's data a mess"
+          ],
+          "hooks": [
+            {
+              "text": "They moved forecasting to store level in September.",
+              "link": "https://larkspur.example/news"
+            }
+          ]
+        },
+        "questions": [
+          {
+            "question": "Tell me about yourself.",
+            "why": "what a screen usually asks",
+            "answer": "I turn store and supplier data into weekly plans people use, and this role does that closer to the shelf.",
+            "draft": false,
+            "cue": null,
+            "checking": null,
+            "notes": []
+          },
+          {
+            "question": "Why Larkspur Retail?",
+            "why": "what a screen usually asks",
+            "answer": "You've just moved forecasting to store level, and that's the problem I've been working on.",
+            "draft": true,
+            "cue": null,
+            "checking": null,
+            "notes": []
+          },
+          {
+            "question": "Tell me about a forecast that was wrong.",
+            "why": "what a screen usually asks",
+            "answer": null,
+            "draft": false,
+            "cue": "The bank holiday miss, what you changed, and the next quarter's error.",
+            "checking": "whether you can explain your work simply. They want to hear: one example, plainly.",
+            "notes": [
+              "Your story: The bank holiday forecast"
+            ]
+          },
+          {
+            "question": "How do you explain a model to a store manager?",
+            "why": "what a screen usually asks",
+            "answer": null,
+            "draft": false,
+            "cue": "The one-page plan you made for the regional team.",
+            "checking": "whether you can explain your work simply. They want to hear: one example, plainly.",
+            "notes": [
+              "Your story: The bank holiday forecast"
+            ]
+          },
+          {
+            "question": "What do you need from a manager?",
+            "why": "what a screen usually asks",
+            "answer": null,
+            "draft": false,
+            "cue": "Clear priorities, and room to fix the data under a report.",
+            "checking": "whether you can explain your work simply. They want to hear: one example, plainly.",
+            "notes": [
+              "Your story: The bank holiday forecast"
+            ]
+          }
+        ],
+        "sections": [
+          {
+            "key": "stories",
+            "title": "Stories",
+            "items": [
+              {
+                "text": "The bank holiday forecast",
+                "link": "",
+                "sub": [
+                  "The situation: a bank holiday weekend the forecast missed by a fifth.",
+                  "What you did: added holiday effects store by store.",
+                  "The result: the next quarter's error came down to 9%."
+                ]
+              }
+            ]
+          },
+          {
+            "key": "the_company",
+            "title": "About Larkspur Retail",
+            "items": [
+              {
+                "text": "Recent news: Moved its forecasting to store level in September 2026.",
+                "link": "https://larkspur.example/news",
+                "sub": []
+              }
+            ]
+          },
+          {
+            "key": "earlier_stages",
+            "title": "Earlier rounds",
+            "items": [
+              {
+                "text": "Booked: Phone screen 2026-10-28",
+                "link": "",
+                "sub": []
+              }
+            ]
+          }
+        ],
+        "live": true
+      }
     },
     {
       "id": "int-harbourline-risk",

@@ -341,24 +341,69 @@ def shown(show) -> int:
     return KEEP_TOP if n <= 0 else min(n, KEEP_TOP)
 
 
-def write_summary(shortlist_path, out_dir, name, scraped_path=None, show=None):
+def hard_rules(jobage, today, seen=None, keep_ruled_out=False):
+    """A function from a ranked row to the hard rule it fails now, or "": the search window,
+    the candidate's bar (tools/bar.py, its hard rules, with the posting read), and a ruling
+    or a hold made since the row was ranked (prefilter.already_ruled_out: seen_jobs.json,
+    a referral in flight, do_not_target.json). The shortlist is cut with it (write_summary),
+    so a row failing one is passed over and the next row taken."""
+    import bar
+    import prefilter
+    day = datetime.date.fromisoformat(today) if isinstance(today, str) else today
+    ruled = prefilter.already_ruled_out(seen, keep_ruled_out, day) if seen else (lambda job: "")
+
+    def check(row) -> str:
+        age = prefilter.age_days(row, day)
+        if age is not None and age > jobage:
+            return f"age: {age} days old, past the {jobage}-day window"
+        verdict, why = bar.verdict(row.get("company"), row.get("desc") or "")
+        if verdict == bar.EXCLUDED:
+            return f"candidate's bar: {why}"
+        return ruled(row) or ""
+    return check
+
+
+def write_summary(shortlist_path, out_dir, name, scraped_path=None, show=None, rules=None,
+                  report=None, links=None):
     """The compact shortlist, and where it was written. With `scraped_path` (the round's
     scrape), each kept row's apply link is checked against what the round read
-    (link_checks), so a card says where to apply and whether it is still listed."""
+    (link_checks), so a card says where to apply and whether it is still listed; `links`
+    ({url: link fields}) carries a row's link fields from an earlier cut of the same round.
+
+    With `rules` (hard_rules), the shortlist keeps taking the next ranked row that passes
+    every hard rule until it has the number asked for or runs out. It took the first N and
+    nothing after: a search asked for 10, rows failing a rule were cut from those 10, and 7
+    came back with good rows left below them (2026-11-03). `report`, a dict, is given the
+    number asked for, the number found and the rows passed over, with why."""
     try:
         rows = _read_json(shortlist_path)
     except Exception:
         return None
     rows = rows if isinstance(rows, list) else list(rows.values())
     rows.sort(key=lambda r: -(r.get("priority") or 0))
-    kept = rows[:shown(show)]
+    want = shown(show)
+    kept, passed = [], []
+    for r in rows:
+        if len(kept) >= want:
+            break
+        why = rules(r) if rules else ""
+        if why:
+            passed.append({**r, "skip_reason": why})
+        else:
+            kept.append(r)
+    if report is not None:
+        report.update(asked=want, found=len(kept), passed_over=passed)
+    links = links or {}
     if scraped_path:
         try:
             scraped = _read_json(scraped_path)
             scraped = scraped if isinstance(scraped, list) else list(scraped.values())
         except Exception:
             scraped = []
-        kept = link_checks(kept, scraped, datetime.datetime.now(datetime.timezone.utc))
+        fresh = iter(link_checks([r for r in kept if r.get("url") not in links], scraped,
+                                 datetime.datetime.now(datetime.timezone.utc)))
+        kept = [r if r.get("url") in links else next(fresh) for r in kept]
+    kept = [dict(r, **links[r.get("url")]) if r.get("url") in links else r for r in kept]
     out = [{k: r.get(k) for k in SUMMARY_FIELDS if r.get(k) not in (None, "")}
            for r in kept]
     os.makedirs(out_dir, exist_ok=True)
@@ -598,6 +643,55 @@ def round_dir(out: str) -> str:
     return os.path.normpath(out)
 
 
+def say_cut(report: dict, show) -> list[str]:
+    """The lines a cut says: the rows passed over for a rule and, when the person asked for a
+    number and the round ran out first, how many it found."""
+    lines = []
+    passed = report.get("passed_over") or []
+    if passed:
+        lines.append(f"shortlist: passed over {len(passed)} that fail a rule now, and took the "
+                     "next instead: " + "; ".join(
+                         f"{r.get('title') or '?'}, {r.get('company') or '?'} ({r['skip_reason']})"
+                         for r in passed[:5]))
+    if show and int(show) > 0 and report.get("found", 0) < report.get("asked", 0):
+        lines.append(f"shortlist: found {report['found']} of the {report['asked']} asked for "
+                     "that pass every rule; the round had no more")
+    return lines
+
+
+def recut(a) -> int:
+    """--recut: the round's shortlist cut again, nothing searched. A ruling or a judgement
+    made since the round ran (exclude.py add, bar.py judge) is a hard rule the cut now
+    applies, so the rows it rules out are passed over and the next rows fill the shortlist
+    back to the number asked for. Dropped from the table by hand, they left it short."""
+    short = os.path.join(a.out, SHORTLIST)
+    if not os.path.isfile(short):
+        sys.exit(f"--recut: there is no shortlist at {short}. Point --out at the round's own "
+                 "folder, the one it was run with.")
+    name = os.path.basename(os.path.abspath(a.out))
+    where = a.summary_dir or person.state(SUMMARY_DIR)
+    try:
+        before = _read_json(os.path.join(where, "%s.json" % name))
+    except Exception:
+        before = []
+    links = {r["url"]: {k: r[k] for k in LINK_FIELDS if r.get(k)}
+             for r in (before if isinstance(before, list) else [])
+             if isinstance(r, dict) and r.get("url")}
+    scraped = os.path.join(a.out, SCRAPED, "kept.json")
+    report: dict = {}
+    seen = a.seen or person.state("job_scraper", "seen_jobs.json")
+    path = write_summary(short, where, name,
+                         scraped_path=scraped if os.path.isfile(scraped) else None,
+                         show=a.show, rules=hard_rules(a.jobage, a.today, seen, a.no_seen_read),
+                         report=report, links=links)
+    for line in say_cut(report, a.show):
+        print(line)
+    if path:
+        print(f"shortlist summary: {local_path.rel(path, ROOT)} ({report.get('found', 0)} "
+              "rows) - commit this one")
+    return 0
+
+
 def _job_age_days() -> int:
     """How old a posting may be: the person's own search window (JOB_AGE_DAYS, set from
     the page: 7, 14 or 30 days), else the app's rule of 14."""
@@ -658,6 +752,10 @@ def main():
     ap.add_argument("--keep-intermediates", dest="keep", action="store_true",
                     help="keep the stage files instead of pruning them; they are "
                          "reproducible, so this is for debugging a round that went wrong")
+    ap.add_argument("--recut", action="store_true",
+                    help="search nothing: cut the round in --out again, every hard rule "
+                         "applied as it stands now (a ruling or a judgement made since), "
+                         "refilled from the next rows to --show")
     a = ap.parse_args()
     a.out = round_dir(a.out)
     # A line this round cannot print in the console's own encoding is printed with a
@@ -667,6 +765,8 @@ def main():
             stream.reconfigure(errors="replace")
         except (AttributeError, ValueError):
             pass
+    if a.recut:
+        return recut(a)
     import scrape_wide
     pages, workers, _ = scrape_wide.defaults()
     a.pages = a.pages or pages
@@ -800,19 +900,32 @@ def main():
         log.flush()
     print(f"\nshortlist: {f('06_shortlist.json')}")
 
-    good, strong = yield_of(f("06_shortlist.json"))
-    met = good >= YIELD_60 and strong >= YIELD_75
-    print(f"yield: {good} scoring 60+ (target {YIELD_60}), "
-          f"{strong} scoring 75+ (target {YIELD_75}) -> {'MET' if met else 'MISSED'}")
-    if partial:
-        print(f"warning: {partial}")
-
     # Write the keeper, then drop the rest. Done before the expansion branch
     # below returns, so every exit path leaves the same small footprint.
+    cut: dict = {}
     summary = write_summary(f("06_shortlist.json"),
                             a.summary_dir or person.state(SUMMARY_DIR),
                             os.path.basename(os.path.abspath(a.out)), scraped_path=scraped,
-                            show=a.show)
+                            show=a.show,
+                            rules=hard_rules(a.jobage, a.today,
+                                             a.seen or person.state("job_scraper",
+                                                                    "seen_jobs.json"),
+                                             a.no_seen_read),
+                            report=cut)
+    # Counted on the list the person is shown, after the hard rules cut it: counted on the
+    # ranked rows before the cut, 60 and more of them, a round met its target with rows the
+    # cut then dropped, and never widened (the release review, 2026-11-03).
+    good, strong = yield_of(summary) if summary else (0, 0)
+    # A search asked for N widens until N score 60 or more: a top-up of ten starts on one page
+    # of each site (the app skill) and stopped at five (2026-11-03).
+    want = max(YIELD_60, min(a.show or 0, 60))
+    met = good >= want and strong >= YIELD_75
+    print(f"yield: {good} scoring 60+ (target {want}), "
+          f"{strong} scoring 75+ (target {YIELD_75}) -> {'MET' if met else 'MISSED'}")
+    if partial:
+        print(f"warning: {partial}")
+    for line in say_cut(cut, a.show):
+        print(line)
     if summary:
         print(f"shortlist summary: {local_path.rel(summary, ROOT)} "
               f"(top {KEEP_TOP}, no posting bodies) - commit this one")
@@ -883,6 +996,8 @@ def main():
             + (["--scrape-before", scraped] if os.path.isdir(scraped) else [])
             + (["--keep-intermediates"] if a.keep else [])
             + (["--summary-dir", a.summary_dir] if a.summary_dir else [])
+            # The number asked for: without it a widened top-up of ten kept KEEP_TOP rows.
+            + (["--show", str(a.show)] if a.show is not None else [])
             + (["--tracker", a.tracker] if a.tracker else [])
             + (["--seen", a.seen] if a.seen else [])
             + (["--no-seen-write"] if a.no_seen_write else [])
