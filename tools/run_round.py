@@ -901,8 +901,11 @@ def main():
     print(f"\nshortlist: {f('06_shortlist.json')}")
 
     good, strong = yield_of(f("06_shortlist.json"))
-    met = good >= YIELD_60 and strong >= YIELD_75
-    print(f"yield: {good} scoring 60+ (target {YIELD_60}), "
+    # A search asked for N widens until N score 60 or more: a top-up of ten starts on one page
+    # of each site (the app skill) and stopped at five (2026-11-03).
+    want = max(YIELD_60, min(a.show or 0, 60))
+    met = good >= want and strong >= YIELD_75
+    print(f"yield: {good} scoring 60+ (target {want}), "
           f"{strong} scoring 75+ (target {YIELD_75}) -> {'MET' if met else 'MISSED'}")
     if partial:
         print(f"warning: {partial}")
