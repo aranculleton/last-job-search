@@ -1,7 +1,7 @@
 {
  "model": 1,
  "made_at": "2026-10-25T18:00:00Z",
- "rev": "bce716f1ef4e",
+ "rev": "9cc8d127abc2",
  "app": {
   "version": "4.8.0",
   "update_waiting": null,
@@ -46,7 +46,7 @@
  ],
  "jobs": {
   "round": "r9",
-  "made_at": "2026-11-03T15:52:05Z",
+  "made_at": "2026-11-03T16:29:28Z",
   "met": false,
   "summary": "4 roles on the shortlist, 4 scoring 60 or more and 2 scoring 75 or more. 3 left out, each with its reason.",
   "rows": [
@@ -555,7 +555,6 @@
    "kind": "reply",
    "title": "Reply to Juno at Larkspur Retail",
    "context": "Analytics Manager · University of Leeds alumni · first wrote 10 Sep",
-   "said": "Hi Morgan, happy to help. Send me your CV and I'll pass it on.",
    "due": "2026-10-20",
    "company": "Larkspur Retail",
    "overdue_days": 5,
@@ -592,7 +591,6 @@
    "kind": "nudge",
    "title": "Follow up with Wren at Fernhill Freight",
    "context": "Head of Supply Chain Analytics · first wrote 21 Sep",
-   "said": null,
    "due": "2026-09-29",
    "company": "Fernhill Freight",
    "overdue_days": 26,
@@ -767,7 +765,7 @@
    "when": "2026-10-28",
    "prep": {
     "path": "documents/applications/thornbury_bank_risk_analyst_thornbury/interview_prep.md",
-    "updated": "2026-11-03T15:52:05Z"
+    "updated": "2026-11-03T16:29:28Z"
    },
    "questions": 2,
    "all_day": true,

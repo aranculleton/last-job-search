@@ -1568,6 +1568,26 @@ def open_target(contact: dict, channel: str) -> dict | None:
     return None
 
 
+def last_words(ctx, ids) -> dict:
+    """{contact id: the last thing they said, in a line} for `ids`, so Today says what a
+    reply is to rather than only when it was due (the maintainer, 2026-11-03: "not
+    informative at all"). Their own words, so only ever in the owner-only documents with
+    their address (`reach`), never in the page's data: nothing about another person reaches
+    that but a first name and an employer (the release review)."""
+    from network import state as net_state
+    out = {}
+    for cid in set(ids):
+        theirs = [r for r in ctx.by_contact.get(cid) or [] if net_state.said_something(r)]
+        if not theirs:
+            continue
+        # Their own words first: a summary is often one word ("replied").
+        words = " ".join(str(theirs[-1].get("full_text") or theirs[-1].get("summary") or "")
+                         .split())
+        if len(words.split()) >= 3:
+            out[cid] = words if len(words) <= 140 else words[:139].rsplit(" ", 1)[0] + "\u2026"
+    return out
+
+
 def reach_docs(contacts, ids) -> dict:
     """{contact id: {linkedin, email}} for the people the page has a message or a row for:
     the owner-only documents `app.py view` writes, read by the page only for its owner."""
@@ -2024,7 +2044,7 @@ def _due(ctx: Ctx, targets: dict) -> list:
         # with its words, and an interview by /outcome: those rows offer their work instead.
         doable = (i["half"] == "contact" and raw == "action_due") or (
             i["half"] == "application" and raw != "interview")
-        context, said = "", ""
+        context = ""
         if i["half"] == "contact":
             # One line on who they are, so a follow-up says which person it is (the maintainer,
             # 2026-10-26): their role, how they were found, when you first wrote.
@@ -2042,20 +2062,7 @@ def _due(ctx: Ctx, targets: dict) -> list:
                 bits.append("first wrote " + first.strftime("%-d %b") if os.name != "nt"
                             else "first wrote " + first.strftime("%d %b").lstrip("0"))
             context = scrub(" \u00b7 ".join(b for b in bits if b), ctx.names)
-            # What they last said, in a line, so Today says what the reply is to rather than
-            # only when it was due (the maintainer, 2026-11-03: "not informative at all").
-            from network import state as net_state
-            theirs = [r for r in ctx.by_contact.get(i.get("contact_id") or "") or []
-                      if net_state.said_something(r)]
-            if theirs:
-                # Their own words first: a summary is often one word ("replied").
-                words = " ".join(str(theirs[-1].get("full_text") or theirs[-1].get("summary")
-                                     or "").split())
-                if len(words.split()) >= 3:
-                    said = scrub(words if len(words) <= 140 else words[:139].rsplit(" ", 1)[0]
-                                 + "\u2026", ctx.names)
-        item = {"id": did, "kind": kind, "title": title, "context": context, "said": said or None,
-                "due": i["due"],
+        item = {"id": did, "kind": kind, "title": title, "context": context, "due": i["due"],
                 "company": (str(book.get(i.get("contact_id") or "", {}).get("company") or "")
                             if i["half"] == "contact" else i["who"].partition(" - ")[0]),
                 "overdue_days": max(int(i.get("late") or 0), 0), "action": action,

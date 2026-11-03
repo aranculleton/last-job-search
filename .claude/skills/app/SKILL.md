@@ -165,8 +165,11 @@ page waited on every tap (2026-10-29). `next` never hands one to this chat to ru
 
 - `run: child session`: send the claim, then make the `create_session` call exactly as
   `next` printed it. That chat runs the one item, pins its progress, finishes it, lands it on
-  master and tells this chat. It never publishes, watches or answers the page, and is titled
-  `Job search: <title>`, and is archived as soon as it says its work is on master (below).
+  master and brings the page up to date itself (taking master first, so the page keeps every
+  other chat's work). It cannot tell this chat (a chat in the cloud cannot message another
+  one: a search's results sat off the page until the person asked, 2026-11-03), so nothing
+  arrives here. It never publishes, watches or answers the page, is titled `Job search:
+  <title>`, and the daily tidy archives it once its work is on master.
 - `run: background agent` is the fallback where `create_session` is not available: a chat
   on a computer, or a chat without that tool (run `next` with `--no-sessions`). Send the
   claim, then make the Agent call exactly as printed (`run_in_background: true`,
@@ -174,19 +177,12 @@ page waited on every tap (2026-10-29). `next` never hands one to this chat to ru
 
 Never wait for either: go straight back to step 3 for the next item, so a search, a
 networking run and an interview prep run side by side (three at most, `page_db.HEAVY_CAP`;
-`next` keeps the cap and the locks). When a big job's chat writes to this one:
-
-- `Progress <id>: <stage> | <line>` (it had no ArtifactData): `python3 tools/app.py pin "$D"
-  --work <id> --stage <stage> --line "<line>"`, and send its batch.
-- `Finished <id>, on master` (or an agent's last line saying so): take master, run `app.py
-  view` (step 5) and send its batch. This chat is the one writer of the page's view, so two
-  chats never write it at once. An item still running finishes here, as step 5 says, from
-  what the message said. Then archive the chat that sent it, at once: `archive_session` with
-  its id (the one `create_session` returned; its message comes from it). A finished job's
-  chat sat in the person's list until the daily tidy, and they asked whether one would pile
-  up after every job (2026-10-30). The daily tidy stays as the backstop. Then step 3 again:
-  work queued while that job ran starts now, never left "not picked up" (a draft waited
-  after the other's chat had closed, 2026-10-30).
+`next` keeps the cap and the locks). When a background agent ends with `Finished <id>, on
+master`: run `app.py view` (step 5; it takes master first) and send its batch; an item still
+running finishes here, as step 5 says, from what its line said; then step 3 again, so work
+queued while it ran starts now. Two chats writing the page at once is safe: each write is
+pinned to what it read, so the later one is refused and redone, and each is drawn from
+master.
 
 Drafting and audits are never moved below this chat's model. The other chats are never
 mentioned to the person; the page shows each job's progress.
@@ -258,7 +254,10 @@ date:
 python3 tools/app.py view "$D/view" --dump "$D" --chat <your chat id>
 ```
 
-Send the batch it prints (dump `screen`, `meta` and `addr` first, so the sets are pinned).
+Send the batch it prints (dump `screen`, `meta`, `addr` and `work` first, so the sets are
+pinned and a hand-over never comes while a job runs); it writes only what changed. A
+`for_claude` line it prints (a fresh helper when this chat's day or size is up) is done at
+once, unasked.
 **Republish only when the page's own code changed**: a republish reloads every open window.
 Only the listener publishes; any other chat asks it to (`app.py republish`). After an update
 both are done at once, never asked, and the person hears one line, "Your page is updated."

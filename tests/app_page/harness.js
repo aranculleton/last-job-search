@@ -997,6 +997,22 @@ S.chat_busy = async (a) => {
   return r;
 };
 
+// "Don't do it" on work that never reached Claude calls it off and wakes nobody: the tap's
+// catch-up skipped the card it was on (the release review, 2026-11-03).
+S.stop_unsent = async (a) => {
+  const asked = new Date(Date.parse(T0) - 60000).toISOString();
+  const o = await open({html: a.html, hash: "work", clock: T0, seed: {
+    "work/prep~int-larkspur-supply": {kind: "prep", title: "Interview prep: Larkspur Retail", to: "cloud", args: {}, asked_at: asked, asked_from: {tab: "t0"}, status: "queued", stages: [], stage: 0, steps: [], stop_asked: false, attempt: 1},
+  }, fake: {canSend: "available"}});
+  const {page, store} = o;
+  await page.locator(workSel("prep~int-larkspur-supply")).getByRole("button", {name: "Don't do it: Interview prep: Larkspur Retail"}).click();
+  await turn(page, 8);
+  const r = {rings: await page.evaluate(() => window.__calls.filter((c) => c.op === "sendToClaude").length), work: store.get("work/prep~int-larkspur-supply")};
+  r.errors = o.errors;
+  await o.ctx.close();
+  return r;
+};
+
 S.stop = async (a) => {
   const asked = new Date(Date.parse(T0) - 240000).toISOString();
   const rang = new Date(Date.parse(T0) - 11 * 60000).toISOString();

@@ -128,6 +128,11 @@ def cmd_view(a) -> int:
     import app_model
     import page_db
     import app_alerts
+    import app_setup
+    behind = app_setup.take_master()
+    if behind:
+        print(_dump({"rev": None, "batches": [], "for_claude": [behind]}), end="")
+        return 3
     today, now = app_model.clock(a.today, a.now)
     db = page_db.load(a.dump) if a.dump else {}
     # The suggestions already on the page keep their day, so no more than three new ones
@@ -135,10 +140,25 @@ def cmd_view(a) -> int:
     full: dict = {}
     model, _ = _build(today, now, shown=app_alerts.shown_in(db.get("view") or {}), full=full)
     w = page_db.Writes(a.out_dir)
+    views = (db.get("view") or {}) if db else {}
+    # Only what changed is written: every update rewrote all 37 documents, about 1.5 MB, when
+    # one card had changed (2026-11-03). The page takes each document newer than its own copy,
+    # so one left as it was still shows; a section in parts is kept or rewritten whole, so
+    # its parts never mix two revs.
+    volatile = ("rev", "made_at", page_db.VERSION_FIELD)
+
+    def unchanged(doc_id, doc):
+        old = (views.get(doc_id) or {}).get("data")
+        if not isinstance(old, dict):
+            return False
+        strip = lambda d: {k: v for k, v in d.items() if k not in volatile}  # noqa: E731
+        return strip(old) == json.loads(json.dumps(strip(doc), ensure_ascii=False))
     # Each whole list, in parts under 256 KiB, for the page's "Show" (tools/app_lists.py).
     import app_lists
     for doc_id, doc in app_lists.docs(full, model["made_at"], model["rev"]):
-        old = (db.get("view") or {}).get(doc_id) if db else None
+        old = views.get(doc_id)
+        if unchanged(doc_id, doc):
+            continue
         w.add("set", "view", doc_id, doc, if_version=old["version"] if old else None)
     for doc_id in app_lists.stale(full, db.get("view") or {}):
         if db["view"][doc_id]["version"] is not None:      # read under 4.2's name: kept
@@ -151,9 +171,17 @@ def cmd_view(a) -> int:
                                                            "schedule")):
         if name not in model:
             continue
-        for doc_id, doc in page_db.split(name, {"rev": model["rev"], "made_at": model["made_at"],
-                                                "data": model[name]}):
-            old = (db.get("view") or {}).get(doc_id) if db else None
+        docs = page_db.split(name, {"rev": model["rev"], "made_at": model["made_at"],
+                                    "data": model[name]})
+        if views and page_db.joined(views, name) == json.loads(json.dumps(model[name],
+                                                                           ensure_ascii=False)):
+            # Unchanged: the section's documents stay as they are, parts and all.
+            head = (views.get(name) or {}).get("data") or {}
+            n = head.get("in_parts") if isinstance(head.get("in_parts"), int) else 0
+            written.extend([name] + [page_db.part_id(name, i) for i in range(1, n + 1)])
+            continue
+        for doc_id, doc in docs:
+            old = views.get(doc_id)
             w.add("set", "view", doc_id, doc, if_version=old["version"] if old else None)
             written.append(doc_id)
     for doc_id in page_db.stale_parts(db.get("view") or {}, written):
@@ -166,7 +194,12 @@ def cmd_view(a) -> int:
         [q["contact"] for q in ((model.get("linkedin") or {}).get("reading") or {})
          .get("queue") or []]
     try:
-        reach = app_model.reach_docs(app_model.Ctx(today, now).contacts, ids)
+        ctx = app_model.Ctx(today, now)
+        reach = app_model.reach_docs(ctx.contacts, ids)
+        # What each person waiting on a reply last said, beside their address, owner-only.
+        owed = [str(d.get("item") or "") for d in model.get("due") or [] if d.get("item")]
+        for cid, words in app_model.last_words(ctx, owed + ids).items():
+            reach.setdefault(cid, {"linkedin": None, "email": None})["said"] = words
     except Exception:  # noqa: BLE001  no profile yet: nobody to reach
         reach = {}
     # In a few owner-only documents, each contact always in the same one, and only a
@@ -188,8 +221,8 @@ def cmd_view(a) -> int:
           if_version=old["version"] if old else None)
     batches = w.save("view")
     import app_listen
-    more, lines = app_listen.view_check_in(db, os.path.join(a.out_dir, "listen"), a.chat, now)
-    print(_dump({"rev": model["rev"], "batches": batches + more,
+    lines = app_listen.view_renewal(db, a.chat, now)
+    print(_dump({"rev": model["rev"], "batches": batches,
                  **({"for_claude": lines} if lines else {})}), end="")
     return 0
 
@@ -298,14 +331,15 @@ def child_prompt(chosen: dict, parent: str, url: str, session: bool = True) -> s
         # ask the chat that answers the page to bring it up to date found both ways refused,
         # and its ten jobs sat off the page (2026-11-03). It brings the page up to date itself.
         lines.append(
-            f"{len(lines)}. Finish as step 5 says, without its heartbeat line. Then bring the "
-            f"page up to date yourself, before saving, so the person sees it at once: "
-            f"ArtifactData query, url {url}, collections view, meta and addr, out_dir $D; "
-            f"python3 tools/app.py view \"$D/view\" --dump \"$D\" --chat <this chat's id>; "
+            f"{len(lines)}. Finish as step 5 says, without its heartbeat line. Save and land "
+            f"your work on master (CLAUDE.md, \"Saving\"). Then bring the page up to date "
+            f"yourself: ArtifactData query, url {url}, collections screen, meta, addr and work, "
+            f"out_dir $D; python3 tools/app.py view \"$D/view\" --dump \"$D\" --chat <this "
+            "chat's id> (it takes master first, so the page has every other chat's work too); "
             "and send every batch it prints (ArtifactData batch). A refused batch: read those "
-            "three again and run it once more. No chat will do it for you: a chat in the cloud "
-            "cannot message another one. Then save and land your work on master (CLAUDE.md, "
-            "\"Saving\"). Never write to the person: the page shows how it went.")
+            "four again and run it once more. No chat will do it for you: a chat in the cloud "
+            "cannot message another one. Never write to the person: the page shows how it "
+            "went.")
     else:
         lines.append(
             f"{len(lines)}. Finish as step 5 says, without its heartbeat line and without app.py "

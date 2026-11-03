@@ -1063,8 +1063,9 @@ def record_stage(folder, company, role, stage, date, with_="", today=None, time=
     text = _read(out)
     if not text:
         text = ("# Outcome: %s - %s\n\n**Status:** in_progress\n\n## Interview stages "
-                "reached\n\n## Notes\n- %s: %s booked for %s.\n"
-                % (company, role, _text(today) or dt.date.today().isoformat(), stage, date))
+                "reached\n\n## Notes\n- %s: %s booked %s.\n"
+                % (company, role, _text(today) or dt.date.today().isoformat(), stage,
+                   "for " + date if _text(date) else "with the day still to choose"))
     text = _with_stage(text, stage, date, with_, time, zone, minutes, due)
     os.makedirs(folder, exist_ok=True)
     with open(out, "w", encoding="utf-8", newline="\n") as fh:

@@ -733,6 +733,12 @@ def test_work_claude_has_picked_up_says_so_with_a_clock_like_a_chat(run, pages):
     assert "1 running, 1 starting, 1 waiting their turn." in r["summary"], r["summary"]
 
 
+def test_calling_off_work_never_sent_wakes_nobody(run, pages):
+    r = run("stop_unsent", html=pages["sample"])
+    _clean(r)
+    assert r["rings"] == 0 and r["work"]["status"] == "stopped", r
+
+
 def test_stop_says_what_is_kept(run, pages):
     """Work never asks the person to ask again (the maintainer, 2026-11-03: "get rid of the
     ask claude again button ... fix the app so that the button is redundant"): what has not

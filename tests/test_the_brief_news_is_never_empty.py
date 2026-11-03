@@ -325,4 +325,5 @@ def test_news_is_three_points_when_the_last_four_weeks_have_them_each_in_its_par
     items = secs[0]["items"]
     assert len(items) == 3
     old = next(i for i in items if i["text"].startswith("Rates held"))
-    assert (old["what"], old["use"], old["src"], old["date"]) == ("Rates held.", "A line for lender interviews.", "Example Times", None)
+    # Its day is the brief that found it, never today's.
+    assert (old["what"], old["use"], old["src"], old["date"]) == ("Rates held.", "A line for lender interviews.", "Example Times", "2026-10-27")

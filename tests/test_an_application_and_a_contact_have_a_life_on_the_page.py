@@ -309,3 +309,21 @@ def test_the_checks_a_draft_got_are_said_in_plain_words(search):
 def test_the_model_still_keeps_the_contract(search):
     assert app_model.check(search.model()) == []
     _ = app_state
+
+
+def test_no_day_yet_never_wipes_a_day_already_booked(search):
+    """"Book it, no day yet" on a stage already booked for a day left that day blank (the
+    release review, 2026-11-03): the day stays, and the person is told it is there."""
+    a = _app(search, LARKSPUR)
+    first = search.act("outcome.interview", LARKSPUR, rev=a["rev"],
+                       value={"stage": "Phone screen", "on": "2026-10-30", "with": "the recruiter"})
+    assert search.apply()["ok"] == [first]
+    a = _app(search, LARKSPUR)
+    again = search.act("outcome.interview", LARKSPUR, rev=a["rev"], value={"stage": "Phone screen", "on": ""})
+    search.written_back()
+    assert search.apply()["ok"] == [again]
+    assert search.receipt(again)["note"] == "Already booked for 2026-10-30."
+    folder = os.path.join(search.state, "documents", "applications")
+    md = next(os.path.join(folder, d, "outcome.md") for d in os.listdir(folder)
+              if d.startswith("larkspur_retail_senior"))
+    assert "- [ ] Phone screen (scheduled 2026-10-30, with the recruiter)" in open(md, encoding="utf-8").read()

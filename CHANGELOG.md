@@ -37,17 +37,25 @@ make sense to somebody whose repo just received it.
 - **A pasted message is never lost.** An invitation or a reply pasted into Chat is saved and
   sent to Claude in the same tap; an interview invitation still offers to book it at once.
 - **A booked interview shows in Coming up and on the Brief straight away**, and reaches Claude
-  in the same tap. An invitation with no day yet asks for the day, or is booked as "the day
-  still to choose" (it was refused, quoting a day already past, while the page said "Saved").
+  in the same tap; a later round shows beside an earlier one still to come. An invitation with
+  no day yet asks for the day, or is booked as "the day still to choose" (it was refused,
+  quoting a day already past, while the page said "Saved"); a stage already booked for a day
+  keeps it.
 - **A job that runs in a chat of its own puts its results on your page itself.** A search
   finished its ten jobs, but was told to ask the chat that answers your page to show them, and
-  a chat in the cloud cannot message another one, so the jobs never appeared. It now brings the
-  page up to date before it saves.
+  a chat in the cloud cannot message another one, so the jobs never appeared. It now saves its
+  work and then brings the page up to date.
+- **Two chats can never undo each other's work on your page.** Every page update first takes
+  in what the other chats have saved, so a finished search can no longer hide a finished
+  draft, and the reverse. Where it cannot, the page is left as it was.
+- **Bringing your page up to date writes only what changed**, not all of it every time.
 - **The chat that answers your page stays quick.** It handed over to a fresh helper only at a
   check-in the morning brief never made, so one helper ran for days and re-read some 535,000
-  tokens at every step. Every page update by that chat now counts as its check-in, and it
-  hands over at its next quiet moment once it re-reads more than 150,000 tokens a step, as
-  well as daily. After a quiet day the page no longer decides nobody is listening.
+  tokens at every step. Now a page update by that chat, the brief's included, hands over at
+  its next quiet moment once a day has passed or its history has grown by 200,000 tokens, never
+  while a job runs, and at most once a day.
+- **Saving checks your own tests in parallel**, about 41 seconds where it took nearly five
+  minutes, and the answer goes to you before any saving starts.
 - **News is at least three points while the last four weeks have them**, filled from as many
   earlier briefs as it takes, each split into what happened, how to use it and where it is
   from (lines from before 4.8 included), and as many as your screen has room for.
@@ -55,7 +63,8 @@ make sense to somebody whose repo just received it.
   with nothing after it, with no "Find more people at" button, and a row about them says
   "Employer not on record".
 - **Today says what the person last said** ("They said: ..."), in the page's normal size,
-  rather than only when it was due.
+  rather than only when it was due. Their words are kept with their address, readable by you
+  alone, never in the page's shared data.
 
 ## [4.8.0] - 2026-11-02
 

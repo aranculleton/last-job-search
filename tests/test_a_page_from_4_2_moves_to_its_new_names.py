@@ -171,3 +171,22 @@ def test_a_record_under_both_names_reads_as_the_new_one_and_nothing_moves_twice(
     again = page_db.move(page_db.load(str(d)), str(d), str(tmp_path / "out2"),
                          "2026-10-29T09:00:00Z", "c")
     assert again["entries"] == [] and page_db.to_read(str(d), page_db.load(str(d))) == []
+
+
+def test_a_page_update_writes_only_what_changed(copy, tmp_path):
+    """Every update rewrote all 37 view documents, about 1.5 MB, when one card had changed
+    (2026-11-03). A second update with nothing new writes no view document at all, only the
+    record of when the page was brought up to date, and the page still has every section."""
+    d = read(copy, str(tmp_path / "one"), ("screen", "meta", "addr"))
+    out = json.loads(copy.run("view", str(tmp_path / "view1"), "--dump", d, "--now", NOW,
+                              "--chat", CHAT))
+    assert copy.send("\n".join(out["batches"]))
+    before = {f for f in os.listdir(os.path.join(copy.db, "screen"))}
+    d2 = read(copy, str(tmp_path / "two"), ("screen", "meta", "addr"))
+    out = json.loads(copy.run("view", str(tmp_path / "view2"), "--dump", d2, "--now", NOW,
+                              "--chat", CHAT))
+    writes = [e for b in out["batches"] for e in json.load(open(b, encoding="utf-8"))]
+    assert [e["doc_id"] for e in writes if e["collection"] == "screen"] == [], writes
+    assert any(e["collection"] == "meta" for e in writes)
+    assert copy.send("\n".join(out["batches"])), writes
+    assert {f for f in os.listdir(os.path.join(copy.db, "screen"))} == before

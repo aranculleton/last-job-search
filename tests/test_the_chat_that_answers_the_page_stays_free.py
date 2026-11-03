@@ -268,7 +268,9 @@ def test_a_big_job_is_never_run_by_the_chat_that_answers_the_page(monkeypatch):
         # A cloud chat cannot message another one: it brings the page up to date itself
         # (2026-11-03: a search's ten jobs sat off the page).
         assert "send_message" not in said and "tools/app.py view" in said and PAGE in said
-        assert said.index("tools/app.py view") < said.index("land your work on master")
+        # Landed first, then drawn from master; the page's documents are stored as "screen".
+        assert said.index("land your work on master") < said.index("tools/app.py view")
+        assert "collections screen, meta, addr and work" in said
         assert ("--log" in said) == (kind == "search")
         # Where no chat can be started: a chat on a computer, no create_session, no address.
         for args in ((chosen, "listener-1", "cloud", True), (chosen, "listener-1", "computer")):

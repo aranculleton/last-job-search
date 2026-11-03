@@ -1300,9 +1300,11 @@ def claude_lines(b: dict) -> list[str]:
                        "says (an older one said never to republish; this update replaced that "
                        "rule): %s" % (behind, " ".join(behind_steps(b["page"]))))
         out.append("the page, after landing (step 4): ArtifactData query, url %s, collections "
-                   "screen, meta and addr, out_dir <D>, limit 1000; python3 tools/app.py view "
-                   "<D>/view --dump <D> --chat brief; send every batch it prints. "
-                   "Then the app skill's steps 1 to 3, for work still waiting" % b["page"])
+                   "screen, meta, addr and work, out_dir <D>, limit 1000; python3 tools/app.py "
+                   "view <D>/view --dump <D> --chat brief; send every batch it prints, and do "
+                   "any for_claude line it prints at once, unasked (a fresh helper when this "
+                   "chat's day is up). Then the app skill's steps 1 to 3, for work still "
+                   "waiting" % b["page"])
     try:
         import routines
         owed = routines.calls()
@@ -1505,6 +1507,10 @@ def carry_news(today: dt.date, need: int = NEWS_MAX, skip=(), paths=None) -> tup
             got = {u.rstrip(".,;") for u in _LINK.findall(s)}
             if s in texts or got & links:
                 continue
+            texts.add(s)
+            # A line written without its day keeps the day it was found, so a carried point
+            # never reads as today's (the release review, 2026-11-03).
+            s = _UNDATED_SOURCE.sub(r"(\1, %s, \2)" % d.isoformat(), s, count=1)
             items.append(s)
             texts.add(s)
             links |= got
@@ -1515,6 +1521,7 @@ def carry_news(today: dt.date, need: int = NEWS_MAX, skip=(), paths=None) -> tup
 
 
 _CARRIED = re.compile(r"Carried from the brief of (\d{4}-\d{2}-\d{2})")
+_UNDATED_SOURCE = re.compile(r"\(([^(),]{2,80}),\s*(https?://[^\s()]+)\)")
 
 
 def _note_news(kept: list[str], today: dt.date) -> list[str]:

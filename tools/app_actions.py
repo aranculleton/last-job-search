@@ -928,8 +928,16 @@ def _outcome(r: Run, status: str) -> dict:
             stage = " ".join(str(r.value.get("stage") or r.target.get("stage") or
                                  "Interview").split())[:60]
             clock = what_works.clock(r.words("time")) if day else ""
+            if not day:
+                # "No day yet" on a stage already booked for a day never wipes that day (the
+                # release review, 2026-11-03).
+                had = [x for x in what_works.outcome_stages(before["md"] or "")
+                       if x["label"].lower() == stage.lower() and x["date"]]
+                if had:
+                    return {"note": f"Already booked for {had[0]['date']}.", "undo": None}
+            who = r.words("with")
             when = (f" for {day}" + (f" at {clock}" if clock else "")) if day else \
-                ", the day still to choose"
+                ", the day still to choose" + (f", with {who}" if who else "")
             changed = confirm.record_outcome(row, "interview", r.day,
                                              note=f"{stage} booked{when}",
                                              source="page", now=r.local)

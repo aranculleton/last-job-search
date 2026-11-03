@@ -91,11 +91,13 @@ UPDATE_QUIET_S = 60 * 60
 # maintainer, 2026-10-30). Until the new one has taken it, the old one still answers: a fresh
 # chat that never starts changes nothing.
 RENEW_S = 20 * 3600
-# A helper that re-reads more than this at every step answers slowly: one answering the page
-# since three days before re-read some 535,000 tokens a step, and a one-line LinkedIn reply
-# took minutes that a fresh chat does at once (the maintainer, 2026-11-03: "the entire app is
-# so unnecessarily slow"). Past it, the helper hands over at its next quiet moment.
-RENEW_TOKENS = 150_000
+# A helper whose history has grown by more than this since its first turn answers slowly:
+# one answering the page since three days before re-read some 535,000 tokens a step, and a
+# one-line LinkedIn reply took minutes that a fresh chat does at once (the maintainer,
+# 2026-11-03: "the entire app is so unnecessarily slow"). Past it, the helper hands over at
+# its next quiet moment. Growth, not size: a fresh chat already starts near 100,000, and a
+# size of 150,000 would have started a new helper about every hour (the release review).
+RENEW_TOKENS = 200_000
 # How every page step after an update is done: at once, unasked, one command at a time (a
 # chained command goes to the desktop app's safety check whole), with nothing left behind.
 NO_ASK = ("Do it now, before anything else, and never ask the person first: bringing their "
@@ -409,36 +411,27 @@ def renew_line(renew: dict) -> str:
             "answers, and its next check-in finds the new one and stops its watch.")
 
 
-def view_check_in(db: dict, out_dir: str, chat: str, now: dt.datetime) -> tuple[list, list]:
-    """(batch paths, lines): a page update by the chat that answers the page is a check-in
-    too. The morning brief runs in that chat and brings the page up to date, but only a
-    check-in wrote `answered_at`, so after a quiet day the page decided nobody was
-    listening, and the daily renewal, printed only at a check-in, never came (2026-11-03).
-    Its own batch, so a check-in refused never holds up the page's data."""
-    chat = this_chat(chat)
-    rec, version = record(db)
-    if not chat or rec.get("chat") != chat or version is None:
-        return [], []
-    # A chat that checked in this last hour has done this already, and its dump, read before
-    # that check-in, holds a version the check-in moved on: the write would only be refused.
-    mine = seen().get("listener") or {}
-    last = _time(mine.get("seen_at"))
-    if mine.get("chat") == chat and last is not None and (now - last).total_seconds() < 3600:
-        return [], []
-    import page_db
-    lines = []
+def view_renewal(db: dict, chat: str, now: dt.datetime) -> list[str]:
+    """The renewal line when a page update by the chat that answers the page finds its day
+    or its size up: the morning brief runs in that chat and brings the page up to date, but
+    the renewal was printed only at a check-in the brief never made, so one helper ran for
+    days (2026-11-03). It writes nothing: `answered_at` says the chat took the work waiting,
+    and a page update takes none (the release review). Only with the work queue in the dump,
+    so a job still running is never handed over; and the chat is this session's own id
+    whatever `--chat` says (the brief passes a word, not an id)."""
+    chat = this_chat("") or this_chat(chat)
+    rec, _ = record(db)
+    if not chat or rec.get("chat") != chat or "work" not in db:
+        return []
     renew = renewal(rec, db, chat, now)
-    if renew:
-        lines.append(renew_line(renew))
-    w = page_db.Writes(out_dir)
-    w.add("update", DOC_COLLECTION, DOC_ID, {"answered_at": _stamp(now)}, if_version=version)
-    return w.save("listen"), lines
+    return [renew_line(renew)] if renew else []
 
 
 def context_tokens() -> int:
-    """How much this chat re-reads at every step: its last turn's input, from the newest
-    session file Claude Code keeps under ~/.claude/projects (CLAUDE_CONFIG_DIR where set).
-    0 when there is none or it cannot be read: then only the day decides."""
+    """How much this chat's history has grown since its first turn: its last turn's input
+    less its first's, from the newest session file Claude Code keeps under ~/.claude/projects
+    (CLAUDE_CONFIG_DIR where set). 0 when there is none or it cannot be read: then only the
+    day decides."""
     root = os.path.join(os.environ.get("CLAUDE_CONFIG_DIR") or os.path.expanduser("~/.claude"),
                         "projects")
     try:
@@ -448,21 +441,27 @@ def context_tokens() -> int:
         newest = max(files, key=os.path.getmtime) if files else ""
         if not newest:
             return 0
+        size = os.path.getsize(newest)
         with open(newest, "rb") as fh:
-            fh.seek(max(0, os.path.getsize(newest) - 262144))
+            head = fh.read(min(size, 262144)).decode("utf-8", "replace")
+            fh.seek(max(0, size - 262144))
             tail = fh.read().decode("utf-8", "replace")
     except OSError:
         return 0
-    for line in reversed(tail.splitlines()):
-        if '"usage"' not in line:
-            continue
-        try:
-            u = json.loads(line)["message"]["usage"]
-            return sum(int(u.get(k) or 0) for k in ("input_tokens", "cache_read_input_tokens",
-                                                   "cache_creation_input_tokens"))
-        except (ValueError, KeyError, TypeError):
-            continue
-    return 0
+
+    def used(lines):
+        for line in lines:
+            if '"usage"' not in line:
+                continue
+            try:
+                u = json.loads(line)["message"]["usage"]
+                return sum(int(u.get(k) or 0) for k in ("input_tokens", "cache_read_input_tokens",
+                                                       "cache_creation_input_tokens"))
+            except (ValueError, KeyError, TypeError):
+                continue
+        return None
+    last, first = used(reversed(tail.splitlines())), used(head.splitlines())
+    return max(0, (last or 0) - (first or 0)) if last is not None else 0
 
 
 def renewal(rec: dict, db: dict, chat: str, now: dt.datetime) -> dict | None:
@@ -481,7 +480,7 @@ def renewal(rec: dict, db: dict, chat: str, now: dt.datetime) -> dict | None:
             return None
     got = seen()
     last = _time(got.get("renewed_at"))
-    if last is not None and (now - last).total_seconds() < (3600 if big else RENEW_S):
+    if last is not None and (now - last).total_seconds() < RENEW_S:
         return None
     try:
         import app_setup

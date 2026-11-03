@@ -196,7 +196,7 @@
     localWork: new Map(),
     workNote: new Map(),
     // When this tab last rang for each piece of work, and last tried to.
-    rang: new Map(), tried: new Map(),
+    rang: new Map(), tried: new Map(), tries: new Map(), lastTry: 0,
     sel: {jobs: new Set(), ready: new Set()},
     can: {comments: null},
     recent: [],
@@ -335,18 +335,26 @@
     for (const [id, d] of allActions()) {
       if (txt(d.action) !== "outcome.interview") continue;
       const st = actionState(id);
-      if (st !== "saving" && st !== "saved") continue;
-      if (effective(txt(d.item), IV_TURNS).id !== id) continue;
+      // Until the page's data has it: applied a moment ago, it vanished until the next
+      // update (the release review, 2026-11-03).
+      if (st !== "saving" && st !== "saved" && !(st === "applied" && now() - (tms(d.at) || 0) < 2 * 3600000)) continue;
+      const e = effective(txt(d.item), IV_TURNS);
+      if (!e || e.id !== id) continue;
       const v = obj(d.value);
       const appId = txt(d.item);
       const iid = "int-" + appId.replace(/^app-/, "");
       const was = list.find((i) => txt(i.id) === iid);
-      if (was && txt(v.on) && dayOf(was.when) === txt(v.on)) continue;
+      const stage = txt(v.stage) || "Interview";
+      if (was && (txt(v.on) ? dayOf(was.when) === txt(v.on) : txt(was.next_stage).toLowerCase() === stage.toLowerCase())) continue;
+      // An earlier stage still to come stays the interview; the later one shows in Coming up.
+      if (was && txt(v.on) && dayOf(was.when) && !isPast(was.when) && dayOf(was.when) < txt(v.on)) continue;
+      if (st === "applied" && was && !txt(v.on)) continue;
       const a = applicationItems().find((x) => txt(x.id) === appId) || {};
       const time = /^\d{1,2}:\d{2}$/.test(txt(v.time)) ? txt(v.time) : "";
-      out.push(Object.assign({}, was || {}, {id: iid, application: appId, company: txt(a.company) || txt(obj(was).company), role: txt(a.role) || txt(obj(was).role),
-        next_stage: txt(v.stage) || "Interview", when: txt(v.on) ? (time ? zoneMoment(txt(v.on), time, zone()) : txt(v.on)) : null,
-        all_day: !time, time: time || null, with: txt(v.with) || null, past: false, booked_here: id}));
+      // Its own stage only: the last stage's format and prep are not this one's.
+      out.push({id: iid, application: appId, company: txt(a.company) || txt(obj(was).company), role: txt(a.role) || txt(obj(was).role),
+        status: "interview", next_stage: stage, when: txt(v.on) ? (time ? zoneMoment(txt(v.on), time, zone()) : txt(v.on)) : null,
+        all_day: !time, time: time || null, with: txt(v.with) || null, prep: null, questions: 0, past: false, booked_here: id});
     }
     return out;
   }
@@ -646,6 +654,7 @@
       noticeWorkChanges(S.work, next);
       S.work = next;
       for (const id of next.keys()) S.localWork.delete(id);
+      learnWake();
     });
     sub("actions", db.collection("actions").orderBy("at", "desc").limit(300), (snap) => { S.actions = docsOf(snap); });
     // The newest receipts: without an order the store sends the first 500 by id (db.d.ts).
@@ -667,7 +676,7 @@
     // The last ring, read before any tap so the next one can reply in its thread at once.
     sub("bell", db.doc("meta/doorbell"), (d) => { S.bell = d && d.exists ? d.data() : null; });
     // The one chat a tap wakes, and when it last answered (CONTRACT 7).
-    sub("listener", db.doc("meta/listen"), (d) => { const before = tms(obj(S.listener).answered_at) || 0; S.listener = d && d.exists ? d.data() : null; if (before) learnWake(before); });
+    sub("listener", db.doc("meta/listen"), (d) => { S.listener = d && d.exists ? d.data() : null; });
     sub("view", db.collection("screen"), (snap) => { S.views = docsOf(snap); recompute(); });
     // How to reach each contact (their LinkedIn address, their email), kept only in this
     // owner-only collection and never in the page itself (FUNCTIONS_SPEC 1.5 item 2), a few
@@ -1138,6 +1147,7 @@
     const text = "[app] [" + (tag || "work") + ":" + ids.join(",") + "]";
     const thread = bell ? txt(bell.thread) : "";
     for (const id of ids) S.tried.set(id, now());
+    S.lastTry = now();
     const send = (where) => { try { return Promise.resolve(c.sendToClaude(Object.assign({text}, where))); } catch (e) { return Promise.reject(e); } };
     const rang = async (res, used) => {
       const at = iso();
@@ -1186,18 +1196,21 @@
   // a few minutes until it has seen one.
   function wakeS() {
     const xs = arr(obj(S.bell).wakes).map(Number).filter((x) => x > 0).sort((a, b) => a - b);
-    return xs.length ? xs[Math.floor(xs.length / 2)] : WAKE_GUESS_S;
+    return xs.length ? xs[Math.floor((xs.length - 1) / 2)] : WAKE_GUESS_S;
   }
   function lateMs() { return Math.max(LATE_MIN_MS, 2 * wakeS() * 1000); }
   function aboutMins(sec) { const m = Math.max(1, Math.round(sec / 60)); return m === 1 ? "a minute" : m + " minutes"; }
-  // Seen live: a check-in after a ring this page watched go out is how long a wake takes.
-  function learnWake(before) {
+  // How long a wake takes: from a ring to the moment Claude claimed a piece of work that ring
+  // named, and nothing else (a brief or a new helper checking in skewed it, the release
+  // review, 2026-11-03).
+  function learnWake() {
     const b = obj(S.bell);
     const rung = tms(b.rung_at);
-    const ans = tms(obj(S.listener).answered_at);
-    if (!rung || !ans || ans < rung || !(before < rung) || txt(b.woke_for) === txt(b.rung_at)) return;
-    const sec = Math.round((ans - rung) / 1000);
-    if (sec < 1 || sec > 3600) return;
+    if (!rung || txt(b.woke_for) === txt(b.rung_at)) return;
+    const claimed = arr(b.ids).map((id) => tms(obj(workDoc(id)).claimed_at) || 0).filter((x) => x >= rung);
+    if (!claimed.length) return;
+    const sec = Math.round((Math.min(...claimed) - rung) / 1000);
+    if (sec < 5 || sec > 1800) return;
     const rec = Object.assign({}, b, {wakes: arr(b.wakes).concat([sec]).slice(-7), woke_for: txt(b.rung_at)});
     S.bell = rec;
     const db = S.caps.db;
@@ -1212,18 +1225,30 @@
   // the same way, so nobody is asked to send anything twice (the maintainer, 2026-11-03:
   // "fix the app so that the button is redundant"). A ring needs a tap of the person's own
   // (comments.d.ts), so their next tap is the soonest it can go.
-  function catchUp() {
-    if (!canRing()) return;
+  // Never for the card the tap was on (its own button acts: "Don't do it" rang for the work
+  // it stopped), never in a tap that rang already (two rings, two threads), never for work
+  // waiting its turn behind jobs running in the same chat, and at most three times a piece
+  // of work in a visit (the release review, 2026-11-03). A slot that freed since a ring
+  // sends it again: the chat that finished cannot wake the one that answers the page.
+  const RING_TRIES = 3;
+  function catchUp(target) {
+    if (!canRing() || now() - (S.lastTry || 0) < 2000) return;
     const t = now();
+    const here = target && target.closest ? txt((target.closest("[data-work]") || {getAttribute: () => ""}).getAttribute("data-work")) : "";
+    const freed = Math.max(0, ...[...allWork()].filter(([, x]) => HEAVY_KINDS.has(txt(x.kind)) && TERMINAL.has(txt(x.status))).map(([, x]) => tms(x.finished_at) || 0));
     const ids = [];
     for (const [id, w] of allWork()) {
-      if ((txt(w.status) || "queued") !== "queued" || !w.asked_from || w.stop_asked) continue;
+      if (id === here || (txt(w.status) || "queued") !== "queued" || !w.asked_from || w.stop_asked) continue;
       if (w.to === "computer" && !computerListening()) continue;
-      if (pickedUp(w) || t - (tms(w.asked_at) || t) > 86400000 || t - (S.tried.get(id) || 0) < 15000) continue;
+      if (pickedUp(w) || t - (S.tried.get(id) || 0) < 15000 || (S.tries.get(id) || 0) >= RING_TRIES) continue;
       const p = progress(w, t);
-      if (p.unsent || p.late) ids.push(id);
+      const place = queuePlace(id, w);
+      if (place.busy) continue;
+      if (p.unsent || p.late || (p.sentAt && freed > p.sentAt)) ids.push(id);
     }
-    if (ids.length) sendNow(ids);
+    if (!ids.length) return;
+    for (const id of ids) S.tries.set(id, (S.tries.get(id) || 0) + 1);
+    sendNow(ids);
   }
   function ringNote(ids, how) {
     const told = how === "rang" || how === "coalesced";
@@ -3468,7 +3493,9 @@
     // beside "30 days late" told the person nothing (the maintainer, 2026-11-03).
     const personFacts = (p, d) => {
       const out = [];
-      if (d && txt(d.said)) out.push("They said: “" + txt(d.said) + "”");
+      // Their words are kept with their address, for the owner alone (S.reach).
+      const said = p ? txt(obj(S.reach.get(p.id)).said) : "";
+      if (said) out.push("They said: “" + said + "”");
       if (d && txt(d.context)) out.push(...txt(d.context).split(" · ").slice(0, 2));
       else if (p && txt(p.employer)) out.push(txt(p.employer));
       if (p && messageItems().some((m) => txt(m.contact) === p.id)) out.push("A draft is ready in Messages");
@@ -4575,11 +4602,26 @@
     // An interview the list does not hold yet (booked since the list was made, or a list from
     // before Coming up): its row from the interview itself, until the next one brings its
     // calendar links.
-    const have = new Set(out.map((u) => txt(obj(u.go).item)).filter(Boolean));
-    for (const iv of interviewItems()) {
+    const have = new Set(out.map((u) => txt(obj(u.go).item) + "|" + txt(u.day)).filter((k) => k[0] !== "|"));
+    const pendingLater = [];
+    for (const [id, d] of allActions()) {
+      if (txt(d.action) !== "outcome.interview" || !txt(obj(d.value).on)) continue;
+      const st = actionState(id);
+      if (st === "saving" || st === "saved") pendingLater.push(d);
+    }
+    for (const iv of interviewItems().concat(pendingLater.map((d) => {
+      // A later round booked here while an earlier one is still to come (pendingBookings
+      // keeps the earlier one as the interview): its own row, keyed by its day.
+      const v = obj(d.value);
+      const iid = "int-" + txt(d.item).replace(/^app-/, "");
+      const a = applicationItems().find((x) => txt(x.id) === txt(d.item)) || {};
+      const time = /^\d{1,2}:\d{2}$/.test(txt(v.time)) ? txt(v.time) : "";
+      return {id: iid, company: txt(a.company), role: txt(a.role), next_stage: txt(v.stage) || "Interview", when: time ? zoneMoment(txt(v.on), time, zone()) : txt(v.on)};
+    }))) {
       const day = dayOf(iv.when);
       const n = day ? dayDiff(day) : null;
-      if (n === null || n < 0 || have.has(txt(iv.id)) || txt(iv.status) === "done") continue;
+      if (n === null || n < 0 || have.has(txt(iv.id) + "|" + day) || txt(iv.status) === "done") continue;
+      have.add(txt(iv.id) + "|" + day);
       const timed = !isDateOnly(iv.when) && tms(iv.when) !== null;
       out.push({id: "up-iv-" + txt(iv.id), title: (txt(iv.next_stage) || "Interview") + ": " + txt(iv.company), kind: "interview", day,
         start: timed ? new Date(tms(iv.when)).toISOString() : null, all_day: !timed, note: txt(iv.role) || null, go: {to: "interviews", item: txt(iv.id)}});
@@ -7869,7 +7911,7 @@
           h("div", {class: "card-actions"}, btn("Choose the application", () => haveInterview(g), {kind: "secondary", small: true, key: "book-choose"}))),
       // Where it went, said at once: "Saved. Claude will pick this up." left the person
       // asking where the interview was (2026-11-03).
-      waiting ? h("p", {class: "state tone-muted"}, h("span", {class: "state-text"}, "Booked. It is in Coming up now. "), tabLink("interviews", "int-" + txt(app.id).replace(/^app-/, "")), undoButton(t, "book")) :
+      waiting ? h("p", {class: "state tone-muted"}, h("span", {class: "state-text"}, txt(obj(booked.doc.value).on) ? "Booked. It is in Coming up now. " : "Booked, with no day yet: it is with your interviews in Coming up. "), tabLink("interviews", "int-" + txt(app.id).replace(/^app-/, "")), undoButton(t, "book")) :
         app ? stateLine(app.id, "book") : null);
   }
 
@@ -7954,7 +7996,7 @@
       now1 = held ? txt(upd.hold_line) + "." : toComputer && !computerListening() ? "This needs your computer: open Claude on it." :
         unsent ? "Not sent to Claude yet: it goes with your next tap here." :
         helperStarting() ? "Claude's helper is starting up. It takes this in a minute or two." :
-        late ? (p.sentAt ? "No answer from Claude in " + aboutMins((now() - p.sentAt) / 1000) + ". It is sent again with your next tap here; if its chat has closed, start it again." : "Claude has not picked this up yet.") :
+        late ? (p.sentAt ? "No answer from Claude in " + aboutMins((now() - p.sentAt) / 1000) + "." + ((S.tries.get(id) || 0) < RING_TRIES ? " It is sent again with your next tap here." : "") + " If its chat has closed, start it again." : "Claude has not picked this up yet.") :
         waking ? (freshHeartbeat() ? "Sent to Claude, which is open now: it starts in a moment." : "Sent to Claude. Its chat is waking up, which usually takes about " + aboutMins(wakeS()) + ".") :
         tms(w.answered_at) ? "Your answer is with Claude." :
         inLine ? (place.pos === 1 ? "Starts as soon as one of the " + place.busy + " jobs running now is done." : plural(place.pos - 1, "job", "jobs") + " before it, once one of the " + place.busy + " running now is done.") :
@@ -8489,14 +8531,22 @@
   // (2026-11-03: "scratch the job drafts and find 10 more" sat unsent all afternoon).
   // A question, or a word that is not a request ("the draft looks good"), still gets the
   // quick answer.
-  const ASKS_FOR_WORK = new RegExp("^(?:(?:also|please|pls|plz|now|ok|okay|and|then|just|so|right|can you|could you|would you|will you|can u|could u|i want you to|i need you to|i'd like you to|id like you to|go ahead and)[\\s,]+)*" +
-    "(?:find|search|look for|look up|scratch|scrap|scrape|delete|remove|clear|bin|ditch|drop|draft|redraft|write|rewrite|redo|apply|tailor|prep|prepare|update|change|edit|fix|add|make|build|send|message|reply|follow up|chase|network|connect|book|cancel|reschedule|move|run|start|stop|set up|tidy|research|get me)\\b", "i");
+  // "Draft looks good", "Search results look thin, why?", "Book club tonight" are remarks:
+  // the verb must have something to act on after it (the release review, 2026-11-03), and a
+  // question goes to the quick answer unless it is a request ("can you find ...?").
+  const WORK_LEAD = "(?:(?:also|please|pls|plz|now|ok|okay|and|then|just|so|right|i want you to|i need you to|i'd like you to|id like you to|go ahead and)[\\s,]+)*";
+  const WORK_ASK = "(?:can you|could you|would you|will you|can u|could u)[\\s,]+";
+  const WORK_VERB = "(?:find|search|look for|look up|scratch|scrap|scrape|delete|remove|clear|bin|ditch|drop|draft|redraft|write|rewrite|redo|apply|tailor|prep|prepare|update|change|edit|fix|add|make|build|send|message|reply|follow up|chase|network|connect|book|cancel|reschedule|move|run|start|stop|set up|tidy|research|get)";
+  const WORK_OBJ = "\\s+(?:me|us|him|her|them|it|this|that|these|those|the|a|an|my|our|his|their|some|more|all|every|each|any|another|new|other|\\d+|ten|five|three|two|to|for|with|on|at|in|up|out|back|off|jobs?|roles?|people|contacts?|interviews?|drafts?|messages?|replies|notes?|resumes?|cvs?|letters?)\\b";
+  const ASKS_FOR_WORK = new RegExp("^" + WORK_LEAD + "(" + WORK_ASK + ")?" + WORK_VERB + WORK_OBJ, "i");
   function asksForWork(text) {
     const t = txt(text).trim();
-    return t.length > 0 && t.length <= 600 && ASKS_FOR_WORK.test(t);
+    if (!t || t.length > 600) return false;
+    const m = ASKS_FOR_WORK.exec(t);
+    return !!m && (!!m[1] || !/\?\s*$/.test(t));
   }
-  document.addEventListener("click", () => setTimeout(catchUp, 0), true);
-  document.addEventListener("keydown", (e) => { if (e.key === "Enter" || e.key === " ") setTimeout(catchUp, 0); }, true);
+  document.addEventListener("click", (e) => { const t = e.target; setTimeout(() => catchUp(t), 0); }, true);
+  document.addEventListener("keydown", (e) => { if (e.key === "Enter" || e.key === " ") { const t = e.target; setTimeout(() => catchUp(t), 0); } }, true);
   // Work for a bigger chat: where Claude works (Settings), said only when it matters.
   function handOff(text, inClick, sent) {
     const shots = arr(sent);

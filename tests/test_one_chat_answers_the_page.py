@@ -587,36 +587,37 @@ def test_a_chat_answering_the_page_for_a_day_starts_a_fresh_helper_at_a_quiet_mo
                                               for ln in took["lines"])
 
 
-def test_a_page_update_by_the_listener_is_its_check_in(copy, tmp_path, monkeypatch):
+def test_a_page_update_by_the_listener_brings_its_renewal(copy, tmp_path, monkeypatch):
     """The morning brief runs in the chat that answers the page and brings the page up to
-    date, but only a check-in wrote `answered_at`: after a quiet day the page decided nobody
-    was listening, and the daily renewal never came (2026-11-03). A page update by the
-    listener now checks in, in a batch of its own; anyone else's writes nothing."""
+    date, but the renewal was printed only at a check-in the brief never made, so one helper
+    ran for days (2026-11-03). A page update by that chat prints it when due, writes nothing
+    (answered_at means the chat took the work waiting), names the chat by its session even
+    when --chat is a word, and never hands over without the work queue in hand."""
     import app_listen
-    import json as _json
     monkeypatch.setattr(app_listen, "chat_kind", lambda: "cloud")
     monkeypatch.setattr(app_listen, "context_tokens", lambda: 0)
+    monkeypatch.setenv("LJS_CHAT", "session_old")
     now = dt.datetime(2026, 11, 3, 8, 0, tzinfo=dt.timezone.utc)
     rec = {"chat": "session_old", "kind": "cloud", "helper": True, "since": "2026-11-01T08:00:00Z",
            "answered_at": "2026-11-02T16:20:00Z"}
     db = {"meta": {"listener": {"data": rec, "version": 12}}, "work": {}}
-    paths, lines = app_listen.view_check_in(db, str(tmp_path / "a"), "session_old", now)
-    writes = [e for p in paths for e in _json.load(open(p))]
-    assert [(e["op"], e["doc_id"], _json.load(open(e["file_path"]))["answered_at"], e.get("if_version"))
-            for e in writes] == [("update", "listen", "2026-11-03T08:00:00Z", 12)], writes
+    lines = app_listen.view_renewal(db, "brief", now)
     assert len(lines) == 1 and lines[0].startswith("listen: renew:")
-    # Another chat's page update leaves the listener's record alone.
-    assert app_listen.view_check_in(db, str(tmp_path / "b"), "session_other", now) == ([], [])
-
-    # A chat that checked in this last hour has done it already: its dump is older than that.
-    app_listen._remember(rec, now - dt.timedelta(minutes=5))
-    assert app_listen.view_check_in(db, str(tmp_path / "c"), "session_old", now) == ([], [])
+    app_listen._save_seen({k: v for k, v in app_listen.seen().items() if k != "renewed_at"})
+    # No work queue read: never handed over, since a job might be running.
+    assert app_listen.view_renewal({"meta": db["meta"]}, "brief", now) == []
+    # Work running: not now.
+    busy = dict(db, work={"w1": {"data": {"status": "running"}, "version": 1}})
+    assert app_listen.view_renewal(busy, "brief", now) == []
+    # Another chat's page update: nothing.
+    monkeypatch.setenv("LJS_CHAT", "session_other")
+    assert app_listen.view_renewal(db, "brief", now) == []
 
 
 def test_a_helper_that_rereads_a_lot_hands_over_within_the_day(copy, tmp_path, monkeypatch):
     """A helper three days old re-read some 535,000 tokens at every step, and a one-line reply
-    took minutes (2026-11-03). Past RENEW_TOKENS it hands over at its next quiet moment, even
-    inside its first day; its size is read from the last turn in its own session file."""
+    took minutes (2026-11-03). Once its history has grown by RENEW_TOKENS it hands over at its
+    next quiet moment, even inside its first day, and never more than once a day."""
     import app_listen
     import json as _json
     monkeypatch.setattr(app_listen, "chat_kind", lambda: "cloud")
@@ -629,10 +630,13 @@ def test_a_helper_that_rereads_a_lot_hands_over_within_the_day(copy, tmp_path, m
     log = home / "projects" / "-home-user" / "a1.jsonl"
     log.write_text("\n".join(_json.dumps(x) for x in [
         {"type": "user", "message": {"content": "hi"}},
-        {"type": "assistant", "message": {"usage": {"input_tokens": 2, "cache_read_input_tokens": 160000,
+        {"type": "assistant", "message": {"usage": {"input_tokens": 2, "cache_read_input_tokens": 98000,
+                                                     "cache_creation_input_tokens": 0}}},
+        {"type": "assistant", "message": {"usage": {"input_tokens": 2, "cache_read_input_tokens": 320000,
                                                      "cache_creation_input_tokens": 900}}}]) + "\n")
     monkeypatch.setenv("CLAUDE_CONFIG_DIR", str(home))
-    assert app_listen.context_tokens() == 160902
+    # Grown by its history alone: a fresh chat already starts near 100,000.
+    assert app_listen.context_tokens() == 222900
     got = app_listen.decide(db, "session_new", str(tmp_path / "a"), now)
     assert [ln for ln in got["lines"] if ln.startswith("listen: renew:")], got["lines"]
     # A small one, six hours old, keeps the page.

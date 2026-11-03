@@ -147,6 +147,31 @@ def _git(*args, timeout: int = 30, root: str = "") -> tuple[int, str]:
     return r.returncode, r.stdout
 
 
+def take_master() -> str:
+    """Bring what other chats have landed on master into this copy before the page is drawn
+    from it. A chat's copy holds other chats' work only once it takes master, and a page
+    update drawn from a copy behind master dropped another chat's results: a finished search
+    could undo a finished draft, and the next update the search (the release review,
+    2026-11-03). "" when nothing was needed, it was taken, or it cannot be checked (no
+    network, not a person's copy); otherwise the line saying why the page was left as it
+    is. Never in the app itself, whose copies are not a person's."""
+    if not os.path.isfile(os.path.join(ROOT, "profile", "person.json")):
+        return ""
+    owner, name = origin()
+    if not owner or f"{owner}/{name}" == APP_REPO:
+        return ""
+    if _git("fetch", "-q", "origin", "master", timeout=60)[0] != 0:
+        return ""
+    if _git("merge-base", "--is-ancestor", "origin/master", "HEAD")[0] == 0:
+        return ""
+    if _git("merge", "--no-edit", "-q", "origin/master", timeout=120)[0] == 0:
+        return ""
+    _git("merge", "--abort")
+    return ("app: this copy is behind master, and taking master stopped on a change of this "
+            "chat's own in the same file: save this chat's work first, then run this again. The "
+            "page was left as it is, so nothing another chat saved is lost from it.")
+
+
 def origin() -> tuple[str, str]:
     """(owner, name) of this copy on GitHub, or ("", "") when it has none."""
     code, url = _git("remote", "get-url", "origin")

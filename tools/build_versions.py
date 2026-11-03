@@ -387,8 +387,9 @@ METHODS: dict[str, dict] = {
             (25, "2026-10-29", False, "the pack asks which team the call is for only when the employer has another posting for the role, and lists the other postings, not the one the call is for; the same role on two boards is one posting and a posting past its deadline is none; an interview's time said in the chat, an invite, a message or a contact's note is saved on its record (interview_pack.py book and times, and --time when a stage is booked), so the page shows it instead of time not set; packs already made stay as they are"),
             (26, "2026-10-30", True, "a prep the page asks for after a booked stage's day has gone is for what comes next, never the stage already held, and the pack says which stage it is for in its first line"),
             (27, "2026-11-02", False, "a stage is booked with its kind (due by a day, or a meeting), its length and its time zone's own name (interview_pack.py book --due --minutes, --zone America/Toronto), so Coming up reads them rather than guessing from English words; packs are built as before; a time given on rebooking makes a test a meeting, and a zone it cannot place gives no time"),
+            (28, "2026-11-03", False, "a stage booked with no day yet says so in its notes instead of an empty date"),
         ),
-        "fingerprint": "c039a36f4ba77a4f",
+        "fingerprint": "645edda6589978a8",
     },
     "research": {
         "by": "upgrade", "priority": 3, "applies": "live_applications", "time": "~5 min each",
@@ -693,7 +694,7 @@ METHODS: dict[str, dict] = {
             (16, "2026-11-02", True, "the News panel is never empty while a recent brief had news, and each point says what happened, how to use it and where it is from; Today is the most pressing thing with what matters about it beside it; Coming up lists what is due next when nothing else is booked; a person is shown once; the update line glides"),
             (17, "2026-11-03", True, "a message to Claude that fails on an old thread goes again on a fresh one, and anything not sent goes with the next tap, so nothing waits for next time and there is no Ask Claude again; work says Not sent yet, Waking Claude with its clock, or No answer yet; a request typed in Chat goes to Claude in the same tap; a pasted message is always saved and sent; a booking shows in Coming up at once and can have no day yet; Today says what the person last said; News fits the window; someone with no employer on record is shown by name alone"),
         ),
-        "fingerprint": "b8db0b5d35e4a1ed",
+        "fingerprint": "8447bd7653aabc4d",
     },
     "upskill": {
         "by": "upgrade", "priority": 4, "applies": "upskill_plans", "time": "~10 min",
