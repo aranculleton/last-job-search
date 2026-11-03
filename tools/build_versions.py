@@ -620,8 +620,9 @@ METHODS: dict[str, dict] = {
             (33, "2026-10-29", False, "an unused helper removed from the free filters; screening is as before"),
             (34, "2026-10-29", False, "a ruling on a remote posting holds for the same role on another board, whichever place that board names, except a ruling on where the posting is, which holds only for that place; and a posting read without its place is ruled out exactly when it would be with it"),
             (35, "2026-11-03", False, "the search window holds for an employer's own board as for every other source, read from the posting's own date where the board gives one; nothing ruled out before needs looking at again"),
+            (36, "2026-11-03", False, "the bar reads a public body its names miss from its own posting (\"is a provincial agency\", \"an agency of the Government of\"), where the profile excludes public bodies, so it is cut before the shortlist like one named; the paid exception holds"),
         ),
-        "fingerprint": "4cfb5052ce587662",
+        "fingerprint": "cdb4bed1fb903c2b",
     },
     "routines": {
         "by": "you", "priority": 3, "applies": "routines",
