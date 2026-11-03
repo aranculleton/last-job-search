@@ -59,6 +59,14 @@ make sense to somebody whose repo just received it.
 - **News is at least three points while the last four weeks have them**, filled from as many
   earlier briefs as it takes, each split into what happened, how to use it and where it is
   from (lines from before 4.8 included), and as many as your screen has room for.
+- **A search follows your rules all the way to the list.** Jobs from employers' own career pages
+  follow your search window too, so a posting months old no longer reaches your list; a public
+  body you have ruled out is caught from what its own posting says it is, even when it is not
+  on your list of names; and when you ask for ten jobs you get ten that pass every rule, or
+  Claude tells you how many it found.
+- **Match scores no longer bunch up at 100.** A posting that only names your skills now tops
+  out below 100; a contact there or an earlier interview is what takes a role to 100. Scores
+  of 90 or under are unchanged.
 - **Someone whose employer was never recorded is shown by name alone**, never "Andrijana at"
   with nothing after it, with no "Find more people at" button, and a row about them says
   "Employer not on record".
