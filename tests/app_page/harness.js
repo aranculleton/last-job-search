@@ -998,22 +998,26 @@ S.chat_busy = async (a) => {
 };
 
 S.stop = async (a) => {
-  const late = new Date(Date.parse(T0) - 240000).toISOString();
+  const asked = new Date(Date.parse(T0) - 240000).toISOString();
+  const rang = new Date(Date.parse(T0) - 11 * 60000).toISOString();
   const o = await open({html: a.html, hash: "work", clock: T0, seed: {
     "work/search~1": runningDoc(),
-    "work/prep~int-larkspur-supply": {kind: "prep", title: "Interview prep: Larkspur Retail", to: "cloud", args: {}, asked_at: late, status: "queued", stages: [], stage: 0, steps: [], stop_asked: false, attempt: 1},
+    // Asked on this page, and its ring never went (one refused on an old thread, 2026-11-03).
+    "work/prep~int-larkspur-supply": {kind: "prep", title: "Interview prep: Larkspur Retail", to: "cloud", args: {}, asked_at: asked, asked_from: {tab: "t0"}, status: "queued", stages: [], stage: 0, steps: [], stop_asked: false, attempt: 1},
+    // Sent eleven minutes ago, and no word back since.
+    "work/files~resume-current": {kind: "files", title: "Your resume as a file", to: "cloud", args: {}, asked_at: rang, asked_from: {tab: "t0"}, status: "queued", stages: [], stage: 0, steps: [], stop_asked: false, attempt: 1},
+    "meta/doorbell": {rung_at: rang, ids: ["files~resume-current"], rung: {"files~resume-current": rang}, thread: "thread-old"},
   }, fake: {canSend: "available"}});
   const {page, store} = o;
-  const r = {late: await bar(page, "prep~int-larkspur-supply")};
-  // Late: the page asks its helper again first; only when that cannot be reached (no
-  // connector here) is the link to start a chat by hand offered.
-  r.rewake = (await bar(page, "prep~int-larkspur-supply")).buttons;
-  await page.locator(workSel("prep~int-larkspur-supply")).getByRole("button", {name: "Ask Claude again: Interview prep: Larkspur Retail"}).click();
-  await turn(page, 8);
-  r.told = await page.$eval(workSel("prep~int-larkspur-supply"), (x) => x.textContent).catch(() => "");
+  const r = {unsent: await bar(page, "prep~int-larkspur-supply"), late: await bar(page, "files~resume-current")};
   r.runningBefore = (await bar(page, "search~1")).buttons;
+  // Any tap on the page sends what has not gone, and sends again what went unanswered: here,
+  // the Stop on another card. Nobody is asked to send anything twice.
   await page.locator(workSel("search~1")).getByRole("button", {name: "Stop: Finding jobs"}).click();
-  await turn(page, 6);
+  await turn(page, 8);
+  r.rings = await page.evaluate(() => window.__calls.filter((c) => c.op === "sendToClaude").map((c) => c.text));
+  r.sent = await bar(page, "prep~int-larkspur-supply");
+  r.bell = store.get("meta/doorbell");
   r.running = store.get("work/search~1");
   r.runningCard = await bar(page, "search~1");
   await page.locator(workSel("prep~int-larkspur-supply")).getByRole("button", {name: "Don't do it: Interview prep: Larkspur Retail"}).click();

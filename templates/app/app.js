@@ -25,7 +25,12 @@
   "use strict";
 
   const TOAST_MS = 8000;
-  const LATE_MS = 3 * 60 * 1000;
+  // How long a ring may go unanswered before its card says so: a chat woken after a quiet
+  // spell first builds its computer (its setup script alone ran two minutes on 2026-11-03),
+  // so three minutes called a chat that was still waking "not picked up" (the maintainer,
+  // 2026-11-03). Twice the usual wake this page has seen, ten minutes at least.
+  const LATE_MIN_MS = 10 * 60 * 1000;
+  const WAKE_GUESS_S = 240;
   const RING_COALESCE_MS = 90 * 1000;
   const COMPUTER_FRESH_MS = 12 * 3600 * 1000;
   const DAY = 86400000;
@@ -190,6 +195,8 @@
     local: new Map(),
     localWork: new Map(),
     workNote: new Map(),
+    // When this tab last rang for each piece of work, and last tried to.
+    rang: new Map(), tried: new Map(),
     sel: {jobs: new Set(), ready: new Set()},
     can: {comments: null},
     recent: [],
@@ -315,7 +322,48 @@
   const peopleItems = () => arr(M().people);
   // An interview ended on this page (its bin, or I heard back on its application) leaves
   // Interviews, To do and the counts at once, not when a chat next applies it.
-  const allInterviews = () => arr(M().interviews);
+  // A booking made on this page is in Coming up and on the Brief at once, before a chat has
+  // written it into the tracker (the maintainer, 2026-11-03: "what happened to the interview
+  // i said to book?").
+  const allInterviews = () => {
+    const list = arr(M().interviews);
+    const extra = pendingBookings(list);
+    return extra.length ? list.filter((i) => !extra.some((e) => e.id === txt(i.id))).concat(extra) : list;
+  };
+  function pendingBookings(list) {
+    const out = [];
+    for (const [id, d] of allActions()) {
+      if (txt(d.action) !== "outcome.interview") continue;
+      const st = actionState(id);
+      if (st !== "saving" && st !== "saved") continue;
+      if (effective(txt(d.item), IV_TURNS).id !== id) continue;
+      const v = obj(d.value);
+      const appId = txt(d.item);
+      const iid = "int-" + appId.replace(/^app-/, "");
+      const was = list.find((i) => txt(i.id) === iid);
+      if (was && txt(v.on) && dayOf(was.when) === txt(v.on)) continue;
+      const a = applicationItems().find((x) => txt(x.id) === appId) || {};
+      const time = /^\d{1,2}:\d{2}$/.test(txt(v.time)) ? txt(v.time) : "";
+      out.push(Object.assign({}, was || {}, {id: iid, application: appId, company: txt(a.company) || txt(obj(was).company), role: txt(a.role) || txt(obj(was).role),
+        next_stage: txt(v.stage) || "Interview", when: txt(v.on) ? (time ? zoneMoment(txt(v.on), time, zone()) : txt(v.on)) : null,
+        all_day: !time, time: time || null, with: txt(v.with) || null, past: false, booked_here: id}));
+    }
+    return out;
+  }
+  // A day and a clock time in a named zone, as the moment the model writes ("…T14:00:00Z").
+  function zoneMoment(day, hhmm, tzName) {
+    const guess = Date.parse(day + "T" + (hhmm.length === 4 ? "0" + hhmm : hhmm) + ":00Z");
+    if (!isFinite(guess)) return day;
+    const off = (t) => {
+      try {
+        const parts = new Intl.DateTimeFormat("en-US", {timeZone: tzName || undefined, hourCycle: "h23", year: "numeric", month: "2-digit", day: "2-digit", hour: "2-digit", minute: "2-digit"}).formatToParts(new Date(t));
+        const g = (k) => Number((parts.find((x) => x.type === k) || {}).value);
+        return Date.UTC(g("year"), g("month") - 1, g("day"), g("hour") % 24, g("minute")) - t;
+      } catch (e) { return 0; }
+    };
+    const t = guess - off(guess - off(guess));
+    return new Date(t).toISOString().slice(0, 16) + ":00Z";
+  }
   const interviewItems = () => allInterviews().filter((i) => !ivEnd(i));
   const applications = () => arr(obj(M().done).applications);
   const alertsOf = (item) => arr(obj(item).alerts).filter((a) => a && a.id && (a.level === undefined || Number(a.level) === 1));
@@ -619,7 +667,7 @@
     // The last ring, read before any tap so the next one can reply in its thread at once.
     sub("bell", db.doc("meta/doorbell"), (d) => { S.bell = d && d.exists ? d.data() : null; });
     // The one chat a tap wakes, and when it last answered (CONTRACT 7).
-    sub("listener", db.doc("meta/listen"), (d) => { S.listener = d && d.exists ? d.data() : null; });
+    sub("listener", db.doc("meta/listen"), (d) => { const before = tms(obj(S.listener).answered_at) || 0; S.listener = d && d.exists ? d.data() : null; if (before) learnWake(before); });
     sub("view", db.collection("screen"), (snap) => { S.views = docsOf(snap); recompute(); });
     // How to reach each contact (their LinkedIn address, their email), kept only in this
     // owner-only collection and never in the page itself (FUNCTIONS_SPEC 1.5 item 2), a few
@@ -816,7 +864,9 @@
   // A setup answer wakes a chat at once (CAPABILITY_MAP G1): the next question and the roles
   // to search for come from the model, which only a chat refreshes. Every other action waits
   // for the next chat, as before.
-  const RINGS = (action) => /^setup\./.test(txt(action));
+  // A booked interview rings too: its prep and its tracker row wait on a chat, and the next
+  // brief was a day away (2026-11-03).
+  const RINGS = (action) => /^setup\./.test(txt(action)) || txt(action) === "outcome.interview";
   async function act(list, label) {
     noteFocus();
     const recs = [];
@@ -933,7 +983,15 @@
       out.leftS = 0;
       return out;
     }
-    if (status === "queued") { out.late = t - asked > LATE_MS; return out; }
+    if (status === "queued") {
+      // Work this page asked for reaches Claude only by a ring; until one has gone it is
+      // "not sent", never "waiting" (2026-11-03: a ring that failed said "saved" all day).
+      const rung = rungAt(workIdOf(w));
+      out.sentAt = rung && rung >= (tms(w.answered_at) || 0) - 60000 ? rung : 0;
+      out.unsent = !!w.asked_from && canRing() && !out.sentAt;
+      out.late = !out.unsent && t - Math.max(asked, out.sentAt) > lateMs();
+      return out;
+    }
     out.i = at;
     const before = stages.slice(0, at).reduce((a, s) => a + s.est, 0);
     const since = tms(w.stage_at) || tms(w.claimed_at) || asked;
@@ -969,7 +1027,7 @@
     return out;
   }
   function phaseOf(w, p) {
-    return [p.status, p.over, p.late, p.lapsed, p.stopping, p.i, limitHit(), p.status === "queued" && pickedUp(w) > 0].join("|");
+    return [p.status, p.over, p.late, p.lapsed, p.stopping, p.i, limitHit(), p.status === "queued" && pickedUp(w) > 0, !!p.unsent, !!p.sentAt].join("|");
   }
   // Queued work Claude is already on: the chat that answers the page checks in first thing
   // on every wake (meta/listen answered_at, tools/app_listen.py), so a check-in after the
@@ -992,11 +1050,11 @@
   }
   // How long the current step has run: since its last line, its stage, its claim or, picked
   // up, since Claude checked in.
-  function stepSeconds(w, picked, t) {
+  function stepSeconds(w, picked, t, sentAt) {
     t = t === undefined ? now() : t;
     const steps = arr(w.steps);
     const last = steps.length ? tms(steps[steps.length - 1].at) : 0;
-    const since = picked ? pickedUp(w) : Math.max(last || 0, tms(w.stage_at) || 0) || tms(w.claimed_at) || tms(w.asked_at) || t;
+    const since = picked ? (pickedUp(w) || sentAt || t) : Math.max(last || 0, tms(w.stage_at) || 0) || tms(w.claimed_at) || tms(w.asked_at) || t;
     return Math.max(0, Math.floor((t - since) / 1000));
   }
   // A step's time the way a chat shows it: 45s, 13m 0s, 1h 2m.
@@ -1079,34 +1137,93 @@
         arr(bell.ids).every((id) => { const w = workDoc(id); return w && w.status === "queued"; })) return Promise.resolve("coalesced");
     const text = "[app] [" + (tag || "work") + ":" + ids.join(",") + "]";
     const thread = bell ? txt(bell.thread) : "";
-    let p;
-    try {
-      if (thread) p = c.sendToClaude({threadId: thread, text});
-      else if (S.bellAnchor) p = c.sendToClaude({anchor: S.bellAnchor, text});
-      else p = Promise.reject({code: "not_ready"});
-    } catch (e) { p = Promise.reject(e); }
-    return Promise.resolve(p).then(async (res) => {
-      const rec = {rung_at: iso(), tab: S.tab, ids: ids.slice(0, 50), thread: (res && res.threadId) || thread || null};
+    for (const id of ids) S.tried.set(id, now());
+    const send = (where) => { try { return Promise.resolve(c.sendToClaude(Object.assign({text}, where))); } catch (e) { return Promise.reject(e); } };
+    const rang = async (res, used) => {
+      const at = iso();
+      // Each piece of work keeps when it was sent, so its card knows after a reload whether
+      // it went out; only work still waiting is kept.
+      const rung = {};
+      for (const [k, v] of Object.entries(obj(obj(S.bell).rung))) { const w = workDoc(k); if (w && ACTIVE.has(txt(w.status) || "queued")) rung[k] = v; }
+      if (tag !== "act") for (const id of ids) { rung[id] = at; S.rang.set(id, now()); }
+      const keep = Object.keys(rung).slice(-50);
+      const rec = {rung_at: at, tab: S.tab, ids: ids.slice(0, 50), thread: (res && res.threadId) || used || null,
+        rung: Object.fromEntries(keep.map((k) => [k, rung[k]])), wakes: arr(obj(S.bell).wakes).slice(-7), woke_for: txt(obj(S.bell).woke_for) || null};
       S.bell = rec;
       const db = S.caps.db;
       if (db) { try { await db.doc("meta/doorbell").set(rec); } catch (e) { /* the ring went out; this note only saves rings */ } }
       return "rang";
-    }, (e) => {
+    };
+    const failed = (e) => {
       const code = (e && e.code) || "upstream_error";
-      // A thread that is gone: the next tap starts a new one.
-      if (code === "not_found" && S.bell) S.bell = Object.assign({}, S.bell, {thread: null});
       if (code === "claude_unavailable") return "no_session";
       if (code === "forbidden") { S.can.comments = "off"; return "off"; }
       return code;
+    };
+    if (!thread && !S.bellAnchor) return Promise.resolve("not_ready");
+    if (!thread) return send({anchor: S.bellAnchor}).then((res) => rang(res, null), failed);
+    // A thread from before the page was published again refused a ring and the work sat
+    // unsent all afternoon (2026-11-03): any refusal on the old thread goes again at once on
+    // a fresh one, still inside the same tap.
+    return send({threadId: thread}).then((res) => rang(res, thread), (e) => {
+      if (((e && e.code) || "") === "forbidden" || !S.bellAnchor) return failed(e);
+      if (S.bell) S.bell = Object.assign({}, S.bell, {thread: null});
+      return send({anchor: S.bellAnchor}).then((res) => rang(res, null), failed);
     });
   }
-  // Asked again for one piece of work, from its own button.
-  function ringAgain(id) {
-    const rung = ringNow([id], "work", true);
-    rung.then((how) => {
-      ringNote([id], how);
-      announce(how === "rang" ? "Claude has been told again." : "Claude could not be reached. It starts next time Claude works on your search.");
-    });
+  // When a piece of work was last sent to Claude, from this tab or any other (meta/doorbell).
+  function rungAt(id) {
+    if (!id) return 0;
+    const b = obj(S.bell);
+    const kept = tms(obj(b.rung)[id]) || (arr(b.ids).includes(id) ? tms(b.rung_at) : 0) || 0;
+    return Math.max(S.rang.get(id) || 0, kept);
+  }
+  function workIdOf(w) {
+    for (const [id, x] of allWork()) if (x === w) return id;
+    return txt(obj(w).id);
+  }
+  // How long Claude's chat takes to answer a ring: the middle of the last few this page saw,
+  // a few minutes until it has seen one.
+  function wakeS() {
+    const xs = arr(obj(S.bell).wakes).map(Number).filter((x) => x > 0).sort((a, b) => a - b);
+    return xs.length ? xs[Math.floor(xs.length / 2)] : WAKE_GUESS_S;
+  }
+  function lateMs() { return Math.max(LATE_MIN_MS, 2 * wakeS() * 1000); }
+  function aboutMins(sec) { const m = Math.max(1, Math.round(sec / 60)); return m === 1 ? "a minute" : m + " minutes"; }
+  // Seen live: a check-in after a ring this page watched go out is how long a wake takes.
+  function learnWake(before) {
+    const b = obj(S.bell);
+    const rung = tms(b.rung_at);
+    const ans = tms(obj(S.listener).answered_at);
+    if (!rung || !ans || ans < rung || !(before < rung) || txt(b.woke_for) === txt(b.rung_at)) return;
+    const sec = Math.round((ans - rung) / 1000);
+    if (sec < 1 || sec > 3600) return;
+    const rec = Object.assign({}, b, {wakes: arr(b.wakes).concat([sec]).slice(-7), woke_for: txt(b.rung_at)});
+    S.bell = rec;
+    const db = S.caps.db;
+    if (db) db.doc("meta/doorbell").set(rec).catch(() => {});
+  }
+  // Sent now, from a tap of the person's own.
+  function sendNow(ids) {
+    ringNow(ids, "work", true).then((how) => ringNote(ids, how));
+  }
+  // Work this page asked for that has not reached Claude goes with the person's next tap
+  // anywhere on the page, and work whose ring went unanswered past the late limit goes again
+  // the same way, so nobody is asked to send anything twice (the maintainer, 2026-11-03:
+  // "fix the app so that the button is redundant"). A ring needs a tap of the person's own
+  // (comments.d.ts), so their next tap is the soonest it can go.
+  function catchUp() {
+    if (!canRing()) return;
+    const t = now();
+    const ids = [];
+    for (const [id, w] of allWork()) {
+      if ((txt(w.status) || "queued") !== "queued" || !w.asked_from || w.stop_asked) continue;
+      if (w.to === "computer" && !computerListening()) continue;
+      if (pickedUp(w) || t - (tms(w.asked_at) || t) > 86400000 || t - (S.tried.get(id) || 0) < 15000) continue;
+      const p = progress(w, t);
+      if (p.unsent || p.late) ids.push(id);
+    }
+    if (ids.length) sendNow(ids);
   }
   function ringNote(ids, how) {
     const told = how === "rang" || how === "coalesced";
@@ -1114,7 +1231,9 @@
     for (const id of ids) {
       const w = workDoc(id);
       const toComputer = w && w.to === "computer";
-      if (told) S.workNote.set(id, {text: "Claude has been told.", tone: "muted"});
+      // Sent, or not sent and saying so on its card with the way to send it: never "saved"
+      // over a ring that failed.
+      if (told || (canRing() && how !== "no_session" && !toComputer)) S.workNote.delete(id);
       else if (toComputer) S.workNote.set(id, {text: "This needs your computer: open Claude on it, and it starts there.", tone: "muted"});
       else if (how === "no_session") S.workNote.set(id, {text: "Claude is not working on your search right now. This starts next time it does.", tone: "warn", link: true});
       else S.workNote.set(id, {text: "Saved. It starts next time Claude works on your search.", tone: "muted", link: true});
@@ -3335,11 +3454,13 @@
     const todaySteps = dueSteps.filter((x) => dayDiff(x.d.due) === 0);
     const tomorrowIv = weekIv && dayDiff(dayOf(weekIv.when)) === 1 ? weekIv : null;
     // Facts about a person, in a few words each: who they are, where it stands, a draft.
+    // What they last said comes first: "first wrote 4 Oct" and "30 days since it was due"
+    // beside "30 days late" told the person nothing (the maintainer, 2026-11-03).
     const personFacts = (p, d) => {
       const out = [];
+      if (d && txt(d.said)) out.push("They said: “" + txt(d.said) + "”");
       if (d && txt(d.context)) out.push(...txt(d.context).split(" · ").slice(0, 2));
       else if (p && txt(p.employer)) out.push(txt(p.employer));
-      if (d && Number(d.overdue_days) > 0) out.push(plural(Number(d.overdue_days), "day", "days") + " since it was due");
       if (p && messageItems().some((m) => txt(m.contact) === p.id)) out.push("A draft is ready in Messages");
       return out;
     };
@@ -3528,9 +3649,11 @@
         txt(it.use) || src ? h("span", {class: "bp-meta"}, txt(it.use) ? h("span", {class: "bp-use"}, inlineMd(txt(it.use).replace(/\.$/, ""))) : null,
           txt(it.use) && src ? " \u00b7 " : null, src ? h("span", {class: "bp-src"}, src) : null) : null);
     };
-    if (news.length) put(grid, briefPanel("news", "News", h("ul", {class: "bp-lead-list bp-news"}, news.slice(0, 3).map(newsPoint)),
-      [news.length > 3 ? h("details", {class: "bp-all"}, h("summary", {}, plural(news.length - 3, "more", "more")), h("ul", {class: "bp-lead-list bp-news"}, news.slice(3).map(newsPoint))) : null,
-        newsAsOf(b.news_date || b.date)],
+    // As many points as the window has room for, like every list on the Brief: all of them on
+    // a phone, and on a wider screen down to three only when the Brief would run past the
+    // bottom (fitBrief; the maintainer, 2026-11-03: "news is dynamic like the rest?").
+    if (news.length) put(grid, briefPanel("news", "News", h("ul", {class: "bp-lead-list bp-news", "data-fit": "3," + Math.min(news.length, 5) + ",1"}, news.slice(0, 5).map(newsPoint)),
+      [newsAsOf(b.news_date || b.date)],
       {icon: "k-message", w: 6, m: 2}));
     // The numbers: the last 30 days, how far applications got, and the weeks. A share is said
     // where there is something to share (never "0 0%"), and what it is a share of.
@@ -7693,11 +7816,12 @@
   function pastedSomething(text) {
     return txt(text).length >= 120 && /\b(interview|phone screen|screening call|invite|invitation|video call|assessment centre|replied|thanks for (reaching|getting) out)\b/i.test(text);
   }
+  // The paste itself is already saved and with Claude (handOff, in the Send tap): one pasted
+  // into the page's chat was kept nowhere and reached nobody (2026-11-03). This only offers
+  // the booking or the reply it reads as, at once.
   async function readPasted(text) {
     const sample = await CAP.sample;
-    if (!sample || !sample.json) { askQuick(text); return; }
-    if (talkInput && talkInput.value.trim() === text) { talkInput.value = ""; draftSet("talk", null); countTalk(); }
-    S.quick.turns.push({id: "q" + stamp() + rand4(), from: "you", text, at: iso()});
+    if (!sample || !sample.json) return;
     S.quick.busy = true;
     renderChat();
     const people = peopleItems().map((p) => ({id: p.id, first_name: p.first_name, employer: p.employer}));
@@ -7711,33 +7835,34 @@
     S.quick.busy = false;
     const g = obj(got);
     if (txt(g.kind) === "interview") S.chatNotes.push({id: "o" + stamp(), from: "claude", at: iso(), node: () => bookOffer(g)});
-    else if (txt(g.kind) === "reply" && peopleItems().some((p) => p.id === txt(g.contact))) S.chatNotes.push({id: "o" + stamp(), from: "claude", at: iso(), node: () => replyOffer(g, text)});
-    else { renderChat(); askQuick(text, true); return; }
     renderChat();
   }
   function bookOffer(g) {
     const app = applicationItems().find((a) => a.id === txt(g.application)) || applicationItems().find((a) => appLive(a) && txt(a.company) === txt(g.company));
     const when = [txt(g.stage) || "Interview", txt(g.day) ? fmtDay(g.day) : null, txt(g.time) || null, txt(g.with) ? "with " + txt(g.with) : null].filter(Boolean).join(", ");
     const booked = app && effective(app.id, ["outcome.interview"]);
+    // No day in the message (an invitation to choose a slot): the day is asked for first,
+    // never booked as a guess.
+    const dayless = !txt(g.day);
+    const t = app ? lastTouch(app.id) : null;
+    const waiting = booked && t && t.id === booked.id && (t.state === "saving" || t.state === "saved");
     return h("div", {class: "offer-card"}, h("p", {class: "talk-who"}, "Claude"),
-      h("p", {class: "talk-text"}, "Book this interview: " + when + (txt(g.company) ? ", at " + txt(g.company) : "") + "?"),
+      h("p", {class: "talk-text"}, "Book this interview: " + when + (txt(g.company) ? ", at " + txt(g.company) : "") + "?" + (dayless && !booked ? " It gives no day yet." : "")),
       app ? h("div", {class: "card-actions"},
-        btn(booked ? "Booked" : "Book it", () => act([{item: app.id, action: "outcome.interview", value: Object.assign({on: txt(g.day), stage: txt(g.stage) || "Interview"}, txt(g.time) ? {time: txt(g.time)} : {}, txt(g.with) ? {with: txt(g.with)} : {}), rev: app.rev}], "Booked: " + txt(app.company)),
-          {kind: "primary", small: true, key: "book-it", pressed: !!booked}),
-        btn("Change it first", () => heardBack(app, g), {kind: "quiet", small: true, key: "book-change"})) :
+        dayless && !booked ? btn("Add the day", () => heardBack(app, g), {kind: "primary", small: true, key: "book-day"}) :
+          btn(booked ? "Booked" : "Book it", () => act([{item: app.id, action: "outcome.interview", value: Object.assign({on: txt(g.day), stage: txt(g.stage) || "Interview"}, txt(g.time) ? {time: txt(g.time)} : {}, txt(g.with) ? {with: txt(g.with)} : {}), rev: app.rev}], "Booked: " + txt(app.company)),
+            {kind: "primary", small: true, key: "book-it", pressed: !!booked}),
+        dayless && !booked ? btn("Book it, no day yet", () => act([{item: app.id, action: "outcome.interview", value: Object.assign({on: "", stage: txt(g.stage) || "Interview"}, txt(g.with) ? {with: txt(g.with)} : {}), rev: app.rev}], "Booked: " + txt(app.company) + ", the day still to choose"),
+          {kind: "quiet", small: true, key: "book-noday"}) :
+          btn("Change it first", () => heardBack(app, g), {kind: "quiet", small: true, key: "book-change"})) :
         h("div", {}, h("p", {class: "small muted"}, "No application of yours matches it."),
           h("div", {class: "card-actions"}, btn("Choose the application", () => haveInterview(g), {kind: "secondary", small: true, key: "book-choose"}))),
-      app ? stateLine(app.id, "book") : null);
+      // Where it went, said at once: "Saved. Claude will pick this up." left the person
+      // asking where the interview was (2026-11-03).
+      waiting ? h("p", {class: "state tone-muted"}, h("span", {class: "state-text"}, "Booked. It is in Coming up now. "), tabLink("interviews", "int-" + txt(app.id).replace(/^app-/, "")), undoButton(t, "book")) :
+        app ? stateLine(app.id, "book") : null);
   }
-  function replyOffer(g, text) {
-    const p = peopleItems().find((x) => x.id === txt(g.contact));
-    return h("div", {class: "offer-card"}, h("p", {class: "talk-who"}, "Claude"),
-      h("p", {class: "talk-text"}, "Log " + txt(p.first_name) + "'s reply and draft an answer?"),
-      h("div", {class: "card-actions"}, btn("Log it and draft", () => {
-        act([{item: p.id, action: "msg.received", value: {text, on: todayIso()}, rev: p.rev}], "Logged: " + txt(p.first_name) + "'s reply");
-        requestWork([{id: "reply~" + seg(p.id) + "~" + hash10(text), kind: "reply", to: "either", title: "Reply to " + txt(p.first_name) + " at " + txt(p.employer), args: {contact: txt(p.id), received: actionId(p.id, "msg.received")}}]);
-      }, {kind: "primary", small: true, key: "reply-offer"})));
-  }
+
 
   // ------------------------------------------------------------------ Work: a pill in the header, a sheet on a phone, a rail on a wide screen
 
@@ -7796,8 +7921,11 @@
     const inLine = !!(place && place.busy && !p.late);
     const picked = st === "queued" && !inLine && !p.stopping && pickedUp(w) > 0;
     const late = p.late && !picked && !helperStarting();
-    const label = p.stopping ? "Stopping after this step" : picked ? "Starting" : st === "queued" ? (late ? "Not picked up yet" : inLine ? (place.pos === 1 ? "Next" : "In line") : "Waiting to start") : st === "running" || st === "claimed" ? (slow ? "May have stopped" : null) : WORK_WORDS[st] || cap1(st);
-    const tone = p.stopping ? "held" : {done: "ok", failed: "bad", stopped: "held", needs_you: "warn"}[st] || (slow || late ? "warn" : null);
+    const unsent = st === "queued" && p.unsent && !p.stopping && !(toComputer && !computerListening());
+    // Sent, and its chat not yet back: the page's own clock runs, as a chat shows its setup.
+    const waking = st === "queued" && !!p.sentAt && !picked && !late && !inLine && !p.stopping;
+    const label = p.stopping ? "Stopping after this step" : picked ? "Starting" : st === "queued" ? (unsent ? "Not sent yet" : late ? "No answer yet" : inLine ? (place.pos === 1 ? "Next" : "In line") : waking ? (freshHeartbeat() ? "Sent" : "Waking Claude") : "Waiting to start") : st === "running" || st === "claimed" ? (slow ? "May have stopped" : null) : WORK_WORDS[st] || cap1(st);
+    const tone = p.stopping ? "held" : {done: "ok", failed: "bad", stopped: "held", needs_you: "warn"}[st] || (slow || late || unsent ? "warn" : null);
     const spinning = (ACTIVE.has(st) && st !== "needs_you" && st !== "queued" && !slow) || picked;
     const waitingDot = st === "queued" && !late && !picked;
     const cur = p.stages[Math.min(p.i, p.n - 1)];
@@ -7814,8 +7942,11 @@
       const upd = obj(obj(M().updates).waiting);
       const held = txt(w.kind) !== "update" && txt(upd.waits_for) && txt(upd.hold_line);
       now1 = held ? txt(upd.hold_line) + "." : toComputer && !computerListening() ? "This needs your computer: open Claude on it." :
+        unsent ? "Not sent to Claude yet: it goes with your next tap here." :
         helperStarting() ? "Claude's helper is starting up. It takes this in a minute or two." :
-        late ? "Claude has not picked this up yet." : tms(w.answered_at) ? "Your answer is with Claude." :
+        late ? (p.sentAt ? "No answer from Claude in " + aboutMins((now() - p.sentAt) / 1000) + ". It is sent again with your next tap here; if its chat has closed, start it again." : "Claude has not picked this up yet.") :
+        waking ? (freshHeartbeat() ? "Sent to Claude, which is open now: it starts in a moment." : "Sent to Claude. Its chat is waking up, which usually takes about " + aboutMins(wakeS()) + ".") :
+        tms(w.answered_at) ? "Your answer is with Claude." :
         inLine ? (place.pos === 1 ? "Starts as soon as one of the " + place.busy + " jobs running now is done." : plural(place.pos - 1, "job", "jobs") + " before it, once one of the " + place.busy + " running now is done.") :
         "Waiting for Claude to start.";
     } else if (st === "stopped") now1 = "Stopped. Anything already saved is kept.";
@@ -7832,9 +7963,9 @@
     // What Claude is doing now, with its own clock in seconds, as a chat shows a step
     // (the maintainer, 2026-10-30: "live updates similar to how we do in the chat"). The
     // clock ticks on the page; nothing more is written for it.
-    const stepClock = (picked || ((st === "running" || st === "claimed") && !slow)) && !p.stopping;
+    const stepClock = (picked || waking || ((st === "running" || st === "claimed") && !slow)) && !p.stopping;
     if (now1) put(cardEl, h("p", {class: "wc-now" + (st === "failed" ? " tone-bad" : st === "needs_you" ? " tone-warn" : "")}, now1,
-      stepClock ? h("span", {class: "wc-clock muted", "data-step": "1"}, " · " + stepTime(stepSeconds(w, picked))) : null));
+      stepClock ? h("span", {class: "wc-clock muted", "data-step": "1"}, " · " + stepTime(stepSeconds(w, st === "queued", undefined, p.sentAt))) : null));
     if (ACTIVE.has(st)) {
       put(cardEl, h("div", {class: "bar" + (spinning ? " is-running" : ""), role: "progressbar", "aria-labelledby": titleId, "aria-valuemin": "0", "aria-valuemax": "100",
         "aria-valuenow": String(p.pct), "aria-valuetext": barText(p)}, h("span", {class: "fill", style: "width:" + p.pct + "%"})));
@@ -7868,6 +7999,8 @@
     if (note && st === "queued" && !picked) put(cardEl, h("p", {class: "note tone-" + note.tone}, note.text));
     const acts = h("div", {class: "wc-actions"});
     // Work nobody has started yet is called off in one plain tap, first on its row.
+    // Not sent: the one next step, though any tap on the page sends it too.
+    if (unsent) put(acts, btn("Send to Claude", () => sendNow([id]), {kind: "primary", small: true, key: "send:" + id, aria: "Send to Claude: " + txt(w.title)}));
     if (st === "queued" && !p.stopping) put(acts, btn("Don't do it", () => stopWork(id), {kind: "secondary", small: true, key: "stop:" + id, aria: "Don't do it: " + txt(w.title)}));
     if (stopBtn) put(acts, stopBtn);
     // Nothing has picked it up: the page asks its helper chat again; only once that cannot
@@ -7877,8 +8010,9 @@
     if ((st === "failed" || (st === "stopped" && !w.stop_asked) || (slow && ACTIVE.has(st) && !limitHit())) && tries < 3) {
       put(acts, btn("Try again", () => retryWork(id), {kind: "secondary", small: true, key: "retry:" + id, aria: "Try again: " + txt(w.title)}));
     }
-    if (st === "queued" && p.late && !toComputer && canWake) put(acts, btn("Ask Claude again", () => ringAgain(id), {kind: "secondary", small: true, key: "rewake:" + id, aria: "Ask Claude again: " + txt(w.title)}));
-    if (st === "queued" && (p.late || (note && note.link)) && !toComputer && !canWake) {
+    // No "Ask Claude again": a ring that went unanswered goes again with the person's next
+    // tap by itself (catchUp), so the only thing left to offer is a chat started afresh.
+    if (st === "queued" && !toComputer && (late || (note && note.link && !canWake))) {
       put(acts, h("a", {class: "btn quiet small", href: wakeUrl(), target: "_blank", rel: "noopener noreferrer", "data-k": "prefill:" + id}, "Start it now", h("span", {class: "sr-only"}, " (opens Claude in a new tab)")));
     }
     if (acts.childNodes.length) put(cardEl, acts);
@@ -8237,7 +8371,18 @@
         if (!last) continue;
         const w = workDoc(last.work || ("talk~" + seg(currentThread(to)) + "~" + seg(last.id)));
         if (!w || !ACTIVE.has(w.status)) continue;
-        const words = w.status === "queued" ? (to === "computer" && !computerListening() ? "This needs your computer: open Claude on it. Your question waits here until then." : "Claude is starting on this…") : "Claude is working on it…";
+        // The same words as its card in Claude's work, so the two never disagree (2026-11-03:
+        // the chat said "starting" while the card said "waiting" over a ring that had failed).
+        const p = progress(w);
+        const away = to === "computer" && !computerListening();
+        if (w.status === "queued" && p.unsent && !away) {
+          items.push(h("li", {class: "talk-msg pending", role: "status"}, h("p", {class: "talk-text muted"}, "Not sent to Claude yet: it goes with your next tap here. "),
+            h("div", {class: "card-actions"}, btn("Send to Claude", () => sendNow([workIdOf(w)]), {kind: "primary", small: true, key: "talk-send:" + to}))));
+          continue;
+        }
+        const words = w.status === "queued" ? (away ? "This needs your computer: open Claude on it. Your question waits here until then." :
+          pickedUp(w) ? "Claude has this…" : p.late ? "No answer from Claude yet. It is sent again with your next tap here." :
+          p.sentAt && !freshHeartbeat() ? "Sent. Claude's chat is waking up, usually about " + aboutMins(wakeS()) + "…" : "Claude is starting on this…") : "Claude is working on it…";
         // Moving dots, as in a Claude chat, so a wait never looks like a freeze.
         items.push(h("li", {class: "talk-msg pending", role: "status"}, h("p", {class: "talk-text muted"}, words, " ", h("span", {class: "typing", "aria-hidden": "true"}, h("span", {}), h("span", {}), h("span", {})))));
       }
@@ -8325,9 +8470,23 @@
     // call it is about needs one anyway). Sent inside this click, so the ring can go.
     if (withPics) { handOff(text, true, pics.splice(0)); renderPics(); return; }
     if (!S.quick.mode && capsSettled.sample && !S.caps.sample) { handOff(text, true); return; }
-    if (!S.quick.mode && pastedSomething(text)) { readPasted(text); return; }
+    if (!S.quick.mode && pastedSomething(text)) { handOff(text, true); readPasted(text); return; }
+    if (!S.quick.mode && asksForWork(text)) { handOff(text, true); return; }
     askQuick(text);
   }
+  // A request for work goes to Claude in the Send tap itself: the quick helper can only hand
+  // it on, and by the time it has said so the tap is spent and the ring cannot go
+  // (2026-11-03: "scratch the job drafts and find 10 more" sat unsent all afternoon).
+  // A question, or a word that is not a request ("the draft looks good"), still gets the
+  // quick answer.
+  const ASKS_FOR_WORK = new RegExp("^(?:(?:also|please|pls|plz|now|ok|okay|and|then|just|so|right|can you|could you|would you|will you|can u|could u|i want you to|i need you to|i'd like you to|id like you to|go ahead and)[\\s,]+)*" +
+    "(?:find|search|look for|look up|scratch|scrap|scrape|delete|remove|clear|bin|ditch|drop|draft|redraft|write|rewrite|redo|apply|tailor|prep|prepare|update|change|edit|fix|add|make|build|send|message|reply|follow up|chase|network|connect|book|cancel|reschedule|move|run|start|stop|set up|tidy|research|get me)\\b", "i");
+  function asksForWork(text) {
+    const t = txt(text).trim();
+    return t.length > 0 && t.length <= 600 && ASKS_FOR_WORK.test(t);
+  }
+  document.addEventListener("click", () => setTimeout(catchUp, 0), true);
+  document.addEventListener("keydown", (e) => { if (e.key === "Enter" || e.key === " ") setTimeout(catchUp, 0); }, true);
   // Work for a bigger chat: where Claude works (Settings), said only when it matters.
   function handOff(text, inClick, sent) {
     const shots = arr(sent);
@@ -8505,15 +8664,17 @@
     S.quick.ctl = null;
     if (handoff && !S.quick.mode) {
       S.quick.turns = S.quick.turns.filter((t) => t !== youMsg);
-      handOff(text, false);
+      // Still inside the Send tap (a quick answer that knew at once), the ring goes now;
+      // otherwise the person's next tap anywhere sends it (catchUp).
+      const live = !!(navigator.userActivation && navigator.userActivation.isActive);
+      handOff(text, live);
       const wid = S.lastHandOff;
-      const note = {id: "n" + stamp() + rand4(), from: "note", at: iso(), sent: false};
-      note.node = () => note.sent ? h("p", {class: "talk-text"}, "Sent to Claude. The answer appears here.") :
+      const note = {id: "n" + stamp() + rand4(), from: "note", at: iso()};
+      note.node = () => rungAt(wid) ? h("p", {class: "talk-text"}, "Sent to Claude. The answer appears here.") :
         h("div", {}, h("p", {class: "talk-text"}, "This needs Claude itself, not a quick answer."),
-          h("div", {class: "card-actions"}, btn("Send to Claude", () => { ringNow([wid], "work", true).then((how) => { ringNote([wid], how); note.sent = how === "rang" || how === "coalesced"; if (!note.sent) toast({text: "Claude could not be reached. It answers next time it works on your search.", ids: [], until: 0}); renderChat(); }); },
-            {kind: "primary", small: true, key: "handoff:" + note.id})));
+          h("div", {class: "card-actions"}, btn("Send to Claude", () => sendNow([wid]), {kind: "primary", small: true, key: "handoff:" + note.id})));
       S.chatNotes.push(note);
-      announce("This needs Claude itself. Send it when you are ready.");
+      announce("This needs Claude itself.");
       renderChat();
       return;
     }
@@ -9565,7 +9726,7 @@
       const tt = el.querySelector("[data-time]");
       if (tt) tt.textContent = timeText(w, p);
       const sc = el.querySelector("[data-step]");
-      if (sc) sc.textContent = " · " + stepTime(stepSeconds(w, p.status === "queued", t));
+      if (sc) sc.textContent = " · " + stepTime(stepSeconds(w, p.status === "queued", t, p.sentAt));
     }
     if (S.toasts.some((x) => !x.held && t >= x.until)) renderToasts();
     for (const [k, n] of S.notes) if (n.until && n.until <= t) { S.notes.delete(k); scheduleRender(); }

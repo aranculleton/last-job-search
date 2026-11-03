@@ -294,3 +294,35 @@ def test_the_furthest_stage_says_how_the_person_is_in_touch_whatever_the_rows_or
     rows = [{"company": "Kestrel Mutual", "status": "applied"}, {"company": "Kestrel Mutual", "status": "interview"}]
     for order in (rows, rows[::-1]):
         assert brief.in_play(order, [], [], ["Kestrel Mutual"]) == ["Kestrel Mutual (interviewing)"]
+
+
+def test_news_is_three_points_when_the_last_four_weeks_have_them_each_in_its_parts(tmp_path):
+    """One carried point stood alone for days, as one paragraph (the maintainer, 2026-11-03:
+    "the news only has 1 bullet ... quite wall of text-y"). A thin day is filled to three from
+    as many earlier briefs as it takes, each item carried only from the brief that found it,
+    and a line written before 4.8 without its day is split into its parts too."""
+    d = tmp_path / "briefs"
+    d.mkdir()
+    (d / "2026-10-27.md").write_text(
+        "# Brief, 2026-10-27\n\n## News\n\n- Rates held (Example Times, https://example.com/r). "
+        "A line for lender interviews.\n- A hub opens (Example Post, 2026-10-26, https://example.com/h). "
+        "Worth a note to the team there.\n", encoding="utf-8")
+    (d / "2026-10-29.md").write_text(
+        "# Brief, 2026-10-29\n\n## News\n\nCarried from the brief of 2026-10-27. From search results.\n\n"
+        "- Rates held (Example Times, https://example.com/r). A line for lender interviews.\n", encoding="utf-8")
+    (d / "2026-10-30.md").write_text(
+        "# Brief, 2026-10-30\n\n## News\n\nFrom search results.\n\n- A launch (Example Times, 2026-10-30, "
+        "https://example.com/a). A question for your interview there.\n", encoding="utf-8")
+    files = sorted(str(p) for p in d.iterdir())
+    got, day = brief.carry_news(dt.date(2026, 11, 3), brief.NEWS_MAX, paths=files)
+    assert [x[:8] for x in got] == ["A launch", "Rates he", "A hub op"]
+    assert day == "2026-10-30"
+    # A new point found today with links already carried is not counted twice.
+    more, _ = brief.carry_news(dt.date(2026, 11, 3), 2, skip=["Fresh (X, https://example.com/a). Use it."], paths=files)
+    assert [x[:10] for x in more] == ["Rates held", "A hub open"]
+    secs = [{"title": "News", "kind": "news", "text": "Nothing new.", "items": []}]
+    assert app_model._news_fallback(types.SimpleNamespace(today=dt.date(2026, 11, 3)), secs, files) == "2026-10-30"
+    items = secs[0]["items"]
+    assert len(items) == 3
+    old = next(i for i in items if i["text"].startswith("Rates held"))
+    assert (old["what"], old["use"], old["src"], old["date"]) == ("Rates held.", "A line for lender interviews.", "Example Times", None)

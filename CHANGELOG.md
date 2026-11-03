@@ -20,6 +20,36 @@ make sense to somebody whose repo just received it.
 
 ## [Unreleased]
 
+### Fixed
+
+- **What you ask for on your page reaches Claude, and the page says honestly where it is.**
+  After your page was published again, its message to Claude could fail on the old line it
+  used, and the card said "Saved. It starts next time" while nothing had been sent. Now a
+  failed message goes again at once on a fresh line, anything still not sent goes with your
+  next tap anywhere on the page, and something left unanswered is sent again the same way, so
+  there is no "Ask Claude again" button. A card says "Not sent yet", "Waking Claude" with a
+  clock and how long a wake usually takes on your page, "Sent", or "No answer yet", and the
+  chat says the same. A late answer waits ten minutes, not three, since a chat woken after a
+  quiet spell first builds its computer.
+- **A request typed in Chat goes to Claude in the same tap.** "Find me ten more jobs" or "draft
+  a reply to her" used to go to the quick helper first, which could only pass it on once the
+  tap had expired, so it sat unsent. A question still gets the quick answer.
+- **A pasted message is never lost.** An invitation or a reply pasted into Chat is saved and
+  sent to Claude in the same tap; an interview invitation still offers to book it at once.
+- **A booked interview shows in Coming up and on the Brief straight away**, and reaches Claude
+  in the same tap. An invitation with no day yet asks for the day, or is booked as "the day
+  still to choose" (it was refused, quoting a day already past, while the page said "Saved").
+- **The chat that answers your page stays quick.** It handed over to a fresh helper only at a
+  check-in the morning brief never made, so one helper ran for days and re-read some 535,000
+  tokens at every step. Every page update by that chat now counts as its check-in, and it
+  hands over at its next quiet moment once it re-reads more than 150,000 tokens a step, as
+  well as daily. After a quiet day the page no longer decides nobody is listening.
+- **News is at least three points while the last four weeks have them**, filled from as many
+  earlier briefs as it takes, each split into what happened, how to use it and where it is
+  from (lines from before 4.8 included), and as many as your screen has room for.
+- **Today says what the person last said** ("They said: ..."), in the page's normal size,
+  rather than only when it was due.
+
 ## [4.8.0] - 2026-11-02
 
 ### Changed

@@ -584,3 +584,24 @@ def test_a_chat_answering_the_page_for_a_day_starts_a_fresh_helper_at_a_quiet_mo
     took = app_listen.decide(quiet, "session_new", str(tmp_path / "d"), now, listen=True, helper=True)
     assert took["role"] == "listener" and any("archive_session" in ln and app_listen.HELPER_CHAT_TITLE in ln
                                               for ln in took["lines"])
+
+
+def test_a_page_update_by_the_listener_is_its_check_in(copy, tmp_path, monkeypatch):
+    """The morning brief runs in the chat that answers the page and brings the page up to
+    date, but only a check-in wrote `answered_at`: after a quiet day the page decided nobody
+    was listening, and the daily renewal never came (2026-11-03). A page update by the
+    listener now checks in, in a batch of its own; anyone else's writes nothing."""
+    import app_listen
+    import json as _json
+    monkeypatch.setattr(app_listen, "chat_kind", lambda: "cloud")
+    now = dt.datetime(2026, 11, 3, 8, 0, tzinfo=dt.timezone.utc)
+    rec = {"chat": "session_old", "kind": "cloud", "helper": True, "since": "2026-11-01T08:00:00Z",
+           "answered_at": "2026-11-02T16:20:00Z"}
+    db = {"meta": {"listener": {"data": rec, "version": 12}}, "work": {}}
+    paths, lines = app_listen.view_check_in(db, str(tmp_path / "a"), "session_old", now)
+    writes = [e for p in paths for e in _json.load(open(p))]
+    assert [(e["op"], e["doc_id"], _json.load(open(e["file_path"]))["answered_at"], e.get("if_version"))
+            for e in writes] == [("update", "listen", "2026-11-03T08:00:00Z", 12)], writes
+    assert len(lines) == 1 and lines[0].startswith("listen: renew:")
+    # Another chat's page update leaves the listener's record alone.
+    assert app_listen.view_check_in(db, str(tmp_path / "b"), "session_other", now) == ([], [])

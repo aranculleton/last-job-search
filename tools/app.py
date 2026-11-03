@@ -186,7 +186,11 @@ def cmd_view(a) -> int:
                                      "model": model["model"], "by": a.chat,
                                      **_published()},
           if_version=old["version"] if old else None)
-    print(_dump({"rev": model["rev"], "batches": w.save("view")}), end="")
+    batches = w.save("view")
+    import app_listen
+    more, lines = app_listen.view_check_in(db, os.path.join(a.out_dir, "listen"), a.chat, now)
+    print(_dump({"rev": model["rev"], "batches": batches + more,
+                 **({"for_claude": lines} if lines else {})}), end="")
     return 0
 
 

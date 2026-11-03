@@ -63,6 +63,24 @@ def test_every_application_that_went_is_a_record_with_its_drafts_id(search):
     assert KESTREL not in apps
 
 
+def test_an_invitation_with_no_day_yet_is_booked_with_the_day_still_to_choose(search):
+    """An invitation that asks the person to choose a slot was refused with "Which day is
+    it? Give it as 2026-10-28", a day already past, while the page said "Saved"
+    (2026-11-03). It is booked as a stage with no day, which the day joins later."""
+    a = _app(search, LARKSPUR)
+    aid = search.act("outcome.interview", LARKSPUR, rev=a["rev"],
+                     value={"stage": "Initial round", "on": ""})
+    got = search.apply()
+    assert got["ok"] == [aid], search.receipt(aid)
+    assert "the day still to choose" in search.receipt(aid)["note"]
+    assert "initial round booked, the day still to choose" in \
+        search.tracker_row("Larkspur Retail")["notes"].lower()
+    folder = os.path.join(search.state, "documents", "applications")
+    md = next(os.path.join(folder, d, "outcome.md") for d in os.listdir(folder)
+              if d.startswith("larkspur_retail_senior"))
+    assert "- [ ] Initial round\n" in open(md, encoding="utf-8").read()
+
+
 def test_an_interview_booked_on_the_page_is_the_stage_line_outcome_writes(search):
     a = _app(search, LARKSPUR)
     aid = search.act("outcome.interview", LARKSPUR, rev=a["rev"],

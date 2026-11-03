@@ -734,11 +734,20 @@ def test_work_claude_has_picked_up_says_so_with_a_clock_like_a_chat(run, pages):
 
 
 def test_stop_says_what_is_kept(run, pages):
+    """Work never asks the person to ask again (the maintainer, 2026-11-03: "get rid of the
+    ask claude again button ... fix the app so that the button is redundant"): what has not
+    reached Claude says so and goes with the next tap anywhere, and what went unanswered
+    goes again the same way."""
     r = run("stop", html=pages["sample"])
     _clean(r)
-    assert r["late"]["status"] == "Not picked up yet"
-    assert "Ask Claude again" in r["rewake"]
-    assert "Claude has been told" in r["told"], "asked again, the doorbell rang and the card says so"
+    assert r["unsent"]["status"] == "Not sent yet", r["unsent"]
+    assert r["unsent"]["sentence"].startswith("Not sent to Claude yet"), r["unsent"]
+    assert "Send to Claude" in r["unsent"]["buttons"]
+    assert r["late"]["status"] == "No answer yet" and "No answer from Claude in 11 minutes" in r["late"]["sentence"], r["late"]
+    assert not any("again" in b.lower() for b in r["unsent"]["buttons"] + r["late"]["buttons"]), "no Ask Claude again"
+    assert len(r["rings"]) == 1 and "prep~int-larkspur-supply" in r["rings"][0] and "files~resume-current" in r["rings"][0], r["rings"]
+    assert r["sent"]["status"] in ("Waking Claude", "Sent") and r["sent"]["sentence"].startswith("Sent to Claude"), r["sent"]
+    assert set(r["bell"]["rung"]) >= {"prep~int-larkspur-supply", "files~resume-current"}
     assert r["running"]["stop_asked"] is True and r["running"]["status"] == "running"
     assert r["runningCard"]["status"] == "Stopping after this step"
     assert "Stop" not in r["runningCard"]["buttons"]

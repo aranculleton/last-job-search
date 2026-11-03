@@ -91,6 +91,11 @@ UPDATE_QUIET_S = 60 * 60
 # maintainer, 2026-10-30). Until the new one has taken it, the old one still answers: a fresh
 # chat that never starts changes nothing.
 RENEW_S = 20 * 3600
+# A helper that re-reads more than this at every step answers slowly: one answering the page
+# since three days before re-read some 535,000 tokens a step, and a one-line LinkedIn reply
+# took minutes that a fresh chat does at once (the maintainer, 2026-11-03: "the entire app is
+# so unnecessarily slow"). Past it, the helper hands over at its next quiet moment.
+RENEW_TOKENS = 150_000
 # How every page step after an update is done: at once, unasked, one command at a time (a
 # chained command goes to the desktop app's safety check whole), with nothing left behind.
 NO_ASK = ("Do it now, before anything else, and never ask the person first: bringing their "
@@ -348,11 +353,7 @@ def decide(db: dict, chat: str, out_dir: str, now: dt.datetime | None = None,
     if mine:
         renew = renewal(rec, db, chat, now)
         if renew:
-            lines.append("listen: renew: this chat has answered the page for a day, and nothing "
-                         "is waiting. Start its fresh helper now, unasked and saying nothing to "
-                         "the person: create_session " + json.dumps(renew, ensure_ascii=False) +
-                         ". The new chat takes the page as it starts; until then this one still "
-                         "answers, and its next check-in finds the new one and stops its watch.")
+            lines.append(renew_line(renew))
         fresh = {"answered_at": at, "watching": True, **({"helper": True} if helper else {})}
         if version is None:
             # Read only under its 4.2 name (page_db.load): the new record is made, whole.
@@ -399,20 +400,82 @@ def decide(db: dict, chat: str, out_dir: str, now: dt.datetime | None = None,
     return {"role": "listener", "lines": lines, "batches": w.save("listen"), "record": rec}
 
 
+def renew_line(renew: dict) -> str:
+    """What the listener does when its day is up: start its fresh helper, unasked."""
+    return ("listen: renew: this chat has answered the page for a day, and nothing "
+            "is waiting. Start its fresh helper now, unasked and saying nothing to "
+            "the person: create_session " + json.dumps(renew, ensure_ascii=False) +
+            ". The new chat takes the page as it starts; until then this one still "
+            "answers, and its next check-in finds the new one and stops its watch.")
+
+
+def view_check_in(db: dict, out_dir: str, chat: str, now: dt.datetime) -> tuple[list, list]:
+    """(batch paths, lines): a page update by the chat that answers the page is a check-in
+    too. The morning brief runs in that chat and brings the page up to date, but only a
+    check-in wrote `answered_at`, so after a quiet day the page decided nobody was
+    listening, and the daily renewal, printed only at a check-in, never came (2026-11-03).
+    Its own batch, so a check-in refused never holds up the page's data."""
+    chat = this_chat(chat)
+    rec, version = record(db)
+    if not chat or rec.get("chat") != chat or version is None:
+        return [], []
+    import page_db
+    lines = []
+    renew = renewal(rec, db, chat, now)
+    if renew:
+        lines.append(renew_line(renew))
+    w = page_db.Writes(out_dir)
+    w.add("update", DOC_COLLECTION, DOC_ID, {"answered_at": _stamp(now)}, if_version=version)
+    return w.save("listen"), lines
+
+
+def context_tokens() -> int:
+    """How much this chat re-reads at every step: its last turn's input, from the newest
+    session file Claude Code keeps under ~/.claude/projects (CLAUDE_CONFIG_DIR where set).
+    0 when there is none or it cannot be read: then only the day decides."""
+    root = os.path.join(os.environ.get("CLAUDE_CONFIG_DIR") or os.path.expanduser("~/.claude"),
+                        "projects")
+    try:
+        files = [os.path.join(root, d, f) for d in os.listdir(root)
+                 if os.path.isdir(os.path.join(root, d))
+                 for f in os.listdir(os.path.join(root, d)) if f.endswith(".jsonl")]
+        newest = max(files, key=os.path.getmtime) if files else ""
+        if not newest:
+            return 0
+        with open(newest, "rb") as fh:
+            fh.seek(max(0, os.path.getsize(newest) - 262144))
+            tail = fh.read().decode("utf-8", "replace")
+    except OSError:
+        return 0
+    for line in reversed(tail.splitlines()):
+        if '"usage"' not in line:
+            continue
+        try:
+            u = json.loads(line)["message"]["usage"]
+            return sum(int(u.get(k) or 0) for k in ("input_tokens", "cache_read_input_tokens",
+                                                   "cache_creation_input_tokens"))
+        except (ValueError, KeyError, TypeError):
+            continue
+    return 0
+
+
 def renewal(rec: dict, db: dict, chat: str, now: dt.datetime) -> dict | None:
     """The create_session call for a fresh helper, or None. Only a cloud chat answering the
     page for RENEW_S, with nothing queued or running, and not renewed in the last RENEW_S."""
     if not chat or rec.get("chat") != chat or chat_kind() != "cloud":
         return None
     since = _time(rec.get("since"))
-    if since is None or (now - since).total_seconds() < RENEW_S:
+    if since is None:
+        return None
+    big = context_tokens() >= RENEW_TOKENS
+    if (now - since).total_seconds() < RENEW_S and not big:
         return None
     for doc in (db.get("work") or {}).values():
         if str(doc["data"].get("status") or "") in ("queued", "claimed", "running"):
             return None
     got = seen()
     last = _time(got.get("renewed_at"))
-    if last is not None and (now - last).total_seconds() < RENEW_S:
+    if last is not None and (now - last).total_seconds() < (3600 if big else RENEW_S):
         return None
     try:
         import app_setup

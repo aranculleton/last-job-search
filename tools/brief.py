@@ -1437,8 +1437,12 @@ def take_news(text: str, today: dt.date) -> dict:
     path = brief_path(today.isoformat())
     body = _read(path)
     carried, day = ([], "") if kept else carry_news(today)
+    # Fewer than NEWS_MIN new: the newest earlier items fill it to NEWS_MIN, after a line
+    # that says so. One point on its own read as an empty panel (the maintainer, 2026-11-03).
+    more = carry_news(today, NEWS_MIN - len(kept), skip=kept)[0] if 0 < len(kept) < NEWS_MIN else []
     if kept:
-        news = [NEWS_SOURCE, ""] + ["- " + s for s in kept]
+        news = [NEWS_SOURCE, ""] + ["- " + s for s in kept] + (
+            ["", NEWS_ALSO, ""] + ["- " + s for s in more] if more else [])
     elif carried:
         news = ["Carried from the brief of %s. %s" % (day, NEWS_SOURCE), ""] + [
             "- " + s for s in carried]
@@ -1466,24 +1470,48 @@ def news_items(text: str) -> list[str]:
             if ln.startswith("- ") and ln[2:].strip()]
 
 
-def carry_news(today: dt.date) -> tuple[list[str], str]:
-    """The newest earlier brief's news, within CARRY_DAYS, and its day: what a brief whose
-    reader brought nothing new shows instead of an empty panel."""
-    for p in reversed(earlier_briefs(today)):
+NEWS_ALSO = "Also from earlier briefs."
+
+
+def gathered_news(text: str) -> list[str]:
+    """The news a brief's own search found, never what it carried from an earlier one, so a
+    carried item is never renewed by being carried again (news from 1 October read as from
+    10 November on the 25th, the release review)."""
+    sec = _section(text, "News")
+    if _CARRIED.search(sec):
+        return []
+    out = []
+    for ln in sec.splitlines():
+        if ln.strip() == NEWS_ALSO:
+            break
+        if ln.startswith("- ") and ln[2:].strip():
+            out.append(ln[2:].strip())
+    return out
+
+
+def carry_news(today: dt.date, need: int = NEWS_MAX, skip=(), paths=None) -> tuple[list[str], str]:
+    """Up to `need` news items the briefs of the last CARRY_DAYS found, newest first, none
+    already in `skip` by its words or its link, and the day the newest of them was found:
+    what a brief whose reader brought nothing new shows instead of an empty panel. It reached
+    back to one brief only, so one old point stood alone for days (2026-11-03)."""
+    items, day = [], ""
+    texts = set(skip)
+    links = {u.rstrip(".,;") for s in skip for u in _LINK.findall(s)}
+    for p in reversed(earlier_briefs(today) if paths is None else list(paths)):
         d = _d(os.path.basename(p)[:10])
         if not d or (today - d).days > CARRY_DAYS:
             break
-        text = _read(p)
-        got = news_items(text)
-        if got:
-            # Already carried: the day it was gathered, so a carry never renews it (news from
-            # 1 October read as from 10 November on the 25th, the release review).
-            was = _CARRIED.search(_section(text, "News"))
-            d = _d(was.group(1)) if was else d
-            if (today - d).days > CARRY_DAYS:
-                return [], ""
-            return got[:NEWS_MAX], d.isoformat()
-    return [], ""
+        for s in gathered_news(_read(p)):
+            got = {u.rstrip(".,;") for u in _LINK.findall(s)}
+            if s in texts or got & links:
+                continue
+            items.append(s)
+            texts.add(s)
+            links |= got
+            day = day or d.isoformat()
+            if len(items) >= need:
+                return items, day
+    return items, day
 
 
 _CARRIED = re.compile(r"Carried from the brief of (\d{4}-\d{2}-\d{2})")

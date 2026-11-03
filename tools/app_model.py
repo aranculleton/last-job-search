@@ -2024,7 +2024,7 @@ def _due(ctx: Ctx, targets: dict) -> list:
         # with its words, and an interview by /outcome: those rows offer their work instead.
         doable = (i["half"] == "contact" and raw == "action_due") or (
             i["half"] == "application" and raw != "interview")
-        context = ""
+        context, said = "", ""
         if i["half"] == "contact":
             # One line on who they are, so a follow-up says which person it is (the maintainer,
             # 2026-10-26): their role, how they were found, when you first wrote.
@@ -2042,7 +2042,18 @@ def _due(ctx: Ctx, targets: dict) -> list:
                 bits.append("first wrote " + first.strftime("%-d %b") if os.name != "nt"
                             else "first wrote " + first.strftime("%d %b").lstrip("0"))
             context = scrub(" \u00b7 ".join(b for b in bits if b), ctx.names)
-        item = {"id": did, "kind": kind, "title": title, "context": context, "due": i["due"],
+            # What they last said, in a line, so Today says what the reply is to rather than
+            # only when it was due (the maintainer, 2026-11-03: "not informative at all").
+            from network import state as net_state
+            theirs = [r for r in ctx.by_contact.get(i.get("contact_id") or "") or []
+                      if net_state.said_something(r)]
+            if theirs:
+                words = " ".join(str(theirs[-1].get("summary") or theirs[-1].get("full_text")
+                                     or "").split())
+                said = scrub(words if len(words) <= 140 else words[:139].rsplit(" ", 1)[0]
+                             + "\u2026", ctx.names)
+        item = {"id": did, "kind": kind, "title": title, "context": context, "said": said or None,
+                "due": i["due"],
                 "company": (str(book.get(i.get("contact_id") or "", {}).get("company") or "")
                             if i["half"] == "contact" else i["who"].partition(" - ")[0]),
                 "overdue_days": max(int(i.get("late") or 0), 0), "action": action,
@@ -3160,22 +3171,16 @@ def _news_fallback(ctx: Ctx, sections: list[dict], earlier: list[str]) -> str:
         was = re.search(r"Carried from the brief of (\d{4}-\d{2}-\d{2})", " ".join(s["text"] for s in news))
         return was.group(1) if was else ""
     import brief
-    for p in reversed(earlier):
-        day = os.path.basename(p)[:10]
-        try:
-            age = (ctx.today - dt.date.fromisoformat(day)).days
-        except ValueError:
-            continue
-        if age > brief.CARRY_DAYS:
-            break
-        got = [s for s in brief_sections(_read(p)) if s["kind"] == "news" and s["items"]]
-        if got:
-            if news:
-                news[0]["items"], news[0]["text"] = got[0]["items"], got[0]["text"]
-            else:
-                sections.append(got[0])
-            return day
-    return ""
+    # From as many earlier briefs as it takes to fill the panel, never one point alone.
+    lines, day = brief.carry_news(ctx.today, brief.NEWS_MAX, paths=earlier)
+    items = [dict({"text": brief_line(x)}, **news_parts(x)) for x in lines if brief_line(x)]
+    if not items:
+        return ""
+    if news:
+        news[0]["items"], news[0]["text"] = items, ""
+    else:
+        sections.append({"title": "News", "kind": "news", "text": "", "items": items})
+    return day
 
 
 def _watch_again() -> list[dict]:
@@ -3227,7 +3232,9 @@ def brief_line(text: str) -> str:
 
 
 # A news line as the news reader writes it: what happened (publisher, date, link). How to use it.
-_NEWS_LINE = re.compile(r"^(?P<what>.+?)\s*\((?P<src>[^()]{2,80}?),\s*(?P<date>\d{4}-\d{2}-\d{2}),\s*"
+# The day is left out of lines written before 4.8 ("(Bank of Canada, https://...)"), which
+# then showed as one paragraph (the maintainer, 2026-11-03: "wall of text-y").
+_NEWS_LINE = re.compile(r"^(?P<what>.+?)\s*\((?P<src>[^()]{2,80}?),\s*(?:(?P<date>\d{4}-\d{2}-\d{2}),\s*)?"
                         r"(?P<url>https?://[^\s()]+)\)\.?\s*(?P<use>.*)$")
 
 

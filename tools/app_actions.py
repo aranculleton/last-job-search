@@ -893,14 +893,17 @@ def _ready_reopen(r: Run) -> dict:
 
 
 def _stage_day(r: Run) -> str:
-    """The day an interview stage is booked for: any day, since it is usually to come."""
+    """The day an interview stage is booked for: any day, since it is usually to come, or ""
+    for an invitation whose day is still to be chosen. That was refused with "Which day is
+    it? Give it as 2026-10-28", a day already past, while the page said "Saved" (2026-11-03);
+    a stage with no day is booked as one, and its day is given when it is known."""
     given = r.words("on") or r.words("date")
     if not given:
-        raise Refused("Which day is it? Give it as 2026-10-28.")
+        return ""
     try:
         return dt.date.fromisoformat(given[:10]).isoformat()
     except ValueError:
-        raise Refused(f"{given} is not a day: give it as 2026-10-28.") from None
+        raise Refused(f"{given} is not a day: give it as {r.day.isoformat()}.") from None
 
 
 def _outcome(r: Run, status: str) -> dict:
@@ -924,14 +927,17 @@ def _outcome(r: Run, status: str) -> dict:
             day = _stage_day(r)
             stage = " ".join(str(r.value.get("stage") or r.target.get("stage") or
                                  "Interview").split())[:60]
-            clock = what_works.clock(r.words("time"))
-            when = f" at {clock}" if clock else ""
+            clock = what_works.clock(r.words("time")) if day else ""
+            when = (f" for {day}" + (f" at {clock}" if clock else "")) if day else \
+                ", the day still to choose"
             changed = confirm.record_outcome(row, "interview", r.day,
-                                             note=f"{stage} booked for {day}{when}",
+                                             note=f"{stage} booked{when}",
                                              source="page", now=r.local)
             interview_pack.record_stage(folder, company, role, stage, day, r.words("with"),
                                         today=r.day.isoformat(), time=clock)
-            said = f"Booked: {stage} with {company} on {day}{when}."
+            said = (f"Booked: {stage} with {company} on {day}" + (f" at {clock}." if clock else ".")
+                    if day else f"Booked: {stage} with {company}, the day still to choose. "
+                    "Add the day in Coming up once you have it.")
         else:
             day = r.on()
             changed = confirm.record_outcome(row, status, r.day, note=r.words("why"),
@@ -951,7 +957,7 @@ def _outcome(r: Run, status: str) -> dict:
         return {"note": "Already recorded.", "undo": None}
     if status == "interview" and not changed:
         # The row was at interview already: a later stage, dated on the row as the first was.
-        confirm.add_note(row, f"{r.day.isoformat()}: {stage} booked for {day}{when} (page)")
+        confirm.add_note(row, f"{r.day.isoformat()}: {stage} booked{when} (page)")
     path = person.state("job_search_tracker.csv")
     csv_store.write_rows(path, rows, list(dict.fromkeys(
         csv_store.header(path) + list(throttle.CONFIRM_COLUMNS))))
