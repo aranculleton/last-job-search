@@ -76,9 +76,11 @@ make sense to somebody whose repo just received it.
 - **Match scores no longer bunch up at 100.** A posting that only names your skills now tops
   out below 100; a contact there or an earlier interview is what takes a role to 100. Scores
   of 90 or under are unchanged.
-- **Someone whose employer was never recorded is shown by name alone**, never "Andrijana at"
-  with nothing after it, with no "Find more people at" button, and a row about them says
-  "Employer not on record".
+- **You can see who each person is.** People added from your LinkedIn export came in with no
+  employer, so a follow-up list showed only first names and "first wrote 10 Sep". Your next
+  export fills in each one's employer and title where their record has none. Until then,
+  someone with no employer on record is shown by name alone, never "Name at" with nothing
+  after it, and a row about them says "Employer not on record".
 - **Today says what the person last said** ("They said: ..."), in the page's normal size,
   rather than only when it was due. Their words are kept with their address, readable by you
   alone, never in the page's shared data.

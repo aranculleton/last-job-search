@@ -1183,7 +1183,7 @@ def plan_history(contacts, threads, src=None, mine=None) -> dict:
         mine = (next((st.profile_handle(r.get("SENDER PROFILE URL")) for r in msgs["rows"]
                       if name_key(r.get("FROM")) == mine[1]
                       and st.profile_handle(r.get("SENDER PROFILE URL"))), ""), mine[1])
-    out = {"add": [], "fill": [], "redate": [], "mark": [],
+    out = {"add": [], "fill": [], "redate": [], "mark": [], "who": [],
            "joined": {"profile address": 0, "name": 0},
            "unmatched": [], "ambiguous": [], "groups": 0, "drafts": 0, "tables": tables,
            "problem": ""}
@@ -1416,6 +1416,14 @@ def plan_history(contacts, threads, src=None, mine=None) -> dict:
             c, _how = match_contact(contacts, name, r.get("URL"), index)
             if c is None:
                 continue
+            # Their employer and title as the export gives them, onto a record that has none:
+            # twenty-four people added from an export showed as a first name and "first wrote
+            # 10 Sep", and the person asked who they all were (2026-11-03). Never over a
+            # record's own.
+            co, ti = (r.get("Company") or "").strip(), (r.get("Position") or "").strip()
+            if (co and not str(c.get("company") or "").strip()) or \
+                    (ti and not str(c.get("title") or "").strip()):
+                out["who"].append((c, co, ti))
             cid = str(c.get("contact_id") or "").strip()
             rows = st._ordered(mine_for(cid))
             asked = [x for x in rows if st.is_request(x)
@@ -1456,6 +1464,12 @@ def apply_history(threads, plan, contacts=None) -> int:
     behind put every imported thread in front of the person as a contradiction."""
     for row, text in plan["fill"]:
         row["full_text"] = text
+    who = 0
+    for c, co, ti in plan.get("who") or ():
+        if co and not str(c.get("company") or "").strip():
+            c["company"], who = co, who + 1
+        if ti and not str(c.get("title") or "").strip():
+            c["title"], who = ti, who + 1
     for row, summary in plan.get("mark") or ():
         row["summary"] = summary
     redate = plan.get("redate") or []
@@ -1472,7 +1486,7 @@ def apply_history(threads, plan, contacts=None) -> int:
         settle(contacts, threads, {r["contact_id"] for r in plan["add"]}
                | {str(r.get("contact_id") or "") for r, _ in plan["fill"]}
                | {str(r.get("contact_id") or "") for r, _ in redate})
-    return len(plan["add"]) + len(plan["fill"]) + len(redate) + len(plan.get("mark") or ())
+    return len(plan["add"]) + len(plan["fill"]) + len(redate) + len(plan.get("mark") or ()) + who
 
 
 def settle(contacts, threads, ids) -> list:
