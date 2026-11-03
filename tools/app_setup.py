@@ -881,20 +881,33 @@ def _publish_lines(st: dict, n: int) -> list[str]:
     return lines
 
 
+# How start words the day's update check, and `app.py wake` the same check it ran itself.
+SYNC_DO = "the day's update check; do what it prints, then carry on"
+SYNC_PAGE = ". What it says about the person's page is done at once, and is never a question"
+
+
 NO_PUBLISH = ("If this chat cannot publish (no Artifact tool, or the publish is refused again "
               "after one more try), run "
               "python3 tools/app.py published none, ask setup's questions in this chat instead, "
               "as .claude/commands/setup.md says, and say nothing about a page.")
 
 
-def start(on: str = "", tools: str = "", page_url: str = "", runner=None) -> tuple[int, list[str]]:
+def start(on: str = "", tools: str = "", page_url: str = "", runner=None, work: str = "",
+          data_current: bool = False) -> tuple[int, list[str]]:
     """(exit code, the lines a chat follows): what this chat does next, whatever the copy's
-    state. Exit 0 with steps to follow; 1 when nothing may be written here."""
+    state. Exit 0 with steps to follow; 1 when nothing may be written here.
+
+    `work`: a chat started for one big job (`app.py next`). It takes no update check: the
+    chat that answers the page took the day's already, and a job must not take an update
+    part way through. It never writes the page's view either. `data_current`: the page's
+    `meta/current` already carries the model this copy makes now, so its data is not
+    written again."""
     st = state(runner)
     kind = st["repo"]["kind"]
     sync = (["python3 tools/sync_app.py --pull",
              f"python3 tools/sync_app.py --on \"{on or '<this chat model>'}\" --tools "
-             f"\"{tools or '<the browser tools this chat has>'}\""] if st["stale"] else [])
+             f"\"{tools or '<the browser tools this chat has>'}\""]
+            if st["stale"] and not work else [])
     if page_url and not st["page"].get("url") and kind == "private":
         try:
             record_page(page_url)
@@ -944,10 +957,8 @@ def start(on: str = "", tools: str = "", page_url: str = "", runner=None) -> tup
                      "is private.")
         n += 1
     for i, cmd in enumerate(sync):
-        page = (". What it says about the person's page is done at once, and is never a "
-                "question" if i == len(sync) - 1 and st["page"].get("url") else "")
-        steps.append(f"{n}. {cmd}   (the day's update check; do what it prints, then carry "
-                     f"on{page})")
+        page = (SYNC_PAGE if i == len(sync) - 1 and st["page"].get("url") else "")
+        steps.append(f"{n}. {cmd}   ({SYNC_DO}{page})")
         n += 1
     if setup in ("landed", "branch"):
         steps.append(f"{n}. The search is set up on another chat's work: bring it in first "
@@ -1008,7 +1019,7 @@ def start(on: str = "", tools: str = "", page_url: str = "", runner=None) -> tup
                  "listed improvements Claude applies itself, start the background /upgrade "
                  "(.claude/commands/upgrade.md); its progress goes on the page.")
     n += 1
-    if st["page"].get("url"):
+    if st["page"].get("url") and not work and not (data_current and not sync):
         steps.append(f"{n}. " + ("Unless the update check above just did it, b" if sync else "B") +
                      "ring the page's data up to date: python3 tools/app.py view <your "
                      "scratchpad>/view --dump <a dump of the page's view and meta> and send the "

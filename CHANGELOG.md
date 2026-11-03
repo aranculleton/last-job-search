@@ -20,6 +20,23 @@ make sense to somebody whose repo just received it.
 
 ## [Unreleased]
 
+### Changed
+
+- **Draft this drafts, in one tap.** No sheet asks first whether you have applied: that is
+  "I have applied" under the card's More (one tap, today, with "Another day?" in its message)
+  or the bin's "Already applied".
+- **A job you put in the bin leaves the list at once**, with Undo in its message and then under
+  "set aside". Why you set it aside is asked once, in the bin, never again on the card.
+- **Ten applications draft at once, and a longer queue keeps moving by itself.** Each draft
+  runs in a chat of its own, so ten run side by side where three did; when one finishes, its
+  chat starts the next one waiting, so twenty drafts finish one after another with nobody
+  having to start them.
+- **A job's own chat never stops to ask your permission** to write to your page while you are
+  away, and nor does a fresh helper.
+- **Your page answers faster.** When you tap something, Claude does its bookkeeping in one
+  command, and tapping Draft starts the draft straight away instead of at Claude's next look.
+  A long job like a search no longer stops part way through to take an update.
+
 ### Fixed
 
 - **What you ask for on your page reaches Claude, and the page says honestly where it is.**

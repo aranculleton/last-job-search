@@ -876,7 +876,7 @@
   // A booked interview rings too: its prep and its tracker row wait on a chat, and the next
   // brief was a day away (2026-11-03).
   const RINGS = (action) => /^setup\./.test(txt(action)) || txt(action) === "outcome.interview";
-  async function act(list, label) {
+  async function act(list, label, more) {
     noteFocus();
     const recs = [];
     const ringing = list.some((o) => RINGS(o.action));
@@ -911,7 +911,7 @@
       toast({text: "Not saved: " + label + ".", ids: [], bad: true, retry: () => { for (const r of failed) S.local.delete(r.id); act(failed.map((r) => ({item: r.doc.item, action: r.doc.action, value: r.doc.value, rev: r.doc.rev_seen, undoes: r.doc.undoes})), label); }});
       shout("Not saved: " + label + ". Try again.");
     } else {
-      toast({text: label, ids: recs.map((r) => r.id)});
+      toast(Object.assign({text: label, ids: recs.map((r) => r.id)}, more || {}));
       announce(label + ". Saved.");
       if (rung) {
         rung.then((how) => {
@@ -1552,60 +1552,30 @@
 
   const appliedQ = (q) => /already applied/i.test(txt(q));
 
+  // Applied today, in one tap; another day from the toast, which takes it back and records
+  // that day (the draft sheet's "Yes, I have applied" asked this of everyone, 2026-11-03).
+  function appliedToday(r) {
+    const label = "Marked as applied today: " + txt(r.company);
+    return act([{item: r.id, action: "job.applied", value: {on: todayIso()}, rev: r.rev}], label, {seeLabel: "Another day?", see: () => {
+      const last = effective(r.id, ["job.applied"]);
+      sheet({title: "When did you apply?", intro: txt(r.title) + " at " + txt(r.company) + ".", submit: "Save",
+        fields: [{id: "on", type: "date", label: "The day", required: true, value: todayIso()}],
+        onSubmit: (v) => { if (last) undo([last.id]); act([{item: r.id, action: "job.applied", value: {on: v.on || todayIso()}, rev: r.rev}], "Marked as applied on " + fmtDay(v.on || todayIso()) + ": " + txt(r.company)); }});
+    }});
+  }
+  // One tap drafts (the maintainer, 2026-11-03: "when i press draft this, it doesnt draft, it
+  // brings up this then i have to press draft again"). Already applied is the bin's own
+  // choice and "I have applied" under More; the posting's own questions never held a draft up.
   function askDraft(rows) {
     rows = rows.filter(Boolean);
     if (!rows.length) return;
-    const one = rows.length === 1;
-    const fields = [];
-    if (one) {
-      const r = rows[0];
-      const dateField = h("div", {class: "field reveal", hidden: true});
-      const dateIn = h("input", {type: "date", id: "applied-on", value: todayIso()});
-      put(dateField, h("label", {for: "applied-on"}, "When did you apply?"), dateIn);
-      let dlg = null;
-      // "No, draft it" is already chosen: the person pressed Draft this, so one more tap drafts
-      // (a question nothing had answered held a tired person up, 2026-11-02).
-      fields.push({id: "applied", type: "radio", label: "Have you already applied for this role?", required: true, value: "no",
-        options: [["no", "No, draft it"], ["yes", "Yes, I have applied"]],
-        onChange: (v) => { dateField.hidden = v !== "yes"; if (dlg && dlg._submit) dlg._submit.textContent = v === "yes" ? "Mark as applied" : "Draft it"; }, extra: dateField, error: "Say whether you have applied."});
-      // The posting's own questions help the draft and never hold it up: one left unanswered
-      // goes ahead without it. Marking it applied asks none of them.
-      const qs = arr(r.questions).filter((q) => !appliedQ(q));
-      qs.forEach((q, i) => fields.push({id: "q" + i, type: "radio", label: txt(q), optional: true, options: [["yes", "Yes"], ["no", "No"]]}));
-      const ref = referralAt(r.company, r);
-      const lead = ref ? h("p", {class: "warm"}, txt(ref.first_name) + " has put your name forward here. Ask " + txt(ref.first_name) + " before you send anything yourself.")
-        : r.warm ? h("p", {class: "warm"}, h("span", {class: "warm-k"}, "Before you apply: "), txt(r.warm)) : null;
-      dlg = sheet({title: "Draft this: " + txt(r.company) + ", " + txt(r.title), lead,
-        intro: "Claude writes a " + noun() + " and a cover letter, checks every fact and puts them in Jobs, under Drafts.",
-        cost: costLine("draft"), fields, submit: "Draft it",
-        onSubmit: (v) => {
-          if (v.applied === "yes") {
-            act([{item: r.id, action: "job.applied", value: {on: dateIn.value || todayIso()}, rev: r.rev}], "Marked as applied: " + txt(r.company));
-            return;
-          }
-          requestWork([draftSpec(r, draftAnswers(r, (i) => v["q" + i]))]);
-        }});
-      return;
-    }
-    fields.push({id: "applied", type: "checks", label: "Have you already applied for any of these?", hint: "Tick the ones you have. They are marked as applied and not drafted.",
-      options: rows.map((r) => [r.id, txt(r.company) + ", " + txt(r.title)])});
-    rows.forEach((r, ri) => arr(r.questions).filter((q) => !appliedQ(q)).forEach((q, i) =>
-      fields.push({id: "r" + ri + "q" + i, type: "radio", label: txt(r.company) + ": " + txt(q), optional: true, options: [["yes", "Yes"], ["no", "No"]]})));
-    sheet({title: "Draft " + rows.length + " applications",
-      intro: "Each gets a " + noun() + " and a cover letter, checked, in Jobs under Drafts.", cost: costLine("draft").replace(/^About \d+ minutes?\. /, "About " + plural(rows.length * 9, "minute", "minutes") + " in all. "),
-      fields, submit: "Draft " + rows.length,
-      onSubmit: (v) => {
-        const applied = new Set(arr(v.applied));
-        const done = rows.filter((r) => applied.has(r.id));
-        if (done.length) act(done.map((r) => ({item: r.id, action: "job.applied", value: {on: todayIso()}, rev: r.rev})), "Marked " + plural(done.length, "role", "roles") + " as applied");
-        const specs = rows.filter((r) => !applied.has(r.id)).map((r) => {
-          const ri = rows.indexOf(r);
-          return draftSpec(r, draftAnswers(r, (i) => v["r" + ri + "q" + i]));
-        });
-        if (specs.length) requestWork(specs);
-        S.sel.jobs.clear();
-        scheduleRender();
-      }});
+    requestWork(rows.map((r) => draftSpec(r, [])));
+    const ref = rows.length === 1 ? referralAt(rows[0].company, rows[0]) : null;
+    const mins = Math.max(1, Math.round((Number((costLine("draft").match(/About (\d+)/) || [])[1]) || 9) * rows.length));
+    toast({text: (rows.length === 1 ? "Drafting " + txt(rows[0].company) : "Drafting " + rows.length + " applications") + ": in Jobs, under Drafts, in about " + plural(mins, "minute", "minutes") + ". Nothing is sent." +
+      (ref ? " " + txt(ref.first_name) + " put your name forward there: ask them before you send it." : ""), ids: [], until: 0});
+    if (S.sel && S.sel.jobs) S.sel.jobs.clear();
+    scheduleRender();
   }
   // What the person said to the posting's own questions: only the ones answered go with it.
   function draftAnswers(r, answerOf) {
@@ -3830,8 +3800,11 @@
     if (!JOB_TABS.some(([k]) => k === tab)) tab = "new";
     if (tab === "applied") return renderApplied(where);
     const selecting = !!S.selecting;
-    const inThis = rows.filter((r) => (inTab(jobStatus(r), tab) && !(tab !== "new" && jobPending(r))) || (tab === "new" && jobPending(r)));
-    const aside = tab === "new" ? rows.filter((r) => jobStatus(r) === "dismissed" && !jobPending(r)) : [];
+    // A role put in the bin leaves the list at once, its Undo in the toast and then under
+    // "set aside" (the maintainer, 2026-11-03: "its not OBVIOUS i deleted it"); one marked
+    // applied stays, marked, until it is in Applied.
+    const aside = tab === "new" ? rows.filter((r) => jobStatus(r) === "dismissed") : [];
+    const inThis = rows.filter((r) => ((inTab(jobStatus(r), tab) && !(tab !== "new" && jobPending(r))) || (tab === "new" && jobPending(r))) && aside.indexOf(r) < 0);
     const searching = [...allWork()].find(([id, w]) => w.kind === "search" && ACTIVE.has(w.status));
     const again = h("button", {type: "button", class: "btn link", "data-k": "search-again", onclick: () => askSearch()}, "Search again");
     const addJob = h("button", {type: "button", class: "btn link", "data-k": "add-job", onclick: () => askAddJob()}, "Add a job");
@@ -3944,7 +3917,7 @@
     else if (iv) primary = btn(obj(iv.prep).updated ? "Read your prep" : "Prepare me", () => (obj(iv.prep).updated ? openDetail("interview", iv.id) : askPrep(iv)), {kind: "primary", small: true, key: "jobiv:" + r.id, aria: (obj(iv.prep).updated ? "Read your prep for " : "Prepare me for ") + txt(r.company)});
     else if (nudge) primary = btn("Draft the follow-up", () => askDue(nudge), {kind: "primary", small: true, key: "jobnudge:" + r.id, aria: "Draft the follow-up: " + about});
     if (primary && primary.tagName === "A") primary.classList.add("btn", "primary", "small");
-    const markApplied = () => confirmApplied([r], () => act([{item: r.id, action: "job.applied", value: {on: todayIso()}, rev: r.rev}], "Marked as applied: " + txt(r.company)));
+    const markApplied = () => confirmApplied([r], () => appliedToday(r));
     const extra = pending ? [] : [
       upLine,
       live ? nearLine(r) : null,
@@ -3965,9 +3938,8 @@
     const closedAlert = closed && live && !alertsOf(r).some((a) => a.kind === "closed") ? alertLine({id: "page-closed-" + r.id, kind: "closed", text: "This posting has closed.", why: "Its own site no longer lists it."}, {}) : null;
     const dismissing = pending && st === "dismissed" ? effective(r.id, ["job.dismiss"]) : null;
     const given = dismissing && txt(obj(dismissing.doc.value).why || "");
-    const why = dismissing && !given ? h("div", {class: "why-aside", role: "group", "aria-label": "Why set it aside? (if you like)"}, h("span", {class: "muted small"}, "Why? "),
-      SET_ASIDE_WHY.map(([v, l]) => btn(l, () => act([{item: r.id, action: "job.dismiss", value: {why: v}, rev: r.rev}], ASIDE_TEACHES[v] ? asideWords(v, txt(r.company)) : "Set aside: " + txt(r.company) + " (" + l.toLowerCase() + ")"),
-        {kind: "filter", small: true, pressed: txt(obj(dismissing.doc.value).why || dismissing.doc.value) === v, key: "why:" + r.id + ":" + v}))) : null;
+    // Why is asked once, in the bin's own sheet, never again on the card.
+    const why = dismissing && given ? null : null;
     const scoreWords = "Fit " + txt(r.score) + " out of 100" + (band ? ", " + band : "");
     const place = txt(r.place);
     const style = REMOTE(r) && !place.toLowerCase().includes(REMOTE(r)) ? cap1(txt(r.remote)) : "";
@@ -7946,7 +7918,9 @@
   // "heavy" and HEAVY_CAP; the app skill, step 4), and an urgent one more. Light work never
   // waits behind them. So a job is "In line" only while three big ones are running.
   const HEAVY_KINDS = new Set(["search", "draft", "resume_for_contact", "prep", "network"]);
-  const HEAVY_CAP = 3;
+  // Ten at once where each runs in a cloud chat of its own (page_db.HEAVY_CAP_CHATS); three on
+  // a computer, where they share one machine.
+  const heavyCap = () => (txt(obj(S.listener).kind) === "computer" ? 3 : 10);
   function queuePlace(id, w) {
     const to = txt(w.to) || "cloud";
     const here = (x) => { const t = txt(x.to) || "cloud"; return t === to || t === "either" || to === "either"; };
@@ -7955,7 +7929,7 @@
     const same = activeWork().filter(([, x]) => here(x) && heavy(x));
     const running = same.filter(([, x]) => x.status === "running" || x.status === "claimed");
     const queued = same.filter(([, x]) => x.status === "queued").sort((a, b) => (Number(b[1].priority) || 0) - (Number(a[1].priority) || 0) || txt(a[1].asked_at).localeCompare(txt(b[1].asked_at)));
-    const free = Math.max(0, HEAVY_CAP + (Number(w.priority) >= 2 ? 1 : 0) - running.length);
+    const free = Math.max(0, heavyCap() + (Number(w.priority) >= 2 ? 1 : 0) - running.length);
     const pos = queued.findIndex(([qid]) => qid === id) + 1 - free;
     return {pos: Math.max(0, pos), running: running.length ? txt(running[0][1].title) : "", busy: pos > 0 ? running.length : 0};
   }

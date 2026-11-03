@@ -138,7 +138,7 @@ def test_every_action_the_page_sends_is_one_the_engine_applies_or_is_named_as_st
 def test_the_page_never_sends_an_action_without_its_items_rev():
     with open(APP_JS, encoding="utf-8") as fh:
         js = fh.read()
-    body = js[js.index("async function act(list, label)"):]
+    body = js[js.index("async function act(list, label"):]
     body = body[:body.index("\n  }\n")]
     assert "M().rev" not in body, "a missing rev is never filled in with the model's own"
 
@@ -149,10 +149,11 @@ def test_the_page_never_sends_an_action_without_its_items_rev():
 def test_marking_a_job_applied_records_the_day_given(run, tmp_path):
     where = Search(str(tmp_path / "s"))
     got, rec = _round_trip(run, tmp_path, where, "applied", [
-        {"hash": "jobs", "click": "Draft this: Brindle Hart Logistics, Demand Planning Analyst"},
-        {"click": "Yes, I have applied", "role": "radio"},
-        {"fill": {"When did you apply?": "2026-10-20"}},
-        {"click": "Mark as applied"},
+        {"hash": "jobs", "moreText": "Demand Planning Analyst"},
+        {"click": "I have applied: Brindle Hart Logistics, Demand Planning Analyst"},
+        {"click": "Another day?"},
+        {"fill": {"The day": "2026-10-20"}},
+        {"click": "Save", "exact": True},
     ])
     (a,) = [x for x in got["actions"] if x["action"] == "job.applied"]
     assert a["value"] == {"on": "2026-10-20"} and a["rev_seen"]

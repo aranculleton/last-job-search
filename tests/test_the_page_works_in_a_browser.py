@@ -483,7 +483,9 @@ def test_a_referral_in_flight_asks_before_a_draft_or_an_application(run, pages):
     assert "the referral can be lost" in r["confirm"]["intro"] and r["confirm"]["go"] == "Mark as applied anyway"
     assert r["afterNo"] == [], "Not now records nothing"
     assert r["draftConfirm"] == "Draft it anyway"
-    assert r["draftSheet"].startswith("Draft this: Copperleaf Pay") and "Tamsin" in r["lead"]
+    # Asked once, then drafted at once, the referral said in the toast.
+    assert r["draftSheet"] in ("", None) and any("Tamsin put your name forward" in t for t in r["toast"]), r["toast"]
+    assert any(p.startswith("work/draft~") for p in r["work"])
     assert r["warmLink"] == "#contacts/larkspur_retail_castellan", "the warm note links to the person it names"
 
 
@@ -518,14 +520,14 @@ def test_undo_stays_on_the_item_until_claude_has_done_it(run, pages):
     r = run("undo", html=pages["sample"])
     _clean(r)
     assert _base(r["before"]) == ["actions/act~r12-1~job.dismiss"]
-    assert r["marked"], "a role set aside stays in place, marked, until it is done"
-    assert r["focus"] == "Undo", "focus moves to the item's Undo"
+    assert not r["marked"], "a role put in the bin leaves the list at once (2026-11-03)"
+    assert r["focus"] == "Jobs", "the card gone, focus is on the list's heading, never lost"
     assert r["undoShown"] == 1
     assert r["after"] == [], "Undo deletes the action before any chat applied it"
     assert "Pricing Analyst" in r["back"]
     assert r["reason"]["value"] == {"why": "pay"}, "a reason, if they give one, goes with the same action"
     assert r["during"] >= 1
-    assert r["later"] == {"toast": 0, "item": 1}, "the toast goes; the item's Undo stays"
+    assert r["later"] == {"toast": 0, "item": 0}, "the toast goes; its Undo is then under set aside"
     assert _base(r["kept"]) == ["actions/act~r12-3~job.dismiss"]
 
 
@@ -565,25 +567,19 @@ def test_settings_save_once_the_person_settles_and_show_the_new_value(run, pages
 
 # ------------------------------------------------------------------ asking a chat for work
 
-def test_draft_this_asks_its_questions_first_says_what_it_costs_and_rings_with_no_words(run, pages):
+def test_draft_this_drafts_at_once_says_what_it_costs_and_rings_with_no_words(run, pages):
+    """One tap drafts (the maintainer, 2026-11-03: "when i press draft this, it doesnt draft,
+    it brings up this then i have to press draft again"): no sheet, a toast saying where it
+    will be and how long it takes."""
     r = run("draft", html=pages["sample"], shot="phone-draft" if SHOTS else "")
     _clean({"errors": r["pageErrors"]})
-    assert r["open"] and r["focusInDialog"]
-    assert r["legends"][0] == "Have you already applied for this role?"
-    assert any("fixed term" in x for x in r["legends"])
-    # The gauge's own words, then the time (4.3).
-    assert "About 9 minutes." in r["cost"] and "Nothing is sent." in r["cost"]
-    # "No, draft it" is chosen for the person, and the posting's own question is theirs to
-    # leave (2026-11-02): one more tap drafts. Answered, it goes with the draft.
-    assert r["chosen"] == ["No, draft it"] and r["errors"] == [], r
-    assert any("fixed term" in x and "(if you like)" in x for x in r["legends"])
-    assert r["submitWhenApplied"] == "Mark as applied" and r["submitWhenNot"] == "Draft it", "the button says what it will do"
-    assert r["closed"]
+    assert not r["sheet"], "no sheet between the tap and the draft"
+    assert any("Drafting Harbourline Bank" in t and "under Drafts" in t and "Nothing is sent." in t for t in r["toast"]), r["toast"]
     w = r["work"]
     assert w["kind"] == "draft" and w["status"] == "queued" and w["to"] == "cloud"
     assert w["title"] == "CV and letter: Harbourline Bank, Pricing Analyst"
     assert w["args"]["already_applied"] == "no" and w["args"]["job"] == "r12-1"
-    assert w["args"]["answers"] == [{"q": "Are you happy with a 12 month fixed term?", "a": "yes"}]
+    assert w["args"]["answers"] == [], "the posting's own questions never hold a draft up"
     assert [s["name"] for s in w["stages"]][0] == "Getting started" and all(s["est_s"] > 0 for s in w["stages"])
     rings = [c for c in r["calls"] if c["cap"] == "comments"]
     assert len(rings) == 1 and rings[0]["text"] == "[app] [work:draft~r12-1]"
@@ -596,7 +592,8 @@ def test_already_applied_is_recorded_and_nothing_is_drafted(run, pages):
     r = run("applied_first", html=pages["sample"])
     _clean(r)
     assert r["work"] == []
-    assert [(a["item"], a["action"], a["value"]) for a in r["actions"]] == [("r12-1", "job.applied", {"on": "2026-10-20"})]
+    got = [(a["item"], a["action"]) for a in r["actions"]]
+    assert got == [("r12-1", "job.applied")] and r["actions"][0]["value"]["on"], r["actions"]
 
 
 def test_two_windows_pressing_draft_at_once_make_one_job_and_one_ring(run, pages):
@@ -964,7 +961,7 @@ def test_keyboard_alone_reaches_and_works_everything_and_the_shortcuts_can_be_sw
     assert r["reachedDraft"]
     assert r["visibleFocus"] not in ("none", "")
     assert r["dialog"] and r["dialogGone"]
-    assert r["backOn"] == "Draft this: Harbourline Bank, Pricing Analyst"
+    assert r["backOn"] == "Not for me: Harbourline Bank, Pricing Analyst"
     assert r["help"] == "Keyboard shortcuts"
     assert r["afterGT"] == "To do" and r["afterGJ"] == "Jobs"
     assert r["cardFocus"] == "r12-1", "j moves to the first card: the best match by its number (4.3)"

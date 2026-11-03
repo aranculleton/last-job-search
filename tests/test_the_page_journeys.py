@@ -113,10 +113,12 @@ def test_a_job_goes_from_draft_this_to_applied_on_the_day_given(run, tmp_path, v
     nxt["applications"].insert(0, {"id": "app-harbourline-pricing", "company": "Harbourline Bank", "role": "Pricing Analyst", "applied_on": "2026-10-20",
                                    "status": "applied", "last": "2026-10-20", "rev": "apx", "stages": [{"name": "Applied", "on": "2026-10-20", "done": True}]})
     got = _go(run, tmp_path, [
-        {"hash": "jobs", "click": "Draft this: Harbourline Bank, Pricing Analyst"},
-        {"click": "Yes, I have applied", "role": "radio"},
-        {"fill": {"When did you apply?": "2026-10-20"}},
-        {"click": "Mark as applied", "receipts": True, "view": {"jobs": nxt["jobs"], "applications": nxt["applications"]}},
+        # Applied, said under More in one tap, and another day from its toast (2026-11-03).
+        {"hash": "jobs", "more": "r12-1"},
+        {"click": "I have applied: Harbourline Bank, Pricing Analyst"},
+        {"click": "Another day?"},
+        {"fill": {"The day": "2026-10-20"}},
+        {"click": "Save", "exact": True, "receipts": True, "view": {"jobs": nxt["jobs"], "applications": nxt["applications"]}},
         {"hash": "jobs", "open": "jobsw:applied", "read": '[data-item="app-harbourline-pricing"]'},
     ], vp)
     a = _one(got, "job.applied")

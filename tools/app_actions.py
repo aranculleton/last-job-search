@@ -3084,6 +3084,13 @@ def claim(dump_dir: str, chat: str, now: dt.datetime, out_dir: str) -> dict:
                              if isinstance(raw, dict) and "text" in raw and "answers" not in raw
                              else {"__delete__": True})
         w.add("update", "actions", aid, data, if_version=version)
+        # The dump as it will be once the claim lands, words kept: `apply` from this folder
+        # then knows the claim took them off the page, and pins nothing to the version the
+        # claim moved on. It wrote a second pinned removal of a pasted profile's words, to
+        # the version read before the claim, and the store refused the whole batch with the
+        # receipt in it (2026-11-03).
+        page_db._keep_dump(dump_dir, "actions", aid,
+                           dict(act, claimed_by=chat, claimed_until=until), int(version) + 1)
     return {"claimed": [a for a, _, v in todo if v is not None], "unpinned": unpinned,
             "batches": w.save("claim")}
 

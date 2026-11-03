@@ -44,7 +44,9 @@ def test_the_page_knows_the_same_big_jobs_and_the_same_cap_as_the_engine():
     kinds = re.search(r"const HEAVY_KINDS = new Set\(\[([^\]]*)\]\)", js).group(1)
     assert {k.strip().strip('"') for k in kinds.split(",")} == \
         {k for k, v in page_db.WORK_KINDS.items() if v["heavy"]}
-    assert f"const HEAVY_CAP = {page_db.HEAVY_CAP};" in js and page_db.HEAVY_CAP == 3
+    # Ten at once in the cloud, each a chat of its own; three sharing one computer (2026-11-03).
+    assert page_db.HEAVY_CAP == 3 and page_db.HEAVY_CAP_CHATS == 10
+    assert '=== "computer" ? 3 : 10' in js
 
 
 def test_next_sends_a_big_job_to_a_chat_of_its_own_and_keeps_light_work_here(search):
@@ -89,7 +91,7 @@ def test_a_job_is_in_line_only_once_three_big_ones_are_running():
     js = _read("templates/app/app.js")
     body = js[js.index("  function queuePlace(id, w) {"):]
     body = body[:body.index("\n  }\n") + 4]
-    assert "HEAVY_CAP" in body and "if (!heavy(w)) return {pos: 0" in body
+    assert "heavyCap()" in body and "if (!heavy(w)) return {pos: 0" in body
 
 
 def _doc(kind, status, company, asked, **kw):
@@ -164,3 +166,25 @@ def test_the_brief_takes_work_still_waiting_on_the_page():
     brief, which runs there, sweeps up what is still waiting (2026-11-01)."""
     assert "Then the app skill's steps 1 to 3, for work still waiting" in _read("tools/brief.py")
 
+
+
+def test_a_jobs_own_chat_takes_the_next_big_job_and_does_it_itself(monkeypatch):
+    """No chat can tell the one that answers the page that a slot is free, so a queue of
+    drafts waited behind the cap with nobody to start it (2026-11-03). A big job's own chat,
+    finished, takes the next big job waiting, never light work, and does it there."""
+    import datetime as dt
+    import app
+    import app_setup
+    now = dt.datetime(2026, 11, 3, 12, 0, tzinfo=dt.timezone.utc)
+    q = lambda kind, at: {"data": {"kind": kind, "status": "queued", "to": "cloud", "asked_at": at,  # noqa: E731
+                                   "title": kind, "args": {}}, "version": 1}
+    db = {"work": {"talk~1": q("talk", "2026-11-03T11:00:00Z"), "draft~a": q("draft", "2026-11-03T11:05:00Z")}}
+    assert page_db.next_item(db, "cloud", now)["work"] == "talk~1"
+    assert page_db.next_item(db, "cloud", now, heavy_only=True)["work"] == "draft~a"
+    monkeypatch.setattr(app_setup, "origin", lambda: ("example-owner", "example-copy"))
+    monkeypatch.setattr(app_setup, "page_record", lambda: {"url": "https://claude.ai/code/artifact/example-page"})
+    got = app.choose(db, "job-chat-1", "cloud", now, job_chat=True)
+    assert got["work"] == "draft~a" and got["run"] == "here" and "create_session" not in got
+    said = app.child_prompt({"work": "draft~a", "kind": "draft", "title": "x", "stages": []}, "listener-1",
+                            "https://claude.ai/code/artifact/example-page")
+    assert "--job-chat" in said and "At most three jobs in this chat" in said

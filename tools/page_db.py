@@ -523,11 +523,15 @@ WORK_KINDS = {
     "profile": {"to": "either", "can": ("cloud", "computer"), "heavy": False},
 }
 assert set(STAGES) == set(WORK_KINDS)
-# Three big jobs at once (a search, a networking run and an interview prep, the maintainer's
-# own example, 2026-10-29), and an urgent one more. The work and its cost are the same run side
-# by side or one after another; the cap only keeps the cloud computer's disk and memory clear
-# (a search round's stage files, a batch's LaTeX compiles).
+# Three big jobs at once on one computer (a search, a networking run and an interview prep, the
+# maintainer's own example, 2026-10-29), and an urgent one more. The work and its cost are the
+# same run side by side or one after another; the cap only keeps one computer's disk and memory
+# clear (a search round's stage files, a batch's LaTeX compiles). In the cloud each big job runs
+# in a chat of its own, on a computer of its own, so ten run at once: three at a time held a
+# fourth and fifth application back while the first three were still starting (the maintainer,
+# 2026-11-03: "i could generate 5, 10, 20 cvs and cover letters in one go").
 HEAVY_CAP = 3
+HEAVY_CAP_CHATS = 10
 ACTIVE = ("claimed", "running")
 # A job whose chat stopped is started again by itself this many times in all (the first try
 # included); after that it waits for the person's "Ask Claude again".
@@ -627,7 +631,7 @@ def held_locks(db: dict, now: dt.datetime) -> dict:
 
 
 def next_item(db: dict, chat_kind: str, now: dt.datetime,
-              cap: int = HEAVY_CAP) -> dict | None:
+              cap: int = HEAVY_CAP, heavy_only: bool = False) -> dict | None:
     """The queued work item this chat should claim, or None.
 
     A kind of work it can do (can_take), the most urgent first and then the oldest asked, never past the heavy-job cap (urgent
@@ -640,7 +644,7 @@ def next_item(db: dict, chat_kind: str, now: dt.datetime,
     for wid, doc in work.items():
         item = doc["data"]
         kind = WORK_KINDS.get(str(item.get("kind") or ""))
-        if kind is None or item.get("stop_asked"):
+        if kind is None or item.get("stop_asked") or (heavy_only and not kind.get("heavy")):
             continue
         # A job whose chat stopped (its claim not moved on for LEASE_S) is started again,
         # once, by the next chat to look: it sat "running" for good, and work for the same
@@ -729,25 +733,32 @@ def heartbeat(chat_id: str, chat_kind: str, now: dt.datetime, busy: str | None =
 
 
 def claim(db: dict, chosen: dict, chat_id: str, chat_kind: str, now: dt.datetime,
-          out_dir: str) -> list[str]:
+          out_dir: str, running: bool = False) -> list[str]:
     """The claim for `chosen` (next_item's answer) as batch files: the item pinned to the
     version read, each lock created (a lock left by a finished job is replaced, pinned to
-    its version), and the chat's heartbeat. A refused batch means another chat has it."""
+    its version), and the chat's heartbeat. A refused batch means another chat has it.
+    `running`: small work this chat does at once (`run: here`), so the claim itself marks it
+    running at its first stage, and no progress pin follows: each pin was a step of a chat
+    that re-reads its whole history, for work done in a minute (2026-11-03)."""
     import app_model
     w = Writes(out_dir)
     at = app_model.stamp(now)
     until = app_model.stamp(now + dt.timedelta(seconds=LEASE_S))
-    fields = {"status": "claimed", "claimed_by": chat_id, "claimed_at": at, "lease_until": until}
+    status = "running" if running else "claimed"
+    fields = {"status": status, "claimed_by": chat_id, "claimed_at": at, "lease_until": until}
+    if running:
+        fields.update(stage=0, stage_at=at)
     if chosen.get("again"):
         # Started again after its chat stopped: from the top, with the stop said on its card.
-        fields.update(attempt=chosen["again"], stage=0, stage_at=None,
+        fields.update(attempt=chosen["again"], stage=0, stage_at=at if running else None,
                       steps=[{"at": at, "text": "Started again: the last try stopped part way. "
                                                 "Anything it saved is kept."}])
     w.add("update", "work", chosen["work"], fields, if_version=chosen.get("version"))
     for other in chosen.get("with") or []:
         w.add("update", "work", other["work"],
-              {"status": "claimed", "claimed_by": chat_id, "claimed_at": at, "lease_until": until,
-               "with": chosen["work"]}, if_version=other.get("version"))
+              {"status": status, "claimed_by": chat_id, "claimed_at": at, "lease_until": until,
+               "with": chosen["work"], **({"stage": 0, "stage_at": at} if running else {})},
+              if_version=other.get("version"))
     for lock in chosen.get("locks") or []:
         old = (db.get("locks") or {}).get(safe_id(lock))
         w.add("set", "locks", lock, {"work": chosen["work"], "chat": chat_id, "since": at,
@@ -842,6 +853,52 @@ def _keep_dump(dump_dir: str, collection: str, doc_id: str, fields: dict, versio
     with open(path, "w", encoding="utf-8", newline="\n") as fh:
         json.dump(dict(fields, **{VERSION_FIELD: version}), fh, ensure_ascii=False, indent=1)
         fh.write("\n")
+
+
+def _merged(old: dict, new: dict) -> dict:
+    """An update's fields over the record's: a `{"__delete__": true}` takes a field away, at
+    the top or inside a field that is itself a record."""
+    out = dict(old)
+    for k, v in new.items():
+        if v == {"__delete__": True}:
+            out.pop(k, None)
+        elif isinstance(v, dict) and isinstance(out.get(k), dict) and \
+                "__delete__" in json.dumps(v):
+            out[k] = _merged(out[k], v)
+        else:
+            out[k] = v
+    return out
+
+
+def keep_landed(dump_dir: str, batches, skip=()) -> None:
+    """The dump as it will be once `batches` land, so the next command over the same folder
+    pins to the versions they leave and sees what they made (a work item a tap queued, a
+    claim already taken), with no second read. Collections in `skip` are left as read: a
+    tap's claim takes the person's words off the page, and the dump keeps them for `apply`.
+    A refused batch means read again, into a new folder."""
+    for path in batches or ():
+        for e in _read_json(path) or []:
+            coll, doc_id = str(e.get("collection") or ""), str(e.get("doc_id") or "")
+            if not coll or not doc_id or coll in skip or _LOGICAL.get(coll, coll) in skip:
+                continue
+            where = os.path.join(dump_dir, coll)
+            names = [os.path.join(where, doc_id.replace("~", "@") + ".json"),
+                     os.path.join(where, doc_id + ".json")]
+            if e.get("op") == "delete":
+                for p in dict.fromkeys(names):
+                    if os.path.isfile(p):
+                        os.remove(p)
+                continue
+            body = _read_json(e.get("file_path") or "")
+            if not isinstance(body, dict):
+                continue
+            version = body.pop(VERSION_FIELD, None)
+            if not isinstance(version, int):
+                version = int(e.get("if_version") or 0) + 1
+            if e.get("op") == "update":
+                old = next((unwrap(_read_json(p))[0] for p in names if os.path.isfile(p)), {})
+                body = _merged(old, body)
+            _keep_dump(dump_dir, coll, doc_id, body, version)
 
 
 def pin(db: dict, work_id: str, now: dt.datetime, out_dir: str, stage=None, line: str = "",

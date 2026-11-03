@@ -262,6 +262,8 @@ def test_a_big_job_is_never_run_by_the_chat_that_answers_the_page(monkeypatch):
         assert tidy.APP_TITLE.match(call["title"])        # the daily tidy archives it
         assert call["source_url"] == "https://github.com/example-owner/example-copy"
         assert call["model"] == "sonnet"
+        # The page's tools go with it, so the job never stops on a permission prompt.
+        assert call["extra_allowed_tools"] == ["ArtifactData", "ArtifactComments", "Artifact"]
         said = call["prompt"]
         assert f"--work {kind}~1" in said and "app.py pin" in said and PAGE in said
         assert "Never publish, watch or answer the page" in said

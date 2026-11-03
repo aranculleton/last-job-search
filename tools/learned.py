@@ -1644,6 +1644,9 @@ def hook(event: dict) -> dict:
     return {"decision": "block", "reason": refuse_over_pending("Not finished")}
 
 
+_WORK_CHAT = re.compile(r"tools/app\.py start\b[^\n]*--work \S")
+
+
 def _update_due(event: dict) -> str:
     """The day's update check, said beside the day's first message in any chat, a chat left
     open for weeks included: the line in CLAUDE.md asking for it was missed, and a copy
@@ -1652,6 +1655,10 @@ def _update_due(event: dict) -> str:
     the turn, never here, where a prompt hook is cut off after 30 seconds, mid-merge. This is
     the app's one hook, so it says this too, rather than a second hook."""
     if (event.get("hook_event_name") or "") != "UserPromptSubmit":
+        return ""
+    if _WORK_CHAT.search(str(event.get("prompt") or "")):
+        # A chat started for one big job (tools/app.py child_prompt): the chat that answers
+        # the page took the day's check, and a job must not take an update part way through.
         return ""
     path = _path()
     if path is None or person.in_example(path):

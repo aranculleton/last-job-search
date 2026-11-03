@@ -491,8 +491,11 @@ def renewal(rec: dict, db: dict, chat: str, now: dt.datetime) -> dict | None:
         return None
     got["renewed_at"] = _stamp(now)
     _save_seen(got)
+    # The page's own tools carried over (create_session's extra_allowed_tools), so the fresh
+    # helper never stops on a permission prompt while the person is away (2026-11-03).
     return {"title": HELPER_CHAT_TITLE, "prompt": WAKE_PROMPT,
-            "source_url": f"https://github.com/{owner}/{name}"}
+            "source_url": f"https://github.com/{owner}/{name}",
+            "extra_allowed_tools": ["ArtifactData", "ArtifactComments", "Artifact"]}
 
 
 def first_claim(chat: str, out_dir: str, now: dt.datetime | None = None,

@@ -683,6 +683,7 @@ S.engine = async (a) => {
   for (const st of a.steps || []) {
     if (st.hash) await goto(page, st.hash);
     if (st.more) await openMore(page, st.more);
+    if (st.moreText) { await page.locator("#main [data-item]", {hasText: st.moreText}).first().locator("summary.more-btn").first().click(); await turn(page, 3); }
     if (st.open) { await page.locator('[data-k="' + st.open + '"]').first().click(); await turn(page, 3); }
     // To do shows five first; what a step taps may wait behind "Show the other N".
     if (st.click) { await page.$$eval("details.band-more:not([open])", (ds) => ds.forEach((d) => { d.open = true; })); await turn(page, 2);
@@ -1105,17 +1106,9 @@ S.inside = async (a) => {
   return r;
 };
 
-async function draftViaDialog(page, opts) {
+// One tap drafts (2026-11-03): no sheet stands between Draft this and the draft.
+async function draftViaDialog(page) {
   await page.getByRole("button", {name: "Draft this: Harbourline Bank, Pricing Analyst"}).click();
-  await turn(page, 3);
-  const dlg = page.locator("dialog.sheet");
-  if (opts && opts.submitEmpty) {
-    await dlg.getByRole("button", {name: "Draft it"}).click();
-    await turn(page, 3);
-  }
-  await dlg.getByLabel("No, draft it").check();
-  await dlg.getByRole("group", {name: /fixed term/}).getByLabel("Yes").check();
-  await dlg.getByRole("button", {name: "Draft it"}).click();
   await turn(page, 8);
 }
 
@@ -1123,24 +1116,8 @@ S.draft = async (a) => {
   const o = await open({html: a.html, hash: "jobs", fake: a.fake || {canSend: "available"}});
   const {page, store} = o;
   await page.getByRole("button", {name: "Draft this: Harbourline Bank, Pricing Analyst"}).click();
-  await turn(page, 3);
-  const dlg = page.locator("dialog.sheet");
-  const r = {open: await dlg.isVisible(), legends: await dlg.locator("legend").allInnerTexts(), focusInDialog: await page.evaluate(() => !!document.activeElement.closest("dialog")),
-    cost: await one(page, "dialog .sheet-cost")};
-  // Drafting is already chosen, and the posting's own question may be left open (2026-11-02):
-  // nothing stands between the tap and the draft.
-  r.chosen = await dlg.locator("input[type=radio]:checked").evaluateAll((xs) => xs.map((x) => x.labels[0].textContent));
-  r.errors = await dlg.locator(".errors li").allInnerTexts();
-  await dlg.getByLabel("Yes, I have applied").check();
-  await turn(page, 2);
-  r.submitWhenApplied = (await dlg.locator("button[type=submit]").innerText()).trim();
-  await dlg.getByLabel("No, draft it").check();
-  await turn(page, 2);
-  r.submitWhenNot = (await dlg.locator("button[type=submit]").innerText()).trim();
-  await dlg.getByRole("group", {name: /fixed term/}).getByLabel("Yes").check();
-  await dlg.getByRole("button", {name: "Draft it"}).click();
   await turn(page, 8);
-  r.closed = !(await page.$("dialog.sheet"));
+  const r = {sheet: !!(await page.$("dialog.sheet")), toast: await page.$$eval(".toast", (x) => x.map((e) => e.textContent))};
   r.work = store.get("work/draft~r12-1");
   r.calls = (await calls(page)).filter((c) => c.cap === "comments" || c.cap === "room");
   r.doorbell = store.get("meta/doorbell");
@@ -1172,9 +1149,8 @@ S.referral = async (a) => {
   await page.waitForTimeout(50);
   await turn(page, 6);
   r.draftSheet = await one(page, "dialog .sheet-title");
-  r.lead = await one(page, "dialog .warm");
-  await page.keyboard.press("Escape");
-  await turn(page, 3);
+  r.toast = await page.$$eval(".toast", (x) => x.map((e) => e.textContent));
+  r.work = store.list("work/");
   // The warm note on another role links to the person it names.
   r.warmLink = await page.$eval('#main [data-item="r12-2"] .warm a', (x) => x.getAttribute("href")).catch(() => null);
   r.errors = o.errors;
@@ -1182,16 +1158,19 @@ S.referral = async (a) => {
   return r;
 };
 
+// Already applied is said where it belongs, under the card's More, never asked before a draft.
 S.applied_first = async (a) => {
   const o = await open({html: a.html, hash: "jobs"});
   const {page, store} = o;
-  await page.getByRole("button", {name: "Draft this: Harbourline Bank, Pricing Analyst"}).click();
-  await turn(page, 3);
+  await openMore(page, "r12-1");
+  await page.locator('#main [data-item="r12-1"]').getByRole("button", {name: "I have applied: Harbourline Bank, Pricing Analyst"}).click();
+  await turn(page, 4);
   const dlg = page.locator("dialog.sheet");
-  await dlg.getByLabel("Yes, I have applied").check();
-  await dlg.getByLabel("When did you apply?").fill("2026-10-20");
-  await dlg.getByRole("group", {name: /fixed term/}).getByLabel("No").check();
-  await dlg.getByRole("button", {name: "Mark as applied"}).click();
+  if (await dlg.count()) {
+    const day = dlg.locator("input[type=date]");
+    if (await day.count()) await day.first().fill("2026-10-20");
+    await dlg.locator("button[type=submit]").click();
+  }
   await turn(page, 8);
   const r = {work: store.list("work/"), actions: store.list("actions/").map((p) => store.get(p)), errors: o.errors};
   await o.ctx.close();
@@ -1201,14 +1180,7 @@ S.applied_first = async (a) => {
 S.two_tabs = async (a) => {
   const o = await open({html: a.html, hash: "jobs", tabs: 2, fake: {canSend: "available"}});
   const [p1, p2] = o.pages;
-  for (const p of [p1, p2]) {
-    await p.getByRole("button", {name: "Draft this: Harbourline Bank, Pricing Analyst"}).click();
-    await turn(p, 3);
-    const dlg = p.locator("dialog.sheet");
-    await dlg.getByLabel("No, draft it").check();
-    await dlg.getByRole("group", {name: /fixed term/}).getByLabel("Yes").check();
-  }
-  await Promise.all([p1, p2].map((p) => p.locator("dialog.sheet").getByRole("button", {name: "Draft it"}).click()));
+  await Promise.all([p1, p2].map((p) => p.getByRole("button", {name: "Draft this: Harbourline Bank, Pricing Analyst"}).click()));
   for (const p of [p1, p2]) await turn(p, 10);
   const r = {
     work: o.store.list("work/"),
@@ -1978,7 +1950,8 @@ S.keyboard = async (a) => {
   let found = false;
   for (let i = 0; i < 40 && !found; i++) {
     await page.keyboard.press("Tab");
-    found = await page.evaluate(() => (document.activeElement.getAttribute("aria-label") || "") === "Draft this: Harbourline Bank, Pricing Analyst");
+    // A sheet opened from the keyboard: the bin's (Draft this drafts at once, 2026-11-03).
+    found = await page.evaluate(() => (document.activeElement.getAttribute("aria-label") || "") === "Not for me: Harbourline Bank, Pricing Analyst");
   }
   r.reachedDraft = found;
   r.visibleFocus = await page.evaluate(() => getComputedStyle(document.activeElement).outlineStyle);
