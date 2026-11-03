@@ -60,10 +60,22 @@ def copy(tmp_path):
 
 @pytest.mark.timing
 def test_nothing_changed_skips_the_app_tree_and_never_blames_an_update(copy):
+    # The check runs the first python3 on the path (tools/py.sh): this one, which has pytest,
+    # so the person's own failing test is run, never skipped as "pytest is not installed"
+    # on a machine whose first python3 lacks it (the person job on GitHub, 2026-11-03).
+    here = copy.parent / "bin"
+    here.mkdir(exist_ok=True)
+    path = os.environ.get("PATH", "")
+    try:
+        os.symlink(sys.executable, here / "python3")
+        path = str(here) + os.pathsep + path
+    except (OSError, NotImplementedError):
+        pass                          # Windows without the right to link: its own py.sh order
     env = dict(os.environ, LJS_APP_URL="https://github.com/example-owner/last-job-search",
-               PYTHONDONTWRITEBYTECODE="1")
+               PYTHONDONTWRITEBYTECODE="1", PATH=path)
     env.pop("LJS_PROFILE", None)
     env.pop("LJS_STATE", None)
+    env.pop("VIRTUAL_ENV", None)
     start = time.monotonic()
     r = subprocess.run(["bash", "tools/ci_local.sh", "--quick"], cwd=copy, env=env,
                        capture_output=True, text=True, encoding="utf-8", errors="replace",
