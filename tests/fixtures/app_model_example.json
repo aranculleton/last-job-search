@@ -1,7 +1,7 @@
 {
  "model": 1,
  "made_at": "2026-10-25T18:00:00Z",
- "rev": "90f61b720847",
+ "rev": "912003141efa",
  "app": {
   "version": "4.8.0",
   "update_waiting": null,
@@ -46,7 +46,7 @@
  ],
  "jobs": {
   "round": "r9",
-  "made_at": "2026-11-03T18:38:07Z",
+  "made_at": "2026-11-03T19:21:30Z",
   "met": false,
   "summary": "4 roles on the shortlist, 4 scoring 60 or more and 2 scoring 75 or more. 3 left out, each with its reason.",
   "rows": [
@@ -369,14 +369,16 @@
      "name": "Morgan_Ellis_CV_Fernhill.pdf",
      "asset": null,
      "path": "cv/Morgan_Ellis_CV_Fernhill.pdf",
-     "pages": null
+     "pages": null,
+     "made": false
     },
     {
      "kind": "letter",
      "name": "Morgan_Ellis_Cover_Letter_Fernhill.pdf",
      "asset": null,
      "path": "cover_letters/Morgan_Ellis_Cover_Letter_Fernhill.pdf",
-     "pages": null
+     "pages": null,
+     "made": false
     }
    ],
    "checks": {
@@ -448,14 +450,16 @@
      "name": "Morgan_Ellis_CV_Kestrel.pdf",
      "asset": null,
      "path": "cv/Morgan_Ellis_CV_Kestrel.pdf",
-     "pages": 1
+     "pages": 1,
+     "made": true
     },
     {
      "kind": "letter",
      "name": "Morgan_Ellis_Cover_Letter_Kestrel.pdf",
      "asset": null,
      "path": "cover_letters/Morgan_Ellis_Cover_Letter_Kestrel.pdf",
-     "pages": 1
+     "pages": 1,
+     "made": true
     }
    ],
    "checks": {
@@ -798,7 +802,7 @@
    "when": "2026-10-28",
    "prep": {
     "path": "documents/applications/thornbury_bank_risk_analyst_thornbury/interview_prep.md",
-    "updated": "2026-11-03T18:38:07Z"
+    "updated": "2026-11-03T19:21:30Z"
    },
    "questions": 2,
    "all_day": true,
