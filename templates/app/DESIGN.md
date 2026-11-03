@@ -8,8 +8,9 @@ next?" in its first lines, and nothing asks for a decision a default could make.
 ## Places
 
 - Seven places: **Brief** (the home screen), **To do**, **Jobs** (Found, Drafts, Applied),
-  **Contacts** (People, Messages), **Chat**, then **Interviews** and **Settings**. Five sit in
-  the phone's tab bar; To do alone carries a coloured badge. (layout 6)
+  **Contacts** (People, Messages), **Coming up** and **Chat** together in the side menu, and
+  **Settings** alone at its foot. Five sit in the phone's tab bar (Brief, To do, Jobs,
+  Contacts, Chat); To do alone carries a coloured badge. (layout 6, nav order test)
 - Each screen: its title, one plain summary line, at most three blocks before the first item.
   (layout 1 to 3)
 - A long list opens on its first few and folds the rest one tap below ("Show 6 more"): To do
@@ -34,16 +35,21 @@ next?" in its first lines, and nothing asks for a decision a default could make.
 ## The bin
 
 - One icon puts anything away: the bin, top right of every live card. Never an x.
-- One possible answer: done at once, with Undo. Several: a short sheet, each choice doing
-  exactly what it says, and Undo putting every part back. (bin tests, design test)
-- The choices: a job (not this role, the pay, the place, my field, no more from the employer,
-  already applied, closed); a draft (won't apply, already applied, closed); a message (set it
-  aside, or the person's choices); a person (don't contact, not that employer any more, in
-  touch another way); an interview or an application (they said no, I withdrew, stopped
-  waiting); a reminder in To do (hide it for a week, and "1 hidden this week: Show" at the end
-  of To do brings it back, as "1 set aside: Show" does in Jobs).
+- One possible answer: done at once, with Undo. Several: a short sheet of buttons, one a
+  choice, the one tapped done at once (never a choice and then a second button), and Undo
+  putting every part back. (bin tests, design test)
+- The choices: a job (not this role, the pay, the place, my field, no more from the employer;
+  posted too long ago only where it was, closed only where it has); a draft (the same); a
+  message (set it aside, or the person's choices); a person (hide this for a week where it is
+  a To do row, don't contact, not that employer any more, in touch another way); an interview
+  or an application (they said no, I withdrew, stopped waiting); a reminder in To do (hide it
+  for a week, and "1 hidden this week: Show" at the end of To do brings it back, as "1 set
+  aside: Show" does in Jobs). "I have applied" is under a job's More and on a draft's face,
+  never in the bin as well.
 - A reason that changes something says so when it is given ("Set aside. Fewer jobs outside
   your field from now on.").
+- A card the person has finished (binned, sent, answered, done) leaves its list at once. Its
+  Undo is in the toast while the toast is up, and on its own line only after: never both.
 
 ## Buttons, links and taps
 
@@ -65,12 +71,19 @@ next?" in its first lines, and nothing asks for a decision a default could make.
 
 - Running work turns a small spinner and sweeps its bar; waiting work breathes; an update is a
   moving line under the header. Reduced motion stills all of it. (motion test)
-- Work says where it stands in words: running, Next, In line, in the same chat. The top pill
-  names the one thing running.
+- Work says where it stands in words: running, Next, In line, Not sent yet, Waking Claude,
+  Sent, No answer yet, Waiting for Claude (with when it was asked), in the same chat. "Claude
+  is on it" only for work Claude has begun; a step's clock only from a few seconds in, and
+  none where the work counts its own progress. The top pill names the one thing running.
 
 ## Words and settings
 
 - Plain words: no git, branch, command or config, no file names, no ids.
+- One date a card, said one way: a day gone by as "12 Sept", a day ahead with its weekday. A
+  card about someone shows the day they wrote (or you did); its corner says only "Overdue".
+  What someone asked for leads the card, and its button does it ("Make a CV for Juno").
+- Counts agree: a tab, a summary and a badge count the same things, a checklist of people a
+  thing for each person, and a button that starts several says the time for all of them.
 - Nothing asks what a default answers. A choice becomes a setting only where people really
   differ, and work goes where it can run without anyone choosing (one chat answers the page;
   only the brief needs the cloud). (place and routing tests)

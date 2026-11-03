@@ -165,7 +165,8 @@ def test_setting_a_job_aside_keeps_the_reason_given(run, tmp_path):
     where = Search(str(tmp_path / "s"))
     got, rec = _round_trip(run, tmp_path, where, "aside", [
         {"hash": "jobs", "click": "Not for me: Dovecote Freight, Inventory Analyst"},
-        {"click": "The pay", "role": "radio", "exact": True}, {"click": "Take it off my list"},
+        # Each reason a button of its own, done in the tap (2026-11-03).
+        {"click": "The pay", "exact": True, "within": "dialog"},
     ])
     acts = [x for x in got["actions"] if x["action"] == "job.dismiss"]
     assert acts and acts[-1]["value"] == {"why": "pay"}
@@ -214,8 +215,8 @@ def test_a_person_put_in_the_bin_is_never_messaged_again(run, tmp_path):
         # Wren owes nothing today, so is one tap below the people who do.
         {"hash": "contacts", "click": "more people, nothing owed to them now", "exact": False},
         {"click": "Not Wren?", "exact": True},
-        {"click": "Don't contact Wren", "role": "radio", "exact": True},
-        {"submit": True},
+        # The choice is the tap that does it (2026-11-03: a choice and then Done was two).
+        {"click": "Don't contact Wren", "exact": True, "within": "dialog"},
     ])
     (a,) = [x for x in got["actions"] if x["action"] == "person.stop"]
     assert a["item"] == "fernhill_freight_halloway" and a["rev_seen"] and a["value"]["why"], a
@@ -229,8 +230,8 @@ def test_the_bin_on_a_to_do_row_turns_the_employer_down_in_the_engine(run, tmp_p
     where = Search(str(tmp_path / "s"))
     got, rec = _round_trip(run, tmp_path, where, "todobin", [
         {"hash": "todo", "click": "Not Wren?", "exact": False},
-        {"click": "Not interested in Fernhill Freight any more", "role": "radio", "exact": True},
-        {"submit": True},
+        # The choice is the tap that does it (2026-11-03).
+        {"click": "Not interested in Fernhill Freight any more", "exact": True, "within": "dialog"},
     ])
     (a,) = [x for x in got["actions"] if x["action"] == "person.stop"]
     assert a["value"]["scope"] == "employer" and a["value"]["employer"] == "Fernhill Freight", a

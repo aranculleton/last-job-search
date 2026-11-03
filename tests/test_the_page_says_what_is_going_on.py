@@ -104,7 +104,9 @@ def test_two_things_running_on_one_screen_are_counted_and_finished_work_is_not(r
             "work/prep~2": _work("prep", "Prep two", status="done", finished_at=T)}
     got = _go(run, tmp_path, [{"hash": "interviews", "eval": "document.querySelector('#main .running-here').getAttribute('data-running')"}],
               PHONE, seed=seed, clock=T)
-    assert got["after"][0]["eval"] == "2" and "Claude is on 2 things here." in got["after"][0]["text"]
+    # "Claude is on it" only for work Claude has begun (2026-11-03): the thank-you not yet picked
+    # up waits, and says so, still counted.
+    assert got["after"][0]["eval"] == "2" and "Claude is on 1 thing here, 1 more waiting." in got["after"][0]["text"], got["after"][0]["text"][:300]
 
 
 def test_the_bin_on_a_to_do_row_takes_the_row_away_as_it_is_chosen(run, tmp_path, vp):
@@ -115,8 +117,9 @@ def test_the_bin_on_a_to_do_row_takes_the_row_away_as_it_is_chosen(run, tmp_path
     got = _go(run, tmp_path, [
         {"hash": "todo", "eval": "[!!" + row + ", !!" + due + "]"},
         {"click": "Not Wren?", "within": "#main [data-item=\"q-sent-fernhill_freight_halloway\"]"},
-        {"click": "Not interested in Fernhill Freight any more", "role": "radio"},
-        {"submit": True, "ready": "!" + row + " && !" + due, "eval": "[!!" + row + ", !!" + due + "]"},
+        # The choice is the tap that does it (2026-11-03); the next step only reads.
+        {"click": "Not interested in Fernhill Freight any more", "within": "dialog"},
+        {"ready": "!" + row + " && !" + due, "eval": "[!!" + row + ", !!" + due + "]"},
     ], vp, clock=T)
     assert got["after"][0]["eval"] == [True, True], "the row and its follow-up were there to bin"
     assert got["after"][3]["eval"] == [False, False]
@@ -130,8 +133,9 @@ def test_the_bin_for_one_person_leaves_the_rest_of_their_employer(run, tmp_path)
     got = _go(run, tmp_path, [
         {"hash": "todo"},
         {"click": "Not Wren?", "within": "#main [data-item=\"q-sent-fernhill_freight_halloway\"]"},
-        {"click": "Don't contact Wren", "role": "radio"},
-        {"submit": True, "ready": "!" + row},
+        # The choice is the tap that does it (2026-11-03); the next step only reads.
+        {"click": "Don't contact Wren", "within": "dialog"},
+        {"ready": "!" + row},
     ], PHONE, clock=T)
     a = _one(got, "person.stop")
     assert a["value"]["scope"] == "person", a["value"]
@@ -182,8 +186,9 @@ def _bin(choice):
                                            "due-fernhill-odile", "due-fernhill-reply"]) + "]"
     return [{"hash": "todo", "eval": rows},
             {"click": "Not Wren?", "within": "#main [data-item=\"q-sent-fernhill_freight_halloway\"]"},
-            {"click": choice, "role": "radio"},
-            {"submit": True, "ready": _q("q-sent-fernhill_freight_halloway")[1:], "eval": rows}]
+            # The choice is the tap that does it (2026-11-03); the next step only reads.
+            {"click": choice, "within": "dialog"},
+            {"ready": _q("q-sent-fernhill_freight_halloway")[1:], "eval": rows}]
 
 
 def test_the_bin_for_an_employer_keeps_the_rows_of_people_already_in_conversation(run, tmp_path):

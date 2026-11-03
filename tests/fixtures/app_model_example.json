@@ -1,7 +1,7 @@
 {
  "model": 1,
  "made_at": "2026-10-25T18:00:00Z",
- "rev": "9cc8d127abc2",
+ "rev": "f7c6a663db9d",
  "app": {
   "version": "4.8.0",
   "update_waiting": null,
@@ -46,7 +46,7 @@
  ],
  "jobs": {
   "round": "r9",
-  "made_at": "2026-11-03T16:29:28Z",
+  "made_at": "2026-11-03T17:39:22Z",
   "met": false,
   "summary": "4 roles on the shortlist, 4 scoring 60 or more and 2 scoring 75 or more. 3 left out, each with its reason.",
   "rows": [
@@ -664,7 +664,7 @@
      "level": 1,
      "id": "al-reply_owed-larkspur_retail_castellan",
      "kind": "reply_owed",
-     "text": "Juno replied 43 days ago and is waiting for your answer.",
+     "text": "Juno replied on 2026-09-12 and is waiting for your answer.",
      "why": "A reply left for a week reads as lost interest, and this conversation is the way to a referral.",
      "action": {
       "type": "work",
@@ -765,7 +765,7 @@
    "when": "2026-10-28",
    "prep": {
     "path": "documents/applications/thornbury_bank_risk_analyst_thornbury/interview_prep.md",
-    "updated": "2026-11-03T16:29:28Z"
+    "updated": "2026-11-03T17:39:22Z"
    },
    "questions": 2,
    "all_day": true,

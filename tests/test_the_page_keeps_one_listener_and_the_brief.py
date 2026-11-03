@@ -283,7 +283,7 @@ def test_today_leads_with_what_is_on_today_and_the_strip_marks_today_and_tomorro
 # Today is the one most pressing thing, with what matters about it beside it (the maintainer,
 # 2026-11-02): with no booked thing today and an interview whose prep is ready, what has rolled
 # over leads, with who it is and how late; Today's right half is never left empty, Coming up is
-# never a strip over nothing, and Today's thing may be in Next three too.
+# never a strip over nothing, and Today's thing is never in Next three as well (2026-11-03).
 TODAY = ("(() => { const t = document.querySelector('#main .bp-today'); const u = document.querySelector('#main .bp-upcoming'); "
          "const side = t.querySelector('.bp-today-side'); "
          "return {when: t.querySelector('.bp-iv-when').textContent, what: t.querySelector('.bp-iv-what').textContent, "
@@ -306,10 +306,19 @@ def test_today_is_the_most_pressing_thing_with_what_matters_beside_it(run, tmp_p
     late["context"] = "Operations lead at Fernhill Freight \u00b7 met at a meetup"
     got = _go(run, tmp_path, [{"hash": "brief", "eval": TODAY}], vp, model=model, clock=T)
     r = got["after"][0]["eval"]
-    assert r["when"].startswith("Rolled over"), r
+    # One date a card, said one way (the walk-through, 2026-11-03): about someone, the corner
+    # says Overdue and the facts lead with the day it is about; never "Rolled over · 2 days late".
+    assert r["when"] == "Overdue", r
+    assert r["facts"][0].startswith("You wrote 21 Sep") and r["facts"][0].endswith("no reply"), r
     assert late["title"] in r["what"], r
     assert "Operations lead at Fernhill Freight" in r["facts"], r
     assert r["empty"] == 0 and r["upRows"] >= 1, r
+    assert not any(late["title"] in n for n in r["next"]), ("Today's thing is never said again under it", r["next"])
+    # Not about anyone: how late it is, in two words.
+    other = copy.deepcopy(model)
+    other["due"] = [d for d in other["due"] if d["id"] != late["id"]]
+    got = _go(run, tmp_path, [{"hash": "brief", "eval": TODAY}], vp, model=other, clock=T)
+    assert got["after"][0]["eval"]["when"] == "2 days late", got["after"][0]["eval"]
     # Prep not written yet: the interview leads instead, inside the prep window.
     iv["prep"] = {}
     got = _go(run, tmp_path, [{"hash": "brief", "eval": TODAY}], vp, model=model, clock=T)
@@ -626,9 +635,15 @@ def test_the_brief_time_is_said_as_the_sheet_says_it(run, tmp_path, vp):
 
 
 def test_the_bin_says_posted_too_long_ago_not_too_old(run, tmp_path):
-    got = _go(run, tmp_path, [{"hash": "jobs", "click": "Not for me: Harbourline Bank, Pricing Analyst", "read": "dialog[open]"}], PHONE, clock=T)
+    # Offered only for a posting up for months (2026-11-03): the sample's is five days old, so
+    # it is put up for four months here, and a fresh one is asked about too.
+    m = _sample()
+    next(r for r in m["jobs"]["rows"] if r["id"] == "r12-1")["posted_days"] = 120
+    got = _go(run, tmp_path, [{"hash": "jobs", "click": "Not for me: Harbourline Bank, Pricing Analyst", "read": "dialog[open]"}], PHONE, clock=T, model=m)
     sheet = got["after"][0]["text"]
     assert "Posted too long ago" in sheet and "Too old" not in sheet, sheet
+    fresh = _go(run, tmp_path, [{"hash": "jobs", "click": "Not for me: Copperleaf Pay, Data Analyst, Payments", "read": "dialog[open]"}], PHONE, clock=T)
+    assert "Posted too long ago" not in fresh["after"][0]["text"] and "It has closed" not in fresh["after"][0]["text"]
 
 
 ALERT_WORDS = "[...document.querySelectorAll('#main [data-alert]')].map((a) => [a.getAttribute('data-alert'), a.querySelector('.sr-only').textContent.trim()])"

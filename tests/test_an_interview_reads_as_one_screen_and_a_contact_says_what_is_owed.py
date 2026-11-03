@@ -159,7 +159,9 @@ def test_keep_this_to_work_on_is_kept_once_and_undo_takes_it_off(search):
 
 def test_a_reply_owed_more_than_three_days_is_an_alert_on_the_contact(search):
     (a,) = _person(search.model(), JUNO)["alerts"]
-    assert a["kind"] == "reply_owed" and a["text"].startswith("Juno replied 43 days ago")
+    # The day it was said, never "43 days ago": the page shows every past day one way, "12 Sept"
+    # (2026-11-03: four forms of one wait on one person).
+    assert a["kind"] == "reply_owed" and a["text"].startswith("Juno replied on 2026-09-12")
     assert a["action"]["kind"] == "reply" and a["action"]["id"] == f"reply~{JUNO}"
     _add_threads(search, [{"contact_id": JUNO, "date": "2026-10-23", "direction": "inbound",
                            "channel": "linkedin", "scenario": "detailed_generous",

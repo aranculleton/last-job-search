@@ -199,10 +199,12 @@ def test_an_interview_binned_leaves_interviews_at_once_and_undo_brings_it_back(r
     card = "document.querySelector('#main article[data-item=\"int-harbourline-risk\"]')"
     line = "document.querySelector('#main .ended[data-item=\"int-harbourline-risk\"]')"
     soon = "document.querySelectorAll('#main [data-item=\"soon:int-harbourline-risk\"]').length"
+    # Each answer in the bin is a button that does it (2026-11-03); the step after only reads.
+    toasts = "[...document.querySelectorAll('[data-toast]')].map((t) => t.textContent).join(' | ')"
     binned = [
         {"hash": "interviews/int-harbourline-risk", "open": "ivbin:int-harbourline-risk"},
-        {"click": "No reply, and I have stopped waiting", "role": "radio"},
-        {"submit": True, "ready": "!" + card + " && !!" + line},
+        {"click": "No reply, and I have stopped waiting", "within": "dialog"},
+        {"ready": "!" + card + " && !!" + line, "eval": toasts},
     ]
     got = _go(run, tmp_path, [{"hash": "todo", "eval": soon}] + binned + [{"hash": "todo", "eval": soon}], vp)
     a = _one(got, "outcome.no_response")
@@ -210,9 +212,11 @@ def test_an_interview_binned_leaves_interviews_at_once_and_undo_brings_it_back(r
     before, ended, todo = got["after"][0], got["after"][3], got["after"][4]
     assert before["eval"] == 1 and todo["eval"] == 0, (before["eval"], todo["eval"])
     assert "Second interview with Harbourline Bank: marked as no reply." in ended["text"], ended["text"]
-    assert "Saved. Claude will pick this up." in ended["text"] and "5 things booked or due" in ended["text"], ended["text"]
+    assert "5 things booked or due" in ended["text"], ended["text"]
+    # Its Undo is in the toast while the toast is up, never a second one on its line (2026-11-03).
+    assert "Undo" in ended["eval"] and "Saved. Claude will pick this up." not in ended["text"], (ended["eval"], ended["text"])
     # Undo, before a chat has seen it: the card is back and nothing is left to apply.
-    got = _go(run, tmp_path, binned + [{"open": "undo:ivend:int-harbourline-risk", "ready": "!!" + card + " && !" + line}], vp)
+    got = _go(run, tmp_path, binned + [{"click": "Undo", "exact": True, "within": "#toasts", "ready": "!!" + card + " && !" + line}], vp)
     assert "7 things booked or due" in got["after"][3]["text"] and "marked as no reply" not in got["after"][3]["text"]
     assert not [x for x in got["actions"] if x["action"] == "outcome.no_response"]
 
@@ -437,9 +441,9 @@ def test_links_are_the_model_s_own_so_spelling_differences_still_join(run, tmp_p
 def test_changing_your_mind_keeps_the_reason_and_brings_things_back(run, tmp_path, vp):
     got = _go(run, tmp_path, [
         {"hash": "jobs", "click": "Not for me: Harbourline Bank, Pricing Analyst"},
-        # Why is asked once, in the bin's own sheet (2026-10-29: never a second "Why?").
-        {"click": "The pay", "role": "radio", "exact": True},
-        {"click": "Take it off my list"},
+        # Why is asked once, in the bin's own sheet (2026-10-29: never a second "Why?"), and the
+        # reason is the tap that does it (2026-11-03).
+        {"click": "The pay", "exact": True, "within": "dialog"},
         {"click": "41 left out by the search", "exact": False},
         {"click": "Bring back Transport Planning Analyst at Fernhill Freight"},
         {"click": "Set it aside", "exact": True},

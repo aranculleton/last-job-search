@@ -52,24 +52,39 @@ from test_the_page_journeys import PHONE, _go, _one  # noqa: E402
 T = "2026-10-25T09:00:00Z"
 
 
-# The Jobs bin's reasons, short pills with "Not this one" already chosen, each sent as the engine reads it (tests/test_every_bin_choice_changes
-# _what_it_says.py applies each one); only the employer choice turns the employer down.
-@pytest.mark.parametrize("pick,why,toast", [
-    ("Not this one", "not this role", "Not applying: Ellerwick Trust"),
-    ("The pay", "pay", "Not applying: Ellerwick Trust"),
-    ("The place", "place", "Not applying: Ellerwick Trust"),
-    ("Not my field", "field", "Not applying: Ellerwick Trust"),
-    ("Posted too long ago", "old", "Not applying: Ellerwick Trust"),
-    ("No more from Ellerwick Trust", "employer", "No more roles from Ellerwick Trust"),
-    ("It has closed", "closed", "Not applying: Ellerwick Trust"),
+def _old_and_closed():
+    """The Ellerwick draft's posting closed, and up for four months: the two reasons the bin
+    offers only where they are true."""
+    m = _sample()
+    a = next(x for x in m["ready"] if x["id"] == "app-ellerwick-insight")
+    a["apply"] = dict(a["apply"], status="closed")
+    next(r for r in m["jobs"]["rows"] if r["id"] == a["job"])["posted_days"] = 120
+    return m
+
+
+# The Jobs bin's reasons, each a button that acts in the tap (2026-11-03: a reason already chosen
+# and then "Done" took two taps), each sent as the engine reads it (tests/test_every_bin_choice_changes
+# _what_it_says.py applies each one); only the employer choice turns the employer down. "Posted too
+# long ago" and "It has closed" are offered only where they are true.
+@pytest.mark.parametrize("pick,why,toast,model", [
+    ("Not this one", "not this role", "Not applying: Ellerwick Trust", None),
+    ("The pay", "pay", "Not applying: Ellerwick Trust", None),
+    ("The place", "place", "Not applying: Ellerwick Trust", None),
+    ("Not my field", "field", "Not applying: Ellerwick Trust", None),
+    ("Posted too long ago", "old", "Not applying: Ellerwick Trust", _old_and_closed),
+    ("No more from Ellerwick Trust", "employer", "No more roles from Ellerwick Trust", None),
+    ("It has closed", "closed", "Not applying: Ellerwick Trust", _old_and_closed),
 ])
-def test_a_drafts_bin_says_why_it_is_not_going_out(run, tmp_path, pick, why, toast):
+def test_a_drafts_bin_says_why_it_is_not_going_out(run, tmp_path, pick, why, toast, model):
     got = _go(run, tmp_path, [
         {"hash": "drafts", "open": "dbin:app-ellerwick-insight", "read": "dialog[open]"},
-        {"click": pick, "role": "radio", "exact": True},
-        {"submit": True, "ready": "[...document.querySelectorAll('[data-toast]')].some((t) => t.textContent.includes(%r))" % toast},
-    ], PHONE, clock=T)
-    assert "Not sending this one?" in got["after"][0]["text"]
+        {"click": pick, "exact": True, "within": "dialog",
+         "ready": "[...document.querySelectorAll('[data-toast]')].some((t) => t.textContent.includes(%r))" % toast},
+    ], PHONE, clock=T, model=model() if model else None)
+    sheet = got["after"][0]["text"]
+    assert "Not sending this one?" in sheet
+    assert ("It has closed" in sheet and "Posted too long ago" in sheet) == bool(model), "offered only where true"
+    assert "Already applied" not in sheet, "I have applied is on the draft's own face, never in the bin too"
     a = _one(got, "ready.not_applying")
     assert a["item"] == "app-ellerwick-insight" and a["value"] == {"why": why}
 
@@ -77,7 +92,7 @@ def test_a_drafts_bin_says_why_it_is_not_going_out(run, tmp_path, pick, why, toa
 def test_a_messages_bin_sets_the_note_aside_first(run, tmp_path):
     got = _go(run, tmp_path, [
         {"hash": "drafts-messages", "open": "wbin:msg-ash-1", "read": "dialog[open]"},
-        {"submit": True, "wait": 300},
+        {"click": "Not now: set this note aside", "exact": True, "within": "dialog", "wait": 300},
     ], PHONE, clock=T)
     assert "Not now: set this note aside" in got["after"][0]["text"]
     assert _one(got, "msg.skip")["item"] == "msg-ash-1"
@@ -87,8 +102,7 @@ def test_a_messages_bin_sets_the_note_aside_first(run, tmp_path):
 def test_an_interviews_bin_records_how_it_ended(run, tmp_path):
     got = _go(run, tmp_path, [
         {"hash": "interviews/int-harbourline-risk", "open": "ivbin:int-harbourline-risk", "read": "dialog[open]"},
-        {"click": "I withdrew", "role": "radio", "exact": True},
-        {"submit": True, "wait": 300},
+        {"click": "I withdrew", "exact": True, "within": "dialog", "wait": 300},
     ], PHONE, clock=T)
     assert "Is the" in got["after"][0]["text"] and "Harbourline" in got["after"][0]["text"]
     a = _one(got, "outcome.withdrawn")
