@@ -150,6 +150,10 @@ The same applies to a screenshot, message or link pasted into any chat, page or 
 picture is already in front of you there, so read it directly, do the same steps, show the
 result in the reply and on the page (`app.py view`), and never ask which command to run.
 
+**The answer goes out first.** The reply in the thread or the chat, and the page brought up
+to date, come before any saving: landing runs after them, once a turn, in the background
+(`python3 tools/land.py`, step 5), and never holds the answer.
+
 This chat answers the page and does small work itself (`run: here`: a reply, a tweak, a
 message in the chat), at once. **A big job runs in a chat of its own** (a search, drafts, a
 resume for a contact, an interview prep, a networking run): run in this chat, even as
@@ -239,13 +243,7 @@ now." Never offer it again in a chat; the page asks by itself, now and then.
   work"` while the landing check below runs (`null` when nothing is left to land).
 - from a `talk` thread, a reply there (`from: cloud` or `computer`, plain words).
 
-Then land the work on master without holding this chat (the landing check took minutes and
-the page waited on every tap, 2026-10-29): commit (`python3 tools/save_state.py`), start
-`./tools/ci_local.sh --quick` in the background (Bash, `run_in_background`), and carry on
-with the page and step 3 while it runs. When it ends green, land it (CLAUDE.md, "Saving"),
-then `python3 tools/app.py busy "$D" --done` and send its batch. Red: leave the work where it
-is, clear `busy` the same way and say nothing; the next chat lands it. Bring the page up to
-date:
+Bring the page up to date:
 
 ```bash
 python3 tools/app.py view "$D/view" --dump "$D" --chat <your chat id>
@@ -257,6 +255,15 @@ Only the listener publishes; any other chat asks it to (`app.py republish`). Aft
 both are done at once, never asked, and the person hears one line, "Your page is updated."
 (RUNBOOK.md, "Start of a session", step 2). A wake from a timer or a background job of yours
 that brings nothing new is said to nobody.
+
+Then, the answer out, land the work on master without holding this chat (the landing check
+took minutes and the page waited on every tap, 2026-10-29), once a turn: start `python3
+tools/land.py --message "<what changed>"` in the background (Bash, `run_in_background`; it
+saves, commits, merges master and runs `./tools/ci_local.sh --quick`), as a separate call
+in the same message as the page's last batch, and carry on with step 3 while it runs. When
+it ends `land: ready`, make the calls it prints (CLAUDE.md, "Saving"), then `python3
+tools/app.py busy "$D" --done` and send its batch. Not green or a conflict: leave the work
+where it is, clear `busy` the same way and say nothing; the next chat lands it.
 
 ## Rules that hold everywhere
 

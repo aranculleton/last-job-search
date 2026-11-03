@@ -241,7 +241,8 @@ def land(root: str = ROOT, message: str = "", check=None, sleep=time.sleep) -> i
     print('  1. create_pull_request: owner "%s", repo "%s", head "%s", base "master", '
           'title "%s", body "%s"' % (owner, repo, name, title.replace('"', "'"), body))
     print('  2. merge_pull_request: owner "%s", repo "%s", pullNumber <the number 1 gave>, '
-          'merge_method "merge"' % (owner, repo))
+          'merge_method "merge"; in the same message, as a separate call, '
+          'unsubscribe_pr_activity for it where this chat has that tool' % (owner, repo))
     print("  3. python3 tools/land.py --after-merge")
     print("  No GitHub tools in this chat (a computer of your own): gh pr create --base master "
           "--fill, then gh pr merge <number> --merge, each on its own line, then 3.")

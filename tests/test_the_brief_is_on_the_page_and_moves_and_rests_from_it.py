@@ -139,7 +139,8 @@ def test_a_page_left_behind_by_an_update_is_published_again_by_the_brief(monkeyp
     monkeypatch.setattr(brief, "page_behind", lambda: "an update changed the page itself")
     lines = brief.claude_lines(dict(b))
     first = next(i for i, ln in enumerate(lines) if "republish it now" in ln)
-    data = next(i for i, ln in enumerate(lines) if "the page, after landing" in ln)
+    # The page, then the message, and only then the landing (morning_brief.md steps 4 to 6).
+    data = next(i for i, ln in enumerate(lines) if "the page, once the news is recorded" in ln)
     assert first < data                               # the new code first, then today's data
     assert "app.py page --out" in lines[first] and PAGE in lines[first]
     # The first brief after the update read the older prompt, which said never to: this wins.

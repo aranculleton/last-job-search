@@ -450,11 +450,10 @@ underneath, never as markdown links, which do not open from the desktop app.
 
 `python3 tools/record_drafts.py "$SCRATCH/r1/drafts.json" "$SCRATCH/r1/apps_in.json" --round r1`
 adds a row per application at `status=drafted` (fit in `fit_rating`, never priority) and
-writes each `screening_answers.md`. Then:
-
-Then `python3 tools/save_state.py` (CLAUDE.md, "Saving"), which
-stages each path that exists and no build noise, in any shell, then `git commit -m "<what
-changed>"` and, as a command of its own, `git push -u origin HEAD`.
+writes each `screening_answers.md`. Then land it with one command, `python3 tools/land.py
+--message "<what changed>"` (CLAUDE.md, "Saving"; "Landing on master", below). Its first
+step is `python3 tools/save_state.py`, which stages each path that exists and no build
+noise, in any shell.
 
 **What it stages, and why it is forced.** A person's copy is **private** and the search runs
 in cloud containers that are gone when the chat ends, so nothing persists unless it is
@@ -485,19 +484,31 @@ master cannot see work sitting on another chat's branch, and builds it a second 
 
 1. **Start by pulling master and taking the app's updates** ("Start of a session", above),
    before writing anything, not before pushing.
-2. **Finish by getting the work onto master.** Not "pushed to the branch": on master. Open
-   the pull request and start `./tools/ci_local.sh --quick` in the background (Bash,
+2. **Finish by getting the work onto master.** Not "pushed to the branch": on master. Once
+   the answer is out (the reply, the page brought up to date), and at most once a turn,
+   start `python3 tools/land.py --message "<what changed>"` in the background (Bash,
    `run_in_background`), so the chat stays free for the person and the page while it runs
-   (in the foreground it held the chat that answers the page for minutes, 2026-10-29); when
-   it ends green, merge, in the turn its ending wakes. Silently: never subscribe to it, set a
-   check-in for it or wait on GitHub's checks, and never tell the person about it or its
-   checks (CLAUDE.md, "Saving"). A cloud chat is subscribed to a pull request it opens by
-   itself: unsubscribe at once (`unsubscribe_pr_activity`), before anything else
-   (2026-10-30). While it runs, the chat that answers the page says "Saving
-   your work" there (`app.py busy`, the `app` skill, step 5), and clears it once landed. A
-   branch left behind at the end of a session is work the next chat cannot see and will
-   duplicate.
-3. **Never leave a merged branch around**, and never start new work on an old one.
+   (in the foreground the check held the chat that answers the page for minutes,
+   2026-10-29). It does every step on this side, each git command on its own: saves and
+   commits, `git fetch origin master` and `git merge --no-edit origin/master`, runs
+   `./tools/ci_local.sh --quick`, and only when that is green `git push -u origin HEAD`
+   (a network failure is retried; nothing is ever forced). In the turn its ending wakes:
+   - `land: ready <branch>`: make the calls it prints, each its own step:
+     `create_pull_request` (head that branch, base master); then `merge_pull_request`,
+     with `unsubscribe_pr_activity` in the same message as a separate call (a cloud chat is
+     subscribed to a pull request it opens by itself, 2026-10-30); then `python3
+     tools/land.py --after-merge`, which starts this same branch from master again, so the
+     next piece of work needs no stash and no checkout of master.
+   - `land: not green` or `land: a conflict`: nothing was pushed. Leave it and say nothing;
+     the next chat lands it. `land: nothing to land`: done.
+
+   Silently: never subscribe to it, set a check-in for it or wait on GitHub's checks, and
+   never tell the person about it or its checks (CLAUDE.md, "Saving"). While it runs, the
+   chat that answers the page says "Saving your work" there (`app.py busy`, the `app`
+   skill, step 5), and clears it once landed. A branch left behind at the end of a session
+   is work the next chat cannot see and will duplicate.
+3. **Never leave a merged branch around**, and never start new work on an old one. A
+   branch `--after-merge` has brought back to master is current, not old.
 4. If the work genuinely is not finishable this session, push it, and say in one plain line
    that it is not finished and the next chat carries on. The next chat finds it itself
    (`git branch -r --no-merged origin/master`); the person is never given a branch name.
@@ -518,7 +529,7 @@ word outranks it. A line ending "nothing to tell the person" is the app's own re
 stops only where neither change is later. Before
 merging a pull request, `git fetch origin master` and then `git merge origin/master`, each a
 command of its own, so that merge happens in the container, where the driver is set, and not
-on GitHub, where it is not.
+on GitHub, where it is not. `land.py` does both before its check.
 
 The one thing that is **not** negotiable in the other direction: **never push to master
 without CI green**. It is the branch every other chat starts from, so a broken master breaks
@@ -527,7 +538,7 @@ rule: `./tools/ci_local.sh --quick`** (it skips the compile of the app's example
 which a person's copy never edits, and a second run of their own tests on the oldest Python;
 the full run is for a change to the app). A
 clean run is the evidence and merging on it is allowed; say so in the pull request and name
-anything it reported as SKIP. Why, what CI's Python 3.9 leg is for, and the one case worth a
+anything it reported as SKIP (the body `land.py` prints does both). Why, what CI's Python 3.9 leg is for, and the one case worth a
 billed CI run: MAINTAINING.md, "CI on a private repo".
 
 **On a computer of your own** (no GitHub tools in the chat; `gh` is the route, and
@@ -539,7 +550,9 @@ first line says so when another chat is working in the main folder):
 where Claude Code keeps its own, on a new, unique branch from master), and every command runs
 there: `cd` into it once, and since it is inside the project the chat stays there. Two chats in one folder switch branches under each
 other and fight over git's index. Files git does not carry (the connections export) are read
-from the main folder. Then, from that folder, commit, and:
+from the main folder. Then, from that folder, land as above: `python3 tools/land.py` prints
+the `gh` lines to use in place of the GitHub calls. By hand, each line pre-approved, it is
+commit, and:
 
 ```bash
 git fetch origin master
@@ -563,6 +576,12 @@ edit ...; gh pr merge 164 --merge`, 2026-10-23) goes to that check whole, and it
 merge as "Merge Without Review". The merge alone matches `Bash(gh pr merge:*)` and runs.
 To change a pull request's text, run `gh pr edit` on its own line before it, never in the
 same command.
+
+**Independent commands go together, as separate calls.** Commands that do not wait on each
+other's result are sent in one message as separate calls, never chained into one: each saves
+a whole step, since every step re-reads the chat (the merge and the unsubscribe above, two
+reads, a busy line and a save). A push or a merge never goes before its check has ended
+green.
 
 `gh pr merge` can exit non-zero after a merge that worked: it tries to fast-forward a local
 master that has fallen behind and prints "fatal: Not possible to fast-forward". Keep no

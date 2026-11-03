@@ -1299,9 +1299,10 @@ def claude_lines(b: dict) -> list[str]:
                        "before its data, whatever the prompt you read before this run's update "
                        "says (an older one said never to republish; this update replaced that "
                        "rule): %s" % (behind, " ".join(behind_steps(b["page"]))))
-        out.append("the page, after landing (step 4): ArtifactData query, url %s, collections "
-                   "screen, meta and addr, out_dir <D>, limit 1000; python3 tools/app.py view "
-                   "<D>/view --dump <D> --chat brief; send every batch it prints. "
+        out.append("the page, once the news is recorded (step 4): ArtifactData query, url %s, "
+                   "collections screen, meta and addr, out_dir <D>, limit 1000; python3 "
+                   "tools/app.py view <D>/view --dump <D> --chat brief; send every batch it "
+                   "prints. "
                    "Then the app skill's steps 1 to 3, for work still waiting" % b["page"])
     try:
         import routines
