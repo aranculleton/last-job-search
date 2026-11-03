@@ -541,3 +541,4 @@ Ribeira Clinic              # invented employer, tests/test_brief.py
 Apple Calendar              # a product, docs/NEXT_BUILDER.md
 Waking Claude
 Ottilie Brandt              # invented, tests/test_linkedin_export.py
+Exampleshire Public Service # invented, tests/test_a_public_body_is_known_by_what_its_posting_says.py

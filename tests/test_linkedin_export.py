@@ -305,3 +305,27 @@ def test_an_export_fills_an_employer_and_title_a_record_lacks_and_never_one_it_h
     E.apply_history([], plan, book)
     assert (book[0]["company"], book[0]["title"]) == ("Quayside Foods", "Data Lead")
     assert (book[1]["company"], book[1]["title"]) == ("Fernhill Freight", "Head of Planning")
+
+
+def test_a_name_alone_never_gives_a_record_a_strangers_employer(tmp_path):
+    """The fill took a name-only match with no request in the log, so a same-name stranger's
+    employer and title filled a not-contacted record (the release review, 2026-11-03). By
+    name, it fills only with a request to them logged before they connected."""
+    conns = tmp_path / "Connections.csv"
+    conns.write_text("First Name,Last Name,URL,Email Address,Company,Position,Connected On\n"
+                     "Wren,Halloway,https://www.linkedin.com/in/example-another-wren,,Brackenhollow Foods,"
+                     "Field Title,12 Sep 2026\n", encoding="utf-8")
+    (tmp_path / "messages.csv").write_text("CONVERSATION ID,FROM,SENDER PROFILE URL,TO,DATE,CONTENT\n",
+                                           encoding="utf-8")
+    mine = ("example-morgan-ellis", "morgan ellis")
+    book = [{"contact_id": "halloway", "name": "Wren Halloway", "linkedin_url": "",
+             "company": "", "title": ""}]
+    plan = E.plan_history(book, [], str(tmp_path), mine=mine)
+    E.apply_history([], plan, book)
+    assert (book[0]["company"], book[0]["title"]) == ("", ""), "not contacted: nothing joins them"
+    asked = [{"contact_id": "halloway", "date": "2026-09-08", "direction": "out",
+              "channel": "connection", "scenario": "connection_request",
+              "summary": "Request sent", "full_text": "", "subject": ""}]
+    plan = E.plan_history(book, asked, str(tmp_path), mine=mine)
+    E.apply_history(asked, plan, book)
+    assert (book[0]["company"], book[0]["title"]) == ("Brackenhollow Foods", "Field Title")

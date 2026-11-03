@@ -222,6 +222,23 @@ def test_a_message_someone_else_wrote_pasted_in_is_not_the_persons_reaction(prof
     assert "learned.py record" in got["hookSpecificOutput"]["additionalContext"]
 
 
+def test_an_instruction_naming_a_message_keeps_the_lines_under_it(profile):
+    """A short line naming "Juno's message" or "message from" marked every line after it as
+    Juno's, and a line opening "Thanks for reaching out" dropped all that followed: the
+    person's own rule under it was never read (the release review, 2026-11-03). Lines under
+    an intro are theirs only when it ends in ":" or is a label, or the block reads as a
+    message (a greeting to the person, or a sign-off with a name)."""
+    for text in ("Draft a reply to Juno's message.\nKeep it short and never use exclamation marks.",
+                 "Can you answer this message from Juno?\nand stop using 'reach out'",
+                 "Thanks for reaching out to them for me.\nThat last note was too formal."):
+        assert learned.reaction(text), text
+    for text in ("Juno's message:\nPlease never use my work email.",
+                 "Draft a reply to Juno's message.\nHi Morgan, please don't use my work email.",
+                 "Draft a reply to Juno's message.\nPlease don't use my work email.\n\nBest,\nJuno",
+                 "Thanks for reaching out!\nPlease don't use my work email.\n\nBest,\nJuno"):
+        assert learned.reaction(text) == "", text
+
+
 def test_a_reaction_waiting_in_the_chat_never_reaches_a_test(profile, monkeypatch):
     learned.note_reaction("too formal", "too formal")
     assert learned.pending()

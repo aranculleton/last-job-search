@@ -483,7 +483,11 @@ works only if every branch lands on master before its chat ends: a chat that sta
 master cannot see work sitting on another chat's branch, and builds it a second time. So:
 
 1. **Start by pulling master and taking the app's updates** ("Start of a session", above),
-   before writing anything, not before pushing.
+   before writing anything, not before pushing. Then bring in what an earlier chat could
+   not land: `python3 tools/land.py --waiting` lists each branch whose work waits (the
+   start command names them too); `git merge --no-edit <each>`, a command of its own, and
+   this chat's landing takes it to master. One that stops on a conflict: `git merge
+   --abort`, and leave it.
 2. **Finish by getting the work onto master.** Not "pushed to the branch": on master. Once
    the answer is out (the reply, the page brought up to date), and at most once a turn,
    start `python3 tools/land.py --message "<what changed>"` in the background (Bash,
@@ -498,9 +502,14 @@ master cannot see work sitting on another chat's branch, and builds it a second 
      with `unsubscribe_pr_activity` in the same message as a separate call (a cloud chat is
      subscribed to a pull request it opens by itself, 2026-10-30); then `python3
      tools/land.py --after-merge`, which starts this same branch from master again, so the
-     next piece of work needs no stash and no checkout of master.
-   - `land: not green` or `land: a conflict`: nothing was pushed. Leave it and say nothing;
-     the next chat lands it. `land: nothing to land`: done.
+     next piece of work needs no stash and no checkout of master. **merge refused** (not
+     mergeable: two chats landed at once, and GitHub's merge has no row-by-row driver): run
+     `python3 tools/land.py` again, which merges master here, with the driver, and pushes the
+     same branch; then merge the same pull request again.
+   - `land: not green` or `land: a conflict`: the work waits on this chat's branch, pushed
+     with no pull request (a conflict pushes it as it was before the merge), so it outlives
+     this container. Open no pull request, leave it and say nothing; the next chat lands it.
+     `land: nothing to land`: done.
 
    Silently: never subscribe to it, set a check-in for it or wait on GitHub's checks, and
    never tell the person about it or its checks (CLAUDE.md, "Saving"). While it runs, the
@@ -511,7 +520,7 @@ master cannot see work sitting on another chat's branch, and builds it a second 
    branch `--after-merge` has brought back to master is current, not old.
 4. If the work genuinely is not finishable this session, push it, and say in one plain line
    that it is not finished and the next chat carries on. The next chat finds it itself
-   (`git branch -r --no-merged origin/master`); the person is never given a branch name.
+   (`python3 tools/land.py --waiting`); the person is never given a branch name.
 
 **Commit and push whenever a unit of work finishes**, not once at the end: a session that
 runs out of context mid-task loses everything uncommitted. Batch the commits and push once a

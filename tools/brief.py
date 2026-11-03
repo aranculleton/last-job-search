@@ -649,10 +649,13 @@ def start(argv: list[str], model: str) -> int:
                            capture_output=True, encoding="utf-8", errors="replace")
         if s.returncode:
             setup = ((s.stderr or s.stdout or "").strip().splitlines() or ["failed"])[-1][:200]
-    earlier = subprocess.run(["git", "branch", "-r", "--no-merged", "origin/master", "--list",
-                              "origin/claude/ops-*"], cwd=ROOT, text=True, capture_output=True,
-                             encoding="utf-8", errors="replace")
-    branches = " ".join(b.strip() for b in (earlier.stdout or "").splitlines() if b.strip())
+    # Every branch a landing left waiting, a chat's as well as a run's: one that was not green
+    # or stopped on a conflict pushes its branch, and only claude/ops-* was looked for here.
+    try:
+        import land
+        branches = " ".join(land.waiting(ROOT))
+    except Exception:  # noqa: BLE001  the brief goes on; the next run looks again
+        branches = ""
     with open(sync_log_path(), "w", encoding="utf-8", newline="\n") as fh:
         fh.write("date: %s\nexit: %d\nearlier: %s\nsetup: %s\n---\n%s%s"
                  % (today.isoformat(), r.returncode, branches, setup, r.stdout or "",

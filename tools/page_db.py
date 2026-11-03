@@ -901,13 +901,27 @@ def keep_landed(dump_dir: str, batches, skip=()) -> None:
             _keep_dump(dump_dir, coll, doc_id, body, version)
 
 
+def not_its_claim(item: dict, chat: str) -> str:
+    """Why a chat may not write to this item, or "": another chat claims it now. The pinned
+    version is no guard, since a chat whose lease ran out reads the item afresh, re-claimed,
+    and its write then lands on the other chat's claim (the release review, 2026-11-03)."""
+    who = str(item.get("claimed_by") or "").strip()
+    chat = str(chat or "").strip()
+    if chat and who and who != chat:
+        return ("another chat took this job on after this one went quiet, and it is that "
+                f"chat's now ({who}): write nothing more to it, and stop")
+    return ""
+
+
 def pin(db: dict, work_id: str, now: dt.datetime, out_dir: str, stage=None, line: str = "",
-        count: dict | None = None, left_s: int | None = None, dump_dir: str = "") -> dict:
+        count: dict | None = None, left_s: int | None = None, dump_dir: str = "",
+        chat: str = "") -> dict:
     """One pinned update of a running item: its stage (stage_at only when the stage moves
     on), one plain line in its steps, how many of how many are done, how long is left
     (`left_s`, as of `left_at`), and its lease, renewed, so long work is never taken for
     stopped. The page reads `left_s` as the stage's own estimate: a search that says
-    "15 min left" is not shown as late at ten. {work, stage, count, left_s, batches}."""
+    "15 min left" is not shown as late at ten. {work, stage, count, left_s, batches}.
+    `chat`: the id the job was claimed under; another chat's claim is a KeyError."""
     import app_model
     doc = (db.get("work") or {}).get(safe_id(work_id))
     if doc is None:
@@ -915,6 +929,9 @@ def pin(db: dict, work_id: str, now: dt.datetime, out_dir: str, stage=None, line
     item = dict(doc["data"])
     if str(item.get("status") or "") in ("done", "failed", "stopped"):
         raise KeyError(f"work {work_id!r} has finished; write nothing more to it")
+    taken = not_its_claim(item, chat)
+    if taken:
+        raise KeyError(taken)
     if item.get("stop_asked"):
         # They tapped Stop: no stage is pinned, the work is stopped (the app skill, step 4).
         return {"work": work_id, "stop_asked": True, "batches": []}
@@ -1019,7 +1036,7 @@ def message_id(now: dt.datetime) -> str:
 
 def finish(db: dict, work_id: str, now: dt.datetime, out_dir: str, summary: str = "",
            status: str = "done", error: str = "", links=(), reply: str = "", thread: str = "",
-           chat_kind: str = "cloud", dump_dir: str = "") -> dict:
+           chat_kind: str = "cloud", dump_dir: str = "", chat: str = "") -> dict:
     """The batch that finishes one work item (the app skill, step 5): the item `done` (or
     `failed`, with `error` in plain words), its one-sentence summary and links, pinned to
     the version read; each of its locks the dump holds, deleted and pinned; and with `reply`,
@@ -1034,6 +1051,9 @@ def finish(db: dict, work_id: str, now: dt.datetime, out_dir: str, summary: str 
     item = dict(doc["data"])
     if str(item.get("status") or "") in FINISHED:
         raise KeyError(f"work {work_id!r} has already finished; write nothing more to it")
+    taken = not_its_claim(item, chat)        # `chat`: the id the job was claimed under
+    if taken:
+        raise KeyError(taken)
     if status not in ("done", "failed"):
         raise ValueError(f"a finished item is done or failed, not {status!r}")
     error = " ".join(str(error or "").split())

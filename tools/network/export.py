@@ -1416,19 +1416,23 @@ def plan_history(contacts, threads, src=None, mine=None) -> dict:
             c, _how = match_contact(contacts, name, r.get("URL"), index)
             if c is None:
                 continue
-            # Their employer and title as the export gives them, onto a record that has none:
-            # twenty-four people added from an export showed as a first name and "first wrote
-            # 10 Sep", and the person asked who they all were (2026-11-03). Never over a
-            # record's own.
-            co, ti = (r.get("Company") or "").strip(), (r.get("Position") or "").strip()
-            if (co and not str(c.get("company") or "").strip()) or \
-                    (ti and not str(c.get("title") or "").strip()):
-                out["who"].append((c, co, ti))
             cid = str(c.get("contact_id") or "").strip()
             rows = st._ordered(mine_for(cid))
             asked = [x for x in rows if st.is_request(x)
                      and (st.as_date(x.get("date")) or datetime.date.max)
                      <= when + datetime.timedelta(days=MESSAGE_SLACK_DAYS)]
+            # Their employer and title as the export gives them, onto a record that has none:
+            # twenty-four people added from an export showed as a first name and "first wrote
+            # 10 Sep", and the person asked who they all were (2026-11-03). Never over a
+            # record's own, and only where the export's row is surely this person: their
+            # profile address, or their name with a request to them in the log. A name alone
+            # gave a not-contacted record a same-name stranger's employer (the release
+            # review, 2026-11-03).
+            co, ti = (r.get("Company") or "").strip(), (r.get("Position") or "").strip()
+            sure = _how == "profile address" or (_how == "name" and bool(asked))
+            if sure and ((co and not str(c.get("company") or "").strip()) or
+                         (ti and not str(c.get("title") or "").strip())):
+                out["who"].append((c, co, ti))
             if not asked:
                 continue           # connected before any request: nothing to accept
             since = st.as_date(asked[-1].get("date"))

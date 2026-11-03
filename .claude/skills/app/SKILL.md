@@ -239,8 +239,8 @@ are not reading: the page says it.
 **Progress costs nothing extra**, and is for big jobs only: small work done here is claimed
 running at its first stage and finished in one batch, with no pin between. At each stage
 boundary of a big job (`app.py progress <kind>` names the stages), in the same message as
-that stage's first command, `python3 tools/app.py pin "$D" --work <id> --stage <stage>
---line "<one plain line>"`, and send its batch: it moves the stage, adds the line and renews
+that stage's first command, `python3 tools/app.py pin "$D" --work <id> --chat <the id it
+was claimed under> --stage <stage> --line "<one plain line>"`, and send its batch: it moves the stage, adds the line and renews
 the item's lease. On a long stage, pin it again with a new line every ten minutes or so: the
 page counts a job with no word for half an hour as stopped. A search's job sites say how far
 they are and how long is left: while `run_round.py` runs (in the background), every ten
@@ -266,8 +266,9 @@ now." Never offer it again in a chat; the page asks by itself, now and then.
 
 ## 5. Finish in one batch
 
-`python3 tools/app.py done "$D" --work <id> --summary "<one sentence>"` writes the item's
-part of it, so none is written by hand: `--reply-file -` (or a file) for the answer in its
+`python3 tools/app.py done "$D" --work <id> --chat <the id it was claimed under> --summary
+"<one sentence>"` writes the item's part of it, so none is written by hand (a job another
+chat has taken on since is refused, and nothing is written): `--reply-file -` (or a file) for the answer in its
 `talk` thread, `--failed "<why, in plain words>"` when it did not finish, `--link
 "<label>=<address>"` for each link (a reply's own is `reply.py finish ... --work <id>
 --dump "$D"`). A summary past one sentence or 15 words is refused. A finish holds:

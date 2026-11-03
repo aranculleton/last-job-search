@@ -113,29 +113,55 @@ def test_the_pull_request_names_what_the_check_skipped(copy, capsys):
     assert land.DEFAULT_MESSAGE in git(chat, "log", "-1", "--format=%s").stdout
 
 
-def test_a_red_check_pushes_nothing_and_keeps_the_work_committed(copy, capsys):
-    origin, chat, _other = copy
+def test_a_red_check_pushes_its_branch_with_no_pull_request_and_the_next_chat_finds_it(copy,
+                                                                                      capsys):
+    """A cloud container is gone when its chat ends: work only committed there was lost, and
+    a person's own tests failing after an update made every landing red (the release review,
+    2026-11-03). Red still pushes the chat's branch, never a pull request, and --waiting
+    names it for the next chat or run."""
+    origin, chat, other = copy
     write(chat, "profile/notes.md", "second\n")
     code, out = _run(chat, "--message", "Notes", check=RED, capsys=capsys)
     assert code == 1
-    assert out.startswith("land: not green") and "AssertionError: boom" in out
+    assert out.startswith("land: not green; the work waits on claude/chat-1, pushed with no "
+                          "pull request") and "AssertionError: boom" in out
     assert "tests                     FAIL" in out and "1 passed, 1 failed" in out
-    assert "claude/chat-1" not in _branches(origin)
-    assert git(chat, "log", "-1", "--format=%s").stdout.strip() == "Notes"
+    assert "create_pull_request" not in out and "land: ready" not in out
+    assert "claude/chat-1" in _branches(origin)
+    assert git(origin, "log", "-1", "--format=%s", "claude/chat-1").stdout.strip() == "Notes"
     assert git(chat, "status", "--porcelain", "--untracked-files=no").stdout == ""
+    # The next chat, in a fresh container, finds it and is told how to bring it in.
+    git(other, "fetch", "-q", "origin")
+    assert land.waiting(str(other)) == ["origin/claude/chat-1"]
+    code, out = _run(other, "--waiting", capsys=capsys)
+    assert code == 0 and "waiting on: origin/claude/chat-1" in out
+    assert "git merge --no-edit <it>" in out
+    # The chat's own branch is never listed to itself, and a branch of the app's is never one.
+    assert land.waiting(str(chat)) == []
+    git(other, "switch", "-q", "-c", "claude/app-change")
+    write(other, "tools/example.py", "print('changed')\n")
+    git(other, "commit", "-q", "-am", "an app change")
+    git(other, "push", "-q", "origin", "claude/app-change")
+    git(other, "fetch", "-q", "origin")
+    assert land.waiting(str(other)) == ["origin/claude/chat-1"]
 
 
-def test_a_conflict_is_aborted_and_pushes_nothing(copy, capsys):
+def test_a_conflict_pushes_the_work_from_before_the_merge_and_leaves_no_merge(copy, capsys):
     origin, chat, other = copy
     write(other, "profile/notes.md", "theirs\n")
     git(other, "commit", "-q", "-am", "theirs")
     git(other, "push", "-q", "origin", "master")
     write(chat, "profile/notes.md", "mine\n")
-    code, out = _run(chat, check=NEVER, capsys=capsys)
+    code, out = _run(chat, "--message", "Mine", check=NEVER, capsys=capsys)
     assert code == 2
-    assert out.strip() == "land: a conflict in profile/notes.md; nothing was pushed"
+    assert out.startswith("land: a conflict in profile/notes.md; the work waits on claude/chat-1")
+    assert "create_pull_request" not in out
     assert git(chat, "rev-parse", "-q", "--verify", "MERGE_HEAD", check=False).returncode != 0
-    assert "claude/chat-1" not in _branches(origin)
+    # Pushed as it was before the merge: the chat's own commit, master's not in it.
+    assert git(origin, "rev-parse", "claude/chat-1").stdout == git(chat, "rev-parse", "HEAD").stdout
+    assert git(origin, "log", "-1", "--format=%s", "claude/chat-1").stdout.strip() == "Mine"
+    assert git(origin, "merge-base", "--is-ancestor", "master", "claude/chat-1",
+               check=False).returncode != 0
 
 
 def test_nothing_ahead_of_master_lands_nothing_and_runs_no_check(copy, capsys):
@@ -239,4 +265,101 @@ def test_the_app_itself_is_never_landed_this_way(copy, capsys):
     code, out = _run(chat, check=NEVER, capsys=capsys)
     assert code == 2 and "the app itself" in out
     git(chat, "remote", "set-url", "origin", str(origin))
+
+
+def test_a_refused_merge_is_landed_again_here_then_merged(copy, capsys):
+    """Two chats landing at once: each merges master here with the row-by-row driver, but
+    GitHub's merge has no driver, so the second pull request is not mergeable (the release
+    review, 2026-11-03). The steps say what to do, and landing again does it."""
+    origin, chat, other = copy
+    write(chat, "profile/notes.md", "second\n")
+    code, out = _run(chat, capsys=capsys)
+    assert code == 0 and land.MERGE_REFUSED in out
+    assert "merge refused" in land.MERGE_REFUSED and "python3 tools/land.py" in land.MERGE_REFUSED
+    with open(os.path.join(ROOT, "RUNBOOK.md"), encoding="utf-8") as fh:
+        assert "merge refused" in fh.read()
+    # The other chat's landing reaches master first; landing again takes it in, same branch.
+    write(other, "profile/theirs.md", "theirs\n")
+    git(other, "add", "profile/theirs.md")
+    git(other, "commit", "-q", "-m", "the other chat")
+    git(other, "push", "-q", "origin", "master")
+    code, out = _run(chat, capsys=capsys)
+    assert code == 0 and "land: ready claude/chat-1" in out
+    assert git(origin, "merge-base", "--is-ancestor", "master", "claude/chat-1",
+               check=False).returncode == 0
+
+
+def test_after_the_merge_a_page_update_that_took_master_since_is_no_reason_to_stay(copy, capsys):
+    """A page update (app_setup.take_master) merged master into the branch after the push,
+    so HEAD was never on master and --after-merge said "not merged" for ever (the release
+    review, 2026-11-03). The commit the landing pushed is what is looked for."""
+    origin, chat, other = copy
+    write(chat, "profile/notes.md", "second\n")
+    assert _run(chat, capsys=capsys)[0] == 0
+    write(other, "profile/later.md", "later\n")
+    git(other, "add", "profile/later.md")
+    git(other, "commit", "-q", "-m", "a later chat")
+    git(other, "push", "-q", "origin", "master")
+    git(chat, "fetch", "-q", "origin", "master")
+    git(chat, "merge", "-q", "--no-edit", "origin/master")          # the page update
+    git(other, "fetch", "-q", "origin", "claude/chat-1")
+    git(other, "merge", "-q", "--no-ff", "--no-edit", "FETCH_HEAD")  # GitHub merges the PR
+    git(other, "push", "-q", "origin", "master")
+    code, out = _run(chat, "--after-merge", capsys=capsys)
+    assert code == 0 and "starts from master now" in out
+    assert git(chat, "rev-parse", "HEAD").stdout == git(origin, "rev-parse", "master").stdout
+
+
+def test_after_the_merge_newer_work_of_its_own_is_kept(copy, capsys):
+    origin, chat, other = copy
+    write(chat, "profile/notes.md", "second\n")
+    assert _run(chat, capsys=capsys)[0] == 0
+    write(chat, "profile/newer.md", "newer\n")
+    git(chat, "add", "profile/newer.md")
+    git(chat, "commit", "-q", "-m", "newer work")
+    git(other, "fetch", "-q", "origin", "claude/chat-1")
+    git(other, "merge", "-q", "--no-ff", "--no-edit", "FETCH_HEAD")
+    git(other, "push", "-q", "origin", "master")
+    code, out = _run(chat, "--after-merge", capsys=capsys)
+    assert code == 0 and "newer work of its own" in out
+    assert git(chat, "merge-base", "--is-ancestor", "origin/master", "HEAD",
+               check=False).returncode == 0
+    assert os.path.exists(os.path.join(str(chat), "profile", "newer.md"))
+
+
+def test_a_landing_holds_a_lock_and_a_second_one_waits_for_it(copy, capsys, monkeypatch):
+    """A page update takes no master while a landing runs (app_setup.take_master reads the
+    same lock), and two landings never run in one checkout at once."""
+    _origin, chat, _other = copy
+    lock = os.path.join(land.git_dir(str(chat)), land.LOCK_FILE)
+    seen = []
+    monkeypatch.setattr(land, "_check_command",
+                        lambda root, check: seen.append(land.landing(str(chat))) or GREEN)
+    write(chat, "profile/notes.md", "second\n")
+    assert _run(chat, capsys=capsys)[0] == 0
+    assert seen == [True] and not os.path.exists(lock) and not land.landing(str(chat))
+    monkeypatch.undo()
+    # Another landing's lock, live: nothing is done.
+    with open(lock, "w", encoding="utf-8") as fh:
+        fh.write("%d now\n" % os.getpid())
+    write(chat, "profile/notes.md", "third\n")
+    code, out = _run(chat, check=NEVER, capsys=capsys)
+    assert code == 2 and "another landing is running" in out
+    # One left by a landing killed long ago is stale, and ignored.
+    os.utime(lock, (1, 1))
+    assert not land.landing(str(chat))
+
+
+def test_a_git_command_refused_for_another_ones_index_lock_is_tried_again(copy, capsys):
+    """git refuses at once while another command holds index.lock (a page update, the
+    update check): the landing stopped with exit 2 (2026-11-03). It waits a moment instead."""
+    import threading
+    _origin, chat, _other = copy
+    lock = os.path.join(land.git_dir(str(chat)), "index.lock")
+    with open(lock, "w", encoding="utf-8") as fh:
+        fh.write("")
+    threading.Timer(0.3, os.remove, [lock]).start()
+    write(chat, "profile/notes.md", "second\n")
+    code, out = _run(chat, capsys=capsys)
+    assert code == 0 and "land: ready claude/chat-1" in out, out
 

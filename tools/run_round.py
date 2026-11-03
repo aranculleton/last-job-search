@@ -900,16 +900,6 @@ def main():
         log.flush()
     print(f"\nshortlist: {f('06_shortlist.json')}")
 
-    good, strong = yield_of(f("06_shortlist.json"))
-    # A search asked for N widens until N score 60 or more: a top-up of ten starts on one page
-    # of each site (the app skill) and stopped at five (2026-11-03).
-    want = max(YIELD_60, min(a.show or 0, 60))
-    met = good >= want and strong >= YIELD_75
-    print(f"yield: {good} scoring 60+ (target {want}), "
-          f"{strong} scoring 75+ (target {YIELD_75}) -> {'MET' if met else 'MISSED'}")
-    if partial:
-        print(f"warning: {partial}")
-
     # Write the keeper, then drop the rest. Done before the expansion branch
     # below returns, so every exit path leaves the same small footprint.
     cut: dict = {}
@@ -922,6 +912,18 @@ def main():
                                                                     "seen_jobs.json"),
                                              a.no_seen_read),
                             report=cut)
+    # Counted on the list the person is shown, after the hard rules cut it: counted on the
+    # ranked rows before the cut, 60 and more of them, a round met its target with rows the
+    # cut then dropped, and never widened (the release review, 2026-11-03).
+    good, strong = yield_of(summary) if summary else (0, 0)
+    # A search asked for N widens until N score 60 or more: a top-up of ten starts on one page
+    # of each site (the app skill) and stopped at five (2026-11-03).
+    want = max(YIELD_60, min(a.show or 0, 60))
+    met = good >= want and strong >= YIELD_75
+    print(f"yield: {good} scoring 60+ (target {want}), "
+          f"{strong} scoring 75+ (target {YIELD_75}) -> {'MET' if met else 'MISSED'}")
+    if partial:
+        print(f"warning: {partial}")
     for line in say_cut(cut, a.show):
         print(line)
     if summary:
@@ -994,6 +996,8 @@ def main():
             + (["--scrape-before", scraped] if os.path.isdir(scraped) else [])
             + (["--keep-intermediates"] if a.keep else [])
             + (["--summary-dir", a.summary_dir] if a.summary_dir else [])
+            # The number asked for: without it a widened top-up of ten kept KEEP_TOP rows.
+            + (["--show", str(a.show)] if a.show is not None else [])
             + (["--tracker", a.tracker] if a.tracker else [])
             + (["--seen", a.seen] if a.seen else [])
             + (["--no-seen-write"] if a.no_seen_write else [])

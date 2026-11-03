@@ -85,6 +85,18 @@ make sense to somebody whose repo just received it.
   asked there.
 - **A message you paste in from someone else is never taken for your own feedback.** "Please
   don't use my work email" in their message no longer changes how Claude writes for you.
+- **Nothing Claude saves is lost when a check fails.** Work that could not be saved to your
+  main copy (its check failed, or two chats saved at once) now waits on its own branch on
+  GitHub, and the next chat or brief brings it in; before, a cloud chat's work could vanish
+  when it ended. A page update never throws away a merge being settled, and waits while a save
+  runs.
+- **Well-known employers are never wrongly ruled out as public bodies.** A posting that
+  mentions public-sector clients or a regulator no longer excludes a bank or a consultancy you
+  target.
+- **A rule you write under a request is kept.** "Draft a reply to Juno's message. Keep it
+  short." no longer loses the "keep it short".
+- **A job chat never finishes a job another chat has taken on**, and its next job gets its own
+  steps.
 - **A resume fitted to its page always passes its own check.** Filling the page to its last
   line put text within the margin the check fails ("text near the edge"), so a resume reported
   as fitted was then turned back; filling now stops before that margin.

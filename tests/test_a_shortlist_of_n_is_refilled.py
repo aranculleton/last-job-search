@@ -100,3 +100,46 @@ def test_a_ruling_made_after_the_round_is_refilled_by_a_recut(round_dir, monkeyp
     assert rows[0]["apply_url"] == "https://careers.example/fernhill/3"
     assert rows[0]["link_status"] == "open"
     assert "passed over 3 that fail a rule now" in capsys.readouterr().out
+
+
+def _round(tmp_path, monkeypatch, rows, *extra):
+    """run_round.main() with every stage stubbed, its ranked shortlist `rows`; returns the
+    widened round's command, or None when the round did not widen."""
+    widened = []
+
+    def stage(cmd, log, deadline=None, ok=(0,)):
+        if os.path.basename(cmd[1]) == "throttle.py":
+            with open(cmd[cmd.index("--out") + 1], "w", encoding="utf-8") as fh:
+                json.dump(rows, fh)
+
+    monkeypatch.setattr(run_round, "run", stage)
+    monkeypatch.setattr(run_round.subprocess, "call", lambda cmd: widened.append(list(cmd)) or 0)
+    scraped = tmp_path / "scraped.json"
+    scraped.write_text("[]")
+    seen = tmp_path / "seen_jobs.json"
+    seen.write_text('{"seen": {}}', encoding="utf-8")
+    monkeypatch.setattr(sys, "argv", ["run_round.py", "--out", str(tmp_path / "r1"),
+                                      "--from-scraped", str(scraped), "--seen", str(seen),
+                                      "--summary-dir", str(tmp_path / "summ"), "--today", TODAY,
+                                      "--jobage", "14", "--pages", "1", "--expand", *extra])
+    run_round.main()
+    return widened[0] if widened else None
+
+
+def test_the_yield_is_counted_on_the_list_the_hard_rules_leave(tmp_path, monkeypatch, judged):
+    """`met` counted the ranked rows before the hard rules cut them: six at 90, five of them
+    past the search window, met the target, and the round never widened to find the rest
+    (the release review, 2026-11-03)."""
+    rows = [_row(1, "Fernhill Freight")] + [_row(n, f"Larkspur Retail {n}", date="2026-06-08")
+                                            for n in range(2, 7)]
+    for r in rows:
+        r["fit"] = 90
+    cmd = _round(tmp_path, monkeypatch, rows)
+    assert cmd is not None, "one row passes every rule: the target is missed and it widens"
+
+
+def test_a_widened_round_keeps_the_number_asked_for(tmp_path, monkeypatch, judged):
+    """A top-up of ten that widened ran its next round with no --show, so it kept KEEP_TOP
+    rows (the release review, 2026-11-03)."""
+    cmd = _round(tmp_path, monkeypatch, [_row(1, "Fernhill Freight")], "--show", "10")
+    assert cmd is not None and cmd[cmd.index("--show") + 1] == "10"

@@ -75,6 +75,72 @@ def test_a_copy_that_cannot_take_master_leaves_the_page_as_it_is(tmp_path, monke
     assert not (a / ".git" / "MERGE_HEAD").exists()
 
 
+def test_a_merge_being_settled_by_hand_is_never_thrown_away(tmp_path, monkeypatch):
+    """With a merge stopped part way and being settled by hand, git merge failed on it and
+    the abort that always followed threw the settling away (the release review, 2026-11-03)."""
+    a, b = _copies(tmp_path)
+    (b / "job_search_tracker.csv").write_text("company\nKestrel Mutual\nLarkspur Retail\n")
+    _git(b, "commit", "-qam", "another chat's row")
+    _git(b, "push", "-q", "origin", "HEAD:master")
+    (a / "job_search_tracker.csv").write_text("company\nKestrel Mutual\nQuayside Foods\n")
+    _git(a, "commit", "-qam", "this chat's row")
+    _git(a, "fetch", "-q", "origin", "master")
+    subprocess.run(["git", "-C", str(a), "merge", "--no-edit", "origin/master"],
+                   capture_output=True)                       # stops on the conflict
+    settled = "company\nKestrel Mutual\nLarkspur Retail\nQuayside Foods\n"
+    (a / "job_search_tracker.csv").write_text(settled)      # settled by hand, not yet added
+    _here(monkeypatch, a)
+    said = app_setup.take_master()
+    assert said.startswith("app: a merge is being settled") and "left as it is" in said
+    assert (a / ".git" / "MERGE_HEAD").exists(), "the merge is still there to finish"
+    assert (a / "job_search_tracker.csv").read_text() == settled
+
+
+def test_a_page_update_takes_no_master_while_a_landing_runs(tmp_path, monkeypatch):
+    """The landing merges master itself; a page update merging at the same moment fought it
+    over git's index (the release review, 2026-11-03)."""
+    import land
+    a, b = _copies(tmp_path)
+    (b / "round.json").write_text('{"jobs": 10}\n')
+    _git(b, "add", "-A")
+    _git(b, "commit", "-qm", "a search")
+    _git(b, "push", "-q", "origin", "HEAD:master")
+    _here(monkeypatch, a)
+    lock = os.path.join(land.git_dir(str(a)), land.LOCK_FILE)
+    with open(lock, "w", encoding="utf-8") as fh:
+        fh.write("%d now\n" % os.getpid())
+    head = _git(a, "rev-parse", "HEAD").stdout
+    assert app_setup.take_master() == ""
+    assert _git(a, "rev-parse", "HEAD").stdout == head and not (a / "round.json").exists()
+    os.remove(lock)
+    assert app_setup.take_master() == "" and (a / "round.json").exists()
+
+
+def test_the_next_chat_is_told_of_work_an_earlier_one_could_not_land(tmp_path, monkeypatch):
+    """A landing that was not green pushes its branch to wait; the start command names it,
+    so the next chat brings it in (the release review, 2026-11-03)."""
+    a, b = _copies(tmp_path)
+    _git(b, "switch", "-q", "-c", "claude/earlier-chat")
+    (b / "job_search_tracker.csv").write_text("company\nKestrel Mutual\nLarkspur Retail\n")
+    _git(b, "commit", "-qam", "unlanded")
+    _git(b, "push", "-q", "origin", "claude/earlier-chat")
+    _git(a, "fetch", "-q", "origin")
+    _here(monkeypatch, a)
+    _git(a, "remote", "set-url", "origin", str(tmp_path / "origin.git"))
+    assert app_setup._waiting_branches() == ["origin/claude/earlier-chat"]
+    monkeypatch.setattr(app_setup, "_waiting_branches", lambda: ["origin/claude/earlier-chat"])
+    monkeypatch.setattr(app_setup, "state", lambda runner=None: {
+        "repo": {"kind": "private"}, "setup": {"state": "here", "say": ""},
+        "page": {"url": "https://claude.ai/code/artifact/example"}, "page_current": True,
+        "stale": False, "answers": {}, "set_up": True})
+    monkeypatch.setattr(app_setup, "_finished", lambda: True)
+    _code, lines = app_setup.start(on="test", tools="none")
+    said = "\n".join(lines)
+    assert "waits on origin/claude/earlier-chat" in said and "git merge --no-edit" in said
+    _code, lines = app_setup.start(on="test", tools="none", work="draft~a")
+    assert "earlier-chat" not in "\n".join(lines), "a job's own chat brings in nothing"
+
+
 def test_the_app_itself_and_a_copy_with_no_profile_are_left_alone(tmp_path, monkeypatch):
     a, _ = _copies(tmp_path)
     monkeypatch.setattr(app_setup, "ROOT", str(a))

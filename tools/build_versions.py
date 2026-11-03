@@ -350,7 +350,7 @@ METHODS: dict[str, dict] = {
             (62, "2026-11-03", False, "the RUNBOOK lands a chat's work with one background command, tools/land.py, once the answer is out; independent commands go together as separate calls; documents render and are checked as before"),
             (63, "2026-11-03", False, "filling the page stops before the margin the verification checks, so a fitted resume never fails it for text too near the edge"),
         ),
-        "fingerprint": "cf1f4db27c3a72f9",
+        "fingerprint": "489f6e7937d46cdb",
     },
     "interview": {
         "by": "upgrade", "priority": 2, "applies": "live_interviews", "time": "~15 min",
@@ -519,9 +519,9 @@ METHODS: dict[str, dict] = {
             (63, "2026-10-29", False, "no chat reads LinkedIn: the short list is queued for the person's page, which reads each profile with its Experience, Education and activity pages in the Claude desktop app, and every note waiting on those reads is rewritten as one piece of work; a run never waits on a read, and the people found are as before"),
             (64, "2026-10-30", False, "a run the page asked for brings back as many people as the person chose, 5 when not given"),
             (65, "2026-11-03", False, "a reply is two commands: reply.py prepare finds who wrote, logs their message, saves an interview time it gives and prints everything the draft needs; reply.py finish checks the draft, saves it for the page and writes the page's finishing batch"),
-            (66, "2026-11-03", False, "an export's connections fill in the employer and title of a contact whose record has none"),
+            (66, "2026-11-03", False, "an export's connections fill in the employer and title of a contact whose record has none, only where the row is surely theirs: their profile address, or their name with a request to them logged"),
         ),
-        "fingerprint": "ba132594347f9bf2",
+        "fingerprint": "27ce20d8453c63d1",
     },
     "network-notes": {
         "by": "network", "priority": 2, "applies": "queued_notes", "time": "~10 min",
@@ -625,10 +625,10 @@ METHODS: dict[str, dict] = {
             (33, "2026-10-29", False, "an unused helper removed from the free filters; screening is as before"),
             (34, "2026-10-29", False, "a ruling on a remote posting holds for the same role on another board, whichever place that board names, except a ruling on where the posting is, which holds only for that place; and a posting read without its place is ruled out exactly when it would be with it"),
             (35, "2026-11-03", False, "the search window holds for an employer's own board as for every other source, read from the posting's own date where the board gives one; nothing ruled out before needs looking at again"),
-            (36, "2026-11-03", False, "the bar reads a public body its names miss from its own posting (\"is a provincial agency\", \"an agency of the Government of\"), where the profile excludes public bodies, so it is cut before the shortlist like one named; the paid exception holds"),
+            (36, "2026-11-03", False, "the bar reads a public body its names miss from its own posting (\"is a provincial agency\", \"an agency of the Government of\"), where the profile excludes public bodies, so it is cut before the shortlist like one named; the paid exception holds; only the employer saying it of itself counts (\"We are a\", \"<employer> is a\", \"join the ... Public Service\"), never a client or a regulator the posting names, and only for an employer on none of the lists and judged by nobody"),
             (37, "2026-11-03", False, "a posting that only names the person's skills no longer scores 100: above 90 a point counts half and the posting alone stops at 98, so the top of a ranking tells rows apart; a live contact or an earlier interview still reaches 100; scores of 90 or under are unchanged"),
         ),
-        "fingerprint": "ca672cbf3fa9a9b7",
+        "fingerprint": "73feabcb9692282c",
     },
     "routines": {
         "by": "you", "priority": 3, "applies": "routines",

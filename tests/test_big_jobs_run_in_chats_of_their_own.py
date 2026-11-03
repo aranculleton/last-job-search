@@ -17,6 +17,7 @@ from __future__ import annotations
 import json
 import os
 import re
+import subprocess
 import sys
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
@@ -188,3 +189,52 @@ def test_a_jobs_own_chat_takes_the_next_big_job_and_does_it_itself(monkeypatch):
     said = app.child_prompt({"work": "draft~a", "kind": "draft", "title": "x", "stages": []}, "listener-1",
                             "https://claude.ai/code/artifact/example-page")
     assert "--job-chat" in said and "At most three jobs in this chat" in said
+
+
+def test_a_jobs_chat_is_given_the_next_jobs_own_steps(monkeypatch):
+    """A job chat's second job was done "here from step 3" of the first one's prompt: steps 4
+    and 5 named the first item's id and $D, and a search taken second had no round.log pin
+    (the release review, 2026-11-03). `next --job-chat` prints the new job's own steps."""
+    import datetime as dt
+    import app
+    import app_setup
+    now = dt.datetime(2026, 11, 3, 12, 0, tzinfo=dt.timezone.utc)
+    page = "https://claude.ai/code/artifact/example-page"
+    monkeypatch.setattr(app_setup, "origin", lambda: ("example-owner", "example-copy"))
+    monkeypatch.setattr(app_setup, "page_record", lambda: {"url": page})
+    first = {"work": "draft~a", "kind": "draft", "title": "x",
+             "stages": page_db.progress("draft")["stages"]}
+    db = {"work": {"search~b": {"data": {"kind": "search", "status": "queued", "to": "cloud",
+                                         "asked_at": "2026-11-03T11:00:00Z", "title": "Analysts",
+                                         "args": {}}, "version": 1}}}
+    got = app.choose(db, "job-chat-1", "cloud", now, job_chat=True)
+    steps = "\n".join(got["steps"])
+    assert got["work"] == "search~b" and steps.startswith("1. Load ArtifactData")
+    assert ("$D/work/search" + "@b.json") in steps and "draft~a" not in steps
+    assert "--work search~b --chat job-chat-1 --stage scrape --log" in steps
+    assert app.work_row("search") in steps and "app.py done with --work search~b" in steps
+    # The first job's prompt sends the chat to those steps, never back to its own step 3.
+    said = app.child_prompt(first, "listener-1", page)
+    assert "from step 3" not in said and "follow the `steps` it printed" in said
+    assert "--work draft~a --chat listener-1 --stage" in said
+
+
+def test_a_job_another_chat_took_on_is_never_finished_or_pinned_by_the_first(search):
+    """A job chat whose lease ran out read the item afresh, re-claimed by another chat, and
+    its done landed on that chat's claim: the pinned version is no guard (the release review,
+    2026-11-03). done and pin take --chat and refuse another chat's claim, plainly."""
+    search.put("work", "draft~a", _w("draft", "Kestrel Mutual", status="running",
+                                     claimed_by="job-chat-2", stage=1), version=4)
+    for cmd in (("done", search.dump, "--work", "draft~a", "--summary", "Your draft is ready."),
+                ("pin", search.dump, "--work", "draft~a", "--stage", "1", "--line", "Reading.")):
+        r = subprocess.run([sys.executable, os.path.join(ROOT, "tools", "app.py"), *cmd,
+                            "--chat", "job-chat-1", "--now", NOW], capture_output=True,
+                           encoding="utf-8", env=dict(os.environ, LJS_PROFILE=search.profile,
+                                                      LJS_STATE=search.state))
+        assert r.returncode == 2 and r.stdout == "", r.stdout
+        assert "another chat took this job on" in r.stderr and "write nothing more" in r.stderr
+    # The chat that holds it now writes as before, and so does a call that names no chat.
+    assert json.loads(search.run("pin", search.dump, "--work", "draft~a", "--stage", "1",
+                                 "--chat", "job-chat-2", "--now", NOW))["batches"]
+    assert json.loads(search.run("done", search.dump, "--work", "draft~a", "--summary",
+                                 "Your draft is ready.", "--now", NOW))["batches"]

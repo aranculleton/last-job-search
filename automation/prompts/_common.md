@@ -35,11 +35,11 @@ The brief does all four of these in one command, given in its own file. Every ot
    itself, run `/upgrade 20` now; at the end of the message, one plain line per change it
    made for them, never a commit or a command. Never put a question to the person mid-run:
    at most three of the ones that need them go at the end of the message.
-3. If an earlier `claude/ops-*` branch is not on master, it is an earlier run's unfinished
-   work: `git merge --no-edit origin/<that branch>` into this run's, and this run's landing
-   takes it to master. Only if that merge stops (`git merge --abort`), one plain line in
-   the message: "An earlier run's notes are not saved yet; the next run tries again." Never
-   a branch, a PR or a link.
+3. Each branch `python3 tools/land.py --waiting` lists is earlier work that could not
+   land: `git merge --no-edit <it>` into this run's, and this run's landing takes it to
+   master. Only if that merge stops (`git merge --abort`), one plain line in the message:
+   "An earlier run's notes are not saved yet; the next run tries again." Never a branch, a
+   PR or a link.
 4. `./tools/setup_env.sh --python` (seconds). Run it without `--python` only if this run
    compiles a document.
 
@@ -52,8 +52,8 @@ tip line's too), commits, merges master, and pushes only once `./tools/ci_local.
 is green. When it ends `land: ready`, make the calls it prints (open the PR, merge it) and
 write nothing after: the message has gone. GitHub's checks show as skipped on this private
 repo by design; never wait for them or dispatch them. Never push to master directly. Not
-green, a conflict or a refusal: never work around it and say nothing; the work waits for
-the next run.
+green or a conflict: its branch waits, pushed; open no PR and say nothing (step 3 brings it
+in). Merge refused: run `python3 tools/land.py` again, then merge the same PR.
 
 ## Delivering the message
 

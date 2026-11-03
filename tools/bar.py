@@ -14,9 +14,11 @@ Verdicts, first match wins:
             employer declined by name (BAR_DECLINED), a public-sector agency
             named outright (BAR_NAMED_PUBLIC), or any other public body, by
             name (BAR_PUBLIC) or by its posting saying what it is
-            (PUBLIC_SAID), unless the posting states a range that reaches the
-            target band. Public-adjacent employers on the profile's target
-            list (BAR_PUBLIC_TARGETS) never land here.
+            (PUBLIC_SAID, with the employer the subject, and read last, only
+            for an employer on none of the lists and judged by nobody), unless
+            the posting states a range that reaches the target band.
+            Public-adjacent employers on the profile's target list
+            (BAR_PUBLIC_TARGETS) never land here.
   pay       a stated range whose midpoint reaches the target band, or a tier-1
             employer, whose pay is top of market by definition.
   prestige  a tier-2 employer, a public body the profile names as a prestige
@@ -89,23 +91,46 @@ FRONTIER = set(getattr(_S, "BAR_FRONTIER", ()))
 # Service". A posting about working with public bodies ("our public sector clients") names
 # a client, not the employer, and is never read as one. Read only where the profile
 # excludes public bodies (BAR_PUBLIC), and the paid exception holds as for a name.
-PUBLIC_SAID = re.compile(
-    r"\b(?:is|are|as) (?:an?|the) (?:[\w-]+ ){0,3}?"
-    r"(?:(?:crown|provincial|federal|state|government|governmental|municipal|regulatory|"
-    r"executive|non-departmental public) (?:agency|corporation|body|authority)|"
-    r"public (?:agency|body|authority))\b"
-    r"|\b(?:agency|body|corporation|department) of the (?:government|province|state) of\b"
-    r"|\b(?:join|joining|part of|within) the (?:[\w.]+ ){0,2}(?:public|civil) service\b",
-    re.I)
+#
+# And only with the employer as the subject: "We are a ...", "<the employer> is a ...",
+# "join the ... Public Service". Any "is a/as the <public body>" anywhere matched a
+# consultancy's "clients within the federal public service" and a bank's "OSFI, as the
+# federal regulatory body", and both came back excluded (the release review, 2026-11-03).
+# It is read only for an employer on none of the profile's lists, too (verdict).
+_PUBLIC_KIND = (r"(?:(?:crown|provincial|federal|state|government|governmental|municipal|"
+                r"regulatory|executive|non-departmental public)\s+(?:agency|corporation|body|"
+                r"authority)|public\s+(?:agency|body|authority)|(?:agency|body|corporation|"
+                r"department)\s+of\s+the\s+(?:government|province|state)\s+of)\b")
+_ITS_KIND = r"(?:an?|the)\s+(?:[\w-]+\s+){0,3}?" + _PUBLIC_KIND
+PUBLIC_SAID = re.compile(r"\b(?:we\s+are|we're|we’re)\s+(?P<said>" + _ITS_KIND + ")"
+                         r"|\b(?P<joins>(?:join|joining)\s+the\s+(?:[\w.]+\s+){0,2}"
+                         r"(?:public|civil)\s+service)\b", re.I)
 
 
-def public_said(posting: str = "") -> str:
-    """The words in which a posting says its own employer is a public body, or "". Nothing
-    is read when the profile does not exclude public bodies."""
+def _named(company: str) -> re.Pattern | None:
+    """The employer's own name, then "is a <public body>" or ", a <public body>"."""
+    names = {" ".join(str(company or "").split()), own_name(company)}
+    alts = ["\\W+".join(re.escape(w) for w in n.split()) for n in names if n and n.split()]
+    if not alts:
+        return None
+    return re.compile(r"\b(?:%s)\b(?:\s*\([^)]{0,60}\))?(?:\s*,\s*(?P<app>%s)|\s+(?P<is>is\s+%s))"
+                      % ("|".join(sorted(alts, key=len, reverse=True)), _ITS_KIND, _ITS_KIND),
+                      re.I)
+
+
+def public_said(posting: str = "", company: str = "") -> str:
+    """The words in which a posting says its own employer is a public body, or "": "we are
+    a crown agency", "<company> is a provincial agency", "join the ... Public Service".
+    Nothing is read when the profile does not exclude public bodies."""
     if PUBLIC is _NEVER:
         return ""
-    m = PUBLIC_SAID.search(str(posting or ""))
-    return " ".join(m.group(0).split()) if m else ""
+    text = str(posting or "")
+    named = _named(company)
+    m = (named.search(text) if named else None) or PUBLIC_SAID.search(text)
+    if not m:
+        return ""
+    said = next(v for v in m.groupdict().values() if v)
+    return " ".join(said.split())
 
 
 def excluded_by_name(company: str | None) -> str:
@@ -290,11 +315,10 @@ def verdict(company: str | None, posting: str = "") -> tuple[str, str]:
         return PRESTIGE, _PRESTIGE_WHY
     if PENSIONS.search(both):
         pass  # a target-list public-adjacent employer is never public sector
-    elif PUBLIC.search(both) or public_said(posting):
+    elif PUBLIC.search(both):
         if paid:
             return PAY, _PUBLIC_PAID.format(cur=CUR, mid=mid, target=TARGET_MIDPOINT)
-        said = "" if PUBLIC.search(both) else public_said(posting)
-        return EXCLUDED, _PUBLIC_WHY + (f' (the posting says it: "{said}")' if said else "")
+        return EXCLUDED, _PUBLIC_WHY
 
     collided = bool(COLLISIONS.search(both))
     score, why = (0, "") if collided else tier(name)
@@ -322,6 +346,11 @@ def verdict(company: str | None, posting: str = "") -> tuple[str, str]:
     j = judgement(name)
     if j and j.get("verdict") in (PAY, PRESTIGE, SIGNAL, NONE):
         return j["verdict"], f"judged {j.get('date', '')}: {j.get('why', '')}".replace(" :", ":")
+    # On none of the lists and judged by nobody: only now is its posting read for what the
+    # employer says it is. A paid posting has already come back pay, the paid exception.
+    said = public_said(posting, name)
+    if said:
+        return EXCLUDED, _PUBLIC_WHY + f' (the posting says it: "{said}")'
     if mid is not None:
         return NONE, (f"stated range midpoint {CUR}{mid:,} is under the {CUR}{TARGET_MIDPOINT:,} "
                       f"target band, and {UNLISTED}")

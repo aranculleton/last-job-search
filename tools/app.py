@@ -8,7 +8,8 @@
     python3 tools/app.py next <dump dir> --chat ID --kind cloud|computer [--claim-out DIR]
                                                                  [--no-sessions]: where it runs
     python3 tools/app.py pin <dump dir> --work ID --stage S [--line L] [--done N --total M]
-                                         [--left-s S] [--log round.log]   progress, as it goes
+                                         [--left-s S] [--log round.log] [--chat ID]
+                                                                 progress, as it goes
     python3 tools/app.py busy <dump dir> "<a few words>" | --done
                                                                  what this chat does in the chat
     python3 tools/app.py progress <kind of work>                 its stages and their seconds
@@ -32,7 +33,7 @@
     python3 tools/app.py propose "<role>"...                     the roles setup asks about
     python3 tools/app.py done <dump dir> --work ID --summary "<one sentence>"
                               [--reply-file F [--thread T]] [--failed "<why>"] [--link L]
-                                                                 a finished item, in one batch
+                              [--chat ID]                        a finished item, in one batch
     python3 tools/app.py ask <dump dir> --kind K --title "<words>" [--args '<json>']
                                                                  work queued from a chat message
 
@@ -297,6 +298,13 @@ def choose(db: dict, chat: str, kind: str, now, on: str = "", no_sessions: bool 
         chosen.update(run="here")
         chosen.pop("create_session", None)
         chosen.pop("agent", None)
+        if chosen.get("heavy"):
+            # Its own steps, for this chat to follow: its id, a fresh folder, its kind's
+            # commands and pins. "Do it here from step 3" reused the first job's (the release
+            # review, 2026-11-03).
+            import app_setup
+            url = app_setup.page_record().get("url", "") or "<url>"
+            chosen["steps"] = job_steps(chosen, chat, url, session=True, first=1)
     if claim_out:
         chosen["batches"] = page_db.claim(db, chosen, chat, kind, now, claim_out,
                                           running=chosen.get("run") == "here")
@@ -349,18 +357,9 @@ def work_row(kind: str) -> str:
 def child_prompt(chosen: dict, parent: str, url: str, session: bool = True) -> str:
     """What a chat (or, where none can be started, a background agent) is told for one big
     job: run that item, pin its progress, finish it, land it, and say it is finished. It
-    never publishes, watches or answers the page."""
+    never publishes, watches or answers the page. `parent` is the chat that claimed it."""
     wid, kind = chosen["work"], chosen["kind"]
-    keys = ", ".join(s["key"] for s in chosen.get("stages") or [] if s.get("key"))
     where = "in a chat of its own" if session else "as a background agent"
-    row = work_row(kind)
-    # The commands themselves, so the chat reads none of the skill for them: reading it was
-    # steps and context before the job even started (2026-11-03).
-    do = (f"3. Do it, as the app skill's own table says for a {kind}: {row.rstrip('.')}. "
-          "Read nothing of "
-          ".claude/skills/app/SKILL.md but its step 5, for the finish." if row else
-          f"3. Do it as .claude/skills/app/SKILL.md says for a {kind}: step 4 (its row, and "
-          "\"Progress costs nothing extra\") and step 5. Read only those parts.")
     lines = [
         f"Do one piece of work for this person's job search page, {where}, so the chat that "
         f"answers the page stays free. The work: \"{chosen.get('title') or kind}\" (work item "
@@ -368,56 +367,77 @@ def child_prompt(chosen: dict, parent: str, url: str, session: bool = True) -> s
         f"it: {parent}.",
         f"1. python3 tools/app.py start --on \"<your model>\" --tools none --work {wid}, and do "
         "what it prints. Never publish, watch or answer the page.",
-        "2. Load ArtifactData (ToolSearch, select:ArtifactData). Read the page's database "
-        f"into a fresh folder in your scratchpad, $D, in one go: ArtifactData query, url {url}, "
-        "once for each of the collections work, holds, screen, meta and addr, each with "
-        f"out_dir $D and limit 1000. The item, its args and the `answers` the person already "
-        f"gave on the page (never asked again) are in $D/work/{wid.replace('~', '@')}.json.",
-        do,
-        f"4. At each stage ({keys}): python3 tools/app.py pin \"$D\" --work {wid} --stage "
-        "<stage> --line \"<one plain line>\", and send the batch it prints (ArtifactData "
-        f"batch, url {url}). On a long stage, pin it again with a new line every ten minutes "
-        "or so: the page counts a job with no word for half an hour as stopped. "
-        "\"stop_asked\": true means they tapped Stop: finish it stopped. A refused pin: read "
-        "work again and pin once more; claimed by another chat, write nothing else and stop.",
     ]
+    return "\n".join(lines + job_steps(chosen, parent, url, session=session, first=2))
+
+
+def job_steps(chosen: dict, claimer: str, url: str, session: bool = True,
+              first: int = 1) -> list[str]:
+    """The steps for one big job, numbered from `first`, every one naming this job's own id,
+    its own folder ($D, read afresh), its kind's commands and its pins (a search's round.log
+    as well), with `--chat <claimer>` (the id it was claimed under) on each write. A job
+    chat's second job reused the first one's id and $D, and had no search pin unless the
+    first was a search (the release review, 2026-11-03): `next --job-chat` prints these."""
+    wid, kind = chosen["work"], chosen["kind"]
+    keys = ", ".join(s["key"] for s in chosen.get("stages") or [] if s.get("key"))
+    row = work_row(kind)
+    lines: list[str] = []
+
+    def step(text: str) -> None:
+        lines.append(f"{first + len(lines)}. {text}")
+
+    step("Load ArtifactData (ToolSearch, select:ArtifactData). Read the page's database "
+         f"into a fresh folder in your scratchpad for this job alone, $D, in one go: "
+         f"ArtifactData query, url {url}, once for each of the collections work, holds, screen, "
+         f"meta and addr, each with out_dir $D and limit 1000. The item, its args and the "
+         f"`answers` the person already gave on the page (never asked again) are in "
+         f"$D/work/{wid.replace('~', '@')}.json.")
+    # The commands themselves, so the chat reads none of the skill for them: reading it was
+    # steps and context before the job even started (2026-11-03).
+    step(f"Do it, as the app skill's own table says for a {kind}: {row.rstrip('.')}. Read "
+         "nothing of .claude/skills/app/SKILL.md but its step 5, for the finish." if row else
+         f"Do it as .claude/skills/app/SKILL.md says for a {kind}: step 4 (its row, and "
+         "\"Progress costs nothing extra\") and step 5. Read only those parts.")
+    step(f"At each stage ({keys}): python3 tools/app.py pin \"$D\" --work {wid} --chat "
+         f"{claimer} --stage <stage> --line \"<one plain line>\", and send the batch it prints "
+         f"(ArtifactData batch, url {url}). On a long stage, pin it again with a new line every "
+         "ten minutes or so: the page counts a job with no word for half an hour as stopped. "
+         "\"stop_asked\": true means they tapped Stop: finish it stopped. A refused pin: read "
+         "work again and pin once more; claimed by another chat, write nothing else and stop.")
     if kind == "search":
-        lines.append(
-            f"{len(lines)}. Run run_round.py in the background (Bash, run_in_background). "
-            f"While it runs, every ten minutes or so (its lease is thirty): python3 "
-            f"tools/app.py pin \"$D\" --work {wid} --stage scrape --log <the round's "
-            "folder>/round.log, and send its batch, so the page shows how many job sites are "
-            "done and how long is left.")
+        step("Run run_round.py in the background (Bash, run_in_background). While it runs, "
+             f"every ten minutes or so (its lease is thirty): python3 tools/app.py pin \"$D\" "
+             f"--work {wid} --chat {claimer} --stage scrape --log <the round's folder>/round.log, "
+             "and send its batch, so the page shows how many job sites are done and how long "
+             "is left.")
+    done = f"its app.py done with --work {wid} --chat {claimer}"
     if session:
         # A chat in the cloud cannot message another one (send_message: "a cloud session
         # receives your message but cannot message any session back yet"): a search told to
         # ask the chat that answers the page to bring it up to date found both ways refused,
         # and its ten jobs sat off the page (2026-11-03). It brings the page up to date itself.
-        lines.append(
-            f"{len(lines)}. Finish as step 5 says, without its heartbeat line. Save and land "
-            f"your work on master (CLAUDE.md, \"Saving\"). Then bring the page up to date "
-            f"yourself: ArtifactData query, url {url}, collections screen, meta, addr and work, "
-            f"out_dir $D; python3 tools/app.py view \"$D/view\" --dump \"$D\" --chat <this "
-            "chat's id> (it takes master first, so the page has every other chat's work too); "
-            "and send every batch it prints (ArtifactData batch). A refused batch: read those "
-            "four again and run it once more. No chat will do it for you: a chat in the cloud "
-            "cannot message another one. Never write to the person: the page shows how it "
-            "went.")
-        lines.append(
-            f"{len(lines)}. Then the next big job waiting, so a queue keeps moving with nobody "
-            f"to start it: ArtifactData query, url {url}, collections work and holds, out_dir a "
-            f"fresh folder $E; python3 tools/app.py next \"$E\" --chat <this chat's id> --kind "
-            f"cloud --job-chat --on \"<your model>\" --claim-out \"$E/claim\". Nothing named: "
-            "stop. One named: send its claim batch (refused: another chat has it, stop), then do "
-            "it here from step 3, as the app skill's table says for its kind, and finish it the "
-            "same way. At most three jobs in this chat, so its history stays short.")
+        step(f"Finish as step 5 says ({done}), without its heartbeat line. Save and land your "
+             f"work on master (CLAUDE.md, \"Saving\"). Then bring the page up to date yourself: "
+             f"ArtifactData query, url {url}, collections screen, meta, addr and work, out_dir "
+             f"$D; python3 tools/app.py view \"$D/view\" --dump \"$D\" --chat <this chat's id> "
+             "(it takes master first, so the page has every other chat's work too); and send "
+             "every batch it prints (ArtifactData batch). A refused batch: read those four again "
+             "and run it once more. No chat will do it for you: a chat in the cloud cannot "
+             "message another one. Never write to the person: the page shows how it went.")
+        step(f"Then the next big job waiting, so a queue keeps moving with nobody to start it: "
+             f"ArtifactData query, url {url}, collections work and holds, out_dir a fresh folder "
+             f"$E; python3 tools/app.py next \"$E\" --chat <this chat's id> --kind cloud "
+             f"--job-chat --on \"<your model>\" --claim-out \"$E/claim\". Nothing named: stop. "
+             "One named: send its claim batch (refused: another chat has it, stop), then follow "
+             "the `steps` it printed, in order: that job's own, with its id, its folder and its "
+             "commands, never this one's. At most three jobs in this chat, so its history stays "
+             "short.")
     else:
-        lines.append(
-            f"{len(lines)}. Finish as step 5 says, without its heartbeat line and without app.py "
-            f"view. Save and land your work on master (CLAUDE.md, \"Saving\"). Then end with "
-            f"one line: \"Finished {wid}, on master: bring the page up to date.\" Never write "
-            "to the person: the page shows how it went.")
-    return "\n".join(lines)
+        step(f"Finish as step 5 says ({done}), without its heartbeat line and without app.py "
+             f"view. Save and land your work on master (CLAUDE.md, \"Saving\"). Then end with "
+             f"one line: \"Finished {wid}, on master: bring the page up to date.\" Never write "
+             "to the person: the page shows how it went.")
+    return lines
 
 
 def where_it_runs(chosen: dict, chat: str, kind: str, no_sessions: bool = False) -> dict:
@@ -473,7 +493,8 @@ def cmd_pin(a) -> int:
             stage = seen["stage"] or stage
     try:
         got = page_db.pin(db, a.work, now, a.out or os.path.join(a.dump, "out"),
-                          stage=stage, line=a.line, count=count, left_s=left, dump_dir=a.dump)
+                          stage=stage, line=a.line, count=count, left_s=left, dump_dir=a.dump,
+                          chat=a.chat)
     except KeyError as e:
         print(f"app: {e.args[0]}", file=sys.stderr)
         return 2
@@ -1191,7 +1212,8 @@ def cmd_done(a) -> int:
         got = page_db.finish(db, a.work, now, a.out or os.path.join(a.dump, "out"),
                              summary=a.summary, status="failed" if a.failed else "done",
                              error=a.failed, links=_links(a.link), reply=reply, thread=a.thread,
-                             chat_kind=a.kind or app_listen.chat_kind(), dump_dir=a.dump)
+                             chat_kind=a.kind or app_listen.chat_kind(), dump_dir=a.dump,
+                             chat=a.chat)
     except (KeyError, ValueError) as e:
         print(f"app: not finished: {e.args[0] if e.args else e}", file=sys.stderr)
         return 2
@@ -1220,6 +1242,10 @@ def cmd_ask(a) -> int:
         return 2
     print(_dump(got), end="")
     return 0
+
+
+CLAIMED_UNDER = ("the chat id this job was claimed under (app.py next --chat): a job another "
+                 "chat has taken on since is refused, and nothing is written to it")
 
 
 def main(argv=None) -> int:
@@ -1273,6 +1299,7 @@ def main(argv=None) -> int:
     p.add_argument("--left-s", dest="left_s", type=int, default=None,
                    help="seconds left in this stage, when the work itself says")
     p.add_argument("--log", default="", help="a search's round.log: the count and time left")
+    p.add_argument("--chat", default="", help=CLAIMED_UNDER)
     p.add_argument("--out", default="", help="where the batch goes (default <dump>/out)")
     p.add_argument("--now", default=None)
     p = sub.add_parser("busy", help="what this chat is doing for the person, on the page")
@@ -1351,6 +1378,7 @@ def main(argv=None) -> int:
     p.add_argument("--failed", default="", help="it did not finish: why, in plain words")
     p.add_argument("--link", action="append", default=[],
                    help="\"<label>=<address>\" shown with it (more than one allowed)")
+    p.add_argument("--chat", default="", help=CLAIMED_UNDER)
     p.add_argument("--kind", default="", choices=("", "cloud", "computer"))
     p.add_argument("--out", default="", help="where the batch goes (default <dump>/out)")
     p.add_argument("--now", default=None)

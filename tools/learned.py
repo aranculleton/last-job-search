@@ -1263,26 +1263,73 @@ def _starts_theirs(line: str, greeting) -> bool:
     return bool(s) and bool(greeting.match(s) or _OPENS_THEIRS.match(s) or _HEADER.match(s))
 
 
+# A line the person says to Claude, never a label over someone's message: "Draft a reply to
+# Juno's message." read as introducing what followed, and the instruction under it was
+# dropped as Juno's (the release review, 2026-11-03).
+_ASKS = re.compile(r"(?:please[ \t]+)?(?:(?:can|could|would|will)[ \t]+you\b|(?:draft|write|"
+                   r"reply|respond|answer|help|make|do|send|look|read|check|tell|show|turn|"
+                   r"redo|rewrite)\b)", re.I)
+
+
+def _name_line(s: str) -> bool:
+    """A name under a sign-off ("Juno", "Juno C."): a few words, capitalised."""
+    return bool(s) and len(s.split()) <= 4 and s[:1].isupper()
+
+
+def _signed_after(lines: list[str], i: int) -> bool:
+    """Do the lines after `i` close on a sign-off with a name under it ("Best,\\nJuno"), or
+    one ending in a comma: what runs to it reads as a message someone wrote."""
+    for j in range(i + 1, len(lines)):
+        s = lines[j].strip()
+        if _SIGNS_OFF.match(s):
+            if s.endswith(","):
+                return True
+            if _name_line(next((x.strip() for x in lines[j + 1:] if x.strip()), "")):
+                return True
+    return False
+
+
+def _introduces(prev: str, lines: list[str], i: int) -> bool:
+    """Is `prev`, the line before lines[i], a short one introducing a message under it? Only
+    as a label ("Juno's reply", "Juno got back to me on LinkedIn") or ending in ":", or
+    where what follows reads as a message (it closes on a sign-off). A sentence of the
+    person's own ("Draft a reply to Juno's message.") introduces nothing."""
+    p = prev.strip()
+    if not (0 < len(p.split()) <= INTRO_MAX_WORDS and _INTRODUCES.search(p)):
+        return False
+    if p.endswith(":"):
+        return True
+    if p[-1:] not in ".?!" and not _ASKS.match(p):
+        return True
+    return _signed_after(lines, i - 1)
+
+
 def without_pasted(text: str) -> str:
     """`text` with every message pasted into it that someone else wrote taken out, so only
     the person's own words are left to read for a reaction or an approval."""
     name = _own_first_name()
     greeting = re.compile(_GREETING.format(name=re.escape(name) if name else r"(?!x)x"), re.I)
     keep, theirs, prev = [], False, ""
-    for line in str(text or "").split("\n"):
+    lines = str(text or "").split("\n")
+    for i, line in enumerate(lines):
         s = line.strip()
         if theirs == "signed":
             # A sign-off with a name under it ("Best,\nJuno") closes their message, and the
             # person's own words may follow it. A "Thanks!" with no name is still theirs.
-            theirs = not (s and len(s.split()) <= 4 and s[:1].isupper())
+            theirs = not _name_line(s)
             continue
         if theirs:
             if _SIGNS_OFF.match(s):
                 theirs = "signed"
             continue
-        if s and (_starts_theirs(s, greeting) or (
-                0 < len(prev.split()) <= INTRO_MAX_WORDS and _INTRODUCES.search(prev))):
+        if s and (greeting.match(s) or _HEADER.match(s) or _introduces(prev, lines, i)):
             theirs = True                  # this line is theirs too: a greeting, a header
+            continue
+        if s and _OPENS_THEIRS.match(s):
+            # "Thanks for reaching out" opens their message, or is the person thanking
+            # Claude: the line is theirs, and what follows only when it closes on a sign-off.
+            # Everything after it was dropped (the release review, 2026-11-03).
+            theirs = _signed_after(lines, i)
             continue
         keep.append(line)
         prev = s or prev
