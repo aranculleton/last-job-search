@@ -189,6 +189,39 @@ def test_a_contacts_words_pasted_in_are_not_the_persons_reaction():
         assert learned.reaction(text), text
 
 
+PASTED = (
+    # A contact's message pasted whole, with no "replied:" to mark it (2026-11-03): held as
+    # the person's reaction, it forced a skip before the reply could be drafted.
+    "Juno got back to me on LinkedIn\nThanks for reaching out! Please dont use my work "
+    "email, use this one instead.",
+    "can you draft a reply?\n\nHi Morgan, thanks for connecting. Don't send me your CV yet, "
+    "I'm too busy this week.",
+    "Hi Morgan,\n\nHappy to help. Just dont use the careers portal.\n\nBest,\nJuno",
+    "Juno Castellan 10:42 AM\nDon't use the referral link, it is broken.",
+    "From: Juno Castellan\nSubject: Re: hello\nPlease don't send attachments.",
+    "Juno's reply\nNever use my personal number please",
+    "the screenshot says: don't use the portal",
+)
+
+
+def test_a_message_someone_else_wrote_pasted_in_is_not_the_persons_reaction(profile):
+    for text in PASTED:
+        assert learned.reaction(text) == "", text
+        assert learned.hook({"hook_event_name": "UserPromptSubmit", "prompt": text}) == {}, text
+    assert learned.pending() == []
+    assert learned.approval("Hi Morgan, this is perfect, send it over.") == ""
+    # The person's own words around a pasted message are still theirs.
+    for text in ("Hi Morgan, thanks!\n\nBest,\nJuno\n\nyour last draft was too formal",
+                 "Juno replied and I don't like your draft\nmake it shorter",
+                 "I replied to her already\nstop suggesting follow-ups to her",
+                 "move it to 10:30\ntoo formal though", "Hi Claude, that's too long",
+                 "Here's what I sent\nHi Juno, thanks!"):
+        assert learned.reaction(text), text
+    got = learned.hook({"hook_event_name": "UserPromptSubmit",
+                        "prompt": PASTED[1] + "\n\nBest,\nJuno\n\nand stop using 'reach out'"})
+    assert "learned.py record" in got["hookSpecificOutput"]["additionalContext"]
+
+
 def test_a_reaction_waiting_in_the_chat_never_reaches_a_test(profile, monkeypatch):
     learned.note_reaction("too formal", "too formal")
     assert learned.pending()
