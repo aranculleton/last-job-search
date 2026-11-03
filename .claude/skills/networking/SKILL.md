@@ -679,6 +679,15 @@ understood the shape of what they said; do not summarise it at them.
 
 See `02-reply-playbook.md` for the full scenario table.
 
+**A reply is two commands** (`/reply` says what each carries). `python3
+tools/network/reply.py prepare "<name or contact id>" --text-file <their message>` finds
+them, saying when it is not sure and then logging nothing, logs their message (`state.py
+received`), saves an interview time it gives, and prints the scenario, whether a reply is
+owed, the guidance, the thread and `learned.py brief` for replies. `python3
+tools/network/reply.py finish <contact id> --draft-file <the draft>` runs the draft check
+and refuses while it finds anything or a reaction of theirs waits unrecorded, then saves
+the draft for the page and counts what drew the reply. Nothing is sent.
+
 ### A request that is still pending is not a thread
 
 Until a connection request is accepted there is nowhere to write, so it is never
@@ -1026,7 +1035,9 @@ almost always one.
 ## Commands
 
 - `/network <companies>`, discovery run, ending in ready-to-send drafts
-- `/reply <contact>`, classify a live thread and draft the reply
+- `/reply <contact>`, classify a live thread and draft the reply: `reply.py prepare
+  "<name or id>" --text-file <their message>` before the draft, `reply.py finish <id>
+  --draft-file <the draft>` after it
 - `/threads`, what is owed, what is due, what has gone cold
 - `/prep <contact>`, prep document for a booked call
 - `state.py received <id> --text-file <file>` logs their message as it came (`--scenario`,

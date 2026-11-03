@@ -517,8 +517,9 @@ METHODS: dict[str, dict] = {
             (62, "2026-10-26", False, "a draft is held to its own limit when saved (a follow-up to the nudge's), never-say rules about moving catch every way of saying it, and a draft that ignores or repeats the person's unanswered last message is refused"),
             (63, "2026-10-29", False, "no chat reads LinkedIn: the short list is queued for the person's page, which reads each profile with its Experience, Education and activity pages in the Claude desktop app, and every note waiting on those reads is rewritten as one piece of work; a run never waits on a read, and the people found are as before"),
             (64, "2026-10-30", False, "a run the page asked for brings back as many people as the person chose, 5 when not given"),
+            (65, "2026-11-03", False, "a reply is two commands: reply.py prepare finds who wrote, logs their message, saves an interview time it gives and prints everything the draft needs; reply.py finish checks the draft, saves it for the page and writes the page's finishing batch"),
         ),
-        "fingerprint": "6450f03a63461e69",
+        "fingerprint": "a8209412e81cfd07",
     },
     "network-notes": {
         "by": "network", "priority": 2, "applies": "queued_notes", "time": "~10 min",

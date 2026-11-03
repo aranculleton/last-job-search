@@ -26,6 +26,11 @@
     python3 tools/app.py resume-saved <file> [--asset ID]        the resume from the page, saved
     python3 tools/app.py files-saved <path> <asset id> [...]     a document put in the page's file store
     python3 tools/app.py propose "<role>"...                     the roles setup asks about
+    python3 tools/app.py done <dump dir> --work ID --summary "<one sentence>"
+                              [--reply-file F [--thread T]] [--failed "<why>"] [--link L]
+                                                                 a finished item, in one batch
+    python3 tools/app.py ask <dump dir> --kind K --title "<words>" [--args '<json>']
+                                                                 work queued from a chat message
 
 `<dump dir>` is where ArtifactData's `out_dir` saved the page's database: `actions/`,
 `receipts/`, `work/`, `locks/`, `chats/`, one JSON file a document. What a chat sends back
@@ -670,6 +675,74 @@ def cmd_propose(a) -> int:
     return 0
 
 
+def _links(given) -> list:
+    """`--link` values as the page shows them: "<label>=<address>", or the address alone."""
+    out = []
+    for raw in given or ():
+        label, sep, url = str(raw).partition("=")
+        if not sep or "://" in label:
+            label, url = "Open", str(raw)
+        out.append({"label": " ".join(label.split()) or "Open", "url": url.strip()})
+    return out
+
+
+def cmd_done(a) -> int:
+    """A finished work item as one batch (the app skill, step 5): done with its one-sentence
+    summary (or failed, saying why), its locks removed, and with --reply-file the chat's
+    answer in its conversation. No chat writes these by hand."""
+    import app_listen
+    import app_model
+    import page_db
+    _, now = app_model.clock(None, a.now)
+    db = page_db.load(a.dump)
+    reply = ""
+    if a.reply_file == "-":
+        reply = sys.stdin.read().strip()
+    elif a.reply_file:
+        try:
+            with open(a.reply_file, encoding="utf-8") as fh:
+                reply = fh.read().strip()
+        except OSError as e:
+            print(f"app: cannot read {a.reply_file}: {e.strerror or e}", file=sys.stderr)
+            return 2
+        if not reply:
+            print("app: the answer file is empty", file=sys.stderr)
+            return 2
+    try:
+        got = page_db.finish(db, a.work, now, a.out or os.path.join(a.dump, "out"),
+                             summary=a.summary, status="failed" if a.failed else "done",
+                             error=a.failed, links=_links(a.link), reply=reply, thread=a.thread,
+                             chat_kind=a.kind or app_listen.chat_kind(), dump_dir=a.dump)
+    except (KeyError, ValueError) as e:
+        print(f"app: not finished: {e.args[0] if e.args else e}", file=sys.stderr)
+        return 2
+    print(_dump(got), end="")
+    return 0
+
+
+def cmd_ask(a) -> int:
+    """Work queued from something said in a chat, as the page's own Ask queues it, so no chat
+    writes a work item by hand. `next` takes it like any other."""
+    import app_listen
+    import app_model
+    import page_db
+    _, now = app_model.clock(None, a.now)
+    try:
+        args = json.loads(a.args) if a.args else {}
+    except ValueError:
+        print("app: --args is JSON, like '{\"contact\": \"<contact id>\"}'", file=sys.stderr)
+        return 2
+    try:
+        got = page_db.ask(page_db.load(a.dump), a.kind, a.title, now,
+                          a.out or os.path.join(a.dump, "out"), args=args, to=a.to,
+                          chat_id=app_listen.this_chat(a.chat), item_id=a.id, dump_dir=a.dump)
+    except ValueError as e:
+        print(f"app: not asked: {e}", file=sys.stderr)
+        return 2
+    print(_dump(got), end="")
+    return 0
+
+
 def main(argv=None) -> int:
     ap = argparse.ArgumentParser(prog="app.py", description=__doc__.split("\n\n")[0])
     sub = ap.add_subparsers(dest="cmd")
@@ -772,6 +845,31 @@ def main(argv=None) -> int:
     p.add_argument("items", nargs="+", metavar="PATH ASSET")
     p = sub.add_parser("propose", help="the roles setup asks the person about")
     p.add_argument("roles", nargs="+")
+    p = sub.add_parser("done", help="a finished work item as one batch: done, its locks "
+                                    "removed, and the answer in its conversation")
+    p.add_argument("dump")
+    p.add_argument("--work", required=True, help="the work item's id")
+    p.add_argument("--summary", default="", help="one short sentence of what is ready")
+    p.add_argument("--reply-file", dest="reply_file", default="",
+                   help="the answer for the person, shown in the conversation; - reads it "
+                        "from the input")
+    p.add_argument("--thread", default="", help="the conversation (default: the item's own)")
+    p.add_argument("--failed", default="", help="it did not finish: why, in plain words")
+    p.add_argument("--link", action="append", default=[],
+                   help="\"<label>=<address>\" shown with it (more than one allowed)")
+    p.add_argument("--kind", default="", choices=("", "cloud", "computer"))
+    p.add_argument("--out", default="", help="where the batch goes (default <dump>/out)")
+    p.add_argument("--now", default=None)
+    p = sub.add_parser("ask", help="work queued from a chat message, as the page queues it")
+    p.add_argument("dump")
+    p.add_argument("--kind", required=True, help="the kind of work (app.py progress <kind>)")
+    p.add_argument("--title", required=True, help="what it is, in a few plain words")
+    p.add_argument("--args", default="", help="its args, as JSON (the app skill, step 4)")
+    p.add_argument("--to", default="", choices=("", "cloud", "computer", "either"))
+    p.add_argument("--id", default="", help="its id (default: made the way the page makes one)")
+    p.add_argument("--chat", default="")
+    p.add_argument("--out", default="", help="where the batch goes (default <dump>/out)")
+    p.add_argument("--now", default=None)
     a = ap.parse_args(argv)
     if not a.cmd:
         ap.print_help()
@@ -782,7 +880,8 @@ def main(argv=None) -> int:
             "progress": cmd_progress, "check": cmd_check,
             "start": cmd_start, "published": cmd_published, "resume-saved": cmd_resume_saved,
             "files-saved": cmd_files_saved, "propose": cmd_propose, "listen": cmd_listen,
-            "republish": cmd_republish, "pinned": cmd_pinned}[a.cmd](a)
+            "republish": cmd_republish, "pinned": cmd_pinned, "done": cmd_done,
+            "ask": cmd_ask}[a.cmd](a)
 
 
 if __name__ == "__main__":

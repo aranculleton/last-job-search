@@ -1215,9 +1215,78 @@ _RELAYED = re.compile(r"\[Subagent hand-back\]|Another Claude session sent a mes
                       r"\[SYSTEM NOTIFICATION", re.I)
 _LONG_QUOTE = re.compile(r'"[^"\n]{80,}"|\u201c[^\u201d\n]{80,}\u201d')
 # "She replied: ..." introduces their words, not the person's.
-_THEIR_WORDS = re.compile(r"\b(?:replied|wrote back|responded|answered|said|wrote|messaged"
+_THEIR_WORDS = re.compile(r"\b(?:replied|wrote back|responded|answered|said|says|wrote|messaged"
                           r"|their (?:reply|message|answer)|(?:his|her) (?:reply|message|answer)"
                           r"|the reply)\s*:", re.I)
+
+# Someone else's message pasted in whole, with no "replied:" to say so. A contact's "please
+# don't use my work email" was held as the person's own reaction, and the chat had to skip it
+# before it could draft the reply (2026-11-03). Such a message opens on a greeting to the
+# person by their own first name ("Hi Morgan,"), on a thanks for getting in touch, on a
+# LinkedIn or email header (a name and a time, "From:", "sent the following message"), or
+# on the line after a short one that introduces it ("Juno replied on LinkedIn"); it runs to
+# its sign-off ("Best,\nJuno"), or to the end. What the person wrote around it is theirs.
+_GREETING = (r"(?:hi|hey|hello|hiya|dear|morning|good (?:morning|afternoon|evening))"
+             r"[ \t]+(?:there\b|{name}\b)")
+_OPENS_THEIRS = re.compile(
+    r"(?:thanks?|thank you)(?: so much| very much| a lot)? for (?:reaching out|getting in "
+    r"touch|connecting|the (?:connection|connect|invite|invitation)|your (?:message|note|"
+    r"interest|patience)|thinking of me)\b|(?:great|nice|good|lovely) to (?:hear from|connect "
+    r"with|meet) you\b", re.I)
+_HEADER = re.compile(r"(?:from|sent|subject|date|cc)[ \t]*:[ \t]*\S|-{2,}[ \t]*(?:original|"
+                     r"forwarded) message|.{0,60}\bsent the following messages?\b|"
+                     r"(?:(?-i:[A-Z])[\w'’.-]*[ \t]+){0,3}\d{1,2}:\d{2}[ \t]*[ap]\.?m\.?[ \t]*$|"
+                     r"\d{1,2}:\d{2}[ \t]*(?:[ap]\.?m\.?)?[ \t]*$|"
+                     r"view [\w'’ .-]{1,60}['’]s? profile[ \t]*$", re.I)
+_INTRODUCES = re.compile(r"(?<!\bi )(?<!\byou )(?<!\bwe )\b(?:replied|wrote back|responded|"
+                         r"got back to me|messaged me|wrote to me|sent me (?:this|a message|a "
+                         r"note|a dm))\b|\b(?:reply|message|note|answer|response|email|dm|"
+                         r"inmail) (?:back )?from\b|\b(?:his|her|their|[a-z]+['’]s) (?:reply|"
+                         r"message|answer|response)\b|\b(?:got this from|came in from)\b", re.I)
+_SIGNS_OFF = re.compile(r"(?:best|best wishes|all the best|cheers|thanks|thank you|many thanks|"
+                        r"thanks again|regards|kind regards|warm regards|warmly|speak soon|talk "
+                        r"soon|take care|sincerely)[ \t]*[,!.]?[ \t]*$", re.I)
+INTRO_MAX_WORDS = 12
+
+
+def _own_first_name() -> str:
+    """The person's own first name (person.json), or "" where there is no profile."""
+    try:
+        name = person.get("identity.first", "") or str(person.get("identity.name", "")).split(" ")[0]
+    except Exception:  # noqa: BLE001  the app itself, or a profile not set up
+        return ""
+    return re.sub(r"[^\w'’-]", "", str(name or ""))
+
+
+def _starts_theirs(line: str, greeting) -> bool:
+    s = line.strip()
+    return bool(s) and bool(greeting.match(s) or _OPENS_THEIRS.match(s) or _HEADER.match(s))
+
+
+def without_pasted(text: str) -> str:
+    """`text` with every message pasted into it that someone else wrote taken out, so only
+    the person's own words are left to read for a reaction or an approval."""
+    name = _own_first_name()
+    greeting = re.compile(_GREETING.format(name=re.escape(name) if name else r"(?!x)x"), re.I)
+    keep, theirs, prev = [], False, ""
+    for line in str(text or "").split("\n"):
+        s = line.strip()
+        if theirs == "signed":
+            # A sign-off with a name under it ("Best,\nJuno") closes their message, and the
+            # person's own words may follow it. A "Thanks!" with no name is still theirs.
+            theirs = not (s and len(s.split()) <= 4 and s[:1].isupper())
+            continue
+        if theirs:
+            if _SIGNS_OFF.match(s):
+                theirs = "signed"
+            continue
+        if s and (_starts_theirs(s, greeting) or (
+                0 < len(prev.split()) <= INTRO_MAX_WORDS and _INTRODUCES.search(prev))):
+            theirs = True                  # this line is theirs too: a greeting, a header
+            continue
+        keep.append(line)
+        prev = s or prev
+    return "\n".join(keep)
 
 
 # The person approving a message: kept as an example (`approve`), the way a reaction against
@@ -1241,7 +1310,7 @@ def approval(text: str) -> str:
         return ""
     if _RELAYED.search(t):
         return ""
-    t = _LONG_QUOTE.sub(" ", _NOT_THEIRS.sub(" ", t))
+    t = without_pasted(_LONG_QUOTE.sub(" ", _NOT_THEIRS.sub(" ", t)))
     cut = _THEIR_WORDS.search(t)
     if cut:
         t = t[:cut.start()]
@@ -1261,7 +1330,7 @@ def reaction(text: str) -> str:
         t = t.lstrip().split("\n", 1)[0]
     if _RELAYED.search(t):                       # another agent's report, relayed
         return ""
-    t = _LONG_QUOTE.sub(" ", _NOT_THEIRS.sub(" ", t))
+    t = without_pasted(_LONG_QUOTE.sub(" ", _NOT_THEIRS.sub(" ", t)))
     cut = _THEIR_WORDS.search(t)
     if cut:
         t = t[:cut.start()]
