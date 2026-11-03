@@ -803,14 +803,14 @@ def test_chat_is_one_box_and_quick_answers_read_the_page(run, pages):
 
 
 def test_a_question_the_page_cannot_answer_goes_to_claude_in_one_tap(run, pages):
-    """Handed on seconds after the tap, the doorbell cannot ring by itself (comments.d.ts:
-    only from the person's own recent tap): the note's one button sends it (2026-10-29)."""
+    """The doorbell rings only from the person's own recent tap (comments.d.ts): a hand-off
+    while the Send tap still counts goes at once, with nothing more to press (2026-11-03: a
+    request sat unsent behind a second button); a later one goes with the next tap."""
     r = run("talk", html=pages["sample"], question="Can you check the employer's website?",
             sample={"toolCalls": [{"name": "needs_chat", "input": {"reason": "It needs the employer's own website"}}],
                     "reply": "Your cloud chat can look that up."})
     _clean(r)
-    assert any("This needs Claude itself" in t for t in r["quick"]) and not any("It needs the employer" in t for t in r["quick"]), "Claude's own reasoning is never shown"
-    assert any("Sent to Claude" in t for t in r["afterSend"])
+    assert any("Sent to Claude" in t for t in r["quick"]) and not any("It needs the employer" in t for t in r["quick"]), "Claude's own reasoning is never shown"
     assert not any("Your cloud chat can look that up." in t for t in r["quick"])
     sent = [w for w in r["work"] if w["kind"] == "talk"]
     assert len(sent) == 1 and sent[0]["to"] == "cloud"

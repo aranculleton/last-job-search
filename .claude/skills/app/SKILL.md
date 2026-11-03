@@ -132,9 +132,11 @@ messages (ArtifactData `query`, collection `talk/<thread>/messages`, `out_dir: $
   word under LinkedIn's own headings (About, Experience, Education) into a file, never filling
   a gap, and run `reading.py read <contact> <file> --source screenshot`; then rewrite their
   waiting note on it (`/network`, `args.rewrite`) and put it in the thread, ready to copy.
-- **Someone wrote to them**: find who in the contact book, log their message the networking
-  skill's way, draft the reply (`/reply`), and put the draft in the thread in full, ready to
-  copy. Nothing is ever sent.
+- **Someone wrote to them**: find who in the contact book, log their message with
+  `python3 tools/network/state.py received <contact id> --text-file <file>`, draft the reply
+  (`/reply`), and put the draft in the thread in full, ready to copy, before anything is
+  saved. Nothing is ever sent. (A helper spent its first steps searching the tools for how to
+  log a message, and the person waited, 2026-11-03.)
 - **Someone proposed a time for a call** ("how about 2pm ET Thursday?"): log their message,
   record the call booked on that day with `network/state.py set <contact> --status
   call_booked --due <day>`, draft the short yes, and say the call prep follows.
@@ -145,6 +147,11 @@ messages (ArtifactData `query`, collection `talk/<thread>/messages`, `out_dir: $
   never tell the person to add a time, or fix any record, themselves.
 - **Anything else** is answered in the thread in plain words; work it starts shows in the
   page's Work list as it runs.
+
+**The answer goes in the thread first**, then the saving: `save_state.py`, the commit, and
+`./tools/ci_local.sh --quick` started with Bash `run_in_background`, never chained into
+another command. A one-line reply waited three minutes behind the person's own tests run in
+the foreground (2026-11-03).
 
 The same applies to a screenshot, message or link pasted into any chat, page or none: the
 picture is already in front of you there, so read it directly, do the same steps, show the

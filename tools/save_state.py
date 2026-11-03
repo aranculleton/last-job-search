@@ -153,9 +153,11 @@ def main(argv: list[str] | None = None, root: str = ROOT) -> int:
 
 # What follows the commit: the landing check runs in the background, so the chat that
 # answers the page is never held by it (it was, for minutes, 2026-10-29).
-LAND = ("save_state: then commit, open the pull request and start ./tools/ci_local.sh --quick "
-        "in the background (Bash run_in_background); merge when it ends green. While it runs "
-        "the page says \"Saving your work\" (app.py busy; the app skill, step 5).")
+LAND = ("save_state: the person's answer first, if it is not out yet. Then commit, open the "
+        "pull request and start ./tools/ci_local.sh --quick on its own in the background (Bash "
+        "run_in_background), never chained into another command: it runs the person's own "
+        "tests, minutes that held a one-line reply (2026-11-03). Merge when it ends green. While "
+        "it runs the page says \"Saving your work\" (app.py busy; the app skill, step 5).")
 
 
 if __name__ == "__main__":
