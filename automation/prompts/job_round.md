@@ -21,11 +21,16 @@ rank, stop at the shortlist, draft nothing until the candidate picks. `_common.m
    shortlist and no web search in its place.
 2. Judge every employer the bar does not know yet, once each (`python3 tools/bar.py
    unjudged`, then `bar.py judge "<employer>" <verdict> "<why>"`): a "none" that says "not on
-   your employer lists yet" has not failed the bar. Then, from the shortlist, drop anything
-   failing the candidate's bar (`tools/bar.py`, and the target sectors and exclusions in
-   `profile/CLAUDE.md`). The round has already cut the rest (a live process or a referral
-   hold, a role already drafted or applied to, anything older than `--jobage`, a second role
-   at one employer). Keep warm-route warnings ("DO NOT APPLY COLD") visible next to the role.
+   your employer lists yet" has not failed the bar. Then rule out each row failing the
+   candidate's bar (`tools/bar.py`, and the target sectors and exclusions in
+   `profile/CLAUDE.md`) with `python3 tools/exclude.py add <url> --title "<title>" --company
+   "<company>" --reason "candidate's bar: <why>"`, and cut the round again: `python3
+   tools/run_round.py --out "$SCRATCH/rN" --recut`. It refills the shortlist from the next
+   rows that pass every rule, and says how many it found when the round ran out; never drop
+   a row from the shortlist by hand. The round has already cut the rest (a live process or a
+   referral hold, a role already drafted or applied to, anything older than `--jobage`, a
+   second role at one employer). Keep warm-route warnings ("DO NOT APPLY COLD") visible next
+   to the role.
 3. Commit `documents/rounds/<rN>.json` and `job_scraper/seen_jobs.json` (`git add -f` for
    the latter) and land them per `_common.md`.
 4. The message, written to be read on a phone: one role per block, the role and employer

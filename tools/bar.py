@@ -12,9 +12,10 @@ Verdicts, first match wins:
 
   excluded  a hard rule the profile states: a sector (BAR_EXCLUDED), an
             employer declined by name (BAR_DECLINED), a public-sector agency
-            named outright (BAR_NAMED_PUBLIC), or any other public body unless
-            the posting states a range that reaches the target band
-            (BAR_PUBLIC). Public-adjacent employers on the profile's target
+            named outright (BAR_NAMED_PUBLIC), or any other public body, by
+            name (BAR_PUBLIC) or by its posting saying what it is
+            (PUBLIC_SAID), unless the posting states a range that reaches the
+            target band. Public-adjacent employers on the profile's target
             list (BAR_PUBLIC_TARGETS) never land here.
   pay       a stated range whose midpoint reaches the target band, or a tier-1
             employer, whose pay is top of market by definition.
@@ -79,6 +80,32 @@ PUBLIC, _PUBLIC_PAID, _PUBLIC_WHY = getattr(_S, "BAR_PUBLIC", (_NEVER, "", ""))
 # short tiered name inside a longer, unrelated one.
 COLLISIONS = getattr(_S, "BAR_COLLISIONS", _NEVER)
 FRONTIER = set(getattr(_S, "BAR_FRONTIER", ()))
+
+# A public body the profile's names miss, read from its own posting. The public rule read
+# only the employer's name, so a provincial agency named on none of the profile's lists came
+# back "none", a flag and never a cut, and reached a shortlist although the profile excludes
+# public bodies (2026-11-03). Its posting said what it was. Only the employer describing
+# itself counts: "is a Crown agency", "an agency of the Government of", "join the ... Public
+# Service". A posting about working with public bodies ("our public sector clients") names
+# a client, not the employer, and is never read as one. Read only where the profile
+# excludes public bodies (BAR_PUBLIC), and the paid exception holds as for a name.
+PUBLIC_SAID = re.compile(
+    r"\b(?:is|are|as) (?:an?|the) (?:[\w-]+ ){0,3}?"
+    r"(?:(?:crown|provincial|federal|state|government|governmental|municipal|regulatory|"
+    r"executive|non-departmental public) (?:agency|corporation|body|authority)|"
+    r"public (?:agency|body|authority))\b"
+    r"|\b(?:agency|body|corporation|department) of the (?:government|province|state) of\b"
+    r"|\b(?:join|joining|part of|within) the (?:[\w.]+ ){0,2}(?:public|civil) service\b",
+    re.I)
+
+
+def public_said(posting: str = "") -> str:
+    """The words in which a posting says its own employer is a public body, or "". Nothing
+    is read when the profile does not exclude public bodies."""
+    if PUBLIC is _NEVER:
+        return ""
+    m = PUBLIC_SAID.search(str(posting or ""))
+    return " ".join(m.group(0).split()) if m else ""
 
 
 def excluded_by_name(company: str | None) -> str:
@@ -263,10 +290,11 @@ def verdict(company: str | None, posting: str = "") -> tuple[str, str]:
         return PRESTIGE, _PRESTIGE_WHY
     if PENSIONS.search(both):
         pass  # a target-list public-adjacent employer is never public sector
-    elif PUBLIC.search(both):
+    elif PUBLIC.search(both) or public_said(posting):
         if paid:
             return PAY, _PUBLIC_PAID.format(cur=CUR, mid=mid, target=TARGET_MIDPOINT)
-        return EXCLUDED, _PUBLIC_WHY
+        said = "" if PUBLIC.search(both) else public_said(posting)
+        return EXCLUDED, _PUBLIC_WHY + (f' (the posting says it: "{said}")' if said else "")
 
     collided = bool(COLLISIONS.search(both))
     score, why = (0, "") if collided else tier(name)

@@ -48,6 +48,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import math
 import os
 import re
 import sys
@@ -185,6 +186,19 @@ CORE_FULL, CORE_TAPER, CORE_MAX = 36, 0.5, 48
 # absolute bars, while the costs in use were written inline; it is now what they read.
 YEARS_COST = {9: 40, 7: 30, 5: 20}
 YEARS_SLACK_CAP = {9: 0.10, 7: 0.25, 5: 0.45}
+
+
+# The top of the scale. The posting's positives alone run past 100 (the base 50, a band's
+# +8 and CORE_MAX's 48 make 106), so a posting that merely named enough of the person's
+# capabilities, each once and in any sentence, was clamped to 100 beside the best match
+# in the round: a fraud analyst title scored 100, and one round had ten rows at 100
+# (2026-11-03). That is the clamp CORE_MAX's taper undid for core, back at the end. So
+# above TOP_KNEE a point counts half (104 is 97, 95 is 93), and what the posting says
+# stops at POSTING_MAX: 100
+# is for a role a person vouches for too, a live contact or an employer that interviewed
+# them (main adds both). At or under the knee, the 60 and 75 the yield target counts
+# among it, nothing changes.
+TOP_KNEE, TOP_TAPER, POSTING_MAX = 90, 0.5, 98
 
 
 def _core_points(raw: int) -> int:
@@ -563,6 +577,13 @@ def fit(job: dict) -> dict:
             why.append("+0 graduate degree mentioned, but with an equivalence route "
                        f"or not asked of {_HIM}")
 
+    if pts > TOP_KNEE:
+        # Rounded up, so 91 stays 91 rather than tying with 90 (round() takes a half to even).
+        top = min(POSTING_MAX, TOP_KNEE + math.ceil((pts - TOP_KNEE) * TOP_TAPER))
+        # Not a gap, so not written as one: the page shows the largest "-N" as the gap.
+        why.append(f"top of the scale: {pts} counted as {top} (above {TOP_KNEE} a match "
+                   f"counts half, and the posting alone stops at {POSTING_MAX})")
+        pts = top
     pts = max(0, min(100, pts))
     return {"fit": pts, "fit_why": why, "location_verdict": lv, "near": near_matches(body)}
 

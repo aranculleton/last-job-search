@@ -405,23 +405,17 @@ def stamp_copies(rows: list, today: _dt.date | None = None) -> list:
     return out
 
 
-# An employer's own careers board is a different kind of source from an
-# aggregator. A LinkedIn listing 40 days old may well have been filled and
-# never taken down, which is what the age limit is for. A Greenhouse or Lever
-# board is the system the employer runs its own hiring in: if the posting is
-# still on it, the requisition is still open, and a `updated_at` from six
-# weeks ago means nobody edited the description, not that nobody is hiring.
-#
-# Applying the aggregator's age limit to them cost a large share of a pass's
-# postings, every one of them live.
-#
-# Workday and Ashby are the same kind of source, read by tools/ats_boards.py
-# from the employer's own ATS. A Workday posting's date is the day it went up,
-# and a requisition an employer opened in July and is still interviewing for is
-# still listed because it is still open.
-#
-# So is every other system openroles reads, and a careers site the employer runs: the
-# list is openroles' own (tools/openroles), not a copy that falls behind it.
+# An employer's own careers board: every system openroles reads, and a careers site the
+# employer runs (the list is openroles' own, tools/openroles, not a copy that falls behind
+# it). A posting still listed there is still open, and these were once let past the age
+# rule for that reason. But the person's search window is how old a posting may be, not
+# whether it is still open: a search with a 14-day window brought back an Ashby posting
+# published 148 days before and a Greenhouse one 82 days before, at the top of its
+# shortlist (2026-11-03). The age rule now holds for every source, from the posting's own
+# date where the board gives one (Ashby's and Greenhouse's publish dates, Lever's created
+# date, Workday's "posted N days ago"), and each is a day the posting already existed, so
+# a posting past the window by it is past the window. The name stays, for the reason a
+# drop gives.
 from openroles.models import ATS as _EMPLOYER_BOARDS  # noqa: E402
 
 LIVE_BOARDS = frozenset(_EMPLOYER_BOARDS)
@@ -467,10 +461,11 @@ def _decide(job: dict, today: _dt.date | None, max_age: int) -> tuple:
     if site:
         return out(False, f"eligibility: internal Workday site ({site})")
     posted = posted_age(job, today)
-    live = (job.get("portal") or "") in LIVE_BOARDS
-    if age is not None and age > max_age and not live:
+    board = " on the employer's own board" if (job.get("portal") or "") in LIVE_BOARDS else ""
+    if age is not None and age > max_age:
         if posted is not None and posted >= age:
-            return out(False, f"age: posted {age} days ago, past the {max_age}-day hard limit")
+            return out(False, f"age: posted {age} days ago{board}, past the {max_age}-day "
+                              "hard limit")
         said = ("the portal gives no date" if posted is None
                 else f"the portal's {posted} days is a relist")
         return out(False, f"age: first seen {age} days ago, past the {max_age}-day hard limit; "
@@ -482,8 +477,6 @@ def _decide(job: dict, today: _dt.date | None, max_age: int) -> tuple:
         return out(False, f"title: {twhy}")
     if age is None:
         agestr = "no date from the portal"
-    elif live and age > max_age:
-        agestr = f"{age}d old, kept: still listed on the employer's own board"
     elif posted is None:
         agestr = f"first seen {age}d ago, no date from the portal"
     else:
