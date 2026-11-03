@@ -66,11 +66,13 @@ def test_nothing_changed_skips_the_app_tree_and_never_blames_an_update(copy):
     here = copy.parent / "bin"
     here.mkdir(exist_ok=True)
     path = os.environ.get("PATH", "")
-    try:
-        os.symlink(sys.executable, here / "python3")
+    if os.name != "nt":
+        # A launcher, never a link: a link to a virtual environment's python starts the base
+        # Python, which finds no pyvenv.cfg beside the link and so none of its packages.
+        launch = here / "python3"
+        launch.write_text('#!/bin/sh\nexec "%s" "$@"\n' % sys.executable, encoding="utf-8")
+        launch.chmod(0o755)
         path = str(here) + os.pathsep + path
-    except (OSError, NotImplementedError):
-        pass                          # Windows without the right to link: its own py.sh order
     env = dict(os.environ, LJS_APP_URL="https://github.com/example-owner/last-job-search",
                PYTHONDONTWRITEBYTECODE="1", PATH=path)
     env.pop("LJS_PROFILE", None)
