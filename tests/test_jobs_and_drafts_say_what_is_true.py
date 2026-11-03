@@ -241,6 +241,23 @@ def test_when_a_file_was_written_is_its_commit_not_its_checkout(tmp_path):
     assert app_model.saved_at(str(f)).date() == dt.date.today()
 
 
+def test_a_commit_time_git_writes_with_a_z_is_read_on_every_python(tmp_path, monkeypatch):
+    """A newer git writes UTC as "...Z", which Python 3.9 cannot read: the time fell back to
+    the checkout, and only the 3.9 job saw it (CI, 2026-11-03)."""
+    f = tmp_path / "r1.json"
+    f.write_text("[]", encoding="utf-8")
+    real = subprocess.run
+
+    def git(cmd, *a, **kw):
+        if cmd[:2] == ["git", "log"]:
+            return subprocess.CompletedProcess(cmd, 0, "2026-09-02T10:00:00Z\n", "")
+        if cmd[:2] == ["git", "diff"]:
+            return subprocess.CompletedProcess(cmd, 0, b"", b"")
+        return real(cmd, *a, **kw)
+    monkeypatch.setattr(app_model.subprocess, "run", git)
+    assert app_model.saved_at(str(f)) == dt.datetime(2026, 9, 2, 10, tzinfo=dt.timezone.utc)
+
+
 def test_the_brief_counts_live_applications_as_the_page_does():
     """The brief said 65 live beside the page's 66: it left out a process with no
     application of its own (audit 29)."""

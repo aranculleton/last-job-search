@@ -392,7 +392,11 @@ def saved_at(path: str) -> dt.datetime | None:
                              stdin=subprocess.DEVNULL) if same else None
     except (OSError, subprocess.TimeoutExpired):
         return own
+    # A newer git writes UTC as "Z", which Python before 3.11 (a Mac's own python3 is 3.9)
+    # cannot read: every file then took its checkout time again (CI on 3.9, 2026-11-03).
     when = got.stdout.strip() if got is not None and got.returncode == 0 else ""
+    if when.endswith("Z"):
+        when = when[:-1] + "+00:00"
     try:
         return dt.datetime.fromisoformat(when).astimezone(dt.timezone.utc) if when else own
     except ValueError:
