@@ -2,6 +2,32 @@
 
 Usage: `/reply <contact name or company>`, then paste their message.
 
+## Two commands
+
+The draft is yours; everything around it is two commands, so nothing is looked up first.
+Nothing is ever sent.
+
+1. **Prepare.** Save their message to a file, as it came, and run `python3
+   tools/network/reply.py prepare "<their name or contact id>" --text-file <file>`
+   (`--company <employer>` when it says two people share the name; `--date`, `--channel
+   email` when it came another day or way; `--scenario <name>` where its reading is wrong;
+   no `--text-file` for their newest message already logged, as the page's Reply). It does
+   steps 1 to 4 below and step 6's logging of their message, by `state.py received`'s own
+   path, saves an interview day or time it gives, and prints all of it: the scenario and its
+   evidence, whether a reply is owed, the guidance, the thread, and the person's own rules
+   (`learned.py brief`), which outrank every default. Not sure who it is, it logs nothing
+   and names who it could be: run it again with their id.
+2. **Draft** the reply from what it printed, or nothing where it says none is owed.
+3. **Finish.** Save the draft to a file and run `python3 tools/network/reply.py finish
+   <contact id> --draft-file <file>` (from the page's work: `--work <id> --dump "$D"`, and
+   `--thread <t>` for a message in its chat). It runs step 5's check, and refuses, saving
+   nothing, while the check finds anything or a reaction of theirs waits unrecorded
+   (`learned.py record` or `skip` first): rewrite and run it again. Passed, it saves the
+   draft where the page's Messages shows it with Copy and "I sent it", prints step 7's line
+   and the tip to end with, and with `--work` writes the page's finishing batch: send it.
+
+The steps the two commands carry, for when one is done by hand:
+
 ## Run it
 
 1. **Load the thread.** `state.load_threads()` for that contact. The thread

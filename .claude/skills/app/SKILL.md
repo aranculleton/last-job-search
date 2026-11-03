@@ -4,7 +4,7 @@ description: >
   The chat's side of the person's job-search page: what to do when the page rings. Triggers
   on: [app], a doorbell from the page, "Artifact comment sent to Claude" on the job-search
   page, a work item, [work:<id>], the app page, the page's actions or receipts.
-allowed-tools: Read, Bash(python3 tools/app.py *), Bash(python3 tools/routines.py *), Bash(python3 tools/tidy.py *), ArtifactData, Artifact, ArtifactComments, Agent, mcp__claude-code-remote__create_session, mcp__claude-code-remote__send_message, mcp__claude-code-remote__list_sessions, mcp__claude-code-remote__get_session, mcp__claude-code-remote__archive_session, mcp__claude-code-remote__list_triggers, mcp__claude-code-remote__create_trigger, mcp__claude-code-remote__update_trigger, mcp__claude-code-remote__set_session_title
+allowed-tools: Read, Bash(python3 tools/app.py *), Bash(python3 tools/network/reply.py *), Bash(python3 tools/routines.py *), Bash(python3 tools/tidy.py *), ArtifactData, Artifact, ArtifactComments, Agent, mcp__claude-code-remote__create_session, mcp__claude-code-remote__send_message, mcp__claude-code-remote__list_sessions, mcp__claude-code-remote__get_session, mcp__claude-code-remote__archive_session, mcp__claude-code-remote__list_triggers, mcp__claude-code-remote__create_trigger, mcp__claude-code-remote__update_trigger, mcp__claude-code-remote__set_session_title
 ---
 
 # The page's inbox
@@ -132,23 +132,39 @@ messages (ArtifactData `query`, collection `talk/<thread>/messages`, `out_dir: $
   word under LinkedIn's own headings (About, Experience, Education) into a file, never filling
   a gap, and run `reading.py read <contact> <file> --source screenshot`; then rewrite their
   waiting note on it (`/network`, `args.rewrite`) and put it in the thread, ready to copy.
-- **Someone wrote to them**: find who in the contact book, log their message the networking
-  skill's way, draft the reply (`/reply`), and put the draft in the thread in full, ready to
-  copy. Nothing is ever sent.
-- **Someone proposed a time for a call** ("how about 2pm ET Thursday?"): log their message,
-  record the call booked on that day with `network/state.py set <contact> --status
-  call_booked --due <day>`, draft the short yes, and say the call prep follows.
-- **An interview's day or time** (an invite, a recruiter's message, said in passing): log
-  the message, then save it on the interview itself with `interview_pack.py book "<Company>"
-  --stage "<stage>" --date <day> --time <HH:MM> [--zone <as written>]`, so the page shows
-  it. Logging a message or a note already saves a time it gives (`Saved on the interview:`);
-  never tell the person to add a time, or fix any record, themselves.
-- **Anything else** is answered in the thread in plain words; work it starts shows in the
-  page's Work list as it runs.
+- **Someone wrote to them**: two commands, with nothing to look up first (`/reply` says
+  what each does). Save their words to a file, as they came, and run `python3
+  tools/network/reply.py prepare "<their name or contact id>" --text-file <file>`
+  (`--company <employer>` when it says two people share the name; `--date`, `--channel
+  email` when it came another day or way). It finds them, logs their message, saves an
+  interview day or time it gives, and prints what it is, whether a reply is owed, the
+  guidance, the thread and the person's own rules, which outrank every default. Draft the
+  reply from that, then `python3 tools/network/reply.py finish <contact id> --draft-file
+  <file> --work <id> --dump "$D"`: it refuses while the draft check finds anything or a
+  reaction of theirs is unrecorded, saves the draft where Messages shows it, and writes this
+  item's finishing batch with the draft in the thread in full, ready to copy. Send that
+  batch. Nothing is ever sent.
+- **Someone proposed a time for a call** ("how about 2pm ET Thursday?"): `reply.py
+  prepare` logs their message; record the call booked on that day with `network/state.py
+  set <contact> --status call_booked --due <day>`, draft the short yes (`reply.py finish`),
+  and say the call prep follows.
+- **An interview's day or time** (an invite, a recruiter's message, said in passing):
+  `reply.py prepare` logs the message and saves a time it gives (`Saved on the interview:`);
+  one said any other way goes on the interview itself with `interview_pack.py book
+  "<Company>" --stage "<stage>" --date <day> --time <HH:MM> [--zone <as written>]`, so the
+  page shows it. Logging a message or a note already saves a time it gives; never tell the
+  person to add a time, or fix any record, themselves.
+- **Anything else** is answered in the thread in plain words: write the answer to a file and
+  `python3 tools/app.py done "$D" --work <id> --summary "<one sentence>" --reply-file <file>`
+  writes it, the item done and its locks removed, in one batch. Work it starts is queued
+  with `python3 tools/app.py ask "$D" --kind <kind> --title "<a few plain words>" --args
+  '<json>'` (the args step 4's table names), the item the page's own Ask writes, never one
+  written by hand; `next` takes it, and it shows in the page's Work list as it runs.
 
 The same applies to a screenshot, message or link pasted into any chat, page or none: the
-picture is already in front of you there, so read it directly, do the same steps, show the
-result in the reply and on the page (`app.py view`), and never ask which command to run.
+picture is already in front of you there, so read it directly, do the same steps
+(`reply.py finish` without `--work` where no page item asked), show the result in the
+reply and on the page (`app.py view`), and never ask which command to run.
 
 This chat answers the page and does small work itself (`run: here`: a reply, a tweak, a
 message in the chat), at once. **A big job runs in a chat of its own** (a search, drafts, a
@@ -229,6 +245,12 @@ page's url, then `python3 tools/app.py pinned yes`, and one line: "Pinned: it's 
 now." Never offer it again in a chat; the page asks by itself, now and then.
 
 ## 5. Finish in one batch
+
+`python3 tools/app.py done "$D" --work <id> --summary "<one sentence>"` writes the item's
+part of it, so none is written by hand: `--reply-file <file>` for the answer in its `talk`
+thread, `--failed "<why, in plain words>"` when it did not finish, `--link
+"<label>=<address>"` for each link (a reply's own is `reply.py finish ... --work <id>
+--dump "$D"`). A summary past one sentence or 15 words is refused. A finish holds:
 
 - `work/<id>`: `status: done` (or `failed`, `error` in plain words), `finished_at`,
   `result: {summary, links}` (web addresses or repo paths; downloads go to the asset store).
