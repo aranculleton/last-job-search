@@ -217,7 +217,10 @@ def _text_pdf(path, line):
 def test_a_resume_that_breaks_their_rules_is_never_offered(prof):
     import app_model
     import docpaths
+    import pdftext
     import stage_picks
+    if not pdftext.reader():
+        pytest.skip("no PDF reader here: the check reads the resume's own text")
     cvs = person.state("documents", "cv")
     bad = os.path.join(cvs, "Morgan_Ellis_CV_CURRENT_2026-09.pdf")
     _text_pdf(bad, "Standardized the reporting. Mar 2023 \\226 Present")

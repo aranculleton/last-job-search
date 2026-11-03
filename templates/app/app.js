@@ -527,7 +527,9 @@
   function fmtDay(s) {
     const d = parseDay(dayOf(s));
     if (d === null) return "";
-    try { return dtf(LOC, {weekday: "short", day: "numeric", month: "short", timeZone: "UTC"}).format(new Date(d)); }
+    // Said one way on every browser: newer ones put a comma after the weekday ("Thu, 29 Oct"),
+    // older ones none, so the same day read two ways on two devices (CI, 2026-11-03).
+    try { return dtf(LOC, {weekday: "short", day: "numeric", month: "short", timeZone: "UTC"}).format(new Date(d)).replace(/^([^\s,]+),\s+/, "$1 "); }
     catch (e) { return txt(s).slice(0, 10); }
   }
   function clock(t, z) {
