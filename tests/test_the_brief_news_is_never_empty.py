@@ -327,3 +327,14 @@ def test_news_is_three_points_when_the_last_four_weeks_have_them_each_in_its_par
     old = next(i for i in items if i["text"].startswith("Rates held"))
     # Its day is the brief that found it, never today's.
     assert (old["what"], old["use"], old["src"], old["date"]) == ("Rates held.", "A line for lender interviews.", "Example Times", "2026-10-27")
+
+
+def test_widening_always_reaches_the_local_job_market(monkeypatch):
+    """Widening only by the same employers and watched things found nothing new three mornings
+    running (2026-11-03): the local job market, which has news every week, is always in it."""
+    monkeypatch.setattr(brief, "home_place", lambda: "Leeds")
+    monkeypatch.setattr(brief, "setting", lambda k: [])
+    got = brief.wider(dt.date(2026, 11, 3), ["Kestrel Mutual"], watch=[{"what": "rail fares"}],
+                      qs=["rail fares November 2026"])
+    assert "Leeds job market news" in got and "Leeds hiring layoffs this week" in got
+    assert len(got) <= brief.SEARCHES_MAX - 1

@@ -511,6 +511,10 @@ def wider(today: dt.date, live_employers: list[str], watch: list[dict] | None = 
     out = [w["what"] for w in watch if w["what"] not in due]
     if "employers" not in set(setting("leave_out")):
         out += ["%s%s news" % (n, " " + where if where else "") for n in live_employers[:2]]
+    # The local job market, which has news every week: widening only by the same employers
+    # and watched things found nothing new three mornings running (2026-11-03).
+    if where:
+        out += ["%s job market news" % where, "%s hiring layoffs this week" % where]
     out += [w["what"] for w in watch if w["what"] in due]
     return [q for q in dict.fromkeys(out) if q not in qs][:room]
 
