@@ -963,7 +963,7 @@ def test_a_name_read_through_a_one_argument_getter_is_listed():
     # so HOME_ADJECTIVE, read nowhere else, was missing from every check of a profile.
     import profile_names
     names = profile_names.collect()["networking"]
-    assert "tools/network/reply.py:69" in names["HOME_ADJECTIVE"]["where"]
+    assert any(w.startswith("tools/network/reply.py:") for w in names["HOME_ADJECTIVE"]["where"])
     assert not names["HOME_ADJECTIVE"]["required"]
 
 

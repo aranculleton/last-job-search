@@ -521,7 +521,7 @@ METHODS: dict[str, dict] = {
             (65, "2026-11-03", False, "a reply is two commands: reply.py prepare finds who wrote, logs their message, saves an interview time it gives and prints everything the draft needs; reply.py finish checks the draft, saves it for the page and writes the page's finishing batch"),
             (66, "2026-11-03", False, "an export's connections fill in the employer and title of a contact whose record has none"),
         ),
-        "fingerprint": "db293ccab593fab2",
+        "fingerprint": "ba132594347f9bf2",
     },
     "network-notes": {
         "by": "network", "priority": 2, "applies": "queued_notes", "time": "~10 min",

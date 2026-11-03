@@ -1874,7 +1874,8 @@ def finish(argv) -> int:
         print("  Rewrite what a warning is right about before it is shown; a soft close is "
               "allowed in a reply.")
     path = save_draft(cid, draft)
-    print(f"saved: {os.path.relpath(path, person.state())}, shown in the page's Messages with "
+    import local_path
+    print(f"saved: {local_path.rel(path, person.state())}, shown in the page's Messages with "
           "Copy and \"I sent it\". Nothing is sent; it is logged only once they say it went.")
     extra = []
     try:
