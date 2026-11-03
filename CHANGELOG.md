@@ -52,6 +52,23 @@ make sense to somebody whose repo just received it.
 - **Less clutter**: no "Pay not stated", no "Not now" beside the bin, the tour only on your
   first visit, the LinkedIn card one step at a time.
 
+- **Your interview prep reads in plain words.** What to say, what to ask, and one or two things
+  to be careful of come first, in big type; the rest folds away, one tap each. No file names,
+  links to your own files or commands anywhere in it; "Draft" shows only above an answer that
+  is a draft for you to check. Preps made before this update are remade by themselves.
+- **An interview that ended says how it ended** (they said no, you withdrew, no reply), never
+  "Passed"; an offer shows as your offer; a round with nothing booked after it shows as waiting
+  to hear. The Brief shows the likely questions for an interview today or tomorrow, the
+  practice interview asks your prep's own questions, and no thank-you is asked for after an
+  offer.
+- **A person's page shows your conversation with them**, and drafting a reply never asks for
+  their words again. Someone new, like a recruiter who wrote to you first, is added to your
+  contacts by Claude, never twice; "they accepted my request" is recorded and your follow-up
+  counts from that day.
+- **After two messages with no reply, Contacts offers Close, never another follow-up**, and
+  Close closes it. Contacts and To do count the same follow-ups, and the first notes from
+  finding people are one card in To do. A person in your LinkedIn download is listed once.
+
 ### Fixed
 
 - **What you ask for on your page reaches Claude, and the page says honestly where it is.**

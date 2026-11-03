@@ -1818,6 +1818,7 @@ CLOSE_IT = "If still silent by the date, close it: state.py set {cid} --status g
 _APP_ACTION = re.compile(
     r"one nudge if no reply"
     r"|once they accept: .+\. withdraw the request if nobody accepts in \d+ days"
+    r"|write to them: they accepted your request, which had no note"
     r"|nudged: nothing more unless they reply\. if still silent by the date, close it: "
     r"state\.py set \S+ --status gone_cold"
     r"|follow up if no reply \(\d+ of \d+ sent; your rule: [^)]*\)"
@@ -2013,6 +2014,225 @@ def _cli_withdraw(argv) -> int:
         save_contacts(contacts, a.contacts)
     print(f"withdraw: {done} recorded" + (f", {failed} not" if failed else ""))
     return 1 if failed and not done else 0
+
+
+# ---------------------------------------------------------------- someone new, an acceptance
+
+def add_contact(contacts, name, company="", today=None, new=False, **fields) -> tuple:
+    """(the row, "added" or "existing") for one person the person named: a recruiter who
+    wrote first, someone met at an event, a name a friend passed on. There was no command
+    for it, so every chat that met someone new (a message from a recruiter, the app skill's
+    "someone not in it is added") wrote the contact book by hand, which the rules forbid,
+    and `received` refused their message until it had (2026-11-03).
+
+    The same person already in the book (their LinkedIn address, or their name at that
+    employer) is that row, never a second. A name close to one already at that employer (a
+    nickname, an initial), or the same name with no employer given, is refused with who it
+    may be, unless `new` says it is someone else. Raises ValueError for a name with no
+    surname-like part to make an id from. The list changes in place; the caller saves."""
+    day = _need_date(today or datetime.date.today(), "today")
+    name = " ".join(str(name or "").split())
+    company = " ".join(str(company or "").split())
+    url = str(fields.get("linkedin_url") or "").strip()
+    if not _match_name(name):
+        raise ValueError("a name is needed: their first name and surname, as they write it")
+    same = already_contacted(contacts, linkedin_url=url) if url else None
+    if same is None and company:
+        same = already_contacted(contacts, name=name, company=company)
+    if same is not None:
+        return same, "existing"
+    if not new:
+        if company:
+            maybe = possible_match(contacts, name, company, linkedin_url=url or None)
+            if maybe is None:
+                # The employer written short or long ("Northwind" for "Northwind
+                # Analytics"): the same person under a nickname or an initial is asked about.
+                # Only a question, never a merge, so a name that starts the other's is enough
+                # ("Larkspur" for "Larkspur Retail", which same_employer leaves apart).
+                want = company_key(company).split()
+
+                def near(c):
+                    have = row_company_key(c).split()
+                    short, longer = sorted((want, have), key=len)
+                    return bool(short) and have != want and short == longer[:len(short)]
+                try:
+                    import discovery
+                    others = [c for c in contacts if row_company_key(c) != company_key(company)
+                              and (near(c) or discovery.same_employer(c.get("company"), company))]
+                except ImportError:
+                    others = [c for c in contacts if near(c)]
+                for c in others:
+                    sure, why = _why_same(name, c.get("name"))
+                    if sure:
+                        maybe = {"row": c, "sure": sure, "reason": why}
+                        break
+            if maybe:
+                row = maybe["row"]
+                raise ValueError(f"{name} may be {row.get('name')}, already in your contact "
+                                 f"book as {row.get('contact_id')} ({maybe['reason']}). If it "
+                                 "is, use that id; if someone else, add --new")
+        else:
+            named = [c for c in contacts if _match_name(c.get("name")) == _match_name(name)]
+            if named:
+                raise ValueError(
+                    f"{len(named)} already in your contact book called {name}: "
+                    + ", ".join(f"{c.get('contact_id')} at {c.get('company') or 'no employer'}"
+                                for c in named)
+                    + ". If it is one of them, use that id; if someone else, add --new")
+    cid = unique_contact_id(name, company, contacts, linkedin_url=url or None)
+    channel = str(fields.get("channel") or "").strip().lower() or (
+        "email" if str(fields.get("email") or "").strip() and not url else "connection")
+    note = " ".join(str(fields.pop("note", "") or "").split())
+    row = add_row(contacts, cid, dict(
+        {k: " ".join(str(v or "").split()) for k, v in fields.items() if v},
+        name=name, company=company, channel=channel,
+        notes=f"added {day.isoformat()}" + (f": {note}" if note else "")))
+    return row, "added"
+
+
+def _cli_add(argv) -> int:
+    ap = argparse.ArgumentParser(
+        prog="state.py add",
+        description="Add one person to the contact book: someone who wrote first, someone "
+                    "met, a name passed on. Never a second row for someone already in it.")
+    ap.add_argument("name", help="their name as they write it")
+    ap.add_argument("--company", default="", help="their employer (none for a recruiter "
+                                                  "who has not said)")
+    ap.add_argument("--title", default="")
+    ap.add_argument("--linkedin", dest="linkedin_url", default="", help="their profile address")
+    ap.add_argument("--email", default="")
+    ap.add_argument("--location", default="")
+    ap.add_argument("--route", default="", help="how they came: referral, recruiter, alumni_"
+                                                "school, alumni_employer, mutual, hiring_team")
+    ap.add_argument("--route-detail", dest="route_detail", default="",
+                    help="in words: \"met at the planning meetup\", \"Juno's colleague\"")
+    ap.add_argument("--referred-by", dest="referred_by", default="",
+                    help="the contact id of whoever passed them on")
+    ap.add_argument("--channel", default="", choices=("", "connection", "inmail", "email",
+                                                      "intro", "message"))
+    ap.add_argument("--note", default="")
+    ap.add_argument("--new", action="store_true",
+                    help="someone else with a name like one already in the book")
+    ap.add_argument("--contacts", default=CONTACTS_CSV)
+    ap.add_argument("--today", default=datetime.date.today().isoformat())
+    a = ap.parse_args(argv)
+    contacts = load_contacts(a.contacts)
+    fields = {k: getattr(a, k) for k in ("title", "linkedin_url", "email", "location", "route",
+                                         "route_detail", "referred_by", "channel", "note")}
+    try:
+        row, how = add_contact(contacts, a.name, a.company, a.today, new=a.new, **fields)
+    except ValueError as e:
+        print(f"add: not added: {e}")
+        return 1
+    cid = row.get("contact_id")
+    where = f" at {row.get('company')}" if row.get("company") else ""
+    if how == "existing":
+        print(f"add: {row.get('name')}{where} is already in your contact book as {cid}; "
+              "nothing added")
+        return 0
+    save_contacts(contacts, a.contacts)
+    print(f"add: {row.get('name')}{where} added as {cid}. A message from them: state.py "
+          f"received {cid} --text-file <file>")
+    return 0
+
+
+ACCEPTED_SUMMARY = "Accepted your connection request"
+FIRST_MESSAGE_ACTION = "Write to them: they accepted your request, which had no note"
+
+
+def accepted(contacts, threads, contact_id, today, date=None) -> dict:
+    """Record that they accepted a connection request: an inbound row with scenario
+    `accepted_no_reply` and no words, as the networking skill says an acceptance is logged.
+    There was no command for it, and `received` refuses an acceptance as a message, so a
+    chat told "she accepted" wrote the row by hand or not at all, and the row kept saying
+    "Once they accept ... withdraw the request" with the old date (2026-11-03).
+
+    The follow-up clock then runs from the acceptance: the row's next action and its day
+    are written from it, or, for a request that carried no note, a first message is owed
+    that day. A next action of the person's own is never written over. Raises ValueError
+    for a contact not in the book, an acceptance already logged, no request on the log, or
+    a day before the request went. Both lists change in place; the caller saves them."""
+    day = _need_date(date or today, "date")
+    cid = str(contact_id or "").strip()
+    contact = already_contacted(contacts, contact_id=cid) if cid else None
+    if contact is None:
+        raise ValueError(f"no contact {cid!r} in the contact book")
+    name = contact.get("name") or cid
+    rows = [r for r in threads_for(threads, cid) if _direction(r)]
+    took = [r for r in rows if is_acceptance(r)]
+    if took:
+        raise ValueError(f"already logged: {name} accepted on {took[-1].get('date')}")
+    asks = [r for r in rows if is_request(r)]
+    if not asks:
+        raise ValueError(f"no connection request to {name} is on the log, so there is nothing "
+                         "to accept: one sent from LinkedIn itself is logged first with "
+                         f"state.py sent {cid} --outside")
+    went = as_date(asks[-1].get("date"))
+    if went and day < went:
+        raise ValueError(f"{day.isoformat()} is before the request went on {went.isoformat()}")
+    row = {"contact_id": cid, "date": day.isoformat(), "direction": "in",
+           "channel": "connection", "scenario": "accepted_no_reply",
+           "summary": ACCEPTED_SUMMARY, "full_text": ""}
+    threads.append(row)
+    stored = str(contact.get("status") or "").strip()
+    msgs = [r for r in threads_for(threads, cid) if _direction(r)]
+    if stored in DERIVABLE or stored in ("", "connected_no_reply", "gone_cold"):
+        contact["status"] = derive_status(msgs)
+    action = str(contact.get("next_action") or "").strip()
+    said = "follow-up clock now runs from the acceptance"
+    if action and not _APP_ACTION.fullmatch(action) and action != FIRST_MESSAGE_ACTION:
+        said = "your own next step is kept"
+    elif accepted_never_messaged(msgs) is not None:
+        contact["next_action"], contact["next_action_due"] = FIRST_MESSAGE_ACTION, day.isoformat()
+        said = "their request had no note, so a first message is owed now"
+    elif effective_status(contact, msgs) in schema.OWED_BY_US:
+        said = "a reply to them is still owed"
+    else:
+        plan = follow_up_plan(contact, msgs)
+        if plan:
+            contact["next_action"], contact["next_action_due"] = plan
+            said = f"follow up on {plan[1]} if they stay silent"
+    return {"row": row, "said": said}
+
+
+def _cli_accepted(argv) -> int:
+    ap = argparse.ArgumentParser(
+        prog="state.py accepted",
+        description="Record that they accepted a connection request (not a message).")
+    ap.add_argument("contact_ids", nargs="+", help="who accepted, by contact id or name")
+    ap.add_argument("--date", default="", help="the day they accepted (default today)")
+    ap.add_argument("--contacts", default=CONTACTS_CSV)
+    ap.add_argument("--threads", default=THREADS_CSV)
+    ap.add_argument("--today", default=datetime.date.today().isoformat())
+    a = ap.parse_args(argv)
+    contacts, threads = load_contacts(a.contacts), load_threads(a.threads)
+    done = 0
+    for who in a.contact_ids:
+        row = already_contacted(contacts, contact_id=who)
+        if row is None:
+            named = [c for c in contacts if _match_name(who) and
+                     _match_name(c.get("name")) == _match_name(who)]
+            if len(named) > 1:
+                print(f"  not recorded: {len(named)} contacts are called {who!r}: name one by "
+                      "its id (" + ", ".join(f"{c.get('contact_id')} at "
+                                             f"{c.get('company') or 'no employer'}"
+                                             for c in named) + ")")
+                continue
+            row = named[0] if named else None
+        cid = str((row or {}).get("contact_id") or who)
+        try:
+            got = accepted(contacts, threads, cid, a.today, a.date or None)
+        except ValueError as e:
+            print(f"  not recorded: {e}")
+            continue
+        done += 1
+        print(f"  {cid}: accepted on {got['row']['date']}; {got['said']}")
+    if done:
+        save_threads(threads, a.threads)
+        save_contacts(contacts, a.contacts)
+    print(f"accepted: {done} recorded" + (f", {len(a.contact_ids) - done} not"
+                                          if done < len(a.contact_ids) else ""))
+    return 0 if done else 1
 
 
 # ---------------------------------------------------------------- sent, dropped, reopened
@@ -2276,6 +2496,9 @@ def followed_up(contacts, threads, contact_id, today, text="", date=None, channe
 
 
 RECEIVED_CHANNELS = ("message", "inmail", "email", "connection", "intro")
+# A message of their own this many words long, logged again word for word on another day,
+# is the same message logged twice; a shorter one ("Thanks!") may really come twice.
+SAME_WORDS_MIN = 6
 
 
 def received(contacts, threads, contact_id, today, text="", date=None, channel="",
@@ -2307,9 +2530,14 @@ def received(contacts, threads, contact_id, today, text="", date=None, channel="
                          "--text-file <file> with their message as it came")
     rows = [r for r in threads_for(threads, cid) if _direction(r)]
     for r in rows:
-        if (_direction(r) == "in" and str(r.get("date") or "") == day.isoformat()
-                and _same_words_sent(r.get("full_text"), body)):
-            raise ValueError(f"already logged: the same words from {name} on {day.isoformat()}")
+        if _direction(r) != "in" or not _same_words_sent(r.get("full_text"), body):
+            continue
+        # The same message pasted again on another day (the page asked for their words a
+        # second time, or two chats logged it) is that message, not a new one: a reply
+        # of a sentence or more is never written twice word for word. "Thanks!" can be.
+        if str(r.get("date") or "") == day.isoformat() or len(body.split()) >= SAME_WORDS_MIN:
+            raise ValueError(f"already logged: the same words from {name} on "
+                             f"{r.get('date') or day.isoformat()}")
     chan = channel_of(str(channel or ""))
     if chan and chan not in RECEIVED_CHANNELS:
         raise ValueError(f"channel is one of {', '.join(RECEIVED_CHANNELS)}, not {channel!r}")
@@ -4318,6 +4546,10 @@ def main(argv=None) -> int:
     argv = sys.argv[1:] if argv is None else list(argv)
     if argv[:1] == ["withdraw"]:
         return _cli_withdraw(argv[1:])
+    if argv[:1] == ["add"]:
+        return _cli_add(argv[1:])
+    if argv[:1] == ["accepted"]:
+        return _cli_accepted(argv[1:])
     if argv[:1] == ["sent"]:
         return _cli_sent(argv[1:])
     if argv[:1] == ["text"]:

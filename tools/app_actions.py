@@ -1304,16 +1304,21 @@ def _msg_received(r: Run) -> dict:
             code, out = _cli(state, argv)
     finally:
         os.remove(path)
-    if code:
+    # Their words already kept (pasted again with "Draft a reply", or logged by a chat): the
+    # message is not logged twice, and the reply asked for is still drafted, never refused.
+    kept = bool(code) and "already logged" in out
+    if code and not kept:
         raise Refused(_said(out))
     # Their words are in the log now: the page's database keeps none of them.
     if r.version is not None and not str(r.act.get("claimed_by") or ""):
         r.w.add("update", "actions", r.aid, {"value": {"__delete__": True}},
                 if_version=r.version)
     who = _first(cid)
-    got = {"note": f"Logged: {who} wrote on {day}. A reply is owed.",
-           "undo": {"action": "msg.unreceived", "target": {"kind": "person", "contact": cid},
-                    "value": {"on": day}}}
+    got = ({"note": f"{who}'s message was already kept, so it is not logged twice.",
+            "undo": None} if kept else
+           {"note": f"Logged: {who} wrote on {day}. A reply is owed.",
+            "undo": {"action": "msg.unreceived", "target": {"kind": "person", "contact": cid},
+                     "value": {"on": day}}})
     if r.value.get("draft"):
         wid = page_db.safe_id(f"reply~{cid}")
         have = (r.db.get("work") or {}).get(wid)
@@ -2445,11 +2450,21 @@ def _due_done(r: Run) -> dict:
     if row is None:
         raise Refused("They are no longer in your contact book.")
     before = {"next_action": row.get("next_action") or "", "due": row.get("next_action_due") or ""}
-    code, out = _cli(_state(), ["set", cid, "--next-action", "", "--due", "", "--note",
-                                "done, said on the page", "--today", day])
+    # "Close" on a thread whose limit of unanswered messages is reached closes it, as the
+    # row's own words say (state.CLOSE_IT): only clearing the line left them "Connected" and
+    # waiting, counted among people waiting to hear back (2026-11-03).
+    leave = app_model.stopped(row.get("next_action"))
+    argv = ["set", cid, "--next-action", "", "--due", "", "--note",
+            "closed after no reply, said on the page" if leave else "done, said on the page",
+            "--today", day]
+    if leave:
+        before["status"] = row.get("status") or ""
+        argv[2:2] = ["--status", "gone_cold"]
+    code, out = _cli(_state(), argv)
     if code:
         raise Refused(_said(out))
-    return {"note": f"Done: {_first(cid)}.",
+    return {"note": f"Closed: {_first(cid)}. A reply from them opens it again." if leave
+            else f"Done: {_first(cid)}.",
             "undo": {"action": "due.undo", "target": dict(t), "value": before}}
 
 
@@ -2475,9 +2490,12 @@ def _due_undo(r: Run) -> dict:
         return {"note": f"The follow-up is due again: {t.get('company')}.",
                 "undo": {"action": "due.done", "target": dict(t)}}
     cid = t.get("contact") or ""
-    code, out = _cli(_state(), ["set", cid, "--next-action", str(r.value.get("next_action") or ""),
-                                "--due", str(r.value.get("due") or ""), "--note",
-                                "brought back on the page", "--today", r.day.isoformat()])
+    argv = ["set", cid, "--next-action", str(r.value.get("next_action") or ""),
+            "--due", str(r.value.get("due") or ""), "--note",
+            "brought back on the page", "--today", r.day.isoformat()]
+    if str(r.value.get("status") or "").strip():
+        argv[2:2] = ["--status", str(r.value["status"]).strip()]
+    code, out = _cli(_state(), argv)
     if code:
         raise Refused(_said(out))
     return {"note": f"Due again: {_first(cid)}.", "undo": {"action": "due.done", "target": dict(t)}}

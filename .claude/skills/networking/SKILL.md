@@ -753,7 +753,10 @@ an ignored invitation would get.
   sent and it signals the sender is not looking.
 
 **Log an acceptance as an inbound row with scenario `accepted_no_reply` and no
-text.** `state.derive_status` reads that row as `connected_no_reply`, never as a
+text**, by command, the turn the person says so: `python3 tools/network/state.py accepted
+<contact_id or name> [--date <day>]`. It also rewrites the row's next step from the day they
+accepted (a first message owed that day after a request with no note), and refuses a second
+acceptance or one with no request on the log. `state.derive_status` reads that row as `connected_no_reply`, never as a
 reply, and the nudge clock runs from its date. Reading the direction alone would
 count an acceptance as an answer, make the employer a warm route and refuse the
 nudge because "they answered".
@@ -1040,8 +1043,14 @@ almost always one.
   --draft-file <the draft>` after it
 - `/threads`, what is owed, what is due, what has gone cold
 - `/prep <contact>`, prep document for a booked call
+- `state.py add "<name>" [--company --title --linkedin --email --route --route-detail
+  --referred-by --note]` adds someone not in the book (a recruiter who wrote first, a name
+  passed on), never a second row: someone already there is named, and a name close to one at
+  that employer is asked about (`--new` when it is someone else)
 - `state.py received <id> --text-file <file>` logs their message as it came (`--scenario`,
-  `--date`, `--channel`), never written into the log by hand
+  `--date`, `--channel`), never written into the log by hand; the same words already logged
+  are refused, on any day for a message of a sentence or more
+- `state.py accepted <id>...` records that they accepted a request (`--date`)
 - `state.py nudge <id> --text-file <file>` logs a nudge that went, with its words;
   `state.py message <id> ...` any other later message (`--texts <file.json>` for several);
   `--attached <file>` on either (and on `sent`) names a file that went with it, and

@@ -222,21 +222,26 @@ def test_an_interview_binned_leaves_interviews_at_once_and_undo_brings_it_back(r
 
 
 def test_the_prep_is_read_on_the_page_and_practice_uses_its_questions(run, tmp_path, vp):
+    # 2026-11-03: the prep opens on what to say and ask, and its likely questions are one tap
+    # below, folded: the questions are read once that fold is open.
     got = _go(run, tmp_path, [
-        {"hash": "interviews", "click": "Read your prep", "read": "dialog.detail"},
+        {"hash": "interviews", "click": "Read your prep"},
+        {"open": "prep-fold:int-larkspur-supply:q", "read": "dialog.detail"},
         {"click": "Practise with Claude", "within": "dialog.detail", "read": "#main", "wait": 300, "calls": "sample"},
         {"eval": "(() => { const t = document.querySelector('#talk-text'); t.value = 'I have three years of store and supplier data behind me, turned into weekly plans.'; t.dispatchEvent(new Event('input', {bubbles: true})); return 1; })()"},
         {"click": "Send", "exact": True, "wait": 300, "read": "#main .talk-list"},
     ], vp, fake={"canSend": "available", "sample": {"replies": [
         "Tell me about yourself.",
         "Band: Solid\n- You said \"three years of store and supplier data\": lead with it.\n- Say more about the regional team.\nWhy Larkspur Retail?"]}})
-    read = got["after"][0]["text"]
+    read = got["after"][1]["text"]
     for q in ("Tell me about yourself.", "Why Larkspur Retail?", "Tell me about a forecast that was wrong."):
         assert q in read, q
-    first = got["after"][1]["calls"][0]
+    assert read.count("Draft") == 1, "Draft only above the one answer that is a draft"
+    first = got["after"][2]["calls"][0]
     asked = json.dumps(first)
     assert "Tell me about yourself." in asked and "Why Larkspur Retail?" in asked, "the practice is given the pack's own questions"
-    feedback = got["after"][3]["text"]
+    assert "[object Object]" not in asked
+    feedback = got["after"][4]["text"]
     assert "Band: Solid" in feedback and "three years of store and supplier data" in feedback
     assert "Say more about the regional team" not in feedback, "a point that does not quote the answer is never shown"
 

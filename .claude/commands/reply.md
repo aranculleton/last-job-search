@@ -83,7 +83,9 @@ The steps the two commands carry, for when one is done by hand:
    in a reply. If the person reacts to the draft, the reaction is recorded before the next
    draft (`learned.py record` or `skip`): the composers refuse to draft over one.
 
-6. **Record.** Their message goes into `network_threads.csv` now, by command, with their
+6. **Record.** Someone not in the contact book yet (a recruiter who wrote first) is added
+   first, never by hand: `python3 tools/network/state.py add "<name>" [--company "<employer>"]
+   [--title "<title>"]`, which prints their id. Their message goes into `network_threads.csv` now, by command, with their
    words as they came: `python3 tools/network/state.py received <contact_id> --text-file
    <file>` (`--scenario <the scenario from step 2>`; `--date` when it came another day;
    `--channel` when it came another way than the thread runs). Never by hand. Ours goes in only when

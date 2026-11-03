@@ -1,7 +1,7 @@
 {
  "model": 1,
  "made_at": "2026-10-25T18:00:00Z",
- "rev": "f7c6a663db9d",
+ "rev": "90f61b720847",
  "app": {
   "version": "4.8.0",
   "update_waiting": null,
@@ -46,7 +46,7 @@
  ],
  "jobs": {
   "round": "r9",
-  "made_at": "2026-11-03T17:39:22Z",
+  "made_at": "2026-11-03T18:38:07Z",
   "met": false,
   "summary": "4 roles on the shortlist, 4 scoring 60 or more and 2 scoring 75 or more. 3 left out, each with its reason.",
   "rows": [
@@ -531,6 +531,8 @@
    "due": null,
    "hold": null,
    "rev": "2ca9b4fd8d83",
+   "wave": "w2026-43",
+   "wave_label": "First notes to send",
    "parts": false,
    "tweaks_done": [],
    "paste": null,
@@ -556,6 +558,7 @@
    "title": "Reply to Juno at Larkspur Retail",
    "context": "Analytics Manager · University of Leeds alumni · first wrote 10 Sep",
    "due": "2026-10-20",
+   "step": "Reply",
    "company": "Larkspur Retail",
    "overdue_days": 5,
    "action": "work:reply",
@@ -592,6 +595,7 @@
    "title": "Follow up with Wren at Fernhill Freight",
    "context": "Head of Supply Chain Analytics · first wrote 21 Sep",
    "due": "2026-09-29",
+   "step": "Follow up",
    "company": "Fernhill Freight",
    "overdue_days": 26,
    "action": "work:follow_up",
@@ -636,6 +640,8 @@
     },
     "ask": "Paste what they said, if it is not logged"
    },
+   "stopped": false,
+   "wrote": true,
    "last": "2026-09-12",
    "next_action": "send the CV",
    "due": "2026-10-20",
@@ -647,6 +653,19 @@
    "call": null,
    "paste": null,
    "is_process_stage": false,
+   "thread": [
+    {
+     "from": "you",
+     "on": "2026-09-10",
+     "text": "Hi Juno, hope you're well. We were both at Leeds. I work in supply-chain analytics in Manchester and I'm looking for my next role. How is the analytics team set up at Larkspur?"
+    },
+    {
+     "from": "them",
+     "on": "2026-09-12",
+     "text": "Hi Morgan, happy to help. Send me your CV and I'll pass it on."
+    }
+   ],
+   "thread_more": 0,
    "related": {
     "jobs": [
      "r9-4"
@@ -698,6 +717,8 @@
      "contact": "fernhill_freight_halloway"
     }
    },
+   "stopped": false,
+   "wrote": true,
    "last": "2026-09-21",
    "next_action": "One nudge if no reply",
    "due": "2026-09-29",
@@ -709,6 +730,14 @@
    "call": null,
    "paste": null,
    "is_process_stage": false,
+   "thread": [
+    {
+     "from": "you",
+     "on": "2026-09-21",
+     "text": "Hi Wren, hope you're well. I saw Fernhill opened a Manchester hub. I work in supply-chain analytics here. How is the new site's planning team set up?"
+    }
+   ],
+   "thread_more": 0,
    "related": {
     "ready": [
      "app-fernhill_freight_operations_analyst"
@@ -728,6 +757,8 @@
    "status": "not_contacted",
    "status_word": "Not written to",
    "owed": null,
+   "stopped": false,
+   "wrote": false,
    "last": null,
    "next_action": "Send the first note; call if needed",
    "due": null,
@@ -739,6 +770,8 @@
    "call": null,
    "paste": null,
    "is_process_stage": false,
+   "thread": [],
+   "thread_more": 0,
    "related": {
     "jobs": [
      "r9-2"
@@ -765,7 +798,7 @@
    "when": "2026-10-28",
    "prep": {
     "path": "documents/applications/thornbury_bank_risk_analyst_thornbury/interview_prep.md",
-    "updated": "2026-11-03T17:39:22Z"
+    "updated": "2026-11-03T18:38:07Z"
    },
    "questions": 2,
    "all_day": true,
@@ -792,7 +825,39 @@
    ],
    "format": null,
    "one_screen": null,
-   "prep_text": "# Interview prep\n\n<!-- stages: Panel interview -->\n\n- **Q.** Tell me about a forecast you built (screen; source: posting)\n- **Q.** How do you check your data (screen; source: posting)\n",
+   "prep_read": {
+    "glance": {
+     "assessing": null,
+     "hear": null,
+     "say": [],
+     "ask": [],
+     "money": null,
+     "careful": [],
+     "hooks": []
+    },
+    "questions": [
+     {
+      "question": "Tell me about a forecast you built",
+      "why": "screen",
+      "answer": null,
+      "draft": false,
+      "cue": null,
+      "checking": null,
+      "notes": []
+     },
+     {
+      "question": "How do you check your data",
+      "why": "screen",
+      "answer": null,
+      "draft": false,
+      "cue": null,
+      "checking": null,
+      "notes": []
+     }
+    ],
+    "sections": [],
+    "live": false
+   },
    "practice": {
     "questions": [
      {

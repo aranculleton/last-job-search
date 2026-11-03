@@ -1935,6 +1935,57 @@ S.mock = async (a) => {
   await turn(o.page, 10);
   const r = {heading: await one(o.page, "#main h2"), msgs: await T(o.page, "#main .talk-msg .talk-text"),
     first: (await calls(o.page)).filter((c) => c.cap === "sample").map((c) => String(c.input[0].content).slice(0, 200)), errors: o.errors};
+  // The whole of the interviewer's instructions: the questions it is to ask are in it.
+  r.prompt = (await calls(o.page)).filter((c) => c.cap === "sample").map((c) => String(c.input[0].content))[0] || "";
+  await o.ctx.close();
+  return r;
+};
+
+// An interview's prep, read on the page (2026-11-03): what the minutes before show, the parts
+// folded below it, and everything in it once every fold is open, at the size asked for.
+S.prep_reader = async (a) => {
+  const o = await open({html: a.html, viewport: a.viewport, scheme: a.scheme, hash: "interviews", clock: a.clock});
+  await throughNav(o.page, () => o.page.evaluate((h) => { location.hash = h; }, "interviews/" + a.id + "/open"));
+  await turn(o.page, 8);
+  const r = {errors: o.errors};
+  r.title = await one(o.page, "dialog[open] .detail-title");
+  r.when = await one(o.page, "dialog[open] .d-stack > .when");
+  r.glance = await one(o.page, "dialog[open] .prep-glance");
+  r.glanceH = await one(o.page, "dialog[open] .prep-glance-h");
+  r.say = await T(o.page, "dialog[open] .prep-glance .pg-part:first-of-type .pg-list > li");
+  r.parts = await o.page.$$eval("dialog[open] .prep-glance .pg-part", (ps) => ps.map((p) => ({label: (p.querySelector(".pg-label") || {}).textContent, n: p.querySelectorAll("li").length})));
+  r.folds = await T(o.page, "dialog[open] .prep-fold > summary .prep-fold-t");
+  r.openAtFirst = await o.page.$$eval("dialog[open] details.prep-fold[open]", (d) => d.length);
+  // A fold opens with a tap on its name.
+  if (r.folds.length) { await o.page.locator("dialog[open] .prep-fold > summary").first().click(); await turn(o.page, 4); }
+  r.openAfterTap = await o.page.$$eval("dialog[open] details.prep-fold[open]", (d) => d.length);
+  await o.page.$$eval("dialog[open] details.prep-fold:not([open])", (ds) => ds.forEach((d) => { d.open = true; }));
+  await turn(o.page, 4);
+  r.text = await one(o.page, "dialog[open] .detail-body");
+  r.drafts = await o.page.$$eval("dialog[open] .pq", (qs) => qs.filter((q) => /\bDraft\b/.test(q.textContent)).map((q) => q.querySelector(".pq-q").textContent));
+  r.links = await o.page.$$eval("dialog[open] .detail-body a[href]", (as) => as.map((x) => x.getAttribute("href")));
+  r.glanceFont = await o.page.$eval("dialog[open] .pg-list", (e) => parseFloat(getComputedStyle(e).fontSize)).catch(() => 0);
+  r.bodyFont = await o.page.$eval("dialog[open] .pq-a, dialog[open] .pi-list", (e) => parseFloat(getComputedStyle(e).fontSize)).catch(() => 0);
+  r.overflow = await o.page.evaluate(() => { const b = document.querySelector("dialog[open] .detail-body"); return b ? {sw: b.scrollWidth, cw: b.clientWidth} : null; });
+  if (a.shot) await shot(o.page, a.shot, false);
+  await o.ctx.close();
+  return r;
+};
+
+// Coming up's Interviews view, card by card: its title, its pill, its facts, whether it has a
+// bin and the buttons it shows; and the Brief's Today panel.
+S.iv_cards = async (a) => {
+  const o = await open({html: a.html, viewport: a.viewport, hash: "interviews", clock: a.clock});
+  await interviewCards(o.page);
+  const r = {errors: o.errors};
+  r.cards = await o.page.$$eval("#main article.card.interview", (cs) => cs.map((c) => ({
+    title: (c.querySelector("h3") || {}).textContent, pill: (c.querySelector(".top-end .state-word") || {}).textContent || "",
+    when: (c.querySelector(".when") || {}).textContent || "", meta: (c.querySelector(".meta") || {}).textContent || "",
+    bin: !!c.querySelector('[data-k^="ivbin:"]'), buttons: [...c.querySelectorAll(".card-actions > button")].map((b) => b.textContent)})));
+  await throughNav(o.page, () => o.page.evaluate(() => { location.hash = "brief"; }));
+  await turn(o.page, 6);
+  r.today = await one(o.page, ".bp-today");
+  r.likely = await T(o.page, ".bp-today .bp-qs li");
   await o.ctx.close();
   return r;
 };

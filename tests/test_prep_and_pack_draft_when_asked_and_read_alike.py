@@ -145,10 +145,12 @@ def test_the_packs_own_lines_offer_the_draft_and_never_refuse_it(st, monkeypatch
     _application(st, posting="Demand Planning Analyst. Experience with PySpark is essential.")
     ctx = _gather()
     donts = P.do_not_say(ctx, never_say=[])
-    assert "- Never claim PySpark: big-data engineering is not held. Ask for an example and " \
-        "Claude drafts one, marked for you to confirm (source: tools/bridges.py)" in donts
-    assert donts[-1] == ("- No claim in the room beyond the paper they read, except a draft you "
-                         "asked for and have made true.")
+    # 2026-11-03: offered in plain words, its source in words; and the rule every interview
+    # keeps is said once, under What the paper says, never as one more "don't" on each pack.
+    assert "- Never claim PySpark: big-data engineering is not held. Ask Claude for an example " \
+        "and it drafts one for you to check (source: your profile)" in donts
+    assert not any("No claim in the room" in d for d in donts)
+    assert "except a draft you asked for and have made true" in P.PAPER_RULE
     call = P.call_ctx(PEER, "", profile_facts.build())
 
     def lines(**item):
@@ -156,17 +158,21 @@ def test_the_packs_own_lines_offer_the_draft_and_never_refuse_it(st, monkeypatch
 
     assert "never claim it" not in lines(question="What is your experience with Kafka?",
                                          gap=True, framing="")
-    assert "Asked for an example of using it, Claude drafts one" in lines(
+    assert "Ask Claude for an example of using it and it drafts one" in lines(
         question="What is your experience with Kafka?", gap=True, framing="")
     assert "never a story you do not have" not in lines(
         question="Tell me about your experience with SAP.", req=True, evidence="")
-    assert "Asked for an example, Claude drafts one" in lines(
+    # 2026-11-03: the same offer, in the person's words.
+    assert "Ask Claude for an example and it drafts one" in lines(
         question="Tell me about a time you led something.")
     assert "facts only" not in lines(question="How would you survey a zebra crossing?")
     monkeypatch.setattr(P, "hard_answers", lambda path=None: [])
     asked = P.answer_for({"question": "Why are you looking?", "why": "", "source": ""},
                          P.call_ctx(PEER, "", profile_facts.build()))
-    assert asked["ask"].startswith(P.ASK_MARK) and "If they ask for a draft instead" in asked["ask"]
+    # 2026-11-03: the offer of a draft said to the person, the command to keep their answer
+    # printed for Claude by `pack`, never written where they read.
+    assert asked["ask"].startswith(P.ASK_MARK) and "Or ask Claude to draft one" in asked["ask"]
+    assert "python3" not in asked["ask"]
     # Small talk: no invented memory unasked, an anecdote drafted when asked.
     who = {"identity.moved": "just arrived", "identity.area": "Ancoats, Manchester"}
     monkeypatch.setattr(P, "_person", lambda dotted: who.get(dotted, ""))
@@ -403,7 +409,9 @@ def test_a_recruiter_is_asked_about_the_next_stage_once(st):
     assert "screener" not in P.ASK_KIND
     whole = text.lower()
     assert "next stage look like" not in whole
-    assert whole.count("what does the next round involve") == 1
+    # 2026-11-03: once among the questions to ask; the one screen repeats the first of them.
+    assert _section(text, "Ask them").lower().count("what does the next round involve") == 1
+    assert whole.count("what does the next round involve") == 2
     assert "Ask them about the process" in _section(text, "Who you are meeting")
 
 

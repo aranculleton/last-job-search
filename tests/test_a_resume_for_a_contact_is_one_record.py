@@ -734,8 +734,12 @@ def test_the_interview_pack_says_which_resume_a_contact_holds(repo):
     unnamed = dict(sent, date="2026-10-16", summary="CV sent again.")
     ctx = {"company": "Oakmere Foods", "contacts": CONTACTS, "threads": THREADS + [sent, unnamed]}
     lines = interview_pack._held_by_contacts(ctx)
-    assert lines[0] == f"- Sent to Quillon Varga on 2026-10-15: {CV}"
-    assert "file not named (state.py attach %s)" % CID in lines[1]
+    # 2026-11-03: the pack is read by the person, so it says "your CV" and whether it was
+    # another version from the one applied with, never the file's name or a command to name it.
+    assert lines[0] == "- Sent to Quillon Varga on 2026-10-15: your CV"
+    assert lines[1] == "- Sent to Quillon Varga on 2026-10-16: a CV (which version is not recorded)"
+    other = interview_pack._held_by_contacts(dict(ctx, row={"cv_file": "cv/Another_CV.tex"}))
+    assert other[0].endswith("your CV, a different version from the one you applied with")
     # Someone at another employer, and a message that only offered one, add nothing.
     assert interview_pack._held_by_contacts(dict(ctx, company="Kestrel Mutual")) == []
 

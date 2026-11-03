@@ -1700,6 +1700,13 @@ def _messages(ctx: Ctx, targets: dict) -> list:
                                      f"They work at {c.get('company') or 'an employer you want'}"),
                 "due": str(c.get("next_action_due") or "") or None, "hold": hold,
                 "rev": rev_of(cid, text, kind, channel, live)}
+        if mtype == "first_note" and channel == "linkedin_note" and hold is None:
+            # First notes waiting to go are one wave: one To do card ("4 first notes ready to
+            # send") and one list by employer in Messages. The page had both and the engine
+            # never said which notes were a wave, so a networking run's notes reached To do
+            # nowhere (2026-11-03).
+            year, week, _ = ctx.today.isocalendar()
+            item["wave"], item["wave_label"] = f"w{year}-{week:02d}", "First notes to send"
         import parts
         # Code-only tweaks need the parts the note was made from (tools/network/parts.py).
         item["parts"] = parts.load(cid, text) is not None
@@ -1771,6 +1778,64 @@ STATUS_WORDS = {
 }
 
 
+# A person's conversation on their page: the newest few messages, each cut at a word. The
+# sheet's "Your conversation" read `thread` and the engine never wrote it, so every real
+# page showed "Last in touch ..." and nothing said, and "Draft a reply" asked for words
+# already in the log, which logged them a second time (2026-11-03).
+THREAD_KEEP = 4
+THREAD_CHARS = 600
+
+
+def _redact(text: str) -> str:
+    """Their words with any contact detail said as what it was, never the detail: the page
+    reads an address from the owner-only reach documents (CONTRACT 1)."""
+    out = LINKEDIN_IN.sub("(their profile address)", str(text or ""))
+    out = EMAIL.sub("(an email address)", out)
+    for p in sorted(set(_phones(out)), key=len, reverse=True):
+        out = out.replace(p, "(a phone number)")
+    return out
+
+
+def thread_of(msgs, names=()) -> tuple[list, int]:
+    """(the newest THREAD_KEEP things that happened in a conversation, how many earlier
+    ones are not shown): {"from": "you"|"them", "on": day, "text": ...}, with "event": True
+    on what was not a message (a request accepted or withdrawn, a call)."""
+    from network import state
+    out = []
+    for m in msgs:
+        d = state.direction(m)
+        if not d or state.is_auto_reply(m):
+            continue
+        # Their lines kept, each one's spacing tidied: a file saved on Windows says \r\n.
+        lines = re.split(r"\r\n|\r|\n", str(m.get("full_text") or ""))
+        words = re.sub(r"\n{3,}", "\n\n", "\n".join(" ".join(x.split()) for x in lines)).strip()
+        event = None
+        if state.is_acceptance(m):
+            event = "Accepted your connection request."
+        elif state.is_withdrawal(m):
+            event = "You withdrew the connection request."
+        elif state.is_call(m):
+            event = "A call." if state.call_held(m) else "A call that did not happen."
+        elif not words:
+            event = ("A connection request with no note." if state.is_bare_request(m)
+                     else short(str(m.get("summary") or ""), 120) or None)
+        if event is None and not words:
+            continue
+        item = {"from": "you" if d == "out" else "them", "on": str(m.get("date") or "")[:10]
+                or None, "text": event or short(scrub_names(_redact(words), names), THREAD_CHARS)}
+        if event:
+            item["event"] = True
+        out.append(item)
+    return out[-THREAD_KEEP:], max(len(out) - THREAD_KEEP, 0)
+
+
+def scrub_names(text: str, names=()) -> str:
+    """`text` with each full name in the book cut to its first name (`scrub`'s names)."""
+    if hasattr(names, "sub"):
+        return names.sub(text)
+    return text
+
+
 def who_they_are(c: dict, status: str) -> str:
     """recruiter, referrer, hiring (an interviewer, a hiring manager or HR) or peer: what the
     Contacts filter sorts people by (the maintainer, 2026-10-28)."""
@@ -1786,7 +1851,16 @@ def who_they_are(c: dict, status: str) -> str:
     return "peer"
 
 
-def owed_button(cid: str, status: str, due: str, today: dt.date, has_draft: bool) -> dict | None:
+def stopped(next_action) -> bool:
+    """Has this thread reached the person's limit of unanswered messages (the app's own
+    "No more follow-ups" or "Nudged: nothing more" line on the row)? Then nothing more is
+    drafted to them: the row offered "Draft the follow-up" under a line saying to leave it,
+    a third message the person's rule forbids (2026-11-03)."""
+    return bool(_STOPPED.match(" ".join(str(next_action or "").split())))
+
+
+def owed_button(cid: str, status: str, due: str, today: dt.date, has_draft: bool,
+                action: str = "") -> dict | None:
     """The one button a contact row shows, only when something is owed."""
     if status == "replied_needs_response":
         return {"label": "Draft a reply", "kind": "reply", "id": f"reply~{cid}",
@@ -1798,7 +1872,7 @@ def owed_button(cid: str, status: str, due: str, today: dt.date, has_draft: bool
                 "args": {"contact": cid, "call": True}}
     late = _date(due)
     if status in ("awaiting_reply", "connected_no_reply") and late and late <= today \
-            and not has_draft:
+            and not has_draft and not stopped(action):
         return {"label": "Draft the follow-up", "kind": "follow_up", "id": f"follow_up~{cid}",
                 "args": {"contact": cid}}
     return None
@@ -1917,10 +1991,19 @@ def _people(ctx: Ctx, targets: dict) -> list:
     out, used = [], 2
     for n, (c, cid, status, due, last) in enumerate(live_rows + rest):
         action = plain_action(scrub(c.get("next_action"), ctx.names))
+        msgs = ctx.by_contact.get(cid) or []
+        thread, earlier = thread_of(msgs, ctx.names)
         item = {"id": cid, "first_name": first_name(c.get("name")),
                 "employer": str(c.get("company") or ""), "status": status,
                 "status_word": STATUS_WORDS.get(status, status.replace("_", " ")),
-                "owed": owed_button(cid, status, due, ctx.today, cid in drafts),
+                "owed": owed_button(cid, status, due, ctx.today, cid in drafts,
+                                    c.get("next_action")),
+                # Their limit of unanswered messages reached: nothing more is drafted.
+                "stopped": stopped(c.get("next_action")) and status in throttle.SENT_NO_REPLY,
+                # Whether the person has written to them: someone who wrote first has not
+                # been "written to" until a message of theirs went back.
+                "wrote": any(state.direction(t) == "out" and not state.is_withdrawal(t)
+                             for t in msgs),
                 "last": last,
                 "next_action": action, "due": due or None, "route": full[cid]["route"],
                 # Who they came through (the book's referred_by: a contact id or a name), so the
@@ -1933,6 +2016,9 @@ def _people(ctx: Ctx, targets: dict) -> list:
                 "paste": _paste(cid, first_name(c.get("name")), None) if cid in drafts
                 else None,
                 "is_process_stage": _is_process_stage(ctx, c, status),
+                # Their conversation, newest last, so their page shows what was said and a
+                # reply is drafted from words already kept (thread_of).
+                "thread": thread, "thread_more": earlier,
                 "related": {},        # filled by app_lists.link; counted in the budget
                 "rev": rev_of(cid, status, action, due, last)}
         _card(ctx, targets, item, "for_person")
@@ -1994,6 +2080,13 @@ def _due(ctx: Ctx, targets: dict) -> list:
                      "request_pending": f"Your request to {who}{where} was not accepted",
                      "first_message": f"Write to {who}{where}: they accepted"}.get(
                 raw, f"{who}{where}: " + short(plain_action(scrub(c.get("next_action"), ctx.names))))
+            # What is due, said without who: their own row in Contacts names them already
+            # ("Next: reply to Juno at Larkspur Retail" sat under "Juno at Larkspur Retail").
+            step = {"reply": "Reply", "resume": f"Send your {noun}", "nudge": "Follow up",
+                    "request_pending": "Your request has not been accepted yet",
+                    "first_message": "Write to them: they accepted"}.get(
+                raw, short(plain_action(scrub(c.get("next_action"), ctx.names))))
+            leave = raw == "action_due" and stopped(c.get("next_action"))
             key = i.get("contact_id") or ""
             action = "work:resume_for_contact" if raw == "resume" else _DUE_WORK[kind]
             about = key
@@ -2011,9 +2104,14 @@ def _due(ctx: Ctx, targets: dict) -> list:
                 iid = "int-" + rid[4:] if rid else ""
                 sub = ("prep" if "no pack" in w else "thank_you" if "thank-you" in w
                        else "status_note")
+                # Quiet since a round that was held, or since the last word with none held yet
+                # (a round named and never given a day): "since your interview" was said of a
+                # panel interview that had not happened (2026-11-03).
+                held = sub != "status_note" or _round_held(ctx, company, role)
                 title = {"prep": f"Prepare for your {company} interview",
                          "thank_you": f"Thank-you note after your {company} interview",
-                         "status_note": f"No word from {company} since your interview"}[sub]
+                         "status_note": f"No word from {company} since your interview" if held
+                         else f"No word from {company} since your last update"}[sub]
                 # One work id per prep: the interview card's own (prep~<interview>), so a
                 # tap here and a tap there are one piece of work. A thank-you and a status
                 # note are follow-ups, never a prep (FUNCTIONS_SPEC 1.8).
@@ -2054,7 +2152,8 @@ def _due(ctx: Ctx, targets: dict) -> list:
                 [co] if co and co not in title else [])
             how = str(c.get("route_detail") or "").strip() or _ROUTE_WORDS.get(
                 str(c.get("route") or "").strip().lower(), "")
-            if how:
+            # "Recruiter · recruiter": their route said again after a title that already says it.
+            if how and how.lower() not in role.lower():
                 bits.append(how)
             import dates
             first = dates.as_date(c.get("first_contacted"), iso_only=True)
@@ -2062,7 +2161,11 @@ def _due(ctx: Ctx, targets: dict) -> list:
                 bits.append("first wrote " + first.strftime("%-d %b") if os.name != "nt"
                             else "first wrote " + first.strftime("%d %b").lstrip("0"))
             context = scrub(" \u00b7 ".join(b for b in bits if b), ctx.names)
+        # A contact's: what is due said without who, and whether it is only to leave.
+        own = ({"step": step, **({"leave": True} if leave else {})}
+               if i["half"] == "contact" else {})
         item = {"id": did, "kind": kind, "title": title, "context": context, "due": i["due"],
+                **own,
                 "company": (str(book.get(i.get("contact_id") or "", {}).get("company") or "")
                             if i["half"] == "contact" else i["who"].partition(" - ")[0]),
                 "overdue_days": max(int(i.get("late") or 0), 0), "action": action,
@@ -2113,6 +2216,30 @@ def _due(ctx: Ctx, targets: dict) -> list:
 # ------------------------------------------------------------------ interviews and done
 
 
+def _scrubbed(value, names):
+    """Every string in `value` (a dict, a list, a string) with contact details out (scrub);
+    a link the reader kept is a page of the employer's, kept whole, and never a person's
+    profile."""
+    if isinstance(value, dict):
+        return {k: (("" if LINKEDIN_IN.search(str(v or "")) else v) if k == "link"
+                    else _scrubbed(v, names)) for k, v in value.items()}
+    if isinstance(value, list):
+        return [_scrubbed(v, names) for v in value]
+    return scrub(value, names) if isinstance(value, str) else value
+
+
+def _round_held(ctx: Ctx, company: str, role: str) -> bool:
+    """Has any round of this application been held: ticked, or booked for a day now gone?"""
+    import open_actions
+    today = ctx.today.isoformat()
+    for row in ctx.tracker:
+        if (row.get("company") or "").strip() == company and \
+                ((row.get("role") or "").strip() or "role not recorded") == role:
+            _folder, _files, stages = open_actions.stages(row)
+            return any(s["done"] or (s["date"] and s["date"] < today) for s in stages)
+    return True
+
+
 def _interviews(ctx: Ctx, targets: dict) -> list:
     import followups
     import open_actions
@@ -2146,6 +2273,18 @@ def _interviews(ctx: Ctx, targets: dict) -> list:
         import interview_pack
         nxt = (interview_pack.next_stage(stages, today) if stages else {}) if live else {}
         stage = nxt if live else past
+        if live and nxt and nxt.get("label") not in {s_["label"] for s_ in stages}:
+            # Nothing on record after the last round: next_stage names the next one for a
+            # pack ("Round 3"), and the page showed it as an interview with no day and an
+            # offer as "Round 4" (2026-11-03). An offer is the offer; otherwise the card is
+            # the round last held, waiting to hear, whose prep asks for what comes next.
+            held = [s_ for s_ in stages if s_["date"] and s_["date"] <= today]
+            if st == "offer":
+                stage = {"label": "Offer", "date": "", "time": "", "with": ""}
+            elif held:
+                stage = max(held, key=lambda s_: (s_["date"], s_.get("time") or ""))
+            else:
+                stage = dict(nxt, label="Next round")
         prep = os.path.join(folder, "interview_prep.md")
         text = _read(prep)
         iid = "int-" + rid[4:]
@@ -2169,8 +2308,14 @@ def _interviews(ctx: Ctx, targets: dict) -> list:
                 "format": _format_of(text, stage.get("label")),
                 "one_screen": _one_screen(text, ctx.names),
                 # The prep itself, so it is read on the page, never only from a chat (the
-                # maintainer, 2026-10-28): its words, contact details out, cut at a length.
-                "prep_text": scrub(text, ctx.names)[:20000] if text else None,
+                # maintainer, 2026-10-28), as parts in plain words: the few things for the
+                # minutes before, each question with its answer, the rest to fold. The
+                # document as written was shown whole, a wall of headings, file paths and
+                # commands (2026-11-03). Contact details out, as everywhere on the page.
+                # Read first, then each line scrubbed: scrubbed first, a source's path lost its
+                # space and its digits, and the reader could no longer take it out (2026-11-03).
+                "prep_read": _scrubbed(interview_pack.reading(text, row.get("company") or ""),
+                                       ctx.names) if text else None,
                 "practice": interview_pack.practice(text) if text else None,
                 "sent_files": _sent_files(ctx, row),
                 "referrer": referrer_of(ctx, row),
@@ -2225,7 +2370,7 @@ def _one_screen(text, names) -> dict | None:
     for k in ("assessing", "hear", "money"):
         if got[k]:
             got[k] = scrub(got[k], names)
-    for part in ("questions", "hooks", "do_not_say"):
+    for part in ("questions", "hooks", "do_not_say", "say", "ask"):
         for e in got[part]:
             for k in ("question", "answer", "text"):
                 if e.get(k):

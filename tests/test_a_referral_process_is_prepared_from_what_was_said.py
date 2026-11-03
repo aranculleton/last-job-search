@@ -184,13 +184,18 @@ def test_motivation_answers_are_asked_and_stock_answers_are_matched_and_flagged(
 def test_what_was_read_and_what_was_not_logged_are_both_said(case):
     _process()
     told = _section(_doc(), "What they have been told")
-    assert "- Read: Ivo Vance, Associate Partner, Operations Practice [awaiting_reply]: 1 " \
-           "message(s) from you, 2026-09-10" in told
-    assert "- Read: Tamsin Marsh, Talent Acquisition Partner [call_booked]: nothing from you " \
-           "logged" in told
-    assert "2026-09-10, to Ivo Vance: text not logged (logged as \"first note, alumni\"): check " \
-           "what this said about where you are, notice and pay" in told
-    assert "state.py text calder_rook_vance --date 2026-09-10" in told
+    # 2026-11-03: each contact's state in words, never its code ("[awaiting_reply]"), and a
+    # message with no words on record asks the person what it said, never a command to run.
+    assert "- Ivo Vance, Associate Partner, Operations Practice (waiting for their reply): one " \
+           "message from you, 2026-09-10" in told
+    assert "- Tamsin Marsh, Talent Acquisition Partner (call booked): nothing from you on " \
+           "record" in told
+    assert "2026-09-10, to Ivo Vance: its words are not on record (noted as \"first note, " \
+           "alumni\"). Tell Claude what it said about where you are, notice and pay" in told
+    assert "python3" not in told and "[awaiting_reply]" not in told
+    # The command that keeps its words is Claude's, in /interview's own instructions.
+    cmd = open(os.path.join(ROOT, ".claude", "commands", "interview.md"), encoding="utf-8").read()
+    assert "python3 tools/network/state.py text <contact_id> --date <date>" in cmd
     # The words, once added, are read: and what to say about them is never put in their mouth.
     msg = case / "msg.txt"
     msg.write_text("Hi Ivo, I'm moving to Manchester from Leeds next month.", encoding="utf-8")
@@ -214,7 +219,8 @@ def test_the_warm_route_and_the_interviewer_are_right(case):
     assert "**Tamsin Marsh**" in meeting
     warm = _section(text, "Warm route")
     # Her stored status wins over the inbound message, and nothing is owed to her.
-    assert "Tamsin Marsh" in warm and "[call_booked]" in warm
+    # 2026-11-03: her state in words, never its code.
+    assert "Tamsin Marsh" in warm and "(call booked)" in warm and "[call_booked]" not in warm
     assert "replied_needs_response" not in warm and "tell them it is booked" not in warm
     # The referrer, named only in her row's referred_by, is listed with the referrer's rule.
     assert "- Ivo Vance, Associate Partner, Operations Practice put you forward" in warm

@@ -106,14 +106,34 @@ OWNED = ("Your answers", "To rework", "Notes")
 FOUND_OUT = "### What you found out"
 FOUND_EMPTY = "- Nothing yet: each line added here, with its source, stays."
 NOTES_EMPTY = "- Nothing yet: anything you want kept, write it here."
-TO_WRITE = "[to write: said aloud, first person, whole sentences, contractions welcome]"
+# The mark on an answer still to write. It was an instruction to Claude ("said aloud, first
+# person, whole sentences, contractions welcome"), read by the person on their page; how an
+# answer is written is in interview.md Step 3. The older mark is still read as the same one.
+TO_WRITE = "[not written yet: Claude writes it with you, the way you would say it]"
+OLD_TO_WRITE = "[to write: said aloud, first person, whole sentences, contractions welcome]"
+TO_WRITES = (TO_WRITE, OLD_TO_WRITE)
+# Research the document still needs, which Claude does before the person reads it: said in
+# plain words, since the person may see the line on their page before the research is in.
+# The older wording is still read wherever the line is looked for.
+RESEARCH_MARK = "Not looked up yet (Claude does this before you read it):"
+RESEARCH_MARKS = (RESEARCH_MARK, "RESEARCH FIRST (Claude")
+
+
+def research_line(line) -> bool:
+    """Is this a line asking Claude for research the document does not hold yet?"""
+    return any(m in str(line or "") for m in RESEARCH_MARKS)
 _STAGES_MARK = re.compile(r"^<!-- stages: (.*?) -->$", re.M)
 
-# One screen is what is read in the minutes before: five questions, three hooks,
-# one money line, four things not to say. The detail below is for the night before.
+# One screen is what is read in the minutes before: five questions, three to five things to
+# say, two or three questions to ask them, three hooks, one money line and the one or two
+# things not to say that matter. The detail below is for the night before. Four "do not say"
+# lines, one of them the same rule on every pack, read as a list of warnings to a person
+# about to go in (2026-11-03: "so many random don't says").
 ONE_SCREEN_QUESTIONS = 5
 HOOKS = 3
-MAX_DO_NOT = 4
+MAX_DO_NOT = 2
+MAX_SAY = 5
+MAX_ASK_FIRST = 3
 MAX_QUESTIONS = 18
 MAX_REQUIREMENTS = 3
 MAX_FORM_LINES = 8
@@ -184,6 +204,71 @@ def pack_name(stage) -> str:
     """`interview_prep_<stage>.md`, the name open_actions.py looks for."""
     return "interview_prep_%s.md" % (re.sub(r"[^a-z0-9]+", "_", _text(stage).lower()).strip("_")
                                      or "interview")
+
+
+# ---------------------------------------------------------------- plain words for the person
+
+# The pack is read by a tired person on a phone in the minutes before a call, and it named its
+# sources as files: "(source: ../../profile/07-interview-prep.md)", "job_search_tracker.csv",
+# "company_research/x.json" (2026-11-03: "links to random json files and destinations the
+# user shouldn't know about"). Every source is still given, as what it is to them. A link to
+# an employer's own page stays a link: that is a source they can open.
+_SOURCE_WORDS = (
+    (r"\.claude/|job-application-assistant", "the app's guide"),
+    (r"07-interview-prep", "your stories and answers"),
+    (r"04-job-evaluation", "your pay targets"),
+    (r"01-candidate-profile|person\.json|02-behavioral|skills\.py|BRIDGES|bridges|"
+     r"networking\.py|WORK_AUTH|profile_facts|(?:^|/)profile(?:/|$)", "your profile"),
+    (r"job_search_tracker", "your applications"),
+    (r"network_contacts", "your contacts"),
+    (r"network_threads", "your messages"),
+    (r"screening_answers|form_fields", "the application form"),
+    (r"job_posting", "the job posting"),
+    (r"outcome\.md", "this interview's record"),
+    (r"draft\.json|cover_letter|Cover_Letter|outreach\.md", "what you sent"),
+    (r"(?:^|/)cv/|_CV_|_Resume_", "the resume you sent"),
+    (r"interview_prep", "an earlier prep"),
+    (r"learned|liked", "what you told Claude"),
+    (r"asked\.json|interview_bank|question_bank", "your past interviews"),
+    (r"documents/network|reading\.json|prep\.md", "your notes on them"),
+    (r"company_research|research", "the research"),
+)
+# A file or a folder named in a source, with the name of a setting inside it that may follow
+# ("profile/person.json identity.places_told", "networking.py WORK_AUTH").
+_PATH_TOKEN = re.compile(
+    r"(?<![\w/:.])(?:\.\./)*(?:[\w.&-]+/)*[\w.&-]+\.(?:md|json|csv|py|tex|txt|pdf|docx)\b"
+    r"(?:\s+(?:[a-z_]+\.[a-z_.]+|[A-Z_]{3,})\b)?"
+    r"|(?<![\w/:.])(?:\.\./)*(?:[\w.&-]+/)+[\w.&-]*[_.][\w.&-]*/?")
+
+
+def _path_words(token) -> str:
+    for rx, words in _SOURCE_WORDS:
+        if re.search(rx, token):
+            return words
+    return "your files"
+
+
+def source_words(src) -> str:
+    """A source as the person knows it: "your profile", "the job posting", an employer's
+    link as it is. Words that are already words stay, and a file named inside a sentence
+    ("the recruiter's email, recorded in documents/interview/question_bank.csv") is said in
+    words where it stands."""
+    s = _text(src)
+    if not s or re.match(r"https?://", s, re.I):
+        return s
+    out = _PATH_TOKEN.sub(lambda m: _path_words(m.group(0)), s)
+    # The same place named twice ("your CV, your CV") is said once.
+    parts = list(dict.fromkeys(p.strip() for p in out.split(", ")))
+    return ", ".join(parts)
+
+
+_SOURCE_IN = re.compile(r"(\bsource: )([^()]+?)(\))")
+
+
+def plain_sources(line) -> str:
+    """A line with every "source: <file>" in it said in words (source_words)."""
+    return _SOURCE_IN.sub(lambda m: m.group(1) + source_words(m.group(2)) + m.group(3),
+                          str(line))
 
 
 # ---------------------------------------------------------------- the person's stories
@@ -1555,14 +1640,14 @@ def answer_for(item, ctx) -> dict:
         led = [x for x in facts.get("strengths") or [] if re.search(
             r"\b(?:mentor|first|introduc|standard|train|onboard|set up|owned|led)\w*", _text(x), re.I)]
         lines += ["From your profile: %s (source: %s)" % (prep.clip(x, 170), prof) for x in led[:2]]
-        lines.append("By default no people management is claimed that your profile does not "
-                     "hold: lead from what you set up, the standards you brought in and who you "
-                     "brought along. Asked for an example, Claude drafts one, marked for you to "
-                     "confirm (interview.md rule 2).")
+        lines.append("Claim no people management your profile does not hold: lead from what "
+                     "you set up, the standards you brought in and who you brought along. Ask "
+                     "Claude for an example and it drafts one for you to check.")
     elif re.search(r"interviewing anywhere else", q, re.I):
         n = ctx.get("elsewhere", 0)
-        lines.append(("Yes: %d other process(es) at an interview stage. Say so, name nobody, and "
-                      "invent no offer (source: %s)" % (n, prep.TRACKER_SOURCE)) if n else
+        lines.append(("Yes: %s at an interview stage. Say so, name nobody, and invent no "
+                      "offer (source: %s)" % ("one other process" if n == 1 else
+                                               "%d other processes" % n, prep.TRACKER_SOURCE)) if n else
                      ("Nothing at an interview stage elsewhere: say you are in early conversations "
                       "if that is true, and invent nothing (source: %s)" % prep.TRACKER_SOURCE))
     elif re.search(r"^how do you know", q, re.I):
@@ -1578,8 +1663,8 @@ def answer_for(item, ctx) -> dict:
                          "intend, and nothing beyond what your profile says."
                          % (facts["work_authorization"], prof))
     elif re.search(r"willing to travel", q, re.I):
-        lines.append("Say what travel works for you, honestly. Your profile records nothing on it: "
-                     "add it to 01-candidate-profile.md so the next pack can say it.")
+        lines.append("Say what travel works for you, honestly. Your profile says nothing on it "
+                     "yet: tell Claude, and the next prep says it.")
     elif re.search(r"commercial result", q, re.I):
         money_story = next((s for s in ctx["stories"] if re.search(r"[£$€]|\d+%|\bsaved|\brevenue",
                                                                   _text(s["star"].get("R")), re.I)), None)
@@ -1601,9 +1686,8 @@ def answer_for(item, ctx) -> dict:
                                                ctx["company"]))
         prepared = None
     elif prepared and prepared.get("fill_in"):
-        lines.append("Your stock answer to this still has a fill-in (\"%s\") in %s: fill it "
-                     "there, and the next build uses it." % (prepared["fill_in"],
-                                                            prepared["source"]))
+        lines.append("Your stock answer to this still has a gap to fill (\"%s\"): fill it in "
+                     "with Claude, and the next prep uses it." % prepared["fill_in"])
         prepared = None
     where = places_told.clash(prepared["answer"], ctx["company"]) if prepared else ""
     if where:
@@ -1618,17 +1702,16 @@ def answer_for(item, ctx) -> dict:
         # Their reasons are theirs: asked first, never drafted from dates and employers unasked.
         # If they ask for a draft of them instead, it is written under the question, marked
         # (interview.md rule 2).
-        ask = ("%s \"%s\" Nothing on file can supply the reasons. Their answer is kept for every "
-               "later employer: python3 tools/interview_pack.py motive \"%s\" --answer \"<their "
-               "words>\" [--suits <kinds> --not-for <kinds>]. If they ask for a draft instead, "
-               "write it under the question, marked as one (interview.md rule 2)."
-               % (ASK_MARK, motive_ask(kind, ctx), q))
+        # The command that keeps their answer is Claude's (interview.md Step 3), printed by
+        # `pack` for the session, never written where the person reads.
+        ask = "%s \"%s\" Or ask Claude to draft one for you to check." % (
+            ASK_MARK, motive_ask(kind, ctx))
         lines.insert(0, ask)
     if story:
         lines.append("Story: %s (%s; source: %s)" % (story["title"], how, story["source"]))
     elif mapped:
-        lines.append("Mapped to %r, which is not a story in %s: check the title."
-                     % (mapped, STORIES_FILE))
+        lines.append("Matched to \"%s\", which is not one of your stories: check its title."
+                     % mapped)
 
     def done(kind_, short):
         # `prepared` (the stock answer used, or None) and `ask` (the line asking for their
@@ -1638,34 +1721,33 @@ def answer_for(item, ctx) -> dict:
     if story:
         return done("story", "story: %s" % story["title"])
     if prepared:
-        return done("prepared", "prepared answer, below")
+        return done("prepared", "your prepared answer")
     if kind:
-        return done("ask", "ask you first: your reasons, in your words")
+        return done("ask", "your own reasons: Claude asks you first")
     if why_us:
-        return done("say", "a hook below" + (", and what the letter told them"
+        return done("say", "something true about them" + (", and what your letter told them"
                                              if _text((ctx["draft"] or {}).get("p2")) else ""))
     if item.get("req") and not item.get("evidence") and not story:
         # The paper claimed nothing here: a story drafted unasked would claim more than it did.
         lines.append("The letter named no evidence for this. If your profile holds none, it is "
-                     "a gap: say the nearest true thing plainly (Gaps and honest framing). "
-                     "Asked for an example, Claude drafts one, marked for you to confirm before "
-                     "it is said (interview.md rule 2).")
+                     "a gap: say the nearest true thing plainly (Gaps and honest framing). Ask "
+                     "Claude for an example and it drafts one for you to check.")
         return done("none", "no evidence on paper: the nearest true thing")
     if item.get("gap") and not item.get("framing"):
-        lines.append("No framing recorded (profile skills.py BRIDGES): write one before the "
-                     "interview. Say plainly what you do not hold, then the nearest true thing. "
-                     "Asked for an example of using it, Claude drafts one, marked for you to "
-                     "confirm (interview.md rule 2).")
-        return done("none", "a gap with no framing yet: write one (Gaps)")
+        lines.append("No honest framing written for this yet: settle one with Claude before "
+                     "the interview. Say plainly what you do not hold, then the nearest true "
+                     "thing. Ask Claude for an example of using it and it drafts one for you "
+                     "to check.")
+        return done("none", "a gap: settle how you will put it")
     if lines:
         first = re.sub(r" \(source: .*$", "", lines[0]).replace("The form said: ", "the form said ")
         if first.startswith(prep.RAW_MARK):
-            first = "your summary, said your way (Your answers)"
+            first = "your summary, in your own words"
         return done("say", prep._short(first, 70))
-    lines.append("No story or prepared answer covers this yet: Claude drafts one from %s "
-                 "(interview.md Step 3), and, asked for an example you cannot recall, writes "
-                 "one marked for you to confirm (rule 2)." % prep.PROFILE_SOURCE)
-    return done("none", "no story yet: draft one")
+    lines.append("No story or prepared answer covers this yet: Claude writes one from your "
+                 "profile, and asked for an example you cannot recall, drafts one for you to "
+                 "check.")
+    return done("none", "no story yet: Claude writes one")
 
 
 # ---------------------------------------------------------------- the other sections
@@ -1710,7 +1792,10 @@ def do_not_say(ctx, never_say=None) -> list:
     out = ["- Not as it stands: your answer to \"%s\": %s. Rewrite it for %s before it comes "
            "up (source: %s)" % (a["question"], why, ctx["company"], a["source"])
            for a in ctx["answers"] for why in [against_employer(a, ctx)] if why]
-    out += ["- Do not say: %s (source: %s)" % (f.value, f.source)
+    # A prohibition the research wrote as one ("Do not call it a discounter") is said once,
+    # never as "Do not say: Do not ...".
+    out += ["- %s%s (source: %s)" % ("" if re.match(r"(?i)(?:do not|don'?t|never|avoid)\b",
+                                                    f.value) else "Do not say: ", f.value, f.source)
             for f in prep._facts(research.get("do_not_claim"), default)]
     out += ["- Careful: %s (source: %s)" % (f.value, f.source)
             for f in prep._facts(research.get("cautions"), default)]
@@ -1719,21 +1804,25 @@ def do_not_say(ctx, never_say=None) -> list:
     for g in ctx["gaps_hard"]:
         head = "Never claim %s" % g.asked + (": " + _text(g.note).rstrip(" .") if _text(g.note)
                                              else "")
-        out.append("- %s. Ask for an example and Claude drafts one, marked for you to confirm "
-                   "(source: tools/bridges.py)" % head)
+        out.append("- %s. Ask Claude for an example and it drafts one for you to check "
+                   "(source: your profile)" % head)
     phrases = [p for p, _rx in (never_say if never_say is not None else learned.never_say())]
     if phrases:
         out.append("- Words you have said never to use: %s (source: %s)" % (
             ", ".join('"%s"' % p for p in phrases[:MAX_NEVER_SAY]), prep.LEARNED_SOURCE))
-    out.append("- No claim in the room beyond the paper they read, except a draft you asked "
-               "for and have made true.")
     return out
+
+
+# The one rule every interview keeps, said once where it belongs (What the paper says), never
+# as a warning on the one screen of every pack, where it read as another "don't".
+PAPER_RULE = ("- Say nothing in the room the paper does not say, except a draft you asked for "
+              "and have made true.")
 
 
 def paper_lines(ctx) -> list:
     """What the documents they read argued, so nothing said contradicts them, then where the
     resume they hold invites a push (landmine_lines)."""
-    return _sent_lines(ctx) + landmine_lines(ctx)
+    return [PAPER_RULE] + _sent_lines(ctx) + landmine_lines(ctx)
 
 
 def _held_by_contacts(ctx) -> list:
@@ -1748,10 +1837,24 @@ def _held_by_contacts(ctx) -> list:
             continue
         name = state.person_name(c.get("name")) or _text(c.get("name"))
         for sent in state.resumes_sent(ctx["threads"], c.get("contact_id")):
-            what = ", ".join(sent["files"]) or "a %s, file not named (state.py attach %s)" % (
-                _noun(), c.get("contact_id"))
+            # Which file it was is Claude's to read in the message log; the person reads it as
+            # their resume, never as a file name or a command to name it.
+            stem = lambda f: os.path.splitext(os.path.basename(_text(f)))[0].lower()  # noqa: E731
+            applied = stem((ctx.get("row") or {}).get("cv_file"))
+            what = ("your %s" % _noun() + (", a different version from the one you applied with"
+                                          if applied and all(stem(f) != applied
+                                                             for f in sent["files"]) else "")
+                    if sent["files"] else "a %s (which version is not recorded)" % _noun())
             out.append("- Sent to %s on %s: %s" % (name, sent["date"] or "an undated day", what))
     return out
+
+
+def _files_words(row) -> str:
+    """The documents an application went with, as the person names them ("your resume and
+    cover letter"), never their file names."""
+    got = [w for col, w in (("cv_file", _noun()), ("cover_letter_file", "cover letter"))
+           if _text(row.get(col))]
+    return "your " + " and ".join(got) if got else ""
 
 
 def _sent_lines(ctx) -> list:
@@ -1767,16 +1870,16 @@ def _sent_lines(ctx) -> list:
                                          if referrer_of(ctx) else ""))
         if files:
             out.append("- Drafted for this role and never sent: %s. Not what they read."
-                       % ", ".join(files))
+                       % _files_words(row))
         return out
     if files:
-        out.append("- Sent: %s (source: %s)" % (", ".join(files), prep.TRACKER_SOURCE))
+        out.append("- Sent: %s (source: %s)" % (_files_words(row), prep.TRACKER_SOURCE))
     if ctx["outreach_sent"]:
-        out.append("- The note drafted for the hiring manager or recruiter: %s/outreach.md. If it "
-                   "went, whoever it went to may be on the panel." % _rel(ctx["folder"]))
+        out.append("- A note was drafted for the hiring manager or recruiter. If it went, "
+                   "whoever it went to may be on the panel.")
     if not draft:
-        out.append("- No draft.json kept for this application, so what the letter argued is "
-                   "not on file: read the letter itself before the interview.")
+        out.append("- What the letter argued is not on file: read the letter itself before the "
+                   "interview.")
         return out
     if _text(draft.get("angle")):
         out.append("- The argument: %s (source: %s)" % (_text(draft["angle"]), src))
@@ -2005,8 +2108,9 @@ def gap_lines(ctx) -> list:
         out.append("- BLOCKER: %s. No framing fixes this. (source: %s)"
                    % (b, prep._profile_source(ctx["facts"])))
     docked = [_text(w) for w in draft.get("fit_why") or [] if _text(w).startswith("-")]
-    out += ["- The score docked it: %s (source: %s)" % (w, src) for w in docked[:MAX_GAP_NOTES]]
-    out += ["- The grounding audit said an interviewer could probe: %s (source: %s)"
+    out += ["- The fit score marked it down: %s (source: %s)" % (w, src)
+            for w in docked[:MAX_GAP_NOTES]]
+    out += ["- The check on your application said an interviewer could probe: %s (source: %s)"
             % (_text(r), src) for r in list(draft.get("residual_risks") or [])[:MAX_GAP_NOTES]
             if _text(r)]
     # Skills the profile does not list that they said yes to claiming on this application:
@@ -2084,16 +2188,20 @@ def money(ctx) -> tuple:
         import profile_consistency
         for f in profile_consistency.findings():
             if f["fact"] in ("pay band", "walk-away floor"):
-                lines.append("  - CHECK: %s:%d says \"%s\". The band above is the one the "
-                             "form answers use: settle which is right before the call."
-                             % (f["file"], f["line"], f["said"]))
+                lines.append("  - Check: your profile also says \"%s\". The band above is the "
+                             "one the form answers use: settle which is right with Claude "
+                             "before the call." % f["said"])
     else:
-        lines.append("- Your band: %s, no salary table in %s. Ask their range rather than quote "
-                     "a number you cannot source." % (prep.NOT_RESEARCHED,
-                                                       _repo_rel(EVALUATION)))
-    lines.append("- Market band:")
-    lines += ["  " + ln for ln in prep.comp_band(
-        ctx["role"], "", "", prep._comp_sources(ctx["research"], ctx["row"]))]
+        lines.append("- Your band: %s, as your profile has no pay targets yet. Ask their range "
+                     "rather than quote a number you cannot stand behind." % prep.NOT_RESEARCHED)
+    market = prep._comp_sources(ctx["research"], ctx["row"])
+    if market:
+        lines.append("- Market band:")
+        lines += ["  " + ln for ln in prep.comp_band(ctx["role"], "", "", market)]
+    else:
+        # Nothing looked up: said in a line, never as an empty band with how it was not made.
+        lines.append("- Market pay for the role: %s. Ask their range rather than quote a number "
+                     "you cannot stand behind." % prep.NOT_RESEARCHED)
     sheet = _screening()
     try:
         sponsor = "needed" if sheet.requires_sponsorship() else "not needed"
@@ -2101,22 +2209,23 @@ def money(ctx) -> tuple:
                      % (sponsor, prep.PROFILE_SOURCE))
     except (AttributeError, getattr(sheet, "MissingFact", LookupError)):
         # Never guessed, and never silently left out either.
-        lines.append("- Sponsorship: your profile does not say \"no sponsorship required\" or "
-                     "\"sponsorship required\" in so many words, so nothing is printed here. Add "
-                     "the one that is true to %s." % prep.PROFILE_SOURCE)
+        lines.append("- Sponsorship: your profile does not say whether you need it, so nothing "
+                     "is printed here. Tell Claude which is true.")
     if ctx["step"] == "offer":
         lines += _offer_lines()
     _q, said = _form_value(ctx, _PAY_Q)
+    # What to say, first: the line is read in the minutes before the call, and "nothing on
+    # the form; your target is ..." made the person work out what that meant (2026-11-03).
     if ctx["step"] == "offer":
-        one = "weigh total compensation, not base%s; the floor stays unsaid" % (
-            ", against your target %s" % target if target else "")
+        one = "weigh the whole package, not the base pay%s, and keep your lowest figure to " \
+              "yourself" % (", against your target %s" % target if target else "")
     elif said:
-        one = "the form said %s%s; a recruiter checks what you say against it" % (
-            said, ", your target %s" % target if target and target not in said else "")
+        one = "say what the form said, %s%s: a recruiter checks what you say against it" % (
+            said, " (your target is %s)" % target if target and target not in said else "")
     elif target:
-        one = "nothing on the form; your target is %s, and the floor stays unsaid" % target
+        one = "say %s, as a range, and keep your lowest figure to yourself" % target
     else:
-        one = "%s: ask their range first" % prep.NOT_RESEARCHED
+        one = "ask their range first: your own band is %s" % prep.NOT_RESEARCHED
     return one, lines
 
 
@@ -2248,8 +2357,8 @@ def ask_lines(ctx) -> list:
         for q in [q for q in cats.get(cat, []) if "[" not in q][:2]:
             if len(out) >= cap:
                 break
-            out.append("- %s (the guide's \"%s\" list: cut it if the research already answers it)"
-                       % (q, cat))
+            out.append("- %s (a common one about %s: skip it if their own pages answer it)"
+                       % (q, re.sub(r"^About ", "", cat).replace("&", "and").lower()))
     return first + out[:cap]
 
 
@@ -2333,14 +2442,16 @@ def warm_lines(ctx) -> list:
             r"\b(?:wait|waiting|await|awaiting)\b", step, re.I) and not re.search(
             r"\b(?:HOLD|FREEZE|no action|do not|don'?t)\b", step, re.I)
         if step and _HANDS_OFF.search(step) and not stale_wait:
-            out.append("- %s%s [%s]: their row says to leave them be for now: \"%s\". "
-                       "(source: %s)" % (name, title, status, prep.clip(step, ROW_QUOTE), prep.CONTACTS_SOURCE))
+            out.append("- %s%s (%s): your notes say to leave them be for now: \"%s\". "
+                       "(source: %s)" % (name, title, status_words(status), prep.clip(step, ROW_QUOTE),
+                                         prep.CONTACTS_SOURCE))
             continue
         if len(name) > 3 and name.lower() in names:
-            known = ["documents/network/%s/%s" % (cid, f) for f in ("prep.md", "reading.json")
+            known = [f for f in ("prep.md", "reading.json")
                      if cid and os.path.exists(person.state("documents", "network", cid, f))]
-            out.append("- %s%s is interviewing you and is in your contact book [%s]%s. "
-                       "(source: %s)" % (name, title, status, ": reuse " + " and ".join(known)
+            out.append("- %s%s is interviewing you and is in your contacts (%s)%s. "
+                       "(source: %s)" % (name, title, status_words(status),
+                                         ": what you noted about them is under Who you are meeting"
                                          if known else "", prep.CONTACTS_SOURCE))
         elif _referred(c, ctx, name):
             then = (" Their row's next step: \"%s\"." % prep.clip(step, ROW_QUOTE)) if step else ""
@@ -2350,19 +2461,19 @@ def warm_lines(ctx) -> list:
             word = stage[:1].lower() + stage[1:]
             led = "%s %s%s" % ("an" if word[:1] in "aeiou" else "a", word,
                                " on %s" % ctx["date"] if booked else "")
-            out.append("- %s%s put you forward [%s]. If you have not thanked them yet, once: "
+            out.append("- %s%s put you forward. If you have not thanked them yet, once: "
                        "thanks, that it led to %s, and that nothing is needed from them. Then "
                        "no update until there is an outcome, unless they ask.%s (source: %s)"
-                       % (name, title, status, led, then, prep.CONTACTS_SOURCE))
+                       % (name, title, led, then, prep.CONTACTS_SOURCE))
         elif status == "call_booked" or (cid and cid == lead and prep.is_recruiter(c)
                                          and status in throttle.RESPONDED):
             # Whoever booked the stage already knows it is booked.
-            out.append("- %s%s booked this [%s]: nothing is owed to them before the call. "
-                       "(source: %s)" % (name, title, status, prep.CONTACTS_SOURCE))
+            out.append("- %s%s booked this: nothing is owed to them before the call. "
+                       "(source: %s)" % (name, title, prep.CONTACTS_SOURCE))
         elif status in throttle.RESPONDED:
-            out.append("- %s%s is already talking to you [%s]: %s (source: %s)"
-                       % (name, title, status, "tell them it is booked." if booked else
-                          "tell them once it has a date.", prep.CONTACTS_SOURCE))
+            out.append("- %s%s is already talking to you (%s): %s (source: %s)"
+                       % (name, title, status_words(status), "tell them it is booked." if booked
+                          else "tell them once it has a date.", prep.CONTACTS_SOURCE))
     channel = _text(ctx["row"].get("channel"))
     if referrer:
         out.append("- How did you hear about us: through %s. (source: %s)"
@@ -2749,6 +2860,22 @@ def _here(ctx) -> dict:
 STORED_WINS = frozenset({"call_booked", "referral_in_progress"})
 
 
+# A contact's state as the person says it: "[replied_needs_response]" was printed as it is.
+_STATUS_WORDS = {
+    "not_contacted": "not written to yet", "awaiting_reply": "waiting for their reply",
+    "connected_no_reply": "connected, no reply yet", "replied_needs_response": "replied, your turn",
+    "in_conversation": "talking", "call_booked": "call booked",
+    "referral_in_progress": "putting you forward", "referral_agreed": "agreed to put you forward",
+    "converted_to_application": "now an application", "gone_cold": "gone quiet",
+    "cold": "gone quiet", "closed": "closed", "dropped": "set aside", "stopped": "stopped",
+}
+
+
+def status_words(status) -> str:
+    s = _text(status)
+    return _STATUS_WORDS.get(s, s.replace("_", " "))
+
+
 def _status_for(c, ctx) -> str:
     stored = _text(c.get("status"))
     if stored in STORED_WINS:
@@ -2770,9 +2897,8 @@ def told_lines(ctx) -> list:
     # What this employer was told on purpose is the line to keep, not the profile's own.
     moved = "" if heard else _moved_on()
     if heard:
-        out.append("- You told %s you are in %s (source: profile/person.json "
-                   "identity.places_told): every answer and message to them says the same."
-                   % (ctx["company"], heard))
+        out.append("- You told %s you are in %s (source: your profile): every answer and "
+                   "message to them says the same." % (ctx["company"], heard))
     current = [n for e in ctx["facts"].get("employers") or [] if isinstance(e, dict)
                and "present" in _text(e.get("dates")).lower()
                for n in (_text(e.get("company")),) if n]
@@ -2785,10 +2911,11 @@ def told_lines(ctx) -> list:
         name = state.person_name(c.get("name")) or _text(c.get("name"))
         title = ", " + _text(c.get("title")) if _text(c.get("title")) else ""
         dates = sorted(_text(r.get("date")) or "undated" for r in sent_to[cid])
-        out.append("- Read: %s%s [%s]: %s (source: %s)" % (
-            name, title, _status_for(c, ctx),
-            "%d message(s) from you, %s" % (len(dates), ", ".join(dates)) if dates
-            else "nothing from you logged", prep.THREADS_SOURCE))
+        out.append("- %s%s (%s): %s (source: %s)" % (
+            name, title, status_words(_status_for(c, ctx)),
+            "%s from you, %s" % ("one message" if len(dates) == 1 else "%d messages" % len(dates),
+                                 ", ".join(dates)) if dates
+            else "nothing from you on record", prep.THREADS_SOURCE))
     rows = sorted((r for rs in sent_to.values() for r in rs), key=lambda r: _text(r.get("date")))
     for r in rows:
         cid = _text(r.get("contact_id"))
@@ -2796,13 +2923,13 @@ def told_lines(ctx) -> list:
         if not _text(r.get("full_text")):
             if state.is_bare_request(r):
                 continue        # a connection request with no note said nothing
-            out.append("- %s, to %s: text not logged%s: check what this said about where you "
-                       "are, notice and pay. Add it: python3 tools/network/state.py text %s "
-                       "--date %s --text-file <the message as sent> (source: %s)" % (
+            # The command that keeps its words is Claude's (interview.md Step 3); the person
+            # is asked only what it said.
+            out.append("- %s, to %s: its words are not on record%s. Tell Claude what it said "
+                       "about where you are, notice and pay. (source: %s)" % (
                            _text(r.get("date")) or "undated", name,
-                           " (logged as \"%s\")" % prep.clip(r.get("summary"), 80)
-                           if _text(r.get("summary")) else "", cid,
-                           _text(r.get("date")) or "<its date>", prep.THREADS_SOURCE))
+                           " (noted as \"%s\")" % prep.clip(r.get("summary"), 80)
+                           if _text(r.get("summary")) else "", prep.THREADS_SOURCE))
             continue
         for topic, sent in _said(r.get("full_text")):
             key = (topic, sent.lower())
@@ -2829,7 +2956,7 @@ def told_lines(ctx) -> list:
                            "differs is the one a recruiter remembers." % _band()[0])
     for q, a in ctx["form"]:
         for topic, _sent in _said(q + ". " + a):
-            out.append("- The form, on %s: %s **%s** (source: %s/screening_answers.md)"
+            out.append("- The form, on %s: %s %s (source: %s/screening_answers.md)"
                        % (topic, q, a, _rel(ctx["folder"])))
             break
     if ctx["process"]:
@@ -2969,8 +3096,8 @@ def meeting_lines(ctx) -> list:
     out = []
     if ctx.get("with_assumed"):
         out.append("- Assumed: %s leads this process, and a recruiter screen is with the "
-                   "recruiter. If the invite names someone else, rebuild with --with "
-                   "\"<name, title>\". (source: %s)" % (ctx["with_assumed"], prep.CONTACTS_SOURCE))
+                   "recruiter. If the invite names someone else, tell Claude who. (source: %s)"
+                   % (ctx["with_assumed"], prep.CONTACTS_SOURCE))
     for who in _interviewers(ctx):
         name, given = who["name"], who["title"]
         if not name:
@@ -2987,12 +3114,10 @@ def meeting_lines(ctx) -> list:
                                                               if title else "", angle))
         if not found and _kind(title) != "screener":
             # A recruiter's own posts are about hiring: nothing worth reading for the call.
-            out.append("  - RESEARCH FIRST (Claude, not you): %s's public, professional work "
-                       "(a talk, an article, code, their team's own pages), kept with `python3 "
-                       "tools/network/reading.py add <id> --name \"%s\" --company \"%s\" ...`, "
-                       "then this is rebuilt. Never a people-search site; their profile only "
-                       "through your own browser when you have set that up."
-                       % (name, name, ctx["company"]))
+            # How Claude keeps what it finds (reading.py add) is in interview.md Step 2, and
+            # `pack` prints it: never in the person's document.
+            out.append("  - %s %s's public, professional work (a talk, an article, code, "
+                       "their team's own pages)." % (RESEARCH_MARK, name))
         if not found:
             out += tailored(ctx, name, title, " ".join([title, ctx["role"]]), {}, "", formats)
             out += _said_of(ctx, name)
@@ -3268,10 +3393,10 @@ def tailored(ctx, name, title, topics, found, src, formats=()) -> list:
             out.append("  - Their team (%s): nothing public found about it; ask them what it "
                        "owns." % prep.clip(team, 60))
         else:
-            out.append("  - RESEARCH FIRST (Claude, not you): what \"%s\" works on at %s, from "
-                       "the employer's own pages. The employer-researcher keeps it under `%s` "
-                       "in company_research (or under `%s` when nothing is public), then this "
-                       "is rebuilt." % (team, ctx["company"], TEAMS_KEY, NOT_FOUND_KEY))
+            # Where the employer-researcher keeps it (TEAMS_KEY, NOT_FOUND_KEY) is in its own
+            # instructions: the person reads only what is still to look up.
+            out.append("  - %s what \"%s\" works on at %s, from the employer's own pages."
+                       % (RESEARCH_MARK, team, ctx["company"]))
     work = [i for i in _decent_items(found) if i.get("kind") in _PUBLIC_WORK]
     out += _ask_them(ctx, kind, formats, work, src)
     return out
@@ -3484,8 +3609,8 @@ def format_lines(ctx) -> list:
     formats, assumed = interview_formats(ctx)
     out = []
     if assumed:
-        out.append("- Assumed %s: %s. Ask the recruiter what the round involves, then rebuild "
-                   "with --format." % (" and ".join(f for f in formats), assumed))
+        out.append("- Assumed %s: %s. Ask the recruiter what the round involves, and tell "
+                   "Claude: the prep follows." % (" and ".join(f for f in formats), assumed))
     for f in formats:
         p = FORMAT_PREP[f]
         out.append("- **%s.** It tests %s. They want to hear %s." % (FORMAT_NAMES[f], p["tests"],
@@ -3516,12 +3641,9 @@ def format_lines(ctx) -> list:
             out.append("- %s publishes nothing on how it runs this; the drills above stand."
                        % ctx["company"])
         else:
-            out.append("- RESEARCH FIRST (Claude, not you): how %s says it runs %s, from its "
-                       "own careers pages. The employer-researcher keeps it as "
-                       "`interview_process` in company_research (or under `%s` when nothing "
-                       "is public), then this is rebuilt."
-                       % (ctx["company"], " and ".join(FORMAT_NAMES[f].lower() for f in formats),
-                          NOT_FOUND_KEY))
+            out.append("- %s how %s says it runs %s, from its own careers pages."
+                       % (RESEARCH_MARK, ctx["company"],
+                          " and ".join(FORMAT_NAMES[f].lower() for f in formats)))
     return out + route_lines(ctx)
 
 
@@ -3695,7 +3817,7 @@ def _own_words(body) -> list:
     """The lines of an answer block the person (or the session, for them) wrote, as they
     laid them out (a blank line between paragraphs stays): never the marker or the
     "- From:" lines this file generated, which a rebuild makes afresh."""
-    out = [ln.rstrip() for ln in body or () if TO_WRITE not in ln
+    out = [ln.rstrip() for ln in body or () if not any(m in ln for m in TO_WRITES)
            and not ln.lstrip().startswith(("- From:", "- careful:"))]
     while out and not out[0].strip():
         out.pop(0)
@@ -3716,11 +3838,18 @@ DRAFT = prep.DRAFT
 drafted = prep.drafted
 
 
-ANSWERS_INTRO = ("What you will say goes under each question, as sentences. Anything else (a "
-                 "reminder, a list) goes under a line \"Notes:\", after \"Note:\", or in "
-                 "italics: it is kept on every rebuild and never checked as something to say. "
-                 "An answer drafted for you to confirm starts \"Draft:\"; delete that line "
-                 "once it is true.")
+# One short line: the longer one said "Draft" on every pack, whether or not any answer was a
+# draft (2026-11-03: "sometimes randomly says draft"). How a draft is marked is Claude's to
+# know (interview.md rule 2), and a draft says so itself, once, above its own answer.
+ANSWERS_INTRO = ("What you will say, under each question. A note to yourself goes under a line "
+                 "\"Notes:\", and is kept.")
+# What the line said before, still read as the tool's own in a document with no record of
+# its last build, so a rebuild never keeps it as a line of the person's.
+OLD_ANSWERS_INTRO = ("What you will say goes under each question, as sentences. Anything else (a "
+                     "reminder, a list) goes under a line \"Notes:\", after \"Note:\", or in "
+                     "italics: it is kept on every rebuild and never checked as something to say. "
+                     "An answer drafted for you to confirm starts \"Draft:\"; delete that line "
+                     "once it is true.")
 
 
 def spoken(body) -> list:
@@ -3743,6 +3872,11 @@ def _restates(body, checking, hear) -> bool:
     return False
 
 
+# How many of a question's notes an unwritten answer lists under Your answers; Likely
+# questions carries the rest, never the same ones again.
+ANSWER_NOTES = 3
+
+
 def answer_lines(ctx, answered) -> list:
     """Your answers: one block a question, the person's own words kept from the last
     version, and otherwise what to say it from, marked to be written."""
@@ -3762,7 +3896,8 @@ def answer_lines(ctx, answered) -> list:
         else:
             # Notes kept, and still to write: the marker and what to say it from.
             out.append(TO_WRITE)
-            out += ["- From: %s" % re.sub(r"^Say: ", "", ln) for ln in a["lines"][:3]]
+            out += ["- From: %s" % plain_sources(re.sub(r"^Say: ", "", ln))
+                    for ln in a["lines"][:ANSWER_NOTES]]
             out += ([""] + body) if body else []
         out.append("")
     # An answer written for a question this stage does not list (an earlier stage's, one the
@@ -3796,7 +3931,7 @@ def check(path) -> list:
     # Research the document asks Claude for is part of being ready: the person never sees a
     # RESEARCH FIRST line, only what it found.
     out = [("Research", re.sub(r"^\s*-\s*", "", ln).split(". The employer-researcher")[0])
-           for ln in text.splitlines() if "RESEARCH FIRST (Claude" in ln]
+           for ln in text.splitlines() if research_line(ln)]
     company = _company_of(path)
     seconds = answer_seconds(text)
     for i, (q, body) in enumerate(blocks.values()):
@@ -3806,7 +3941,7 @@ def check(path) -> list:
             out.append((q, where))
         if not " ".join(mine).strip():
             # A motivation question waits on the person's own reasons, wherever it falls.
-            if any(ASK_MARK in ln for ln in body):
+            if any(prep.asks_first(ln) for ln in body):
                 out.append(("Ask", q))
             elif i < ONE_SCREEN_QUESTIONS:
                 out.append((q, "not written yet"))
@@ -3833,7 +3968,7 @@ def _company_of(path) -> str:
     return m.group(1).strip() if m else ""
 
 
-_NEXT = re.compile(r"^Last updated \S+\. Next: (.+?)(?:, \d{4}-\d{2}-\d{2}|, with |\. One document)",
+_NEXT = re.compile(r"^Last updated \S+\. Next: (.+?)(?:, \d{4}-\d{2}-\d{2}|, with |\. One document|\.$)",
                    re.M)
 
 
@@ -3979,12 +4114,119 @@ def _section(title, lines, empty) -> list:
         raise ValueError("%r is not one of the pack's SECTIONS" % title)
     if title in hidden():
         return []
+    # Every source in what this tool writes is said in words (plain_sources). What the person
+    # wrote is theirs as it stands: Your answers carries it with the tool's own lines, which
+    # answer_lines makes plain itself, and Small talk keeps what they found out.
+    if title not in OWNED and title != "Small talk":
+        lines = [plain_sources(ln) for ln in lines]
     return ["## " + title, ""] + (list(lines) if lines else ["- " + empty]) + [""]
 
 
 # The lines of an answer's sources that quote text someone could say as it stands: a stock
 # answer, the profile's own wording, or what to say.
 _QUOTES_TEXT = re.compile(r"^(?:Prepared:|Say:|From your profile:|%s)" % re.escape(prep.RAW_MARK))
+
+
+def _sentence(text, n=170) -> str:
+    """The first sentence of `text`, cut where a clause ends when it runs long."""
+    first = re.split(r"(?<=[.!?])\s+", _text(text), maxsplit=1)[0]
+    return prep._short(first, n).rstrip(".") + "."
+
+
+def say_these(ctx, answered, written=None) -> list:
+    """Three to five things to get across, for the minutes before the call: the result to
+    lead with, why this employer, the basics a screen checks, and the honest line on a gap.
+    Each from the person's stories, what they wrote, the research or their profile, never
+    invented; a draft they have not confirmed is never one of them."""
+    written = written or {}
+    if ctx["step"] == "offer":
+        target, _floor = _band()
+        return [x for x in (
+            "Counter inside your target, %s, said as total pay." % target if target else "",
+            "Ask what the package holds (bonus, pension, benefits) before you answer.",
+            "Nothing is decided on the call: ask to see it in writing.") if x]
+    out = []
+
+    def mine(question_rx):
+        for _key, (q, body) in written.items():
+            if re.search(question_rx, q, re.I) and not drafted(body):
+                said = " ".join(x.strip() for x in spoken(body) if x.strip())
+                if said:
+                    return said
+        return ""
+    # The result to lead with: the story the plan gives the first question a story answers.
+    titles = [a["short"][len("story: "):] for _q, a in answered if a["kind"] == "story"]
+    told = []
+    for title in titles + [s["title"] for s in ctx["stories"]]:
+        st = next((s for s in ctx["stories"] if s["title"].lower() == title.lower()), None)
+        if st and _text(st["star"].get("R")) and st["title"] not in told:
+            told.append(st["title"])
+        if len(told) == (2 if ctx["step"] in ("technical", "final") else 1):
+            break
+    for i, title in enumerate(told):
+        st = next(s for s in ctx["stories"] if s["title"] == title)
+        result = _sentence(st["star"]["R"])
+        out.append("Lead with your strongest result: %s" % result if i == 0 else
+                   "Have a second story ready: %s (%s)." % (title, result.rstrip(".")))
+    # Why them: their own words when written, else the first fact researched about them.
+    why = mine(r"^why (?!are|did|do|have|would|should|leav)")
+    if why:
+        out.append("Why them, in your words: %s" % _sentence(why))
+    else:
+        # Something that happened there says "why them" better than what it is: the news first.
+        research = ctx["research"] or {}
+        facts = prep._facts(research.get("recent_news") or research.get("news"),
+                            prep._research_source(research)) + hooks(ctx)
+        facts = [f for f in facts if prep.UNREAD not in f.value]
+        if facts:
+            out.append("Why them: %s (source: %s)" % (_sentence(facts[0].value), facts[0].source))
+    # The basics a screen checks, in one line.
+    if ctx["step"] == "screen":
+        basics = []
+        place = places_told.place(ctx["company"]) or home_place()
+        if place:
+            basics.append("you are in %s" % place)
+        _q, notice = _form_value(ctx, r"notice")
+        if not notice:
+            prepared = _answer_for("What is your notice period?", ctx["answers"],
+                                   [ctx["company"]], ctx["company"])
+            notice = _text((prepared or {}).get("answer"))
+        if notice:
+            basics.append("notice: %s" % _sentence(notice, 60).rstrip(".").lower())
+        try:
+            sheet = _screening()
+            if sheet is not None and not sheet.requires_sponsorship():
+                basics.append("no sponsorship needed")
+        except (AttributeError, getattr(_screening(), "MissingFact", LookupError)):
+            pass
+        if basics:
+            out.append("The basics: %s." % "; ".join(basics))
+    # The gap most likely to come up, with its honest line.
+    for g in ctx["facts"].get("gaps") or []:
+        if g.get("framing"):
+            out.append("If %s comes up: %s" % (_text(g["gap"]).rstrip("."),
+                                               _sentence(g["framing"])))
+            break
+    return out[:MAX_SAY]
+
+
+def ask_first(ctx) -> list:
+    """Two or three questions to ask them, for the one screen: the first the research and
+    the stage give, and the close."""
+    if ctx["step"] == "offer":
+        # An offer is not an interview: what to ask is what the package holds and when an
+        # answer is wanted, never the close of an interview.
+        return list(OFFER_QUESTIONS)
+    out = []
+    for ln in ask_lines(ctx):
+        head, _why = _last_parens(re.sub(r"^\s*-\s*", "", ln))
+        if head.endswith("?") and len(out) < MAX_ASK_FIRST - 1:
+            out.append(head)
+    return out + [CLOSE_QUESTION]
+
+
+OFFER_QUESTIONS = ("What does the whole package hold: bonus, pension, benefits?",
+                   "When would you like an answer by?")
 
 
 # What this document and the chat around it are for, said once at the top of every pack: an
@@ -4012,11 +4254,12 @@ def pack_markdown(ctx, never_say=None) -> str:
     when = ", ".join(x for x in (ctx["date"], "with " + ctx["with"] + (
         " (assumed: the recruiter who leads it)" if ctx.get("with_assumed") else "")
         if ctx["with"] else "") if x)
+    # Who, when and what for, then the one line on what this is for: the two lines about
+    # keeping one document and sourcing every fact were the app's promises to itself, read by
+    # a person minutes before a call (2026-11-03).
     lines = ["# Interview prep: %s at %s" % (ctx["role"], ctx["company"]), "",
-             "Last updated %s. Next: %s%s. One document for this whole process: change an "
-             "answer here, and it is sent to you again." % (ctx["today"], ctx["stage"],
-                                                            ", " + when if when else ""),
-             "Every fact carries its source, and anything unsourced was left out.",
+             "Last updated %s. Next: %s%s." % (ctx["today"], ctx["stage"],
+                                              ", " + when if when else ""),
              LIVE_LINE, stages_mark(ctx), ""]
 
     formats, _assumed = interview_formats(ctx)
@@ -4026,18 +4269,24 @@ def pack_markdown(ctx, never_say=None) -> str:
               "**What they want to hear:** %s." % "; ".join(FORMAT_PREP[f]["hear"] for f in formats)
               if formats else "", ""]
     screen = [ln for i, ln in enumerate(screen) if ln or (i == 2 and any(screen[:2]))]
-    screen += ["**Likely questions, and what to answer with**"]
     # Once they have written their reasons under the question, the one screen says so: it
     # went on saying "ask you first" over an answer they had given (2026-10-25).
     written = _answer_blocks(_owned(ctx["living"]).get("Your answers"))
+    say = say_these(ctx, answered, written)
+    if say:
+        screen += ["**Say these**"] + ["- " + plain_sources(x) for x in say] + [""]
+    screen += ["**Likely questions, and what to answer with**"]
 
     def _short(q, a):
         mine = written.get(what_works._norm(q["question"]))
         if a["kind"] == "ask" and mine and spoken(_own_words(mine[1])):
-            return "your answer, below"
+            return "your answer"
         return a["short"]
     screen += ["%d. %s -> %s" % (i, q["question"], _short(q, a))
                for i, (q, a) in enumerate(answered[:ONE_SCREEN_QUESTIONS], 1)]
+    ask = ask_first(ctx)
+    if ask:
+        screen += ["", "**Ask them**"] + ["- " + x for x in ask]
     screen += ["", "**Hooks**"]
     letter = _text((ctx["draft"] or {}).get("_path"))
     screen += ["- %s%s (source: %s)" % ("The letter told them: " if f.source == letter else "",
@@ -4046,8 +4295,10 @@ def pack_markdown(ctx, never_say=None) -> str:
                                                 % prep.NOT_RESEARCHED]
     screen += ["", "**Money:** %s." % one_money, ""]
     # The list of what not to say quotes the very words it warns against, so it is neither
-    # flagged for them here nor read by voice_check as something the person will say.
-    quoted = [voice_check.QUOTED_OPEN, "**Do not say**"] + donts[:MAX_DO_NOT] + [voice_check.QUOTED_CLOSE]
+    # flagged for them here nor read by voice_check as something the person will say. Only
+    # the one or two that matter, and none at all when nothing specific is on file.
+    quoted = ([voice_check.QUOTED_OPEN, "**Do not say**"] + donts[:MAX_DO_NOT]
+              + [voice_check.QUOTED_CLOSE]) if donts else []
     lines += _section("On one screen", prep._flag_banned(screen, banned) + quoted, "")
     yours = answer_lines(ctx, answered)
     lines += _section("Your answers", ([ANSWERS_INTRO, ""] if yours else [])
@@ -4057,56 +4308,64 @@ def pack_markdown(ctx, never_say=None) -> str:
     told = told_lines(ctx)
     lines += _section("What they have been told", [ln for t in told for ln in (
         prep._flag_banned([t], banned) if t.startswith("  - ") else [t])],
-                      "Nobody at %s is in your contact book and no form is on file: nothing they "
+                      "Nobody at %s is in your contacts and no form is on file: nothing they "
                       "were told is on record." % ctx["company"])
     lines += _section("Who you are meeting", prep._flag_banned(meeting_lines(ctx), banned),
-                      "Nobody named for this stage yet: when the invite names them, rebuild this "
-                      "with --with \"<name, title>\".")
+                      "Nobody named for this stage yet: when the invite names them, tell Claude, "
+                      "and this says what they listen for.")
     lines += _section("The format", prep._flag_banned(format_lines(ctx), banned),
                       "An offer: nothing to drill.")
 
-    # Notes on each question, never words to say: where an answer can come from. The text a
-    # stock answer or the profile holds is quoted here only while the person's own answer
-    # is unwritten, and marked as notes; repeated beside an answer already written, the
-    # raw profile wording and an older stock answer read as things to say (2026-10-20).
+    # Notes on each question, never words to say: where an answer can come from. Under Your
+    # answers, an unwritten answer already lists the first notes it is said from and every
+    # question says what it checks: here, only what is not there, so the pack never says the
+    # same thing twice (2026-11-03: "walls of text"). The text a stock answer or the profile
+    # holds is quoted only while the person's own answer is unwritten, and marked as notes;
+    # repeated beside an answer already written, the raw profile wording and an older stock
+    # answer read as things to say (2026-10-20).
     kept = _answer_blocks(owned.get("Your answers"))
-    detail = ["Notes on each question: what an answer can come from, and where. None of it is "
-              "words to say: what you say is under Your answers.", ""] if answered else []
+    detail = []
     for q, a in answered:
         detail.append("- **Q.** %s (%s; source: %s)" % (q["question"], q["why"], q["source"]))
-        checking, hear = intent(q["question"], ctx["company"])
-        if checking:
-            detail.append("  - Checking %s. They want to hear %s." % (checking, hear))
         written = spoken((kept.get(what_works._norm(q["question"])) or ("", []))[1])
-        for ln in a["lines"]:
+        for ln in a["lines"][0 if written else ANSWER_NOTES:]:
             if _QUOTES_TEXT.match(ln):
                 if written:
                     continue
-                ln = "Notes, not words to say: " + ln
+                ln = "Notes only: " + ln
             detail.append("  - " + ln)
-        if written:
-            detail.append("  - Your own answer is under Your answers.")
     lines += _section("Likely questions", prep._flag_banned(detail, banned),
                       "No questions: nothing on file to anticipate.")
     lines += _section("Stories", prep._flag_banned(_story_lines(ctx), banned),
-                      "No STAR stories in profile/%s: write three or four before the interview "
-                      "(/setup --section history)." % STORIES_FILE)
+                      "No stories written yet: tell Claude three or four things you did and how "
+                      "they turned out, and it writes them up with you.")
     lines += _section("What the paper says", paper_lines(ctx), "Nothing on file about what was sent.")
-    lines += _section("Gaps and honest framing", prep._flag_banned(gap_lines(ctx), banned),
-                      "No gap the posting names: lead with the matches.")
+    # The one screen carries the one or two that matter; the rest are kept here, quoted as
+    # the one screen quotes them (never read as words to say), so nothing is lost.
+    more = donts[MAX_DO_NOT:]
+    careful = ([voice_check.QUOTED_OPEN, "- Careful, too:"] + ["  " + d for d in more]
+               + [voice_check.QUOTED_CLOSE]) if more else []
+    gaps = prep._flag_banned(gap_lines(ctx), banned)
+    lines += _section("Gaps and honest framing", (gaps or (["- No gap the posting names: lead "
+                                                            "with the matches."] if careful else []))
+                      + careful, "No gap the posting names: lead with the matches.")
     lines += _section("Money and eligibility", prep._flag_banned(money_lines, banned),
                       prep.NOT_RESEARCHED)
-    company = prep._company_lines(ctx["research"], ctx["today"])
+    # A prohibition the research wrote as one is said once ("Do not call it a discounter"),
+    # never under a "Do not say:" label that repeats it.
+    company = [re.sub(r"^- \*\*Do not say:\*\* (?=(?:Do not|Don'?t|Never|Avoid)\b)", "- ", ln)
+               for ln in prep._company_lines(ctx["research"], ctx["today"])]
     stale = prep._stale_line(ctx["research"], ctx["today"]) if company else ""
     lines += _section("The company", company + ([stale] if stale else []),
-                      "RESEARCH FIRST (Claude, not you): %s itself, from its own pages "
-                      "(interview.md Step 2), then this is rebuilt." % ctx["company"])
-    talk = small_talk_lines(ctx)
+                      "%s %s itself, from its own pages." % (RESEARCH_MARK, ctx["company"]))
+    talk = [plain_sources(ln) for ln in small_talk_lines(ctx)]
     found = _found_out(ctx["living"])
     lines += _section("Small talk", prep._flag_banned(talk, banned) + ["", FOUND_OUT, ""]
                       + (found or [FOUND_EMPTY]), "")
-    ask = ask_lines(ctx) + ["- %s (the close: it gives them the last word on any doubt)"
-                            % CLOSE_QUESTION]
+    ask = ask_lines(ctx) + (["- %s (before you answer an offer)" % q for q in OFFER_QUESTIONS]
+                            if ctx["step"] == "offer" else
+                            ["- %s (the close: it gives them the last word on any doubt)"
+                             % CLOSE_QUESTION])
     lines += _section("Ask them", prep._flag_banned(ask, banned),
                       "Nothing researched to anchor a question on.")
     lines += _section("Warm route", prep._flag_banned(warm_lines(ctx), banned),
@@ -4234,12 +4493,14 @@ LEFTOVER_NOTE = ("These lines were in the document before this rebuild, in secti
 _TITLE = re.compile(r"^# Interview prep: .+ at .+$")
 _SECTION_HEAD = re.compile(r"^## (.+?)\s*$")
 # What only this tool writes, never a person: read as the tool's in a document with no record.
-_TOOL_LINE = re.compile(r"^(?:Last updated \S+\. Next: |<!-- stages: .* -->$|%s|%s$|%s$|%s$|"
+_TOOL_LINE = re.compile(r"^(?:Last updated \S+\. Next: |<!-- stages: .* -->$|%s|%s$|%s$|%s$|%s$|%s$|"
                         r"Every fact carries its source, and anything unsourced was left out\.$|"
                         r"- From: |%s|- Nothing yet: each line you add here, with its source, "
                         r"stays\.$|- %s$|- %s$|- Your own answer is under Your answers\.$)"
-                        % (re.escape(INTENT_MARK), re.escape(TO_WRITE), re.escape(ANSWERS_INTRO),
-                           re.escape(LIVE_LINE), re.escape(FOUND_EMPTY), re.escape(REWORK_EMPTY),
+                        % (re.escape(INTENT_MARK), re.escape(TO_WRITE), re.escape(OLD_TO_WRITE),
+                           re.escape(ANSWERS_INTRO),
+                           re.escape(OLD_ANSWERS_INTRO), re.escape(LIVE_LINE),
+                           re.escape(FOUND_EMPTY), re.escape(REWORK_EMPTY),
                            re.escape(NOTES_EMPTY[2:])))
 
 
@@ -4318,7 +4579,7 @@ def _not_in(lines, base) -> list:
 def _tools_own(line) -> bool:
     """A line only this tool writes and only it may change: the date and stage line, the
     stages it was built for, a marker, a placeholder, a research request."""
-    return bool(_TOOL_LINE.match(line)) or "RESEARCH FIRST (Claude" in line
+    return bool(_TOOL_LINE.match(line)) or research_line(line)
 
 
 def _as_built(bc, oc) -> list:
@@ -4722,7 +4983,7 @@ def section_lines(text, title) -> list:
 _BOLD_LEAD = re.compile(r"^\*\*(.+?):\*\*\s*(.*)$")
 _SOURCE_TAIL = re.compile(r"\s*\(source: ([^()]*)\)\s*$")
 _SCREEN_PART = {"likely questions, and what to answer with": "questions", "hooks": "hooks",
-                "do not say": "do_not_say"}
+                "do not say": "do_not_say", "say these": "say", "ask them": "ask"}
 
 
 def _plain(text) -> str:
@@ -4731,13 +4992,15 @@ def _plain(text) -> str:
 
 def one_screen(text) -> dict | None:
     """The "On one screen" section as parts: {assessing, hear, questions [{question,
-    answer}], hooks [{text, source}], money, do_not_say [{text, source}]}; each item that
-    uses a phrase the person banned carries `careful`. None when there is no such section."""
+    answer}], hooks [{text, source}], money, do_not_say [{text, source}], say [{text,
+    source}], ask [{text, source}]}; each item that uses a phrase the person banned carries
+    `careful`. None when there is no such section. `say` and `ask` are empty in a document
+    built before the one screen carried them."""
     lines = section_lines(text, "On one screen")
     if not any(ln.strip() for ln in lines):
         return None
     out = {"assessing": None, "hear": None, "questions": [], "hooks": [], "money": None,
-           "do_not_say": []}
+           "do_not_say": [], "say": [], "ask": []}
     part, last = None, None
     for ln in lines:
         s = ln.strip()
@@ -4768,7 +5031,7 @@ def one_screen(text) -> dict | None:
                 q, _sep, a = m.group(1).partition(" -> ")
                 last = {"question": _plain(q), "answer": _plain(a) or None}
                 out["questions"].append(last)
-        elif part in ("hooks", "do_not_say") and s.startswith("- "):
+        elif part in ("hooks", "do_not_say", "say", "ask") and s.startswith("- "):
             body = s[2:]
             src = _SOURCE_TAIL.search(body)
             last = {"text": _plain(body[:src.start()] if src else body),
@@ -4833,6 +5096,307 @@ def format_of(text) -> dict | None:
 def rework_lines(text) -> list:
     """The lines kept under "To rework" in a living document."""
     return _rework_lines(text)
+
+
+# ---------------------------------------------------------------- the prep as the page reads it
+
+# The page showed the whole document as it is written, after its one screen: twenty thousand
+# characters of headings, sources, file paths, commands and status codes, the same notes
+# twice (2026-11-03: "hits you with walls of text, links to random json files and
+# destinations the user shouldn't know about, is weirdly formatted and sometimes randomly
+# says draft"). `reading` gives the page the document as parts in plain words: the few things
+# for the minutes before, each likely question with its answer, and the rest as short
+# sections to fold. It reads any version of the document, so a prep written before this one
+# reads as cleanly until it is remade.
+
+# How the page names a section, where its own name is a word the person would not use.
+READ_TITLES = {"Warm route": "People you know there", "Earlier stages": "Earlier rounds",
+               "To rework": "To work on", "Notes": "Your notes",
+               "Gaps and honest framing": "Gaps, and how to put them",
+               "Money and eligibility": "Pay and right to work"}
+# The order the page folds them in: what is most read the night before first.
+READ_ORDER = ("Stories", "The company", "Who you are meeting", "The format", "Ask them",
+              "What they have been told", "What the paper says", "Gaps and honest framing",
+              "Money and eligibility", "Small talk", "Warm route", "Earlier stages",
+              "To rework", "Notes")
+# Read into other parts: the one screen, the answers and the notes on each question.
+_READ_ELSEWHERE = ("On one screen", "Your answers", "Likely questions")
+READ_ITEMS = 24            # lines a section shows on the page
+READ_CHARS = 600           # characters a line shows
+_STAR_WORDS = {"S": "The situation", "T": "The task", "A": "What you did", "R": "The result",
+               "Situation": "The situation", "Task": "The task", "Action": "What you did",
+               "Result": "The result"}
+_PLACEHOLDERS = (FOUND_EMPTY, NOTES_EMPTY, "- " + REWORK_EMPTY,
+                 "- Nothing yet: each line you add here, with its source, stays.")
+# What only Claude needs in a line written by an older version of this file: a command, a
+# rule of its own instructions, an instruction to rebuild, a file to edit.
+_CLAUDE_ONLY = re.compile(
+    r"(?:Their answer is kept for every later employer|Nothing on file can supply the reasons|"
+    r"If they ask for a draft instead|The employer-researcher keeps|, kept with `|, then this "
+    r"is rebuilt|then this is rebuilt|rebuild (?:this )?with --|Add it: python3|"
+    r"python3 tools/|`[^`]*\.py\b)[^\n]*$")
+_RULE_REF = re.compile(r"\s*\((?:interview\.md [^)]*|rule \d+|/setup[^)]*|[\w./-]+\.(?:py|md|json|csv)"
+                       r"(?: [A-Z_]+)?)\)")
+_STATUS_CODE = re.compile(r"\s*\[([a-z]+(?:_[a-z]+)+)\]")
+_FILE_WORD = re.compile(r"(?<![\w/:.])(?:[\w.-]+/)*[\w.-]+\.(?:md|json|csv|py|tex|txt)\b")
+_PLURAL_S = re.compile(r"\b(\w+)\((e?s)\)")
+_COUNTED = re.compile(r"\b(\d+) (\w+)\((e?s)\)")
+
+
+def _file_words(name) -> str:
+    """A file an older document named in its text, as the person knows it."""
+    if re.search(r"(?:^|/)cv/|_CV_|_Resume_", name):
+        return "your %s" % _noun()
+    if re.search(r"cover_letter|Cover_Letter", name):
+        return "your cover letter"
+    if "outreach" in name:
+        return "the note drafted to them"
+    return source_words(name)
+
+
+def plain_line(line) -> tuple:
+    """(the words of one line of the document, as the page shows them, the employer's own
+    link it cites or "") or ("", "") for a line that is Claude's alone (research still to do,
+    a placeholder). No markdown, no source files, no commands, no status codes."""
+    raw = str(line or "")
+    if research_line(raw) or raw.strip() in _PLACEHOLDERS or raw.strip().startswith("<!--"):
+        return "", ""
+    s = re.sub(r"^\s*(?:[-*+]|\d+[.)])\s+", "", raw).strip()
+    s = re.sub(r"^>\s*", "", s)
+    link = ""
+    for m in _SOURCE_IN.finditer(s):
+        if re.match(r"https?://", m.group(2).strip(), re.I) and not link:
+            link = m.group(2).strip()
+    # The source goes from the page's line: "(source: x)" whole, "; source: x" inside a bracket.
+    s = re.sub(r"\s*\(source: [^()]*\)", "", s)
+    s = re.sub(r";\s*source: [^();]*(?=\))", "", s)
+    s = re.sub(r"\(\s*\)", "", s)
+    for old in prep.ASK_MARKS:
+        s = s.replace(old, prep.ASK_MARK)
+    s = s.replace(prep.RAW_MARK, "From your profile:")
+    s = re.sub(r"^(?:Notes, not words to say|Notes only):\s*", "", s)
+    s = re.sub(r"^Prepared:\s*", "Your prepared answer: ", s)
+    s = re.sub(r"^From:\s*", "", s)
+    s = re.sub(r"^Prepared:\s*", "Your prepared answer: ", s)
+    s = re.sub(r"^Story:\s*", "Your story: ", s)
+    s = _CLAUDE_ONLY.sub("", s)
+    s = _RULE_REF.sub("", s)
+    s = _STATUS_CODE.sub(lambda m: " (%s)" % status_words(m.group(1)), s)
+    # Lines an older version wrote around a file name, said as what they meant.
+    s = re.sub(r"^No draft\.json kept for this application, so what", "What", s)
+    s = re.sub(r"^Read: ", "", s)
+    s = re.sub(r"^Do not say: (?=(?:Do not|Don'?t|Never|Avoid)\b)", "", s)
+    s = _FILE_WORD.sub(lambda m: _file_words(m.group(0)), s)
+    s = re.sub(r"\b(your [a-z ]+), \1\b", r"\1", s)
+    s = _COUNTED.sub(lambda m: ("one %s" % m.group(2)) if m.group(1) == "1"
+                     else "%s %s%s" % (m.group(1), m.group(2), m.group(3)), s)
+    s = _PLURAL_S.sub(lambda m: m.group(1) + m.group(2), s)
+    s = re.sub(r"(?<!\.)\.\.(?!\.)", ".", s)
+    s = re.sub(r"\*\*|__|`", "", s)
+    s = re.sub(r"(?<!\w)\*(?!\s)([^*]+?)(?<!\s)\*(?!\w)", r"\1", s)
+    s = " ".join(s.split()).strip()
+    if s and s[-1] in ",;:":
+        s = s[:-1].rstrip() + "."
+    if s in (".", ":"):
+        s = ""
+    if len(s) > READ_CHARS:
+        s = prep._short(s, READ_CHARS)
+    return s, link
+
+
+def _read_section(title, lines) -> dict | None:
+    """One section of the document as the page folds it: {key, title, items [{text, link,
+    sub [text]}]}, or None when nothing in it is for the person."""
+    items, cur, group = [], None, None
+    for ln in lines:
+        if not ln.strip():
+            continue
+        head = re.match(r"^#{3,6}\s+(.*)$", ln)
+        if head:
+            # A heading inside a section ("What you found out") holds the lines under it.
+            label = plain_line(head.group(1))[0]
+            group = {"text": label, "link": "", "sub": [], "head": True} if label else None
+            if group:
+                items.append(group)
+            continue
+        text, link = plain_line(ln)
+        if not text:
+            continue
+        if title == "Ask them":
+            text = re.sub(r"\s*\([^()]*\)$", "", text)
+        if title == "To rework":
+            # rework_entry's line, "<day>, <where>: "<question>": <note>", said the other way
+            # round: the question, then what to change, then where it came from.
+            m = re.match(r'^(\d{4}-\d{2}-\d{2}), ([^:]+): "(.+?)": (.*)$', text)
+            if m:
+                text = "%s %s (from %s, %s)" % (m.group(3), m.group(4), "your practice"
+                                                if m.group(2) == "mock" else m.group(2),
+                                                m.group(1))
+        if title == "Stories":
+            star = re.match(r"^(S|T|A|R|Situation|Task|Action|Result):\s*(.*)$", text)
+            if star and cur is not None:
+                cur["sub"].append("%s: %s" % (_STAR_WORDS[star.group(1)], star.group(2)))
+                continue
+            if re.match(r"^Use for:", text):
+                continue        # the tags a question reaches a story by: Claude's, not the page's
+            text = re.sub(r"\s*\((?:[a-z][^()]*)\)$", "", text)   # its theme, a tag
+        indented = re.match(r"^\s{2,}[-*+]\s", ln)
+        if group is not None and len(group["sub"]) < READ_ITEMS:
+            group["sub"].append(text)
+            continue
+        if indented and cur is not None and len(cur["sub"]) < READ_ITEMS:
+            cur["sub"].append(text + (" (%s)" % _host(link) if link and title != "The company"
+                                      else ""))
+            continue
+        if len(items) >= READ_ITEMS:
+            continue
+        cur = {"text": text, "link": link, "sub": []}
+        items.append(cur)
+    items = [i for i in items if not i.get("head") or i["sub"]]
+    if not items:
+        return None
+    return {"key": re.sub(r"[^a-z]+", "_", title.lower()).strip("_"),
+            "title": READ_TITLES.get(title, title), "items": items}
+
+
+# What an older one screen said to answer with, in words that pointed at the document ("below",
+# "(Your answers)"), as the page says it: None where the person's own answer is shown instead.
+_OLD_CUES = ((r"^your summary, said your way.*$", "your summary, in your own words"),
+             (r"^prepared answer, below$", "your prepared answer"),
+             (r"^your answer, below$", ""), (r"^your answer$", ""),
+             (r"^ask you first.*$", "your own reasons: Claude asks you first"),
+             (r"^a hook below", "something true about them"),
+             (r"^a gap with no framing yet.*$", "a gap: settle how you will put it"),
+             (r"^no story yet: draft one$", "no story yet: Claude writes one"))
+
+
+def _why_story(note) -> str:
+    """A story note without how the story was chosen ("matched by its Use for tags", "mapped"):
+    that is Claude's, not the person's."""
+    return re.sub(r"\s*\((?:matched|mapped|as the last build|it carries the letter|chosen over)"
+                  r"[^()]*(?:\([^()]*\)[^()]*)*\)", "", note)
+
+
+def _cue(text) -> str | None:
+    t = _text(text)
+    for rx, words in _OLD_CUES:
+        t = re.sub(rx, words, t, flags=re.I)
+    t = re.sub(r"^story: ", "your story: ", t)
+    return t or None
+
+
+def _host(url) -> str:
+    m = re.match(r"https?://(?:www\.)?([^/]+)", _text(url), re.I)
+    return m.group(1) if m else ""
+
+
+def _doc_parts(text) -> list:
+    """[(title, lines)] of a document's "## " sections, in order."""
+    return [(t, ls[1:]) for t, ls in _doc_sections(str(text or "").splitlines()) if t]
+
+
+def reading(text, company="") -> dict | None:
+    """The prep as the page reads it, in plain words, from any version of the document:
+    {glance {assessing, hear, say [text], ask [text], money, careful [text], hooks [{text,
+    link}]}, questions [{question, why, answer, draft, cue, checking, notes [text]}],
+    sections [{key, title, items}], live}. `answer` is what the person wrote to say, `draft`
+    true only where that answer still carries a draft's mark, `cue` what to answer with
+    while it is unwritten. None for an empty document."""
+    text = str(text or "")
+    if not text.strip():
+        return None
+    shot = one_screen(text) or {}
+    plain = lambda x: plain_line(x)[0]   # noqa: E731
+    cues = {what_works._norm(q["question"]): q.get("answer") for q in shot.get("questions") or []}
+    glance = {"assessing": plain(shot.get("assessing")) or None,
+              "hear": plain(shot.get("hear")) or None,
+              "say": [t for t in (plain(x["text"]) for x in shot.get("say") or []) if t],
+              "ask": [t for t in (plain(x["text"]) for x in shot.get("ask") or []) if t],
+              "money": plain(shot.get("money")) or None,
+              "careful": [t for t in (plain(x["text"]) for x in (shot.get("do_not_say") or [])
+                                      [:MAX_DO_NOT]) if t and not t.startswith("No claim in the room")],
+              "hooks": [{"text": plain(x["text"]), "link": x.get("source") or ""}
+                        for x in (shot.get("hooks") or [])[:HOOKS] if plain(x["text"])
+                        and not plain(x["text"]).startswith(prep.NOT_RESEARCHED)]}
+    for h in glance["hooks"]:
+        if not re.match(r"https?://", h["link"], re.I):
+            h["link"] = ""
+    parts = _doc_parts(text)
+    found = dict(parts)
+    # A document from before the one screen said what to say and what to ask: the first
+    # questions of its own Ask them, and nothing invented.
+    if not glance["ask"] and found.get("Ask them"):
+        asks = [plain_line(ln)[0] for ln in found["Ask them"] if ln.startswith("- ")]
+        asks = [re.sub(r"\s*\([^()]*\)$", "", a) for a in asks if a]
+        glance["ask"] = [a for a in asks if a.endswith("?")][:MAX_ASK_FIRST]
+    blocks = _answer_blocks(found.get("Your answers") or [])
+    notes_of = {}
+    for ln in found.get("Likely questions") or []:
+        if ln.startswith("- **Q.** "):
+            head, _inside = _last_parens(ln[len("- **Q.** "):])
+            cur = notes_of.setdefault(what_works._norm(_plain(head)), [])
+        elif re.match(r"^\s{2,}-\s", ln) and notes_of:
+            t = plain(ln)
+            if t and not re.match(r"^(?:Checking |Your own answer is under)", t):
+                cur.append(t)
+    # What each question checks: the line Your answers writes under its heading.
+    checks, at = {}, None
+    for ln in found.get("Your answers") or []:
+        m = re.match(r"^### (.*)$", ln)
+        if m:
+            at = what_works._norm(m.group(1).strip())
+        elif at and ln.startswith(INTENT_MARK):
+            checks[at] = plain(re.sub(r"^%s\s*" % re.escape(INTENT_MARK), "", ln))
+    questions = []
+    for q in practice(text)["questions"]:
+        key = what_works._norm(q["question"])
+        body = (blocks.get(key) or ("", []))[1]
+        froms = [plain(ln) for ln in body if ln.lstrip().startswith("- From:")]
+        notes_of[key] = [_why_story(n) for n in notes_of.get(key, [])]
+        froms = [_why_story(n) for n in froms]
+        notes = [n for n in froms + notes_of.get(key, []) if n]
+        notes = list(dict.fromkeys(notes))
+        cue = _cue(plain(cues.get(key) or ""))
+        if q["answer"]:
+            # Written: what it was said from is history, and a reason to ask is answered.
+            notes = [n for n in notes if not n.startswith((prep.ASK_MARK, "Your prepared answer",
+                                                           "From your profile"))]
+        questions.append({"question": q["question"], "why": plain(q["why"] or "") or None,
+                          "answer": q["answer"], "draft": bool(q["answer"]) and q["draft"],
+                          "cue": cue, "checking": checks.get(key) or None,
+                          "notes": notes[:6]})
+    sections = []
+    order = [t for t in READ_ORDER if t in found] + [t for t, _ls in parts if t not in READ_ORDER
+                                                     and t not in _READ_ELSEWHERE]
+    for title in order:
+        got = _read_section(title, found[title])
+        if got:
+            if title == "The company" and company:
+                got["title"] = "About %s" % company
+            sections.append(got)
+    if not glance["say"]:
+        glance["say"] = _say_from(shot, sections, glance["hooks"])
+    return {"glance": glance, "questions": questions, "sections": sections,
+            "live": LIVE_LINE in text}
+
+
+def _say_from(shot, sections, hook_list) -> list:
+    """What to say, for a document built before its one screen said it: the result of the
+    story its first question is answered with, and the first fact about the employer."""
+    out = []
+    stories = next((s["items"] for s in sections if s["key"] == "stories"), [])
+    titles = [re.sub(r"^story: ", "", _text(q.get("answer")), flags=re.I)
+              for q in shot.get("questions") or [] if re.match(r"(?i)story: ", _text(q.get("answer")))]
+    for title in titles + [i["text"] for i in stories]:
+        st = next((i for i in stories if i["text"].lower() == title.lower()), None)
+        result = next((x.split(": ", 1)[1] for x in (st or {}).get("sub") or []
+                       if x.startswith("The result: ")), "")
+        if result:
+            out.append("Lead with your strongest result: %s" % _sentence(result))
+            break
+    if hook_list:
+        out.append("Why them: %s" % _sentence(hook_list[0]["text"]))
+    return out
 
 
 def remove_rework(company, role, stage, line) -> bool:
@@ -5218,9 +5782,23 @@ def _report(ctx, path) -> None:
     research = [w for q, w in left if q == "Research"]
     for line in research:
         print("research first: %s" % line)
+    if research:
+        # How what is found is kept, said to Claude here and never in the person's document
+        # (2026-11-03: the document carried these commands to a person minutes before a call).
+        print("  keep it: the employer, its teams (company_research `%s`) and how it runs a "
+              "round (`interview_process`, or `%s` when nothing is public) with the "
+              "employer-researcher; an interviewer's public work with python3 "
+              "tools/network/reading.py add <id> --name \"<name>\" --company \"%s\" (never a "
+              "people-search site); then build again" % (TEAMS_KEY, NOT_FOUND_KEY,
+                                                         ctx["company"]))
     asks = [w for q, w in left if q == "Ask"]
     for line in asks:
         print("ask the person first, once, in the plain words the document gives: %s" % line)
+    if asks:
+        print("  keep each answer for every later employer: python3 tools/interview_pack.py "
+              "motive \"<the question>\" --answer \"<their words>\" [--suits <kinds> --not-for "
+              "<kinds>], then build again; asked for a draft instead, write it under the "
+              "question marked as one (interview.md rule 2)")
     drafts = [w for q, w in left if q == DRAFT]
     if drafts:
         print("drafts they asked for, to show them as drafts: %d (%s): %s"

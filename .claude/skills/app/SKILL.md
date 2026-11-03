@@ -135,8 +135,8 @@ messages (ArtifactData `query`, collection `talk/<thread>/messages`, `out_dir: $
 - **Someone sent them a job** (with or without a picture): do what the page's Add a job does,
   in this work: find the posting from the link or the words, score it (/apply Step 1),
   `added_jobs.py add`, and make the sender its referral route as `evaluate` does with
-  `contact` (find them in the contact book first; someone not in it is added the networking
-  skill's way). Draft the application (the drafting path in RUNBOOK.md step 2) only
+  `contact` (find them in the contact book first; someone not in it is added with
+  `network/state.py add "<name>" --company "<employer>"`). Draft the application (the drafting path in RUNBOOK.md step 2) only
   when the message asks for it or says to apply. Answer in the thread with where it is:
   the score, who it is linked to, and where it shows (Jobs, or Drafts once drafted).
 - **Screenshots of someone's LinkedIn profile** (the page's "Send screenshots instead", for
@@ -145,7 +145,9 @@ messages (ArtifactData `query`, collection `talk/<thread>/messages`, `out_dir: $
   a gap, and run `reading.py read <contact> <file> --source screenshot`; then rewrite their
   waiting note on it (`/network`, `args.rewrite`) and put it in the thread, ready to copy.
 - **Someone wrote to them**: two commands, with nothing to look up first (`/reply` says
-  what each does). Run `python3 tools/network/reply.py prepare "<their name or contact id>"
+  what each does); someone not yet in the contact book (a recruiter who wrote first) is added
+  first with `python3 tools/network/state.py add "<name>"`, and "they accepted my request" is
+  `python3 tools/network/state.py accepted <contact>`. Run `python3 tools/network/reply.py prepare "<their name or contact id>"
   --text-file -` with their words, as they came, on its input (a heredoc; a file's path
   works too), `--company <employer>` when it says two people share the name, `--date` and
   `--channel email` when it came another day or way. It finds them, logs their message,

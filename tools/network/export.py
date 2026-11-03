@@ -822,8 +822,13 @@ def take(srcs, contacts_path: str | None = None, threads_path: str | None = None
                  f"{people} {'person' if people == 1 else 'people'} in the contact book. "
                  "Nothing was sent.")
     if plan["unmatched"]:
-        lines.append(f"{len(plan['unmatched'])} people in the history are not in the contact "
-                     f"book ({len(wrote)} of them written to): `export.py history` lists them.")
+        n_out = len(plan["unmatched"])
+        lines.append(
+            f"1 person in the history is not in the contact book"
+            f"{' (you wrote to them)' if wrote else ''}: `export.py history` names them."
+            if n_out == 1 else
+            f"{n_out} people in the history are not in the contact book ({len(wrote)} of them "
+            "written to): `export.py history` lists them.")
     if dated:
         lines.append(f"Follow-up dates written on {len(dated)} contact"
                      f"{'s' if len(dated) != 1 else ''} ({st.schema.follow_up_rule()}).")
@@ -1455,7 +1460,21 @@ def plan_history(contacts, threads, src=None, mine=None) -> dict:
         how = joined_ids.get(cid)
         if how in out["joined"]:
             out["joined"][how] += 1
-    out["unmatched"].sort(key=lambda u: u["last"], reverse=True)
+    # One person, one line: their messages in two conversations (a message, then a reply in
+    # a new one) were two lines and counted as two people (2026-11-03).
+    merged: dict = {}
+    for u in out["unmatched"]:
+        k = _who(u["name"], u["url"]) or f"row{len(merged)}"
+        had = merged.get(k)
+        if had is None:
+            merged[k] = dict(u)
+            continue
+        had["sent"] += u["sent"]
+        had["received"] += u["received"]
+        if u["last"] > had["last"]:
+            had.update(last=u["last"], last_from=u["last_from"])
+        had["name"], had["url"] = had["name"] or u["name"], had["url"] or u["url"]
+    out["unmatched"] = sorted(merged.values(), key=lambda u: u["last"], reverse=True)
     return out
 
 
@@ -1799,8 +1818,9 @@ def _cli_history(a) -> int:
     if plan["unmatched"]:
         wrote = [u for u in plan["unmatched"] if u["sent"]]
         print(f"NOT IN YOUR CONTACT BOOK ({len(plan['unmatched'])}, {len(wrote)} of them you "
-              "wrote to), newest first. Add any worth keeping to network_contacts.csv with "
-              "their LinkedIn address, then run this again and their messages join them:")
+              "wrote to), newest first. Add any worth keeping with their LinkedIn address "
+              "(python3 tools/network/state.py add \"<name>\" --company \"<employer>\" "
+              "--linkedin <address>), then run this again and their messages join them:")
         for u in plan["unmatched"][:25]:
             print(f"  {u['name'] or u['url']}: last message {u['last'] or 'undated'}, from "
                   f"{u['last_from']}; {u['sent']} sent, {u['received']} received"

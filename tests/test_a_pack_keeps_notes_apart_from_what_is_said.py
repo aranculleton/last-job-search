@@ -60,9 +60,13 @@ def _rewrite(old, new):
 
 def test_likely_questions_are_notes_and_never_repeat_a_written_answer(case):
     _process()
+    # 2026-11-03: Likely questions no longer repeats a note Your answers already lists under an
+    # unwritten answer, nor opens on a paragraph about itself (the person read the same notes
+    # twice, "walls of text"). The raw wording is still marked as notes, once, where it is.
     likely = _section(_doc(), "Likely questions").lstrip()
-    assert likely.startswith("Notes on each question") and "None of it is words to say" in likely
-    assert "Notes, not words to say: %s" % prep.RAW_MARK in likely
+    assert likely.startswith("- **Q.** ")
+    assert prep.RAW_MARK not in likely
+    assert "- From: %s" % prep.RAW_MARK in _block(_doc(), ABOUT)
     # Written in their own words, the raw wording is never shown beside it again.
     block = _block(_doc(), ABOUT)
     _rewrite("### %s\n%s" % (ABOUT, block),
@@ -71,7 +75,9 @@ def test_likely_questions_are_notes_and_never_repeat_a_written_answer(case):
     P.main(["pack", FIRM, "--today", TODAY, "--write"])
     likely = _section(_doc(), "Likely questions")
     about = likely.split("**Q.** %s" % ABOUT, 1)[1].split("- **Q.**", 1)[0]
-    assert prep.RAW_MARK not in about and "Your own answer is under Your answers." in about
+    # 2026-11-03: and no line pointing at it either: the answer is under its own question.
+    assert prep.RAW_MARK not in about and "Your own answer is under Your answers." not in about
+    assert prep.RAW_MARK not in _block(_doc(), ABOUT)
 
 
 def test_a_stock_answer_with_a_fill_in_is_never_printed_as_one(case):
@@ -82,7 +88,8 @@ def test_a_stock_answer_with_a_fill_in_is_never_printed_as_one(case):
     _process()
     text = _doc()
     block = _block(text, "What is your notice period, and when could you start?")
-    assert "One month," not in block and 'still has a fill-in ("[Customize per company]")' in block
+    # 2026-11-03: said as a gap for them to fill with Claude, never as a file to edit.
+    assert "One month," not in block and 'still has a gap to fill ("[Customize per company]")' in block
     assert "One month," not in _section(text, "Likely questions")
 
 

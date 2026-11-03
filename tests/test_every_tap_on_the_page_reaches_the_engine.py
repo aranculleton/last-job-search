@@ -212,8 +212,9 @@ def test_a_person_put_in_the_bin_is_never_messaged_again(run, tmp_path):
     # choice in its own sheet, applied by the engine, and the person shows as stopped.
     where = Search(str(tmp_path / "s"))
     got, rec = _round_trip(run, tmp_path, where, "bin", [
-        # Wren owes nothing today, so is one tap below the people who do.
-        {"hash": "contacts", "click": "more people, nothing owed to them now", "exact": False},
+        # Wren is owed only a follow-up, so is one tap below the people who need the person
+        # now; the fold says so ("1 with a follow-up you could send"), never "nothing owed".
+        {"hash": "contacts", "click": "more people, 1 with a follow-up you could send", "exact": False},
         {"click": "Not Wren?", "exact": True},
         # The choice is the tap that does it (2026-11-03: a choice and then Done was two).
         {"click": "Don't contact Wren", "exact": True, "within": "dialog"},

@@ -137,10 +137,16 @@ def test_it_leads_with_one_screen(app):
                            "Shirin Example, Head of Planning.")
     assert re.findall(r"^## (.+)$", text, re.M) == list(P.SECTIONS)
     screen = _section(text, "On one screen")
-    assert len(screen) <= 20
+    # 2026-11-03: the one screen now says what to say and what to ask them, and keeps two
+    # things not to say rather than four, so it holds a few more lines than the twenty it did.
+    assert len(screen) <= 28
     assert [ln[:3] for ln in screen if re.match(r"^\d\. ", ln)] == ["1. ", "2. ", "3. ", "4. ", "5. "]
     assert any(ln.startswith("**Money:**") for ln in screen)
     assert screen.index("**Do not say**") > screen.index("**Hooks**")
+    say = screen[screen.index("**Say these**") + 1:screen.index("**Likely questions, and what to answer with**")]
+    assert 2 <= len(say) <= P.MAX_SAY and say[0].startswith("- Lead with your strongest result: ")
+    ask = screen[screen.index("**Ask them**") + 1:screen.index("**Hooks**")]
+    assert 2 <= len(ask) <= P.MAX_ASK_FIRST and ask[-1] == "- " + P.CLOSE_QUESTION
 
 
 def test_the_stage_date_and_interviewer_come_from_outcome_md(app):
@@ -167,9 +173,12 @@ def test_a_technical_round_asks_the_requirements_with_what_the_letter_said(app):
     text = _pack()
     detail = "\n".join(_section(text, "Likely questions"))
     assert "Tell me about your experience with Demand forecasting." in detail
+    # 2026-11-03: an unwritten answer lists the notes it is said from under Your answers, and
+    # Likely questions no longer repeats them; every source is said in words, never a path.
+    yours = "\n".join(_section(text, "Your answers"))
     assert ("What the letter answered it with: Cut forecast error from 22% to 14% across 2,400 "
-            "SKUs at Brindle & Hart Logistics (source: documents/applications/") in detail
-    assert "Story: The forecast that freed safety stock" in detail
+            "SKUs at Brindle & Hart Logistics (source: what you sent)") in yours
+    assert "Story: The forecast that freed safety stock" in yours
 
 
 def test_the_session_maps_what_the_tags_do_not_reach(app):
@@ -181,7 +190,8 @@ def test_the_session_maps_what_the_tags_do_not_reach(app):
     first = screen[screen.index("**Likely questions, and what to answer with**") + 1]
     assert first == ("1. Walk me through how forecasts reach the depots. -> story: The "
                          "forecast that freed safety stock")
-    assert "Story: Ending a daily reconciliation (mapped;" in "\n".join(_section(text, "Likely questions"))
+    # 2026-11-03: under Your answers, where an unwritten answer lists what it is said from.
+    assert "Story: Ending a daily reconciliation (mapped;" in "\n".join(_section(text, "Your answers"))
 
 
 def test_every_story_is_shown_with_its_tags(app):
@@ -217,8 +227,10 @@ def test_a_bridged_gap_gets_its_framing_and_a_credential_is_never_claimed(app):
     gaps = "\n".join(_section(text, "Gaps and honest framing"))
     assert "SAP. Say: I have reported from SAP extracts and the warehouse system behind them." in gaps
     donts = _section(text, "On one screen")
+    # 2026-11-03: a prohibition the research wrote as one is said once, never "Do not say: Do
+    # not ...".
     assert donts[donts.index("**Do not say**") + 1].startswith(
-        "- Do not say: Do not call it a parcel carrier: it moves pallets.")
+        "- Do not call it a parcel carrier: it moves pallets.")
     assert any(ln.startswith("- Never claim Chartered procurement: A credential, not a skill.")
                for ln in donts)
 
@@ -229,10 +241,12 @@ def test_what_the_score_and_the_audit_saw_is_kept_when_the_draft_carries_it(app)
         json.dump([dict(DRAFT, fit_why=["+10 forecasting named", "-6 SAP stated as essential"],
                         residual_risks=["SAP depth is reporting, not configuration"])], fh)
     gaps = _section(_pack(), "Gaps and honest framing")
-    assert any(ln.startswith("- The score docked it: -6 SAP stated as essential") for ln in gaps)
-    assert not any("+10 forecasting" in ln for ln in gaps)
-    assert any(ln.startswith("- The grounding audit said an interviewer could probe: SAP depth")
+    # 2026-11-03: in words the person uses, not the app's ("docked", "grounding audit").
+    assert any(ln.startswith("- The fit score marked it down: -6 SAP stated as essential")
                for ln in gaps)
+    assert not any("+10 forecasting" in ln for ln in gaps)
+    assert any(ln.startswith("- The check on your application said an interviewer could probe: "
+                             "SAP depth") for ln in gaps)
 
 
 def test_a_phrase_the_person_banned_is_flagged_where_it_would_be_said(app):
@@ -240,15 +254,19 @@ def test_a_phrase_the_person_banned_is_flagged_where_it_would_be_said(app):
     screen = _section(text, "On one screen")
     flagged = [i for i, ln in enumerate(screen) if "wording you have said never to use" in ln]
     assert flagged and "cross-dock" in screen[flagged[0] - 1]
-    assert '- Words you have said never to use: "cross-dock"' in "\n".join(screen)
+    # 2026-11-03: the one screen keeps the two that matter most (here the employer's own
+    # prohibition and a credential never to claim); the person's list is kept under the gaps.
+    assert '  - Words you have said never to use: "cross-dock"' in \
+        "\n".join(_section(text, "Gaps and honest framing"))
 
 
 def test_the_list_of_what_not_to_say_is_not_read_as_something_to_say(app):
     never = [(p, re.compile(r"\b%s\b" % re.escape(p), re.I))
              for p in ("passionate about", "leverage my", "synergy")]
     text = _pack(never_say=never)
-    screen = _section(text, "On one screen")
-    donts = "\n".join(screen[screen.index("**Do not say**"):])
+    # 2026-11-03: past the one screen's two, the list is kept under the gaps, quoted the same way.
+    gaps = _section(text, "Gaps and honest framing")
+    donts = "\n".join(gaps[gaps.index("- Careful, too:"):])
     assert '"passionate about", "leverage my", "synergy"' in donts
     # Neither flagged as wording to avoid by the pack itself, nor read by the voice check
     # as the person's own words: the pack carrying the list comes back clean of it.
@@ -266,9 +284,10 @@ def test_a_question_reported_rather_than_asked_keeps_its_source(app):
     assert row["source"] == "the recruiter's email of 2026-03-09" and row["landed"] == ""
     ctx = P.gather(COMPANY, today=TODAY, contacts=CONTACTS, threads=[])   # the bank on disk
     detail = "\n".join(_section(P.pack_markdown(ctx, never_say=[]), "Likely questions"))
+    # 2026-11-03: where it was recorded is said in words, never as the file it is in.
     assert ("- **Q.** Walk me through a SQL window function. (reported by the recruiter's email "
             "of 2026-03-09 (Technical interview, 2026-03-09); source: the recruiter's email of "
-            "2026-03-09, recorded in documents/interview/question_bank.csv)") in detail
+            "2026-03-09, recorded in your past interviews)") in detail
     with pytest.raises(ValueError, match="reported question was not asked"):
         P.add_asked(COMPANY, ROLE, "Technical interview", "Why us?", landed="yes",
                     source="a contact")
@@ -295,8 +314,10 @@ def test_a_bank_written_before_sources_keeps_its_lines(app):
 
 def test_what_the_paper_argued_is_on_file(app):
     paper = _section(_pack(), "What the paper says")
-    assert paper[0] == ("- Sent: cv/Morgan_Ellis_CV_Fernhill.tex, cover_letters/"
-                        "Morgan_Ellis_Cover_Letter_Fernhill.tex (source: job_search_tracker.csv)")
+    # 2026-11-03: the rule every interview keeps opens this section, said once here rather than
+    # on every one screen, and what was sent is named as the person names it, not by its files.
+    assert paper[0] == P.PAPER_RULE
+    assert paper[1] == "- Sent: your CV and cover letter (source: your applications)"
     assert any(ln.startswith("- The argument: A forecaster who has already cut error") for ln in paper)
     assert not any("Conceded" in ln for ln in paper)          # "none" is not a concession
 
@@ -304,13 +325,14 @@ def test_what_the_paper_argued_is_on_file(app):
 def test_the_money_is_what_the_form_already_said(app):
     text = _pack()
     money = "\n".join(_section(text, "Money and eligibility"))
-    assert "- The form said (source: documents/applications/" in money
+    assert "- The form said (source: the application form):" in money     # 2026-11-03: in words
     assert "  - What are your salary expectations? **GBP 48,000 to 58,000**" in money
     assert "[check the tracker row]" not in money             # a blank on the sheet, not an answer
     assert "Walk-away floor 42,000: keep it to yourself." in money
     assert "  - Earliest start date: one month after an offer" in money
     line = next(ln for ln in _section(text, "On one screen") if ln.startswith("**Money:**"))
-    assert line.startswith("**Money:** the form said GBP 48,000 to 58,000;")
+    # 2026-11-03: what to say comes first.
+    assert line.startswith("**Money:** say what the form said, GBP 48,000 to 58,000:")
     assert "42,000" not in line
 
 
@@ -325,7 +347,7 @@ def test_a_band_nobody_wrote_down_is_not_printed(app, monkeypatch):
 def test_an_offer_is_prepared_as_total_compensation(app):
     money = "\n".join(_section(_pack(stage="Offer received"), "Money and eligibility"))
     assert "Always report total compensation, not just base" in money
-    assert "(source: .claude/skills/job-application-assistant/04-job-evaluation.md)" in money
+    assert "(source: the app's guide)" in money       # 2026-11-03: in words, never its path
 
 
 # ------------------------------------------------------------------ the research and the people
@@ -343,12 +365,15 @@ def test_a_referrer_is_told_and_a_known_interviewer_is_reused(app):
     warm = _section(_pack(), "Warm route")
     # The networking skill's rule for a referrer: thanks once, then no update until there is
     # an outcome, unless they ask (3.7.0 told the candidate to report the booking).
-    assert warm[0].startswith("- Hal Okonedo, Transport Analyst put you forward "
-                              "[referral_in_progress]. If you have not thanked them yet, once")
+    # 2026-11-03: a contact's state in words (never "[referral_in_progress]"), and what the
+    # person already noted about an interviewer pointed to where it is, never by its file.
+    assert warm[0].startswith("- Hal Okonedo, Transport Analyst put you forward. If you have "
+                              "not thanked them yet, once")
     assert "no update until there is an outcome, unless they ask" in warm[0]
     assert any(ln.startswith("- Shirin Example, Head of Planning is interviewing you and is in "
-                             "your contact book [in_conversation]: reuse documents/network/"
-                             "fernhill_freight_example/prep.md") for ln in warm)
+                             "your contacts (talking): what you noted about them is under Who "
+                             "you are meeting") for ln in warm)
+    assert not any("documents/" in ln or "[" in ln for ln in warm)
     assert not any("is already talking to you" in ln for ln in warm)
     assert warm[-1].startswith("- How did you hear about us: through Hal Okonedo.")
     assert not any("Juno Castellan" in ln for ln in warm)

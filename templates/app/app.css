@@ -954,7 +954,7 @@ a.navlink, .applylink, .btn.link, .fold .btn.link, .bp-foot a { text-decoration-
   /* A link inside a sentence keeps the sentence's line: its 44px target reaches above and
      below the line (padding taken back by a negative margin) instead of stretching it, so a
      name in the middle of a line never breaks the text around it (2026-10-29). */
-  .btn.link, a.navlink, .errors a, .wc-links a, .related a, .warm a, a.name-link, .bp-news a, .prep-text a, .bp-lead a {
+  .btn.link, a.navlink, .errors a, .wc-links a, .related a, .warm a, a.name-link, .bp-news a, .prep-text a, .bp-lead a, a.pi-src {
     display: inline-block; min-height: var(--target); padding: calc((var(--target) - 20px) / 2) 0; margin-block: calc((var(--target) - 20px) / -2); line-height: 20px; vertical-align: baseline; white-space: normal; text-align: center; }
   .card-actions .btn.link, .controls .btn.link { margin-block: 0; }
   a.back-link, a.bp-go { display: inline-flex; align-items: center; min-height: var(--target); min-width: var(--target); }
@@ -1412,13 +1412,41 @@ ul.bp-news { gap: 12px; }
 .prep-side { display: flex; flex-direction: column; gap: 16px; min-width: 0; font-size: var(--t-sm); }
 .prep-side .d-block { display: flex; flex-direction: column; gap: 4px; }
 .prep-side .d-block p { margin: 0; }
-.prep-glance { background: var(--sunk); border-radius: var(--r); padding: 16px 20px; max-width: 76ch; }
-.prep-glance-h { margin: 0 0 8px; font-size: var(--t-sm); font-weight: 700; letter-spacing: 0.04em; text-transform: uppercase; color: var(--st-failed); }
-.prep-glance .read { display: flex; flex-direction: column; gap: 16px; }
-.prep-glance .read .fg-label { display: block; margin: 0 0 4px; font-weight: 700; color: var(--ink); }
-.prep-glance .read-q { display: flex; flex-direction: column; gap: 8px; margin: 0; padding-left: 20px; }
-.prep-glance .read-q p { margin: 0; }
-.prep-glance ul { margin: 0; padding-left: 20px; display: flex; flex-direction: column; gap: 4px; }
+/* Before you go in: the few things read in the minutes before a call, in big type in one soft
+   grey box, short lines with room between them (2026-11-03: "far easier to read"). */
+.prep-glance { background: var(--sunk); border-radius: var(--r); padding: 20px; max-width: 76ch; display: flex; flex-direction: column; gap: 20px; }
+.prep-glance-h { margin: 0; font-size: var(--t-xl); font-weight: 700; color: var(--ink); }
+.pg-check, .pg-money { margin: 0; font-size: var(--t-lg); line-height: 1.5; }
+.pg-part { display: flex; flex-direction: column; gap: 8px; }
+.pg-label { margin: 0; font-size: var(--t-md); font-weight: 600; color: var(--muted); }
+.pg-label.inline { display: inline; font-size: inherit; }
+.pg-list { margin: 0; padding-left: 24px; display: flex; flex-direction: column; gap: 12px; font-size: var(--t-lg); line-height: 1.5; }
+.pg-careful .pg-list { font-size: var(--t-md); gap: 8px; }
+/* The rest, folded: each part a soft card that opens in place, a count beside its name. */
+.prep-folds { display: flex; flex-direction: column; gap: 8px; max-width: 76ch; }
+.prep-fold { background: var(--surface); border: 1px solid var(--line); border-radius: var(--r); }
+.prep-fold-sum { cursor: pointer; list-style: none; display: flex; align-items: center; gap: 8px; min-height: var(--target); padding: 8px 16px; font-size: var(--t-lg); font-weight: 600; }
+.prep-fold-sum::-webkit-details-marker { display: none; }
+.prep-fold-sum::after { content: ""; margin-left: auto; width: 8px; height: 8px; border-right: 2px solid currentColor; border-bottom: 2px solid currentColor; transform: rotate(45deg) translateY(-2px); color: var(--muted); flex: none; }
+.prep-fold[open] > .prep-fold-sum::after { transform: rotate(-135deg) translateY(-1px); }
+.prep-fold-n { font-size: var(--t-sm); font-weight: 600; }
+.prep-fold-body { padding: 0 16px 16px; }
+.pq-list { display: flex; flex-direction: column; gap: 0; }
+.pq { display: flex; flex-direction: column; gap: 8px; padding: 16px 0; border-top: 1px solid var(--line); }
+.pq:first-child { border-top: 0; padding-top: 4px; }
+.pq-q { margin: 0; font-weight: 600; font-size: var(--t-md); }
+.pq-n { color: var(--muted); }
+.pq-a { margin: 0; line-height: 1.6; }
+.pq-cue { margin: 0; color: var(--muted); }
+.pq-draft { margin: 0; display: flex; flex-wrap: wrap; align-items: center; gap: 8px; font-size: var(--t-sm); }
+.pq-why { margin: 0; }
+.pq-notes { margin: 0; padding-left: 20px; display: flex; flex-direction: column; gap: 4px; color: var(--muted); }
+.pi-list { margin: 0; padding-left: 20px; display: flex; flex-direction: column; gap: 12px; line-height: 1.55; }
+.pi-list > li.pi-head { list-style: none; margin-left: -20px; }
+.pi-list > li.pi-head > span { font-weight: 600; }
+.pi-sub { margin: 8px 0 0; padding-left: 20px; display: flex; flex-direction: column; gap: 4px; color: var(--muted); }
+.pi-src { font-size: var(--t-sm); white-space: nowrap; }
+.prep-live { margin: 8px 0 0; }
 .prep-doc { max-width: 76ch; }
 /* The numbers card: what the bars are, and how far applications went, opened in place. */
 .bp-spark-cap { margin: 4px 0 0; }
@@ -1452,6 +1480,10 @@ ul.bp-news { gap: 12px; }
 .d-person .timeline { display: grid; gap: 12px; }
 .d-person .timeline li { display: grid; gap: 2px; }
 .d-person .t-draft .t-text { white-space: pre-wrap; background: var(--sunk); border-radius: var(--r-sm); padding: 12px 16px; }
+/* Their words and yours keep their lines; what was not a message (an acceptance, a call) is
+   one quiet line. */
+.d-person .timeline .t-text { margin: 0; white-space: pre-wrap; overflow-wrap: anywhere; }
+.d-person .timeline .t-event .t-text { color: var(--muted); }
 /* Every point on the Brief has the same small dot, centred on its first line whatever its
    size, in place of the browser's own bullet beside a dot of ours (the maintainer,
    2026-11-02: "the bullets ... look clunky and misspaced"). */

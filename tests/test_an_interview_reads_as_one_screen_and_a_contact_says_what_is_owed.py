@@ -74,7 +74,12 @@ def test_the_one_screen_practice_and_format_are_read_as_the_pack_wrote_them(app)
     assert got["questions"][0]["answer"] == "story: One report in place of eleven spreadsheets"
     assert len(got["hooks"]) == P.HOOKS and all(h["source"] for h in got["hooks"])
     assert got["money"] and got["assessing"] and got["hear"]
-    assert got["do_not_say"][-1]["text"].startswith("No claim in the room beyond the paper")
+    # 2026-11-03: the one or two that matter, and never the rule every interview keeps, which
+    # is said once under What the paper says; what to say and what to ask are read as well.
+    assert 1 <= len(got["do_not_say"]) <= P.MAX_DO_NOT
+    assert not any(d["text"].startswith("No claim in the room") for d in got["do_not_say"])
+    assert P.PAPER_RULE in _section(text, "What the paper says")
+    assert got["say"] and got["ask"][-1]["text"] == P.CLOSE_QUESTION
     practice = P.practice(text)
     asked = [ln for ln in _section(text, "Likely questions") if ln.startswith("- **Q.** ")]
     assert len(practice["questions"]) == len(asked)
