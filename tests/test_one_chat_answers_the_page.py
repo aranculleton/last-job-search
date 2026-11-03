@@ -565,6 +565,7 @@ def test_a_chat_answering_the_page_for_a_day_starts_a_fresh_helper_at_a_quiet_mo
     helper; until that one takes the page, it still answers."""
     import app_listen
     monkeypatch.setattr(app_listen, "chat_kind", lambda: "cloud")
+    monkeypatch.setattr(app_listen, "context_tokens", lambda: 0)
     now = dt.datetime(2026, 10, 30, 12, 0, tzinfo=dt.timezone.utc)
     rec = {"chat": "session_old", "kind": "cloud", "helper": True, "since": "2026-10-29T08:00:00Z",
            "answered_at": "2026-10-30T11:00:00Z"}
@@ -594,6 +595,7 @@ def test_a_page_update_by_the_listener_is_its_check_in(copy, tmp_path, monkeypat
     import app_listen
     import json as _json
     monkeypatch.setattr(app_listen, "chat_kind", lambda: "cloud")
+    monkeypatch.setattr(app_listen, "context_tokens", lambda: 0)
     now = dt.datetime(2026, 11, 3, 8, 0, tzinfo=dt.timezone.utc)
     rec = {"chat": "session_old", "kind": "cloud", "helper": True, "since": "2026-11-01T08:00:00Z",
            "answered_at": "2026-11-02T16:20:00Z"}
@@ -605,3 +607,37 @@ def test_a_page_update_by_the_listener_is_its_check_in(copy, tmp_path, monkeypat
     assert len(lines) == 1 and lines[0].startswith("listen: renew:")
     # Another chat's page update leaves the listener's record alone.
     assert app_listen.view_check_in(db, str(tmp_path / "b"), "session_other", now) == ([], [])
+
+    # A chat that checked in this last hour has done it already: its dump is older than that.
+    app_listen._remember(rec, now - dt.timedelta(minutes=5))
+    assert app_listen.view_check_in(db, str(tmp_path / "c"), "session_old", now) == ([], [])
+
+
+def test_a_helper_that_rereads_a_lot_hands_over_within_the_day(copy, tmp_path, monkeypatch):
+    """A helper three days old re-read some 535,000 tokens at every step, and a one-line reply
+    took minutes (2026-11-03). Past RENEW_TOKENS it hands over at its next quiet moment, even
+    inside its first day; its size is read from the last turn in its own session file."""
+    import app_listen
+    import json as _json
+    monkeypatch.setattr(app_listen, "chat_kind", lambda: "cloud")
+    now = dt.datetime(2026, 11, 3, 15, 0, tzinfo=dt.timezone.utc)
+    rec = {"chat": "session_new", "kind": "cloud", "helper": True, "since": "2026-11-03T09:00:00Z",
+           "answered_at": "2026-11-03T14:00:00Z"}
+    db = {"meta": {"listener": {"data": rec, "version": 4}}, "work": {}}
+    home = tmp_path / "claude"
+    (home / "projects" / "-home-user").mkdir(parents=True)
+    log = home / "projects" / "-home-user" / "a1.jsonl"
+    log.write_text("\n".join(_json.dumps(x) for x in [
+        {"type": "user", "message": {"content": "hi"}},
+        {"type": "assistant", "message": {"usage": {"input_tokens": 2, "cache_read_input_tokens": 160000,
+                                                     "cache_creation_input_tokens": 900}}}]) + "\n")
+    monkeypatch.setenv("CLAUDE_CONFIG_DIR", str(home))
+    assert app_listen.context_tokens() == 160902
+    got = app_listen.decide(db, "session_new", str(tmp_path / "a"), now)
+    assert [ln for ln in got["lines"] if ln.startswith("listen: renew:")], got["lines"]
+    # A small one, six hours old, keeps the page.
+    monkeypatch.setenv("CLAUDE_CONFIG_DIR", str(tmp_path / "nowhere"))
+    app_listen._save_seen({k: v for k, v in app_listen.seen().items() if k != "renewed_at"})
+    assert app_listen.context_tokens() == 0
+    assert not [ln for ln in app_listen.decide(db, "session_new", str(tmp_path / "b"), now)["lines"]
+                if ln.startswith("listen: renew:")]

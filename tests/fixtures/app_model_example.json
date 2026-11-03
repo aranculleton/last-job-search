@@ -1,18 +1,18 @@
 {
  "model": 1,
  "made_at": "2026-10-25T18:00:00Z",
- "rev": "92c3c176197a",
+ "rev": "bce716f1ef4e",
  "app": {
-  "version": "4.6.0",
+  "version": "4.8.0",
   "update_waiting": null,
   "news": [
-   "Coming up: everything booked or due, in one place.",
-   "Add anything to your calendar in a tap, with nothing connected.",
-   "A call's time shows on the person."
+   "Your brief's news is never empty, and each item says how to use it.",
+   "Today on your Brief is the one most pressing thing, with what matters about it beside it.",
+   "News reads as tidy points."
   ],
   "privacy": "Only you can open this page unless you share it. It holds first names, employers, your drafts and your setup answers, so keep it unshared.",
   "repo": "https://github.com/aranculleton/last-job-search",
-  "page": 14
+  "page": 17
  },
  "person": {
   "first_name": "Morgan",
@@ -46,7 +46,7 @@
  ],
  "jobs": {
   "round": "r9",
-  "made_at": "2026-11-02T11:50:27Z",
+  "made_at": "2026-11-03T15:52:05Z",
   "met": false,
   "summary": "4 roles on the shortlist, 4 scoring 60 or more and 2 scoring 75 or more. 3 left out, each with its reason.",
   "rows": [
@@ -555,6 +555,7 @@
    "kind": "reply",
    "title": "Reply to Juno at Larkspur Retail",
    "context": "Analytics Manager · University of Leeds alumni · first wrote 10 Sep",
+   "said": "Hi Morgan, happy to help. Send me your CV and I'll pass it on.",
    "due": "2026-10-20",
    "company": "Larkspur Retail",
    "overdue_days": 5,
@@ -591,6 +592,7 @@
    "kind": "nudge",
    "title": "Follow up with Wren at Fernhill Freight",
    "context": "Head of Supply Chain Analytics · first wrote 21 Sep",
+   "said": null,
    "due": "2026-09-29",
    "company": "Fernhill Freight",
    "overdue_days": 26,
@@ -765,7 +767,7 @@
    "when": "2026-10-28",
    "prep": {
     "path": "documents/applications/thornbury_bank_risk_analyst_thornbury/interview_prep.md",
-    "updated": "2026-11-02T11:50:27Z"
+    "updated": "2026-11-03T15:52:05Z"
    },
    "questions": 2,
    "all_day": true,
@@ -1194,31 +1196,33 @@
   ]
  },
  "updates": {
-  "version": "4.6.0",
-  "newest": "4.6.0",
+  "version": "4.8.0",
+  "newest": "4.8.0",
   "mode": "auto",
   "waiting": null,
   "changed": [
    {
-    "version": "4.6.0",
+    "version": "4.8.0",
     "date": "2026-11-02",
     "lines": [
-     "Coming up: everything booked or due, in one place.",
-     "Add anything to your calendar in a tap, with nothing connected.",
-     "A call's time shows on the person.",
-     "Your news fits your country and your field.",
-     "Adding something on Coming up is never refused.",
-     "Old news no longer promises a next brief."
+     "Your brief's news is never empty, and each item says how to use it.",
+     "Today on your Brief is the one most pressing thing, with what matters about it beside it.",
+     "News reads as tidy points.",
+     "The weekly bars are clearer.",
+     "Fold the side menu to its icons.",
+     "Your progress fits its panel at any width."
     ]
    },
    {
-    "version": "4.5.1",
-    "date": "2026-10-31",
+    "version": "4.7.0",
+    "date": "2026-11-02",
     "lines": [
-     "A morning brief whose chat was removed runs again by itself.",
-     "Moving everything to another time zone moves the job round too.",
-     "The Brief's numbers are never cut off.",
-     "The README is a third of its old length."
+     "Your page shows what is new without you doing anything.",
+     "A new version reaches your page by itself.",
+     "The brief's opening shows on your Brief again.",
+     "Your brief's news watches what moves your own search, in your words. (set up for you)",
+     "Today on your Brief is what comes next today.",
+     "The Brief fits your screen by what really saves room."
     ]
    }
   ],

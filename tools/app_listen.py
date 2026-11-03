@@ -419,6 +419,12 @@ def view_check_in(db: dict, out_dir: str, chat: str, now: dt.datetime) -> tuple[
     rec, version = record(db)
     if not chat or rec.get("chat") != chat or version is None:
         return [], []
+    # A chat that checked in this last hour has done this already, and its dump, read before
+    # that check-in, holds a version the check-in moved on: the write would only be refused.
+    mine = seen().get("listener") or {}
+    last = _time(mine.get("seen_at"))
+    if mine.get("chat") == chat and last is not None and (now - last).total_seconds() < 3600:
+        return [], []
     import page_db
     lines = []
     renew = renewal(rec, db, chat, now)

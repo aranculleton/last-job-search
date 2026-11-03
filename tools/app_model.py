@@ -2048,10 +2048,12 @@ def _due(ctx: Ctx, targets: dict) -> list:
             theirs = [r for r in ctx.by_contact.get(i.get("contact_id") or "") or []
                       if net_state.said_something(r)]
             if theirs:
-                words = " ".join(str(theirs[-1].get("summary") or theirs[-1].get("full_text")
+                # Their own words first: a summary is often one word ("replied").
+                words = " ".join(str(theirs[-1].get("full_text") or theirs[-1].get("summary")
                                      or "").split())
-                said = scrub(words if len(words) <= 140 else words[:139].rsplit(" ", 1)[0]
-                             + "\u2026", ctx.names)
+                if len(words.split()) >= 3:
+                    said = scrub(words if len(words) <= 140 else words[:139].rsplit(" ", 1)[0]
+                                 + "\u2026", ctx.names)
         item = {"id": did, "kind": kind, "title": title, "context": context, "said": said or None,
                 "due": i["due"],
                 "company": (str(book.get(i.get("contact_id") or "", {}).get("company") or "")
