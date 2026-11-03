@@ -1307,8 +1307,8 @@ def claude_lines(b: dict) -> list[str]:
                    "collections screen, meta, addr and work, out_dir <D>, limit 1000; python3 "
                    "tools/app.py view <D>/view --dump <D> --chat brief; send every batch it "
                    "prints, and do any for_claude line it prints at once, unasked (a fresh "
-                   "helper when this chat's day is up). Then the app skill's steps 1 to 3, for "
-                   "work still waiting" % b["page"])
+                   "helper when this chat's day is up). "
+                   "Then the app skill's steps 1 to 3, for work still waiting" % b["page"])
     try:
         import routines
         owed = routines.calls()

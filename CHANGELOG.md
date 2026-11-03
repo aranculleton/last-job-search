@@ -62,6 +62,12 @@ make sense to somebody whose repo just received it.
 - **News is at least three points while the last four weeks have them**, filled from as many
   earlier briefs as it takes, each split into what happened, how to use it and where it is
   from (lines from before 4.8 included), and as many as your screen has room for.
+- **Answering someone who wrote to you is quicker.** Claude logs their message, works out what
+  kind it is, checks its draft and puts it on your page in two steps instead of about fifteen.
+  Work Claude starts from something you said in a chat shows on your page exactly as if you had
+  asked there.
+- **A message you paste in from someone else is never taken for your own feedback.** "Please
+  don't use my work email" in their message no longer changes how Claude writes for you.
 - **A search follows your rules all the way to the list.** Jobs from employers' own career pages
   follow your search window too, so a posting months old no longer reaches your list; a public
   body you have ruled out is caught from what its own posting says it is, even when it is not
