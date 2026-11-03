@@ -1294,7 +1294,11 @@ def _msg_sent(r: Run) -> dict:
         with _thread_lock():
             went = _already_sent(cid, text, app_model.as_day(day))
             if went:
-                raise Refused(f"Already logged on {_weekday(went)}.")
+                # The same send logged already (this tap in another window, or two chats
+                # applying it at once): done, never a refusal, as a tap whose item is gone
+                # says it (engine audit 13). Two chats at once refused one and passed the
+                # other, so the same tap read two ways by timing alone (CI, 2026-11-03).
+                return {"note": f"Already logged on {_weekday(went)}."}
             _, msgs = _contact(cid)
             logged = [m for m in msgs if state.direction(m)]
             if not logged:

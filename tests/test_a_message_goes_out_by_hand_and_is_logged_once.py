@@ -175,7 +175,10 @@ def test_two_chats_logging_the_same_send_at_once_write_one_row(search):
                               NOW], env=env, stdout=subprocess.PIPE, stderr=subprocess.PIPE,
                              encoding="utf-8") for n, d in enumerate(dumps, 1)]
     outs = [json.loads(r.communicate(timeout=300)[0]) for r in runs]
-    assert sorted(len(o["ok"]) for o in outs) == [0, 1], outs
+    # One send is one row, and both chats say it is done, whichever ran first and however
+    # they overlapped: the one that came second reads "Already logged" (engine audit 13).
+    # It once refused the second only when the two overlapped, so the result hung on timing.
+    assert [len(o["ok"]) for o in outs] == [1, 1], outs
     rows = [r for r in _threads(search, PELL) if r["full_text"] == msg["body"]]
     assert len(rows) == 1
 
