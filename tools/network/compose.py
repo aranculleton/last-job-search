@@ -1856,6 +1856,52 @@ def thread_findings(text, thread, today=None) -> list:
     return out
 
 
+# What a draft says they said, offered or wrote, read against what they did. A nudge said
+# "you offered to refer me" to someone whose messages offered a recruiter's name, and a
+# "reply" said "sorry for the slow reply" to three people whose one row was a connection
+# request with no words (2026-11-03): the gate passed both, given the contact.
+_SORRY_LATE = re.compile(r"\b(?:sorry|apologies)\s+(?:for|about)\s+(?:the|my|this)\s+"
+                         r"(?:slow|late|delayed)\s+(?:reply|response|answer)\b", re.I)
+_SAYS_THEY_OFFERED = re.compile(
+    r"\byou\s+(?:very\s+|so\s+)?(?:kindly\s+|generously\s+)?offered\s+to\s+(?P<what>refer|"
+    r"introduc\w*|connect|put\s+me\s+in\s+touch|pass)", re.I)
+_REFER_WORDS = re.compile(r"\brefer(?:r(?:al|ed|ing))?s?\b|\breferral\b", re.I)
+
+
+def their_words_findings(text, thread, kind) -> list:
+    """What a draft claims about their side of the thread that their messages do not hold,
+    as tone.Violation: a reply (or an apology for a slow one) to someone who has said
+    nothing (`nothing_to_reply_to`), and an offer to refer the person that nobody made
+    (`not_in_their_messages`). [] when the log holds nothing for them: their history then
+    predates it, and the row is the record."""
+    import state
+    rows = _thread_rows(thread)
+    if not rows:
+        return []
+    t = tone._visible(str(text or ""))
+    theirs = [r for r in rows if state.said_something(r)]
+    out = []
+    # A call they held is something to answer too: the thank-you after it is a reply.
+    if not theirs and not any(state.call_held(r) for r in rows):
+        said = _SORRY_LATE.search(t) or _ANSWERS_THEM.search(t)
+        if kind == "reply" or said:
+            out.append(tone.Violation(
+                "nothing_to_reply_to",
+                ("\"%s\": " % said.group(0) if said else "")
+                + "they have not written anything to answer (a connection request with no "
+                  "note says nothing): write it as a first message, not a reply"))
+        return out
+    m = _SAYS_THEY_OFFERED.search(t)
+    if m and m.group("what").lower().startswith("refer"):
+        words = " ".join(str(r.get("full_text") or r.get("summary") or "") for r in theirs)
+        if not _REFER_WORDS.search(words):
+            out.append(tone.Violation(
+                "not_in_their_messages",
+                "\"%s\": nothing they wrote offers to refer you; say only what they offered, "
+                "in their words" % m.group(0)))
+    return out
+
+
 def referral_ask(name, context, role, link, close=None, work_auth=None,
                  seniority="peer", thread=None) -> str:
     """The ask the first note exists to earn, sent once they have engaged.
@@ -2670,6 +2716,13 @@ def validate(message, kind, name=None, seniority="peer", employers=(),
         out.append(tone.Violation("referrer_buried", str(referrer)))
     if contact:
         out += thread_findings(text, contact, today)
+        out += their_words_findings(text, contact, k)
+    # A start date the profile's notice period does not allow: "available straight away" went
+    # to a recruiter from someone with a month's notice (2026-10-21).
+    import check_claims
+    now = check_claims.available_now_clash(text)
+    if now:
+        out.append(tone.Violation("not_your_notice", now))
     if their_message:
         restated = tone.restate_ratio(text, their_message)
         if restated.flagged:

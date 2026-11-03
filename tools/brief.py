@@ -186,7 +186,11 @@ def counts_since(tracker, threads, since: dt.date, today: dt.date) -> dict:
         if _status(r) in throttle.FINAL and _status(r) != "rejected" or _status(r) in throttle.UNSENT:
             continue
         _f, _files, stages = open_actions._stages(r)
-        interviews += sum(1 for st in stages if inside(_d(st.get("date"))))
+        # Held since the last brief: on its day or after, and before today's. A morning brief
+        # counted the evening's interview before it happened, and never after (the audit,
+        # 2026-11-03).
+        interviews += sum(1 for st in stages if _d(st.get("date"))
+                          and since <= _d(st.get("date")) < today)
 
     def last_word(r):
         days = [d for d in (_d(x) for x in _DATE_IN.findall(str(r.get("notes") or "")))
@@ -205,8 +209,11 @@ def live_counts(tracker) -> dict:
     import throttle
     live = set(throttle.LIVE_PROCESS)
     processes = [r for r in tracker if _status(r) in live]
-    apps = [r for r in tracker if (_status(r) == "applied" or _status(r) in live)
-            and not throttle.is_process(r)]
+    # Live is the page's own rule (app_model._applications `live`): sent, and not over. The
+    # brief left out a hiring process with no application of its own and said 65 beside
+    # the page's 66 (2026-11-03).
+    apps = [r for r in tracker if _status(r) and _status(r) not in throttle.UNSENT
+            and _status(r) not in throttle.FINAL]
     return {"applications": len(apps), "interviews": len(processes), "processes": processes}
 
 
@@ -460,8 +467,12 @@ def due_watch(today: dt.date, watch: list[dict] | None = None,
             out.append((last or dt.date.min, n, w))
     # The longest waiting first, the person's order between equals: a brief with no room for
     # one leaves it the oldest, so the next brief takes it (the release review: a daily item
-    # early in the list took every slot, and a monthly one later in it never ran).
-    return [w for _l, _n, w in sorted(out, key=lambda x: (x[0], x[1]))]
+    # early in the list took every slot, and a monthly one later in it never ran). Their first
+    # item, the most important, always leads when it is due: a work permit their profile says
+    # "outranks everything else" was moved to the wider searches behind items waiting longer
+    # (engine audit 23, 2026-11-03).
+    ranked = [w for _l, _n, w in sorted(out, key=lambda x: (x[1] != 0, x[0], x[1]))]
+    return ranked
 
 
 def home_place() -> str:
@@ -946,19 +957,52 @@ def _live_employers(tracker, contacts, threads, today) -> list[str]:
     return out
 
 
+def _soonest(procs, today: dt.date) -> tuple:
+    """(row, stage) of the process whose next step comes first: a round booked for a day, or
+    a day still to choose by the day to answer by. Tracker order put a process with nothing
+    booked ahead of an interview that evening (the audit, 2026-11-03)."""
+    import open_actions
+    best = (None, {})
+    key = None
+    for r in procs:
+        _f, _files, stages = open_actions._stages(r)
+        for st in stages:
+            if st.get("done"):
+                continue
+            day = _d(st.get("date"))
+            offered = [_d(x) for x in st.get("offered") or [] if _d(x) and _d(x) >= today]
+            when = day if day and day >= today else (
+                min([_d(st.get("reply_by"))] + offered[:1]) if offered and _d(st.get("reply_by"))
+                else (offered[0] if offered else None))
+            if when and (key is None or (when, st.get("time") or "") < key):
+                key, best = (when, st.get("time") or ""), (r, st)
+    return best if best[0] is not None else ((procs[0], {}) if procs else (None, {}))
+
+
 def _lead(counts, replies, nudges_due, sent_lately, warm, owned, today) -> str:
     procs = counts["processes"]
     if procs:
-        r = procs[0]
+        r, st = _soonest(procs, today)
         company = (r.get("company") or "").strip()
-        k = company_key(company)
-        if k in owned:
-            return "%s is live, and its own chat (%s) has the prep." % (company, owned[k])
-        st = next_stage(r, today)
         more = " (and %d more)" % (len(procs) - 1) if len(procs) > 1 else ""
-        nxt = (": the %s is on %s" % (st.get("label") or "next stage", st["date"])) if st else ""
-        return "Your %s process is live%s%s. /interview %s prepares it." % (
-            company, more, nxt, company)
+        label = (st.get("label") or "next round").strip()
+        label = label[:1].upper() + label[1:]
+        if st.get("offered") and not st.get("date"):
+            import open_actions
+            by = _d(st.get("reply_by"))
+            return "%s: choose your %s day (%s) and tell them%s." % (
+                company, label[:1].lower() + label[1:],
+                open_actions._days_said([x for x in st["offered"] if x >= today.isoformat()]),
+                ", by %s" % _weekday(by) if by else "")
+        if st.get("date"):
+            day = _d(st["date"])
+            when = ("today" if day == today else "tomorrow" if day == today + dt.timedelta(days=1)
+                    else "on %s" % _weekday(day))
+            return "%s with %s is %s%s%s. Your prep is on your page." % (
+                label, company, when, " at %s" % st["time"] if st.get("time") else "", more)
+        # An employer whose own chat runs its process: the chat is Claude's to know, never
+        # named to the person ("its own chat (... campaign (this chat))", the audit).
+        return "Your %s process is live%s. Your prep is on your page." % (company, more)
     if replies:
         i = replies[0]
         who = first_name(i.get("name", "").split(" (")[0])
@@ -977,6 +1021,11 @@ def _lead(counts, replies, nudges_due, sent_lately, warm, owned, today) -> str:
         return ("Nothing has gone out in %d days.%s A fresh shortlist is one \"find me jobs\" away."
                 % (QUIET_DAYS, " Warm routes already in your contacts: %s." % routes if routes else ""))
     return "Nothing is owed today."
+
+
+def _weekday(day) -> str:
+    """"Wed 4 Nov"."""
+    return "%s %d %s" % (day.strftime("%a"), day.day, day.strftime("%b")) if day else ""
 
 
 def _owed_line(i: dict) -> dict:
@@ -1016,7 +1065,8 @@ def _set_aside(asks, old, held) -> list[str]:
     if old:
         out.append("%d owed over 45 days with nothing done, set aside" % len(old))
     if held:
-        out.append("%d held for now (an interview, a referral or your own note)" % len(held))
+        out.append("%d held for now (an interview, a referral, your own note or your own rules)"
+                   % len(held))
     return out
 
 
@@ -1049,6 +1099,15 @@ def _own_profile_due(today, contacts, threads) -> str:
         return ""
 
 
+def _on_page(item) -> bool:
+    """Is a message to this contact drafted where the person reads and sends it: Messages on
+    their page (documents/network/<contact>/draft.md)? The brief said "it is drafted for you"
+    of a reply that sat only in this brief's own pack, which cannot be copied or marked sent,
+    while Messages had nothing (2026-11-03)."""
+    cid = str(item.get("contact_id") or "").strip()
+    return bool(cid) and os.path.isfile(person.state("documents", "network", cid, "draft.md"))
+
+
 def _next_three(got, counts, replies, drafted, preps, export_line, profile_line, sent_lately,
                 warm, today) -> list[str]:
     """Exactly three things to do before the next brief, most valuable first, each one line
@@ -1062,24 +1121,29 @@ def _next_three(got, counts, replies, drafted, preps, export_line, profile_line,
             out.append(text)
 
     live = [i for i in got if not i.get("held") and not i.get("quiet") and not i.get("old")]
+    # An interview's own first, whatever else is owed: the day to choose, the prep before it,
+    # the thank-you after it (the audit, 2026-11-03: the thank-you came after every reply).
+    for i in live:
+        if i.get("kind") == "interview" and i.get("sub") == "choose":
+            add(i.get("key"), "%s: %s." % (i["name"].split(" (")[0], i["what"]))
     for i in live:
         if i.get("kind") == "interview" and "no pack yet" in (i.get("what") or ""):
             add(i.get("key"), "Prepare for your interview at %s, %s." % (
                 i["name"].split(" (")[0], i["what"].split(" (")[0].replace("interview ", "", 1)))
-    for i in replies:
-        who = i.get("name", "")
-        if _noun() + " owed" in (i.get("what") or "") or i.get("kind") == "resume":
-            add(i.get("key"), "Send %s the %s they asked for." % (who, _noun()))
-        elif i["draft"]["status"] in ("ready", "check"):
-            add(i.get("key"), "Send your reply to %s: it is drafted for you." % who)
-        else:
-            add(i.get("key"), "Reply to %s." % who)
     for i in live:
         if i.get("kind") == "interview" and "thank-you" in (i.get("what") or ""):
             add(i.get("key"), "Send the thank-you after your interview at %s."
                 % i["name"].split(" (")[0])
+    for i in replies:
+        who = i.get("name", "")
+        if _noun() + " owed" in (i.get("what") or "") or i.get("kind") == "resume":
+            add(i.get("key"), "Send %s the %s they asked for." % (who, _noun()))
+        elif _on_page(i):
+            add(i.get("key"), "Send your reply to %s: it is drafted for you." % who)
+        else:
+            add(i.get("key"), "Reply to %s." % who)
     for i in live:
-        if i["draft"]["status"] in ("ready", "check") and i.get("kind") in ("nudge", "first_message") \
+        if _on_page(i) and i.get("kind") in ("nudge", "first_message") \
                 and i.get("half") == "contact":
             add(i.get("key"), "Send the nudge to %s: it is drafted for you." % i.get("name"))
     for i in live:
@@ -1157,12 +1221,17 @@ def headline(b: dict) -> str:
         c["interviews"], "" if c["interviews"] == 1 else "s")
 
 
+def _n(n: int, one: str, many: str) -> str:
+    return "%d %s" % (n, one if n == 1 else many)
+
+
 def since_line(b: dict) -> str:
     s = b["since_counts"]
-    extra = "".join(", %d %s" % (s[k], w) for k, w in (("offers", "offers"), ("rejections", "rejections"))
-                    if s[k])
-    return "Since %s: %d sent, %d replies, %d interviews%s" % (
-        _short_date(b["since"]), s["sent"], s["replies"], s["interviews"], extra)
+    extra = "".join(", " + _n(s[k], one, many) for k, one, many in (
+        ("offers", "offer", "offers"), ("rejections", "rejection", "rejections")) if s[k])
+    return "Since %s: %d sent, %s, %s%s" % (
+        _short_date(b["since"]), s["sent"], _n(s["replies"], "reply", "replies"),
+        _n(s["interviews"], "interview", "interviews"), extra)
 
 
 def _short_date(iso: str) -> str:
@@ -1574,7 +1643,9 @@ WATCH_HELP = """What the person's brief watches, in their own terms (person.json
   watch write            Claude's list from the profile, as JSON on stdin:
                          [{"what": "<words to search>", "every": "day|week|month"}, ...]
                          A few things (at most %d) that move THIS person's search, most
-                         important first, each as often as it really changes: their right to
+                         important first (the first leads whenever it is due; one their
+                         profile says outranks everything is first, every day), each as
+                         often as it really changes: their right to
                          work where it can change, the pay talks, rules or exams of their
                          field, their local market for their roles, an employer group they
                          follow. Never a kind of news because others watch it. It replaces

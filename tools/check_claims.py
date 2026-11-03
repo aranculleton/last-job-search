@@ -93,6 +93,12 @@ def app_rules() -> dict:
                              "Only their yes puts one on a document (stage_picks.py consent).")
     r["duplicated-word"] = ("ERROR", "duplicated-word", r"\b([^\W\d_]{3,})\s+\1\b",
                             "A word is repeated. Usually an editing slip.")
+    # A line no reader needs, which a hand-made resume carried and was sent with (2026-09).
+    r["references-on-request"] = ("ERROR", "references-on-request",
+                                  r"\breferences?\b[^.\n¦]{0,30}?\b(?:available\s+)?"
+                                  r"(?:up)?on\s+request\b",
+                                  "\"References available upon request\" says nothing a reader "
+                                  "needs: take it out.")
     r["unsupported-connective"] = (
         "WARN", "unsupported-connective",
         r"\bin parallel\b|\bsimultaneously\b|\bwhile also\b",
@@ -135,6 +141,46 @@ def read_consent(raw: str) -> tuple[list[str], list[str]]:
         m = re.search(r"^%+\s*" + re.escape(label) + r":\s*(.+)$", raw, re.M)
         got[label] = [n.strip() for n in m.group(1).split(",") if n.strip()] if m else []
     return got[_YES], got[_NO]
+
+
+DEFAULT_SOURCES = ("01-candidate-profile.md", "CLAUDE.md", "bullets.py")
+_sources_cache: dict = {}
+
+
+def grounding_text() -> str:
+    """Every file person.json `grounding.sources` names (the candidate profile, the summary
+    and bullets.py by default), as one text, read again when one of them changes."""
+    try:
+        paths = [os.path.normpath(person.path(p)) for p in
+                 person.get("grounding.sources", list(DEFAULT_SOURCES))]
+    except person.NoProfile:
+        return ""
+    stamp = []
+    for p in paths:
+        try:
+            stamp.append((p, os.path.getmtime(p)))
+        except OSError:
+            stamp.append((p, None))
+    if _sources_cache.get("stamp") != stamp:
+        parts = []
+        for p, m in stamp:
+            if m is None:
+                continue
+            with open(p, encoding="utf-8", errors="replace") as fh:
+                parts.append(fh.read())
+        _sources_cache.update(stamp=stamp, text="\n".join(parts))
+    return _sources_cache["text"]
+
+
+def skill_pattern(name: str) -> re.Pattern:
+    """A skill's name as a profile writes it: any case, a space or a hyphen between words."""
+    words = [re.escape(w) for w in re.split(r"[\s\-]+", str(name or "").strip()) if w]
+    return re.compile(r"(?<![\w])" + r"[\s\-]+".join(words) + r"(?![\w])", re.I)
+
+
+def grounded_skill(name: str) -> bool:
+    """Does a file the profile grounds claims in name this skill?"""
+    return bool(str(name or "").strip()) and bool(skill_pattern(name).search(grounding_text()))
 
 
 # Rules that warn rather than fail on a cover letter. Read by check().
@@ -229,6 +275,30 @@ def check_text(raw: str, letter: bool = False) -> list[tuple[str, str, str, str]
         for m in re.finditer(pat, text, re.I):
             findings.append(("ERROR", "figure-drift",
                              re.sub(r"\s+", " ", m.group(0))[:80], why))
+    # A yes puts a skill on the page, and the yes must be in the profile: a chat is never a
+    # source until the fact is written there (CLAUDE.md, "grounded"). NLP, BigQuery and
+    # LLM-as-judge went on a sent resume on a yes given in a chat, and no profile file held
+    # any of them (2026-10-26). `stage_picks.py consent` writes each yes into the candidate
+    # profile as it records it; one it did not write is an error until it is there.
+    for n in yes:
+        if not grounded_skill(n):
+            findings.append(("ERROR", "ungrounded-yes", n,
+                             f"{n} is claimed on the candidate's yes, and no profile file "
+                             "holds it: record the yes with `python3 tools/stage_picks.py "
+                             "consent <round> <pick> --yes \"" + n + "\"`, which writes it into "
+                             "01-candidate-profile.md, or take it off."))
+    now = available_now_clash(text)
+    if now:
+        findings.append(("ERROR", "available-now", now.split("\", ")[0].lstrip("\""),
+                         "Starting at once is not what your profile says: " + now + "."))
+    # Something still to happen, dated in a month that has gone: "certification in progress,
+    # scheduled September 2026" went on resumes sent in October and stayed there.
+    for m in _STALE.finditer(text):
+        when = _month_of(m.group("month"), m.group("year"))
+        if when and when < _this_month():
+            findings.append(("ERROR", "stale-date", " ".join(m.group(0).split()),
+                             "A date that has passed, said as still to come: give the new "
+                             "date the profile holds, or leave the date out."))
     # A warning, not an error: the word can also sit inside work the profile does hold.
     for n in no:
         for m in re.finditer(r"(?<!\w)" + re.escape(n) + r"(?!\w)", text, re.I):
@@ -236,6 +306,51 @@ def check_text(raw: str, letter: bool = False) -> list[tuple[str, str, str, str]
                              "The candidate said no to claiming this for this application. "
                              "Take it out unless it describes work the profile does hold."))
     return findings
+
+
+# "Available straight away" to a recruiter, from someone with a month's notice (2026-10-21).
+_AVAILABLE_NOW = re.compile(
+    r"\b(?:available|free|able)\s+(?:to\s+start\s+)?(?:straight\s+away|right\s+away|"
+    r"immediately|at\s+once|from\s+(?:now|today|tomorrow))\b"
+    r"|\b(?:can|could)\s+start\s+(?:straight\s+away|right\s+away|immediately|tomorrow|now)\b",
+    re.I)
+_NO_NOTICE = re.compile(r"\b(?:immediate(?:ly)?|none|no notice|nil|zero|straight away|right "
+                        r"away|now)\b", re.I)
+
+
+def available_now_clash(text: str) -> str:
+    """What `text` says about starting at once that the profile's notice period does not
+    allow, or "": "available straight away" from someone whose notice is one month."""
+    m = _AVAILABLE_NOW.search(str(text or ""))
+    if not m:
+        return ""
+    try:
+        import screening_answers
+        notice = screening_answers.notice_period()
+    except Exception:  # noqa: BLE001  no notice on file: nothing to hold it against
+        return ""
+    if _NO_NOTICE.search(notice):
+        return ""
+    return f"\"{m.group(0)}\", and your notice period is {notice}"
+
+
+_MONTH_NAMES = ("january", "february", "march", "april", "may", "june", "july", "august",
+                "september", "october", "november", "december")
+_STALE = re.compile(r"\b(?:scheduled|booked|expected|due|planned|sitting)\s+(?:for\s+|in\s+)?"
+                    r"(?P<month>(?i:jan|feb|mar|apr|may|jun|jul|aug|sep|sept|oct|nov|dec)"
+                    r"[a-z]*\.?)\s+(?P<year>20\d\d)\b", re.I)
+
+
+def _month_of(month: str, year: str):
+    m = str(month or "").lower().rstrip(".")
+    n = next((i for i, name in enumerate(_MONTH_NAMES, 1) if name.startswith(m[:3])), None)
+    return (int(year), n) if n else None
+
+
+def _this_month():
+    import datetime as _dt
+    today = _dt.date.today()
+    return (today.year, today.month)
 
 
 def main() -> int:

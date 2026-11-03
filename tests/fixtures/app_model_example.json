@@ -1,9 +1,10 @@
 {
  "model": 1,
  "made_at": "2026-10-25T18:00:00Z",
- "rev": "912003141efa",
+ "rev": "faa0c96f7bc5",
  "app": {
   "version": "4.8.0",
+  "url": null,
   "update_waiting": null,
   "news": [
    "Your brief's news is never empty, and each item says how to use it.",
@@ -46,9 +47,9 @@
  ],
  "jobs": {
   "round": "r9",
-  "made_at": "2026-11-03T19:21:30Z",
+  "made_at": "2026-11-03T22:34:44Z",
   "met": false,
-  "summary": "4 roles on the shortlist, 4 scoring 60 or more and 2 scoring 75 or more. 3 left out, each with its reason.",
+  "summary": "3 roles from the last search to look at, 1 of them scoring 75 or more. 3 left out, each with its reason.",
   "rows": [
    {
     "id": "r9-1",
@@ -474,11 +475,13 @@
    "screening": [
     {
      "q": "Do you have the right to work in the UK?",
-     "a": "Yes"
+     "a": "Yes",
+     "why": "A note."
     },
     {
      "q": "Will you now or in future need sponsorship?",
-     "a": "No"
+     "a": "No",
+     "why": "A note."
     }
    ],
    "status": "drafted",
@@ -522,6 +525,8 @@
     "label": "144 of 300 characters"
    },
    "warnings": [],
+   "blocked": [],
+   "where_unknown": false,
    "open": {
     "kind": "profile",
     "doc": "reach/kestrel_mutual_ansgar",
@@ -635,6 +640,7 @@
    "employer": "Larkspur Retail",
    "status": "replied_needs_response",
    "status_word": "Replied: your turn",
+   "group": "now",
    "owed": {
     "label": "Draft a reply",
     "kind": "reply",
@@ -642,12 +648,19 @@
     "args": {
      "contact": "larkspur_retail_castellan"
     },
-    "ask": "Paste what they said, if it is not logged"
+    "logged": true,
+    "due": "due-reply-larkspur_retail_castellan",
+    "reply": true
    },
+   "next": "Reply",
+   "late": 5,
+   "hold": null,
    "stopped": false,
    "wrote": true,
    "last": "2026-09-12",
+   "title": "Analytics Manager",
    "next_action": "send the CV",
+   "link": null,
    "due": "2026-10-20",
    "route": "alumni",
    "came_through": null,
@@ -656,6 +669,8 @@
    "live": true,
    "call": null,
    "paste": null,
+   "where_unknown": false,
+   "asked_sent": null,
    "is_process_stage": false,
    "thread": [
     {
@@ -681,7 +696,7 @@
      "due-reply-larkspur_retail_castellan"
     ]
    },
-   "rev": "68ac7b6b3d24",
+   "rev": "ead1ea6c8a1f",
    "alerts": [
     {
      "level": 1,
@@ -712,19 +727,26 @@
    "first_name": "Wren",
    "employer": "Fernhill Freight",
    "status": "awaiting_reply",
-   "status_word": "Sent",
+   "status_word": "Waiting for a reply",
+   "group": "follow",
    "owed": {
     "label": "Draft the follow-up",
     "kind": "follow_up",
     "id": "follow_up~fernhill_freight_halloway",
     "args": {
      "contact": "fernhill_freight_halloway"
-    }
+    },
+    "due": "due-nudge-fernhill_freight_halloway"
    },
+   "next": "Follow up",
+   "late": 26,
+   "hold": null,
    "stopped": false,
    "wrote": true,
    "last": "2026-09-21",
+   "title": "Head of Supply Chain Analytics",
    "next_action": "One nudge if no reply",
+   "link": null,
    "due": "2026-09-29",
    "route": "cold",
    "came_through": null,
@@ -733,6 +755,8 @@
    "live": true,
    "call": null,
    "paste": null,
+   "where_unknown": false,
+   "asked_sent": null,
    "is_process_stage": false,
    "thread": [
     {
@@ -750,7 +774,7 @@
      "due-nudge-fernhill_freight_halloway"
     ]
    },
-   "rev": "b27405fc8c16",
+   "rev": "940637f37e26",
    "alerts": [],
    "suggest": null
   },
@@ -760,11 +784,22 @@
    "employer": "Kestrel Mutual",
    "status": "not_contacted",
    "status_word": "Not written to",
-   "owed": null,
+   "group": "new",
+   "owed": {
+    "kind": "draft",
+    "label": "See the note",
+    "message": "msg-kestrel_mutual_ansgar",
+    "reply": false
+   },
+   "next": "Your note to them is written: send it",
+   "late": 0,
+   "hold": null,
    "stopped": false,
    "wrote": false,
    "last": null,
+   "title": "Claims Analytics Lead",
    "next_action": "Send the first note; call if needed",
+   "link": null,
    "due": null,
    "route": "alumni",
    "came_through": null,
@@ -773,6 +808,8 @@
    "live": true,
    "call": null,
    "paste": null,
+   "where_unknown": false,
+   "asked_sent": null,
    "is_process_stage": false,
    "thread": [],
    "thread_more": 0,
@@ -787,7 +824,7 @@
      "msg-kestrel_mutual_ansgar"
     ]
    },
-   "rev": "289c0edef75a",
+   "rev": "2f0b37216148",
    "alerts": [],
    "suggest": null
   }
@@ -799,10 +836,12 @@
    "role": "Risk Analyst",
    "status": "interview",
    "next_stage": "Panel interview",
+   "offered": null,
+   "reply_by": null,
    "when": "2026-10-28",
    "prep": {
     "path": "documents/applications/thornbury_bank_risk_analyst_thornbury/interview_prep.md",
-    "updated": "2026-11-03T19:21:30Z"
+    "updated": "2026-11-03T22:34:44Z"
    },
    "questions": 2,
    "all_day": true,
@@ -905,7 +944,7 @@
    ],
    "referrer": null,
    "past": false,
-   "rev": "8d545da8255f",
+   "rev": "872c75166933",
    "alerts": [],
    "suggest": null,
    "related": {
@@ -981,6 +1020,7 @@
   ],
   "applications": [
    {
+    "id": "app-thornbury_bank_risk_analyst",
     "company": "Thornbury Bank",
     "role": "Risk Analyst",
     "applied_on": "2026-10-02",
@@ -989,6 +1029,7 @@
     "live": true
    },
    {
+    "id": "app-larkspur_retail_senior_supply_chain_analyst",
     "company": "Larkspur Retail",
     "role": "Senior Supply Chain Analyst",
     "applied_on": "2026-09-08",
@@ -1163,6 +1204,15 @@
     ]
    ],
    "rev": "638415eb3385"
+  },
+  {
+   "id": "setting-time_zone",
+   "key": "time_zone",
+   "label": "Your time zone",
+   "kind": "text",
+   "value": "London",
+   "choices": null,
+   "rev": "4493a98296c8"
   }
  ],
  "brief": {
@@ -1550,7 +1600,7 @@
     "key": "todo",
     "tab": "todo",
     "title": "To do",
-    "text": "What needs you, five at a time, most urgent first: a question, a follow-up that is due, an interview coming up. Each card has one button, and a bin."
+    "text": "What needs you, five at a time, most urgent first: a question, a follow-up that is due, an interview coming up. A card's filled button is its next step; the bin puts it away."
    },
    {
     "key": "jobs",
@@ -1590,6 +1640,7 @@
   "file": null,
   "made_on": null,
   "stale": false,
+  "breaks": [],
   "work": {
    "kind": "general_resume",
    "id": "general_resume~current",
@@ -1618,7 +1669,8 @@
   "pay": {
    "floor": 42000,
    "target": 48000,
-   "cut": 32000
+   "cut": 32000,
+   "currency": "GBP"
   },
   "window_days": 14,
   "employers": [],
@@ -1633,13 +1685,14 @@
     "name": "linkedin-search",
     "label": "LinkedIn",
     "on": true,
-    "why": "LinkedIn's own job search. Its robots rules turn crawlers away; only you switch it off."
+    "why": "LinkedIn's own job search."
    }
   ],
   "boards": [],
+  "boards_left_out": 0,
   "rules": [],
   "pause": null,
-  "rev": "1ba13b86ac16"
+  "rev": "f523c2612e37"
  },
  "where": {
   "id": "where",
@@ -1786,10 +1839,11 @@
     "item": "int-thornbury_bank_risk_analyst"
    },
    "note": "Risk Analyst, with the head of risk",
+   "uid": "up-app-thornbury_bank_risk_analyst-stage-1",
    "cal": {
     "google": "https://calendar.google.com/calendar/render?action=TEMPLATE&text=Panel%20interview%3A%20Thornbury%20Bank&dates=20261028/20261029&details=Risk%20Analyst%2C%20with%20the%20head%20of%20risk",
     "outlook": "https://outlook.live.com/calendar/action/compose?path=%2Fcalendar%2Faction%2Fcompose&rru=addevent&startdt=2026-10-28&enddt=2026-10-29&allday=true&subject=Panel%20interview%3A%20Thornbury%20Bank&body=Risk%20Analyst%2C%20with%20the%20head%20of%20risk",
-    "ics": "BEGIN:VEVENT\r\nUID:up-app-thornbury_bank_risk_analyst-panel-interview-2026-10-28.last-job-\r\n search\r\nDTSTAMP:20261025T000000Z\r\nDTSTART;VALUE=DATE:20261028\r\nDTEND;VALUE=DATE:20261029\r\nSUMMARY:Panel interview: Thornbury Bank\r\nDESCRIPTION:Risk Analyst\\, with the head of risk\r\nBEGIN:VALARM\r\nACTION:DISPLAY\r\nDESCRIPTION:Panel interview: Thornbury Bank\r\nTRIGGER:-PT9H\r\nEND:VALARM\r\nEND:VEVENT\r\n"
+    "ics": "BEGIN:VEVENT\r\nUID:up-app-thornbury_bank_risk_analyst-stage-1.last-job-search\r\nDTSTAMP:20261025T000000Z\r\nSEQUENCE:297\r\nDTSTART;VALUE=DATE:20261028\r\nDTEND;VALUE=DATE:20261029\r\nSUMMARY:Panel interview: Thornbury Bank\r\nDESCRIPTION:Risk Analyst\\, with the head of risk\r\nBEGIN:VALARM\r\nACTION:DISPLAY\r\nDESCRIPTION:Panel interview: Thornbury Bank\r\nTRIGGER:-PT9H\r\nEND:VALARM\r\nEND:VEVENT\r\n"
    },
    "rev": "205c22b25fa6"
   }
@@ -1798,7 +1852,13 @@
   "shown": 3,
   "all": 3,
   "live": 3,
-  "rest": 0
+  "rest": 0,
+  "need": 1,
+  "replies": 1,
+  "follow": 1,
+  "leave": 0,
+  "waiting": 0,
+  "held": 0
  },
  "lists": {
   "applications": {

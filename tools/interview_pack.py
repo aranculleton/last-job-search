@@ -786,15 +786,23 @@ def _record(text) -> list:
     return out
 
 
+def _ahead_key(s) -> tuple:
+    """When a stage still to come is: its day and time, or the first day it was offered on; a
+    stage with no day at all comes after every dated one."""
+    day = s.get("date") or min(s.get("offered") or [""]) or "9999-12-31"
+    return (day, s.get("time") or "")
+
+
 def next_stage(stages, today="") -> dict:
-    """The stage this pack is for, when none is named: the next one booked, else the next undone.
-    A booked stage whose date has passed and nobody ticked was most likely held: it is passed
-    over, as a held one would be."""
+    """The stage this pack is for, when none is named: the earliest one booked ahead (by its
+    day, never by where its line sits: a later round booked first came out as the next one,
+    the audit, 2026-11-03), else the next undone. A booked stage whose date has passed and
+    nobody ticked was most likely held: it is passed over, as a held one would be."""
     past = [i for i, s in enumerate(stages) if s["scheduled"] and not s["done"]
             and today and s.get("date") and s["date"] < today]
     booked = [s for i, s in enumerate(stages) if s["scheduled"] and not s["done"] and i not in past]
     if booked:
-        return booked[0]
+        return min(booked, key=_ahead_key)
     done = [i for i, s in enumerate(stages) if s["done"] or i in past]
     after = stages[(done[-1] + 1) if done else 0:]
     if after:
@@ -1077,17 +1085,46 @@ def zone_name(zone) -> str:
             return z
         except Exception:  # noqa: BLE001  not a zone this machine knows
             return ""
-    return z.upper() if re.fullmatch(r"[A-Za-z]{2,5}", z) else ""
+    if re.fullmatch(r"[A-Za-z]{2,5}", z):
+        return z.upper()
+    # Words a person writes ("Toronto time", "Eastern", "Pacific Time"), kept as the zone's
+    # own name: they gave no time at all before (the audit, 2026-11-03).
+    return person.zone_in(z)
 
 
-def _with_stage(text, stage, date="", with_="", time="", zone="", minutes=0, due=False) -> str:
+_ORDINALS = ((r"first|initial|1st|one", "1"), (r"second|2nd|two", "2"), (r"third|3rd|three", "3"),
+             (r"fourth|4th|four", "4"))
+
+
+def _round_key(label) -> str:
+    """Which round a stage name says, whatever words it uses: "Initial round", "First round"
+    and "Round 1 (technical)" are all "round 1"; "Final round" is "final"; "" when it names no
+    round. A move written under another name booked the round twice (the audit, 2026-11-03)."""
+    t = _text(label).lower()
+    for words, n in _ORDINALS:
+        t = re.sub(r"\b(?:%s)\b" % words, n, t)
+    m = re.search(r"\b(?:round|stage)\s*(\d+)\b|\b(\d+)\s*(?:round|stage)\b", t)
+    if m:
+        return "round " + (m.group(1) or m.group(2))
+    return "final" if re.search(r"\bfinal\b", t) else ""
+
+
+def _with_stage(text, stage, date="", with_="", time="", zone="", minutes=0, due=False,
+                offered=(), reply_by="", place="") -> str:
     """outcome.md's text with this stage booked on its checklist: `- [ ] <stage> (scheduled
     <date> [<HH:MM> [<zone>]], with <who>)`, the line the brief, /outcome, every pack and the
-    page read. `zone` is one an invite gives beside the time (EST), when not the person's."""
+    page read. `zone` is one an invite gives beside the time (EST), when not the person's.
+    With no day and `offered` days, the invitation's choice: `(offered <day>, <day>; reply by
+    <day>, with <who>)`, until the day chosen is booked over it."""
     # [ \t], never \s: in a multi-line match \s ate the newline and the blank line after a
     # rebooked stage, so booking it twice ran the next heading into it.
     same = re.compile(r"^- \[ \] %s(?:[ \t]*\(.*\))?[ \t]*$" % re.escape(stage), re.M | re.I)
     hits = list(same.finditer(text))
+    if not hits and _round_key(stage):
+        # The same round under another name ("Initial round" moved as "First round"): the
+        # one line, moved, never two rounds booked.
+        hits = [m for m in re.finditer(r"^- \[ \] ([^(\n]+?)(?:[ \t]*\(.*\))?[ \t]*$", text, re.M)
+                if _round_key(m.group(1)) == _round_key(stage)][:1]
     if not _text(with_) and hits:
         # Rebooked with a new date only: the interviewer already on the line stays.
         had = re.search(r",\s*with\s+([^)]*)\)", hits[0].group(0))
@@ -1104,6 +1141,8 @@ def _with_stage(text, stage, date="", with_="", time="", zone="", minutes=0, due
         if was:
             minutes = was[0].get("minutes") or 0
             due = was[0].get("kind") == "test" and not what_works.clock(time)
+            place = place or was[0].get("place") or ""
+    place = " ".join(re.sub(r"[,()]", " ", _text(place)).split())[:60]
     given = _text(zone)
     zone = zone_name(zone)
     if given and not zone:
@@ -1113,9 +1152,18 @@ def _with_stage(text, stage, date="", with_="", time="", zone="", minutes=0, due
     when = ("%s %s%s" % (date, what_works.clock(time), " " + zone if zone else "")
             if what_works.clock(time) and not due else date)
     length = ", %d min" % int(minutes) if minutes and not due else ""
-    line = "- [ ] %s%s" % (stage, " (%s %s%s%s)" % (
-        "due" if due else "scheduled", when, length,
-        ", with %s" % with_ if _text(with_) else "") if _text(date) else "")
+    days = sorted({d for d in (offered or ()) if re.fullmatch(r"\d{4}-\d{2}-\d{2}", _text(d))})
+    if _text(date):
+        line = "- [ ] %s (%s %s%s%s%s)" % (stage, "due" if due else "scheduled", when, length,
+                                           ", on %s" % place if place and not due else "",
+                                           ", with %s" % with_ if _text(with_) else "")
+    elif days:
+        line = "- [ ] %s (offered %s%s%s)" % (
+            stage, ", ".join(days),
+            "; reply by %s" % reply_by if re.fullmatch(r"\d{4}-\d{2}-\d{2}", _text(reply_by)) else "",
+            ", with %s" % with_ if _text(with_) else "")
+    else:
+        line = "- [ ] %s" % stage
     if not hits:
         # A bare template line for the same step ("Phone screen" when a recruiter screen
         # is booked) is this stage under another name: it is replaced, never doubled.
@@ -1128,18 +1176,36 @@ def _with_stage(text, stage, date="", with_="", time="", zone="", minutes=0, due
             end = m.end() + 1 if text[m.end():m.end() + 1] == "\n" else m.end()
             text = text[:m.start()] + text[end:]
         return text[:hits[0].start()] + line + text[hits[0].end():]
-    # A new stage goes after the last one held, so the order stays the order it ran.
-    held = list(re.finditer(r"^- \[[xX]\] .*$", text, re.M))
-    if held:
-        return text[:held[-1].end()] + "\n" + line + text[held[-1].end():]
+    # A new stage goes in the order the rounds run: after the last one held or booked for a
+    # day before it, so a later round booked first never reads as the next one.
+    when_of = lambda m: (what_works.outcome_stages(  # noqa: E731
+        "## Interview stages reached\n" + m.group(0)) or [{}])[0].get("date") or ""
+    before = [m for m in re.finditer(r"^- \[[ xX]\] .*$", text, re.M)
+              if m.group(0)[3] in "xX" or (_text(date) and when_of(m) and when_of(m) <= date)]
+    if before:
+        return text[:before[-1].end()] + "\n" + line + text[before[-1].end():]
     if "## Interview stages reached\n" in text:
         return text.replace("## Interview stages reached\n",
                             "## Interview stages reached\n%s\n" % line, 1)
     return text.rstrip("\n") + "\n\n## Interview stages reached\n%s\n" % line
 
 
+def tick_stage(path, stage) -> bool:
+    """Tick one stage held (or a test sat) on outcome.md's checklist: `- [ ] <stage> (...)`
+    becomes `- [x] ...`. False when no such line is there to tick."""
+    text = _read(path)
+    m = re.search(r"^- \[ \] %s(?=[ \t]*(?:\(|$))" % re.escape(_text(stage)), text, re.M | re.I) \
+        if _text(stage) else None
+    if not m:
+        return False
+    text = text[:m.start()] + "- [x]" + text[m.start() + 5:]
+    with open(path, "w", encoding="utf-8", newline="\n") as fh:
+        fh.write(text)
+    return True
+
+
 def record_stage(folder, company, role, stage, date, with_="", today=None, time="",
-                 zone="", minutes=0, due=False) -> str:
+                 zone="", minutes=0, due=False, offered=(), reply_by="", place="") -> str:
     """Book a stage given to `pack --write` in the process's outcome.md, the record the
     brief reminds from and every later pack reads: given there with a date, it was used
     for that one pack and recorded nowhere (interview audit, 2026-10-25). An outcome.md not
@@ -1151,7 +1217,8 @@ def record_stage(folder, company, role, stage, date, with_="", today=None, time=
                 "reached\n\n## Notes\n- %s: %s booked %s.\n"
                 % (company, role, _text(today) or dt.date.today().isoformat(), stage,
                    "for " + date if _text(date) else "with the day still to choose"))
-    text = _with_stage(text, stage, date, with_, time, zone, minutes, due)
+    text = _with_stage(text, stage, date, with_, time, zone, minutes, due, offered, reply_by,
+                       place)
     os.makedirs(folder, exist_ok=True)
     with open(out, "w", encoding="utf-8", newline="\n") as fh:
         fh.write(text)
@@ -1176,7 +1243,8 @@ _SAID_DAYS = (
                % _MONTH_RX, re.I),
 )
 _SAID_CLOCK = (r"(?<![\d:.])(?P<time>\d{1,2}[:.]\d{2}(?:\s*[ap]\.?m\b\.?)?|\d{1,2}\s*[ap]\.?m\b\.?)"
-               r"(?:[ \t]*(?-i:(?P<zone>[A-Z]{2,5}))\b)?")
+               r"(?:[ \t]*\(?(?-i:(?P<zone>[A-Z]{2,5}\b|[A-Z][a-z]+(?:[ \t]+[A-Z][a-z]+)?"
+               r"[ \t]+(?i:time)\b|(?:Eastern|Pacific|Central|Mountain|Atlantic)\b)))?")
 # Right after the day, or a few plain words on ("28 October is now at 11:15"): never across
 # a number, so another day's time is not taken.
 _CLOCK_AFTER = re.compile(r"[ \t,]*(?:(?:[a-z]+[ \t]+){0,3}?(?:at|from|@)[ \t]*)?" + _SAID_CLOCK,
@@ -1188,10 +1256,13 @@ _MONTHS3 = ("jan", "feb", "mar", "apr", "may", "jun", "jul", "aug", "sep", "oct"
 
 
 def _zone_word(word) -> str:
-    """A zone written beside a time (EST, CET, BST), or "" for capitals that are not one."""
+    """A zone written beside a time (EST, CET, BST, "Toronto time", "Eastern"), or "" for
+    capitals that are not one. Words are kept as the zone's own name."""
     import app_model
     w = _text(word)
-    return w if w in app_model._ZONE_WORDS or re.fullmatch(r"[A-Z]{1,4}T", w) else ""
+    if re.fullmatch(r"[A-Z]{2,5}", w):
+        return w if w in app_model._ZONE_WORDS or re.fullmatch(r"[A-Z]{1,4}T", w) else ""
+    return person.zone_in(w) if w else ""
 
 
 def time_said(text, day) -> tuple:
@@ -1303,9 +1374,14 @@ def record_result(folder, company, role, status, date, today=None) -> str:
                 "- [ ] Offer received", line, 1)
     word = ARCHIVE_STATUS.get(status)
     if word:
-        if re.search(r"^\*\*Status:\*\*.*$", text, re.M):
-            text = re.sub(r"^\*\*Status:\*\*.*$", "**Status:** %s" % word, text, count=1,
-                          flags=re.M)
+        # One status a file: a "Status: in_progress" written by hand under the bold one kept
+        # saying the process was live after it was resolved (2026-11-03).
+        any_status = r"^(?:\*\*)?Status:(?:\*\*)?[ \t]*\S.*$"
+        if re.search(any_status, text, re.M):
+            text = re.sub(any_status, "**Status:** %s" % word, text, count=1, flags=re.M)
+            first = re.search(r"^\*\*Status:\*\* .*$", text, re.M)
+            head, rest = text[:first.end()], text[first.end():]
+            text = head + re.sub(any_status + r"\n?", "", rest, flags=re.M)
         else:
             text = re.sub(r"^(# .*\n)", r"\1\n**Status:** %s\n" % word, text, count=1)
         if re.search(r"^\*\*Date resolved:\*\*.*$", text, re.M):
@@ -1691,7 +1767,18 @@ def answer_for(item, ctx) -> dict:
         prepared = None
     where = places_told.clash(prepared["answer"], ctx["company"]) if prepared else ""
     if where:
-        lines.append("Careful: %s." % where)
+        # Printed under a warning, it was still the answer offered as "Prepared", and it told
+        # an employer that heard one city that he was settled in another (2026-11-03).
+        lines.append("Your stock answer to this is left out for %s: %s." % (ctx["company"],
+                                                                           plain_clash(where)))
+        prepared = None
+    # A stock pay answer with figures of its own beside the band the pack gives: one pack said
+    # "around 70 to 80 thousand" on its first page and 70,000 to 85,000 under it
+    # (2026-11-03). The band the form gave, else the profile's, is the one said.
+    off = pay_differs(prepared["answer"], ctx) if prepared and re.search(_PAY_Q, q, re.I) else ""
+    if off:
+        lines.append("Your stock answer to this is left out: %s." % off)
+        prepared = None
     if prepared:
         lines.append("Prepared: %s (source: %s)%s" % (
             prepared["answer"], prepared["source"],
@@ -1845,7 +1932,11 @@ def _held_by_contacts(ctx) -> list:
                                           if applied and all(stem(f) != applied
                                                              for f in sent["files"]) else "")
                     if sent["files"] else "a %s (which version is not recorded)" % _noun())
-            out.append("- Sent to %s on %s: %s" % (name, sent["date"] or "an undated day", what))
+            line = "- Sent to %s on %s: %s" % (name, sent["date"] or "an undated day", what)
+            # One person kept on two rows, or a send logged twice, is one send: the same line
+            # went in a pack twice (2026-11-03).
+            if line not in out:
+                out.append(line)
     return out
 
 
@@ -1945,6 +2036,17 @@ def _span(dates, today):
     return (start, end, current) if start and end else None
 
 
+def plain_clash(where) -> str:
+    """told.clash's reason as the person reads it: the command that records a place is
+    Claude's, never printed in their document."""
+    return re.split(r",\s*(?:or|then)\s+record\b", _text(where), maxsplit=1)[0]
+
+
+def _a_or_an(word) -> str:
+    """"an" before a vowel sound, else "a": "what a analyst here does" went in a pack."""
+    return "an" if re.match(r"[aeiou]", _text(word), re.I) else "a"
+
+
 def _between(a, b) -> int:
     """Whole months from (year, month) a to b."""
     return (b[0] - a[0]) * 12 + b[1] - a[1]
@@ -1977,22 +2079,29 @@ def landmines(ctx) -> list:
         found = _why_answer(question, ctx)
         if found:
             # The same check as the answer under Your answers: printed here unmarked, a stock
-            # answer naming the place this employer did not hear was the thing to say.
+            # answer naming the place this employer did not hear was the thing to say, and
+            # printed under a warning it still was (2026-11-03): it is left out.
             where = places_told.clash(found["answer"], ctx["company"])
-            return (["Careful: %s." % where] if where else []) + [
-                "Prepared: %s (source: %s)" % (found["answer"], found["source"])]
+            if where:
+                return ["Your stock answer to this is left out for %s: %s." % (ctx["company"],
+                                                                              plain_clash(where))]
+            return ["Prepared: %s (source: %s)" % (found["answer"], found["source"])]
+        # The command that keeps their answer is Claude's (interview.md Step 3), never printed
+        # where the person reads (2026-11-03).
         return ["Nothing on file says why, and only you can: Claude asks you once, in your words, "
-                "and keeps the answer for every later employer (python3 tools/interview_pack.py "
-                "motive \"%s\" --answer \"<your words>\"). Never drafted from the dates." % question]
+                "and keeps the answer for every later employer. Never drafted from the dates."]
 
     spans = [(e, _span(e.get("dates"), ctx["today"])) for e in jobs]
     for e, span in spans:
         if not span:
             continue
         start, end, current = span
-        months = _between(start, end) + (0 if current else 1)
-        if months >= SHORT_TENURE_MONTHS:
+        # Whether it was short counts both end months (Sep to Aug is a year there); what is
+        # said counts the months between, as a person says it: "Mar 2024 - Sep 2024" is six
+        # months, which the profile says, and it was asked as "after 7 months" (2026-11-03).
+        if _between(start, end) + (0 if current else 1) >= SHORT_TENURE_MONTHS:
             continue
+        months = max(1, _between(start, end))
         name, title = _text(e["company"]), _text(e.get("title"))
         if current:
             ask = "Why are you looking to leave %s after %d months?" % (name, months)
@@ -2068,8 +2177,8 @@ def landmines(ctx) -> list:
                            "you did not hold.")
             out.append({"what": "Your title says %s; this role is %s" % (
                             f_mine.group(1).lower(), f_theirs.group(1).lower()),
-                        "ask": "Your title is %s. What in your work is what a %s here does?"
-                               % (latest, f_theirs.group(1).lower()),
+                        "ask": "Your title is %s. What in your work is what %s %s here does?"
+                               % (latest, _a_or_an(f_theirs.group(1)), f_theirs.group(1).lower()),
                         "then": "What would you need to learn first?",
                         "framing": framing})
     return out
@@ -2132,6 +2241,37 @@ def _screening():
         return screening_answers
     except (ImportError, person.NoProfile):
         return None
+
+
+_MONEY = re.compile(r"(\d{2,3}(?:,\d{3})+|\d{2,3})\s*(k\b|thousand\b)?", re.I)
+
+
+def _figures(text) -> list:
+    """Every pay figure in `text`, in whole units: "70 to 80 thousand" is 70,000 and
+    80,000 (a bare number takes the unit of the next one that has one)."""
+    found = [(m.group(1), (m.group(2) or "").lower()) for m in _MONEY.finditer(str(text or ""))]
+    out, unit = [], ""
+    for raw, u in reversed(found):
+        unit = u or unit
+        n = int(raw.replace(",", ""))
+        out.append(n * 1000 if n < 1000 and unit else n)
+    return sorted(x for x in out if x >= 1000)
+
+
+def pay_differs(answer, ctx) -> str:
+    """Why a stock answer's pay figures differ from the band this pack gives, or ""."""
+    said = _figures(answer)
+    if not said:
+        return ""
+    _q, form = _form_value(ctx, _PAY_Q) if "form" in ctx else ("", "")
+    target, _floor = _band()
+    band = form or target
+    want = _figures(band)
+    if not want or set(said) <= set(want):
+        return ""
+    return "it says %s, and the band to say is %s" % (
+        " to ".join("{:,}".format(x) for x in (said[0], said[-1]) if x) if len(said) > 1
+        else "{:,}".format(said[0]), band)
 
 
 def _band():
@@ -3958,7 +4098,64 @@ def check(path) -> list:
         out += [(q, why) for why in prep.unsayable(mine, q, seconds)]
         if drafted(body):
             out.append((DRAFT, q))
+    # Every number said as the person's own is the profile's: "about four and a half years'
+    # experience" went in a tell-me-about-yourself answer, against four in the profile and
+    # in what the employer had already heard (2026-11-03). A draft they asked for is theirs
+    # to confirm, and listed as one.
+    said = [(q, body) for q, body in list(blocks.values()) + list(elsewhere.values())
+            if not drafted(body) and " ".join(spoken(body)).strip()]
+    out += _ungrounded_numbers(text, said)
+    # A gap to fill anywhere in the document, under any heading: "[FILL IN: the hardest
+    # moment]" sat in an answer under a story's heading, which no question block reads.
+    reported = {why for _q, why in out}
+    for where, gap in prep.placeholders(text):
+        why = "a placeholder still to fill: %s" % gap
+        if why not in reported:
+            out.append((where, why))
+    # What it says an employer heard, against what the profile says now: a pack built when
+    # one employer heard one city kept saying so after the person told it another (2026-11-03).
+    for m in _TOLD_LINE.finditer(text):
+        now = places_told.place(m.group(1))
+        if now and not places_told.same_place(now, m.group(2)):
+            out.append(("the document", "it says you told %s you are in %s, and your profile "
+                        "now says %s: build it again" % (m.group(1), m.group(2), now)))
     return out
+
+
+_TOLD_LINE = re.compile(r"You told (.+?) you are in (.+?) \(source: profile/person\.json")
+
+
+def _ungrounded_numbers(text, said) -> list:
+    """[(question, why)] for each number in an answer to say that the profile does not hold.
+    A figure the document's own notes and research carry (the employer's, the posting's) is
+    allowed: an answer may repeat what it read about them."""
+    import check_numbers
+    answered = set()
+    for _q, body in said:
+        answered.update(ln for ln in body if ln.strip())
+    rest = "\n".join(ln for ln in str(text or "").splitlines() if ln not in answered)
+    base = check_numbers.grounded()
+    allowed = check_numbers.Grounded(base, base.nouns, base.said, base.small)
+    allowed.add_text(rest, nouns=False)
+    out = []
+    for q, body in said:
+        # Pay and notice are what the person asks for and owes, never a claim about their work:
+        # "between 48 and 58, base" is theirs to say (the band is read against the form's).
+        if re.search(_PAY_Q + r"|\bnotice\b|\bstart\b", q, re.I):
+            continue
+        for f in check_numbers.check(" ".join(spoken(body)), allowed=allowed):
+            # What they would do there ("in my first 90 days I'd ...") is a plan, never a
+            # claim about their work.
+            if _PLAN.search(f.get("context") or ""):
+                continue
+            out.append((q, "a number your profile does not hold: \"%s\". Say what "
+                           "01-candidate-profile.md says, or write the true one there first"
+                        % f.get("value", "")))
+    return out
+
+
+_PLAN = re.compile(r"\b(?:I(?:['’]d|['’]ll| would| will| could| plan| hope)|"
+                   r"(?:first|next|within)\s+(?:\w+\s+)?\d+\s+(?:days|weeks|months))\b", re.I)
 
 
 def _company_of(path) -> str:
@@ -5074,7 +5271,7 @@ def practice(text) -> dict:
         said = [x.strip() for x in spoken(mine) if x.strip()]
         qs.append({"question": q, "why": _plain(why) or None,
                    "answer": " ".join(said) or None, "draft": prep.drafted(mine)})
-    return {"questions": qs[:MAX_QUESTIONS], "reworked": rework_lines(text),
+    return {"questions": qs, "reworked": rework_lines(text),
             "bands": list(BANDS), "min_quote_words": MIN_QUOTE_WORDS}
 
 
@@ -5121,8 +5318,10 @@ READ_ORDER = ("Stories", "The company", "Who you are meeting", "The format", "As
               "To rework", "Notes")
 # Read into other parts: the one screen, the answers and the notes on each question.
 _READ_ELSEWHERE = ("On one screen", "Your answers", "Likely questions")
-READ_ITEMS = 24            # lines a section shows on the page
-READ_CHARS = 600           # characters a line shows
+# Every line, whole: nothing in the prep is cut on its way to the page. It was cut at 20,000
+# characters mid-word, then at 24 lines a section and 600 characters a line, kept to the
+# first sentence, with no sign (the audit, 2026-11-03). A section folds; a big one reaches the
+# page in parts (tools/page_db.py split).
 _STAR_WORDS = {"S": "The situation", "T": "The task", "A": "What you did", "R": "The result",
                "Situation": "The situation", "Task": "The task", "Action": "What you did",
                "Result": "The result"}
@@ -5199,8 +5398,6 @@ def plain_line(line) -> tuple:
         s = s[:-1].rstrip() + "."
     if s in (".", ":"):
         s = ""
-    if len(s) > READ_CHARS:
-        s = prep._short(s, READ_CHARS)
     return s, link
 
 
@@ -5241,14 +5438,12 @@ def _read_section(title, lines) -> dict | None:
                 continue        # the tags a question reaches a story by: Claude's, not the page's
             text = re.sub(r"\s*\((?:[a-z][^()]*)\)$", "", text)   # its theme, a tag
         indented = re.match(r"^\s{2,}[-*+]\s", ln)
-        if group is not None and len(group["sub"]) < READ_ITEMS:
+        if group is not None:
             group["sub"].append(text)
             continue
-        if indented and cur is not None and len(cur["sub"]) < READ_ITEMS:
+        if indented and cur is not None:
             cur["sub"].append(text + (" (%s)" % _host(link) if link and title != "The company"
                                       else ""))
-            continue
-        if len(items) >= READ_ITEMS:
             continue
         cur = {"text": text, "link": link, "sub": []}
         items.append(cur)
@@ -5364,7 +5559,7 @@ def reading(text, company="") -> dict | None:
         questions.append({"question": q["question"], "why": plain(q["why"] or "") or None,
                           "answer": q["answer"], "draft": bool(q["answer"]) and q["draft"],
                           "cue": cue, "checking": checks.get(key) or None,
-                          "notes": notes[:6]})
+                          "notes": notes})
     sections = []
     order = [t for t in READ_ORDER if t in found] + [t for t, _ls in parts if t not in READ_ORDER
                                                      and t not in _READ_ELSEWHERE]

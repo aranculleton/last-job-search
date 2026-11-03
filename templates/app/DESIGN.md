@@ -10,7 +10,8 @@ next?" in its first lines, and nothing asks for a decision a default could make.
 - Seven places: **Brief** (the home screen), **To do**, **Jobs** (Found, Drafts, Applied),
   **Contacts** (People, Messages), **Coming up** and **Chat** together in the side menu, and
   **Settings** alone at its foot. Five sit in the phone's tab bar (Brief, To do, Jobs,
-  Contacts, Chat); To do alone carries a coloured badge. (layout 6, nav order test)
+  Contacts, Chat); To do alone carries a coloured badge, and Chat a small grey dot while an
+  answer waits unseen. (layout 6, nav order test; contacts rules test)
 - Each screen: its title, one plain summary line, at most three blocks before the first item.
   (layout 1 to 3)
 - A long list opens on its first few and folds the rest one tap below ("Show 6 more"): To do
@@ -27,6 +28,9 @@ next?" in its first lines, and nothing asks for a decision a default could make.
 - A card reads top down: its top line (a kind or a score, the title, a state pill, the bin),
   one line of facts, at most one block in a soft grey box (a question or a suggestion), then
   its actions: one filled button at most, quiet ones beside it, More for the rest. (layout 7, 8)
+- A job card's line of facts says when it was posted and the pay where stated; why it scored
+  what it did is the first line under More. A drafted role's card in Found opens its draft,
+  where "I have applied" is; a closed one offers only setting it aside. (jobs page tests)
 - A state is a small tinted pill in words a person uses, never a code word: ok green, info
   blue, warn amber, bad red, held violet, waiting grey. (status audit, colour tests)
 - One "?" a card at most, after the last word of its line, and no more than three on a first
@@ -41,7 +45,8 @@ next?" in its first lines, and nothing asks for a decision a default could make.
 - The choices: a job (not this role, the pay, the place, my field, no more from the employer;
   posted too long ago only where it was, closed only where it has); a draft (the same); a
   message (set it aside, or the person's choices); a person (hide this for a week where it is
-  a To do row, don't contact, not that employer any more, in touch another way); an interview
+  a To do row, let it go where they have not replied, don't contact, not that employer any
+  more, in touch another way); an interview
   or an application (they said no, I withdrew, stopped waiting); a reminder in To do (hide it
   for a week, and "1 hidden this week: Show" at the end of To do brings it back, as "1 set
   aside: Show" does in Jobs). "I have applied" is under a job's More and on a draft's face,
@@ -75,6 +80,12 @@ next?" in its first lines, and nothing asks for a decision a default could make.
   Sent, No answer yet, Waiting for Claude (with when it was asked), in the same chat. "Claude
   is on it" only for work Claude has begun; a step's clock only from a few seconds in, and
   none where the work counts its own progress. The top pill names the one thing running.
+  Work waiting its turn behind the big jobs stays "In line" however long it waits, and drafts
+  written together show their batch's progress and one Stop. The chat's line under a message
+  is the same words as its card. (what-reaches-Claude tests)
+- A tap is "Saved" once written and "Done" once Claude's receipt says so. One Claude could not
+  do says why in Claude's own words ("changed since you saw it" only when it did), with the
+  field to give what it needs, on its card and as a To do card. (what-reaches-Claude tests)
 
 ## Words and settings
 
@@ -82,6 +93,9 @@ next?" in its first lines, and nothing asks for a decision a default could make.
 - One date a card, said one way: a day gone by as "12 Sept", a day ahead with its weekday. A
   card about someone shows the day they wrote (or you did); its corner says only "Overdue".
   What someone asked for leads the card, and its button does it ("Make a CV for Juno").
+- Where a person stands, what is owed, who the person's own rules keep back and every count
+  of them are the engine's one answer (`app_model.standing`): the page renders them and never
+  works them out again. A message that breaks the person's rules is never offered as ready.
 - Counts agree: a tab, a summary and a badge count the same things, a checklist of people a
   thing for each person, and a button that starts several says the time for all of them.
 - Nothing asks what a default answers. A choice becomes a setting only where people really

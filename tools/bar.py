@@ -316,9 +316,18 @@ def verdict(company: str | None, posting: str = "") -> tuple[str, str]:
     if PENSIONS.search(both):
         pass  # a target-list public-adjacent employer is never public sector
     elif PUBLIC.search(both):
-        if paid:
-            return PAY, _PUBLIC_PAID.format(cur=CUR, mid=mid, target=TARGET_MIDPOINT)
+        if public_paid(lo, hi):
+            return PAY, public_paid_why(lo)
         return EXCLUDED, _PUBLIC_WHY
+
+    # An employer on none of the lists and judged by nobody: only now is its posting read
+    # for what the employer says it is, and a public body it describes is held to the
+    # public rule, its stricter paid exception included, before the midpoint rule below.
+    said = "" if listed(name) else public_said(posting, name)
+    if said:
+        if public_paid(lo, hi):
+            return PAY, public_paid_why(lo)
+        return EXCLUDED, _PUBLIC_WHY + f' (the posting says it: "{said}")'
 
     collided = bool(COLLISIONS.search(both))
     score, why = (0, "") if collided else tier(name)
@@ -346,19 +355,74 @@ def verdict(company: str | None, posting: str = "") -> tuple[str, str]:
     j = judgement(name)
     if j and j.get("verdict") in (PAY, PRESTIGE, SIGNAL, NONE):
         return j["verdict"], f"judged {j.get('date', '')}: {j.get('why', '')}".replace(" :", ":")
-    # On none of the lists and judged by nobody: only now is its posting read for what the
-    # employer says it is. A paid posting has already come back pay, the paid exception.
-    said = public_said(posting, name)
-    if said:
-        return EXCLUDED, _PUBLIC_WHY + f' (the posting says it: "{said}")'
     if mid is not None:
         return NONE, (f"stated range midpoint {CUR}{mid:,} is under the {CUR}{TARGET_MIDPOINT:,} "
                       f"target band, and {UNLISTED}")
     return NONE, f"no stated range, and {UNLISTED}"
 
 
+def public_paid(lo, hi) -> bool:
+    """The one exception a public body has: pay, held to a stricter bar than any other
+    employer's (the public rule is "more stringent than others"). The bottom of the stated
+    range reaches the target, not its midpoint: a provincial agency's six-month contract
+    whose midpoint was 2% over the target passed as well paid, and was ranked up (2026-11-03)."""
+    return lo is not None and hi is not None and lo >= TARGET_MIDPOINT
+
+
+def public_paid_why(lo) -> str:
+    return (f"public body, but even the bottom of its stated range, {CUR}{lo:,}, reaches the "
+            f"{CUR}{TARGET_MIDPOINT:,} target: the one exception for a public body")
+
+
+def is_public(company: str | None, posting: str = "") -> bool:
+    """Whether the profile's public rule reads this employer as a public body: by name
+    (BAR_NAMED_PUBLIC, BAR_PUBLIC) or by what its posting says it is, never a prestige
+    exception or a target-list public-adjacent employer. The opportunity score gives a
+    public body no employer-tier lift, whatever tier list names it."""
+    name = str(company or "")
+    both = f"{name} {company_key(name)}"
+    if PUBLIC_PRESTIGE.search(both) or PENSIONS.search(both):
+        return False
+    if NAMED_PUBLIC.search(both) or PUBLIC.search(both):
+        return True
+    return bool(posting) and not listed(name) and bool(public_said(posting, name))
+
+
 def clears(company: str | None, posting: str = "") -> bool:
     return verdict(company, posting)[0] in (PAY, PRESTIGE, SIGNAL)
+
+
+def applies() -> bool:
+    """Does the profile set a bar of pay, prestige or signal at all: an employer tier, a
+    frontier list or a judgement? With none, every employer would come back "none", which
+    says nothing."""
+    import opportunity
+    return bool(getattr(opportunity, "TIER_1", None) or getattr(opportunity, "TIER_2", None)
+                or FRONTIER or judged())
+
+
+def hold_question(company: str, posting: str = "") -> dict | None:
+    """The question a pick waits on before it is drafted, when its employer clears none of the
+    bar: {id, question}, or None. One employer was drafted with its bar "none" and unjudged, against
+    the person's rule that an employer clearing none of pay, prestige or signal does not go on
+    the list (2026-11-03). Judged since (`judge`), it clears or it asks; the person may still
+    say draft it."""
+    if not applies():
+        return None
+    what, _why = verdict(company, posting)
+    if what != NONE:
+        return None
+    j = judgement(company)
+    if j:
+        plain = "judged %s: %s" % (j.get("date", ""), j.get("why", "")) if j.get("why") else \
+            "judged as clearing none"
+    else:
+        lo, hi, _ = salary_range(posting or "")
+        plain = ("its stated pay is under your target, and nobody has judged it yet" if lo and hi
+                 else "it states no pay and is on none of your employer lists, and nobody has "
+                      "judged it yet")
+    return {"id": "bar", "question": "%s clears none of your bar of pay, prestige or signal "
+                                     "(%s). Do you still want it drafted?" % (company, plain)}
 
 
 def unjudged(path: str | None = None) -> list[str]:

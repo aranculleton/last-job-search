@@ -138,6 +138,67 @@ def section_layout(tex_path, want):
     return " ".join(out)
 
 
+def _unaudited(entry: dict) -> list:
+    """[(field, sentence)] for each sentence of the draft that no claim-map entry holds (a
+    part of one is held: the renderer cuts a long summary at a clause), or [] when the draft
+    carries no claim map (a general resume, a draft from before the map)."""
+    cm = [c for c in entry.get("claim_map") or [] if isinstance(c, dict)]
+    if not cm:
+        return []
+    import draft_audit
+    have = [h for h in (draft_audit._norm(c.get("sentence", "")) for c in cm) if h]
+    out = []
+    for field, sentence in draft_audit.field_sentences(entry):
+        if field == "outreach_body":
+            continue
+        want = draft_audit._norm(sentence)
+        if want and not any(want in h for h in have):
+            out.append((field, sentence))
+    return out
+
+
+def _batch_flags(abbr: str, entry: dict, general: bool) -> list:
+    """The whole-batch checks, read for one application's documents: CLAIMS for an error
+    check_claims.py finds in its resume or letter, NUMBERS for a figure check_numbers.py
+    cannot ground in its resume, letter or summary. Read here, in this process, so each
+    application's record carries its own; a check that cannot run says nothing."""
+    out = []
+    try:
+        import check_claims
+        paths = [docpaths.resume_tex(abbr)] + ([] if general else [docpaths.letter_tex(abbr)])
+        if any(sev == "ERROR" for path in paths if os.path.isfile(path)
+               for sev, *_rest in check_claims.check(path)):
+            out.append("CLAIMS")
+    except Exception:  # noqa: BLE001
+        pass
+    try:
+        import check_numbers
+        found = check_numbers.check_draft(entry) if entry else []
+        tex = docpaths.resume_tex(abbr)
+        if os.path.isfile(tex):
+            with open(tex, encoding="utf-8") as fh:
+                found += check_numbers.check(fh.read(), tex)
+        if found:
+            out.append("NUMBERS")
+    except Exception:  # noqa: BLE001
+        pass
+    return out
+
+
+def _caps(entry: dict) -> dict:
+    """{employer: the most bullets it may carry} for this draft's posting, or {} when the
+    allocator cannot be read (a profile with no bullets for it)."""
+    # Without the posting a cap_unless cannot be read, and every role would be held to its
+    # lower cap: nothing is read then, rather than a false finding.
+    if not str(entry.get("posting") or "").strip():
+        return {}
+    try:
+        import allocate
+        return allocate.caps_for(str(entry.get("posting") or ""))
+    except Exception:  # noqa: BLE001  no caps known is no cap read, never a crash
+        return {}
+
+
 def _run3(args):
     """(exit code, stdout, stderr) of one of the app's tools."""
     p = subprocess.run([PY, *args], capture_output=True, text=True, encoding="utf-8",
@@ -213,6 +274,7 @@ def main(argv=None) -> int:
 
     fail = tb = n = skipped = design_skipped = 0
     readers: list = []
+    records: dict = {}
     _say("%-9s %-4s %-4s %-14s %s" % ("ABBR", "pgs", "blt", v["ROLE_HEADER"], "flags"))
     for a in abbrs:
         r_pdf = docpaths.resume_pdf(a)
@@ -327,16 +389,33 @@ def main(argv=None) -> int:
         for i, m, short in mins:
             if int(got[i]) < m:
                 p += f" {short}_LT_{m}"
+        # And no more than its cap for this posting (the profile's cap, lowered by its
+        # cap_unless off its territory): only the floor was read, and a role held to one
+        # bullet off its territory printed two (2026-11-03).
+        entry = next((x for x in batch if x.get("abbr") == a), {})
+        # Every sentence on the page is one the audits read: a summary changed after them
+        # ("with four years" where the audited sentence said "4+ years") was the one sent,
+        # and the audit's record was of text never shipped (2026-11-03).
+        unaudited = _unaudited(entry)
+        if unaudited:
+            p += " UNAUDITED"
+        caps = _caps(entry)
+        for i, r in enumerate(roles):
+            cap = caps.get(r["employer"])
+            if cap is not None and i < len(got) and int(got[i]) > cap:
+                p += f" {r.get('short') or i}_GT_{cap}"
         b = sum(1 for line in r_lines if BULLET.search(line))
         tb += b
         n += 1
-        _record(next((x for x in batch if x.get("abbr") == a), {}), p.split(), rp, cp,
-                bool(c_pdf))
+        records[a] = (entry, p.split(), rp, cp, bool(c_pdf))
         _say("%-9s %s/%s  %-4s %-14s %s" % (a, rp_s, cp_s, b, cnt, p))
         if lost:
             _say("          contact lines not on the page: " + "; ".join(lost))
         if " ROUNDTRIP" in p:
             _say("\n".join("          " + line for line in rt.splitlines()))
+        for field, sentence in unaudited[:5]:
+            _say(f"          not read by the audits ({field}): {sentence[:110]}; audit it "
+                 "again (stage_picks.py audit) or put back the audited words")
         if p:
             fail = 1
     _say(f"mean bullets: {tb // n if n else 0}")
@@ -397,6 +476,11 @@ def main(argv=None) -> int:
             fail = 1
     else:
         _say("no letters: a general resume")
+    # Each application's record says what the whole-batch checks found on its own documents
+    # too: a claim, a number or a letter the batch failed on, with "flags": [] beside it, read
+    # on the page as checked and clean (2026-11-03).
+    for a, (entry, flags, rp_, cp_, has_letter) in records.items():
+        _record(entry, flags + _batch_flags(a, entry, a in general), rp_, cp_, has_letter)
     if skipped:
         _say("=== SPACING CHECK SKIPPED ===")
         _say("pypdf is not available, so words run together were NOT checked on any document.")

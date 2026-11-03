@@ -53,6 +53,18 @@ REWORDED = ("Owned the Power BI and Looker service-level reporting used by 30+ o
 GOOD = {"id": "BH_REPORT", "skill": "Looker", "text": REWORDED}
 
 
+@pytest.fixture(autouse=True)
+def _the_yes_is_in_the_profile(monkeypatch):
+    """The pick here carries the yes as `consent` leaves it, without the line consent writes
+    into the candidate profile (stage_picks.profile_yes), which this example person must not
+    be given: the yes is read as grounded, as it is in a person's copy once recorded
+    (tests/test_a_generated_document_passes_its_own_checker.py writes and reads it)."""
+    import check_claims
+    held = check_claims.grounded_skill
+    monkeypatch.setattr(check_claims, "grounded_skill",
+                        lambda n: str(n).casefold() in {y.casefold() for y in YES} or held(n))
+
+
 def _profile_digest() -> str:
     h = hashlib.sha256()
     base = os.path.dirname(person.path("bullets.py"))

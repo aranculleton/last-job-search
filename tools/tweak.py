@@ -351,6 +351,8 @@ def check(work: dict, where: dict | None = None) -> list[dict]:
         row = BY_P.get(p)
         if row is None or output not in row["outputs"]:
             raise Refused(f"{p or 'That'} is not a change that can be made here.")
+        if row["control"] == "schedule":
+            v = _schedule_value(v)
         vals = v if isinstance(v, list) else [v]
         why = _invalid(row, v)
         if why:
@@ -362,6 +364,34 @@ def check(work: dict, where: dict | None = None) -> list[dict]:
         if not any(c["p"] == p for c in out):
             out.append({"p": p, "v": v, "row": BY_P[p], "from_words": True})
     return out
+
+
+def _schedule_value(v):
+    """The brief's days and time as `_invalid` and the routine take them ({"days": [1..7],
+    "time": "HH:MM"}). The page's "Days it comes" sends the days alone, as a calendar's
+    numbers (Sunday 0): the time is then the one the brief comes at now. Refused as "say the
+    days and the time" before, after the panel had offered the change as complete (journeys
+    audit 10)."""
+    if isinstance(v, dict) and "days" in v and v.get("time"):
+        return v
+    days = v.get("days") if isinstance(v, dict) else v
+    if not isinstance(days, list):
+        return v
+    try:
+        nums = sorted({int(str(d).strip()) % 7 or 7 for d in days})
+    except ValueError:
+        return v
+    time_ = str(v.get("time") or "") if isinstance(v, dict) else ""
+    if not time_:
+        try:
+            import routines
+            reg = routines.load()
+            brief = next((r for r in (reg.get("routines") or []) if isinstance(r, dict)
+                          and r.get("key") == "morning_brief"), None)
+            time_ = (routines.read_cron((brief or {}).get("cron") or "") or {}).get("time", "")
+        except Exception:  # noqa: BLE001  no brief yet: the time is asked for
+            time_ = ""
+    return {"days": nums, "time": time_}
 
 
 def _invalid(row: dict, v) -> str:
@@ -431,6 +461,12 @@ def _invalid(row: dict, v) -> str:
         if not (isinstance(days, list) and days and all(d in range(1, 8) for d in days)):
             return "choose at least one day"
         return "" if re.match(r"^([01]\d|2[0-3]):[0-5]\d$", at) else "give a time like 07:40"
+    if row["p"] == "J6":
+        # Any whole number of days a person asks for, not only the three the page offers:
+        # "the last 10 days" was refused here and read as 14 by the search (2026-11-03).
+        import run_round
+        days = int(v) if isinstance(v, str) and v.strip().isdigit() else v
+        return "" if run_round.job_age_ok(days) else "give a number of days, from 1 to 365"
     vals = v if isinstance(v, list) else [v]
     if control in ("toggles", "chips") and isinstance(v, dict):
         return "choose from the list"

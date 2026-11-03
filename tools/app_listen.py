@@ -98,6 +98,10 @@ RENEW_S = 20 * 3600
 # its next quiet moment. Growth, not size: a fresh chat already starts near 100,000, and a
 # size of 150,000 would have started a new helper about every hour (the release review).
 RENEW_TOKENS = 200_000
+# A fresh helper asked for and never come: asked for again after this long, while this chat
+# still answers the page. It was a whole day, from the moment the call was printed, made or
+# not (engine audit, 2026-11-03).
+RENEW_RETRY_S = 2 * 3600
 # How every page step after an update is done: at once, unasked, one command at a time (a
 # chained command goes to the desktop app's safety check whole), with nothing left behind.
 NO_ASK = ("Do it now, before anything else, and never ask the person first: bringing their "
@@ -242,7 +246,7 @@ def record(db: dict) -> tuple[dict, int | None]:
     return (dict(doc["data"]), doc["version"]) if doc else ({}, None)
 
 
-def waiting_since(db: dict) -> dt.datetime | None:
+def waiting_since(db: dict, now: dt.datetime | None = None) -> dt.datetime | None:
     """When the oldest thing still waiting for a chat was asked: a queued work item, or a
     tap with no receipt and no claim. None when nothing waits (or nothing was dumped)."""
     times = []
@@ -251,9 +255,14 @@ def waiting_since(db: dict) -> dt.datetime | None:
         if str(d.get("status") or "") == "queued" and not d.get("stop_asked"):
             times.append(_time(d.get("asked_at")))
     receipts = db.get("receipts") or {}
+    now = dt.datetime.now(dt.timezone.utc) if now is None else now
     for aid, doc in (db.get("actions") or {}).items():
-        if aid not in receipts and not doc["data"].get("claimed_by"):
-            times.append(_time(doc["data"].get("at")))
+        d = doc["data"]
+        until = _time(d.get("claimed_until"))
+        # A claim that ran out is no claim: the chat that made it stopped, and the tap still
+        # waits (it never counted, so a listener that had gone was never judged gone).
+        if aid not in receipts and not (d.get("claimed_by") and until is not None and until > now):
+            times.append(_time(d.get("at")))
     times = [t for t in times if t is not None]
     return min(times) if times else None
 
@@ -264,7 +273,7 @@ def lapsed(rec: dict, db: dict, now: dt.datetime) -> bool:
     lapsed: a watch outlives a quiet week."""
     if not rec.get("chat"):
         return True
-    since = waiting_since(db)
+    since = waiting_since(db, now)
     if since is None or (now - since).total_seconds() < LAPSE_S:
         return False
     answered = _time(rec.get("answered_at")) or _time(rec.get("since"))
@@ -404,11 +413,13 @@ def decide(db: dict, chat: str, out_dir: str, now: dt.datetime | None = None,
 
 def renew_line(renew: dict) -> str:
     """What the listener does when its day is up: start its fresh helper, unasked."""
-    return ("listen: renew: this chat has answered the page for a day, and nothing "
-            "is waiting. Start its fresh helper now, unasked and saying nothing to "
-            "the person: create_session " + json.dumps(renew, ensure_ascii=False) +
-            ". The new chat takes the page as it starts; until then this one still "
-            "answers, and its next check-in finds the new one and stops its watch.")
+    return ("listen: renew: this chat has answered the page for a day (or its history has "
+            "grown long), and has no small job of its own in hand. Start its fresh helper "
+            "now, unasked and saying nothing to the person: create_session "
+            + json.dumps(renew, ensure_ascii=False) +
+            ". The new chat takes the page as it starts, and the work waiting with it; until "
+            "then this one still answers, and its next check-in finds the new one and stops "
+            "its watch.")
 
 
 def view_renewal(db: dict, chat: str, now: dt.datetime) -> list[str]:
@@ -466,7 +477,12 @@ def context_tokens() -> int:
 
 def renewal(rec: dict, db: dict, chat: str, now: dt.datetime) -> dict | None:
     """The create_session call for a fresh helper, or None. Only a cloud chat answering the
-    page for RENEW_S, with nothing queued or running, and not renewed in the last RENEW_S."""
+    page for RENEW_S (or grown by RENEW_TOKENS), with no small work of its own in hand, and
+    not asked for in the last RENEW_RETRY_S. Work waiting in the queue moves with the page:
+    the new helper takes it. Waiting on it kept one helper answering for three days, against
+    a day, while a draft sat queued (engine audit, 2026-11-03); a big job runs in a chat of
+    its own, whichever chat claimed it."""
+    import page_db
     if not chat or rec.get("chat") != chat or chat_kind() != "cloud":
         return None
     since = _time(rec.get("since"))
@@ -475,12 +491,18 @@ def renewal(rec: dict, db: dict, chat: str, now: dt.datetime) -> dict | None:
     big = context_tokens() >= RENEW_TOKENS
     if (now - since).total_seconds() < RENEW_S and not big:
         return None
-    for doc in (db.get("work") or {}).values():
-        if str(doc["data"].get("status") or "") in ("queued", "claimed", "running"):
+    work = db.get("work") or {}
+    for doc in work.values():
+        d = doc["data"]
+        if str(d.get("claimed_by") or "") == chat and \
+                not page_db.WORK_KINDS.get(str(d.get("kind") or ""), {}).get("heavy") and \
+                page_db._live_claim(d, now, work):
             return None
     got = seen()
     last = _time(got.get("renewed_at"))
-    if last is not None and (now - last).total_seconds() < RENEW_S:
+    # This chat still answers the page, so a helper asked for that long ago never took it
+    # (its create_session failed, or it never started): it is asked for again, not a day on.
+    if last is not None and (now - last).total_seconds() < RENEW_RETRY_S:
         return None
     try:
         import app_setup

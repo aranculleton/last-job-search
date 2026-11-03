@@ -207,14 +207,23 @@ def test_a_pasted_resume_goes_into_the_copy_and_leaves_the_page(fresh):
     assert fresh.step("resume")["status"] == "done"
 
 
-def test_a_claimed_resume_leaves_the_page_with_the_claim(fresh):
+def test_a_claimed_resume_leaves_the_page_with_its_receipt(fresh):
+    """Changed 2026-11-03 (engine audit 9): the claim leaves the words, so a chat that stops
+    before applying loses nothing; the receipt's batch takes them off the page, pinned to the
+    version the claim left."""
     aid = fresh.act("setup.resume", "setup-resume", value={"text": "Morgan Ellis, analyst"})
     claimed = json.loads(fresh.run("apply", fresh.dump, "--chat", "c1", "--claim", "--now", NOW))
     with open(claimed["batches"][0], encoding="utf-8") as fh:
         entry = json.load(fh)[0]
     with open(entry["file_path"], encoding="utf-8") as fh:
         body = json.load(fh)
-    assert entry["doc_id"] == aid and body["value"] == {"text": {"__delete__": True}}
+    assert entry["doc_id"] == aid and "value" not in body
+    got = json.loads(fresh.run("apply", fresh.dump, "--chat", "c1", "--now", NOW))
+    wipe = next(e for b in got["batches"] for e in json.load(open(b, encoding="utf-8"))
+                if e["collection"] == "actions" and e["doc_id"] == aid)
+    with open(wipe["file_path"], encoding="utf-8") as fh:
+        assert json.load(fh)["value"] == {"text": {"__delete__": True}}
+    assert wipe["if_version"] == entry["if_version"] + 1
 
 
 def test_a_resume_file_added_on_the_page_is_saved_then_taken_off_it(fresh):

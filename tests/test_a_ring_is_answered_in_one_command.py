@@ -17,6 +17,7 @@ invented.
 """
 from __future__ import annotations
 
+import glob
 import json
 import os
 import re
@@ -276,9 +277,10 @@ def test_a_wake_takes_the_days_check_only_when_it_is_due(monkeypatch):
 # ------------------------------------------------------------------ the claim keeps the dump
 
 def test_a_tap_claimed_then_applied_from_one_read_lands(tmp_path):
-    """The claim takes a pasted profile's words off the page; the dump keeps them for the
-    apply, and now also knows the claim was made, so the apply pins nothing to the version
-    the claim moved on (its second pinned removal had the whole batch refused)."""
+    """The claim leaves a pasted profile's words on the page until they are kept (changed
+    2026-11-03, engine audit 9: taken with the claim, a chat that stopped before applying
+    lost them); the receipt's batch removes them, pinned to the version the claim leaves,
+    never the one read before it (that second pinned removal had the whole batch refused)."""
     import test_an_interview_reads_as_one_screen_and_a_contact_says_what_is_owed as T
     from test_a_tick_on_the_page_is_applied_once import Search
     search = Search(str(tmp_path))
@@ -289,10 +291,17 @@ def test_a_tap_claimed_then_applied_from_one_read_lands(tmp_path):
     kept = page_db.load(search.dump)["actions"][aid]
     assert kept["version"] == 2 and kept["data"]["claimed_by"] == "cloud-1"
     assert kept["data"]["value"]["text"] == T.PROFILE        # the words, kept for the apply
+    claim = [e for b in glob.glob(os.path.join(search.dump, "out", "claim*.json"))
+             for e in json.load(open(b, encoding="utf-8"))]
+    for e in claim:
+        assert "__delete__" not in open(e["file_path"], encoding="utf-8").read(), e
     got = search.apply()
     assert got["ok"] == [aid]
     entries = [e for b in got["batches"] for e in json.load(open(b, encoding="utf-8"))]
-    assert not [e for e in entries if e["collection"] == "actions"], entries
+    gone = [e for e in entries if e["collection"] == "actions"]
+    assert [(e["op"], e["doc_id"], e.get("if_version")) for e in gone] == [("update", aid, 2)]
+    assert json.load(open(gone[0]["file_path"], encoding="utf-8"))["value"] == {
+        "text": {"__delete__": True}}
 
 
 def test_keep_landed_is_the_dump_as_the_store_will_hold_it(tmp_path):

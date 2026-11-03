@@ -167,7 +167,8 @@ def test_hearing_back_books_an_interview_and_one_prep_card_follows(run, tmp_path
     ], vp, clock="2026-10-25T09:00:00Z")
     a = _one(got, "outcome.interview")
     assert a["item"] == "app-quayside-ops"
-    assert a["value"] == {"on": "2026-10-26", "stage": "Phone screen", "time": "13:00", "with": "the recruiter"}
+    # The time goes with the zone the page shows it in (the audit, 2026-11-03).
+    assert a["value"] == {"on": "2026-10-26", "stage": "Phone screen", "time": "13:00", "zone": "Europe/London", "with": "the recruiter"}
     _rev_is_the_items(m, a)
     cards, prep_rows, first = got["after"][4]["eval"]
     assert cards == 1 and prep_rows == 0, "one card for the interview and its prep, never two"

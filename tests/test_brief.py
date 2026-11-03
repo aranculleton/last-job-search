@@ -198,10 +198,23 @@ def test_each_watched_thing_is_searched_as_often_as_it_changes(monkeypatch):
     seen = {"daily thing": _DAY - dt.timedelta(days=1), "weekly thing": _DAY - dt.timedelta(days=3),
             "monthly thing": _DAY - dt.timedelta(days=20)}
     due = [w["what"] for w in brief.due_watch(_DAY, watch, seen)]
-    assert due == ["new thing", "daily thing"]           # the longest waiting first
+    # Their first, the most important, leads when due (engine audit 23, 2026-11-03); the rest
+    # the longest waiting first.
+    assert due == ["daily thing", "new thing"]
     later = _DAY + dt.timedelta(days=8)
     assert [w["what"] for w in brief.due_watch(later, watch, seen)] == [
-        "new thing", "monthly thing", "weekly thing", "daily thing"]
+        "daily thing", "new thing", "monthly thing", "weekly thing"]
+
+
+def test_what_outranks_everything_is_searched_every_morning(monkeypatch):
+    """Engine audit 23: a work permit the profile says "outranks everything else" went to the
+    wider searches, behind items that had waited longer, while two employers led the brief."""
+    watch = [{"what": "work permit changes", "every": "day"}] + [
+        {"what": "thing %d" % n, "every": "week"} for n in range(6)]
+    _with(monkeypatch, watch=watch)
+    seen = {"work permit changes": _DAY - dt.timedelta(days=1)}
+    q = brief.queries(_DAY, ["Larkspur Retail", "Fernhill Freight"], searched=seen)
+    assert q[2] == "work permit changes October 2026", q
 
 
 def test_a_list_from_anywhere_is_checked_never_trusted(monkeypatch):

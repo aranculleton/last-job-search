@@ -430,9 +430,12 @@ def general_resume_for(contact_id: str, today=None, contacts_path: str = "") -> 
     contacts = state.load_contacts(path)
     c = contact_for(contact_id, contacts)
     current = docpaths.current_resume()
-    out = {"file": current, "name": c.get("name") or contact_id, "noted": False,
+    # One that breaks the person's own rules never goes, as it is never offered on the page.
+    problems = docpaths.resume_problems(current) if current else []
+    out = {"file": "" if problems else current, "name": c.get("name") or contact_id,
+           "noted": False, "problems": problems,
            "choices": [] if current else docpaths.general_resumes()}
-    if not current:
+    if not current or problems:
         return out
     word = state.noun()
     line = f"{word} to send: {current} (no role named, so the current one)"
@@ -498,6 +501,17 @@ def stage(round_dir: str, picks: list[str], rows: list[dict] | None = None,
         asks = to_ask(r["desc"])
         prof = posting_profile.read(r, r["desc"], rows=rows, today=today)
         hold = posting_profile.questions(prof, r)
+        # The person's bar, before anything is drafted: an employer that clears none of it is
+        # theirs to say yes to (bar.hold_question). Unjudged, Claude judges it first.
+        import bar as _bar
+        bar_q = _bar.hold_question(r["company"], r["desc"])
+        if bar_q:
+            if not _bar.judgement(r["company"]) and not _bar.listed(r["company"]):
+                print(f"stage: {r['company']} is on none of the employer lists: judge its pay, "
+                      f"prestige and signal first (python3 tools/bar.py judge "
+                      f"\"{r['company']}\" <pay|prestige|signal|none> \"<why>\"), then stage "
+                      "again; it waits on the person only if it clears none.", file=sys.stderr)
+            hold.append(bar_q)
         if mine and mine["for_contact_name"] and mine["for_contact_name"] in str(
                 (prof.get("employer") or {}).get("referral") or ""):
             # The referral in flight there is theirs: this resume goes through it, so it is
@@ -724,6 +738,51 @@ def _which(staged: list[dict], which: str) -> dict:
     return hits[0]
 
 
+YES_HEADING = "## Skills you said you can claim"
+_YES_LINE = re.compile(r"^- (?P<skill>.+?): you said yes for ")
+
+
+def profile_yes(yes=(), no=(), company: str = "", role: str = "", today=None) -> list[str]:
+    """Write each yes the profile does not already hold into 01-candidate-profile.md, under
+    YES_HEADING, with the posting and the day; take out a line of that section for each no.
+    Returns the skills written. The example person is never written to."""
+    import check_claims
+    import datetime as _dt
+    path = person.file("candidate_profile", "01-candidate-profile.md")
+    if person.in_example(path) or not os.path.isfile(path) or not (yes or no):
+        return []
+    with open(path, encoding="utf-8") as fh:
+        text = fh.read()
+    lines = text.splitlines()
+    nos = _fold(no)
+    kept = [ln for ln in lines
+            if not ((m := _YES_LINE.match(ln)) and m.group("skill").casefold() in nos)]
+    day = str(today) if today else _dt.date.today().isoformat()
+    what = " ".join(x for x in (company, f"({role})" if role else "") if x) or "an application"
+    added = []
+    for n in yes:
+        if check_claims.grounded_skill(n) or any(
+                (m := _YES_LINE.match(ln)) and m.group("skill").casefold() == n.casefold()
+                for ln in kept):
+            continue
+        added.append(f"- {n}: you said yes for {what}, {day}: you can claim it and back it "
+                     "up in an interview.")
+    if not added and kept == lines:
+        return []
+    if added:
+        if YES_HEADING not in kept:
+            kept += ["", YES_HEADING, ""]
+        at = kept.index(YES_HEADING) + 1
+        while at < len(kept) and not kept[at].strip():
+            at += 1
+        while at < len(kept) and kept[at].startswith("- "):
+            at += 1
+        kept[at:at] = added
+    with open(path, "w", encoding="utf-8", newline="\n") as fh:
+        fh.write("\n".join(kept).rstrip("\n") + "\n")
+    return [a[2:].split(":", 1)[0] for a in added]
+
+
 def consent(round_dir: str, which: str, yes=(), no=(), draft: bool = False,
             skip: bool = False) -> dict:
     """Record the person's answers for one pick, and return the pick.
@@ -753,6 +812,12 @@ def consent(round_dir: str, which: str, yes=(), no=(), draft: bool = False,
         new = [spelled.get(str(n).strip().casefold(), str(n).strip()) for n in got if str(n).strip()]
         p[key] = list(dict.fromkeys(keep + new))
         p[other] = [n for n in p.get(other) or [] if n.casefold() not in _fold(got)]
+    # Each yes is a fact about the person, so it goes where facts are: the candidate profile,
+    # which every check grounds a claim in. Kept only in picks.json it was a claim a chat
+    # made (CLAUDE.md, "grounded"), and check_claims.py refuses it.
+    profile_yes([spelled.get(str(n).strip().casefold(), str(n).strip()) for n in yes
+                 if str(n).strip()], [str(n).strip() for n in no if str(n).strip()],
+                p.get("company") or "", p.get("role") or "")
     if draft and p in held:
         held.remove(p)
         p["answered"] = [q["id"] for q in p.get("hold") or []]
@@ -1003,7 +1068,12 @@ def _no_role(contact_id: str) -> int:
     got = general_resume_for(contact_id)
     word = _network_state().noun()
     if not got["file"]:
-        if got["choices"]:
+        if got.get("problems"):
+            print(f"No role named, so nothing is drafted, and your current {word} breaks your "
+                  f"own rules ({'; '.join(got['problems'][:3])}), so it does not go: make a "
+                  f"fresh one first (python3 tools/stage_picks.py general <dir>), then run this "
+                  "again.")
+        elif got["choices"]:
             print(f"No role named, so nothing is drafted, and documents/cv/ holds "
                   f"{len(got['choices'])} files with nothing saying which is your current "
                   f"{word}: put \"current\" in the name of the one you send, then run this again "

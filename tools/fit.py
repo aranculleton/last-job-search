@@ -602,7 +602,8 @@ def near_matches(text) -> list:
         return []
     out = []
     for a in found:
-        if a.verdict == bridges.BRIDGE and a.have and a.asked not in {x["asked"] for x in out}:
+        if a.verdict == bridges.BRIDGE and a.have and a.asked not in {x["asked"] for x in out} \
+                and not bridges.covered_by(a.asked):
             out.append({"asked": a.asked, "have": a.have[0]})
     return out[:NEAR_MAX]
 

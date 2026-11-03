@@ -50,7 +50,7 @@ EVENTS = ("documents", "upcoming.json")
 EVENTS_MAX = 200
 
 # A stage that is something to finish by a day, not a meeting: an online test, a case study.
-_TEST = re.compile(r"\b(?:test|assessment|case study|take[- ]home|exercise|challenge|hirevue|"
+_TEST = re.compile(r"\b(?:test|assessment(?! cent(?:re|er))|case study|take[- ]home|exercise|challenge|hirevue|"
                    r"coding task|assignment|questionnaire)\b", re.I)
 # A short meeting: a screen or a call is half an hour; any other interview an hour.
 _SHORT = re.compile(r"\b(?:screen|screening|call|chat|intro)\b", re.I)
@@ -62,7 +62,11 @@ _PLACES = (("teams", "Microsoft Teams"), ("zoom", "Zoom"), ("google meet", "Goog
 # "18:00-18:30 UK", "2-3pm", "14.30", "14h30". A zone is an upper-case word app_model knows
 # beside it: "at" is a word, never Atlantic time (the release review, 2026-11-02).
 _MER = r"(?:([ap])\.?\s*m\.?\b)?"
-_ZONE = r"(?:\s*\(?\s*(?-i:([A-Z]{2,5}))\b)?"
+# The zone after a time: an upper-case word (ET, BST), or words a person writes ("Toronto
+# time", "Eastern", "Pacific Time", "UK time"), read by the one reader (person.zone_in).
+_ZONE = (r"(?:\s*\(?\s*(?-i:([A-Z]{2,5}\b|[A-Z][a-z]+(?:[ \t]+[A-Z][a-z]+)?(?:[ \t]+(?i:time))?"
+         r"|(?i:(?:uk|eastern|pacific|central|mountain|atlantic)[ \t]+time|eastern|pacific)\b)))?")
+_NOON = re.compile(r"\b(?:at\s+)?(?:12\s+)?(noon|midday)\b" + _ZONE, re.I)
 _RANGE = re.compile(r"(?<![\d:.])(\d{1,2})(?:[:.h](\d{2}))?\s*" + _MER + r"\s*(?:-|–|to)\s*"
                     r"(\d{1,2})(?:[:.h](\d{2}))?\s*" + _MER + _ZONE, re.I)
 _ONE = re.compile(r"(?<![\d:.])(\d{1,2})(?:[:.h](\d{2}))?\s*" + _MER + _ZONE, re.I)
@@ -80,6 +84,9 @@ def _zone_word(word: str, home: str) -> str | None:
         return home
     if "/" in raw:
         return raw if _known_zone(raw) else None
+    if not re.fullmatch(r"[A-Z]{2,5}", raw):
+        # Words, not an abbreviation: "Toronto time", "Eastern", "Pacific Time".
+        return person.zone_in(raw, home) or None
     w = raw.upper()
     names = _zone_abbreviations().get(w) or set()
     # The person's own zone first, before the app's short list: in Shanghai CST is China's,
@@ -87,7 +94,9 @@ def _zone_word(word: str, home: str) -> str | None:
     if home in names:
         return home
     if w in app_model._ZONE_WORDS:
-        return app_model._ZONE_WORDS[w]
+        got = app_model._ZONE_WORDS[w]
+        # ET for a person in Toronto is Toronto's clock: their own city is named.
+        return home if home and person._same_clock(got, home) else got
     if not names:
         return None
     offsets = {o for n in names for o in [_offsets(n)]}
@@ -176,11 +185,21 @@ def call_time(text: str, home: str) -> dict | None:
         t = _clock(h, mi, mer)
         if t:
             found.append((m.start(), -len(m.group(0)), t, None, word))
+    for m in _NOON.finditer(text):
+        found.append((m.start(), -len(m.group(0)), "12:00", None, m.group(2)))
     if not found:
+        return None
+    # Two times offered ("12pm or Friday at 9am Eastern"): a choice, not a booking. The first
+    # was taken as the booked one (the audit, 2026-11-03).
+    starts = sorted({(at, t) for at, _l, t, _e, _w in found})
+    if len({t for _a, t in starts}) > 1 and re.search(r"\bor\b", text, re.I):
         return None
     # The first written; at one place, the longest reading (a range, an am or pm).
     _at, _len, time_, end, word = min(found)
     zone = _zone_word(word, home)
+    if zone is None and word and not re.fullmatch(r"[A-Z]{2,5}", word) \
+            and not re.search(r"(?i)\btime$", word):
+        zone = home          # a word after the time that is no zone ("2pm Thursday")
     return {"time": time_, "end": end, "zone": zone} if zone else None
 
 
@@ -248,7 +267,8 @@ def _save(rows: list[dict]) -> None:
         fh.write("\n")
 
 
-def add(title: str, day: str, time_: str = "", note: str = "", eid: str = "") -> dict:
+def add(title: str, day: str, time_: str = "", note: str = "", eid: str = "",
+        zone: str = "") -> dict:
     """Keep something the person booked that the app does not know of: what, the day, and
     a time where they gave one. Returns the row kept."""
     title = " ".join(str(title or "").split())[:120]
@@ -263,7 +283,8 @@ def add(title: str, day: str, time_: str = "", note: str = "", eid: str = "") ->
     eid = eid or "ev" + dt.datetime.now(dt.timezone.utc).strftime("%Y%m%d%H%M%S%f")[:18]
     row = {"id": eid, "title": title, "day": str(day),
            **({"time": f"{int(time_.split(':')[0]):02d}:{time_.split(':')[1]}"} if time_ else {}),
-           **({"note": " ".join(str(note).split())[:200]} if str(note or "").strip() else {})}
+           **({"note": " ".join(str(note).split())[:200]} if str(note or "").strip() else {}),
+           **({"zone": zone} if time_ and person.known_zone(zone) else {})}
     rows = [r for r in rows if r.get("id") != eid] + [row]
     _save(rows)
     return row
@@ -295,25 +316,48 @@ def _local_day(t: dt.datetime, home: str) -> str:
 
 
 def _item(kind, iid, title, day, time_="", zone="", end_time="", with_="", where=None,
-          go=None, note=None, minutes=None, home="") -> dict:
+          go=None, note=None, minutes=None, home="", uid="") -> dict:
     """One thing on the list. A timed one sits on the day it falls on where the person is:
     18:00 in California is the next morning in London, and the interview's own card says so
     (the release review, 2026-11-02)."""
     start = _moment(day, time_, zone) if time_ else None
-    if start and home:
-        day = _local_day(start, home)
     if start:
-        if end_time:
-            end = _moment(day, end_time, zone)
-            if not end or end <= start:
-                end = None
-        else:
+        # The end on the day it was written for, in its own zone: worked out after the day
+        # moved to the person's own, a 6pm Pacific call ran 24 and a half hours (the audit,
+        # 2026-11-03). An end at or before the start runs past midnight.
+        end = _moment(day, end_time, zone) if end_time else None
+        if end and end <= start:
+            end = end + dt.timedelta(days=1)
+        if end and end - start > dt.timedelta(hours=12):
             end = None
         end = end or start + dt.timedelta(minutes=minutes or 60)
+    if start and home:
+        day = _local_day(start, home)
     return {"id": iid, "kind": kind, "title": title, "with": with_ or None, "day": day,
             "time": time_ or None, "zone": zone if start else None,
             "start": _iso(start) if start else None, "end": _iso(end) if start else None,
-            "all_day": not start, "place": where, "go": go, "note": note}
+            "all_day": not start, "place": where, "go": go, "note": note,
+            # The calendar's own id for it: the round, never its day, time or name, so a move
+            # updates the event a calendar already holds rather than adding a second.
+            "uid": uid or iid}
+
+
+def label(text) -> str:
+    """A stage's name as a title starts: "initial round" is "Initial round"."""
+    t = " ".join(str(text or "").split())
+    return t[:1].upper() + t[1:]
+
+
+def _days_words(days) -> str:
+    """"Thu 12, Fri 13 or Thu 19 Nov": offered days said together."""
+    got = [dt.date.fromisoformat(d) for d in days if _is_day(d)]
+    if not got:
+        return ""
+    words = []
+    for n, d in enumerate(got):
+        last = n == len(got) - 1 or got[n + 1].month != d.month
+        words.append(f"{d:%a} {d.day}" + (f" {d:%b}" if last else ""))
+    return words[0] if len(words) == 1 else ", ".join(words[:-1]) + " or " + words[-1]
 
 
 def build(ctx, page_url: str = "") -> list[dict]:
@@ -333,8 +377,16 @@ def build(ctx, page_url: str = "") -> list[dict]:
     out: list[dict] = []
     seen_days: dict = {}           # (employer, day): the clock times of its stages, "" untimed
 
-    def ahead(day) -> bool:
+    now = getattr(ctx, "now", None)
+
+    def ahead(day, item=None) -> bool:
         d = app_model._date(day)
+        if item and item.get("end") and now is not None:
+            # Over: a timed one leaves at its end, never at midnight. It sat in Coming up and
+            # on the Brief as today's for the rest of the evening (the audit, 2026-11-03).
+            ends = app_model.parse_time(item["end"])
+            if ends and ends <= now:
+                return False
         return bool(d and today <= d <= last)
 
     # A booked call's written time, by employer and day: where an interview stage gives the
@@ -367,15 +419,33 @@ def build(ctx, page_url: str = "") -> list[dict]:
         if st in throttle.FINAL:
             continue
         _folder, _files, stages = open_actions.stages(row)
-        for s in stages:
+        for n_, s in enumerate(stages):
+            if not s.get("done") and not _is_day(s.get("date")) and s.get("offered"):
+                # Invited, and the day is theirs to choose: the choice is due, on the day
+                # they are to answer by, and it says the days offered (the audit, 2026-11-03).
+                days = [d for d in s["offered"] if _is_day(d) and d >= today.isoformat()]
+                if not days:
+                    continue
+                by = s.get("reply_by") if _is_day(s.get("reply_by")) else ""
+                due = max(today.isoformat(), min(by or days[0], days[0]))
+                name = label(s.get("label") or "Interview")
+                item = _item("deadline", f"up-{rid}-choose-{n_}", f"Choose your day: {name}, "
+                             f"{company}", due, with_=company,
+                             go={"to": "interviews", "item": "int-" + rid[4:]},
+                             note=f"Offered {_days_words(days)}. Tell them the day you choose.",
+                             uid=f"up-{rid}-stage-{n_}-choose")
+                item["offered"] = days
+                if ahead(item["day"]):
+                    out.append(item)
+                continue
             if s.get("done") or not _is_day(s.get("date")):
                 continue
-            label = str(s.get("label") or "Interview")
+            label_ = label(s.get("label") or "Interview")
             day = str(s["date"])
             # What it is and how long it lasts, as the stage was booked; only a stage booked
             # before 4.7, which says neither, is read from its English words.
             kind = str(s.get("kind") or "")
-            test = kind == "test" if kind else bool(_TEST.search(label))
+            test = kind == "test" if kind else bool(_TEST.search(label_))
             time_ = str(s.get("time") or "")
             zone = (_zone_word(s.get("zone"), home) if s.get("zone") else
                     call_zone.get((ckey(company), day, time_), home))
@@ -383,14 +453,15 @@ def build(ctx, page_url: str = "") -> list[dict]:
                 time_, zone = "", home
             who = app_model._third_party(s.get("with"), names) if s.get("with") else ""
             item = _item("test" if test else "interview",
-                         f"up-{rid}-{_slug(label)}-{day}" + (f"-{time_.replace(':', '')}" if time_ else ""),
-                         (f"{label} due: {company}" if test and not time_ else
-                          f"{label}: {company}"), day, time_, zone,
-                         with_=company, go={"to": "interviews", "item": "int-" + rid[4:]},
+                         f"up-{rid}-{_slug(label_)}-{day}" + (f"-{time_.replace(':', '')}" if time_ else ""),
+                         (f"{label_} due: {company}" if test and not time_ else
+                          f"{label_}: {company}"), day, time_, zone,
+                         with_=company, where=place(s.get("place")) or (s.get("place") or None),
+                         go={"to": "interviews", "item": "int-" + rid[4:]},
                          note=(f"{role}" + (f", with {who}" if who else "")) or None,
-                         minutes=int(s.get("minutes") or 0) or (30 if _SHORT.search(label) else 60),
-                         home=home)
-            if ahead(item["day"]):
+                         minutes=int(s.get("minutes") or 0) or (30 if _SHORT.search(label_) else 60),
+                         home=home, uid=f"up-{rid}-stage-{n_}")
+            if ahead(item["day"], item):
                 out.append(item)
                 seen_days.setdefault((ckey(company), day), set()).add(time_)
     for c in ctx.contacts:
@@ -411,16 +482,18 @@ def build(ctx, page_url: str = "") -> list[dict]:
                      f"Call with {first}" + (f" ({company})" if company else ""), day,
                      when.get("time") or "", when.get("zone") or "", when.get("end") or "",
                      with_=company, where=place(said), go={"to": "contacts", "item": cid},
-                     minutes=30, home=home)
-        if ahead(item["day"]):
+                     minutes=30, home=home, uid=f"up-call-{_slug(cid)}")
+        if ahead(item["day"], item):
             out.append(item)
     for e in added():
         text = app_model.scrub(e.get("title"), names) or "Booked"
+        # In the zone it was added in (the page sends the one it shows times in), else theirs.
+        ez = str(e.get("zone") or "") if person.known_zone(str(e.get("zone") or "")) else home
         item = _item("event", f"up-{e['id']}", text, str(e["day"]), str(e.get("time") or ""),
-                     home, where=place(text), note=app_model.scrub(e.get("note"), names) or None,
+                     ez, where=place(text), note=app_model.scrub(e.get("note"), names) or None,
                      home=home)
         item["own"] = e["id"]
-        if ahead(item["day"]):
+        if ahead(item["day"], item):
             out.append(item)
     out.sort(key=lambda i: (i["day"], i["start"] or "", i["title"].lower()))
     for i in out:
@@ -503,7 +576,11 @@ def vevent(item: dict, page_url: str = "", stamp: dt.datetime | dt.date | None =
         stamp = stamp.strftime("%Y%m%dT%H%M%SZ")
     else:
         stamp = (stamp or dt.datetime.now(dt.timezone.utc).date()).strftime("%Y%m%dT000000Z")
-    lines = ["BEGIN:VEVENT", f"UID:{item['id']}.last-job-search", f"DTSTAMP:{stamp}"]
+    # SEQUENCE grows with the day the list is made, so a calendar that holds this UID takes
+    # the moved event as newer (RFC 5545 3.8.7.4).
+    seq = (dt.date(int(stamp[:4]), int(stamp[4:6]), int(stamp[6:8])) - dt.date(2026, 1, 1)).days
+    lines = ["BEGIN:VEVENT", f"UID:{item.get('uid') or item['id']}.last-job-search",
+             f"DTSTAMP:{stamp}", f"SEQUENCE:{max(seq, 0)}"]
     # When it reminds them is theirs (Settings, Calendar reminders): an hour before unless they
     # chose otherwise, none at all if they said so; a day with no time, the afternoon before.
     remind = reminder_minutes()

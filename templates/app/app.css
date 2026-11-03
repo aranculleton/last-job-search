@@ -81,7 +81,7 @@ bdi { unicode-bidi: isolate; }
 .conn-btn .dot { width: 9px; height: 9px; }
 .dot.conn-live { background: var(--st-done); }
 .dot.conn-connecting, .dot.conn-reconnecting { background: var(--line-strong); }
-.dot.conn-offline, .dot.conn-readonly, .dot.conn-stopped { background: var(--st-overdue); }
+.dot.conn-offline, .dot.conn-readonly, .dot.conn-stopped, .dot.conn-unheard { background: var(--st-overdue); }
 .top-tools { margin-left: auto; display: flex; align-items: center; gap: 8px; }
 .pulse { font-size: var(--t-sm); color: var(--muted); padding-bottom: 4px; }
 .pulse .refresh-btn { margin-left: 8px; vertical-align: middle; }
@@ -111,6 +111,7 @@ bdi { unicode-bidi: isolate; }
 }
 .gear { display: inline-grid; place-items: center; flex: none; width: var(--target); height: var(--target); border-radius: 50%; color: var(--ink); }
 @media (hover: hover) { .gear:hover { background: var(--raised); } }
+.gear[aria-current="page"] { background: var(--raised); color: var(--accent); }
 
 
 .main { grid-area: main; min-width: 0; outline: none; padding-top: 8px; }
@@ -145,6 +146,9 @@ bdi { unicode-bidi: isolate; }
 .navcount { min-width: 20px; height: 20px; padding: 0 8px; border-radius: 10px; background: var(--sunk); color: var(--muted); font: 600 0.75rem/20px var(--font-data); text-align: center; }
 .side-list .navcount, .side-list .badge { margin-left: auto; }
 .tab .navcount { position: absolute; top: 5px; left: calc(50% + 6px); }
+/* A new answer in Chat not seen yet: a small dot, never a number or a colour of its own. */
+.navdot { display: inline-block; width: 8px; height: 8px; border-radius: 4px; background: var(--muted); }
+.tab .navdot { position: absolute; top: 8px; left: calc(50% + 12px); }
 
 @media (min-width: 760px) {
   .shell {
@@ -185,6 +189,7 @@ bdi { unicode-bidi: isolate; }
    up and Settings, the same height as a menu item. */
 .side-top { padding-bottom: 8px; border-bottom: 1px solid var(--line); margin-bottom: -12px; }
 .side-top .side-toggle { width: 100%; }
+.side-top.side-end { padding: 8px 0 0; margin: 12px 0 0; border-bottom: 0; border-top: 1px solid var(--line); }
 
 .side-toggle { display: flex; align-items: center; gap: 12px; min-height: var(--target); padding: 8px 12px; border: 0; border-radius: var(--r-sm); background: none; color: var(--muted); font: inherit; font-size: var(--t-sm); cursor: pointer; text-align: left; }
 @media (hover: hover) { .side-toggle:hover { background: var(--raised); color: var(--ink); } }
@@ -226,7 +231,7 @@ bdi { unicode-bidi: isolate; }
 .card h3, .card-title { font-size: var(--t-lg); font-weight: 600; }
 .org { color: var(--muted); }
 .job-top { display: flex; flex-wrap: wrap; align-items: baseline; justify-content: space-between; gap: 8px 12px; }
-.job-top h3 { min-width: 0; flex: 1 1 200px; }
+.job-top h3 { min-width: 0; flex: 1 1 200px; overflow-wrap: anywhere; }
 .card-actions, .opts, .wc-actions, .inline, .sheet-actions, .talk-row, .bulk-btns, .more-acts, .suggest-acts, .examples { display: flex; flex-wrap: wrap; gap: 12px; align-items: center; }
 .card-actions { margin-top: 4px; }
 .todo-top { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 8px 12px; }
@@ -301,6 +306,9 @@ p.tone-warn, .note.tone-warn, .checks.tone-warn { color: var(--st-overdue); }
 p.tone-bad, .note.tone-bad, .state.tone-bad { color: var(--st-failed); }
 .state.tone-muted, .note.tone-muted { color: var(--muted); }
 .state { font-size: var(--t-sm); display: flex; flex-wrap: wrap; align-items: center; gap: 4px 12px; }
+/* What a refused tap needs, given in place: its label, its field and Send on one line. */
+.fix { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin-top: 8px; font-size: var(--t-sm); }
+.fix .fix-in { flex: 1 1 160px; min-width: 0; }
 .note { font-size: var(--t-sm); }
 .cost { font-size: var(--t-sm); color: var(--muted); display: inline-flex; align-items: center; gap: 4px; }
 .gauge { width: 14px; height: 12px; flex: none; }
@@ -639,7 +647,7 @@ textarea { width: 100%; resize: vertical; line-height: 1.45; }
   /* A small circle drawn inside a 44px target, the size of every control on a phone; on a
      wider screen the target is the circle's own size, so it never takes a line of its own. */
   background: radial-gradient(circle at center, transparent 0 10px, var(--line-strong) 10px 11px, transparent 11.5px); vertical-align: middle; }
-@media (min-width: 760px) { .q { width: 24px; height: 24px; min-width: 24px; margin: -4px 0 -4px 4px; } }
+@media (min-width: 760px) and (pointer: fine) { .q { width: 24px; height: 24px; min-width: 24px; margin: -4px 0 -4px 4px; } }
 .orphan { display: grid; gap: 8px; }
 .near-line { font-size: 0.875rem; color: var(--muted); }
 
@@ -770,6 +778,7 @@ dialog.question-screen[open] { display: flex; flex-direction: column; }
    large text (2026-10-29: 37px over in the font Linux draws, not in Inter). */
 .msg-top { display: flex; flex-wrap: wrap; align-items: center; justify-content: flex-start; gap: 8px; }
 .msg-top > .icon-only { margin-left: auto; }
+.msg-top > * { min-width: 0; overflow-wrap: anywhere; }
 .subject { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
 .openlink { display: inline-flex; align-items: center; min-height: var(--target); font-weight: 600; }
 
@@ -883,6 +892,9 @@ dialog.sheet {
   background: var(--surface); color: var(--ink); box-shadow: var(--shadow);
 }
 dialog.sheet form { display: grid; gap: 16px; }
+/* A long list of choices keeps Save and Cancel in reach: the row stays at the sheet's foot
+   while the list scrolls (the 3 November audit: Save 4,076px down a list of 73 roles). */
+dialog.sheet .sheet-actions { position: sticky; bottom: 0; z-index: 1; margin: 0 -24px -24px; padding: 12px 24px 24px; background: var(--surface); border-top: 1px solid var(--line); }
 .sheet-title { font-size: var(--t-xl); font-weight: 600; padding-right: 8px; }
 .sheet-intro { color: var(--ink); }
 .sheet-cost { color: var(--muted); font-size: var(--t-sm); }
@@ -956,6 +968,10 @@ a.navlink, .applylink, .btn.link, .fold .btn.link, .bp-foot a { text-decoration-
      name in the middle of a line never breaks the text around it (2026-10-29). */
   .btn.link, a.navlink, .errors a, .wc-links a, .related a, .warm a, a.name-link, .bp-news a, .prep-text a, .bp-lead a, a.pi-src {
     display: inline-block; min-height: var(--target); padding: calc((var(--target) - 20px) / 2) 0; margin-block: calc((var(--target) - 20px) / -2); line-height: 20px; vertical-align: baseline; white-space: normal; text-align: center; }
+  /* A person's name is the way into their page: a short one ("Ge", 19px) reaches its 44px
+     through its sides, so the line around it does not move (2026-11-03). */
+  a.name-link { position: relative; }
+  a.name-link::after { content: ""; position: absolute; inset: 0 -13px; }
   .card-actions .btn.link, .controls .btn.link { margin-block: 0; }
   a.back-link, a.bp-go { display: inline-flex; align-items: center; min-height: var(--target); min-width: var(--target); }
   a.bp-link { min-height: var(--target); }
@@ -1254,7 +1270,7 @@ body.has-fab .shell { padding-bottom: calc(var(--tabs-h) + env(safe-area-inset-b
 }
 .sec.brief-page { max-width: none; }
 .brief-head { display: flex; align-items: flex-end; justify-content: space-between; gap: 12px 16px; flex-wrap: wrap; }
-.brief-hello .screen-title { font-size: 1.75rem; line-height: 1.2; letter-spacing: -0.01em; }
+.brief-hello .screen-title { font-size: 1.75rem; line-height: 1.2; letter-spacing: -0.01em; outline: none; }
 .brief-hello .sum-small { margin: 4px 0 0; }
 .brief-grid { display: grid; grid-template-columns: minmax(0, 1fr); gap: 12px; }
 @media (min-width: 760px) { .brief-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
@@ -1359,10 +1375,10 @@ ul.bp-news { gap: 12px; }
 .bp-link { color: inherit; text-decoration: none; border-radius: 4px; }
 @media (hover: hover) { .bp-link:hover { text-decoration: underline; text-decoration-color: var(--link-line); text-underline-offset: 3px; } }
 .bp-link:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }
-.name-link { color: inherit; font-weight: inherit; text-decoration: underline; text-decoration-color: var(--line-strong); text-decoration-thickness: 1px; text-underline-offset: 3px; }
+.name-link { overflow-wrap: anywhere; color: inherit; font-weight: inherit; text-decoration: underline; text-decoration-color: var(--line-strong); text-decoration-thickness: 1px; text-underline-offset: 3px; }
 @media (hover: hover) { .name-link:hover { text-decoration-color: var(--link-line); } }
 .sum .help-q { display: inline-grid; place-items: center; vertical-align: 1px; min-width: 22px; min-height: 22px; width: 22px; height: 22px; margin-left: 8px; padding: 0; font-size: var(--t-sm); font-weight: 600; }
-@media (max-width: 759px) { .sum .help-q { width: var(--target); height: var(--target); min-width: var(--target); min-height: var(--target); margin: calc((var(--target) - 20px) / -2) -8px calc((var(--target) - 20px) / -2) -4px; border: 0; vertical-align: middle;
+@media (max-width: 759px), (pointer: coarse) { .sum .help-q { width: var(--target); height: var(--target); min-width: var(--target); min-height: var(--target); margin: calc((var(--target) - 20px) / -2) -8px calc((var(--target) - 20px) / -2) -4px; border: 0; vertical-align: middle;
   background: radial-gradient(circle at center, transparent 0 10px, var(--line-strong) 10px 11px, transparent 11.5px); } }
 .af-x { margin-left: 4px; }
 
@@ -1388,8 +1404,8 @@ ul.bp-news { gap: 12px; }
 .set-advanced > summary { cursor: pointer; list-style: none; display: flex; align-items: center; justify-content: space-between; gap: 12px; min-height: var(--target);
   padding: 8px 16px; border: 1px solid var(--line); border-radius: var(--r); background: var(--surface); font-weight: 600; }
 .set-advanced > summary::-webkit-details-marker { display: none; }
-.set-advanced > summary::after { content: "›"; color: var(--muted); font-size: 1.25rem; line-height: 1; transition: transform 0.15s; }
-.set-advanced[open] > summary::after { transform: rotate(90deg); }
+.set-advanced > summary::after { content: ""; width: 8px; height: 8px; flex: none; border-right: 2px solid var(--muted); border-bottom: 2px solid var(--muted); transform: rotate(45deg); margin-right: 4px; transition: transform 0.15s; }
+.set-advanced[open] > summary::after { transform: rotate(-135deg); }
 .set-advanced[open] > summary { margin-bottom: 12px; }
 .prof-row .hint { margin-top: 2px; }
 
@@ -1557,6 +1573,8 @@ dialog.sheet .sheet-body { display: grid; gap: 16px; }
 .bp-day-dots { display: flex; gap: 2px; min-height: 6px; }
 .bp-day-dots i { width: 6px; height: 6px; border-radius: 50%; background: var(--pc); }
 .bp-day-dots i.due { background: transparent; box-shadow: inset 0 0 0 1.5px var(--pc); }
+/* A day an invitation offers, still to choose: outlined and fainter than one booked. */
+.bp-day-dots i.offered { opacity: 0.6; }
 /* Today and tomorrow stand out at a glance, never in red (the maintainer, 2026-11-02: red
    "promotes alarmism", and pine and iris were too faint): a clear green and gold, the panel's
    own colour for every other day. Coming up's day headings carry the same as a dot. */

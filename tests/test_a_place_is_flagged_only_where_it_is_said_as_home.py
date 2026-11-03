@@ -125,8 +125,13 @@ def test_where_they_will_push_marks_the_answer_as_your_answers_does(case):
         {"company": "Saltmarsh Analytics", "title": "Analyst", "dates": "Sep 2019 - Mar 2020"}])
     ctx["answers"] = [STOCK]
     push = next(m for m in P.landmines(ctx) if "Saltmarsh" in m["what"])
-    assert push["framing"][0].startswith("Careful: you told %s you are in Leeds" % FIRM)
-    assert push["framing"][1].startswith("Prepared: I moved to Manchester")
+    # Updated 2026-11-03 (the documents audit, finding 1): printed under its warning, the
+    # answer naming the other place was still offered as "Prepared", and a pack told an
+    # employer that heard one city the person was settled in another. It is left out.
+    assert push["framing"][0].startswith(
+        "Your stock answer to this is left out for %s: you told %s you are in Leeds"
+        % (FIRM, FIRM))
+    assert not any(f.startswith("Prepared:") for f in push["framing"])
 
 
 def test_an_answer_under_a_heading_of_their_own_is_checked_for_the_place(case):

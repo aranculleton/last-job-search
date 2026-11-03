@@ -993,6 +993,7 @@ def years_bars(text: str) -> list[tuple[int, str]]:
         if BOAST.search(s) or not WANTS.search(s):
             continue
         seen = set()
+        here = []
         for m in list(YEARS.finditer(s)) + list(YEARS_IN.finditer(s)):
             if m.start() in seen:
                 continue
@@ -1000,8 +1001,29 @@ def years_bars(text: str) -> list[tuple[int, str]]:
             n = _num(m.group(1))
             if n > 25 or (n > 12 and not STRONG_WANT.search(s)) or _preferred_bar(s, m):
                 continue
-            found.append((n, s[:220]))
+            here.append((n, s[:220], _graduate_route(s, m)))
+        # "BS with 8+ years, MS with 6+ years, or PhD with 2+ years": the bar for someone
+        # with no graduate degree is the bachelor's eight. Read as the lowest, it was two,
+        # and a posting whose minimum he missed by four years scored 90 (2026-11-03).
+        if not GRADUATE_HELD and any(not g for _n, _s, g in here):
+            here = [x for x in here if not x[2]]
+        found += [(n, q) for n, q, _g in here]
     return sorted(found, key=lambda x: x[0])
+
+
+# A years figure stated for a graduate degree: the degree opens the clause the figure is in.
+_GRAD_ROUTE = re.compile(r"\b(?:ms|m\.s\.?|msc|m\.sc\.?|master['’]?s?|mba|ph\.?\s?d\.?|"
+                         r"doctora\w*|graduate degree|advanced degree)(?![\w'’])", re.I)
+# Does the person hold a graduate degree? The profile's DEGREE_FLAGS (on unless set off)
+# says a graduate degree is one they lack, the same reading fit.py makes.
+GRADUATE_HELD = not getattr(_S, "DEGREE_FLAGS", True)
+
+
+def _graduate_route(s: str, m) -> bool:
+    """Is the years figure at `m` the bar for a graduate degree ("or PhD with 2+ years")?"""
+    before = s[:m.start()]
+    clause = re.split(r"[,;(/]|\bor\b|\band\b", before)[-1]
+    return bool(_GRAD_ROUTE.search(clause))
 
 
 def _preferred_bar(s: str, m) -> bool:

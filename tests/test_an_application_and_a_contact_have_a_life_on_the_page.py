@@ -94,8 +94,9 @@ def test_an_interview_booked_on_the_page_is_the_stage_line_outcome_writes(search
     folder = os.path.join(search.state, "documents", "applications")
     md = next(os.path.join(folder, d, "outcome.md") for d in os.listdir(folder)
               if d.startswith("larkspur_retail_senior"))
-    # The time goes on the stage line too, where the pack, the brief and the page read it.
-    assert "- [ ] Phone screen (scheduled 2026-10-30 14:00, with the recruiter)" in open(
+    # The time goes on the stage line too, where the pack, the brief and the page read it,
+    # with the zone it was given in (the audit, 2026-11-03).
+    assert "- [ ] Phone screen (scheduled 2026-10-30 14:00 Europe/London, with the recruiter)" in open(
         md, encoding="utf-8").read()
     assert _app(search, LARKSPUR)["next"] == {"kind": "interview", "label": "Phone screen",
                                               "date": "2026-10-30"}
@@ -158,13 +159,15 @@ def test_a_call_booked_is_the_contacts_and_its_prep_is_the_calls(search):
     assert after["call"] == {"day": "2026-10-30", "time": "12:30", "prep": None}
     assert after["owed"] == {"label": "Prepare for the call", "kind": "prep",
                              "id": f"prep~call~{WREN}", "args": {"contact": WREN, "call": True}}
-    # A call booked with someone whose reply is owed is still booked on their row.
+    # A call booked with someone whose reply was owed is booked on their row, and stays booked:
+    # their message before the call's day is the one that booked it, never a reply still owed
+    # (the audit, contacts 9: a booked recruiter screen read "Replied: your turn").
     juno = next(p for p in search.model()["people"] if p["id"] == JUNO)
     search.written_back()
     aid = search.act("person.call_booked", JUNO, value="2026-10-31", rev=juno["rev"])
     assert search.apply()["ok"] == [aid]
     juno = next(p for p in search.model()["people"] if p["id"] == JUNO)
-    assert juno["status"] == "replied_needs_response" and juno["call"]["day"] == "2026-10-31"
+    assert juno["status"] == "call_booked" and juno["call"]["day"] == "2026-10-31"
 
 
 def _held(model, company):

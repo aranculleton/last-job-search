@@ -639,13 +639,27 @@ _DOC_NAMED = re.compile(_SEND_VERBS + r"[^.!?\n]{0,40}\b(resume|r[eé]sum[eé]|c
                         + _DOC_OVER, re.I)
 
 
+# Thanks for one already received: "thanks for sending the resume", "got your CV". The
+# resume is with them, so nothing is owed: it was read as a new ask, and a second resume
+# was put on the person's list the day the first was thanked for (journeys audit 8).
+_THANKED_FOR = re.compile(
+    r"\b(?:thanks?|thank\s+you|cheers|appreciated?|grateful)\b[^.!?\n]{0,20}?\bfor\s+"
+    r"(?:\w+\s+){0,2}?" + _SEND_VERBS + r"[^.!?\n]{0,40}"
+    r"|\b(?:got|received|have\s+got|have\s+received|now\s+have)\s+(?:your|the)\s+"
+    r"(?:resume|r[eé]sum[eé]|cv|curriculum vitae)\b", re.I)
+
+
+def _without_thanks(text: str) -> str:
+    return _THANKED_FOR.sub(" ", text)
+
+
 def asks_for_resume(text) -> bool:
     """Do they ask for the resume itself? "Send me your CV and I'll pass it on" does;
-    their address in a signature, "send me your details", a no, a dead end, and "I've
-    passed your CV on" (done, not asked) do not. What the log reads a resume owed from
-    (state.resumes_owed), where the classifier's wider net would owe one to every
-    signature."""
-    text = str(text or "")
+    their address in a signature, "send me your details", a no, a dead end, "I've
+    passed your CV on" (done, not asked) and "thanks for sending your resume" do not. What
+    the log reads a resume owed from (state.resumes_owed), where the classifier's wider net
+    would owe one to every signature."""
+    text = _without_thanks(str(text or ""))
     if (_ALREADY_DONE.search(text) or _hits(text, REJECTION) or _hits(text, MISMATCH)
             or REFERRAL_FIELD.search(text)):
         return False
@@ -670,7 +684,8 @@ def _match_send_resume(text, ctx):
     # name them, not email them a PDF.
     blocked = (_hits(text, REJECTION) or _hits(text, MISMATCH)
                or bool(REFERRAL_FIELD.search(text)))
-    hits = [] if (_ALREADY_DONE.search(text) or blocked) else _hits(text, RESUME_ASK)
+    asked = _without_thanks(text)
+    hits = [] if (_ALREADY_DONE.search(asked) or blocked) else _hits(asked, RESUME_ASK)
     if ctx["email"] and not blocked:
         # An address with no ask around it is usually a signature block rather than
         # an invitation, and the classifier cannot tell the two apart. It still

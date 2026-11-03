@@ -551,3 +551,34 @@ Ivo Haddad             # invented, the same test
 Hi Ivo                  # the invented Ivo Haddad greeted, the same test
 Bea Novak               # invented, the same test
 Tobias Brightwell       # invented, the same test
+Quillon Networks        # invented employer, tests/test_a_generated_document_passes_its_own_checker.py
+Teo Vell                # invented, the same test
+Thanks Teo              # the invented Teo Vell thanked, the same test
+Mira Halvorsen          # invented, the same test
+Ana Kellam               # invented, tests/test_contacts_show_only_what_the_persons_rules_allow.py
+Corwin Nettle            # invented, tests/test_contacts_show_only_what_the_persons_rules_allow.py
+Hi Quill                 # invented, tests/test_contacts_show_only_what_the_persons_rules_allow.py
+Ivo Elsworth             # invented, tests/test_contacts_show_only_what_the_persons_rules_allow.py
+Kestrel Foodstuffs       # invented, tests/test_contacts_show_only_what_the_persons_rules_allow.py
+Kit Glen                 # invented, tests/test_contacts_show_only_what_the_persons_rules_allow.py
+Lark Health              # invented, tests/test_contacts_show_only_what_the_persons_rules_allow.py
+Lark Retail              # invented, tests/test_contacts_show_only_what_the_persons_rules_allow.py
+Log Corwin's             # invented, tests/test_contacts_show_only_what_the_persons_rules_allow.py
+Moss Energy              # invented, tests/test_contacts_show_only_what_the_persons_rules_allow.py
+Moss Foods               # invented, tests/test_contacts_show_only_what_the_persons_rules_allow.py
+Quay Bank                # invented, tests/test_contacts_show_only_what_the_persons_rules_allow.py
+Quay Retail              # invented, tests/test_contacts_show_only_what_the_persons_rules_allow.py
+Quill Orme               # invented, tests/test_contacts_show_only_what_the_persons_rules_allow.py
+Quinn Jessop             # invented, tests/test_contacts_show_only_what_the_persons_rules_allow.py
+Rafe Thorne              # invented, tests/test_contacts_show_only_what_the_persons_rules_allow.py
+Rhian Glen               # invented, tests/test_contacts_show_only_what_the_persons_rules_allow.py
+Riley Hatherly           # invented, tests/test_contacts_show_only_what_the_persons_rules_allow.py
+Robin Ivers              # invented, tests/test_contacts_show_only_what_the_persons_rules_allow.py
+Rosalind Kellam          # invented, tests/test_contacts_show_only_what_the_persons_rules_allow.py
+Sasha Farrow             # invented, tests/test_contacts_show_only_what_the_persons_rules_allow.py
+Shirin Lowther           # invented, tests/test_contacts_show_only_what_the_persons_rules_allow.py
+Wren Caddel              # invented, tests/test_contacts_show_only_what_the_persons_rules_allow.py
+Zoe Quarry               # invented, tests/test_contacts_show_only_what_the_persons_rules_allow.py
+Northmere Transit Authority  # an invented public body, test_a_shortlist_holds_every_rule_the_person_gave
+Northmere Transit       # the same invented body, the same test
+Ash Penrose             # invented, the same test

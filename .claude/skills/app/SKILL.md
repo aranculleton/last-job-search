@@ -25,7 +25,8 @@ the whole chat, so a ring is one read, one command and its batches. ArtifactData
 in one message, each with `out_dir: $D` and `limit` 1000:
 
 - `actions` and `receipts` (what the person did, and what is already applied)
-- `work` where `status` in `queued`, `claimed`, `running` (the active set is small)
+- `work`, all of it (a finished item asked for again is written pinned to its version; the
+  store keeps two months of it)
 - `beats`, `holds`, `meta`, and `talk` threads addressed to you
 - `screen` and `addr` (the page's view and its addresses), so step 5's `app.py view` needs
   no second read
@@ -102,7 +103,7 @@ page, so never ask it again):
 | kind | run |
 |---|---|
 | search | `run_round.py --show <args.size>` (10 when it is not given; 0 is every one that fits, up to 60), then the shortlist (the job-scraper skill); `args.note` is what the person typed about it, followed like any instruction of theirs. A top-up (a size of 15 or fewer, or "find N more"): add `--pages 1 --expand`, one page of each site first, wider only when fewer than the size pass every rule (a full read of every site for ten roles took 23 minutes, 2026-11-03) |
-| draft, resume_for_contact | a draft that stops because the role is not one they can take (where it is open, eligibility, a hard cut) also takes the job off Jobs: `python3 tools/exclude.py add <url> --reason "<why, plain>" --title "<title>" --company "<employer>" --basis rules`, so the Brief and Jobs stop counting it (one stopped for Figma stayed in "10 jobs to look at", 2026-10-30); one run for the item and each in `with` (drafts queued together are one batch: `stage_picks.py stage` takes them all), by the drafting path in RUNBOOK.md step 2 (`stage_picks.py stage`, `consent` from the item's `answers`, or from `args.answers` (a list of question and answer) when the page queued it, the workflow, both audits, `assemble`, RUNBOOK step 3), then each PDF it made into the page's file store as the `files` row does (Artifact publish `asset: true`, then `app.py files-saved <path> <asset id>`), before step 5, so the draft's card downloads them at once instead of asking the person to "Get my files ready". `resume_for_contact`: `stage_picks.py --for-contact <args.contact>` for `args.job`, or the general resume when `job` is null; `args.note` is what they typed |
+| draft, resume_for_contact | a draft that stops because the role is not one they can take (where it is open, eligibility, a hard cut) also takes the job off Jobs: `python3 tools/exclude.py add <url> --reason "<why, plain>" --title "<title>" --company "<employer>" --basis rules`, so the Brief and Jobs stop counting it (one stopped for Figma stayed in "10 jobs to look at", 2026-10-30); one run for the item and each in `with` (drafts queued together are one batch: `stage_picks.py stage` takes them all), by the drafting path in RUNBOOK.md step 2 (`stage_picks.py stage`, `consent` from the item's `answers`, or from `args.answers` (each question with the person's answer) when the page queued it, the workflow, both audits, `assemble`, RUNBOOK step 3), then each PDF it made into the page's file store as the `files` row does (Artifact publish `asset: true`, then `app.py files-saved <path> <asset id>`), before step 5, so the draft's card downloads them at once instead of asking the person to "Get my files ready". `resume_for_contact`: `stage_picks.py --for-contact <args.contact>` for `args.job`, or the general resume when `job` is null; `args.note` is what they typed |
 | evaluate | /apply Step 1 on `args.url` or `args.text`, then `added_jobs.py add <row.json>`; with `applied_on`, `confirm.py applied --new`; with `contact` (who sent it), that person is the job's referral route: `network/state.py set <contact> --next-action "apply via <first name>'s referral" --note "sent <role> at <employer>"`, never by hand, and `result.summary` says who it is linked to; with `draft: true`, once it is scored queue its `draft` work as tapping Draft does (`app_actions.py` `_job_draft`); with `from_name` (someone not in the contact book), add "sent by <name>" to the role's notes |
 | general_resume | `stage_picks.py general` |
 | prep | `/interview` for `args.interview`; with `args.contact`, `network/prep.py "<contact>"`; `args.note` is what they typed |
@@ -211,7 +212,8 @@ Never wait for either: go straight back to step 3 for the next item, so a search
 networking run and an interview prep run side by side (ten at most in the cloud, each in a chat of
 its own, `page_db.HEAVY_CAP_CHATS`; three on a computer, `page_db.HEAVY_CAP`;
 `next` keeps the cap and the locks). When a background agent ends with `Finished <id>, on
-master`: run `app.py view` (step 5; it takes master first) and send its batch; an item still
+master` or `Finished <id>, not landed` (its check failed; land it with this chat's own work):
+run `app.py view` (step 5; it takes master first) and send its batch; an item still
 running finishes here, as step 5 says, from what its line said; then step 3 again, so work
 queued while it ran starts now. Two chats writing the page at once is safe: each write is
 pinned to what it read, so the later one is refused and redone, and each is drawn from
@@ -248,9 +250,10 @@ page counts a job with no word for half an hour as stopped. A search's job sites
 they are and how long is left: while `run_round.py` runs (in the background), every ten
 minutes or so (the lease is thirty) `python3 tools/app.py pin "$D" --work <id> --stage
 scrape --log <the round's folder>/round.log`, so the page times it by that and not by the
-usual minutes. `"stop_asked": true` in what it prints: write `status:
-stopped`, release its locks and stop. A refused pin: read `work` again; still yours, pin
-once more; claimed by another chat, write nothing else.
+usual minutes. `"stop_asked": true` in what it prints (or an item named under `stopped`):
+`python3 tools/app.py done "$D" --work <id> --chat <the id it was claimed under> --stopped`,
+which releases its locks, and stop. A refused pin: as any refused write (below); claimed by
+another chat, write nothing else.
 
 **"Something looks wrong"** (the person's own report from the page, in any words): look,
 and fix what is theirs. Where it is the app's own fault, work round it for them now, the best
@@ -313,11 +316,16 @@ where it is, clear `busy` the same way and say nothing; the next chat lands it.
 
 - Nothing about another person goes into the database but a first name and an employer,
   except `reach/<contact>`, owner-only, which `app.py view` writes. Their words leave it
-  with the claim. `app.py check` fails a model that holds an address.
+  with the receipt that kept them. `app.py check` fails a model that holds an address.
 - Work goes to the chat that answers the page, whichever kind it is (`page_db.can_take`);
   only a brief waits for a chat in the cloud. Nobody is asked where something should run.
-- A question the work raises that the page did not ask goes on the item as `status:
-  needs_you` with the question in `note`; the page asks it. Never wait in the chat. The
-  person's answer comes back on the same item, queued again, in `args.answers` under the
-  question: take it with `next` and carry on from where it stopped.
-- Every write is pinned (`if_version`) except a create; one write at a time per document.
+- A question the work raises that the page did not ask goes to the page by command:
+  `python3 tools/app.py done "$D" --work <id> --chat <the id it was claimed under> --question
+  "<one plain question>"` (the item waits for them, its locks freed); the page asks it.
+  Never wait in the chat. The person's answer comes back on the same item, queued again, in
+  `args.answers` under the question: take it with `next` and carry on.
+- Every move of a work item is an `app.py` command (`next`, `pin`, `done`, `ask`, `busy`),
+  never a write by hand. Every write is pinned (`if_version`) except a create; one write at a
+  time per document. A refused write names the record's current version: `python3
+  tools/app.py version "$D" <collection>/<doc id> <that version>`, then the same command once
+  more; refused again, read again into a new folder.

@@ -319,13 +319,17 @@ STEPS = (
     {"id": "resume", "kind": "upload-or-paste",
      "question": "Your resume: add the file, or paste it.",
      "help": "No resume? Choose Build one with me, and I'll make it with you, one job at a time.",
+     # The page's store keeps a PDF or a text file; a Word file it refuses (journeys 21).
      "fields": [{"key": "resume", "kind": "upload-or-paste",
-                 "label": "Your resume (PDF or Word), or paste it"}],
+                 "label": "Your resume (a PDF or a text file), or paste it"}],
      "options": [{"label": "Build one with me", "action": "setup.build_resume"}]},
+    # Both are needed before anything can be searched: never "(if you like)" (journeys 21).
     {"id": "work", "kind": "text", "question": "What work do you want next, and where?",
      "help": "In your own words: a job title or two is plenty.",
-     "fields": [{"key": "work", "kind": "text", "label": "The work you want next"},
-                {"key": "place", "kind": "place", "label": "Where you'd like to work"}]},
+     "fields": [{"key": "work", "kind": "text", "label": "The work you want next",
+                 "required": True},
+                {"key": "place", "kind": "place", "label": "Where you'd like to work",
+                 "required": True}]},
     {"id": "right_to_work", "kind": "choice",
      "question": "Can you work in {country} without an employer sponsoring you, now and later?",
      "fields": [{"key": "answer", "kind": "choice", "label": "",
@@ -917,6 +921,49 @@ NO_PUBLISH = ("If this chat cannot publish (no Artifact tool, or the publish is 
               "as .claude/commands/setup.md says, and say nothing about a page.")
 
 
+def _resume_to_save(st: dict) -> str:
+    """The step that saves a resume the person added on the page, or "" when none waits."""
+    resume = (st["answers"].get("resume") or {}) if isinstance(st["answers"], dict) else {}
+    if not (resume.get("asset") and not resume.get("file")):
+        return ""
+    url = st["page"].get("url") or "<the page's url>"
+    return (f"The person added their resume on the page. Save it: Artifact, action read, url "
+            f"{url}, path {resume['asset']}, out_dir documents/cv. Then python3 tools/app.py "
+            f"resume-saved <the file it saved> --asset {resume['asset']}, and delete it from "
+            f"the page (Artifact, action delete, url {url}, path {resume['asset']}): the page "
+            "is no place to keep it.")
+
+
+def _setup_open(st: dict) -> bool:
+    return not st["set_up"] or st["setup"]["state"] in ("none", "partial", "self", "stopped") \
+        or not _finished()
+
+
+def carry_on() -> list[str]:
+    """What a chat the page woke does about setup once it has applied the person's setup
+    answers: save a resume they added, and carry setup on from the answers. Only `start`
+    said it, and a wake from the page never runs start, so answers given on the page sat
+    with "nothing printed: end the turn" (journeys audit 13)."""
+    try:
+        if repo_kind_offline()["kind"] in ("app", "none"):
+            return []
+        st = {"setup": _setup_state(), "page": page_record(), "answers": answers(),
+              "set_up": set_up()}
+    except Exception:  # noqa: BLE001  no copy to read: nothing to carry on
+        return []
+    out = []
+    saving = _resume_to_save(st)
+    if saving:
+        out.append("setup: " + saving)
+    if _setup_open(st):
+        done = sum(1 for s in STEP_IDS if (st["answers"].get(s) or {}))
+        out.append(f"setup: carries on from where it is ({done} of {len(STEP_IDS)} answered): "
+                   "follow .claude/commands/setup.md, which reads every answer from "
+                   "profile/setup_answers.json and never asks one again. The page asks the "
+                   "rest, one at a time; this chat asks nothing.")
+    return out
+
+
 def start(on: str = "", tools: str = "", page_url: str = "", runner=None, work: str = "",
           data_current: bool = False) -> tuple[int, list[str]]:
     """(exit code, the lines a chat follows): what this chat does next, whatever the copy's
@@ -924,7 +971,9 @@ def start(on: str = "", tools: str = "", page_url: str = "", runner=None, work: 
 
     `work`: a chat started for one big job (`app.py next`). It takes no update check: the
     chat that answers the page took the day's already, and a job must not take an update
-    part way through. It never writes the page's view either. `data_current`: the page's
+    part way through. Its own steps bring the page up to date at the end, after it lands
+    (app.py job_steps), so start says nothing about it (the drafting child, 2026-11-03: start
+    said a job chat never did, and its prompt then said to). `data_current`: the page's
     `meta/current` already carries the model this copy makes now, so its data is not
     written again."""
     st = state(runner)
@@ -1010,16 +1059,11 @@ def start(on: str = "", tools: str = "", page_url: str = "", runner=None, work: 
             check_job_sites()
         except Exception:  # noqa: BLE001  the day's sync checks it too
             pass
-    resume = (st["answers"].get("resume") or {}) if isinstance(st["answers"], dict) else {}
-    if resume.get("asset") and not resume.get("file"):
-        url = st["page"].get("url") or "<the page's url>"
-        steps.append(f"{n}. The person added their resume on the page. Save it: Artifact, "
-                     f"action read, url {url}, path {resume['asset']}, out_dir documents/cv. "
-                     "Then python3 tools/app.py resume-saved <the file it saved> --asset "
-                     f"{resume['asset']}, and delete it from the page (Artifact, action delete, "
-                     f"url {url}, path {resume['asset']}): the page is no place to keep it.")
+    saving = _resume_to_save(st)
+    if saving:
+        steps.append(f"{n}. {saving}")
         n += 1
-    if not st["set_up"] or setup in ("none", "partial", "self", "stopped") or not _finished():
+    if _setup_open(st):
         done = sum(1 for s in STEP_IDS if (st["answers"].get(s) or {}))
         if no_page:
             steps.append(f"{n}. Setup carries on from where it is ({done} of {len(STEP_IDS)} "

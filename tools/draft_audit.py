@@ -514,6 +514,58 @@ def research_findings(d: dict, pick: dict, research: dict | None) -> list[dict]:
     return out
 
 
+# A sentence of the letter or the note that is the employer's own sentence with a word or
+# two changed: "<Product> delivers guidance that accelerates time to value ... activate
+# agentic capabilities" against the press release's "delivers expert guidance and best
+# practices that accelerate time to value, enabling customers to activate agentic
+# capabilities", in the letter and in a third of the note (2026-11-03). Measured as the share
+# of the sentence's own content words that are the source's (tone.restate_ratio).
+COPIED_SHARE = 0.7
+
+
+def copied_findings(d: dict, research: dict | None, posting: str = "") -> list[dict]:
+    """The sentences a reader reads that copy what the research quotes from the employer's
+    own pages, and a letter that says where the person is based more than once. The posting
+    is not read here: naming their need in their words is how an opening is meant to start."""
+    import tone
+    sources = [_fact_evidence(f) for f in research_facts(research).values()]
+    sources = [s for s in sources if len(str(s).split()) >= 6]
+    out = []
+    for field, sentence in field_sentences(d):
+        if field == "summary":
+            continue
+        for src in sources:
+            r = tone.restate_ratio(sentence, src)
+            if r.ratio >= COPIED_SHARE and len(r.terms) >= tone.MIN_CONTENT_WORDS:
+                out.append(_finding("copies-source", field, sentence[:120],
+                                    "this is their own sentence with a word or two changed "
+                                    "(\"%s\"): say what it means for the role, in your own "
+                                    "words" % " ".join(str(src).split())[:120]))
+                break
+    out += located_twice(d)
+    return out
+
+
+def located_twice(d: dict) -> list[dict]:
+    """A letter that tells them where the person is in two places: "I am a data scientist in
+    <City>" opening it and "I am based in <City>" closing it (2026-11-03). The close says it
+    (the person's letter rule); once is enough."""
+    home = str(person.get("identity.location", "") or "").split(",")[0].strip()
+    if not home:
+        return []
+    rx = re.compile(r"(?<![\w-])%s(?![\w-])" % re.escape(home), re.I)
+    me = re.compile(r"\b(?:I|I'm|I’m|my)\b")
+    said = [(field, s) for field, s in field_sentences(d)
+            if field in ("p1", "lead", "p4") or field.startswith("cl_bullets")
+            if rx.search(s) and me.search(s)]
+    if len({f for f, _s in said}) < 2:
+        return []
+    first = said[0]
+    return [_finding("located-twice", first[0], first[1][:120],
+                     "the letter says you are in %s more than once: keep it in the close "
+                     "only" % home)]
+
+
 def _research_country(pick: dict) -> str:
     """The country the pick's research is kept under ("- research as: XX" above its fence)."""
     try:
@@ -991,6 +1043,7 @@ def mechanical(d: dict, pick: dict, posting: str, research: dict | None,
         flags += rewording_flags(d, pick, findings)
     if not broken:
         findings += research_findings(d, pick, research)
+        findings += copied_findings(d, research, posting)
         if research_facts(research) and not str(d.get("research_hash") or "").strip():
             flags.append(_flag("no-research-hash", "draft", "", "written without the research's "
                                "hash, so its F ids cannot be shown to be the facts on file: "

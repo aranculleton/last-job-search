@@ -58,10 +58,14 @@ def test_a_resume_pasted_in_the_setup_card_is_kept_in_the_copy_and_off_the_page(
     claimed = json.loads(fresh.run("apply", fresh.dump, "--chat", "cloud-1", "--now", NOW,
                                    "--claim"))
     batch = json.load(open(claimed["batches"][0], encoding="utf-8"))
-    wipe = next(e for e in batch if e["doc_id"] == aid)
-    assert json.load(open(wipe["file_path"], encoding="utf-8"))["value"] == {"__delete__": True}
+    # The words leave with the receipt, not the claim (changed 2026-11-03, engine audit 9).
+    claim = next(e for e in batch if e["doc_id"] == aid)
+    assert "value" not in json.load(open(claim["file_path"], encoding="utf-8"))
     got = fresh.apply()
     assert got["ok"] == [aid], fresh.receipt(aid)
+    wipe = next(e for b in got["batches"] for e in json.load(open(b, encoding="utf-8"))
+                if e["collection"] == "actions" and e["doc_id"] == aid)
+    assert json.load(open(wipe["file_path"], encoding="utf-8"))["value"] == {"__delete__": True}
     saved = fresh.answers()["resume"]
     assert saved["source"] == "pasted" and saved["file"].startswith("documents/cv/")
     with open(os.path.join(fresh.state, *saved["file"].split("/")), encoding="utf-8") as fh:

@@ -169,7 +169,8 @@ PAGE_TOUR = (
              "numbers. Tap any line to go to it."},
     {"key": "todo", "tab": "todo", "title": "To do",
      "text": "What needs you, five at a time, most urgent first: a question, a follow-up "
-             "that is due, an interview coming up. Each card has one button, and a bin."},
+             "that is due, an interview coming up. A card's filled button is its next step; "
+             "the bin puts it away."},
     {"key": "jobs", "tab": "jobs", "title": "Jobs",
      "text": "Every role from found to applied. Found: scored out of 100 for how well it "
              "fits you; tap Draft this on one you like. Drafts: your resume and letter, "

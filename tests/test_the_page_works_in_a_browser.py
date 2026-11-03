@@ -180,8 +180,12 @@ def pages(tmp_path_factory):
             st, last = ["in_conversation", "awaiting_reply", "call_booked"][i % 3], "2026-10-%02d" % (5 + i)
         else:
             st, last = ["awaiting_reply", "closed", "cold"][i % 3], "2026-0%d-%02d" % (3 + i % 4, 1 + i % 25)
+        # Where each stands is the engine's answer (app_model.standing): a conversation with a
+        # step due and a call this week need the person; the rest wait or are done.
+        group = ("now" if i < 12 and st != "awaiting_reply" else "waiting" if st == "awaiting_reply"
+                 else "done")
         people.append({"id": "c%d" % i, "first_name": first[i % len(first)], "employer": companies[i % len(companies)],
-                       "status": st, "last": last, "next_action": "Reply" if st == "in_conversation" else None,
+                       "status": st, "group": group, "last": last, "next_action": "Reply" if st == "in_conversation" else None,
                        "due": "2026-10-27" if st == "in_conversation" else None})
     crowd["done"] = dict(crowd["done"], applications=apps)
     crowd["applications"] = [dict(x, id="crowd-app-%d" % i, rev="ca%d" % i) for i, x in enumerate(apps)]
@@ -237,9 +241,13 @@ def pages(tmp_path_factory):
                                               "funnel": [{"stage": "applied", "n": 1}, {"stage": "interview", "n": 0}, {"stage": "offer", "n": 0}]})
     # Set up, with nothing found yet: every list says what will appear there.
     nothing = dict(EMPTY, setup={"state": "done", "steps": []})
+    # A search just set up, nothing applied for yet: the one To do offers the tour to.
+    fresh = _sample()
+    fresh["done"] = dict(fresh["done"], applications=[])
     return {"sample": _write(tmp, "sample", _sample()), "empty": _write(tmp, "empty", EMPTY), "nothing": _write(tmp, "nothing", nothing), "held": _write(tmp, "held", held),
             "big": _write(tmp, "big", big), "hostile": _write(tmp, "hostile", hostile),
-            "crowd": _write(tmp, "crowd", crowd), "kinds": _write(tmp, "kinds", kinds), "busy": _write(tmp, "busy", busy)}
+            "crowd": _write(tmp, "crowd", crowd), "kinds": _write(tmp, "kinds", kinds), "busy": _write(tmp, "busy", busy),
+            "fresh": _write(tmp, "fresh", fresh)}
 
 
 def _clean(r):
@@ -404,9 +412,10 @@ def test_a_long_history_shows_every_live_thing_without_a_tap_and_folds_only_the_
     assert r["progressSearch"] and r["contactSearch"]
     assert r["contactDefault"] == 8 and not r["defaultChips"], \
         "Contacts opens on the 8 who need the person, with no filter left on (4.3)"
-    assert any(f.startswith("292 more people, nothing owed to them now") for f in r["contactFold"]), r["contactFold"]
+    assert any(f.startswith("292 more people, nothing to do for them now") for f in r["contactFold"]), r["contactFold"]
     assert r["searched"] >= 1 and r["searchFocus"] == "search", "typing in the search box keeps its focus"
-    assert any("hidden by your filters" in f for f in r["hidden"])
+    # A search is not a filter: it never says the rest are "hidden by your filters" (2026-11-03).
+    assert not any("hidden by your filters" in f for f in r["hidden"]), r["hidden"]
     assert r["cleared"] == 8
     assert r["unfolded"] == 8 + 50, "the fold opens fifty at a time beyond the ones who need you"
     assert r["overflow"]["sw"] <= r["overflow"]["cw"]
@@ -507,8 +516,10 @@ def test_a_tap_is_saved_only_when_it_is_and_done_when_its_receipt_arrives(run, p
     assert r["focusAfter"]["inMain"] and r["focusAfter"]["tag"] != "BODY", ("the card gone, focus is on what took its place, never lost", r["focusAfter"])
     assert r["done"].startswith("Done.") and r["moved"] == 3, "once done it moves to Sent or skipped: three of four cards left"
     assert "Change back" in r["back"], "and where the chat left a way back, it can be changed back"
-    assert r["refused"].startswith("Not done: this changed since you saw it.")
-    assert "Answered differently on your phone." in r["refused"]
+    # A refusal says the engine's own reason, once: "this changed since you saw it" only for a
+    # stale one, never over a conflict that says something else (the audit, 2026-11-03).
+    assert r["refused"].startswith("Not done: Answered differently on your phone."), r["refused"]
+    assert "changed since you saw it" not in r["refused"]
 
 
 def test_a_failed_save_says_so_at_once_and_never_says_saved(run, pages):
@@ -516,7 +527,10 @@ def test_a_failed_save_says_so_at_once_and_never_says_saved(run, pages):
     _clean(r)
     assert any(t.startswith("Not saved: Marked as sent: Juno") for t in r["toast"])
     assert any("Try again" in t for t in r["toast"])
-    assert r["state"].startswith("Not saved.") and "Try again" in r["state"]
+    # Said once: in the toast while it is up, then on the card, never both at once (the 3
+    # November audit: "Not saved. Try again" under the row and in a toast together).
+    assert not r["state"], r["state"]
+    assert r["stateAfter"].startswith("Not saved.") and "Try again" in r["stateAfter"]
     assert r["alert"].startswith("Not saved") and "Saved." not in r["live"]
 
 
@@ -566,7 +580,7 @@ def test_settings_save_once_the_person_settles_and_show_the_new_value(run, pages
     # The row is "Light or dark" under the group Look: a row named as its group read "Look /
     # Look" (the walk-through, 2026-11-03).
     look = r["names"].index("Light or dark")
-    assert r["names"][look:look + 2] == ["Light or dark", "Size"] and "Look" not in r["names"], r["names"]
+    assert r["names"][look:look + 2] == ["Light or dark", "Text size"] and "Look" not in r["names"], r["names"]
     adv = r["names"].index("Where Claude works")
     assert adv > look and r["names"][adv:adv + 2] == ["Where Claude works", "Suggestions"], r["names"]
 
@@ -810,8 +824,13 @@ def test_chat_is_one_box_and_quick_answers_read_the_page(run, pages):
     r = run("talk", html=pages["sample"], shot="phone-talk" if SHOTS else "")
     _clean(r)
     assert r["label"] == "Ask Claude anything" and r["placeholder"] == "Ask anything, or paste a screenshot of a message you got"
-    assert "What is due this week?" in r["examples"] and "Someone sent me a job" in r["examples"]
+    # Four ways in and the box: two example questions as well made six buttons before the box
+    # (the audit, 2026-11-03).
+    assert r["examples"][0] == "Someone sent me a job" and len(r["examples"]) == 4, r["examples"]
+    assert "What is due this week?" not in r["examples"]
     assert r["quick"][-1].startswith("Two things are due today")
+    # The question and its answer are both kept in the conversation.
+    assert len([p for p in r["stored"] if "/messages/" in p]) == 2, r["stored"]
     assert r["tools"] and r["tools"][0][0] == "read_section" and "Reply to Juno" in r["tools"][0][1]
     call = r["sampleCall"][0]
     assert call["tier"] == "quick" and call["tools"] == ["read_section", "find", "needs_chat"]
@@ -959,12 +978,13 @@ def test_no_width_scrolls_sideways_and_each_has_its_navigation(run, pages, width
     r = run("paint", html=pages["sample"], viewport={"width": width, "height": 800}, hash="jobs")
     _clean(r)
     assert r["overflow"]["sw"] <= r["overflow"]["cw"], r["overflow"]
+    # The rail beside a wide screen shows only while it has something to show (the 3 November
+    # audit: "Claude's work. Nothing running." squeezed every screen); with work it is there
+    # (test_the_rail_shows_only_while_claude_has_work).
     if width < 760:
         assert r["tabs"] and not r["side"] and not r["rail"]
-    elif width < 1280:
-        assert r["side"] and not r["tabs"] and not r["rail"]
     else:
-        assert r["side"] and r["rail"] and not r["tabs"]
+        assert r["side"] and not r["tabs"] and not r["rail"]
 
 
 def test_keyboard_alone_reaches_and_works_everything_and_the_shortcuts_can_be_switched_off(run, pages):
@@ -1091,7 +1111,7 @@ def test_light_or_dark_is_chosen_in_settings_kept_for_this_viewer_and_followed_b
     assert r["before"] == _rgb("light")
     # The look, then this device's size (2026-10-29).
     # "Light or dark" under the group Look, never "Look" twice (2026-11-03).
-    assert r["legends"] == ["Light or dark", "Size"] and r["choices"] == ["Auto", "Light", "Dark", "Smaller", "Standard", "Larger"]
+    assert r["legends"] == ["Light or dark", "Text size"] and r["choices"] == ["Auto", "Light", "Dark", "Smaller", "Standard", "Larger"]
     assert r["after"] == {"bg": _rgb("dark"), "look": "dark", "stored": "dark", "scheme": "dark"}
     assert r["actions"] == [], "a look is the viewer's own: nothing is asked of a chat"
     assert r["otherWindow"]["bg"] == _rgb("dark") and "dark" in r["otherWindow"]["checked"]
@@ -1310,7 +1330,7 @@ def test_the_profile_is_filled_in_and_changed_on_the_page_one_work_item_each(run
 
 
 def test_the_tour_walks_each_section_skips_and_opens_one_part_from_its_title(run, pages):
-    r = run("tour", html=pages["sample"])
+    r = run("tour", html=pages["fresh"])
     _clean(r)
     assert r["card"] == ["New here? A one-minute tour"]
     assert r["first"] == ["Brief (1 of 7)"]
@@ -1341,10 +1361,11 @@ def test_the_numbers_say_what_they_count_and_each_bar_says_its_week(run, pages):
     "applied" read as employers when it counts people who answered a message (2026-10-30)."""
     r = run("paint", html=pages["sample"], hash="brief", clock="2026-10-25T09:00:00Z")
     _clean(r)
-    # This week beside the usual one: a number with nothing to compare it to says little.
+    # This week beside the weeks' average: a number with nothing to compare it to says little,
+    # and the middle week said "usually 0" under a week of 51 (the audit, 2026-11-03).
     # How many weeks the bars cover is said with them: "Your last 30 days" over an eight-week
     # chart left it to be guessed (the walk-through, 2026-11-03).
-    assert re.search(r"Applications each week, the last \d+ weeks\. This week \d+, usually \d+\.", r["bodyText"]), r["bodyText"][-800:]
+    assert re.search(r"Applications each week, the last \d+ weeks\. This week \d+, about \d+ a week on average\.", r["bodyText"]), r["bodyText"][-800:]
     assert "contacts replied" in r["bodyText"] or "contact replied" in r["bodyText"]
     assert not re.search(r"\b1\s+interviews\b", r["bodyText"])
 
@@ -1463,8 +1484,9 @@ def test_the_page_opened_with_no_chat_running_brings_itself_up_to_date_and_says_
     pointer, and News was not in points like Today."""
     r = run("fixes_1031", html=pages["sample"])
     _clean(r)
-    # Refresh on old data asks Claude for today's data, inside the tap, and says so.
-    assert "Search data from" in r["pulse"] and "Refresh" in r["pulse"], r["pulse"]
+    # Refresh on old data asks Claude for today's data, inside the tap, and says so, in plain
+    # words: "Updated 3 days ago", never "Search data from" (the 3 November audit).
+    assert "Updated " in r["pulse"] and "Search data" not in r["pulse"] and "Refresh" in r["pulse"], r["pulse"]
     assert len(r["work"]) == 1, r["work"]
     w = r["work"][0]
     assert w["args"] == {"refresh": True} and w["status"] == "queued" and w["title"] == "Bringing your page up to date"
@@ -1543,7 +1565,9 @@ def test_everything_booked_is_one_tap_from_any_calendar_and_the_brief_shows_the_
     # One door to add anything, an interview first (2026-11-03: "Add something" beside "I have an
     # interview" were two ways to one thing).
     assert r["addChoices"][0] == "An interview" and len(r["addChoices"]) == 2, r["addChoices"]
-    assert [a["value"] for a in r["added"]] == [{"title": "Coffee with a former colleague", "on": "2026-10-27", "time": "09:30"}]
+    # Its time goes with the zone the page shows it in, so 09:30 here is never 09:30 somewhere
+    # else (the audit, 2026-11-03).
+    assert [a["value"] for a in r["added"]] == [{"title": "Coffee with a former colleague", "on": "2026-10-27", "time": "09:30", "zone": "Europe/London"}]
     assert r["added"][0]["item"] == "upcoming-add" and r["added"][0]["rev_seen"] == "add"
     assert r["saving"] and "Saving" in r["saving"][0], r["saving"]
     # Taken off: its action carries the item's rev, and it leaves the list at once.

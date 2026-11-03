@@ -145,13 +145,15 @@ def test_the_same_send_within_a_week_is_one_row(search):
     first = search.act("msg.sent", msg["id"], value={"text": msg["body"], "on": "2026-10-24"})
     assert search.apply()["ok"] == [first]
     search.written_back()
-    # Logged again from another tap the next day (another action id): refused, with the day.
+    # Logged again from another tap the next day (another action id): one row, and the
+    # receipt says the day it was logged. Done, not refused (changed 2026-11-03, engine audit
+    # 13: a refusal read on the page as "it changed since you saw it").
     search.put("actions", "act-again", {"action": "msg.sent", "item": msg["id"],
                                         "value": {"text": msg["body"]},
                                         "at": "2026-10-25T17:30:00Z", "rev_seen": msg["rev"],
                                         "tab": "t1"}, version=1)
     got = search.apply()
-    assert got["ok"] == [] and got["conflict"] == ["act-again"], got
+    assert got["ok"] == ["act-again"] and got["conflict"] == [], got
     assert search.receipt("act-again")["note"] == "Already logged on Saturday 24 October."
     assert len(_threads(search, PELL)) == 1
 

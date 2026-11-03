@@ -1195,7 +1195,20 @@ AWAY_GRACE_BUSINESS_DAYS = 2
 def said_something(row) -> bool:
     """An inbound row that is a message: the only kind that makes a route warm."""
     return (_direction(row) == "in" and not is_acceptance(row) and not is_call(row)
-            and not is_auto_reply(row))
+            and not is_auto_reply(row) and not is_bare_invitation(row))
+
+
+# Their connection request, as the LinkedIn download records it: "They asked to connect".
+# With no note it says nothing, as an acceptance says nothing. Read as a message, it made
+# three people "reply owed", and their drafts said "sorry for the slow reply" to someone
+# who had never written (2026-11-03).
+INVITATION_IN_SCENARIOS = frozenset({"invitation_received", "invitation_in", "they_invited"})
+
+
+def is_bare_invitation(row) -> bool:
+    """Their connection request with no note: a connection, never a message."""
+    return (_direction(row) == "in" and _scenario(row) in INVITATION_IN_SCENARIOS
+            and not str(row.get("full_text") or "").strip())
 
 
 def they_spoke_last(rows) -> bool:
@@ -1232,14 +1245,24 @@ def accepted_never_messaged(rows) -> datetime.date | None:
     """
     ordered = _ordered([r for r in rows if _direction(r) and not is_call(r)
                         and not is_auto_reply(r)])
-    if not ordered or not is_acceptance(ordered[-1]):
+    if not ordered:
+        return None
+    last = ordered[-1]
+    if is_bare_invitation(last):
+        # They asked to connect and said nothing, and nothing went from us: a first
+        # message is owed, as after an acceptance of a request with no note.
+        if all(is_bare_invitation(r) or is_acceptance(r) for r in ordered):
+            return as_date(last.get("date")) or datetime.date.min
+        return None
+    if not is_acceptance(last):
         return None
     before = ordered[:-1]
-    if any(_direction(r) == "in" and not is_acceptance(r) for r in before):
+    if any(_direction(r) == "in" and not is_acceptance(r) and not is_bare_invitation(r)
+           for r in before):
         return None
     sent = [r for r in before if _direction(r) == "out"]
     if sent and all(is_bare_request(r) for r in sent):
-        return as_date(ordered[-1].get("date")) or datetime.date.min
+        return as_date(last.get("date")) or datetime.date.min
     return None
 
 
@@ -1311,7 +1334,7 @@ def derive_status(threads_for_contact) -> str:
             if call_held(row):
                 status = "in_conversation"
             continue
-        if is_acceptance(row):
+        if is_acceptance(row) or is_bare_invitation(row):
             if status != "replied_needs_response":
                 status = "connected_no_reply"
         elif _direction(row) == "in":
@@ -1342,6 +1365,9 @@ def effective_status(contact, thread_rows) -> str:
     if stored in schema.TERMINAL:
         if stored in REOPENED_BY_A_REPLY and reopened(contact, thread_rows, derived):
             return derived
+        return stored
+    if derived == "replied_needs_response" and stored == "call_booked" \
+            and _booked_by_their_last(contact, thread_rows):
         return stored
     if derived == "replied_needs_response":
         return derived
@@ -1394,11 +1420,45 @@ def closed_on(contact) -> datetime.date | None:
 REOPENED_BY_A_REPLY = frozenset({"gone_cold"})
 
 
+def _booked_by_their_last(contact, rows) -> bool:
+    """A call booked on the row, and their last message came on or before the call's day
+    (the row's next_action_due): the message that booked it, an invitation or a time, not
+    a new one owed an answer. A booked recruiter screen read "Replied: your turn" with
+    "Draft a reply" because the invitation was the last row (2026-11-03). Their message
+    after the call's day is a reply owed like any other."""
+    day = as_date(contact.get("next_action_due"))
+    last_in = max((as_date(r.get("date")) for r in rows if said_something(r)
+                   and as_date(r.get("date"))), default=None)
+    return bool(day and last_in and last_in <= day)
+
+
+# A reaction to a message (a thumbs-up, "Liked your message") says nothing: it opens no
+# thread closed on silence. A thumbs-up from fourteen months ago turned a recruiter's
+# "gone quiet" back into "Replied: your turn" (2026-11-03).
+_REACTION = re.compile(r"^\W*(?:(?:reacted|liked|loved|celebrated|supported)\b.{0,60}|"
+                       r"(?:thumbs[ -]?up|like)(?: reaction)?(?: only)?)?\W*$", re.I | re.S)
+
+
+def is_reaction(row) -> bool:
+    """An inbound row that is only a reaction: no words, or a platform's "Liked your
+    message" line, with an emoji or none."""
+    if _direction(row) != "in":
+        return False
+    text = str(row.get("full_text") or "").strip() or str(row.get("summary") or "").strip()
+    return bool(_REACTION.match(text)) and not re.search(r"[A-Za-z]{2,}", re.sub(
+        r"(?i)\b(?:reacted|liked|loved|celebrated|supported|thumbs[ -]?up|like|reaction|only|"
+        r"with|to|your|message|a|an|the|on)\b", "", text))
+
+
 def reopened(contact, rows, derived=None) -> bool:
     """Have they written since this thread was closed? Their message is the last word, the
-    close was not marked on purpose, and it is not dated on or after their last message."""
+    close was not marked on purpose, and it is not dated on or after their last message.
+    A reaction alone (`is_reaction`) is not their writing."""
     if derived is None:
         derived = derive_status(rows)
+    words = [r for r in rows if said_something(r)]
+    if words and is_reaction(words[-1]):
+        return False
     return (derived == "replied_needs_response"
             and not CLOSED_ON_PURPOSE.search(" ".join(
                 str(contact.get(k) or "") for k in ("next_action", "notes")))
@@ -1600,6 +1660,37 @@ def no_reply(contacts, threads, who, why, today, look_again=None) -> tuple[dict,
                  f"{back.isoformat()}, or as soon as they write")
 
 
+def namesakes(contacts) -> dict:
+    """{contact_id: [the contact_ids of the other rows for the same person]}: the same full
+    name, at the same employer or with no employer on one row. One person kept on two rows
+    had a reply owed on one while the other held the answer already sent, and a second
+    thank-you was drafted (2026-11-03)."""
+    groups: dict = {}
+    for c in contacts:
+        n = _match_name(c.get("name"))
+        cid = str(c.get("contact_id") or "").strip()
+        if cid and n.count("_") >= 1:
+            groups.setdefault(n, []).append((cid, row_company_key(c)))
+    out = {}
+    for rows in groups.values():
+        if len(rows) < 2:
+            continue
+        for cid, key in rows:
+            out[cid] = [o for o, k in rows if o != cid and (not key or not k or k == key)]
+    return {k: v for k, v in out.items() if v}
+
+
+def answered_under_another_row(cid, since, twins, index) -> bool:
+    """Did a message of ours go to the same person, on another row of theirs, on or after
+    `since` (their latest word on this row)?"""
+    for other in twins.get(cid, ()):
+        for r in _rows_of(index, other):
+            day = as_date(r.get("date"))
+            if day is not None and day >= since and _is_message_out(r):
+                return True
+    return False
+
+
 def owed(contacts, threads, today) -> list[dict]:
     """What the user owes right now: every reply first, then nudges, each oldest first.
 
@@ -1623,6 +1714,7 @@ def owed(contacts, threads, today) -> list[dict]:
     items = []
     own_dated = set()
     index = by_contact(threads)
+    twins = namesakes(contacts)
     for contact in contacts:
         cid = str(contact.get("contact_id") or "").strip()
         msgs = [r for r in _rows_of(index, cid) if _direction(r)]
@@ -1664,6 +1756,8 @@ def owed(contacts, threads, today) -> list[dict]:
         if status in schema.OWED_BY_US:
             last_in = next((r for r in reversed(msgs) if said_something(r)), None)
             since = as_date(last_in.get("date")) if last_in else None
+            if since and answered_under_another_row(cid, since, twins, index):
+                continue
             items.append(dict(base,
                               kind="reply",
                               channel=channel_of(last_in) if last_in else channel_of(contact),
@@ -2489,7 +2583,21 @@ def followed_up(contacts, threads, contact_id, today, text="", date=None, channe
         # Connected and now written to: "once they accept" is over, so the request's
         # withdraw-in-21-days line no longer stands beside the nudge (2026-10-21).
         contact["next_action"] = then
-    contact["next_action_due"] = due if (done or str(contact.get("status") or "") in waiting) \
+    # Our answer to their word, in a conversation the log does not decide (talking, a call
+    # held): what the row said was due before is over, and the next follow-up is the
+    # person's rule from today. It said "was due 4 days ago" right after the reply went
+    # (journeys audit 8). A date still ahead (a call booked) stays, and so does the date of
+    # a resume still owed after it: "Thanks! I'll send it tonight." answered them, and the
+    # resume they asked for is as due as it was.
+    old_due = str(contact.get("next_action_due") or "").strip()
+    answered = scenario in ("reply", "send_resume") and (not old_due or old_due <= day.isoformat())
+    if answered and not resume and any(o["contact_id"] == cid
+                                       for o in resumes_owed([contact], threads)):
+        answered = False
+    if answered and not done and str(contact.get("status") or "") not in waiting:
+        contact["next_action"] = then
+    contact["next_action_due"] = due if (done or answered
+                                         or str(contact.get("status") or "") in waiting) \
         else contact.get("next_action_due", "")
     _drop_draft(cid)
     return {"row": row, "said": note}
@@ -2579,6 +2687,12 @@ def received(contacts, threads, contact_id, today, text="", date=None, channel="
     if (not machine and str(contact.get("status") or "") in schema.OWED_BY_US
             and action and _APP_ACTION.fullmatch(action)):
         contact["next_action"], contact["next_action_due"] = "", ""
+    # Their message is what is owed now, from the day it came: a date the row held from
+    # before (a check due last week) made the reply "4 days late" the moment it was logged
+    # (journeys audit 8).
+    owed_since = str(contact.get("next_action_due") or "").strip()
+    if not machine and owed_since and owed_since < day.isoformat():
+        contact["next_action_due"] = day.isoformat()
     return {"row": row, "said": said}
 
 
@@ -3629,6 +3743,15 @@ def says_resume_went(row) -> bool:
     return False
 
 
+def answered_with_a_file(row) -> bool:
+    """A message of ours with an attachment, whatever it was, sent after they asked for the
+    resume: that is the resume going. The LinkedIn download marks every file "an attachment",
+    which on its own says nothing about what went, so after an ask it was never read as the
+    answer: three messages with a file, sent the day she asked, left a resume "owed" for a
+    month and first on the brief (2026-11-03)."""
+    return _is_message_out(row) and bool(_marked(row))
+
+
 def names_a_file(row) -> bool:
     """Does the row name the file that went (or say nobody kept it)?"""
     return bool(attached(row))
@@ -3827,7 +3950,8 @@ def resumes_owed(contacts, threads, tracker=None) -> list[dict]:
         asked = as_date(rows[ask_at].get("date")) if ask_at is not None else None
         # "Send me your CV", then "apply and put me down as your referrer": the later word
         # sends it through the portal, so nothing is owed to them.
-        if (ask_at is not None and not any(says_resume_went(r) for r in rows[ask_at + 1:])
+        if (ask_at is not None and not any(says_resume_went(r) or answered_with_a_file(r)
+                                           for r in rows[ask_at + 1:])
                 and not _settled_since(contact, asked)
                 and resume_route(rows, cid) != ROUTE_PORTAL):
             made = [r for r in made_rows

@@ -666,7 +666,7 @@ async function evalThrough(page, code) {
 }
 
 S.engine = async (a) => {
-  const o = await open({html: a.html, viewport: a.viewport, scheme: a.scheme, seed: a.seed || {}, fake: a.fake, clipboard: a.clipboard, clock: a.clock});
+  const o = await open({html: a.html, viewport: a.viewport, scheme: a.scheme, seed: a.seed || {}, fake: a.fake, clipboard: a.clipboard, clock: a.clock, timezoneId: a.timezoneId, touch: a.touch});
   const {page, store} = o;
   // A page expected to reload itself first (a newer version published): wait for that load,
   // so no step's own navigation or read lands in the middle of it (Firefox, 4.7).
@@ -685,6 +685,11 @@ S.engine = async (a) => {
     if (st.more) await openMore(page, st.more);
     if (st.moreText) { await page.locator("#main [data-item]", {hasText: st.moreText}).first().locator("summary.more-btn").first().click(); await turn(page, 3); }
     if (st.open) { await page.locator('[data-k="' + st.open + '"]').first().click(); await turn(page, 3); }
+    // A chat's own writes before the step (any record, pinned to nothing), the clock moved on,
+    // and words typed into the chat's box.
+    if (st.write) { for (const [k, v] of Object.entries(st.write)) store.chat(k, v); await turn(page, 6); }
+    if (st.tick) { await page.clock.runFor(st.tick); await turn(page, 4); }
+    if (st.type !== undefined) { await page.fill("#talk-text", st.type); await turn(page, 2); }
     // To do shows five first; what a step taps may wait behind "Show the other N".
     if (st.click) { await page.$$eval("details.band-more:not([open])", (ds) => ds.forEach((d) => { d.open = true; })); await turn(page, 2);
       await (st.within ? page.locator(st.within) : page).getByRole(st.role || "button", {name: st.click, exact: !!st.exact}).first().click(); await turn(page, 6); }
@@ -714,6 +719,8 @@ S.engine = async (a) => {
     if (st.until) await page.waitForFunction((c) => eval(c), st.until, {timeout: 5000}).catch(() => {});
     entry.hash = await evalThrough(page, "location.hash");
     entry.work = store.list("work/").map((k) => Object.assign({id: k.split("/")[1]}, store.get(k)));
+    if (st.store) entry.store = store.list(st.store).map((k) => Object.assign({path: k}, store.get(k)));
+    if (st.rings) entry.rings = (await calls(page)).filter((c) => c.cap === "comments" && c.text).map((c) => ({text: c.text, thread: c.threadId, anchor: c.anchor}));
     out.after.push(entry);
     if (a.shots && st.shot) out.shots.push(await shot(page, a.shots + "-" + st.shot, !!st.full));
   }
@@ -839,6 +846,10 @@ S.write_fail = async (a) => {
   await page.waitForFunction(() => document.getElementById("alert").textContent !== "", null, {timeout: 3000}).catch(() => {});
   const r = {toast: await T(page, ".toast"), state: await one(page, '#main [data-item="msg-juno-1"] .state'), alert: await page.evaluate(() => document.getElementById("alert").textContent),
     live: await page.evaluate(() => document.getElementById("live").textContent), errors: o.errors};
+  // Once the toast has gone, the card says it (a failure's toast stays 16 seconds).
+  await page.clock.runFor(17000);
+  await turn(page, 6);
+  r.stateAfter = await one(page, '#main [data-item="msg-juno-1"] .state');
   await o.ctx.close();
   return r;
 };
@@ -1181,7 +1192,11 @@ S.applied_first = async (a) => {
 S.two_tabs = async (a) => {
   const o = await open({html: a.html, hash: "jobs", tabs: 2, fake: {canSend: "available"}});
   const [p1, p2] = o.pages;
-  await Promise.all([p1, p2].map((p) => p.getByRole("button", {name: "Draft this: Harbourline Bank, Pricing Analyst"}).click()));
+  // Pressed at the same moment in both windows: each press lands in its own page before the
+  // other's write can reach it. With the test driver's own click, whose checks take a while, a
+  // window drawing quickly had already shown the other's job, its Draft this gone, before
+  // its own press landed (the 3 November audit's faster page).
+  await Promise.all([p1, p2].map((p) => p.evaluate(() => document.querySelector('#main [data-k="draft:r12-1"]').click())));
   for (const p of [p1, p2]) await turn(p, 10);
   const r = {
     work: o.store.list("work/"),
@@ -1738,7 +1753,7 @@ S.todo = async (a) => {
 };
 
 S.talk = async (a) => {
-  const o = await open({html: a.html, hash: "chat", fake: {canSend: "available", sample: a.sample || {toolCalls: [{name: "read_section", input: {section: "due"}}], reply: "Two things are due today: reply to Juno and nudge Fernhill Freight."}}});
+  const o = await open({html: a.html, hash: "chat", seed: a.seed || {}, fake: {canSend: "available", sample: a.sample || {toolCalls: [{name: "read_section", input: {section: "due"}}], reply: "Two things are due today: reply to Juno and nudge Fernhill Freight."}}});
   const {page, store} = o;
   const r = {examples: await T(page, "#main .talk-examples button"), label: await one(page, "#talk-label"), placeholder: await page.getAttribute("#talk-text", "placeholder")};
   await page.getByLabel("Ask Claude anything").fill(a.question || "What is due today?");
@@ -2114,7 +2129,8 @@ S.crowd = async (a) => {
   r.searched = (await page.$$("#main .person")).length;
   r.searchFocus = await page.evaluate(() => document.activeElement.type);
   r.hidden = await T(page, "#main .fold");
-  await page.getByRole("button", {name: "Clear filters"}).first().click();
+  // A search is cleared by emptying it: it is not a filter, with no "Clear filters" of its own.
+  await page.locator("#main input[type=search]").fill("");
   await turn(page, 4);
   r.cleared = (await page.$$("#main .person")).length;
   const fold = page.getByRole("button", {name: /^Show \d+ more (person|people)/});
@@ -2624,6 +2640,153 @@ S.walk = async (a) => {
   }
   out.push({file: await shot(o.page, a.name + "-end", false), at: null});
   await o.ctx.close();
+  return out;
+};
+
+// A script of taps, keys, clocks and chats across one or more windows of one page, each step
+// read back: what a person sees (the section, the toasts, the live and alert regions) and what
+// the store holds. For the robustness and journey checks (tests/test_no_tap_is_lost_or_shown_wrong.py),
+// where a finding is a double tap, a held key, a second window, a store that refuses or never
+// answers, or a chat landing between two taps.
+S.script = async (a) => {
+  const o = await open({html: a.html, viewport: a.viewport, hash: a.hash, seed: a.seed || {}, fake: a.fake, clock: a.clock, tabs: a.tabs || 1, noStorage: a.noStorage, timezoneId: a.timezoneId});
+  const {store} = o;
+  const out = [];
+  const read = async (page, st) => ({
+    main: (await one(page, st.read || "#main")) || "",
+    dialog: (await one(page, "dialog[open]")) || "",
+    toasts: await T(page, ".toast"),
+    badToasts: await page.$$eval(".toast", (els) => els.filter((e) => /bad|tone-bad|is-bad/.test(e.className)).map((e) => e.innerText.trim())).catch(() => []),
+    live: await evalThrough(page, "(document.getElementById('live') || {}).textContent || ''"),
+    alert: await evalThrough(page, "(document.getElementById('alert') || {}).textContent || ''"),
+    conn: await evalThrough(page, "(function () { const c = document.getElementById('conn'); return c ? (c.getAttribute('data-state') || '') + ': ' + c.textContent.trim() : ''; })()"),
+    width: await evalThrough(page, "document.documentElement.scrollWidth"),
+  });
+  for (const st of a.steps || []) {
+    const page = o.pages[st.tab || 0];
+    if (st.hash) await goto(page, st.hash);
+    if (st.chat) for (const [p, d, v] of st.chat) store.chat(p, d, v === undefined ? undefined : v);
+    if (st.drop) for (const p of st.drop) store.change(storedPath(p), null);
+    // A chat taking every action with no receipt yet, as app.py apply --claim writes it.
+    if (st.claim) for (const k of store.list("actions/")) if (!store.get("receipts/" + k.split("/")[1])) store.chat(k, {claimed_by: "cloud-1", claimed_until: "2099-01-01T00:00:00Z"}, undefined, "update");
+    if (st.fake) await page.evaluate((f) => Object.assign(window.__LJS_FAKE, f), st.fake);
+    if (st.event) await page.evaluate((e) => window.dispatchEvent(new Event(e)), st.event);
+    if (st.click || st.dblclick) {
+      await page.$$eval("details.band-more:not([open])", (ds) => ds.forEach((d) => { d.open = true; })).catch(() => {});
+      const loc = (st.within ? page.locator(st.within) : page).getByRole(st.role || "button", {name: st.click || st.dblclick, exact: !!st.exact}).first();
+      if (st.dblclick) await loc.dblclick(); else await loc.click();
+      await turn(page, 6);
+    }
+    if (st.focus) { await page.locator(st.focus).first().focus(); await turn(page, 1); }
+    if (st.tap) { await page.locator(st.tap).first().click(); await turn(page, 6); }
+    if (st.type) { await page.fill(st.type[0], st.type[1]); await turn(page, 2); }
+    if (st.pastePic) {
+      await page.evaluate((b64) => {
+        const bytes = Uint8Array.from(atob(b64), (c) => c.charCodeAt(0));
+        const dt = new DataTransfer();
+        dt.items.add(new File([bytes], "screenshot.png", {type: "image/png"}));
+        const ta = document.getElementById("talk-text");
+        ta.focus();
+        const ev = new Event("paste", {bubbles: true, cancelable: true});
+        Object.defineProperty(ev, "clipboardData", {value: dt});
+        ta.dispatchEvent(ev);
+      }, PNG.toString("base64"));
+      await turn(page, 8);
+    }
+    if (st.send) { await page.click(st.send); await turn(page, 12); }
+    if (st.hold) {
+      // A key held down while the page is busy drawing: the press and its repeats arrive
+      // together, before the page has drawn again (the audit's real page took a second and
+      // more to draw), as the browser sends them to the focused element.
+      await page.evaluate(([k, n]) => {
+        const el = document.activeElement || document.body;
+        for (let i = 0; i <= n; i++) el.dispatchEvent(new KeyboardEvent("keydown", {key: k, repeat: i > 0, bubbles: true, cancelable: true}));
+      }, [st.hold, st.repeats || 3]);
+      await turn(page, 6);
+    }
+    if (st.fill) for (const [label, value] of Object.entries(st.fill)) await page.locator("dialog").getByLabel(label, {exact: false}).first().fill(value);
+    if (st.submit) { await page.locator("dialog [data-k=sheet-go]").click(); await turn(page, 6); }
+    if (st.run) { await page.clock.runFor(st.run); await turn(page, 6); }
+    if (st.wait) { await page.waitForTimeout(st.wait); await turn(page, 6); }
+    if (st.reload) { await page.reload(); await settle(page); if (st.hash2) await goto(page, st.hash2); }
+    if (st.ready) await page.waitForFunction((c) => eval(c), st.ready, {timeout: 8000});
+    const entry = await read(page, st);
+    if (st.eval) entry.eval = await evalThrough(page, st.eval);
+    entry.actions = store.list("actions/").map((k) => Object.assign({id: k.split("/")[1], v: store.version(k)}, store.get(k)));
+    entry.work = store.list("work/").map((k) => Object.assign({id: k.split("/")[1], v: store.version(k)}, store.get(k)));
+    entry.calls = (await calls(page)).filter((c) => c.cap === "db" || c.cap === "comments").map((c) => ({cap: c.cap, op: c.op, path: c.path, failed: !!c.failed, text: c.text || null}));
+    entry.talk = store.list("talk/").filter((p) => p.includes("/messages/")).map((p) => store.get(p));
+    entry.visibleError = await page.evaluate(() => {
+      const vis = (e) => e && e.getClientRects().length > 0;
+      const said = [...document.querySelectorAll(".toast, #main .state, #main .note, .talk-msg, .talk-status, dialog[open]")].filter(vis).map((e) => e.textContent).join(" ");
+      return [...document.querySelectorAll(".toast.bad, .state.tone-bad, .note.tone-bad")].some(vis) || /not saved|could not|try again/i.test(said + " " + ((document.getElementById("alert") || {}).textContent || ""));
+    });
+    out.push(entry);
+  }
+  const result = {steps: out, errors: o.errors};
+  await o.ctx.close();
+  return result;
+};
+
+// No silent drops: every control on a screen tapped, its sheet filled and sent where it opens
+// one, with a store that refuses every write (or never answers: `fake.hang`). Any tap that
+// tried to write must leave a visible error: a toast that says so, the alert region, an item
+// line or a sheet's own error box. Returns each control that tried to write and said nothing.
+S.silent = async (a) => {
+  const out = {silent: [], wrote: [], tapped: 0, errors: [], keys: []};
+  const visibleError = (page) => page.evaluate(() => {
+    const vis = (e) => e && e.getClientRects().length > 0;
+    const bad = [...document.querySelectorAll(".toast.bad, .state.tone-bad, dialog[open] .errors:not([hidden]), .note.tone-bad, [data-tone=bad]")].some(vis);
+    const alert = (document.getElementById("alert") || {}).textContent || "";
+    const notSaved = /not saved|could not|try again|cannot/i.test([...document.querySelectorAll(".toast, #main .state, #main .note, dialog[open]")].map((e) => e.textContent).join(" "));
+    return bad || /not saved|could not|try again/i.test(alert) || notSaved;
+  });
+  const keysOn = (page) => page.evaluate(() => {
+    const vis = (e) => e.getClientRects().length > 0 && !e.closest("details:not([open]) > :not(summary)");
+    return [...new Set([...document.querySelectorAll("#main [data-k]")].filter((e) => vis(e) && e.matches("button") && !e.disabled
+      && e.getAttribute("aria-pressed") !== "true").map((e) => e.getAttribute("data-k")))];
+  });
+  for (const id of a.sections) {
+    const first = await open({html: a.html, viewport: a.viewport, clock: a.clock, seed: a.seed});
+    await goto(first.page, id);
+    const keys = await keysOn(first.page);
+    await first.ctx.close();
+    for (const k of keys.slice(0, a.limit || 120)) {
+      const o = await open({html: a.html, viewport: a.viewport, clock: a.clock, seed: a.seed, fake: Object.assign({failWrites: true}, a.fake || {})});
+      const {page} = o;
+      await goto(page, id);
+      out.keys.push([id, k]);
+      try {
+        const el = page.locator('#main [data-k="' + k + '"]').first();
+        await el.scrollIntoViewIfNeeded({timeout: 2000});
+        await el.click({timeout: 3000});
+        await turn(page, 5);
+        // A sheet that opened: its fields filled the way a person would, then sent.
+        if (await page.locator("dialog[open]").count()) {
+          const dlg = page.locator("dialog[open]").last();
+          await dlg.evaluate((d) => {
+            for (const f of d.querySelectorAll("textarea, input[type=text], input:not([type])")) if (!f.value) { f.value = "Words for the check, 2026-10-24, 14:00"; f.dispatchEvent(new Event("input", {bubbles: true})); }
+            for (const f of d.querySelectorAll("input[type=date]")) if (!f.value) { f.value = "2026-10-24"; f.dispatchEvent(new Event("input", {bubbles: true})); }
+            const groups = new Set([...d.querySelectorAll("input[type=radio]")].map((r) => r.name));
+            for (const g of groups) { const r = d.querySelector("input[type=radio][name=\"" + g + "\"]"); if (r && !d.querySelector("input[type=radio][name=\"" + g + "\"]:checked")) r.click(); }
+          });
+          const go = dlg.locator("[data-k=sheet-go], [data-k=q-continue], .choice-btn").first();
+          if (await go.count()) { await go.click({timeout: 3000}).catch(() => {}); await turn(page, 6); }
+        }
+        if (a.run) { await page.clock.runFor(a.run); await turn(page, 4); }
+        await page.waitForTimeout(150);
+        await turn(page, 4);
+        const tried = (await calls(page)).filter((c) => c.cap === "db" && c.failed);
+        if (tried.length) {
+          out.wrote.push([id, k]);
+          if (!(await visibleError(page))) out.silent.push([id, k, tried.map((c) => c.op + " " + c.path).slice(0, 3)]);
+        }
+      } catch (e) { /* a control that cannot be tapped is the sweep's business, not this check's */ }
+      if (o.errors.length) out.errors.push([id, k, o.errors.slice(0, 2)]);
+      out.tapped++;
+      await o.ctx.close();
+    }
+  }
   return out;
 };
 

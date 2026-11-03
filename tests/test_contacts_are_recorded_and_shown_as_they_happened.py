@@ -57,7 +57,8 @@ def test_a_thread_at_its_limit_offers_only_to_close_and_close_closes_it(book):
     lived_in(book)
     m = book.model()
     dev = next(p for p in m["people"] if p["id"] == "copperleaf_pay_raman")
-    assert dev["stopped"] is True and dev["owed"] is None, dev["owed"]
+    # The engine's one button for them is Close (tools/app_model.py standing), never a message.
+    assert dev["stopped"] is True and dev["owed"]["kind"] == "close", dev["owed"]
     due = next(d for d in m["due"] if d.get("item") == "copperleaf_pay_raman"
                or "copperleaf_pay_raman" in d["id"])
     assert due["leave"] is True and due["step"].startswith("No reply to 2 messages")

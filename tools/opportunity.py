@@ -219,6 +219,15 @@ _PAY_CUE = re.compile(r"\b(?:salary|salaries|pay|paid|compensation|base|wage|rem
                       r"package|earn\w*|range)\b", re.I)
 
 
+def _public(company, posting) -> bool:
+    """bar.is_public, read here at call time (bar imports this module's tiers)."""
+    try:
+        import bar
+        return bar.is_public(company, posting)
+    except Exception:  # noqa: BLE001  no bar to read: no public rule to hold to
+        return False
+
+
 def score(job: dict, today: dt.date | None = None) -> dict:
     body = (job.get("desc") or "")[:20000]
     title = job.get("title") or ""
@@ -227,6 +236,12 @@ def score(job: dict, today: dt.date | None = None) -> dict:
     why: list[str] = []
 
     t, treason = tier(job.get("company"))
+    if t > 0 and _public(job.get("company"), body):
+        # A public body earns no employer-tier lift, whichever tier list names it: the
+        # public rule is a hard no but for pay, and a provincial agency on a tier list
+        # ranked +10 next to the agencies the profile names as hard nos (2026-11-03).
+        why.append(f"+0 a public body: no lift from its employer tier ({treason})")
+        t = 0
     if t:
         pts += t
         why.append(f"{t:+d} {treason}")

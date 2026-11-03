@@ -189,7 +189,9 @@ def family_bridges(text, skip=frozenset()):
     out = []
     for fam, members in _FAMILY_RX:
         for name, rx in members:
-            if name in skip or not rx.search(text or "") or _held(name):
+            # Held under another name is held: "Azure" asked of someone who lists Azure
+            # Data Factory read "you have AWS S3" (2026-11-03).
+            if name in skip or not rx.search(text or "") or _held(name) or covered_by(name):
                 continue
             have = []
             for other, _ in members:

@@ -56,6 +56,54 @@ def test_what_exists_is_staged_and_nothing_else(tmp_path, capsys):
         assert noise not in staged, noise
 
 
+def test_the_briefs_records_and_the_pages_own_files_are_saved(tmp_path):
+    """Engine audit 31 (2026-11-03): `save_state.py --list` staged nothing under
+    documents/briefs/, documents/upcoming.json or documents/page_assets.json, so the brief's
+    records for two days were lost with their containers. What .gitignore keeps private
+    under documents/ stays out."""
+    r = _repo(tmp_path)
+    mine = {"documents/briefs/2026-10-30.md": "# Brief\n", "documents/upcoming.json": "{}",
+            "documents/page_assets.json": "{}", "documents/network/quayside_hale/draft.md": "x"}
+    private = {"documents/linkedin/messages.csv": "big", "documents/postings/q.txt": "x",
+               "documents/diplomas/degree.pdf": "x", "documents/to_send/prep.md": "x"}
+    for rel, text in {**mine, **private}.items():
+        p = tmp_path / rel
+        p.parent.mkdir(parents=True, exist_ok=True)
+        p.write_text(text)
+    assert save_state.main([], root=r) == 0
+    staged = _staged(r)
+    assert set(mine) <= staged, set(mine) - staged
+    assert not set(private) & staged, set(private) & staged
+
+
+def test_every_personal_path_is_saved_or_said_why_not(tmp_path):
+    """The class: a path personal_paths calls the person's is either staged by save_state or
+    listed in save_state.NEVER with its reason, so a new kind of record is never left out
+    without anyone deciding it."""
+    import personal_paths
+    r = _repo(tmp_path)
+    sample = {}
+    for pat in personal_paths.PERSONAL:
+        rel = pat.replace("**/", "").replace("/**", "/kept/one.json").replace("*", "x_Resume_y")
+        if pat.startswith("cv/"):
+            rel = "cv/x_Resume_y.tex"
+        elif pat.startswith("cover_letters/"):
+            rel = "cover_letters/x_Cover_Letter_y.tex"
+        elif pat == "upskill/*.md":
+            rel = "upskill/report.md"
+        sample[pat] = rel
+    for rel in sample.values():
+        p = tmp_path / rel
+        p.parent.mkdir(parents=True, exist_ok=True)
+        p.write_text("x")
+    assert save_state.main([], root=r) == 0
+    staged = _staged(r)
+    left = [pat for pat, rel in sample.items() if rel not in staged and pat not in save_state.NEVER]
+    assert not left, f"personal, never saved and never said why: {left}"
+    for pat in save_state.NEVER:
+        assert pat in personal_paths.PERSONAL or pat.startswith("documents/"), pat
+
+
 def test_list_stages_nothing(tmp_path, capsys):
     r = _repo(tmp_path)
     assert save_state.main(["--list"], root=r) == 0

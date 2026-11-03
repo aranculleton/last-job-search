@@ -292,6 +292,10 @@ def draft(item: dict, contacts_by_id: dict, threads_index: dict, tracker, earlie
     none   nothing to write (an action: send a file, prep a call, withdraw a request)."""
     if item.get("held") or item.get("quiet") or item.get("old"):
         return _new("none", why="held: " + "; ".join(item.get("held") or ["not due"]))
+    if item.get("campaign"):
+        # Owed, and drafted in the employer's own chat: two chats writing to one person
+        # contradict each other (open_actions.due_items).
+        return _new("none", why="drafted in the chat that runs this employer's process")
     if item.get("half") == "application":
         if item.get("kind") == "interview":
             return _new("none", why=item.get("what") or "")
@@ -378,8 +382,9 @@ def draft(item: dict, contacts_by_id: dict, threads_index: dict, tracker, earlie
         try:
             # Dated the day it is drafted for (`--today`), never the computer's: run for another
             # day it said "from August last year" (the date check, 2026-10-29).
-            text = compose.follow_up(name, msgs, OFFER_REASON % (company or "your company"),
-                                     close=OFFER_CLOSE, today=today or None)
+            reason, close = offer_words(offer)
+            text = compose.follow_up(name, msgs, reason % (company or "your company"),
+                                     close=close, today=today or None)
         except ValueError as e:
             return refused or _new("write", kind=kind, who="you",
                                    why="the follow-up on their offer did not pass: " + _one_line(e))
@@ -398,6 +403,22 @@ def draft(item: dict, contacts_by_id: dict, threads_index: dict, tracker, earlie
 OFFER_REASON = ("in your last message you offered to refer me if a role came up at %s, and I'd "
                 "still be glad of that")
 OFFER_CLOSE = "If one does, would it be all right to send you the link?"
+# An offer to introduce is not an offer to refer. "Happy to connect you with a recruiter if
+# something appeals" was followed up as "you offered to refer me", which they never said
+# (2026-11-03): the follow-up says what they offered.
+INTRO_REASON = ("in your last message you kindly offered to put me in touch with someone at %s, "
+                "and I'd still be glad of that")
+INTRO_CLOSE = "If a role there appeals, would it be all right to send you the link?"
+
+
+def offer_words(offer: dict) -> tuple[str, str]:
+    """(reason, close) for a follow-up on their offer, in what they offered: to refer the
+    person only where their own words say refer or referral, else to put them in touch."""
+    import compose
+    said = str((offer or {}).get("full_text") or (offer or {}).get("summary") or "")
+    if compose._REFER_WORDS.search(said):
+        return OFFER_REASON, OFFER_CLOSE
+    return INTRO_REASON, INTRO_CLOSE
 
 
 def their_offer(rows) -> dict | None:

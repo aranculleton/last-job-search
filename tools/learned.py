@@ -152,6 +152,82 @@ def save_entries(rows: list[dict], offers_: list[dict] | None = None) -> None:
 _save = save_entries  # the module's own name for it; other modules call save_entries
 
 
+# ------------------------------------------------------------------ a rule is its setting
+
+# Rules whose setting the app knows, whatever words they come in: `record` writes the setting
+# in the same command and names it in `applied_to`, so a rule is never kept without it. The
+# person's "update only when I say" (2026-10-25) was recorded against an app file and never
+# written into person.json, and ten updates came in by themselves (engine audit, 2026-11-03).
+_ABOUT_UPDATES = re.compile(r"\b(?:the app|app'?s|sync\w*|updates|new versions?)\b", re.I)
+_UPDATES_WAIT = re.compile(
+    r"\b(?:only|never|don'?t|do not|no|stop|not)\b[^.;]{0,60}\bupdat|"
+    r"\bupdat\w*\b[^.;]{0,60}\b(?:only|unless|until|when|wait)\b[^.;]{0,30}"
+    r"\b(?:i|he|she|they|you|asked|told|say|says|said)\b", re.I)
+_UPDATES_AUTO = re.compile(r"\bupdat\w*\b[^.;]{0,40}\b(?:by (?:them|it)sel(?:f|ves)|"
+                           r"automatically|on (?:its|their) own)\b", re.I)
+# "only jobs from the last 10 days", "nothing older than a week" -> JOB_AGE_DAYS.
+_WINDOW = re.compile(r"\b(?:last|past|within|under|less than|no older than|not older than|"
+                     r"younger than|newer than|up to|at most)\s+(?:(\d{1,3})\s+days?|a\s+(week)|"
+                     r"(two|2)\s+weeks)\b", re.I)
+_JOBS_WORDS = re.compile(r"\b(?:jobs?|postings?|roles?|listings?|openings?|vacanc\w+|search)\b",
+                         re.I)
+
+
+def known_settings(area: str, said: str, rule: str) -> list[tuple[str, object]]:
+    """[(setting, value)] a rule says in any words, as `applied_to` names them: "profile/
+    person.json app_updates" (when_asked or auto) and "profile/search.py JOB_AGE_DAYS"."""
+    text = f"{said} {rule}"
+    out: list[tuple[str, object]] = []
+    if _ABOUT_UPDATES.search(text) and re.search(r"\bupdat", text, re.I):
+        if _UPDATES_WAIT.search(text):
+            out.append(("profile/person.json app_updates", "when_asked"))
+        elif _UPDATES_AUTO.search(text):
+            out.append(("profile/person.json app_updates", "auto"))
+    if area in ("search", "jobs", "targets", "other") and _JOBS_WORDS.search(text):
+        m = _WINDOW.search(text)
+        if m:
+            days = int(m.group(1)) if m.group(1) else 7 if m.group(2) else 14
+            # The window the search takes (run_round.job_age_ok): what is written here is
+            # what is searched, never a number the search reads as 14.
+            import run_round
+            if run_round.job_age_ok(days):
+                out.append(("profile/search.py JOB_AGE_DAYS", days))
+    return out
+
+
+def apply_setting(setting: str, value) -> None:
+    """One known setting written, the way the page's own Settings write it."""
+    where, _, key = setting.partition(" ")
+    if where.endswith("person.json"):
+        person.put([key], value)
+    else:
+        import profile_set
+        profile_set.set_line(os.path.basename(where), key, value)
+
+
+def _app_file(applied: str) -> str:
+    """The app's own file an `applied_to` names, or "": the next update puts an app file back,
+    so a rule kept there is a rule nobody follows."""
+    token = str(applied or "").strip().split(" ", 1)[0].strip("`'\"")
+    if not re.search(r"\.(?:py|json|md|csv|txt|tex|sh|js|ya?ml)$", token):
+        return ""
+    import personal_paths
+    root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+    if "/" in token:
+        rel = token.lstrip("./")
+        return rel if not personal_paths.is_personal(rel) and \
+            os.path.exists(os.path.join(root, rel)) else ""
+    try:
+        if os.path.exists(person.path(token)):
+            return ""                                    # one of their profile's files
+    except person.NoProfile:
+        pass
+    for rel in (os.path.join("tools", token), token):
+        if os.path.exists(os.path.join(root, rel)) and not personal_paths.is_personal(rel):
+            return rel.replace(os.sep, "/")
+    return ""
+
+
 def entries(area: str | None = None) -> list[dict]:
     """The active entries, oldest first, for one area or all of them."""
     return [r for r in load() if r.get("status", "active") == "active"
@@ -173,9 +249,22 @@ def record(area: str, said: str, rule: str, applied_to=(), never_say=(),
         raise SystemExit(f"learned: area {area!r}; one of {', '.join(AREAS)}")
     if not str(said or "").strip() or not str(rule or "").strip():
         raise SystemExit("learned: record needs what they said and the rule it gives")
+    applied_to = [str(a) for a in applied_to if str(a).strip()]
+    for a in applied_to:
+        app = _app_file(a)
+        if app:
+            raise SystemExit(f"learned: {app} is the app's own file, and the next update puts it "
+                             "back, so a rule kept there is never followed. Make it stick in "
+                             "their profile (the setting it governs there), and name that.")
+    # A rule the app knows the setting of is that setting, written now (never only noted).
+    written = known_settings(area, said, rule)
+    for setting, value in written:
+        apply_setting(setting, value)
+        if setting not in applied_to:
+            applied_to.append(setting)
     entry = {"date": today or dt.date.today().isoformat(), "area": area,
              "said": str(said).strip(), "rule": " ".join(str(rule).split()),
-             "applied_to": [str(a) for a in applied_to if str(a).strip()],
+             "applied_to": applied_to,
              "never_say": [str(p) for p in never_say if str(p).strip()],
              "status": "active"}
     over = [str(c).strip() for c in overrides if str(c).strip()]
@@ -209,7 +298,7 @@ def record(area: str, said: str, rule: str, applied_to=(), never_say=(),
     if answers:
         resolve_pending(entry["said"])
     return {**entry, "conflicts": found, "replaced": replaced,
-            "own_overlaps": own_overlaps(entry["never_say"])}
+            "own_overlaps": own_overlaps(entry["never_say"]), "set": written}
 
 
 def repeats(entry: dict, rows: list[dict]) -> list[int]:
@@ -422,9 +511,8 @@ def _uses(text: str, phrase: str) -> bool:
     if not _says(text, phrase):
         return False
     low, p = str(text or "").lower(), str(phrase).lower()
-    if p in low:
-        at = [m.start() for m in re.finditer(re.escape(p), low)]
-    else:                                        # said in other words: where they start
+    at = [m.start() for m in re.finditer(r"(?<!\w)%s(?!\w)" % re.escape(p), low)]
+    if not at:                                   # said in other words: where they start
         words = sorted(_content(p))
         at = [m.start() for w in words[:1]
               for m in re.finditer(r"\b%s\b" % re.escape(w), low)]
@@ -439,7 +527,7 @@ def _says(text: str, phrase: str) -> bool:
     """Does `text` say what `phrase` says: the phrase itself, or every word of it that
     carries meaning?"""
     low = str(text or "").lower()
-    if str(phrase).lower() in low:
+    if re.search(r"(?<!\w)%s(?!\w)" % re.escape(str(phrase).lower()), low):
         return True
     words = _content(phrase)
     return bool(words) and words <= _content(low)
@@ -628,21 +716,43 @@ def never_say() -> list[tuple[str, re.Pattern]]:
     out = []
     for r in entries():
         for phrase in r.get("never_say") or ():
-            # An apostrophe either way: a phrase typed on a phone arrives as "I’m", and the
-            # message checks straighten every draft to "I'm" first, so the curly one never
-            # matched anything (2026-10-20).
-            words = [re.escape(w).replace("’", "'").replace("'", "['’]")
-                     for w in str(phrase).split()]
-            if words:
+            body = phrase_pattern(phrase)
+            if body:
                 # Edges that work for a phrase that opens or closes on punctuation: \b
                 # needs a word character there, so "(remote)" or "[sic]" never matched.
                 # A phrase quoted in profile/CLAUDE.md's prose takes its capital from the
                 # sentence it was quoted in, so it is matched anywhere.
                 quoted = str(r.get("rule") or "").endswith(FROM_PROFILE_RULES)
                 start = _OPENS if opens_a_sentence(phrase) and not quoted else r"(?<!\w)"
-                out.append((phrase, re.compile(start + r"\s+".join(words) + r"(?!\w)",
-                                               re.I | re.M)))
+                # An initialism the person said to write in full (two or more capitals) is
+                # a word in capitals: read in any case, it matched inside names.
+                flags = re.M if _INITIALISM.fullmatch(str(phrase).strip()) else re.I | re.M
+                out.append((phrase, re.compile(start + body + r"(?!\w)", flags)))
     return out
+
+
+# A phrase that opens with the person saying what they did: "I made the move" is the same
+# words as "I've made the move" and "I have made the move", and only the first was refused,
+# so a follow-up saying "I've made the move" passed every check and was sent (2026-10-21).
+_SUBJECTS = frozenset({"i", "we"})
+_HELPER = r"(?:['’](?:ve|d)|\s+(?:have|had|has))?"
+_INITIALISM = re.compile(r"[A-Z]{2,5}")
+
+
+def phrase_pattern(phrase: str) -> str:
+    """The pattern for a never-say phrase, without its edges: each word as written (an
+    apostrophe either way), whitespace between, and, where it opens on "I" or "we" with a
+    verb after it, the same words with "'ve", "'d", "have" or "had" between them."""
+    # An apostrophe either way: a phrase typed on a phone arrives as "I’m", and the
+    # message checks straighten every draft to "I'm" first, so the curly one never
+    # matched anything (2026-10-20).
+    words = [re.escape(w).replace("’", "'").replace("'", "['’]")
+             for w in str(phrase or "").split()]
+    if not words:
+        return ""
+    if len(words) >= 2 and str(phrase).split()[0].lower() in _SUBJECTS:
+        return words[0] + _HELPER + r"\s+" + r"\s+".join(words[1:])
+    return r"\s+".join(words)
 
 
 def own_overlaps(phrases) -> list[tuple[str, str, str]]:
@@ -670,11 +780,12 @@ def own_overlaps(phrases) -> list[tuple[str, str, str]]:
         own.append(("OWN_VOICE", re.sub(r"\\(.)", r"\1", voice.pattern)))
     out = []
     for phrase in phrases:
-        words = [re.escape(w).replace("'", "['’]") for w in str(phrase).replace("’", "'").split()]
-        if not words:
+        body = phrase_pattern(str(phrase).replace("’", "'"))
+        if not body:
             continue
         start = _OPENS if opens_a_sentence(phrase) else r"(?<!\w)"
-        rx = re.compile(start + r"\s+".join(words) + r"(?!\w)", re.I | re.M)
+        flags = re.M if _INITIALISM.fullmatch(str(phrase).strip()) else re.I | re.M
+        rx = re.compile(start + body + r"(?!\w)", flags)
         out += [(phrase, setting, line) for setting, line in own if rx.search(line)]
     return out
 
@@ -717,7 +828,25 @@ def profile_never_phrases(text: str | None = None) -> list[tuple[str, str]]:
                 continue
             seen.add(low)
             out.append((phrase, " ".join((m.group(0) + clause).split())))
+    # A name the profile says to write in full is a ban on its initials: "Always write
+    # "<Employer Name>" in full" held no "never", so "ex-<initials>" passed every check and went in
+    # two sent messages (2026-10-21).
+    for m in _IN_FULL.finditer(text):
+        name = (m.group(1) or m.group(2)).strip()
+        caps = [w for w in name.split() if w[:1].isupper()]
+        short = "".join(w[0] for w in caps)
+        if len(caps) < 2 or len(caps) != len(name.split()) or short.lower() in seen:
+            continue
+        seen.add(short.lower())
+        rest = text[m.end():m.end() + 160]
+        end = _CLAUSE_END.search(rest)
+        out.append((short, " ".join((m.group(0) + (rest[:end.start()] if end else ""))
+                                    .split())))
     return out
+
+
+_IN_FULL = re.compile(r"\b(?:write|say|spell|name)\s+(?:out\s+)?(?:\"([^\"\n]{3,60})\"|"
+                      r"“([^”\n]{3,60})”)\s+(?:in full|out in full|out)\b", re.I)
 
 
 def unadopted() -> list[tuple[str, str]]:
@@ -901,12 +1030,30 @@ def superseded(rows: list[dict] | None = None) -> dict:
     for n, r in enumerate(active):
         text = str(r.get("rule") or "").lower()
         own = {str(p).lower() for p in r.get("never_say") or ()}
+        # One setting set twice: the later word is the one followed. "Ask me which place for
+        # each employer" stayed in every brief beside the rule that replaced it, "this
+        # employer hears one city, everyone else the other" (2026-11-03). Lists only grow.
+        mine = _one_settings(r)
+        later_same = next((x for x in active[n + 1:] if mine & _one_settings(x)
+                           and (x.get("rule") or "") != (r.get("rule") or "")), None)
+        if later_same is not None:
+            out[_key(r)] = later_same
+            continue
         for later in active[n + 1:]:
-            if any(p.strip() and p.lower() in text and p.lower() not in own
+            # As a phrase, never as letters inside a word: a ban on two initials overruled every
+            # earlier rule with "back" or "bank" in it.
+            if any(p.strip() and p.lower() not in own
+                   and re.search(r"(?<!\w)%s(?!\w)" % re.escape(p.lower()), text)
                    for p in map(str, later.get("never_say") or ())):
                 out[_key(r)] = later
                 break
     return out
+
+
+def _one_settings(r: dict) -> set:
+    """The settings an entry sets that hold one value (never a list a rule adds to)."""
+    return {str(a) for a in r.get("applied_to") or ()
+            if _SETTING.search(_FILE_NAME.sub(" ", str(a))) and not _LISTS.search(str(a))}
 
 
 def brief(area: str | None = None, channel: str | None = None, reader: str | None = None) -> str:
@@ -1842,6 +1989,8 @@ def main(argv=None) -> int:
         e = record(a.area, a.said, a.rule, a.applied_to, a.never_say, overrides=a.overrides,
                    replaces=a.replaces, length=a.length, via=a.via, output=a.output)
         print(f"learned: {e['area']}: {e['rule']}")
+        for setting, value in e.get("set") or ():
+            print(f"  set: {setting} = {json.dumps(value)} (the setting this rule is, written now)")
         for kind, per in (e.get("length") or {}).items():
             print("  length: " + ", ".join(f"{kind} to {'any reader' if who == 'any' else who}"
                                            f" runs to about {n} words" for who, n in per.items()))

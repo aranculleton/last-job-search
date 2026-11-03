@@ -52,7 +52,10 @@ def test_a_short_stay_is_named_with_the_question_and_the_one_behind_it(app):
     assert now["ask"] == "Why are you looking to leave Kestrel Mutual after 3 months?"
     assert now["then"] == "How do we know you would stay longer with us?"
     past = found["A short stay: Graduate Analyst, Larkspur Retail (Jan 2024 - Jul 2024)"]
-    assert past["ask"] == "Why did you leave Larkspur Retail after 7 months?"
+    # Updated 2026-11-03 (the documents audit, finding 20): Jan to Jul is six months, as a
+    # person says it and as the stock answer below says; counted inclusively it was seven,
+    # against a profile that said six.
+    assert past["ask"] == "Why did you leave Larkspur Retail after 6 months?"
     assert past["then"] == "Would you leave us as quickly?"
     # A title that says the post had a set length is said first; the reasons are theirs.
     assert past["framing"][0].startswith("Your title there was Graduate Analyst: if the post had a "

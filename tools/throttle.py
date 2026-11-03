@@ -645,9 +645,22 @@ def entry_pair(e: dict, reason: str = "") -> tuple[str, str, str] | None:
     t, k = title_key(e.get("title")), key(e.get("company"))
     if not (t and k):
         return None
+    said = reason or str(e.get("exclusion_reason") or "")
+    if e.get("basis") == "person" and not _about_place(said):
+        # The person's own call on a role, for anything but its place, holds for every
+        # copy of it: one cleared as posted in "Canada" came back as posted in the
+        # "Greater Toronto Area", a city the ruling was not kept under (2026-11-03).
+        return (t, k, ANYWHERE)
     if reason and _LOCATION_REASON.search(reason) and city(e.get("location")) == ANYWHERE:
         return (t, k, _own_place(e.get("location")))
     return (t, k, place(e.get("location")))
+
+
+def _about_place(reason: str) -> bool:
+    """Whether a ruling's reason is about where the posting is: the page's "The place", or
+    any reason the location rules read as one."""
+    low = " ".join(str(reason or "").lower().split())
+    return low in ("place", "the place") or bool(_LOCATION_REASON.search(low))
 
 
 def _own_place(location) -> str:
@@ -1041,10 +1054,33 @@ def _contacts_by_employer(path: str, statuses: set, rows: list[dict] | None = No
     return out
 
 
+# A reply that is not a way in, as the person or a chat wrote it on the contact: parked,
+# "not a hiring route", "do not use him to chase". Counted as warm, such a contact added
+# the referral bonus to a fraud-ops role until it scored 100, and the card said "ask
+# them first" against the record (2026-11-03).
+NOT_A_ROUTE = re.compile(r"\bparked\b|\bnot (?:a |an )?(?:hiring |referral |warm )?route\b"
+                         r"|\bno (?:hiring |referral )?route\b|\bnot a way in\b"
+                         r"|\bdo not use (?:him|her|them)\b|\bdon'?t use (?:him|her|them)\b",
+                         re.I)
+
+
+def is_route(row: dict) -> bool:
+    """Whether a contact who replied is a way in: not one whose own record says it is
+    not (NOT_A_ROUTE in its next step or notes). The one test, for the fit bonus, the
+    page's "ask them first" and its filter alike."""
+    said = " ".join(str(row.get(k) or "") for k in ("next_action", "notes"))
+    return not NOT_A_ROUTE.search(said)
+
+
 def warm_routes(path: str = CONTACTS, rows: list[dict] | None = None,
                 live: dict[str, str] | None = None) -> dict[str, list[dict]]:
-    """Employer key -> the people there who have actually replied."""
-    return _contacts_by_employer(path, RESPONDED, rows, live)
+    """Employer key -> the people there who have actually replied and are a way in."""
+    if rows is None:
+        rows = _contact_rows(path)
+        if not rows:
+            return {}
+        live = _derived_statuses(rows, threads_beside(path))
+    return _contacts_by_employer(path, RESPONDED, [r for r in rows if is_route(r)], live)
 
 
 def pending_outreach(path: str = CONTACTS, rows: list[dict] | None = None,
@@ -1193,13 +1229,18 @@ def throttle(rows: list[dict], open_apps: dict[str, dict], urls: dict[str, str],
             reason = f"already ruled out, {urls[n]}"
         elif (pair_why := ruled_pair(pairs, r)):
             reason = f"already ruled out, {pair_why}"
-        elif k and closed and any(_same_title(r.get("title"), c.get("role"))
-                                  for c in closed.get(k, [])):
-            c = next(c for c in closed[k] if _same_title(r.get("title"), c.get("role")))
+        elif k and (c := next((c for c in [*(closed or {}).get(k, []),
+                                           *(silent or {}).get(k, [])]
+                               if _same_title(r.get("title"), c.get("role"))), None)):
+            # The same role already applied to, closed or gone quiet: a sent application
+            # past SILENCE_DAYS is neither open nor closed, so the role it was for came
+            # back on a shortlist at rank 5, six weeks after it went (2026-11-03).
             done = ("already in a hiring process for this role, with no application, from"
                     if is_process(c) else "already applied to this role on")
+            quiet = "" if str(c.get("status") or "").strip().lower() in FINAL \
+                else f", no reply in {SILENCE_DAYS} days"
             reason = (f"{done} {c.get('date') or 'an unrecorded date'} "
-                      f"({c.get('status')}); a relisted posting is the same job")
+                      f"({c.get('status')}{quiet}); a relisted posting is the same job")
         elif k and k in open_apps:
             opens = open_apps[k]
             if isinstance(opens, dict):      # one row, the shape this took before

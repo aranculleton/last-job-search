@@ -576,9 +576,13 @@ def test_a_chat_answering_the_page_for_a_day_starts_a_fresh_helper_at_a_quiet_mo
     # Once a day: asked again an hour later, nothing.
     again = app_listen.decide(quiet, "session_old", str(tmp_path / "b"), now + dt.timedelta(hours=1))
     assert not [ln for ln in again["lines"] if ln.startswith("listen: renew:")]
-    # Never with work waiting.
+    # Never with small work of its own in hand (changed 2026-11-03, engine audit 7: work that
+    # only waits in the queue moves with the page, and waiting on it kept one helper three days).
     app_listen._save_seen({k: v for k, v in app_listen.seen().items() if k != "renewed_at"})
-    busy = dict(quiet, work={"w1": {"data": {"status": "queued"}, "version": 1}})
+    busy = dict(quiet, work={"w1": {"data": {"status": "running", "kind": "talk",
+                                             "claimed_by": "session_old",
+                                             "lease_until": "2026-10-30T12:20:00Z"},
+                                    "version": 1}})
     assert not [ln for ln in app_listen.decide(busy, "session_old", str(tmp_path / "c"), now)["lines"]
                 if ln.startswith("listen: renew:")]
     # The fresh helper takes it, and is told to archive the old helper by its title only.
@@ -606,8 +610,10 @@ def test_a_page_update_by_the_listener_brings_its_renewal(copy, tmp_path, monkey
     app_listen._save_seen({k: v for k, v in app_listen.seen().items() if k != "renewed_at"})
     # No work queue read: never handed over, since a job might be running.
     assert app_listen.view_renewal({"meta": db["meta"]}, "brief", now) == []
-    # Work running: not now.
-    busy = dict(db, work={"w1": {"data": {"status": "running"}, "version": 1}})
+    # Small work this chat is doing: not now.
+    busy = dict(db, work={"w1": {"data": {"status": "running", "kind": "reply",
+                                          "claimed_by": "session_old",
+                                          "lease_until": "2026-11-03T08:20:00Z"}, "version": 1}})
     assert app_listen.view_renewal(busy, "brief", now) == []
     # Another chat's page update: nothing.
     monkeypatch.setenv("LJS_CHAT", "session_other")

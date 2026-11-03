@@ -119,8 +119,10 @@ def test_an_interview_carries_its_stages_time_who_files_and_practice(search):
     assert search.apply()["ok"] == [aid], search.receipt(aid)
     with open(os.path.join(search.state, *FOLDER, "outcome.md"), encoding="utf-8") as fh:
         md = fh.read()
-    assert "- [ ] Panel interview (scheduled 2026-10-28 14:00, with Shirin Example, Head of " \
-           "Risk)" in md
+    # Kept with its zone, the one the time was given in (the audit, 2026-11-03: a time with no
+    # zone was later read in whatever zone stood in for the person's, hours out).
+    assert "- [ ] Panel interview (scheduled 2026-10-28 14:00 Europe/London, with Shirin " \
+           "Example, Head of Risk)" in md
     i = _interview(search)
     # `when` is the moment once the time is known: the page reads `when` alone, and a day
     # alone there reads "time not set" (2026-10-29).
@@ -253,11 +255,17 @@ def test_a_pasted_profile_is_kept_as_a_paste_and_the_note_rewritten_once(search)
     claimed = json.loads(search.run("apply", search.dump, "--chat", "cloud-1", "--now", NOW,
                                     "--claim"))
     batch = json.load(open(claimed["batches"][0], encoding="utf-8"))
-    wipe = next(e for e in batch if e["doc_id"] == aid)
-    assert json.load(open(wipe["file_path"], encoding="utf-8"))["value"] == {
-        "text": {"__delete__": True}}
+    # The words stay until they are kept: the claim takes none (changed 2026-11-03, engine
+    # audit 9: taken with the claim, a chat that stopped before applying lost them) ...
+    claim = next(e for e in batch if e["doc_id"] == aid)
+    assert "value" not in json.load(open(claim["file_path"], encoding="utf-8"))
     got = search.apply()
     assert got["ok"] == [aid], search.receipt(aid)
+    # ... and the receipt's batch removes them, pinned to the version the claim left.
+    wipe = next(e for b in got["batches"] for e in json.load(open(b, encoding="utf-8"))
+                if e["collection"] == "actions" and e["doc_id"] == aid)
+    assert wipe["if_version"] == 2 and json.load(open(wipe["file_path"], encoding="utf-8"))[
+        "value"] == {"text": {"__delete__": True}}
     r = search.receipt(aid)
     assert r["note"].startswith("Kept what Pell's profile says.")
     assert _read_kept(search, PELL)

@@ -10,7 +10,7 @@ by file so the build noise the rule says never to commit stays out.
     python3 tools/save_state.py            # stage them; prints what it staged
     python3 tools/save_state.py --list     # say what it would stage, and change nothing
 
-`profile` and `networking` take a plain `git add` (never forced, which would bring the
+`profile`, `networking`, `documents` and `handoff` take a plain `git add` (never forced, which would bring the
 caches under profile/tests/ with them); everything else is ignored by .gitignore on
 purpose, so it is forced in by path, one existing path at a time, and a file of theirs the
 repo holds that has gone from disk is staged as removed. Exit 0, or 1 when git refused.
@@ -30,7 +30,27 @@ import sys
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 
-PLAIN = ("profile", "networking")
+# Taken whole with a plain add, which keeps .gitignore's private folders out: everything the
+# app writes under documents/ is the person's record (personal_paths.PERSONAL), and a new
+# file there is saved without anyone listing it here. The brief's own records
+# (documents/briefs/), what is coming up (documents/upcoming.json) and the page's file ids
+# (documents/page_assets.json) were never staged, and two days of briefs were lost with their
+# containers (engine audit, 2026-11-03).
+PLAIN = ("profile", "networking", "documents", "handoff")
+# What personal_paths.PERSONAL holds that is never saved, and why: tests/test_saving_works_in_
+# any_shell.py fails on a personal path that is neither saved nor here.
+NEVER = {
+    "salary_data.json": "licensed salary data, never committed",
+    "gmail_sync/**": "the mail cursor an older version left: message ids and subjects",
+    "rounds/**": "a search round's working files, tens of megabytes, made again by the round",
+    "job_scraper/notion_sync.json": "left by the removed /notion-sync, kept as it is",
+    ".agents/skills/**": "a job site of their own, committed by /add-portal with its code",
+    "documents/linkedin/**": "the LinkedIn download: only its connections and invitations go",
+    "documents/postings/**": "postings' own text, kept out like a round's",
+    "documents/diplomas/**": "copies of their certificates, never committed",
+    "documents/references/**": "references' own letters, never committed",
+    "documents/to_send/**": "copies made each time a prep is sent; the kept file is the record",
+}
 FORCED = (
     "job_search_tracker.csv", "network_contacts.csv", "network_threads.csv",
     "job_scraper/seen_jobs.json", "job_scraper/do_not_target.json",
@@ -96,7 +116,9 @@ def gone(root: str = ROOT) -> list[str]:
     r = _git(root, "ls-files", "--deleted", "-z")
     if r.returncode != 0:
         return []
-    return [p for p in dict.fromkeys(r.stdout.split("\0")) if p and _under(p)]
+    # A folder taken whole (PLAIN) has its removals staged by its own plain add.
+    return [p for p in dict.fromkeys(r.stdout.split("\0")) if p and _under(p)
+            and not any(p.startswith(d + "/") for d in PLAIN)]
 
 
 

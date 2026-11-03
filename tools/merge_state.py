@@ -338,14 +338,17 @@ JSON_NAMES = {
                      ".wake.json"),
                     _SCRATCH),
     **dict.fromkeys(("ljs-app-watch.json", "ljs-job-sites.json", "ljs-listener.json",
-                     "ljs-place.json", "ljs-tidy.json",
+                     "ljs-applied.json", "ljs-place.json", "ljs-tidy.json",
                      "ljs-reactions.json", "ljs-upgrades-listed.json", "ljs_own_tests.json",
                      ".reactions.json"), _GITDIR),
     **dict.fromkeys(("claude_surfaces.json", "public_names.json", "removed_names.json",
                      "rule_map.json", "remote.json", "design_draft.json",
                      "tools/leak_scan.py: **.json", "tools/markets.py: *.json",
                      "tools/markets.py: .json"), _APP),
-    **dict.fromkeys(("reading-ledger.json", "budget.json"), _OUTSIDE),
+    **dict.fromkeys(("reading-ledger.json", "budget.json",
+                     # a state folder outside git (a test's): the ledger in the computer's
+                     # temporary folder, named for that folder (app_actions._kept_ledger_path)
+                     "tools/app_actions.py: ljs-applied-*.json"), _OUTSIDE),
     # profile/tidy.json (tools/tidy.py): the old chats tidied away, a list only ever added
     # to, by the one chat that answers the page once a day; a second chat that took the page
     # over adds other chats' ids, never a different value for one already there.
