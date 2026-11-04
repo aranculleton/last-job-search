@@ -1623,6 +1623,7 @@ def clear_old_copies(root: str) -> tuple[list[str], list[str]]:
     documents and own tests, once: where the file beside one is identical, or was changed
     later than the copy was made. (cleared, undecided): any copy where the copy is the later
     one or has no file beside it is left, named. Never raises."""
+    import local_path
     cleared: list[str] = []
     undecided: list[str] = []
     try:
@@ -1632,7 +1633,7 @@ def clear_old_copies(root: str) -> tuple[list[str], list[str]]:
                 if SIDE not in n:
                     continue
                 full = os.path.join(full_dir, n)
-                rel = os.path.relpath(full, root).replace(os.sep, "/")
+                rel = local_path.rel(full, root)
                 if not rel.startswith(_COPY_PLACES):
                     continue
                 beside = os.path.join(full_dir, n.split(SIDE)[0])

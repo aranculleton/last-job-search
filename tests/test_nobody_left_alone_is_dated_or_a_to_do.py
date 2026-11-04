@@ -14,11 +14,12 @@ from __future__ import annotations
 
 import ast
 import csv
-import glob
 import os
 import sys
 
 import pytest
+
+from tests import repo_files  # noqa: E402
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 for _p in (os.path.join(ROOT, "tools", "network"), os.path.join(ROOT, "tools"),
@@ -131,7 +132,7 @@ def test_every_date_on_a_contact_is_written_through_the_one_gate():
     """state.put_next is the one place a contact's next_action_due is written: a writer that
     set it itself could date someone at their limit or closed again."""
     found = []
-    for path in glob.glob(os.path.join(ROOT, "tools", "**", "*.py"), recursive=True):
+    for path in map(str, repo_files.files("tools/**/*.py", root=ROOT)):
         if os.sep + "openroles" + os.sep in path:
             continue
         with open(path, encoding="utf-8") as fh:

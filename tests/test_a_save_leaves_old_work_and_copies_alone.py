@@ -5,6 +5,8 @@ a temp dir; invented names."""
 # ruff: noqa: F811  (the landing tests' `copy` fixture, imported and taken as a parameter)
 import os
 import sys
+
+from tests import repo_files  # noqa: E402
 import time
 
 sys.path.insert(0, os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "tools"))
@@ -155,4 +157,4 @@ def test_a_save_clears_copies_older_versions_left_and_names_the_rest(copy, capsy
     left = _files_like(chat, "from-another-chat")
     assert sorted(left) == ["Orphan.md.from-another-chat", "test_c.py.from-another-chat"], left
     assert "cleared 2 extra copy" in out and "2 extra copy(ies)" in out and "tell the person" in out
-    assert git(chat, "ls-files", "documents/cv").stdout.split() == ["documents/cv/Resume_A.tex"]
+    assert repo_files.tracked("documents/cv", root=chat, app_only=False) == ["documents/cv/Resume_A.tex"]
