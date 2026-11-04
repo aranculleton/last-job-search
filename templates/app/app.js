@@ -1581,8 +1581,11 @@
     if (canRing() && !stillInTap(t0)) return Promise.resolve("later");
     return ringNow(ids, tag || "work", force !== false);
   }
-  // Sent now, from a tap of the person's own.
+  // Sent now, from a tap of the person's own. A double tap is one tap: work this window is
+  // still writing or ringing for, or rang for in the last two seconds, is not rung again.
   function sendNow(ids) {
+    ids = arr(ids).filter((id) => !workWriting.has(id) && now() - (S.tried.get(id) || 0) >= 2000);
+    if (!ids.length) return;
     toClaude(ids, "work", now()).then((how) => ringNote(ids, how));
   }
   // Work this page asked for that has not reached Claude goes with the person's next tap
@@ -1803,7 +1806,7 @@
         announce("Asked again: " + txt(w.title) + ".");
         ringNote(sent, await toClaude(sent, "work", t0));
       } catch (e) { announce("Could not start it again. Try once more."); }
-      finally { for (const x of ids) workWriting.delete(x); }
+      finally { for (const x of ids) workWriting.delete(x); scheduleRender(); }
     })();
   }
   // The drafts claimed with a batch's first one (page_db.claim writes `with` on each), and the
@@ -9326,7 +9329,10 @@
     const inLine = !!(place && place.busy);
     const picked = st === "queued" && !inLine && !p.stopping && pickedUp(w) > 0;
     const late = p.late && !picked && !inLine && !helperStarting();
-    const unsent = st === "queued" && p.unsent && !p.stopping && !away;
+    // Not while this window is still writing it or ringing for it: the card drew Send to Claude
+    // where Try again had been, and a double tap's second tap rang a second time (Firefox, CI,
+    // 2026-11-04).
+    const unsent = st === "queued" && p.unsent && !p.stopping && !away && !workWriting.has(id);
     // Sent, and its chat not yet back: the page's own clock runs, as a chat shows its setup.
     const waking = st === "queued" && !!p.sentAt && !picked && !late && !inLine && !p.stopping;
     // One honest word for waiting work, and the sentence under it says when: "Waiting to
