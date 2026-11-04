@@ -384,15 +384,16 @@ def test_a_nudge_is_logged_by_command_with_its_words(book, capsys):
     assert (row["scenario"], row["channel"], row["full_text"]) == (
         "nudge", "message", "Hi Wren, how do your depot forecasts handle bank holidays?")
     c = book.contacts()[0]
-    assert c["next_action_due"] and "gone_cold" in c["next_action"]
+    # A nudge is the second unanswered message, the person's limit: nobody at their limit is
+    # dated or a To do (state.put_next), so it waits for a reply with no date.
+    assert not c["next_action_due"] and "nothing more unless they reply" in c["next_action"]
     # The same words to the same person on the same day: never logged twice.
     assert state.main(["nudge", "fernhill_halloway", "--text-file", str(words),
                        "--today", "2026-10-21"]) == 1
     assert "already logged" in capsys.readouterr().out
     assert len(book.threads()) == 3
-    # One nudge, then nothing more is owed but closing it out.
-    assert [i["kind"] for i in state.owed(book.contacts(), book.threads(), "2026-11-20")] == \
-        ["action_due"]
+    # One nudge, then nothing more is owed: at their limit they are no To do, weeks later too.
+    assert [i["kind"] for i in state.owed(book.contacts(), book.threads(), "2026-11-20")] == []
 
 
 def test_several_later_messages_go_in_one_command_and_a_reply_is_a_reply(book, capsys):
