@@ -1283,7 +1283,7 @@ def test_a_busy_week_is_a_few_checklists_not_a_card_each(run, pages):
     sent = r["groups"]["grp:sent"]
     assert sent["title"].startswith("Did these notes go?") and len(sent["rows"]) == 2 and "They all went" in sent["actions"]
     warn = [g for k, g in r["groups"].items() if k.startswith("grp:read_first")]
-    assert len(warn) == 1 and warn[0]["title"].startswith("Written before their profile was read"), r["groups"]
+    assert len(warn) == 1 and warn[0]["title"].startswith("3 messages to check before you send"), r["groups"]  # what the card is, its reason under it (2026-11-04)
     assert "4 follow-ups at employers you turned down not shown." in r["hidden"]
     assert "Nudge" not in r["text"], "a follow-up is called a follow-up"
     assert "Turn on the new reading pace?" not in r["text"], "questions from updates wait in Settings"
