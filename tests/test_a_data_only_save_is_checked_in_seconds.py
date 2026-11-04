@@ -22,6 +22,12 @@ sys.path.insert(0, os.path.join(ROOT, "tests"))
 
 import repo_files  # noqa: E402
 
+sys.path.insert(0, os.path.join(ROOT, "tools"))
+import local_path  # noqa: E402
+
+# Git Bash on Windows, never the Linux layer's launcher a bare "bash" reaches there.
+BASH = local_path.bash() or "bash"
+
 
 def _git(cwd, *args):
     return subprocess.run(["git", "-C", str(cwd), "-c", "user.name=t",
@@ -33,7 +39,7 @@ def _git(cwd, *args):
 def copy(tmp_path):
     """The app's tracked files with the example person as the person, committed, with
     origin/master at that commit: nothing changed since master."""
-    if not shutil.which("git") or not shutil.which("bash"):
+    if not shutil.which("git") or not local_path.bash():
         pytest.skip("needs git and bash")
     files = repo_files.tracked(root=ROOT, app_only=False)
     c = tmp_path / "copy"
@@ -79,7 +85,7 @@ def test_nothing_changed_skips_the_app_tree_and_never_blames_an_update(copy):
     env.pop("LJS_STATE", None)
     env.pop("VIRTUAL_ENV", None)
     start = time.monotonic()
-    r = subprocess.run(["bash", "tools/ci_local.sh", "--quick"], cwd=copy, env=env,
+    r = subprocess.run([BASH, "tools/ci_local.sh", "--quick"], cwd=copy, env=env,
                        capture_output=True, text=True, encoding="utf-8", errors="replace",
                        timeout=600)
     took = time.monotonic() - start
@@ -111,7 +117,7 @@ def test_a_profile_missing_a_setting_never_lands_and_is_named_never_traced(copy)
     out = r.stdout + r.stderr
     assert r.returncode == 1 and "Traceback" not in out, out
     assert "profile/search.py has no" in out, out
-    r = subprocess.run(["bash", "tools/ci_local.sh", "--quick"], cwd=copy, env=env,
+    r = subprocess.run([BASH, "tools/ci_local.sh", "--quick"], cwd=copy, env=env,
                        capture_output=True, text=True, encoding="utf-8", errors="replace",
                        timeout=600)
     out = r.stdout + r.stderr
