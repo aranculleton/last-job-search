@@ -1552,7 +1552,10 @@ def test_everything_booked_is_one_tap_from_any_calendar_and_the_brief_shows_the_
     # The person's own clock first; on a device somewhere else, the time there too ("13:00 (3:00 here)").
     # An interview with no time gives the way to add it, never "Time not set" with no way to
     # set it (the walk-through, 2026-11-03).
-    assert [w.split(" (")[0] for w in r["when"][:3]] == ["13:00", "15:00", "10:00"] and "End of day" in r["when"] and "Add the time" in r["when"], r["when"]
+    # On a device in another zone the person's clock is named ("13:00 London time (3:00 here)",
+    # the audit's interviews 3): the time, then the zone, then the time where the device is.
+    assert [w.split(" (")[0].split(" ")[0] for w in r["when"][:3]] == ["13:00", "15:00", "10:00"] and "End of day" in r["when"] and "Add the time" in r["when"], r["when"]
+    assert all(("here)" in w) == (" time (" in w) for w in r["when"][:3]), r["when"]
     assert "Time not set" not in r["when"], r["when"]
     # Each interview says whether its prep is ready, on its own row only (never on a test
     # due in the same process): read it from there, or ask for it.
