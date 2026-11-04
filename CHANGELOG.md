@@ -38,6 +38,8 @@ make sense to somebody whose repo just received it.
 
 ### Fixed
 
+- **The settings gear is even all round, and the Brief's icon is sharp.** The gear's teeth
+  were lopsided, and the Brief's four boxes sat so close their edges blurred together.
 - **Work waiting behind an update says how long it really waits**: the work running now and
   then the update, never only the update's own few minutes. A day on a work card reads "Wed
   21 Oct", and its time is said once.

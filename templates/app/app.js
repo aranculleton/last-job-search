@@ -11023,7 +11023,9 @@
     "side-hide": "M5 4h14a2 2 0 0 1 2 2v12a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2z M9 4v16 M16 9l-3 3 3 3",
     "side-show": "M5 4h14a2 2 0 0 1 2 2v12a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2z M9 4v16 M13 9l3 3-3 3",
     todo: "M12 3a9 9 0 1 0 0 18a9 9 0 0 0 0-18zM8 12l3 3l5-6",
-    brief: "M4 4h7v7H4zM13 4h7v4h-7zM13 10h7v10h-7zM4 13h7v7H4z",
+    // Four panels with clear space between them: 2 units apart under a 1.75 line, their edges
+    // ran together at the menu's size and read as blurred (the maintainer, 2026-11-04).
+    brief: "M3 3h7v9H3zM14 3h7v5h-7zM14 12h7v9h-7zM3 16h7v5H3z",
     // A pencil, so Tweak never looks like Settings' sliders (the maintainer, 2026-10-26).
     tweak: "M4 20l4-1L19 8l-3-3L5 16zM14 7l3 3",
     copy: "M9 9h11v11H9zM5 15H4V4h11v1",
@@ -11042,7 +11044,10 @@
     "cal-add": "M5 5h14v15H5zM5 9h14M9 3v4M15 3v4M12 12v6M9 15h6",
     progress: "M4 20V10M10 20V4M16 20v-7M22 20H2",
     expand: "M4 9V4h5M20 9V4h-5M4 15v5h5M20 15v5h-5",
-    settings: "M12 9a3 3 0 1 0 0 6a3 3 0 0 0 0-6zM10.3 3h3.4l.5 2.4 1.9.8 2-1.4 2.4 2.4-1.4 2 .8 1.9 2.4.5v3.4l-2.4.5-.8 1.9 1.4 2-2.4 2.4-2-1.4-1.9.8-.5 2.4h-3.4l-.5-2.4-1.9-.8-2 1.4-2.4-2.4 1.4-2-.8-1.9L3 13.7v-3.4l2.4-.5.8-1.9-1.4-2 2.4-2.4 2 1.4 1.9-.8z",
+    // A rounded gear, the shape of Lucide's "settings" (ISC License, Copyright (c) Lucide
+    // Contributors): the angular one read as odd beside the rounded icons (the maintainer,
+    // 2026-11-04: "settings icon looks weird").
+    settings: "M12.22 2h-.44a2 2 0 0 0-2 2v.18a2 2 0 0 1-1 1.73l-.43.25a2 2 0 0 1-2 0l-.15-.08a2 2 0 0 0-2.73.73l-.22.38a2 2 0 0 0 .73 2.73l.15.1a2 2 0 0 1 1 1.72v.51a2 2 0 0 1-1 1.74l-.15.09a2 2 0 0 0-.73 2.73l.22.38a2 2 0 0 0 2.73.73l.15-.08a2 2 0 0 1 2 0l.43.25a2 2 0 0 1 1 1.73V20a2 2 0 0 0 2 2h.44a2 2 0 0 0 2-2v-.18a2 2 0 0 1 1-1.73l.43-.25a2 2 0 0 1 2 0l.15.08a2 2 0 0 0 2.73-.73l.22-.39a2 2 0 0 0-.73-2.73l-.15-.08a2 2 0 0 1-1-1.74v-.5a2 2 0 0 1 1-1.74l.15-.09a2 2 0 0 0 .73-2.73l-.22-.38a2 2 0 0 0-2.73-.73l-.15.08a2 2 0 0 1-2 0l-.43-.25a2 2 0 0 1-1-1.73V4a2 2 0 0 0-2-2zM12 9a3 3 0 1 0 0 6a3 3 0 0 0 0-6z",
     "k-application": "M7 3h7l5 5v13H7zM14 3v5h5",
     "k-message": "M4 5h16v11H9l-5 4z",
     "k-interview": "M5 6h14v14H5zM5 10h14M9 3v4M15 3v4",
