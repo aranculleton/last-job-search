@@ -95,13 +95,12 @@ _WRAPPER = {"id", "doc_id", "version", "data", "path", "collection", "created_at
 VERSION_FIELD = "_v"
 
 
-def unwrap(obj) -> tuple[dict, int | None]:
-    """(the document's fields, its version) from one dumped file. A dump holds either the
-    fields themselves, or a wrapper {id, version, data}. The version is the wrapper's, else
-    `__version__` or `_version` beside the fields, else the record's own `_v`, else 1: a
-    record from before `_v` that a chat never rewrote was made once, by the page."""
+def _version_of(obj) -> tuple[dict, int | None, bool]:
+    """(fields, version, whether the store itself gave the version): the wrapper's or
+    `__version__` beside the fields is the store's own; `_v` is only what the last writer
+    said it would be."""
     if not isinstance(obj, dict):
-        return {}, None
+        return {}, None, False
     if isinstance(obj.get("data"), dict) and set(obj) <= _WRAPPER:
         version = obj.get("version", obj.get("__version__", obj.get("_version")))
         fields = dict(obj["data"])
@@ -109,9 +108,86 @@ def unwrap(obj) -> tuple[dict, int | None]:
         fields = {k: v for k, v in obj.items() if k not in ("__version__", "_version")}
         version = obj.get("__version__", obj.get("_version"))
     own = fields.pop(VERSION_FIELD, None)
-    if not isinstance(version, int) or isinstance(version, bool):
+    real = isinstance(version, int) and not isinstance(version, bool)
+    if not real:
         version = own if isinstance(own, int) and not isinstance(own, bool) and own > 0 else 1
+    return fields, version, real
+
+
+def unwrap(obj) -> tuple[dict, int | None]:
+    """(the document's fields, its version) from one dumped file. A dump holds either the
+    fields themselves, or a wrapper {id, version, data}. The version is the wrapper's, else
+    `__version__` or `_version` beside the fields, else the record's own `_v`, else 1: a
+    record from before `_v` that a chat never rewrote was made once, by the page."""
+    fields, version, _real = _version_of(obj)
     return fields, version
+
+
+# ------------------------------------------------------------------ the store's own number
+#
+# `_v` is a stamp the last writer put in the record, not the store's count. One write that
+# stamped it wrong (a write by hand, a page with an old copy of the record) and every chat
+# read the wrong number back, every write pinned to it was refused, and a new read gave the
+# same number again: the listener's check-in bounced on every wake (the maintainer, 4
+# November). The store names its real version when it refuses; `app.py version` keeps that
+# here, in the copy's git folder, beside the stamp it corrects, and every later read whose
+# record still carries that stamp is pinned to the store's number, so the next write lands
+# and stamps the record right again. A record the store gave its own version for is never
+# corrected: the store's number always wins.
+KNOWN_VERSIONS = "ljs-versions.json"
+KNOWN_DAYS = 7
+_KNOWN_PATH: list = []
+
+
+def _known_path() -> str:
+    """Where the versions the store named are kept: LJS_VERSIONS (tests), else the copy's git
+    folder (never committed), else "" (nothing kept)."""
+    given = os.environ.get("LJS_VERSIONS")
+    if given:
+        return given
+    if _KNOWN_PATH:
+        return _KNOWN_PATH[0]
+    path = ""
+    try:
+        import subprocess
+        import person
+        r = subprocess.run(["git", "-C", person.state(), "rev-parse", "--absolute-git-dir"],
+                           capture_output=True, text=True, encoding="utf-8", errors="replace",
+                           timeout=10, stdin=subprocess.DEVNULL)
+        if r.returncode == 0 and r.stdout.strip():
+            path = os.path.join(r.stdout.strip(), KNOWN_VERSIONS)
+    except Exception:  # noqa: BLE001  no copy, no git: nothing is kept
+        path = ""
+    _KNOWN_PATH.append(path)
+    return path
+
+
+def known_versions() -> dict:
+    """{"<stored collection>/<stored doc id>": {"stamp": n, "real": m, "at": iso}}."""
+    path = _known_path()
+    got = _read_json(path) if path else None
+    return got if isinstance(got, dict) else {}
+
+
+def remember_version(ref: str, stamp: int | None, real: int, now: dt.datetime | None = None) -> None:
+    """Keep the store's version for a record whose stamp read `stamp`."""
+    path = _known_path()
+    if not path or not isinstance(stamp, int):
+        return
+    now = now or dt.datetime.now(dt.timezone.utc)
+    cutoff = (now - dt.timedelta(days=KNOWN_DAYS)).strftime("%Y-%m-%dT%H:%M:%S")
+    got = {k: v for k, v in known_versions().items()
+           if isinstance(v, dict) and str(v.get("at") or "") >= cutoff}
+    got[ref] = {"stamp": int(stamp), "real": int(real), "at": now.strftime("%Y-%m-%dT%H:%M:%SZ")}
+    try:
+        os.makedirs(os.path.dirname(path), exist_ok=True)
+        tmp = f"{path}.{os.getpid()}.tmp"
+        with open(tmp, "w", encoding="utf-8", newline="\n") as fh:
+            json.dump(got, fh, indent=1, sort_keys=True)
+            fh.write("\n")
+        os.replace(tmp, path)
+    except OSError:
+        pass
 
 
 def _read_json(path: str):
@@ -131,6 +207,7 @@ def load(dump_dir: str) -> dict:
     version is the old record's, which the new name never had, so a write pinned to it was
     refused (2026-10-29). The first write makes the new record, and `move()` makes them all."""
     out: dict = {c: {} for c in COLLECTIONS}
+    known = None
     for coll in COLLECTIONS:
         new = STORE.get(coll, coll)
         # The old name first, so a record under its new name always wins.
@@ -139,7 +216,17 @@ def load(dump_dir: str) -> dict:
                 got = _read_json(path)
                 if got is None:
                     continue
-                fields, version = unwrap(got)
+                fields, version, real = _version_of(got)
+                if not real:
+                    # Its own stamp only: a wrong one the store has corrected is read as the
+                    # store's number (KNOWN_VERSIONS).
+                    if known is None:
+                        known = known_versions()
+                    stem = os.path.splitext(os.path.basename(path))[0].replace("@", "~")
+                    fix = known.get(f"{where}/{stem}") if known else None
+                    if isinstance(fix, dict) and fix.get("stamp") == version \
+                            and isinstance(fix.get("real"), int) and fix["real"] > 0:
+                        version = fix["real"]
                 # ArtifactData spells a "~" in an id as "@" in the file's name; ids never
                 # hold an "@" of their own (safe_id), so every "@" is a "~".
                 doc_id = os.path.splitext(os.path.basename(path))[0].replace("@", "~")
@@ -683,8 +770,10 @@ def next_item(db: dict, chat_kind: str, now: dt.datetime,
         # once, by the next chat to look: it sat "running" for good, and work for the same
         # employer could only wait (2026-11-01). A second stop is left for the person's
         # "Ask Claude again".
+        # Never one a chat began for the person in that chat (`in_chat`): they are there, and
+        # a second run elsewhere would do it twice; it is ended instead (stranded).
         again = (str(item.get("status") or "") in ACTIVE and not _live_claim(item, now, work)
-                 and int(item.get("attempt") or 1) < AUTO_TRIES)
+                 and int(item.get("attempt") or 1) < AUTO_TRIES and not item.get("in_chat"))
         if str(item.get("status") or "") != "queued" and not again:
             continue
         if not can_take(item, chat_kind):
@@ -752,17 +841,31 @@ def next_item(db: dict, chat_kind: str, now: dt.datetime,
 # kinds move on. It sat "running" for good before, refusing every new search and holding the
 # helper's renewal (engine audit, 2026-11-03). One they asked to stop is stopped.
 STRANDED_SAID = "It stopped part way twice. Tap Try again to start it once more."
+# Work a chat began for the person in that chat, gone quiet: never started again elsewhere,
+# ended after a lease and as long again with no word, so a long step it forgot to pin keeps it.
+CHAT_STRANDED_SAID = "It stopped in its chat before it finished. Tap Try again to start it once more."
+
+
+def _chat_quiet(item: dict, now: dt.datetime) -> bool:
+    """Has work a chat runs itself had no word for a lease past its lease?"""
+    until = _time(item.get("lease_until")) or _time(item.get("stage_at")) or \
+        _time(item.get("claimed_at"))
+    return until is not None and (now - until).total_seconds() >= LEASE_S
 
 
 def stranded(db: dict, now: dt.datetime) -> list[str]:
     """Ids of claimed or running items no chat holds any more, that `next_item` will not start
-    again: tried AUTO_TRIES times, or asked to stop."""
+    again: tried AUTO_TRIES times, asked to stop, or begun in a chat that has gone quiet."""
     work = db.get("work") or {}
     out = []
     for wid, d in work.items():
         item = d["data"]
         if str(item.get("status") or "") not in ACTIVE or d.get("version") is None \
                 or _live_claim(item, now, work):
+            continue
+        if item.get("in_chat") and not item.get("stop_asked"):
+            if _chat_quiet(item, now):
+                out.append(wid)
             continue
         if item.get("stop_asked") or int(item.get("attempt") or 1) >= AUTO_TRIES:
             out.append(wid)
@@ -781,7 +884,8 @@ def fail_stranded(db: dict, now: dt.datetime, out_dir: str) -> dict:
     work = db.get("work") or {}
     for wid in ids:
         stop = bool(work[wid]["data"].get("stop_asked"))
-        said = STOPPED_SAID if stop else STRANDED_SAID
+        said = STOPPED_SAID if stop else CHAT_STRANDED_SAID if work[wid]["data"].get("in_chat") \
+            else STRANDED_SAID
         w.add("update", "work", wid, {
             "status": "stopped" if stop else "failed", "finished_at": at, "lease_until": None,
             "error": None if stop else said, "result": {"summary": said, "links": []}},
@@ -832,7 +936,7 @@ def claim(db: dict, chosen: dict, chat_id: str, chat_kind: str, now: dt.datetime
         (engine audit, 2026-11-03)."""
         item = (work.get(wid) or {}).get("data") or {}
         out: dict = {"stage": 0, "stage_at": at if running else None}
-        for k in ("with", "stage_line", "note", "error"):
+        for k in ("with", "stage_line", "note", "error", "in_chat"):
             if item.get(k) not in (None, "", [], {}):
                 out[k] = {"__delete__": True}
         if item.get("answered_at"):
@@ -1017,6 +1121,17 @@ def note_version(dump_dir: str, ref: str, version: int) -> str:
     if doc is None:
         raise KeyError(f"no {coll}/{doc_id} in {dump_dir}: read it again into this folder")
     store_coll, store_id = stored(logical, doc_id)
+    # The stamp the record itself carries, as read: kept beside the store's number, so a new
+    # read of the same record, still stamped wrong, is pinned right (KNOWN_VERSIONS).
+    stamp = None
+    for name in (store_id.replace("~", "@"), store_id):
+        raw = _read_json(os.path.join(dump_dir, store_coll, name + ".json"))
+        if isinstance(raw, dict):
+            _f, v, real = _version_of(raw)
+            stamp = None if real else v
+            break
+    if stamp is not None and stamp != int(version):
+        remember_version(f"{store_coll}/{store_id}", stamp, int(version))
     _keep_dump(dump_dir, store_coll, store_id, dict(doc["data"]), int(version))
     return f"{store_coll}/{store_id}"
 
@@ -1337,11 +1452,19 @@ def work_id(kind: str, now: dt.datetime) -> str:
 
 
 def ask(db: dict, kind: str, title: str, now: dt.datetime, out_dir: str, args: dict | None = None,
-        to: str = "", chat_id: str = "", item_id: str = "", dump_dir: str = "") -> dict:
+        to: str = "", chat_id: str = "", item_id: str = "", dump_dir: str = "",
+        here: bool = False, chat_kind: str = "cloud") -> dict:
     """A new work item, queued from a chat as the page's own Ask would queue it
     (templates/app/app.js createWork): the same fields, the kind's own stages, and, for a
     kind the page runs one at a time, refused while one is going. {work, batches}. Raises
-    ValueError, in plain words, for a kind there is none of, no title, or one already going."""
+    ValueError, in plain words, for a kind there is none of, no title, or one already going.
+
+    `here`: the chat the person asked does it itself, now (a search, drafts, a prep asked in
+    a chat). The item is made claimed by that chat and running at its first stage, marked
+    `in_chat`, so the page's work list shows it, its stages and its result like work asked
+    on the page; only a busy line showed before, and nobody could see what ran or what was
+    done (the maintainer, 4 November). That chat pins it and finishes it (`app.py pin`,
+    `app.py done`); no other chat ever starts it again."""
     import app_model
     if kind not in WORK_KINDS:
         raise ValueError(f"there is no kind of work {kind!r}; one of "
@@ -1368,11 +1491,80 @@ def ask(db: dict, kind: str, title: str, now: dt.datetime, out_dir: str, args: d
               "priority": 0, "status": "queued", "stages": progress(kind)["stages"], "stage": 0,
               "stage_at": None, "steps": [], "claimed_by": None, "claimed_at": None,
               "stop_asked": False, "attempt": 1}
+    if here:
+        if not chat_id:
+            raise ValueError("this chat's id is not known: run it again with --chat <this "
+                             "chat's id>")
+        held = held_locks(db, now)
+        busy = [lk for lk in locks_for(fields) if lk in held]
+        if busy:
+            other = ((db.get("work") or {}).get(held[busy[0]]) or {}).get("data") or {}
+            raise ValueError(f"\"{other.get('title') or 'another job'}\" is running for the "
+                             "same thing: wait for it to finish")
+        at = app_model.stamp(now)
+        fields.update(status="running", claimed_by=chat_id, claimed_at=at, stage_at=at,
+                      lease_until=app_model.stamp(now + dt.timedelta(seconds=LEASE_S)),
+                      in_chat=True, asked_from={"tab": "chat", "chat": chat_id},
+                      to=chat_kind if chat_kind in WORK_KINDS[kind]["can"] else to)
     w = Writes(out_dir)
     w.add("set", "work", wid, fields)
     if dump_dir:
         _keep_dump(dump_dir, "work", wid, fields, 1)
     return {"work": wid, "batches": w.save("ask")}
+
+
+# Kinds of work whose finish leaves PDFs the page should hold: they run in a chat of their own,
+# which cannot put a file in the page's store (only a chat with the Artifact tool allowed can,
+# and a job's chat carries ArtifactData and ArtifactComments alone), so the chat that started
+# them uploaded each by hand, or the person tapped "Get my files ready" (the maintainer, 4
+# November).
+FILES_AFTER = ("draft", "resume_for_contact")
+
+
+def queue_files(db: dict, apps: list, now: dt.datetime, out_dir: str, dump_dir: str = "",
+                chat_id: str = "") -> dict | None:
+    """One `files` item for every drafted application in `apps` (app_model.files_missing)
+    that no files work still going already covers, made as the page's own "Get my files
+    ready" makes it (templates/app/app.js askFiles): for the chat that answers the page,
+    which can upload, all of them in one piece of work. The page rings for it with the
+    person's next tap, like any work no chat was told of. None when nothing is left."""
+    import app_model
+    work = db.get("work") or {}
+    covered: set = set()
+    for d in work.values():
+        x = d.get("data") or {}
+        if x.get("kind") != "files" or str(x.get("status") or "queued") not in ("queued",) + ACTIVE:
+            continue
+        a = x.get("args") if isinstance(x.get("args"), dict) else {}
+        covered |= {str(i) for i in a.get("applications") or []}
+        if a.get("application"):
+            covered.add(str(a["application"]))
+    left = [x for x in apps or [] if str(x.get("id") or "") and str(x["id"]) not in covered]
+    if not left:
+        return None
+    wid = safe_id("files~" + str(left[0]["id"]))
+    title = "Make the files downloadable: " + (f"{len(left)} applications" if len(left) > 1
+                                               else str(left[0].get("company") or "")
+                                               or "your application")
+    args = {"application": str(left[0]["id"]),
+            "files": [n for x in left for n in x.get("files") or []],
+            "paths": [p for x in left for p in x.get("paths") or []]}
+    if len(left) > 1:
+        args["applications"] = [str(x["id"]) for x in left]
+    fields = {"kind": "files", "title": title[:140], "to": "either", "args": args,
+              "asked_at": app_model.stamp(now), "asked_from": {"tab": "chat",
+                                                               **({"chat": chat_id} if chat_id else {})},
+              "priority": 0, "status": "queued", "stages": progress("files")["stages"],
+              "stage": 0, "stage_at": None, "steps": [], "claimed_by": None, "claimed_at": None,
+              "stop_asked": False, "attempt": 1}
+    old = work.get(wid)
+    w = Writes(out_dir)
+    # One with this id already finished (an earlier upload of the first of them): asked
+    # again, pinned to it, as the page's own "redo" does.
+    w.add("set", "work", wid, fields, if_version=old["version"] if old else None)
+    if dump_dir:
+        _keep_dump(dump_dir, "work", wid, fields, int(old["version"] or 1) + 1 if old else 1)
+    return {"work": wid, "applications": [str(x["id"]) for x in left], "batches": w.save("files")}
 
 
 # ------------------------------------------------------------------ keeping the store small

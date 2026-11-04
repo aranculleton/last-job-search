@@ -41,7 +41,8 @@
                               [--reply-file F [--thread T]] [--failed "<why>"] [--link L]
                               [--chat ID]                        a finished item, in one batch
     python3 tools/app.py ask <dump dir> --kind K --title "<words>" [--args '<json>']
-                                                                 work queued from a chat message
+                             [--here]                            work queued from a chat message,
+                                                                 or (--here) begun in this chat
 
 `<dump dir>` is where ArtifactData's `out_dir` saved the page's database: `actions/`,
 `receipts/`, `work/`, `locks/`, `chats/`, one JSON file a document. What a chat sends back
@@ -152,6 +153,28 @@ def cmd_view(a) -> int:
         return 3
     today, now = app_model.clock(a.today, a.now)
     db = page_db.load(a.dump) if a.dump else {}
+    import app_listen
+    # Only the chat that answers the page draws its screens (and a job's own chat, which no
+    # chat can tell): two helpers in a hand-over rewrote whole screens over each other, and
+    # every update bounced (the maintainer, 4 November).
+    draws, said = app_listen.draws_screens(db, a.chat, getattr(a, "work", "") or "", now)
+    if not draws:
+        print(_dump({"rev": None, "batches": [], "for_claude": [said]}), end="")
+        return 0
+    base = copy_basis()
+    me = {c for c in (app_listen.this_chat(""), app_listen.this_chat(a.chat)) if c}
+    by = app_listen.this_chat("") or a.chat
+
+    def newer(old) -> bool:
+        """Is the page's copy drawn by another chat from a newer copy than this one? Never
+        written over: a copy behind another's would put back what that one moved on."""
+        d = (old or {}).get("data") if isinstance(old, dict) else None
+        if not base or not isinstance(d, dict):
+            return False
+        theirs = str(d.get("base") or "")
+        return bool(theirs) and theirs > base and str(d.get("by") or "") not in me
+    kept: list = []
+    stamp = {"by": by, **({"base": base} if base else {})}
     # The suggestions already on the page keep their day, so no more than three new ones
     # reach it a day.
     full: dict = {}
@@ -162,7 +185,7 @@ def cmd_view(a) -> int:
     # one card had changed (2026-11-03). The page takes each document newer than its own copy,
     # so one left as it was still shows; a section in parts is kept or rewritten whole, so
     # its parts never mix two revs.
-    volatile = ("rev", "made_at", page_db.VERSION_FIELD)
+    volatile = ("rev", "made_at", page_db.VERSION_FIELD, "by", "base")
 
     def unchanged(doc_id, doc):
         old = (views.get(doc_id) or {}).get("data")
@@ -176,7 +199,11 @@ def cmd_view(a) -> int:
         old = views.get(doc_id)
         if unchanged(doc_id, doc):
             continue
-        w.add("set", "view", doc_id, doc, if_version=old["version"] if old else None)
+        if newer(old):
+            kept.append(doc_id)
+            continue
+        w.add("set", "view", doc_id, dict(doc, **stamp),
+              if_version=old["version"] if old else None)
     for doc_id in app_lists.stale(full, db.get("view") or {}):
         if db["view"][doc_id]["version"] is not None:      # read under 4.2's name: kept
             w.add("delete", "view", doc_id, if_version=db["view"][doc_id]["version"])
@@ -189,13 +216,20 @@ def cmd_view(a) -> int:
         if name not in model:
             continue
         docs = page_db.split(name, {"rev": model["rev"], "made_at": model["made_at"],
-                                    "data": model[name]})
+                                    "data": model[name], **stamp})
         if views and page_db.joined(views, name) == json.loads(json.dumps(model[name],
                                                                            ensure_ascii=False)):
             # Unchanged: the section's documents stay as they are, parts and all.
             head = (views.get(name) or {}).get("data") or {}
             n = head.get("in_parts") if isinstance(head.get("in_parts"), int) else 0
             written.extend([name] + [page_db.part_id(name, i) for i in range(1, n + 1)])
+            continue
+        if newer(views.get(name)):
+            # A section is kept or rewritten whole, so its parts never mix two copies.
+            head = (views.get(name) or {}).get("data") or {}
+            n = head.get("in_parts") if isinstance(head.get("in_parts"), int) else 0
+            written.extend([name] + [page_db.part_id(name, i) for i in range(1, n + 1)])
+            kept.append(name)
             continue
         for doc_id, doc in docs:
             old = views.get(doc_id)
@@ -232,19 +266,41 @@ def cmd_view(a) -> int:
         if doc_id not in page_db.addr_docs(reach):
             w.add("delete", "addr", doc_id, if_version=old["version"])
     old = (db.get("meta") or {}).get("current") if db else None
-    import app_listen
     # Who wrote it, by this session's own id where there is one: the brief passed the word
     # "brief", which no listener rule could compare with a chat (engine audit, 2026-11-03).
-    w.add("set", "meta", "current", {"rev": model["rev"], "made_at": model["made_at"],
-                                     "model": model["model"],
-                                     "by": app_listen.this_chat("") or a.chat,
-                                     **_published()},
-          if_version=old["version"] if old else None)
-    batches = w.save("view")
+    if not newer(old):
+        w.add("set", "meta", "current", {"rev": model["rev"], "made_at": model["made_at"],
+                                         "model": model["model"], **stamp, **_published()},
+              if_version=old["version"] if old else None)
+    batches = w.save("view") if w.entries else []
     lines = app_listen.view_renewal(db, a.chat, now)
     print(_dump({"rev": model["rev"], "batches": batches,
+                 **({"kept_newer": kept} if kept else {}),
                  **({"for_claude": lines} if lines else {})}), end="")
     return 0
+
+
+def copy_basis() -> str:
+    """When the newest commit in this copy was made, in UTC ("2026-11-04T09:12:00Z"), or ""
+    where it cannot be told (the app itself, no git). Each screen carries it as `base`, so a
+    chat whose copy is behind another's never writes over that one's screens. LJS_BASIS is
+    for tests."""
+    given = os.environ.get("LJS_BASIS")
+    if given is not None:
+        return given
+    if not os.path.isfile(os.path.join(person.ROOT, "profile", "person.json")):
+        return ""
+    import subprocess
+    try:
+        r = subprocess.run(["git", "-C", person.ROOT, "log", "-1", "--format=%ct", "HEAD"],
+                           capture_output=True, text=True, encoding="utf-8", errors="replace",
+                           timeout=10, stdin=subprocess.DEVNULL)
+        secs = int(r.stdout.strip()) if r.returncode == 0 and r.stdout.strip() else 0
+    except (OSError, ValueError, subprocess.TimeoutExpired):
+        secs = 0
+    if not secs:
+        return ""
+    return dt.datetime.fromtimestamp(secs, dt.timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
 
 
 def cmd_page(a) -> int:
@@ -825,6 +881,10 @@ def check_in(dump: str, chat: str, now, out: str, listen: bool = False, helper: 
         page_db.moved_into(dump, move)
     got = app_listen.decide(move["db"], chat, out, now, listen=listen, helper=helper,
                             hand_to=hand, update=update)
+    if got["batches"]:
+        # The record as it will be once the check-in lands, so the rest of this wake (its
+        # page update above all) sees who answers the page now. Refused: a new read.
+        page_db.keep_landed(dump, got["batches"])
     upkeep: list[str] = []
     old: list[str] = []
     ended: dict = {"ended": [], "batches": []}
@@ -948,7 +1008,10 @@ SEND = {"move": "the page's records take their new names, once",
         "taps": "what the person did, claimed",
         "applied": "what the person did, applied, with its receipts",
         "work": "the work below, claimed"}
-REFUSED = "Refused: another chat {who}; read again into a new folder and wake once more"
+REFUSED = ("Refused: another chat {who}, or a record's own stored number was wrong. First keep "
+           "the version the refusal names: python3 tools/app.py version \"{dump}\" "
+           "<collection>/<doc id> <that version> (a wrong number is put right that way, never "
+           "bounced on). Then read again into a new folder and wake once more")
 
 
 def _wake_state(dump: str) -> dict:
@@ -1143,7 +1206,7 @@ def cmd_wake(a) -> int:
                 # nothing here may have changed.
                 _save_wake_state(a.dump, {"phase": "claimed", "runs": run, "after": after,
                                           "tidy": tidy_due})
-                _print_wake(head, notes, _send_as(sends, rd), url, then=[
+                _print_wake(head, notes, _send_as(sends, rd, a.dump), url, then=[
                     "then: send these, and once every one is accepted, run this again with the "
                     "same folder: it applies what the person did (it changes your copy, so "
                     "never before the claim is accepted) and takes the next work: "
@@ -1242,11 +1305,11 @@ def cmd_wake(a) -> int:
             last += [PRUNE_SAID] + after
         if tidy_due:
             last.append(TIDY_SAID)
-    _print_wake(head, notes, _send_as(sends, rd), url, then=then + last)
+    _print_wake(head, notes, _send_as(sends, rd, a.dump), url, then=then + last)
     return 0
 
 
-def _send_as(sends, out_dir: str) -> list[tuple[str, str]]:
+def _send_as(sends, out_dir: str, dump: str = "$D") -> list[tuple[str, str]]:
     """[(batch file, what it is and what a refusal means)]: each run of batches that go
     together joined into one file the store takes whole, where it fits in one."""
     import page_db
@@ -1270,11 +1333,12 @@ def _send_as(sends, out_dir: str) -> list[tuple[str, str]]:
         names = list(dict.fromkeys(whats))
         said = "; ".join(SEND[w] for w in names)
         if names == ["move"]:
-            said += ". " + REFUSED.format(who="did it already")
+            said += ". " + REFUSED.format(who="did it already", dump=dump)
         elif names == ["work"]:
-            said += ". " + REFUSED.format(who="took it")
+            said += ". " + REFUSED.format(who="took it", dump=dump)
         elif names != ["applied"]:
-            said += ". " + REFUSED.format(who="took the page or holds something claimed here") \
+            said += ". " + REFUSED.format(who="took the page or holds something claimed here",
+                                          dump=dump) \
                 + ", which leaves that to it"
         files = paths
         if len(paths) > 1:
@@ -1450,6 +1514,23 @@ def cmd_done(a) -> int:
     except (KeyError, ValueError) as e:
         print(f"app: not finished: {e.args[0] if e.args else e}", file=sys.stderr)
         return 2
+    kind = str((((db.get("work") or {}).get(page_db.safe_id(a.work)) or {}).get("data") or {})
+               .get("kind") or "")
+    if got["status"] == "done" and kind in page_db.FILES_AFTER:
+        # The PDFs it made reach the page with no one asking: one `files` item for the chat
+        # that answers the page, for every draft whose files the page lacks (a job's own chat
+        # cannot upload them).
+        try:
+            missing = app_model.files_missing()
+        except Exception:  # noqa: BLE001  no profile or no tracker: nothing to put up
+            missing = []
+        queued = page_db.queue_files(page_db.load(a.dump), missing, now,
+                                     os.path.join(a.out or os.path.join(a.dump, "out"), "files"),
+                                     dump_dir=a.dump, chat_id=app_listen.this_chat(a.chat)) \
+            if missing else None
+        if queued:
+            got["files"] = {"work": queued["work"], "applications": queued["applications"]}
+            got["batches"] = list(got["batches"]) + queued["batches"]
     print(_dump(got), end="")
     return 0
 
@@ -1469,7 +1550,8 @@ def cmd_ask(a) -> int:
     try:
         got = page_db.ask(page_db.load(a.dump), a.kind, a.title, now,
                           a.out or os.path.join(a.dump, "out"), args=args, to=a.to,
-                          chat_id=app_listen.this_chat(a.chat), item_id=a.id, dump_dir=a.dump)
+                          chat_id=app_listen.this_chat(a.chat), item_id=a.id, dump_dir=a.dump,
+                          here=a.here, chat_kind=app_listen.chat_kind())
     except ValueError as e:
         print(f"app: not asked: {e}", file=sys.stderr)
         return 2
@@ -1510,6 +1592,9 @@ def main(argv=None) -> int:
     p.add_argument("out_dir")
     p.add_argument("--dump", default="", help="a dump of view/ and meta/, for the versions")
     p.add_argument("--chat", default="chat")
+    p.add_argument("--work", default="", help="the job this chat was started for: a job's own "
+                                              "chat draws the page once it is done, as the chat "
+                                              "that answers the page does")
     p = clocked(sub.add_parser("page", help="the page to publish: in parts with --out-dir, "
                                             "else as one HTML file"))
     p.add_argument("--out")
@@ -1667,6 +1752,9 @@ def main(argv=None) -> int:
     p.add_argument("--args", default="", help="its args, as JSON (the app skill, step 4)")
     p.add_argument("--to", default="", choices=("", "cloud", "computer", "either"))
     p.add_argument("--id", default="", help="its id (default: made the way the page makes one)")
+    p.add_argument("--here", action="store_true",
+                   help="this chat does it itself, now: the item is claimed by this chat and "
+                        "running, so the page's work list shows it, its stages and its result")
     p.add_argument("--chat", default="")
     p.add_argument("--out", default="", help="where the batch goes (default <dump>/out)")
     p.add_argument("--now", default=None)
