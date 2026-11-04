@@ -304,7 +304,9 @@ these lenses, and each real finding becomes a test the same way:
 5. **Hand over, then stop.** Write `docs/NEXT_BUILDER.md` afresh for the next chat: what
    the release left (anything unfinished, anything not tested, what Safari, Firefox, Mac and
    Windows found, the maintainer's notes not yet built, decisions to keep), in plain words and with
-   no real person in it (the push gate scans it like any file). Land it on master, then tell
+   no real person in it (the push gate scans it like any file). It is background for the next
+   builder, never a list of work: no "do first" and no to-do heading, because the next chat
+   starts nothing from it unless the maintainer's notes say so ("How a builder works"). Land it on master, then tell
    the maintainer in one line that the release is out, and recommend a new chat for the next
    version: every step of a long chat re-reads all of it, and everything a builder needs is
    in the repo. **In that same message, give them the builder prompt below, whole, in one
@@ -314,6 +316,12 @@ these lenses, and each real finding becomes a test the same way:
 
 ## How a builder works (learnt over 4.5 to 4.9)
 
+- **The maintainer's notes are the only work.** A new builder reads what the prompt names,
+  gets set up, says in one line that it is ready, and waits for the notes; with none, it
+  builds nothing. `docs/NEXT_BUILDER.md` is background, and what it left is worked on only
+  when the notes say so (the maintainer, 2026-11-04: the notes passed from one builder to the
+  next "shouldn't automatically start fixes unless fixes are explicitly provided"; "the main
+  objective is just to set up and be ready for them").
 - **Decide, never ask.** Make the call, do it, and say it in one line with the reason.
 - **Token-cheap and still certain.** The maintainer runs short of tokens. A fix's test that
   fails without it is the check: no separate sceptic per finding, one reviewer for what a
@@ -340,10 +348,10 @@ under the last line:
 ```text
 You are the builder for last-job-search, the public app at github.com/aranculleton/last-job-search. I am its maintainer. My own private copy of the app is attached to this chat: read it only so tools/push_gate.sh can build the denylist from it, and never change it.
 
-Before anything else, read MAINTAINING.md ("Developer rules", "Before pushing", "Releasing"), docs/NEXT_BUILDER.md (what the last release left you), and templates/app/DESIGN.md before you touch the page.
+Before anything else, read MAINTAINING.md ("Developer rules", "Before pushing", "Releasing"), docs/NEXT_BUILDER.md (background from the last release, never a list to start on), and templates/app/DESIGN.md before you touch the page. Then get set up, tell me in one line you are ready, and wait for my notes: build nothing until they ask for it, and work from docs/NEXT_BUILDER.md only when they say to.
 
 How we work:
-- Build what my notes below ask, all of it into [Unreleased], with tests, and merge to master once the fast checks are green: my copy takes master the same day. Nothing is released until I say "release it", except at once when a fix stops something working for people other than me; a release means merge and publish, under 15 minutes, as MAINTAINING.md "Releasing" says: only the fast checks block it.
+- Build only what my notes below ask, all of it into [Unreleased], with tests, and merge to master once the fast checks are green: my copy takes master the same day. Nothing is released until I say "release it", except at once when a fix stops something working for people other than me; a release means merge and publish, under 15 minutes, as MAINTAINING.md "Releasing" says: only the fast checks block it.
 - Cheap: every step re-reads this chat, so take few steps. Never poll; GitHub wakes you. Read only the failing lines. The whole suite runs on GitHub for free, never by hand. Run tools/push_gate.sh before every push, batch your commits, and push once per round of fixes.
 - Works everywhere: every change reaches a new install and an existing one by itself (a profile upgrade or a build version where an existing person would otherwise miss it), through the day's sync and the brief alone, on a pinned page left open with no chat running, and in a cloud chat and a chat on a computer alike. Rehearse it (tools/rehearse_sync.py) before calling it done.
 - Nothing private and no real person's name in the app, ever; the gate passes before any push.
