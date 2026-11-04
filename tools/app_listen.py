@@ -61,9 +61,13 @@ HELPER_CHAT_TITLE = HELPER_TITLE      # short: what it is for is said, never in 
 # maintainer, 2026-10-29: a heads-up about a new chat, "DO NOT MAKE THIS PERSIST").
 SAY_OTHER_CHAT = ("Heads up: your page is looked after by {who}, so this chat leaves it alone. "
                   "Anything you do here is saved to the same place and shows on your page.")
-SAY_HELPER = ("This chat is your job search helper. It does what you ask for on your page, "
-              "even with your computer off, and writes your morning brief if you turn it on. "
-              "Leave it in your list; if it is ever closed, your page offers to start a new one.")
+# A new helper says the page's link at once, shows the page busy while it works, and ends
+# with one short line. It once said a paragraph about what a helper is and posted the whole
+# morning brief, the link nowhere near the start (the maintainer, 2026-11-04: the link
+# first, then the work while the page shows it, then one line that it is ready).
+SAY_HELPER = "Your job search helper is starting: {url}"
+SAY_HELPER_READY = "Your job search helper is ready: {url}"
+HELPER_BUSY = "Getting your page ready"
 # What the page's "Wake Claude" link types for the person; they only press Send. Plain words
 # (it is their message, in their list of chats: a command there broke the rule that a person
 # is never shown one, the stranger audit, X-84); the app's hook knows the words and tells the
@@ -432,9 +436,10 @@ def decide(db: dict, chat: str, out_dir: str, now: dt.datetime | None = None,
             lines.append("listen: the chat that answered before stops by itself: its next "
                          "check finds this one.")
         if helper and chat.startswith("session_"):
-            lines.append(f"listen: name this chat so the person knows what it is: "
-                         f"set_session_title (session_id {chat}, title \"{HELPER_CHAT_TITLE}\"), "
-                         f"and tell them, as it is: \"{SAY_HELPER}\"")
+            # Named, never explained: the start said the one line the person hears.
+            lines.append(f"listen: name this chat in their list: set_session_title "
+                         f"(session_id {chat}, title \"{HELPER_CHAT_TITLE}\"), and say "
+                         "nothing about it.")
         _remember(new, now, confirmed=False)
         return {"role": "listener", "lines": lines, "batches": w.save("listen"), "record": new}
     else:
@@ -891,6 +896,8 @@ def shape(code: int, lines: list[str], chat: str = "", listen: bool = False,
             add.append("Otherwise: " + _ask_listener(url))
     else:
         add.append(_check_in(chat, url, who == "claim", listen, helper, update=bool(publish)))
+        if helper:
+            add.append(helper_busy(chat, url))
         if publish:
             add += [f"If that left this chat as the listener: {p[:1].lower()}{p[1:]}"
                     for p in publish]
@@ -905,6 +912,11 @@ def shape(code: int, lines: list[str], chat: str = "", listen: bool = False,
         except Exception:  # noqa: BLE001  no profile yet, or no registry
             pass
     keep[at:at] = [(True, a) for a in add]
+    if helper and who in ("claim", "listener"):
+        # The link once, first, in the helper's own line: the page's introduction would say it
+        # a second time, in a paragraph.
+        keep = [(step, t) for step, t in keep if not (step and t.startswith(_INTRO))]
+        keep = [(True, helper_first(url))] + keep + [(True, helper_last(chat, url))]
     out, n = [], 0
     for step, t in keep:
         if step:
@@ -935,11 +947,41 @@ def mark_introduced(today: dt.date | None = None) -> None:
             pass
 
 
+def helper_first(url: str) -> str:
+    """A new helper's first words: the page's link, at once (the maintainer, 2026-11-04)."""
+    return ("Say this to the person at once, before any other step, as it is: "
+            f"\"{say(SAY_HELPER, url)}\" Then nothing about this chat or its work until the "
+            "last step.")
+
+
+def helper_busy(chat: str, url: str) -> str:
+    """While a new helper works, the page says so (the chat's heartbeat, `app.py busy`)."""
+    return ("Once the check-in is accepted, show on the page that this chat is at work: "
+            f"ArtifactData query (url {url}, collection beats, out_dir <your scratchpad>/beats), "
+            f"then python3 tools/app.py busy <your scratchpad>/beats \"{HELPER_BUSY}\" --chat "
+            f"{chat or '<this chat id>'}, and send the batch it prints. Do the rest, and any "
+            "brief or job the check-in brings, while the page shows it.")
+
+
+def helper_last(chat: str, url: str) -> str:
+    """A new helper's last words: one line that it is ready, never the brief or a paragraph
+    about what it is (the maintainer, 2026-11-04)."""
+    return ("When all of this start's work is done (any brief or job the check-in brought "
+            "included, and the page brought up to date): python3 tools/app.py busy <your "
+            f"scratchpad>/beats --done --chat {chat or '<this chat id>'}, and send its batch "
+            "(refused: read beats again and run it once more). Then say only this, as it is: "
+            f"\"{say(SAY_HELPER_READY, url)}\" Nothing else in this reply: never the brief, its "
+            "news or its replies, and never what this chat is for; the page holds them. If the "
+            "check-in said another chat answers the page, say nothing more.")
+
+
+_INTRO = "Tell the person once, at the start of your reply, in these words"
+
+
 def intro_line(url: str) -> str:
     """The once-only line that tells the person what their page is (X-25, the chat-only
     review's S1): a page published and never named was a page they never knew they had."""
-    return ("Tell the person once, at the start of your reply, in these words, before anything "
-            f"else about the page: \"{say(SAY_FIRST_PAGE, url)}\"")
+    return f"{_INTRO}, before anything else about the page: \"{say(SAY_FIRST_PAGE, url)}\""
 
 
 def published_lines(url: str, chat: str, first: bool, out_dir: str,

@@ -60,3 +60,17 @@ def test_it_checks_privacy_then_names_then_the_version_note_and_runs_no_other_te
     runs = [ln for ln in code.splitlines() if "pytest" in ln]
     assert len(runs) == 1 and "tests/test_build_versions.py" in runs[0], runs
     assert '"$BASE..HEAD"' in SRC, "the scans still read every patch since master"
+
+
+def test_the_denylist_comes_from_the_newest_saved_work_not_a_stale_folder():
+    """The maintainer's copy given to the gate was a day behind GitHub, and an employer named
+    since reached the public app in a code comment (4.9.0, 2026-11-04). The gate fetches that
+    copy's GitHub copy into its own folder, builds from it, and builds again when it moves;
+    the copy itself is never changed."""
+    import re
+    s = SRC
+    assert 'remote get-url origin' in s and '"$WORK/maint"' in s
+    assert 'tokens.head' in s and 'SRC_HEAD' in s
+    assert 'cd "$SRC" && "$PY" tools/build_app.py' in s
+    assert not re.search(r'git -C "\$MAINT" (fetch|pull|reset|checkout)', s), \
+        "the maintainer's own copy is read, never changed"

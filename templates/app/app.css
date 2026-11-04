@@ -1039,6 +1039,30 @@ label.pick { display: flex; align-items: flex-start; justify-content: center; wi
 .quiet-card { background: var(--sunk); }
 .page-url { overflow-wrap: anywhere; }
 .add-download { display: inline-flex; gap: 8px; flex-wrap: wrap; }
+/* An opened fold (foldBody): its words, then what they do, then the line a tap leaves. On a
+   wide screen the words and the buttons stand side by side, the buttons at the right edge
+   under the row's own value, and a tap's line runs under both with its Undo at the right,
+   under the button that made it (the maintainer, 2026-11-04: "surely this could be spaced
+   out a bit better instead of bunching them all on the left"). */
+.fbody { display: grid; gap: 12px; min-width: 0; }
+.fb-say { display: grid; gap: 8px; min-width: 0; align-content: start; }
+.fb-acts { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 12px; }
+.fb-row { padding-block: 8px; border-top: 1px solid var(--line); }
+li:first-child > .fb-row, .fb-row:first-child { border-top: 0; }
+@media (min-width: 760px) {
+  .fbody.has-acts { grid-template-columns: minmax(0, 1fr) auto; column-gap: 24px; align-items: baseline; }
+  .fbody.has-acts > .fb-acts { grid-column: 2; grid-row: 1; justify-content: flex-end; }
+  .fbody > :not(.fb-say):not(.fb-acts) { grid-column: 1 / -1; }
+  .fbody > .state { justify-content: space-between; }
+}
+/* A short single choice in Settings is a row of chips, each with its radio, that wrap on a
+   phone: four choices stood down the left of a wide panel with a gap after each (the
+   maintainer, 2026-11-04: "this could be a bit better right"). On the fold's grey, a chip is
+   white, and the one chosen carries the mark. */
+.set-body .pills .choice { background: var(--surface); }
+.set-body .pills .choice:has(input:checked) { background: var(--surface); box-shadow: inset 0 0 0 1px var(--mark); }
+/* A short word ("On", "Off") still has its full target. */
+.set-body .pills .choice label { white-space: nowrap; min-width: var(--target); text-align: center; }
 /* Claude's browser: a small panel bottom right on a wide screen, a bottom sheet on a phone.
    Close hides it; the reading carries on. */
 .bp-host { position: fixed; z-index: 40; right: 16px; bottom: 16px; width: min(360px, calc(100vw - 32px)); }

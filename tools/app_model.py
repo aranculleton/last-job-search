@@ -4258,7 +4258,7 @@ def _brief(ctx: Ctx, targets: dict) -> dict | None:
     if not files:
         return None
     path = files[-1]
-    sections = brief_sections(_read(path))
+    sections = brief_sections(_read(path), ctx.today)
     # Today's brief searched the news when it has a News part of its own, items or none: its
     # carried points then say the search found nothing newer, never only "Gathered" five days
     # back, which read as no search since (2026-11-03).
@@ -4377,10 +4377,12 @@ def news_parts(line: str) -> dict:
             "url": m.group("url").rstrip(".,;")}
 
 
-def brief_sections(text: str) -> list[dict]:
+def brief_sections(text: str, today: dt.date | None = None) -> list[dict]:
     """The brief in its parts, each {title, kind, text, items: [{text}]}: a heading's own
     sentences as `text`, its bullets or numbered steps as items. A line about a file or a
-    folder is left out: nothing on the page opens a path."""
+    folder is left out: nothing on the page opens a path. With `today`, a news item's time
+    words are read against its own date (brief.news_as_of): a brief from days before still
+    shows, and its "tomorrow" had come."""
     out: list[dict] = []
     cur = None
     for raw in str(text or "").splitlines():
@@ -4404,10 +4406,14 @@ def brief_sections(text: str) -> list[dict]:
             continue
         item = re.match(r"(?:[-*]|\d+[.)])\s+(.*)", ln)
         if item:
-            said = brief_line(item.group(1))
+            raw = item.group(1)
+            if cur["kind"] == "news" and today is not None:
+                import brief
+                raw = brief.news_as_of(raw, today)
+            said = brief_line(raw)
             if said:
                 cur["items"].append(dict({"text": said}, **(
-                    news_parts(item.group(1)) if cur["kind"] == "news" else {})))
+                    news_parts(raw) if cur["kind"] == "news" else {})))
         else:
             said = brief_line(ln)
             if said:

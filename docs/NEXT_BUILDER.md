@@ -1,6 +1,6 @@
 # Notes for the next builder
 
-Written at the end of 4.9.0 (2026-11-04) for the chat that builds the next version. Read
+Written at the end of 4.9.0 and 4.9.1 (2026-11-04) for the chat that builds the next version. Read
 MAINTAINING.md first; this is only what 4.9 left.
 
 ## Do first, for [Unreleased]
@@ -19,26 +19,24 @@ MAINTAINING.md first; this is only what 4.9 left.
   boards held to the search window, the scorer's baseline, a sample note using initials their
   own rules ban); the update tells their chat to bring them in line. Check it did.
 
-## How to work (the maintainer, 2026-10-30 to 2026-11-04)
+- **Phone scrolling on a real iPhone.** 4.9.1 stopped every live update redrawing the whole
+  screen (`patch` now compares like with like and `morph` swaps only what changed), proven in
+  headless WebKit. What it cannot show is the iPhone's own painting: open a long Brief on a
+  phone and scroll fast once. If it still flashes blank, look at the panels' CSS (shadows and
+  backdrop blur repaint) before the code.
+- **The Windows computer check** now skips the app's suite after an ordinary day, as a
+  person's save does: pip's download cache sat in the copy and made every save look like an
+  app change. The whole Windows suite runs under an accented temp folder instead. Read the
+  first release run of that job: "computer: an ordinary day changes only the person's own
+  files" must pass.
 
-- **Decide, never ask.** Make the call, do it, say it in one line, with a reason.
-- **Use the app yourself, as a tired job seeker would, and as a stranger would**: a copy with
-  no tie to the maintainer, chat only, on a phone, weeks behind, in another country. 4.9's
-  stranger audit found 85 things the maintainer's own use never showed.
-- **Token-cheap, and still certain.** The maintainer runs short of tokens: no separate skeptic
-  per finding (a fix's test that fails first is the check), one reviewer for what merges broke,
-  scripts for coverage, the whole suite on GitHub only, one push per round.
-- **Helpers in worktrees start on old master**: tell each to `git reset --hard` to the
-  branch's head first. Merging many helpers is where new bugs come from: give the merge to one
-  careful agent with both sides' outcome tables.
-- **The container can restart mid-night** and lose every background agent: helpers commit
-  early and often; a lost one is re-created from the same brief.
-- **The push gate's leak scan reads every patch since master**: invented names only, never the
-  maintainer's employers, contacts or handle (write the app's address as
-  `aranculleton/last-job-search` in full); when an old patch holds a flagged line, fold the
-  unpushed commits into one (`git reset --soft origin/<branch>`).
-- **Say nothing about runs on a push you have replaced.** Speak when the latest push is green
-  or truly red, when work merges, and when the release is out.
+## How to work
+
+MAINTAINING.md now holds it for good: "How a builder works" (decide, never ask; cheap and
+still certain; helpers in worktrees; the leak scan) and, under "Releasing", the lenses a
+version is reviewed through instead of another whole-app audit (the stranger, real scale,
+two chats at once, every engine, with Platforms started by hand early). The lessons 4.9 paid
+for are rules under "Developer rules".
 
 ## What 4.9 decided, to keep
 
@@ -76,6 +74,9 @@ MAINTAINING.md first; this is only what 4.9 left.
 - The host's answer for a code file that is missing (a 404 or a page): the guard handles both
   for scripts, but it was not seen on the real host.
 - A push from a real scheduled brief beyond the one recorded run ("Mobile push requested").
+- The maintainer's helper said in one chat that the brief's chat had lost the files; 4.9.1
+  notices that (`routines.no_copy`) and moves the brief, tested on records, not yet on a real
+  task that lost its copy.
 - Safari, Firefox and Windows on 4.9.0 ran on the release pull request; everything they found was
   fixed in it (a phone's Chat opening above the newest message, a long paste in Firefox, Windows
   day formats and its bash) except one Windows-only timing test that failed once and passed on

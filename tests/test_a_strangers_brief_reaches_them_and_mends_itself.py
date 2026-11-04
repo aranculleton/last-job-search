@@ -513,7 +513,9 @@ def test_the_first_brief_counts_from_setup_and_leads_with_it(tmp_path):
         "Nothing has gone out in 2 days.")
     assert brief._lead(counts, [], [], False, [], {}, day, None).startswith(
         "Nothing has gone out in 14 days.")
-    c = Copy(tmp_path)
+    # No page: the chat's message then carries the Since line (with a page it is the
+    # headline, the lead and the link, and the page shows the rest).
+    c = Copy(tmp_path, page=False)
     place = c.read("place.json")
     place["setup"] = {"started": "2026-11-01", "finished": "2026-11-01"}
     c.write("place.json", place)

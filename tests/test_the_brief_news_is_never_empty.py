@@ -330,6 +330,43 @@ def test_news_is_three_points_when_the_last_four_weeks_have_them_each_in_its_par
     assert (old["what"], old["use"], old["src"], old["date"]) == ("Rates held.", "A line for lender interviews.", "Example Times", "2026-10-27")
 
 
+def test_an_item_from_days_ago_never_says_next_week_as_if_it_were_now(tmp_path):
+    """The brief of 4 November said an employer "has a product launch event next week" from a
+    piece dated 28 October, when that week had already come (the maintainer, 2026-11-04). An
+    item's time words count from its own date, so once a brief is later than that date they
+    are written against it, in the record, the message, carried items and the page."""
+    state = _state(tmp_path)
+    _run(state, "--today", "2026-11-04", "--write")
+    stale = ("- Kestrel Pay raised $90M and has a product launch event next week (Example Times, "
+             "2026-10-28, https://example.com/k). A point to raise in any interview this month.\n")
+    fresh = ("- Fernhill Bank opens a hub tomorrow (Example Times, 2026-11-04, "
+             "https://example.com/f). Worth a line to Sam at Fernhill Bank.\n")
+    r = _run(state, "news", "--today", "2026-11-04", stdin=stale + fresh)
+    news = open(os.path.join(state, "documents", "briefs", "2026-11-04.md"),
+                encoding="utf-8").read().split("## News", 1)[1]
+    assert "next week" not in news and "event in the week after 28 Oct" in news
+    assert "interview this month" in news           # the advice is today's, and stays
+    assert "opens a hub tomorrow" in news            # dated today: true as said
+    # The message's lines keep each item's date, without its link.
+    assert "(Example Times, 28 Oct)" in r.stdout and "https://" not in r.stdout
+    # Carried five days on, today's "tomorrow" is the day it meant.
+    _run(state, "--today", "2026-11-09", "--write")
+    _run(state, "news", "--today", "2026-11-09", stdin="")
+    later = open(os.path.join(state, "documents", "briefs", "2026-11-09.md"),
+                 encoding="utf-8").read().split("## News", 1)[1]
+    assert "tomorrow" not in later and "opens a hub 5 Nov" in later
+    # The page, showing a brief from days before, reads it against today too.
+    secs = app_model.brief_sections("# Brief\n\n## News\n\n" + fresh, dt.date(2026, 11, 9))
+    assert secs[0]["items"][0]["what"].startswith("Fernhill Bank opens a hub 5 Nov")
+    for said, meant in (("launches this week", "launches in the week of 28 Oct"),
+                        ("reported yesterday", "reported 27 Oct"),
+                        ("results due next month", "results due in November"),
+                        ("hiring later this year", "hiring later in 2026")):
+        line = "Kestrel Pay %s (Example Times, 2026-10-28, https://example.com/x). Use it." % said
+        assert brief.news_as_of(line, dt.date(2026, 11, 4)).startswith("Kestrel Pay " + meant)
+        assert brief.news_as_of(line, dt.date(2026, 10, 28)) == line
+
+
 def test_widening_always_reaches_the_local_job_market(monkeypatch):
     """Widening only by the same employers and watched things found nothing new three mornings
     running (2026-11-03): the local job market, which has news every week, is always in it."""

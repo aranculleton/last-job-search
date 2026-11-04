@@ -112,6 +112,26 @@ def test_list_stages_nothing(tmp_path, capsys):
     assert "add -f  cv/Morgan_Ellis_Resume_QF.tex" in out and "nothing staged" in out
 
 
+def test_list_names_each_file_a_save_takes_the_briefs_record_included(tmp_path, capsys):
+    """After the brief of 4 November a helper read `save_state.py --list`, found no line for
+    documents/briefs/, took the brief's record and watched.json as no longer saved and added
+    them by hand: --list said "add documents" for the whole folder and never a file in it,
+    though a save stages both (the maintainer, 2026-11-04). It names each file now."""
+    r = _repo(tmp_path)
+    brief = ("documents/briefs/2026-11-04.md", "documents/briefs/watched.json")
+    for rel in brief:
+        p = tmp_path / rel
+        p.parent.mkdir(parents=True, exist_ok=True)
+        p.write_text("x")
+    assert save_state.main(["--list"], root=r) == 0
+    out = capsys.readouterr().out
+    for rel in brief:
+        assert f"add     {rel}" in out, out
+    assert "add     documents\n" not in out and _staged(r) == set()
+    assert save_state.main([], root=r) == 0
+    assert set(brief) <= _staged(r)
+
+
 def test_it_runs_the_same_from_zsh_where_the_loop_stopped(tmp_path):
     import shutil
     import pytest

@@ -264,6 +264,24 @@ def test_a_skill_claimed_on_a_yes_is_held_by_the_profile_or_refused(prof):
         ["ungrounded-yes"]
 
 
+def test_a_no_written_in_the_same_tick_as_the_yes_is_still_read(prof):
+    """On Windows a yes and then a no were written within one tick of the file clock, the
+    profile kept its time, and the check still held the skill (the release run, 2026-11-04)."""
+    import check_claims
+    cv = prof / "01-candidate-profile.md"
+    doc = "%% Tailored for: Quillon Networks\n" + check_claims.consent_header(["BigQuery"]) + \
+        "\\section{Skills} SQL, BigQuery, Power BI\n"
+    before = os.stat(cv)
+    cv.write_text(cv.read_text(encoding="utf-8") + "\n- BigQuery: you said yes for Quillon\n",
+                  encoding="utf-8")
+    os.utime(cv, ns=(before.st_atime_ns, before.st_mtime_ns))
+    held = [n for s, n, _x, _w in check_claims.check_text(doc) if s == "ERROR"]
+    cv.write_text(cv.read_text(encoding="utf-8").replace(
+        "\n- BigQuery: you said yes for Quillon\n", ""), encoding="utf-8")
+    os.utime(cv, ns=(before.st_atime_ns, before.st_mtime_ns))
+    assert held == [] and [n for s, n, _x, _w in check_claims.check_text(doc)
+                           if s == "ERROR"] == ["ungrounded-yes"]
+
 def test_the_example_person_is_never_written_to(monkeypatch):
     import stage_picks
     monkeypatch.setenv(person.ENV, os.path.join(ROOT, "profile.example"))

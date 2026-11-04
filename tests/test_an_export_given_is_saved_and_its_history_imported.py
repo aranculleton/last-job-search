@@ -61,6 +61,40 @@ def test_take_saves_the_export_and_imports_its_history_once(tmp_path, monkeypatc
     assert len(state.load_threads(t)) == after
 
 
+def test_take_fills_what_the_book_lacks_from_the_connections_and_never_replaces_it(
+        tmp_path, monkeypatch):
+    """A take imported the messages and invitations only: a contact the book knew by its
+    profile address alone kept no name, employer or title, whatever Connections.csv said
+    (the maintainer, 2026-11-04). A take fills what is missing, never a value already there
+    (the export's employer and title are as of the day they connected), adds nobody, and
+    says what it filled; the same file again fills again and doubles nothing."""
+    st, c, t = _state(tmp_path, monkeypatch)
+    rows = state.load_contacts(c)
+    by = {r["contact_id"]: r for r in rows}
+    by["larkspur_retail_castellan"].update(name="", title="", company="", company_key="")
+    by["fernhill_freight_okonedo"].update(title="Head of Planning", company="", company_key="")
+    state.save_contacts(rows, c)
+    lines = E.take([str(_archive(tmp_path / "Basic_LinkedInDataExport.zip"))], c, t)
+    after = {r["contact_id"]: r for r in state.load_contacts(c)}
+    juno, hal = after["larkspur_retail_castellan"], after["fernhill_freight_okonedo"]
+    assert (juno["name"], juno["title"], juno["company"], juno["company_key"]) == (
+        "Juno Castellan", "Analytics Manager", "Larkspur Retail", "larkspur retail")
+    assert (hal["title"], hal["company"]) == ("Head of Planning", "Fernhill Freight")
+    assert len(after) == len(rows)                     # a connection not in the book is not added
+    said = [ln for ln in lines if ln.startswith("Filled ")]
+    assert said and "2 contacts" in said[0] and "as of the day you connected" in said[0], lines
+    # The same file again: the history stays once, and what went missing is filled again.
+    logged = len(state.load_threads(t))
+    rows = state.load_contacts(c)
+    next(r for r in rows if r["contact_id"] == "fernhill_freight_okonedo")["company"] = ""
+    state.save_contacts(rows, c)
+    again = E.take([str(st / "documents" / "linkedin")], c, t)
+    assert len(state.load_threads(t)) == logged
+    assert {r["contact_id"]: r for r in state.load_contacts(c)}[
+        "fernhill_freight_okonedo"]["company"] == "Fernhill Freight"
+    assert any(ln.startswith("Filled ") and "1 contact" in ln for ln in again), again
+
+
 def test_files_says_plainly_when_the_history_was_never_saved(tmp_path, monkeypatch, capsys):
     st, _c, _t = _state(tmp_path, monkeypatch)
     kept = st / "documents" / "linkedin"

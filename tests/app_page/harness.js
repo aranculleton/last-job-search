@@ -126,14 +126,19 @@ const DRAWN_RECT = `Element.prototype.__drawnRect = function () {
   return new DOMRect((r.x + sx) * d - sx, (r.y + sy) * d - sy, r.width * d, r.height * d);
 };`;
 async function open(o) {
-  const ctx = await browser.newContext({
+  // A named phone (`device`, one of Playwright's own, such as "iPhone 13"): its screen, its
+  // browser's name, touch and a phone's viewport, drawn at one pixel a point. Firefox's engine
+  // has no phone mode, so there it is the screen and touch alone.
+  const dev = o.device ? playwright.devices[o.device] : null;
+  const phone = dev ? {viewport: dev.viewport, userAgent: dev.userAgent, hasTouch: true, isMobile: ENGINE === "firefox" ? undefined : !!dev.isMobile} : {};
+  const ctx = await browser.newContext(Object.assign({
     viewport: o.viewport || {width: 375, height: 812}, colorScheme: o.scheme || "light", deviceScaleFactor: o.scale || 1,
     reducedMotion: o.reducedMotion || "no-preference", locale: LOCALE, timezoneId: o.timezoneId || ZONE || "Europe/London",
     // Only Chrome's engine takes clipboard permissions; the others allow a copy on a tap.
     permissions: o.clipboard === false || ENGINE !== "chromium" ? [] : ["clipboard-read", "clipboard-write"], hasTouch: !!o.touch,
     forcedColors: o.forcedColors || "none", contrast: o.contrast || "no-preference",
     javaScriptEnabled: o.javaScriptEnabled !== false,
-  });
+  }, phone));
   const store = o.store || new Store(o.seed);
   await ctx.exposeBinding("__ljsStore", (src, op, args) => store.handle(op, args));
   await ctx.route("**/*", (route) => {
@@ -1169,6 +1174,44 @@ S.look = async (a) => {
   return r;
 };
 
+// A long Brief scrolled fast on a phone (an iPhone in the Claude app showed a blank page, then
+// its foot, 2026-11-04), with the page's live updates arriving on the way: a heartbeat, the
+// minute's redraw and a look for newer data, then a change to one panel while it rests
+// scrolled. Each step reads every panel: the box it is (a panel torn down and built again is
+// one a phone has to draw afresh), whether it holds its words, and where the page is scrolled.
+S.fast_scroll = async (a) => {
+  const o = await open({html: a.html, hash: "brief", device: a.device || "iPhone 13", clock: a.clock, seed: a.seed || {}});
+  const {page, store} = o;
+  const PANELS = "#main [data-k^='bp:']";
+  await page.evaluate((sel) => { let n = 0; for (const e of document.querySelectorAll(sel)) e.__tag = ++n; }, PANELS);
+  const read = (what) => page.evaluate(([sel, what]) => {
+    const ps = [...document.querySelectorAll(sel)];
+    return {what, y: Math.round(scrollY), h: document.documentElement.scrollHeight, max: document.documentElement.scrollHeight - innerHeight,
+      panels: ps.map((e) => [e.getAttribute("data-k"), e.__tag || 0, e.innerText.replace(/\s+/g, " ").trim().length])};
+  }, [PANELS, what]);
+  const steps = [await read("opened")];
+  const beat = (n) => store.chat("chats/cloud-1", {kind: "cloud", seen_at: new Date(Date.parse(a.clock || "2026-10-25T09:00:00Z") + n * 1000).toISOString(), watching: true});
+  // Down the page in quick steps, a frame or two apart, the updates landing in between.
+  for (let i = 0; i < 24; i++) {
+    await page.evaluate(() => window.scrollBy(0, 160));
+    if (i === 6) beat(1);
+    if (i === 12) { await page.evaluate(() => window.dispatchEvent(new Event("focus"))); await page.clock.runFor(61000); }
+    if (i === 18) beat(2);
+    await turn(page, 2);
+    steps.push(await read("scrolling " + i));
+  }
+  // Resting at the foot, a change to one panel arrives.
+  if (a.view) { store.chat("view/brief", {made_at: "2026-10-25T09:30:00Z", data: a.view}); }
+  await turn(page, 8);
+  steps.push(await read("updated while scrolled"));
+  // And back up, fast.
+  for (let i = 0; i < 12; i++) { await page.evaluate(() => window.scrollBy(0, -320)); if (i === 4) beat(3); await turn(page, 2); steps.push(await read("up " + i)); }
+  const r = {steps, text: await one(page, "#main"), errors: o.errors};
+  if (a.shot) r.shot = await shot(page, a.shot);
+  await o.ctx.close();
+  return r;
+};
+
 // Is one thing drawn wholly inside another (not cut off by its box), before and after a tap?
 S.inside = async (a) => {
   const o = await open({html: a.html, viewport: a.viewport, hash: a.hash || "brief", clock: a.clock, seed: a.seed || {}});
@@ -1184,6 +1227,25 @@ S.inside = async (a) => {
   }, [a.inner, a.box]);
   const r = {closed: await fits()};
   if (a.tap) { await page.locator(a.tap).first().click(); await turn(page, 4); r.opened = await fits(); }
+  r.errors = o.errors;
+  await o.ctx.close();
+  return r;
+};
+
+// The Brief as first shown and the Brief its tab shows next, on a phone whose browser bars
+// move the window between the two, as a phone's do when the page scrolls and when the tab is
+// pressed: each list, and what of it is shown.
+S.brief_again = async (a) => {
+  const o = await open({html: a.html, viewport: a.viewport, clock: a.clock, seed: a.seed || {}, touch: true});
+  const {page} = o;
+  const lists = () => page.$$eval("#main .brief-grid [data-fit]", (ls) => ls.map((l) => [(l.closest(".bpanel") || l).getAttribute("data-k"),
+    [...l.children].filter((li) => !li.hidden).map((li) => li.innerText.trim().replace(/\s+/g, " "))]));
+  const r = {first: await lists()};
+  await page.setViewportSize({width: a.viewport.width, height: a.viewport.height + (a.bars || 0)});
+  await turn(page, 4);
+  await page.locator('[data-k="tab:brief"]').click();
+  await turn(page, 6);
+  r.after = await lists();
   r.errors = o.errors;
   await o.ctx.close();
   return r;

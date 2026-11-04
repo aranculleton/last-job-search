@@ -2216,11 +2216,15 @@ def _export_take(r: Run) -> dict:
     remove = [g[0] for g in given]
     with _thread_lock():
         rec = export.load_record()
-        # The same download again changes nothing, unless its files are no longer on file
-        # (taken in a chat whose folder went with it): then it is taken again.
+        # The same download again doubles nothing, unless its files are no longer on file
+        # (taken in a chat whose folder went with it): then it is taken again. On file, it is
+        # no dead end: what the contact book lacks is filled again from it, and said (it
+        # stopped at "Already taken" and refreshed nothing, 2026-11-04).
         if digest in (rec.get("taken_hashes") or []) and export._holds_any(export.default_folder()):
-            return {"note": "Already taken: that download changed nothing new.", "undo": None,
-                    "remove_assets": remove}
+            got = export.again()
+            said = " ".join(got["lines"]) or "Nothing in it was new."
+            return {"note": "That download was taken before. " + app_model.scrub(said, ()),
+                    "undo": None, "remove_assets": remove}
         work = tempfile.mkdtemp(prefix="ljs_export_")
         try:
             for path, name, part in found:

@@ -83,9 +83,16 @@ next?" in its first lines, and nothing asks for a decision a default could make.
   Work waiting its turn behind the big jobs stays "In line" however long it waits, and drafts
   written together show their batch's progress and one Stop. The chat's line under a message
   is the same words as its card. (what-reaches-Claude tests)
-- A tap is "Saved" once written and "Done" once Claude's receipt says so. One Claude could not
-  do says why in Claude's own words ("changed since you saw it" only when it did), with the
-  field to give what it needs, on its card and as a To do card. (what-reaches-Claude tests)
+- A tap is "Saved" once written and "Done" once Claude's receipt says so. Saved says what it
+  waits for and where it shows: "Claude makes the change next, and this line says Done when it
+  has", what it waits behind ("after “Reply to Juno”", light work running in the chat that
+  answers the page), or that Claude's helper is not answering. A tap that is work for Claude
+  (the LinkedIn download) links to its card in Claude's work, which says the same ("Next,
+  after ..."). One Claude could not do says why in Claude's own words ("changed since you saw
+  it" only when it did), with the field to give what it needs, on its card and as a To do
+  card. (what-reaches-Claude tests, spaces-its-settings test)
+- A live update redraws only the card, panel or row that changed: the rest stays as it was
+  drawn, so a phone scrolling fast never meets a blank page. (spaces-its-settings test)
 
 ## Words and settings
 
@@ -101,6 +108,10 @@ next?" in its first lines, and nothing asks for a decision a default could make.
 - Nothing asks what a default answers. A choice becomes a setting only where people really
   differ, and work goes where it can run without anyone choosing (one chat answers the page;
   only the brief needs the cloud). (place and routing tests)
+- An opened setting reads across a wide panel: its words on the left, its buttons at the right
+  edge under the row's own value, and a tap's line under both with its Undo at the right; on a
+  phone the buttons follow the words. One way to do each thing in it. A short single choice is
+  a row of chips, still a radio group, that wraps on a phone. (spaces-its-settings test)
 - Each setting has one home in Settings. Where a setting also has a control elsewhere (the
   Brief's bell, a break from To do), both open the same sheet and can never disagree.
 - Every control does something visible (the sweep test taps all of them) and every action

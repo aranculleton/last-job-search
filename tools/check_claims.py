@@ -155,10 +155,13 @@ def grounding_text() -> str:
                  person.get("grounding.sources", list(DEFAULT_SOURCES))]
     except person.NoProfile:
         return ""
+    # Its time and its size: on Windows a yes and then a no written in one tick of the clock
+    # kept the time, and a skill said no to was still held (the release run, 2026-11-04).
     stamp = []
     for p in paths:
         try:
-            stamp.append((p, os.path.getmtime(p)))
+            st = os.stat(p)
+            stamp.append((p, (st.st_mtime_ns, st.st_size)))
         except OSError:
             stamp.append((p, None))
     if _sources_cache.get("stamp") != stamp:

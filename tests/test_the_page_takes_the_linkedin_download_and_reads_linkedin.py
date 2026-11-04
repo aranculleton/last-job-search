@@ -135,12 +135,27 @@ def test_the_files_added_on_the_page_are_fetched_then_taken_once(page):
     assert after > before
     ex = page.model()["linkedin"]["export"]
     assert ex["state"] == "fresh" and ex["taken_on"] and ex["counts"]["messages"] > 0
-    # The same download again, from another tap: nothing changes.
+    # The same download again, from another tap: nothing doubles, and it is no dead end: a
+    # contact that lost its employer since has it filled again from the connections, and
+    # the receipt says so (it stopped at "Already taken" and refreshed nothing, 2026-11-04).
+    book = os.path.join(page.state, "network_contacts.csv")
+    with open(book, encoding="utf-8") as fh:
+        rows = list(csv.DictReader(fh))
+    hal = next(r for r in rows if r["contact_id"] == "fernhill_freight_okonedo")
+    hal["company"] = hal["company_key"] = ""
+    with open(book, "w", encoding="utf-8", newline="") as fh:
+        w = csv.DictWriter(fh, fieldnames=list(rows[0]))
+        w.writeheader()
+        w.writerows(rows)
     page.written_back()
     again = page.take("act-again")
     assert page.apply_assets()["ok"] == [again]
-    assert page.receipt(again)["note"].startswith("Already taken")
+    note = page.receipt(again)["note"]
+    assert note.startswith("That download was taken before.") and "Hal Okonedo" in note, note
     assert len(_rows(page)) == after
+    with open(book, encoding="utf-8") as fh:
+        hal = next(r for r in csv.DictReader(fh) if r["contact_id"] == "fernhill_freight_okonedo")
+    assert (hal["company"], hal["company_key"]) == ("Fernhill Freight", "fernhill freight")
 
 
 def test_two_chats_taking_the_same_download_at_once_import_it_once(page):

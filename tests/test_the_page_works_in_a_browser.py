@@ -1497,6 +1497,26 @@ def test_the_numbers_on_the_brief_are_never_cut_off(run, pages):
         assert r["closed"] and r["opened"], (vp, r)
 
 
+def test_the_brief_its_tab_shows_on_a_phone_is_the_brief_first_shown(run, pages):
+    """The maintainer, on their phone with 4.9.0: "when I press the top one for brief it's not
+    the same as what's originally displayed". How many of each list the Brief shows was worked
+    out for the page as published and kept by its rev, which newer screens from the store
+    leave alone: five new jobs came in and the Brief showed one, until the phone's browser
+    bars moved the window and a press on Brief showed three. It is worked out for the lists
+    as drawn, so the first look and every later one agree, with the newer data."""
+    jobs = _sample()["jobs"]
+    first = next(r for r in jobs["rows"] if r["id"] == "r12-1")
+    jobs["rows"] += [dict(first, id="r13-%d" % i, rank=10 + i, score=80 - i, company=c, title="Planning Analyst", rev="r13-%d" % i)
+                     for i, c in enumerate(("Larkspur Retail", "Kestrel Mutual", "Quayside Foods", "Ellerwick Trust"))]
+    jobs["made_at"] = "2026-10-25T08:40:00Z"
+    r = run("brief_again", html=pages["sample"], viewport={"width": 390, "height": 664}, bars=80,
+            seed={"view/jobs": {"made_at": "2026-10-25T08:40:00Z", "data": jobs}})
+    _clean(r)
+    assert r["after"] == r["first"], (r["first"], r["after"])
+    shown = dict(r["first"])["bp:jobs"]
+    assert len(shown) == 3 and any("Larkspur Retail" in x for x in shown), shown
+
+
 def test_the_page_opened_with_no_chat_running_brings_itself_up_to_date_and_says_what_is_going_on(run, pages):
     """The maintainer opened their page from the sidebar a day after any chat ran (2026-10-31):
     Refresh reloaded the same data so it went on saying "yesterday", the work pill did nothing

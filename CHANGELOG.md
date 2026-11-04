@@ -20,6 +20,64 @@ make sense to somebody whose repo just received it.
 
 ## [Unreleased]
 
+## [4.9.1] - 2026-11-04
+
+### Changed
+
+- **A new helper chat gives your page's link straight away.** It shows "Getting your page
+  ready" on the page while it works, and ends with one short line that it is ready: no more
+  paragraph about itself, and never the whole brief.
+- **With a page, a brief in a chat is short.** The chat gets the headline, the main point,
+  how many questions wait for you, and your page's link; the rest is on the page. With no
+  page, the chat still gets the whole brief.
+- **A LinkedIn download fills in what your contacts lack.** A missing name, employer or title
+  is filled from your connections (as of the day you connected), never changing anything
+  already recorded, and the app says what it filled. Giving the same download again fills
+  again instead of stopping at "Already taken".
+- **An opened setting uses the whole width.** Its words sit on the left, its buttons at the
+  right and the line a tap leaves underneath, with Undo at the right; on a phone the buttons
+  follow the words. Short choices, like Calendar reminders, are a row of chips instead of a
+  tall list.
+- **Your LinkedIn download has one button**, for the zip or the files inside it, and it steps
+  aside while a download waits.
+- **A saved tap says what happens next and where to see it**: "Claude makes the change next,
+  and this line says Done when it has", what it is waiting behind ("Next, after ..."), or that
+  your helper chat is not answering. A saved LinkedIn download links to its card in Claude's
+  work.
+
+### Fixed
+
+- **Scrolling the Brief quickly on a phone no longer shows a blank page.** Every live update
+  redrew the whole screen; now only the part that changed is drawn again.
+
+- **News in the brief no longer says "next week" about last week.** Words like "tomorrow" or
+  "next week" are read against the article's own date, and each item shows its date.
+- **A brief whose chat lost your files is noticed and moved.** The app said the brief was set
+  up while its chat could no longer open your files, so a morning's brief sent nothing; it now
+  moves the brief into the chat that looks after your page and runs the one you missed.
+- **Checking what a save will include names each file**, your brief's record included, so
+  nothing is mistaken for unsaved.
+- **On Windows, a save is checked in seconds again.** Installing the packages left their
+  download cache in your folder, which then looked like a change to the app, so the check
+  before every save ran the app's whole suite.
+- **On a phone, pressing Brief shows the Brief you first saw.** When newer jobs, people or news
+  reached your page after it opened, the Brief kept showing only as many of each list as the
+  older data had (one new job of five, say), and pressing Brief later showed a different Brief
+  with the rest. It now shows the right number from the start, and the same every time. Found
+  on a phone with 4.9.0.
+- **The folds on the Brief stay open while you read them.** "Since your last brief" and the
+  earlier briefs closed again whenever your page refreshed itself, which it does often; they now
+  keep their state like every other fold. Found by the Safari run of the 4.9.0 release.
+- **A PDF is read on Windows when your folder's name has an accent.** Where pypdf cannot run,
+  the app reads a PDF with Poppler, which could not open a file under a folder such as
+  "Zoë"; it is now handed a plain copy of the file instead. Found by the Windows run of the
+  4.9.0 release.
+- **A skill you say no to straight after a yes is refused at once.** On Windows the check
+  could still treat it as yours when both answers were saved within a moment of each other.
+- **The Windows check of a release finishes inside its time.** A copy's own checks use
+  several workers on GitHub's computers (41 minutes in one), and the app's tests never take
+  a copy's newer saved work while they run.
+
 ## [4.9.0] - 2026-11-04
 
 ### Changed
