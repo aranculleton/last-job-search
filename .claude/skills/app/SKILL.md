@@ -63,7 +63,9 @@ say nothing about it; the fresh helper takes the page as it starts, and this cha
 until its next check-in finds that. A chat that takes the page asks to watch it
 (ArtifactComments, action `watch`), as `listen` prints. A chat whose first message is the
 page's own words, "Look after my job search page from now on.", starts with `python3
-tools/app.py start --listen --helper`.
+tools/app.py start --listen --helper`, and says only the two lines it prints for the person:
+the page's link at once, and one line at the end that it is ready. The page shows it busy in
+between; never the brief in full, and never a paragraph about what the helper is.
 
 ## 2. Apply what the person did
 
