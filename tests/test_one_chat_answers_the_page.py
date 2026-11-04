@@ -691,3 +691,147 @@ def test_a_helper_that_rereads_a_lot_hands_over_within_the_day(copy, tmp_path, m
     assert app_listen.context_tokens() == 0
     assert not [ln for ln in app_listen.decide(db, "session_new", str(tmp_path / "b"), now)["lines"]
                 if ln.startswith("listen: renew:")]
+
+
+def _view(copy, chat, *extra, base=None, now=NOW):
+    """`app.py view` over a fresh read of the page, as one chat: (its answer, every write it
+    would send as {(collection, doc id): body})."""
+    out = os.path.join(copy.root, f"view-{chat}-{len(os.listdir(copy.root))}")
+    env = {"LJS_BASIS": base} if base is not None else {}
+    got = json.loads(copy.run("view", out, "--dump", copy.dump(), "--chat", chat, "--now", now,
+                              *extra, **env))
+    writes = {}
+    for path in got["batches"]:
+        with open(path, encoding="utf-8") as fh:
+            for e in json.load(fh):
+                body = None
+                if e.get("file_path"):
+                    with open(e["file_path"], encoding="utf-8") as fh2:
+                        body = json.load(fh2)
+                writes[(e["collection"], e["doc_id"])] = body
+    return got, writes
+
+
+def _apply_all(copy, got):
+    import fake_db
+    return all(fake_db.apply(copy.db, b) for b in got["batches"])
+
+
+def test_only_the_chat_that_answers_the_page_draws_its_screens(copy):
+    """During a hand-over the old helper and the new one both rewrote whole screens, and each
+    page update bounced off the other's (the maintainer, 4 November). Only the chat that
+    answers the page draws them now, and a job's own chat for its job; any other chat, the old
+    helper above all, writes nothing to them and says so in one line. No chat writes a screen
+    over one another chat drew from a newer copy than its own."""
+    import app_listen
+    copy.page()
+    assert copy.send(copy.run("listen", copy.dump(), "--chat", "session_OLDHELPER", "--helper"))
+    assert copy.send(copy.run("listen", copy.dump(), "--chat", "session_OLDHELPER", "--hand",
+                              "session_NEWHELPER"))
+    assert copy.listener()["chat"] == "session_NEWHELPER"
+    # The old helper, finishing up the reply it took as the listener: nothing to any screen,
+    # and one line for Claude.
+    def put_work(wid, **data):
+        os.makedirs(os.path.join(copy.db, "work"), exist_ok=True)
+        with open(os.path.join(copy.db, "work", wid + ".json"), "w", encoding="utf-8") as fh:
+            json.dump({"data": dict({"kind": "reply", "title": "A reply", "asked_at": NOW},
+                                    **data), "version": 2}, fh)
+    put_work("reply~juno", status="done", claimed_by="session_OLDHELPER",
+             finished_at="2026-10-25T17:59:00Z")
+    got, writes = _view(copy, "session_OLDHELPER")
+    assert got["batches"] == [] and writes == {}
+    assert got["for_claude"] == [app_listen.VIEW_LEFT] and "--here" in app_listen.VIEW_LEFT
+    # Work a chat the person opened began for them there (`ask --here`) is its own: it draws.
+    put_work("prep~kestrel", kind="prep", status="running", claimed_by="session_ASKED",
+             in_chat=True, lease_until="2026-10-25T18:20:00Z")
+    assert _view(copy, "session_ASKED")[0]["batches"]
+    # The new one draws them, each saying which chat drew it and from which copy.
+    got, writes = _view(copy, "session_NEWHELPER", base="2026-10-25T17:00:00Z")
+    assert got["batches"] and _apply_all(copy, got)
+    now_doc = writes[("meta", "now")]
+    assert now_doc["by"] == "session_NEWHELPER" and now_doc["base"] == "2026-10-25T17:00:00Z"
+    assert all(b.get("by") == "session_NEWHELPER" for (c, d), b in writes.items()
+               if c == "screen" and not d.startswith("part~") and b)
+    # A job's own chat draws the page for its job, once it is done; with no job, nothing.
+    copy.queue("draft~kestrel")
+    got, _w = _view(copy, "session_JOB", "--work", "draft~kestrel", base="2026-10-25T18:00:00Z",
+                    now="2026-10-26T09:00:00Z")
+    assert got["batches"] and "for_claude" not in got
+    assert _view(copy, "session_JOB", now="2026-10-26T09:00:00Z")[0]["batches"] == []
+    # The scheduled brief's own update (it passes the word) draws the day's news, wherever it
+    # runs.
+    assert _view(copy, "brief", now="2026-10-26T09:00:00Z")[0]["batches"]
+    # A chat whose copy is behind the one the screens were drawn from never writes over them:
+    # a day later the dated screens differ, and each is kept as the newer copy drew it.
+    got, writes = _view(copy, "session_JOB", "--work", "draft~kestrel",
+                        base="2026-10-25T16:00:00Z", now="2026-10-26T09:00:00Z")
+    assert got.get("kept_newer") and ("meta", "now") not in writes
+    assert not [d for (c, d) in writes if c == "screen" and d in got["kept_newer"]]
+    # The chat that answers the page, from a copy as new, writes them.
+    got, writes = _view(copy, "session_NEWHELPER", base="2026-10-25T17:00:00Z",
+                        now="2026-10-26T09:00:00Z")
+    assert ("meta", "now") in writes and not got.get("kept_newer")
+    # A chat that took the page in this wake draws it from the same folder: its check-in is
+    # kept in the folder as it will be once sent.
+    dump = copy.dump("taking")
+    said = copy.run("listen", dump, "--chat", "session_TAKER", "--listen", CLAUDE_CODE_REMOTE="true")
+    assert "answers the page now" in said
+    got = json.loads(copy.run("view", os.path.join(copy.root, "taker-view"), "--dump", dump,
+                              "--chat", "session_TAKER", "--now", NOW))
+    assert got["batches"] and "for_claude" not in got
+
+
+def test_a_wrong_number_stored_in_the_listener_record_is_healed_not_bounced(copy, tmp_path):
+    """The check-in pinned its write to the number stored inside meta/listen. One write that
+    stored it wrong, and every chat read the same wrong number back, every check-in was
+    refused, and reading again changed nothing (the maintainer, 4 November). The version the
+    store names on refusing is kept, a new read of the record still stamped wrong is pinned to
+    the store's number, and the write that lands stamps it right."""
+    known = str(tmp_path / "known.json")
+    rec = {"chat": "session_HELPER", "title": "Job search helper", "kind": "cloud",
+           "helper": True, "since": "2026-10-25T08:00:00Z", "answered_at": "2026-10-25T17:00:00Z",
+           "watching": True}
+
+    def read(name, **extra):
+        """meta/listen as ArtifactData's out_dir saves it: the fields alone, `_v` among them."""
+        d = tmp_path / name / "meta"
+        d.mkdir(parents=True)
+        (d / "listen.json").write_text(json.dumps(dict(rec, **extra)), encoding="utf-8")
+        return str(tmp_path / name)
+
+    def check_in(dump):
+        said = copy.run("listen", dump, "--chat", "session_HELPER", LJS_VERSIONS=known)
+        batch = [ln for ln in said.splitlines() if ln.endswith(".json")]
+        with open(batch[0], encoding="utf-8") as fh:
+            entry = json.load(fh)[0]
+        with open(entry["file_path"], encoding="utf-8") as fh:
+            return said, entry, json.load(fh)
+
+    copy.page()
+    # The store holds version 7; the record says 3. The check-in pins to 3 and is refused.
+    said, entry, _body = check_in(read("first", _v=3))
+    assert entry["if_version"] == 3
+    assert "python3 tools/app.py version <this folder> meta/listen <that version>" in said
+    # A wake moves its folder on as each batch will land; the stamp as read is kept beside it.
+    import page_db
+    page_db.keep_landed(str(tmp_path / "first"),
+                        [ln for ln in said.splitlines() if ln.endswith(".json")])
+    assert page_db.load(str(tmp_path / "first"))["meta"]["listener"]["version"] == 4
+    # The refusal named 7: kept, as the check-in says, and the same folder is pinned to it.
+    kept = copy.run("version", str(tmp_path / "first"), "meta/listen", "7", LJS_VERSIONS=known)
+    assert "meta/listen is at version 7" in kept
+    with open(known, encoding="utf-8") as fh:
+        assert json.load(fh)["meta/listen"]["stamp"] == 3
+    # A new read, the record still stamped 3: pinned to the store's 7, and the write stamps
+    # it 8, so every later check-in reads the right number.
+    _said, entry, body = check_in(read("second", _v=3))
+    assert entry["if_version"] == 7 and body["_v"] == 8
+    # The store's own number, where the read carries it, always wins over both.
+    _said, entry, _body = check_in(read("third", _v=3, __version__=9))
+    assert entry["if_version"] == 9
+    # A record another chat wrote since, stamped right, is never corrected.
+    _said, entry, _body = check_in(read("fourth", _v=8))
+    assert entry["if_version"] == 8
+    # The wake says the same when a batch is refused.
+    import app
+    assert "python3 tools/app.py version" in app.REFUSED

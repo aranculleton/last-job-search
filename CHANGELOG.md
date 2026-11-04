@@ -36,6 +36,17 @@ make sense to somebody whose repo just received it.
   tests.** When two chats changed the same document, the later one stays and nothing is left
   beside it; a save also clears the extra copies older versions left, and names any it could
   not tell apart in one line.
+- **Resumes drafted in a chat of their own reach your page by themselves.** That chat cannot
+  put files on your page, so when it finishes it asks the chat that looks after your page to
+  put up every draft's files at once; nobody uploads them by hand.
+- **Work you ask for in a chat shows in Claude's work on your page**, with its steps and its
+  result, like work asked on the page, instead of only a "busy" line.
+- **Two chats no longer overwrite each other's page updates.** Only the chat that looks after
+  your page redraws it (and a chat doing a job, once, for that job); a chat that handed your
+  page on leaves it alone, and no chat redraws a part another drew from newer work.
+- **One wrong number saved in your page no longer stops Claude checking in.** Claude now takes
+  the number your page's store itself gives and saves it right, instead of being turned away
+  every time after.
 - **A recruiter at a recruitment agency is no longer hidden from Messages.** They were
   held as "an employer you turned down" because of the agency they work for, even when they
   had asked for your resume. Your bar now judges only where you would work; an employer you

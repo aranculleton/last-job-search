@@ -1513,6 +1513,34 @@ def record_assets(pairs) -> list:
     return done
 
 
+def files_missing(ctx=None) -> list:
+    """Drafted applications whose made PDFs the page's own file store lacks, in tracker order:
+    [{id, company, files: [names], paths: [repo paths]}]. A job's own chat cannot upload them
+    (Artifact is not among the tools it carries), so its finish queues one `files` item for
+    the chat that answers the page with all of these (page_db.queue_files)."""
+    import throttle
+    if ctx is None:
+        today, now = clock(None, None)
+        ctx = Ctx(today, now)
+    out = []
+    for row, rid in zip(ctx.tracker, ctx.tracker_ids):
+        if _status(row) not in throttle.UNSENT:
+            continue
+        names, paths = [], []
+        for col in ("cv_file", "cover_letter_file"):
+            tex = str(row.get(col) or "").strip()
+            if not tex:
+                continue
+            pdf = os.path.splitext(tex)[0] + ".pdf"
+            if os.path.isfile(person.state(*pdf.split("/"))) and not asset_for(pdf):
+                names.append(os.path.basename(pdf))
+                paths.append(pdf)
+        if names:
+            out.append({"id": rid, "company": str(row.get("company") or ""), "files": names,
+                        "paths": paths})
+    return out
+
+
 def _files(row) -> list:
     out = []
     for kind, col in (("resume", "cv_file"), ("letter", "cover_letter_file")):
