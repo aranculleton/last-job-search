@@ -1317,7 +1317,10 @@ def _jobs(ctx: Ctx, targets: dict) -> dict:
                 "questions": (["Have you already applied?"] if status == "new" else [])
                 + [str(q) for q in (r.get("questions") if isinstance(r.get("questions"), list)
                                     else []) if str(q).strip()],
-                "rev": rev_of(url, status, company, title, score)}
+                # What an action on it acts on: the posting and where it stands. Never its
+                # score, rank or wording, which a search run again or a newer build redraws:
+                # a tap made before that was refused as "changed since you saw it" (2026-11-04).
+                "rev": rev_of(url or (company, title), status)}
         _card(ctx, targets, item, "for_job")
         rows.append(item)
         targets[jid] = {"kind": "job", "round": rname, "rank": rank, "url": url,
@@ -2642,7 +2645,10 @@ def _people(ctx: Ctx, targets: dict) -> list:
                 # reply is drafted from words already kept (thread_of).
                 "thread": thread, "thread_more": earlier,
                 "related": {},        # filled by app_lists.link; counted in the budget
-                "rev": rev_of(cid, status, action, due, last, where["group"])}
+                # What an action on them acts on: their record and their messages, never the
+                # group the day puts them in, which moves with the clock while nothing about
+                # them changed: a Stop made the day before was refused (2026-11-04).
+                "rev": rev_of(cid, status, str(c.get("next_action") or ""), due, last)}
         if full[cid].get("initial"):
             item["initial"] = full[cid]["initial"]
         _card(ctx, targets, item, "for_person")

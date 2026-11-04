@@ -45,7 +45,9 @@ Exactly once, three ways. An action with a receipt is never applied again. An ac
 applied only while the item it was made on is as the person saw it (`rev_seen` is the
 item's rev now): one made on something that has changed since is refused, receipt `stale`,
 nothing written, so two devices that answered one question differently never overwrite
-each other. And a run keeps a ledger in the dump folder, so running `apply` again before
+each other. What only this batch's own earlier taps from the same window changed is still as
+the person saw it (they made those taps, and the page showed them at once), and an item's rev
+holds only what an action on it acts on, so a page drawn again never moves it. And a run keeps a ledger in the dump folder, so running `apply` again before
 the receipts are written back re-sends the same receipts instead of applying twice. Every
 row an action writes is dated by the action's own time (`at`, in the person's zone), so two
 chats that both applied it would write the same row, which the row-wise merge keeps once.
@@ -343,24 +345,51 @@ class Index:
     built again only for an item this run has already changed. Built again after every write,
     fifteen taps built the page's sections fifteen times, seconds a tap (engine audit 17,
     2026-11-03); a tap is checked against what the person saw, and a second tap on the same
-    item against what the first one left."""
+    item against what the first one left.
+
+    `before` is each item's rev as it stood before this run wrote anything: every section the
+    batch's taps name is built before its first write (`ready`), so a tap whose item an
+    earlier tap of the same batch changed (Not applying, then Set aside, on one job; a Stop
+    on everyone at an employer, then a Stop on one of them) is still checked against what
+    the person saw, never bounced by their own earlier tap (2026-11-04)."""
 
     def __init__(self, today: dt.date, now: dt.datetime, shown: dict | None = None):
         self.today, self.now, self.shown = today, now, shown
         self.cache: dict = {}
         self.touched: set = set()
         self.builds = 0
+        self.before: dict = {}
+        self.was: dict = {}             # each item's target as it stood then
+        self.wanted: set = set()
+        self.tabs: set = set()          # the windows whose taps this run has written
 
     def section(self, name: str) -> dict:
         if name not in self.cache:
             _, self.cache[name] = app_model.build(self.today, self.now, only={name})
             self.builds += 1
+            if not self.tabs:
+                for k, t in self.cache[name].items():
+                    if isinstance(t, dict):
+                        self.before.setdefault(k, t.get("rev"))
+                        self.was.setdefault(k, t)
         return self.cache[name]
+
+    def want(self, item_id: str) -> None:
+        """A tap of this batch acts on this item: its section is read before the first write."""
+        self.wanted.update(_sections_for(item_id))
+
+    def ready(self) -> None:
+        """Before this run's first write: every section a tap of the batch names, as it is."""
+        if not self.tabs:
+            for name in sorted(self.wanted - set(self.cache)):
+                self.section(name)
 
     def find(self, item_id: str, kinds=(), rev: str = "") -> dict | None:
         """The item's target. One id on two sections (an application is its draft's id on
         Drafts and on Applied) is the one of a kind the action takes, the one whose rev the
-        person saw first."""
+        person saw first. An id that now names something else, or nothing (a search saved
+        since, its rows ranked afresh), is the one item of that kind whose rev is the one the
+        person saw, where there is exactly one: the posting they tapped, wherever it now is."""
         if item_id in self.touched:
             self._forget()
         hits = []
@@ -369,13 +398,38 @@ class Index:
             if got:
                 hits.append(dict(got, id=item_id))
         fit = [h for h in hits if not kinds or h.get("kind") in kinds] or hits
-        return next((h for h in fit if rev and h.get("rev") == rev), fit[0] if fit else None)
+        same = next((h for h in fit if rev and h.get("rev") == rev), None)
+        if same or not rev:
+            return same or (fit[0] if fit else None)
+        if rev == self.before.get(item_id):
+            # As the person saw it before this batch wrote: moved, or gone from the page, since
+            # this batch's own earlier tap (a Stop, then another tap on that person). Gone, the
+            # item as it stood then, which only `ours` accepts.
+            was = self.was.get(item_id)
+            if not fit and was and (not kinds or was.get("kind") in kinds):
+                return dict(was, id=item_id, gone=True)
+            return fit[0] if fit else None
+        moved = {k: t for name in _sections_for(item_id) for k, t in self.section(name).items()
+                 if isinstance(t, dict) and t.get("rev") == rev and k != item_id
+                 and (not kinds or t.get("kind") in kinds)}
+        if len(moved) == 1:
+            k, t = next(iter(moved.items()))
+            return dict(t, id=k)
+        return fit[0] if fit else None
 
+    def ours(self, ids, seen: str, tab: str) -> bool:
+        """The item moved only by this batch's own earlier taps, all made in this tap's
+        window, from where the person saw it: their own change, shown on their page as they
+        made it, never one they did not see. Taps from two windows still never overwrite
+        each other."""
+        return bool(seen) and self.tabs == {tab} and any(
+            i and self.before.get(i) == seen for i in ids)
 
-    def changed(self, *ids) -> None:
+    def changed(self, *ids, tab: str = "") -> None:
         """This run changed these items: the next tap on one of them reads them afresh. The
         profile is read afresh at once (a setting a tap wrote is what the next one reads)."""
         self.touched.update(str(i) for i in ids if i)
+        self.tabs.add(tab)
         person.reset()
         import docpaths
         docpaths.forget_abbreviations()
@@ -3274,9 +3328,13 @@ def _logged_already(act: dict, zone: str, now: dt.datetime) -> str:
 def _seen_current(act: dict, target: dict, index: "Index") -> bool:
     """Was the item as the person saw it? Its own rev, which every item and every button on
     a card's alert or suggestion carries (CONTRACT 6.13), and nothing else: the page's
-    top-level rev is never compared with an item's."""
+    top-level rev is never compared with an item's. Moved since only by an earlier tap of
+    this same batch, from the same window, it still is (`Index.ours`)."""
     seen = str(act.get("rev_seen") or "")
-    return bool(seen) and seen == target.get("rev")
+    if bool(seen) and seen == target.get("rev") and not target.get("gone"):
+        return True
+    return index.ours((_item_id(str(act.get("item") or "")), target.get("id")), seen,
+                      str(act.get("tab") or ""))
 
 
 def _one(aid: str, act: dict, index: Index, db: dict, w, chat: str, zone: str,
@@ -3302,6 +3360,8 @@ def _one(aid: str, act: dict, index: Index, db: dict, w, chat: str, zone: str,
     else:
         shown = act
         target = _target_of(act, index)
+        if target is not None and target.get("gone") and not _seen_current(act, target, index):
+            target = None              # gone since, by a tap the person did not make here
         if target is None:
             went = _logged_already(act, zone, now)
             if went:
@@ -3319,6 +3379,8 @@ def _one(aid: str, act: dict, index: Index, db: dict, w, chat: str, zone: str,
             return _receipt("stale", "It changed since you saw it: look again.", chat, now,
                             aid, act)
     run = Run(aid, act, target, db, w, chat, zone, now, version)
+    if name not in DB_ONLY:
+        index.ready()
     try:
         got = HANDLERS[name](run)
     except NeedsAssets:
@@ -3331,7 +3393,7 @@ def _one(aid: str, act: dict, index: Index, db: dict, w, chat: str, zone: str,
                         chat, now, aid, shown)
     if name not in DB_ONLY:
         index.changed(_item_id(str(shown.get("item") or "")), (target or {}).get("id"),
-                      (got.get("target_after") or {}).get("id"))
+                      (got.get("target_after") or {}).get("id"), tab=str(shown.get("tab") or ""))
     undo = got.get("undo")
     after = got.get("target_after") or (undo or {}).get("target") or target
     out = _receipt("ok", got["note"], chat, now, aid, shown, undo=undo,
@@ -3480,7 +3542,14 @@ def apply_dir(dump_dir: str, chat: str = "chat", now: dt.datetime | None = None,
     names = None
     summary: dict = {"ok": [], "stale": [], "conflict": [], "again": []}
     done: dict = {}
-    for aid, act, version in pending(db, chat, now):
+    todo = pending(db, chat, now)
+    for aid, act, _version in todo:
+        name, item = str(act.get("action") or ""), _item_id(str(act.get("item") or ""))
+        if aid not in ledger and name in ACTIONS and name != "undo" \
+                and not {"work", "hint", "pin"} & set(ACTIONS[name][0]) \
+                and item not in ("job-new", "jobs-add"):
+            index.want(item)
+    for aid, act, version in todo:
         if str(act.get("action") or "") not in PUBLIC_SAFE:
             if safe_only is None:
                 import app_setup

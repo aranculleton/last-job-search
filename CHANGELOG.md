@@ -48,6 +48,11 @@ make sense to somebody whose repo just received it.
   none while ordinary searches found plenty. A result's day is now read from its title, its
   words or its link, and when fewer than three come back, Claude searches again once before
   the brief is written.
+- **A tap on your page is no longer turned back as "It changed since you saw it" when only
+  your own taps, or the page being drawn again, changed it.** "Not applying" and then "Set
+  aside" on one job, a Stop made the day before, or a job set aside while a search re-ranked
+  the list are all done as you asked; a tap is still turned back when the thing itself really
+  changed, or when two windows answered the same thing differently.
 
 ## [4.9.1] - 2026-11-04
 
