@@ -620,8 +620,9 @@ def fit(a):
             pages = _render_resume(a)   # the PDF on disk must match the draft
             break
         pages = grown
-    if a.get("general"):
-        # A resume for no posting in particular has no letter (tools/general_resume.py).
+    if not docpaths.has_letter(a):
+        # A resume for no posting in particular has no letter (tools/general_resume.py), and
+        # neither has one the person asked for alone (docpaths.has_letter).
         pages = compile_resume(abbr, passes=2)
         fonts = font_problems(resume_pdf(abbr))
         if fonts:
@@ -736,9 +737,10 @@ if __name__ == "__main__":
         except CompileFailed as exc:
             print(f"fit_to_page: {a.get('abbr') or a.get('company')}: {exc}", file=sys.stderr)
             sys.exit(1)
-        if a.get("general"):
+        if not docpaths.has_letter(a):
             flag = "   <-- CHECK" if needs_check(rp, lp, 0, general=True) else ""
-            print(f"{a['abbr']:<12} resume {rp}p/{rl}ln  no letter (a general resume){flag}")
+            why = "a general resume" if a.get("general") else "the resume alone, as asked"
+            print(f"{a['abbr']:<12} resume {rp}p/{rl}ln  no letter ({why}){flag}")
             continue
         bw = body_words(a)
         flag = "   <-- CHECK" if needs_check(rp, lp, bw) else ""

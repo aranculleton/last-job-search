@@ -76,6 +76,31 @@ def letter_pdf(abbr: str) -> str:
     return person.state(letter_rel(abbr, ".pdf"))
 
 
+# The documents a draft makes. A resume for no posting (general_resume.py) has no letter, and
+# neither has one the person asked for alone: `resume_only` on the pick, which staging puts on
+# the draft (stage_picks.py --resume-only, the page's "Draft the resume only"). There was no
+# way to ask for a resume alone, and a resume-only run named letters in the tracker that were
+# never made (the maintainer, 2026-11-04).
+RESUME_ONLY = "resume_only"
+
+
+def has_letter(draft: dict | None) -> bool:
+    """Whether this draft makes a cover letter: the one answer every step reads (the drafter's
+    brief, the audits, the render, the checks, the note and the tracker row)."""
+    d = draft if isinstance(draft, dict) else {}
+    return not (d.get("general") or d.get(RESUME_ONLY))
+
+
+def made(rel: str) -> bool:
+    """Whether a document the tracker would name (its repo-relative path, as cv_file and
+    cover_letter_file store it) is on disk: its .tex or its .pdf."""
+    rel = str(rel or "").strip()
+    if not rel:
+        return False
+    stem = os.path.splitext(rel)[0]
+    return any(os.path.isfile(person.state(stem + ext)) for ext in (".tex", ".pdf"))
+
+
 # The person's own resume, the one they send when someone asks for it and names no role:
 # documents/cv/, which they fill (documents/README.md). A tailored resume for a role nobody
 # named is a guess, and the guess is what the reader sees.

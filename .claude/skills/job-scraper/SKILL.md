@@ -236,8 +236,10 @@ it is.
 - **Sorted by score, highest first**, with the score shown. Never alphabetically, by portal or
   by posting date, and never an unscored posting.
 - **The number asked for is filled from the next rows that pass every rule.** The round's cut
-  passes over a row failing a hard rule (the search window, the candidate's bar, a ruling) and
-  takes the next, and says how many it found when it runs out (`shortlist: found 7 of the 10
+  (`run_round.hard_rules`, the one path every row a search brings back goes through) passes
+  over a row failing a hard rule (no score, the search window, the candidate's bar with a
+  staffing agency, the screen's hard cuts such as a language, a ruling, or a job the person
+  already has: applied, drafted, added, kept or still on their list) and takes the next, and says how many it found when it runs out (`shortlist: found 7 of the 10
   asked for`): pass that on. A row you find fails a rule the round could not see is ruled out
   with `python3 tools/exclude.py add <url> --title "<title>" --company "<company>" --reason
   "<why>"`, then `python3 tools/run_round.py --out <the round's folder> --recut --show <N>`

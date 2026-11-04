@@ -207,21 +207,32 @@ def _row_for(draft: dict, meta: dict, today: str, round_name: str,
         "fit_rating": "" if fit is None else str(int(round(float(fit)))),
         "notes": notes,
         "cv_file": docpaths.resume_rel(abbr),
-        "cover_letter_file": docpaths.letter_rel(abbr),
+        # A resume asked for alone, or a general one, has no letter: none is named.
+        "cover_letter_file": (docpaths.letter_rel(abbr)
+                              if docpaths.has_letter(draft) and docpaths.has_letter(meta)
+                              else ""),
         "source": meta.get("url", "") or (f"contact:{str(who.get('contact_id')).strip()}"
                                           if who else ""),
         "deadline": draft.get("deadline", "") or meta.get("deadline", "") or "",
     }
 
 
+FILE_COLUMNS = ("cv_file", "cover_letter_file")
+
+
 def record(drafts: list[dict], metas: dict[str, dict], today: str, round_name: str = "",
-           path: str = TRACKER) -> list[tuple[str, dict]]:
+           path: str = TRACKER, exists=None) -> list[tuple[str, dict]]:
     """Apply the batch to the tracker. Returns [(action, row)] with action added/updated.
 
     Written through tools/csv_store.py: the file's own columns and line ending
     are kept, so one new row is one changed line. A plain DictWriter rewrote
     every "\\n" as "\\r\\n", and after a column added by hand it appended a
     second `deadline`.
+
+    `exists` (a repo-relative path -> whether it is on disk; main() passes docpaths.made):
+    a document is named on this draft's row only when it was made. A resume-only run named
+    letters that were never made, which broke the saved-documents check and held up saving
+    (the maintainer, 2026-11-04).
     """
     rows = csv_store.read_rows(path, HEADER)
     done = []
@@ -232,6 +243,10 @@ def record(drafts: list[dict], metas: dict[str, dict], today: str, round_name: s
             contacts = _contacts()
         who = for_contact(d, meta, contacts)
         new = _row_for(d, meta, today, round_name, contacts)
+        if exists is not None:
+            for col in FILE_COLUMNS:
+                if new[col] and not exists(new[col]):
+                    new[col] = ""
         open_match = next((r for r in rows if _same_application(r, new)
                            and (r.get("status") or "").strip().lower() not in FINAL
                            and _this_application(r, new)), None)
@@ -239,6 +254,12 @@ def record(drafts: list[dict], metas: dict[str, dict], today: str, round_name: s
             rows.append(new)
             done.append(("added", new))
             continue
+        if exists is not None:
+            # This draft's own record: a document it named before and nobody made since
+            # (an earlier run's letter that never was) is not named again.
+            for col in FILE_COLUMNS:
+                if str(open_match.get(col) or "").strip() and not exists(open_match[col]):
+                    open_match[col] = ""
         # Never move an open row backwards: refresh the documents and the score,
         # keep its status and its date.
         for col in ("cv_file", "cover_letter_file", "fit_rating", "source"):
@@ -262,6 +283,23 @@ def record(drafts: list[dict], metas: dict[str, dict], today: str, round_name: s
         done.append(("updated", open_match))
     csv_store.write_rows(path, rows, HEADER)
     return done
+
+
+def unmade(done: list[tuple[str, dict]], path: str = TRACKER, exists=None) -> list[str]:
+    """The check after writing: each document a row this batch wrote names that is not on
+    disk, read back from the tracker as written, as "<employer> | <role>: <file>". [] when
+    the tracker records only what exists."""
+    exists = docpaths.made if exists is None else exists
+    keys = {(r.get("date"), r.get("company"), r.get("role")) for _a, r in done}
+    out = []
+    for r in csv_store.read_rows(path, HEADER):
+        if (r.get("date"), r.get("company"), r.get("role")) not in keys:
+            continue
+        for col in FILE_COLUMNS:
+            rel = str(r.get(col) or "").strip()
+            if rel and not exists(rel):
+                out.append(f"{r.get('company')} | {r.get('role')}: {rel}")
+    return out
 
 
 def screening(draft: dict) -> str:
@@ -297,12 +335,26 @@ def main() -> int:
         print("no shortlist row (apps_in.json) for: " + ", ".join(missing)
               + ". Their fit, source and portal come from there; stage with tools/stage_picks.py.")
         return 1
-    for action, row in record(drafts, metas, a.today, a.round):
-        print(f"{action:<8} {row['company']} | {row['role']} | fit {row['fit_rating']} | {row['cv_file']}")
+    # A draft whose resume was never made is not an application yet: rendering it is the
+    # step before this one (tools/fit_to_page.py), and a row naming nothing would say it is.
+    unrendered = [d for d in drafts if not docpaths.made(docpaths.resume_rel(d["abbr"]))]
+    for d in unrendered:
+        print(f"not recorded: {d['company']} | {d['role']}: its resume was never made. Render "
+              "it first (tools/fit_to_page.py), then record it.")
+    drafts = [d for d in drafts if d not in unrendered]
+    tracker = person.state("job_search_tracker.csv")
+    done = record(drafts, metas, a.today, a.round, path=tracker, exists=docpaths.made)
+    for action, row in done:
+        print(f"{action:<8} {row['company']} | {row['role']} | fit {row['fit_rating']} | "
+              f"{row['cv_file']}" + ("" if row.get("cover_letter_file") else " | no letter"))
+    # The check after writing: the tracker records what exists, nothing else.
+    left = unmade(done, tracker)
+    for line in left:
+        print(f"the tracker names a file that was not made: {line}")
     if not a.no_screening:
         for d in drafts:
             print("screening answers:", screening(d))
-    return 0
+    return 1 if (unrendered or left) else 0
 
 
 if __name__ == "__main__":

@@ -622,3 +622,6 @@ Vloeiend Frans          # not a name: Dutch posting words, tests/test_a_posting_
 Marlowe Staffing Partners   # invented: an agency in tests/test_an_agency_recruiter_is_not_held_for_their_agency.py
 Declined Staffing Group     # invented: an agency, the same test
 Wrenley Ashdown             # invented: a contact in tests/test_a_short_thank_you_and_a_note_with_no_place_pass.py
+Ottergate Foods             # invented: an employer in tests/test_a_resume_can_be_drafted_alone.py
+Harrowgate Insurance        # invented: an employer in tests/test_a_search_brings_back_only_new_jobs_that_pass_every_rule.py
+Brightpath Staffing         # invented: an agency, the same test

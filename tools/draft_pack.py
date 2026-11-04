@@ -1014,6 +1014,13 @@ def named(pick: dict) -> str:
                            label="employer and role")
 
 
+# A pick the person asked for the resume alone (stage_picks.py --resume-only): the drafter
+# writes no letter, and the audits read none (draft_audit.rule_findings).
+RESUME_ONLY_LINE = ("THE RESUME ALONE: the person asked for no cover letter. Write p1, p2, lead "
+                    "and p4 as empty strings and cl_bullets as []; the claim map covers the "
+                    "summary and anything else the resume says. No letter is made or checked.")
+
+
 def posting_brief(pick: dict) -> str:
     """The per-posting part the pack does not hold, apart from the research the workflow
     adds after it: the person's answers, the bridges, the posting itself."""
@@ -1031,6 +1038,9 @@ def posting_brief(pick: dict) -> str:
              f"this resume's skills line; the summary or letter may name it where the posting "
              f"asks, and a resume bullet listed below may name it): {yes}. No (never named "
              f"anywhere): {no}."]
+    import docpaths
+    if not docpaths.has_letter(pick):
+        lines.append(RESUME_ONLY_LINE)
     seen = bridges.assess(body)
     if seen:
         lines.append("What the profile holds for what this posting asks (tools/bridges.py):")

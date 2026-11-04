@@ -370,6 +370,10 @@ def shown(show) -> int:
 
 
 SET_ASIDE_ON_PAGE = "set aside on your page"
+# A recruitment or staffing agency's posting names no employer, so it clears none of pay,
+# prestige or signal: the person's own agency lists (employers.py AGENCY, EXTRA_AGENCY) read
+# by tools/sector.py. Four came back in one search of 20 (the maintainer, 2026-11-04).
+AGENCY_WHY = "a recruitment or staffing agency, so the employer is not named"
 
 
 def page_set_asides(dump_dir) -> tuple[set, set]:
@@ -441,27 +445,133 @@ def declined_now() -> dict:
     return dict(got) if isinstance(got, dict) else {}
 
 
-def hard_rules(jobage, today, seen=None, keep_ruled_out=False, dump=None):
-    """A function from a ranked row to the hard rule it fails now, or "": the search window,
-    the candidate's bar (tools/bar.py, its hard rules, with the posting read), and a ruling
-    or a hold made since the row was ranked (prefilter.already_ruled_out: seen_jobs.json,
-    a referral in flight, do_not_target.json). The shortlist is cut with it (write_summary),
-    so a row failing one is passed over and the next row taken. Made when the shortlist is
+def family(name: str) -> set:
+    """The saved rounds one search wrote: "r9", and "r9_round2" and "r9_round3" when it
+    widened. A widened round finds what the round before it found, and that is not a job
+    already on the list."""
+    base = re.sub(r"_round\d+$", "", str(name or ""))
+    if not base:
+        return set()
+    try:
+        names = os.listdir(person.state(SUMMARY_DIR))
+    except OSError:
+        names = []
+    return {base} | {os.path.splitext(n)[0] for n in names
+                     if re.fullmatch(re.escape(base) + r"_round\d+\.json", n)}
+
+
+def already_had(name: str = "", today=None, tracker: str | None = None, own=()):
+    """A function from a ranked row to why the person already has it, or "": a role in their
+    applications (drafted, applied or decided, the tracker), a draft saved for it
+    (documents/applications), a job they added or kept, or one still on their Jobs list from
+    an earlier search (app_model.carried, the page's own answer). Matched by the posting's
+    link, or by the employer and the role, so another site's copy of it is the same job.
+    A search asked for 20 brought back four of these (the maintainer, 2026-11-04). `name` is
+    the round being cut, whose own rounds are never "earlier"; `own`, the links its last cut
+    kept, which a cut made again keeps whatever was done with them since."""
+    import glob
+    import throttle
+    from company_key import key as company_key
+    from lookup_score import norm
+    by_url: dict = {}
+    by_role: dict = {}
+
+    def note(url, company, role, why):
+        u = norm(str(url or ""))
+        if u:
+            by_url.setdefault(u, why)
+        k = company_key(str(company or ""))
+        if k and str(role or "").strip():
+            by_role.setdefault(k, []).append((str(role), why))
+
+    try:
+        rows = throttle._tracker_rows(tracker or person.state("job_search_tracker.csv"))
+    except Exception:  # noqa: BLE001  no tracker yet: nothing applied for
+        rows = []
+    for r in rows:
+        status = str(r.get("status") or "").strip().lower()
+        when = str(r.get("date") or "").strip() or "an unrecorded date"
+        why = (f"already drafted: {r.get('role')}, {when}" if status in throttle.UNSENT
+               else f"already in your applications: {r.get('role')} ({status or 'no status'}, "
+                    f"{when})")
+        src = str(r.get("source") or "")
+        note(src if src.startswith("http") else "", r.get("company"), r.get("role"), why)
+    for p in glob.glob(person.state("documents", "applications", "*", "draft.json")):
+        try:
+            got = _read_json(p)
+        except Exception:  # noqa: BLE001  one unreadable draft reads as none
+            continue
+        for d in (got if isinstance(got, list) else [got]):
+            if isinstance(d, dict):
+                note(d.get("url"), d.get("company"), d.get("role") or d.get("title"),
+                     f"already drafted: {d.get('role') or d.get('title')}")
+    try:
+        import added_jobs
+        import app_model
+        for r in added_jobs.load():
+            note(r.get("url"), r.get("company"), r.get("title"), "already on your list: you "
+                                                                 "added it")
+        for url, k in app_model.kept_jobs().items():
+            k = k if isinstance(k, dict) else {}
+            note(url, k.get("company"), k.get("title"), "already on your list: kept for later")
+        day = datetime.date.fromisoformat(today) if isinstance(today, str) else today
+        for rname, _rank, r in app_model.carried(day or datetime.date.today(),
+                                                 but=family(name)):
+            note(r.get("url"), r.get("company"), r.get("title"),
+                 f"already on your list, from search {rname}")
+    except Exception:  # noqa: BLE001  no saved searches yet: nothing on the list
+        pass
+    mine = {norm(str(u or "")) for u in own} - {None, ""}
+
+    def check(row) -> str:
+        u = norm(str(row.get("url") or ""))
+        if u and u in mine:
+            return ""
+        if u and u in by_url:
+            return by_url[u]
+        k = company_key(str(row.get("company") or ""))
+        return next((why for role, why in by_role.get(k, ())
+                     if throttle._same_title(row.get("title"), role)), "")
+    return check
+
+
+def unscored(row) -> bool:
+    """A row with no 0-100 score, read as the page reads one (its fit, else its priority).
+    Never shown: a list of unranked links is a failed search."""
+    s = row.get("fit") if row.get("fit") is not None else row.get("priority")
+    return not isinstance(s, (int, float)) or isinstance(s, bool)
+
+
+def hard_rules(jobage, today, seen=None, keep_ruled_out=False, dump=None, name="",
+               tracker=None, own=()):
+    """A function from a ranked row to the hard rule it fails now, or "": no score, the
+    search window, the candidate's bar (tools/bar.py, its hard rules, with the posting read,
+    and a recruitment or staffing agency by the person's own lists, tools/sector.py), the
+    stated-fact screen's hard cuts (tools/text_screen.py: a language, eligibility, a
+    credential...), a ruling or a hold made since the row was ranked
+    (prefilter.already_ruled_out: seen_jobs.json, a referral in flight, do_not_target.json),
+    and a job the person already has (already_had: applied, drafted, added, kept or on the
+    list). The shortlist is cut with it (write_summary), so a row failing one is passed over
+    and the next row taken: the one path every row a search brings back goes through, the
+    number asked for (--show) and a cut made again (--recut) alike. Made when the shortlist is
     cut, so it reads every ruling as it stands then, a Set aside or an employer turned down
     while the round ran included (declined_now); the person's own rulings hold even with --no-seen-read, which only looks again
     at what a rule decided; and with `dump`, a page dump, the Set asides still waiting on the
     page (page_set_asides)."""
     import bar
     import prefilter
+    import sector
+    import text_screen
     day = datetime.date.fromisoformat(today) if isinstance(today, str) else today
     ruled = prefilter.already_ruled_out(seen, keep_ruled_out, day) if seen else (lambda job: "")
-    own = (lambda job: "")
+    mine = (lambda job: "")
     if seen and keep_ruled_out:
-        mine = {k: e for k, e in (prefilter._seen_entries(seen) or {}).items()
-                if isinstance(e, dict) and e.get("basis") == "person"}
-        own = prefilter.already_ruled_out(seen, False, day, entries=mine) if mine else own
+        theirs = {k: e for k, e in (prefilter._seen_entries(seen) or {}).items()
+                  if isinstance(e, dict) and e.get("basis") == "person"}
+        mine = prefilter.already_ruled_out(seen, False, day, entries=theirs) if theirs else mine
     waiting, revs = page_set_asides(dump)
     declined = declined_now()
+    had = already_had(name, day, tracker, own)
     from company_key import key as company_key
     from lookup_score import norm
 
@@ -475,6 +585,8 @@ def hard_rules(jobage, today, seen=None, keep_ruled_out=False, dump=None):
         return any(app_model.job_rev(u, c, t, st) in revs for st in ("new", "ready"))
 
     def check(row) -> str:
+        if unscored(row):
+            return "no score: a job is never shown unscored"
         age = prefilter.age_days(row, day)
         if age is not None and age > jobage:
             return f"age: {age} days old, past the {jobage}-day window"
@@ -484,9 +596,14 @@ def hard_rules(jobage, today, seen=None, keep_ruled_out=False, dump=None):
         k = company_key(str(row.get("company") or "")) if declined else ""
         if k and k in declined:
             return f"candidate's bar: {declined[k]}"
+        if sector.is_agency(row.get("company")):
+            return f"candidate's bar: {AGENCY_WHY}"
+        cuts = text_screen.screen(row).get("cuts") or []
+        if cuts:
+            return f"screen: {cuts[0]}"
         if (waiting or revs) and set_aside(row):
             return SET_ASIDE_ON_PAGE
-        return ruled(row) or own(row) or ""
+        return ruled(row) or mine(row) or had(row) or ""
     return check
 
 
@@ -850,7 +967,8 @@ def recut(a) -> int:
     path = write_summary(short, where, name,
                          scraped_path=scraped if os.path.isfile(scraped) else None,
                          show=a.show, rules=hard_rules(a.jobage, a.today, seen, a.no_seen_read,
-                                                       dump=a.dump),
+                                                       dump=a.dump, name=name,
+                                                       tracker=a.tracker, own=links),
                          report=report, links=links)
     for line in say_cut(report, a.show):
         print(line)
@@ -1106,7 +1224,9 @@ def main():
                             rules=hard_rules(a.jobage, a.today,
                                              a.seen or person.state("job_scraper",
                                                                     "seen_jobs.json"),
-                                             a.no_seen_read, dump=a.dump),
+                                             a.no_seen_read, dump=a.dump,
+                                             name=os.path.basename(os.path.abspath(a.out)),
+                                             tracker=a.tracker),
                             report=cut)
     # Counted on the list the person is shown, after the hard rules cut it: counted on the
     # ranked rows before the cut, 60 and more of them, a round met its target with rows the

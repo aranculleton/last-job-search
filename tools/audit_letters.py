@@ -412,8 +412,9 @@ if __name__ == "__main__":
     # Through fit_to_page's loader: a kept draft.json names its posting, which is read
     # back through its untrusted fence, and the posting-copy check needs it.
     apps, _read_in = load(sys.argv[1])
-    # A general resume has no letter (tools/general_resume.py): nothing here to read.
-    apps = [a for a in apps if not a.get("general")]
+    # A general resume has no letter (tools/general_resume.py), nor has a resume asked for
+    # alone (docpaths.has_letter): nothing here to read.
+    apps = [a for a in apps if docpaths.has_letter(a)]
     bad = 0
     for a in apps:
         flags, w = audit(a, apps)

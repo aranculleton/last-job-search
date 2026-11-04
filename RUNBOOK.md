@@ -264,6 +264,8 @@ python3 tools/stage_picks.py stage "$SCRATCH/r1" 3 7 "Acme::Demand Planning"
 python3 tools/stage_picks.py consent "$SCRATCH/r1" <slug> --yes <skill> ... --no <skill> ...
 python3 tools/stage_picks.py consent "$SCRATCH/r1" <slug> --draft   # or --skip: a held pick
 # Two roles at one employer are both held with "which one?"; stage ... --both drafts both.
+# The resume alone (the person asked for no letter, in any words): stage ... --resume-only.
+#   No letter is drafted, audited, made or named in the tracker, which names only files made.
 python3 tools/draft_pack.py build "$SCRATCH/r1"           # pack.md and draft_args.json
 # Workflow draft-applications, args: the contents of draft_args.json, plus {today}
 #   (add "only": [slugs] to leave out roles the person has dropped)
