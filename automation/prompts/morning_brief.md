@@ -42,7 +42,8 @@ The `news-reader` agent, given every FOR CLAUDE news line as printed. It returns
 lines, each ending in how the person can use it, widening rather than coming back empty.
 No such agent here (a copy cloned this run loads none): a general one on haiku, its prompt
 `.claude/agents/news-reader.md` below its header, then the lines. Nothing else finds the
-news; if it cannot run, step 4 gives `brief.py news` nothing.
+news, except the one search again step 4 may ask for; if it cannot run, step 4 gives
+`brief.py news` nothing.
 
 ## 4. Record: one command
 
@@ -54,6 +55,8 @@ EOF
 
 `brief.py news` puts the news in the day's record, leaves out any link an earlier brief
 sent, and notes a freeze or layoffs at an employer with a live application on that row.
+When it says only a few came back, do the one search again it asks for, then `brief.py news
+--again` with every line.
 With a page, bring it up to date as its FOR CLAUDE line says; where a line says its code is
 older than this version, republish it first: no other chat will.
 
