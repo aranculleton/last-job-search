@@ -26,7 +26,7 @@ import docpaths  # noqa: E402
 import draft_pack  # noqa: E402
 import record_drafts  # noqa: E402
 import stage_picks  # noqa: E402
-from tests.test_one_drafting_call_per_posting import FIXTURE, SLUG, make_round, run_workflow  # noqa: E402
+from tests.test_one_drafting_call_per_posting import FIXTURE, make_round, run_workflow  # noqa: E402
 
 TODAY = "2026-11-04"
 POSTING = ("Pricing Analyst. A permanent role in our Leeds team, hybrid. You will build pricing "
