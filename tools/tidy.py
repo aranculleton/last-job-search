@@ -17,7 +17,10 @@ and keeps every chat that is:
 - bound to a scheduled task that is on (the job round, an older ops chat that relays to the
   phone, which is never rebuilt), or the ops chat itself;
 - a campaign chat for a process still live;
-- running, or used in the last two days (seven when it is waiting on the person);
+- running, or used in the last two days (seven when it is waiting on the person), unless it
+  ran one of the app's jobs and every work item it claimed has ended (done, failed or
+  stopped) with none still going: a finished job's chat is put away at once, and the tidy-up
+  is due again as soon as such a job ends (`due`), so it does not wait for tomorrow;
 - or holding work that is not on master yet: a branch it pushed that master does not hold.
   The day's update lands such a branch; the chat is archived once it has.
 
@@ -88,25 +91,63 @@ def _checked_path() -> str:
     return os.path.join(d, CHECKED) if d else ""
 
 
-def due(today: str = "") -> bool:
-    """Is today's tidy-up still to do? Only once a day, and never where it cannot be kept."""
+def finished_jobs(db: dict, skip: str = "") -> dict:
+    """{chat id: when its last job ended} for the chats whose claimed work items have all
+    ended (done, failed, stopped) with none still going. `skip` is a chat to leave out (the
+    one that answers the page, whose small work ends all day)."""
+    import page_db
+    held: dict = {}
+    for doc in (db.get("work") or {}).values():
+        d = doc.get("data") or {}
+        who = str(d.get("claimed_by") or "")
+        if not who.startswith("session_") or who == skip:
+            continue
+        ended = str(d.get("status") or "") in page_db.FINISHED
+        at = str(d.get("finished_at") or "") if ended else ""
+        was = held.get(who, "")
+        if not ended or was is None:
+            held[who] = None
+        elif at > was:
+            held[who] = at
+    return {k: v for k, v in held.items() if v}
+
+
+def due(today: str = "", db: dict | None = None, skip: str = "") -> bool:
+    """Is a tidy-up still to do? Once a day, and again when another chat's job has ended since
+    the last one (`db`: the page's records), so its chat is put away soon after, not at
+    tomorrow's. Never where it cannot be kept."""
     today = today or dt.date.today().isoformat()
     path = _checked_path()
     if not path:
         return False
     try:
         with open(path, encoding="utf-8") as fh:
-            return (json.load(fh) or {}).get("checked") != today
+            got = json.load(fh) or {}
     except (OSError, ValueError, AttributeError):
         return True
+    if got.get("checked") != today:
+        return True
+    if db is None:
+        return False
+    import app_model
+    last = app_model.parse_time(got.get("at"))
+    if last is None:
+        return False
+    gone = {x.get("id") for x in archived()}
+    for chat, at in finished_jobs(db, skip).items():
+        t = app_model.parse_time(at)
+        if chat not in gone and t is not None and t > last:
+            return True
+    return False
 
 
-def _mark_checked(today: str) -> None:
+def _mark_checked(today: str, now: str = "") -> None:
     path = _checked_path()
     if not path:
         return
+    at = now or dt.datetime.now(dt.timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
     with open(path, "w", encoding="utf-8", newline="\n") as fh:
-        json.dump({"checked": today}, fh)
+        json.dump({"checked": today, "at": at}, fh)
         fh.write("\n")
 
 
@@ -211,9 +252,12 @@ def _days_since(stamp: str, today: dt.date) -> float:
 
 def plan(chats: list[dict], triggers: list[dict], info: dict, reg: dict, listener: dict,
          this_chat: str, repo: str, today: dt.date, campaigns: set[str],
-         branches: set[str] | None, done_before: set[str]) -> dict:
+         branches: set[str] | None, done_before: set[str],
+         jobs: dict | None = None) -> dict:
     """{"ask": [ids to read with get_session], "archive": [{id, title, why}],
-    "keep": [{id, title, why}], "brief": [calls] or []}."""
+    "keep": [{id, title, why}], "brief": [calls] or []}. `jobs` is finished_jobs(): a chat in
+    it is not kept for being used lately."""
+    jobs = jobs or {}
     import routines
     live_ids = {listener.get("chat") or "", this_chat} - {""}
     # The chat the page was taken from is put away only where the app started it: one the
@@ -342,7 +386,8 @@ def plan(chats: list[dict], triggers: list[dict], info: dict, reg: dict, listene
             continue
         quiet = _days_since(s.get("updated_at") or s.get("created_at") or "", today)
         waits = "REQUIRES_ACTION" in status or "BLOCKED" in status
-        if sid not in moved_from and quiet < (WAITING_DAYS if waits else IDLE_DAYS):
+        if (sid not in moved_from and sid not in jobs
+                and quiet < (WAITING_DAYS if waits else IDLE_DAYS)):
             keep(f"used {quiet:.0f} day(s) ago")
             continue
         d = info.get(sid)
@@ -555,9 +600,16 @@ def run_plan(a) -> int:
     listed = sessions(_pages(a.sessions))
     runs, extra = run_chats(tasks, _remembered_runs(), done, {s.get("id") for s in listed})
     _remember_runs(runs)
+    jobs: dict = {}
+    if a.dump:
+        try:
+            import page_db
+            jobs = finished_jobs(page_db.load(a.dump), listener.get("chat") or "")
+        except Exception:  # noqa: BLE001  not a dump: no finished jobs known, the days rule holds
+            jobs = {}
     got = plan(listed + extra, tasks, details(_pages(a.details)), reg,
                listener, app_listen.this_chat(a.chat), repo, today,
-               _campaign_chats(), unmerged(), done)
+               _campaign_chats(), unmerged(), done, jobs)
     if got["ask"]:
         print("tidy: read these chats first, each with get_session, and run this again with "
               "--details <each file>: " + " ".join(got["ask"]))

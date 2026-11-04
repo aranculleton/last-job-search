@@ -863,7 +863,7 @@ def check_in(dump: str, chat: str, now, out: str, listen: bool = False, helper: 
     tidy_due = False
     if got["role"] == "listener" and app_listen.chat_kind() == "cloud":
         import tidy
-        tidy_due = bool(tidy.due())
+        tidy_due = bool(tidy.due(db=move["db"], skip=chat))
     return {"read": [], "move": move["batches"], "got": got, "upkeep": upkeep, "prune": old,
             "tidy": tidy_due, "stranded": ended["batches"]}
 

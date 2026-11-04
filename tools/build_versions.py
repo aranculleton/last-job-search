@@ -671,8 +671,9 @@ METHODS: dict[str, dict] = {
             (19, "2026-11-03", False, "the brief stays bound to the chat that holds the copy, where it works: never made, moved or brought back from a break as a task that starts a new chat each run, and a working brief is never moved by the day's tidy-up (only one whose chat is deleted or a retired helper, and the shortlist with it); a brief bound to a chat sends its headline as a push at the end of each run, asked by brief.py alone, and where it was not sent the next message in that chat says so once; the line that sets it up says where and when it comes, with or without a page, and 5:38 where 7:38 falls in the scheduler's slow hours; a break whose day has passed, a zone this computer does not know and a brief that did not come are mended at any start, wake or brief; every task the app made gets the line for its files from any chat; run chats are remembered and tidied; the silent upkeep runs only on the brief's off days and needs no push in a routine's set-up; one setup reminder a day after the page goes up while setup waits; the tidy-up puts away only a chat the app started, never one you write in, and brings back once a chat of yours it put away before; a brief that did not come is judged by the page's own clock"),
             (20, "2026-11-04", False, "a brief whose chat cannot open the files (its task fired and left no record of that day's brief, or it now wakes another chat) is said plainly, never as set up, with the calls that move it into the chat that answers the page"),
             (21, "2026-11-04", False, "the page is told whether the brief\'s own run sends its phone notification, so Settings offers that choice only there"),
+            (22, "2026-11-04", False, "the chat of a big job (an interview prep, a search, a batch of drafts) is put away soon after its job ends, not after two quiet days: the tidy-up is due again when such a job finishes, and archives its chat once its work is saved"),
         ),
-        "fingerprint": "41a4fd7774c151f6",
+        "fingerprint": "e19b16c294b156cd",
     },
     "expand": {
         "by": "upgrade", "priority": 4, "time": "~15 min",
