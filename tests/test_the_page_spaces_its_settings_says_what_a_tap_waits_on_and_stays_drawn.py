@@ -300,3 +300,21 @@ def test_a_finished_follow_up_opens_the_person_in_contacts(run, tmp_path):
     link = "Array.from(document.querySelectorAll('#rail [data-work=\"follow_up~2\"] a[data-k^=\"open:\"]')).map((a) => [a.getAttribute('data-k'), a.textContent])"
     got = _go(run, tmp_path, [{"hash": "todo", "eval": link}], WIDE, seed=dict(HEARD, **{"work/follow_up~2": done}), clock=T)
     assert got["after"][0]["eval"] == [["open:contacts:p-wren", "Open in Contacts"]], got["after"][0]["eval"]
+
+
+def test_a_run_of_like_work_is_one_card_with_its_count(run, tmp_path):
+    """Fifty follow-ups and replies stood one card each down Claude's work (the maintainer,
+    2026-11-04: "an easier way of displaying it in this list rather than scrolling through like
+    50 items"). Four or more of one kind waiting, or finished, are one card; Show lists them."""
+    names = ["Wren", "Juno", "Tamsin", "Marisol", "Ada"]
+    seed = dict(HEARD, **{"work/reply~1": RUNNING})
+    for i, n in enumerate(names):
+        seed["work/follow_up~r%d" % i] = dict(QUEUED, title="Follow up with " + n, asked_at="2026-10-25T08:58:%02d.000Z" % i)
+    look = ("(() => { const r = document.getElementById('rail'); const run = r.querySelector('[data-work-run]');"
+            " return [run ? run.querySelector('.wc-title').textContent : null, run ? run.querySelector('.wc-now').textContent : null,"
+            " r.querySelectorAll('[data-work^=\"follow_up~r\"]').length]; })()")
+    got = _go(run, tmp_path, [{"hash": "todo", "eval": look}, {"open": "run:run~queued:follow_up", "wait": 300, "eval": look}], WIDE, seed=seed, clock=T)
+    title, line, cards = got["after"][0]["eval"]
+    assert title == "5 follow-ups waiting their turn" and cards == 0, got["after"][0]["eval"]
+    assert line.startswith("Wren, Juno, Tamsin and 2 more"), line
+    assert got["after"][1]["eval"][2] == 5, "Show lists each of them"

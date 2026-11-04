@@ -26,6 +26,9 @@ make sense to somebody whose repo just received it.
   pill at the top opens the panel on the right and closes it again, like the menu's "Icons
   only", and the page remembers which you chose; the panel has its own Hide. Narrower, it
   opens as a panel on the right, and on a phone from the bottom.
+- **A run of the same kind of work is one card in Claude's work.** Four or more follow-ups
+  waiting, or replies finished, show as one card with their count and the first few names;
+  Show lists them, and "Don't do them" calls off the lot.
 - **What you close or stop leaves its list at once.** Closing people in To do, or "No more
   messages" to someone, takes them off the list straight away instead of waiting for Claude;
   "11 closed: Show" brings them back with their Undo.

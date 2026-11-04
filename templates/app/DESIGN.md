@@ -23,6 +23,8 @@ next?" in its first lines, and nothing asks for a decision a default could make.
   opens and closes the panel on the right, as the menu's "Icons only" folds, remembered on the
   device (open beside every screen but the Brief until the person chooses); narrower, it opens
   as a panel on the right, and on a phone as a sheet from the bottom. (pill tests)
+- In Claude's work, four or more of one kind waiting, or finished, are one card with their
+  count and the first few names; Show lists them. Nobody scrolls past fifty cards. (run test)
 
 ## Cards and lists
 

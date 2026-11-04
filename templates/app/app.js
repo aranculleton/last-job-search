@@ -9638,8 +9638,67 @@
     if (st === "done" && workSeenAt.has(id) && now() - workSeenAt.get(id) > 60000) return true;
     return age > 15 * 60000;
   }
+  // Like work in a run is one card with its count: four or more of one kind waiting their turn,
+  // or finished and not yet folded away, with Show to list them. Fifty follow-ups and replies
+  // stood one card each down the panel (the maintainer, 2026-11-04: "an easier way of
+  // displaying it in this list rather than scrolling through like 50 items").
+  const RUN_MIN = 4;
+  const BATCH_WORDS = {follow_up: ["follow-up", "follow-ups"], reply: ["reply", "replies"], draft: ["application", "applications"],
+    network: ["search for people", "searches for people"], prep: ["prep", "preps"], files: ["set of files", "sets of files"], evaluate: ["job to score", "jobs to score"]};
+  function workRuns(items) {
+    const by = new Map();
+    for (const [id, w] of items) {
+      const st = txt(w.status) || "queued";
+      if ((st !== "queued" && st !== "done") || txt(w.kind) === "update" || txt(w.kind) === "talk") continue;
+      if (st === "queued" && workSay(id, w).picked) continue;
+      if (st === "done" && workFolded(id, w)) continue;
+      const key = st + ":" + txt(w.kind);
+      if (!by.has(key)) by.set(key, []);
+      by.get(key).push([id, w]);
+    }
+    const members = new Set();
+    const cards = [];
+    for (const [key, list] of by) {
+      if (list.length < RUN_MIN) continue;
+      // In the order they were asked for, the order they are done in.
+      list.sort((a, b) => txt(a[1].asked_at).localeCompare(txt(b[1].asked_at)));
+      for (const [id] of list) members.add(id);
+      const st = key.split(":")[0];
+      cards.push(["run~" + key, {kind: txt(list[0][1].kind), status: st, run: list,
+        asked_at: list.map(([, w]) => txt(w.asked_at)).sort()[0] || "",
+        finished_at: st === "done" ? new Date(Math.max(...list.map(([, w]) => finishedAt(w)))).toISOString() : undefined}]);
+    }
+    return {members, cards};
+  }
+  function workRunCard(gid, r) {
+    const list = r.run;
+    const n = list.length;
+    const done = r.status === "done";
+    const words = BATCH_WORDS[txt(r.kind)] || ["piece of work", "pieces of work"];
+    const open = openState.get("det:run:" + gid) === true;
+    // Seen here as one card: each folds away a minute on, as a finished card does.
+    if (done) for (const [id] of list) if (!workSeenAt.has(id)) workSeenAt.set(id, now());
+    const names = list.map(([, w]) => workName(w).replace(/^(Follow up with|Reply to|Draft:?|Prepare for)\s+/i, "")).filter(Boolean);
+    const shown = names.slice(0, 3).join(", ") + (names.length > 3 ? " and " + (names.length - 3) + " more" : "");
+    const notes = done ? list.filter(([, w]) => { const c = txt(obj(w.args).contact); return c && messageItems().some((m) => txt(m.contact) === c && msgLive(m)); }).length : 0;
+    const hid = "wrun-" + seg(gid);
+    return h("article", {class: "work-card work-run st-" + (done ? "done" : "queued"), "data-work-run": gid, "aria-labelledby": hid},
+      h("div", {class: "wc-head"}, h("span", {class: "dot tone-" + (done ? "ok" : "plain is-waiting"), "aria-hidden": "true"}),
+        h("h3", {id: hid, class: "wc-title"}, n + " " + words[1] + (done ? " done" : " waiting their turn"))),
+      h("p", {class: "wc-now"}, shown),
+      notes ? h("p", {class: "wc-time"}, plural(notes, "message", "messages") + " ready to send.") : null,
+      open ? h("div", {class: "stack wc-run"}, list.map(([id, w]) => workCard(id, w))) : null,
+      h("div", {class: "wc-actions"},
+        btn(open ? "Hide them" : "Show them", () => { openState.set("det:run:" + gid, !open); scheduleRender(); }, {kind: "link", small: true, key: "run:" + gid, aria: (open ? "Hide " : "Show ") + n + " " + words[1]}),
+        done ? (notes ? tabLink("drafts-messages", null) : null)
+          : btn("Don't do them", () => { for (const [id] of list) stopWork(id); }, {kind: "secondary", small: true, key: "run-stop:" + gid, aria: "Don't do them: " + n + " " + words[1]}),
+        done ? btn("", () => { for (const [id] of list) { workSeenAt.set(id, 0); hiddenWork.add(id); } scheduleRender(); },
+          {kind: "quiet icon-only", small: true, icon: "bin", key: "run-bin:" + gid, aria: "Put away: " + n + " " + words[1]}) : null));
+  }
   function workPanel(where) {
-    const items = [...allWork()].filter(([, w]) => !TERMINAL.has(txt(w.status)) || now() - finishedAt(w) < 86400000);
+    const all = [...allWork()].filter(([, w]) => !TERMINAL.has(txt(w.status)) || now() - finishedAt(w) < 86400000);
+    const runs = workRuns(all);
+    const items = all.filter(([id]) => !runs.members.has(id)).concat(runs.cards);
     const limit = limitHit();
     const active = activeWork();
     const running = active.filter(([, w]) => w.status === "running" || w.status === "claimed").length;
@@ -9670,11 +9729,11 @@
       helperStartingCard(),
       tapCards(),
       listView("work", {items, name: "work", live: ([, w]) => ACTIVE.has(txt(w.status) || "queued"),
-        fold: ([id, w]) => workFolded(id, w),
+        fold: ([id, w]) => (w.run ? false : workFolded(id, w)),
         foldLabel: (k) => k + " finished",
         sort: (a, b) => ((WORK_ORDER[a[1].status] === undefined ? 3 : WORK_ORDER[a[1].status]) - (WORK_ORDER[b[1].status] === undefined ? 3 : WORK_ORDER[b[1].status])) ||
           (TERMINAL.has(a[1].status) ? finishedAt(b[1]) - finishedAt(a[1]) : txt(a[1].asked_at).localeCompare(txt(b[1].asked_at))),
-        render: ([id, w]) => workCard(id, w), empty: () => null}));
+        render: ([id, w]) => (w.run ? workRunCard(id, w) : workCard(id, w)), empty: () => null}));
   }
   // A tap that is a piece of work for Claude (a LinkedIn download to read) shows in Claude's
   // work until it is applied: saved, it was nowhere there, and the person could not tell it
