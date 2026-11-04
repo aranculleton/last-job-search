@@ -175,5 +175,7 @@ def test_taps_on_different_items_build_the_page_once(search, monkeypatch):
     got = app_actions.apply_dir(search.dump, "cloud-1",
                                 dt.datetime(2026, 10, 25, 18, tzinfo=dt.timezone.utc))
     person.reset()
-    assert len(got["ok"]) == 3 and again not in got["ok"], got
+    # The fourth taps a job an earlier tap in the same batch changed: it reads the job afresh
+    # and is applied, never bounced as changed (the maintainer's note 6, 2026-11-04).
+    assert len(got["ok"]) == 4 and again in got["ok"], got
     assert built.count(["jobs"]) == 2, built        # once for the three, once for the fourth

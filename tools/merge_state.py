@@ -330,6 +330,9 @@ _HASHED = ("a snapshot named by the hash of what it holds: two chats that write 
 _PER_ROUND = ("named after the round that wrote it, once, and never written again; a round "
               "is run by one chat")
 JSON_NAMES = {
+    # run_round reads every round's summary to find a job set aside while a search ran; the
+    # files themselves are wired as "documents/rounds/*.json" above.
+    "tools/run_round.py: *.json": "every round summary, read only, to hold a set-aside made during a search; written by write_summary, merged as documents/rounds/*.json",
     **dict.fromkeys(("00_portal_health.json", "01_dropped.json", "01_prefiltered.json",
                      "02_hydrated.json", "03_screened.json", "03_screened_all.json",
                      "04_opportunity.json", "05_ranked.json", "06_shortlist.json",
