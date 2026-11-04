@@ -605,8 +605,12 @@ def test_small_things_each_say_what_they_are(run, page):
         "kit": {"hash": "drafts-messages", "read": "#main [data-item=\"msg-sedge_foods_glen\"]"},
         "panel": {"hash": "drafts-messages", "open": "tweak:message:msg-kestrel_foods_thorne", "eval": "(document.querySelector('.tweak-panel') || {}).innerText || ''"},
         "close3": {"open": "tweak-close"},
-        "copy": {"hash": "drafts-messages", "click": "Copy message to Rafe", "eval": "document.getElementById('live').textContent"},
-        "toast": {"hash": "contacts", "click": "Draft it: Taylor at Vale Freight", "wait": 200, "eval": "document.getElementById('live').textContent"},
+        # What the live region says is set a moment after the tap (announce): waited for, never
+        # read after a set time (CI, 2026-11-04: read before it was said).
+        "copy": {"hash": "drafts-messages", "click": "Copy message to Rafe", "ready": "/copied/.test(document.getElementById('live').textContent)",
+                 "eval": "document.getElementById('live').textContent"},
+        "toast": {"hash": "contacts", "click": "Draft it: Taylor at Vale Freight", "ready": "/^Asked/.test(document.getElementById('live').textContent)",
+                  "eval": "document.getElementById('live').textContent"},
     }
     got = run("engine", html=page, viewport=PHONE, clock=CLOCK, steps=list(steps.values()))
     assert not got["errors"], got["errors"]
@@ -674,6 +678,10 @@ def test_settings_says_ready_once(run, model, tmp_path):
     assert "Open this page in the Claude app on your computer to check it" not in got["after"][0]["text"]
 
 
+PLACED = ("(() => { const f = document.querySelector('.talk-form'); if (!f) return false; const r = f.getBoundingClientRect();"
+          " return r.bottom <= window.innerHeight + 2 && r.top >= 0; })()")
+
+
 def test_chat_opens_on_its_newest_answers_unanswered_ones_and_dots_a_new_one(run, page):
     """contacts_chat_2 26, 27 and 29."""
     msgs = {"talk/cloud-1": {"to": "cloud", "conv": "1", "title": "Earlier", "created_at": "2026-10-20T09:00:00Z", "_v": 1}}
@@ -686,7 +694,8 @@ def test_chat_opens_on_its_newest_answers_unanswered_ones_and_dots_a_new_one(run
     msgs["talk/cloud-1/messages/m22"] = {"from": "claude", "text": "Done: the old drafts are set aside.", "at": "2026-10-25T18:10:00Z", "_v": 1}
     got = run("engine", html=page, viewport=PHONE, clock=CLOCK, seed=msgs, steps=[
         {"hash": "contacts", "eval": "!!document.querySelector('.tab .navdot')"},
-        {"hash": "chat", "wait": 300, "eval": "(() => { const f = document.querySelector('.talk-form'); const r = f.getBoundingClientRect(); return r.bottom <= window.innerHeight + 2 && r.top >= 0; })()"},
+        # Waited for, with a time limit: read after a set 300ms, Safari's engine on CI was not there yet.
+        {"hash": "chat", "ready": PLACED, "eval": PLACED},
         {"hash": "chat", "read": "#main .talk-list"},
         {"hash": "contacts", "eval": "!!document.querySelector('.tab .navdot')"}])
     assert not got["errors"], got["errors"]

@@ -136,8 +136,10 @@ def test_contacts_says_what_to_do_once_and_agrees_with_to_do(run, page, vp, sche
     # No dangling "at" for someone with no employer, anywhere.
     assert "Sam at" not in contacts and not sam.split("\n")[2].endswith(" at")
     assert "Find more people at\n" not in sam + "\n"
-    # Their words are on their page, and someone who wrote first was not "written to".
-    assert "open to a chat" in sam and "Written to\n(not yet)" in sam
+    # Their words are on their page, and someone who wrote first was not "written to". Read as
+    # words: Chrome's engine breaks the line before the hidden "(not yet)" and Safari's does not
+    # (2026-11-04), while both show and read out the same.
+    assert "open to a chat" in sam and "Written to (not yet)" in " ".join(sam.split()), sam
     assert "Accepted your connection request." in dev
     # Dev's limit is reached: Close, never a third message, on the row and in To do.
     row = contacts.split("Dev at Copperleaf Pay")[1].split("More")[0]

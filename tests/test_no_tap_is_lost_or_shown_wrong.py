@@ -38,6 +38,13 @@ def _script(run, html, steps, **kw):
     return got["steps"]
 
 
+# What an Undo says reaches the live region a moment after the tap (announce): a step reads it
+# once it is there, with a time limit, never after a set number of frames (CI, 2026-11-04:
+# read as "" in the moment between the region clearing and the words).
+UNDO_SAID = ("/Undone\\.|Too late to undo|not saved/.test(['live', 'alert']"
+             ".map((id) => (document.getElementById(id) || {}).textContent || '').join(' '))")
+
+
 def _mine(entry, item=ITEM):
     return [a for a in entry["actions"] if a.get("item") == item]
 
@@ -81,7 +88,7 @@ def test_the_same_tap_in_a_second_window_is_the_same_action_and_one_undo_takes_b
         # Two windows tapping in the same instant still land two copies: the other's, as it wrote it.
         {"tab": 0, "chat": [["actions/act~due-fernhill-nudge~due.done~race1",
                              {"item": ITEM, "action": "due.done", "value": {"on": "2026-10-25"}, "at": "2026-10-25T09:00:01Z", "rev_seen": "d1", "tab": "tother"}]]},
-        {"tab": 0, "click": "Undo", "within": ".toast", "exact": True},
+        {"tab": 0, "click": "Undo", "within": ".toast", "exact": True, "ready": UNDO_SAID},
     ], tabs=2)
     assert len(_mine(s[2])) == 1
     assert s[3]["eval"] is False, "the other window offers no second Done for a tap already made"
@@ -129,7 +136,7 @@ def test_undo_after_a_chat_has_taken_the_action_is_too_late_and_says_so(run, tmp
     s = _script(run, html, [
         {"hash": "todo", "click": DONE},
         {"claim": True},
-        {"click": "Undo", "within": ".toast", "exact": True},
+        {"click": "Undo", "within": ".toast", "exact": True, "ready": UNDO_SAID},
     ])
     assert len(_mine(s[-1])) == 1, "the action a chat is applying stays"
     assert "Too late to undo" in s[-1]["live"] and "Undone." not in s[-1]["live"]

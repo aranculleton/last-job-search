@@ -9675,7 +9675,7 @@
     talkEarlier = h("div", {class: "talk-earlier"});
     talkCount = h("p", {class: "talk-count muted small", id: "talk-count", hidden: true});
     talkInput = h("textarea", {id: "talk-text", rows: 1, maxlength: TALK_MAX, "data-k": "talk-text", placeholder: talkPlaceholder(), "aria-describedby": "talk-count",
-      oninput: () => { draftSet("talk", talkInput.value); countTalk(); growTalk(); },
+      oninput: () => { pasteLanded(); draftSet("talk", talkInput.value); countTalk(); growTalk(); },
       onpaste: onTalkPaste,
       onkeydown: (e) => { if (e.key === "Enter" && (e.metaKey || e.ctrlKey)) { e.preventDefault(); sendChat(); } }});
     talkSend = h("button", {type: "submit", class: "btn primary", "data-k": "talk-send"}, "Send");
@@ -10327,16 +10327,28 @@
     picNodes.set(id, el);
     return el;
   }
+  function talkCutSay() { S.talkCut = true; shout("Only the first " + TALK_MAX.toLocaleString("en-GB") + " characters fit. Send the rest as a second message."); setTimeout(countTalk, 0); }
+  function pasteLanded() {
+    if (!S.talkPasteBlind) return;
+    S.talkPasteBlind = false;
+    if (talkInput && talkInput.value.length >= TALK_MAX) talkCutSay();
+  }
   function onTalkPaste(e) {
     const cd = e.clipboardData;
     if (!cd) return;
     const plain = typeof cd.getData === "function" ? txt(cd.getData("text/plain")) : "";
+    const files = [...(cd.files || [])].filter((f) => /^image\//i.test(txt(f.type)));
     // Words past the box's room are cut by the browser: said at once, never only a count.
     if (plain && talkInput) {
       const room = TALK_MAX - (talkInput.value.length - Math.abs((talkInput.selectionEnd || 0) - (talkInput.selectionStart || 0)));
-      if (plain.length > room) { S.talkCut = true; shout("Only the first " + TALK_MAX.toLocaleString("en-GB") + " characters fit. Send the rest as a second message."); setTimeout(countTalk, 0); }
+      if (plain.length > room) talkCutSay();
+    } else if (talkInput && !files.length) {
+      // A paste whose words the page may not read (Firefox's engine hands a script's paste an
+      // empty clipboard, 2026-11-04): judged from the box once the words land, a full box
+      // being one the paste ran past. Chrome's and Safari's engines read the words, as above.
+      S.talkPasteBlind = true;
+      setTimeout(() => { S.talkPasteBlind = false; }, 0);
     }
-    const files = [...(cd.files || [])].filter((f) => /^image\//i.test(txt(f.type)));
     if (!files.length) return;
     // Words win: a copy from a web page can carry both, and the words are what was meant.
     if (plain.trim()) return;
@@ -10373,6 +10385,11 @@
     document.body.appendChild(dockEl);
     document.body.appendChild(fabEl);
   }
+  function placeChat() {
+    if (!S.chatPlace || !talkForm) return;
+    S.chatPlace = false;
+    try { talkForm.scrollIntoView({block: "end"}); } catch (e) { /* no layout */ }
+  }
   // Called by render(): where the conversation sits, whether the panel and the button show.
   function renderDock() {
     if (S.owner !== true) return;
@@ -10381,8 +10398,11 @@
     const shown = chatShown();
     if (shown && dockOpen) { dockOpen = false; dockBackTo = null; sset("session", "ljs:dock", null); }
     // Opening Chat shows its newest message and the box under it, never the top of the history
-    // (2026-11-03: on a phone the latest message sat two screens down).
-    if (shown && !S.chatWasShown && talkForm) requestAnimationFrame(() => { try { talkForm.scrollIntoView({block: "end"}); } catch (e) { /* no layout */ } });
+    // (2026-11-03: on a phone the latest message sat two screens down). A move to Chat places it
+    // in the same turn (go, after its scroll to the top); anything else a frame later, once
+    // drawn. Only a frame later, a read straight after the move found the top (Safari's
+    // engine on a busy machine, CI, 2026-11-04).
+    if (shown && !S.chatWasShown && talkForm) { S.chatPlace = true; requestAnimationFrame(placeChat); }
     S.chatWasShown = shown;
     // Seen: the Chat tab's dot goes once its newest answer has been on screen.
     if (shown && lastAnswerAt() && lastAnswerAt() !== txt(pref("chat:seen", ""))) setPref("chat:seen", lastAnswerAt());
@@ -10743,7 +10763,7 @@
     render();
     if (S.focusItem) showItem(S.focusItem);
     else if (o.focus) focusMainHeading();
-    if (!o.keepScroll && !S.focusItem) { try { window.scrollTo({top: 0}); } catch (e) { /* no scrolling here */ } }
+    if (!o.keepScroll && !S.focusItem) { try { window.scrollTo({top: 0}); } catch (e) { /* no scrolling here */ } placeChat(); }
   }
   function showItem(id) {
     let el = null;
