@@ -1,6 +1,6 @@
 # Notes for the next builder
 
-Written at the end of 4.9.0 (2026-11-04) for the chat that builds the next version. Read
+Written at the end of 4.9.0 and its patch 4.9.1 (2026-11-04) for the chat that builds the next version. Read
 MAINTAINING.md first; this is only what 4.9 left.
 
 ## Do first, for [Unreleased]

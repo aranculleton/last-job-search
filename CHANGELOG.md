@@ -20,6 +20,14 @@ make sense to somebody whose repo just received it.
 
 ## [Unreleased]
 
+## [4.9.1] - 2026-11-04
+
+### Fixed
+
+- **The folds on the Brief stay open while you read them.** "Since your last brief" and the
+  earlier briefs closed again whenever your page refreshed itself, which it does often; they now
+  keep their state like every other fold. Found by the Safari run of the 4.9.0 release.
+
 ## [4.9.0] - 2026-11-04
 
 ### Changed
