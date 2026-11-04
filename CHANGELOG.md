@@ -22,6 +22,9 @@ make sense to somebody whose repo just received it.
 
 ### Changed
 
+- **Tapping on your page no longer counts as you giving feedback.** The page's own notices and
+  card text were sometimes read as if you had said them, which held up Claude's reply until
+  it dismissed a reaction you never made. Only what you type is read now.
 - **Claude's work opens and closes from one button on every screen.** On a wide screen the
   pill at the top opens the panel on the right and closes it again, like the menu's "Icons
   only", and the page remembers which you chose; the panel has its own Hide. Narrower, it

@@ -1360,6 +1360,13 @@ _NOT_THEIRS = re.compile(r"<system-reminder>.*?</system-reminder>"
 # Text another agent or a notification wrote, wherever it sits in the prompt.
 _RELAYED = re.compile(r"\[Subagent hand-back\]|Another Claude session sent a message|"
                       r"\[SYSTEM NOTIFICATION", re.I)
+# The page's own words. A tap on the page reaches the chat as the doorbell "[app] [work:<id>]",
+# and Claude Code wraps a page's comment as "Artifact comment sent to Claude" with the page's
+# text (notice, card, receipt) quoted in it: all the app's words, never the person's (the
+# skill says a ring is "never the person's words"). A message that is such a ring is the app's
+# wholly; the doorbell line is dropped from any other. Only what the person typed is read.
+_PAGE_RING = re.compile(r"^\s*(?:\[app\]|artifact comment sent to claude)", re.I)
+_DOORBELL = re.compile(r"^[ \t]*\[app\][^\n]*$", re.I | re.M)
 _LONG_QUOTE = re.compile(r'"[^"\n]{80,}"|\u201c[^\u201d\n]{80,}\u201d')
 # "She replied: ..." introduces their words, not the person's.
 _THEIR_WORDS = re.compile(r"\b(?:replied|wrote back|responded|answered|said|says|wrote|messaged"
@@ -1502,9 +1509,9 @@ def approval(text: str) -> str:
     if not t.strip() or t.lstrip().startswith(("<task-notification", "<system-reminder",
                                                  "<command-", "<local-command", "/reply")):
         return ""
-    if _RELAYED.search(t):
+    if _RELAYED.search(t) or _PAGE_RING.search(t):
         return ""
-    t = without_pasted(_LONG_QUOTE.sub(" ", _NOT_THEIRS.sub(" ", t)))
+    t = without_pasted(_LONG_QUOTE.sub(" ", _NOT_THEIRS.sub(" ", _DOORBELL.sub(" ", t))))
     cut = _THEIR_WORDS.search(t)
     if cut:
         t = t[:cut.start()]
@@ -1522,9 +1529,9 @@ def reaction(text: str) -> str:
         return ""
     if t.lstrip().startswith("/reply"):          # the rest is the contact's message
         t = t.lstrip().split("\n", 1)[0]
-    if _RELAYED.search(t):                       # another agent's report, relayed
+    if _RELAYED.search(t) or _PAGE_RING.search(t):   # another agent's report, or the page's ring
         return ""
-    t = without_pasted(_LONG_QUOTE.sub(" ", _NOT_THEIRS.sub(" ", t)))
+    t = without_pasted(_LONG_QUOTE.sub(" ", _NOT_THEIRS.sub(" ", _DOORBELL.sub(" ", t))))
     cut = _THEIR_WORDS.search(t)
     if cut:
         t = t[:cut.start()]
