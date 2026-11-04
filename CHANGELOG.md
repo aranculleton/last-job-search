@@ -20,7 +20,7 @@ make sense to somebody whose repo just received it.
 
 ## [Unreleased]
 
-## [4.10.0] - 2026-11-04
+## [4.9.1] - 2026-11-04
 
 ### Changed
 
