@@ -530,8 +530,9 @@ METHODS: dict[str, dict] = {
             (66, "2026-11-03", False, "an export's connections fill in the employer and title of a contact whose record has none, only where the row is surely theirs: their profile address, or their name with a request to them logged; a follow-up says only what they offered, a reply needs something of theirs to answer, a connection request with no note is a connection (a first message owed), an attachment after their ask is the resume sent, one person on two rows is one thread, a never-say phrase holds in its other forms and a name the profile says to write in full bans its initials; their message logged moves what is owed to the day it came, our answer to it sets the next follow-up by the person's rule, and thanks for a resume already sent is never read as asking for another; the person's own surface rules are one check (surface.held) for To do, Contacts, Messages and the brief: their limit of unanswered messages counted from the log, an employer their bar turns down (replies too), a country their search says is not home, a request nobody accepted and a closed thread; a booked call stays booked against the message that booked it; a reaction alone never reopens a thread; a role is never a sentence about someone; only a bar the person's own profile states turns an employer down or holds its people for a judgement, so a stranger's follow-ups and people at ordinary employers are shown again; a call invitation in its usual words (free for a 20 minute call, set up a call) is read as one, a question in another language ends on a question mark, a recruiter hears the person's status unasked only where it needs saying, and an application follow-up writes its dates by name and waits for the closing date"),
             (67, "2026-11-04", False, "a big contact book is read faster: a reply is read for a resume asked for before the checks that can only turn an ask down, and the check before anyone is shown takes the message log already grouped; nothing to redo; a nudge keeps the capital on an employer named in the books read now, never the books read when the chat began"),
             (68, "2026-11-04", False, "a LinkedIn download fills the name, employer and title a contact lacks from its connections, never over one already recorded, and says what it filled; the same download taken again on the page fills again rather than stopping at Already taken"),
+            (69, "2026-11-04", False, "a follow-up finished with reply.py finish is checked as the follow-up it is, so one to someone who never wrote back is saved where Messages shows it instead of refused as a reply with nothing to answer, and its line says follow-up; nothing to redo"),
         ),
-        "fingerprint": "d3c4f2dae91fa532",
+        "fingerprint": "af2dd0c1c7eb73ab",
     },
     "network-notes": {
         "by": "network", "priority": 2, "applies": "queued_notes", "time": "~10 min",
@@ -717,8 +718,9 @@ METHODS: dict[str, dict] = {
             (18, "2026-11-04", True, "the Brief's Since your last brief and its earlier briefs stay open when the page redraws, so a tap on them always opens them; the Brief shows as many of each list as it should for the newest data, so pressing Brief on a phone shows the same Brief as it first did; an opened setting puts its buttons at the right on a wide screen, a short choice is a row of chips, the LinkedIn download has one button, a saved tap says what it waits behind with a link to it in Claude's work, and a phone scrolling the Brief no longer meets a blank page while it updates"),
             (19, "2026-11-04", True, "Settings has Phone notification under Your brief, off unless chosen, and turning the brief on asks whether you want one"),
             (20, "2026-11-04", True, "Claude\'s work opens and closes from the pill on every screen; closed and stopped rows leave their lists at once; a finished follow-up opens that person\'s message; held work counts the running work before the update; the settings gear is even and the Brief icon has clear gaps"),
+            (21, "2026-11-04", True, "a To do row whose message is drafted says Draft ready and opens the draft, never drafts it again, an application\'s follow-up included; two or more drafted messages are one card, N messages ready to send, a row a person opening their draft and one button opening Messages"),
         ),
-        "fingerprint": "7ef8d919e22eb08e",
+        "fingerprint": "9032444f7bb41839",
     },
     "upskill": {
         "by": "upgrade", "priority": 4, "applies": "upskill_plans", "time": "~10 min",
@@ -808,7 +810,8 @@ KEEPS_NOTHING: dict[str, str] = {
     "tools/installs.py": "installs into the person's own folders; keeps nothing tracked",
     "tools/find_copy.py": "finds the person's copy on GitHub to clone; keeps nothing",
     "tools/brief.py": "gathers each brief afresh; its records are dated records of one run",
-    "tools/followup_drafts.py": "drafts afresh every run; a pack is the day's",
+    "tools/followup_drafts.py": "drafts afresh every run, checking again the draft waiting for "
+                                "each person; a pack is the day's",
     "tools/cost_meter.py": "development tooling: measures what a run reads, keeps nothing",
     ".claude/agents/news-reader.md": "searches afresh for each brief; keeps nothing",
     "tools/app.py": "the page's view, derived from the state files on every run",

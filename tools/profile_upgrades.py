@@ -1999,6 +1999,12 @@ SAFE_DEFAULTS: dict[str, str] = {
                                       "nobody there has answered, as before it was a "
                                       "setting; reading.py more-at raises it for one "
                                       "employer on the person's word",
+    # Since 2026-11-04 a follow-up with nothing new to say is drafted short and plain, where
+    # code before left it unwritten; a rule of the person's own already kept says either way
+    # (followup_drafts.plain_nudge_allowed reads their learned rules when this is unset).
+    "networking.PLAIN_NUDGE": "unset is yes: a follow-up with nothing new to say is a short "
+                              "plain one, unless a rule the person gave says to wait for "
+                              "something new; False is their word (learned.py record writes it)",
     "person.json:documents.styles": "none, so every resume and letter is black, as before "
                                     "the setting existed; a colour is the person's choice "
                                     "per kind of employer (templates/doc_style.py)",
