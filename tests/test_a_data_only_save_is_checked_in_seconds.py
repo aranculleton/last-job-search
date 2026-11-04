@@ -84,6 +84,10 @@ def test_nothing_changed_skips_the_app_tree_and_never_blames_an_update(copy):
     env.pop("LJS_PROFILE", None)
     env.pop("LJS_STATE", None)
     env.pop("VIRTUAL_ENV", None)
+    if sys.prefix != sys.base_prefix:
+        # Run from a virtual environment (the person job, on every system): tools/py.sh takes
+        # VIRTUAL_ENV's Python first, the one with pytest, wherever the launcher cannot go.
+        env["VIRTUAL_ENV"] = sys.prefix
     start = time.monotonic()
     r = subprocess.run([BASH, "tools/ci_local.sh", "--quick"], cwd=copy, env=env,
                        capture_output=True, text=True, encoding="utf-8", errors="replace",
