@@ -76,6 +76,8 @@ make sense to somebody whose repo just received it.
 - **"Claude isn't listening" is said once, on its card in To do, with Wake Claude as its one
   button.** The line at the top no longer says it again, and on a phone nothing sends you out
   of the Claude app to your browser.
+- **Every choice in a sheet shows whole.** In Add something, the second choice was half
+  hidden behind the row with Cancel.
 - **A LinkedIn download Claude has saved leaves To do.** One that brought nothing new says
   "Nothing new in that download" in Settings, instead of "Saved: 0 messages" with a note about
   taking it back.
