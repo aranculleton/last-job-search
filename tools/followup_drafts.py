@@ -6,10 +6,17 @@ this never keeps a clock of its own. For each item it makes the draft the state 
 support and nothing more:
 
   an application nudge   followups.py's own text, to the recipient it found
-  a networking nudge     a draft on the contact's row or in an earlier pack, else a nudge
-                         (compose.nudge) whose new reason is a posting at their employer from
-                         the newest saved round, said only to a reader allowed to hear the role
-  anything else          a draft on the contact's row or in an earlier pack
+  a networking nudge     the draft waiting for them (documents/network/<id>/draft.md, what
+                         the page's Messages shows), one on the contact's row or in an earlier
+                         pack; else a nudge (compose.nudge) whose new reason is a posting at
+                         their employer from the newest saved round, said only to a reader
+                         allowed to hear the role, or a follow-up on their own offer; else,
+                         with nothing new to say, a short plain follow-up (plain_nudge): it
+                         follows up on the person's own unanswered note and asks one question
+                         about the reader's work, in the person's own words where they have
+                         some, unless their own rule says otherwise (plain_nudge_allowed)
+  anything else          the draft waiting for them, one on the contact's row or in an
+                         earlier pack
 
 Every draft then goes through `compose.validate` (the gate: a finding means code could not
 make it cleanly, and it is listed as needs writing, with the finding as the reason) and
@@ -19,20 +26,27 @@ the search found, named as it was posted.
 
 A draft code cannot make is listed with why, and who can write it: "here" when the thread
 holds what a writer needs (a reply: their message is in the log), "you" when it needs the
-person (a nudge with nothing new to say, a recipient nobody has found).
+person (a recipient nobody has found, a nudge their own rule keeps for something new).
+
+A draft that passes the gate is put where the page's Messages shows it, in the same step
+(`keep`): a contact's in documents/network/<id>/draft.md, the one draft waiting for them, and
+an application's in today's pack, which Messages reads for it. Follow-ups written by hand and
+passed by `check --pack` went only into the pack, and Messages never showed one (2026-11-04).
 
     python3 tools/followup_drafts.py                     # everything due, each with its draft or why not
     python3 tools/followup_drafts.py --contact <id>      # one contact
     python3 tools/followup_drafts.py --company <name>    # one employer, both halves
     python3 tools/followup_drafts.py --json
-    python3 tools/followup_drafts.py --pack              # also write documents/network/followup_pack_<today>.md
+    python3 tools/followup_drafts.py --pack              # also write documents/network/followup_pack_<today>.md,
+                                                         # and put each clean draft in Messages
     python3 tools/followup_drafts.py context --due       # what a writer needs, for what code could not draft
     python3 tools/followup_drafts.py context <id>...
     python3 tools/followup_drafts.py check <drafts.json> [--pack]   # the gate, for drafts written by hand
 
 `check` reads a JSON list of {"id": <contact id or app:...>, "text": "<the draft>"} (and
 "kind" where it is not the usual one), runs validate, the restatement check against their
-last message, and advise, and with --pack adds each draft the gate passes to today's pack.
+last message, and advise, and puts each draft the gate passes where Messages shows it; with
+--pack today's pack is written with them too.
 """
 
 from __future__ import annotations
@@ -40,6 +54,7 @@ from __future__ import annotations
 import argparse
 import datetime as dt
 import glob
+import hashlib
 import json
 import os
 import re
@@ -324,9 +339,12 @@ def draft(item: dict, contacts_by_id: dict, threads_index: dict, tracker, earlie
     their = _their_last(msgs)
     stored = (item.get("text") or "").strip()
     card_only = False
-    if not stored and kind in ("connection", "inmail", "dm", "email"):
-        # A first note queued by /network (documents/network/<id>/draft.md): checked as it
-        # stands, and one still waiting on a read of their profile is the person's to unlock.
+    if not stored and item.get("kind") != "reply":
+        # The draft waiting for them (documents/network/<id>/draft.md), which the page's
+        # Messages shows: a first note queued by /network, or a follow-up kept there before
+        # (`keep`), checked as it stands, so a run never writes a second over the one the
+        # person sees or edited. One still waiting on a read of their profile is the person's
+        # to unlock. A reply's is not read: it may answer a message of theirs since overtaken.
         queued, card_only, waits = _queued_note(cid)
         if waits:
             return _new("write", kind=kind, who="you", source="stored",
@@ -394,9 +412,92 @@ def draft(item: dict, contacts_by_id: dict, threads_index: dict, tracker, earlie
             got["why"] = "follows up on your note of %s, on their offer of %s" % (
                 last.get("date"), offer.get("date"))
         return got
-    return refused or _new("write", kind=kind, who="you",
-                why="nothing new to say on file: a nudge needs a new reason (a role they "
-                    "posted, news at %s, something you have done since)" % (company or "their employer"))
+    if refused:
+        return refused                      # their own words, to rewrite on its findings
+    # Nothing new to say: a short plain follow-up all the same, never a refusal that leaves
+    # the page's Follow up doing nothing. Code wrote one for 1 of 19 due (2026-11-04).
+    if not plain_nudge_allowed():
+        return _new("write", kind=kind, who="you",
+                    why="nothing new to say on file, and your own rule is to follow up only "
+                        "with something new (a role they posted, news at %s, something you "
+                        "have done since)" % (company or "their employer"))
+    try:
+        text = plain_nudge(contact or {"contact_id": cid, "name": name}, msgs, today=today)
+    except ValueError as e:
+        return _new("write", kind=kind, who="you",
+                    why="the plain follow-up did not pass: " + _one_line(e))
+    got = _checked(text, kind, name=name, title=title, company=company, contact=cid,
+                   their_message=their, source="code", today=today)
+    if got["status"] != "write":
+        got["why"] = "nothing new to say, so a short plain follow-up"
+    return got
+
+
+def plain_nudge_allowed() -> bool:
+    """Is a follow-up with nothing new to say still drafted, short and plain? Yes, unless the
+    person said otherwise: profile/networking.py PLAIN_NUDGE, or the newest rule of theirs
+    that says either way (learned.known_settings reads one in any words, and `record` writes
+    the setting), so a rule kept before the setting existed is followed too."""
+    try:
+        net = person.module("networking")
+    except Exception:  # noqa: BLE001  no profile: the app's default
+        net = None
+    own = getattr(net, "PLAIN_NUDGE", None)
+    if own is not None:
+        return bool(own)
+    try:
+        import learned
+        over = learned.superseded()
+        for r in reversed(learned.entries()):
+            if learned.entry_key(r) in over:
+                continue
+            for setting, value in learned.known_settings(
+                    str(r.get("area") or ""), str(r.get("said") or ""), str(r.get("rule") or "")):
+                if setting.endswith(" PLAIN_NUDGE"):
+                    return bool(value)
+    except Exception:  # noqa: BLE001  an unreadable learned file sets no rule
+        pass
+    return True
+
+
+def plain_nudge(contact: dict, msgs, today: str = "") -> str:
+    """A short plain follow-up for a thread where nothing new has happened: it follows up on
+    the person's own unanswered message by its month ("following up on my note from
+    October") and asks one thing, a question about the reader's work (to a recruiter, the
+    plain ask), in the person's own words where their profile has them (compose.options:
+    their TEMPLATES and ASK first, then the app's lines their voice check passes). One that
+    shares two or more words with that message is passed over, so it is never asked again.
+    Held to a nudge's length and gate. Raises what compose.nudge raises."""
+    compose = _compose()
+    import learned
+    import state
+    cid = str(contact.get("contact_id") or "")
+    reader = compose.reader_type(contact.get("title") or "")
+    last = compose.unanswered_ours(msgs)
+    said = learned.content_words(str((last or {}).get("full_text") or (last or {}).get("summary")
+                                     or ""))
+    if reader == "recruiter":
+        lines = [(o, o) for o in compose.options("ask", reader)]
+    else:
+        lines = [(compose._question(o.replace("{team}", "your team")), o.replace("{team}", ""))
+                 for o in compose.options("work_question", reader)]
+    lines = [(line, words) for line, words in lines if str(line or "").strip()]
+    if not lines:
+        raise ValueError("no plain question in the person's own words or the app's")
+    # Chosen by contact, as compose.phrase chooses: a batch varies and a redraft does not.
+    start = int(hashlib.sha1(cid.encode()).hexdigest(), 16) % len(lines) if cid else 0
+    ordered = lines[start:] + lines[:start]
+    reason = next((line for line, words in ordered
+                   if len(learned.content_words(words) & said) < 2), ordered[0][0])
+    name = str(contact.get("name") or "")
+    if last is not None:
+        return compose.follow_up(name, msgs, reason, today=today or None)
+    # Owed, with no words of ours in the log (their history predates it): said as a follow-up
+    # all the same, never as a first message.
+    word = "email" if state.channel_of(contact) == "email" else "note"
+    company = str(contact.get("company") or "").strip()
+    return compose.nudge(name, reason, opener="following up on my " + word,
+                         their=(company,) if company else ())
 
 
 # Their own offer to refer, as the one thing a follow-up gives them to answer.
@@ -756,6 +857,46 @@ def add_to_pack(today: str, checked: list[dict], got: list[dict], contacts) -> s
     return write_pack(today, merged, contacts)
 
 
+# ---------------------------------------------------------------- where Messages shows it
+
+def keep(pairs) -> list[str]:
+    """Each (contact id, draft) the gate passed, put where the page's Messages shows it
+    (documents/network/<id>/draft.md, the one draft waiting for them), by the code that
+    passed it: the ids written. Never over the same words, and never over a first note still
+    marked as resting on a read or on their card alone, which is /network's to rewrite."""
+    import reading
+    import reply
+    out = []
+    for cid, text in pairs:
+        cid, text = str(cid or "").strip(), str(text or "").strip()
+        if not cid or not text or cid.startswith("app:"):
+            continue
+        try:
+            with open(reading.draft_path(cid), encoding="utf-8") as fh:
+                raw = fh.read()
+        except OSError:
+            raw = None
+        except ValueError:                   # not an id a folder can have
+            continue
+        if raw is not None and (reading.marked(cid) or reading.note_body(raw).strip() == text):
+            continue
+        reply.save_draft(cid, text)
+        out.append(cid)
+    return out
+
+
+def keep_drafted(got) -> list[str]:
+    """`keep` for what code drafted: each contact's draft that came out clean."""
+    return keep((i.get("contact_id"), i["draft"]["text"]) for i in got
+                if i.get("half") == "contact" and i["draft"]["status"] in ("ready", "check"))
+
+
+def keep_checked(checked, contacts) -> list[str]:
+    """`keep` for drafts written by hand: each one `check` passed, for someone in the book."""
+    known = {str(c.get("contact_id") or "").strip() for c in contacts}
+    return keep((c["id"], c["text"]) for c in checked if c["ok"] and c["id"] in known)
+
+
 # ---------------------------------------------------------------- output
 
 def render(got: list[dict]) -> str:
@@ -833,7 +974,12 @@ def _main(argv=None) -> int:
                 print("  refused: " + f)
             for w in r["warnings"]:
                 print("  warning: " + w)
-        if a.pack:
+        # Each one that passed goes where the page's Messages shows it, now: a contact's as
+        # the draft waiting for them, an application's in today's pack, which Messages reads.
+        shown = keep_checked(res, contacts)
+        if shown:
+            print("in Messages: " + ", ".join(shown))
+        if a.pack or any(r["ok"] and r["id"].startswith("app:") for r in res):
             path = add_to_pack(a.today, res, got, contacts)
             print("pack: %s" % (local_path.rel(path, person.state()) if path else "nothing to write"))
         return 0 if all(r["ok"] for r in res) else 1
@@ -855,6 +1001,9 @@ def _main(argv=None) -> int:
         path = write_pack(a.today, got, contacts)
         print("pack: %s" % (local_path.rel(path, person.state()) if path else "nothing to write"),
               file=sys.stderr)
+        shown = keep_drafted(got)
+        if shown:
+            print("in Messages: " + ", ".join(shown), file=sys.stderr)
     if a.json:
         print(json.dumps(_json_safe(got), indent=1, ensure_ascii=False))
     else:

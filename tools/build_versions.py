@@ -531,8 +531,9 @@ METHODS: dict[str, dict] = {
             (67, "2026-11-04", False, "a big contact book is read faster: a reply is read for a resume asked for before the checks that can only turn an ask down, and the check before anyone is shown takes the message log already grouped; nothing to redo; a nudge keeps the capital on an employer named in the books read now, never the books read when the chat began"),
             (68, "2026-11-04", False, "a LinkedIn download fills the name, employer and title a contact lacks from its connections, never over one already recorded, and says what it filled; the same download taken again on the page fills again rather than stopping at Already taken"),
             (69, "2026-11-04", False, "nobody is owed a follow-up message who cannot receive one: someone only ever sent an InMail, with no acceptance and no word back, is not listed, because a second would be a second InMail"),
+            (70, "2026-11-04", False, "a follow-up finished with reply.py finish is checked as the follow-up it is, so one to someone who never wrote back is saved where Messages shows it instead of refused as a reply with nothing to answer, and its line says follow-up; nothing to redo"),
         ),
-        "fingerprint": "dd5f15fa55616a0e",
+        "fingerprint": "33f0a53aea6ce039",
     },
     "network-notes": {
         "by": "network", "priority": 2, "applies": "queued_notes", "time": "~10 min",
@@ -718,8 +719,9 @@ METHODS: dict[str, dict] = {
             (18, "2026-11-04", True, "the Brief's Since your last brief and its earlier briefs stay open when the page redraws, so a tap on them always opens them; the Brief shows as many of each list as it should for the newest data, so pressing Brief on a phone shows the same Brief as it first did; an opened setting puts its buttons at the right on a wide screen, a short choice is a row of chips, the LinkedIn download has one button, a saved tap says what it waits behind with a link to it in Claude's work, and a phone scrolling the Brief no longer meets a blank page while it updates"),
             (19, "2026-11-04", True, "Settings has Phone notification under Your brief, off unless chosen, and turning the brief on asks whether you want one"),
             (20, "2026-11-04", True, "Claude\'s work opens and closes from the pill on every screen; closed and stopped rows leave their lists at once; a finished follow-up opens that person\'s message; held work counts the running work before the update; the settings gear is even and the Brief icon has clear gaps; a run of like work is one card; a card of notes to check says what it is; the edit panel leads with your words and has one button; a card being changed says so"),
+            (21, "2026-11-04", True, "a To do row whose message is drafted says Draft ready and opens the draft, never drafts it again, an application\'s follow-up included; two or more drafted messages are one card, N messages ready to send, a row a person opening their draft and one button opening Messages"),
         ),
-        "fingerprint": "99d77ae80a933594",
+        "fingerprint": "946c797b7bc9d66a",
     },
     "upskill": {
         "by": "upgrade", "priority": 4, "applies": "upskill_plans", "time": "~10 min",
@@ -809,7 +811,8 @@ KEEPS_NOTHING: dict[str, str] = {
     "tools/installs.py": "installs into the person's own folders; keeps nothing tracked",
     "tools/find_copy.py": "finds the person's copy on GitHub to clone; keeps nothing",
     "tools/brief.py": "gathers each brief afresh; its records are dated records of one run",
-    "tools/followup_drafts.py": "drafts afresh every run; a pack is the day's",
+    "tools/followup_drafts.py": "drafts afresh every run, checking again the draft waiting for "
+                                "each person; a pack is the day's",
     "tools/cost_meter.py": "development tooling: measures what a run reads, keeps nothing",
     ".claude/agents/news-reader.md": "searches afresh for each brief; keeps nothing",
     "tools/app.py": "the page's view, derived from the state files on every run",

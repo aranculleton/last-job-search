@@ -54,8 +54,20 @@ make sense to somebody whose repo just received it.
   whether you want one, and you can change it any time in Settings, under Your brief, Phone
   notification. If you already have a brief, Claude asks you once. Your brief still comes on
   your page and in its chat either way. Profile upgrade: brief-push.
+- **A follow-up with nothing new to say is still written for you**: a short, plain note that
+  follows up on your last message and asks one question about their work, in your own words
+  where you have given some. If you would rather only follow up when there is news, say so
+  once and it waits for news. No profile upgrade: it needs nothing from you.
+- **To do says when a message is already written.** Its card says "Draft ready" and opens the
+  draft, so a second tap never writes it again; two or more written are one card, "6 messages
+  ready to send", with a row for each person and one button that opens Messages.
 
 ### Fixed
+
+- **Every follow-up and reply Claude writes shows in Messages straight away**, ready to copy,
+  instead of only in the day's list of follow-ups. A follow-up to someone who never wrote back
+  is no longer turned away as a reply with nothing to answer, and an application's follow-up
+  shows even when no other message is waiting.
 
 - **The settings gear is even all round, and the Brief's icon is sharp.** The gear's teeth
   were lopsided, and the Brief's four boxes sat so close their edges blurred together.

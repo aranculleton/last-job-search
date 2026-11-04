@@ -1893,7 +1893,15 @@ def finish(argv) -> int:
         print(f"REFUSED, nothing saved. {waiting}")
         return 1
     import followup_drafts
-    got = followup_drafts.check([{"id": cid, "text": draft, "kind": "reply"}], contacts,
+    # A follow-up to the person's own unanswered message is checked as the follow-up it is:
+    # checked as a reply, every one to someone who never wrote was refused as having nothing
+    # to reply to, and the page's Follow up could not be finished (2026-11-04).
+    import compose
+    rows = [r for r in state.threads_for(threads, cid) if _direction(r)]
+    kind = "reply"
+    if compose.unanswered_ours(rows) is not None:
+        kind = "message" if state.channel_of(c) == "email" else "nudge"
+    got = followup_drafts.check([{"id": cid, "text": draft, "kind": kind}], contacts,
                                 threads, a.today)[0]
     if got["findings"]:
         print("finish: REFUSED, nothing saved: the draft check found what must change first.")
@@ -1942,12 +1950,13 @@ def finish(argv) -> int:
     _, now = app_model.clock(None, a.now)
     db = page_db.load(a.dump)
     first = _first(c)
-    answer = "\n\n".join([f"Your reply to {first}, ready to copy (nothing is sent):", draft]
+    what = "reply" if kind == "reply" else "follow-up"
+    answer = "\n\n".join([f"Your {what} to {first}, ready to copy (nothing is sent):", draft]
                          + extra)
     item = ((db.get("work") or {}).get(page_db.safe_id(a.work)) or {}).get("data") or {}
     args = item.get("args") if isinstance(item.get("args"), dict) else {}
     thread = a.thread or str(args.get("thread") or "")
-    summary = a.summary or (f"Your reply to {first} is ready to copy"
+    summary = a.summary or (f"Your {what} to {first} is ready to copy"
                             + ("." if thread else " in Messages."))
     try:
         done = page_db.finish(db, a.work, now, a.out or os.path.join(a.dump, "out"),

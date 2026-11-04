@@ -171,13 +171,35 @@ _WINDOW = re.compile(r"\b(?:last|past|within|under|less than|no older than|not o
                      r"(two|2)\s+weeks)\b", re.I)
 _JOBS_WORDS = re.compile(r"\b(?:jobs?|postings?|roles?|listings?|openings?|vacanc\w+|search)\b",
                          re.I)
+# "only follow up when there's something new", "no nudges without a reason" -> PLAIN_NUDGE
+# False; "follow up even with nothing new" -> True. A follow-up with nothing new to say is a
+# short plain one unless the person said otherwise (followup_drafts.plain_nudge_allowed).
+_NUDGE_WORDS = re.compile(r"\b(?:nudg\w*|follow[- ]?ups?|follow(?:ing)? (?:them |people )?up|"
+                          r"chas(?:e|es|ing))\b", re.I)
+# Having something new to say, never news as a subject ("never mention news about me").
+_NEWS_WORDS = re.compile(r"\b(?:nothing (?:new|to say)|something new|anything new|new reason|"
+                         r"(?:a|no|any) reason|without (?:a |any )?(?:reason|news)|"
+                         r"(?:no|any|unless there(?:'?s| is)|if there(?:'?s| is)|when there(?:'?s| is)|"
+                         r"only with) (?:some )?news)\b", re.I)
+_PLAIN_ON = re.compile(r"\b(?:even|anyway|still|regardless|always)\b", re.I)
+_PLAIN_OFF = re.compile(r"\b(?:only|unless|never|don'?t|do not|stop|no|not|without)\b", re.I)
 
 
 def known_settings(area: str, said: str, rule: str) -> list[tuple[str, object]]:
     """[(setting, value)] a rule says in any words, as `applied_to` names them: "profile/
-    person.json app_updates" (when_asked or auto) and "profile/search.py JOB_AGE_DAYS"."""
+    person.json app_updates" (when_asked or auto), "profile/search.py JOB_AGE_DAYS" and
+    "profile/networking.py PLAIN_NUDGE" (whether a follow-up with nothing new to say is still
+    drafted as a short plain one)."""
     text = f"{said} {rule}"
     out: list[tuple[str, object]] = []
+    if area in ("messages", "voice", "people", "other") and _NUDGE_WORDS.search(text) \
+            and _NEWS_WORDS.search(text):
+        # "still nudge with no news" is a yes. Read wrongly, a yes only drafts (nothing is
+        # ever sent), while a wrong no leaves the follow-ups unwritten: a yes is read first.
+        if _PLAIN_ON.search(text):
+            out.append(("profile/networking.py PLAIN_NUDGE", True))
+        elif _PLAIN_OFF.search(text):
+            out.append(("profile/networking.py PLAIN_NUDGE", False))
     if _ABOUT_UPDATES.search(text) and re.search(r"\bupdat", text, re.I):
         if _UPDATES_WAIT.search(text):
             out.append(("profile/person.json app_updates", "when_asked"))
