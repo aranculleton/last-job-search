@@ -1,34 +1,13 @@
 # Notes for the next builder
 
 Written at the end of 4.9.0 and 4.9.1 (2026-11-04) for the chat that builds the next version. Read
-MAINTAINING.md first; this is only what 4.9 left.
+MAINTAINING.md first; this is only what 4.9 left, as background, never a list of work.
 
-## Do first, for [Unreleased]
+## Nothing to start from here
 
-- **The real-page report.** After 4.9.0 reaches the maintainer's copy, their helper chat walks
-  the key journeys on the real page (chat send and paste, every work state, booking offered
-  days, a batch of drafts, contacts with rule-breaking candidates) and reports. That report is
-  the audit's final gate: fix anything it finds first, as a patch release if it stops something
-  working for anyone.
-- **The first full-size page in parts.** Every page republishes once into the new shape at its
-  update (a small page.html plus about 70 content-named code files, sent in batches). Only a
-  small probe was published on the real host (all its checks passed); the first full-size one
-  is the maintainer's. If it says "did not load fully" after its 15 minutes of "being updated",
-  read tools/app_page.py `plan` and templates/app/guard.js first.
-- **The maintainer's own tests.** Seven of them pinned behaviour 4.9 changed on purpose (job
-  boards held to the search window, the scorer's baseline, a sample note using initials their
-  own rules ban); the update tells their chat to bring them in line. Check it did.
-
-- **Phone scrolling on a real iPhone.** 4.9.1 stopped every live update redrawing the whole
-  screen (`patch` now compares like with like and `morph` swaps only what changed), proven in
-  headless WebKit. What it cannot show is the iPhone's own painting: open a long Brief on a
-  phone and scroll fast once. If it still flashes blank, look at the panels' CSS (shadows and
-  backdrop blur repaint) before the code.
-- **The Windows computer check** now skips the app's suite after an ordinary day, as a
-  person's save does: pip's download cache sat in the copy and made every save look like an
-  app change. The whole Windows suite runs under an accented temp folder instead. Read the
-  first release run of that job: "computer: an ordinary day changes only the person's own
-  files" must pass.
+The maintainer said on 2026-11-04 that what 4.9 left open is settled. Everything below is
+background: a builder starts work only from the maintainer's notes (MAINTAINING.md, "How a
+builder works").
 
 ## How to work
 

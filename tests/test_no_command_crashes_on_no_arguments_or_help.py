@@ -39,7 +39,9 @@ COMMANDS = _positional_commands()
 # only --help is tried. sync_app.py with nothing takes the app's update; in the app it does
 # nothing, but in a person's repo, where ci_local.sh runs this suite, it merged and committed
 # a release mid-run and put 68 app files back to it (a rehearsal on a copy, 2026-10-22).
-ACTS_ON_THE_REPO = frozenset({os.path.join("tools", "sync_app.py")})
+# readme_pictures.py with nothing renames the README's pictures in docs/images.
+ACTS_ON_THE_REPO = frozenset({os.path.join("tools", "sync_app.py"),
+                              os.path.join("tools", "readme_pictures.py")})
 
 
 def test_the_commands_that_read_arguments_by_position_are_found():
