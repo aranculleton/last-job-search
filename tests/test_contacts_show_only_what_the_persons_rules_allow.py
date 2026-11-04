@@ -814,3 +814,25 @@ def test_a_length_suggestion_counts_only_notes_written_since_the_persons_own_rul
                                 "said": "remember this one for future connections",
                                 "rule": "Write first notes to the recipe the person approved"}]}, fh)
     assert suggest() is None, "notes from before the person's own rule say nothing about notes written to it"
+
+
+def test_a_reply_logged_with_no_words_still_reopens_a_closed_thread():
+    """Only a reaction (an emoji, "Liked your message") leaves a closed thread closed: a reply
+    logged with no words kept was read as a reaction, so a closed thread that got one stayed
+    closed (a person's own test, the 4.9.0 rehearsal, 2026-11-04)."""
+    import schema
+    import state
+    row = {c: "" for c in schema.CONTACT_COLUMNS}
+    row.update(name="Ada Example", company="Quay Bank", tier="2", channel="connection",
+               status="closed")
+    row["contact_id"] = state.contact_id(row["name"], row["company"])
+
+    def said(day, way, text=""):
+        r = {c: "" for c in schema.THREAD_COLUMNS}
+        r.update(contact_id=row["contact_id"], date=day, direction=way, channel="connection",
+                 full_text=text)
+        return r
+    out = said("2026-10-26T07:00", "out")
+    assert [p["reason"] for p in state.reconcile([row], [out, said("2026-10-27T15:00", "in")])] \
+        == ["reopened"]
+    assert state.reconcile([row], [out, said("2026-10-27T15:00", "in", "\U0001F44D")]) == []

@@ -1496,11 +1496,15 @@ _REACTION = re.compile(r"^\W*(?:(?:reacted|liked|loved|celebrated|supported)\b.{
 
 
 def is_reaction(row) -> bool:
-    """An inbound row that is only a reaction: no words, or a platform's "Liked your
-    message" line, with an emoji or none."""
+    """An inbound row that is only a reaction: a platform's "Liked your message" line, or an
+    emoji alone. A reply logged with no words kept is a reply, never a reaction: its words
+    are unknown, and a closed thread that got one is reopened (a person's own test, the
+    4.9.0 rehearsal, 2026-11-04)."""
     if _direction(row) != "in":
         return False
     text = str(row.get("full_text") or "").strip() or str(row.get("summary") or "").strip()
+    if not text:
+        return False
     return bool(_REACTION.match(text)) and not re.search(r"[A-Za-z]{2,}", re.sub(
         r"(?i)\b(?:reacted|liked|loved|celebrated|supported|thumbs[ -]?up|like|reaction|only|"
         r"with|to|your|message|a|an|the|on)\b", "", text))
