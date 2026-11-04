@@ -112,7 +112,8 @@ def finished_jobs(db: dict, skip: str = "") -> dict:
     return {k: v for k, v in held.items() if v}
 
 
-def due(today: str = "", db: dict | None = None, skip: str = "") -> bool:
+def due(today: str = "", db: dict | None = None, skip: str = "",
+        listener: dict | None = None) -> bool:
     """Is a tidy-up still to do? Once a day, and again when another chat's job has ended since
     the last one (`db`: the page's records), so its chat is put away soon after, not at
     tomorrow's. Never where it cannot be kept."""
@@ -134,6 +135,13 @@ def due(today: str = "", db: dict | None = None, skip: str = "") -> bool:
     if last is None:
         return False
     gone = {x.get("id") for x in archived()}
+    # A hand-over to a fresh helper: the app's own old one is archived at the next check-in,
+    # not tomorrow (its work and brief are judged by plan as ever).
+    mine = listener or {}
+    since = app_model.parse_time(mine.get("since"))
+    if (mine.get("took_from_helper") and mine.get("took_from") not in gone
+            and since is not None and since > last):
+        return True
     for chat, at in finished_jobs(db, skip).items():
         t = app_model.parse_time(at)
         if chat not in gone and t is not None and t > last:
