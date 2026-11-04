@@ -312,7 +312,7 @@ Send the batch it prints (dump `screen`, `meta`, `addr` and `work` first, so the
 pinned and a hand-over never comes while a job runs); it writes only what changed, and never
 over a screen another chat drew from a newer copy. Only the chat that answers the page draws
 its screens, and a chat running work of its own (a job's chat with `--work <its id>`, work
-begun with `ask --here`): in any other chat (one the page was taken from in a hand-over, a
+begun with `ask --here`, the scheduled brief): in any other chat (one the page was taken from in a hand-over, a
 chat the person opened) it writes nothing and says so in one `for_claude` line, and that chat
 writes only its own work items and receipts. A `for_claude` line it prints (a fresh helper
 when this chat's day or size is up) is done at once, unasked.

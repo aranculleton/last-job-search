@@ -514,6 +514,10 @@ VIEW_LEFT = ("view: another chat answers the page, so this chat leaves the page'
              "tools/app.py ask \"$D\" --kind <kind> --title \"<a few plain words>\" --here "
              "--chat <this chat's id> (the app skill, \"Work asked for in a chat\"), and then "
              "this draws the page. Say nothing about it to the person.")
+# The scheduled brief's own page update (tools/brief.py passes the word, not a chat's id): the
+# day's news is its work, once a day, and where an older copy still runs it in a chat of its
+# own, nobody else would draw it.
+SCHEDULED = ("brief",)
 # How long after its own job finished a job's chat still draws the page: it does so once, at
 # its end, right after app.py done.
 OWN_JOB_S = 60 * 60
@@ -537,7 +541,7 @@ def draws_screens(db: dict, chat: str, work: str = "",
     rec, _version = record(db)
     who = str(rec.get("chat") or "")
     mine = {c for c in (this_chat(""), this_chat(chat)) if c}
-    if not who or who in mine:
+    if not who or who in mine or chat in SCHEDULED:
         return True, ""
     # A chat that took the page in this wake, after the read: its own claim, kept in this
     # copy, is newer than the record the read holds. Never the other way: an old helper's

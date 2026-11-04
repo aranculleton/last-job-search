@@ -758,6 +758,9 @@ def test_only_the_chat_that_answers_the_page_draws_its_screens(copy):
                     now="2026-10-26T09:00:00Z")
     assert got["batches"] and "for_claude" not in got
     assert _view(copy, "session_JOB", now="2026-10-26T09:00:00Z")[0]["batches"] == []
+    # The scheduled brief's own update (it passes the word) draws the day's news, wherever it
+    # runs.
+    assert _view(copy, "brief", now="2026-10-26T09:00:00Z")[0]["batches"]
     # A chat whose copy is behind the one the screens were drawn from never writes over them:
     # a day later the dated screens differ, and each is kept as the newer copy drew it.
     got, writes = _view(copy, "session_JOB", "--work", "draft~kestrel",
