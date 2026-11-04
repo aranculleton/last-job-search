@@ -70,6 +70,70 @@ def test_a_brief_turned_off_or_failing_is_said_and_never_made_again():
     assert "lists it as trig_EXAMPLEC" in routines.existing_brief(REG, moved)["say"]
 
 
+def test_a_brief_whose_chat_lost_the_files_is_said_and_moved_into_this_chat():
+    """The 07:56 brief fired in the chat it is bound to, which had been made again without
+    the person's files, so it wrote nothing and sent nothing, and routines.py brief still
+    said it was set up (the maintainer, 2026-11-04; the helper moved it into itself by hand).
+    A task that fired after its time with no record of that day's brief, or that now wakes
+    another chat, is said plainly, with the calls that move it into this chat."""
+    reg = dict(REG, routines=[dict(REG["routines"][0], made="2026-10-20",
+                                   cron="CRON_TZ=Europe/London 56 7 * * *")])
+    task = routines.listing(RAW)[0][0]
+    ran = {"status": "SUCCEEDED", "fired_at": "2026-11-04T07:56:10Z",
+           "session_id": "session_EXAMPLEA"}
+    now = datetime.datetime(2026, 11, 4, 12, 0, tzinfo=datetime.timezone.utc)
+    here = "session_EXAMPLEHELPER"
+
+    def look(last_run, days, **more):
+        return routines.existing_brief(reg, [dict(task, last_run=last_run, **more)], now=now,
+                                       days_on_file=days, here=here,
+                                       repo="example-owner/example-copy")
+    got = look(ran, {"2026-11-03"})
+    assert got["state"] == "lost" and "cannot open" in got["say"], got
+    make, record, old = got["calls"]
+    assert make["tool"] == "create_trigger" and make["args"]["persistent_session_id"] == here
+    assert make["args"]["cron_expression"] == "CRON_TZ=Europe/London 56 7 * * *"
+    assert "example-owner/example-copy" in make["args"]["prompt"]   # it gets its files
+    assert f"record --session {here} --trigger" in record["run"]
+    assert old["tool"] == "update_trigger" and old["args"] == {"trigger_id": "trig_EXAMPLEA",
+                                                              "enabled": False}
+    assert "morning_brief.md" in got["then"] and got["tell"]
+    # Today's record on file: it worked, and stays where it is.
+    assert look(ran, {"2026-11-04"})["state"] == "registered"
+    # Not fired yet today (the scheduler runs late) and still bound to its own chat: not lost.
+    assert look(dict(ran, fired_at="2026-11-03T07:56:10Z"), {"2026-11-03"})["state"] == \
+        "registered"
+    # The task now wakes another chat than the one it was bound to: lost, fired or not.
+    assert look(dict(ran, fired_at="2026-11-03T07:56:10Z"), {"2026-11-03"},
+                session="session_EXAMPLEEMPTY")["state"] == "lost"
+
+
+def test_the_brief_command_prints_the_move_for_a_brief_whose_chat_lost_the_files(tmp_path):
+    """The same, on the real path: `routines.py brief --triggers <page> --chat <this chat>`
+    in a cloud chat, with a task that fired just now and no brief on record since."""
+    profile, state = tmp_path / "profile", tmp_path / "state"
+    profile.mkdir()
+    (state / "documents" / "briefs").mkdir(parents=True)
+    reg = dict(REG, routines=[dict(
+        REG["routines"][0], made="2026-01-01", cron="CRON_TZ=Europe/London 1 0 * * *")])
+    (profile / "routines.json").write_text(json.dumps(reg), encoding="utf-8")
+    fired = datetime.datetime.now(datetime.timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
+    page = tmp_path / "page.json"
+    page.write_text(json.dumps({"data": [dict(RAW["data"][0], last_run={
+        "status": "SUCCEEDED", "fired_at": fired, "session_id": "session_EXAMPLEA"})],
+        "has_more": False}), encoding="utf-8")
+    env = dict(os.environ, LJS_PROFILE=str(profile), LJS_STATE=str(state),
+               CLAUDE_CODE_REMOTE="true")
+    got = subprocess.run([sys.executable, os.path.join(ROOT, "tools", "routines.py"), "brief",
+                          "--triggers", str(page), "--chat", "session_EXAMPLEHELPER"],
+                         capture_output=True, text=True, encoding="utf-8", errors="replace",
+                         env=env)
+    assert got.returncode == 0 and got.stdout.startswith("lost: "), got.stdout + got.stderr
+    assert "move 1: create_trigger" in got.stdout and "session_EXAMPLEHELPER" in got.stdout
+    assert '"enabled": false' in got.stdout and "morning_brief.md" in got.stdout
+    assert "the brief is set up" not in got.stdout
+
+
 def test_a_registry_with_nothing_scheduled_yet_is_clean():
     assert routines.check({"setup": "chat_per_briefing", "timezone": "Europe/London",
                            "routines": []}) == []
