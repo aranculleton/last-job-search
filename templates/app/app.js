@@ -3004,10 +3004,10 @@
   const NO_REPLY = /: No reply to \d+ messages\b/;
   function dueGroupKey(d) {
     if (dueContact(d) && (d.leave === true || NO_REPLY.test(txt(d.title))) && obj(d.done).action) return "leave";
-    // Its message already drafted: never a row of a "Draft all". Follow-ups drafted are one
-    // checklist whose rows each open their draft (nineteen came at once, 2026-11-04); anything
-    // else drafted is a card of its own that opens it.
-    if (dueDraft(d)) return isFollowUp(d) ? "drafted" : null;
+    // Its message already drafted: never a row of a "Draft all". Two or more drafted are one
+    // card, "6 messages ready to send", a row a person opening their draft (the maintainer,
+    // 2026-11-04: "same with to do, batch would be easier to read"); one alone keeps its card.
+    if (dueDraft(d)) return "drafted";
     if (isFollowUp(d)) return "follow";
     // Only the kinds a checklist row can finish: a follow-up on an application keeps its own
     // card and its Done (a grouped row only drafts).
@@ -3355,8 +3355,9 @@
     follow: {title: (n) => "Follow up with " + plural(n, "person", "people"), all: "Draft all", row: "Draft", strip: /^Follow up with /},
     "work~reply": {title: (n) => "Reply to " + plural(n, "person", "people"), all: "Draft all", row: "Draft", strip: /^Reply to /},
     leave: {title: (n) => plural(n, "person hasn't", "people haven't") + " answered two messages", sub: "Leave them unless they write back: close each, or all of them.", all: "Close them all", row: "Close", strip: NO_REPLY},
-    // Drafted already: each row opens its draft (askDue does), and nothing drafts them again.
-    drafted: {title: (n) => plural(n, "follow-up", "follow-ups") + " drafted, ready to send", sub: "Open each, copy it and send it yourself.", row: "See the draft", strip: /^Follow up with /},
+    // Drafted already: each row opens that person's draft and the card's one button Messages;
+    // nothing drafts them again.
+    drafted: {title: (n) => plural(n, "message", "messages") + " ready to send", row: "See the draft", strip: /^(?:Reply to|Follow up with|Follow up on|Write to|Send your \S+ to) /},
   };
   // Who someone is, on a row about them: a list of names with only "first wrote 10 Sep" left
   // the person asking who they all were (2026-11-03). With no employer on record, it says so.
@@ -3430,6 +3431,7 @@
     const kind = g.startsWith("work~") ? g.slice(5) : g === "follow" ? "follow_up" : "";
     const words = GROUP_WORDS[g] || {title: (n) => (DUE_WORK[kind] || "To do") + ": " + plural(n, "person", "people"), row: DUE_SUB[kind] ? "Draft" : "Do it", strip: null};
     const leave = g === "leave";
+    const drafted = g === "drafted";
     const busy = (d) => { const w = kind ? dueWork(d, kind) : null; return !!(w && ACTIVE.has(w.status)); };
     const open = ds.filter((d) => !busy(d) && !effective(d.id, ["due.done", "due.snooze"]));
     // A row the person closed or finished leaves the list at once; "11 closed: Show" at the
@@ -3443,8 +3445,11 @@
     const row = (d) => {
       const marked = !!effective(d.id, ["due.done", "due.snooze"]);
       const title = txt(d.title);
-      const name = words.strip && words.strip.test(title) ? (leave ? title.split(":")[0] : title.replace(words.strip, "")) : title;
       const cid = isPerson(dueContact(d)) ? dueContact(d) : "";
+      // A drafted message's row is the person it goes to, whatever the row was owed for.
+      const who = drafted && cid ? personById(cid) : null;
+      const name = who ? whoAt(who.first_name, who.employer) : words.strip && words.strip.test(title) ? (leave ? title.split(":")[0] : title.replace(words.strip, "")) : title;
+      const draft = drafted ? dueDraft(d) : null;
       // One line under the name: who they are and the day it is about ("you wrote 21 Sept ·
       // no reply"), never Draft, Not now and a bin on every row (the walk-through, 2026-11-03).
       return h("li", {class: "g-row" + (marked ? " is-marked" : ""), "data-item": d.id},
@@ -3452,14 +3457,17 @@
           dueWho(d) ? h("p", {class: "muted small"}, cap1(dueWho(d))) : null, stateLine(d.id, "due:" + where + ":" + d.id)),
         h("div", {class: "g-acts"}, busy(d) ? btn("See it", openWork, {small: true, kind: "quiet", key: "fgsee:" + where + ":" + d.id}) :
           leave ? btn(words.row, () => close(d), {small: true, pressed: marked, key: "fgclose:" + where + ":" + d.id, aria: "Close: " + name}) :
+          draft ? seeDraftBtn(draft, "fgdraft:" + where + ":" + d.id, "secondary") :
           btn(words.row, () => askDue(d), {small: true, key: "fgdo:" + where + ":" + d.id, aria: words.row + ": " + title}),
           // Its bin: the person's choices, and hiding this one row for a week.
           cid && !marked && !leave ? btn("", () => askRemovePerson(cid, name.replace(/ at .*$/, ""), employerIn(title) || "", null, {hide: () => hideTodo("due:" + d.id, title)}),
             {kind: "quiet icon-only", small: true, icon: "bin", key: "fgbin:" + where + ":" + d.id, aria: "Not " + name + "? Or hide this for a week"}) : null));
     };
-    // Drafting them all takes as long as each one does, added up: "Draft all 25" said one
-    // draft's minutes (2026-11-03).
-    const allBtn = open.length > 1 && words.all ? (leave ?
+    // Drafted messages: the card's one filled button opens them all in Messages. Drafting them
+    // all takes as long as each one does, added up: "Draft all 25" said one draft's minutes
+    // (2026-11-03).
+    const allBtn = drafted ? (ds.length > gone.length ? btn("Open Messages", () => go("drafts", {focus: true, drafts: "messages"}), {kind: "primary", small: true, key: "fg-msgs:" + where + ":" + band}) : null) :
+      open.length > 1 && words.all ? (leave ?
       btn(words.all, () => { for (const d of open) close(d); }, {kind: "primary", small: true, key: "fg-all:" + where + ":" + g + ":" + band}) :
       [btn(words.all + " " + open.length, () => requestWork(open.map(dueSpec)), {kind: "primary", small: true, key: "fg-all:" + where + ":" + g + ":" + band}),
         costEl({state: WORK_COST[kind] === undefined ? 1 : WORK_COST[kind]}, kind, "fgc-" + where + "-" + seg(g) + "-" + band, open.length)]) : null;
@@ -5100,7 +5108,7 @@
   function dueMessage(d) {
     const named = txt(d.item) ? messageItems().find((m) => m.id === txt(d.item)) : null;
     if (named) return named;
-    const app = txt(obj(obj(d.work).args).application) || (!dueContact(d) && txt(d.sub) === "follow_up" ? txt(d.item) : "");
+    const app = txt(obj(obj(d.work).args).application) || txt(d.application) || (!dueContact(d) && txt(d.sub) === "follow_up" ? txt(d.item) : "");
     const forApp = app ? messageItems().find((m) => txt(m.application) === app && msgLive(m)) : null;
     if (forApp) return forApp;
     const kind = txt(obj(d.work).kind) || txt(d.action).replace(/^work:/, "");
