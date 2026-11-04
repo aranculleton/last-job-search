@@ -41,7 +41,8 @@ Notes 5 to 8 of the maintainer's nine of 4 November (a resume drafted in another
 reaching the page; work asked for in a chat never in Claude's work; two chats overwriting each
 other's page updates during the hand-over; the check-in trusting a stored version number) were
 being built by a helper that was stopped mid-way when the usage limit ran out. Its three commits
-are on `claude/page-sync-wip`, based on the evening batch, not merged and not reviewed:
+are on `claude/page-sync-wip`, merged there with the evening batch, not merged to master and not
+reviewed:
 
 - "Only explicit job work or work begun in a chat draws the page; the stamp as read kept for the
   store's version" (notes 7 and 8)
@@ -50,8 +51,9 @@ are on `claude/page-sync-wip`, based on the evening batch, not merged and not re
 
 It changed tools/app.py, app_listen.py, app_model.py, page_db.py, the app skill and three tests.
 Its last words: the scheduled brief passes `--chat brief` and can run in a chat of its own in
-older copies, so it is let draw the page like a job does, guarded by the newer-copy check. No
-commit title is about note 6. Nothing on it has a build version or a fixture remade yet.
+older copies, so it is let draw the page like a job does, guarded by the newer-copy check. Its
+changelog lines claim all four notes, note 6 included; none of it was checked against the notes,
+nor its tests seen to fail on the old code, and the whole suite has not run on it.
 
 ## How to work
 
