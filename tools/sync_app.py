@@ -1087,8 +1087,18 @@ def pull_master() -> int:
         for line in dirty[:20]:
             print("  " + line)
         return 1
-    if git("merge", "-q", "--no-edit", "origin/master", check=False).returncode:
-        git("merge", "--abort", check=False)
+    # A clash in the person's own files is settled as a landing settles it (land.merge_in,
+    # merge_state.settle), never left for a chat to do by hand: two chats that took the same
+    # update a day apart stopped here on every call prep both had rebuilt (the 4.9.0
+    # rehearsal). Only a clash in an app file still stops.
+    try:
+        import land
+        merged, _lines = land.merge_in(ROOT, "origin/master")
+    except ImportError:              # a copy older than the landing tool: a plain merge
+        merged = git("merge", "-q", "--no-edit", "origin/master", check=False).returncode == 0
+        if not merged:
+            git("merge", "--abort", check=False)
+    if not merged:
         print("sync_app: stopped, nothing changed. master does not merge cleanly into this "
               "branch: run `git merge origin/master` and settle it (RUNBOOK.md, \"Landing on master\", says how).")
         return 1

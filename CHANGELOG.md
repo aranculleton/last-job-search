@@ -51,6 +51,10 @@ make sense to somebody whose repo just received it.
   they require), pay stated by the month is read as a year, and nothing assumes one country.
 - **The page is quicker on a big search**: Contacts opens in about a second on a phone instead
   of eight, and building your page's data takes about half the time.
+- **Your own tests that pinned the old behaviour are brought in line by the update**: job
+  boards held to your search window, the scorer's baseline after the scoring fix, and a
+  sample note using initials your own rules ban. A reply logged with no words still
+  reopens a closed thread. No profile upgrade: the update's own steps do it.
 - **Setting up needs nobody to ask**: the start pages match what runs, a setup that stopped
   says so with one Carry on button, and the app's own first command no longer asks permission.
 - **Draft this drafts, in one tap.** No sheet asks first whether you have applied: that is
@@ -102,6 +106,9 @@ make sense to somebody whose repo just received it.
 
 ### Fixed
 
+- **Two chats that take the same update a day apart settle it by themselves**: a call prep
+  both rebuilt keeps the later one, and a clash in your files when an update comes in is
+  settled as saving settles it, never left for a chat to do by hand.
 - **Everything you send to Claude from your page is saved first, then sent**, and a tap
   Claude cannot do says why in plain words, with a box for what it needs.
 - **A batch of drafts is one job to the end**: none is drafted twice, a question from one of

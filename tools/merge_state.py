@@ -1373,6 +1373,25 @@ def _side_path(root: str, path: str) -> str:
     return side
 
 
+_WRITTEN = re.compile(r"^Written (\d{4}-\d{2}-\d{2})\b", re.M)
+
+
+def _written(root: str, stages: dict) -> str:
+    """For a conflicted file the app wrote and dated on both sides (a "Written <day>" line
+    near its top, as every call prep has): "--ours" or "--theirs", whichever was written
+    later (master's on the same day); "" when either side has no such line."""
+    if "2" not in stages or "3" not in stages:
+        return ""
+    days = []
+    for st in ("2", "3"):
+        head = _g(root, "cat-file", "blob", stages[st]).stdout[:600]
+        m = _WRITTEN.search(head)
+        if not m:
+            return ""
+        days.append(m.group(1))
+    return "--ours" if days[0] > days[1] else "--theirs"
+
+
 def settle(root: str) -> tuple[list[str], list[str]]:
     """Settle every conflicted file of the person's in the merge stopped in `root`.
     (what was done, one line each, for Claude; the paths left as they were). Each settled
@@ -1404,6 +1423,14 @@ def settle(root: str) -> tuple[list[str], list[str]]:
             _g(root, "checkout", keep, "--", p)
             done.append(f"{p}: one chat removed it and the other changed it; the changed "
                         "one is kept")
+        elif _written(root, stages):
+            # A document the app writes and dates ("Written 2026-11-04."), rebuilt by two chats
+            # on different days: the later one is current and the next rebuild makes it so
+            # anyway, so it is kept with no side copy. Two chats that took the 4.9.0 update a
+            # day apart stopped on every call prep the update rebuilt (its rehearsal).
+            keep = _written(root, stages)
+            _g(root, "checkout", keep, "--", p)
+            done.append(f"{p}: rebuilt by two chats; the later one is kept")
         elif _same_upgrade(root, p):
             _g(root, "checkout", "--theirs", "--", p)
             done.append(f"{p}: the same improvement made by two chats; the other's copy "
