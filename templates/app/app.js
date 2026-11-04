@@ -80,7 +80,7 @@
       if (v === null || v === undefined || v === false) continue;
       if (k === "class") el.className = v;
       else if (k === "text") el.textContent = v;
-      else if (k.startsWith("on") && typeof v === "function") el.addEventListener(k.slice(2), v);
+      else if (k.startsWith("on") && typeof v === "function") { el.addEventListener(k.slice(2), v); el.__ljsOn = true; }
       else if (k === "checked" || k === "value" || k === "disabled" || k === "indeterminate" || k === "hidden" || k === "open") {
         el[k] = v;
         // Written as attributes too, so two renders of the same state read the same.
@@ -1000,9 +1000,10 @@
     // Saved and waiting past the late limit: said, with when it goes ("Saved. Claude will
     // pick this up." had no time limit, the audit, 2026-11-03).
     const waited = t.state === "saved" && now() - (tms(t.doc.at) || now()) > lateMs();
+    const work = TAP_WORK[txt(t.doc.action)];
     const words = {
       saving: "Saving…",
-      saved: waited ? (S.tries.get(t.id) ? "Saved, and sent to Claude. Not done yet." : "Saved, not done yet. It goes to Claude with your next tap here.") : "Saved. Claude will pick this up.",
+      saved: savedWords(work, t.state === "saved" ? tapAhead(t.doc.at) : {}, waited ? (S.tries.get(t.id) ? "Saved, and sent to Claude. Not done yet." : "Saved, not done yet. It goes to Claude with your next tap here.") : ""),
       claimed: "Claude is doing this now.",
       applied: t.doc.action === "undo" ? "Changed back." : "Done.",
       refused: refusedWords(r),
@@ -1012,9 +1013,40 @@
     if (!words) return null;
     const tone = {applied: "ok", refused: "bad", failed: "bad", unsaved: "bad"}[t.state] || "muted";
     const k = key || item;
-    const line = h("p", {class: "state tone-" + tone}, h("span", {class: "state-text"}, words), undoButton(t, k));
+    // A tap that is a piece of work for Claude says where to watch it: its card in Claude's work.
+    const see = work && (t.state === "saved" || t.state === "claimed") ? h("button", {type: "button", class: "btn link", "data-k": "see-work:" + k, onclick: () => openWork(t.id)}, "See it in Claude's work") : null;
+    const line = h("p", {class: "state tone-" + tone}, h("span", {class: "state-text"}, words, see ? [" ", see] : null), undoButton(t, k));
     const fix = t.state === "refused" ? askFix(t, r, k) : null;
     return fix ? h("div", {class: "state-wrap"}, line, fix) : line;
+  }
+  // What a saved tap is waiting for, and where it shows once done, in words: "Saved. Claude will
+  // pick this up." said neither (the maintainer, 2026-11-04: "where? what exactly am I waiting
+  // for?"). From what the page already holds (tapAhead), never a state the engine did not give.
+  // `late`: what a tap saved past the late limit says, unless it is waiting its turn.
+  function savedWords(work, ahead, late) {
+    if (ahead.after) return work ? "Saved. " + work.verb + " after " + quoted(ahead.after) + "." : "Saved. Claude makes the change after " + quoted(ahead.after) + ", then this line says Done.";
+    if (ahead.away) return work ? "Saved. Claude's helper is not answering, so it waits." : "Saved. Claude's helper is not answering, so the change waits for it.";
+    if (late) return late;
+    if (ahead.picked) return work ? "Saved. Claude has started on it." : "Saved. Claude is making the change, and this line says Done when it has.";
+    return work ? "Saved. " + work.verb + " next." : "Saved. Claude makes the change next, and this line says Done when it has.";
+  }
+  const quoted = (s) => "\u201c" + clip(txt(s), 60) + "\u201d";
+  // What a tap, which the chat answering this page takes on its next look, waits behind: the
+  // light work running in that chat now (big jobs run in chats of their own and hold nothing
+  // up), or what it is doing for the person in a chat; else whether it has looked since the
+  // tap, or is not answering at all. The work it read "Waiting to start" behind for a while
+  // was never named (the maintainer, 2026-11-04: "took a while, is that intended?").
+  function tapAhead(at) {
+    const after = runningAhead("");
+    if (after) return {after};
+    if (pickedUp({asked_at: at}) > 0) return {picked: true};
+    return notListening() ? {away: true} : {};
+  }
+  function runningAhead(except) {
+    const here = txt(obj(S.listener).kind) || "cloud";
+    const run = activeWork().find(([id, w]) => id !== except && (w.status === "running" || w.status === "claimed") && !HEAVY_KINDS.has(txt(w.kind)) &&
+      ((txt(w.to) || "cloud") === here || txt(w.to) === "either") && !leadOf(w) && !progress(w).lapsed && !txt(w.blocked_at));
+    return run ? txt(run[1].title).replace(/^Nudge /, "Follow up with ") || "Work" : chatBusy();
   }
   // What a refused tap says: the engine's own reason, in its words. Every refusal read "this
   // changed since you saw it", even when the engine was asking "Which day is it?", and a
@@ -1211,7 +1243,9 @@
       toast({text: "Not saved: " + label + ".", ids: failed.map((r) => r.id), bad: true, retry: () => retryTaps(failed)});
       shout("Not saved: " + label + ". Try again.");
     } else {
-      toast(Object.assign({text: label, ids: recs.map((r) => r.id)}, more || {}));
+      // A tap that is a piece of work for Claude: its toast opens it in Claude's work too.
+      const tw = recs.length === 1 && TAP_WORK[txt(recs[0].doc.action)] ? {see: () => openWork(recs[0].id), seeLabel: "See it"} : {};
+      toast(Object.assign({text: label, ids: recs.map((r) => r.id)}, tw, more || {}));
       announce(label + ". Saved.");
       // Rung once the taps are written, so the chat it wakes finds them (the audit, 2026-11-03).
       if (ringing) {
@@ -3941,6 +3975,7 @@
         // dates of month or something ... idk what its measuring").
         const st = isoWeekMonday(x.week);
         labels.push(h("span", {class: "bp-wk" + (i === w.length - 1 ? " is-now" : ""), "aria-hidden": "true"}, st ? fmtDayMonth(st) : ""));
+        col.__ljsOn = true;
         col.addEventListener("pointerenter", () => show(i));
         col.addEventListener("focus", () => show(i));
         col.addEventListener("click", () => show(i));
@@ -3948,7 +3983,11 @@
         cols.push(col);
         return col; }));
     chart.addEventListener("pointerleave", () => show(null));
-    return h("div", {class: "bp-spark-wrap"}, chart, h("div", {class: "bp-wks", "aria-hidden": "true"}, labels), cap);
+    chart.__ljsOn = true;
+    // One box: its bars' listeners write to its caption, so the two are drawn again together.
+    const wrap = h("div", {class: "bp-spark-wrap"}, chart, h("div", {class: "bp-wks", "aria-hidden": "true"}, labels), cap);
+    wrap.__ljsOn = true;
+    return wrap;
   }
   // How far applications went, opened in place: "See your progress" led to a page of its own
   // that read as left over (the maintainer, 2026-10-30). Applied, then interviews, then
@@ -4021,27 +4060,43 @@
   // Worked out once for a window size and a set of data, then kept: a list that changed length
   // while the person used the page (each tap redraws it) would move what they reached for.
   let fitMemo = {key: "", counts: null};
+  // data-fit "fewest,start,keep": `keep` orders what gives first when nothing else decides
+  // (0 Today's likely questions, then Coming up, Jobs, People).
+  const fitOf = (l) => { const [min, base, keep] = txt(l.getAttribute("data-fit")).split(",").map(Number); return {min: min || 1, base: base || 3, keep: keep || 1}; };
+  const fitName = (l) => txt((l.closest(".bpanel") || {getAttribute: () => ""}).getAttribute("data-k")) + ":" + txt(l.className);
+  // The set of data is what the lists hold, not the page's own rev: newer screens from the
+  // store (recompute) leave the rev as published, so the counts worked out for the page as
+  // published were kept for the newer lists, one job of five, until a phone's browser bars
+  // moved the window and a tap on Brief showed the rest (the maintainer, 4.9.0: "when I
+  // press the top one for brief it's not the same as what's originally displayed").
+  const fitHeld = (l) => { let n = 0; const t = l.textContent; for (let i = 0; i < t.length; i++) n = (n * 31 + t.charCodeAt(i)) | 0; return fitName(l) + "=" + l.children.length + ":" + n; };
+  const fitKey = (lists) => window.innerWidth + "x" + window.innerHeight + ":" + lists.map(fitHeld).join("|");
+  // The counts last worked out, put on a Brief drawn afresh before it is compared with the one
+  // on screen (patch): without them the two never matched, and every live update, and the
+  // minute's redraw, tore the whole Brief down and built it again, which a phone scrolling
+  // fast showed as a blank page (the maintainer, 2026-11-04, an iPhone).
+  function fitKept(root) {
+    const grid = root.querySelector(".brief-grid");
+    if (!grid || !fitMemo.counts) return;
+    const lists = [...grid.querySelectorAll("[data-fit]")];
+    if (fitKey(lists) !== fitMemo.key) return;
+    for (const l of lists) { const n = fitMemo.counts[fitName(l)]; const {base} = fitOf(l); [...l.children].forEach((li, i) => { fitHide(li, i >= (n === undefined ? base : n)); }); }
+  }
+  // Written only where it changes: the same mark written again is still a change to the page.
+  function fitHide(li, v) { if (li.hidden !== v) li.hidden = v; }
   function fitBrief() {
     const grid = document.querySelector("#main .brief-grid");
     if (!grid) return;
     const lists = [...grid.querySelectorAll("[data-fit]")];
-    // data-fit "fewest,start,keep": `keep` orders what gives first when nothing else decides
-    // (0 Today's likely questions, then Coming up, Jobs, People).
-    const fit = (l) => { const [min, base, keep] = txt(l.getAttribute("data-fit")).split(",").map(Number); return {min: min || 1, base: base || 3, keep: keep || 1}; };
-    const name = (l) => txt((l.closest(".bpanel") || {getAttribute: () => ""}).getAttribute("data-k")) + ":" + txt(l.className);
-    // The set of data is what the lists hold, not the page's own rev: newer screens from the
-    // store (recompute) leave the rev as published, so the counts worked out for the page as
-    // published were kept for the newer lists, one job of five, until a phone's browser bars
-    // moved the window and a tap on Brief showed the rest (the maintainer, 4.9.0: "when I
-    // press the top one for brief it's not the same as what's originally displayed").
-    const held = (l) => { let n = 0; const t = l.textContent; for (let i = 0; i < t.length; i++) n = (n * 31 + t.charCodeAt(i)) | 0; return name(l) + "=" + l.children.length + ":" + n; };
-    const key = window.innerWidth + "x" + window.innerHeight + ":" + lists.map(held).join("|");
+    const fit = fitOf;
+    const name = fitName;
+    const key = fitKey(lists);
     if (fitMemo.key === key && fitMemo.counts) {
-      for (const l of lists) { const n = fitMemo.counts[name(l)]; const {base} = fit(l); [...l.children].forEach((li, i) => { li.hidden = i >= (n === undefined ? base : n); }); }
+      for (const l of lists) { const n = fitMemo.counts[name(l)]; const {base} = fit(l); [...l.children].forEach((li, i) => { fitHide(li, i >= (n === undefined ? base : n)); }); }
       return;
     }
     const remember = () => { fitMemo = {key, counts: Object.fromEntries(lists.map((l) => [name(l), [...l.children].filter((li) => !li.hidden).length]))}; };
-    for (const l of lists) { const {base} = fit(l); [...l.children].forEach((li, i) => { li.hidden = i >= base; }); }
+    for (const l of lists) { const {base} = fit(l); [...l.children].forEach((li, i) => { fitHide(li, i >= base); }); }
     if (window.innerWidth < 760 || getComputedStyle(grid).gridTemplateColumns.split(" ").length < 2) { remember(); return; }
     const shown = (l) => [...l.children].filter((li) => !li.hidden);
     // Grow: one more at a time, kept only while its panel neither grows the row nor overflows.
@@ -7794,10 +7849,9 @@
   function anotherDeviceBody() {
     const url = pageUrl();
     return h("div", {class: "d-stack"},
-      url ? h("p", {class: "page-url"}, h("span", {id: "page-url"}, url), " ", copyButton(url, "Copy link", "copy:page-url", "page-url")) :
+      url ? foldBody(h("p", {class: "page-url", id: "page-url"}, url), copyButton(url, "Copy link", "copy:page-url", "page-url"), noteFor("copy:page-url")) :
         h("p", {class: "muted"}, "The link arrives with the next update of this page."),
-      url ? noteFor("copy:page-url") : null,
-      h("div", {class: "d-stack"}, h("p", {}, "Open the link on your phone signed in to the same Claude account. Pinned to your sidebar, the page is always one tap away."),
+      foldBody(h("p", {}, "Open the link on your phone signed in to the same Claude account. Pinned to your sidebar, the page is always one tap away."),
         btn("Pin it to my sidebar", askPin, {small: true, kind: "quiet", key: "pin-page"})));
   }
 
@@ -7881,20 +7935,20 @@
     // writes and finds, so saying in Chat what to do instead keeps the rest of what it knows.
     // And one tap has Claude tidy them: rules the app now does itself, doubles and those a
     // later one replaced, each offered to you before it goes (the maintainer, 2026-10-30).
-    const intro = h("div", {class: "d-stack learned-intro"},
+    const intro = foldBody(
       h("p", {class: "small muted"}, "Everything you have told Claude about how you like things. Each one shapes what it writes and finds, so if one is wrong, it is usually better to say in Chat what you want instead; Remove is still here."),
-      h("div", {class: "card-actions"}, btn("Tidy these up", () => { handOff("Tidy what I have taught you: find rules the app now does by itself, rules that say the same thing, and rules a later one replaced, and show me each before anything goes.", true); toast({text: "Asked. Claude shows you what it would tidy before anything goes.", ids: []}); },
-        {small: true, kind: "secondary", key: "learned-tidy"})));
+      btn("Tidy these up", () => { handOff("Tidy what I have taught you: find rules the app now does by itself, rules that say the same thing, and rules a later one replaced, and show me each before anything goes.", true); toast({text: "Asked. Claude shows you what it would tidy before anything goes.", ids: []}); },
+        {small: true, kind: "secondary", key: "learned-tidy"}), null, {class: "learned-intro"});
     // The newest five, then the rest one tap below, with a search: all 173 at once were a wall
     // 32,700px tall on a phone (the 3 November audit). Each is said to the person ("say").
     const lo = {items, name: "what you have taught it", one: "rule", many: "rules", fold: (x) => !!x.retired, foldLabel: (k) => plural(k, "earlier rule", "earlier rules"),
       first: 5, firstLabel: (k) => plural(k, "more rule", "more rules"), search: (x) => [x.say, x.rule, x.said, x.area].map(txt).join(" "), searchLabel: "A word in a rule",
       sort: (a, b) => txt(b.on).localeCompare(txt(a.on)),
-      render: (x) => h("div", {class: "learned", "data-item": txt(x.id)}, h("p", {}, txt(x.say) || txt(x.rule)),
-        x.said ? h("p", {class: "hint"}, "You said: " + txt(x.said) + (x.on ? ", " + fmtDay(x.on) : "")) : null,
+      render: (x) => foldBody([h("p", {}, txt(x.say) || txt(x.rule)),
+        x.said ? h("p", {class: "hint"}, "You said: " + txt(x.said) + (x.on ? ", " + fmtDay(x.on) : "")) : null],
         x.id && !x.retired ? btn(effective(txt(x.id), ["learned.retire"]) ? "Removed" : "Remove", () => act([{item: txt(x.id), action: "learned.retire", value: null, rev: txt(x.rev)}], "Removed: " + clip(txt(x.rule), 40)),
           {kind: "quiet", small: true, key: "unlearn:" + txt(x.id), aria: "Remove: " + txt(x.rule), pressed: !!effective(txt(x.id), ["learned.retire"])}) : null,
-        x.id ? stateLine(txt(x.id), "learned:" + txt(x.id)) : null)};
+        x.id ? stateLine(txt(x.id), "learned:" + txt(x.id)) : null, {class: "learned fb-row", "data-item": txt(x.id)})};
     return [intro, items.length > 5 ? controlRow([searchField("learned", lo)]) : null, listView("learned", lo)];
   }
 
@@ -7978,12 +8032,12 @@
     // Pay opened says what the figure does, never the summary's own line again (the 3
     // November audit).
     const body = (what, value) => (what === "pay" && pay.floor ? "A job whose stated pay tops out under " + money(pay.floor) + " is flagged as under what you would take." : value || "Not set");
-    const plain = (what, name, value, items, full) => infoRow("search-" + what, name, few(value, items) || "Not set", h("div", {class: "d-stack"}, items && items.length > 1 ? chips(items, full) : h("p", {}, body(what, value)),
+    const plain = (what, name, value, items, full) => infoRow("search-" + what, name, few(value, items) || "Not set", foldBody([items && items.length > 1 ? chips(items, full) : h("p", {}, body(what, value)),
+      what === "avoid" ? h("p", {class: "small muted"}, "Say what to leave out under Something else. The bin on a job in Jobs leaves out ones like it too.") : null],
       ["roles", "places", "pay"].includes(what) ? change(what, name, value) : avoidChange(), stateLine(sid, "search:" + what)));
     // What to avoid is changed where the search is changed, in the person's own words; the
     // bin on a job teaches it too (2026-11-02: the row had no Change, only "use the bin").
-    const avoidChange = () => [btn("Change", () => openTweak("jobs", jobsBlock()), {small: true, key: "search-change:avoid", aria: "Change what to avoid"}),
-      h("p", {class: "small muted"}, "Say what to leave out under Something else. The bin on a job in Jobs leaves out ones like it too.")];
+    const avoidChange = () => btn("Change", () => openTweak("jobs", jobsBlock()), {small: true, key: "search-change:avoid", aria: "Change what to avoid"});
     const portals = arr(s.portals);
     const boards = arr(s.boards);
     const rules = arr(s.rules).filter((r) => !effective(txt(r.id), ["rule.lift"]));
@@ -8013,11 +8067,11 @@
         const n = Number(r.count) || 0;
         const name = txt(r.label) || cap1(txt(r.words));
         const lift = () => act([{item: txt(r.id), action: "rule.lift", value: null, rev: txt(r.rev) || txt(s.rev) || null}], "Brought back: " + name);
-        return h("li", {"data-item": txt(r.id)}, h("span", {}, name + (n ? ": " + plural(n, "job", "jobs") : "")), " ",
-          arr(r.examples).length ? h("p", {class: "small muted rule-ex"}, "Such as " + arr(r.examples).map(txt).join("; ") + (n > arr(r.examples).length ? ", and " + (n - arr(r.examples).length) + " more." : ".")) : null,
+        return h("li", {"data-item": txt(r.id)}, foldBody([h("p", {}, name + (n ? ": " + plural(n, "job", "jobs") : "")),
+          arr(r.examples).length ? h("p", {class: "small muted rule-ex"}, "Such as " + arr(r.examples).map(txt).join("; ") + (n > arr(r.examples).length ? ", and " + (n - arr(r.examples).length) + " more." : ".")) : null],
           btn("Bring back", () => (n > 5 ? sheet({title: "Bring back " + plural(n, "job", "jobs") + "?", intro: "All " + n + " go back into Jobs, to look through again.", fields: [], submit: "Bring them back", onSubmit: lift}) : lift()),
             {kind: "quiet", small: true, key: "lift:" + txt(r.id), aria: "Bring back: " + name}),
-          stateLine(txt(r.id), "rule:" + txt(r.id)));
+          stateLine(txt(r.id), "rule:" + txt(r.id)), {class: "fb-row"}));
       })) : h("p", {class: "muted"}, "No kind of job is hidden.")),
     ];
   }
@@ -8329,13 +8383,12 @@
     const line = !st.setUp ? (st.asked ? "Claude is setting it up in the chat that answers this page. It shows as on here once it is." : "A short note each morning: what is due today, and news that matters. Turn it on here.")
       : !st.on ? "Off. Your days and time are kept for when you turn it back on." : st.when + (txt(sc.zone) ? ", " + zoneName(txt(sc.zone)) + " time" : "") + ".";
     return [
-      infoRow("brief-when", "When it comes", briefWord(st), h("div", {class: "d-stack"},
-        h("p", {}, line),
+      infoRow("brief-when", "When it comes", briefWord(st), foldBody([h("p", {}, line),
+        arr(sc.waiting).length || Number(sc.waiting) > 0 ? h("p", {class: "hint"}, "Claude makes the change next time it works on your search.") : null],
         st.asked ? btn("See its progress", openWork, {small: true, key: "brief-see"}) :
           btn(!st.setUp || !st.on ? "Turn it on" : "Change it", briefSheet, {small: true, key: "brief-move"}),
-        arr(sc.waiting).length || Number(sc.waiting) > 0 ? h("p", {class: "hint"}, "Claude makes the change next time it works on your search.") : null,
         stateLine(item, "brief-move"))),
-      infoRow("brief-pause", "Take a break", paused ? "Until " + fmtDay(paused) : "Off", h("div", {class: "d-stack"},
+      infoRow("brief-pause", "Take a break", paused ? "Until " + fmtDay(paused) : "Off", foldBody(
         h("p", {}, "Nothing is chased and no brief comes while you are away. Nothing is lost, and it all starts again by itself on the day you choose."),
         paused ? btn("Start again", endBreak, {small: true, key: "brief-resume"}) : btn("Take a break until…", askBreak, {small: true, key: "brief-pause"}),
         stateLine(item, "brief-pause"))),
@@ -8557,13 +8610,13 @@
     return card("article", {class: "card todo export", "aria-labelledby": "export-title", "data-item": "linkedin-export"},
       h("div", {class: "todo-top"}, kindMark("message")), body, noteFor("export"), stateLine(EXPORT_ID(), "export"));
   }
+  // One button for one download: it takes the zip, or the files from inside it (a Mac opens a
+  // zip by itself), chosen together. "Choose its folder" beside it was a second way to give
+  // the same thing (the maintainer, 2026-11-04: "any unnecessary or redundant buttons here?").
   function addDownloadBtn(x, where) {
     const k = where || "card";
     const zipIn = h("input", {type: "file", hidden: true, "aria-label": "The LinkedIn download", accept: ".zip,.csv,application/zip,text/csv", multiple: true, id: "export-files-" + k, onchange: (e) => takeDownload(x, [...(e.target.files || [])])});
-    const dirIn = h("input", {type: "file", hidden: true, "aria-label": "The LinkedIn download's folder", webkitdirectory: "", id: "export-folder-" + k, onchange: (e) => takeDownload(x, [...(e.target.files || [])])});
-    const wide = window.innerWidth >= 760;
-    return h("span", {class: "add-download"}, btn("Add the download", () => zipIn.click(), {kind: k === "card" ? "primary" : "secondary", small: true, key: "export-add:" + k}),
-      wide ? btn("Choose its folder", () => dirIn.click(), {kind: "quiet", small: true, key: "export-folder:" + k}) : null, zipIn, dirIn);
+    return h("span", {class: "add-download"}, btn("Add the download", () => zipIn.click(), {kind: k === "card" ? "primary" : "secondary", small: true, key: "export-add:" + k}), zipIn);
   }
   function neededFiles(x) {
     const files = arr(x.files).filter((f) => typeof f === "string" || f.needed !== false).map((f) => txt(typeof f === "string" ? f : f.name).toLowerCase()).filter(Boolean);
@@ -8719,13 +8772,17 @@
     const link = exportLink(x);
     const st = readingState();
     const [rw, rt] = WHERE_WORDS[st] || [cap1(st.replace(/_/g, " ")), null];
+    // While one download waits for Claude, its line says where it is and has its Undo: a second
+    // Add beside it was a second way to do what was already done (2026-11-04).
+    const waiting = !!obj(exportTaken()).pending;
     return [
-      infoRow("linkedin-download", "Your LinkedIn download", value, h("div", {class: "d-stack"},
+      infoRow("linkedin-download", "Your LinkedIn download", value, foldBody([
+        h("p", {}, "So Claude knows who you have talked to, and never writes to someone twice. Add the zip from LinkedIn's email, or the files inside it."),
         det("export-how", false, {class: "how"}, h("summary", {"data-k": "export-how"}, "How to get it"),
           steps.length ? h("ol", {class: "steps"}, steps.map((s) => h("li", {}, s))) : h("p", {class: "muted"}, "The steps arrive with the next update of this page."),
           link ? h("p", {}, h("a", {href: link, target: "_blank", rel: "noopener noreferrer", class: "btn secondary small", "data-k": "export-open:settings"}, "Open LinkedIn's download page", h("span", {class: "sr-only"}, " (opens in a new tab)"))) : null,
-          obj(x.steps).checked ? h("p", {class: "hint"}, "Steps checked " + fmtDay(obj(x.steps).checked) + ".") : null),
-        h("div", {class: "card-actions"}, addDownloadBtn(x, "settings")), noteFor("export"), stateLine(EXPORT_ID(), "export:settings"))),
+          obj(x.steps).checked ? h("p", {class: "hint"}, "Steps checked " + fmtDay(obj(x.steps).checked) + ".") : null)],
+        waiting ? null : addDownloadBtn(x, "settings"), [noteFor("export"), stateLine(EXPORT_ID(), "export:settings")])),
       // One row for one choice: whether Claude reads profiles, and checking that it can, are
       // the profile_reads setting's own row (renderSettings); a second row beside it read as
       // two settings (the walk-through, 2026-11-03).
@@ -8734,16 +8791,16 @@
   }
   function readingBody() {
     const st = readingState();
-    return h("div", {class: "d-stack"},
+    const here = st !== "off" && S.reading.here === true;
+    return foldBody([
       h("p", {}, "Before Claude writes to someone, the Claude app on your computer reads their LinkedIn profile in its own browser, so the note fits them. Nothing is sent."),
       st === "paused" ? h("p", {}, "LinkedIn asked Claude to slow down: reading starts again tomorrow, by itself.") : null,
-      st === "off" ? null : S.reading.here === true ? h("div", {class: "card-actions"}, btn("Open LinkedIn", () => openLinkedIn("reading:settings"), {small: true, kind: "secondary", key: "reading-open:settings"}),
-        btn("Check it works", () => openReading(true), {small: true, key: "reading-check:settings"}))
-        // Ready says it is ready, and nothing more: "Ready" beside "open this page on your
-        // computer to check it" said two things at once (2026-11-03).
-        : st === "ready" ? null : h("p", {class: "small muted"}, "Open this page in the Claude app on your computer to check it."),
-      noteFor("browser:reading:settings"),
-      S.reading.line ? h("p", {class: "small", role: "status"}, S.reading.line) : null);
+      // Ready says it is ready, and nothing more: "Ready" beside "open this page on your
+      // computer to check it" said two things at once (2026-11-03).
+      st === "off" || here || st === "ready" ? null : h("p", {class: "small muted"}, "Open this page in the Claude app on your computer to check it.")],
+      here ? [btn("Open LinkedIn", () => openLinkedIn("reading:settings"), {small: true, kind: "secondary", key: "reading-open:settings"}),
+        btn("Check it works", () => openReading(true), {small: true, key: "reading-check:settings"})] : null,
+      [noteFor("browser:reading:settings"), S.reading.line ? h("p", {class: "small", role: "status"}, S.reading.line) : null]);
   }
   // The foot of Contacts: one small link while the download is missing or over 14 days old.
   function exportFootLink() {
@@ -9335,21 +9392,24 @@
     // past three minutes it read "Not picked up yet", then "Starting" with a clock, though
     // nothing could start it (the audit, 2026-11-03).
     const inLine = !!(place && place.busy);
-    const picked = st === "queued" && !inLine && !p.stopping && pickedUp(w) > 0;
-    const late = p.late && !picked && !inLine && !helperStarting();
+    // Light work waits in the chat that answers the page behind the light work running there,
+    // and says what that is ("Next, after ..."), behind what came before it if anything did.
+    const ahead = st === "queued" && !inLine && !p.stopping && !away && !HEAVY_KINDS.has(txt(w.kind)) ? lightAhead(id, w) : null;
+    const picked = st === "queued" && !inLine && !ahead && !p.stopping && pickedUp(w) > 0;
+    const late = p.late && !picked && !inLine && !ahead && !helperStarting();
     // Not while this window is still writing it or ringing for it: the card drew Send to Claude
     // where Try again had been, and a double tap's second tap rang a second time (Firefox, CI,
     // 2026-11-04).
     const unsent = st === "queued" && p.unsent && !p.stopping && !away && !workWriting.has(id);
     // Sent, and its chat not yet back: the page's own clock runs, as a chat shows its setup.
-    const waking = st === "queued" && !!p.sentAt && !picked && !late && !inLine && !p.stopping;
+    const waking = st === "queued" && !!p.sentAt && !picked && !late && !inLine && !ahead && !p.stopping;
     // One honest word for waiting work, and the sentence under it says when: "Waiting to
     // start", "Waiting for Claude to start." and "Asked just now." said three things and none
     // said when (the walk-through, 2026-11-03).
     // Its own chat stopped on a question to the person (tools/page_db.py mark_blocked): said
     // as that, never as a job that may have stopped (the stranger audit, X-7 and X-8).
     const blocked = (st === "running" || st === "claimed") && !!txt(w.blocked_at);
-    const label = p.stopping ? "Stopping after this step" : picked ? "Starting" : st === "queued" ? (unsent ? "Not sent yet" : late ? "No answer yet" : inLine ? (place.pos === 1 ? "Next" : "In line") : waking ? (freshHeartbeat() ? "Sent" : "Waking Claude") : "Waiting for Claude") : st === "running" || st === "claimed" ? (blocked ? "Waiting for you" : slow ? "May have stopped" : null) : WORK_WORDS[st] || cap1(st);
+    const label = p.stopping ? "Stopping after this step" : picked ? "Starting" : st === "queued" ? (unsent ? "Not sent yet" : late ? "No answer yet" : inLine ? (place.pos === 1 ? "Next" : "In line") : ahead ? (ahead.pos === 1 ? "Next" : "In line") : waking ? (freshHeartbeat() ? "Sent" : "Waking Claude") : "Waiting for Claude") : st === "running" || st === "claimed" ? (blocked ? "Waiting for you" : slow ? "May have stopped" : null) : WORK_WORDS[st] || cap1(st);
     const tone = p.stopping ? "held" : {done: "ok", failed: "bad", stopped: "held", needs_you: "warn"}[st] || (blocked || slow || late || unsent ? "warn" : null);
     const cur = p.stages[Math.min(p.i, p.n - 1)];
     // The newest line Claude wrote on it, from after it was asked (or answered).
@@ -9374,12 +9434,23 @@
         said ? said :
         helperStarting() ? "Claude's helper is starting up. It takes this in a minute or two." :
         inLine ? (place.pos === 1 ? "Starts as soon as one of the " + place.busy + " jobs running now is done." : plural(place.pos - 1, "job", "jobs") + " before it, once one of the " + place.busy + " running now is done.") :
+        ahead ? (ahead.pos === 1 ? "Next, after " : "In line, after ") + quoted(ahead.after) + "." :
         late ? (p.sentAt ? "No answer from Claude in " + aboutMins((now() - p.sentAt) / 1000) + "." + ((S.tries.get(id) || 0) < RING_TRIES ? " It is sent again with your next tap here." : "") + " If its chat has closed, open Claude." : "Claude has not picked this up yet.") :
         waking ? (freshHeartbeat() ? "Sent to Claude, which is open now: it starts in a moment." : "Sent to Claude. Its chat is waking up, which usually takes about " + aboutMins(wakeS()) + ".") :
         tms(w.answered_at) ? "Answered " + askedWhen(w) + ". Your answer is with Claude." :
         "Asked " + askedWhen(w) + ". Claude starts it when it next looks at this page.";
     }
-    return {p, v, lead, st, toComputer, away, slow, over, place, inLine, picked, late, unsent, waking, label, tone, now1};
+    return {p, v, lead, st, toComputer, away, slow, over, place, inLine, ahead, picked, late, unsent, waking, label, tone, now1};
+  }
+  // What light work waits behind in its chat: the one running there, or the light work asked
+  // before it that waits too, with its place.
+  function lightAhead(id, w) {
+    const run = runningAhead(id);
+    if (!run) return null;
+    const to = txt(w.to) || "cloud";
+    const before = activeWork().filter(([x, v]) => x !== id && txt(v.status) === "queued" && !HEAVY_KINDS.has(txt(v.kind)) && (txt(v.to) || "cloud") === to &&
+      txt(v.asked_at) < txt(w.asked_at));
+    return {after: before.length ? txt(before[before.length - 1][1].title) || run : run, pos: before.length + 1};
   }
   function workCard(id, w) {
     const ws = workSay(id, w);
@@ -9558,18 +9629,25 @@
   // A tap that is a piece of work for Claude (a LinkedIn download to read) shows in Claude's
   // work until it is applied: saved, it was nowhere there, and the person could not tell it
   // was coming (2026-10-30).
-  const TAP_WORK = {"export.take": "Reading your LinkedIn download"};
+  // `verb`: what its receipt says Claude does with it ("Saved. Claude reads it next.").
+  const TAP_WORK = {"export.take": {title: "Reading your LinkedIn download", verb: "Claude reads it"}};
   function tapCards() {
     const out = [];
     for (const [id, d] of allActions()) {
-      const title = TAP_WORK[txt(d.action)];
+      const work = TAP_WORK[txt(d.action)];
       const st = actionState(id);
-      if (!title || (st !== "saved" && st !== "saving")) continue;
-      const picked = pickedUp({asked_at: d.at}) > 0;
-      out.push(h("article", {class: "work-card st-queued", "data-tap-work": id},
-        h("div", {class: "wc-head"}, picked ? h("span", {class: "spin", "aria-hidden": "true"}) : h("span", {class: "dot tone-plain is-waiting", "aria-hidden": "true"}),
-          h("h3", {class: "wc-title"}, title), stateWord(picked ? "Starting" : "Waiting for Claude", null)),
-        h("p", {class: "wc-now"}, picked ? "Claude has picked this up" : "Asked " + askedWhen({asked_at: d.at}) + ". Claude starts it when it next looks at this page.")));
+      if (!work || (st !== "saved" && st !== "saving")) continue;
+      // What it waits behind, as its receipt says: "Next, after" the work running in the chat
+      // that answers the page, or that chat not answering, with the one way to start it.
+      const ahead = tapAhead(d.at);
+      const picked = !ahead.after && !!ahead.picked;
+      const tid = "w-tap-" + seg(id);
+      out.push(h("article", {class: "work-card st-queued" + (ahead.away ? " edge-warn" : ""), "data-tap-work": id, tabindex: "-1", "aria-labelledby": tid},
+        h("div", {class: "wc-head"}, picked ? h("span", {class: "spin", "aria-hidden": "true"}) : h("span", {class: "dot tone-" + (ahead.away ? "warn" : "plain is-waiting"), "aria-hidden": "true"}),
+          h("h3", {class: "wc-title", id: tid}, work.title), stateWord(picked ? "Starting" : ahead.after ? "Next" : ahead.away ? "No answer yet" : "Waiting for Claude", ahead.away ? "warn" : null)),
+        h("p", {class: "wc-now"}, picked ? "Claude has picked this up" : ahead.after ? "Next, after " + quoted(ahead.after) + "." :
+          ahead.away ? "Claude's helper is not answering, so this waits. Open Claude to start it now." : "Asked " + askedWhen({asked_at: d.at}) + ". Claude starts it when it next looks at this page."),
+        ahead.away ? h("div", {class: "wc-actions"}, h("a", {class: "btn quiet small", href: wakeUrl(), target: "_blank", rel: "noopener noreferrer", "data-k": "prefill:tap:" + id}, "Open Claude", h("span", {class: "sr-only"}, " (opens Claude in a new tab)"))) : null));
     }
     return out;
   }
@@ -9578,16 +9656,27 @@
   // width. There the pill opens the sheet, as on a phone: it did nothing at all on the Brief
   // (the maintainer, 2026-10-31).
   function railShown() { const hd = $("h-work-rail"); return !!(wide() && hd && hd.getClientRects().length); }
-  function openWork() {
+  // `item`: a tap or a piece of work to show in it, scrolled to and given the focus (a saved
+  // tap's "See it in Claude's work").
+  function openWork(item) {
     sset("session", "ljs:work-seen", String(now()));
+    const id = typeof item === "string" ? item : "";
+    const show = (root) => {
+      let c = null;
+      try { c = id && root ? root.querySelector('[data-tap-work="' + CSS.escape(id) + '"], [data-work="' + CSS.escape(id) + '"]') : null; } catch (e) { c = null; }
+      if (!c) return false;
+      try { c.scrollIntoView({block: "nearest"}); } catch (e) { /* no scrolling */ }
+      try { c.focus({preventScroll: true}); } catch (e) { c.focus(); }
+      return true;
+    };
     if (railShown()) {
       if (S.tweak) closeTweak();
       const hd = $("h-work-rail");
       try { hd.scrollIntoView({block: "start"}); } catch (e) { /* no scrolling */ }
-      hd.focus();
+      if (!show($("rail"))) hd.focus();
       return;
     }
-    if (workDlg) return;
+    if (workDlg) { show(workDlg); return; }
     const opener = document.activeElement;
     const body = h("div", {class: "work-body"});
     workDlg = h("dialog", {class: "work-sheet", "aria-labelledby": "h-work-sheet"},
@@ -9598,7 +9687,7 @@
     body.replaceChildren(workPanel("sheet"));
     try { workDlg.showModal(); } catch (e) { workDlg.setAttribute("open", ""); }
     const hd = $("h-work-sheet");
-    if (hd) hd.focus();
+    if (!show(workDlg) && hd) hd.focus();
   }
   function closeWork() { if (workDlg) { try { workDlg.close(); } catch (e) { workDlg.remove(); workDlg = null; } } }
   function workPill() {
@@ -10627,14 +10716,21 @@
     }
     let body;
     if (s.kind === "choice") {
-      body = h("fieldset", {class: "setting"}, h("legend", {class: "sr-only"}, settingLabel(s)), copy.hint ? h("p", {class: "hint"}, copy.hint) : null, arr(s.choices).map((c, i) => {
-        const words = (copy.choices || {})[txt(c[0])] || [txt(c[1])];
+      const wordsOf = (c) => (copy.choices || {})[txt(c[0])] || [txt(c[1])];
+      // A few short choices with nothing more to say about each sit side by side as chips,
+      // wrapping on a phone; still a radio group, so arrow keys and a screen reader work as
+      // before (the maintainer, 2026-11-04: four reminders stacked down a wide panel).
+      const chips = arr(s.choices).length <= 5 && arr(s.choices).every((c) => !wordsOf(c)[1] && txt(wordsOf(c)[0]).length <= 24);
+      const opts = arr(s.choices).map((c, i) => {
+        const words = wordsOf(c);
         const hid = words[1] ? sid + "-" + i + "-h" : null;
         return h("div", {class: "choice"},
           h("input", {type: "radio", name: sid, id: sid + "-" + i, "data-k": sid + "-" + i, value: txt(c[0]), checked: txt(v) === txt(c[0]), "aria-describedby": hid,
             onchange: () => saveSoon(s, c[0], words[0])}),
           h("label", {for: sid + "-" + i}, words[0], words[1] ? h("span", {class: "hint block", id: hid}, words[1]) : null));
-      }));
+      });
+      body = h("fieldset", {class: "setting" + (chips ? " pills" : "")}, h("legend", {class: "sr-only"}, settingLabel(s)), copy.hint ? h("p", {class: "hint"}, copy.hint) : null,
+        chips ? h("div", {class: "pill-row"}, opts) : opts);
     } else {
       const key = "set:" + s.key;
       const draft = draftGet(key);
@@ -10669,6 +10765,17 @@
     return h("div", {class: "setting-row toggle-row"}, h("label", {for: "keys-on", class: "set-name"}, "Keyboard shortcuts", h("span", {class: "hint block", id: "keys-hint"}, "Press ? to see them all.")),
       h("input", {type: "checkbox", role: "switch", id: "keys-on", "data-k": "keys-on", checked: S.keysOn, "aria-describedby": "keys-hint",
         onchange: (e) => { S.keysOn = e.target.checked; sset("local", "ljs:keys", S.keysOn ? null : "off"); announce(S.keysOn ? "Keyboard shortcuts on." : "Keyboard shortcuts off."); }}));
+  }
+  // An opened fold: what it says, what it does, and the line a tap leaves. On a wide screen the
+  // buttons stand at its right edge, under the row's own value, beside the words they belong
+  // to, and a tap's line runs under both with its Undo under the button; on a phone they
+  // follow the words. Each fold stacked words, buttons and its line down the left of a wide
+  // panel (the maintainer, 2026-11-04: "surely this could be spaced out a bit better instead
+  // of bunching them all on the left").
+  function foldBody(say, acts, after, attrs) {
+    const a = [acts].flat(3).filter(Boolean);
+    return h("div", Object.assign({}, attrs, {class: "fbody" + (a.length ? " has-acts" : "") + (attrs && attrs.class ? " " + attrs.class : "")}),
+      h("div", {class: "fb-say"}, say), a.length ? h("div", {class: "fb-acts"}, a) : null, after);
   }
   function infoRow(key, name, value, body) {
     return det("info:" + key, false, {class: "setting-row"}, h("summary", {class: "set-sum", "data-k": "info-sum:" + key}, h("span", {class: "set-name"}, name), value ? h("span", {class: "set-value"}, value) : null),
@@ -11156,13 +11263,45 @@
   }
   // Only what changed is redrawn: a region whose new content is the same as what is there
   // is left alone, so a live update never wipes a selection or moves the reading place.
-  function patch(el, nodes) {
+  // `prep` gives a screen drawn afresh the marks the page puts on the one on screen after
+  // drawing it (which button stays filled, a control's name after its card, how much of each
+  // Brief list fits), so the two compare as the same when nothing changed; `keep` redraws only
+  // the parts that did change (morph). Before, the marks made every comparison differ, and
+  // each live update rebuilt the whole screen (the maintainer, 2026-11-04: an iPhone scrolling
+  // the Brief showed a blank page, then its foot).
+  function patch(el, nodes, prep, keep) {
     const kids = arr(nodes).filter((k) => k !== null && k !== undefined && k !== false);
     if (talkEl && kids.indexOf(talkEl) >= 0) { el.replaceChildren(...kids); return true; }
     const probe = document.createElement(el.tagName === "UL" ? "ul" : "div");
     add(probe, kids);
+    if (prep) prep(probe);
     if (sameKids(probe, el)) return false;
-    el.replaceChildren(...probe.childNodes);
+    if (keep) morph(el, probe);
+    else el.replaceChildren(...probe.childNodes);
+    return true;
+  }
+  // A part is drawn again only where it changed: the boxes around the cards, panels and rows
+  // are kept while their insides are compared, and a card, panel, row or control that changed
+  // is put in whole. A box with its own listeners, or one that is a card, a row or a control
+  // (data-k, data-card, data-item), is never kept with new insides: what its listeners do was
+  // made for what it showed before.
+  function morph(el, probe) {
+    const x = [...el.childNodes];
+    const y = [...probe.childNodes];
+    if (x.length !== y.length) { el.replaceChildren(...y); return; }
+    for (let i = 0; i < y.length; i++) {
+      const a = x[i], b = y[i];
+      if (a.isEqualNode(b)) continue;
+      if (sameBox(a, b)) morph(a, b);
+      else el.replaceChild(b, a);
+    }
+  }
+  function sameBox(a, b) {
+    if (a.nodeType !== 1 || b.nodeType !== 1 || a.tagName !== b.tagName || a.__ljsOn || b.__ljsOn) return false;
+    if (b.hasAttribute("data-k") || b.hasAttribute("data-card") || b.hasAttribute("data-item") || /^(INPUT|TEXTAREA|SELECT|BUTTON|A|DETAILS|SUMMARY|FORM|DIALOG|svg)$/i.test(b.tagName)) return false;
+    const ya = b.attributes;
+    if (a.attributes.length !== ya.length) return false;
+    for (const at of ya) if (a.getAttribute(at.name) !== at.value) return false;
     return true;
   }
 
@@ -11217,8 +11356,9 @@
   }
   // Two controls in the main part never share a name unless each names its item (LAYOUT_SPEC
   // 7.9): a repeated "Not yet" or "Open in Drafts" is named after the card or row it is on.
-  function nameByItem() {
-    const main = $("main");
+  // `root`: a screen drawn afresh, named before it is compared with the one on screen (patch).
+  function nameByItem(root) {
+    const main = root || $("main");
     if (!main) return;
     const nameOf = (e) => (e.getAttribute("aria-label") || e.textContent || "").replace(/\s+/g, " ").trim();
     const ctrls = [...main.querySelectorAll("button, a, summary")];
@@ -11233,10 +11373,12 @@
       if (what && !n.includes(what)) c.setAttribute("aria-label", n + ": " + what);
     }
   }
-  function demotePrimaries() {
+  // `roots`: a screen drawn afresh, and whether one filled button is already on the page
+  // before it (the rail's comes after the main part's).
+  function demotePrimaries(roots, before) {
     const all = [];
-    for (const root of [$("main"), wide() ? $("rail") : null]) if (root) for (const b of root.querySelectorAll(".btn.primary")) all.push(b);
-    all.forEach((b, i) => { if (i > 0) { b.classList.remove("primary"); b.classList.add("secondary"); } });
+    for (const root of roots || [$("main"), wide() ? $("rail") : null]) if (root) for (const b of root.querySelectorAll(".btn.primary")) all.push(b);
+    all.forEach((b, i) => { if (i > 0 || before) { b.classList.remove("primary"); b.classList.add("secondary"); } });
   }
   // One part of the page that throws never stops the rest: a single malformed item froze
   // every screen silently, taps and toasts included (robustness audit 6). The part says so.
@@ -11271,7 +11413,8 @@
       main.classList.toggle("split", !!split);
       const node = (sec, b) => guarded(() => sectionNode(sec, b), () => h("section", {class: "section"},
         empty("This part could not be shown.", "Something in it is not as the page expects. Refresh, and if it stays, tell Claude in a chat what you see, or the app's makers (Settings, Something looks wrong).")));
-      patch(main, split ? [h("div", {class: "col"}, node(S.section)), h("div", {class: "col"}, node(S.split, "b"))] : [node(S.section)]);
+      patch(main, split ? [h("div", {class: "col"}, node(S.section)), h("div", {class: "col"}, node(S.split, "b"))] : [node(S.section)],
+        (probe) => { fitKept(probe); demotePrimaries([probe]); nameByItem(probe); }, true);
     }
     const rail = $("rail");
     // The Brief is a page to take in at a glance, so it has the whole width: no Work rail
@@ -11280,10 +11423,10 @@
     // The rail is there only while it has something to show: "Claude's work. Nothing
     // running." beside every screen squeezed To do and Settings (the 3 November audit).
     const railNode = isWide && !S.tweak ? guarded(() => workPanel("rail")) : null;
-    const railEmpty = !!railNode && !railNode.querySelector("[data-work], [data-chat-busy], [data-card], .banner, .fold");
+    const railEmpty = !!railNode && !railNode.querySelector("[data-work], [data-tap-work], [data-chat-busy], [data-card], .banner, .fold");
     guarded(() => { if (shell) shell.classList.toggle("no-rail", isWide && !S.tweak && (S.section === "brief" || railEmpty)); });
     // An open Tweak panel holds the rail on wide screens until it closes.
-    guarded(() => { if (rail) { if (isWide) { if (!S.tweak) patch(rail, railEmpty || !railNode ? [] : [railNode]); } else if (rail.childNodes.length) rail.replaceChildren(); } });
+    guarded(() => { if (rail) { if (isWide) { if (!S.tweak) patch(rail, railEmpty || !railNode ? [] : [railNode], (probe) => demotePrimaries([probe], !!$("main").querySelector(".btn.primary")), true); } else if (rail.childNodes.length) rail.replaceChildren(); } });
     guarded(() => { if (workDlg) { const body = workDlg.querySelector(".work-body"); if (body) patch(body, [workPanel("sheet")]); } });
     for (const part of [renderFoot, renderBrowserPanel, renderDock, tidyDownload, demotePrimaries, nameByItem, renderToasts, fitBrief]) guarded(part);
     const n = guarded(todoBadge, () => 0);
