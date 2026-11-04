@@ -52,6 +52,8 @@ make sense to somebody whose repo just received it.
   Apply is the one button: it starts at once.
 - **A card being changed says so**: "Claude changes this next", with a link to it in
   Claude's work, until the new version is there.
+- **Something Claude could not do always has a way out.** Its card in To do says what it was
+  about, says any day as a day, and can be said in Chat or put away, even when it asks nothing.
 - **What you close or stop leaves its list at once.** Closing people in To do, or "No more
   messages" to someone, takes them off the list straight away instead of waiting for Claude;
   "11 closed: Show" brings them back with their Undo.

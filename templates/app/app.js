@@ -1053,8 +1053,12 @@
   // stale one said it twice (the audit, 2026-11-03). Only a stale receipt says it changed.
   function refusedWords(r) {
     const note = txt(obj(r).note).replace(/\s+/g, " ").trim();
-    if (txt(obj(r).result) === "stale") return "Not done: " + (note && !/changed since/i.test(note) ? note : "this changed since you saw it. Look again and choose once more.");
-    return "Not done: " + (note || "it could not be done. Try it once more, or say it in Chat.");
+    // A day in it said as a person says it: "Give it as 2026-10-28" stood on a To do card
+    // (the maintainer, 2026-11-04).
+    // Only a real day: "2026-11-31 is not a day" quotes what the person typed, as typed.
+    const days = (s) => txt(s).replace(/\b\d{4}-\d{2}-\d{2}\b/g, (m) => { const d = new Date(m + "T00:00:00Z"); return !isNaN(d) && d.toISOString().slice(0, 10) === m ? plainDates(m) : m; });
+    if (txt(obj(r).result) === "stale") return "Not done: " + days(note && !/changed since/i.test(note) ? note : "this changed since you saw it. Look again and choose once more.");
+    return "Not done: " + days(note || "it could not be done. Try it once more, or say it in Chat.");
   }
   // Where the engine says what it needs (a receipt's `ask`: the value's key, a label and its
   // kind), the field to give it, which sends the same tap again with it filled in.
@@ -1100,12 +1104,23 @@
       // Gone from the page altogether, with nothing asked: nothing is left to do about it.
       const name = itemName(d.item);
       if (!name && !obj(r.ask).key) continue;
-      out.push({key: "refused:" + id, kind: "setup", band: "answer", employer: null, tab: null, counts: true, node: () => {
+      // Marked by what it was about, never "Setup" for an interview; and never a dead end: with
+      // no question to answer on it, it can be said in Chat or put away. A card from before
+      // refusals carried their question sat with no button at all (the maintainer, 2026-11-04:
+      // "doesn't seem to have any options").
+      const kind = /^(outcome|interview)\./.test(txt(d.action)) ? "interview" : /^(job|ready)\./.test(txt(d.action)) ? "application"
+        : /^(msg|person|referral)\./.test(txt(d.action)) ? "message" : "setup";
+      const title = name || ACTION_WORDS[d.action] || "Something you tapped";
+      out.push({key: "refused:" + id, kind, band: "answer", employer: null, tab: null, counts: true, node: () => {
+        const asked = !!txt(obj(r.ask).key);
         return card("article", {class: "card todo", "aria-labelledby": "rf-" + seg(id), "data-item": "refused:" + id},
-          h("div", {class: "todo-top"}, kindMark("setup"), stateWord("Not done", "bad")),
+          h("div", {class: "todo-top"}, kindMark(kind), stateWord("Not done", "bad"),
+            btn("", () => hideTodo("refused:" + id, title), {kind: "quiet icon-only", small: true, icon: "bin", key: "rf-bin:" + id, aria: "Put away: " + title})),
           // Named by what it was about: "Interview booked" beside "Not done" said both.
-          h("p", {class: "card-title", id: "rf-" + seg(id)}, name || ACTION_WORDS[d.action] || "Something you tapped"),
-          stateLine(d.item, "rf:" + id));
+          h("p", {class: "card-title", id: "rf-" + seg(id)}, title),
+          stateLine(d.item, "rf:" + id),
+          asked ? null : h("div", {class: "card-actions"}, btn("Say it in Chat", (e) => openDock({opener: e.currentTarget, text: title + ": "}),
+            {kind: "secondary", small: true, key: "rf-chat:" + id})));
       }});
     }
     return out;
