@@ -117,6 +117,30 @@ def test_code_drafts_reach_messages_and_never_write_over_the_one_waiting(clean):
     assert _waiting(WREN) == "Hi Wren, a note."
 
 
+def test_the_brief_puts_each_follow_up_it_drafts_in_messages(clean, tmp_path, monkeypatch):
+    import brief
+    import datetime as dt
+    # The brief writes to its profile too (the routines it keeps): a copy of the example's,
+    # and its own briefs folder taken away afterwards.
+    shutil.copytree(os.path.join(ROOT, "profile.example"), tmp_path / "profile")
+    monkeypatch.setenv("LJS_PROFILE", str(tmp_path / "profile"))
+    person.reset()
+    briefs = person.state("documents", "briefs")
+    had = set(os.listdir(briefs)) if os.path.isdir(briefs) else None
+    try:
+        b = brief.gather(dt.date.fromisoformat(DAY), write=True)
+    finally:
+        monkeypatch.undo()
+        person.reset()
+        if had is None:
+            shutil.rmtree(briefs, ignore_errors=True)
+        else:
+            for name in set(os.listdir(briefs)) - had:
+                os.remove(os.path.join(briefs, name))
+    assert b["pack"], "the day's pack is written"
+    assert _waiting(WREN).startswith("Hi Wren, following up on my note from September. "), _waiting(WREN)
+
+
 def test_finish_saves_a_follow_up_to_someone_who_never_wrote_back(clean, tmp_path):
     f = tmp_path / "draft.txt"
     f.write_text(TEXT, encoding="utf-8")
