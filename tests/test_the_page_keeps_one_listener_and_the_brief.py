@@ -690,3 +690,54 @@ def test_a_new_person_is_asked_to_start_everywhere_until_a_step_is_done(run, tmp
 def test_messages_opened_by_its_own_link_is_called_messages(run, tmp_path):
     got = _go(run, tmp_path, [{"hash": "messages", "eval": "document.querySelector('#main h2').textContent"}], PHONE, model=copy.deepcopy(EMPTY), clock=T)
     assert got["after"][0]["eval"] == "Messages"
+
+
+# ------------------------------------------------------------------ the brief's phone notification
+
+
+def _no_brief_yet(m):
+    m["schedule"] = {"id": "schedule", "set_up": False, "off": False, "when": "", "days": [], "time": "",
+                     "zone": "Europe/London", "paused": None, "waiting": 0, "rev": "sc0", "push_here": False,
+                     "actions": {"move": "brief.move", "pause": "brief.pause", "resume": "brief.resume", "off": "brief.off", "on": "brief.on"}}
+    return m
+
+
+def _phone_setting(m, value="off"):
+    m["settings"] = [s for s in m.get("settings") or [] if s.get("key") != "brief_push"] + [
+        {"id": "setting-brief_push", "key": "brief_push", "label": "Phone notification", "kind": "choice",
+         "value": value, "choices": [["off", "Off"], ["on", "On"]], "rev": "s-brief_push"}]
+    return m
+
+
+def test_turning_the_brief_on_asks_about_the_phone_and_keeps_the_answer(run, tmp_path, vp):
+    """Off unless chosen, and asked where the brief is set up (the maintainer, 2026-11-04: "make
+    it off by default but maybe part of the setup"). The answer is kept either way, so the
+    update never asks again what was answered here."""
+    for choose, want in ((None, "off"), ("On", "on")):
+        here = tmp_path / want
+        here.mkdir()
+        steps = [{"hash": "brief", "open": "brief-bell", "read": "dialog[open]"}]
+        if choose:
+            steps.append({"click": choose, "role": "radio", "exact": True})
+        steps.append({"click": "Turn it on", "wait": 500})
+        got = _go(run, here, steps, vp, model=_phone_setting(_no_brief_yet(_sample())), clock=T)
+        assert "Phone notification" in got["after"][0]["text"]
+        tap = _one(got, "setting.set")
+        assert tap["item"] == "setting-brief_push" and tap["value"] == want, tap
+        w = [x for x in got["work"] if x and x.get("kind") == "brief"]
+        assert w and w[-1]["args"] == {"setup": True}, got["work"]
+
+
+def test_settings_offers_the_phone_notification_only_where_the_brief_sends_it(run, tmp_path, vp):
+    groups = ("Array.from(document.querySelectorAll('.set-group'))"
+              ".map((g) => (g.getAttribute('aria-label') || '') + ':' + g.textContent).join('|')")
+    for here in (True, False):
+        m = _phone_setting(_sample())
+        m["schedule"]["push_here"] = here
+        d = tmp_path / str(here)
+        d.mkdir()
+        got = _go(run, d, [{"hash": "settings", "eval": groups}], vp, model=m, clock=T)
+        text = got["after"][0]["eval"]
+        brief = next(g for g in text.split("|") if g.startswith("Your brief:"))
+        assert ("Phone notification" in brief) is here, brief
+        assert ("Phone notification" in text) is here

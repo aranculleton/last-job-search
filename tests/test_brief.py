@@ -571,3 +571,48 @@ def test_watching_again_what_was_stopped_works_from_a_chat(tmp_path):
         _run(state, "watch", "add", "thing %d" % n)
     full = _run(state, "watch", "add", "one too many")
     assert full.returncode == 2 and "stop one first" in full.stderr
+
+
+# ------------------------------------------------------------------ the news, 4 November
+
+NEWS_ITEM = ("- A payments firm raises $425M at a higher valuation (Example Business News, 2026-10-28, "
+             "https://example.com/news/raise). A point to raise in any interview this month.\n")
+
+
+def test_the_message_carries_the_news_without_its_links(tmp_path):
+    """The brief printed "the first 3 without their links" and then the links (the maintainer,
+    2026-11-04): each line keeps its publisher and day, never its link."""
+    line = brief.message_news(NEWS_ITEM.strip("- \n"))
+    assert "http" not in line and "(Example Business News, 28 Oct)" in line, line
+    state = _state(tmp_path)
+    _run(state, "--today", "2026-11-04", "--write")
+    r = _run(state, "news", "--today", "2026-11-04", stdin=NEWS_ITEM)
+    shown = r.stdout.split("for the message", 1)[1] if "for the message" in r.stdout else ""
+    assert "Example Business News, 28 Oct" in shown and "https://" not in shown, r.stdout
+
+
+def test_too_few_news_items_have_the_chat_search_again_once(tmp_path):
+    """The news reader came back with none on 4 November, dropping every result not dated on
+    its own line, while three ordinary searches found two items at once. Fewer than three: the
+    chat searches again itself, once, reading a day from a result's title, text or link."""
+    state = _state(tmp_path)
+    _run(state, "--today", "2026-11-04", "--write")
+    for stdin, args, asks in ((NEWS_ITEM, (), True), ("", (), True), (NEWS_ITEM, ("--again",), False),
+                              (NEWS_ITEM * 3, (), False)):
+        if stdin == NEWS_ITEM * 3:
+            stdin = "".join(NEWS_ITEM.replace("raise)", "raise-%d)" % i) for i in range(3))
+        r = _run(state, "news", "--today", "2026-11-04", *args, stdin=stdin)
+        said = [ln for ln in r.stdout.splitlines() if ln.startswith("news: only ")]
+        assert bool(said) is asks, (args, r.stdout)
+        if asks:
+            assert "/2026/11/04/" in said[0] and "--again" in said[0] and "2026-10-07" in said[0]
+    brief_lines = _run(state, "--today", "2026-11-04").stdout
+    assert "today is 2026-11-04" in brief_lines
+
+
+def test_the_news_reader_reads_a_day_wherever_a_result_gives_it():
+    text = " ".join(open(os.path.join(ROOT, ".claude", "agents", "news-reader.md"), encoding="utf-8").read().split())
+    assert "the result shows its own date" not in text
+    for where in ("its title or text", "a date in its link", "/2026/11/03/", "counted back from today",
+                  "**Today's date**"):
+        assert where in text, where

@@ -20,6 +20,21 @@ make sense to somebody whose repo just received it.
 
 ## [Unreleased]
 
+### Changed
+
+- **Your brief's phone notification is off unless you want it.** Turning the brief on asks
+  whether you want one, and you can change it any time in Settings, under Your brief, Phone
+  notification. If you already have a brief, Claude asks you once. Your brief still comes on
+  your page and in its chat either way. Profile upgrade: brief-push.
+
+### Fixed
+
+- **Your brief's news is never empty because of how a date was shown.** The news search left
+  out any result that did not show its date on its own line, so a brief could come back with
+  none while ordinary searches found plenty. A result's day is now read from its title, its
+  words or its link, and when fewer than three come back, Claude searches again once before
+  the brief is written.
+
 ## [4.9.1] - 2026-11-04
 
 ### Changed

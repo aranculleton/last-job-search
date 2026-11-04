@@ -1,19 +1,19 @@
 {
  "model": 1,
  "made_at": "2026-10-25T18:00:00Z",
- "rev": "eb6568c5ddbd",
+ "rev": "f2c85ba35cc3",
  "app": {
-  "version": "4.8.0",
+  "version": "4.9.1",
   "url": null,
   "update_waiting": null,
   "news": [
-   "Your brief's news is never empty, and each item says how to use it.",
-   "Today on your Brief is the one most pressing thing, with what matters about it beside it.",
-   "News reads as tidy points."
+   "A new helper chat gives your page's link straight away.",
+   "With a page, a brief in a chat is short.",
+   "A LinkedIn download fills in what your contacts lack."
   ],
   "privacy": "Only you can open this page unless you share it. It holds first names, employers, your drafts and your setup answers, so keep it unshared.",
   "repo": "https://github.com/aranculleton/last-job-search",
-  "page": 17,
+  "page": 19,
   "not_saved": 0
  },
  "person": {
@@ -48,7 +48,7 @@
  ],
  "jobs": {
   "round": "r9",
-  "made_at": "2026-11-04T01:01:53Z",
+  "made_at": "2026-11-04T17:41:22Z",
   "met": false,
   "summary": "3 roles from the last search to look at, 1 of them scoring 75 or more. 3 left out, each with its reason.",
   "rows": [
@@ -842,7 +842,7 @@
    "when": "2026-10-28",
    "prep": {
     "path": "documents/applications/thornbury_bank_risk_analyst_thornbury/interview_prep.md",
-    "updated": "2026-11-04T01:01:53Z"
+    "updated": "2026-11-04T17:41:22Z"
    },
    "questions": 2,
    "all_day": true,
@@ -1207,6 +1207,24 @@
    "rev": "638415eb3385"
   },
   {
+   "id": "setting-brief_push",
+   "key": "brief_push",
+   "label": "Phone notification",
+   "kind": "choice",
+   "value": "off",
+   "choices": [
+    [
+     "off",
+     "Off"
+    ],
+    [
+     "on",
+     "On"
+    ]
+   ],
+   "rev": "bfec526fd79b"
+  },
+  {
    "id": "setting-time_zone",
    "key": "time_zone",
    "label": "Your time zone",
@@ -1314,33 +1332,33 @@
   ]
  },
  "updates": {
-  "version": "4.8.0",
-  "newest": "4.8.0",
+  "version": "4.9.1",
+  "newest": "4.9.1",
   "mode": "auto",
   "waiting": null,
   "changed": [
    {
-    "version": "4.8.0",
-    "date": "2026-11-02",
+    "version": "4.9.1",
+    "date": "2026-11-04",
     "lines": [
-     "Your brief's news is never empty, and each item says how to use it.",
-     "Today on your Brief is the one most pressing thing, with what matters about it beside it.",
-     "News reads as tidy points.",
-     "The weekly bars are clearer.",
-     "Fold the side menu to its icons.",
-     "Your progress fits its panel at any width."
+     "A new helper chat gives your page's link straight away.",
+     "With a page, a brief in a chat is short.",
+     "A LinkedIn download fills in what your contacts lack.",
+     "An opened setting uses the whole width.",
+     "Your LinkedIn download has one button.",
+     "A saved tap says what happens next and where to see it."
     ]
    },
    {
-    "version": "4.7.0",
-    "date": "2026-11-02",
+    "version": "4.9.0",
+    "date": "2026-11-04",
     "lines": [
-     "Your page shows what is new without you doing anything.",
-     "A new version reaches your page by itself.",
-     "The brief's opening shows on your Brief again.",
-     "Your brief's news watches what moves your own search, in your words. (set up for you)",
-     "Today on your Brief is what comes next today.",
-     "The Brief fits your screen by what really saves room."
+     "Every finding of two full audits is fixed in this release.",
+     "Your page goes up in small pieces any chat can manage.",
+     "If your page was never made, the next chat makes it.",
+     "Your morning brief stays in your own chat and sends its headline to your phone.",
+     "Improvements start by themselves.",
+     "Work from a chat that could not save is brought in by the next save."
     ]
    }
   ],
@@ -1759,6 +1777,7 @@
   "zone": "Europe/London",
   "paused": null,
   "waiting": 0,
+  "push_here": true,
   "actions": {
    "move": "brief.move",
    "pause": "brief.pause",
@@ -1767,7 +1786,7 @@
    "on": "brief.on"
   },
   "id": "schedule",
-  "rev": "7cd56d1d27f9"
+  "rev": "43cc79b6d1d5"
  },
  "you": {
   "id": "you",

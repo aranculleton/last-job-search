@@ -89,8 +89,17 @@ def _readme():
 def test_a_brief_bound_to_a_chat_ends_with_one_push_of_its_headline(tmp_path):
     """S3, X-1: the brief posted into a chat with no notification. The run now sends its
     headline, with the page's link, under PushNotification's 200 characters, asked by
-    brief.py's own lines alone (one place, never the shared prompts)."""
+    brief.py's own lines alone (one place, never the shared prompts). Only for a person who
+    chose it: off unless they did (the maintainer, 2026-11-04)."""
     c = Copy(tmp_path)
+    out = c.run("brief.py", "--today", "2026-11-03")
+    assert "PushNotification" not in out.split("FOR CLAUDE", 1)[1]
+    pj = os.path.join(c.profile, "person.json")
+    with open(pj, encoding="utf-8") as fh:
+        data = json.load(fh)
+    data["brief_push"] = "on"
+    with open(pj, "w", encoding="utf-8") as fh:
+        json.dump(data, fh, indent=2)
     out = c.run("brief.py", "--today", "2026-11-03")
     message, claude = out.split("FOR CLAUDE", 1)
     asks = [ln for ln in claude.splitlines() if "PushNotification" in ln]
@@ -118,6 +127,10 @@ def test_only_a_brief_with_no_notification_of_its_own_is_asked_to_push(monkeypat
         if chat:
             reg["routines"][0]["chat"] = {"session_id": CHAT}
         monkeypatch.setattr(routines, "load", lambda path=None, reg=reg: reg)
+        # Off unless the person chose it, whatever the set-up (2026-11-04).
+        monkeypatch.setattr(brief, "push_wanted", lambda: False)
+        assert brief.push_due({"lead": "x"}) is False, setup
+        monkeypatch.setattr(brief, "push_wanted", lambda: True)
         assert brief.push_due({"lead": "x"}) is asks, setup
         assert bool(brief.push_step({"lead": "x"})) is asks, setup
     assert brief.push_due({"lead": "x", "paused": "2026-11-10"}) is False

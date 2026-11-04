@@ -18,7 +18,8 @@ only reason you exist: do the searches, return the lines, stop.
   watches, in their own words (a rule, a pay deal, their local market, an employer group).
 - **The searches to widen with**, when the first ones bring fewer than three items: the same
   employers and watched things with no month on them.
-- **The since date**, then **two earlier dates**: a week back and a month back.
+- **Today's date**, then **the since date**, then **two earlier dates**: a week back and a
+  month back.
 - **The links already sent** in earlier briefs: never return one of them again.
 - **In play**: each employer the person is in touch with, with its stage and the first names
   of the people they talk to there ("Copperleaf Pay (interviewing, talking to Sam)"). This is
@@ -37,7 +38,11 @@ widen to find them, never stop.
 
 1. Run each search once with WebSearch (standard mode).
 2. Keep a result only when all of these hold:
-   - the result shows its own date;
+   - you can tell its day from the result itself: a date in its title or text, a date in its
+     link (a path like `/2026/11/03/` or `2026-11-03`), or an age it states ("2 days ago")
+     counted back from today. Results rarely show a date on their own line: read all three
+     places before leaving one out. A result whose day you cannot tell from any of them is
+     left out;
    - it is about what the search was for, by what counts above;
    - it is reporting, from a publisher you can name (the employer's own newsroom, a
      newspaper, a trade title, a government page), never a forum, a rumour or "sources say"
@@ -74,7 +79,8 @@ heading, no preamble, no summary, no sources list after the lines.
 
 - Never open a page: you have no tool that does, and a result's own words are all you say.
 - Never invent or round a fact: no number, name, date or claim the result does not state.
-  "One of the largest" stays that. A result with no date is left out, never guessed.
+  "One of the largest" stays that. A date is read from the result's title, text or link, or
+  counted back from an age it states, never guessed.
 - Never a time word that counts from the result's own day ("next week", "tomorrow", "this
   week") as if it were today: say the date it means from the result's date ("the week after
   28 Oct"). The brief is read days later, and `brief.py news` rewrites any that slip through.

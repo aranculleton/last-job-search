@@ -1401,14 +1401,25 @@ def push_line(b: dict) -> str:
     return text + tail
 
 
+def push_wanted() -> bool:
+    """Did the person choose a phone notification for their brief? Off unless they did
+    (person.json `brief_push`, Settings' "Phone notification"; the maintainer, 2026-11-04:
+    "make it off by default but maybe part of the setup")."""
+    try:
+        import person
+        return str(person.get("brief_push", "off") or "off").strip().lower() == "on"
+    except Exception:  # noqa: BLE001  no profile: nobody chose one
+        return False
+
+
 def push_due(b: dict) -> bool:
-    """Does this run send the person a push itself? A brief bound to a chat has no
-    notification of its own (routines.brief_pushes_itself); a Routines-screen task and an
-    older ops chat's relay send theirs, a brief asked for by hand is read in the chat, and a
-    paused search sends nothing. The setup reminder always does."""
+    """Does this run send the person a push itself? Only when they chose one (push_wanted).
+    A brief bound to a chat has no notification of its own (routines.brief_pushes_itself); a
+    Routines-screen task and an older ops chat's relay send theirs, a brief asked for by hand
+    is read in the chat, and a paused search sends nothing. The setup reminder always does."""
     if b.get("waiting"):
         return True
-    if b.get("paused"):
+    if b.get("paused") or not push_wanted():
         return False
     try:
         import routines
@@ -1553,10 +1564,11 @@ def claude_lines(b: dict) -> list[str]:
                        if b.get("language") else ""))
         today = _d(b["date"]) or dt.date.today()
         week, month = (today - dt.timedelta(days=d) for d in WIDEN_DAYS)
-        out.append("news, never none: %d to %d items, each ending in how the person can use it; "
-                   "when fewer than %d are new since the since date, it widens back to %s, then "
-                   "%s%s" % (
-                       NEWS_MIN, NEWS_MAX, NEWS_MIN, week.isoformat(), month.isoformat(),
+        out.append("news, never none: today is %s; %d to %d items, each ending in how the person "
+                   "can use it; when fewer than %d are new since the since date, it widens back "
+                   "to %s, then %s%s" % (
+                       today.isoformat(), NEWS_MIN, NEWS_MAX, NEWS_MIN, week.isoformat(),
+                       month.isoformat(),
                        ", with these searches too: " + " | ".join(b["wider"])
                        if b.get("wider") else ""))
         if b.get("in_play"):
@@ -1865,6 +1877,23 @@ def news_as_of(line: str, today: dt.date) -> str:
     return what + line[m.start():]
 
 
+def again_line(n: int, today: dt.date) -> str:
+    """Too few came back from the news reader: the chat searches again itself, once. On 4
+    November it returned none, dropping every result whose date was not shown day by day,
+    while three ordinary searches straight after found a results miss and a funding round
+    from the week before (the maintainer, 2026-11-04)."""
+    month = today - dt.timedelta(days=WIDEN_DAYS[1])
+    return ("news: only %d came back, so search again yourself now, once (the one exception to "
+            "\"nothing else finds the news\"): WebSearch each of the brief's news searches, then "
+            "the wider ones; keep reporting dated back to %s, its "
+            "date read from its title, its text or its link (a path like /%s/ or %s), or an age "
+            "it states counted back from %s, never guessed; then python3 tools/brief.py news "
+            "--again with every line, the earlier ones and the new, each as \"- <what happened> "
+            "(<publisher>, <YYYY-MM-DD>, <link>). <how the person can use it>.\""
+            % (n, month.isoformat(), today.strftime("%Y/%m/%d"), today.isoformat(),
+               today.isoformat()))
+
+
 def message_news(line: str) -> str:
     """A news line for the chat's message: its source and day kept, its link left out."""
     def short(m):
@@ -1998,6 +2027,8 @@ def main(argv=None) -> int:
         ap = argparse.ArgumentParser(prog="brief.py news")
         ap.add_argument("--file", help="the items, one a line; stdin without it")
         ap.add_argument("--today", default="")
+        ap.add_argument("--again", action="store_true",
+                        help="the lines after searching again: never asks for a third search")
         a = ap.parse_args(argv[1:])
         text = _read(a.file) if a.file else sys.stdin.read()
         got = take_news(text, _today(a.today))
@@ -2014,6 +2045,8 @@ def main(argv=None) -> int:
             print("for the message, the first %d, each with its day:" % setting("news"))
             for ln in lines[:setting("news")]:
                 print("- " + message_news(ln))
+        if len(got["kept"]) < NEWS_MIN and setting("news") and not a.again:
+            print(again_line(len(got["kept"]), _today(a.today)))
         return 0
     if argv[:1] == ["watch"]:
         return watch_main(argv[1:])
