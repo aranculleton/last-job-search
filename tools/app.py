@@ -151,6 +151,11 @@ def cmd_view(a) -> int:
         print(_dump({"rev": None, "batches": [], "for_claude": [behind]}), end="")
         return 3
     today, now = app_model.clock(a.today, a.now)
+    try:                  # the day's upkeep: a call whose day has passed is no longer booked
+        from network import state as _contacts
+        _contacts.advance_past_calls(today)
+    except Exception:  # noqa: BLE001  the page is built from the book as it is
+        pass
     db = page_db.load(a.dump) if a.dump else {}
     # The suggestions already on the page keep their day, so no more than three new ones
     # reach it a day.
