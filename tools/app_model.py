@@ -1186,16 +1186,27 @@ def _earlier_rows(ctx: Ctx, newest: str) -> list[tuple[str, int, dict]]:
     """(round, rank, row) for each posting from an earlier search the person has not
     decided on: found in the last CARRY_DAYS days, or kept for later, and not in the newest
     round (FUNCTIONS_SPEC 1.1)."""
+    return carried(ctx.today, newest)
+
+
+def carried(today: dt.date, newest: str = "", but=()) -> list[tuple[str, int, dict]]:
+    """(round, rank, row) for each posting Jobs carries from a saved search other than
+    `newest` (its file) and the rounds named in `but`: found in the last CARRY_DAYS days, or
+    kept for later, once each. The one answer to "is it on the list already": the page lists
+    these as from an earlier search, and a search passes them over (run_round.already_had)."""
     from lookup_score import norm
     files = sorted((p for p in glob.glob(person.state("documents", "rounds", "*.json"))
-                    if os.path.isfile(p) and p != newest), key=_round_key, reverse=True)
+                    if os.path.isfile(p) and p != newest
+                    and os.path.splitext(os.path.basename(p))[0] not in set(but)),
+                   key=_round_key, reverse=True)
     kept = {norm(u): k for u, k in kept_jobs().items()}
-    have = {norm(r.get("url") or "") for r in (_json(newest, []) or []) if isinstance(r, dict)}
+    have = {norm(r.get("url") or "") for r in ((_json(newest, []) or []) if newest else [])
+            if isinstance(r, dict)}
     out, seen = [], set(have)
     for p in files:
         name = os.path.splitext(os.path.basename(p))[0]
         made = round_day(p)
-        recent = made is not None and 0 <= (ctx.today - made).days <= CARRY_DAYS
+        recent = made is not None and 0 <= (today - made).days <= CARRY_DAYS
         rows = _json(p, [])
         rows = rows if isinstance(rows, list) else []
         for rank, r in enumerate(rows, 1):
