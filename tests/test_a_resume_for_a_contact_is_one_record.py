@@ -387,13 +387,18 @@ def test_an_old_hand_made_or_forbidden_resume_is_never_offered(repo):
     import person
     profile = Path(person.path("CLAUDE.md"))
     profile.parent.mkdir(parents=True, exist_ok=True)
+    kept = profile.read_text(encoding="utf-8") if profile.exists() else None
     profile.write_text("Do not send Morgan_Ellis_CV_current.pdf to anyone.\n", encoding="utf-8")
     try:
         assert docpaths.resume_to_offer() == ""
         assert "make one for them" in reply.guidance(
             "send_resume", "send it to quillon@example.com")["which_resume"]
     finally:
-        profile.unlink()
+        # Put the file back as it was: in the app it is profile.example/CLAUDE.md itself.
+        if kept is None:
+            profile.unlink()
+        else:
+            profile.write_text(kept, encoding="utf-8")
 
 
 def test_passing_a_cv_on_is_not_a_no():
