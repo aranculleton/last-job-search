@@ -20,7 +20,7 @@ make sense to somebody whose repo just received it.
 
 ## [Unreleased]
 
-## [4.9.1] - 2026-11-04
+## [4.10.0] - 2026-11-04
 
 ### Changed
 
@@ -34,8 +34,21 @@ make sense to somebody whose repo just received it.
   is filled from your connections (as of the day you connected), never changing anything
   already recorded, and the app says what it filled. Giving the same download again fills
   again instead of stopping at "Already taken".
+- **An opened setting uses the whole width.** Its words sit on the left, its buttons at the
+  right and the line a tap leaves underneath, with Undo at the right; on a phone the buttons
+  follow the words. Short choices, like Calendar reminders, are a row of chips instead of a
+  tall list.
+- **Your LinkedIn download has one button**, for the zip or the files inside it, and it steps
+  aside while a download waits.
+- **A saved tap says what happens next and where to see it**: "Claude makes the change next,
+  and this line says Done when it has", what it is waiting behind ("Next, after ..."), or that
+  your helper chat is not answering. A saved LinkedIn download links to its card in Claude's
+  work.
 
 ### Fixed
+
+- **Scrolling the Brief quickly on a phone no longer shows a blank page.** Every live update
+  redrew the whole screen; now only the part that changed is drawn again.
 
 - **News in the brief no longer says "next week" about last week.** Words like "tomorrow" or
   "next week" are read against the article's own date, and each item shows its date.

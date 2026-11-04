@@ -1,6 +1,6 @@
 # Notes for the next builder
 
-Written at the end of 4.9.0 and its patch 4.9.1 (2026-11-04) for the chat that builds the next version. Read
+Written at the end of 4.9.0 and 4.10.0 (2026-11-04) for the chat that builds the next version. Read
 MAINTAINING.md first; this is only what 4.9 left.
 
 ## Do first, for [Unreleased]
@@ -18,6 +18,17 @@ MAINTAINING.md first; this is only what 4.9 left.
 - **The maintainer's own tests.** Seven of them pinned behaviour 4.9 changed on purpose (job
   boards held to the search window, the scorer's baseline, a sample note using initials their
   own rules ban); the update tells their chat to bring them in line. Check it did.
+
+- **Phone scrolling on a real iPhone.** 4.10.0 stopped every live update redrawing the whole
+  screen (`patch` now compares like with like and `morph` swaps only what changed), proven in
+  headless WebKit. What it cannot show is the iPhone's own painting: open a long Brief on a
+  phone and scroll fast once. If it still flashes blank, look at the panels' CSS (shadows and
+  backdrop blur repaint) before the code.
+- **The Windows computer check** now skips the app's suite after an ordinary day, as a
+  person's save does: pip's download cache sat in the copy and made every save look like an
+  app change. The whole Windows suite runs under an accented temp folder instead. Read the
+  first release run of that job: "computer: an ordinary day changes only the person's own
+  files" must pass.
 
 ## How to work
 
@@ -63,6 +74,9 @@ for are rules under "Developer rules".
 - The host's answer for a code file that is missing (a 404 or a page): the guard handles both
   for scripts, but it was not seen on the real host.
 - A push from a real scheduled brief beyond the one recorded run ("Mobile push requested").
+- The maintainer's helper said in one chat that the brief's chat had lost the files; 4.10.0
+  notices that (`routines.no_copy`) and moves the brief, tested on records, not yet on a real
+  task that lost its copy.
 - Safari, Firefox and Windows on 4.9.0 ran on the release pull request; everything they found was
   fixed in it (a phone's Chat opening above the newest message, a long paste in Firefox, Windows
   day formats and its bash) except one Windows-only timing test that failed once and passed on
