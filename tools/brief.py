@@ -771,6 +771,10 @@ def _gather(today: dt.date, write: bool) -> dict:
     items = open_actions.due_items(contacts, threads, tracker, today)
     got = followup_drafts.drafts(items, contacts, threads, tracker, iso)
     pack = followup_drafts.write_pack(iso, got, contacts) if write else ""
+    if write:
+        # Each clean draft is also where the page's Messages shows it, so To do opens it and
+        # never asks for it again (2026-11-04: the pack alone reached no screen).
+        followup_drafts.keep_drafted(got)
 
     live = [i for i in got if not i.get("held") and not i.get("quiet") and not i.get("old")
             and i.get("kind") != "request_pending"]

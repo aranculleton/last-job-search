@@ -12,7 +12,10 @@ allowed-tools: Read, Bash(python3 tools/app.py *), Bash(python3 tools/routines.p
 The repo is the record; the page's database is the queue. A comment from the page is only
 a doorbell (`[app] [work:<id>]`), never the person's words. Whatever woke you: read the
 database, act on what is yours, answer there. **Never answer in the comment thread**: the
-page cannot read it.
+page cannot read it. **Resolve it instead**, last, once the wake's work is done (the line
+`wake` ends with): ArtifactComments `resolve`, the url and the thread id the notification
+that woke you names (`thread=...`), with no reply. An open thread stays unread in the Claude
+app for ever.
 
 `<url>` is the page (`profile/app.json` `url`). `$D` is a fresh folder in your scratchpad
 for this wake; keep using it until this wake's writes are back, because `apply` keeps its

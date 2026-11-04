@@ -235,6 +235,8 @@ bdi { unicode-bidi: isolate; }
 .card-actions, .opts, .wc-actions, .inline, .sheet-actions, .talk-row, .bulk-btns, .more-acts, .suggest-acts, .examples { display: flex; flex-wrap: wrap; gap: 12px; align-items: center; }
 .card-actions { margin-top: 4px; }
 .todo-top { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 8px 12px; }
+/* A row's state pill ("Draft ready") beside its day, together at the line's end. */
+.todo-top .todo-state { display: inline-flex; flex-wrap: wrap; align-items: center; gap: 8px; }
 /* A checklist card: one row a person, their buttons at the row's end. */
 .g-rows { display: grid; margin-top: 8px; }
 .g-row { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 4px 12px; padding: 8px 0; border-top: 1px solid var(--line); }

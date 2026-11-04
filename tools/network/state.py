@@ -1289,6 +1289,20 @@ def request_pending(rows) -> datetime.date | None:
     return None
 
 
+def inmail_only(rows) -> bool:
+    """Did every message to them go as an InMail, with no acceptance and no word from them?
+
+    An InMail is how LinkedIn lets you write to someone you are not connected to, and it
+    costs a credit each time. Until they reply (or accept), another message to them is
+    another InMail, not a free follow-up, so none is owed: LinkedIn's InMail page is the
+    rule this follows (a reply opens the conversation). Anyone connected, who wrote, or who
+    was ever sent an ordinary message is not this."""
+    real = [r for r in rows if _direction(r) and not is_auto_reply(r) and not is_withdrawal(r)]
+    sent = [r for r in real if _direction(r) == "out" and not is_request(r)]
+    return (bool(sent) and all(channel_of(r) == "inmail" for r in sent)
+            and not any(_direction(r) == "in" for r in real))
+
+
 def accepted_never_messaged(rows) -> datetime.date | None:
     """The acceptance date when only bare requests went before it and nothing after.
 
@@ -1885,6 +1899,11 @@ def owed(contacts, threads, today, index=None, live=None) -> list[dict]:
                               business_days=business_days_between(pending, today),
                               due=(pending + datetime.timedelta(days=REQUEST_WITHDRAW_DAYS)).isoformat(),
                               nudges_sent=0))
+            continue
+        # Only ever InMailed, no acceptance and no word back: a second would be a second
+        # InMail, so no follow-up is owed (`inmail_only`).
+        if inmail_only(msgs):
+            _action_row()
             continue
         # Accepted a request that said nothing, and has heard nothing since: a
         # first message is owed, written as one (compose.first_note), never a nudge.

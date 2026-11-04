@@ -300,3 +300,80 @@ def test_a_finished_follow_up_opens_the_person_in_contacts(run, tmp_path):
     link = "Array.from(document.querySelectorAll('#rail [data-work=\"follow_up~2\"] a[data-k^=\"open:\"]')).map((a) => [a.getAttribute('data-k'), a.textContent])"
     got = _go(run, tmp_path, [{"hash": "todo", "eval": link}], WIDE, seed=dict(HEARD, **{"work/follow_up~2": done}), clock=T)
     assert got["after"][0]["eval"] == [["open:contacts:p-wren", "Open in Contacts"]], got["after"][0]["eval"]
+
+
+def test_a_run_of_like_work_is_one_card_with_its_count(run, tmp_path):
+    """Fifty follow-ups and replies stood one card each down Claude's work (the maintainer,
+    2026-11-04: "an easier way of displaying it in this list rather than scrolling through like
+    50 items"). Four or more of one kind waiting, or finished, are one card; Show lists them."""
+    names = ["Wren", "Juno", "Tamsin", "Marisol", "Ada"]
+    seed = dict(HEARD, **{"work/reply~1": RUNNING})
+    for i, n in enumerate(names):
+        seed["work/follow_up~r%d" % i] = dict(QUEUED, title="Follow up with " + n, asked_at="2026-10-25T08:58:%02d.000Z" % i)
+    look = ("(() => { const r = document.getElementById('rail'); const run = r.querySelector('[data-work-run]');"
+            " return [run ? run.querySelector('.wc-title').textContent : null, run ? run.querySelector('.wc-now').textContent : null,"
+            " r.querySelectorAll('[data-work^=\"follow_up~r\"]').length]; })()")
+    got = _go(run, tmp_path, [{"hash": "todo", "eval": look}, {"open": "run:run~queued:follow_up", "wait": 300, "eval": look}], WIDE, seed=seed, clock=T)
+    title, line, cards = got["after"][0]["eval"]
+    assert title == "5 follow-ups waiting their turn" and cards == 0, got["after"][0]["eval"]
+    assert line.startswith("Wren, Juno, Tamsin and 2 more"), line
+    assert got["after"][1]["eval"][2] == 5, "Show lists each of them"
+
+
+def test_a_card_of_notes_to_check_says_what_it_is(run, tmp_path):
+    """Four notes held for an unread profile made a To do card titled with the warning alone,
+    over a list of names (the maintainer, 2026-11-04: "idk what the bottom one is"). Its title
+    says what it is, the reason sits under it, and its link says where they are."""
+    m = copy.deepcopy(_sample())
+    held = [x for x in m["messages"] if x.get("kind") == "first_note"][:2]
+    assert len(held) == 2
+    for x in held:
+        x["hold"] = "Written before their profile was read: read it first"
+        # The engine's own alert for it (tools/app_alerts.py for_message, "read_first").
+        x["alerts"] = [{"id": "read_first:" + x["id"], "kind": "read_first", "level": 1, "item": x["id"],
+                        "text": "Written before their profile was read: read it first.",
+                        "why": "A note written before their profile was read can get them wrong."}]
+    look = ("Array.from(document.querySelectorAll('[data-item^=\"grp:\"]')).map((c) => [(c.querySelector('.card-title') || {}).textContent || '',"
+            " c.textContent]).filter((x) => /profile was read/.test(x[1]))")
+    got = _go(run, tmp_path, [{"hash": "todo", "eval": look}], WIDE, model=m, clock=T)
+    cards = got["after"][0]["eval"]
+    assert cards, "the held notes make a card in To do"
+    title, text = cards[0]
+    assert title.startswith("2 messages to check before you send"), title
+    assert "Written before their profile was read: read it first." in text and "Open in Contacts" in text, text
+
+
+def test_a_card_being_changed_says_so(run, tmp_path):
+    """After Apply on an edit, the note showed nothing while the change waited its turn (the
+    maintainer, 2026-11-04: "after i send a job is there an indication that that one is being
+    worked on in the list")."""
+    m = copy.deepcopy(_sample())
+    mid = m["messages"][0]["id"]
+    work = dict(QUEUED, kind="tweak", title="Edit message", args={"v": 1, "target": {"id": mid, "output": "message"}})
+    look = ("(() => { const c = document.querySelector('[data-item=\"" + mid + "\"]'); const g = c && c.querySelector('[data-tweak-going]');"
+            " return g ? g.textContent : null; })()")
+    got = _go(run, tmp_path, [{"hash": "drafts-messages", "eval": look}], WIDE, model=m, seed=dict(HEARD, **{"work/tweak~m1": work}), clock=T)
+    line = got["after"][0]["eval"]
+    assert line and line.startswith("Claude changes this next") and "See it" in line, line
+
+
+def test_a_refused_tap_with_nothing_asked_still_has_a_way_out(run, tmp_path):
+    """A tap refused before refusals carried their question sat in To do as "Setup ... Not
+    done: Which day is it? Give it as 2026-10-28" with no button at all (the maintainer,
+    2026-11-04: "doesn't seem to have any options"). It is marked by what it was about, its
+    day reads as a day, and it can be said in Chat or put away."""
+    m = copy.deepcopy(_sample())
+    app = m["applications"][0]
+    aid = "act~" + app["id"] + "~outcome.interview~old"
+    seed = dict(HEARD, **{"actions/" + aid: {"item": app["id"], "action": "outcome.interview", "value": {"stage": "Phone screen"},
+                                             "at": "2026-10-25T08:50:00.000Z", "rev_seen": "r", "tab": "t0"},
+                          "receipts/" + aid: {"result": "conflict", "note": "Which day is it? Give it as 2026-10-28.",
+                                              "applied_at": "2026-10-25T08:51:00Z", "by": "cloud-1"}})
+    look = ("(() => { const c = document.querySelector('[data-item=\"refused:" + aid + "\"]'); if (!c) return null;"
+            " return [c.querySelector('.kind').textContent, c.textContent, !!c.querySelector('[data-k^=\"rf-bin:\"]'), !!c.querySelector('[data-k^=\"rf-chat:\"]')]; })()")
+    got = _go(run, tmp_path, [{"hash": "todo", "eval": look}], WIDE, model=m, seed=seed, clock=T)
+    card = got["after"][0]["eval"]
+    assert card, "the refused tap has its card in To do"
+    kind, text, has_bin, has_chat = card
+    assert kind != "Setup" and "2026-10-28" not in text and "28 Oct" in text, card
+    assert has_bin and has_chat, card

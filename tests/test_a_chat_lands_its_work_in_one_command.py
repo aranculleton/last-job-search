@@ -12,6 +12,7 @@ the branch starts from master with no checkout dance.
 from __future__ import annotations
 
 import os
+import pathlib
 import subprocess
 import sys
 import time
@@ -290,6 +291,175 @@ def test_work_stranded_by_an_older_version_comes_back_at_the_next_landing(copy, 
     git(other, "merge", "-q", "--no-ff", "--no-edit", "FETCH_HEAD")
     git(other, "push", "-q", "origin", "master")
     assert _run(late, "--waiting", capsys=capsys)[1].strip() == "land: nothing waiting"
+
+
+OWN_TEST = "profile/tests/test_my_floor.py"
+PLAN = "documents/plan.md"
+
+
+def _own_test(check):
+    return ("import search\n\n\ndef test_floor():\n    assert %s\n\n\n"
+            "def test_name():\n    assert search.__name__ == 'search'\n" % check)
+
+
+def _commit_all(repo, message):
+    git(repo, "add", "-A")
+    git(repo, "commit", "-q", "-m", message)
+
+
+def _base_with_own_files(copy):
+    """The person's own test and a plan on master, taken into the chat."""
+    origin, chat, other = _stranger(copy)
+    write(other, OWN_TEST, _own_test("search.SALARY_FLOOR > 0"))
+    write(other, PLAN, "Plan\n\nFirst: the base.\n\nSecond: kept.\n")
+    _land_other(other, "the person's own test and plan")
+    git(chat, "fetch", "-q", "origin", "master")
+    git(chat, "merge", "-q", "--ff-only", "origin/master")
+    return origin, chat, other
+
+
+def _no_copies_beside(chat):
+    # Every file in the chat's folder, git's own excepted: a side copy is left untracked.
+    from tests import repo_files
+    root = pathlib.Path(chat)
+    return [str(p.relative_to(root)) for p in repo_files.files("**/*.from-another-chat*", root=root)
+            if ".git" not in p.relative_to(root).parts]
+
+
+@pytest.mark.parametrize("into", ["newer", "older"])
+def test_a_branch_holding_only_older_copies_leaves_the_newer_ones_alone(copy, into):
+    """A branch left days ago, brought in whole, held the same change to the person's own
+    test and plan that this chat made and then changed again: it brought nothing of its own
+    to either, so either way round the newer copies stand, with no copy beside them and no
+    [CONFIRM: ...] line (a report from a person's copy, 2026-11-04: eight of their tests were
+    marked and a dozen copies left beside files). A file both sides truly changed is still
+    settled as before, both kept and the person asked."""
+    origin, chat, other = _base_with_own_files(copy)
+    git(chat, "switch", "-q", "-c", "claude/upgrade-old")
+    write(chat, OWN_TEST, _own_test("search.SALARY_FLOOR >= 0"))
+    write(chat, PLAN, "Plan\n\nFirst: the base, made clearer.\n\nSecond: kept.\n")
+    write(chat, "profile/search.py", "SALARY_FLOOR = 55000\n")
+    _commit_all(chat, "Profile upgrade: own-tests")
+    git(chat, "switch", "-q", "claude/chat-1")
+    write(chat, OWN_TEST, _own_test("search.SALARY_FLOOR >= 0"))
+    write(chat, PLAN, "Plan\n\nFirst: the base, made clearer.\n\nSecond: kept.\n")
+    _commit_all(chat, "Save the search's work")
+    newer_test = _own_test("search.SALARY_FLOOR >= 0, 'a floor of nothing or more'")
+    newer_plan = "Plan\n\nFirst: the base, made clearer still.\n\nSecond: kept.\n"
+    write(chat, OWN_TEST, newer_test)
+    write(chat, PLAN, newer_plan)
+    write(chat, "profile/search.py", "SALARY_FLOOR = 60000\n")
+    _commit_all(chat, "Save the search's work")
+    if into == "older":
+        git(chat, "switch", "-q", "claude/upgrade-old")
+    ok, said = land.merge_in(str(chat), "claude/upgrade-old" if into == "newer"
+                             else "claude/chat-1")
+    assert ok, said
+    with open(os.path.join(str(chat), OWN_TEST), encoding="utf-8") as fh:
+        assert fh.read() == newer_test
+    with open(os.path.join(str(chat), PLAN), encoding="utf-8") as fh:
+        assert fh.read() == newer_plan
+    assert _no_copies_beside(chat) == ["profile/search.py.from-another-chat"]
+    with open(os.path.join(str(chat), "profile", "search.py"), encoding="utf-8") as fh:
+        assert "[CONFIRM: two of your chats changed this file" in fh.read()
+    assert any(OWN_TEST in ln and "the newer one is kept" in ln for ln in said), said
+
+
+def test_a_branch_whose_merges_crossed_keeps_the_newer_copy_it_never_changed(copy):
+    """Where earlier merges crossed (each branch brought in work the other also has), git's
+    common ancestor is a blend of two, and a file the old branch never changed itself
+    conflicts all the same. The copy it holds is one a common ancestor held, so the newer
+    one stands, alone."""
+    origin, chat, other = _base_with_own_files(copy)
+    base = git(chat, "rev-parse", "HEAD").stdout.strip()
+    git(chat, "switch", "-q", "-c", "claude/one", base)
+    write(chat, OWN_TEST, _own_test("search.SALARY_FLOOR >= 0"))
+    _commit_all(chat, "chat one")
+    git(chat, "switch", "-q", "-c", "claude/two", base)
+    write(chat, OWN_TEST, _own_test("search.SALARY_FLOOR > 1"))
+    _commit_all(chat, "chat two")
+    # This chat brought both in and settled them, then changed the test again.
+    git(chat, "switch", "-q", "claude/chat-1")
+    git(chat, "merge", "-q", "--no-edit", "claude/one")
+    git(chat, "merge", "-q", "--no-edit", "claude/two", check=False)
+    write(chat, OWN_TEST, _own_test("search.SALARY_FLOOR >= 1"))
+    _commit_all(chat, "both brought in")
+    newer = _own_test("search.SALARY_FLOOR >= 1, 'one or more'")
+    write(chat, OWN_TEST, newer)
+    _commit_all(chat, "Save the search's work")
+    # The old branch brought both in the other way round, kept chat two's copy, and made
+    # its own change elsewhere.
+    git(chat, "switch", "-q", "-c", "claude/upgrade-old", base)
+    git(chat, "merge", "-q", "--no-ff", "--no-edit", "claude/two")
+    git(chat, "merge", "-q", "--no-edit", "claude/one", check=False)
+    write(chat, OWN_TEST, _own_test("search.SALARY_FLOOR > 1"))
+    _commit_all(chat, "kept chat two's")
+    write(chat, "profile/notes.md", "the old branch's own note\n")
+    _commit_all(chat, "a note")
+    git(chat, "switch", "-q", "claude/chat-1")
+    assert len(git(chat, "merge-base", "--all", "HEAD", "claude/upgrade-old").stdout.split()) == 2
+    ok, said = land.merge_in(str(chat), "claude/upgrade-old")
+    assert ok, said
+    with open(os.path.join(str(chat), OWN_TEST), encoding="utf-8") as fh:
+        assert fh.read() == newer
+    with open(os.path.join(str(chat), "profile", "notes.md"), encoding="utf-8") as fh:
+        assert fh.read() == "the old branch's own note\n"
+    assert _no_copies_beside(chat) == []
+
+
+def _commit_days_ago(repo, message, days):
+    """Commit everything, dated `days` ago."""
+    when = "@%d +0000" % int(time.time() - days * 86400)
+    git(repo, "add", "-A")
+    subprocess.run(["git", "-C", str(repo), "commit", "-q", "-m", message], check=True,
+                   capture_output=True, env=dict(os.environ, GIT_AUTHOR_DATE=when,
+                                                 GIT_COMMITTER_DATE=when))
+
+
+def test_a_branch_left_behind_is_never_brought_in_and_never_deleted(copy, capsys, monkeypatch):
+    """A branch left nine days earlier changes files master has changed since: brought in by
+    a landing, it put older copies over newer ones (a report from a person's copy,
+    2026-11-04). It is left as it is, with one line, and kept on GitHub; start no longer says
+    a landing brings it in. An old branch whose files master never changed since, and a fresh
+    one that clashes (X-30), are still brought in."""
+    origin, chat, other = _base_with_own_files(copy)
+    git(other, "fetch", "-q", "origin")
+    git(other, "merge", "-q", "--ff-only", "origin/master")
+    git(other, "switch", "-q", "-c", "claude/upgrade-old")
+    write(other, PLAN, "Plan\n\nFirst: the base, as it was nine days ago.\n\nSecond: kept.\n")
+    write(other, "profile/notes.md", "an old note\n")
+    _commit_days_ago(other, "Profile upgrade: an old one", 9)
+    git(other, "push", "-q", "origin", "claude/upgrade-old")
+    git(other, "switch", "-q", "-c", "claude/old-but-apart", "master")
+    write(other, "profile/stories.md", "A story about Lindenmoor\n")
+    _commit_days_ago(other, "a draft nobody else touched", 9)
+    git(other, "push", "-q", "origin", "claude/old-but-apart")
+    git(other, "switch", "-q", "master")
+    write(other, PLAN, "Plan\n\nFirst: the base, as it is now.\n\nSecond: kept.\n")
+    _land_other(other, "the plan as it is now")
+    write(chat, "profile/notes.md", "first\nand a note from today\n")
+    code, out = _run(chat, "--message", "A note", capsys=capsys)
+    assert code == 0, out
+    lines = [ln for ln in out.splitlines() if "claude/upgrade-old" in ln]
+    assert lines == ["land: left origin/claude/upgrade-old as it is: its own work is 9 days "
+                     "older than master's later changes to the same files (documents/plan.md), "
+                     "so bringing it in would put older copies over newer ones. It stays on "
+                     "GitHub, never deleted; nothing to tell the person"], out
+    assert "land: brought in work that waited on origin/claude/old-but-apart" in out
+    shown = lambda rel: git(origin, "show", "claude/chat-1:" + rel, check=False).stdout  # noqa: E731
+    assert "as it is now" in shown(PLAN) and "nine days ago" not in shown(PLAN)
+    assert shown("profile/notes.md") == "first\nand a note from today\n"
+    assert "Lindenmoor" in shown("profile/stories.md")
+    assert "claude/upgrade-old" in _branches(origin)
+    git(other, "fetch", "-q", "origin")
+    assert sorted(land.waiting(str(other))) == ["origin/claude/chat-1",
+                                                "origin/claude/old-but-apart"]
+    assert list(land.left_behind(str(other))) == ["origin/claude/upgrade-old"]
+    monkeypatch.setattr(land, "fetch_waiting", lambda root: True)
+    assert list(land.stranded(str(other))) == ["origin/claude/old-but-apart"]
+    code, out = _run(other, "--waiting", capsys=capsys)
+    assert "land: left origin/claude/upgrade-old as it is" in out
+    assert "waiting on: origin/claude/chat-1 (today)" in out
 
 
 def test_a_branch_that_took_an_update_and_could_not_land_is_still_listed(copy, capsys):

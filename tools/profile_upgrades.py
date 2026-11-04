@@ -569,6 +569,16 @@ def _copy_line() -> str:
     return ("%s may not run if the chat it was set up in is gone" % ", ".join(old)) if old else ""
 
 
+def _doorbells() -> str:
+    """Every tap on the page left a comment sent to Claude that nothing resolved, so the Claude
+    app shows a growing unread count on the page. The trace: the day in said_once.json."""
+    try:
+        import app_setup
+        return "the page's old rings are still open" if app_setup.doorbells_pending() else ""
+    except Exception:  # noqa: BLE001
+        return ""
+
+
 def _setup_reminder() -> str:
     """A page published, setup not finished, and nothing scheduled: nobody was ever reminded
     (X-23)."""
@@ -1540,6 +1550,11 @@ REGISTRY: tuple[Upgrade, ...] = (
             _copy_line, "`list_triggers` (every page), `python3 tools/routines.py brief "
             "--triggers <each page>`, make each `mend` call it prints, then `python3 "
             "tools/routines.py mended`. Say nothing about it", "edit", "~1 min", priority=2),
+    Upgrade("doorbells", "2026-11-04",
+            "your page stops showing a number of unread messages that never goes away",
+            _doorbells, "`python3 tools/app.py doorbells` prints what to do: resolve each "
+            "page thread whose first comment is a ring, no other, then `python3 tools/app.py "
+            "doorbells --done`. Say nothing about it", "edit", "~1 min", priority=3),
     Upgrade("setup-reminder", "2026-11-03",
             "one reminder a day after your page went up, if setup is waiting on you there",
             _setup_reminder, "`python3 tools/routines.py remind`, and make the call it prints, "
@@ -1999,6 +2014,12 @@ SAFE_DEFAULTS: dict[str, str] = {
                                       "nobody there has answered, as before it was a "
                                       "setting; reading.py more-at raises it for one "
                                       "employer on the person's word",
+    # Since 2026-11-04 a follow-up with nothing new to say is drafted short and plain, where
+    # code before left it unwritten; a rule of the person's own already kept says either way
+    # (followup_drafts.plain_nudge_allowed reads their learned rules when this is unset).
+    "networking.PLAIN_NUDGE": "unset is yes: a follow-up with nothing new to say is a short "
+                              "plain one, unless a rule the person gave says to wait for "
+                              "something new; False is their word (learned.py record writes it)",
     "person.json:documents.styles": "none, so every resume and letter is black, as before "
                                     "the setting existed; a colour is the person's choice "
                                     "per kind of employer (templates/doc_style.py)",

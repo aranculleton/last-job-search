@@ -160,8 +160,10 @@ def test_a_big_contact_book_full_of_details_gives_none_of_them(tmp_path):
     m = model(state)
     assert app_model.check(m) == []
     for section in ("people", "due", "needs_you", "jobs"):
-        for _path, text in app_model._strings(m[section]):
-            assert app_model.private_in(text) == [], text
+        for path, text in app_model._strings(m[section]):
+            # A rev is a hash nobody sees, and twelve hex digits can be all digits, as
+            # app_model.check says: one hashed from a contact's record read as a phone number.
+            assert path[-1:] == ("rev",) or app_model.private_in(text) == [], text
     assert "@example.com" not in json.dumps(m["people"]) + json.dumps(m["due"])
     assert m["people_count"]["all"] >= len(m["people"])
 

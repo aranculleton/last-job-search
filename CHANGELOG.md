@@ -22,10 +22,38 @@ make sense to somebody whose repo just received it.
 
 ### Changed
 
+- **The number of unread messages on your page no longer grows.** Each tap used to leave a
+  message that stayed unread in the Claude app; Claude now clears it when the work is done,
+  and clears the ones already piled up, once, without asking. Profile upgrade: doorbells
+- **A chat for a big job is tidied away as soon as the job is done.** An interview prep, a
+  search or a batch of drafts no longer leaves its chat in your list for two more days: once
+  the work is finished and saved, Claude puts the chat away soon after. Nothing in it is lost
+  and it can be brought back.
+- **Tapping on your page no longer counts as you giving feedback.** The page's own notices and
+  card text were sometimes read as if you had said them, which held up Claude's reply until
+  it dismissed a reaction you never made. Only what you type is read now.
+- **Applications with nobody to write to are no longer chased.** A follow-up that cannot be
+  drafted because no recruiter or hiring manager is named stays off your To do list; it
+  appears the day a name is added or someone there replies.
+- **Nobody is listed for a follow-up who cannot get one.** Someone you only sent an InMail,
+  who has not answered or connected, is left alone (a second would be another InMail), and a
+  connection request nobody accepted is never a message to send.
 - **Claude's work opens and closes from one button on every screen.** On a wide screen the
   pill at the top opens the panel on the right and closes it again, like the menu's "Icons
   only", and the page remembers which you chose; the panel has its own Hide. Narrower, it
   opens as a panel on the right, and on a phone from the bottom.
+- **A run of the same kind of work is one card in Claude's work.** Four or more follow-ups
+  waiting, or replies finished, show as one card with their count and the first few names;
+  Show lists them, and "Don't do them" calls off the lot.
+- **A To do card about several notes says what it is**: "4 messages to check before you
+  send", with the reason under it, never the reason alone over a list of names.
+- **Editing something starts with your own words.** The box to say what to change is at the
+  top, two choices show with the rest under More choices, your rules fold to one line, and
+  Apply is the one button: it starts at once.
+- **A card being changed says so**: "Claude changes this next", with a link to it in
+  Claude's work, until the new version is there.
+- **Something Claude could not do always has a way out.** Its card in To do says what it was
+  about, says any day as a day, and can be said in Chat or put away, even when it asks nothing.
 - **What you close or stop leaves its list at once.** Closing people in To do, or "No more
   messages" to someone, takes them off the list straight away instead of waiting for Claude;
   "11 closed: Show" brings them back with their Undo.
@@ -35,8 +63,30 @@ make sense to somebody whose repo just received it.
   whether you want one, and you can change it any time in Settings, under Your brief, Phone
   notification. If you already have a brief, Claude asks you once. Your brief still comes on
   your page and in its chat either way. Profile upgrade: brief-push.
+- **A follow-up with nothing new to say is still written for you**: a short, plain note that
+  follows up on your last message and asks one question about their work, in your own words
+  where you have given some. If you would rather only follow up when there is news, say so
+  once and it waits for news. No profile upgrade: it needs nothing from you.
+- **To do says when a message is already written.** Its card says "Draft ready" and opens the
+  draft, so a second tap never writes it again; two or more written are one card, "6 messages
+  ready to send", with a row for each person and one button that opens Messages.
 
 ### Fixed
+
+- **Your page never switches back to an old one when two chats' work is joined.** The page
+  you use now is always the one kept, whole, never an older page another chat made earlier.
+- **Old unfinished work no longer overwrites newer work.** Work a chat left more than three
+  days ago, touching things you have changed since, is left aside instead of being brought
+  in; it is kept, never deleted.
+- **No more spare copies or "which one stays?" questions when nothing really clashed.** Where
+  one chat only held an older version of a file, the newer one is kept, with nothing left
+  beside it and nothing to answer.
+- **A page record that went back to an older page is put right by the next chat**, before it
+  does anything on the page.
+- **Every follow-up and reply Claude writes shows in Messages straight away**, ready to copy,
+  instead of only in the day's list of follow-ups. A follow-up to someone who never wrote back
+  is no longer turned away as a reply with nothing to answer, and an application's follow-up
+  shows even when no other message is waiting.
 
 - **The settings gear is even all round, and the Brief's icon is sharp.** The gear's teeth
   were lopsided, and the Brief's four boxes sat so close their edges blurred together.
@@ -48,6 +98,19 @@ make sense to somebody whose repo just received it.
   none while ordinary searches found plenty. A result's day is now read from its title, its
   words or its link, and when fewer than three come back, Claude searches again once before
   the brief is written.
+- **A tap on your page is no longer turned back as "It changed since you saw it" when only
+  your own taps, or the page being drawn again, changed it.** "Not applying" and then "Set
+  aside" on one job, a Stop made the day before, or a job set aside while a search re-ranked
+  the list are all done as you asked; a tap is still turned back when the thing itself really
+  changed, or when two windows answered the same thing differently.
+- **A search says its shortlist is ready only once Jobs can show it.** A search could be
+  marked finished while it was still saving, so its card said the jobs were ready while Jobs
+  said "Nothing new". Each search is also saved under the next number in your list of
+  searches, never a name a chat made up.
+- **A job you set aside while a search is running stays set aside.** The search checks what
+  you have set aside, and any employer you said "No more roles from", again just before it
+  makes your list, including taps on your page Claude has not taken in yet, and fills each
+  place with the next best job, so you get the number you asked for.
 
 ## [4.9.1] - 2026-11-04
 

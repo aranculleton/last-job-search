@@ -453,14 +453,19 @@ def test_to_do_groups_by_when_then_by_employer_in_the_order_things_are_done(run,
     answer = next(b for b in r["bands"] if b["band"] == "Needs your answer")["groups"]
     assert answer[0]["employer"] == "Fernhill Freight" and len(answer[0]["titles"]) == 2, "one employer's two questions together"
     late = next(b for b in r["bands"] if b["band"] == "Due or late")["groups"]
-    assert late[0]["titles"][0].startswith("Follow up with Fernhill Freight"), "the late thing first"
+    # The late things first: the follow-up and the thank-you, both two days late. The
+    # follow-up is on one card with the reply also drafted (2026-11-04: drafted messages are
+    # one card; tests/test_to_do_says_a_message_is_drafted_and_batches_them.py holds its rows).
+    assert sorted(g["titles"][0] for g in late[:2]) == [
+        "2 messages ready to send", "Thank-you note after your Harbourline Bank first interview"], "the late things first"
     titles = [t for b in r["bands"] for g in b["groups"] for t in g["titles"]]
     assert "Prepare for the Larkspur Retail phone screen" not in titles, "the interview's own card is its prep, never a second card"
     assert "Thank-you note after your Harbourline Bank first interview" in titles
     assert r["dueButtons"]["Thank-you note after your Harbourline Bank first interview"][0] == "Draft the thank-you"
     assert r["dueButtons"]["Send your CV to Tamsin"][0] == "Choose the role"
-    # The reply is drafted already: the row opens it, never drafts it again (2026-11-02).
-    assert r["dueButtons"]["Reply to Juno at Larkspur Retail"][0] == "See the draft"
+    # The reply is drafted already: its row is on the drafted card, which opens it and never
+    # drafts it again (2026-11-02), and no card of its own offers to.
+    assert "Reply to Juno at Larkspur Retail" not in r["dueButtons"], r["dueButtons"]
     assert all("Done" in b for b in r["dueButtons"].values()), "every due row can be marked done"
     assert titles.count("3 first notes ready to send") == 1, "a wave of first notes is one card"
     assert r["chips"] == 0, "no kind chips on To do"
@@ -1283,7 +1288,7 @@ def test_a_busy_week_is_a_few_checklists_not_a_card_each(run, pages):
     sent = r["groups"]["grp:sent"]
     assert sent["title"].startswith("Did these notes go?") and len(sent["rows"]) == 2 and "They all went" in sent["actions"]
     warn = [g for k, g in r["groups"].items() if k.startswith("grp:read_first")]
-    assert len(warn) == 1 and warn[0]["title"].startswith("Written before their profile was read"), r["groups"]
+    assert len(warn) == 1 and warn[0]["title"].startswith("3 messages to check before you send"), r["groups"]  # what the card is, its reason under it (2026-11-04)
     assert "4 follow-ups at employers you turned down not shown." in r["hidden"]
     assert "Nudge" not in r["text"], "a follow-up is called a follow-up"
     assert "Turn on the new reading pace?" not in r["text"], "questions from updates wait in Settings"

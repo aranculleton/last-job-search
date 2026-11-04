@@ -415,6 +415,9 @@ def _never_asks(said):
 def test_an_update_that_changed_the_page_republishes_it_at_once_and_never_asks(copy):
     import app_listen
     copy.page(current=False)
+    # A page whose old rings were already cleared: the one-time clear-up (profile upgrade
+    # "doorbells", 2026-11-04) is its own step and not what this test is about.
+    copy.run("doorbells", "--done")
     assert copy.send(copy.run("listen", copy.dump(), "--chat", "helper-1", "--listen"))
     said = _after_sync(copy, "helper-1")
     _never_asks(said)

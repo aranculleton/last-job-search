@@ -23,6 +23,8 @@ next?" in its first lines, and nothing asks for a decision a default could make.
   opens and closes the panel on the right, as the menu's "Icons only" folds, remembered on the
   device (open beside every screen but the Brief until the person chooses); narrower, it opens
   as a panel on the right, and on a phone as a sheet from the bottom. (pill tests)
+- In Claude's work, four or more of one kind waiting, or finished, are one card with their
+  count and the first few names; Show lists them. Nobody scrolls past fifty cards. (run test)
 
 ## Cards and lists
 
@@ -37,6 +39,13 @@ next?" in its first lines, and nothing asks for a decision a default could make.
   where "I have applied" is; a closed one offers only setting it aside. (jobs page tests)
 - A state is a small tinted pill in words a person uses, never a code word: ok green, info
   blue, warn amber, bad red, held violet, waiting grey. (status audit, colour tests)
+- A To do row whose message is already drafted says "Draft ready" and its one button opens
+  the draft, never drafts it again; two or more drafted are one card, "N messages ready to
+  send", a row a person opening their draft and one button opening Messages. (drafted
+  messages tests)
+- Many of one small thing are one checklist card, a row an item: each row has one action of
+  its own beside its bin, and the card's own actions keep to the card's anatomy above.
+  (layout 8)
 - One "?" a card at most, after the last word of its line, and no more than three on a first
   screen. (design test, budget test)
 

@@ -228,8 +228,9 @@ def test_setup_answers_given_in_the_chat_are_kept_as_the_pages_are(copy):
 
 def test_a_page_another_chat_published_is_taken_never_made_twice(copy, tmp_path, monkeypatch):
     """X-57: a second chat opened during setup, before the first chat's work landed, saw no
-    page and published another; landing then took its address over the first. A page on any
-    branch of the copy is taken whole instead, the first published winning."""
+    page and published another. A page on any branch of the copy is taken whole instead, the
+    one published last winning, as a merge keeps it: a branch left days ago holds an older,
+    abandoned page, never the one in use."""
     import subprocess
     import app_setup
     import place
@@ -256,7 +257,42 @@ def test_a_page_another_chat_published_is_taken_never_made_twice(copy, tmp_path,
     monkeypatch.setattr(app_setup, "ROOT", str(repo))
     monkeypatch.setenv(person.ENV, str(repo / "profile"))
     assert app_setup.adopt_page_elsewhere() is True
-    assert app_setup.page_record()["url"] == first["url"]
+    assert app_setup.page_record()["url"] == second["url"]
+
+
+def test_a_page_record_gone_back_to_an_older_page_is_noticed_and_the_newer_kept(tmp_path,
+                                                                                monkeypatch):
+    """A merge put an older page's record back over the one published later, and the next
+    start moved everything to the abandoned page (a report from a person's copy, 2026-11-04).
+    Start now finds the newer record in the copy's own history, keeps it again whole, and says
+    so in one line; a record that is the newest is left alone."""
+    import subprocess
+    import app_setup
+    repo = tmp_path / "repo"
+    subprocess.run(["git", "init", "-q", "-b", "master", str(repo)], check=True)
+    (repo / "profile").mkdir()
+    git = lambda *a: subprocess.run(["git", "-C", str(repo), "-c", "user.name=t", "-c",  # noqa: E731
+                                     "user.email=t@example.com", *a], check=True, capture_output=True)
+    monkeypatch.setattr(app_setup, "ROOT", str(repo))
+    monkeypatch.setenv(person.ENV, str(repo / "profile"))
+    in_use = {"url": "https://claude.ai/code/artifact/example-in-use", "by": "computer-1",
+              "published_at": "2026-11-03T10:00:00Z", "code": ["code/b1.js"], "title_name": "Rowan"}
+    old = {"url": "https://claude.ai/code/artifact/example-abandoned", "by": "upgrade-chat",
+           "published_at": "2026-10-25T09:00:00Z", "code": ["code/a1.js"], "title_name": "Rowan"}
+    for rec, msg in ((in_use, "the page in use"), (dict(old, suggest_no={"jobs~fernhill": {
+            "on": "2026-11-03", "kind": "jobs"}}), "a merge took the older page")):
+        app_setup._write_json(str(repo / "profile" / "app.json"), rec)
+        git("add", "-A")
+        git("commit", "-qm", msg)
+    said = app_setup.newer_page_kept()
+    assert said.startswith("The page's record had gone back to an older page"), said
+    assert in_use["url"] in said and old["url"] in said
+    got = app_setup.page_record()
+    assert {k: got.get(k) for k in in_use} == in_use
+    assert got["suggest_no"] == {"jobs~fernhill": {"on": "2026-11-03", "kind": "jobs"}}
+    git("commit", "-qam", "the newer kept again")
+    assert app_setup.newer_page_kept() == ""
+    assert app_setup.page_record()["url"] == in_use["url"]
 
 
 def _versioned(path, version):

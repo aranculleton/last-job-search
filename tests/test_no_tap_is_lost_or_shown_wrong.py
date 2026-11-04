@@ -24,8 +24,10 @@ from test_the_page_works_in_a_browser import PHONE, _sample, _write, pages, run 
 _ = (pages, run)   # the fixtures, used by name
 
 T0 = "2026-10-25T09:00:00Z"
-DONE = "Done: Follow up with Fernhill Freight"
-ITEM = "due-fernhill-nudge"
+# A To do card with its own Done: the Fernhill Freight follow-up is drafted now, so it sits in
+# "2 messages ready to send", which opens the draft (2026-11-04).
+DONE = "Done: Thank-you note after your Harbourline Bank first interview"
+ITEM = "due-harbourline-thanks"
 
 
 def _page(tmp_path, name="sample", model=None):
@@ -195,7 +197,7 @@ def test_one_null_item_in_a_screen_leaves_every_screen_working(run, tmp_path):
     seed = {"view/due": {"made_at": later, "data": [None] + m["due"]},
             "view/people": {"made_at": later, "data": m["people"][:3] + [None] + m["people"][3:]}}
     s = _script(run, html, [{"hash": "todo"}, {"hash": "contacts"}, {"hash": "todo", "click": DONE}], seed=seed)
-    assert "Follow up with Fernhill Freight" in s[0]["main"]
+    assert "Thank-you note after your Harbourline Bank first interview" in s[0]["main"]
     assert "Juno" in s[1]["main"]
     assert len(_mine(s[-1])) == 1, "taps still save and draw"
 

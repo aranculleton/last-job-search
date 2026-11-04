@@ -56,6 +56,7 @@ HELPER_TITLE = "Job search helper"
 # The helper's own name in their list of chats, and what it says when it starts: the one
 # thing a person needs to know about it (the maintainer, 2026-10-29: "some quick way of
 # explaining what it's for ... even if the user deletes it it's fine it'll start up again").
+OLD_HELPER_TITLE = HELPER_TITLE + " (finishing up)"     # the helper a new one took the page from
 HELPER_CHAT_TITLE = HELPER_TITLE      # short: what it is for is said, never in its name
 # Said once in a chat that does not answer the page, the first time it starts (the
 # maintainer, 2026-10-29: a heads-up about a new chat, "DO NOT MAKE THIS PERSIST").
@@ -440,6 +441,14 @@ def decide(db: dict, chat: str, out_dir: str, now: dt.datetime | None = None,
             lines.append(f"listen: name this chat in their list: set_session_title "
                          f"(session_id {chat}, title \"{HELPER_CHAT_TITLE}\"), and say "
                          "nothing about it.")
+        old = str(rec.get("chat") or "")
+        if rec.get("helper") and old.startswith("session_") and old != chat:
+            # Two chats called "Job search helper" side by side told nobody which was which:
+            # the app's own old helper is renamed at once (never a chat the person writes in),
+            # and the tidy-up is due again to archive it once its work is saved.
+            lines.append(f"listen: name the chat that answered before, so the two can be told "
+                         f"apart: set_session_title (session_id {old}, title "
+                         f"\"{OLD_HELPER_TITLE}\"), and say nothing about it.")
         _remember(new, now, confirmed=False)
         return {"role": "listener", "lines": lines, "batches": w.save("listen"), "record": new}
     else:

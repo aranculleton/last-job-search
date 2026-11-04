@@ -392,3 +392,24 @@ def test_the_skill_reads_once_and_wakes_once():
     assert "already loaded on a wake" in one_to_three
     progress = skill[skill.index("**Progress costs nothing extra**"):]
     assert "big jobs only" in progress[:400] and "every ten minutes" in progress[:1200]
+
+
+# ------------------------------------------------------------------ the ring is resolved
+
+def test_the_wake_ends_by_resolving_the_thread_it_came_on(ring):
+    said = ring.wake(ring.read("wake1"))
+    assert "ArtifactComments resolve" in said and "the thread this wake came on" in said
+    assert "leave no reply" in said
+
+
+def test_old_rings_are_cleared_once_and_the_upgrade_notes_it(tmp_path, monkeypatch, capsys):
+    import profile_upgrades
+    monkeypatch.setattr(app_setup, "profile_dir", lambda: str(tmp_path))
+    u = profile_upgrades.by_id("doorbells")
+    assert u.needs == "nobody" and not u.pending()          # no page, nothing to clear
+    (tmp_path / "app.json").write_text('{"url": "https://claude.ai/artifact/EXAMPLE"}')
+    assert u.pending()
+    assert app.main(["doorbells"]) == 0 and "resolve each thread" in capsys.readouterr().out
+    assert u.pending()
+    assert app.main(["doorbells", "--done"]) == 0
+    assert not u.pending()

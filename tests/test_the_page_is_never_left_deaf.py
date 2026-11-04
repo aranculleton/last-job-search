@@ -261,3 +261,28 @@ def test_the_wake_link_types_plain_words_and_the_chat_knows_them(copy, monkeypat
                              "prompt": app_listen.WAKE_PROMPT})
     assert "app.py start --listen --helper" in got
     assert learned._wake_due({"hook_event_name": "UserPromptSubmit", "prompt": "hi"}) == ""
+
+
+def test_a_hand_over_renames_the_old_helper_and_makes_the_tidy_due(copy, monkeypatch):
+    """The old helper is renamed at once (never the person's own chat), and the tidy-up is due
+    again so it is archived at the next check-in, not tomorrow."""
+    import app_listen
+    import tidy
+    monkeypatch.setattr(app_listen, "chat_kind", lambda: "cloud")
+    own = {"chat": "session_PERSONSOWN", "kind": "cloud", "helper": False,
+           "since": "2026-11-03T08:00:00Z", "answered_at": "2026-11-04T16:00:00Z"}
+    old = dict(own, chat="session_EXAMPLEHELPERA", helper=True)
+    rename = "session_id session_EXAMPLEHELPERA, title \"Job search helper (finishing up)\""
+    took = app_listen.decide(_db(old), "session_EXAMPLEHELPERB", str(copy.root) + "/a", NOW,
+                             listen=True, helper=True)
+    assert any(rename in ln for ln in took["lines"]), took["lines"]
+    from_own = app_listen.decide(_db(own), "session_EXAMPLEHELPERB", str(copy.root) + "/b", NOW,
+                                 listen=True, helper=True)
+    assert not any("(finishing up)" in ln for ln in from_own["lines"])
+    monkeypatch.setattr(tidy, "_git_dir", lambda: str(copy.root))
+    monkeypatch.setattr(tidy, "archived", lambda: [])
+    tidy._mark_checked("2026-11-04", "2026-11-04T08:00:00Z")
+    rec = dict(took["record"], since="2026-11-04T17:00:00Z")
+    assert tidy.due("2026-11-04", db={"work": {}}, listener=rec) is True
+    assert tidy.due("2026-11-04", db={"work": {}}, listener=dict(rec, took_from_helper=False)) is False
+    assert tidy.due("2026-11-04", db={"work": {}}, listener=dict(rec, since="2026-11-04T07:00:00Z")) is False
