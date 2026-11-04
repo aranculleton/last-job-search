@@ -386,6 +386,10 @@ def test_the_pasted_line_never_stops_a_chat_from_starting():
     # It still installs the same tools.
     for tool in ("texlive-luatex", "texlive-xetex", "poppler-utils", "pypdf", "cffi"):
         assert tool in line
+    if os.name == "nt":
+        # The line runs only in a Linux cloud environment's set-up; a Windows runner's `bash`
+        # is the Linux layer with no system installed, which runs nothing at all.
+        pytest.skip("the set-up line runs only in a Linux cloud environment")
     r = subprocess.run(["bash", "-c", line.replace("apt-get", "false").replace("pip3", "false")],
                        capture_output=True, timeout=30)
     assert r.returncode == 0
