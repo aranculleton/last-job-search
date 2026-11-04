@@ -41,7 +41,10 @@ def copy(tmp_path):
     origin/master at that commit: nothing changed since master."""
     if not shutil.which("git") or not local_path.bash():
         pytest.skip("needs git and bash")
-    files = repo_files.tracked(root=ROOT, app_only=False)
+    # The app's files only: run in a person's copy (the computer check on Windows runs the
+    # app's tests in one), their own profile/ came along, and the example's could not be
+    # put where it already was (FileExistsError, 2026-11-04).
+    files = repo_files.tracked(root=ROOT, app_only=True)
     c = tmp_path / "copy"
     for rel in files:
         if not rel or rel.startswith(("profile.example/", "docs/images/")):

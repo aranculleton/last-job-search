@@ -561,12 +561,22 @@ def test_every_line_after_an_update_gives_the_page_link(copy):
         assert app_listen.say(line, PAGE).endswith(": " + PAGE)
 
 
+def _on_github(monkeypatch):
+    """The copy's address on GitHub, which a fresh helper is started from. These tests may run
+    in a checkout with none: the Windows computer check runs them in a person's copy cloned
+    from a folder (tools/platform_check.py), where no helper can be started and none is
+    asked for (2026-11-04)."""
+    import app_setup
+    monkeypatch.setattr(app_setup, "origin", lambda: ("someone", "my-job-search"))
+
+
 def test_a_chat_answering_the_page_for_a_day_starts_a_fresh_helper_at_a_quiet_moment(copy, tmp_path, monkeypatch):
     """A chat re-reads its whole history at every wake, so one answering for days grew
     dearer with every tap (2026-10-30). After a day, with nothing waiting, it starts a fresh
     helper; until that one takes the page, it still answers."""
     import app_listen
     monkeypatch.setattr(app_listen, "chat_kind", lambda: "cloud")
+    _on_github(monkeypatch)
     monkeypatch.setattr(app_listen, "context_tokens", lambda: 0)
     now = dt.datetime(2026, 10, 30, 12, 0, tzinfo=dt.timezone.utc)
     rec = {"chat": "session_old", "kind": "cloud", "helper": True, "since": "2026-10-29T08:00:00Z",
@@ -601,6 +611,7 @@ def test_a_page_update_by_the_listener_brings_its_renewal(copy, tmp_path, monkey
     when --chat is a word, and never hands over without the work queue in hand."""
     import app_listen
     monkeypatch.setattr(app_listen, "chat_kind", lambda: "cloud")
+    _on_github(monkeypatch)
     monkeypatch.setattr(app_listen, "context_tokens", lambda: 0)
     monkeypatch.setenv("LJS_CHAT", "session_old")
     now = dt.datetime(2026, 11, 3, 8, 0, tzinfo=dt.timezone.utc)
@@ -628,6 +639,7 @@ def test_a_helper_that_rereads_a_lot_hands_over_within_the_day(copy, tmp_path, m
     next quiet moment, even inside its first day, and never more than once a day."""
     import app_listen
     import json as _json
+    _on_github(monkeypatch)
     monkeypatch.setattr(app_listen, "chat_kind", lambda: "cloud")
     now = dt.datetime(2026, 11, 3, 15, 0, tzinfo=dt.timezone.utc)
     rec = {"chat": "session_new", "kind": "cloud", "helper": True, "since": "2026-11-03T09:00:00Z",

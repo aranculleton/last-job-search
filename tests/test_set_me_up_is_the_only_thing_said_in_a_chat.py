@@ -45,6 +45,7 @@ class Copy:
         self.dump = os.path.join(root, "dump")
         self.kind = kind
         self.path = os.environ.get("PATH", "")
+        self.extra = {}
         self.n = 0
 
     def env(self):
@@ -54,6 +55,7 @@ class Copy:
                    GIT_COMMITTER_EMAIL="t@example.com")
         for k in ("LJS_TODAY", "CLAUDE_CODE_REMOTE"):
             env.pop(k, None)
+        env.update(self.extra)
         return env
 
     def run(self, *args, ok=(0,)):
@@ -134,11 +136,14 @@ class Copy:
                          "    print('https://github.com/someone/my-job-search')\n"
                          "elif sys.argv[1:2] == ['api']:\n"
                          f"    print({'true' if private else 'false'!r})\n")
-            # The script by %~dp0, its own folder: cmd reads a .cmd file in the console's code
-            # page, so a folder with an accent in it ("Zoë") written into the file as UTF-8
-            # named a script that was not there (the Windows check, 2026-10-29).
-            with open(os.path.join(bindir, "gh.cmd"), "w", encoding="utf-8", newline="\r\n") as fh:
-                fh.write(f'@"{sys.executable}" "%~dp0{os.path.basename(fake)}" %*\n')
+            # The script by %~dp0, its own folder, and Python by a variable cmd expands itself:
+            # cmd reads a .cmd file in the console's code page, so a folder with an accent in
+            # it ("Zoë") written into the file as UTF-8 named a script that was not there (the
+            # Windows check, 2026-10-29), and then a Python that was not there, run from a copy
+            # whose own .venv is under "My Job Search Ö" (2026-11-04). The file is plain ASCII.
+            self.extra["FAKE_GH_PYTHON"] = sys.executable
+            with open(os.path.join(bindir, "gh.cmd"), "w", encoding="ascii", newline="\r\n") as fh:
+                fh.write(f'@"%FAKE_GH_PYTHON%" "%~dp0{os.path.basename(fake)}" %*\n')
         self.path = bindir + os.pathsep + os.environ.get("PATH", "")
         return log
 
