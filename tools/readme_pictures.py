@@ -90,7 +90,14 @@ def rename(root: str = ROOT) -> dict[str, str]:
 
 
 def main(argv: list[str]) -> int:
-    if "--check" in argv:
+    import argparse
+    ap = argparse.ArgumentParser(prog="readme_pictures.py", description=(
+        "Name each README picture in docs/images after its contents and point the README at "
+        "it. Run it after remaking a picture saved under its plain name."))
+    ap.add_argument("--check", action="store_true",
+                    help="change nothing; exit 1 when a picture or the README is out of step")
+    args = ap.parse_args(argv)
+    if args.check:
         found = problems()
         print("\n".join(found) if found else "readme_pictures: every picture is named after itself")
         return 1 if found else 0
