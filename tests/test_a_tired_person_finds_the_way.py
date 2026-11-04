@@ -223,13 +223,14 @@ def test_to_do_opens_on_what_is_late_or_due_today_and_folds_the_setup(run, tmp_p
     got = _go(run, tmp_path, [{"hash": "todo", "eval": FIRST}], vp, clock=T)
     r = got["after"][0]["eval"]
     titles = [c["title"] for c in r["cards"]]
-    for owed in ("Thank-you note after your Harbourline Bank first interview", "Follow up with Fernhill Freight about the Operations Analyst role",
-                 "Reply to Juno at Larkspur Retail", "Send your CV to Tamsin"):
+    # The Fernhill Freight follow-up and the reply to Juno are drafted, so they share one card
+    # that opens Messages (2026-11-04).
+    for owed in ("Thank-you note after your Harbourline Bank first interview", "2 messages ready to send", "Send your CV to Tamsin"):
         assert owed in titles, (owed, titles)
     bands = [c["band"] for c in r["cards"]]
     assert bands[0] == "Due or late", bands
     if "Needs your answer" in bands:
-        last_owed = max(titles.index(t) for t in titles if t.startswith(("Thank-you", "Follow up with", "Reply to", "Send your")))
+        last_owed = max(titles.index(t) for t in titles if t.startswith(("Thank-you", "Follow up with", "Reply to", "Send your", "2 messages ready")))
         assert bands.index("Needs your answer") > last_owed, ("questions come after what is owed", r["cards"])
     assert r["youFolded"], "Finish your profile waits behind the fold while today's things show"
     assert r["fold"].startswith("Show "), r
