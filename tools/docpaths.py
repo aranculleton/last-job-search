@@ -130,6 +130,35 @@ def current_resume() -> str:
     return best(current) if current else best(files)
 
 
+_NEVER_SEND = re.compile(r"never send|do not send|don'?t send|not to be sent|must never be sent", re.I)
+
+
+def never_sent(rel_path: str) -> bool:
+    """Does the person's own profile/CLAUDE.md name this file in a line saying never to send
+    it? "Do not send it" beside the hand-made ..._CURRENT_2026-09.pdf is the rule."""
+    base = os.path.basename(str(rel_path or "")).lower()
+    if not base:
+        return False
+    try:
+        with open(person.path("CLAUDE.md"), encoding="utf-8") as f:
+            text = f.read()
+    except (OSError, person.NoProfile):
+        return False
+    return any(base in line.lower() and _NEVER_SEND.search(line) for line in text.splitlines())
+
+
+def resume_to_offer() -> str:
+    """The resume that may be offered or attached when someone asks for "your resume", or "".
+    Only the one the app made and checked (general_resume.py's own `_current` file), which
+    breaks none of the person's rules and which their profile does not say never to send. An
+    older hand-made file is never it, however it is named (2026-11-04: reply guidance pointed
+    at a ..._CURRENT_2026-09.pdf the person's rules forbid). "" means make one for them."""
+    own = "/".join(GENERAL_DIR + (resume_stem("current") + ".pdf",))
+    if own not in general_resumes() or never_sent(own) or resume_problems(own):
+        return ""
+    return own
+
+
 _problems_cache: dict = {}
 
 

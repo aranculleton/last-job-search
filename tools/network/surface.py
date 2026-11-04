@@ -39,7 +39,6 @@ import argparse
 import datetime
 import json
 import os
-import re
 import sys
 
 _HERE = os.path.dirname(os.path.abspath(__file__))
@@ -422,11 +421,10 @@ def held(contact, msgs, status, replying=False, memo=None) -> dict | None:
     if place:
         return {"why": "place", "said": HELD_WORDS["place"].format(place=place)}
     import throttle
-    if status in throttle.SENT_NO_REPLY or status == "in_conversation":
-        ours = state._trailing_outbound(msgs) if msgs else 0
-        if ours >= state.schema.MAX_UNANSWERED or STOPPED.match(str(c.get("next_action") or "")):
-            n = max(ours, state.schema.MAX_UNANSWERED)
-            return {"why": "limit", "said": HELD_WORDS["limit"].format(n=n), "n": n}
+    # Their limit, the one answer the dates written on a row also read (state.at_limit).
+    if state.at_limit(c, msgs, status):
+        n = max(state._trailing_outbound(msgs) if msgs else 0, state.schema.MAX_UNANSWERED)
+        return {"why": "limit", "said": HELD_WORDS["limit"].format(n=n), "n": n}
     if status in throttle.SENT_NO_REPLY and state.request_pending(msgs) is not None:
         return {"why": "request", "said": HELD_WORDS["request"]}
     return None
@@ -434,8 +432,7 @@ def held(contact, msgs, status, replying=False, memo=None) -> dict | None:
 
 # The app's own line on a row whose limit is reached (state.FOLLOW_UP_STOP and the
 # two-message rule's "Nudged: nothing more"), however a page or a chat has said it since.
-STOPPED = re.compile(r"\s*(?:no more follow-ups: \d+ messages with no reply\b|nudged: nothing "
-                     r"more unless they reply\b|no reply to \d+ messages: leave it\b)", re.I)
+STOPPED = state.STOP_LINE
 
 
 OLD_CONNECTION = ("their employer and title come from your connections file (connected {day}), "

@@ -356,8 +356,9 @@ METHODS: dict[str, dict] = {
             (62, "2026-11-03", False, "the RUNBOOK lands a chat's work with one background command, tools/land.py, once the answer is out; independent commands go together as separate calls; documents render and are checked as before; the RUNBOOK says the interview prep is in plain words; documents render and are checked as before"),
             (63, "2026-11-03", True, "filling the page stops before the margin the verification checks, so a fitted resume never fails it for text too near the edge; a yes is written into the candidate profile when it is recorded and refused anywhere the profile does not hold it; a letter copying the research's own sentence or saying where you are twice is held back; a role over its cap for the posting is held to it and checked; a sentence changed after the audits, and a claim or number the batch failed on, are recorded on the application; a resume that breaks your own rules is never offered; references lines, passed dates and a start your notice does not allow are refused; a skill held under another name (Azure Data Factory is Azure) is never offered as a near match; the RUNBOOK says a landing brings in what an earlier chat left waiting and settles a file two chats changed without losing either side, and that a chat that cannot start the improvements says why; the drafting skill no longer grants itself any command or web fetch, only the app's own checks; the general resume's stop says to write the summary into the profile under its exact heading; a promotion prints both titles under their own dates and a job with no achievement on file as its title line, a letter in another language is dated in it (an unsent letter keeps its day in its own language), the close states the right to work only where the person's status needs saying, the outreach note offers an InMail only on a plan that has them, and a pick today's screen would leave out is asked about before drafting; an application asked for in a chat is given in the chat in full as well as on the page"),
             (64, "2026-11-04", False, "on Windows, a PDF in a folder named with an accent is read by Poppler too, where pypdf cannot run, and a skill you said no to straight after a yes is refused again at once; nothing made before needs making again"),
+            (65, "2026-11-04", False, "a resume is offered to a contact only when it is the one the app made and checked and your own rules do not say never to send it; an older hand-made file is never offered, and with none the guidance says to make one"),
         ),
-        "fingerprint": "fbd81bda73951335",
+        "fingerprint": "c16b2f0ca473c1ef",
     },
     "interview": {
         "by": "upgrade", "priority": 2, "applies": "live_interviews", "time": "~15 min",
@@ -533,8 +534,10 @@ METHODS: dict[str, dict] = {
             (69, "2026-11-04", False, "nobody is owed a follow-up message who cannot receive one: someone only ever sent an InMail, with no acceptance and no word back, is not listed, because a second would be a second InMail"),
             (70, "2026-11-04", False, "a follow-up finished with reply.py finish is checked as the follow-up it is, so one to someone who never wrote back is saved where Messages shows it instead of refused as a reply with nothing to answer, and its line says follow-up; nothing to redo"),
             (71, "2026-11-04", False, "a recruiter at a recruitment or staffing agency is no longer hidden from Messages because the agency clears none of your bar: the bar judges where you would work; an employer you named, and an in-house recruiter at one you turned down, still hold"),
+            (72, "2026-11-04", False, "a short thank-you is no longer refused for sharing their name, their employer or thank with what they wrote, and a note naming no place is no longer warned that it named the wrong one"),
+            (73, "2026-11-04", False, "nobody at their limit of unanswered messages, closed, set aside or gone cold is given a date by any writer (state.put_next), so a follow-up run never brings them back as owed; the check before anyone is shown reads their limit from the same place (state.at_limit); nothing to redo"),
         ),
-        "fingerprint": "0d3f647395c40587",
+        "fingerprint": "0855c2e2fa300c36",
     },
     "network-notes": {
         "by": "network", "priority": 2, "applies": "queued_notes", "time": "~10 min",
@@ -723,8 +726,9 @@ METHODS: dict[str, dict] = {
             (19, "2026-11-04", True, "Settings has Phone notification under Your brief, off unless chosen, and turning the brief on asks whether you want one"),
             (20, "2026-11-04", True, "Claude\'s work opens and closes from the pill on every screen; closed and stopped rows leave their lists at once; a finished follow-up opens that person\'s message; held work counts the running work before the update; the settings gear is even and the Brief icon has clear gaps; a run of like work is one card; a card of notes to check says what it is; the edit panel leads with your words and has one button; a card being changed says so"),
             (21, "2026-11-04", True, "a To do row whose message is drafted says Draft ready and opens the draft, never drafts it again, an application\'s follow-up included; two or more drafted messages are one card, N messages ready to send, a row a person opening their draft and one button opening Messages; nobody listening is said once, on its card in To do, with Wake Claude its one button, never again in the line under the header; Open Claude, which leaves the Claude app, is offered only where nothing can hear the page and never on a phone; a LinkedIn download Claude has saved leaves To do, and one that brought nothing new says so, with nothing to take back; a sheet's foot with Cancel never covers its last choice"),
+            (22, "2026-11-04", True, "To do never lists someone who has not answered your limit of messages: nothing to do is not a To do, so the card to close them all is gone; in Contacts they wait below the fold with the others who need nothing from you, their row saying to leave it unless they write back, with Close"),
         ),
-        "fingerprint": "a6b40a1168f73af8",
+        "fingerprint": "129ddc90447421c1",
     },
     "upskill": {
         "by": "upgrade", "priority": 4, "applies": "upskill_plans", "time": "~10 min",

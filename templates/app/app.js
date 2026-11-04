@@ -2972,6 +2972,10 @@
     }
     for (const d of dueItems()) {
       if (PENDING_KINDS.has(txt(d.kind))) continue;   // one card for all of them (withdrawTodo)
+      // Someone at their limit of unanswered messages: nothing to do but leave them, so never
+      // a To do card (the maintainer, 2026-11-04). The engine lists none; a list it wrote
+      // before says so in the row. Their row in Contacts says it, with Close.
+      if (dueLeftAlone(d)) continue;
       // Its message marked sent on this page: done here at once, before a chat catches up.
       if (dueSentHere(d)) continue;
       // Done or put off on this page: off the list at once, its Undo in the toast (2026-11-03).
@@ -3017,12 +3021,12 @@
   }
   // Which like items a due row is grouped with, two or more in a band making one checklist
   // card (the maintainer, 2026-10-30: "a lot of them seem similar and a lot seem unique ...
-  // make this smart and reliable"). Grouped by what each asks of the person: someone to
-  // close after two unanswered messages, a follow-up, or the same kind of work (a reply, a
-  // thank-you). Anything else stays a card of its own. null: never grouped.
+  // make this smart and reliable"). Grouped by what each asks of the person: a follow-up, or
+  // the same kind of work (a reply, a thank-you). Anything else stays a card of its own.
+  // null: never grouped.
   const NO_REPLY = /: No reply to \d+ messages\b/;
+  function dueLeftAlone(d) { return !!dueContact(d) && (d.leave === true || NO_REPLY.test(txt(d.title))); }
   function dueGroupKey(d) {
-    if (dueContact(d) && (d.leave === true || NO_REPLY.test(txt(d.title))) && obj(d.done).action) return "leave";
     // Its message already drafted: never a row of a "Draft all". Two or more drafted are one
     // card, "6 messages ready to send", a row a person opening their draft (the maintainer,
     // 2026-11-04: "same with to do, batch would be easier to read"); one alone keeps its card.
@@ -3368,12 +3372,10 @@
   }
   // Follow-ups owed to several people: one card, a row each, and one button for them all.
   // One card for like due rows (dueGroupKey): a row each with its own button, and one button
-  // for them all where doing them all is one thing (drafting every follow-up or reply, or
-  // closing everyone who has not answered two messages).
+  // for them all where doing them all is one thing (drafting every follow-up or reply).
   const GROUP_WORDS = {
     follow: {title: (n) => "Follow up with " + plural(n, "person", "people"), all: "Draft all", row: "Draft", strip: /^Follow up with /},
     "work~reply": {title: (n) => "Reply to " + plural(n, "person", "people"), all: "Draft all", row: "Draft", strip: /^Reply to /},
-    leave: {title: (n) => plural(n, "person hasn't", "people haven't") + " answered two messages", sub: "Leave them unless they write back: close each, or all of them.", all: "Close them all", row: "Close", strip: NO_REPLY},
     // Drafted already: each row opens that person's draft and the card's one button Messages;
     // nothing drafts them again.
     drafted: {title: (n) => plural(n, "message", "messages") + " ready to send", row: "See the draft", strip: /^(?:Reply to|Follow up with|Follow up on|Write to|Send your \S+ to) /},
@@ -3449,25 +3451,23 @@
     const ds = list.map((i) => i.d);
     const kind = g.startsWith("work~") ? g.slice(5) : g === "follow" ? "follow_up" : "";
     const words = GROUP_WORDS[g] || {title: (n) => (DUE_WORK[kind] || "To do") + ": " + plural(n, "person", "people"), row: DUE_SUB[kind] ? "Draft" : "Do it", strip: null};
-    const leave = g === "leave";
     const drafted = g === "drafted";
     const busy = (d) => { const w = kind ? dueWork(d, kind) : null; return !!(w && ACTIVE.has(w.status)); };
     const open = ds.filter((d) => !busy(d) && !effective(d.id, ["due.done", "due.snooze"]));
-    // A row the person closed or finished leaves the list at once; "11 closed: Show" at the
-    // foot brings them back with their Undo. Eleven closed rows stayed in place reading
-    // "Saved. Claude will pick this up." while the chat was busy (the maintainer, 2026-11-04).
+    // A row the person finished leaves the list at once; "11 done: Show" at the foot brings
+    // them back with their Undo. Eleven finished rows stayed in place reading "Saved. Claude
+    // will pick this up." while the chat was busy (the maintainer, 2026-11-04).
     const gone = ds.filter((d) => !!effective(d.id, ["due.done", "due.snooze"]));
     const showGone = openState.get("grp-gone:" + hid) === true;
     const left = ds.filter((d) => showGone || gone.indexOf(d) < 0);
     const late = ds.filter((d) => gone.indexOf(d) < 0 && Number(d.overdue_days) > 0).length;
-    const close = (d) => act([{item: d.id, action: txt(obj(d.done).action), value: {on: todayIso()}, rev: d.rev}], "Closed: " + txt(d.title));
     const row = (d) => {
       const marked = !!effective(d.id, ["due.done", "due.snooze"]);
       const title = txt(d.title);
       const cid = isPerson(dueContact(d)) ? dueContact(d) : "";
       // A drafted message's row is the person it goes to, whatever the row was owed for.
       const who = drafted && cid ? personById(cid) : null;
-      const name = who ? whoAt(who.first_name, who.employer) : words.strip && words.strip.test(title) ? (leave ? title.split(":")[0] : title.replace(words.strip, "")) : title;
+      const name = who ? whoAt(who.first_name, who.employer) : words.strip && words.strip.test(title) ? title.replace(words.strip, "") : title;
       const draft = drafted ? dueDraft(d) : null;
       // One line under the name: who they are and the day it is about ("you wrote 21 Sept ·
       // no reply"), never Draft, Not now and a bin on every row (the walk-through, 2026-11-03).
@@ -3475,28 +3475,25 @@
         h("div", {class: "g-main"}, h("p", {class: "g-name"}, cid ? personName(cid, name, "fg:" + d.id) : name),
           dueWho(d) ? h("p", {class: "muted small"}, cap1(dueWho(d))) : null, stateLine(d.id, "due:" + where + ":" + d.id)),
         h("div", {class: "g-acts"}, busy(d) ? btn("See it", openWork, {small: true, kind: "quiet", key: "fgsee:" + where + ":" + d.id}) :
-          leave ? btn(words.row, () => close(d), {small: true, pressed: marked, key: "fgclose:" + where + ":" + d.id, aria: "Close: " + name}) :
           draft ? seeDraftBtn(draft, "fgdraft:" + where + ":" + d.id, "secondary") :
           btn(words.row, () => askDue(d), {small: true, key: "fgdo:" + where + ":" + d.id, aria: words.row + ": " + title}),
           // Its bin: the person's choices, and hiding this one row for a week.
-          cid && !marked && !leave ? btn("", () => askRemovePerson(cid, name.replace(/ at .*$/, ""), employerIn(title) || "", null, {hide: () => hideTodo("due:" + d.id, title)}),
+          cid && !marked ? btn("", () => askRemovePerson(cid, name.replace(/ at .*$/, ""), employerIn(title) || "", null, {hide: () => hideTodo("due:" + d.id, title)}),
             {kind: "quiet icon-only", small: true, icon: "bin", key: "fgbin:" + where + ":" + d.id, aria: "Not " + name + "? Or hide this for a week"}) : null));
     };
     // Drafted messages: the card's one filled button opens them all in Messages. Drafting them
     // all takes as long as each one does, added up: "Draft all 25" said one draft's minutes
     // (2026-11-03).
     const allBtn = drafted ? (ds.length > gone.length ? btn("Open Messages", () => go("drafts", {focus: true, drafts: "messages"}), {kind: "primary", small: true, key: "fg-msgs:" + where + ":" + band}) : null) :
-      open.length > 1 && words.all ? (leave ?
-      btn(words.all, () => { for (const d of open) close(d); }, {kind: "primary", small: true, key: "fg-all:" + where + ":" + g + ":" + band}) :
-      [btn(words.all + " " + open.length, () => requestWork(open.map(dueSpec)), {kind: "primary", small: true, key: "fg-all:" + where + ":" + g + ":" + band}),
-        costEl({state: WORK_COST[kind] === undefined ? 1 : WORK_COST[kind]}, kind, "fgc-" + where + "-" + seg(g) + "-" + band, open.length)]) : null;
+      open.length > 1 && words.all ? [btn(words.all + " " + open.length, () => requestWork(open.map(dueSpec)), {kind: "primary", small: true, key: "fg-all:" + where + ":" + g + ":" + band}),
+        costEl({state: WORK_COST[kind] === undefined ? 1 : WORK_COST[kind]}, kind, "fgc-" + where + "-" + seg(g) + "-" + band, open.length)] : null;
     // "25 late" read as 25 days: the chip says how many are overdue.
     return card("article", {class: "card todo group-card", "aria-labelledby": hid, "data-item": "grp:" + g + ":" + band},
-      h("div", {class: "todo-top"}, kindMark(leave ? "message" : dueKind(ds[0])), late ? h("span", {class: "chip tone-warn"}, late + " overdue") : null),
-      h("p", {class: "card-title", id: hid}, ds.length > gone.length ? words.title(ds.length - gone.length) : plural(gone.length, leave ? "person" : "thing", leave ? "people" : "things") + (leave ? " closed" : " done")),
+      h("div", {class: "todo-top"}, kindMark(dueKind(ds[0])), late ? h("span", {class: "chip tone-warn"}, late + " overdue") : null),
+      h("p", {class: "card-title", id: hid}, ds.length > gone.length ? words.title(ds.length - gone.length) : plural(gone.length, "thing", "things") + " done"),
       words.sub && ds.length > gone.length ? h("p", {class: "small muted"}, words.sub) : null,
       left.length ? groupRows("fg:" + where + ":" + g + ":" + band, left.map(row)) : null,
-      gone.length && !showGone ? h("p", {class: "fold"}, ds.length > gone.length ? h("span", {}, gone.length + (leave ? " closed: " : " done: ")) : null,
+      gone.length && !showGone ? h("p", {class: "fold"}, ds.length > gone.length ? h("span", {}, gone.length + " done: ") : null,
         btn(ds.length > gone.length ? "Show" : "Show them", () => { openState.set("grp-gone:" + hid, true); scheduleRender(); }, {kind: "link", key: "grpgone:" + hid})) : null,
       allBtn ? h("div", {class: "card-actions"}, allBtn) : null);
   }
@@ -3788,13 +3785,12 @@
     const kind = txt(d.action).replace(/^work:/, "");
     const hid = "due-" + (ctx.where || "") + "-" + seg(d.id);
     const when = late ? plural(n !== null && n < 0 ? -n : Number(d.overdue_days), "day", "days") + " late" : n === null ? "" : n === 0 ? "Today" : fmtDay(d.due);
-    // Two messages unanswered means leave it: the card offered "Draft the follow-up" under a
-    // title saying to leave it (2026-10-30). It only closes.
-    const leave = dueGroupKey(d) === "leave";
-    const hasWork = txt(d.action).startsWith("work:") && !leave;
+    // Someone at their limit of unanswered messages never reaches here (dueLeftAlone): a card
+    // offered "Draft the follow-up" under a title saying to leave it (2026-10-30).
+    const hasWork = txt(d.action).startsWith("work:");
     const w = hasWork ? dueWork(d, kind) : null;
     const busy = w && ACTIVE.has(w.status);
-    const done = leave ? Object.assign({}, obj(d.done), {label: "Close"}) : obj(d.done);
+    const done = obj(d.done);
     const marked = !!effective(d.id, ["due.done", "due.snooze"]);
     const draft = hasWork && !busy ? dueDraft(d) : null;
     // What they asked for leads, and its button makes it ("Make a CV for Juno"), never "Draft
@@ -5489,9 +5485,12 @@
       : ["gone_cold", "closed", "dropped", "converted_to_application", "cold", "stopped"].includes(st) ? "done" : "talking";
   }
   function personRank(p) { return GROUP_RANK[personGroup(p)]; }
+  // Someone at their limit of unanswered messages needs nothing from the person: below the fold
+  // with the held and the done, their row keeping its words and Close (the maintainer,
+  // 2026-11-04).
   function personLive(p) {
     const g = personGroup(p);
-    return ["now", "follow", "leave"].includes(g) || (p.live !== false && !["held", "done"].includes(g));
+    return ["now", "follow"].includes(g) || (p.live !== false && !["leave", "held", "done"].includes(g));
   }
   // What the engine says is next, in the person's words: its own step words ("Reply", "Follow
   // up") read on after "Next:", anything the person wrote kept as they wrote it, a name with its
@@ -5513,7 +5512,7 @@
       : "Nobody is waiting on you.") + (total && follow ? " " + plural(follow, "follow-up", "follow-ups") + " you could send." : "");
     // What there is to do comes first, the rest one tap below: a fold, never a filter left on,
     // so nobody is hidden without the page saying so.
-    const upFront = (p) => ["now", "follow", "leave"].includes(g(p));
+    const upFront = (p) => ["now", "follow"].includes(g(p));
     const anyUp = items.some(upFront);
     const front = anyUp ? upFront : personLive;
     const lo = {items, name: "contacts", one: "person", many: "people", live: front, fold: (p) => !front(p), remote: "people",
@@ -11095,8 +11094,8 @@
     } else if (S.section === "contacts") {
       // Behind the fold unless it is something to do now, as renderContacts folds it.
       const p = peopleItems().find((x) => x.id === id);
-      const anyUp = peopleItems().some((x) => personRank(x) <= GROUP_RANK.leave);
-      if (p && !(anyUp ? personRank(p) <= GROUP_RANK.leave : personLive(p))) listState("contacts").open = true;
+      const anyUp = peopleItems().some((x) => personRank(x) <= GROUP_RANK.follow);
+      if (p && !(anyUp ? personRank(p) <= GROUP_RANK.follow : personLive(p))) listState("contacts").open = true;
     }
   }
   function go(id, o) {

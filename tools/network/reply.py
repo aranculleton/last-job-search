@@ -828,13 +828,22 @@ def resume_routes(contact_id="<contact_id>", referral_field=False) -> str:
                 "tell them in the thread once the application is in.")
     try:
         import docpaths
-        current = docpaths.current_resume()
-    except Exception:  # noqa: BLE001  no profile, or no documents/cv/: the folder by name
+        current = docpaths.resume_to_offer()
+    except Exception:  # noqa: BLE001  no profile, or no documents/cv/
         current = ""
+    if not current:
+        return (f"Which {_NOUN}: for a role they named, one made for it and for them: python3 "
+                "tools/stage_picks.py single <dir> --company <their employer> --role <the role> "
+                f"--posting-file <the posting> --for-contact {contact_id}. With no role named, "
+                f"there is no {_NOUN} of yours the app made and checked to send, and an older "
+                f"file is never sent: make one for them first (the page offers Make one for them, "
+                "or python3 tools/stage_picks.py general <dir>), then log it with the file: "
+                f"python3 tools/network/state.py message {contact_id} --attached <the file> "
+                "--text-file <the message as sent>.")
     return (f"Which {_NOUN}: for a role they named, one made for it and for them: python3 "
             "tools/stage_picks.py single <dir> --company <their employer> --role <the role> "
             f"--posting-file <the posting> --for-contact {contact_id}. With no role named, your "
-            f"current {_NOUN} ({current or 'the one in documents/cv/'}), never one tailored to a "
+            f"current {_NOUN} ({current}), never one tailored to a "
             f"guess at the role. When it goes, log it with the file: python3 "
             f"tools/network/state.py message {contact_id} --attached <the file> --text-file "
             "<the message as sent>.")

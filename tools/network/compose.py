@@ -2642,6 +2642,17 @@ def example_facts(text, contact: str = "", name: str = "", referrer: str = "") -
                                                 referrer=referrer)]
 
 
+def _company_of(contact) -> str:
+    """The employer the contact book holds for this contact id, or ""."""
+    try:
+        import learned
+        book = learned.contact_book()
+    except (ImportError, SystemExit):
+        return ""
+    return next((str(c.get("company") or "") for c in book
+                 if contact and str(c.get("contact_id") or "").strip() == str(contact).strip()), "")
+
+
 def book_names(contact: str = "", extra=()) -> list:
     """Everybody else a note could be for: the contact book's names other than `contact`'s,
     and `extra` (a batch's). What `tone.wrong_greeting` reads a short greeting against."""
@@ -2757,7 +2768,8 @@ def validate(message, kind, name=None, seniority="peer", employers=(),
     if now:
         out.append(tone.Violation("not_your_notice", now))
     if their_message:
-        restated = tone.restate_ratio(text, their_message)
+        restated = tone.restate_ratio(text, their_message,
+                                      ignore=[name, *employers, _company_of(contact)])
         if restated.flagged:
             out.append(tone.Violation(
                 "restates_their_points",
@@ -2897,11 +2909,17 @@ def _place_heard(text, company) -> list:
     if not company or not places_told.differs(company):
         return []
     heard = places_told.place(company)
-    own = {w for w in re.findall(r"[a-z]+", places_told.home().lower()) if len(w) > 2}
-    own |= {str(getattr(_NET, "HOME_CITY", "") or "").lower()} - {""}
-    own -= {w for w in re.findall(r"[a-z]+", heard.lower())}
+    # A place is written capitalised: "Greater Toronto Area" is one, and the lower-case "area" in
+    # "thanks for the tip about the area" is not. A note naming no place was warned that it
+    # named the wrong one (2026-11-04).
+    generic = {"greater", "area", "region", "metro", "city", "the", "province", "county"}
+    homes = [places_told.home(), str(getattr(_NET, "HOME_CITY", "") or "")]
+    own = {w for h in homes for w in re.findall(r"[A-Za-z]+", h)
+           if len(w) > 2 and w.lower() not in generic}
+    heard_words = {w.lower() for w in re.findall(r"[A-Za-z]+", heard)}
+    own = {w for w in own if w.lower() not in heard_words}
     hit = next((m.group(0) for w in sorted(own, key=len, reverse=True)
-                for m in [re.search(r"\b%s\b" % re.escape(w), text, re.I)] if m), "")
+                for m in [re.search(r"\b%s\b" % re.escape(w.capitalize()), text)] if m), "")
     if not hit:
         return []
     return [advice.Advice(

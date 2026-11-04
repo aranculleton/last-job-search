@@ -109,26 +109,52 @@ def test_the_date_is_written_on_each_contact_and_never_over_the_persons_own(rule
         ["Corwin Haldane (kestrel_haldane): follow up on 2026-10-22"]
 
 
-def test_at_the_limit_the_row_says_so_and_keeps_the_day_to_close_it(rule):
+def test_at_the_limit_the_row_says_so_and_has_no_day(rule):
+    """Until 2026-11-04 the row at the limit carried a day to close the thread, and on that
+    day it was owed again: six people the person had closed on the page came back as To do
+    cards once an update ran this over every contact. Nothing is owed them, so no day."""
     rule(days=14)
     contacts = [_c()]
     log = [_out("2026-10-01"), _out("2026-10-15", scenario="nudge")]
     assert state.write_follow_ups(contacts, log, "2026-10-16") == \
-        ["Corwin Haldane (kestrel_haldane): no more follow-ups; close it on 2026-10-29 if still silent"]
+        ["Corwin Haldane (kestrel_haldane): no more follow-ups and no date: leave it unless "
+         "they write back"]
     assert contacts[0]["next_action"].startswith("No more follow-ups: 2 messages with no reply")
-    assert "state.py set kestrel_haldane --status gone_cold" in contacts[0]["next_action"]
-    assert _kinds(contacts, log, "2026-10-29") == [("kestrel_haldane", "action_due", "2026-10-29")]
+    assert contacts[0]["next_action_due"] == ""
+    assert _kinds(contacts, log, "2026-10-29") == [] and _kinds(contacts, log, "2026-12-29") == []
+    assert state.write_follow_ups(contacts, log, "2026-10-16") == []      # once only
     rule()                                       # the app's own words, as they always were
     contacts = [_c()]
     state.write_follow_ups(contacts, log, "2026-10-16")
-    assert contacts[0]["next_action"].startswith("Nudged: nothing more unless they reply")
+    assert contacts[0]["next_action"] == "Nudged: nothing more unless they reply"
+    assert contacts[0]["next_action_due"] == ""
     rule(days=14, unanswered=1)                  # one message, and no follow-up at all
     contacts, log = [_c()], [_out("2026-10-01")]
     state.write_follow_ups(contacts, log, "2026-10-02")
     assert contacts[0]["next_action"].startswith("No more follow-ups: 1 messages with no reply")
     assert not reply.nudge_due(log, "2026-10-20")["due"]
-    assert _kinds(contacts, log, "2026-10-14") == []
-    assert _kinds(contacts, log, "2026-10-15") == [("kestrel_haldane", "action_due", "2026-10-15")]
+    assert _kinds(contacts, log, "2026-10-14") == [] and _kinds(contacts, log, "2026-10-15") == []
+
+
+def test_a_day_the_app_put_on_a_row_at_the_limit_comes_off(rule):
+    """What the line said before, with its day, and a day put beside it since (its old To do
+    card's "Not today"): the next run takes the day off and keeps the person's own dates."""
+    rule()
+    log = [_out("2026-10-01"), _out("2026-10-12", scenario="nudge")]
+    old = ("Nudged: nothing more unless they reply. If still silent by the date, close it: "
+           "state.py set kestrel_haldane --status gone_cold")
+    for day in (state.follow_up_on("2026-10-12").isoformat(), "2026-11-11"):
+        contacts = [_c(next_action=old, next_action_due=day)]
+        assert _kinds(contacts, log, "2026-11-30") == [("kestrel_haldane", "action_due", day)]
+        assert state.write_follow_ups(contacts, log, "2026-11-04") == [
+            "Corwin Haldane (kestrel_haldane): no more follow-ups and no date: leave it unless "
+            "they write back"]
+        assert (contacts[0]["next_action"], contacts[0]["next_action_due"]) == (
+            "Nudged: nothing more unless they reply", "")
+        assert _kinds(contacts, log, "2026-11-30") == []
+    own = [_c(next_action="Ask about the Leeds depot when we speak", next_action_due="2026-11-11")]
+    assert state.write_follow_ups(own, log, "2026-11-04") == []
+    assert own[0]["next_action_due"] == "2026-11-11"
 
 
 def test_a_note_logged_as_sent_carries_the_persons_date(rule, monkeypatch):
@@ -151,7 +177,7 @@ def test_a_nudge_says_what_follows_by_the_persons_rule(rule, monkeypatch):
     state.followed_up(contacts, log, "kestrel_haldane", "2026-09-29", kind="nudge",
                       text="Hi Corwin, one last thought on the planning team.")
     assert contacts[0]["next_action"].startswith("No more follow-ups: 3 messages with no reply")
-    assert contacts[0]["next_action_due"] == "2026-10-13"      # the day to close it
+    assert contacts[0]["next_action_due"] == ""      # at the limit: nothing owed, so no day
     rule()                                     # the app's own rule: one nudge, said so
     assert state.waiting_action(1) == "One nudge if no reply"
 

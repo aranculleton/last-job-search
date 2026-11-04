@@ -1071,15 +1071,24 @@ def _content_words(text) -> list:
     return out
 
 
-def restate_ratio(reply_text, their_message) -> Restatement:
+# What every thank-you shares with what they wrote, so it is not copying: the courtesy words.
+COURTESY = frozenset("""thank thanks thankful appreciate appreciated appreciates grateful gratitude
+welcome regards cheers wishes sincerely kindly generous generously helpful chance""".split())
+
+
+def restate_ratio(reply_text, their_message, ignore=()) -> Restatement:
     """How much of the reply's vocabulary came out of their message.
 
     The share of the reply's distinct content words that also appear in theirs,
     plus the overlapping terms, so a caller can show the writer which words gave
     it away rather than asserting the draft "sounds AI-generated".
+    `ignore` is text whose words never count as copied: their name and their employer, which
+    any note to them says (a short thank-you was refused for naming them, 2026-11-04). The
+    courtesy words (thank, thanks...) never count either.
     """
-    reply = _content_words(reply_text)
-    theirs = set(_content_words(their_message))
+    skip = COURTESY | set(_content_words(" ".join(str(x) for x in ignore if x)))
+    reply = [w for w in _content_words(reply_text) if w not in skip]
+    theirs = set(_content_words(their_message)) - skip
     if not reply:
         return Restatement(0.0, [], False)
     distinct = list(dict.fromkeys(reply))

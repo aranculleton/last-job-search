@@ -432,7 +432,7 @@ def test_a_branch_left_behind_is_never_brought_in_and_never_deleted(copy, capsys
     git(other, "push", "-q", "origin", "claude/upgrade-old")
     git(other, "switch", "-q", "-c", "claude/old-but-apart", "master")
     write(other, "profile/stories.md", "A story about Lindenmoor\n")
-    _commit_days_ago(other, "a draft nobody else touched", 9)
+    _commit_days_ago(other, "a draft nobody else touched", 5)
     git(other, "push", "-q", "origin", "claude/old-but-apart")
     git(other, "switch", "-q", "master")
     write(other, PLAN, "Plan\n\nFirst: the base, as it is now.\n\nSecond: kept.\n")
@@ -573,7 +573,8 @@ def test_work_waiting_a_day_or_more_is_known(copy, capsys, monkeypatch):
     git(other, "switch", "-q", "-c", "claude/red-days-ago")
     write(other, "profile/notes.md", "old work\n")
     git(other, "add", "-A")
-    monkeypatch.setenv("GIT_COMMITTER_DATE", "2026-10-30T09:00:00")
+    monkeypatch.setenv("GIT_COMMITTER_DATE", time.strftime(
+        "%Y-%m-%dT%H:%M:%S", time.gmtime(time.time() - 2 * 86400)))
     git(other, "commit", "-q", "-m", "old work")
     monkeypatch.delenv("GIT_COMMITTER_DATE")
     git(other, "push", "-q", "origin", "claude/red-days-ago")

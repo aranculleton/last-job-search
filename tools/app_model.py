@@ -2399,7 +2399,8 @@ def next_words(text, names=()) -> tuple[str, str | None]:
 #   now      something to do: a reply owed, a call to prepare for or thank them after, a
 #            dated step of the person's own, a reply or thank-you drafted
 #   follow   a follow-up To do lists, or one drafted
-#   leave    their limit of unanswered messages reached: Close, never another message
+#   leave    their limit of unanswered messages reached: left alone, never in To do, with
+#            Close here and never another message
 #   waiting  written to, nothing owed yet
 #   new      not written to yet
 #   talking  a conversation going, nothing owed now
@@ -2442,17 +2443,15 @@ def standing(ctx: Ctx, c: dict, cid: str, status: str, msgs: list, due_rows: lis
     if status in schema.TERMINAL:
         out["group"] = "done"
         return out
-    leave_row = next((d for d in due_rows if d.get("leave")), None)
     if hold and hold["why"] != "limit":
         out.update(group="held", next=hold["said"])
         return out
-    if hold or leave_row:
-        said = (hold or {}).get("said") or leave_row.get("step") or ""
-        out.update(group="leave", next=said, owed={
-            "kind": "close", "label": "Close", "due": leave_row["id"] if leave_row else None,
-            "action": "due.done" if leave_row else "person.status",
-            "value": None if leave_row else {"status": "gone_cold",
-                                             "why": "no reply to your limit of messages"}})
+    if hold:
+        # Their limit of unanswered messages: left alone, never a To do item (_due), with
+        # Close here for when the person is done waiting.
+        out.update(group="leave", next=hold.get("said") or "", owed={
+            "kind": "close", "label": "Close", "due": None, "action": "person.status",
+            "value": {"status": "gone_cold", "why": "no reply to your limit of messages"}})
         return out
     if message:
         mt = message.get("type") or message.get("kind")
@@ -2723,26 +2722,36 @@ def _own_step(c: dict, today: dt.date) -> bool:
 _DUE_SAID = frozenset({"reply", "resume", "nudge", "request_pending", "first_message"})
 
 
+def _left_alone(i: dict, book: dict) -> bool:
+    """A contact's dated row that says only to leave them: the app's own line at their limit
+    of unanswered messages ("Nudged: nothing more unless they reply"), dated before such a
+    line was never dated, or dated since by hand. Nothing to do, so never a To do item."""
+    return i.get("half") == "contact" and i.get("kind") == "action_due" and stopped(
+        (book.get(i.get("contact_id") or "") or {}).get("next_action"))
+
+
 def _due(ctx: Ctx, targets: dict) -> list:
     import open_actions
     items = [i for i in ctx.due_items if not i.get("quiet") and not i.get("old")
              and not str(i.get("what") or "").startswith(UNCONFIRMED)]
-    # The person's own surface rules (open_actions._hold_by_rule, surface.held): a thread at
-    # its limit of unanswered messages stays, as one to close; anyone else they stop is not
-    # shown, counted by why in one quiet line.
+    book = {str(c.get("contact_id") or "").strip(): c for c in ctx.contacts}
+    # The person's own surface rules (open_actions._hold_by_rule, surface.held): anyone they
+    # stop is not shown, counted by why in one quiet line. A thread at its limit of
+    # unanswered messages is neither shown nor counted: there is nothing to do but leave it,
+    # and nothing to do is not a To do (the maintainer, 2026-11-04: six "leave it" cards,
+    # closed that morning, came back once an update dated every contact). Their row in
+    # Contacts says so and keeps Close (standing, group "leave").
     ruled = {}
     for i in items:
         rule = i.get("rule") or {}
         if rule and rule.get("why") != "limit" and len(i.get("held") or []) == 1:
             ruled[rule["why"]] = ruled.get(rule["why"], 0) + 1
-    items = [i for i in items if not i.get("held")
-             or ((i.get("rule") or {}).get("why") == "limit" and len(i["held"]) == 1)]
+    items = [i for i in items if not i.get("held") and not _left_alone(i, book)]
     # Requests nobody accepted are never nudged: nothing can be sent to them. They are one
     # row, withdraw them on LinkedIn, then tick (FUNCTIONS_SPEC G8; state.py withdraw).
     pending = [i for i in items if i.get("half") == "contact" and i.get("kind") == "request_pending"]
     items = [i for i in items if i not in pending]
     items.sort(key=open_actions.urgency)
-    book = {str(c.get("contact_id") or "").strip(): c for c in ctx.contacts}
     app_ids = {(str(r.get("company") or ""), str(r.get("role") or "role not recorded")): rid
                for r, rid in zip(ctx.tracker, ctx.tracker_ids)}
     noun = str(person.get("documents.noun", "resume"))
@@ -2775,13 +2784,6 @@ def _due(ctx: Ctx, targets: dict) -> list:
             step = {"reply": "Reply", "resume": f"Send your {noun}", "nudge": "Follow up",
                     "request_pending": "Your request has not been accepted yet",
                     "first_message": "Write to them: they accepted"}.get(raw, own_step)
-            limit = (i.get("rule") or {}).get("why") == "limit"
-            leave = limit or (raw == "action_due" and stopped(c.get("next_action")))
-            if limit:
-                # Their limit reached: one to close, never a follow-up, whatever the row said
-                # to do next ("Send the short nudge" sat under a third unanswered message).
-                step = i["rule"]["said"]
-                title = f"{who}{where}: {step}"
             key = i.get("contact_id") or ""
             action = "work:resume_for_contact" if raw == "resume" else _DUE_WORK[kind]
             about = key
@@ -2789,9 +2791,8 @@ def _due(ctx: Ctx, targets: dict) -> list:
             work = {"kind": wkind, "id": f"{wkind}~{key}", "args": {"contact": key}}
             # Named after the person, never after their step: a step written as a note named
             # the work "<who> at <where>: One follow-up sent 2026-10-21. No more after this" in
-            # Claude's work (the maintainer, 2026-11-04). Past their limit it is a close, as
-            # the title says.
-            if wkind == "follow_up" and not limit:
+            # Claude's work (the maintainer, 2026-11-04).
+            if wkind == "follow_up":
                 work["title"] = f"Follow up with {who}{where}"
             if raw == "resume":
                 work["ask"] = "role"       # which role: asked on the page at tap time
@@ -2852,9 +2853,8 @@ def _due(ctx: Ctx, targets: dict) -> list:
         # way /outcome logs it. A reply, a nudge or a resume owed is done when it is logged
         # with its words, and an interview by /outcome: those rows offer their work instead.
         # A thank-you and a status note sent some other way are Done here too: a thank-you
-        # row had no Done, and sorted to the bottom (the audit, 2026-11-03). A thread at its
-        # limit is one to close: its Done is the Close (app_actions, `leave`).
-        doable = (i["half"] == "contact" and (raw == "action_due" or leave)) or (
+        # row had no Done, and sorted to the bottom (the audit, 2026-11-03).
+        doable = (i["half"] == "contact" and raw == "action_due") or (
             i["half"] == "application" and (raw != "interview" or sub in (
                 "thank_you", "status_note", "test")))
         context = ""
@@ -2876,9 +2876,8 @@ def _due(ctx: Ctx, targets: dict) -> list:
                 bits.append("first wrote " + first.strftime("%-d %b") if os.name != "nt"
                             else "first wrote " + first.strftime("%d %b").lstrip("0"))
             context = scrub(" \u00b7 ".join(b for b in bits if b), ctx.names)
-        # A contact's: what is due said without who, and whether it is only to leave.
-        own = ({"step": step, **({"leave": True} if leave else {})}
-               if i["half"] == "contact" else {})
+        # A contact's: what is due said without who.
+        own = {"step": step} if i["half"] == "contact" else {}
         item = {"id": did, "kind": kind, "title": title, "context": context, "due": i["due"],
                 **own,
                 "company": (str(book.get(i.get("contact_id") or "", {}).get("company") or "")
@@ -2894,8 +2893,6 @@ def _due(ctx: Ctx, targets: dict) -> list:
             t = {"kind": "due", "half": i["half"], "due": i["due"], "rev": item["rev"]}
             if i["half"] == "contact":
                 t["contact"] = i.get("contact_id") or ""
-                if leave:
-                    t["leave"] = True        # its Close closes the thread (app_actions)
             else:
                 company, _, role = i["who"].partition(" - ")
                 t.update(company=company, role=role, sub=sub, stage=i.get("stage") or "")

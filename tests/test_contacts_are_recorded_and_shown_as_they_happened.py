@@ -55,19 +55,23 @@ def test_a_person_carries_their_conversation_with_no_contact_detail(book):
 def test_a_thread_at_its_limit_offers_only_to_close_and_close_closes_it(book):
     from test_a_tick_on_the_page_is_applied_once import Search
     lived_in(book)
+    # The nudge was their second unanswered message: the row says so, with no day on it, and
+    # nothing about them is owed, so To do has no row for them (the maintainer, 2026-11-04).
+    row = book.contact("copperleaf_pay_raman")
+    assert row["next_action"] == "Nudged: nothing more unless they reply", row["next_action"]
+    assert row["next_action_due"] == ""
     m = book.model()
     dev = next(p for p in m["people"] if p["id"] == "copperleaf_pay_raman")
     # The engine's one button for them is Close (tools/app_model.py standing), never a message.
     assert dev["stopped"] is True and dev["owed"]["kind"] == "close", dev["owed"]
-    due = next(d for d in m["due"] if d.get("item") == "copperleaf_pay_raman"
-               or "copperleaf_pay_raman" in d["id"])
-    assert due["leave"] is True and due["step"].startswith("No reply to 2 messages")
+    assert not [d for d in m["due"] if d.get("item") == "copperleaf_pay_raman"
+                or "copperleaf_pay_raman" in d["id"]], m["due"]
     priya = next(d for d in m["due"] if "northwind_analytics_okafor" in d["id"])
     assert priya["step"] == "Follow up" and "leave" not in priya
-    # "Close" on it: gone quiet, and its undo puts the status back.
+    # "Close" on their row in Contacts: gone quiet, and its undo puts the status back.
     s = Search.__new__(Search)
     s.state, s.profile, s.dump, s.n = book.state, book.profile, os.path.join(book.root, "dump"), 0
-    a = s.act("due.done", due["id"], value={"on": TODAY}, rev=due["rev"])
+    a = s.act(dev["owed"]["action"], dev["id"], value=dev["owed"]["value"], rev=dev["rev"])
     assert s.apply()["ok"] == [a]
     assert book.contact("copperleaf_pay_raman")["status"] == "gone_cold"
     s.written_back()
@@ -75,6 +79,7 @@ def test_a_thread_at_its_limit_offers_only_to_close_and_close_closes_it(book):
     assert u in s.apply()["ok"]
     row = book.contact("copperleaf_pay_raman")
     assert row["status"] == "connected_no_reply" and row["next_action"].startswith("Nudged")
+    assert row["next_action_due"] == ""
 
 
 def test_their_words_pasted_again_with_draft_a_reply_still_drafts_once(book):

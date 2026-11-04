@@ -19,6 +19,10 @@ next?" in its first lines, and nothing asks for a decision a default could make.
   (layout 2, crowd tests)
 - To do's five are what is late or due today first, then the questions; setting-up cards wait
   behind the fold. (tired-person tests)
+- To do holds only what there is to do. Someone who has not answered the person's limit of
+  messages is never a card there, nor counted. In Contacts they wait below the fold with the
+  others who need nothing, their row saying to leave it unless they write back, with Close.
+  (contacts rules test)
 - Claude's work has one button on every screen, the pill in the header. On a wide screen it
   opens and closes the panel on the right, as the menu's "Icons only" folds, remembered on the
   device (open beside every screen but the Brief until the person chooses); narrower, it opens

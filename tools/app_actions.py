@@ -2736,11 +2736,11 @@ def _due_done(r: Run) -> dict:
     if row is None:
         raise Refused("They are no longer in your contact book.")
     before = {"next_action": row.get("next_action") or "", "due": row.get("next_action_due") or ""}
-    # "Close" on a thread whose limit of unanswered messages is reached closes it, as the
-    # row's own words say (state.CLOSE_IT): only clearing the line left them "Connected" and
-    # waiting, counted among people waiting to hear back (2026-11-03).
-    # Or the person's own limit, counted from the log (surface.held), which the model marks on
-    # the row it offers Close on: the row's own words may still say to send another.
+    # Done on a row whose own words say their limit of unanswered messages is reached closes
+    # the thread: only clearing the line left them "Connected" and waiting, counted among
+    # people waiting to hear back (2026-11-03). To do no longer lists such a row (the
+    # maintainer, 2026-11-04), so this is a tap from a page drawn before that; the Close on
+    # their row in Contacts is person.status.
     leave = app_model.stopped(row.get("next_action")) or t.get("leave") is True
     argv = ["set", cid, "--next-action", "", "--due", "", "--note",
             "closed after no reply, said on the page" if leave else "done, said on the page",

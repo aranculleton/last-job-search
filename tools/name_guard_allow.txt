@@ -621,3 +621,4 @@ Trainee Analyst         # not a name: a job title, tests/test_two_titles_at_one_
 Vloeiend Frans          # not a name: Dutch posting words, tests/test_a_posting_is_read_in_its_own_language.py
 Marlowe Staffing Partners   # invented: an agency in tests/test_an_agency_recruiter_is_not_held_for_their_agency.py
 Declined Staffing Group     # invented: an agency, the same test
+Wrenley Ashdown             # invented: a contact in tests/test_a_short_thank_you_and_a_note_with_no_place_pass.py

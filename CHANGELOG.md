@@ -22,6 +22,20 @@ make sense to somebody whose repo just received it.
 
 ### Changed
 
+- **Reply help no longer points at an old resume your rules forbid.** It offers a resume only if
+  the app made and checked it and your own rules do not say never to send it; otherwise it says
+  to make one for that person.
+- **A short thank-you is no longer refused for repeating words.** Their name, their employer and
+  words like thanks never count as copying, and a note that names no place is no longer warned
+  that it named the wrong one.
+- **Saving no longer pulls in old unsaved work without telling you.** Work from an earlier
+  chat that is more than a week old is left where it is and mentioned once, so an old copy
+  can't land over newer files; files on your own computer still unsaved after a week are
+  saved, because they are what you have now, and mentioned once.
+- **Saving no longer leaves extra "from-another-chat" copies beside your resumes, letters and
+  tests.** When two chats changed the same document, the later one stays and nothing is left
+  beside it; a save also clears the extra copies older versions left, and names any it could
+  not tell apart in one line.
 - **A recruiter at a recruitment agency is no longer hidden from Messages.** They were
   held as "an employer you turned down" because of the agency they work for, even when they
   had asked for your resume. Your bar now judges only where you would work; an employer you
@@ -42,6 +56,10 @@ make sense to somebody whose repo just received it.
 - **Applications with nobody to write to are no longer chased.** A follow-up that cannot be
   drafted because no recruiter or hiring manager is named stays off your To do list; it
   appears the day a name is added or someone there replies.
+- **People who have not answered your messages stay out of To do.** Once someone has had as
+  many messages as your rule allows with no reply, there is nothing to do but wait, so they
+  are never a card to close and never get a date that brings them back. Their row in
+  Contacts says to leave it unless they write back, with Close if you are done waiting.
 - **Nobody is listed for a follow-up who cannot get one.** Someone you only sent an InMail,
   who has not answered or connected, is left alone (a second would be another InMail), and a
   connection request nobody accepted is never a message to send.
