@@ -61,22 +61,85 @@ def test_a_posting_at_their_employer_is_the_new_reason_for_a_reader_allowed_the_
     assert d["chars"] <= d["limit"] and d["findings"] == []
 
 
-def test_a_peer_is_not_told_the_role_so_the_nudge_waits_for_a_reason():
-    d = _draft(_nudge_item("fernhill_halloway"), _contact("fernhill_halloway", title="Data Analyst"))
-    assert d["status"] == "write" and d["who"] == "you"
-    assert "nothing new to say" in d["why"]
+def _plain(d, name="Juno"):
+    """A short plain follow-up: on our own note by its month, one question, never the role,
+    never our note's question again, within the nudge's limit."""
+    assert d["status"] in ("ready", "check") and d["source"] == "code", d
+    assert d["text"].startswith("Hi %s, following up on my note from October. " % name), d["text"]
+    assert d["text"].rstrip().endswith("?") and d["text"].count("?") == 1, d["text"]
+    assert "Demand Planning" not in d["text"] and "posted" not in d["text"]
+    import learned
+    asked = d["text"].split(". ", 1)[1]
+    assert len(learned.content_words(asked) & learned.content_words(THREAD[0]["full_text"])
+               - {"your", "team"}) < 2, asked
+    assert d["chars"] <= d["limit"] and d["findings"] == []
+    assert "nothing new" in d["why"]
 
 
-def test_a_posting_older_than_the_message_is_no_news():
+# Nothing new to say is no reason for the button to do nothing (the maintainer, 2026-11-04:
+# code drafted 1 of 19 October follow-ups and said "nothing new to say" of the rest).
+def test_a_peer_is_not_told_the_role_so_the_nudge_is_a_short_plain_follow_up():
+    d = F.draft(_nudge_item("fernhill_halloway"), {"fernhill_halloway": _contact("fernhill_halloway", title="Data Analyst")},
+                {"fernhill_halloway": THREAD}, (), {}, POSTING, today=TODAY.isoformat())
+    _plain(d)
+
+
+def test_a_posting_older_than_the_message_is_no_news_so_the_follow_up_is_plain():
     old = [dict(POSTING[0], first_seen="2026-09-20")]
-    d = _draft(_nudge_item("fernhill_halloway"), _contact("fernhill_halloway"), rows=old)
-    assert d["status"] == "write" and "nothing new" in d["why"]
+    contact = _contact("fernhill_halloway")
+    _plain(F.draft(_nudge_item("fernhill_halloway"), {"fernhill_halloway": contact},
+                   {"fernhill_halloway": THREAD}, (), {}, old, today=TODAY.isoformat()))
 
 
 def test_a_posting_already_applied_to_is_the_application_clock_not_a_nudge():
     tracker = [{"company": "Fernhill Freight", "role": "Demand Planning Analyst", "status": "applied"}]
-    d = _draft(_nudge_item("fernhill_halloway"), _contact("fernhill_halloway"), tracker=tracker)
-    assert d["status"] == "write"
+    contact = _contact("fernhill_halloway")
+    _plain(F.draft(_nudge_item("fernhill_halloway"), {"fernhill_halloway": contact},
+                   {"fernhill_halloway": THREAD}, tracker, {}, POSTING, today=TODAY.isoformat()))
+
+
+def test_a_recruiter_gets_the_plain_ask_and_a_nudge_with_no_words_logged_is_still_a_follow_up():
+    recruiter = _contact("fernhill_halloway", title="Talent Acquisition Partner")
+    d = F.draft(_nudge_item("fernhill_halloway"), {"fernhill_halloway": recruiter},
+                {"fernhill_halloway": THREAD}, (), {}, [], today=TODAY.isoformat())
+    assert d["status"] in ("ready", "check") and d["text"].startswith(
+        "Hi Juno, following up on my note from October. "), d
+    assert "your team" not in d["text"]
+    # Owed with nothing of ours in the log (their history predates it): a follow-up all the
+    # same, never written as a first message.
+    bare = F.draft(_nudge_item("fernhill_halloway"), {"fernhill_halloway": _contact("fernhill_halloway")},
+                   {"fernhill_halloway": []}, (), {}, [], today=TODAY.isoformat())
+    assert bare["status"] in ("ready", "check") and bare["text"].startswith(
+        "Hi Juno, following up on my note. "), bare
+
+
+def test_the_persons_own_rule_keeps_a_nudge_for_something_new(monkeypatch):
+    import person
+    net = person.module("networking")
+    monkeypatch.setattr(net, "PLAIN_NUDGE", False, raising=False)
+    d = _draft(_nudge_item("fernhill_halloway"), _contact("fernhill_halloway", title="Data Analyst"))
+    assert d["status"] == "write" and d["who"] == "you" and "your own rule" in d["why"], d
+    # A posting is still something new, and is still said.
+    assert _draft(_nudge_item("fernhill_halloway"), _contact("fernhill_halloway"))["status"] in ("ready", "check")
+
+
+def test_a_rule_in_their_own_words_sets_it_either_way(monkeypatch):
+    import learned
+    off = learned.known_settings("messages", "only follow up when there's something new to say",
+                                 "no nudge without a new reason")
+    on = learned.known_settings("messages", "follow up even if there's nothing new",
+                                "a short plain follow-up when nothing new has happened")
+    assert off == [("profile/networking.py PLAIN_NUDGE", False)], off
+    assert on == [("profile/networking.py PLAIN_NUDGE", True)], on
+    assert learned.known_settings("messages", "never say just checking in", "no check-ins") == []
+    # A rule they gave before the setting existed is followed all the same.
+    rule = {"date": "2026-10-20", "area": "messages", "said": "don't chase anyone unless there's news",
+            "rule": "no follow-up without something new", "status": "active"}
+    monkeypatch.setattr(learned, "entries", lambda area=None: [rule])
+    monkeypatch.setattr(learned, "superseded", lambda rows=None: {})
+    assert F.plain_nudge_allowed() is False
+    d = _draft(_nudge_item("fernhill_halloway"), _contact("fernhill_halloway", title="Data Analyst"))
+    assert d["status"] == "write" and "your own rule" in d["why"]
 
 
 def test_a_stored_draft_the_gate_refuses_is_kept_to_rewrite_with_its_findings():

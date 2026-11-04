@@ -2008,8 +2008,8 @@ def draft_limit(contact: dict, status: str, text: str = "") -> tuple[str, str, i
 def _messages(ctx: Ctx, targets: dict) -> list:
     files = sorted(glob.glob(person.state("documents", "network", "*", "draft.md")))
     ctx._got["message_by_contact"] = {}
-    if not files:
-        return []
+    # No draft waiting for anyone still lists an application's follow-up: returning early
+    # here left every one out until some person had a draft too (2026-11-04).
     import reading
     from network import surface
     book = {str(c.get("contact_id") or "").strip(): c for c in ctx.contacts}

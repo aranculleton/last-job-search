@@ -3004,8 +3004,10 @@
   const NO_REPLY = /: No reply to \d+ messages\b/;
   function dueGroupKey(d) {
     if (dueContact(d) && (d.leave === true || NO_REPLY.test(txt(d.title))) && obj(d.done).action) return "leave";
-    // Its message already drafted: a card of its own that opens it, never a row of a "Draft all".
-    if (dueDraft(d)) return null;
+    // Its message already drafted: never a row of a "Draft all". Follow-ups drafted are one
+    // checklist whose rows each open their draft (nineteen came at once, 2026-11-04); anything
+    // else drafted is a card of its own that opens it.
+    if (dueDraft(d)) return isFollowUp(d) ? "drafted" : null;
     if (isFollowUp(d)) return "follow";
     // Only the kinds a checklist row can finish: a follow-up on an application keeps its own
     // card and its Done (a grouped row only drafts).
@@ -3353,6 +3355,8 @@
     follow: {title: (n) => "Follow up with " + plural(n, "person", "people"), all: "Draft all", row: "Draft", strip: /^Follow up with /},
     "work~reply": {title: (n) => "Reply to " + plural(n, "person", "people"), all: "Draft all", row: "Draft", strip: /^Reply to /},
     leave: {title: (n) => plural(n, "person hasn't", "people haven't") + " answered two messages", sub: "Leave them unless they write back: close each, or all of them.", all: "Close them all", row: "Close", strip: NO_REPLY},
+    // Drafted already: each row opens its draft (askDue does), and nothing drafts them again.
+    drafted: {title: (n) => plural(n, "follow-up", "follow-ups") + " drafted, ready to send", sub: "Open each, copy it and send it yourself.", row: "See the draft", strip: /^Follow up with /},
   };
   // Who someone is, on a row about them: a list of names with only "first wrote 10 Sep" left
   // the person asking who they all were (2026-11-03). With no employer on record, it says so.
@@ -3774,8 +3778,12 @@
       {kind: hasWork ? "secondary" : "primary", small: true, pressed: marked, key: "duedone:" + (ctx.where || "") + ":" + d.id, aria: (txt(done.label) || "Done") + ": " + txt(d.title)}) : null;
     // "Not today" and "Next week" under More went: the bin hides a card for a week, one way to
     // put a thing off (the walk-through, 2026-11-03).
-    return card("article", {class: "card todo due-row" + (late ? " late" : "") + (marked ? " is-marked" : ""), "aria-labelledby": hid, "data-item": d.id, "data-k": "card:" + (ctx.where || "") + ":" + d.id},
-      h("div", {class: "todo-top"}, kindMark(dueKind(d)), chipWords ? h("span", {class: late ? "chip tone-warn" : "muted small"}, chipWords) : null),
+    // Its message drafted: the row says so in its state pill, and its one button opens the draft
+    // (19 follow-ups drafted were asked for again from rows that only said "Follow up",
+    // 2026-11-04).
+    const dateEl = chipWords ? h("span", {class: late ? "chip tone-warn" : "muted small"}, chipWords) : null;
+    return card("article", {class: "card todo due-row" + (late ? " late" : "") + (marked ? " is-marked" : "") + (draft ? " is-drafted" : ""), "aria-labelledby": hid, "data-item": d.id, "data-k": "card:" + (ctx.where || "") + ":" + d.id},
+      h("div", {class: "todo-top"}, kindMark(dueKind(d)), draft ? h("span", {class: "todo-state"}, chip("Draft ready", "ok"), dateEl) : dateEl),
       h("p", {class: "card-title", id: hid}, title),
       dueWho(d) ? h("p", {class: "muted small due-context"}, cap1(dueWho(d))) : null,
       h("div", {class: "card-actions"},
@@ -5085,10 +5093,16 @@
   }
   // The work kinds that write a message to someone; a resume or a prep is not one.
   const MSG_WORK = new Set(["reply", "follow_up", "nudge"]);
-  // The message a due row is about: the one it names, else the one to its person.
+  // The message a due row is about: the one it names, an application's follow-up by its
+  // application (the row names the application, the message is its own), else the one to its
+  // person. The follow-up on an application sat drafted in Messages while its row offered to
+  // draft it again (2026-11-04).
   function dueMessage(d) {
     const named = txt(d.item) ? messageItems().find((m) => m.id === txt(d.item)) : null;
     if (named) return named;
+    const app = txt(obj(obj(d.work).args).application) || (!dueContact(d) && txt(d.sub) === "follow_up" ? txt(d.item) : "");
+    const forApp = app ? messageItems().find((m) => txt(m.application) === app && msgLive(m)) : null;
+    if (forApp) return forApp;
     const kind = txt(obj(d.work).kind) || txt(d.action).replace(/^work:/, "");
     if (!MSG_WORK.has(kind) || PENDING_KINDS.has(txt(d.kind)) || (txt(d.sub) || txt(d.kind)) === "resume") return null;
     return personMessage(dueContact(d));
