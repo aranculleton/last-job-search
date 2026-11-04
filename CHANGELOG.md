@@ -22,8 +22,31 @@ make sense to somebody whose repo just received it.
 
 ## [4.9.1] - 2026-11-04
 
+### Changed
+
+- **A new helper chat gives your page's link straight away.** It shows "Getting your page
+  ready" on the page while it works, and ends with one short line that it is ready: no more
+  paragraph about itself, and never the whole brief.
+- **With a page, a brief in a chat is short.** The chat gets the headline, the main point,
+  how many questions wait for you, and your page's link; the rest is on the page. With no
+  page, the chat still gets the whole brief.
+- **A LinkedIn download fills in what your contacts lack.** A missing name, employer or title
+  is filled from your connections (as of the day you connected), never changing anything
+  already recorded, and the app says what it filled. Giving the same download again fills
+  again instead of stopping at "Already taken".
+
 ### Fixed
 
+- **News in the brief no longer says "next week" about last week.** Words like "tomorrow" or
+  "next week" are read against the article's own date, and each item shows its date.
+- **A brief whose chat lost your files is noticed and moved.** The app said the brief was set
+  up while its chat could no longer open your files, so a morning's brief sent nothing; it now
+  moves the brief into the chat that looks after your page and runs the one you missed.
+- **Checking what a save will include names each file**, your brief's record included, so
+  nothing is mistaken for unsaved.
+- **On Windows, a save is checked in seconds again.** Installing the packages left their
+  download cache in your folder, which then looked like a change to the app, so the check
+  before every save ran the app's whole suite.
 - **On a phone, pressing Brief shows the Brief you first saw.** When newer jobs, people or news
   reached your page after it opened, the Brief kept showing only as many of each list as the
   older data had (one new job of five, say), and pressing Brief later showed a different Brief
