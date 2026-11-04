@@ -1189,6 +1189,25 @@ S.inside = async (a) => {
   return r;
 };
 
+// The Brief as first shown and the Brief its tab shows next, on a phone whose browser bars
+// move the window between the two, as a phone's do when the page scrolls and when the tab is
+// pressed: each list, and what of it is shown.
+S.brief_again = async (a) => {
+  const o = await open({html: a.html, viewport: a.viewport, clock: a.clock, seed: a.seed || {}, touch: true});
+  const {page} = o;
+  const lists = () => page.$$eval("#main .brief-grid [data-fit]", (ls) => ls.map((l) => [(l.closest(".bpanel") || l).getAttribute("data-k"),
+    [...l.children].filter((li) => !li.hidden).map((li) => li.innerText.trim().replace(/\s+/g, " "))]));
+  const r = {first: await lists()};
+  await page.setViewportSize({width: a.viewport.width, height: a.viewport.height + (a.bars || 0)});
+  await turn(page, 4);
+  await page.locator('[data-k="tab:brief"]').click();
+  await turn(page, 6);
+  r.after = await lists();
+  r.errors = o.errors;
+  await o.ctx.close();
+  return r;
+};
+
 // One tap drafts (2026-11-03): no sheet stands between Draft this and the draft.
 async function draftViaDialog(page) {
   await page.getByRole("button", {name: "Draft this: Harbourline Bank, Pricing Analyst"}).click();

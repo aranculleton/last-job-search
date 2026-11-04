@@ -24,6 +24,11 @@ make sense to somebody whose repo just received it.
 
 ### Fixed
 
+- **On a phone, pressing Brief shows the Brief you first saw.** When newer jobs, people or news
+  reached your page after it opened, the Brief kept showing only as many of each list as the
+  older data had (one new job of five, say), and pressing Brief later showed a different Brief
+  with the rest. It now shows the right number from the start, and the same every time. Found
+  on a phone with 4.9.0.
 - **The folds on the Brief stay open while you read them.** "Since your last brief" and the
   earlier briefs closed again whenever your page refreshed itself, which it does often; they now
   keep their state like every other fold. Found by the Safari run of the 4.9.0 release.

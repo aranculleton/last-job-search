@@ -4029,7 +4029,13 @@
     // (0 Today's likely questions, then Coming up, Jobs, People).
     const fit = (l) => { const [min, base, keep] = txt(l.getAttribute("data-fit")).split(",").map(Number); return {min: min || 1, base: base || 3, keep: keep || 1}; };
     const name = (l) => txt((l.closest(".bpanel") || {getAttribute: () => ""}).getAttribute("data-k")) + ":" + txt(l.className);
-    const key = window.innerWidth + "x" + window.innerHeight + ":" + txt(M().rev);
+    // The set of data is what the lists hold, not the page's own rev: newer screens from the
+    // store (recompute) leave the rev as published, so the counts worked out for the page as
+    // published were kept for the newer lists, one job of five, until a phone's browser bars
+    // moved the window and a tap on Brief showed the rest (the maintainer, 4.9.0: "when I
+    // press the top one for brief it's not the same as what's originally displayed").
+    const held = (l) => { let n = 0; const t = l.textContent; for (let i = 0; i < t.length; i++) n = (n * 31 + t.charCodeAt(i)) | 0; return name(l) + "=" + l.children.length + ":" + n; };
+    const key = window.innerWidth + "x" + window.innerHeight + ":" + lists.map(held).join("|");
     if (fitMemo.key === key && fitMemo.counts) {
       for (const l of lists) { const n = fitMemo.counts[name(l)]; const {base} = fit(l); [...l.children].forEach((li, i) => { li.hidden = i >= (n === undefined ? base : n); }); }
       return;
