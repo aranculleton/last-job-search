@@ -2278,8 +2278,15 @@ def _export_take(r: Run) -> dict:
         if digest in (rec.get("taken_hashes") or []) and export._holds_any(export.default_folder()):
             got = export.again()
             said = " ".join(got["lines"]) or "Nothing in it was new."
-            return {"note": "That download was taken before. " + app_model.scrub(said, ()),
-                    "undo": None, "remove_assets": remove}
+            out = {"note": "That download was taken before. " + app_model.scrub(said, ()),
+                   "undo": None, "remove_assets": remove}
+            # Nothing imported and nothing filled: nothing changed, so there is nothing to take
+            # back, and the page says "Nothing new in that download". It said "Saved: 0
+            # messages" in To do, with "Only a chat can take this back" (the maintainer,
+            # 2026-11-04).
+            if not got["imported"] and not got["filled"]:
+                out["nothing_new"] = True
+            return out
         work = tempfile.mkdtemp(prefix="ljs_export_")
         try:
             for path, name, part in found:
@@ -3399,13 +3406,14 @@ def _one(aid: str, act: dict, index: Index, db: dict, w, chat: str, zone: str,
     after = got.get("target_after") or (undo or {}).get("target") or target
     out = _receipt("ok", got["note"], chat, now, aid, shown, undo=undo,
                    guard_after=guard(after) if after.get("kind") != "work" else "")
-    for k in ("counts", "remove_assets", "lines", "why"):
+    for k in ("counts", "remove_assets", "lines", "why", "nothing_new"):
         if k in got:
             out[k] = got[k]
-    if not undo and shown.get("action") != "undo":
+    if not undo and not got.get("nothing_new") and shown.get("action") != "undo":
         # No inverse here, said plainly rather than left blank (UX audit, 2026-10-25). An
         # inverse that exists has no time limit: it runs while the guard still holds. A Change
         # back is itself the way back: the note under it read as a dead end (journeys 22).
+        # Nor where nothing changed: there is nothing to take back (`nothing_new`).
         out["undo_note"] = "Only a chat can take this back: say so in a chat."
     if shown is not act:
         out["ran"] = name
