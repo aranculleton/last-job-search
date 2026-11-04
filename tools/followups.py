@@ -239,19 +239,25 @@ def superseded(rows: list[dict]) -> dict[int, dict]:
                    key=lambda i: (_iso(throttle.applied_on(rows[i]) or rows[i].get("date"))
                                   or datetime.date.min, i))
     keys = {i: company_key(rows[i].get("company")) for i in order}
-    out: dict[int, dict] = {}
-    for n, i in enumerate(order):
-        if not keys[i]:
+    # Each row is held against the later rows at its own employer only, in the same order:
+    # against every later row, 500 applications made 125,000 comparisons (2026-11-03).
+    at: dict[str, list] = {}
+    for i in order:
+        at.setdefault(keys[i], []).append(i)
+    later: dict[int, dict] = {}
+    for k, group in at.items():
+        if not k:
             continue
-        for j in order[n + 1:]:
-            # A process with no application is a new record, never the earlier
-            # application's: it would hide a rejection from every count.
-            if (keys[j] == keys[i] and _status(rows[j]) not in throttle.UNSENT
-                    and not throttle.is_process(rows[j])
-                    and throttle._same_title(rows[i].get("role"), rows[j].get("role"))):
-                out[id(rows[i])] = rows[j]
-                break
-    return out
+        for n, i in enumerate(group):
+            for j in group[n + 1:]:
+                # A process with no application is a new record, never the earlier
+                # application's: it would hide a rejection from every count.
+                if (_status(rows[j]) not in throttle.UNSENT
+                        and not throttle.is_process(rows[j])
+                        and throttle._same_title(rows[i].get("role"), rows[j].get("role"))):
+                    later[i] = rows[j]
+                    break
+    return {id(rows[i]): later[i] for i in order if i in later}
 
 
 def live_processes(rows: list[dict], closed: dict[int, dict]) -> dict[str, dict]:

@@ -660,10 +660,13 @@ def asks_for_resume(text) -> bool:
     the log reads a resume owed from (state.resumes_owed), where the classifier's wider net
     would owe one to every signature."""
     text = _without_thanks(str(text or ""))
-    if (_ALREADY_DONE.search(text) or _hits(text, REJECTION) or _hits(text, MISMATCH)
-            or REFERRAL_FIELD.search(text)):
+    # The one cue first: most messages name no resume, and the checks that can only turn an
+    # ask down (a no, a dead end, a referral field) were most of the time a page build spent
+    # finding the resumes owed (2026-11-03).
+    if not _DOC_NAMED.search(text):
         return False
-    return bool(_DOC_NAMED.search(text))
+    return not (_ALREADY_DONE.search(text) or _hits(text, REJECTION) or _hits(text, MISMATCH)
+                or REFERRAL_FIELD.search(text))
 
 
 def _match_send_resume(text, ctx):

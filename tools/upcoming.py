@@ -418,7 +418,8 @@ def build(ctx, page_url: str = "") -> list[dict]:
             continue
         if st in throttle.FINAL:
             continue
-        _folder, _files, stages = open_actions.stages(row)
+        # The build's own reading, once per application, where it has one (app_model.Ctx).
+        _folder, _files, stages = getattr(ctx, "stages", open_actions.stages)(row)
         for n_, s in enumerate(stages):
             if not s.get("done") and not _is_day(s.get("date")) and s.get("offered"):
                 # Invited, and the day is theirs to choose: the choice is due, on the day

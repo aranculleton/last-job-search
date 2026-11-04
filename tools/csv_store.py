@@ -33,6 +33,7 @@ class Conflicted(RuntimeError):
 _OPEN = re.compile(r"<{7}(?:[ \t].*)?\r?$")
 _SEPARATOR = re.compile(r"={7}\r?$")
 _CLOSE = re.compile(r">{7}(?:[ \t].*)?\r?$")
+_MARK_STARTS = ("<", "=", ">")          # the first character of each marker line
 
 
 def conflict_marker(text: str):
@@ -43,15 +44,18 @@ def conflict_marker(text: str):
     and the advice to delete the marker line would have cut a cell (2026-10-21)."""
     marks, inside, field = [], False, 0
     for n, line in enumerate(str(text or "").split("\n"), 1):
-        for kind, rx in (("open", _OPEN), ("sep", _SEPARATOR), ("close", _CLOSE)):
-            if rx.match(line):
-                marks.append((kind, n, line.strip(), inside, field))
-                break
-        for ch in line:                  # "" inside a field toggles twice: parity holds
-            if ch == '"':
-                inside = not inside
-                if not inside:
-                    field += 1
+        if line.startswith(_MARK_STARTS):
+            for kind, rx in (("open", _OPEN), ("sep", _SEPARATOR), ("close", _CLOSE)):
+                if rx.match(line):
+                    marks.append((kind, n, line.strip(), inside, field))
+                    break
+        # Each quote toggles `inside`, and each toggle out of a field ends one: "" inside a
+        # field toggles twice, so parity holds. Counted, not walked a character at a time,
+        # which was most of reading a big message log (2026-11-03).
+        q = line.count('"')
+        if q:
+            field += (q + 1) // 2 if inside else q // 2
+            inside = inside != (q % 2 == 1)
     for i, (kind, n, said, _in_q, _f) in enumerate(marks):
         if kind != "open":
             continue
@@ -268,14 +272,18 @@ def read_rows(path: str, columns=(), create: bool = False) -> list[dict]:
     refuse_conflicts(path)
     reader = csv.reader(io.StringIO(read_text(path), newline=""))
     head = [h.strip() for h in next(reader, [])]
+    named = all(head)                   # every column has a name: a row is one zip
     rows = []
     for raw in reader:
         if not any(cell.strip() for cell in raw):
             continue
         row = {c: "" for c in columns}
-        for i, name in enumerate(head):
-            if name:
-                row[name] = raw[i] if i < len(raw) else ""
+        if named and len(raw) >= len(head):
+            row.update(zip(head, raw))
+        else:
+            for i, name in enumerate(head):
+                if name:
+                    row[name] = raw[i] if i < len(raw) else ""
         rows.append(row)
     return rows
 

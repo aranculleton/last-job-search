@@ -136,6 +136,17 @@ def _hold(ctx, company):
     return who, _first(who.get("name")) or "someone there"
 
 
+def _at(ctx, k: str) -> list:
+    """The contacts at employer key `k`, in the book's order: the build's own index
+    (app_model.Ctx.contacts_by_key) where there is one, so each card does not key the whole
+    book again."""
+    index = getattr(ctx, "contacts_by_key", None)
+    if index is not None:
+        return index.get(k, [])
+    from company_key import key
+    return [c for c in ctx.contacts if key(c.get("company")) == k]
+
+
 def _replied(ctx, company):
     """(contact row, first name, the day they last replied) of whoever there replied most
     lately: the throttle's warm set (throttle.RESPONDED), from the contact book itself."""
@@ -144,10 +155,9 @@ def _replied(ctx, company):
     from network import state
     k = key(company)
     best = None
-    for c in ctx.contacts:
+    for c in _at(ctx, k):
         cid = str(c.get("contact_id") or "").strip()
-        if not cid or key(c.get("company")) != k or ctx.live.get(cid) not in throttle.RESPONDED \
-                or not throttle.is_route(c):
+        if not cid or ctx.live.get(cid) not in throttle.RESPONDED or not throttle.is_route(c):
             continue
         on = max((str(t.get("date") or "")[:10] for t in ctx.by_contact.get(cid) or []
                   if state.said_something(t)), default="")

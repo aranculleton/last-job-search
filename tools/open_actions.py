@@ -137,15 +137,16 @@ def _tracker(path=TRACKER):
     return csv_store.tracker(path)
 
 
-def network_views(contacts, threads):
+def network_views(contacts, threads, index=None):
     """Every contact's derived status, and the two throttle views read from it.
 
     The heat, the replied-contact recipients and the referral holds all need
     the statuses, and the last two must judge the rows handed in rather than a
-    second read of the file, so they are computed once, here.
+    second read of the file, so they are computed once, here. `index` is
+    `state.by_contact(threads)` when the caller has it already.
     """
     live = {}
-    index = state.by_contact(threads)
+    index = state.by_contact(threads) if index is None else index
     for c in contacts:
         cid = str(c.get("contact_id") or "").strip()
         live[cid] = state.effective_status(c, list(index.get(cid, ())))
@@ -436,7 +437,7 @@ def _days_said(days) -> str:
     return words[0] if len(words) == 1 else ", ".join(words[:-1]) + " or " + words[-1]
 
 
-def interview_items(tracker, today, now=None):
+def interview_items(tracker, today, now=None, read_stages=None):
     """The interview half of the due list, from each live application's outcome.md.
 
     A booked stage with no pack, from PREP_WINDOW_DAYS before it (due today,
@@ -447,15 +448,17 @@ def interview_items(tracker, today, now=None):
     whose day is the person's to choose is a choice owed, by the day they are to answer.
     These are `urgent`: they sort before everything else owed (urgency). And an interview
     row with no word for INTERVIEW_QUIET_DAYS and nothing booked: a status note or
-    the outcome, the person's call (after two notes, the outcome only).
+    the outcome, the person's call (after two notes, the outcome only). `read_stages` is
+    `stages`, or a caller's own reading of it once per application (the page's model).
     """
     today = state.as_date(today)
+    read_stages = read_stages or _stages
     items = []
     for row in tracker:
         status = (row.get("status") or "").strip().lower()
         if status in FINAL or status in throttle.UNSENT or not status:
             continue
-        folder, files, stages = _stages(row)
+        folder, files, stages = read_stages(row)
         company = (row.get("company") or "").strip()
         role = (row.get("role") or "").strip() or "role not recorded"
         for st in stages:
@@ -547,11 +550,14 @@ def _stored_draft(contact) -> str:
     return notes.split("| DRAFT:", 1)[1].strip() if "| DRAFT:" in notes else ""
 
 
-def due_items(contacts, threads, tracker, today, docs=None, network=None, now=None):
+def due_items(contacts, threads, tracker, today, docs=None, network=None, now=None,
+              index=None, read_stages=None):
     """Everything due today or overdue in both halves, plus what a hold is keeping back.
 
     `network` is `_network(contacts, threads)` when the caller has it already (the page's
     model does): on a big contact book it is the slowest part, and was worked out twice.
+    `index` is `state.by_contact(threads)`, likewise: the log grouped once, not five times,
+    and `read_stages` its reading of each application's stages (interview_items).
 
     Contacts: everything `state.owed` lists, which is only ever what is owed
     now (a reply the moment they answer, a nudge once its clock has run, a
@@ -563,8 +569,10 @@ def due_items(contacts, threads, tracker, today, docs=None, network=None, now=No
     """
     today = state.as_date(today)
     by_id = {str(c.get("contact_id") or "").strip(): c for c in contacts}
+    index = (state.by_contact(threads) if threads else {}) if index is None else index
     items = []
-    for o in state.owed(contacts, threads, today):
+    for o in state.owed(contacts, threads, today, index=index,
+                        live=network[0] if network else None):
         # A reply nobody put a date on is owed all the same. Reading only
         # next_action_due dropped it, and the brief's first line said
         # "0 replies owed" while someone sat waiting for an answer.
@@ -596,7 +604,7 @@ def due_items(contacts, threads, tracker, today, docs=None, network=None, now=No
     queued = [i for i in items if i["status"] == "not_contacted"]
     if queued:
         import surface
-        ctx = surface.context(contacts=contacts, threads=threads, today=today)
+        ctx = surface.context(contacts=contacts, threads=threads, today=today, index=index)
         for i in queued:
             got = surface.check(by_id.get(i["contact_id"]) or {"contact_id": i["contact_id"]},
                                 ctx, queued=True)
@@ -607,8 +615,7 @@ def due_items(contacts, threads, tracker, today, docs=None, network=None, now=No
     # One asked for more than state.OLD_OWED_DAYS ago, with no date of the person's own on
     # it and none made for them since, is history like any other thread that has ended: set
     # aside, never "send it now" to someone who asked in 2021.
-    index = state.by_contact(threads) if threads else {}
-    for r in state.resumes_owed(contacts, threads, tracker):
+    for r in state.resumes_owed(contacts, threads, tracker, index=index):
         line = state.resume_owed_line(r)
         c = by_id.get(r["contact_id"], {})
         days = [d for d in (r["asked"], r["made"], r.get("made_on", "")) if d]
@@ -633,7 +640,7 @@ def due_items(contacts, threads, tracker, today, docs=None, network=None, now=No
             "held": [h for h in (state.action_hold(c.get("next_action"), today),) if h],
             "quiet": False, "kind": "resume", "status": c.get("status", ""),
             "contact_id": r["contact_id"], "old": old})
-    _hold_by_rule(items, by_id, threads)
+    _hold_by_rule(items, by_id, threads, index)
     _, warm, holds = network or _network(contacts, threads)
     for n in followups.review(tracker, today, warm, holds, docs or followups.DOCS):
         quiet = n["state"] == "quiet" and n["notice"]
@@ -650,7 +657,7 @@ def due_items(contacts, threads, tracker, today, docs=None, network=None, now=No
             "to": followups.to_line(n) if n["state"] == "due" else "",
             "text": followups.body(n) if n["state"] == "due" else "",
             "held": list(n["held"]), "quiet": quiet, "ready": bool(n["message"])})
-    items += interview_items(tracker, today, now)
+    items += interview_items(tracker, today, now, read_stages)
     # An employer with a chat of its own (a campaign chat, interview_pack.py campaign): that
     # chat drafts what is owed there, and nothing else writes it. It is still owed, and still
     # shown: held, a reply about which interview day to choose reached no list, no Brief and
@@ -663,7 +670,7 @@ def due_items(contacts, threads, tracker, today, docs=None, network=None, now=No
     return items
 
 
-def _hold_by_rule(items, by_id, threads) -> None:
+def _hold_by_rule(items, by_id, threads, index=None) -> None:
     """Every contact item the person's own surface rules stop (surface.held: their limit of
     unanswered messages, an employer their bar turns down, somewhere outside where they
     look, a request nobody accepted, a thread closed) is held with the reason, and carries
@@ -672,7 +679,8 @@ def _hold_by_rule(items, by_id, threads) -> None:
     list and the page offered a third and a fourth message, and follow-ups at employers the
     person had turned down)."""
     import surface
-    index = state.by_contact(threads) if threads else {}
+    if index is None:
+        index = state.by_contact(threads) if threads else {}
     memo: dict = {}
     for i in items:
         if i.get("half") != "contact" or i.get("kind") == "request_pending":

@@ -77,8 +77,9 @@ def _book_index(contacts) -> dict:
             "handle": handle, "name": named}
 
 
-def context(contacts=None, threads=None, connections=None, today=None) -> dict:
-    """What `check` reads, loaded and indexed once for a whole list."""
+def context(contacts=None, threads=None, connections=None, today=None, index=None) -> dict:
+    """What `check` reads, loaded and indexed once for a whole list. `index` is
+    `state.by_contact(threads)` when the caller has it already."""
     if contacts is None:
         contacts = state.load_contacts() if os.path.exists(state.CONTACTS_CSV) else []
     if threads is None:
@@ -96,7 +97,7 @@ def context(contacts=None, threads=None, connections=None, today=None) -> dict:
         if k:
             by_name.setdefault(k, []).append(c)
     return {"contacts": contacts, "book": _book_index(contacts),
-            "threads": state.by_contact(threads), "today": today,
+            "threads": state.by_contact(threads) if index is None else index, "today": today,
             "connections": connections or [], "conn_by_handle": by_handle,
             "conn_by_name": by_name, "employers": {}}
 

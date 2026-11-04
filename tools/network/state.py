@@ -141,7 +141,20 @@ def as_date(value) -> datetime.date | None:
     text handles all three, which is `dates.as_date` with `anywhere`; a month or
     a "15 January 2030" is not read as a day here, as it never was.
     """
+    if value.__class__ is str:
+        # The same few thousand days, read some 90,000 times a page build: kept by their
+        # text here, one lookup, where each read built a key for dates' own (2026-11-03).
+        try:
+            return _DAY_OF[value]
+        except KeyError:
+            if len(_DAY_OF) >= 8192:
+                _DAY_OF.clear()
+            got = _DAY_OF[value] = dates.as_date(value, iso_only=True, anywhere=True)
+            return got
     return dates.as_date(value, iso_only=True, anywhere=True)
+
+
+_DAY_OF: dict = {}
 
 
 def _need_date(value, what: str) -> datetime.date:
@@ -480,6 +493,15 @@ def row_company_key(row) -> str:
 
 
 def _match_name(name: str | None) -> str:
+    if name.__class__ is str:
+        return _match_name_of(name)
+    return _slug(person_name(name))
+
+
+# Pure, and asked for each contact by the owed list and again by the check before anyone
+# is shown, in every build.
+@functools.lru_cache(maxsize=16384)
+def _match_name_of(name: str) -> str:
     return _slug(person_name(name))
 
 
@@ -777,7 +799,19 @@ _CHANNEL_ALIASES = {
 
 
 def direction(row) -> str:
-    return _direction_word(str(row.get("direction") or ""))
+    raw = row.get("direction")
+    try:
+        return _DIRECTION_OF[raw]
+    except (KeyError, TypeError):
+        got = _direction_word(str(raw or ""))
+        if raw.__class__ is str and len(_DIRECTION_OF) < 4096:
+            _DIRECTION_OF[raw] = got
+        return got
+
+
+# Each word as it is written in the log, read: one lookup a row, where a page build asks
+# some 200,000 times (2026-11-03). Only text is kept, so 1 and True never share a reading.
+_DIRECTION_OF: dict = {}
 
 
 @functools.lru_cache(maxsize=256)
@@ -796,8 +830,17 @@ _direction = direction  # the module's own name for it; other modules call direc
 
 def channel_of(row) -> str:
     raw = row if isinstance(row, str) else row.get("channel")
-    c = str(raw or "").strip().lower()
-    return _CHANNEL_ALIASES.get(c, c)
+    try:
+        return _CHANNEL_OF[raw]
+    except (KeyError, TypeError):
+        c = str(raw or "").strip().lower()
+        got = _CHANNEL_ALIASES.get(c, c)
+        if raw.__class__ is str and len(_CHANNEL_OF) < 4096:
+            _CHANNEL_OF[raw] = got
+        return got
+
+
+_CHANNEL_OF: dict = {}          # each channel as written, read once (direction's note)
 
 
 # An inbound row that records something they did rather than something they
@@ -812,7 +855,17 @@ ACCEPTED_SCENARIOS = frozenset({"accepted_no_reply", "connected_no_reply", "conn
 
 
 def _scenario(row) -> str:
-    return _scenario_word(str(row.get("scenario") or ""))
+    raw = row.get("scenario")
+    try:
+        return _SCENARIO_OF[raw]
+    except (KeyError, TypeError):
+        got = _scenario_word(str(raw or ""))
+        if raw.__class__ is str and len(_SCENARIO_OF) < 4096:
+            _SCENARIO_OF[raw] = got
+        return got
+
+
+_SCENARIO_OF: dict = {}         # each scenario as written, read once (direction's note)
 
 
 @functools.lru_cache(maxsize=1024)
@@ -1298,9 +1351,12 @@ def _ordered(rows) -> list[dict]:
     whose date will not parse sorts as the oldest rather than the newest, so a
     typo cannot decide a contact's status on its own; `reconcile` reports it.
     """
-    return [r for _, r in sorted(enumerate(rows),
-                                 key=lambda p: (as_date(p[1].get("date")) or datetime.date.min,
-                                                p[0]))]
+    rows = list(rows)
+    days = [as_date(r.get("date")) or datetime.date.min for r in rows]
+    # Most often in order already (by_contact leaves every thread so): then as they are.
+    if all(a <= b for a, b in zip(days, days[1:])):
+        return rows
+    return [rows[i] for i in sorted(range(len(rows)), key=days.__getitem__)]
 
 
 def derive_status(threads_for_contact) -> str:
@@ -1691,7 +1747,7 @@ def answered_under_another_row(cid, since, twins, index) -> bool:
     return False
 
 
-def owed(contacts, threads, today) -> list[dict]:
+def owed(contacts, threads, today, index=None, live=None) -> list[dict]:
     """What the user owes right now: every reply first, then nudges, each oldest first.
 
     Two kinds, and they are not the same job. A reply is owed the moment they
@@ -1709,16 +1765,27 @@ def owed(contacts, threads, today) -> list[dict]:
 
     Each item carries `old`: owed more than OLD_OWED_DAYS with nothing done and no date
     of the person's own on the row, which the due list counts instead of listing.
+
+    `index` is `by_contact(threads)` when the caller has it already, and `live` the status
+    open_actions.network_views read for each contact from the same book and log. It is
+    taken where it is the one read here (the id on one row only, every message in the
+    thread with a direction), so a page build reads each status once, not twice.
     """
     today = _need_date(today, "today")
     items = []
     own_dated = set()
-    index = by_contact(threads)
+    index = by_contact(threads) if index is None else index
     twins = namesakes(contacts)
+    once: set = set()
+    if live is not None:
+        ids = Counter(str(c.get("contact_id") or "").strip() for c in contacts)
+        once = {cid for cid, n in ids.items() if n == 1 and cid in live}
     for contact in contacts:
         cid = str(contact.get("contact_id") or "").strip()
-        msgs = [r for r in _rows_of(index, cid) if _direction(r)]
-        status = effective_status(contact, msgs)
+        rows = _rows_of(index, cid)
+        msgs = [r for r in rows if _direction(r)]
+        status = live[cid] if cid in once and len(msgs) == len(rows) \
+            else effective_status(contact, msgs)
         base = {
             "contact_id": cid,
             "name": contact.get("name", ""),
@@ -3698,6 +3765,12 @@ def _sent_rx():
     return _sent_rx_for(_doc_rx())
 
 
+# Every match of _sent_rx_for holds one of these words, whatever the document is called: kept
+# beside it, the two say the same words.
+_SENT_WORDS = re.compile(r"\b(?:sent|emailed|e-mailed|attached|attaching|forwarded|shared|went|"
+                         r"enclosed|enclosing|here(?:'s| is)|please find)\b", re.I)
+
+
 @functools.lru_cache(maxsize=16)
 def _sent_rx_for(d: str):
     return re.compile(
@@ -3735,9 +3808,14 @@ def says_resume_went(row) -> bool:
         return True
     if _scenario(row) == "send_resume":
         return True
+    texts = [str(row.get(field) or "") for field in ("summary", "full_text")]
+    # No word that says something went: no sentence can say a resume did, and the person's
+    # word for it is not read from their profile (two file checks a message, 2026-11-03).
+    if not any(_SENT_WORDS.search(t) for t in texts):
+        return False
     sent = _sent_rx()
-    for field in ("summary", "full_text"):
-        for s in _sentences(row.get(field)):
+    for text in texts:
+        for s in _sentences(text):
             if sent.search(s) and not _NOT_THIS_ONE.search(s):
                 return True
     return False
@@ -3919,7 +3997,7 @@ def _pdf(path) -> str:
     return os.path.splitext(str(path or "").strip())[0] + ".pdf"
 
 
-def resumes_owed(contacts, threads, tracker=None) -> list[dict]:
+def resumes_owed(contacts, threads, tracker=None, index=None) -> list[dict]:
     """Every contact owed a resume: their last request for it has had none since, or one
     was drafted for them (a tracker row not yet past drafted) and none has gone since.
 
@@ -3929,9 +4007,11 @@ def resumes_owed(contacts, threads, tracker=None) -> list[dict]:
     name, company, company_key, asked, made, role, words, file, recorded}: `file` is the
     one to send where the repo knows it (a resume made for them, or the "<noun> to send"
     note), `recorded` whether the book already says it is owed (their row, or the
-    tracker's row for the one made for them)."""
+    tracker's row for the one made for them). `index` is `by_contact(threads)` when the
+    caller has it already."""
     out = []
-    index, made_index = by_contact(threads), made_for_index(tracker, contacts)
+    index = by_contact(threads) if index is None else index
+    made_index = made_for_index(tracker, contacts)
     for contact in contacts:
         cid = str(contact.get("contact_id") or "").strip()
         if str(contact.get("status") or "").strip() in ("closed", "gone_cold", "dropped"):
@@ -4388,7 +4468,7 @@ MID_CONVERSATION = frozenset({"reply", "send_resume", "thank_you", "scheduling",
                               "call_missed", "intro_connection", "warm_intro_reply"})
 
 
-def connection_requests(contacts, threads) -> set:
+def connection_requests(contacts, threads, index=None) -> set:
     """(contact_id, date) for every message that spent a connection request.
 
     The log writes a request and a direct message alike as channel `linkedin`,
@@ -4404,15 +4484,15 @@ def connection_requests(contacts, threads) -> set:
     which is the order a discovery run writes them in. It no longer stands in
     once the log reaches back to `first_contacted`: that date is when contact
     began, and for a contact who wrote first it is the day THEY wrote.
+
+    `index` is `by_contact(threads)` when the caller has it already.
     """
-    by_contact: dict[str, list[dict]] = {}
-    for row in threads:
-        by_contact.setdefault(str(row.get("contact_id") or "").strip(), []).append(row)
+    index = by_contact(threads) if index is None else index
 
     requests = set()
-    for cid, rows in by_contact.items():
+    for cid, rows in index.items():
         connected = asked = False
-        for row in _ordered(rows):
+        for row in rows:
             if channel_of(row) != "connection" or is_withdrawal(row):
                 continue
             if _direction(row) == "in":
@@ -4420,7 +4500,7 @@ def connection_requests(contacts, threads) -> set:
                 continue
             if _direction(row) != "out":
                 continue
-            scenario = re.sub(r"[\s-]+", "_", str(row.get("scenario") or "").strip().lower())
+            scenario = _scenario(row)
             day = as_date(row.get("date"))
             # A reply, a thank-you or a scheduling note goes down a channel that
             # is already open: a catch-up message to a relationship older than
@@ -4435,7 +4515,7 @@ def connection_requests(contacts, threads) -> set:
         day = as_date(contact.get("first_contacted"))
         if not day or channel_of(contact) != "connection":
             continue
-        logged = [d for d in (as_date(r.get("date")) for r in by_contact.get(cid, ())) if d]
+        logged = [d for d in (as_date(r.get("date")) for r in index.get(cid, ())) if d]
         if not logged or min(logged) > day:
             requests.add((cid, day))
     return requests
@@ -4471,16 +4551,14 @@ def _inmail_sends(contacts, threads) -> set:
     return out
 
 
-def inmail_refunds(threads) -> list:
+def inmail_refunds(threads, index=None) -> list:
     """[(contact_id, the day the InMail went, the day the reply credited it back)]: every
     InMail answered on LinkedIn within INMAIL_REFUND_DAYS of going. An acceptance of a
-    connection request or a call is not an answer to it; an email reply is not on LinkedIn."""
-    by: dict[str, list] = {}
-    for row in threads:
-        by.setdefault(str(row.get("contact_id") or "").strip(), []).append(row)
+    connection request or a call is not an answer to it; an email reply is not on LinkedIn.
+    `index` is `by_contact(threads)` when the caller has it already."""
+    index = by_contact(threads) if index is None else index
     out = []
-    for cid, rows in by.items():
-        rows = _ordered(rows)
+    for cid, rows in index.items():
         for i, row in enumerate(rows):
             day = as_date(row.get("date"))
             if _direction(row) != "out" or channel_of(row) != "inmail" or not day:
@@ -4536,9 +4614,10 @@ def record_inmails(balance, contacts, threads, today) -> dict:
     return rec
 
 
-def _inmails_left(contacts, threads, today, month_start, month_end, limit, recorded) -> dict:
+def _inmails_left(contacts, threads, today, month_start, month_end, limit, recorded,
+                  index=None) -> dict:
     sends = _inmail_sends(contacts, threads)
-    refunds = inmail_refunds(threads)
+    refunds = inmail_refunds(threads, index)
     sent_month = sum(1 for _, d in sends if month_start <= d <= month_end)
     back_month = sum(1 for _, _, r in refunds if month_start <= r <= min(month_end, today))
     if recorded:
@@ -4561,7 +4640,7 @@ def _inmails_left(contacts, threads, today, month_start, month_end, limit, recor
             "inmails_source": source}
 
 
-def platform_budget(contacts, threads, today, inmail_balance=None) -> dict:
+def platform_budget(contacts, threads, today, inmail_balance=None, index=None) -> dict:
     """Connection requests sent, and InMail credits left, against `schema.LIMITS`. The app
     sets no cap on connection requests (2026-10-22): LinkedIn says when its own is reached.
 
@@ -4575,19 +4654,22 @@ def platform_budget(contacts, threads, today, inmail_balance=None) -> dict:
     InMail credits: an InMail answered within INMAIL_REFUND_DAYS gives its credit back,
     and the balance the person read off LinkedIn this month (`record_inmails`) wins over
     the count. `inmail_balance` is that record ({} for none); None reads it from file.
+    `index` is `by_contact(threads)` when the caller has it already.
     """
     today = _need_date(today, "today")
+    index = by_contact(threads) if index is None else index
     week_start = today - datetime.timedelta(days=today.weekday())
     week_end = week_start + datetime.timedelta(days=6)
     month_start = today.replace(day=1)
     month_end = _month_end(today)
 
-    requests = connection_requests(contacts, threads)
+    requests = connection_requests(contacts, threads, index)
     connections = sum(1 for _, d in requests if week_start <= d <= week_end)
     connections_today = sum(1 for _, d in requests if d == today)
     inmail_limit = schema.LIMITS["inmail_credits_per_month"]
     inmail = _inmails_left(contacts, threads, today, month_start, month_end, inmail_limit,
-                           recorded_inmails(today) if inmail_balance is None else inmail_balance)
+                           recorded_inmails(today) if inmail_balance is None else inmail_balance,
+                           index)
     # Drafts queued and not yet sent, reported beside the counts.
     queued = {"connection": 0, "inmail": 0}
     for contact in contacts:

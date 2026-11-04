@@ -80,14 +80,45 @@ def counts(items: list[dict], fields) -> dict:
 
 
 def size(obj) -> int:
-    return len(json.dumps(obj, ensure_ascii=False, separators=(",", ":")).encode("utf-8"))
+    return len(_COMPACT.encode(obj).encode("utf-8"))
+
+
+_COMPACT = json.JSONEncoder(ensure_ascii=False, separators=(",", ":"))  # json.dumps's, made once
 
 
 def stored(obj) -> int:
     """Its bytes as page_db.Writes stores it inside a part's `items` (indented, keys sorted,
-    two levels in)."""
-    text = json.dumps(obj, ensure_ascii=False, indent=1, sort_keys=True)
-    return len(text.encode("utf-8")) + 2 * (text.count("\n") + 1) + 2
+    two levels in).
+
+    Counted, not written out: json.dumps(obj, ensure_ascii=False, indent=1, sort_keys=True)
+    is the one-line text (separators "," and ": ") with a line break and an indent before
+    each item and each closing bracket of a list or object that is not empty, so its bytes
+    are the one-line text's and those (`_layout`). Before Python 3.13 an indented dump is
+    written in Python a value at a time, and a big search's lists took a tenth of a second
+    to measure (2026-11-03)."""
+    text = _SORTED.encode(obj)
+    extra, lines = _layout(obj, 1) if isinstance(obj, (dict, list, tuple)) else (0, 0)
+    return len(text.encode("utf-8")) + extra + 2 * (lines + 1) + 2
+
+
+_SORTED = json.JSONEncoder(ensure_ascii=False, sort_keys=True, separators=(",", ": "))
+
+
+def _layout(obj, level: int) -> tuple[int, int]:
+    """(the characters indent=1 adds inside `obj`, a container `level` deep, and its line
+    breaks): before each of its n items a line break and `level` spaces, and before its
+    closing bracket a line break and `level - 1`; an empty one stays "[]" or "{}"."""
+    values = obj.values() if isinstance(obj, dict) else obj
+    if not values:
+        return 0, 0
+    n = len(values)
+    extra, lines = n * (1 + level) + level, n + 1
+    for v in values:
+        if isinstance(v, (dict, list, tuple)):
+            e, b = _layout(v, level + 1)
+            extra += e
+            lines += b
+    return extra, lines
 
 
 def chunks(items: list[dict], limit: int = CHUNK_BYTES) -> list[list[dict]]:
@@ -164,14 +195,20 @@ def link(model: dict) -> None:
             keys[id(it)] = k
             if k:
                 index.setdefault(k, {}).setdefault(name, []).append(it["id"])
+    # Each list's ids as a set too, so a list the item is not in is copied whole, never read
+    # an id at a time against its own: a big search's people, due rows and messages at one
+    # employer made some 300,000 comparisons (2026-11-03).
+    held = {(k, sec): set(ids) for k, there in index.items() for sec, ids in there.items()}
     for name, items, _field in sections:
         for it in items:
-            there = index.get(keys[id(it)]) or {}
+            k = keys[id(it)]
+            there = index.get(k) or {}
             rel = {}
             for sec, ids in there.items():
                 if sec == name and sec == "people":
                     continue            # a contact is not linked to every colleague
-                others = [i for i in ids if i != it["id"]]
+                others = [i for i in ids if i != it["id"]] if it["id"] in held[(k, sec)] \
+                    else list(ids)
                 if sec == "people" and len(others) > RELATED_MAX:
                     it["people_more"] = len(others) - RELATED_MAX
                     others = others[:RELATED_MAX]

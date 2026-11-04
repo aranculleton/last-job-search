@@ -184,6 +184,9 @@ _INITIALISM = re.compile(r"\(\s*([A-Z][A-Z&.]{1,9})\s*\)")
 _MINOR = {"of", "the", "and", "for", "de", "du", "la", "le", "et"}
 
 
+# Pure, like _norm, and asked for on every key: a page build keys some 26,000 names, the
+# same few hundred over and over (2026-11-03).
+@functools.lru_cache(maxsize=65536)
 def _own_initialism(name: str) -> str:
     """The short name a posting gives in brackets, when it is the name's own initials.
 
@@ -261,24 +264,36 @@ def _key(name: str) -> str:
     s = _norm(name)
     if s in ALIASES:
         return ALIASES[s]
-    stripped = SPACE.sub(" ", SUFFIX.sub(" ", s)).strip()
-    while TRAILING_FORM.search(stripped) and TRAILING_FORM.sub("", stripped).strip():
-        stripped = TRAILING_FORM.sub("", stripped).strip()
+    stripped, separate, head, trimmed = _shape(s)
     if stripped in ALIASES:
         return ALIASES[stripped]
-    m = SEPARATE.match(stripped)
-    if m:
-        return m.group(1).lower()
+    if separate is not None:
+        return separate
     # A division ("<Parent> Wealth Management", "<Parent> Securities") shares
     # its parent's open application, so it must collapse to the parent.
-    m = DIVISION.match(stripped)
-    if m:
-        head = m.group(1)
+    if head is not None:
         return ALIASES.get(head, head)
-    trimmed = _strip_trailing(stripped)
     if trimmed in ALIASES:
         return ALIASES[trimmed]
     return trimmed or stripped or s
+
+
+@functools.lru_cache(maxsize=65536)
+def _shape(s: str) -> tuple:
+    """(the name without its legal forms, the SEPARATE employer it starts with, the
+    DIVISION parent it starts with, the name without its trailing qualifiers), each None
+    where it does not apply: the pure part of `_key`, kept once a name. The ALIASES lookups
+    are not kept: they are the profile's, read on every ask."""
+    stripped = SPACE.sub(" ", SUFFIX.sub(" ", s)).strip()
+    while TRAILING_FORM.search(stripped) and TRAILING_FORM.sub("", stripped).strip():
+        stripped = TRAILING_FORM.sub("", stripped).strip()
+    m = SEPARATE.match(stripped)
+    if m:
+        return stripped, m.group(1).lower(), None, None
+    m = DIVISION.match(stripped)
+    if m:
+        return stripped, None, m.group(1), None
+    return stripped, None, None, _strip_trailing(stripped)
 
 
 if __name__ == "__main__":

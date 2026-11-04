@@ -175,8 +175,13 @@ def local_day(t: dt.datetime, zone: str) -> dt.date:
 
 
 def _canon(obj) -> str:
-    return json.dumps(obj, sort_keys=True, ensure_ascii=False, separators=(",", ":"),
-                      default=str)
+    return _CANON.encode(obj)
+
+
+# json.dumps with these settings, made once: dumps builds an encoder a call, and a big page
+# asks for some 4,500 revs.
+_CANON = json.JSONEncoder(sort_keys=True, ensure_ascii=False, separators=(",", ":"),
+                          default=str)
 
 
 def rev_of(*parts) -> str:
@@ -185,10 +190,33 @@ def rev_of(*parts) -> str:
 
 
 def _without_clock(obj):
+    """`obj` without any CLOCK_KEYS, at any depth. Only what holds one is copied: the rest is
+    `obj`'s own, so what this returns is read, never changed. A copy of all of a big model
+    was most of the time its rev took (2026-11-03)."""
     if isinstance(obj, dict):
-        return {k: _without_clock(v) for k, v in obj.items() if k not in CLOCK_KEYS}
+        new = None
+        for k, v in obj.items():
+            if isinstance(v, (dict, list)):
+                w = _without_clock(v)
+                if w is not v:
+                    if new is None:
+                        new = dict(obj)
+                    new[k] = w
+        if not CLOCK_KEYS.isdisjoint(obj):
+            new = dict(obj) if new is None else new
+            for k in CLOCK_KEYS:
+                new.pop(k, None)
+        return obj if new is None else new
     if isinstance(obj, list):
-        return [_without_clock(v) for v in obj]
+        new = None
+        for i, v in enumerate(obj):
+            if isinstance(v, (dict, list)):
+                w = _without_clock(v)
+                if w is not v:
+                    if new is None:
+                        new = list(obj)
+                    new[i] = w
+        return obj if new is None else new
     return obj
 
 
@@ -231,6 +259,10 @@ class Names:
                 self.ones.add(words[0])
             else:
                 self.pairs.add((words[0], words[1]))
+        # What each text came out as, for this build: a contact's next step is cut down for
+        # their row and again for To do, and one title is on many rows.
+        self.done: dict = {}
+        self.scrubbed: dict = {}
 
     def could(self, text: str) -> bool:
         """Can a full name be in `text`? False only where none can."""
@@ -242,18 +274,26 @@ class Names:
         return any(p in self.pairs for p in zip(words, words[1:]))
 
     def sub(self, text: str) -> str:
-        if self.rx is None or not self.could(text):
+        if self.rx is None:
             return text
-        return self.rx.sub(lambda m: self.first.get(m.group(0).casefold(), m.group(0)), text)
+        got = self.done.get(text)
+        if got is None:
+            got = self.done[text] = self.rx.sub(
+                lambda m: self.first.get(m.group(0).casefold(), m.group(0)), text) \
+                if self.could(text) else text
+        return got
 
 
 _WORDS = re.compile(r"\w+")
 
 
 def _phones(text: str) -> list[str]:
-    bare = _URL.sub(" ", text)
+    bare = _URL.sub(" ", text) if "://" in text else text      # no address without "://"
     return [m.group(0) for m in PHONE.finditer(bare)
-            if 9 <= len(re.sub(r"\D", "", m.group(0))) <= 15]
+            if 9 <= len(_NON_DIGIT.sub("", m.group(0))) <= 15]
+
+
+_NON_DIGIT = re.compile(r"\D")
 
 
 def private_in(text) -> list[str]:
@@ -318,8 +358,16 @@ def scrub(text, names=()) -> str:
     """`text` with every contact detail taken out, and each full name in `names` (pairs of
     (full name, first name)) cut to the first name."""
     out = str(text or "")
-    out = LINKEDIN_IN.sub("", out)
-    out = EMAIL.sub("", out)
+    kept = getattr(names, "scrubbed", None)
+    if kept is not None and out in kept:
+        return kept[out]
+    raw = out
+    # A profile address holds a "/" and an email address an "@": a line with neither is left
+    # alone without a search for either.
+    if "/" in out:
+        out = LINKEDIN_IN.sub("", out)
+    if "@" in out:
+        out = EMAIL.sub("", out)
     for p in sorted(set(_phones(out)), key=len, reverse=True):
         out = out.replace(p, "")
     if hasattr(names, "sub"):
@@ -328,8 +376,16 @@ def scrub(text, names=()) -> str:
         for full, first in names:
             if full and first and full != first:
                 out = re.sub(re.escape(full), first, out, flags=re.I)
-    out = re.sub(r"\s+([,.;:)])", r"\1", re.sub(r"[ \t]{2,}", " ", out))
-    return re.sub(r"[,;]\s*(?=[,;.]|$)", "", out).strip(" ,;")
+    out = _SPACE_BEFORE.sub(r"\1", _SPACES.sub(" ", out))
+    out = _LOOSE_COMMA.sub("", out).strip(" ,;")
+    if kept is not None:
+        kept[raw] = out
+    return out
+
+
+_SPACES = re.compile(r"[ \t]{2,}")
+_SPACE_BEFORE = re.compile(r"\s+([,.;:)])")
+_LOOSE_COMMA = re.compile(r"[,;]\s*(?=[,;.]|$)")
 
 
 # ------------------------------------------------------------------ small readers
@@ -458,6 +514,12 @@ class Ctx:
         return self._once("tracker", make)
 
     @property
+    def tracker_ids(self) -> list[str]:
+        """tracker_ids(self.tracker), worked out once: every section that names an
+        application asked for all of them again. Read, never changed."""
+        return self._once("tracker_ids", lambda: tracker_ids(self.tracker))
+
+    @property
     def contacts(self) -> list[dict]:
         def make():
             path = person.state("network_contacts.csv")
@@ -483,11 +545,24 @@ class Ctx:
         return self._once("by_contact", lambda: state.by_contact(self.threads))
 
     @property
+    def contacts_by_key(self) -> dict:
+        """{employer key: the contacts there, in the book's order}: keyed once a build, where
+        each card that looked for someone at its employer keyed the whole book again."""
+        def make():
+            from company_key import key
+            got: dict = {}
+            for c in self.contacts:
+                got.setdefault(key(c.get("company")), []).append(c)
+            return got
+        return self._once("contacts_by_key", make)
+
+    @property
     def network(self) -> tuple:
         """(live status by contact id, warm routes, referral holds), as open_actions reads them."""
         def make():
             import open_actions
-            return open_actions.network_views(self.contacts, self.threads)
+            return open_actions.network_views(self.contacts, self.threads,
+                                              index=self.by_contact)
         return self._once("network", make)
 
     @property
@@ -500,8 +575,21 @@ class Ctx:
         def make():
             import open_actions
             return open_actions.due_items(self.contacts, self.threads, self.tracker, self.today,
-                                          network=self.network, now=self.now)
+                                          network=self.network, now=self.now,
+                                          index=self.by_contact, read_stages=self.stages)
         return self._once("due_items", make)
+
+    def stages(self, row: dict) -> tuple:
+        """open_actions.stages for one application, found and read once a build: Interviews,
+        Applications, Coming up and the due list each looked for every application's folder
+        again. Each caller gets lists of its own."""
+        memo = self._got.setdefault("stages", {})
+        k = (row.get("company"), row.get("role") or "")
+        if k not in memo:
+            import open_actions
+            memo[k] = open_actions.stages(row)
+        folder, files, stages = memo[k]
+        return folder, list(files), [dict(s) for s in stages]
 
     @property
     def names(self) -> "Names":
@@ -780,7 +868,7 @@ def _profile_questions(ctx: Ctx, targets: dict) -> list:
     import confirm
     out = []
     rows = ctx.tracker
-    ids = tracker_ids(rows)
+    ids = ctx.tracker_ids
     said = confirm.check(rows, ctx.today).get("notes say sent, tracker says drafted", [])
     if said:
         for row, rid in zip(rows, ids):
@@ -1578,7 +1666,7 @@ def _ready(ctx: Ctx, targets: dict) -> list:
     out, folded = [], 0
     expect = int(person.get("documents.resume_pages", 1) or 1)
     noun = str(person.get("documents.noun", "resume"))
-    for row, rid in zip(ctx.tracker, tracker_ids(ctx.tracker)):
+    for row, rid in zip(ctx.tracker, ctx.tracker_ids):
         st = _status(row)
         on = throttle.applied_on(row) if st not in throttle.UNSENT else ""
         if st in throttle.UNSENT:
@@ -1996,7 +2084,7 @@ def _app_followups(ctx: Ctx, targets: dict) -> list:
     if not drafts:
         return []
     ids = {(str(r.get("company") or ""), str(r.get("role") or "role not recorded")): rid
-           for r, rid in zip(ctx.tracker, tracker_ids(ctx.tracker))}
+           for r, rid in zip(ctx.tracker, ctx.tracker_ids)}
     out = []
     for i in ctx.due_items:
         if i.get("half") != "application" or i.get("kind") == "interview" or i.get("held"):
@@ -2054,11 +2142,18 @@ THREAD_CHARS = 600
 def _redact(text: str) -> str:
     """Their words with any contact detail said as what it was, never the detail: the page
     reads an address from the owner-only reach documents (CONTRACT 1)."""
-    out = LINKEDIN_IN.sub("(their profile address)", str(text or ""))
-    out = EMAIL.sub("(an email address)", out)
+    out = str(text or "")
+    if "/" in out:                    # a profile address holds a "/", an email an "@" (scrub)
+        out = LINKEDIN_IN.sub("(their profile address)", out)
+    if "@" in out:
+        out = EMAIL.sub("(an email address)", out)
     for p in sorted(set(_phones(out)), key=len, reverse=True):
         out = out.replace(p, "(a phone number)")
     return out
+
+
+_LINE_END = re.compile(r"\r\n|\r|\n")
+_BLANK_LINES = re.compile(r"\n{3,}")
 
 
 def thread_of(msgs, names=()) -> tuple[list, int]:
@@ -2072,8 +2167,8 @@ def thread_of(msgs, names=()) -> tuple[list, int]:
         if not d or state.is_auto_reply(m):
             continue
         # Their lines kept, each one's spacing tidied: a file saved on Windows says \r\n.
-        lines = re.split(r"\r\n|\r|\n", str(m.get("full_text") or ""))
-        words = re.sub(r"\n{3,}", "\n\n", "\n".join(" ".join(x.split()) for x in lines)).strip()
+        lines = _LINE_END.split(str(m.get("full_text") or ""))
+        words = _BLANK_LINES.sub("\n\n", "\n".join(" ".join(x.split()) for x in lines)).strip()
         event = None
         if state.is_acceptance(m):
             event = "Accepted your connection request."
@@ -2163,13 +2258,16 @@ def _paste(cid: str, first: str, raw) -> dict | None:
 
 
 def _call_of(cid: str, status: str, due: str, said: str = "", home: str = "",
-             names=()) -> dict | None:
+             names=(), folders=None) -> dict | None:
     """A networking call booked (on the row: a reply owed since does not unbook it), its
     time in the person's own zone where its next action writes one ("2pm ET": the page said
     "Call Thursday" with no time, 2026-11-02), and its prep (tools/network/prep.py) where it
-    is made."""
+    is made. `folders` is `_folder_names` of documents/network, read once for a whole book:
+    an id of plain letters, digits, "_" and "-" with no folder there has no prep, and its
+    prep is not looked for on disk one person at a time."""
     path = person.state("documents", "network", cid, "prep.md")
-    have = os.path.isfile(path)
+    have = (folders is None or not _PLAIN_ID.fullmatch(cid) or cid.lower() in folders) \
+        and os.path.isfile(path)
     if status != "call_booked" and not have:
         return None
     clock = None
@@ -2191,6 +2289,16 @@ def _call_of(cid: str, status: str, due: str, said: str = "", home: str = "",
 
 
 CALL_PREP_CHARS = 12000
+# A name every file system reads one way, give or take its case.
+_PLAIN_ID = re.compile(r"[A-Za-z0-9_-]+")
+
+
+def _folder_names(path: str) -> set:
+    """The names in a folder, in lower case: none where there is no folder."""
+    try:
+        return {n.lower() for n in os.listdir(path)}
+    except OSError:
+        return set()
 
 
 def _prep_text(path: str, names=()) -> str:
@@ -2238,6 +2346,11 @@ _MESSAGE_STEP = re.compile(r"\b(?:send|reply|write|message|follow(?:[- ]up)?|nud
                            r"chase|answer|email|introduce|check in)\b", re.I)
 
 
+_RUN_OF_SPACE = re.compile(r"\s{2,}")
+_VIA_LINK = re.compile(r"\s+(?:through|via|at|from)\s+(?:his|her|their|the|this)?\s*"
+                       r"(?:referral\s+)?link$", re.I)
+
+
 def next_words(text, names=()) -> tuple[str, str | None]:
     """(a contact's next step as the person reads it, the first link it names, or None).
 
@@ -2251,9 +2364,8 @@ def next_words(text, names=()) -> tuple[str, str | None]:
     link = m.group(0).rstrip(".") if m else None
     s = plain_action(_ANY_URL.sub("", raw))
     s = _NOTE_ASIDE.sub("", s)
-    s = re.sub(r"\s+([,.;:)])", r"\1", re.sub(r"\s{2,}", " ", s)).strip(" ,;:")
-    s = re.sub(r"\s+(?:through|via|at|from)\s+(?:his|her|their|the|this)?\s*(?:referral\s+)?link$",
-               "", s, flags=re.I) if not link else s
+    s = _SPACE_BEFORE.sub(r"\1", _RUN_OF_SPACE.sub(" ", s)).strip(" ,;:")
+    s = _VIA_LINK.sub("", s) if not link else s
     if _NONE_SAID.match(s) or _NOTE_TO_CLAUDE.search(s):
         return "", link
     return s, link
@@ -2413,6 +2525,7 @@ def _people(ctx: Ctx, targets: dict) -> list:
     from what_works import route_group
     drafts = {os.path.basename(os.path.dirname(f)) for f in
               glob.glob(person.state("documents", "network", "*", "draft.md"))}
+    folders = _folder_names(person.state("documents", "network"))     # for _call_of
     # What a person's standing reads, made here when this build did not make it first (a
     # build of some sections only, as `app.py apply` makes to check a tap): the same answer
     # either way, so a tap is never refused as stale for a section not built.
@@ -2447,7 +2560,7 @@ def _people(ctx: Ctx, targets: dict) -> list:
         hold = surface.held(c, msgs, status, replying=status in schema.OWED_BY_US,
                             memo=ctx._got.setdefault("held_memo", {}))
         call = _call_of(cid, "call_booked" if str(c.get("status") or "") == "call_booked"
-                        else status, due, c.get("next_action"), ctx.zone, ctx.names)
+                        else status, due, c.get("next_action"), ctx.zone, ctx.names, folders)
         where = standing(ctx, c, cid, status, msgs, due_by.get(cid) or [], shown.get(cid),
                          hold, call)
         group = where["group"]
@@ -2595,7 +2708,7 @@ def _due(ctx: Ctx, targets: dict) -> list:
     items.sort(key=open_actions.urgency)
     book = {str(c.get("contact_id") or "").strip(): c for c in ctx.contacts}
     app_ids = {(str(r.get("company") or ""), str(r.get("role") or "role not recorded")): rid
-               for r, rid in zip(ctx.tracker, tracker_ids(ctx.tracker))}
+               for r, rid in zip(ctx.tracker, ctx.tracker_ids)}
     noun = str(person.get("documents.noun", "resume"))
     out, seen, halves = [], set(), {}
     for i in items:
@@ -2817,28 +2930,26 @@ def _scrubbed(value, names):
 
 def _round_held(ctx: Ctx, company: str, role: str) -> bool:
     """Has any round of this application been held: ticked, or booked for a day now gone?"""
-    import open_actions
     today = ctx.today.isoformat()
     for row in ctx.tracker:
         if (row.get("company") or "").strip() == company and \
                 ((row.get("role") or "").strip() or "role not recorded") == role:
-            _folder, _files, stages = open_actions.stages(row)
+            _folder, _files, stages = ctx.stages(row)
             return any(s["done"] or (s["date"] and s["date"] < today) for s in stages)
     return True
 
 
 def _interviews(ctx: Ctx, targets: dict) -> list:
     import followups
-    import open_actions
     import throttle
     import app_lists
     out, full, folded, order = [], [], 0, {}
     today = ctx.today.isoformat()
-    for row, rid in zip(ctx.tracker, tracker_ids(ctx.tracker)):
+    for row, rid in zip(ctx.tracker, ctx.tracker_ids):
         st = _status(row)
         if st in throttle.UNSENT or not st:
             continue
-        folder, files, stages = open_actions.stages(row)
+        folder, files, stages = ctx.stages(row)
         ahead = any(s["date"] and not s["done"] and s["date"] >= today for s in stages)
         live = st not in throttle.FINAL and (st in followups.LIVE_PROCESS or ahead)
         past = None
@@ -3019,12 +3130,7 @@ def _sent_files(ctx: Ctx, row: dict) -> list:
         on = throttle.applied_on(row) or None
         out += [{"kind": f["kind"], "name": f["name"], "path": f["path"], "asset": f["asset"],
                  "to": None, "on": on} for f in _files(row)]
-    def by_key():
-        got: dict = {}
-        for c in ctx.contacts:
-            got.setdefault(key(c.get("company")), []).append(c)
-        return got
-    for c in ctx._once("contacts_by_key", by_key).get(key(row.get("company")), []):
+    for c in ctx.contacts_by_key.get(key(row.get("company")), []):
         cid = str(c.get("contact_id") or "").strip()
         if not cid:
             continue
@@ -3084,7 +3190,6 @@ def _applications(ctx: Ctx, targets: dict) -> list:
     each from the day it went to its outcome, with the draft's own id (app-<...>), so one
     item runs from Drafts to Applied (FUNCTIONS_SPEC 1.2)."""
     import app_lists
-    import open_actions
     import throttle
     due = {}
     for i in ctx.due_items:
@@ -3093,12 +3198,12 @@ def _applications(ctx: Ctx, targets: dict) -> list:
     out = []
     fold = app_lists.FOLD_DAYS["applications"]
     today = ctx.today.isoformat()
-    for row, rid in zip(ctx.tracker, tracker_ids(ctx.tracker)):
+    for row, rid in zip(ctx.tracker, ctx.tracker_ids):
         st = _status(row)
         if st in throttle.UNSENT or not st:
             continue
         on = throttle.applied_on(row) or str(row.get("date") or "")
-        folder, files, stages = open_actions.stages(row)
+        folder, files, stages = ctx.stages(row)
         company, role = row.get("company") or "", row.get("role") or "role not recorded"
         dates = [x for x in re.findall(r"\b\d{4}-\d{2}-\d{2}\b", str(row.get("notes") or ""))
                  if x <= today]
@@ -3179,7 +3284,7 @@ def _referrals(ctx: Ctx, targets: dict) -> list:
         rid = f"ref-{cid}"
         app_id = None
         if row is not None:
-            ids = dict(zip([id(r) for r in ctx.tracker], tracker_ids(ctx.tracker)))
+            ids = dict(zip([id(r) for r in ctx.tracker], ctx.tracker_ids))
             app_id = ids.get(id(row))
         item = {"id": rid, "contact": cid, "first_name": first_name(c.get("name")),
                 "company": str(c.get("company") or ""), "role": role or None,
@@ -3216,7 +3321,6 @@ def process_news(ctx: Ctx, cid: str) -> dict | None:
     """{on, what}: the latest thing that happened in the process a contact's referral
     started, from the tracker row's dated notes (an outcome, a stage booked) and the stages
     held on outcome.md; None when nothing is on record. What the referrer is owed word of."""
-    import open_actions
     import throttle
     c = next((x for x in ctx.contacts if str(x.get("contact_id") or "").strip() == cid), None)
     if c is None:
@@ -3233,7 +3337,7 @@ def process_news(ctx: Ctx, cid: str) -> dict | None:
             if m.group(1) <= today and re.search(r"\b(?:interview|booked|offer|rejected|"
                                                  r"withdrew|no response)\b", what, re.I):
                 events.append((m.group(1), what))
-        _folder, _files_, stages = open_actions.stages(row)
+        _folder, _files_, stages = ctx.stages(row)
         events += [(s_["date"], f"the {s_['label'].lower()} is done") for s_ in stages
                    if s_["done"] and s_["date"] and s_["date"] <= today]
         for on, what in events:
@@ -3262,7 +3366,7 @@ def _message_budget(ctx: Ctx, targets: dict) -> dict:
     person's LinkedIn plan (schema.LIMITS): the line above a wave of first notes. The app
     sets no cap on requests of its own, so no limit is given that LinkedIn did not."""
     from network import schema, state
-    b = state.platform_budget(ctx.contacts, ctx.threads, ctx.today)
+    b = state.platform_budget(ctx.contacts, ctx.threads, ctx.today, index=ctx.by_contact)
     plan = setting_values().get("linkedin_plan", "free")
     ready = 0
     for f in glob.glob(person.state("documents", "network", "*", "draft.md")):
@@ -3918,7 +4022,9 @@ def _done(ctx: Ctx, targets: dict) -> dict:
     # Each application under the tracker id its live record has (_applications), so the page
     # joins the two as one card: the history had no id, every card showed twice and every
     # one took the first interview (journeys audit 1).
-    row_ids = {id(r): rid for r, rid in zip(rows, tracker_ids(rows))}
+    # The build's own ids and grouped log (Ctx), or worked out here for a ctx without them.
+    ids = getattr(ctx, "tracker_ids", None)
+    row_ids = {id(r): rid for r, rid in zip(rows, tracker_ids(rows) if ids is None else ids)}
     offers = throttle.spellings("offer", "hired", "offer_declined")
     sent = [(r, _date(throttle.applied_on(r))) for r in rows]
     sent = [(r, d) for r, d in sent if d]
@@ -3938,16 +4044,15 @@ def _done(ctx: Ctx, targets: dict) -> dict:
     # years of other conversations, and counting every inbound message said 359 replies
     # (the maintainer, 2026-10-26).
     book = {str(c.get("contact_id") or "").strip() for c in ctx.contacts}
-    by_contact: dict = {}
-    for t in ctx.threads:
-        cid = str(t.get("contact_id") or "").strip()
-        if cid in book:
-            by_contact.setdefault(cid, []).append(t)
     replied_on = []
     replied: dict = {}
-    for cid, rows_ in by_contact.items():
+    grouped = getattr(ctx, "by_contact", None)
+    grouped = state.by_contact(ctx.threads) if grouped is None else grouped
+    for cid, rows_ in grouped.items():
+        if cid not in book:
+            continue
         wrote = False
-        for t in state._ordered(rows_):
+        for t in rows_:
             if state.direction(t) == "out":
                 wrote = True
             elif wrote and state.said_something(t):
@@ -4316,7 +4421,8 @@ def brief_link(ctx: Ctx, line: str) -> dict:
         if " " in str(c.get("name") or "").strip() and named(c.get("name")):
             return {"item": str(c.get("contact_id") or ""), "section": "people"}
     # The longest employer name first, so one name inside another links to the one meant.
-    rows = sorted(zip(ctx.tracker, tracker_ids(ctx.tracker)),
+    ids = getattr(ctx, "tracker_ids", None)          # the build's own (Ctx), else worked out
+    rows = sorted(zip(ctx.tracker, tracker_ids(ctx.tracker) if ids is None else ids),
                   key=lambda x: -len(str(x[0].get("company") or "")))
     for row, rid in rows:
         if named(row.get("company")):
