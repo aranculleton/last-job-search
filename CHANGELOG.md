@@ -73,6 +73,12 @@ make sense to somebody whose repo just received it.
 
 ### Fixed
 
+- **"Claude isn't listening" is said once, on its card in To do, with Wake Claude as its one
+  button.** The line at the top no longer says it again, and on a phone nothing sends you out
+  of the Claude app to your browser.
+- **A LinkedIn download Claude has saved leaves To do.** One that brought nothing new says
+  "Nothing new in that download" in Settings, instead of "Saved: 0 messages" with a note about
+  taking it back.
 - **Your page never switches back to an old one when two chats' work is joined.** The page
   you use now is always the one kept, whole, never an older page another chat made earlier.
 - **Old unfinished work no longer overwrites newer work.** Work a chat left more than three

@@ -61,15 +61,21 @@ def test_nobody_listening_is_one_card_and_wake_claude_rings_the_doorbell(run, tm
 
 def test_with_nothing_to_hear_it_the_one_button_is_open_claude(run, tmp_path, vp):
     """Nothing open to hear a ring is known before the tap: the card offers the one button that
-    can work, Open Claude, never a Wake Claude that cannot (the 3 November audit, shell 8)."""
+    can work, Open Claude, never a Wake Claude that cannot (the 3 November audit, shell 8).
+    On a phone, where that link leaves the Claude app for the browser, there is none: the card
+    says where it works instead (the maintainer, 2026-11-04)."""
     got = _go(run, tmp_path, [
         {"hash": "todo", "read": '[data-item="listen"]', "attr": ['[data-k="wake-open"]', "href"],
          "eval": "[...document.querySelectorAll('[data-item=\"listen\"] .card-actions .btn')].map((b) => b.textContent.trim() + '|' + b.className)"},
     ], vp, seed=_waiting(), clock=T, fake={"canSend": "no_session"})
     card = got["after"][0]["text"]
-    assert "Open Claude to start what is waiting." in card and "Wake Claude" not in card, card
-    assert got["after"][0]["attr"] == _sample()["listener"]["wake"]["url"]
+    assert "Wake Claude" not in card, card
     buttons = got["after"][0]["eval"]
+    if vp == PHONE:
+        assert "Open this page on a computer to start it now." in card and buttons == [] and got["after"][0]["attr"] is None, (card, buttons)
+        return
+    assert "Open Claude to start what is waiting." in card, card
+    assert got["after"][0]["attr"] == _sample()["listener"]["wake"]["url"]
     assert len(buttons) == 1 and buttons[0].startswith("Open Claude") and "primary" in buttons[0], buttons
 
 
