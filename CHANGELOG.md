@@ -22,6 +22,37 @@ make sense to somebody whose repo just received it.
 
 ### Changed
 
+- **Every finding of two full audits is fixed in this release.** A ten-reviewer audit of the
+  whole app on a real search (chat, work, contacts, interviews, jobs, the brief, documents,
+  the page, the engine, robustness and end-to-end journeys) and a second audit of the app as a
+  stranger meets it (their own copy, chat only, any country). Every finding is listed at the
+  end of these notes with what became of it.
+- **Your page goes up in small pieces any chat can manage**, and an update sends only the
+  pieces that changed. A page that did not load fully says so and one tap has Claude put it
+  up again; a page part way through an update says "being updated" and reloads itself.
+- **If your page was never made, the next chat makes it** and tells you once, in one line,
+  what it is, with its link. No profile upgrade: the next chat does it by itself.
+- **Your morning brief stays in your own chat and sends its headline to your phone.** If the
+  notification cannot be sent, your next message there tells you once. A brief that stops
+  coming is noticed and mended by the next chat.
+- **Improvements start by themselves** instead of waiting to be started, and "today" is always
+  your own day.
+- **Work from a chat that could not save is brought in by the next save**, from any chat,
+  with nothing lost. Two chats changing the same part of your profile keep both versions and
+  your page asks which one stays.
+- **Times are in your own time zone**, read from what you wrote, never from when your brief
+  is sent. An invitation offering several days asks which one you want, and one tap books it.
+- **Contacts and the brief show only who your own rules allow**: nobody past your limit of
+  unanswered messages, nobody at an employer you turned down, and no message that breaks your
+  rules is ever offered as ready to send.
+- **Jobs keep every rule you gave**: your search window to the day, roles you applied to never
+  come back, public bodies held to your pay, and the shortlist refilled to the number asked.
+- **Postings in other languages are read properly** (pay, years, contract terms, the languages
+  they require), pay stated by the month is read as a year, and nothing assumes one country.
+- **The page is quicker on a big search**: Contacts opens in about a second on a phone instead
+  of eight, and building your page's data takes about half the time.
+- **Setting up needs nobody to ask**: the start pages match what runs, a setup that stopped
+  says so with one Carry on button, and the app's own first command no longer asks permission.
 - **Draft this drafts, in one tap.** No sheet asks first whether you have applied: that is
   "I have applied" under the card's More (one tap, today, with "Another day?" in its message)
   or the bin's "Already applied".
@@ -71,6 +102,13 @@ make sense to somebody whose repo just received it.
 
 ### Fixed
 
+- **Everything you send to Claude from your page is saved first, then sent**, and a tap
+  Claude cannot do says why in plain words, with a box for what it needs.
+- **A batch of drafts is one job to the end**: none is drafted twice, a question from one of
+  them reaches To do as its own, and the rest carry on.
+- **A resume that breaks your own rules is never offered** to download or send, and nothing
+  generated claims a skill or a figure your profile does not hold.
+- **Dates read one way on every browser and every computer**, a Mac's own Python included.
 - **What you ask for on your page reaches Claude, and the page says honestly where it is.**
   After your page was published again, its message to Claude could fail on the old line it
   used, and the card said "Saved. It starts next time" while nothing had been sent. Now a
@@ -148,6 +186,40 @@ make sense to somebody whose repo just received it.
 - **Today says what the person last said** ("They said: ..."), in the page's normal size,
   rather than only when it was due. Their words are kept with their address, readable by you
   alone, never in the page's shared data.
+
+### Every audit finding, and what became of it
+
+453 findings: 367 fixed, each with a test that failed before its fix; 21 already fixed earlier this release (commit given); 46 merged into the fix of another finding (named); 19 not a bug, each with its evidence in the outcome table. Nine more, below the tables, came from the chat-only report and the release's own review. None is left open.
+
+- **Chat and work** (37). fixed: 1, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 26, 27, 28, 29, TMB1, TMB2, TMB3; already fixed: 2 (8ca4480), 3 (8ca4480), 4 (8ca4480), 25 (c5804e0); merged into: TMB4 (into chat_work-10), TMB6 (into chat_work-1), TMB8 (into chat_work-23); not a bug: TMB5, TMB7.
+- **Contacts** (52). fixed: 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 23, 24, 25, 26, 27, 28, 29, 30, 31, 32, 33, 34, 35, 36, 37, 38, 39, 40, 41, 42, 43, 44, 45, 46, 47, 48, 49, 50, 51, 52; already fixed: 1 (1450034), 2 (1450034), 22 (1450034).
+- **Contacts, second pass** (30). fixed: 2, 3, 4, 5, 6, 7, 9, 13, 14, 16, 17, 18, 19, 22, 26, 27, 29, 30; already fixed: 1 (1450034); merged into: 8 (into contacts-9), 10 (into contacts-17), 11 (into contacts-23), 12 (into contacts-28), 15 (into contacts-16), 20 (into contacts-34), 23 (into contacts-33), 24 (into chat_work-2), 25 (into chat_work-5), 28 (into chat_work-1); not a bug: 21.
+- **Interviews and time** (33). fixed: 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27, 28, top30-14, top30-15, top30-16, top30-17, top30-29.
+- **Jobs, drafts and the brief** (49). fixed: 1, 3, 4, 5, 6, 7, 8, 9, 10, 12, 13, 14, 15, 16, 17, 18, 19, 21, 23, 24, 25, 26, 28, 29, 30, 31, 32, 33, 34, 35, 37, 38, B1, B3, B4, B5, B7; already fixed: 2 (bc02b42), 20 (ba9219b), 27 (ba9219b); merged into: 11 (into engine-2), 22 (into jobs_brief-8), 36 (into jobs_brief-5), B9 (into jobs_brief-34), B10 (into jobs_brief-16); not a bug: 39, B2, B6, B8.
+- **Documents** (26). fixed: 1, 2, 3, 4, 5, 6, 7, 8, 10, 11, 14, 15, 16, 17, 20, 21, 22, 23, 24, 25, 26; merged into: 9 (into jobs_brief-35), 13 (into contacts-5); not a bug: 12, 18, 19.
+- **The page, Settings and speed** (49). fixed: 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 24, 25, 26, 27, 28, 29, 30, 31, 32, R2, R3, R9, R14, R17; already fixed: R12 (ba9219b); merged into: R5 (into shell_settings-24), R6 (into shell_settings-23), R7 (into shell_settings-22), R8 (into shell_settings-31), R10 (into shell_settings-18), R13 (into shell_settings-7), R15 (into shell_settings-19); not a bug: 23, R1, R4, R11, R16.
+- **The engine** (39). fixed: 1, 2, 3, 4, 5, 6, 7, 8, 9, 11, 12, 13, 14, 15, 16, 17, 23, 25, 30, 31, 32, 33, 37, 38, 39; already fixed: 10 (6024d63), 26 (bc02b42), 28 (ec4831d), 29 (df8c00e), 34 (58dbece), 35 (6024d63); merged into: 18 (into contacts_chat_2-3), 19 (into jobs_brief-37), 20 (into contacts_chat_2-3), 21 (into contacts-13), 22 (into jobs_brief-35), 24 (into jobs_brief-37), 27 (into jobs_brief-4); not a bug: 36.
+- **Robustness** (22). fixed: 1, 2, 3, 4, 5, 6, 9, 10, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21; merged into: 7 (into shell_settings-1), 8 (into interviews-5), 11 (into shell_settings-4); not a bug: notes.
+- **Journeys** (25). fixed: 1, 3, 5, 7, 8, 10, 11, 13, 14, 15, 16, 21, 22, 23, 24; already fixed: 2 (1450034), 12 (006d975); merged into: 4 (into interviews-5), 6 (into interviews-7), 9 (into interviews-1), 17 (into jobs_brief-25), 18 (into jobs_brief-28), 19 (into contacts-21), 20 (into jobs_brief-29); not a bug: working.
+- **Drafts in their own chats** (6). fixed: 2, 4, 5; already fixed: 3 (54de8a4); merged into: 1 (into engine-2), 6 (into chat_work-7).
+- **Stranger audit A: the page** (18). fixed: X-3, X-4, X-6, X-8, X-12, X-21, X-24, X-25, X-27, X-44, X-49, X-56, X-57, X-58, X-64, X-65, X-78, X-84.
+- **Stranger audit B: the brief** (18). fixed: X-1, X-9, X-10, X-11, X-18, X-23, X-33, X-37, X-38, X-42, X-43, X-50, X-66, X-68, X-69, X-70, X-72, X-81.
+- **Stranger audit C: saving and updates** (20). fixed: X-2, X-13, X-15, X-22, X-26, X-28, X-30, X-31, X-32, X-34, X-35, X-36, X-39, X-45, X-46, X-52, X-54, X-62, X-71, X-75.
+- **Stranger audit D: setting up** (16). fixed: X-7, X-14, X-20, X-29, X-40, X-53, X-55, X-59, X-60, X-61, X-67, X-73, X-79, X-80, X-82, X-83.
+- **Stranger audit E: markets and documents** (13). fixed: X-5, X-16, X-17, X-19, X-41, X-47, X-48, X-51, X-63, X-76, X-77, X-85; not a bug: X-74.
+
+
+- **The chat-only report** (4). S1, the page never made in a chat-only search: fixed (stranger
+  audit A). S2, updates not landing: not a bug, they landed every day. S3, the brief silent in
+  an existing chat: fixed (stranger audit B, the brief pushes its headline from its own chat).
+  S4, improvements never started: fixed (stranger audit C, they start by themselves or the
+  chat is held until they do). The first attempt's later rounds, built on an older version,
+  were carried over where they still applied and are not shipped as they were.
+- **Merging all of the above** (5, found by the release review): a "said once" record that
+  reopened a finished setup, a job chat taking updates part way through a job, To do not
+  saying how many more people need you, start saying one thing twice, and a batch member's
+  question hidden behind its lead's progress: all fixed, each with a test.
+
 
 ## [4.8.0] - 2026-11-02
 
