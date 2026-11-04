@@ -1324,10 +1324,17 @@ def _short_date(iso: str) -> str:
 
 
 def message_lines(b: dict, owed_max: int = 4) -> list[str]:
-    """The message as a phone shows it, news left for the model to put in."""
+    """The message as a phone shows it, news left for the model to put in. With a page, the
+    chat gets the headline, the lead and the link: the page holds the rest, and a chat that
+    posted the whole brief beside it said everything twice (the maintainer, 2026-11-04)."""
     if b.get("paused"):
         return ["Your search is paused until %s. Nothing is chased meanwhile." % _short_date(
             b["paused"])] + (["Your page: " + b["url"]] if b.get("page") else [])
+    asks = len((b.get("sync") or {}).get("questions") or [])
+    asked = ["", "%d question%s wait%s for you on your page." % (
+        asks, "" if asks == 1 else "s", "s" if asks == 1 else "")] if asks else []
+    if b.get("page"):
+        return [headline(b), b["lead"]] + asked + ["", "Your page: " + b["url"]]
     out = [headline(b), b["lead"], "", "Owed"]
     owed = b["owed"]
     out += ["- " + o["text"] for o in owed[:owed_max]] or ["Nothing owed"]
@@ -1342,12 +1349,8 @@ def message_lines(b: dict, owed_max: int = 4) -> list[str]:
         out += ["", "Next three"] + ["%d. %s" % (n, t) for n, t in enumerate(b["next_three"], 1)]
     if setting("news"):
         out += ["", "News", "<NEWS>"]
-    asks = len((b.get("sync") or {}).get("questions") or [])
-    if b.get("page") and asks:
-        out += ["", "%d question%s wait%s for you on your page." % (
-            asks, "" if asks == 1 else "s", "s" if asks == 1 else "")]
     if b["url"]:
-        out += ["", ("Your page: " if b.get("page") else "Full brief: ") + b["url"]]
+        out += ["", "Full brief: " + b["url"]]
     if b["tip"] and "tip" not in hide:
         out += [b["tip"]]
     return out
@@ -1937,7 +1940,9 @@ def main(argv=None) -> int:
             "; carried %d from the brief of %s" % (len(got["carried"]), got["carried_from"])
             if got["carried"] else ""))
         lines = got["kept"] or got["carried"]
-        if lines:
+        if lines and page_url():
+            print("news: on the page with today's record; the message carries none")
+        elif lines:
             print("for the message, the first %d without their links:" % setting("news"))
             for ln in lines[:setting("news")]:
                 print("- " + ln)
