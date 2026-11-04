@@ -147,17 +147,29 @@ def gone(root: str = ROOT) -> list[str]:
             and not any(p.startswith(d + "/") for d in PLAIN)]
 
 
+def _would_add(root: str, *args: str) -> list[str]:
+    """The files `git add <args>` would stage, asked with --dry-run, so nothing is staged;
+    a name with an accent comes back as it is (core.quotePath off)."""
+    got = _git(root, "-c", "core.quotePath=false", "add", "-n", *args).stdout
+    return [ln[5:-1] for ln in got.splitlines() if ln.startswith("add '") and ln.endswith("'")]
+
+
+def plain_files(root: str = ROOT, plain: list[str] | None = None) -> list[str]:
+    """Each file the plain add of the person's folders would take, by name. --list said
+    "add documents" for the whole folder, so a helper looking for the brief's record there
+    found no line and added it by hand, though a save takes it (2026-11-04)."""
+    plain = paths(root)[0] if plain is None else plain
+    return _would_add(root, "--", *plain) if plain else []
+
+
 def unsaved(root: str = ROOT) -> list[str]:
     """What this checkout holds of the person's that no commit holds yet: what a save would
     stage (asked with git add --dry-run, so nothing is staged), what is staged already, and
     what was taken away. [] when nothing waits."""
     plain, forced = paths(root)
-    asks = ([["add", "-n", "--", *plain]] if plain else []) + \
-        [["add", "-n", "-f", "--", *forced[i:i + 200]] for i in range(0, len(forced), 200)]
-    out: list[str] = []
-    for args in asks:
-        out += [ln[5:-1] for ln in _git(root, *args).stdout.splitlines()
-                if ln.startswith("add '") and ln.endswith("'")]
+    out: list[str] = plain_files(root, plain)
+    for i in range(0, len(forced), 200):
+        out += _would_add(root, "-f", "--", *forced[i:i + 200])
     out += gone(root)
     out += _git(root, "diff", "--cached", "--name-only").stdout.split()
     return list(dict.fromkeys(out))
@@ -182,14 +194,15 @@ def main(argv: list[str] | None = None, root: str = ROOT) -> int:
     plain, forced = paths(root)
     removed = gone(root)
     if "--list" in argv:
-        for p in plain:
+        taken = plain_files(root, plain)
+        for p in taken:
             print(f"add     {p}")
         for p in forced:
             print(f"add -f  {p}")
         for p in removed:
             print(f"remove  {p}")
-        print(f"save_state: {len(plain)} plain, {len(forced)} forced, {len(removed)} removed; "
-              "nothing staged (--list)")
+        print(f"save_state: {len(taken)} new or changed in {', '.join(plain) or 'no folder'}, "
+              f"{len(forced)} forced, {len(removed)} removed; nothing staged (--list)")
         return 0
     failed = []
     if plain:
