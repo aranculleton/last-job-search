@@ -847,6 +847,8 @@ def _gather(today: dt.date, write: bool) -> dict:
         "write_here": followup_drafts.to_write_here(got),
         "url": _brief_url(iso), "page": page, "tip": "", "written": write,
         "paused": brk.get("until", "") if brk and brk.get("until", "") > iso else "",
+        # Said in a chat's short message too, where a page holds the rest.
+        "back": BACK_SAID if (brk or {}).get("over") else "",
     }
     if write:
         b["tip"] = _tip(today)
@@ -908,6 +910,9 @@ def stages_into_tracker(today: dt.date) -> list[str]:
     if added:
         csv_store.write_rows(path, rows, csv_store.header(path))
     return list(dict.fromkeys(added))
+
+
+BACK_SAID = "Welcome back: your break is over."
 
 
 def _break(today: dt.date, write: bool) -> dict:
@@ -1334,7 +1339,8 @@ def message_lines(b: dict, owed_max: int = 4) -> list[str]:
     asked = ["", "%d question%s wait%s for you on your page." % (
         asks, "" if asks == 1 else "s", "s" if asks == 1 else "")] if asks else []
     if b.get("page"):
-        return [headline(b), b["lead"]] + asked + ["", "Your page: " + b["url"]]
+        return [headline(b), b["lead"]] + ([b["back"]] if b.get("back") else []) + asked + [
+            "", "Your page: " + b["url"]]
     out = [headline(b), b["lead"], "", "Owed"]
     owed = b["owed"]
     out += ["- " + o["text"] for o in owed[:owed_max]] or ["Nothing owed"]
