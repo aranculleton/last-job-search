@@ -699,6 +699,14 @@ dialog.filter-sheet.pop::backdrop { background: transparent; }
 /* the work sheet on a phone: from the bottom, sized to its rows, Close at the top right */
 dialog.work-sheet { position: fixed; inset: auto 0 0 0; margin: 0; width: 100%; max-width: 100%; max-height: 85vh; padding: 0 16px 16px; border: 1px solid var(--line);
   border-radius: 20px 20px 0 0; background: var(--surface); color: var(--ink); overflow-y: auto; box-shadow: var(--shadow); }
+/* Wider than a phone, Claude's work opens as a panel on the right, where the rail sits on every
+   other screen and the width of it, never a sheet across the whole page (the maintainer,
+   2026-11-04: "always open that side panel instead of on brief where it opens a full screen
+   one"). */
+@media (min-width: 760px) {
+  dialog.work-sheet { inset: 0 0 0 auto; width: 360px; max-width: calc(100vw - 32px); height: auto; max-height: none;
+    border-width: 0 0 0 1px; border-radius: 0; }
+}
 .sheet-top { display: flex; justify-content: flex-end; position: sticky; top: 0; z-index: 1; background: var(--surface); padding-top: 8px; }
 .work-card { padding: 12px 16px; gap: 4px; }
 .wc-head { grid-template-columns: auto minmax(0, 1fr) auto; gap: 8px; }

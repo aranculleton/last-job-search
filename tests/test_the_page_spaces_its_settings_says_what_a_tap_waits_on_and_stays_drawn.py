@@ -235,3 +235,68 @@ def test_a_long_brief_scrolled_fast_on_a_phone_keeps_every_panel_drawn_through_l
             assert s["y"] >= steps[i - 1]["y"], ("scrolling down never jumps back up", steps[i - 1], s)
     assert steps[upd]["y"] == steps[upd - 1]["y"] == steps[upd - 1]["max"], ("the page stays where it was", steps[upd - 1], steps[upd])
     assert "Reply to Juno at Larkspur Retail today." in r["text"], "the panel that changed shows the change"
+
+
+# ------------------------------------------------------------------ Claude's work, 4 November
+
+
+def test_the_pill_opens_and_closes_claudes_work_on_every_screen(run, tmp_path):
+    """On a wide screen Claude's work was a column fixed beside every screen but the Brief, and
+    a sheet across the whole page there (the maintainer, 2026-11-04: "just having this
+    persistent every page but when u press it, opens or closes the side panel"). The pill opens
+    and closes one panel on every screen, Hide closes it, and the choice is remembered."""
+    rail = ("(() => { const hd = document.getElementById('h-work-rail'); const pill = document.getElementById('pill');"
+            " const r = hd && hd.getClientRects().length ? document.getElementById('rail').getBoundingClientRect() : null;"
+            " return [r ? Math.round(r.right) : null, innerWidth, pill ? pill.getAttribute('aria-expanded') : null]; })()")
+    seed = dict(HEARD, **{"work/reply~1": RUNNING, "work/follow_up~2": QUEUED})
+    d = tmp_path / "wide"
+    d.mkdir()
+    got = _go(run, d, [{"hash": "brief", "eval": rail}, {"open": "pill", "wait": 300, "eval": rail},
+                       {"open": "work-hide", "wait": 300, "eval": rail}, {"hash": "todo", "wait": 300, "eval": rail},
+                       {"open": "pill", "wait": 300, "eval": rail}, {"hash": "brief", "wait": 300, "eval": rail}], WIDE, seed=seed, clock=T)
+    seen = [x["eval"] for x in got["after"]]
+    assert seen[0][0] is None and seen[0][2] == "false", "the Brief keeps its width until the pill is pressed"
+    assert seen[1][0] is not None and abs(seen[1][0] - seen[1][1]) <= 40 and seen[1][2] == "true", seen[1]
+    assert seen[2][0] is None and seen[2][2] == "false", "Hide closes it"
+    assert seen[3][0] is None, "closed stays closed on To do: one choice, remembered"
+    assert seen[4][0] is not None and seen[5][0] is not None, "opened stays open, the Brief included"
+
+
+def test_narrower_claudes_work_opens_on_the_right_and_on_a_phone_from_the_bottom(run, tmp_path):
+    box = ("(() => { const d = document.querySelector('dialog.work-sheet[open]'); if (!d) return null;"
+           " const r = d.getBoundingClientRect(); return [r.right, r.top, r.width, r.bottom, innerWidth, innerHeight]; })()")
+    seed = dict(HEARD, **{"work/reply~1": RUNNING, "work/follow_up~2": QUEUED})
+    for vp, side in (({"width": 1024, "height": 768}, True), (PHONE, False)):
+        d = tmp_path / ("side" if side else "phone")
+        d.mkdir()
+        got = _go(run, d, [{"hash": "brief", "open": "pill", "eval": box}], vp, seed=seed, clock=T)
+        right, top, width, bottom, vw, vh = got["after"][0]["eval"]
+        if side:
+            assert abs(right - vw) <= 1 and top <= 1 and width < vw / 2 and bottom >= vh - 2, got["after"][0]["eval"]
+        else:
+            assert width >= vw - 1 and top > 0, got["after"][0]["eval"]
+
+
+def test_a_work_card_says_a_day_as_a_person_does_and_its_time_once(run, tmp_path):
+    """A card named "<who> at <where>: One follow-up sent 2026-10-21. No more after this", and a
+    first step's clock over "2 min so far" counting the same time (the maintainer, 2026-11-04)."""
+    noted = dict(QUEUED, title="Wren at Harbourline Bank: One follow-up sent 2026-10-21. No more after this")
+    seed = dict(HEARD, **{"work/reply~1": RUNNING, "work/follow_up~2": noted})
+    cards = ("Array.from(document.querySelectorAll('#rail [data-work]')).map((c) => [c.getAttribute('data-work'),"
+             " c.querySelector('.wc-title').textContent, (c.querySelector('[data-step]') || {}).textContent || '',"
+             " (c.querySelector('[data-time]') || {}).textContent || ''])")
+    got = _go(run, tmp_path, [{"hash": "todo", "eval": cards}], WIDE, seed=seed, clock=T)
+    by = {c[0]: c for c in got["after"][0]["eval"]}
+    title = by["follow_up~2"][1]
+    assert "2026-10-21" not in title and "21 Oct" in title, title
+    _id, _title, step, time = by["reply~1"]
+    assert step, "the running step keeps its own clock"
+    assert "so far" not in time and "left" in time, time
+
+
+def test_a_finished_follow_up_opens_the_person_in_contacts(run, tmp_path):
+    done = dict(QUEUED, args={"contact": "p-wren"}, status="done", finished_at="2026-10-25T08:59:00.000Z",
+                result={"summary": "Closed, as you chose: no more messages to Wren."})
+    link = "Array.from(document.querySelectorAll('#rail [data-work=\"follow_up~2\"] a[data-k^=\"open:\"]')).map((a) => [a.getAttribute('data-k'), a.textContent])"
+    got = _go(run, tmp_path, [{"hash": "todo", "eval": link}], WIDE, seed=dict(HEARD, **{"work/follow_up~2": done}), clock=T)
+    assert got["after"][0]["eval"] == [["open:contacts:p-wren", "Open in Contacts"]], got["after"][0]["eval"]

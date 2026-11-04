@@ -834,7 +834,7 @@
         // toast was one place too many (the audit, 2026-11-03).
         const talk = txt(w.kind) === "talk";
         toast({text: (talk ? (w.status === "done" ? "Claude answered in Chat." : w.status === "failed" ? "Claude could not answer in Chat." : "Claude has a question about your message.") :
-          txt(w.title).replace(/^Nudge /, "Follow up with ") + (w.status === "done" ? ": ready." : w.status === "failed" ? ": did not finish." : ": Claude has a question.")), ids: [], bad: w.status === "failed",
+          workName(w) + (w.status === "done" ? ": ready." : w.status === "failed" ? ": did not finish." : ": Claude has a question.")), ids: [], bad: w.status === "failed",
           see: w.status === "needs_you" ? null : w.status === "failed" ? openWork : tab ? () => go(tab, {focus: true}) : openWork, seeLabel: "See it"});
       }
       if (p.status !== w.status) {
@@ -1046,7 +1046,7 @@
     const here = txt(obj(S.listener).kind) || "cloud";
     const run = activeWork().find(([id, w]) => id !== except && (w.status === "running" || w.status === "claimed") && !HEAVY_KINDS.has(txt(w.kind)) &&
       ((txt(w.to) || "cloud") === here || txt(w.to) === "either") && !leadOf(w) && !progress(w).lapsed && !txt(w.blocked_at));
-    return run ? txt(run[1].title).replace(/^Nudge /, "Follow up with ") || "Work" : chatBusy();
+    return run ? workName(run[1]) || "Work" : chatBusy();
   }
   // What a refused tap says: the engine's own reason, in its words. Every refusal read "this
   // changed since you saw it", even when the engine was asking "Which day is it?", and a
@@ -1458,6 +1458,16 @@
     return out;
   }
   function workDoc(id) { return S.work.get(id) || S.localWork.get(id) || null; }
+  // Work held behind an update that changes how records are stored: that update waits for
+  // running work to finish first, so the line counts both. "Starts after the update, about 6
+  // minutes" stood for twenty while a job search ran (the maintainer, 2026-11-04: "what update
+  // is this referring to?").
+  function heldLine(upd) {
+    const run = activeWork().filter(([, x]) => txt(x.kind) !== "update" && x.status !== "queued" && x.status !== "needs_you");
+    if (!run.length) return txt(upd.hold_line) + ".";
+    const wait = run.reduce((m, [, x]) => Math.max(m, Number(progress(x, now()).leftS) || 0), 0);
+    return "Starts after " + lc1(workName(run[0][1]) || "the work running now") + " and then the app's update, " + aboutTime(wait + (Number(upd.est_s) || 0)) + ".";
+  }
   function activeWork() {
     return [...allWork()].filter(([, w]) => ACTIVE.has(txt(w.status) || "queued"))
       .sort((a, b) => txt(a[1].asked_at).localeCompare(txt(b[1].asked_at)));
@@ -2190,7 +2200,7 @@
     }
     if (kind === "reply" && person) { logReply(person, true); return; }
     const w = obj(d.work);
-    if (w.id) { requestWork([{id: txt(w.id), kind, title: txt(d.title), args: Object.assign({due: txt(d.id)}, obj(w.args)), redo: true}]); return; }
+    if (w.id) { requestWork([{id: txt(w.id), kind, title: txt(w.title) || txt(d.title), args: Object.assign({due: txt(d.id)}, obj(w.args)), redo: true}]); return; }
     requestWork([{id: kind + "~due~" + seg(d.id), kind, title: txt(d.title), args: {due: txt(d.id), contact: dueContact(d) || null}, redo: true}]);
   }
   // Every draft whose files are not here yet goes with the one tapped, in one piece of work, so
@@ -3072,11 +3082,17 @@
   // A name, with "at <employer>" only when there is one: "Andrijana at" and "Find more people
   // at" showed for someone whose employer was never recorded (2026-11-03).
   function whoAt(name, employer) { return txt(name) + (txt(employer) ? " at " + txt(employer) : ""); }
+  // A piece of work's name as every card, pill and toast says it: "Nudge" as "Follow up with",
+  // and a day in the words a person uses ("Wed 21 Oct"), never 2026-10-21, wherever the title
+  // came from (the maintainer, 2026-11-04: a card named "...: One follow-up sent 2026-10-21").
+  function workName(w) {
+    return txt(obj(w).title).replace(/^Nudge /, "Follow up with ").replace(/\b\d{4}-\d{2}-\d{2}\b/g, (d) => fmtDay(d) || d);
+  }
   function tabLink(tab, item) {
     if (!tab) return null;
     const r = resolveSection(tab) || {};
     return h("a", {href: "#" + tab + (item ? "/" + item : ""), class: "navlink small", "data-k": "open:" + tab + ":" + (item || ""),
-      onclick: (e) => { e.preventDefault(); go(r.section, {focus: !item, drafts: r.drafts, item: item || null}); }}, "Open in " + (TAB_WORDS[r.section] || labelOf(r.section)));
+      onclick: (e) => { e.preventDefault(); go(r.section, {focus: !item, drafts: r.drafts, item: item || null}); }}, "Open in " + (TAB_WORDS[tab] || TAB_WORDS[r.section] || labelOf(r.section)));
   }
   function emptyModel() {
     const m = M();
@@ -3412,7 +3428,13 @@
     const leave = g === "leave";
     const busy = (d) => { const w = kind ? dueWork(d, kind) : null; return !!(w && ACTIVE.has(w.status)); };
     const open = ds.filter((d) => !busy(d) && !effective(d.id, ["due.done", "due.snooze"]));
-    const late = ds.filter((d) => Number(d.overdue_days) > 0).length;
+    // A row the person closed or finished leaves the list at once; "11 closed: Show" at the
+    // foot brings them back with their Undo. Eleven closed rows stayed in place reading
+    // "Saved. Claude will pick this up." while the chat was busy (the maintainer, 2026-11-04).
+    const gone = ds.filter((d) => !!effective(d.id, ["due.done", "due.snooze"]));
+    const showGone = openState.get("grp-gone:" + hid) === true;
+    const left = ds.filter((d) => showGone || gone.indexOf(d) < 0);
+    const late = ds.filter((d) => gone.indexOf(d) < 0 && Number(d.overdue_days) > 0).length;
     const close = (d) => act([{item: d.id, action: txt(obj(d.done).action), value: {on: todayIso()}, rev: d.rev}], "Closed: " + txt(d.title));
     const row = (d) => {
       const marked = !!effective(d.id, ["due.done", "due.snooze"]);
@@ -3440,9 +3462,11 @@
     // "25 late" read as 25 days: the chip says how many are overdue.
     return card("article", {class: "card todo group-card", "aria-labelledby": hid, "data-item": "grp:" + g + ":" + band},
       h("div", {class: "todo-top"}, kindMark(leave ? "message" : dueKind(ds[0])), late ? h("span", {class: "chip tone-warn"}, late + " overdue") : null),
-      h("p", {class: "card-title", id: hid}, words.title(ds.length)),
-      words.sub ? h("p", {class: "small muted"}, words.sub) : null,
-      groupRows("fg:" + where + ":" + g + ":" + band, ds.map(row)),
+      h("p", {class: "card-title", id: hid}, ds.length > gone.length ? words.title(ds.length - gone.length) : plural(gone.length, leave ? "person" : "thing", leave ? "people" : "things") + (leave ? " closed" : " done")),
+      words.sub && ds.length > gone.length ? h("p", {class: "small muted"}, words.sub) : null,
+      left.length ? groupRows("fg:" + where + ":" + g + ":" + band, left.map(row)) : null,
+      gone.length && !showGone ? h("p", {class: "fold"}, ds.length > gone.length ? h("span", {}, gone.length + (leave ? " closed: " : " done: ")) : null,
+        btn(ds.length > gone.length ? "Show" : "Show them", () => { openState.set("grp-gone:" + hid, true); scheduleRender(); }, {kind: "link", key: "grpgone:" + hid})) : null,
       allBtn ? h("div", {class: "card-actions"}, allBtn) : null);
   }
   // A group card shows its first five, the rest one tap below, as long lists do elsewhere
@@ -5021,6 +5045,13 @@
     return made.length > 0 && made.some((f) => !f.asset);
   }
   const CHANNEL = {linkedin_note: "LinkedIn connection note", linkedin_message: "LinkedIn message", inmail: "LinkedIn InMail", email: "Email"};
+  // Said on this page that they get no more messages: their note goes from Messages at once,
+  // its Undo in the toast and the person still in Contacts. A note stayed on the list after "No
+  // more messages to <them>" (the maintainer, 2026-11-04). "In touch another way" keeps a reply.
+  function msgStopped(m) {
+    const st = txt(m.contact) ? effective(txt(m.contact), ["person.stop"]) : null;
+    return !!st && (txt(obj(st.doc.value).scope) !== "other" || txt(m.kind) !== "reply");
+  }
   function msgStatus(m) {
     const e = effective(m.id, ["msg.sent", "msg.skip"]);
     return e ? (e.doc.action === "msg.sent" ? "sent" : "skipped") : "to_send";
@@ -5082,7 +5113,7 @@
   function draftsView() { const v = txt(pref("drafts:view", "apps")); return v === "messages" ? "messages" : "apps"; }
   function renderDrafts(where) {
     const apps = readyItems();
-    const msgs = messageItems();
+    const msgs = messageItems().filter((m) => !msgStopped(m));
     const view = draftsView();
     const appsWaiting = apps.filter(readyLive);
     const msgsWaiting = msgs.filter((m) => !settledAction(m.id, ["msg.sent", "msg.skip"]) && msgStatus(m) === "to_send");
@@ -9436,7 +9467,7 @@
       // What Claude itself wrote on waiting work ("Waiting its turn: three drafts are being
       // written now") is the line, over any of the page's own: it was only in the folded steps.
       const said = lastStep && tms(lastStep.at) >= (tms(w.answered_at) || tms(w.asked_at) || 0) ? txt(lastStep.text) : "";
-      now1 = held ? txt(upd.hold_line) + "." : away ? "This needs your computer: open Claude on it." :
+      now1 = held ? heldLine(upd) : away ? "This needs your computer: open Claude on it." :
         unsent ? "Not sent to Claude yet: it goes with your next tap here." :
         said ? said :
         helperStarting() ? "Claude's helper is starting up. It takes this in a minute or two." :
@@ -9480,7 +9511,7 @@
     const cardEl = card("article", {class: "work-card st-" + seg(st) + (slow || p.late ? " is-slow" : "") + (tone && tone !== "ok" ? " edge-" + tone : ""), "data-work": id, "data-phase": phaseOf(w, p), "data-fold": String(workFolded(id, w)), "aria-labelledby": titleId, "data-item": "work:" + id},
       h("div", {class: "wc-head"}, spinning ? h("span", {class: "spin", "aria-hidden": "true"}) : h("span", {class: "dot tone-" + (tone || (waitingDot ? "plain" : "info")) + (waitingDot ? " is-waiting" : ""), "aria-hidden": "true"}),
         h("h3", {id: titleId, class: "wc-title"}, h("button", {type: "button", class: "wc-toggle", "aria-expanded": String(open), "aria-controls": "steps-" + seg(id), "data-k": "wct:" + id,
-          onclick: () => { openState.set("det:steps:" + id, !open); scheduleRender(); }}, txt(w.title).replace(/^Nudge /, "Follow up with ") || "Work")),
+          onclick: () => { openState.set("det:steps:" + id, !open); scheduleRender(); }}, workName(w) || "Work")),
         stateWord(label, over && !p.stopping ? "info" : tone)));
     // What Claude is doing now, with its own clock in seconds, as a chat shows a step
     // (the maintainer, 2026-10-30: "live updates similar to how we do in the chat"). The
@@ -9495,7 +9526,7 @@
       put(cardEl, h("div", {class: "bar" + (spinning ? " is-running" : ""), role: "progressbar", "aria-labelledby": titleId, "aria-valuemin": "0", "aria-valuemax": "100",
         "aria-valuenow": String(p.pct), "aria-valuetext": barText(p)}, h("span", {class: "fill", style: "width:" + p.pct + "%"})));
     }
-    put(cardEl, h("p", {class: "wc-time", "data-time": "1"}, ACTIVE.has(st) || TERMINAL.has(st) ? timeText(w, p) : ""));
+    put(cardEl, h("p", {class: "wc-time", "data-time": "1"}, ACTIVE.has(st) || TERMINAL.has(st) ? timeText(w, p, stepClock && !!now1 && sameSpan(ws.v, p)) : ""));
     // Work nobody has started yet can be called off in one plain tap: the small "Stop" at the
     // end of the time line went unseen, and a tap that queued a nudge looked unstoppable
     // (the maintainer, 2026-10-26).
@@ -9513,9 +9544,16 @@
       if (!workSeenAt.has(id)) workSeenAt.set(id, now());
       const links = arr(obj(w.result).links).map((l) => safeUrl(l.url) ? h("a", {href: safeUrl(l.url), target: "_blank", rel: "noopener noreferrer"}, txt(l.label)) : null).filter(Boolean);
       if (links.length) put(cardEl, h("p", {class: "wc-links"}, links));
-      const goTo = WORK_HOME[w.kind];
+      // A follow-up or a reply for someone opens that person in Contacts, where what was done
+      // shows: "Open in Jobs" sat under "Closed: no more messages to <them>" (the maintainer,
+      // 2026-11-04).
+      // Their message itself where one is ready: "Open" took them to the page, not to that
+      // person's message (the maintainer, 2026-11-04).
+      const who = w.kind === "follow_up" || w.kind === "reply" ? txt(obj(w.args).contact) : "";
+      const note = who ? messageItems().find((m) => txt(m.contact) === who && msgLive(m)) : null;
+      const goTo = note ? "drafts-messages" : who ? "contacts" : WORK_HOME[w.kind];
       // Its bin puts it with the finished ones now, rather than in a minute (2026-10-30).
-      put(cardEl, h("div", {class: "wc-actions"}, goTo ? h("p", {onclick: () => workSeenAt.set(id, 0)}, tabLink(goTo, null)) : null,
+      put(cardEl, h("div", {class: "wc-actions"}, goTo ? h("p", {onclick: () => workSeenAt.set(id, 0)}, tabLink(goTo, note ? note.id : who || null)) : null,
         btn("", () => { workSeenAt.set(id, 0); scheduleRender(); }, {kind: "quiet icon-only", small: true, icon: "bin", key: "wput:" + id, aria: "Put away: " + txt(w.title)})));
     }
     // "Claude has been told" says the doorbell rang; once Claude has the work, it says
@@ -9558,7 +9596,7 @@
   }
   // A time left is never shown once the work has run past it (it said "About 8 minutes
   // left" 23 minutes in, 2026-10-29).
-  function timeText(w, p) {
+  function timeText(w, p, same) {
     if (p.status === "done") return "Finished " + ago(w.finished_at || w.asked_at);
     // Work that stopped has no time left: "under a minute left" stood on a job that had not
     // finished, its chat already closed (2026-10-30).
@@ -9568,10 +9606,14 @@
     if (p.status === "queued") return "";
     if (p.status === "needs_you") return "Paused for your answer.";
     const so = dur(p.elapsedS) + " so far";
-    if (p.lapsed) return so;
-    if (p.over || p.stageOver) return so;
-    return so + " · " + (p.leftS < 60 ? "under a minute left" : "about " + dur(p.leftS).replace(/^about /, "") + " left");
+    const left = p.leftS < 60 ? "under a minute left" : "about " + dur(p.leftS).replace(/^about /, "") + " left";
+    // The step's own clock counts the same time while its step is the whole run: "Getting
+    // started · 1m 59s" over "2 min so far" said it twice (the maintainer, 2026-11-04).
+    if (p.lapsed || p.over || p.stageOver) return same ? "" : so;
+    return same ? left : so + " · " + left;
   }
+  // Does the step's clock on this card count the same span as its "so far"? Then one says it.
+  function sameSpan(w, p, t) { return Math.abs(stepSeconds(w, p.status === "queued", t, p.sentAt) - p.elapsedS) <= 5; }
   const WORK_ORDER = {needs_you: 0, running: 1, claimed: 1, queued: 2};
   // Finished work tidies itself away, with nothing to press: a minute after it was first on
   // screen it joins "N finished", and at once when its result is opened (the maintainer,
@@ -9618,7 +9660,8 @@
     const makes = active.some(([, w]) => txt(w.kind) !== "talk");
     const sm = active.length ? ((lightRunning && queued ? "Claude does one thing at a time in the chat that answers this page. " : "") + (late || !going.length ? "" : "About " + plural(Math.max(1, Math.round(left / 60)), "minute", "minutes") + " left. ") + (makes ? "Nothing is sent." : "")).trim() || null : null;
     return h("section", {class: "workp", "aria-labelledby": "h-work-" + where},
-      h("div", {class: "rail-head"}, h("h2", {id: "h-work-" + where, class: "rail-title", tabindex: "-1"}, "Claude's work")),
+      h("div", {class: "rail-head"}, h("h2", {id: "h-work-" + where, class: "rail-title", tabindex: "-1"}, "Claude's work"),
+        where === "rail" ? btn("Hide", () => { setPref("work:open", false); scheduleRender(); const pl = $("pill"); if (pl) pl.focus(); }, {kind: "link", small: true, key: "work-hide"}) : null),
       h("div", {class: "summary"}, h("div", {class: "sum-words"}, h("p", {class: "sum"}, sum), sm ? h("p", {class: "sum-small"}, sm) : null)),
       limit ? h("div", {class: "banner tone-warn"}, h("p", {}, "Claude has reached your plan's usage limit. Running work waits until it resets; nothing retries by itself."),
         active.length ? btn("Stop everything", () => { for (const [id] of active) stopWork(id); }, {small: true, key: "pause-all"}) : null) : null,
@@ -9663,6 +9706,18 @@
   // width. There the pill opens the sheet, as on a phone: it did nothing at all on the Brief
   // (the maintainer, 2026-10-31).
   function railShown() { const hd = $("h-work-rail"); return !!(wide() && hd && hd.getClientRects().length); }
+  // Claude's work on a wide screen is one panel that opens and closes from the pill, on every
+  // screen, the way the menu's "Icons only" folds (the maintainer, 2026-11-04: "just having
+  // this persistent every page but when u press it, opens or closes the side panel"). The
+  // choice is remembered on this device; with none made it is open beside every screen but
+  // the Brief, whose panels take the width.
+  function railWanted() { const v = pref("work:open", null); return v === null ? S.section !== "brief" : !!v; }
+  function toggleRail() {
+    const open = !railShown();
+    setPref("work:open", open);
+    scheduleRender();
+    if (open) requestAnimationFrame(() => requestAnimationFrame(() => { const hd = $("h-work-rail"); if (hd) hd.focus(); }));
+  }
   // `item`: a tap or a piece of work to show in it, scrolled to and given the focus (a saved
   // tap's "See it in Claude's work").
   function openWork(item) {
@@ -9676,6 +9731,12 @@
       try { c.focus({preventScroll: true}); } catch (e) { c.focus(); }
       return true;
     };
+    if (wide() && !railShown() && !S.tweak) {
+      setPref("work:open", true);
+      scheduleRender();
+      requestAnimationFrame(() => requestAnimationFrame(() => { if (railShown()) openWork(item); }));
+      return;
+    }
     if (railShown()) {
       if (S.tweak) closeTweak();
       const hd = $("h-work-rail");
@@ -9723,7 +9784,8 @@
     const narrow = !wide();
     const lead = going ? (one && one.length <= (narrow ? 14 : 18) && !(narrow && queued.length) ? one : going + " running") : "";
     const words = asking ? plural(asking, "needs you", "need you") : going ? lead + (queued.length ? " · " + queued.length + " waiting" : "") : starting + helperGoing ? (starting + helperGoing) + " starting" : waiting ? waiting + " waiting" : recent.length + " done";
-    return h("button", {type: "button", class: "pill" + (asking || slow ? " warn" : ""), id: "pill", "data-k": "pill", "aria-haspopup": wide() && S.section !== "brief" ? null : "dialog", onclick: openWork},
+    return h("button", {type: "button", class: "pill" + (asking || slow ? " warn" : ""), id: "pill", "data-k": "pill", "aria-haspopup": wide() ? null : "dialog",
+      "aria-expanded": wide() ? String(railWanted() && !S.tweak) : null, "aria-controls": wide() ? "rail" : null, onclick: () => (wide() ? toggleRail() : openWork())},
       going && !asking ? h("span", {class: "spin", "aria-hidden": "true"}) : h("span", {class: "dot tone-" + (asking || slow ? "warn" : !recent.length || act.length ? "plain" : "ok") + (!asking && !slow && act.length ? " is-waiting" : ""), "aria-hidden": "true"}),
       h("span", {}, words), h("span", {class: "sr-only"}, ": show the work"));
   }
@@ -11200,12 +11262,12 @@
     const tools = $("toptools");
     if (tools) {
       const parts = [];
-      // The pill while work runs, except where the Work rail already shows it (the Brief
-      // takes the rail's width for its panels).
+      // The pill while work runs, on every screen: on a wide one it opens and closes Claude's
+      // work beside the page (the maintainer, 2026-11-04).
       // An update says itself once, in the moving line under the header: a pill saying
       // "Updating" beside it was a second spinner for one thing (the 3 November audit).
       const onlyUpdate = updating && !chatBusy() && activeWork().every(([id]) => id === updating[0]);
-      if ((!wide() || S.section === "brief") && !onlyUpdate) parts.push(workPill());
+      if (!onlyUpdate) parts.push(workPill());
       // No "Side by side": it added clutter and no way to close it (the maintainer, 2026-10-28).
       if (wide() && S.split) parts.push(btn("Close the second column", () => { S.split = null; keepAddress(false); render(); }, {kind: "quiet", small: true, key: "split-close"}));
       if (phone && S.section === "chat") parts.push(chatMenu());
@@ -11434,7 +11496,7 @@
     // running." beside every screen squeezed To do and Settings (the 3 November audit).
     const railNode = isWide && !S.tweak ? guarded(() => workPanel("rail")) : null;
     const railEmpty = !!railNode && !railNode.querySelector("[data-work], [data-tap-work], [data-chat-busy], [data-card], .banner, .fold");
-    guarded(() => { if (shell) shell.classList.toggle("no-rail", isWide && !S.tweak && (S.section === "brief" || railEmpty)); });
+    guarded(() => { if (shell) shell.classList.toggle("no-rail", isWide && !S.tweak && (!railWanted() || railEmpty)); });
     // An open Tweak panel holds the rail on wide screens until it closes.
     guarded(() => { if (rail) { if (isWide) { if (!S.tweak) patch(rail, railEmpty || !railNode ? [] : [railNode], (probe) => demotePrimaries([probe], !!$("main").querySelector(".btn.primary")), true); } else if (rail.childNodes.length) rail.replaceChildren(); } });
     guarded(() => { if (workDlg) { const body = workDlg.querySelector(".work-body"); if (body) patch(body, [workPanel("sheet")]); } });
@@ -11539,8 +11601,8 @@
       const bar = el.querySelector("[role=progressbar]");
       if (bar) { bar.setAttribute("aria-valuenow", String(p.pct)); bar.setAttribute("aria-valuetext", barText(p)); }
       const tt = el.querySelector("[data-time]");
-      if (tt) tt.textContent = timeText(w, p);
       const sc = el.querySelector("[data-step]");
+      if (tt) tt.textContent = timeText(w, p, !!sc && sameSpan(w, p, t));
       if (sc) sc.textContent = clockText(stepSeconds(w, p.status === "queued", t, p.sentAt));
     }
     if (S.toasts.some((x) => !x.held && t >= x.until)) {

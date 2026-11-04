@@ -19,6 +19,10 @@ next?" in its first lines, and nothing asks for a decision a default could make.
   (layout 2, crowd tests)
 - To do's five are what is late or due today first, then the questions; setting-up cards wait
   behind the fold. (tired-person tests)
+- Claude's work has one button on every screen, the pill in the header. On a wide screen it
+  opens and closes the panel on the right, as the menu's "Icons only" folds, remembered on the
+  device (open beside every screen but the Brief until the person chooses); narrower, it opens
+  as a panel on the right, and on a phone as a sheet from the bottom. (pill tests)
 
 ## Cards and lists
 
@@ -53,8 +57,9 @@ next?" in its first lines, and nothing asks for a decision a default could make.
   never in the bin as well.
 - A reason that changes something says so when it is given ("Set aside. Fewer jobs outside
   your field from now on.").
-- A card the person has finished (binned, sent, answered, done) leaves its list at once. Its
-  Undo is in the toast while the toast is up, and on its own line only after: never both.
+- A card or a row the person has finished (binned, sent, answered, done, closed, no more
+  messages) leaves its list at once, before Claude has caught up. Its Undo is in the toast
+  while the toast is up, and on its own line only after ("11 closed: Show"): never both.
 
 ## Buttons, links and taps
 

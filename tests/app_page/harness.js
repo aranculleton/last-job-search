@@ -1532,8 +1532,10 @@ S.fixes_1031 = async (a) => {
   r.pulseAfter = await page.evaluate(() => (document.getElementById("pulse") || {}).textContent || "");
   await page.locator("#pill").click();
   await turn(page, 4);
-  r.sheet = await page.evaluate(() => !!document.querySelector("dialog.work-sheet[open]"));
-  r.sheetText = await page.evaluate(() => (document.querySelector("dialog.work-sheet") || {}).textContent || "");
+  // A wide screen: the pill opens Claude's work as the panel on the right, the Brief included
+  // (the maintainer, 2026-11-04), where it opened a sheet before.
+  r.sheet = await page.evaluate(() => { const hd = document.getElementById("h-work-rail"); return !!(hd && hd.getClientRects().length); });
+  r.sheetText = await page.evaluate(() => (document.getElementById("rail") || {}).textContent || "");
   await page.keyboard.press("Escape");
   await turn(page, 2);
   const cap = () => page.evaluate(() => (document.querySelector('[data-k="spark-cap"]') || {}).textContent || "");

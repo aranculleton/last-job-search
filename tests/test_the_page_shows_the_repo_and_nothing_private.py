@@ -9,6 +9,7 @@ still quick. Every person and employer here is invented (tests/app_state.py).
 from __future__ import annotations
 
 import json
+import re
 import os
 import subprocess
 import sys
@@ -327,3 +328,15 @@ def test_suggestions_on_a_section_in_parts_keep_their_day():
     view = {d: {"data": b, "version": 1} for d, b in parts}
     assert app_alerts.shown_in(view) == {f"s{i}": "2026-10-20" for i in range(200)}
     assert app_alerts.shown_in({"jobs": {"data": doc, "version": 1}}) == app_alerts.shown_in(view)
+
+
+def test_a_follow_up_from_to_do_is_named_after_the_person(small):
+    """Its work carries "Follow up with <who> at <where>", whatever the person's own step says:
+    a step written as a note named a card "<who> at <where>: One follow-up sent 2026-10-21. No
+    more after this" in Claude's work (the maintainer, 2026-11-04)."""
+    m = model(small)
+    named = [d for d in m["due"] if (d.get("work") or {}).get("kind") == "follow_up"]
+    assert named, "the example search owes a follow-up"
+    for d in named:
+        assert d["work"]["title"].startswith("Follow up with "), d
+        assert not re.search(r"\d{4}-\d{2}-\d{2}", d["work"]["title"]), d
