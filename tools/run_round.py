@@ -32,6 +32,8 @@ as if it were a file and prefilter's dict to text_screen as if it were a list.
 Every intermediate file is kept in --out so a stage can be re-run alone, and
 every one of them is a JSON list.
 """
+from __future__ import annotations
+
 import argparse, datetime, json, os, re, shutil, subprocess, sys
 import tempfile
 import time
