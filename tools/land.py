@@ -19,7 +19,9 @@ once a turn, after its answer is out, and makes only the GitHub calls it prints:
    the driver does not cover is settled, never left (merge_state.settle: neither side lost).
 3. Every earlier chat's or run's work still waiting on GitHub (waiting(), fetched fresh) is
    brought in the same way, so it lands with this one: a job's chat, a brief and a chat
-   kept open for days all bring it in, not only a new chat's start.
+   kept open for days all bring it in, not only a new chat's start. A branch left behind
+   (its own work more than STALE_DAYS older than master's later changes to the same files)
+   is never brought in: one line says so, and it stays where it is.
 4. Nothing ahead of origin/master: "land: nothing to land", exit 0, and no check is run.
 5. ./tools/ci_local.sh --quick. Not green: its failing lines, exit 1.
 6. git push -u origin HEAD, a network failure retried four times (2, 4, 8 and 16 s).
@@ -437,25 +439,93 @@ def _app_side(root: str, ref: str) -> list[str]:
     return out
 
 
-def _own_files(root: str, ref: str) -> list[str] | None:
-    """The files a branch's own commits changed: not master's, and not the app's that its
-    update brought in (a chat that took an update and then could not land was never listed,
-    and its work was lost: the stranger audit, 2026-11-03, X-31). None when git cannot say."""
-    r = _git(root, "log", "--no-merges", "--format=%x01%s", "--name-only", "-z",
+def _own(root: str, ref: str) -> tuple[list[str], int] | None:
+    """(the files a branch's own commits changed, when the newest of them was made, in
+    seconds): not master's, and not the app's that its update brought in (a chat that took an
+    update and then could not land was never listed, and its work was lost: the stranger
+    audit, 2026-11-03, X-31). None when git cannot say."""
+    r = _git(root, "log", "--no-merges", "--format=%x01%ct %s", "--name-only", "-z",
              "origin/master.." + ref, "--not", *_app_side(root, ref),
              *(["--remotes=app"] if _git(root, "rev-parse", "-q", "--verify",
                                          "refs/remotes/app/master").returncode == 0 else []))
     if r.returncode != 0:
         return None
-    files, skip = [], False
+    files, skip, newest = [], False, 0
     for part in r.stdout.replace("\n", "\0").split("\0"):
         if part.startswith("\x01"):
+            when, _, subject = part[1:].partition(" ")
             # A sync's own "put back" commit restores the app's files: the app's, not theirs.
-            skip = part[1:].startswith("Sync from the app")
+            skip = subject.startswith("Sync from the app")
+            if not skip and when.isdigit():
+                newest = max(newest, int(when))
             continue
         if part and not skip:
             files.append(part)
-    return list(dict.fromkeys(files))
+    return list(dict.fromkeys(files)), newest
+
+
+def _own_files(root: str, ref: str) -> list[str] | None:
+    got = _own(root, ref)
+    return None if got is None else got[0]
+
+
+# A branch left behind: master has changed, since the branch last met it, files of the
+# person's that the branch's own commits change too, and the newest of those changes came
+# more than STALE_DAYS after the branch's own newest work. Bringing it in sets copies that
+# much older against newer ones: a branch left nine days earlier, brought in by a landing,
+# put its abandoned page record back over the one in use and left copies and questions
+# beside a dozen of the person's files (a report from a person's copy, 2026-11-04). A branch
+# a landing left a few hours ago, or an old one whose files master never changed since, is
+# brought in as before (X-30): every landing tries it, and the daily brief lands at least
+# once a day, so work still off master STALE_DAYS on was left, not waiting. It is never
+# deleted, only left where it is.
+STALE_DAYS = 3
+
+
+def _left_behind(root: str, ref: str, own: tuple[list[str], int]) -> tuple[int, list[str]]:
+    """(days, files) for a branch left behind, else (0, [])."""
+    files, mine = set(own[0]), own[1]
+    if not files or not mine:
+        return 0, []
+    r = _git(root, "log", "--no-merges", "--format=%x01%ct", "--name-only", "-z",
+             ref + "..origin/master")
+    if r.returncode != 0:
+        return 0, []
+    newest: dict[str, int] = {}
+    when = 0
+    for part in r.stdout.replace("\n", "\0").split("\0"):
+        if part.startswith("\x01"):
+            when = int(part[1:]) if part[1:].isdigit() else 0
+        elif part in files and when > newest.get(part, 0):
+            newest[part] = when
+    late = sorted(f for f, t in newest.items() if t - mine > STALE_DAYS * 86400)
+    if not late:
+        return 0, []
+    return int((max(newest[f] for f in late) - mine) // 86400), late
+
+
+def _chat_branches(root: str) -> tuple[list[str], dict[str, tuple[int, list[str]]]]:
+    """(waiting, left behind): every chat's branch on GitHub off master whose own commits
+    change only the person's files, each either waiting for the next landing or left behind
+    ({ref: (days, files)})."""
+    import personal_paths
+    here = branch(root)
+    r = _git(root, "for-each-ref", "--format=%(refname:short)", "--no-merged", "origin/master",
+             *("refs/remotes/origin/" + (p if p.endswith("/") else p + "*")
+               for p in CHAT_BRANCHES))
+    out, left = [], {}
+    for ref in (x.strip() for x in r.stdout.splitlines() if x.strip()):
+        if ref in ("origin/" + here, "origin/" + _remote_name(here)):
+            continue
+        own = _own(root, ref)
+        if not own or not own[0] or not all(personal_paths.is_personal(p) for p in own[0]):
+            continue
+        days, files = _left_behind(root, ref, own)
+        if files:
+            left[ref] = (days, files)
+        else:
+            out.append(ref)
+    return out, left
 
 
 def waiting(root: str = ROOT) -> list[str]:
@@ -464,20 +534,22 @@ def waiting(root: str = ROOT) -> list[str]:
     conflict, a run that could not finish. Each is brought in by the next landing and lands
     with its work. A branch whose own commits change any of the app's files is never listed:
     no landing commits one, so it is not a chat's work; an update the branch took from the app
-    is the app's, never its own."""
-    import personal_paths
-    here = branch(root)
-    r = _git(root, "for-each-ref", "--format=%(refname:short)", "--no-merged", "origin/master",
-             *("refs/remotes/origin/" + (p if p.endswith("/") else p + "*")
-               for p in CHAT_BRANCHES))
-    out = []
-    for ref in (x.strip() for x in r.stdout.splitlines() if x.strip()):
-        if ref in ("origin/" + here, "origin/" + _remote_name(here)):
-            continue
-        files = _own_files(root, ref)
-        if files and all(personal_paths.is_personal(p) for p in files):
-            out.append(ref)
-    return out
+    is the app's, never its own. A branch left behind (left_behind) is not listed either."""
+    return _chat_branches(root)[0]
+
+
+def left_behind(root: str = ROOT) -> dict[str, tuple[int, list[str]]]:
+    """{branch: (days, files)} for each chat's branch left behind (STALE_DAYS): never brought
+    in by a landing, never deleted."""
+    return _chat_branches(root)[1]
+
+
+def left_line(ref: str, days: int, files: list[str]) -> str:
+    """The one line a landing says of a branch left behind, for Claude."""
+    shown = ", ".join(files[:4]) + (" and %d more" % (len(files) - 4) if len(files) > 4 else "")
+    return ("left %s as it is: its own work is %d days older than master's later changes to the "
+            "same files (%s), so bringing it in would put older copies over newer ones. It stays "
+            "on GitHub, never deleted; nothing to tell the person" % (ref, days, shown))
 
 
 def fetch_waiting(root: str = ROOT) -> bool:
@@ -655,7 +727,10 @@ def _land(root: str, message: str, check, sleep) -> int:
         return 2
     # Whatever earlier chats and runs left waiting comes in with this landing (X-34).
     if fetch_waiting(root):
-        for ref in waiting(root):
+        refs, left = _chat_branches(root)
+        for ref, (days, files) in left.items():
+            print("land: " + left_line(ref, days, files))
+        for ref in refs:
             ok, said = merge_in(root, ref)
             if ok:
                 print("land: brought in work that waited on %s" % ref)
@@ -804,7 +879,10 @@ def main(argv: list[str] | None = None, root: str = ROOT, check=None, sleep=time
         return after_merge(root, sleep=sleep)
     if "--waiting" in argv:
         fetch_waiting(root)
-        found = ages(root, waiting(root))
+        refs, left = _chat_branches(root)
+        for ref, (days, files) in left.items():
+            print("land: " + left_line(ref, days, files))
+        found = ages(root, refs)
         if not found:
             print("land: nothing waiting")
             return 0

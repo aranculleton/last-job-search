@@ -403,6 +403,61 @@ def test_a_branch_whose_merges_crossed_keeps_the_newer_copy_it_never_changed(cop
     assert _no_copies_beside(chat) == []
 
 
+def _commit_days_ago(repo, message, days):
+    """Commit everything, dated `days` ago."""
+    when = "@%d +0000" % int(time.time() - days * 86400)
+    git(repo, "add", "-A")
+    subprocess.run(["git", "-C", str(repo), "commit", "-q", "-m", message], check=True,
+                   capture_output=True, env=dict(os.environ, GIT_AUTHOR_DATE=when,
+                                                 GIT_COMMITTER_DATE=when))
+
+
+def test_a_branch_left_behind_is_never_brought_in_and_never_deleted(copy, capsys, monkeypatch):
+    """A branch left nine days earlier changes files master has changed since: brought in by
+    a landing, it put older copies over newer ones (a report from a person's copy,
+    2026-11-04). It is left as it is, with one line, and kept on GitHub; start no longer says
+    a landing brings it in. An old branch whose files master never changed since, and a fresh
+    one that clashes (X-30), are still brought in."""
+    origin, chat, other = _base_with_own_files(copy)
+    git(other, "fetch", "-q", "origin")
+    git(other, "merge", "-q", "--ff-only", "origin/master")
+    git(other, "switch", "-q", "-c", "claude/upgrade-old")
+    write(other, PLAN, "Plan\n\nFirst: the base, as it was nine days ago.\n\nSecond: kept.\n")
+    write(other, "profile/notes.md", "an old note\n")
+    _commit_days_ago(other, "Profile upgrade: an old one", 9)
+    git(other, "push", "-q", "origin", "claude/upgrade-old")
+    git(other, "switch", "-q", "-c", "claude/old-but-apart", "master")
+    write(other, "profile/stories.md", "A story about Lindenmoor\n")
+    _commit_days_ago(other, "a draft nobody else touched", 9)
+    git(other, "push", "-q", "origin", "claude/old-but-apart")
+    git(other, "switch", "-q", "master")
+    write(other, PLAN, "Plan\n\nFirst: the base, as it is now.\n\nSecond: kept.\n")
+    _land_other(other, "the plan as it is now")
+    write(chat, "profile/notes.md", "first\nand a note from today\n")
+    code, out = _run(chat, "--message", "A note", capsys=capsys)
+    assert code == 0, out
+    lines = [ln for ln in out.splitlines() if "claude/upgrade-old" in ln]
+    assert lines == ["land: left origin/claude/upgrade-old as it is: its own work is 9 days "
+                     "older than master's later changes to the same files (documents/plan.md), "
+                     "so bringing it in would put older copies over newer ones. It stays on "
+                     "GitHub, never deleted; nothing to tell the person"], out
+    assert "land: brought in work that waited on origin/claude/old-but-apart" in out
+    shown = lambda rel: git(origin, "show", "claude/chat-1:" + rel, check=False).stdout  # noqa: E731
+    assert "as it is now" in shown(PLAN) and "nine days ago" not in shown(PLAN)
+    assert shown("profile/notes.md") == "first\nand a note from today\n"
+    assert "Lindenmoor" in shown("profile/stories.md")
+    assert "claude/upgrade-old" in _branches(origin)
+    git(other, "fetch", "-q", "origin")
+    assert sorted(land.waiting(str(other))) == ["origin/claude/chat-1",
+                                                "origin/claude/old-but-apart"]
+    assert list(land.left_behind(str(other))) == ["origin/claude/upgrade-old"]
+    monkeypatch.setattr(land, "fetch_waiting", lambda root: True)
+    assert list(land.stranded(str(other))) == ["origin/claude/old-but-apart"]
+    code, out = _run(other, "--waiting", capsys=capsys)
+    assert "land: left origin/claude/upgrade-old as it is" in out
+    assert "waiting on: origin/claude/chat-1 (today)" in out
+
+
 def test_a_branch_that_took_an_update_and_could_not_land_is_still_listed(copy, capsys):
     """X-31 (the stranger audit, 2026-11-03): a chat that took the day's update and then
     landed red pushed a branch whose diff held the app's files (its sync's merge), and
