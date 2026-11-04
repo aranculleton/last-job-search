@@ -77,15 +77,29 @@ def run(cmd, cwd=ROOT, env=None, timeout=600):
     print("running: " + " ".join(str(c) for c in cmd)[:160], flush=True)
     began = time.monotonic()
     try:
-        p = subprocess.run(cmd, cwd=cwd, env=env, capture_output=True, timeout=timeout,
-                           stdin=subprocess.DEVNULL)
+        p = subprocess.Popen(cmd, cwd=cwd, env=env, stdout=subprocess.PIPE,
+                             stderr=subprocess.PIPE, stdin=subprocess.DEVNULL)
     except FileNotFoundError as exc:
         return 127, f"{exc}", 0.0
-    except subprocess.TimeoutExpired as exc:
-        # What it had printed before it stopped (Windows keeps it; elsewhere it may be none).
-        got = ((exc.stdout or b"") + (exc.stderr or b"")).decode("utf-8", "replace")
-        return 124, f"timed out after {timeout} s\n" + got[-3000:], time.monotonic() - began
-    out = (p.stdout or b"") + (p.stderr or b"")
+    try:
+        so, se = p.communicate(timeout=timeout)
+    except subprocess.TimeoutExpired:
+        # The whole tree stopped, not only the command: on Windows Git Bash's Python kept
+        # the output open after bash was stopped, and the wait for it ran the step past its
+        # 45 minutes with nothing said (2026-11-04).
+        if os.name == "nt":
+            subprocess.run(["taskkill", "/F", "/T", "/PID", str(p.pid)], capture_output=True)
+        else:
+            p.kill()
+        try:
+            so, se = p.communicate(timeout=60)
+        except subprocess.TimeoutExpired:
+            so, se = b"", b""
+        # What it had printed before it stopped.
+        got = ((so or b"") + (se or b"")).decode("utf-8", "replace")
+        return 124, (f"timed out after {timeout} s\n" + got[:1500] + "\n...\n" + got[-3000:]),\
+            time.monotonic() - began
+    out = (so or b"") + (se or b"")
     # Decoded the way a reader would, whatever code page the child wrote in.
     return p.returncode, out.decode("utf-8", "replace"), time.monotonic() - began
 
@@ -625,6 +639,15 @@ def step_computer() -> None:
     check("computer: saving stages the state", code == 0 and "Traceback" not in out,
           out.strip()[:300], took)
     _merge_two_chats(tmp, origin, cenv)
+    # An ordinary day changes only the person's own files, so the check before a merge skips
+    # the app's suite and takes seconds. On Windows it ran the whole suite here for over 40
+    # minutes (2026-11-04): this names any file of the app's the day changed.
+    probe = ("import sys; sys.path.insert(0, 'tools'); import personal_paths as p; "
+             "got = p.changed(); "
+             "print('no base' if got is None else ' '.join(p.split(got)[0]) or 'none')")
+    code, out, took = run([PY, "-X", "utf8", "-c", probe], cwd=here, env=cenv)
+    check("computer: an ordinary day changes only the person's own files", out.strip() == "none",
+          "the app's files changed: " + out.strip()[:1500], took)
     shell = local_path.bash()      # Git Bash on Windows, never WSL's launcher
     if shell:
         code, out, took = run([shell, "tools/ci_local.sh", "--quick"], cwd=here, env=cenv,

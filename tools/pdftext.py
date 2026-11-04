@@ -27,6 +27,7 @@ import shutil
 import subprocess
 import sys
 import tempfile
+from shutil import copyfile as _copyfile
 
 
 class Unreadable(RuntimeError):
@@ -79,7 +80,7 @@ def _poppler(exe: str, pdf, *opts: str) -> subprocess.CompletedProcess:
     if path.isascii():
         return subprocess.run([exe, *opts, path, *(["-"] if opts else [])], **run)
     with tempfile.TemporaryDirectory(prefix="ljs_pdf_") as d:
-        shutil.copyfile(path, os.path.join(d, "in.pdf"))
+        _copyfile(path, os.path.join(d, "in.pdf"))
         return subprocess.run([exe, *opts, "in.pdf", *(["-"] if opts else [])], cwd=d, **run)
 
 

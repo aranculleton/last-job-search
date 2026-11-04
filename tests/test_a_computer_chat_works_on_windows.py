@@ -34,6 +34,10 @@ GIT_ID = dict(GIT_AUTHOR_NAME="t", GIT_AUTHOR_EMAIL="t@example.com",
 @pytest.fixture
 def win(tmp_path):
     """(the environment, the stand-in folder's `python`)."""
+    if not str(tmp_path).isascii():
+        # The C locale that stands in for Windows here cannot name such a folder at all;
+        # Windows itself can, and the computer check runs a copy under one there.
+        pytest.skip("this stand-in for Windows cannot hold a folder named with an accent")
     b = tmp_path / "Program Files" / "bin"
     b.mkdir(parents=True)
     (b / "python3").write_text(STORE_STUB)
