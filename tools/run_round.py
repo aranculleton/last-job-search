@@ -670,6 +670,36 @@ class _Parser(argparse.ArgumentParser):
         self.exit(1, f"{self.prog}: error: {message}\n")
 
 
+# A round's name: "r" and its number, and "_round<k>" on a widening it started itself. The
+# person's own tests read rounds by it, and a chat that had to give --out made one up: a
+# search saved as "2026-11-04-app" failed them (2026-11-04).
+ROUND_NAME = re.compile(r"^r\d+(?:_round\d+)?$")
+
+
+def next_round(summary_dir: str) -> str:
+    """The next round's name: "r" and one more than the highest number saved, so a new round
+    never overwrites an earlier one's shortlist."""
+    try:
+        names = os.listdir(summary_dir)
+    except OSError:
+        names = []
+    nums = [int(m.group(1)) for n in names
+            for m in [re.match(r"^r(\d+)(?:_round\d+)?\.json$", n)] if m]
+    return f"r{max(nums, default=0) + 1}"
+
+
+def name_round(out: str | None, summary_dir: str, chosen: bool) -> str:
+    """Where the round's files go, its name chosen here. No --out: `rounds/<next>` beside
+    the person's files. An --out whose name is not a round's, for a round saved among the
+    person's own (`chosen`: no --summary-dir), keeps its folder and takes the next name."""
+    if not out:
+        return os.path.join(person.state("rounds"), next_round(summary_dir))
+    out = round_dir(out)
+    if chosen or ROUND_NAME.match(os.path.basename(out)):
+        return out
+    return os.path.join(os.path.dirname(out), next_round(summary_dir))
+
+
 def round_dir(out: str) -> str:
     """--out as this computer names a folder: separators of either kind, no trailing one.
     `--out rounds\\r1\\` on Windows kept its trailing backslash, so the round's name came
@@ -758,7 +788,9 @@ def main():
     except Exception:
         pass
     ap = _Parser()
-    ap.add_argument("--out", required=True, help="directory for this round's files")
+    ap.add_argument("--out", default=None,
+                    help="directory for this round's files (default: rounds/r<next number>, "
+                         "named by the round itself; leave it off)")
     ap.add_argument("--pages", type=int, default=None,
                     help="default 5 in the cloud and 2 on a person's own computer "
                          "(scrape_wide.defaults; SCRAPE_PAGES in profile/search.py)")
@@ -806,7 +838,16 @@ def main():
                          "applied as it stands now (a ruling or a judgement made since), "
                          "refilled from the next rows to --show")
     a = ap.parse_args()
-    a.out = round_dir(a.out)
+    if a.recut:
+        if not a.out:
+            ap.error("--recut needs --out, the round's own folder")
+        a.out = round_dir(a.out)
+    else:
+        given = a.out
+        a.out = name_round(a.out, a.summary_dir or person.state(SUMMARY_DIR),
+                           chosen=bool(a.summary_dir) or a.round > 1)
+        if not given or os.path.basename(a.out) != os.path.basename(round_dir(given)):
+            print(f"round: {os.path.basename(a.out)}, its files in {a.out}")
     # A line this round cannot print in the console's own encoding is printed with a
     # stand-in character, never raised: an accented employer name ended the round.
     for stream in (sys.stdout, sys.stderr):

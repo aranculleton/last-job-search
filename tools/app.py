@@ -456,7 +456,10 @@ def job_steps(chosen: dict, claimer: str, url: str, session: bool = True,
          "<that version>, and run it once more; refused again, read work again; claimed by "
          "another chat, write nothing else and stop.")
     if kind == "search":
-        step("Run run_round.py in the background (Bash, run_in_background). While it runs, "
+        step("Run run_round.py in the background (Bash, run_in_background), with no --out: "
+             "the round names itself and its first line says its folder (\"round: r12, its "
+             "files in ...\"). Finish only once it has ended: app.py done refuses a search "
+             "whose shortlist is not saved yet. While it runs, "
              f"every ten minutes or so (its lease is thirty): python3 tools/app.py pin \"$D\" "
              f"--work {wid} --chat {claimer} --stage scrape --log <the round's folder>/round.log, "
              "and send its batch, so the page shows how many job sites are done and how long "

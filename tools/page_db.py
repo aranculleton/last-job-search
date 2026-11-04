@@ -1220,6 +1220,34 @@ LEAVES = ("done", "failed", "stopped", "needs_you")
 STOPPED_SAID = "Stopped, as you asked."
 
 
+# A file's time and a claim's are both this computer's clock, read a moment apart.
+SAVED_SLACK_S = 120
+
+
+def search_unsaved(item: dict) -> str:
+    """Why a search may not be marked done yet, in plain words, or "": its shortlist is not
+    saved where Jobs reads it (documents/rounds, the newest round, written since the search
+    was taken on). A search marked done while run_round.py still ran in the background said
+    "Your shortlist of 60 ranked jobs is ready" over a Jobs that said "Nothing new"
+    (2026-11-04). No profile here (the app itself) checks nothing."""
+    import app_model
+    import person
+    try:
+        newest = app_model.newest_round()
+    except person.NoProfile:
+        return ""
+    since = app_model.parse_time(item.get("claimed_at") or item.get("asked_at"))
+    try:
+        written = os.path.getmtime(newest) if newest else None
+    except OSError:
+        written = None
+    if written is None or (since is not None
+                           and written < since.timestamp() - SAVED_SLACK_S):
+        return ("the search's shortlist is not saved yet, so Jobs would show nothing new: "
+                "wait for run_round.py to end (it saves the shortlist as it ends), then finish")
+    return ""
+
+
 def finish(db: dict, work_id: str, now: dt.datetime, out_dir: str, summary: str = "",
            status: str = "done", error: str = "", links=(), reply: str = "", thread: str = "",
            chat_kind: str = "cloud", dump_dir: str = "", chat: str = "",
@@ -1258,6 +1286,8 @@ def finish(db: dict, work_id: str, now: dt.datetime, out_dir: str, summary: str 
         error if status == "failed" else STOPPED_SAID if status == "stopped" else "")
     problem = summary_problem(summary) if status == "done" or (
         status == "failed" and summary != error) else ""
+    if not problem and status == "done" and str(item.get("kind") or "") == "search":
+        problem = search_unsaved(item)
     if problem:
         raise ValueError(problem)
     args = item.get("args") if isinstance(item.get("args"), dict) else {}
