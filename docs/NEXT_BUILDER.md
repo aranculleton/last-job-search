@@ -1,13 +1,57 @@
 # Notes for the next builder
 
-Written at the end of 4.9.0 and 4.9.1 (2026-11-04) for the chat that builds the next version. Read
-MAINTAINING.md first; this is only what 4.9 left, as background, never a list of work.
+Written at the end of 4.9.0 and 4.9.1 (2026-11-04), and brought up to date the same evening when
+the builder chat for the next version handed over before its release, its chat too long. Read
+MAINTAINING.md first; this is background, never a list of work: the maintainer's notes say what
+to build.
 
 ## Nothing to start from here
 
-The maintainer said on 2026-11-04 that what 4.9 left open is settled. Everything below is
-background: a builder starts work only from the maintainer's notes (MAINTAINING.md, "How a
-builder works").
+A builder starts work only from the maintainer's notes (MAINTAINING.md, "How a builder works").
+The sections below say where the unreleased version stood at the hand-over, so a note that says
+"carry on" can be done in full without guessing.
+
+## Where the unreleased version stood (4 November, evening)
+
+Everything below is in `[Unreleased]` in CHANGELOG.md, nothing released since 4.9.1.
+
+- **On master**: pull requests 164 to 167 (the builder waits for notes; README pictures named
+  after their contents; the brief's phone notification as a setting, off by default; the page's
+  walk-through fixes: Claude's work as a side panel with one pill, batched runs of four or more,
+  the edit panel, drafted messages as one card, tap rev fixes, searches done only once saved).
+- **Branch `claude/evening`, its own pull request**: the evening batch. Agency recruiters are not
+  held to the employer bar; a past call moves the contact on in the daily check-in; nobody at
+  their limit is dated or a To do (every date through `state.put_next`); a sheet's foot never
+  covers its last choice; phones kept in the app; a search's `--show N` cuts with every hard
+  rule (language, agency, jobs already held, unscored); a resume can be drafted alone
+  (`stage_picks.py --resume-only`) and the tracker names only documents made; reply guidance
+  never offers a forbidden or hand-made old resume; short thank-yous pass the message checks and
+  a note naming no place is never told it named the wrong one; saving leaves week-old chat work
+  and side copies alone and clears old copies; a test that wrote over
+  `profile.example/CLAUDE.md` and deleted it puts it back. The old chat merges it once its fast
+  checks are green; if it is still open, it is the new chat's to merge.
+- **Not yet done for this version**: `tools/rehearse_sync.py` has not been run on the evening
+  batch; the page's changed browser tests ran in Chromium only (Safari's and Firefox's engines
+  are not installed in a cloud chat, so their CI runs are the check); the search and
+  resume-only tests were not shown to fail on the old code.
+
+## Half-built, on its own branch
+
+Notes 5 to 8 of the maintainer's nine of 4 November (a resume drafted in another chat never
+reaching the page; work asked for in a chat never in Claude's work; two chats overwriting each
+other's page updates during the hand-over; the check-in trusting a stored version number) were
+being built by a helper that was stopped mid-way when the usage limit ran out. Its three commits
+are on `claude/page-sync-wip`, based on the evening batch, not merged and not reviewed:
+
+- "Only explicit job work or work begun in a chat draws the page; the stamp as read kept for the
+  store's version" (notes 7 and 8)
+- "A queued upload names every application it covers" (note 5)
+- "The scheduled brief draws the day's news wherever it runs" (note 7, the brief's side)
+
+It changed tools/app.py, app_listen.py, app_model.py, page_db.py, the app skill and three tests.
+Its last words: the scheduled brief passes `--chat brief` and can run in a chat of its own in
+older copies, so it is let draw the page like a job does, guarded by the newer-copy check. No
+commit title is about note 6. Nothing on it has a build version or a fixture remade yet.
 
 ## How to work
 
