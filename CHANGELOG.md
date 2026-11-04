@@ -20,6 +20,8 @@ make sense to somebody whose repo just received it.
 
 ## [Unreleased]
 
+## [4.9.0] - 2026-11-04
+
 ### Changed
 
 - **Every finding of two full audits is fixed in this release.** A ten-reviewer audit of the
@@ -106,6 +108,9 @@ make sense to somebody whose repo just received it.
 
 ### Fixed
 
+- **The page behaves the same in Safari, Firefox and Chrome.** On a phone, Chat opens with
+  your newest message just above the box (it could sit screens away), a very long paste says
+  when it was cut in every browser, and a double tap is one tap everywhere.
 - **Two chats that take the same update a day apart settle it by themselves**: a call prep
   both rebuilt keeps the later one, and a clash in your files when an update comes in is
   settled as saving settles it, never left for a chat to do by hand.

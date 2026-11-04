@@ -1542,7 +1542,7 @@ def _schedule_cli(argv: list[str]) -> int:
         if argv[0] == "called":
             hit = called(a.n, a.id)
             print(f"routines.json: call {a.n} ({hit.get('tool')}) made; "
-                  f"{len(calls())} still owed")
+                  f"{len(calls(today=a.today))} still owed")
             return 0
         got = (move(a.days or None, a.time or None, a.cron) if argv[0] == "move" else
                pause(a.until, a.today) if argv[0] == "pause" else

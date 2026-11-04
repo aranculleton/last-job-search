@@ -244,8 +244,8 @@ def test_a_break_holds_the_brief_and_every_follow_up_and_coming_back_early_undoe
     assert back["persistent_session_id"] == "session_EXAMPLEHELPER"
     assert back["run_once_at"] == "2026-11-08T07:38:00Z"        # 7:38 in London, in winter
     assert "automation/prompts/morning_brief.md" in back["prompt"]
-    s.run("routines.py", "called", "2", "--id", "trig_EXAMPLEBACK")
-    s.run("routines.py", "called", "1")
+    s.run("routines.py", "called", "2", "--id", "trig_EXAMPLEBACK", "--today", TODAY)
+    s.run("routines.py", "called", "1", "--today", TODAY)
     # A brief that runs anyway during the break says so in one line, and nothing else.
     out = s.run("brief.py", "--today", "2026-10-28", "--write")
     message = out.split("FOR CLAUDE", 1)[0].strip().splitlines()

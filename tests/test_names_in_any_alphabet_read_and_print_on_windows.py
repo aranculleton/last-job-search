@@ -105,7 +105,10 @@ def test_the_zone_never_comes_from_the_brief_registry(tmp_path):
 @pytest.mark.skipif(sys.platform == "win32", reason=NO_TZSET)
 def test_the_date_a_tool_sees_is_the_persons_after_cloud_day(tmp_path):
     prof = _profile(tmp_path, "Australia/Sydney")
+    # Importing person applies the checkout's own profile/ where it has one (a person's copy,
+    # where the computer check runs this suite): that zone is not this test's (2026-11-04).
     code = ("import sys, os, time; sys.path.insert(0, 'tools'); import person; "
+            "os.environ.pop('TZ', None); "
             f"person.cloud_day(profile_dir={prof!r}); print(os.environ.get('TZ'), "
             "time.strftime('%z'))")
     env = {k: v for k, v in os.environ.items() if k not in ("TZ", "LJS_PROFILE")}

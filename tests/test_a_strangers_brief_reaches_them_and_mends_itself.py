@@ -21,7 +21,8 @@ import subprocess
 import sys
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-sys.path[:0] = [os.path.join(ROOT, "tools"), os.path.join(ROOT, "tools", "network")]
+sys.path[:0] = [os.path.join(ROOT, "tools"), os.path.join(ROOT, "tools", "network"),
+                os.path.join(ROOT, "tests")]
 EXAMPLE = os.path.join(ROOT, "profile.example")
 PAGE = "https://claude.ai/code/artifact/example-page"
 CHAT = "session_EXAMPLEHERCHAT"
@@ -30,6 +31,7 @@ REPO = "example-owner/my-job-search"
 import brief  # noqa: E402
 import routines  # noqa: E402
 import tidy  # noqa: E402
+import repo_files  # noqa: E402
 
 
 class Copy:
@@ -63,7 +65,8 @@ class Copy:
         return env
 
     def run(self, tool, *args, ok=(0,), stdin=None, **env):
-        r = subprocess.run([sys.executable, os.path.join(ROOT, "tools", tool), *args], cwd=ROOT,
+        r = subprocess.run([*repo_files.python_on_github(os.path.join(ROOT, "tools", tool)), *args],
+                           cwd=ROOT,
                            env=self.env(**env), capture_output=True, text=True, encoding="utf-8",
                            timeout=180, input=stdin)
         assert r.returncode in ok, r.stdout + r.stderr

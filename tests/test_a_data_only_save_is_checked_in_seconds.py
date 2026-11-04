@@ -41,7 +41,10 @@ def copy(tmp_path):
     origin/master at that commit: nothing changed since master."""
     if not shutil.which("git") or not local_path.bash():
         pytest.skip("needs git and bash")
-    files = repo_files.tracked(root=ROOT, app_only=False)
+    # The app's files only: run in a person's copy (the computer check on Windows runs the
+    # app's tests in one), their own profile/ came along, and the example's could not be
+    # put where it already was (FileExistsError, 2026-11-04).
+    files = repo_files.tracked(root=ROOT, app_only=True)
     c = tmp_path / "copy"
     for rel in files:
         if not rel or rel.startswith(("profile.example/", "docs/images/")):
@@ -84,6 +87,10 @@ def test_nothing_changed_skips_the_app_tree_and_never_blames_an_update(copy):
     env.pop("LJS_PROFILE", None)
     env.pop("LJS_STATE", None)
     env.pop("VIRTUAL_ENV", None)
+    if sys.prefix != sys.base_prefix:
+        # Run from a virtual environment (the person job, on every system): tools/py.sh takes
+        # VIRTUAL_ENV's Python first, the one with pytest, wherever the launcher cannot go.
+        env["VIRTUAL_ENV"] = sys.prefix
     start = time.monotonic()
     r = subprocess.run([BASH, "tools/ci_local.sh", "--quick"], cwd=copy, env=env,
                        capture_output=True, text=True, encoding="utf-8", errors="replace",

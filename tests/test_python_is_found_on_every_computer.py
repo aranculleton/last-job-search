@@ -218,9 +218,11 @@ def test_the_shipped_hook_runs_where_python3_is_a_store_stand_in(tmp_path, event
     # The hook runs the way Claude Code runs a shell-form hook: the command string given
     # to a shell, CLAUDE_PROJECT_DIR set, from a folder whose name has a space.
     project = tmp_path / "My Job Search"
+    # The app's files without a person: run in a person's copy (the computer check on
+    # Windows runs these tests in one), their profile/ came along and the update check spoke.
     shutil.copytree(ROOT, project, ignore=shutil.ignore_patterns(
         ".git", "__pycache__", ".pytest_cache", "documents", "cv", "cover_letters", "texmf",
-        "node_modules", ".claude", ".venv", "venv"))
+        "node_modules", ".claude", ".venv", "venv", "profile"))
     b = _bin(tmp_path)
     _script(b / "python3", STORE_STUB)
     log = tmp_path / "ran.txt"
