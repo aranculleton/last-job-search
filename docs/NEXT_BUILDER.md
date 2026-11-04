@@ -1,94 +1,85 @@
 # Notes for the next builder
 
-Written at the end of 4.8.0 (2026-11-02) for the chat that builds the next version. Read
-MAINTAINING.md first; this is only what 4.8 left.
+Written at the end of 4.9.0 (2026-11-04) for the chat that builds the next version. Read
+MAINTAINING.md first; this is only what 4.9 left.
 
 ## Do first, for [Unreleased]
 
-1. **Four tests fail only in the Windows Git Bash set-up** ("windows (a computer chat, Git
-   Bash, cp1252)", its step "A copy already set up ...", inside `ci_local.sh --quick`). That
-   step reached its end for the first time in 4.8 (its limit went from 30 to 45 minutes), so
-   these were hidden before, and the same tests pass in all three ordinary Windows legs. Each
-   needs a look on that leg (`EVERYWHERE`-style: run the one file there by hand from the
-   Actions page, `workflow_dispatch`):
-   - `test_nothing_extra_is_needed_to_read_a_pdf.py::test_a_pdfinfo_that_cannot_open_the_file_leaves_the_count_to_pdftotext`:
-     Git's own `ucrt64\bin\pdftotext.EXE` answered exit 0 with no page count.
-   - `test_python_is_found_on_every_computer.py::test_the_shipped_hook_runs_where_python3_is_a_store_stand_in[UserPromptSubmit]`:
-     the hook printed its JSON where nothing was expected.
-   - `test_one_chat_answers_the_page.py::test_a_chat_answering_the_page_for_a_day_starts_a_fresh_helper_at_a_quiet_moment`.
-   - `test_set_me_up_is_the_only_thing_said_in_a_chat.py::test_making_the_copy_from_the_page_is_always_private`:
-     the action `act01` was not applied (`[] == ['act01']`).
-   Every other platform was green on 4.8's final tree: Windows parts 1 to 3, Mac, Firefox,
-   German and far time zones, the Mac and Windows type in French; Safari's one failure (the
-   self-reload test) is fixed in the release pull request.
-2. **Check the first brief after 4.8 on the maintainer's copy** (07:56 UK the next morning;
-   `list_events` on their helper chat): the page republished (the FOR CLAUDE lines are no
-   longer cut at 2,500 characters, which had dropped the republish and the page update on
-   their real state); News has three to five items, each ending in how to use it; and a live
-   process whose record ticks a stage done gets that stage on its tracker row.
-3. **Safari's self-reload test**: the harness's last unprotected reads (`settle`, `goto`, the
-   end of `S.engine`) now wait out a page reloading itself. Confirm Safari is green on the
-   release pull request.
+- **The real-page report.** After 4.9.0 reaches the maintainer's copy, their helper chat walks
+  the key journeys on the real page (chat send and paste, every work state, booking offered
+  days, a batch of drafts, contacts with rule-breaking candidates) and reports. That report is
+  the audit's final gate: fix anything it finds first, as a patch release if it stops something
+  working for anyone.
+- **The first full-size page in parts.** Every page republishes once into the new shape at its
+  update (a small page.html plus about 70 content-named code files, sent in batches). Only a
+  small probe was published on the real host (all its checks passed); the first full-size one
+  is the maintainer's. If it says "did not load fully" after its 15 minutes of "being updated",
+  read tools/app_page.py `plan` and templates/app/guard.js first.
+- **The maintainer's own tests.** Seven of them pinned behaviour 4.9 changed on purpose (job
+  boards held to the search window, the scorer's baseline, a sample note using initials their
+  own rules ban); the update tells their chat to bring them in line. Check it did.
 
-## How to work (the maintainer, 2026-10-30 to 2026-11-02)
+## How to work (the maintainer, 2026-10-30 to 2026-11-04)
 
 - **Decide, never ask.** Make the call, do it, say it in one line, with a reason.
-- **Use the app yourself, as a tired job seeker would, and let that drive the version**:
-  journeys on a phone and a laptop (the morning glance, a reply, an application, an interview,
-  a mistake undone, a brand-new person), dead ends, counts that disagree, things said twice.
-  4.8's walk-through found more than its code review did. Helpers on separate screens, each in
-  its own worktree with tests, merged by you, kept that fast.
-- **Look before calling it done**: screenshots at 1280 and 1440 wide, a phone, light and dark,
-  and a fuller sample when a panel's behaviour depends on how much it holds. The maintainer
-  reads alignment, white space, bold and underlines closely, and sees the screenshots you read.
-- **Say nothing about runs on a push you have replaced** (the maintainer, 2026-11-02: "why do
-  u keep reporting on this random older push"). Speak when the latest push is green or truly
-  red, when work merges, and when the release is out.
-- **Keep it cheap**: few steps, no polling, the whole suite on GitHub only, one push per round.
-  The push gate needs the app's master beside the maintainer's copy: copy their repo to the
-  scratchpad, add the `app` remote there, fetch, and point `push_gate.sh` at the copy.
+- **Use the app yourself, as a tired job seeker would, and as a stranger would**: a copy with
+  no tie to the maintainer, chat only, on a phone, weeks behind, in another country. 4.9's
+  stranger audit found 85 things the maintainer's own use never showed.
+- **Token-cheap, and still certain.** The maintainer runs short of tokens: no separate skeptic
+  per finding (a fix's test that fails first is the check), one reviewer for what merges broke,
+  scripts for coverage, the whole suite on GitHub only, one push per round.
+- **Helpers in worktrees start on old master**: tell each to `git reset --hard` to the
+  branch's head first. Merging many helpers is where new bugs come from: give the merge to one
+  careful agent with both sides' outcome tables.
+- **The container can restart mid-night** and lose every background agent: helpers commit
+  early and often; a lost one is re-created from the same brief.
+- **The push gate's leak scan reads every patch since master**: invented names only, never the
+  maintainer's employers, contacts or handle (write the app's address as
+  `aranculleton/last-job-search` in full); when an old patch holds a flagged line, fold the
+  unpushed commits into one (`git reset --soft origin/<branch>`).
+- **Say nothing about runs on a push you have replaced.** Speak when the latest push is green
+  or truly red, when work merges, and when the release is out.
 
-## What 4.8 decided, to keep
+## What 4.9 decided, to keep
 
-- **News is never empty.** The reader widens to the last week, then the last month, inside
-  its one call (`brief.wider`, at most eight searches), returns three to six items each ending
-  in how to use it, never a link sent in the last four weeks (`links_sent`), and no month on a
-  search in a month's first week (`_dated`). Nothing found: the last items are carried with
-  the day they were gathered, ending four weeks from it (`carry_news`); the page shows the
-  newest earlier news with that day (`_news_fallback`, `news_date`). Points are split into
-  what, use and source (`app_model.news_parts`).
-- **FOR CLAUDE lines are never cut**; only the message gives way to `TEXT_MAX`.
-- **Today is the one most pressing thing**: today's booked thing as itself (an interview, a
-  call, a test, by kind then time), an interview tomorrow, one in the prep window with no
-  prep, what rolled over (replies first), what is due today, the prepared interview, the
-  brief's first step. Beside it, the likely questions or a few facts, never one the title
-  says. It comes again in Next three only where there is room.
-- **One count of jobs to look at** (`jobToLook`): new, a good fit, not closed, not drafted or
-  in a process, not just set aside; every count and list uses it.
-- **A drafted message is opened, never drafted again** ("See the draft"), and "I sent it"
-  counts on every screen at once (`sentHere`).
-- **A stage `outcome.md` ticks done** after the row's last note of the person's own goes onto
-  the tracker row, once (`brief.stages_into_tracker`); app notes and hand-written headings
-  never count.
-- **The page**: one aligned dot for every Brief point; weekly bars as boxes on a baseline,
-  labelled by week; the menu folds to 24px icons (`nav:mini`, kept per device); inline styles
-  set sizes only, never a colour; the week labels use the page's small size (seven type
-  styles a first screen).
-- **Windows**: a research lock refused for a moment is waited for (`_locked`, `_write_json`).
+- **The page in parts** (tools/app_page.py `render_parts`, `plan`; tools/app_listen.py
+  `parts_plan`): every republish lists what the page holds first and sends what it lacks; a
+  page that did not load fully asks for itself whole; one built under 15 minutes ago says it is
+  being updated and reloads. Never one big file again.
+- **The brief stays bound to the chat that holds the copy** and sends its headline with
+  PushNotification, asked from one place only (the lines tools/brief.py prints). Nothing ever
+  moves a working brief to a fresh-chat task (such a run has no copy and no hook).
+- **The one hook holds a turn** (reaction, page owed, improvements unstarted, unsaved work,
+  brief push unsent): one hold a turn at most, each with its limit, in the form the chat's
+  Claude Code version honours, never in the app, the example person or a job chat (recorded
+  when `app.py start --work` runs).
+- **One clock**: `person.today()` wherever a day is counted.
+- **Computed once, in the engine**: counts, who is owed, who may be shown (`surface.held`, from
+  the person's own rules, never names), statuses. The page renders them.
+- **An employer bar applies only when the profile states one** (employer tiers or
+  BAR_FRONTIER); nothing the maintainer set is applied to a stranger.
+- **Merges settle themselves**: person files by `merge_state.settle` in a landing and when an
+  update comes in; a document the app writes and dates keeps the later; two pages published by
+  two chats keep the first; told records live outside setup_answers.json.
 
 ## Left, on purpose, with the reason
 
-- **A To do card hidden by mistake is remembered on that device only**: it can now be brought
-  back from the end of To do; keeping hides across devices means recording them as actions.
-- **The draft bin's own message** ("Not applying: ...") is unchanged; a test pins it.
-- **"Contacts replied"** counts everyone who wrote back in a thread in the last 30 days:
-  plausible on the maintainer's data, not changed.
-- **The three older pages titled with the maintainer's name** stay in their Claude list; only
-  the pinned one is used. Deleting is theirs to ask for.
+- A resume the maintainer must never send still sits in their page's file store: only a chat
+  on their copy can delete it, and the app no longer offers or links it.
+- Briefs already set at 7:38 in US Pacific or Mountain time keep their time: nothing changes a
+  working brief. New ones there default to 5:38.
+- A branch from the chat-only fix's first attempt (built on older master) is not merged; its
+  third round's decisions were carried over by the stranger groups, as the notes say.
 
 ## Not tested
 
-- Safari's and Firefox's engines locally (not installed in the builder's container): only the
-  pull requests' Everywhere runs.
-- The page in the real Claude app's frame, and on a laptop waking from sleep.
-- A brief rewriting the watch list, widening the news and carrying it, in a real scheduled run.
+- The host's answer for a code file that is missing (a 404 or a page): the guard handles both
+  for scripts, but it was not seen on the real host.
+- A push from a real scheduled brief beyond the one recorded run ("Mobile push requested").
+- Safari, Firefox and Windows on 4.9.0 ran on the release pull request; everything they found was
+  fixed in it (a phone's Chat opening above the newest message, a long paste in Firefox, Windows
+  day formats and its bash) except one Windows-only timing test that failed once and passed on
+  the run before: tests/test_a_faster_round_finds_and_scores_the_same.py
+  ::test_a_paced_boards_wait_does_not_hold_the_other_postings (one worker, a paced board and
+  LinkedIn; it compares send times). Look at how hydrate schedules a paced board on a slow
+  Windows runner before trusting it there.
