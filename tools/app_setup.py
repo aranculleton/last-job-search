@@ -773,6 +773,15 @@ def said_once() -> dict:
     return {**(old if isinstance(old, dict) else {}), **(got if isinstance(got, dict) else {})}
 
 
+DOORBELLS = "doorbells-cleared"
+
+
+def doorbells_pending() -> bool:
+    """A page is published and no chat has yet cleared the rings it piled up (the day is kept
+    with the things said once, so two chats merge it by the later day)."""
+    return bool(page_record().get("url")) and not said_once().get(DOORBELLS)
+
+
 def told(key: str) -> str:
     """The day the person was told, or did, `key` (an OUTSIDE card or a report), or ""."""
     return str(said_once().get(key) or "")
