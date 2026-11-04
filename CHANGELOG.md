@@ -38,6 +38,8 @@ make sense to somebody whose repo just received it.
 - **A run of the same kind of work is one card in Claude's work.** Four or more follow-ups
   waiting, or replies finished, show as one card with their count and the first few names;
   Show lists them, and "Don't do them" calls off the lot.
+- **A To do card about several notes says what it is**: "4 messages to check before you
+  send", with the reason under it, never the reason alone over a list of names.
 - **What you close or stop leaves its list at once.** Closing people in To do, or "No more
   messages" to someone, takes them off the list straight away instead of waiting for Claude;
   "11 closed: Show" brings them back with their Undo.

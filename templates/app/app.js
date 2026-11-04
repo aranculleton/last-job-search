@@ -3525,9 +3525,13 @@
     const what = {"drafts-messages": ["message", "messages"], jobs: ["job", "jobs"], interviews: ["interview", "interviews"]}[home] || ["application", "applications"];
     const hid = "ag-" + where + "-" + seg(txt(a.kind) + "-" + home);
     const shown = names.slice(0, 4);
+    // Its title says what the card is, its reason under it: "Written before their profile was
+    // read: read it first" over four names left the person asking what the card was (the
+    // maintainer, 2026-11-04: "idk what the bottom one is").
     return card("article", {class: "card todo group-card", "aria-labelledby": hid, "data-item": "grp:" + txt(a.kind) + ":" + home},
-      h("div", {class: "todo-top"}, kindMark(list[0].kind), h("span", {class: "muted small"}, plural(list.length, what[0], what[1]))),
-      h("p", {class: "card-title", id: hid}, plainDates(a.text), a.why ? hintQ("agwhy:" + where + ":" + txt(a.kind) + home, txt(plainDates(a.why)).replace(/\.$/, ""), "Why: " + clip(txt(plainDates(a.text)), 60)) : null),
+      h("div", {class: "todo-top"}, kindMark(list[0].kind)),
+      h("p", {class: "card-title", id: hid}, plural(list.length, what[0], what[1]) + " to check" + (home === "drafts-messages" ? " before you send" : "")),
+      h("p", {}, cap1(txt(plainDates(a.text)).replace(/\.$/, "")) + ".", a.why ? hintQ("agwhy:" + where + ":" + txt(a.kind) + home, txt(plainDates(a.why)).replace(/\.$/, ""), "Why: " + clip(txt(plainDates(a.text)), 60)) : null),
       h("p", {class: "muted small"}, shown.join(", ") + (names.length > shown.length ? " and " + (names.length - shown.length) + " more" : "") + "."),
       h("p", {}, tabLink(home, null)));
   }

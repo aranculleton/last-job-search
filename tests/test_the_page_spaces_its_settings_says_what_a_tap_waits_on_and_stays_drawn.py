@@ -318,3 +318,26 @@ def test_a_run_of_like_work_is_one_card_with_its_count(run, tmp_path):
     assert title == "5 follow-ups waiting their turn" and cards == 0, got["after"][0]["eval"]
     assert line.startswith("Wren, Juno, Tamsin and 2 more"), line
     assert got["after"][1]["eval"][2] == 5, "Show lists each of them"
+
+
+def test_a_card_of_notes_to_check_says_what_it_is(run, tmp_path):
+    """Four notes held for an unread profile made a To do card titled with the warning alone,
+    over a list of names (the maintainer, 2026-11-04: "idk what the bottom one is"). Its title
+    says what it is, the reason sits under it, and its link says where they are."""
+    m = copy.deepcopy(_sample())
+    held = [x for x in m["messages"] if x.get("kind") == "first_note"][:2]
+    assert len(held) == 2
+    for x in held:
+        x["hold"] = "Written before their profile was read: read it first"
+        # The engine's own alert for it (tools/app_alerts.py for_message, "read_first").
+        x["alerts"] = [{"id": "read_first:" + x["id"], "kind": "read_first", "level": 1, "item": x["id"],
+                        "text": "Written before their profile was read: read it first.",
+                        "why": "A note written before their profile was read can get them wrong."}]
+    look = ("Array.from(document.querySelectorAll('[data-item^=\"grp:\"]')).map((c) => [(c.querySelector('.card-title') || {}).textContent || '',"
+            " c.textContent]).filter((x) => /profile was read/.test(x[1]))")
+    got = _go(run, tmp_path, [{"hash": "todo", "eval": look}], WIDE, model=m, clock=T)
+    cards = got["after"][0]["eval"]
+    assert cards, "the held notes make a card in To do"
+    title, text = cards[0]
+    assert title.startswith("2 messages to check before you send"), title
+    assert "Written before their profile was read: read it first." in text and "Open in Contacts" in text, text
