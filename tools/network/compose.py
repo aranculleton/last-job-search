@@ -547,16 +547,29 @@ def _first_word(name) -> str:
 
 
 _KNOWN: set | None = None
+_KNOWN_KEY: tuple | None = None
 
 
 def _known_names() -> frozenset:
     """One-word names this person's messages may open on, lowercased.
 
     The tools list above, the profile's employers and skills, and every company
-    in the contact book and the tracker. Read once per process.
+    in the contact book and the tracker. Read again whenever the books change or
+    another person's files are read: kept once per process, a chat that added an
+    employer, or the suite's next test on other files, lowered "Larkspur" to
+    "larkspur" in a nudge (CI, 2026-11-04).
     """
-    global _KNOWN
-    if _KNOWN is None:
+    global _KNOWN, _KNOWN_KEY
+    key = [os.environ.get("LJS_PROFILE", ""), os.environ.get("LJS_STATE", "")]
+    for f in ("network_contacts.csv", "job_search_tracker.csv"):
+        p = person.state(f)
+        try:
+            st = os.stat(p)
+            key.append((p, st.st_mtime_ns, st.st_size))
+        except OSError:
+            key.append((p, None, None))
+    if _KNOWN is None or _KNOWN_KEY != tuple(key):
+        _KNOWN_KEY = tuple(key)
         names = set(_TOOL_NAMES)
         for role in getattr(_ROLES, "ROLES", ()) or ():
             for n in [role.get("employer")] + list(
