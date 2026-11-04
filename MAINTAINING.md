@@ -296,7 +296,10 @@ these lenses, and each real finding becomes a test the same way:
    `page-brief.png` (1600x1250), `page-contacts.png` (dark, 1600x1000),
    `page-coming-up-phone.png` (780x1688) and `page-demo.gif` (the tour, 1600x1000, under
    700 KB). Take them at scale 2 (the phone at its own, 3), scale them to those sizes, and
-   look at each one before it is committed: no banner, no error, invented names only.
+   look at each one before it is committed: no banner, no error, invented names only. Save
+   each under its plain name, then run `python3 tools/readme_pictures.py`: it names every
+   picture after its contents and points the README at it, because GitHub's phone app showed
+   a two-version-old picture under a name that never changed (the maintainer, 2026-11-04).
 4. **Check it reached people.** The release workflow green, the tag on the right commit
    (`python3 tools/release.py newest`) and the published notes as `release.py notes` makes
    them. The maintainer hears the number, the reason,
