@@ -652,13 +652,19 @@ def test_a_tap_rings_the_doorbell_inside_the_click_once_and_never_asks_send_this
 
 
 def test_with_no_chat_listening_it_says_when_it_starts_and_offers_to_start_it_now(run, pages):
-    r = run("no_listener", html=pages["sample"])
+    r = run("no_listener", html=pages["sample"], viewport={"width": 1280, "height": 900})
     _clean(r)
     assert r["calls"] == []
     assert any("not working on your search right now" in n for n in r["notes"])
     assert r["links"] and r["links"][0].startswith("https://claude.ai/code?prompt=")
     assert "repositories=morgan-example%2Fjob-search" in r["links"][0]
     assert r["work"]["status"] == "queued", "the request waits in the list whoever rings"
+    # On a phone, Open Claude would leave the Claude app for the browser: no link, and the
+    # note says where it does work (the maintainer, 2026-11-04).
+    r = run("no_listener", html=pages["sample"])
+    _clean(r)
+    assert r["links"] == [], r["links"]
+    assert any("not working on your search right now. Open this page on a computer to start it now." in n for n in r["notes"]), r["notes"]
 
 
 # ------------------------------------------------------------------ progress that costs nothing
