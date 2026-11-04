@@ -1540,6 +1540,9 @@ def nudge_due(threads, today, new_development="") -> dict:
         return dict(base, reason=("the connection request has not been accepted, so there is "
                                   "nowhere to send a nudge: wait, or withdraw it after %d days"
                                   % state.REQUEST_WITHDRAW_DAYS))
+    if state.inmail_only(rows):
+        return dict(base, reason=("they have only been sent an InMail and have not replied: "
+                                  "another would be a second InMail, not a follow-up"))
     if state.accepted_never_messaged(rows) is not None:
         return dict(base, reason=("they accepted a request that carried no note and nothing has "
                                   "been sent since: a first message is owed "
