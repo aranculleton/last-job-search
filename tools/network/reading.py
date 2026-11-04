@@ -4241,95 +4241,20 @@ def match_paste(pieces: list, contacts: list) -> list:
 # the time in the recipient's city now: from their own location when it maps to a time
 # zone, else the person's own (networking.py TIMEZONE, or HOME_CITY). It is said, never
 # used to hold a draft back.
-_IANA = re.compile(r"\b[A-Z][A-Za-z]+(?:/[A-Za-z0-9_+-]+)+\b")
-# Places that sit in one time zone and are not a zone's own name, written folded (no
-# accents: a location is folded before it is looked up). A zone's own city ("Toronto",
-# "London", "New York") is found from the zone list itself.
-_PLACE_ZONES = {
-    "ontario": "America/Toronto", "quebec": "America/Toronto",
-    "mississauga": "America/Toronto", "brampton": "America/Toronto", "markham": "America/Toronto",
-    "vaughan": "America/Toronto", "oakville": "America/Toronto", "ottawa": "America/Toronto",
-    "waterloo": "America/Toronto", "montreal": "America/Toronto",
-    "british columbia": "America/Vancouver", "alberta": "America/Edmonton",
-    "calgary": "America/Edmonton", "manitoba": "America/Winnipeg",
-    "saskatchewan": "America/Regina", "nova scotia": "America/Halifax",
-    "new brunswick": "America/Moncton", "newfoundland and labrador": "America/St_Johns",
-    "san francisco": "America/Los_Angeles", "seattle": "America/Los_Angeles",
-    "san jose": "America/Los_Angeles", "palo alto": "America/Los_Angeles",
-    "mountain view": "America/Los_Angeles", "california": "America/Los_Angeles",
-    "boston": "America/New_York", "massachusetts": "America/New_York",
-    "washington dc": "America/New_York", "philadelphia": "America/New_York",
-    "atlanta": "America/New_York", "miami": "America/New_York", "new jersey": "America/New_York",
-    "austin": "America/Chicago", "dallas": "America/Chicago", "houston": "America/Chicago",
-    "texas": "America/Chicago", "illinois": "America/Chicago", "colorado": "America/Denver",
-    "united kingdom": "Europe/London", "england": "Europe/London", "scotland": "Europe/London",
-    "wales": "Europe/London", "northern ireland": "Europe/London", "uk": "Europe/London",
-    "manchester": "Europe/London", "leeds": "Europe/London", "birmingham": "Europe/London",
-    "edinburgh": "Europe/London", "glasgow": "Europe/London", "bristol": "Europe/London",
-    "cambridge": "Europe/London", "oxford": "Europe/London", "ireland": "Europe/Dublin",
-    "france": "Europe/Paris", "germany": "Europe/Berlin", "munich": "Europe/Berlin",
-    "netherlands": "Europe/Amsterdam", "spain": "Europe/Madrid", "italy": "Europe/Rome",
-    "milan": "Europe/Rome", "switzerland": "Europe/Zurich", "sweden": "Europe/Stockholm",
-    "india": "Asia/Kolkata", "bangalore": "Asia/Kolkata", "bengaluru": "Asia/Kolkata",
-    "mumbai": "Asia/Kolkata", "delhi": "Asia/Kolkata", "japan": "Asia/Tokyo",
-    "new zealand": "Pacific/Auckland",
-}
-# Countries that span several zones: they name a continent, never a time.
-_WIDE_COUNTRIES = {"united states": "America", "usa": "America", "us": "America",
-                   "canada": "America", "australia": "Australia", "brazil": "America",
-                   "mexico": "America", "indonesia": "Asia"}
-
-
-def _zone_cities() -> dict:
-    try:
-        import zoneinfo
-        zones = zoneinfo.available_timezones()
-    except Exception:  # noqa: BLE001  no time zone data on this computer
-        return {}
-    out = {}
-    for z in sorted(zones):
-        if "/" in z and z.split("/")[0] in ("America", "Europe", "Asia", "Africa", "Australia",
-                                            "Pacific", "Atlantic", "Indian"):
-            out.setdefault(z.rsplit("/", 1)[-1].replace("_", " ").lower(), z)
-    return out
-
-
-def _zone_of(part: str, cities: dict) -> str:
-    p = fold(" ".join(str(part or "").split())).lower().strip(" .")
-    if not p:
-        return ""
-    if p in _PLACE_ZONES:
-        return _PLACE_ZONES[p]
-    if p in cities:
-        return cities[p]
-    for name in sorted(list(_PLACE_ZONES) + list(cities), key=len, reverse=True):
-        if len(name) > 3 and re.search(r"(?<!\w)%s(?!\w)" % re.escape(name), p):
-            return _PLACE_ZONES.get(name) or cities[name]
-    return ""
-
-
-def zone_for(location: str) -> str:
-    """The time zone a location sits in, or "" when it names none for certain. The broadest
-    part that names a continent decides between rival readings: "London, Ontario, Canada" is
-    Toronto's time, and "Manchester, New Hampshire, United States" is none this knows."""
-    cities = _zone_cities()
-    parts = [x for x in str(location or "").split(",") if x.strip()]
-    zones = [_zone_of(x, cities) for x in parts]
-    wide = [_WIDE_COUNTRIES.get(fold(x).strip().lower(), "") for x in parts]
-    anchor = next((w or (z.split("/")[0] if z else "") for z, w in
-                   reversed(list(zip(zones, wide))) if w or z), "")
-    for z in zones:
-        if z and (not anchor or z.split("/")[0] == anchor):
-            return z
-    return ""
+# Where a place is in time, and the person's own zone: one reader, the person's own
+# (tools/person.py zone_for, home_zone_named), so this and the page never disagree.
+_PLACE_ZONES = person.PLACE_ZONES
+_WIDE_COUNTRIES = person.WIDE_COUNTRIES
+zone_for = person.zone_for
 
 
 def home_zone() -> str:
-    """The person's own time zone: the zone their TIMEZONE setting names, else HOME_CITY's."""
-    m = _IANA.search(str(getattr(_NET, "TIMEZONE", "") or ""))
-    if m:
-        return m.group(0)
-    return zone_for(str(getattr(_NET, "HOME_CITY", "") or ""))
+    """The person's own time zone, as every part of the app reads it (person.home_zone_named):
+    their page setting, else what TIMEZONE, HOME_CITY or their location says."""
+    try:
+        return person.home_zone_named(person.directory())
+    except person.NoProfile:
+        return ""
 
 
 def their_time(location: str = "", now: datetime.datetime | None = None) -> str:

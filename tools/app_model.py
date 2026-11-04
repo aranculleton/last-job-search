@@ -33,11 +33,13 @@ from __future__ import annotations
 import datetime as dt
 import glob
 import hashlib
+import html
 import json
 import os
 import re
 import subprocess
 import sys
+import urllib.parse
 
 _HERE = os.path.dirname(os.path.abspath(__file__))
 for _p in (os.path.join(_HERE, "network"), _HERE):
@@ -115,19 +117,7 @@ def clock(today: str | None = None, now: str | None = None) -> tuple[dt.date, dt
 # The zones an invite writes beside a time (outcome.md keeps them as written: what_works,
 # _STAGE_WHEN), read as the place they name. One a place does not settle is left out: an
 # interview at a time in a zone not known here keeps its day alone, never a wrong hour.
-_ZONE_WORDS = {"UTC": "UTC", "GMT": "Etc/GMT", "BST": "Europe/London", "UK": "Europe/London",
-               "WET": "Europe/Lisbon", "WEST": "Europe/Lisbon", "CET": "Europe/Paris",
-               "CEST": "Europe/Paris", "EET": "Europe/Athens", "EEST": "Europe/Athens",
-               "ET": "America/New_York", "EST": "America/New_York", "EDT": "America/New_York",
-               "CT": "America/Chicago", "CST": "America/Chicago", "CDT": "America/Chicago",
-               "MT": "America/Denver", "AT": "America/Halifax", "AST": "America/Halifax",
-               "ADT": "America/Halifax", "NST": "America/St_Johns", "NDT": "America/St_Johns",
-               "AKST": "America/Anchorage", "AKDT": "America/Anchorage", "HST": "Pacific/Honolulu",
-               "MST": "America/Denver", "MDT": "America/Denver", "PT": "America/Los_Angeles",
-               "PST": "America/Los_Angeles", "PDT": "America/Los_Angeles",
-               "SGT": "Asia/Singapore", "HKT": "Asia/Hong_Kong", "JST": "Asia/Tokyo",
-               "AEST": "Australia/Sydney", "AEDT": "Australia/Sydney",
-               "NZST": "Pacific/Auckland", "NZDT": "Pacific/Auckland"}
+_ZONE_WORDS = person.ZONE_WORDS
 
 
 def interview_when(day, clock="", written="", home="UTC") -> str | None:
@@ -145,7 +135,9 @@ def interview_when(day, clock="", written="", home="UTC") -> str | None:
     if not m:
         return day
     written = str(written or "").strip()
-    name = (_ZONE_WORDS.get(written.upper()) or (written if "/" in written else "")) if written \
+    # One reader of a zone's words, the person's (person.zone_in): "Toronto time" and "ET"
+    # alike; a word it cannot place gives the day alone, never a time in the wrong zone.
+    name = (_ZONE_WORDS.get(written.upper()) or person.zone_in(written, home)) if written \
         else (str(home or "") or "UTC")
     if not name:
         return day
@@ -183,8 +175,13 @@ def local_day(t: dt.datetime, zone: str) -> dt.date:
 
 
 def _canon(obj) -> str:
-    return json.dumps(obj, sort_keys=True, ensure_ascii=False, separators=(",", ":"),
-                      default=str)
+    return _CANON.encode(obj)
+
+
+# json.dumps with these settings, made once: dumps builds an encoder a call, and a big page
+# asks for some 4,500 revs.
+_CANON = json.JSONEncoder(sort_keys=True, ensure_ascii=False, separators=(",", ":"),
+                          default=str)
 
 
 def rev_of(*parts) -> str:
@@ -193,10 +190,33 @@ def rev_of(*parts) -> str:
 
 
 def _without_clock(obj):
+    """`obj` without any CLOCK_KEYS, at any depth. Only what holds one is copied: the rest is
+    `obj`'s own, so what this returns is read, never changed. A copy of all of a big model
+    was most of the time its rev took (2026-11-03)."""
     if isinstance(obj, dict):
-        return {k: _without_clock(v) for k, v in obj.items() if k not in CLOCK_KEYS}
+        new = None
+        for k, v in obj.items():
+            if isinstance(v, (dict, list)):
+                w = _without_clock(v)
+                if w is not v:
+                    if new is None:
+                        new = dict(obj)
+                    new[k] = w
+        if not CLOCK_KEYS.isdisjoint(obj):
+            new = dict(obj) if new is None else new
+            for k in CLOCK_KEYS:
+                new.pop(k, None)
+        return obj if new is None else new
     if isinstance(obj, list):
-        return [_without_clock(v) for v in obj]
+        new = None
+        for i, v in enumerate(obj):
+            if isinstance(v, (dict, list)):
+                w = _without_clock(v)
+                if w is not v:
+                    if new is None:
+                        new = list(obj)
+                    new[i] = w
+        return obj if new is None else new
     return obj
 
 
@@ -226,17 +246,54 @@ class Names:
         alts = sorted(self.first, key=len, reverse=True)
         self.rx = (re.compile(r"(?<!\w)(?:" + "|".join(re.escape(a) for a in alts) + r")(?!\w)",
                               re.I) if alts else None)
+        # A line holds a full name only where the name's first two words stand side by side
+        # in it, so a set says first whether the pattern of every name can match at all: run
+        # on every line of a book of 2,000, it made each build half a second slower once the
+        # engine said where every person stands (2026-11-03).
+        self.pairs, self.ones, self.always = set(), set(), False
+        for alt in alts:
+            words = _WORDS.findall(alt)
+            if not words:
+                self.always = True
+            elif len(words) == 1:
+                self.ones.add(words[0])
+            else:
+                self.pairs.add((words[0], words[1]))
+        # What each text came out as, for this build: a contact's next step is cut down for
+        # their row and again for To do, and one title is on many rows.
+        self.done: dict = {}
+        self.scrubbed: dict = {}
+
+    def could(self, text: str) -> bool:
+        """Can a full name be in `text`? False only where none can."""
+        if self.always:
+            return True
+        words = _WORDS.findall(text.casefold())
+        if self.ones and not self.ones.isdisjoint(words):
+            return True
+        return any(p in self.pairs for p in zip(words, words[1:]))
 
     def sub(self, text: str) -> str:
         if self.rx is None:
             return text
-        return self.rx.sub(lambda m: self.first.get(m.group(0).casefold(), m.group(0)), text)
+        got = self.done.get(text)
+        if got is None:
+            got = self.done[text] = self.rx.sub(
+                lambda m: self.first.get(m.group(0).casefold(), m.group(0)), text) \
+                if self.could(text) else text
+        return got
+
+
+_WORDS = re.compile(r"\w+")
 
 
 def _phones(text: str) -> list[str]:
-    bare = _URL.sub(" ", text)
+    bare = _URL.sub(" ", text) if "://" in text else text      # no address without "://"
     return [m.group(0) for m in PHONE.finditer(bare)
-            if 9 <= len(re.sub(r"\D", "", m.group(0))) <= 15]
+            if 9 <= len(_NON_DIGIT.sub("", m.group(0))) <= 15]
+
+
+_NON_DIGIT = re.compile(r"\D")
 
 
 def private_in(text) -> list[str]:
@@ -301,8 +358,16 @@ def scrub(text, names=()) -> str:
     """`text` with every contact detail taken out, and each full name in `names` (pairs of
     (full name, first name)) cut to the first name."""
     out = str(text or "")
-    out = LINKEDIN_IN.sub("", out)
-    out = EMAIL.sub("", out)
+    kept = getattr(names, "scrubbed", None)
+    if kept is not None and out in kept:
+        return kept[out]
+    raw = out
+    # A profile address holds a "/" and an email address an "@": a line with neither is left
+    # alone without a search for either.
+    if "/" in out:
+        out = LINKEDIN_IN.sub("", out)
+    if "@" in out:
+        out = EMAIL.sub("", out)
     for p in sorted(set(_phones(out)), key=len, reverse=True):
         out = out.replace(p, "")
     if hasattr(names, "sub"):
@@ -311,8 +376,16 @@ def scrub(text, names=()) -> str:
         for full, first in names:
             if full and first and full != first:
                 out = re.sub(re.escape(full), first, out, flags=re.I)
-    out = re.sub(r"\s+([,.;:)])", r"\1", re.sub(r"[ \t]{2,}", " ", out))
-    return re.sub(r"[,;]\s*(?=[,;.]|$)", "", out).strip(" ,;")
+    out = _SPACE_BEFORE.sub(r"\1", _SPACES.sub(" ", out))
+    out = _LOOSE_COMMA.sub("", out).strip(" ,;")
+    if kept is not None:
+        kept[raw] = out
+    return out
+
+
+_SPACES = re.compile(r"[ \t]{2,}")
+_SPACE_BEFORE = re.compile(r"\s+([,.;:)])")
+_LOOSE_COMMA = re.compile(r"[,;]\s*(?=[,;.]|$)")
 
 
 # ------------------------------------------------------------------ small readers
@@ -352,6 +425,38 @@ def _mtime(path: str) -> str:
         return stamp(dt.datetime.fromtimestamp(os.path.getmtime(path), tz=dt.timezone.utc))
     except OSError:
         return ""
+
+
+def saved_at(path: str) -> dt.datetime | None:
+    """When a file's content was last written: the commit that last changed it where the file
+    is as committed, else (changed since, or never committed) the file's own time. The file's
+    own time alone is when it was checked out: a round run at 15:51 read "searched 2 hours
+    ago" at 18:00 off a fresh copy, and a resume committed in September read "Made Sat 31
+    Oct", so "Out of date" flipped with the order the files were written (2026-11-03)."""
+    try:
+        own = dt.datetime.fromtimestamp(os.path.getmtime(path), tz=dt.timezone.utc)
+    except OSError:
+        return None
+    where = os.path.dirname(path) or "."
+    try:
+        same = subprocess.run(["git", "diff", "--quiet", "HEAD", "--", os.path.basename(path)],
+                              cwd=where, capture_output=True, timeout=10,
+                              stdin=subprocess.DEVNULL).returncode == 0
+        got = subprocess.run(["git", "log", "-1", "--format=%cI", "--",
+                              os.path.basename(path)], cwd=where, capture_output=True,
+                             text=True, encoding="utf-8", errors="replace", timeout=10,
+                             stdin=subprocess.DEVNULL) if same else None
+    except (OSError, subprocess.TimeoutExpired):
+        return own
+    # A newer git writes UTC as "Z", which Python before 3.11 (a Mac's own python3 is 3.9)
+    # cannot read: every file then took its checkout time again (CI on 3.9, 2026-11-03).
+    when = got.stdout.strip() if got is not None and got.returncode == 0 else ""
+    if when.endswith("Z"):
+        when = when[:-1] + "+00:00"
+    try:
+        return dt.datetime.fromisoformat(when).astimezone(dt.timezone.utc) if when else own
+    except ValueError:
+        return own
 
 
 def _status(row) -> str:
@@ -409,6 +514,12 @@ class Ctx:
         return self._once("tracker", make)
 
     @property
+    def tracker_ids(self) -> list[str]:
+        """tracker_ids(self.tracker), worked out once: every section that names an
+        application asked for all of them again. Read, never changed."""
+        return self._once("tracker_ids", lambda: tracker_ids(self.tracker))
+
+    @property
     def contacts(self) -> list[dict]:
         def make():
             path = person.state("network_contacts.csv")
@@ -434,11 +545,24 @@ class Ctx:
         return self._once("by_contact", lambda: state.by_contact(self.threads))
 
     @property
+    def contacts_by_key(self) -> dict:
+        """{employer key: the contacts there, in the book's order}: keyed once a build, where
+        each card that looked for someone at its employer keyed the whole book again."""
+        def make():
+            from company_key import key
+            got: dict = {}
+            for c in self.contacts:
+                got.setdefault(key(c.get("company")), []).append(c)
+            return got
+        return self._once("contacts_by_key", make)
+
+    @property
     def network(self) -> tuple:
         """(live status by contact id, warm routes, referral holds), as open_actions reads them."""
         def make():
             import open_actions
-            return open_actions.network_views(self.contacts, self.threads)
+            return open_actions.network_views(self.contacts, self.threads,
+                                              index=self.by_contact)
         return self._once("network", make)
 
     @property
@@ -451,8 +575,21 @@ class Ctx:
         def make():
             import open_actions
             return open_actions.due_items(self.contacts, self.threads, self.tracker, self.today,
-                                          network=self.network)
+                                          network=self.network, now=self.now,
+                                          index=self.by_contact, read_stages=self.stages)
         return self._once("due_items", make)
+
+    def stages(self, row: dict) -> tuple:
+        """open_actions.stages for one application, found and read once a build: Interviews,
+        Applications, Coming up and the due list each looked for every application's folder
+        again. Each caller gets lists of its own."""
+        memo = self._got.setdefault("stages", {})
+        k = (row.get("company"), row.get("role") or "")
+        if k not in memo:
+            import open_actions
+            memo[k] = open_actions.stages(row)
+        folder, files, stages = memo[k]
+        return folder, list(files), [dict(s) for s in stages]
 
     @property
     def names(self) -> "Names":
@@ -482,7 +619,19 @@ class Ctx:
 
     @property
     def zone(self) -> str:
-        return self._once("zone", lambda: person.home_zone_named(person.directory()) or "UTC")
+        """The person's own zone, for working out days and times: UTC only while they have
+        named none, which the page shows in the device's own zone and asks them for."""
+        return self.zone_named or "UTC"
+
+    @property
+    def zone_named(self) -> str:
+        """The person's own zone as they said it (person.home_zone_named), or ""."""
+        def make():
+            try:
+                return person.home_zone_named(person.directory())
+            except person.NoProfile:
+                return ""
+        return self._once("zone_named", make)
 
 
 # ------------------------------------------------------------------ app and person
@@ -499,14 +648,37 @@ def _app(ctx: Ctx, targets: dict) -> dict:
         owner, name = app_setup.origin()
     except Exception:  # noqa: BLE001
         owner, name = "", ""
+    try:
+        import app_setup
+        url = str(app_setup.page_record().get("url") or "") or None
+    except Exception:  # noqa: BLE001  no profile yet: no page yet
+        url = None
     return {"version": u.get("version") or "",
+            # The page's own address, for Settings' "Open on another device": nothing gave it
+            # the page, which said "The link arrives with the next update" for ever (the 3
+            # November audit).
+            "url": url,
             "update_waiting": waiting["line"] if waiting and u.get("mode") == "when_asked"
             else None, "news": news, "privacy": _privacy_line(),
             # The copy the page belongs to, so the page can start its helper chat itself.
             "repo": f"https://github.com/{owner}/{name}" if owner and name else None,
             # The page's own code version, built into it when it is published: an open page
             # older than the one published since reloads itself (meta/now `page`, app.py view).
-            "page": _page_version()}
+            "page": _page_version(),
+            # How many pieces of the person's work have waited a day or more without being
+            # saved (land.stranded, read offline): the page says so, so work that never
+            # reached their copy is never silent (the stranger audit, X-30).
+            "not_saved": _not_saved()}
+
+
+def _not_saved() -> int:
+    try:
+        import land
+        if not hasattr(land, "stranded") or land._the_app(land.ROOT):
+            return 0
+        return len(land.stranded(land.ROOT, fetch=False))
+    except Exception:  # noqa: BLE001  no git here, or no copy: nothing to say
+        return 0
 
 
 def _page_version() -> int:
@@ -530,9 +702,11 @@ def _person(ctx: Ctx, targets: dict) -> dict:
     try:
         name = str(person.get("identity.name", "") or "")
         first = str(person.get("identity.first", "") or "") or (name.split() or [""])[0]
-        noun, zone = str(person.get("documents.noun", "resume")), ctx.zone
+        # "" while they have named no zone: the page then shows its device's own and asks
+        # (q-time-zone), never the zone their brief happens to be scheduled in.
+        noun, zone = str(person.get("documents.noun", "resume")), ctx.zone_named
     except person.NoProfile:
-        name, first, noun, zone = "", "", "resume", "UTC"
+        name, first, noun, zone = "", "", "resume", ""
     repo, computer = "", False
     try:
         import place
@@ -591,8 +765,11 @@ def _needs_you(ctx: Ctx, targets: dict) -> list:
     import app_setup
     out = app_setup.outside_items(targets, app_setup.repo_kind_offline())
     try:
+        out += _zone_question(ctx, targets)
         out += _profile_questions(ctx, targets)
-        out += _sent_questions(ctx, targets)
+        sent = _sent_questions(ctx, targets)
+        ctx._got["sent_questions"] = sent
+        out += sent
         out += _own_profile_card(ctx, targets)
         out += _tweak_offers(ctx, targets)
     except person.NoProfile:
@@ -650,6 +827,8 @@ def _sent_questions(ctx: Ctx, targets: dict) -> list:
     for i in ctx.due_items:
         if i.get("half") != "contact" or not str(i.get("what") or "").startswith(UNCONFIRMED):
             continue
+        if (i.get("rule") or {}).get("why") in ("employer", "place", "closed"):
+            continue            # their own rules stop anything going to them
         cid = str(i.get("contact_id") or "")
         c = book.get(cid) or {}
         who = first_name(c.get("name")) or "them"
@@ -662,8 +841,14 @@ def _sent_questions(ctx: Ctx, targets: dict) -> list:
                 "title": f"Did your note to {who} go?",
                 "body": f"It was due on {i['due']} and nothing is logged yet. LinkedIn does not "
                         "tell the app when one goes from its own pages.",
+                # It went on or about the day it was due, not on the day it was asked: logged
+                # as sent today, the 14-day follow-up counted from the wrong day (journeys
+                # audit 14). The page offers another day.
                 "options": [{"label": "Yes, it went", "action": "msg.sent",
-                             "value": {"draft": True} if text else {"outside": True}},
+                             "value": dict({"draft": True} if text else {"outside": True},
+                                           **({"on": i["due"]} if str(i.get("due") or "")
+                                              and str(i["due"]) <= ctx.today.isoformat()
+                                              else {}))},
                             {"label": "Not yet", "action": "due.snooze",
                              "value": {"until": tomorrow}}],
                 "edit": {"label": "It went with other words", "action": "msg.sent",
@@ -697,7 +882,7 @@ def _profile_questions(ctx: Ctx, targets: dict) -> list:
     import confirm
     out = []
     rows = ctx.tracker
-    ids = tracker_ids(rows)
+    ids = ctx.tracker_ids
     said = confirm.check(rows, ctx.today).get("notes say sent, tracker says drafted", [])
     if said:
         for row, rid in zip(rows, ids):
@@ -963,8 +1148,23 @@ def why_of(fit_why) -> list[str]:
         if group:
             text = max(group)[1]
             text = re.split(r";", text)[0].strip()
+            for rx, plain in _WHY_PLAIN:
+                text = rx.sub(plain, text)
             out.append(text[:1].upper() + text[1:120])
     return out
+
+
+# The score's reasons as the card says them: the scorer writes for the chat ("core match",
+# "live contact at this employer (...), so this is not a cold application").
+_WHY_PLAIN = [
+    (re.compile(r"^core match: ", re.I), "matches your skills: "),
+    (re.compile(r"^live contact at this employer \(([^)]*)\).*$", re.I), r"you know \1 there"),
+    (re.compile(r"^they interviewed you before \(([^)]*)\)$", re.I), r"they interviewed you before, for \1"),
+    (re.compile(r"^graduate degree stated without an equivalence route.*$", re.I),
+     "asks for a graduate degree, with no other way in"),
+    (re.compile(r"^(senior|mid|junior)[^,]*, the band the profile holds$", re.I),
+     r"\1, the level you are at"),
+]
 
 
 def draft_work_id(url: str, company: str = "", title: str = "") -> str:
@@ -1017,6 +1217,7 @@ def _jobs(ctx: Ctx, targets: dict) -> dict:
     raw = raw if isinstance(raw, list) else list(raw.values()) if isinstance(raw, dict) else []
     rows = []
     kept = {norm(u) for u in kept_jobs()}
+    window = run_round._job_age_days()
     import added_jobs
     found = ([("added", n, r) for n, r in enumerate(added_jobs.load(), 1)]
              + [(name, rank, r) for rank, r in enumerate(raw, 1)] + _earlier_rows(ctx, path))
@@ -1035,7 +1236,15 @@ def _jobs(ctx: Ctx, targets: dict) -> dict:
         # Ruled out by the person, or by a chat that found it is not one they can take (a draft
         # stopped on where the job is open): either way it leaves the list and its counts. One
         # stopped for that stayed in "10 jobs to look at" (2026-10-30).
-        if entry and str(entry.get("status") or "").lower() == "excluded" \
+        # Sent first: a role the tracker holds as applied is Applied whatever a ruling on its
+        # posting says. One applied in September and ruled out since read "Set aside" with
+        # "Bring back", offering a second application (2026-11-03). Sent is a day it went: a
+        # draft set aside ("they chose not to send it") has none, and stays set aside.
+        sent = bool(tracked) and bool(st) and st not in throttle.UNSENT \
+            and bool(throttle.applied_on(tracked))
+        if sent:
+            status = "applied"
+        elif entry and str(entry.get("status") or "").lower() == "excluded" \
                 and entry.get("basis") in ("person", "rules"):
             status = "dismissed"
         elif tracked and st not in throttle.UNSENT and st:
@@ -1056,7 +1265,12 @@ def _jobs(ctx: Ctx, targets: dict) -> dict:
         if r.get("brought_back"):
             notes.append("You brought this back after it was filtered out.")
         if r.get("bar_reason"):
-            notes.append(scrub(r["bar_reason"], ctx.names))
+            said = bar_words(r.get("bar"), scrub(r["bar_reason"], ctx.names))
+            if said:
+                notes.append(said)
+        if r.get("silent_application_note"):
+            notes.append("You applied here before and never heard back: check before "
+                         "applying again.")
         if r.get("outreach_pending_note"):
             notes.append("Someone here has your message and has not replied: applying is "
                          "fine, a second message is not.")
@@ -1065,13 +1279,23 @@ def _jobs(ctx: Ctx, targets: dict) -> dict:
         # Counted to today: the posting's own date where the search read one, else its age
         # on the day the search ran plus the days since. A search's own count stays as it
         # was, so a row found on the 21st said "posted 1 day ago" a week on (2026-10-29).
+        # The older of the two, as the search window reads it (prefilter.age_days): a relisted
+        # posting's portal date said "posted 3 days ago" of one the gate knew was 4 days old,
+        # and "new" of one months old (2026-11-03).
         posted = app_lists.ago(r.get("date"), ctx.today) if _date(str(r.get("date") or "")[:10]) \
             else None
-        if posted is None and isinstance(r.get("age_days"), int):
+        if isinstance(r.get("age_days"), int):
             ran = round_day(rounds_dir(rname)) if not added else None
-            posted = r["age_days"] + max(0, (ctx.today - ran).days) if ran else r["age_days"]
+            gate = r["age_days"] + max(0, (ctx.today - ran).days) if ran else r["age_days"]
+            posted = gate if posted is None else max(posted, gate)
         if posted is None:
             posted = app_lists.ago(r.get("first_seen"), ctx.today)
+        # Past the person's own search window, a posting nobody has decided on leaves the list
+        # by itself, counted to today from its own date: the week rule hung on a chat
+        # remembering to clear it, measured from the day it was found (2026-11-03).
+        if status == "new" and not added and posted is not None and posted > window \
+                and not (url and norm(url) in kept):
+            continue
         item = {"id": jid, "rank": rank, "score": score, "band": _band(score),
                 "company": company, "title": title, "place": place, "remote": _remote(place),
                 "pay": {"text": pay or "not stated", "stated": bool(pay), "top": top,
@@ -1085,7 +1309,8 @@ def _jobs(ctx: Ctx, targets: dict) -> dict:
                 "draft_work": {"kind": "draft", "id": draft_work_id(url, company, title),
                                "args": {"round": rname, "rank": rank, "url": url,
                                         "company": company, "title": title}},
-                "why": why_of(r.get("fit_why")), "from_round": rname if earlier else None,
+                "why": [scrub(w, ctx.names) for w in why_of(r.get("fit_why"))],
+                "from_round": rname if earlier else None,
                 "added": added,
                 "kept": norm(url) in kept if url else False,
                 "apply": apply_link(r), "notes": notes, "status": status,
@@ -1107,15 +1332,71 @@ def _jobs(ctx: Ctx, targets: dict) -> dict:
     good, strong = run_round.yield_of(path)
     met = good >= run_round.YIELD_60 and strong >= run_round.YIELD_75
     filtered = _filtered(name, targets)
-    now_n = sum(1 for r in rows if not r["from_round"] and not r["added"])
-    summary = (f"{now_n} roles on the shortlist, {good} scoring 60 or more"
-               f" and {strong} scoring 75 or more.")
-    if now_n < len(rows):
-        summary += f" {len(rows) - now_n} more from earlier searches, not decided yet."
+    # What Jobs lists to look at, counted once here: a role not applied for, not set aside,
+    # not closed and not drafted. "10 roles on the shortlist" counted the one applied for
+    # and the one set aside beside a page that said 4 (2026-11-03).
+    look = [r for r in rows if to_look_at(r)]
+    now = [r for r in look if not r["from_round"] and not r["added"]]
+    n75 = sum(1 for r in now if (r["score"] or 0) >= 75)
+    summary = (f"{len(now)} {'role' if len(now) == 1 else 'roles'} from the last search to look "
+               f"at, {n75} of them scoring 75 or more.")
+    if len(look) > len(now):
+        summary += f" {len(look) - len(now)} more from earlier searches, not decided yet."
     if filtered["count"]:
         summary += f" {filtered['count']} left out, each with its reason."
-    return {"round": name, "made_at": _mtime(path), "met": met, "summary": summary,
+    made = saved_at(path)
+    return {"round": name, "made_at": stamp(made) if made else None, "met": met,
+            "summary": summary,
             "rows": rows, "filtered": filtered}
+
+
+def to_look_at(r: dict) -> bool:
+    """A job row still to look at: new, scoring 60 or more, not closed; the page's own count
+    (jobToLook) is this one, less what was tapped since."""
+    return (r.get("status") == "new" and (r.get("score") or 0) >= 60
+            and (r.get("apply") or {}).get("status") != "closed")
+
+
+# What the bar's verdict says, in the person's words (audit 17): its reasons were copied onto
+# the card as written for the chat, "tier 2 employer (rogers): major brand, strong pay band",
+# with a command in one.
+_TIER_WORDS = {"1": "A top employer, with top-of-market pay.",
+               "2": "A major brand with a strong pay band.",
+               "3": "A solid employer of its size."}
+
+
+def bar_words(verdict, reason: str) -> str:
+    """One plain sentence for a bar verdict and its reason, or "" when it says nothing a
+    person can use."""
+    why = " ".join(str(reason or "").split())
+    if not why:
+        return ""
+    low = why.lower()
+    m = re.match(r"tier (\d) employer \([^)]*\)", low)
+    if m:
+        return _TIER_WORDS.get(m.group(1), "")
+    if low.startswith("public body, but"):
+        return "A public body, but even the bottom of its stated pay reaches your target."
+    if "reaches the" in low and "target" in low:
+        return "Its stated pay reaches your target."
+    if low.startswith("frontier ai"):
+        return "A frontier AI company."
+    if low.startswith("yc or top-tier backed"):
+        return "Backed by a top investor."
+    if low.startswith("established technology company"):
+        return "An established technology company."
+    if low.startswith("staffing agency"):
+        return "A staffing agency: the employer it hires for is not named."
+    if low.startswith("judged"):
+        said = why.split(":", 1)[1].strip() if ":" in why else ""
+        return f"Your call on this employer: {said.rstrip('.')}." if said else ""
+    if "not on your employer lists" in low:
+        pay = (" Its stated pay is under your target." if "is under the" in low
+               else " It states no pay." if low.startswith("no stated range") else "")
+        return "Not on your employer lists yet." + pay
+    # Anything else: the reason as said, without a command or a code in it.
+    why = re.sub(r"\s*\([^)]*`[^)]*\)", "", re.sub(r"`[^`]*`", "", why)).strip(" ;:,")
+    return (why[:1].upper() + why[1:]).rstrip(".") + "." if why else ""
 
 
 def _filtered(name: str, targets: dict) -> dict:
@@ -1244,10 +1525,25 @@ def _outreach(folder: str, names) -> dict | None:
 def _screening(folder: str) -> list:
     text = _read(os.path.join(folder, "screening_answers.md"))
     out = []
-    for m in re.finditer(r"^###\s+(.+?)\s*$\n+\*\*(.+?)\*\*", text, re.M):
+    for m in re.finditer(r"^###\s+(.+?)\s*$\n+\*\*(.+?)\*\*[ \t]*\n?((?:(?!^###|^---).*\n?)*)",
+                         text, re.M):
         q = re.sub(r"\s*\*\*\(decide per application\)\*\*", "", m.group(1)).strip()
-        out.append({"q": q, "a": m.group(2).strip()})
+        a = m.group(2).strip()
+        # A gap left for the person ("[check the tracker row]", "[FILL IN]") is theirs to
+        # answer, never a Copy button: one tap pasted the brackets into an employer's form
+        # (2026-11-03).
+        if PLACEHOLDER.search(a):
+            out.append({"q": q, "a": "", "fill": True})
+            continue
+        # Why the answer says what it says, the note the drafting wrote under it, so the
+        # person can judge an answer before copying it.
+        why = " ".join(re.sub(r"[*_`]", "", m.group(3) or "").split())
+        out.append(dict({"q": q, "a": a}, **({"why": why[:300]} if why else {})))
     return out
+
+
+# A gap a draft leaves for the person to fill: words in square brackets, or a FILL IN / TBC.
+PLACEHOLDER = re.compile(r"\[[^\]\n]{2,80}\]|\bFILL\s*IN\b|\bTBC\b|\bTODO\b")
 
 
 def _checks(files, expect_resume: int, noun: str = "resume") -> dict:
@@ -1284,6 +1580,9 @@ VERIFY_WORDS = {
     "ROUNDTRIP": "a line of the draft is missing from the PDF's text",
     "NO_PINNED_SKILL": "the skill you always show is missing", "SKILLPARENS":
     "the skills line has brackets", "DUPBULLET": "a bullet is there twice",
+    "UNAUDITED": "a sentence was changed after the checks read it",
+    "CLAIMS": "something on it breaks your own rules or is not in your profile",
+    "NUMBERS": "a number on it is not in your profile",
 }
 VERIFY_PASSED = ("one page each", "jobs in date order", "text an applicant tracking system "
                  "reads cleanly", "your contact details in the text", "every line of the "
@@ -1316,6 +1615,8 @@ def verify_items(folder: str) -> dict | None:
             bad.append("two bullets share a phrase")
         elif "_LT_" in base:
             bad.append("a job has fewer bullets than its minimum")
+        elif "_GT_" in base:
+            bad.append("a job has more bullets than your rules allow for this role")
         else:
             bad.append(VERIFY_WORDS.get(base, "a check failed"))
     return {"at": got.get("at"), "passed": not flags,
@@ -1379,7 +1680,7 @@ def _ready(ctx: Ctx, targets: dict) -> list:
     out, folded = [], 0
     expect = int(person.get("documents.resume_pages", 1) or 1)
     noun = str(person.get("documents.noun", "resume"))
-    for row, rid in zip(ctx.tracker, tracker_ids(ctx.tracker)):
+    for row, rid in zip(ctx.tracker, ctx.tracker_ids):
         st = _status(row)
         on = throttle.applied_on(row) if st not in throttle.UNSENT else ""
         if st in throttle.UNSENT:
@@ -1629,20 +1930,67 @@ def _limit(channel: str, kind: str):
 
 def turned_down(company) -> bool:
     """Has the person's bar (tools/bar.py) turned this employer down, by a rule, by name, or
-    by a judgement on record, so nobody there is chased? An employer with no name is never."""
-    if not str(company or "").strip():
-        return False
+    by a judgement on record, so nobody there is chased? The one check, surface.turned_down;
+    an employer with no name, or one nobody has judged yet, is never."""
+    from network import surface
+    return bool(surface.turned_down(company))
+
+
+# Every reason the composer would refuse a draft (compose.validate), in plain words. A draft
+# that breaks one is never offered as ready to send: its card says what is wrong and offers
+# to fix it, with no Copy and no "I sent it" (2026-11-03: a first note naming sponsorship and
+# a follow-up 7 characters over its limit had Copy and I sent it like any other).
+_BLOCK_WORDS = {
+    "too_long": "it is longer than this kind of message may be",
+    "work_auth_in_first_note": "it brings up your right to work in a first note",
+    "casual_work_auth": "it says your right to work in passing",
+    "asks_for_the_job": "it asks them for a job",
+    "person_dislikes": "it uses words you asked never to use",
+    "banned_phrase": "it uses a phrase you asked never to use",
+    "unfilled_placeholder": "it still has a gap to fill in",
+    "greeting_wrong_name": "it greets them by the wrong name",
+    "check_in": "it only checks in, with nothing for them to answer",
+    "flattery": "it praises them before you know them",
+    "unsupported_claim": "it says something about you that your profile does not hold",
+    "example_facts": "it says something about you that is not on record",
+    "lowercase_name": "a name in it starts with a small letter",
+    "reads_as_generated": "a phrase in it reads as written by a machine",
+    "ignores_your_last_message": "it was written as if your last message to them never went",
+    "repeats_your_last_message": "it repeats news your last message already gave them",
+    "referral_ask_too_soon": "it asks for a referral before they have engaged",
+    "manufactured_connection": "it claims a connection you do not have",
+    "gatekeeping": "it asks them to pass you to someone else",
+}
+# Checks shown elsewhere on the card: a first note with nothing read about them has its own
+# line and its own button (Paste their profile).
+_NOT_BLOCKING = frozenset({"no_reading"})
+
+
+def message_blocks(text: str, mtype: str, contact: dict, today=None) -> list[dict]:
+    """Every reason the composer refuses this draft now, each {"rule", "said"}: what
+    `reading.py draft` refuses at saving, read again on the draft as it stands (a rule the
+    person recorded since, a message of theirs logged since, a limit for what it now is)."""
     try:
-        import bar
-        import profile_set  # noqa: F401  (a profile is there)
-        if bar.excluded_by_name(company):
-            return True
-        # Judged and found wanting; an employer nobody has judged yet is never hidden for
-        # it (bar.py UNLISTED), so the brief judges those (`bar.py unjudged --contacts`).
-        j = bar.judgement(company)
-        return bool(j and j.get("verdict") == bar.NONE)
-    except Exception:  # noqa: BLE001
-        return False
+        import compose
+        found = compose.validate(text, COMPOSE_KIND.get(mtype, "reply"),
+                                 name=first_name(contact.get("name")) or None,
+                                 title=str(contact.get("title") or ""),
+                                 employers=(str(contact.get("company") or ""),)
+                                 if contact.get("company") else (),
+                                 contact=str(contact.get("contact_id") or ""), today=today)
+    except Exception:  # noqa: BLE001  a check that cannot run blocks nothing
+        return []
+    out, seen = [], set()
+    for v in found or ():
+        rule = str(getattr(v, "rule", "") or "")
+        if rule in _NOT_BLOCKING:
+            continue
+        said = _BLOCK_WORDS.get(rule) or ("it breaks a rule: " + short(" ".join(str(
+            getattr(v, "text", "") or "").split()), 90))
+        if said not in seen:
+            seen.add(said)
+            out.append({"rule": rule, "said": said})
+    return out[:4]
 
 
 def draft_limit(contact: dict, status: str, text: str = "") -> tuple[str, str, int | None]:
@@ -1659,10 +2007,11 @@ def draft_limit(contact: dict, status: str, text: str = "") -> tuple[str, str, i
 
 def _messages(ctx: Ctx, targets: dict) -> list:
     files = sorted(glob.glob(person.state("documents", "network", "*", "draft.md")))
+    ctx._got["message_by_contact"] = {}
     if not files:
         return []
     import reading
-    from network import schema
+    from network import surface
     book = {str(c.get("contact_id") or "").strip(): c for c in ctx.contacts}
     out = []
     for f in files:
@@ -1675,14 +2024,17 @@ def _messages(ctx: Ctx, targets: dict) -> list:
         if not text:
             continue
         live = ctx.live.get(cid) or str(c.get("status") or "")
-        if live in schema.TERMINAL:
-            continue            # set aside or closed: a draft left in its folder is not shown
-        if live != "replied_needs_response" and turned_down(c.get("company")):
-            continue            # an employer the bar turns down is not written to
         kind = _message_kind(live)
+        # The person's own surface rules (surface.held): a thread closed or at its limit of
+        # unanswered messages, an employer their bar turns down, somewhere outside where
+        # they look, a request nobody accepted. A draft to such a person is never offered.
+        if surface.held(c, ctx.by_contact.get(cid) or [], live,
+                        replying=live == "replied_needs_response",
+                        memo=ctx._got.setdefault("held_memo", {})):
+            continue
         channel = _channel(c, kind)
         hold = None
-        if raw.startswith(reading.WAITS_ON_A_READ):
+        if kind == "first_note" and raw.startswith(reading.WAITS_ON_A_READ):
             hold = "Written before their profile was read: read it first"
         mid = f"msg-{cid}"
         from network import state as _st
@@ -1693,14 +2045,20 @@ def _messages(ctx: Ctx, targets: dict) -> list:
                 "employer": str(c.get("company") or ""), "channel": channel, "kind": kind,
                 "type": mtype, "subject": subject or None, "body": body,
                 "count": count_of(len(body), limit, mtype),
-                "warnings": message_warnings(body, mtype, c), "open": open_target(c, channel),
+                "warnings": message_warnings(body, mtype, c),
+                "blocked": message_blocks(text, mtype, c, ctx.today),
+                # Where they live is not on record, so the person's rule about where people
+                # are cannot be checked: said on the card before a new message goes.
+                "where_unknown": kind != "reply" and not str(c.get("location") or "").strip(),
+                "open": open_target(c, channel),
                 "application": None,
                 "text": text, "chars": len(body), "limit": limit,
                 "why": ROUTE_WHY.get(str(c.get("route") or "").strip().lower(),
                                      f"They work at {c.get('company') or 'an employer you want'}"),
                 "due": str(c.get("next_action_due") or "") or None, "hold": hold,
                 "rev": rev_of(cid, text, kind, channel, live)}
-        if mtype == "first_note" and channel == "linkedin_note" and hold is None:
+        if mtype == "first_note" and channel == "linkedin_note" and hold is None \
+                and not item["blocked"]:
             # First notes waiting to go are one wave: one To do card ("4 first notes ready to
             # send") and one list by employer in Messages. The page had both and the engine
             # never said which notes were a wave, so a networking run's notes reached To do
@@ -1711,14 +2069,20 @@ def _messages(ctx: Ctx, targets: dict) -> list:
         # Code-only tweaks need the parts the note was made from (tools/network/parts.py).
         item["parts"] = parts.load(cid, text) is not None
         item["tweaks_done"] = _tweaks_done(os.path.dirname(f), f)
-        item["paste"] = _paste(cid, item["first_name"], raw)
+        item["paste"] = _paste(cid, item["first_name"], raw) if kind == "first_note" else None
         _card(ctx, targets, item, "for_message")
         out.append(item)
         targets[mid] = {"kind": "message", "contact": cid, "text": body, "subject": subject,
                         "msg_kind": kind, "type": mtype, "channel": channel, "status": live,
                         "rev": item["rev"]}
     out += _app_followups(ctx, targets)
-    out.sort(key=lambda m: (m["hold"] is not None, m["due"] or "9999", m["first_name"].lower()))
+    # Replies first (someone is waiting on them), then follow-ups, then first notes; within
+    # each the longest owed first. Sorted by due date alone, a follow-up a month stale led and
+    # the one reply someone was waiting on sat eighteenth of nineteen (2026-11-03).
+    rank = {"reply": 0, "thank_you": 0, "referral_ask": 1, "follow_up": 2}
+    out.sort(key=lambda m: (m["hold"] is not None, rank.get(m["type"], 3), m["due"] or "9999",
+                            m["first_name"].lower()))
+    ctx._got["message_by_contact"] = {m["contact"]: m for m in out if m.get("contact")}
     return out
 
 
@@ -1734,7 +2098,7 @@ def _app_followups(ctx: Ctx, targets: dict) -> list:
     if not drafts:
         return []
     ids = {(str(r.get("company") or ""), str(r.get("role") or "role not recorded")): rid
-           for r, rid in zip(ctx.tracker, tracker_ids(ctx.tracker))}
+           for r, rid in zip(ctx.tracker, ctx.tracker_ids)}
     out = []
     for i in ctx.due_items:
         if i.get("half") != "application" or i.get("kind") == "interview" or i.get("held"):
@@ -1770,12 +2134,15 @@ def _app_followups(ctx: Ctx, targets: dict) -> list:
 # One plain word for each status, and what the row offers when something is owed by the
 # person (FUNCTIONS_SPEC 1.4): a reply owed has its own word and its own button.
 STATUS_WORDS = {
-    "not_contacted": "Not written to", "awaiting_reply": "Sent",
+    "not_contacted": "Not written to", "awaiting_reply": "Waiting for a reply",
     "connected_no_reply": "Connected", "replied_needs_response": "Replied: your turn",
     "in_conversation": "Talking", "call_booked": "Call booked",
     "referral_in_progress": "Referral", "converted_to_application": "Applied",
     "gone_cold": "Gone quiet", "closed": "Closed", "dropped": "Set aside",
 }
+# One word for each status, on every card, filter and person page: the page's own map
+# (templates/app/app.js PERSON_STATUS) says the same words, which a test holds. A row said
+# "Sent" where the person's page said "Waiting for a reply" (2026-11-03).
 
 
 # A person's conversation on their page: the newest few messages, each cut at a word. The
@@ -1789,11 +2156,18 @@ THREAD_CHARS = 600
 def _redact(text: str) -> str:
     """Their words with any contact detail said as what it was, never the detail: the page
     reads an address from the owner-only reach documents (CONTRACT 1)."""
-    out = LINKEDIN_IN.sub("(their profile address)", str(text or ""))
-    out = EMAIL.sub("(an email address)", out)
+    out = str(text or "")
+    if "/" in out:                    # a profile address holds a "/", an email an "@" (scrub)
+        out = LINKEDIN_IN.sub("(their profile address)", out)
+    if "@" in out:
+        out = EMAIL.sub("(an email address)", out)
     for p in sorted(set(_phones(out)), key=len, reverse=True):
         out = out.replace(p, "(a phone number)")
     return out
+
+
+_LINE_END = re.compile(r"\r\n|\r|\n")
+_BLANK_LINES = re.compile(r"\n{3,}")
 
 
 def thread_of(msgs, names=()) -> tuple[list, int]:
@@ -1807,8 +2181,8 @@ def thread_of(msgs, names=()) -> tuple[list, int]:
         if not d or state.is_auto_reply(m):
             continue
         # Their lines kept, each one's spacing tidied: a file saved on Windows says \r\n.
-        lines = re.split(r"\r\n|\r|\n", str(m.get("full_text") or ""))
-        words = re.sub(r"\n{3,}", "\n\n", "\n".join(" ".join(x.split()) for x in lines)).strip()
+        lines = _LINE_END.split(str(m.get("full_text") or ""))
+        words = _BLANK_LINES.sub("\n\n", "\n".join(" ".join(x.split()) for x in lines)).strip()
         event = None
         if state.is_acceptance(m):
             event = "Accepted your connection request."
@@ -1821,12 +2195,17 @@ def thread_of(msgs, names=()) -> tuple[list, int]:
                      else short(str(m.get("summary") or ""), 120) or None)
         if event is None and not words:
             continue
+        out.append((d, m, event, words))
+    # Only the lines shown are made safe to show: redacting and cutting the names of every
+    # message of 716 people took more than a second of each page build (engine audit 24).
+    shown = []
+    for d, m, event, words in out[-THREAD_KEEP:]:
         item = {"from": "you" if d == "out" else "them", "on": str(m.get("date") or "")[:10]
                 or None, "text": event or short(scrub_names(_redact(words), names), THREAD_CHARS)}
         if event:
             item["event"] = True
-        out.append(item)
-    return out[-THREAD_KEEP:], max(len(out) - THREAD_KEEP, 0)
+        shown.append(item)
+    return shown, max(len(out) - THREAD_KEEP, 0)
 
 
 def scrub_names(text: str, names=()) -> str:
@@ -1857,25 +2236,6 @@ def stopped(next_action) -> bool:
     drafted to them: the row offered "Draft the follow-up" under a line saying to leave it,
     a third message the person's rule forbids (2026-11-03)."""
     return bool(_STOPPED.match(" ".join(str(next_action or "").split())))
-
-
-def owed_button(cid: str, status: str, due: str, today: dt.date, has_draft: bool,
-                action: str = "") -> dict | None:
-    """The one button a contact row shows, only when something is owed."""
-    if status == "replied_needs_response":
-        return {"label": "Draft a reply", "kind": "reply", "id": f"reply~{cid}",
-                "args": {"contact": cid}, "ask": "Paste what they said, if it is not logged"}
-    if status == "call_booked":
-        # A networking call's prep: `prep` work with the contact (tools/network/prep.py),
-        # never an interview pack. A call that is a stage of a hiring process is an interview.
-        return {"label": "Prepare for the call", "kind": "prep", "id": f"prep~call~{cid}",
-                "args": {"contact": cid, "call": True}}
-    late = _date(due)
-    if status in ("awaiting_reply", "connected_no_reply") and late and late <= today \
-            and not has_draft and not stopped(action):
-        return {"label": "Draft the follow-up", "kind": "follow_up", "id": f"follow_up~{cid}",
-                "args": {"contact": cid}}
-    return None
 
 
 def _is_process_stage(ctx: Ctx, c: dict, status: str) -> bool:
@@ -1911,13 +2271,17 @@ def _paste(cid: str, first: str, raw) -> dict | None:
         if rests else None
 
 
-def _call_of(cid: str, status: str, due: str, said: str = "", home: str = "") -> dict | None:
+def _call_of(cid: str, status: str, due: str, said: str = "", home: str = "",
+             names=(), folders=None) -> dict | None:
     """A networking call booked (on the row: a reply owed since does not unbook it), its
     time in the person's own zone where its next action writes one ("2pm ET": the page said
     "Call Thursday" with no time, 2026-11-02), and its prep (tools/network/prep.py) where it
-    is made."""
+    is made. `folders` is `_folder_names` of documents/network, read once for a whole book:
+    an id of plain letters, digits, "_" and "-" with no folder there has no prep, and its
+    prep is not looked for on disk one person at a time."""
     path = person.state("documents", "network", cid, "prep.md")
-    have = os.path.isfile(path)
+    have = (folders is None or not _PLAIN_ID.fullmatch(cid) or cid.lower() in folders) \
+        and os.path.isfile(path)
     if status != "call_booked" and not have:
         return None
     clock = None
@@ -1934,7 +2298,35 @@ def _call_of(cid: str, status: str, due: str, said: str = "", home: str = "") ->
                 clock = w["time"]
     return {"day": (due or None) if status == "call_booked" else None,
             **({"time": clock} if clock else {}),
-            "prep": {"path": rel(path), "updated": _mtime(path)} if have else None}
+            "prep": {"path": rel(path), "updated": _mtime(path), "text": _prep_text(path, names)}
+            if have else None}
+
+
+CALL_PREP_CHARS = 12000
+# A name every file system reads one way, give or take its case.
+_PLAIN_ID = re.compile(r"[A-Za-z0-9_-]+")
+
+
+def _folder_names(path: str) -> set:
+    """The names in a folder, in lower case: none where there is no folder."""
+    try:
+        return {n.lower() for n in os.listdir(path)}
+    except OSError:
+        return set()
+
+
+def _prep_text(path: str, names=()) -> str:
+    """A call prep as the person reads it on that person's page: plain paragraphs, no
+    contact details, cut at a paragraph (never mid-word) with a line saying so. A prep on
+    file nobody could open from the person's row was no use before the call (2026-11-03)."""
+    text = scrub_names(_redact(re.sub(r"<!--.*?-->", "", read_text(path), flags=re.S)), names)
+    text = re.sub(r"^#+\s*", "", text, flags=re.M)
+    text = re.sub(r"\*\*([^*]+)\*\*", r"\1", text)
+    text = re.sub(r"\n{3,}", "\n\n", text).strip()
+    if len(text) <= CALL_PREP_CHARS:
+        return text
+    cut = text[:CALL_PREP_CHARS].rsplit("\n\n", 1)[0]
+    return cut + "\n\nThe rest of this prep is in your files."
 
 
 def _came_through(value, book: dict) -> str:
@@ -1949,19 +2341,227 @@ def _came_through(value, book: dict) -> str:
     return first_name(v)
 
 
+_NONE_SAID = re.compile(r"^\s*(?:none|n/?a|nothing|-+|tbc|tbd)\s*\.?\s*$", re.I)
+_ANY_URL = re.compile(r"https?://[^\s)\]>,;\"']+", re.I)
+# A note to Claude about the person, kept on the row ("waiting for him to send", "HOLD until
+# the app's nudge wording is updated", "at his request"): never shown as their next step.
+_NOTE_TO_CLAUDE = re.compile(
+    r"\b(?:the candidate|claude|hold until|(?:his|her|their) rule|at (?:his|her) request|"
+    r"(?:for|on) (?:him|her) to\b|waiting for (?:him|her)\b|batch \d+|draft in notes)", re.I)
+# An aside in brackets that only the engine reads: a job or posting number, a batch, a file.
+_NOTE_ASIDE = re.compile(r"\s*\((?=[^()]*(?:\d{5,}|\bjob\b|\bbatch\b|\bfile\b|\bnotes?\b|"
+                         r"\bid\b|\bchat\b))[^()]*\)", re.I)
+# A dated step that is only to wait: nothing to do but see whether it happened.
+_WAIT_STEP = re.compile(r"^\s*(?:wait(?:ing)?\b|none owed|nothing owed|no action|no chase|"
+                        r"leave it|keep warm|do not (?:chase|nudge|follow up)|let (?:it|them) )",
+                        re.I)
+# A dated step that is a message to write: its button drafts it.
+_MESSAGE_STEP = re.compile(r"\b(?:send|reply|write|message|follow(?:[- ]up)?|nudge|ask|thank|"
+                           r"chase|answer|email|introduce|check in)\b", re.I)
+
+
+_RUN_OF_SPACE = re.compile(r"\s{2,}")
+_VIA_LINK = re.compile(r"\s+(?:through|via|at|from)\s+(?:his|her|their|the|this)?\s*"
+                       r"(?:referral\s+)?link$", re.I)
+
+
+def next_words(text, names=()) -> tuple[str, str | None]:
+    """(a contact's next step as the person reads it, the first link it names, or None).
+
+    `plain_action`'s words with nothing only the engine reads: no "None", no job or posting
+    number, no link (given apart, to open on their page), and nothing written as a note to
+    Claude about the person ("Follow-up drafted ... (batch 6), waiting for him to send";
+    "HOLD until the app's nudge wording is updated"). Such a line says nothing to them, and
+    the row says what its status does instead (2026-11-03)."""
+    raw = scrub(text, names)
+    m = _ANY_URL.search(raw)
+    link = m.group(0).rstrip(".") if m else None
+    s = plain_action(_ANY_URL.sub("", raw))
+    s = _NOTE_ASIDE.sub("", s)
+    s = _SPACE_BEFORE.sub(r"\1", _RUN_OF_SPACE.sub(" ", s)).strip(" ,;:")
+    s = _VIA_LINK.sub("", s) if not link else s
+    if _NONE_SAID.match(s) or _NOTE_TO_CLAUDE.search(s):
+        return "", link
+    return s, link
+
+
+# Where each person stands, decided once here and shown the same way on every screen: the
+# page used to work out "needs you", "follow-ups you could send" and who to leave alone
+# again from dates of its own, and its counts, buttons and To do disagreed (2026-11-03).
+#   now      something to do: a reply owed, a call to prepare for or thank them after, a
+#            dated step of the person's own, a reply or thank-you drafted
+#   follow   a follow-up To do lists, or one drafted
+#   leave    their limit of unanswered messages reached: Close, never another message
+#   waiting  written to, nothing owed yet
+#   new      not written to yet
+#   talking  a conversation going, nothing owed now
+#   held     the person's own rules stop anything going (surface.held)
+#   done     closed, set aside, gone quiet, now an application
+GROUPS = ("now", "follow", "leave", "waiting", "new", "talking", "held", "done")
+CALL_SOON_DAYS = 7
+THANKS_DAYS = 14
+
+
+def owed_button(cid: str, status: str, due: str, today: dt.date, has_draft: bool,
+                action: str = "") -> dict | None:
+    """The one button a contact row showed from its status alone, before the engine said
+    where each person stands. Kept for a person's own tests (tools/public_names.json): the
+    page's button is `standing`'s now, which reads their messages and their own rules too
+    (the audit, contacts 14)."""
+    if status == "replied_needs_response":
+        return {"label": "Draft a reply", "kind": "reply", "id": f"reply~{cid}",
+                "args": {"contact": cid}, "ask": "Paste what they said, if it is not logged"}
+    if status == "call_booked":
+        return {"label": "Prepare for the call", "kind": "prep", "id": f"prep~call~{cid}",
+                "args": {"contact": cid, "call": True}}
+    late = _date(due)
+    if status in ("awaiting_reply", "connected_no_reply") and late and late <= today \
+            and not has_draft and not stopped(action):
+        return {"label": "Draft the follow-up", "kind": "follow_up", "id": f"follow_up~{cid}",
+                "args": {"contact": cid}}
+    return None
+
+
+def standing(ctx: Ctx, c: dict, cid: str, status: str, msgs: list, due_rows: list,
+             message: dict | None, hold: dict | None, call: dict | None) -> dict:
+    """{"group", "owed" (the one button, or None), "next" (the line under their name), "late"}
+    for one person: the engine's one answer, which the page renders and never works out."""
+    from network import schema
+    import throttle
+    out = {"group": "", "owed": None, "next": "", "late": 0}
+    late = max([int(d.get("overdue_days") or 0) for d in due_rows] or [0])
+    out["late"] = late
+    if status in schema.TERMINAL:
+        out["group"] = "done"
+        return out
+    leave_row = next((d for d in due_rows if d.get("leave")), None)
+    if hold and hold["why"] != "limit":
+        out.update(group="held", next=hold["said"])
+        return out
+    if hold or leave_row:
+        said = (hold or {}).get("said") or leave_row.get("step") or ""
+        out.update(group="leave", next=said, owed={
+            "kind": "close", "label": "Close", "due": leave_row["id"] if leave_row else None,
+            "action": "due.done" if leave_row else "person.status",
+            "value": None if leave_row else {"status": "gone_cold",
+                                             "why": "no reply to your limit of messages"}})
+        return out
+    if message:
+        mt = message.get("type") or message.get("kind")
+        word = "See the note" if message.get("kind") == "first_note" else "See the draft"
+        out["owed"] = {"kind": "draft", "label": word, "message": message["id"],
+                       # A reply drafted is still a reply owed until it goes: counted as one.
+                       "reply": mt in ("reply", "thank_you", "referral_ask")}
+        out["group"] = ("new" if message.get("kind") == "first_note" else
+                        "follow" if mt == "follow_up" else "now")
+        out["next"] = {"first_note": "Your note to them is written: send it",
+                       "follow_up": "Your follow-up is written: send it"}.get(
+            mt, "Your reply is written: send it")
+        return out
+    reply = next((d for d in due_rows if d.get("kind") == "reply"), None)
+    if reply:
+        theirs = [m for m in msgs if _said(m)]
+        logged = bool(theirs) and bool(" ".join(str(theirs[-1].get("full_text") or "").split()))
+        out["group"] = "now"
+        out["owed"] = {"label": "Draft a reply", "kind": "reply", "id": f"reply~{cid}",
+                       "args": {"contact": cid}, "logged": logged, "due": reply["id"],
+                       "reply": True}
+        if reply.get("sub") == "resume":
+            out["owed"]["resume"] = True
+        out["next"] = reply.get("step") or "Reply"
+        return out
+    day = _date((call or {}).get("day"))
+    if status == "call_booked" and day:
+        diff = (day - ctx.today).days
+        if diff < 0 and -diff <= THANKS_DAYS:
+            out.update(group="now", next="How did it go? Thank them while it is fresh", owed={
+                "kind": "thanks", "label": "Draft the thank-you", "id": f"reply~{cid}~thanks",
+                "args": {"contact": cid, "kind": "thank_you"}})
+            return out
+        if 0 <= diff <= CALL_SOON_DAYS:
+            out.update(group="now", owed={"label": "Prepare for the call", "kind": "prep",
+                                          "id": f"prep~call~{cid}",
+                                          "args": {"contact": cid, "call": True}})
+            return out
+    follow = next((d for d in due_rows if d.get("kind") == "nudge"
+                   or (d.get("step") or "").lower().startswith("follow up")), None)
+    if follow:
+        out.update(group="follow", next=follow.get("step") or "Follow up", owed={
+            "label": "Draft the follow-up", "kind": "follow_up",
+            "id": (follow.get("work") or {}).get("id") or f"follow_up~{cid}",
+            "args": dict((follow.get("work") or {}).get("args") or {"contact": cid}),
+            "due": follow["id"]})
+        return out
+    own = next((d for d in due_rows if d.get("kind") == "follow_up"), None)
+    if own:
+        step = own.get("step") or ""
+        out["next"] = step
+        if _WAIT_STEP.match(step):
+            out["group"] = "waiting"
+            return out
+        out["group"] = "now"
+        if _MESSAGE_STEP.search(step):
+            out["owed"] = {"label": "Draft it", "kind": "follow_up",
+                           "id": (own.get("work") or {}).get("id") or f"follow_up~{cid}",
+                           "args": dict((own.get("work") or {}).get("args") or {"contact": cid},
+                                        step=step), "due": own["id"]}
+        elif (own.get("done") or {}).get("action"):
+            out["owed"] = {"label": "Done", "kind": "done", "due": own["id"],
+                           "action": own["done"]["action"]}
+        return out
+    if status in throttle.SENT_NO_REPLY:
+        out["group"] = "waiting"
+    elif status in ("not_contacted", ""):
+        out["group"] = "new"
+    elif status == "call_booked" and not day:
+        out.update(group="now", owed={"label": "Prepare for the call", "kind": "prep",
+                                      "id": f"prep~call~{cid}",
+                                      "args": {"contact": cid, "call": True}})
+    else:
+        out["group"] = "talking"
+    return out
+
+
+def _said(m) -> bool:
+    from network import state
+    return state.said_something(m)
+
+
 def _people(ctx: Ctx, targets: dict) -> list:
     """Every live contact (a conversation going, a reply or anything else owed, a note
     waiting to go, a message out in the last 60 days), then the rest by recency until the
-    list reaches its size budget; the whole book, cut down, goes to the page's database."""
+    list reaches its size budget; the whole book, cut down, goes to the page's database.
+    Each carries where it stands (`standing`), worked out once here with the person's own
+    surface rules (surface.held), so no screen shows anyone those rules stop."""
     import app_lists
     import open_actions
-    import throttle
-    from network import schema, state
+    from network import schema, state, surface
     from what_works import route_group
     drafts = {os.path.basename(os.path.dirname(f)) for f in
               glob.glob(person.state("documents", "network", "*", "draft.md"))}
+    folders = _folder_names(person.state("documents", "network"))     # for _call_of
+    # What a person's standing reads, made here when this build did not make it first (a
+    # build of some sections only, as `app.py apply` makes to check a tap): the same answer
+    # either way, so a tap is never refused as stale for a section not built.
+    if "message_by_contact" not in ctx._got:
+        _messages(ctx, {})
+    if "due_by_contact" not in ctx._got:
+        _due(ctx, {})
+    if "sent_questions" not in ctx._got:
+        ctx._got["sent_questions"] = _sent_questions(ctx, {})
+    shown = ctx._got.get("message_by_contact") or {}
+    due_by = ctx._got.get("due_by_contact") or {}
+    asked = {str((n.get("about") or {}).get("contact") or ""): n["id"]
+             for n in ctx._got.get("sent_questions") or ()}
     fold = app_lists.FOLD_DAYS["people"]
-    live_rows, rest, full = [], [], {}
+    # The same first name at the same employer (or with none) more than once: each is told
+    # apart by their surname's first letter, never more of it.
+    seen_as: dict = {}
+    for c in ctx.contacts:
+        k = (first_name(c.get("name")).lower(), str(c.get("company") or "").strip().lower())
+        seen_as[k] = seen_as.get(k, 0) + 1
+    rows, full = [], {}
+    counts = dict.fromkeys(GROUPS, 0)
     for c in ctx.contacts:
         cid = str(c.get("contact_id") or "").strip()
         if not cid or cid in full:
@@ -1971,56 +2571,80 @@ def _people(ctx: Ctx, targets: dict) -> list:
         msgs = ctx.by_contact.get(cid) or []
         last = max((str(m.get("date") or "")[:10] for m in msgs), default="") or None
         days = app_lists.ago(last, ctx.today)
-        finished = status in schema.TERMINAL and not due
-        live = not finished and (bool(due) or status in throttle.RESPONDED or cid in drafts
-                                 or (status in throttle.SENT_NO_REPLY and days is not None
-                                     and days <= fold))
-        row = (c, cid, status, due, last)
-        full[cid] = {"id": cid, "first_name": first_name(c.get("name")),
-                     "employer": str(c.get("company") or ""), "status": status,
-                     "route": route_group(c.get("route")), "last": last,
-                     "contacted": app_lists.bucket(days), "due": due or None,
-                     "replied": any(state.said_something(t) for t in msgs), "live": live}
-        if live:
-            live_rows.append(row)
-        elif (days is not None and days <= fold) or (not msgs and status in schema.NEVER_SENT
-                                                    and not finished):
-            rest.append(row)                 # recent history, and people not written to yet
-    live_rows.sort(key=lambda x: (-open_actions.HEAT.get(x[2], 0), x[3] or "9999", x[1]))
+        hold = surface.held(c, msgs, status, replying=status in schema.OWED_BY_US,
+                            memo=ctx._got.setdefault("held_memo", {}))
+        call = _call_of(cid, "call_booked" if str(c.get("status") or "") == "call_booked"
+                        else status, due, c.get("next_action"), ctx.zone, ctx.names, folders)
+        where = standing(ctx, c, cid, status, msgs, due_by.get(cid) or [], shown.get(cid),
+                         hold, call)
+        group = where["group"]
+        counts[group] += 1
+        finished = group in ("done", "held")
+        live = group in ("now", "follow", "leave") or cid in shown or (
+            not finished and (bool(due) or status in throttle_responded()
+                              or (status in schema.NEVER_SENT and cid in drafts)
+                              or (status in throttle_sent() and days is not None
+                                  and days <= fold)))
+        first = first_name(c.get("name"))
+        light = {"id": cid, "first_name": first, "employer": str(c.get("company") or ""),
+                 "status": status, "status_word": STATUS_WORDS.get(status, status.replace("_", " ")),
+                 "group": group, "route": route_group(c.get("route")), "last": last,
+                 "contacted": app_lists.bucket(days), "due": due or None,
+                 "replied": any(state.said_something(t) for t in msgs), "live": live}
+        if seen_as.get((first.lower(), light["employer"].strip().lower()), 0) > 1:
+            parts = str(c.get("name") or "").split()
+            if len(parts) > 1 and parts[-1][:1].isalpha():
+                light["initial"] = parts[-1][:1].upper()
+        title = short(scrub(c.get("title"), ctx.names), 60)
+        if title and not light["employer"]:
+            light["title"] = title
+        full[cid] = light
+        rows.append((c, cid, status, due, last, msgs, hold, call, where, title))
+    live_rows = [r for r in rows if full[r[1]]["live"]]
+    rest = [r for r in rows if not full[r[1]]["live"] and (
+        (app_lists.ago(r[4], ctx.today) is not None and app_lists.ago(r[4], ctx.today) <= fold)
+        or (not r[5] and r[2] in schema.NEVER_SENT and r[8]["group"] == "new"))]
+    order = {g: n for n, g in enumerate(GROUPS)}
+    live_rows.sort(key=lambda x: (order[x[8]["group"]], -x[8]["late"],
+                                  -open_actions.HEAT.get(x[2], 0), x[3] or "9999", x[1]))
     rest.sort(key=lambda x: (x[4] or "", x[1]), reverse=True)
     out, used = [], 2
-    for n, (c, cid, status, due, last) in enumerate(live_rows + rest):
-        action = plain_action(scrub(c.get("next_action"), ctx.names))
-        msgs = ctx.by_contact.get(cid) or []
+    for n, (c, cid, status, due, last, msgs, hold, call, where, title) in enumerate(live_rows + rest):
+        action, link = next_words(c.get("next_action"), ctx.names)
         thread, earlier = thread_of(msgs, ctx.names)
-        item = {"id": cid, "first_name": first_name(c.get("name")),
-                "employer": str(c.get("company") or ""), "status": status,
-                "status_word": STATUS_WORDS.get(status, status.replace("_", " ")),
-                "owed": owed_button(cid, status, due, ctx.today, cid in drafts,
-                                    c.get("next_action")),
-                # Their limit of unanswered messages reached: nothing more is drafted.
-                "stopped": stopped(c.get("next_action")) and status in throttle.SENT_NO_REPLY,
+        item = {"id": cid, "first_name": full[cid]["first_name"],
+                "employer": full[cid]["employer"], "status": status,
+                "status_word": full[cid]["status_word"], "group": where["group"],
+                "owed": where["owed"], "next": where["next"], "late": where["late"],
+                # Why nothing is offered, in their words, where their rules stop it.
+                "hold": hold["said"] if hold and hold.get("said") else None,
+                "stopped": where["group"] == "leave",
                 # Whether the person has written to them: someone who wrote first has not
                 # been "written to" until a message of theirs went back.
                 "wrote": any(state.direction(t) == "out" and not state.is_withdrawal(t)
                              for t in msgs),
-                "last": last,
-                "next_action": action, "due": due or None, "route": full[cid]["route"],
+                "last": last, "title": title or None,
+                "next_action": action, "link": link, "due": due or None,
+                "route": full[cid]["route"],
                 # Who they came through (the book's referred_by: a contact id or a name), so the
                 # page says "Came through Alex" on someone Alex passed them to (2026-10-30).
                 "came_through": _came_through(c.get("referred_by"), full) or None,
                 "who": who_they_are(c, status),
-                "replied": full[cid]["replied"], "live": full[cid]["live"],
-                "call": _call_of(cid, "call_booked" if str(c.get("status") or "") ==
-                                 "call_booked" else status, due, c.get("next_action"), ctx.zone),
-                "paste": _paste(cid, first_name(c.get("name")), None) if cid in drafts
-                else None,
+                "replied": full[cid]["replied"], "live": full[cid]["live"], "call": call,
+                "paste": _paste(cid, full[cid]["first_name"], None)
+                if (shown.get(cid) or {}).get("kind") == "first_note" else None,
+                # Where they live is not on record: the person's rule about where people are
+                # cannot be checked, which the page says before anything goes to them.
+                "where_unknown": not str(c.get("location") or "").strip(),
+                "asked_sent": asked.get(cid),
                 "is_process_stage": _is_process_stage(ctx, c, status),
                 # Their conversation, newest last, so their page shows what was said and a
                 # reply is drafted from words already kept (thread_of).
                 "thread": thread, "thread_more": earlier,
                 "related": {},        # filled by app_lists.link; counted in the budget
-                "rev": rev_of(cid, status, action, due, last)}
+                "rev": rev_of(cid, status, action, due, last, where["group"])}
+        if full[cid].get("initial"):
+            item["initial"] = full[cid]["initial"]
         _card(ctx, targets, item, "for_person")
         used += app_lists.size(item) + 1
         if n >= len(live_rows) and used > app_lists.PEOPLE_BYTES:
@@ -2031,10 +2655,24 @@ def _people(ctx: Ctx, targets: dict) -> list:
     seen = {x["id"] for x in first}
     whole = first + sorted((x for x in full.values() if x["id"] not in seen),
                            key=lambda x: (x["last"] or "", x["id"]), reverse=True)
+    replies = sum(1 for r in rows if r[8]["group"] == "now" and (r[8]["owed"] or {}).get("reply"))
     ctx._got["people_count"] = {"shown": len(out), "all": len(full), "live": len(live_rows),
-                                "rest": len(full) - len(out)}
+                                "rest": len(full) - len(out), "need": counts["now"],
+                                "replies": replies, "follow": counts["follow"],
+                                "leave": counts["leave"], "waiting": counts["waiting"],
+                                "held": counts["held"]}
     _list(ctx, "people", whole, len(out))
     return out
+
+
+def throttle_responded() -> set:
+    import throttle
+    return throttle.RESPONDED
+
+
+def throttle_sent() -> set:
+    import throttle
+    return throttle.SENT_NO_REPLY
 
 
 # ------------------------------------------------------------------ due
@@ -2046,47 +2684,82 @@ _DUE_WORK = {"reply": "work:reply", "nudge": "work:follow_up", "follow_up": "wor
              "interview": "work:prep"}
 
 
+def _own_step(c: dict, today: dt.date) -> bool:
+    """Does the row carry a dated next step of the person's own (not the app's follow-up
+    wording, state._APP_ACTION), due by now?"""
+    from network import state
+    action = " ".join(str(c.get("next_action") or "").split())
+    due = _date(c.get("next_action_due"))
+    # A step that is only to wait ("Wait for them to book a call") stays a follow-up once its
+    # day has gone: the wait is over, and following up is what is due.
+    return bool(action) and due is not None and due <= today and \
+        not state._APP_ACTION.fullmatch(action) and not stopped(action) and \
+        not _WAIT_STEP.match(action)
+
+
+# The kinds of row owed to a contact that _due says in its own words, never the person's step.
+_DUE_SAID = frozenset({"reply", "resume", "nudge", "request_pending", "first_message"})
+
+
 def _due(ctx: Ctx, targets: dict) -> list:
     import open_actions
-    items = list(ctx.due_items)
-    items = [i for i in items if not i.get("held") and not i.get("quiet") and not i.get("old")
+    items = [i for i in ctx.due_items if not i.get("quiet") and not i.get("old")
              and not str(i.get("what") or "").startswith(UNCONFIRMED)]
+    # The person's own surface rules (open_actions._hold_by_rule, surface.held): a thread at
+    # its limit of unanswered messages stays, as one to close; anyone else they stop is not
+    # shown, counted by why in one quiet line.
+    ruled = {}
+    for i in items:
+        rule = i.get("rule") or {}
+        if rule and rule.get("why") != "limit" and len(i.get("held") or []) == 1:
+            ruled[rule["why"]] = ruled.get(rule["why"], 0) + 1
+    items = [i for i in items if not i.get("held")
+             or ((i.get("rule") or {}).get("why") == "limit" and len(i["held"]) == 1)]
     # Requests nobody accepted are never nudged: nothing can be sent to them. They are one
     # row, withdraw them on LinkedIn, then tick (FUNCTIONS_SPEC G8; state.py withdraw).
     pending = [i for i in items if i.get("half") == "contact" and i.get("kind") == "request_pending"]
     items = [i for i in items if i not in pending]
     items.sort(key=open_actions.urgency)
     book = {str(c.get("contact_id") or "").strip(): c for c in ctx.contacts}
-    # Nobody at an employer the person's bar turns down is chased (the maintainer,
-    # 2026-10-26: a charity and an accounting firm were filling To do). A reply they are
-    # owed still shows: someone wrote back.
-    kept = [i for i in items if i.get("half") != "contact" or i.get("kind") == "reply"
-            or not turned_down(book.get(i.get("contact_id") or "", {}).get("company"))]
-    hidden, items = len(items) - len(kept), kept
     app_ids = {(str(r.get("company") or ""), str(r.get("role") or "role not recorded")): rid
-               for r, rid in zip(ctx.tracker, tracker_ids(ctx.tracker))}
+               for r, rid in zip(ctx.tracker, ctx.tracker_ids)}
     noun = str(person.get("documents.noun", "resume"))
-    out, seen = [], set()
-    for i in items[:DUE_MAX]:
+    out, seen, halves = [], set(), {}
+    for i in items:
         raw = i.get("kind") or ("follow_up" if i["half"] == "application" else "follow_up")
+        if raw == "nudge" and i["half"] == "contact" and _own_step(
+                book.get(i.get("contact_id") or "", {}), ctx.today):
+            # A step the person dated on the row ("Send the referral ask for ...") rides on the
+            # nudge: it is that step that is due, never a generic follow-up (2026-11-03: the
+            # row said one thing and its button drafted another).
+            raw = "action_due"
         kind = _DUE_KIND.get(raw, "follow_up")
         if i["half"] == "contact":
             c = book.get(i.get("contact_id") or "", {})
             who = first_name(c.get("name")) or "someone"
             where = f" at {c.get('company')}" if c.get("company") else ""
+            # Their own step, read only where it is the one said: worked out for every row
+            # owed, as a default argument it scrubbed every contact's step twice (2026-11-03).
+            own_step = (short(plain_action(scrub(c.get("next_action"), ctx.names)))
+                        if raw not in _DUE_SAID else "")
             title = {"reply": f"Reply to {who}{where}",
                      "resume": f"Send your {noun} to {who}{where}",
                      "nudge": f"Follow up with {who}{where}",
                      "request_pending": f"Your request to {who}{where} was not accepted",
                      "first_message": f"Write to {who}{where}: they accepted"}.get(
-                raw, f"{who}{where}: " + short(plain_action(scrub(c.get("next_action"), ctx.names))))
+                raw, f"{who}{where}: " + own_step)
             # What is due, said without who: their own row in Contacts names them already
             # ("Next: reply to Juno at Larkspur Retail" sat under "Juno at Larkspur Retail").
             step = {"reply": "Reply", "resume": f"Send your {noun}", "nudge": "Follow up",
                     "request_pending": "Your request has not been accepted yet",
-                    "first_message": "Write to them: they accepted"}.get(
-                raw, short(plain_action(scrub(c.get("next_action"), ctx.names))))
-            leave = raw == "action_due" and stopped(c.get("next_action"))
+                    "first_message": "Write to them: they accepted"}.get(raw, own_step)
+            limit = (i.get("rule") or {}).get("why") == "limit"
+            leave = limit or (raw == "action_due" and stopped(c.get("next_action")))
+            if limit:
+                # Their limit reached: one to close, never a follow-up, whatever the row said
+                # to do next ("Send the short nudge" sat under a third unanswered message).
+                step = i["rule"]["said"]
+                title = f"{who}{where}: {step}"
             key = i.get("contact_id") or ""
             action = "work:resume_for_contact" if raw == "resume" else _DUE_WORK[kind]
             about = key
@@ -2102,14 +2775,18 @@ def _due(ctx: Ctx, targets: dict) -> list:
             if raw == "interview":
                 w = i.get("what") or ""
                 iid = "int-" + rid[4:] if rid else ""
-                sub = ("prep" if "no pack" in w else "thank_you" if "thank-you" in w
-                       else "status_note")
+                sub = i.get("sub") or ("prep" if "no pack" in w else "thank_you"
+                                       if "thank-you" in w else "status_note")
                 # Quiet since a round that was held, or since the last word with none held yet
                 # (a round named and never given a day): "since your interview" was said of a
                 # panel interview that had not happened (2026-11-03).
                 held = sub != "status_note" or _round_held(ctx, company, role)
                 title = {"prep": f"Prepare for your {company} interview",
                          "thank_you": f"Thank-you note after your {company} interview",
+                         # The invitation's choice and a test due, each said as what it is
+                         # (the audit, 2026-11-03).
+                         "choose": f"{company}: choose your interview day and tell them",
+                         "test": f"{company}: " + short(w[:1].upper() + w[1:].split(" (")[0]),
                          "status_note": f"No word from {company} since your interview" if held
                          else f"No word from {company} since your last update"}[sub]
                 # One work id per prep: the interview card's own (prep~<interview>), so a
@@ -2118,6 +2795,11 @@ def _due(ctx: Ctx, targets: dict) -> list:
                 if sub == "prep":
                     action = "work:prep"
                     work = {"kind": "prep", "id": f"prep~{iid}", "args": {"interview": iid}}
+                elif sub in ("choose", "test"):
+                    # The person's to do: a day to choose on the interview's own card, a test
+                    # to sit. Nothing for Claude to draft.
+                    action = "go:interviews"
+                    work = None
                 else:
                     action = "work:follow_up"
                     work = {"kind": "follow_up", "id": f"follow_up~{iid}~{sub}",
@@ -2136,12 +2818,17 @@ def _due(ctx: Ctx, targets: dict) -> list:
         while did in seen:
             did, n = f"due-{kind}-{key}-{n}", n + 1
         seen.add(did)
+        halves[did] = i["half"]
         # "Done" only where a writer takes it (app_actions.py due.done): a dated next action
         # the person set on a contact, or an application's follow-up, which is logged the
         # way /outcome logs it. A reply, a nudge or a resume owed is done when it is logged
         # with its words, and an interview by /outcome: those rows offer their work instead.
-        doable = (i["half"] == "contact" and raw == "action_due") or (
-            i["half"] == "application" and raw != "interview")
+        # A thank-you and a status note sent some other way are Done here too: a thank-you
+        # row had no Done, and sorted to the bottom (the audit, 2026-11-03). A thread at its
+        # limit is one to close: its Done is the Close (app_actions, `leave`).
+        doable = (i["half"] == "contact" and (raw == "action_due" or leave)) or (
+            i["half"] == "application" and (raw != "interview" or sub in (
+                "thank_you", "status_note", "test")))
         context = ""
         if i["half"] == "contact":
             # One line on who they are, so a follow-up says which person it is (the maintainer,
@@ -2179,9 +2866,11 @@ def _due(ctx: Ctx, targets: dict) -> list:
             t = {"kind": "due", "half": i["half"], "due": i["due"], "rev": item["rev"]}
             if i["half"] == "contact":
                 t["contact"] = i.get("contact_id") or ""
+                if leave:
+                    t["leave"] = True        # its Close closes the thread (app_actions)
             else:
                 company, _, role = i["who"].partition(" - ")
-                t.update(company=company, role=role)
+                t.update(company=company, role=role, sub=sub, stage=i.get("stage") or "")
             targets[did] = t
     if pending:
         book = {str(c.get("contact_id") or "").strip(): c for c in ctx.contacts}
@@ -2203,13 +2892,52 @@ def _due(ctx: Ctx, targets: dict) -> list:
                 "snooze": None, "rev": rev_of(did, ids)}
         out.insert(0, item)
         targets[did] = {"kind": "due", "half": "requests", "contacts": ids, "rev": item["rev"]}
-    if hidden:
-        # Said once, quietly, so a shorter list is never a mystery.
+    by_contact: dict = {}
+    for d in out:
+        cid = (targets.get(d["id"]) or {}).get("contact")
+        if cid:
+            by_contact.setdefault(cid, []).append(d)
+    ctx._got["due_by_contact"] = by_contact
+    # Where each person stands reads every row owed (above), so a count of replies owed is
+    # never the cut's (140 owed read as 100). The list the page shows cuts people only: an
+    # application's, an interview's or a thank-you's row is one per process and always kept,
+    # in order (journeys audit 5: cut at 100 behind 550 people).
+    rest = [d for d in out if d.get("kind") != "withdraw"]
+    room = max(0, DUE_MAX - sum(1 for d in rest if halves.get(d["id"]) != "contact"))
+    shown, cut = [], []
+    for d in rest:
+        if halves.get(d["id"]) == "contact":
+            if room <= 0:
+                cut.append(d)
+                continue
+            room -= 1
+        shown.append(d)
+    out = [d for d in out if d.get("kind") == "withdraw"] + shown
+    # The people the cut left off, each once (one person may owe two rows) and never one
+    # shown: at 716 people To do listed 93 and said nothing of the rest (the re-audit of
+    # 4 November).
+    def _who(d: dict) -> str:
+        return (targets.get(d["id"]) or {}).get("contact") or d["id"]
+    more = len({_who(d) for d in cut} - {_who(d) for d in shown
+                                         if halves.get(d["id"]) == "contact"})
+    if ruled or more:
+        # Said once, quietly, so a shorter list is never a mystery: who the person's own rules
+        # keep off it, by why, and how many more are in Contacts. One row.
+        hidden = sum(ruled.values())
+        words = {"employer": "at employers you turned down", "place": "outside where you look",
+                 "request": "whose connection request nobody accepted", "closed": "closed"}
+        parts = [f"{n} {'person' if n == 1 else 'people'} {words.get(w, w)}"
+                 for w, n in sorted(ruled.items(), key=lambda x: -x[1])]
+        said = [", ".join(parts) + " not shown"] if parts else []
+        if more:
+            said.append(f"{more} more {'person who needs' if more == 1 else 'people who need'} "
+                        f"you {'is' if more == 1 else 'are'} in Contacts")
         out.append({"id": "due-hidden", "kind": "hidden", "sub": "hidden",
-                    "title": f"{hidden} follow-up{'s' if hidden != 1 else ''} at employers "
-                             "you turned down not shown", "context": "", "due": None,
+                    "title": ". ".join(said), "context": "", "due": None,
                     "company": "", "overdue_days": 0, "action": None, "item": None,
-                    "work": None, "done": None, "snooze": None, "rev": rev_of("due-hidden", hidden)})
+                    "work": None, "done": None, "snooze": None,
+                    "rev": rev_of("due-hidden", hidden, more) if more else
+                    rev_of("due-hidden", hidden)})
     return out
 
 
@@ -2230,28 +2958,26 @@ def _scrubbed(value, names):
 
 def _round_held(ctx: Ctx, company: str, role: str) -> bool:
     """Has any round of this application been held: ticked, or booked for a day now gone?"""
-    import open_actions
     today = ctx.today.isoformat()
     for row in ctx.tracker:
         if (row.get("company") or "").strip() == company and \
                 ((row.get("role") or "").strip() or "role not recorded") == role:
-            _folder, _files, stages = open_actions.stages(row)
+            _folder, _files, stages = ctx.stages(row)
             return any(s["done"] or (s["date"] and s["date"] < today) for s in stages)
     return True
 
 
 def _interviews(ctx: Ctx, targets: dict) -> list:
     import followups
-    import open_actions
     import throttle
     import app_lists
     out, full, folded, order = [], [], 0, {}
     today = ctx.today.isoformat()
-    for row, rid in zip(ctx.tracker, tracker_ids(ctx.tracker)):
+    for row, rid in zip(ctx.tracker, ctx.tracker_ids):
         st = _status(row)
         if st in throttle.UNSENT or not st:
             continue
-        folder, files, stages = open_actions.stages(row)
+        folder, files, stages = ctx.stages(row)
         ahead = any(s["date"] and not s["done"] and s["date"] >= today for s in stages)
         live = st not in throttle.FINAL and (st in followups.LIVE_PROCESS or ahead)
         past = None
@@ -2289,22 +3015,33 @@ def _interviews(ctx: Ctx, targets: dict) -> list:
         text = _read(prep)
         iid = "int-" + rid[4:]
         clock = str(stage.get("time") or "")
+        import upcoming
+        # The days an invitation offers, still to come, and the day to answer by: the card
+        # asks which one, a tap books it (the audit, 2026-11-03).
+        offered = [d for d in (stage.get("offered") or []) if d >= today] \
+            if not stage.get("date") else []
         item = {"id": iid, "company": row.get("company") or "", "role": row.get("role") or "",
                 "status": st,
-                "next_stage": stage.get("label") or None,
+                "next_stage": upcoming.label(stage.get("label")) or None,
+                "offered": offered or None,
+                "reply_by": (stage.get("reply_by") or None) if offered else None,
                 "when": interview_when(stage.get("date"), clock, stage.get("zone"), ctx.zone),
-                "prep": ({"path": rel(prep), "updated": _mtime(prep)} if text else None),
+                "prep": ({"path": rel(prep), "updated": _mtime(prep),
+                          **({"stale": True} if _prep_stale(folder, text, stage) else {})}
+                         if text else None),
                 "questions": len(re.findall(r"^- \*\*Q\.\*\* ", text, re.M)),
                 # A stage's day is a whole day in the person's own zone; a time shows only
                 # where outcome.md gives one, with the zone written beside it or theirs.
                 "all_day": not clock, "time": clock or None,
                 "zone": (str(stage.get("zone") or "") or ctx.zone) if clock else None,
                 "with": _third_party(stage.get("with"), ctx.names) or None,
-                "stages": [{"label": s_["label"], "date": s_["date"] or None,
+                # The rounds: an offer still to come is not one of them ("Offer received" sat
+                # among the interview stages, the audit, 2026-11-03).
+                "stages": [{"label": upcoming.label(s_["label"]), "date": s_["date"] or None,
                             "time": s_.get("time") or None, "done": s_["done"],
                             "scheduled": s_["scheduled"],
                             "with": _third_party(s_.get("with"), ctx.names) or None}
-                           for s_ in stages],
+                           for s_ in stages if s_["done"] or s_["step"] != "offer"],
                 "format": _format_of(text, stage.get("label")),
                 "one_screen": _one_screen(text, ctx.names),
                 # The prep itself, so it is read on the page, never only from a chat (the
@@ -2321,8 +3058,8 @@ def _interviews(ctx: Ctx, targets: dict) -> list:
                 "referrer": referrer_of(ctx, row),
                 "past": not live,
                 "rev": rev_of(iid, st, stage.get("label"), stage.get("date"), clock,
-                              stage.get("with"), bool(text), live)}
-        order[iid] = (str(stage.get("date") or "9999"), clock)
+                              stage.get("with"), bool(text), live, offered)}
+        order[iid] = (str(stage.get("date") or min(offered or ["9999"])), clock)
         _card(ctx, targets, item, "for_interview")
         targets[iid] = dict(_row_target(row, rid), kind="interview", stage=item["next_stage"]
                             or "", rev=item["rev"])
@@ -2389,6 +3126,26 @@ def _format_of(text, label) -> dict | None:
     return {"names": found, "assumed": False, "told": []} if found else None
 
 
+def _prep_stale(folder: str, text: str, stage: dict) -> bool:
+    """Is the prep for an older plan of rounds? It names the rounds it was built for (its
+    `<!-- stages: -->` line); a round booked since, under none of those names, after the prep
+    was written, is not one it prepares. A new invitation left "Prep ready" on a prep for
+    three rounds that had been replaced (the audit, 2026-11-03)."""
+    import interview_pack
+    label = str(stage.get("label") or "")
+    m = interview_pack._STAGES_MARK.search(text or "")
+    built = [x for x in (m.group(1).split("; ") if m else []) if x]
+    if not label or not built or any(interview_pack._same_round(b, label) or (
+            interview_pack._round_key(b) and interview_pack._round_key(b) ==
+            interview_pack._round_key(label)) for b in built):
+        return False
+    try:
+        return os.path.getmtime(os.path.join(folder, "outcome.md")) > \
+            os.path.getmtime(os.path.join(folder, "interview_prep.md"))
+    except OSError:
+        return False
+
+
 def _sent_files(ctx: Ctx, row: dict) -> list:
     """What they hold of the person's: the resume and letter that went with the application
     (none for a process with no application), and every resume the message log says went to
@@ -2401,12 +3158,7 @@ def _sent_files(ctx: Ctx, row: dict) -> list:
         on = throttle.applied_on(row) or None
         out += [{"kind": f["kind"], "name": f["name"], "path": f["path"], "asset": f["asset"],
                  "to": None, "on": on} for f in _files(row)]
-    def by_key():
-        got: dict = {}
-        for c in ctx.contacts:
-            got.setdefault(key(c.get("company")), []).append(c)
-        return got
-    for c in ctx._once("contacts_by_key", by_key).get(key(row.get("company")), []):
+    for c in ctx.contacts_by_key.get(key(row.get("company")), []):
         cid = str(c.get("contact_id") or "").strip()
         if not cid:
             continue
@@ -2417,10 +3169,13 @@ def _sent_files(ctx: Ctx, row: dict) -> list:
             for f in sent["files"] or [""]:
                 rp = str(f or "").strip()
                 there = bool(rp) and os.path.isfile(person.state(*rp.split("/")))
-                out.append({"kind": "resume", "name": os.path.basename(rp) or None,
-                            "path": rp or None, "asset": asset_for(rp) if there else None,
-                            "to": first_name(c.get("name")) or None,
-                            "on": sent["date"][:10] or None})
+                got = {"kind": "resume", "name": os.path.basename(rp) or None,
+                       "path": rp or None, "asset": asset_for(rp) if there else None,
+                       "to": first_name(c.get("name")) or None,
+                       "on": sent["date"][:10] or None}
+                # Once each: one resume logged twice to one person was listed twice.
+                if got not in out:
+                    out.append(got)
     return out
 
 
@@ -2463,7 +3218,6 @@ def _applications(ctx: Ctx, targets: dict) -> list:
     each from the day it went to its outcome, with the draft's own id (app-<...>), so one
     item runs from Drafts to Applied (FUNCTIONS_SPEC 1.2)."""
     import app_lists
-    import open_actions
     import throttle
     due = {}
     for i in ctx.due_items:
@@ -2472,12 +3226,12 @@ def _applications(ctx: Ctx, targets: dict) -> list:
     out = []
     fold = app_lists.FOLD_DAYS["applications"]
     today = ctx.today.isoformat()
-    for row, rid in zip(ctx.tracker, tracker_ids(ctx.tracker)):
+    for row, rid in zip(ctx.tracker, ctx.tracker_ids):
         st = _status(row)
         if st in throttle.UNSENT or not st:
             continue
         on = throttle.applied_on(row) or str(row.get("date") or "")
-        folder, files, stages = open_actions.stages(row)
+        folder, files, stages = ctx.stages(row)
         company, role = row.get("company") or "", row.get("role") or "role not recorded"
         dates = [x for x in re.findall(r"\b\d{4}-\d{2}-\d{2}\b", str(row.get("notes") or ""))
                  if x <= today]
@@ -2558,7 +3312,7 @@ def _referrals(ctx: Ctx, targets: dict) -> list:
         rid = f"ref-{cid}"
         app_id = None
         if row is not None:
-            ids = dict(zip([id(r) for r in ctx.tracker], tracker_ids(ctx.tracker)))
+            ids = dict(zip([id(r) for r in ctx.tracker], ctx.tracker_ids))
             app_id = ids.get(id(row))
         item = {"id": rid, "contact": cid, "first_name": first_name(c.get("name")),
                 "company": str(c.get("company") or ""), "role": role or None,
@@ -2595,7 +3349,6 @@ def process_news(ctx: Ctx, cid: str) -> dict | None:
     """{on, what}: the latest thing that happened in the process a contact's referral
     started, from the tracker row's dated notes (an outcome, a stage booked) and the stages
     held on outcome.md; None when nothing is on record. What the referrer is owed word of."""
-    import open_actions
     import throttle
     c = next((x for x in ctx.contacts if str(x.get("contact_id") or "").strip() == cid), None)
     if c is None:
@@ -2612,7 +3365,7 @@ def process_news(ctx: Ctx, cid: str) -> dict | None:
             if m.group(1) <= today and re.search(r"\b(?:interview|booked|offer|rejected|"
                                                  r"withdrew|no response)\b", what, re.I):
                 events.append((m.group(1), what))
-        _folder, _files_, stages = open_actions.stages(row)
+        _folder, _files_, stages = ctx.stages(row)
         events += [(s_["date"], f"the {s_['label'].lower()} is done") for s_ in stages
                    if s_["done"] and s_["date"] and s_["date"] <= today]
         for on, what in events:
@@ -2622,9 +3375,15 @@ def process_news(ctx: Ctx, cid: str) -> dict | None:
 
 
 def role_in(text) -> str:
+    """The role a next step names ("Send the referral ask for the Planning Analyst role"), or
+    "": never a sentence about someone ("Wait for Juno to say whether she passed it on"
+    read as a role, 2026-11-03)."""
     m = re.search(r"\bfor (?:the )?([A-Z][\w &/-]{2,60}?)(?: role| position|[.,;]|$)",
                   str(text or ""))
-    return m.group(1).strip() if m else ""
+    got = m.group(1).strip() if m else ""
+    if re.search(r"\b(?:to|whether|if|when|he|she|they|his|her|their|him|them)\b", got):
+        return ""
+    return got
 
 
 # ------------------------------------------------------------------ the sending budget
@@ -2635,7 +3394,7 @@ def _message_budget(ctx: Ctx, targets: dict) -> dict:
     person's LinkedIn plan (schema.LIMITS): the line above a wave of first notes. The app
     sets no cap on requests of its own, so no limit is given that LinkedIn did not."""
     from network import schema, state
-    b = state.platform_budget(ctx.contacts, ctx.threads, ctx.today)
+    b = state.platform_budget(ctx.contacts, ctx.threads, ctx.today, index=ctx.by_contact)
     plan = setting_values().get("linkedin_plan", "free")
     ready = 0
     for f in glob.glob(person.state("documents", "network", "*", "draft.md")):
@@ -2659,10 +3418,78 @@ PLANS_NOTE_CHARS = {"free": 200, "premium": 300}
 # ------------------------------------------------------------------ what it learned
 
 
+# A rule as the chats wrote it speaks of the person ("Answer the question he actually asked",
+# "the candidate prefers"); on their own page it speaks to them (the 3 November audit: 77 of
+# 173 rules read as notes about him). Only the words that can mean nobody but the person are
+# turned: "the candidate", their own first name, and he, his, him where no one else in the
+# rule could be meant by them. What a chat reads is the rule as written.
+_HE_VERB = {"is": "are", "was": "were", "has": "have", "does": "do", "doesn't": "don't",
+            "isn't": "aren't", "wasn't": "weren't", "hasn't": "haven't"}
+_NOT_VERB = {"always", "is", "was", "has", "does", "this", "thus", "us", "yes", "less", "his"}
+_SOMEONE_ELSE = re.compile(r"\b(?:contacts?|recruiters?|managers?|interviewers?|founders?|"
+                           r"referrers?|someone|they|their|them|she|her|hers)\b", re.I)
+_ADVERB = r"(?:always|also|never|often|still|just|only|usually|actually|really|already)"
+
+
+def _you_verb(word: str) -> str:
+    low = word.lower()
+    if low in _HE_VERB:
+        return _HE_VERB[low]
+    if low in _NOT_VERB or not low.isalpha():
+        return word
+    if low.endswith("ies") and len(low) > 4:
+        return word[:-3] + "y"
+    if re.search(r"(?:ch|sh|ss|x|o)es$", low):
+        return word[:-2]
+    if low.endswith("s") and not low.endswith("ss"):
+        return word[:-1]
+    return word
+
+
+def to_person(rule: str, first: str = "") -> str:
+    """A learned rule said to the person: "Answer the question you actually asked"."""
+    text = str(rule or "")
+
+    def cased(src: str, word: str) -> str:
+        return word[:1].upper() + word[1:] if src[:1].isupper() else word
+
+    def you(m) -> str:
+        # The one who is meant, then the verb after it agreeing: "you want", never "you wants".
+        # A capital only where a sentence starts: a name always has one.
+        starts = not m.string[:m.start()].strip() or m.string[:m.start()].rstrip()[-1:] in ".!?"
+        who = "You" if starts else "you"
+        rest = m.group(2)
+        if not rest:
+            return who
+        if rest == "'s":
+            return who + "'re"
+        words = rest.split()
+        return " ".join([who] + words[:-1] + [_you_verb(words[-1])])
+    after = rf"('s|(?:\s+{_ADVERB})?\s+[A-Za-z']+)?"
+    text = re.sub(r"\bthe candidate's\b", lambda m: cased(m.group(0), "your"), text, flags=re.I)
+    text = re.sub(rf"\b([Tt]he candidate)\b{after}", you, text)
+    if first and len(first) > 1:
+        f = re.escape(first)
+        text = re.sub(rf"\b{f}'s\b", lambda m: "Your" if not m.string[:m.start()].strip() or m.string[:m.start()].rstrip()[-1:] in ".!?" else "your", text)
+        text = re.sub(rf"\b({f})\b{after}", you, text)
+    if _SOMEONE_ELSE.search(text):
+        return text
+    text = re.sub(rf"\b([Hh]e)\b{after}", you, text)
+    text = re.sub(r"\bhimself\b", lambda m: cased(m.group(0), "yourself"), text, flags=re.I)
+    text = re.sub(r"\bhis\b", lambda m: cased(m.group(0), "your"), text, flags=re.I)
+    text = re.sub(r"\bhim\b", lambda m: cased(m.group(0), "you"), text, flags=re.I)
+    return text
+
+
 def _learned(ctx: Ctx, targets: dict) -> list:
     """What the person taught it (profile/learned.json), each rule with their own words and
     its day, for Settings' "What you have taught it" with Remove (learned.retire)."""
     import learned
+    try:
+        first = str(person.get("identity.first", "") or "") or \
+            (str(person.get("identity.name", "") or "").split() or [""])[0]
+    except Exception:  # noqa: BLE001  no profile: no name to turn
+        first = ""
     out = []
     for n, e in enumerate(learned.load(), 1):
         if e.get("status") == "retired":
@@ -2670,6 +3497,7 @@ def _learned(ctx: Ctx, targets: dict) -> list:
         lid = f"learned-{n}"
         item = {"id": lid, "n": n, "area": str(e.get("area") or "other"),
                 "rule": " ".join(str(e.get("rule") or "").split())[:300],
+                "say": to_person(" ".join(str(e.get("rule") or "").split())[:300], first),
                 "said": " ".join(str(e.get("said") or "").split())[:200],
                 "on": str(e.get("date") or e.get("recorded") or "")[:10] or None,
                 "via": str(e.get("via") or "") or None,
@@ -2725,29 +3553,82 @@ def _resume(ctx: Ctx, targets: dict) -> dict | None:
     rel_path = docpaths.current_resume()
     regen = {"kind": "general_resume", "id": "general_resume~current", "args": {}}
     if not rel_path:
-        return {"id": "resume-current", "file": None, "made_on": None, "stale": False,
+        return {"id": "resume-current", "file": None, "made_on": None, "stale": False, "breaks": [],
                 "work": regen, "rev": rev_of("resume-current", None)}
     path = person.state(*rel_path.split("/"))
+    made = saved_at(path)
     try:
-        made = dt.datetime.fromtimestamp(os.path.getmtime(path), dt.timezone.utc)
-        prof = dt.datetime.fromtimestamp(os.path.getmtime(person.path(
-            "01-candidate-profile.md")), dt.timezone.utc)
-    except (OSError, person.NoProfile):
-        made, prof = None, None
+        prof = saved_at(person.path("01-candidate-profile.md"))
+    except person.NoProfile:
+        prof = None
     stale = bool(made and prof and prof > made)
+    # A file that breaks the person's own document rules is never offered, whatever it is
+    # named: not to download, not to a contact, not from the page's file store. A hand-made
+    # resume spelling "standardising" with dashes in its dates was one tap away as "Get this
+    # one anyway", and offered to contacts as "Free, instant" (2026-11-03). The card says why
+    # and the one thing to do with it: make a fresh one, made and checked by the app. Both
+    # checks hold it: the drafting pipeline's own (resume_breaks, in plain words) and the
+    # claim checker's (docpaths.resume_problems, which stage_picks reads too), so a file
+    # either would refuse is never handed out.
+    breaks = resume_breaks(path)
+    problems = docpaths.resume_problems(rel_path)
+    breaks = breaks + [p for p in problems if not (breaks and _SAID_BY_BREAKS.match(p))]
     item = {"id": "resume-current", "file": {"name": os.path.basename(rel_path),
-                                             "path": rel_path, "asset": asset_for(rel_path),
+                                             "path": rel_path,
+                                             "asset": None if breaks else asset_for(rel_path),
                                              "pages": _pages(path) if rel_path.endswith(".pdf")
                                              else None},
             "made_on": made.date().isoformat() if made else None, "stale": stale,
+            "breaks": breaks,
             # Free and instant once it is in the page's own file store: `files` work puts it
             # there once, as an application's documents are put.
-            "get": {"kind": "files", "id": "files~resume-current",
-                    "args": {"resume": rel_path, "files": [os.path.basename(rel_path)]}},
+            "get": None if breaks else {
+                "kind": "files", "id": "files~resume-current",
+                "args": {"resume": rel_path, "files": [os.path.basename(rel_path)]}},
             "work": regen, "rev": ""}
-    item["rev"] = rev_of("resume-current", rel_path, item["made_on"], stale)
+    item["rev"] = rev_of("resume-current", rel_path, item["made_on"], stale, breaks)
     targets["resume-current"] = {"kind": "resume", "path": rel_path, "rev": item["rev"]}
     return item
+
+
+_BREAKS: dict = {}
+# The claim checker's words for what resume_breaks already says plainly: a dash, a spelling,
+# the document's noun (docpaths._PLAIN_RULE), never said twice.
+_SAID_BY_BREAKS = re.compile(r"^(?:a dash\b|(?:british|american) spelling\b|the word\b)", re.I)
+
+
+def resume_breaks(path: str) -> list[str]:
+    """What in a resume file breaks the person's own document rules (their spelling, the
+    dashes they never use, a word they never call it), each in plain words, or [] when it
+    keeps them or cannot be read. The checks are the drafting pipeline's own
+    (tools/locale_rules.py), so a file the pipeline would refuse is never handed out."""
+    try:
+        st = os.stat(path)
+    except OSError:
+        return []
+    key = (path, st.st_mtime_ns, st.st_size)
+    if key in _BREAKS:
+        return _BREAKS[key]
+    out: list[str] = []
+    try:
+        import locale_rules
+        import pdftext
+        text = pdftext.text(path) if path.lower().endswith(".pdf") else ""
+        rules = locale_rules._from_profile()
+    except Exception:  # noqa: BLE001  nothing here reads it: nothing to say about it
+        text, rules = "", None
+    if text and rules is not None:
+        words = list(dict.fromkeys(m.group(0) for _, m in rules.wrong_spellings(text)))
+        if words:
+            out.append("it spells " + ", ".join(f"\u201c{w}\u201d" for w in words[:3])
+                       + " another way from your documents")
+        if rules.dashes(text):
+            out.append("it has dashes your documents never use")
+        said = [n.word for n in rules.nouns if n.document.search(text)]
+        if said:
+            out.append(f"it says \u201c{said[0]}\u201d, a word your documents never use")
+    _BREAKS[key] = out
+    return out
 
 
 # ------------------------------------------------------------------ you: what the profile holds
@@ -2857,9 +3738,19 @@ _BRANDS = {"linkedin": "LinkedIn", "freehire": "Freehire", "jobbank": "Job Bank"
 
 
 def portal_label(name: str) -> str:
+    """A job site's name as the person knows it: the brand, else the address it lives at
+    ("builtintoronto.com"), never a name made from its folder ("Builtintoronto", the 3
+    November audit)."""
     base = re.sub(r"-search$", "", str(name or ""))
     if base.lower() in _BRANDS:
         return _BRANDS[base.lower()]
+    try:
+        import portals as portals_mod
+        host = re.sub(r"^www\.", "", urllib.parse.urlparse(portals_mod.url(name)).netloc.lower())
+    except Exception:  # noqa: BLE001  no frontmatter: the folder's name below
+        host = ""
+    if host:
+        return host
     words = re.split(r"[-_]+", base)
     return " ".join(w if w.isupper() else w[:1].upper() + w[1:] for w in words if w)
 
@@ -2884,8 +3775,7 @@ def _search(ctx: Ctx, targets: dict) -> dict:
         sites = portals_mod.enabled()
     except Exception:  # noqa: BLE001
         sites = {}
-    why = {"linkedin-search": "LinkedIn's own job search. Its robots rules turn crawlers away; "
-                              "only you switch it off.",
+    why = {"linkedin-search": "LinkedIn's own job search.",
            "freehire-search": "A free board that lists jobs from many sites."}
     seen = ctx.seen
     mine = [e for e in seen.values() if str(e.get("status") or "").lower() == "excluded"
@@ -2895,15 +3785,25 @@ def _search(ctx: Ctx, targets: dict) -> dict:
     # A few of what each rule left out, newest first, so "cleared from the list · 141" says what
     # it cleared (the maintainer, 2026-10-30: "surely u should be able to dive into this").
     seen_by: dict = {}
+    # Each rule's name as it was written, its capitals kept ("ZQ Bank", never "zq bank"): the
+    # group itself is lower case for counting (the 3 November audit).
+    said_as: dict = {}
     for e in sorted(mine, key=lambda e: str(e.get("date") or e.get("first_seen") or ""), reverse=True):
         g = exclude.reason_group(str(e.get("exclusion_reason") or ""))
-        title, company = str(e.get("title") or "").strip(), str(e.get("company") or "").strip()
+        said = re.split(r"[:;.(,]", html.unescape(str(e.get("exclusion_reason") or "")).strip())[0].strip()[:60]
+        if said and g not in said_as:
+            said_as[g] = said[:1].upper() + said[1:]
+        # A title as a job site sent it, entities and all: "Credit Risk &amp; Collections" was
+        # shown with its "&amp;" (the 3 November audit).
+        title = html.unescape(str(e.get("title") or "")).strip()
+        company = html.unescape(str(e.get("company") or "")).strip()
         if title and len(seen_by.setdefault(g, [])) < 5:
             seen_by[g].append(f"{title} at {company}" if company else title)
     rules = []
     for words, n in groups.most_common(20):
         rid = f"rule-{seg(words)[:60]}"
-        rules.append({"id": rid, "words": words, "count": n, "basis": "person",
+        rules.append({"id": rid, "words": words, "label": said_as.get(words) or words[:1].upper() + words[1:],
+                      "count": n, "basis": "person",
                       "examples": seen_by.get(words, []), "rev": rev_of(rid, n)})
         targets[rid] = {"kind": "rule", "words": words, "rev": rules[-1]["rev"]}
     dnt = _json(person.state("job_scraper", "do_not_target.json"), {})
@@ -2916,17 +3816,29 @@ def _search(ctx: Ctx, targets: dict) -> dict:
                           "count": 1, "basis": "employer", "rev": rev_of(rid, e)})
             targets[rid] = {"kind": "rule", "company": e["company"], "rev": rules[-1]["rev"]}
     pause = paused(ctx.today)
+    # Employers the person has ruled out are not "followed", whatever boards.py still lists:
+    # the page listed pension funds and a declined bank among them (the 3 November audit).
+    out_names = {str(e.get("company") or "").strip().lower() for e in (dnt if isinstance(dnt, list) else [])
+                 if isinstance(e, dict)}
+    try:
+        import bar
+        ruled_out = bar.excluded_by_name
+    except Exception:  # noqa: BLE001  no bar for this person: nothing ruled out by it
+        ruled_out = lambda _name: ""  # noqa: E731
+    followed = {k: v for k, v in boards.items()
+                if str(k).strip().lower() not in out_names and not ruled_out(str(k))}
     item = {"id": "search-settings",
             "roles": [str(x) for x in got("SCRAPE_QUERIES", []) or []],
             "places": [str(x) for x in got("SCRAPE_LOCATIONS", []) or []],
             "pay": {"floor": got("SALARY_FLOOR"), "target": got("SALARY_TARGET"),
-                    "cut": got("SALARY_CUT_BELOW")},
+                    "cut": got("SALARY_CUT_BELOW"), "currency": got("CURRENCY_CODE")},
             "window_days": got("JOB_AGE_DAYS", 14),
             "employers": [str(x) for x in got("SCRAPE_EMPLOYERS", []) or []],
             "portals": [{"name": k, "label": portal_label(k), "on": bool(v), "why": why.get(k, "")}
                         for k, v in sorted(sites.items())],
             "boards": [{"employer": k, "system": (v[0] if isinstance(v, (list, tuple)) and v
-                                                   else str(v))} for k, v in sorted(boards.items())],
+                                                   else str(v))} for k, v in sorted(followed.items())],
+            "boards_left_out": len(boards) - len(followed),
             "rules": rules, "pause": pause, "rev": ""}
     item["rev"] = rev_of({k: v for k, v in item.items() if k != "rev"})
     targets["search-settings"] = {"kind": "search", "rev": item["rev"]}
@@ -3076,7 +3988,10 @@ def _linkedin(ctx: Ctx, targets: dict) -> dict:
         "due_on": st["due_on"] or None, "due": state in ("missing", "due"),
         "every_days": export.EXPORT_EVERY_DAYS,
         "counts": rec.get("counts") or rec.get("rows") or {},
-        "changed": [scrub(x, ctx.names) for x in rec.get("changed") or []],
+        # What a chat reads from the export, said for the person: never a tool's name
+        # ("(export.py pending lists them)" was the card's last words, 2026-11-03).
+        "changed": [re.sub(r"\s*\([^()]*\b[\w-]+\.py\b[^()]*\)", "", scrub(x, ctx.names))
+                    for x in rec.get("changed") or []],
         "steps": {"lines": claude_surfaces.steps("linkedin-export-files"),
                   "checked": e.get("verified_on"), "link": claude_surfaces.official(e)},
         "files": export.file_names(),
@@ -3132,6 +4047,12 @@ def _done(ctx: Ctx, targets: dict) -> dict:
     import throttle
     from network import state
     rows = ctx.tracker
+    # Each application under the tracker id its live record has (_applications), so the page
+    # joins the two as one card: the history had no id, every card showed twice and every
+    # one took the first interview (journeys audit 1).
+    # The build's own ids and grouped log (Ctx), or worked out here for a ctx without them.
+    ids = getattr(ctx, "tracker_ids", None)
+    row_ids = {id(r): rid for r, rid in zip(rows, tracker_ids(rows) if ids is None else ids)}
     offers = throttle.spellings("offer", "hired", "offer_declined")
     sent = [(r, _date(throttle.applied_on(r))) for r in rows]
     sent = [(r, d) for r, d in sent if d]
@@ -3151,16 +4072,15 @@ def _done(ctx: Ctx, targets: dict) -> dict:
     # years of other conversations, and counting every inbound message said 359 replies
     # (the maintainer, 2026-10-26).
     book = {str(c.get("contact_id") or "").strip() for c in ctx.contacts}
-    by_contact: dict = {}
-    for t in ctx.threads:
-        cid = str(t.get("contact_id") or "").strip()
-        if cid in book:
-            by_contact.setdefault(cid, []).append(t)
     replied_on = []
     replied: dict = {}
-    for cid, rows_ in by_contact.items():
+    grouped = getattr(ctx, "by_contact", None)
+    grouped = state.by_contact(ctx.threads) if grouped is None else grouped
+    for cid, rows_ in grouped.items():
+        if cid not in book:
+            continue
         wrote = False
-        for t in state._ordered(rows_):
+        for t in rows_:
             if state.direction(t) == "out":
                 wrote = True
             elif wrote and state.said_something(t):
@@ -3205,7 +4125,8 @@ def _done(ctx: Ctx, targets: dict) -> dict:
         dates = [x for x in re.findall(r"\b\d{4}-\d{2}-\d{2}\b", str(r.get("notes") or ""))
                  if x <= ctx.today.isoformat()]
         st = _status(r)
-        item = {"company": r.get("company") or "", "role": r.get("role") or "",
+        item = {"id": row_ids.get(id(r), ""), "company": r.get("company") or "",
+                "role": r.get("role") or "",
                 "applied_on": d.isoformat(), "status": st, "last": max(dates + [d.isoformat()]),
                 "live": st not in throttle.FINAL}
         full.append(dict(item, employer=item["company"],
@@ -3251,7 +4172,21 @@ def setting_values() -> dict:
         out["profile_reads"] = "browser" if reading.reads_now() == "browser" else "paste"
     except Exception:  # noqa: BLE001  no networking settings: the default
         out["profile_reads"] = "browser"
+    try:
+        out["time_zone"] = zone_words(person.home_zone_named(person.directory()))
+    except person.NoProfile:
+        out["time_zone"] = ""
     return out
+
+
+def zone_words(zone: str) -> str:
+    """A zone as the person says it: "Toronto", "New York", "UTC"; "" for none."""
+    zone = str(zone or "")
+    if zone in ("UTC", "Etc/UTC"):
+        return "UTC"
+    if zone == "Etc/GMT":
+        return "GMT"
+    return zone.rsplit("/", 1)[-1].replace("_", " ")
 
 
 SETTINGS = (
@@ -3276,6 +4211,12 @@ SETTINGS = (
 SETTING_DEFAULTS = {"prep_days": "7", "calendar_reminder": "60"}
 
 
+# The person's own time zone (person.json `time_zone`), said in their words ("Toronto",
+# "Eastern", "Mississauga") and read by person.zone_in: every time on the page, "today", and
+# every calendar link use it. Never the brief's schedule zone (the audit, 2026-11-03).
+TIME_ZONE = ("time_zone", "Your time zone")
+
+
 def _settings(ctx: Ctx, targets: dict) -> list:
     values = setting_values()
     out = []
@@ -3285,7 +4226,30 @@ def _settings(ctx: Ctx, targets: dict) -> list:
                 "value": values[key], "choices": choices, "rev": rev_of(key, values[key])}
         out.append(item)
         targets[sid] = {"kind": "setting", "key": key, "value": values[key], "rev": item["rev"]}
+    key, label = TIME_ZONE
+    item = {"id": "setting-time_zone", "key": key, "label": label, "kind": "text",
+            "value": values[key], "choices": None, "rev": rev_of(key, values[key])}
+    out.append(item)
+    targets[item["id"]] = {"kind": "setting", "key": key, "value": values[key],
+                           "rev": item["rev"]}
     return out
+
+
+def _zone_question(ctx: Ctx, targets: dict) -> list:
+    """Which time zone they are in, asked once nothing they wrote names one: the page shows
+    times in the device's own zone meanwhile, and a calendar link made from a guess is hours
+    out. Answered in their own words, read by person.zone_in."""
+    if ctx.zone_named:
+        return []
+    qid = "q-time-zone"
+    item = {"id": qid, "kind": "question", "title": "Which time zone are you in?",
+            "body": "Your interviews, calls and calendar links use it. Say your city, or the "
+                    "zone (Eastern, UK time).",
+            "options": [{"label": "Say where you are", "action": "setting.set",
+                         "input": "text"}],
+            "about": {}, "rev": rev_of(qid, "ask")}
+    targets[qid] = {"kind": "setting", "key": TIME_ZONE[0], "value": "", "rev": item["rev"]}
+    return [item]
 
 
 def _brief(ctx: Ctx, targets: dict) -> dict | None:
@@ -3295,6 +4259,10 @@ def _brief(ctx: Ctx, targets: dict) -> dict | None:
         return None
     path = files[-1]
     sections = brief_sections(_read(path))
+    # Today's brief searched the news when it has a News part of its own, items or none: its
+    # carried points then say the search found nothing newer, never only "Gathered" five days
+    # back, which read as no search since (2026-11-03).
+    searched = any(sec["kind"] == "news" for sec in sections)
     news_date = _news_fallback(ctx, sections, files[:-1])
     lines = [i["text"] for sec in sections for i in sec["items"]][:8]
     for sec in sections:
@@ -3310,6 +4278,8 @@ def _brief(ctx: Ctx, targets: dict) -> dict | None:
            "sections": sections, "watch": _watch(), "watch_again": _watch_again()}
     if news_date:
         out["news_date"] = news_date
+        if searched and news_date < out["date"]:
+            out["news_searched"] = out["date"]
     return out
 
 
@@ -3441,7 +4411,10 @@ def brief_sections(text: str) -> list[dict]:
         else:
             said = brief_line(ln)
             if said:
-                cur["text"] = (cur["text"] + " " + said).strip()
+                # One sentence ends before the next begins: the headline has no full stop of
+                # its own, and ran into the lead as one sentence (the audit, 2026-11-03).
+                was = cur["text"]
+                cur["text"] = (was + ("" if not was or was[-1] in ".!?:" else ".") + " " + said).strip()
     # A part with nothing left in it, a "Read from your main chat's ..." note before the
     # first heading included, is not shown.
     return [sec for sec in out if (sec["items"] or sec["text"])
@@ -3453,14 +4426,38 @@ def brief_link(ctx: Ctx, line: str) -> dict:
     it names (its application, its draft, then someone there), or the section a count is
     about ("2 replies owed" is Due)."""
     low = line.lower()
-    for row, rid in zip(ctx.tracker, tracker_ids(ctx.tracker)):
-        name = str(row.get("company") or "")
-        if name and name.lower() in low:
+
+    def word(ch: str) -> bool:
+        return ch.isalnum() or ch == "_"
+
+    def named(name) -> bool:
+        # A whole name as words, never inside another: "AB" is not in "Crabtree" or "lab", nor
+        # "Ada" in "Canada", nor "Freelance" in "Freelancer" (the audit, 2026-11-03). Found
+        # with str.find, never a pattern a name: thousands of contacts' names each made a new
+        # one, and the brief's lines took a tenth of a second (2026-11-03).
+        n = " ".join(str(name or "").lower().split())
+        i = low.find(n) if n else -1
+        while i >= 0:
+            j = i + len(n)
+            if not (i and word(low[i - 1])) and not (j < len(low) and word(low[j])):
+                return True
+            i = low.find(n, i + 1)
+        return False
+    # A person the line names by their full name is who the line is about, before any
+    # employer: a line about one person linked to another (2026-11-03).
+    for c in ctx.contacts:
+        if " " in str(c.get("name") or "").strip() and named(c.get("name")):
+            return {"item": str(c.get("contact_id") or ""), "section": "people"}
+    # The longest employer name first, so one name inside another links to the one meant.
+    ids = getattr(ctx, "tracker_ids", None)          # the build's own (Ctx), else worked out
+    rows = sorted(zip(ctx.tracker, tracker_ids(ctx.tracker) if ids is None else ids),
+                  key=lambda x: -len(str(x[0].get("company") or "")))
+    for row, rid in rows:
+        if named(row.get("company")):
             return {"item": rid, "section": "applications" if _status(row) not in (
                 "drafted", "") else "ready"}
-    for c in ctx.contacts:
-        name = str(c.get("company") or "")
-        if name and name.lower() in low:
+    for c in sorted(ctx.contacts, key=lambda c: -len(str(c.get("company") or ""))):
+        if named(c.get("company")):
             return {"item": str(c.get("contact_id") or ""), "section": "people"}
     if re.search(r"\b(?:repl(?:y|ies)|nudge|owed|follow)", low):
         return {"item": None, "section": "due"}
@@ -3475,7 +4472,7 @@ def brief_link(ctx: Ctx, line: str) -> dict:
 
 def _setup(ctx: Ctx, targets: dict) -> dict:
     import app_setup
-    return app_setup.setup_section(ctx.today, targets)
+    return app_setup.setup_section(ctx.today, targets, now=ctx.now)
 
 
 def _updates(ctx: Ctx, targets: dict) -> dict:
@@ -3528,7 +4525,7 @@ def _schedule(ctx: Ctx, targets: dict) -> dict:
     for a chat to make (tools/routines.py page_part), for Settings' "Your brief", with the
     id and rev brief.move, brief.pause and brief.resume act on."""
     import routines
-    part = routines.page_part()
+    part = routines.page_part(now=ctx.now, today=ctx.today)
     if part.get("paused") and _date(part["paused"].get("until")) and \
             _date(part["paused"]["until"]) <= ctx.today:
         part["paused"] = dict(part["paused"], over=True)   # its day came: resume lifts it
@@ -3666,11 +4663,12 @@ _ENUMS = {
     ("ready", "status"): {"drafted", "applied"},
     ("messages", "channel"): {"linkedin_note", "linkedin_message", "inmail", "email"},
     ("messages", "kind"): {"first_note", "follow_up", "reply", "referral_ask"},
-    ("due", "kind"): {"follow_up", "reply", "interview", "nudge", "withdraw"},
+    # "hidden": the one row saying who is not shown (_due's due-hidden), with no day of its own.
+    ("due", "kind"): {"follow_up", "reply", "interview", "nudge", "withdraw", "hidden"},
     ("upcoming", "kind"): {"interview", "test", "call", "deadline", "event"},
 }
 _JOB_STATUS = {"new", "drafting", "ready", "applied", "dismissed"}
-_ISO_DAY = re.compile(r"^\d{4}-\d{2}-\d{2}$")
+_ISO_DAY_ONLY = re.compile(r"^\d{4}-\d{2}-\d{2}$")
 _ISO_TIME = re.compile(r"^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}Z$")
 # Where the person's own words are shown: their drafts and their own answers.
 OWN_TEXT = (("messages", "text"), ("ready", "outreach", "text"), ("ready", "screening"))
@@ -3788,10 +4786,12 @@ def check(model: dict) -> list[str]:
         elif got["shown"] > got["total"] or not isinstance(got["counts"], dict):
             bad.append(f"lists.{name}: shows more than it holds")
     for item in model.get("due") or []:
-        if not _ISO_DAY.match(str(item.get("due") or "")):
+        if item.get("kind") == "hidden" and item.get("due") is None:
+            continue
+        if not _ISO_DAY_ONLY.match(str(item.get("due") or "")):
             bad.append(f"due {item.get('id')}: due is not a date")
     for item in model.get("upcoming") or []:
-        if not _ISO_DAY.match(str(item.get("day") or "")):
+        if not _ISO_DAY_ONLY.match(str(item.get("day") or "")):
             bad.append(f"upcoming {item.get('id')}: day is not a date")
         if bool(item.get("start")) == bool(item.get("all_day")) or any(
                 item.get(k) and not _ISO_TIME.match(str(item[k])) for k in ("start", "end")):

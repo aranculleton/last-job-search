@@ -413,6 +413,12 @@ REFERRAL = _rx(
 # is not one: that is accepting the request (low_effort, or substance if they wrote more).
 # "Feel free to talk to HR" and "open to talk with talented people" send them elsewhere,
 # so a talk with somebody other than the person writing is not one.
+# A call or a chat, however long and whatever kind: "a quick call", "a 20 minute call", "a
+# short introductory phone screen", "a coffee".
+_CALL = (r"(?:(?:quick|short|brief|informal|introductory|intro|initial|virtual|phone|video|zoom|"
+         r"teams|\d{1,3}[- ]?(?:min(?:ute)?s?|mins?)|half[- ]an[- ]hour|15|20|30)[\s-]+){0,3}"
+         r"(?:call|chat|phone\s+screen|phone\s+call|video\s+call|conversation|coffee|catch[- ]up)"
+         r"\b(?!\s+cent(?:re|er)s?\b)")
 CHAT_OFFER = re.compile(
     r"\b(?:happy|glad|keen|(?<!feel )free|available|open)\s+to\s+(?:"
     r"(?:have|grab|do|set up)\s+a\s+(?:quick\s+|short\s+|virtual\s+)?(?:chat|call|coffee)"
@@ -422,7 +428,14 @@ CHAT_OFFER = re.compile(
     r"(?!\s+(?:to|with)\s+(?:hr\b|our\b|the\b|an?\b|some(?:one|body)\b|any(?:one|body)\b"
     r"|people\b|recruit|talent|them\b|him\b|her\b))"
     r"|\blet'?s\s+(?:chat|talk|speak|meet|find a time|grab a (?:coffee|call|chat)|set up a (?:call|chat|time))\b"
-    r"|\bcoffee chat\b", re.I)
+    r"|\bcoffee chat\b"
+    # The forms an invitation most often takes, which were read as a long generous message
+    # and answered with "engage with the substance": "free for a 20 minute call", "available
+    # for a quick call", "time for a chat", "set up a call", "arrange a 30-minute phone
+    # screen", "open to a call". A call centre is somewhere, not a call.
+    r"|\b(?:(?<!feel )free|available|time|open)\s+(?:for|to)\s+an?\s+" + _CALL +
+    r"|\b(?:set\s+up|arrange|schedule|book|organi[sz]e)\s+(?:an?\s+|some\s+)?(?:time\s+for\s+an?\s+)?"
+    + _CALL, re.I)
 
 
 # An eligibility no is the one rejection that is about the applicant rather
@@ -639,17 +652,34 @@ _DOC_NAMED = re.compile(_SEND_VERBS + r"[^.!?\n]{0,40}\b(resume|r[eé]sum[eé]|c
                         + _DOC_OVER, re.I)
 
 
+# Thanks for one already received: "thanks for sending the resume", "got your CV". The
+# resume is with them, so nothing is owed: it was read as a new ask, and a second resume
+# was put on the person's list the day the first was thanked for (journeys audit 8).
+_THANKED_FOR = re.compile(
+    r"\b(?:thanks?|thank\s+you|cheers|appreciated?|grateful)\b[^.!?\n]{0,20}?\bfor\s+"
+    r"(?:\w+\s+){0,2}?" + _SEND_VERBS + r"[^.!?\n]{0,40}"
+    r"|\b(?:got|received|have\s+got|have\s+received|now\s+have)\s+(?:your|the)\s+"
+    r"(?:resume|r[eé]sum[eé]|cv|curriculum vitae)\b", re.I)
+
+
+def _without_thanks(text: str) -> str:
+    return _THANKED_FOR.sub(" ", text)
+
+
 def asks_for_resume(text) -> bool:
     """Do they ask for the resume itself? "Send me your CV and I'll pass it on" does;
-    their address in a signature, "send me your details", a no, a dead end, and "I've
-    passed your CV on" (done, not asked) do not. What the log reads a resume owed from
-    (state.resumes_owed), where the classifier's wider net would owe one to every
-    signature."""
-    text = str(text or "")
-    if (_ALREADY_DONE.search(text) or _hits(text, REJECTION) or _hits(text, MISMATCH)
-            or REFERRAL_FIELD.search(text)):
+    their address in a signature, "send me your details", a no, a dead end, "I've
+    passed your CV on" (done, not asked) and "thanks for sending your resume" do not. What
+    the log reads a resume owed from (state.resumes_owed), where the classifier's wider net
+    would owe one to every signature."""
+    text = _without_thanks(str(text or ""))
+    # The one cue first: most messages name no resume, and the checks that can only turn an
+    # ask down (a no, a dead end, a referral field) were most of the time a page build spent
+    # finding the resumes owed (2026-11-03).
+    if not _DOC_NAMED.search(text):
         return False
-    return bool(_DOC_NAMED.search(text))
+    return not (_ALREADY_DONE.search(text) or _hits(text, REJECTION) or _hits(text, MISMATCH)
+                or REFERRAL_FIELD.search(text))
 
 
 def _match_send_resume(text, ctx):
@@ -670,7 +700,8 @@ def _match_send_resume(text, ctx):
     # name them, not email them a PDF.
     blocked = (_hits(text, REJECTION) or _hits(text, MISMATCH)
                or bool(REFERRAL_FIELD.search(text)))
-    hits = [] if (_ALREADY_DONE.search(text) or blocked) else _hits(text, RESUME_ASK)
+    asked = _without_thanks(text)
+    hits = [] if (_ALREADY_DONE.search(asked) or blocked) else _hits(asked, RESUME_ASK)
     if ctx["email"] and not blocked:
         # An address with no ask around it is usually a signature block rather than
         # an invitation, and the classifier cannot tell the two apart. It still

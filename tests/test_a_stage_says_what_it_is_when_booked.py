@@ -71,7 +71,10 @@ def test_a_zone_is_kept_by_its_name_or_its_word_never_as_anything_else():
     assert interview_pack.zone_name("America/Sao_Paulo") == "America/Sao_Paulo"
     assert interview_pack.zone_name("Not/AZone") == ""
     assert interview_pack.zone_name("est") == "EST"
-    assert interview_pack.zone_name("eastern time") == ""
+    # Words a person writes are a zone too, kept by its own name (the audit, 2026-11-03).
+    assert interview_pack.zone_name("eastern time") == "America/New_York"
+    assert interview_pack.zone_name("Toronto time") == "America/Toronto"
+    assert interview_pack.zone_name("teatime") == ""
 
 
 def test_a_time_given_on_rebooking_a_test_makes_it_a_meeting():
@@ -83,5 +86,9 @@ def test_a_time_given_on_rebooking_a_test_makes_it_a_meeting():
 
 def test_a_zone_it_cannot_place_gives_no_time_rather_than_a_wrong_one():
     s = _read(interview_pack._with_stage(HEAD, "Final round", "2026-11-05", time="14:00",
-                                         zone="Pacific Time"))
+                                         zone="martian time"))
     assert (s["date"], s["time"], s["zone"]) == ("2026-11-05", "", "")
+    # "Pacific Time" is a zone people write, and is kept (the audit, 2026-11-03).
+    s = _read(interview_pack._with_stage(HEAD, "Final round", "2026-11-05", time="14:00",
+                                         zone="Pacific Time"))
+    assert (s["time"], s["zone"]) == ("14:00", "America/Los_Angeles")

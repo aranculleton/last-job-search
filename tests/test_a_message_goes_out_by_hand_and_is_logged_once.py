@@ -145,13 +145,15 @@ def test_the_same_send_within_a_week_is_one_row(search):
     first = search.act("msg.sent", msg["id"], value={"text": msg["body"], "on": "2026-10-24"})
     assert search.apply()["ok"] == [first]
     search.written_back()
-    # Logged again from another tap the next day (another action id): refused, with the day.
+    # Logged again from another tap the next day (another action id): one row, and the
+    # receipt says the day it was logged. Done, not refused (changed 2026-11-03, engine audit
+    # 13: a refusal read on the page as "it changed since you saw it").
     search.put("actions", "act-again", {"action": "msg.sent", "item": msg["id"],
                                         "value": {"text": msg["body"]},
                                         "at": "2026-10-25T17:30:00Z", "rev_seen": msg["rev"],
                                         "tab": "t1"}, version=1)
     got = search.apply()
-    assert got["ok"] == [] and got["conflict"] == ["act-again"], got
+    assert got["ok"] == ["act-again"] and got["conflict"] == [], got
     assert search.receipt("act-again")["note"] == "Already logged on Saturday 24 October."
     assert len(_threads(search, PELL)) == 1
 
@@ -173,7 +175,10 @@ def test_two_chats_logging_the_same_send_at_once_write_one_row(search):
                               NOW], env=env, stdout=subprocess.PIPE, stderr=subprocess.PIPE,
                              encoding="utf-8") for n, d in enumerate(dumps, 1)]
     outs = [json.loads(r.communicate(timeout=300)[0]) for r in runs]
-    assert sorted(len(o["ok"]) for o in outs) == [0, 1], outs
+    # One send is one row, and both chats say it is done, whichever ran first and however
+    # they overlapped: the one that came second reads "Already logged" (engine audit 13).
+    # It once refused the second only when the two overlapped, so the result hung on timing.
+    assert [len(o["ok"]) for o in outs] == [1, 1], outs
     rows = [r for r in _threads(search, PELL) if r["full_text"] == msg["body"]]
     assert len(rows) == 1
 

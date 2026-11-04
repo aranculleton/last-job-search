@@ -153,8 +153,11 @@ def test_the_people_command_refuses_json_that_is_not_the_extractors(here, monkey
 
 def test_someone_the_check_holds_is_never_offered_to_be_closed(here, monkeypatch, capsys):
     # Waiting in the book at an employer nobody has judged: held with the reason, and the
-    # page never prints the hint that closes them for good (`reading.py skip`).
+    # page never prints the hint that closes them for good (`reading.py skip`). Only where the
+    # person's profile states a bar (an employer tier): the example person states none (X-18).
+    import opportunity
     import state
+    monkeypatch.setattr(opportunity, "TIER_1", {"brindlecombe holdings"})
     row = {k: "" for k in state.schema.CONTACT_COLUMNS}
     row.update(contact_id="larkspur_castellan", name="Juno Castellan", company="Larkspur",
                linkedin_url="https://www.linkedin.com/in/example-juno", status="not_contacted")

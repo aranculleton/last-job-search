@@ -21,6 +21,7 @@ ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 sys.path.insert(0, os.path.join(ROOT, "tools"))
 import person  # noqa: E402
 import docpaths  # noqa: E402
+import locale_rules  # noqa: E402
 import tex_escape  # noqa: E402
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import doc_style  # noqa: E402
@@ -131,6 +132,11 @@ JOB = r"""
 \begin{{itemize}}{item_start}
 {bullets}
 \end{{itemize}}}}
+"""
+
+JOB_LINE = r"""
+\needspace{{{ns}\baselineskip}}
+\cventry{{{dates}}}{{{title}}}{{{employer}, {loc}}}{{}}{{}}{{}}
 """
 
 SKILLS = r"""
@@ -276,10 +282,12 @@ def resume(a):
     for j in a["jobs"]:
         bl = "\n".join(f"    \\item {b}" for b in j["bullets"])
         # Escaped: an employer called "Brindle & Hart" is an alignment tab to
-        # LaTeX, and the compile fails on the first one.
-        jobs += JOB.format(ns=j.get("ns", 5), dates=_tex(j["dates"]), title=_tex(j["title"]),
-                           employer=_tex(j["employer"]), loc=_tex(j["loc"]), bullets=bl,
-                           item_start="%ITEMSTART%")
+        # LaTeX, and the compile fails on the first one. A role with no bullets is its
+        # title line alone: an empty list does not compile.
+        jobs += (JOB if j["bullets"] else JOB_LINE).format(
+            ns=j.get("ns", 5 if j["bullets"] else 2), dates=_tex(j["dates"]),
+            title=_tex(j["title"]), employer=_tex(j["employer"]), loc=_tex(j["loc"]),
+            bullets=bl, item_start="%ITEMSTART%")
     me = _identity()
     sections = {
         "summary": SUMMARY.format(summary=a["summary"], para_start="%PARASTART%", **me),
@@ -315,16 +323,10 @@ def resume(a):
 
 
 def _long_date(d=None):
-    """The letter date in the profile's convention: `March 4, 2026`
-    (month_day_year, North American) or `4 March 2026` (day_month_year).
-
-    The day is formatted by hand rather than with `%-d`, which is a glibc
-    extension: it raises on Windows, and SETUP.md documents a Windows path.
-    """
-    d = d or _dt.date.today()
-    if _DOC.get("date_format") == "day_month_year":
-        return "%d %s %d" % (d.day, d.strftime("%B"), d.year)
-    return "%s %d, %d" % (d.strftime("%B"), d.day, d.year)
+    """The letter date in the documents' language and the person's order: `March 4, 2026`
+    or `4 March 2026` in English (documents.date_format), `4. März 2026` in German
+    (locale_rules.long_date, which the follow-ups share)."""
+    return locale_rules.long_date(d or _dt.date.today(), _DOC)
 
 
 def letter(a):

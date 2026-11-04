@@ -54,16 +54,23 @@ def test_nobody_listening_is_one_card_and_wake_claude_rings_the_doorbell(run, tm
     assert got["after"][0]["eval"] == "listen", "it is the first card"
     rings = [c for c in got["after"][1]["calls"] if c.get("text")]
     assert rings and rings[-1]["text"] == "[app] [work:search~late]", "the same doorbell every tap rings"
-    assert "Claude has been told. It picks up what is waiting" in got["after"][1]["text"]
+    # It starts what it can as soon as it can: a big job waiting its turn behind the cap does
+    # not start "within a minute or two" (the audit, 2026-11-03).
+    assert "Claude has been told. It starts on what is waiting as soon as it can" in got["after"][1]["text"]
 
 
-def test_with_nothing_to_hear_it_wake_claude_says_so_and_offers_the_chat(run, tmp_path, vp):
+def test_with_nothing_to_hear_it_the_one_button_is_open_claude(run, tmp_path, vp):
+    """Nothing open to hear a ring is known before the tap: the card offers the one button that
+    can work, Open Claude, never a Wake Claude that cannot (the 3 November audit, shell 8)."""
     got = _go(run, tmp_path, [
-        {"hash": "todo", "click": "Wake Claude", "within": '[data-item="listen"]', "wait": 300, "read": '[data-item="listen"]',
-         "attr": ['[data-k="wake-open"]', "href"]},
+        {"hash": "todo", "read": '[data-item="listen"]', "attr": ['[data-k="wake-open"]', "href"],
+         "eval": "[...document.querySelectorAll('[data-item=\"listen\"] .card-actions .btn')].map((b) => b.textContent.trim() + '|' + b.className)"},
     ], vp, seed=_waiting(), clock=T, fake={"canSend": "no_session"})
-    assert "Nothing is open to hear it." in got["after"][0]["text"]
+    card = got["after"][0]["text"]
+    assert "Open Claude to start what is waiting." in card and "Wake Claude" not in card, card
     assert got["after"][0]["attr"] == _sample()["listener"]["wake"]["url"]
+    buttons = got["after"][0]["eval"]
+    assert len(buttons) == 1 and buttons[0].startswith("Open Claude") and "primary" in buttons[0], buttons
 
 
 def test_a_listener_heard_lately_shows_no_card(run, tmp_path, vp):

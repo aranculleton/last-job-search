@@ -6,8 +6,8 @@ description: >
   like: job posting, job application, CV, cover letter, resume, interview prep, job fit,
   career, application, apply, tailor, ATS, shortlist, build my resume, build one with me,
   no resume, show me around, what can you do, how do I use this
-allowed-tools: Read, Glob, Grep, WebFetch, WebSearch, Bash, Edit, Write, AskUserQuestion
-framework_version: 1.6.0
+allowed-tools: Read, Glob, Grep, WebSearch, Edit, Write, AskUserQuestion, Bash(python3 tools/verify_pdf.py *), Bash(python3 tools/stage_picks.py *), Bash(python3 tools/voice_check.py *), Bash(python3 tools/doc_name.py *), Bash(python3 tools/markets.py *), Bash(python3 tools/history_interview.py *), Bash(python3 tools/screening_answers.py *), Bash(python3 tools/design_check.py *)
+framework_version: 1.6.1
 ---
 
 # Job Application Assistant

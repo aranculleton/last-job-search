@@ -277,8 +277,8 @@ SUMMARY_DIR = "documents/rounds"
 SUMMARY_FIELDS = ("priority", "fit", "fit_why", "opportunity", "title", "company", "location",
                   "date", "first_seen", "age_days", "url", "portal", "bar", "bar_reason",
                   "warm_route_note", "outreach_pending_note", "throttle_override_note",
-                  "drafted_note", "apply_url", "link_kind", "link_status", "link_check",
-                  "near")
+                  "drafted_note", "silent_application_note", "apply_url", "link_kind",
+                  "link_status", "link_check", "near", "salary")
 LINK_FIELDS = ("apply_url", "link_kind", "link_status", "link_check")
 
 
@@ -288,6 +288,13 @@ def link_checks(rows: list[dict], scraped: list[dict], now=None) -> list[dict]:
     read is its listing, so a LinkedIn posting is matched to the employer's own and a
     board's posting is open by being there. Only the link fields are added; the row's own
     `url` stays as it was found, since rulings are keyed on it."""
+    check = link_checker(scraped, now)
+    return [check(r) for r in rows]
+
+
+def link_checker(scraped: list[dict], now=None):
+    """`link_checks` for one row at a time: the boards indexed once, each row checked as
+    the cut reaches it, so a posting found closed is passed over like any other."""
     import apply_link
     from company_key import key as company_key
     by_board: dict = {}
@@ -299,15 +306,34 @@ def link_checks(rows: list[dict], scraped: list[dict], now=None) -> list[dict]:
         got = by_board.get((kind, company_key(employer)))
         return (got, None) if got else ([], "this round did not read that board")
     checker = apply_link.Checker(now=now, read=read)
-    out = []
-    for r in rows:
+
+    def check(r: dict) -> dict:
         try:
             shown = checker.shown(r)
         except Exception:  # noqa: BLE001  a row the checker cannot read keeps no link fields
-            out.append(r)
-            continue
-        out.append(dict(r, **{k: shown[k] for k in LINK_FIELDS if shown.get(k)}))
-    return out
+            return r
+        return dict(r, **{k: shown[k] for k in LINK_FIELDS if shown.get(k)})
+    return check
+
+
+def pay_text(row: dict) -> str:
+    """The pay range the posting states, as a card shows it ("CAD 110,000 to 135,000"), or
+    "". Read by the one parser the bar and the score use (text_screen.salary_range): the
+    round read every range and kept none, so every card said the pay was not stated
+    beside a note quoting its midpoint (2026-11-03)."""
+    if row.get("salary"):
+        return str(row["salary"])
+    try:
+        import text_screen
+        lo, hi, _ = text_screen.salary_range(row.get("desc") or "")
+        code = getattr(person.module("search"), "CURRENCY_CODE", "") or ""
+    except Exception:  # noqa: BLE001  no profile or no body: nothing stated to show
+        return ""
+    if not lo and not hi:
+        return ""
+    lo, hi = lo or hi, hi or lo
+    said = f"{lo:,}" if lo == hi else f"{lo:,} to {hi:,}"
+    return f"{code} {said}".strip()
 
 
 def round_order(path: str) -> tuple:
@@ -382,6 +408,15 @@ def write_summary(shortlist_path, out_dir, name, scraped_path=None, show=None, r
     rows = rows if isinstance(rows, list) else list(rows.values())
     rows.sort(key=lambda r: -(r.get("priority") or 0))
     want = shown(show)
+    links = links or {}
+    check = None
+    if scraped_path:
+        try:
+            scraped = _read_json(scraped_path)
+            scraped = scraped if isinstance(scraped, list) else list(scraped.values())
+        except Exception:
+            scraped = []
+        check = link_checker(scraped, datetime.datetime.now(datetime.timezone.utc))
     kept, passed = [], []
     for r in rows:
         if len(kept) >= want:
@@ -389,23 +424,24 @@ def write_summary(shortlist_path, out_dir, name, scraped_path=None, show=None, r
         why = rules(r) if rules else ""
         if why:
             passed.append({**r, "skip_reason": why})
-        else:
-            kept.append(r)
+            continue
+        # Its apply link, checked as the cut reaches it: a posting its employer's board no
+        # longer lists is passed over and the next taken. Checked after the cut, a closed
+        # one held one of the ten places with nothing to apply to (2026-11-03).
+        if r.get("url") in links:
+            r = dict(r, **links[r.get("url")])
+        elif check:
+            r = check(r)
+        if str(r.get("link_status") or "").lower() == "closed":
+            passed.append({**r, "skip_reason": "closed: its employer's own board no longer "
+                                               "lists it"})
+            continue
+        kept.append(r)
     if report is not None:
         report.update(asked=want, found=len(kept), passed_over=passed)
-    links = links or {}
-    if scraped_path:
-        try:
-            scraped = _read_json(scraped_path)
-            scraped = scraped if isinstance(scraped, list) else list(scraped.values())
-        except Exception:
-            scraped = []
-        fresh = iter(link_checks([r for r in kept if r.get("url") not in links], scraped,
-                                 datetime.datetime.now(datetime.timezone.utc)))
-        kept = [r if r.get("url") in links else next(fresh) for r in kept]
-    kept = [dict(r, **links[r.get("url")]) if r.get("url") in links else r for r in kept]
-    out = [{k: r.get(k) for k in SUMMARY_FIELDS if r.get(k) not in (None, "")}
+    out = [{k: (pay_text(r) if k == "salary" else r.get(k)) for k in SUMMARY_FIELDS}
            for r in kept]
+    out = [{k: v for k, v in r.items() if v not in (None, "")} for r in out]
     os.makedirs(out_dir, exist_ok=True)
     path = os.path.join(out_dir, "%s.json" % name)
     with open(path, "w", encoding="utf-8", newline="\n") as fh:
@@ -692,14 +728,27 @@ def recut(a) -> int:
     return 0
 
 
+# The longest search window a person may set: a year. Anything longer is no window.
+JOB_AGE_MAX = 365
+
+
+def job_age_ok(days) -> bool:
+    """Whether `days` is a search window a person may set: a whole number of days, 1 to a
+    year. The page offers 7, 14 and 30, and a person may ask for any other in their own
+    words: 10 written to search.py was read as 14, silently (2026-11-03)."""
+    return isinstance(days, int) and not isinstance(days, bool) and 1 <= days <= JOB_AGE_MAX
+
+
 def _job_age_days() -> int:
-    """How old a posting may be: the person's own search window (JOB_AGE_DAYS, set from
-    the page: 7, 14 or 30 days), else the app's rule of 14."""
+    """How old a posting may be: the person's own search window (JOB_AGE_DAYS, any whole
+    number of days from 1 to a year: 7, 14 and 30 on the page, any other asked for in
+    words), else the app's rule of 14. A 10 they asked for was read as 14, silently, and an
+    11-day-old posting came back as fresh (engine audit 25, jobs_brief 1, 2026-11-03)."""
     try:
         got = int(getattr(person.module("search"), "JOB_AGE_DAYS", 14) or 14)
     except Exception:  # noqa: BLE001  no profile here, or a value that is not a number
         return 14
-    return got if got in (7, 14, 30) else 14
+    return got if job_age_ok(got) else 14
 
 
 def main():

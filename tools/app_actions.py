@@ -216,6 +216,10 @@ ACTIONS = {
     "setup.restore": (("setup_step",), "profile/setup_answers.json: a step as it was",
                       "setup.restore"),
     "setup.done": (("outside",), "checked again (the job sites), or noted as done", ""),
+    # A setup that stopped with every answer in: nothing is written; the tap rings the chat
+    # that answers the page, and a setup.* action there carries setup on (app.py wake).
+    "setup.carry_on": (("setup",), "nothing written: the chat carries setup on from the "
+                       "answers (app.py wake prints how)", ""),
     "setup.make_copy": (("outside",), "gh repo create <name> --template the app --private", ""),
     "app.update_now": (("update",), "queues work/update~<sha> (db only)", "work.stop"),
     "upgrade.undo": (("upgrade",), "git revert of that improvement's own commit",
@@ -259,7 +263,23 @@ ACTIONS = {
 
 
 class Refused(Exception):
-    """The action cannot apply: its receipt says why, in plain words."""
+    """The action cannot apply: its receipt says why, in plain words. `ask`, where what is
+    missing is one value the person can give ({key, label, type}: the action's value key,
+    the words over its field, "date" or "text"), goes on the receipt, and the page shows the
+    field beside the reason: a refusal that asked "Which day is it?" gave nowhere to say it,
+    and the same empty tap went again (the audit, 2026-11-03)."""
+
+    def __init__(self, message: str = "", ask: dict | None = None):
+        super().__init__(message)
+        self.ask = ask
+
+
+def _ask_day(key: str, label: str = "Which day?") -> dict:
+    return {"key": key, "label": label, "type": "date"}
+
+
+def _ask_text(key: str, label: str) -> dict:
+    return {"key": key, "label": label, "type": "text"}
 
 
 # ------------------------------------------------------------------ the item index
@@ -283,7 +303,7 @@ def _sections_for(item_id: str) -> tuple:
         return ("jobs",)
     if item_id.startswith("sg-"):
         return ("jobs", "ready", "messages", "interviews", "people")
-    if item_id.startswith("setup-"):
+    if item_id.startswith("setup-") or item_id == "setup":
         return ("setup",)
     if item_id == "update-now" or item_id.startswith("upg-"):
         return ("updates",)
@@ -319,21 +339,30 @@ def _sections_for(item_id: str) -> tuple:
 
 
 class Index:
-    """The targets of the items on the page now, one section at a time, rebuilt after a write."""
+    """The targets of the items on the page as the person saw them, one section at a time,
+    built again only for an item this run has already changed. Built again after every write,
+    fifteen taps built the page's sections fifteen times, seconds a tap (engine audit 17,
+    2026-11-03); a tap is checked against what the person saw, and a second tap on the same
+    item against what the first one left."""
 
     def __init__(self, today: dt.date, now: dt.datetime, shown: dict | None = None):
         self.today, self.now, self.shown = today, now, shown
         self.cache: dict = {}
+        self.touched: set = set()
+        self.builds = 0
 
     def section(self, name: str) -> dict:
         if name not in self.cache:
             _, self.cache[name] = app_model.build(self.today, self.now, only={name})
+            self.builds += 1
         return self.cache[name]
 
     def find(self, item_id: str, kinds=(), rev: str = "") -> dict | None:
         """The item's target. One id on two sections (an application is its draft's id on
         Drafts and on Applied) is the one of a kind the action takes, the one whose rev the
         person saw first."""
+        if item_id in self.touched:
+            self._forget()
         hits = []
         for name in _sections_for(item_id):
             got = self.section(name).get(item_id)
@@ -343,8 +372,17 @@ class Index:
         return next((h for h in fit if rev and h.get("rev") == rev), fit[0] if fit else None)
 
 
-    def changed(self) -> None:
+    def changed(self, *ids) -> None:
+        """This run changed these items: the next tap on one of them reads them afresh. The
+        profile is read afresh at once (a setting a tap wrote is what the next one reads)."""
+        self.touched.update(str(i) for i in ids if i)
+        person.reset()
+        import docpaths
+        docpaths.forget_abbreviations()
+
+    def _forget(self) -> None:
         self.cache.clear()
+        self.touched.clear()
         person.reset()
         import docpaths
         docpaths.forget_abbreviations()
@@ -472,6 +510,10 @@ def value_of(act: dict) -> dict:
         return value
     if value in (None, "") or isinstance(value, (list, bool)):
         return {"value": value} if isinstance(value, (list, bool)) else {}
+    if not isinstance(value, str):
+        # A bare number is no message, reason or day: "12345" was logged as the words that
+        # went (engine audit 16).
+        return {"value": value}
     name = str(act.get("action") or "")
     out = {"value": value}
     text = str(value).strip()
@@ -507,12 +549,14 @@ class Run:
         given = self.words(key)
         if not given:
             return self.day.isoformat()
+        # The example is today, never a fixed day already past (the audit, 2026-11-03).
         try:
             day = dt.date.fromisoformat(given[:10])
         except ValueError:
-            raise Refused(f"{given} is not a day: give it as 2026-10-21.") from None
+            raise Refused(f"{given} is not a day: give it as {self.day.isoformat()}.",
+                          ask=_ask_day(key)) from None
         if day > self.day:
-            raise Refused("That day has not come yet.")
+            raise Refused("That day has not come yet.", ask=_ask_day(key))
         return day.isoformat()
 
 
@@ -668,6 +712,18 @@ def _job_bring_back(r: Run) -> dict:
             "undo": {"action": "job.dismiss", "target": dict(t)}}
 
 
+def _on_its_way(r: Run, wid: str, queued_ok: bool = False) -> bool:
+    """Is work under this id already on its way (or, with `queued_ok`, running; a queued one is
+    then written over with the newer ask)? An id made from what it is for (a setting, a
+    profile question) comes back: a finished one is written over, pinned to the version read
+    (page_db.Writes pins it), and one on its way is left to run."""
+    have = (r.db.get("work") or {}).get(wid)
+    if not have:
+        return False
+    st = str(have["data"].get("status") or "")
+    return st not in page_db.FINISHED and not (queued_ok and st == "queued")
+
+
 def _job_draft(r: Run) -> dict:
     t = r.target
     wid = app_model.draft_work_id(t.get("url") or "", t.get("company"), t.get("title"))
@@ -707,7 +763,23 @@ def _job_applied(r: Run) -> dict:
                                   source="page", path=person.state("job_search_tracker.csv"),
                                   today=r.day, now=r.local)
     except confirm.Refused as e:
-        raise Refused(str(e)) from None
+        # The tracker has the role already: a draft of it is confirmed as applied, and one
+        # already applied is said to be recorded. A tap applied once whose receipt never
+        # landed came back refused, naming a command (engine audit 13, 2026-11-03).
+        have = app_model.tracker_match(app_model.Ctx(r.day, r.at), t.get("company"),
+                                       t.get("title"))
+        if have is None:
+            raise Refused(str(e)) from None
+        r.target = {"kind": "tracker", "date": have.get("date") or "",
+                    "company": have.get("company") or "", "role": have.get("role") or ""}
+        if not confirm.takes("applied", have):
+            return {"note": f"Already recorded: you applied to {have.get('company')}.",
+                    "undo": None, "target_after": dict(r.target)}
+        before = _confirm(r, "applied", on=on)
+        return {"note": f"Recorded: you applied to {have.get('company')} on {on}.",
+                "undo": {"action": "ready.not_applied", "target": dict(r.target),
+                         "value": {"on": before.get("applied_on") or ""}},
+                "target_after": dict(r.target)}
     new = {"kind": "tracker", "date": row["date"], "company": row["company"], "role": row["role"]}
     return {"note": f"Recorded: you applied to {t.get('company')} on {on}.",
             "undo": {"action": "ready.not_applied", "target": new}, "target_after": new}
@@ -738,14 +810,18 @@ def _job_add(r: Run) -> dict:
     if not url and re.match(r"^https?://\S+$", text):
         url, text = text, ""
     if not url and len(text) < 80:
-        raise Refused("Paste the job's link, or the whole posting.")
+        raise Refused("Paste the job's link, or the whole posting.",
+                      ask=_ask_text("text", "The job's link, or the whole posting"))
     applied = r.words("applied_on") or r.words("on")
+    day_key = "applied_on" if r.words("applied_on") else "on"
     if applied:
         try:
             if dt.date.fromisoformat(applied[:10]) > r.day:
-                raise Refused("That day has not come yet.")
+                raise Refused("That day has not come yet.",
+                              ask=_ask_day(day_key, "When did you apply?"))
         except ValueError:
-            raise Refused(f"{applied} is not a day.") from None
+            raise Refused(f"{applied} is not a day.",
+                          ask=_ask_day(day_key, "When did you apply?")) from None
     key = app_model.rev_of(url or text[:2000])[:10]
     wid = f"evaluate~{key}"
     have = (r.db.get("work") or {}).get(wid)
@@ -767,7 +843,9 @@ def _job_add(r: Run) -> dict:
     return {"note": "Claude scores it next" + (" and records it as applied." if applied
                                               else ", then drafts your resume and cover letter."
                                               if r.value.get("draft")
-                                              else ", and it goes at the top of your jobs."),
+                                              # Jobs are listed by score: "at the top"
+                                              # put an 80 below a 90 (journeys audit 16).
+                                              else ", and it joins your jobs with its score."),
             "undo": {"action": "work.stop", "target": {"kind": "work", "id": wid}}}
 
 
@@ -903,7 +981,53 @@ def _stage_day(r: Run) -> str:
     try:
         return dt.date.fromisoformat(given[:10]).isoformat()
     except ValueError:
-        raise Refused(f"{given} is not a day: give it as {r.day.isoformat()}.") from None
+        raise Refused(f"{given} is not a day: give it as {r.day.isoformat()}.",
+                      ask=_ask_day("on", "Which day is it?")) from None
+
+
+def _stage_time(r: Run) -> tuple:
+    """(HH:MM, the zone's name, minutes) of the time typed with a booking, read the one way
+    every time is read (upcoming.call_time): "10am ET", "2pm", "14:00", "noon", "10-11am",
+    "18:00 UK", in the zone written with it, else the zone the page sent (the one it shows
+    times in), else the person's own. ("", "", 0) for no time; a time it cannot read is
+    refused with what to write, never dropped: "10am ET" was booked with no time and the
+    page said only "Done." (the audit, 2026-11-03)."""
+    import upcoming
+    said = r.words("time")
+    minutes = int(r.value.get("minutes") or 0) if str(r.value.get("minutes") or "").isdigit() \
+        else 0
+    minutes = minutes if 5 <= minutes <= 480 else 0
+    if not said:
+        return "", "", minutes
+    home = r.words("zone") if person.known_zone(r.words("zone")) else ""
+    if not home:
+        try:
+            home = person.home_zone_named(person.directory()) or "UTC"
+        except person.NoProfile:
+            home = "UTC"
+    got = upcoming.call_time(said, home)
+    if not got:
+        raise Refused(f"The time \"{said}\" could not be read: write it like 14:30, 2pm, or "
+                      "10am ET.")
+    if got.get("end") and not minutes:
+        h1, m1 = (int(x) for x in got["time"].split(":"))
+        h2, m2 = (int(x) for x in got["end"].split(":"))
+        span = (h2 * 60 + m2) - (h1 * 60 + m1)
+        minutes = span if 5 <= span <= 480 else 0
+    return got["time"], got["zone"], minutes
+
+
+def _offered_days(r: Run) -> list:
+    """The days an invitation offers to choose from, each a real day from today on."""
+    out = []
+    for d in r.value.get("offered") or []:
+        try:
+            day = dt.date.fromisoformat(str(d)[:10])
+        except ValueError:
+            continue
+        if day >= r.day:
+            out.append(day.isoformat())
+    return sorted(set(out))
 
 
 def _outcome(r: Run, status: str) -> dict:
@@ -927,25 +1051,37 @@ def _outcome(r: Run, status: str) -> dict:
             day = _stage_day(r)
             stage = " ".join(str(r.value.get("stage") or r.target.get("stage") or
                                  "Interview").split())[:60]
-            clock = what_works.clock(r.words("time")) if day else ""
-            if not day:
+            stage = stage[:1].upper() + stage[1:]
+            clock, zone, minutes = _stage_time(r) if day else ("", "", 0)
+            offered = _offered_days(r) if not day else []
+            reply_by = r.words("reply_by")[:10] if offered and _DAY.match(r.words("reply_by")[:10]) \
+                else ""
+            if not day and not offered and not r.value.get("moved"):
                 # "No day yet" on a stage already booked for a day never wipes that day (the
-                # release review, 2026-11-03).
+                # release review, 2026-11-03); a move with no new day yet does.
                 had = [x for x in what_works.outcome_stages(before["md"] or "")
                        if x["label"].lower() == stage.lower() and x["date"]]
                 if had:
                     return {"note": f"Already booked for {had[0]['date']}.", "undo": None}
             who = r.words("with")
-            when = (f" for {day}" + (f" at {clock}" if clock else "")) if day else \
-                ", the day still to choose" + (f", with {who}" if who else "")
+            when = ((f" for {day}" + (f" at {clock}" if clock else "")) if day else
+                    f", offered {', '.join(offered)}" + (f", reply by {reply_by}" if reply_by else "")
+                    if offered else ", the day still to choose") + \
+                (f", with {who}" if who and not day else "")
             changed = confirm.record_outcome(row, "interview", r.day,
                                              note=f"{stage} booked{when}",
                                              source="page", now=r.local)
-            interview_pack.record_stage(folder, company, role, stage, day, r.words("with"),
-                                        today=r.day.isoformat(), time=clock)
-            said = (f"Booked: {stage} with {company} on {day}" + (f" at {clock}." if clock else ".")
-                    if day else f"Booked: {stage} with {company}, the day still to choose. "
-                    "Add the day in Coming up once you have it.")
+            interview_pack.record_stage(folder, company, role, stage, day, who,
+                                        today=r.day.isoformat(), time=clock, zone=zone,
+                                        minutes=minutes, offered=offered, reply_by=reply_by,
+                                        place=r.words("place")[:60])
+            said = (f"Booked: {stage} with {company} on {day}"
+                    + (f" at {clock} {app_model.zone_words(zone)} time." if clock else ".")
+                    if day else
+                    f"Saved: {stage} with {company}, offered on {len(offered)} days. Choose "
+                    "yours on the interview's card, then tell them." if offered else
+                    f"Booked: {stage} with {company}, the day still to choose. "
+                    "Add the day on the interview's card once you have it.")
         else:
             day = r.on()
             changed = confirm.record_outcome(row, status, r.day, note=r.words("why"),
@@ -983,7 +1119,8 @@ def _rework(r: Run) -> dict:
     if not question:
         raise Refused("Which question: none was given.")
     if not note:
-        raise Refused("What to work on: say it in a few words.")
+        raise Refused("What to work on: say it in a few words.",
+                      ask=_ask_text("note", "What to work on"))
     where = r.words("where") if r.words("where") in ("mock", "the real interview") else "mock"
     stage = r.words("stage") or t.get("stage") or "the next stage"
     line = interview_pack.rework_entry(question, note, r.day.isoformat(), where)
@@ -1007,8 +1144,10 @@ def _unrework(r: Run) -> dict:
     line = str(r.value.get("line") or "")
     gone = interview_pack.remove_rework(t.get("company"), t.get("role"),
                                         r.words("stage") or t.get("stage") or "", line)
-    return {"note": "Taken off To rework." if gone else "It was not on To rework.",
-            "undo": None}
+    if not gone:
+        # Nothing was taken off: never an "ok" for nothing done (engine audit 16).
+        raise Refused("It was not on To rework, so nothing changed.")
+    return {"note": "Taken off To rework.", "undo": None}
 
 
 def _app_folder(t: dict) -> str:
@@ -1020,6 +1159,10 @@ def _outcome_undo(r: Run) -> dict:
     import csv_store
     import outreach
     import throttle
+    if not isinstance(r.value.get("row"), dict) or not r.value["row"]:
+        # Only an outcome's own undo carries what it was before; sent alone it said "Taken
+        # back: it is as it was." having done nothing (engine audit 16).
+        raise Refused("There is nothing to take back there.")
     rows, row = _tracker_row(r.target)
     if row is None:
         raise Refused("That application is no longer in your tracker.")
@@ -1146,7 +1289,8 @@ def _msg_sent(r: Run) -> dict:
         # kept so nobody is written to twice; its words are not known.
         text = "[sent outside the app; the words were not kept]"
     if not text:
-        raise Refused("The words that went are needed, so they can be kept with the thread.")
+        raise Refused("The words that went are needed, so they can be kept with the thread.",
+                      ask=_ask_text("text", "The words that went"))
     day = r.on()
     attached = r.words("attached")
     path = _text_file(text)
@@ -1154,7 +1298,11 @@ def _msg_sent(r: Run) -> dict:
         with _thread_lock():
             went = _already_sent(cid, text, app_model.as_day(day))
             if went:
-                raise Refused(f"Already logged on {_weekday(went)}.")
+                # The same send logged already (this tap in another window, or two chats
+                # applying it at once): done, never a refusal, as a tap whose item is gone
+                # says it (engine audit 13). Two chats at once refused one and passed the
+                # other, so the same tap read two ways by timing alone (CI, 2026-11-03).
+                return {"note": f"Already logged on {_weekday(went)}."}
             _, msgs = _contact(cid)
             logged = [m for m in msgs if state.direction(m)]
             if not logged:
@@ -1179,8 +1327,14 @@ def _msg_sent(r: Run) -> dict:
     who = _first(cid)
     row, _ = _contact(cid)
     nxt = app_model.as_day((row or {}).get("next_action_due"))
-    then = (f" Next: {str((row or {}).get('next_action') or '').strip()[:80]}, "
-            f"{_weekday(nxt.isoformat())}." if nxt and nxt > r.day else "")
+    # The next step in the page's own plain words, cut at a word as app_model.short cuts, never
+    # inside one: cut at 80 characters it read "(1 of 2 sent; your rule: 14 days, at mos,
+    # Tuesday 17 November." (engine audit 15, journeys audit 14).
+    step = app_model.plain_action((row or {}).get("next_action"))
+    if len(step) > 90:
+        step = step[:90].rsplit(" ", 1)[0].rstrip(",;:") + "\u2026"
+    then = (f" Next: {step}, {_weekday(nxt.isoformat())}." if nxt and nxt > r.day and step
+            else f" Next: {_weekday(nxt.isoformat())}." if nxt and nxt > r.day else "")
     return {"note": f"Logged as sent to {who} on {day}.{then}",
             "undo": {"action": "msg.unsent", "target": {"kind": "message", "contact": cid},
                      "value": {"kind": kind, "channel": channel, "text": text,
@@ -1289,7 +1443,8 @@ def _msg_received(r: Run) -> dict:
     cid = r.target.get("contact") or ""
     text = str(r.value.get("text") or "").strip()
     if not text:
-        raise Refused("Paste what they said, so the reply can answer it.")
+        raise Refused("Paste what they said, so the reply can answer it.",
+                      ask=_ask_text("text", "What they said"))
     day = r.on()
     path = _text_file(text)
     try:
@@ -1310,7 +1465,7 @@ def _msg_received(r: Run) -> dict:
     if code and not kept:
         raise Refused(_said(out))
     # Their words are in the log now: the page's database keeps none of them.
-    if r.version is not None and not str(r.act.get("claimed_by") or ""):
+    if r.version is not None:
         r.w.add("update", "actions", r.aid, {"value": {"__delete__": True}},
                 if_version=r.version)
     who = _first(cid)
@@ -1545,8 +1700,16 @@ def _person_status(r: Run) -> dict:
 
 def _call_booked(r: Run) -> dict:
     day = _stage_day(r)
-    time_ = r.words("time")
-    at = f" at {time_}" if re.match(r"^\d{1,2}:\d{2}$", time_) else ""
+    # The time read the one way (_stage_time): "2pm" was dropped, unread (the audit,
+    # 2026-11-03). Written with its zone in words where it is not the person's own, as the
+    # call's line is read back (upcoming.call_time).
+    clock, zone, _minutes = _stage_time(r) if day else ("", "", 0)
+    try:
+        home = person.home_zone_named(person.directory())
+    except person.NoProfile:
+        home = ""
+    at = (f" at {clock}" + (f" {app_model.zone_words(zone)} time" if zone and zone != home
+                             else "")) if clock else ""
     cid = r.target.get("contact") or ""
     before = _set_contact(r, "call_booked", f"Call on {day}{at}: prepare for it", day,
                           f"call booked for {day}{at}, said on the page")
@@ -1579,7 +1742,9 @@ def _referral_ended(r: Run) -> dict:
     said = REFERRAL_ENDS.get(why.lower(), why)
     before = _set_contact(r, "in_conversation", "Thank them for the referral", "",
                           f"the referral ended: {said}, said on the page")
-    return {"note": f"The referral through {_first(cid)} is over ({said}). The hold there is "
+    # No reason given read "is over (over)" (engine audit 16).
+    how = f" ({said})" if said != "over" else ""
+    return {"note": f"The referral through {_first(cid)} is over{how}. The hold there is "
                     "lifted.",
             "undo": {"action": "person.status", "target": {"kind": "person", "contact": cid},
                      "value": before}}
@@ -1592,9 +1757,9 @@ def _due_snooze(r: Run) -> dict:
     try:
         day = dt.date.fromisoformat(until[:10])
     except ValueError:
-        raise Refused(f"{until} is not a day.") from None
+        raise Refused(f"{until} is not a day.", ask=_ask_day("until", "Until which day?")) from None
     if day <= r.day:
-        raise Refused("Pick a day after today.")
+        raise Refused("Pick a day after today.", ask=_ask_day("until", "Until which day?"))
     if t.get("half") == "application":
         import confirm
         import csv_store
@@ -1675,9 +1840,12 @@ def _upcoming_add(r: Run) -> dict:
     Its undo takes it away; an undo of a removal puts the same one back."""
     import upcoming
     eid = str(r.value.get("id") or "")
+    # Kept in the zone it was added in: the page sends the one it shows times in, so 14:00
+    # typed on a phone in Toronto is 14:00 there, never 14:00 London (the audit, 2026-11-03).
+    zone = r.words("zone") if person.known_zone(r.words("zone")) else ""
     try:
         row = upcoming.add(r.words("title"), str(r.value.get("on") or r.value.get("day") or ""),
-                           r.words("time"), r.words("note"), eid=eid)
+                           r.words("time"), r.words("note"), eid=eid, zone=zone)
     except ValueError as e:
         raise Refused(str(e)[:1].upper() + str(e)[1:] + ".") from None
     when = row["day"] + (f" at {row['time']}" if row.get("time") else "")
@@ -1693,7 +1861,8 @@ def _upcoming_remove(r: Run) -> dict:
     return {"note": f"Taken off: {gone['title']}.",
             "undo": {"action": "upcoming.add", "target": {"kind": "upcoming", "rev": "add"},
                      "value": {"id": gone["id"], "title": gone["title"], "on": gone["day"],
-                               "time": gone.get("time") or "", "note": gone.get("note") or ""}}}
+                               "time": gone.get("time") or "", "note": gone.get("note") or "",
+                               "zone": gone.get("zone") or ""}}}
 
 
 # ---- requests nobody accepted
@@ -1774,7 +1943,8 @@ def _search_set(r: Run) -> dict:
         m = re.search(r"\d[\d,]*(?:\.\d+)?", v)
         v = float(m.group(0).replace(",", "")) if m else None
     if what == "pay" and not isinstance(v, (int, float)):
-        raise Refused("Give the lowest pay you would take, as one number.")
+        raise Refused("Give the lowest pay you would take, as one number.",
+                      ask=_ask_text("value", "The lowest pay you would take"))
 
     def one(change) -> dict:
         work = {"kind": "tweak", "args": {"target": {"id": "jobs", "output": "jobs"},
@@ -1785,6 +1955,8 @@ def _search_set(r: Run) -> dict:
             raise Refused(got.get("summary") or "It could not be changed.")
         for n, item in enumerate(got.get("then") or []):
             wid = page_db.safe_id(f"{item['kind']}~setting~{got.get('key')}~{n}")
+            if _on_its_way(r, wid):
+                continue            # the one already queued runs with the setting as it is now
             r.w.add("set", "work", wid, {"kind": item["kind"], "title": item.get("title") or "",
                                          "to": page_db.WORK_KINDS[item["kind"]]["to"],
                                          "args": item.get("args") or {},
@@ -1917,7 +2089,9 @@ def _brief_pause(r: Run) -> dict:
     try:
         day = dt.date.fromisoformat(until[:10]) if until else r.day + dt.timedelta(days=14)
     except ValueError:
-        raise Refused(f"{until} is not a day: give it as 2026-11-08.") from None
+        raise Refused(f"{until} is not a day: give it as "
+                      f"{(r.day + dt.timedelta(days=14)).isoformat()}.",
+                      ask=_ask_day("until", "Until which day?")) from None
     had = routines.paused(r.day.isoformat())
     if had and had.get("until") == day.isoformat():
         return {"note": f"Your search is paused until {day.isoformat()} already.", "undo": None}
@@ -2205,7 +2379,7 @@ def _reading_done(r: Run) -> dict:
         code, out = _cli(reading, argv)
     finally:
         os.remove(path)
-    if r.version is not None and not str(r.act.get("claimed_by") or ""):
+    if r.version is not None:
         r.w.add("update", "actions", r.aid, {"value": {"text": {"__delete__": True}}},
                 if_version=r.version)
     kept = code in (reading.EXIT["ok"], reading.EXIT["skip"]) or \
@@ -2259,7 +2433,7 @@ def _profile_pasted(r: Run) -> dict:
         code, out = _cli(reading, argv)
     finally:
         os.remove(path)
-    if r.version is not None and not str(r.act.get("claimed_by") or ""):
+    if r.version is not None:
         raw = r.act.get("value")
         gone = {"text": {"__delete__": True}} if isinstance(raw, dict) else {"__delete__": True}
         r.w.add("update", "actions", r.aid, {"value": gone}, if_version=r.version)
@@ -2281,7 +2455,9 @@ def _work(r: Run) -> tuple[str, dict]:
     wid = page_db.safe_id(r.target.get("id") or "")
     doc = (r.db.get("work") or {}).get(wid)
     if doc is None:
-        raise Refused("That piece of work was not read: read the work list, then apply again.")
+        # Said on the page, so in its words: the whole work list is read, so one missing is
+        # gone from it (engine audit 16).
+        raise Refused("That is no longer on your page: look again.")
     return wid, doc
 
 
@@ -2330,8 +2506,35 @@ def _set_plan(value: str) -> None:
     profile_set.set_line("networking.py", "LINKEDIN_PLAN", value)
 
 
+def _set_time_zone(r: Run) -> dict:
+    """The person's own time zone, from the words they gave ("Toronto", "Eastern", "UK
+    time"), kept as the zone's name in person.json `time_zone`. Words that name no zone are
+    refused with what to write: a guess would put every time on the page hours out."""
+    said = r.words("value")
+    before = person.get("time_zone", "") or ""
+    if r.value.get("undo"):
+        was = str(r.value.get("was") or "")
+        person.put(["time_zone"], was if was else person.REMOVE)
+        return {"note": "Your time zone is as it was.", "undo": None}
+    try:
+        base = person.home_zone_named(person.directory())
+    except person.NoProfile:
+        base = ""
+    zone = person.zone_in(said, base)
+    if not zone:
+        raise Refused(f"No time zone found in \"{said or 'nothing'}\": write your city, like "
+                      "Toronto or London, or the zone, like Eastern or UK time.")
+    person.put(["time_zone"], zone)
+    return {"note": f"Your time zone: {app_model.zone_words(zone)} time. Every time on your "
+                    "page is shown in it.",
+            "undo": {"action": "setting.set", "target": dict(r.target),
+                     "value": {"value": "", "undo": True, "was": before}}}
+
+
 def _setting_set(r: Run) -> dict:
     key = r.target.get("key")
+    if key == "time_zone":
+        return _set_time_zone(r)
     choices = {k: [c[0] for c in ch] for k, _, ch in app_model.SETTINGS}
     value = str(r.value.get("value") or "").strip()
     if value not in choices.get(key, ()):
@@ -2434,16 +2637,33 @@ def _due_done(r: Run) -> dict:
         import confirm
         import csv_store
         import followups
+        import open_actions
         import throttle
         rows, row = _sent_row(t)
         if row is None:
             raise Refused("That application is no longer in your tracker.")
         before = row.get("notes") or ""
-        confirm.add_note(row, f"{followups.LOG_AS % day}, said on the page")
+        sub = t.get("sub") or ""
+        if sub == "test":
+            # A test sat: its line ticked in outcome.md, the record every list reads.
+            import interview_pack
+            import outreach
+            md = os.path.join(outreach.app_folder(row.get("company") or "",
+                                                  row.get("role") or ""), "outcome.md")
+            was = app_model.read_text(md) if os.path.isfile(md) else ""
+            if not interview_pack.tick_stage(md, t.get("stage") or ""):
+                raise Refused("That step is no longer on the application's record.")
+            return {"note": f"Done: {t.get('stage') or 'the test'} at {t.get('company')}.",
+                    "undo": {"action": "due.undo", "target": dict(t), "value": {"md": was}}}
+        # A thank-you sent some other way: said so in the notes, which the list reads
+        # (open_actions.THANKED_NOTE). A status note is logged as a follow-up.
+        confirm.add_note(row, f"{day}: {open_actions.THANKED_NOTE}, said on the page"
+                         if sub == "thank_you" else f"{followups.LOG_AS % day}, said on the page")
         path = person.state("job_search_tracker.csv")
         csv_store.write_rows(path, rows, list(dict.fromkeys(
             csv_store.header(path) + list(throttle.CONFIRM_COLUMNS))))
-        return {"note": f"Marked as followed up today: {t.get('company')}.",
+        return {"note": f"Marked as sent today: the thank-you to {t.get('company')}."
+                if sub == "thank_you" else f"Marked as followed up today: {t.get('company')}.",
                 "undo": {"action": "due.undo", "target": dict(t), "value": {"notes": before}}}
     cid = t.get("contact") or ""
     row, _ = _contact(cid)
@@ -2453,7 +2673,9 @@ def _due_done(r: Run) -> dict:
     # "Close" on a thread whose limit of unanswered messages is reached closes it, as the
     # row's own words say (state.CLOSE_IT): only clearing the line left them "Connected" and
     # waiting, counted among people waiting to hear back (2026-11-03).
-    leave = app_model.stopped(row.get("next_action"))
+    # Or the person's own limit, counted from the log (surface.held), which the model marks on
+    # the row it offers Close on: the row's own words may still say to send another.
+    leave = app_model.stopped(row.get("next_action")) or t.get("leave") is True
     argv = ["set", cid, "--next-action", "", "--due", "", "--note",
             "closed after no reply, said on the page" if leave else "done, said on the page",
             "--today", day]
@@ -2470,6 +2692,21 @@ def _due_done(r: Run) -> dict:
 
 def _due_undo(r: Run) -> dict:
     t = r.target
+    if t.get("half") == "application" and "md" in r.value:
+        import outreach
+        rows, row = _sent_row(t)
+        if row is None:
+            raise Refused("That application is no longer in your tracker.")
+        md = os.path.join(outreach.app_folder(row.get("company") or "", row.get("role") or ""),
+                          "outcome.md")
+        with open(md, "w", encoding="utf-8", newline="\n") as fh:
+            fh.write(str(r.value.get("md") or ""))
+        return {"note": f"Due again: {t.get('stage') or 'the test'} at {t.get('company')}.",
+                "undo": {"action": "due.done", "target": dict(t)}}
+    # Only the undo of a Done carries what the item was before; sent alone, "Due again" was said
+    # with nothing brought back (engine audit 16).
+    if not any(k in r.value for k in ("notes", "next_action", "due", "status")):
+        raise Refused("There is nothing to bring back there.")
     if t.get("half") == "application":
         import csv_store
         import throttle
@@ -2539,6 +2776,8 @@ def _needs_answer(r: Run) -> dict:
         if choice != "yes":
             raise Refused("Yes or not now: which?")
         wid = "talk~upgrade~" + page_db.safe_id(t["upgrade"])
+        if _on_its_way(r, wid):
+            return {"note": "Already on its way.", "undo": None}
         r.w.add("set", "work", wid, {
             "kind": "talk", "title": t.get("ask") or "Set this up with me", "to": "either",
             "args": {"upgrade": t["upgrade"]}, "asked_at": app_model.stamp(r.at),
@@ -2571,6 +2810,9 @@ def _needs_answer(r: Run) -> dict:
         return {"note": "Written into your profile.", "undo": None}
     if not path.endswith(".md"):
         wid = "talk~fact~" + app_model.rev_of(t.get("file"), t.get("what"))[:8]
+        if _on_its_way(r, wid, queued_ok=True):
+            raise Refused("Your last answer to this is being written in now: give this one "
+                          "again once it is done.")
         r.w.add("set", "work", wid, {
             "kind": "talk", "title": f"Write your answer into your profile: {t.get('what')}",
             "to": "either", "args": {"file": t.get("file"), "what": t.get("what"),
@@ -2593,6 +2835,29 @@ def _needs_answer(r: Run) -> dict:
                      "value": {"at": hit.start(), "answer": answer, "mark": hit.group(0)}}}
 
 
+def _in_words(text: str, at: int) -> bool:
+    """Is character `at` of Python source inside a string or a comment, where any words may
+    go? False where code goes, or for source that cannot be read as tokens."""
+    import io
+    import tokenize
+    starts = [0]
+    for line in text.splitlines(keepends=True):
+        starts.append(starts[-1] + len(line))
+    kinds = {tokenize.STRING, tokenize.COMMENT} | {getattr(tokenize, k) for k in (
+        "FSTRING_MIDDLE", "FSTRING_START", "FSTRING_END") if hasattr(tokenize, k)}
+    try:
+        for tok in tokenize.generate_tokens(io.StringIO(text).readline):
+            if tok.type not in kinds:
+                continue
+            a = starts[tok.start[0] - 1] + tok.start[1]
+            b = starts[tok.end[0] - 1] + tok.end[1]
+            if a <= at < b:
+                return True
+    except (tokenize.TokenError, SyntaxError, IndexError):
+        return False
+    return False
+
+
 def _answer_in_place(path: str, t: dict, answer: str) -> bool:
     """The answer put where its [CONFIRM: ...] mark is in a .py or .json profile file, only
     when the file still loads after it; False leaves the file as it was."""
@@ -2609,6 +2874,14 @@ def _answer_in_place(path: str, t: dict, answer: str) -> bool:
     safe = re.sub(r"[\\\"'\n\r]", " ", answer).strip()
     if not safe:
         return False
+    if path.endswith(".py") and not _in_words(text, hit.start()):
+        # A mark where code goes (`MIN_PAY = [CONFIRM: ...]`) takes a plain number and nothing
+        # else: "yes" there compiled, then stopped the file loading (`name 'yes' is not
+        # defined`) while the receipt said it was written in (engine audit, 2026-11-03). Any
+        # other answer is written in by a chat.
+        if not re.fullmatch(r"-?\d+(?:\.\d+)?", safe.replace(",", "")):
+            return False
+        safe = safe.replace(",", "")
     new = text[:hit.start()] + safe + text[hit.end():]
     try:
         if path.endswith(".py"):
@@ -2643,6 +2916,8 @@ def _setup_fields(step: str) -> set:
     import app_setup
     if step == "history":
         return {"text", "done"}
+    if step == "history_rest":
+        return {"text"}
     spec = next((s for s in app_setup.STEPS if s["id"] == step), None)
     return {f["key"] for f in (spec or {}).get("fields", ())}
 
@@ -2675,6 +2950,9 @@ def _setup_answer(r: Run) -> dict:
         text = str(r.value.get("text") or "").strip()
         if not text and not r.value.get("done"):
             raise Refused("Nothing was written.")
+        if app_setup.ENOUGH.match(text):
+            # Typed rather than chosen, it ends the jobs: it was kept as a job (X-40).
+            text, r.value = "", dict(r.value, done=True)
         if text:
             jobs.append(_clean(text))
         h.update(jobs=jobs, at=app_model.stamp(r.at))
@@ -2751,7 +3029,7 @@ def _setup_resume(r: Run) -> dict:
         a["resume"] = {"source": "pasted", "file": app_model.rel(path), "at": at}
         note = "Got it. I'll read it now."
         # The words are in their own copy now: the page's database keeps none of them.
-        if r.version is not None and not str(r.act.get("claimed_by") or ""):
+        if r.version is not None:
             raw = r.act.get("value")
             gone = ({"text": {"__delete__": True}} if isinstance(raw, dict) and "text" in raw
                     and "answers" not in raw else {"__delete__": True})
@@ -2800,11 +3078,13 @@ def _setup_done(r: Run) -> dict:
         if kind["kind"] != "private":
             raise Refused("GitHub still shows your copy as public.")
         return {"note": "Your copy is private now.", "undo": None}
-    if app_setup.set_up():
-        a = app_setup.answers()
-        a.setdefault("outside", {})[key] = app_model.stamp(r.at)
-        app_setup.save_answers(a)
+    if app_setup.set_up() or key in app_setup.TOLD:
+        app_setup.save_said(key, app_model.stamp(r.at))
     return {"note": "Noted, thank you.", "undo": None}
+
+
+def _setup_carry_on(r: Run) -> dict:
+    return {"note": "Claude carries your setup on from your answers now.", "undo": None}
 
 
 def _setup_make_copy(r: Run) -> dict:
@@ -2862,6 +3142,7 @@ HANDLERS = {
     "setup.build_resume": _setup_build, "setup.skip": _setup_skip,
     "setup.restore": _setup_restore, "setup.done": _setup_done,
     "setup.make_copy": _setup_make_copy, "app.update_now": _app_update_now,
+    "setup.carry_on": _setup_carry_on,
     "upgrade.undo": _upgrade_undo,
     "job.dismiss": _job_dismiss, "job.bring_back": _job_bring_back, "job.draft": _job_draft,
     "job.applied": _job_applied, "job.not_applied": _job_not_applied,
@@ -2917,6 +3198,7 @@ NO_UNDO = {
     "reading.done": "a reading is kept as read; a later one replaces it",
     "tip.seen": "a tip seen is seen: nothing about the search changed",
     "setup.done": "it only checks again what the person did outside the page",
+    "setup.carry_on": "it writes nothing: it only asks a chat to carry setup on",
     "hint.seen": "a hint seen is seen: nothing about the search changed",
     "pin.answer": "pinning is the sidebar's: Settings keeps the button, and a Not now comes "
                   "back by itself",
@@ -2934,12 +3216,14 @@ PUBLIC_SAFE = {"setup.make_copy", "work.stop", "work.resume"}
 
 
 def _receipt(result: str, note: str, by: str, now: dt.datetime, aid: str, act: dict,
-             undo=None, guard_after: str = "") -> dict:
+             undo=None, guard_after: str = "", ask: dict | None = None) -> dict:
     out = {"applied_at": app_model.stamp(now), "by": by, "result": result, "note": note,
            "action": str(act.get("action") or ""), "item": str(act.get("item") or "")}
     if result == "ok":
         out["undo"] = undo
         out["guard"] = guard_after
+    elif ask and ask.get("key"):
+        out["ask"] = {k: str(ask.get(k) or "") for k in ("key", "label", "type")}
     return out
 
 
@@ -3017,7 +3301,9 @@ def _one(aid: str, act: dict, index: Index, db: dict, w, chat: str, zone: str,
         if target is None:
             went = _logged_already(act, zone, now)
             if went:
-                return _receipt("conflict", f"Already logged on {_weekday(went)}.", chat, now,
+                # The words are in the log already (this tap, applied before its receipt
+                # landed, or a chat's): done, never a refusal (engine audit 13).
+                return _receipt("ok", f"Already logged on {_weekday(went)}.", chat, now,
                                 aid, act)
             return _receipt("stale", "That is no longer on the page: look again.", chat, now,
                             aid, act)
@@ -3034,12 +3320,14 @@ def _one(aid: str, act: dict, index: Index, db: dict, w, chat: str, zone: str,
     except NeedsAssets:
         raise
     except Refused as e:
-        return _receipt("conflict", app_model.scrub(str(e), names), chat, now, aid, shown)
+        return _receipt("conflict", app_model.scrub(str(e), names), chat, now, aid, shown,
+                        ask=e.ask)
     except (ValueError, OSError) as e:
         return _receipt("conflict", "It could not be done: " + app_model.scrub(str(e), names),
                         chat, now, aid, shown)
     if name not in DB_ONLY:
-        index.changed()
+        index.changed(_item_id(str(shown.get("item") or "")), (target or {}).get("id"),
+                      (got.get("target_after") or {}).get("id"))
     undo = got.get("undo")
     after = got.get("target_after") or (undo or {}).get("target") or target
     out = _receipt("ok", got["note"], chat, now, aid, shown, undo=undo,
@@ -3047,9 +3335,10 @@ def _one(aid: str, act: dict, index: Index, db: dict, w, chat: str, zone: str,
     for k in ("counts", "remove_assets", "lines", "why"):
         if k in got:
             out[k] = got[k]
-    if not undo:
+    if not undo and shown.get("action") != "undo":
         # No inverse here, said plainly rather than left blank (UX audit, 2026-10-25). An
-        # inverse that exists has no time limit: it runs while the guard still holds.
+        # inverse that exists has no time limit: it runs while the guard still holds. A Change
+        # back is itself the way back: the note under it read as a dead end (journeys 22).
         out["undo_note"] = "Only a chat can take this back: say so in a chat."
     if shown is not act:
         out["ran"] = name
@@ -3087,30 +3376,71 @@ def claim(dump_dir: str, chat: str, now: dt.datetime, out_dir: str) -> dict:
             unpinned.append(aid)
             continue
         data = {"claimed_by": chat, "claimed_until": until}
-        resume_answer = act.get("action") == "setup.answer" and str(
-            act.get("item") or "").endswith("setup-resume")
-        words = value_of(act)
-        if (act.get("action") in ("setup.resume", "msg.received", "reading.done",
-                                  "profile.pasted")
-                or resume_answer) and (words.get("text") or words.get("resume")
-                                       or isinstance(act.get("value"), str)):
-            # A pasted resume, or a contact's own words, leave the page's database with the
-            # claim: the dump this chat applies from has kept them, and the repo is where
-            # they belong (their words are never kept on the page).
-            raw = act.get("value")
-            data["value"] = ({"text": {"__delete__": True}}
-                             if isinstance(raw, dict) and "text" in raw and "answers" not in raw
-                             else {"__delete__": True})
+        # A pasted resume, or a contact's own words, stay until they are in the repo: they
+        # leave the page's database with the receipt that kept them (each handler removes
+        # them, pinned to the version this claim leaves). Taken with the claim, a chat that
+        # stopped before applying lost them, and the next one could only ask for the paste
+        # again (engine audit, 2026-11-03).
         w.add("update", "actions", aid, data, if_version=version)
-        # The dump as it will be once the claim lands, words kept: `apply` from this folder
-        # then knows the claim took them off the page, and pins nothing to the version the
-        # claim moved on. It wrote a second pinned removal of a pasted profile's words, to
-        # the version read before the claim, and the store refused the whole batch with the
-        # receipt in it (2026-11-03).
+        # The dump as it will be once the claim lands: `apply` from this folder then pins
+        # the words' removal to the version the claim leaves, never the one read before it
+        # (a removal pinned to that had the whole batch refused, 2026-11-03).
         page_db._keep_dump(dump_dir, "actions", aid,
                            dict(act, claimed_by=chat, claimed_until=until), int(version) + 1)
     return {"claimed": [a for a, _, v in todo if v is not None], "unpinned": unpinned,
             "batches": w.save("claim")}
+
+
+KEPT_LEDGER = "ljs-applied.json"     # in the copy's git folder, beside ljs-listener.json
+KEPT_MAX = 600
+
+
+def _kept_ledger_path() -> str:
+    """In the copy's git folder, never among its files; a state folder outside git (a test's)
+    keeps it in the computer's temporary folder, named for that state folder."""
+    try:
+        import app_listen
+        import hashlib
+        import tempfile
+        beside = app_listen._cache_path()
+        if not os.path.basename(beside).startswith("."):
+            return os.path.join(os.path.dirname(beside), KEPT_LEDGER)
+        key = hashlib.sha256(os.path.abspath(person.state()).encode("utf-8")).hexdigest()[:16]
+        return os.path.join(tempfile.gettempdir(), f"ljs-applied-{key}.json")
+    except Exception:  # noqa: BLE001  no profile: the dump's own ledger alone
+        return ""
+
+
+def _kept_ledger_read() -> dict:
+    path = _kept_ledger_path()
+    got = app_model.read_json(path, {}) if path else {}
+    return got if isinstance(got, dict) else {}
+
+
+def _fingerprint(act: dict) -> str:
+    """The action as the person made it (what, on which item, when, with what), so a receipt
+    kept for one id is never given to another action that happens to share it."""
+    return app_model.rev_of(json.dumps({k: act.get(k) for k in ("action", "item", "at", "value")},
+                                       sort_keys=True, ensure_ascii=False, default=str))
+
+
+def _kept_ledger_add(aid: str, act: dict, receipt: dict) -> None:
+    path = _kept_ledger_path()
+    if not path:
+        return
+    got = _kept_ledger_read()
+    got[aid] = {"fp": _fingerprint(act), "receipt": receipt}
+    if len(got) > KEPT_MAX:
+        got = dict(sorted(got.items(), key=lambda kv: str(
+            ((kv[1] or {}).get("receipt") or {}).get("applied_at") or ""))[-KEPT_MAX:])
+    try:
+        tmp = f"{path}.{os.getpid()}.tmp"
+        with open(tmp, "w", encoding="utf-8", newline="\n") as fh:
+            json.dump(got, fh, ensure_ascii=False, indent=1)
+            fh.write("\n")
+        os.replace(tmp, path)
+    except OSError:
+        pass
 
 
 def apply_dir(dump_dir: str, chat: str = "chat", now: dt.datetime | None = None,
@@ -3124,7 +3454,17 @@ def apply_dir(dump_dir: str, chat: str = "chat", now: dt.datetime | None = None,
     db = page_db.load(dump_dir)
     ledger_path = os.path.join(dump_dir, LEDGER)
     ledger = app_model.read_json(ledger_path, {}) or {}
-    w = page_db.Writes(out_dir)
+    # What this copy applied, whichever folder it was read into: a tap applied whose receipt
+    # never landed was applied again from a new read, and refused as "already" (engine audit
+    # 13, 2026-11-03). Its receipt is sent again instead, for the same action only.
+    kept = _kept_ledger_read()
+    for aid, act, _v in pending(db, chat, now):
+        got = kept.get(aid)
+        if aid not in ledger and isinstance(got, dict) and got.get("fp") == _fingerprint(act):
+            ledger[aid] = got.get("receipt")
+    # Every write pinned to the version this read holds, whether its handler named one or
+    # not: an unpinned write to a record that exists is refused, and the receipts with it.
+    w = page_db.Writes(out_dir, db=db)
     try:
         zone = person.home_zone_named(person.directory()) or "UTC"
     except person.NoProfile:
@@ -3141,7 +3481,7 @@ def apply_dir(dump_dir: str, chat: str = "chat", now: dt.datetime | None = None,
             if safe_only is None:
                 import app_setup
                 k = app_setup.repo_kind()["kind"]
-                safe_only = k in ("app", "public", "none")
+                safe_only = k in ("app", "public", "fork", "none")
             if safe_only:
                 summary.setdefault("waiting", []).append(aid)
                 continue           # nothing about the person is written here: it waits
@@ -3163,6 +3503,7 @@ def apply_dir(dump_dir: str, chat: str = "chat", now: dt.datetime | None = None,
             with open(ledger_path, "w", encoding="utf-8", newline="\n") as fh:
                 json.dump(ledger, fh, ensure_ascii=False, indent=1)
                 fh.write("\n")
+            _kept_ledger_add(aid, act, receipt)
             summary[receipt["result"]].append(aid)
         done[aid] = receipt
         w.add("set", "receipts", aid, receipt)

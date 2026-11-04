@@ -106,6 +106,12 @@ def current_resume() -> str:
     files = general_resumes()
     if not files:
         return ""
+    # The one the app made (general_resume.py: <Prefix>_<Noun>_current.pdf), first: beside
+    # a hand-made "..._CURRENT_2026-09.pdf", two names said current, only one was dated, and
+    # nothing could be told, so the fresh one the person asked for was never offered.
+    own = "/".join(GENERAL_DIR + (resume_stem("current") + ".pdf",))
+    if own in files:
+        return own
 
     def best(group):
         pdfs = [f for f in group if f.lower().endswith(".pdf")]
@@ -122,6 +128,59 @@ def current_resume() -> str:
 
     current = [f for f in files if "current" in os.path.basename(f).lower()]
     return best(current) if current else best(files)
+
+
+_problems_cache: dict = {}
+
+
+def resume_problems(rel_path: str) -> list[str]:
+    """What in a resume to send as it is breaks the person's own rules, in plain words, or
+    [] when nothing does: check_claims.py's errors (the dashes, the spelling, the document's
+    noun, a skill not held, the profile's own claim rules) read off its text. A resume the
+    person keeps in documents/cv/ was offered for download and to a contact as it was, and
+    the one offered said "standardising" and "modeling" with en dashes in its dates: their
+    profile said never to send it (2026-11-03). A PDF nothing here can read is said so."""
+    path = person.state(*str(rel_path).split("/"))
+    try:
+        st = os.stat(path)
+    except OSError:
+        return []
+    key = (path, st.st_mtime, st.st_size)
+    if _problems_cache.get("key") == key:
+        return list(_problems_cache["out"])
+    out: list[str] = []
+    text = ""
+    if path.lower().endswith(".pdf"):
+        import pdftext
+        # A file nothing here can read is not known to break anything: it is not held back.
+        try:
+            text = pdftext.text(path)
+        except pdftext.Unreadable:
+            text = ""
+    elif path.lower().endswith(".docx"):
+        import zipfile
+        try:
+            with zipfile.ZipFile(path) as z:
+                xml = z.read("word/document.xml").decode("utf-8", "replace")
+            text = re.sub(r"<[^>]+>", " ", re.sub(r"</w:p>", "\n", xml))
+        except (OSError, KeyError, zipfile.BadZipFile):
+            text = ""
+    if text:
+        import check_claims
+        seen = []
+        for sev, name, snippet, _why in check_claims.check_text(text):
+            if sev == "ERROR" and name not in seen:
+                seen.append(name)
+                out.append(_PLAIN_RULE.get(name, name.replace("-", " ")) + ' ("%s")'
+                           % " ".join(snippet.split())[:40])
+    _problems_cache.update(key=key, out=out)
+    return list(out)
+
+
+_PLAIN_RULE = {"em-dash": "a dash your rules ban", "british-ise-spelling": "British spelling",
+               "american-spelling": "American spelling", "unheld-skill": "a skill you do not hold",
+               "duplicated-word": "a word said twice", "unsupported-status": "a status you do not hold",
+               "figure-drift": "a figure that differs from your profile"}
 
 
 def resume_name_rx() -> re.Pattern:

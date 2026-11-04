@@ -1,4 +1,5 @@
 {
+  "agentPushNotifEnabled": true,
   "env": {
     "PYTHONUTF8": "1",
     "GIT_TERMINAL_PROMPT": "0",
@@ -25,6 +26,7 @@
       "Bash(git switch --detach origin/master)",
       "Bash(python3 tools/sync_app.py:*)",
       "Bash(./tools/ci_local.sh:*)",
+      "Bash(python3 tools/app.py:*)",
       "ArtifactData",
       "ArtifactComments"
     ]

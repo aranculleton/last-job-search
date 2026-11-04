@@ -77,9 +77,11 @@ def test_only_the_apps_finished_chats_are_archived():
     got = _plan()
     assert got["ask"] == []
     assert {c["id"] for c in got["archive"]} == {
-        "session_EXAMPLEOLDHELPER", "session_EXAMPLEBRIEFCHAT", "session_EXAMPLEDRAFTS"}
+        "session_EXAMPLEOLDHELPER", "session_EXAMPLEDRAFTS"}
     why = {c["id"]: c["why"] for c in got["keep"]}
     assert why[HELPER] == "it answers the page"
+    # A brief that works where it is stays there, and its chat with it.
+    assert why["session_EXAMPLEBRIEFCHAT"] == "a scheduled task that is on runs in it"
     assert why["session_EXAMPLEROUNDCHAT"] == "a scheduled task that is on runs in it"
     assert why["session_EXAMPLEUNSAVED"].startswith("its work is not on master yet")
     assert why["session_EXAMPLEFRESH"].startswith("used ")
@@ -90,8 +92,17 @@ def test_only_the_apps_finished_chats_are_archived():
     assert "session_EXAMPLEOWN" not in why and all(c["id"] != "session_EXAMPLEOWN" for c in got["archive"])
 
 
-def test_the_brief_moves_into_the_helper_before_its_chat_is_archived():
+def test_a_working_brief_in_a_chat_of_its_own_stays_where_it_works():
+    """The builder's decision of 3 November: a brief that works is never moved, turned off or
+    made again. Only one whose chat no longer works moves (below: deleted, or a helper the
+    page no longer uses)."""
     got = _plan()
+    assert got["brief"] == [] and got["moves"] == []
+    assert all(c["id"] != "session_EXAMPLEBRIEFCHAT" for c in got["archive"])
+
+
+def test_a_brief_whose_chat_no_longer_works_moves_into_the_helper():
+    got = _plan(chats=[c for c in CHATS if c["id"] != "session_EXAMPLEBRIEFCHAT"])
     calls = got["brief"]
     assert [c.get("tool") or "run" for c in calls] == ["create_trigger", "run", "update_trigger"]
     new = calls[0]["args"]
@@ -275,7 +286,8 @@ def test_an_ops_brief_back_from_a_break_runs_in_the_ops_chat(tmp_path, monkeypat
     path = tmp_path / "routines.json"
     path.write_text(json.dumps(OPS), encoding="utf-8")
     routines.pause("2026-11-08", today="2026-10-31", path=str(path))
-    back = next(c for c in routines.calls(str(path)) if c.get("for") == "back")["args"]
+    back = next(c for c in routines.calls(str(path), today="2026-10-31")
+                if c.get("for") == "back")["args"]
     # Never a new chat on firing: it would have no copy of the files.
     assert back["persistent_session_id"] == "session_EXAMPLEOPS"
     assert "create_new_session_on_fire" not in back
@@ -364,7 +376,9 @@ def test_a_copy_with_no_daily_brief_gets_a_silent_daily_upkeep_bound_to_the_help
     assert [c.get("tool") or "run" for c in up] == ["create_trigger", "run"]
     new = up[0]["args"]
     assert new["name"] == routines.UPKEEP_NAME and new["persistent_session_id"] == HELPER
-    assert new["cron_expression"].startswith("CRON_TZ=Europe/London ") and new["cron_expression"].endswith(" * * *")
+    # Only on the days the brief does not run, since a brief does the same (X-38).
+    assert new["cron_expression"].startswith("CRON_TZ=Europe/London ") and \
+        new["cron_expression"].endswith(" * * 0,2,3,5,6")
     assert routines.at_most_daily(new["cron_expression"]) and new["connectors"] == []
     assert "automation/prompts/upkeep.md" in new["prompt"] and "add_repo (owner example-owner" in new["prompt"]
     assert "upkeep-record --session " + HELPER in up[1]["run"]
@@ -391,11 +405,19 @@ def test_the_upkeep_follows_a_renewed_helper_and_its_old_copy_is_deleted_not_pil
     trig = TRIGGERS + [{"id": "trig_EXAMPLEUP", "session": "session_EXAMPLEOLDHELPER", "enabled": True}]
     got = _plan(reg=reg, triggers=trig)["upkeep"]
     assert [c.get("tool") or "run" for c in got] == ["create_trigger", "run", "delete_trigger"]
-    assert got[0]["args"]["persistent_session_id"] == HELPER and got[0]["args"]["cron_expression"] == "CRON_TZ=Europe/London 39 5 * * *"
+    # Moved, it runs only on the days the brief does not (X-38).
+    assert got[0]["args"]["persistent_session_id"] == HELPER and \
+        got[0]["args"]["cron_expression"] == "CRON_TZ=Europe/London 39 5 * * 0,2,3,5,6"
     assert got[2]["args"] == {"trigger_id": "trig_EXAMPLEUP"}
-    # Bound to the helper already, and on: nothing to do.
+    # Bound to the helper already, and on, on every day: its days are corrected, in place.
     reg["routines"][-1]["chat"] = {"session_id": HELPER}
     trig[-1] = dict(trig[-1], session=HELPER)
+    fix = _plan(reg=reg, triggers=trig)["upkeep"]
+    assert [c.get("tool") or "run" for c in fix] == ["update_trigger", "run"]
+    assert fix[0]["args"] == {"trigger_id": "trig_EXAMPLEUP",
+                              "cron_expression": "CRON_TZ=Europe/London 39 5 * * 0,2,3,5,6"}
+    # On the brief's off days already: nothing to do.
+    reg["routines"][-1]["cron"] = "CRON_TZ=Europe/London 39 5 * * 0,2,3,5,6"
     assert _plan(reg=reg, triggers=trig)["upkeep"] == []
 
 
@@ -409,8 +431,9 @@ def test_a_brief_moved_off_the_helper_this_one_replaced_is_deleted_there_not_lef
     calls = _plan(reg=moved, triggers=on_old)["brief"]
     assert [c.get("tool") or "run" for c in calls] == ["create_trigger", "run", "delete_trigger"]
     assert calls[2]["args"] == {"trigger_id": "trig_EXAMPLEBRIEF"}
-    # A brief moved out of a chat of the person's own is still only turned off, never deleted.
-    assert _plan()["brief"][2]["tool"] == "update_trigger"
+    # A brief moved out of a chat of its own that was deleted is only turned off, never deleted.
+    gone = [c for c in CHATS if c["id"] != "session_EXAMPLEBRIEFCHAT"]
+    assert _plan(chats=gone)["brief"][2]["tool"] == "update_trigger"
 
 
 def test_a_registry_with_the_upkeep_in_it_is_clean(tmp_path, monkeypatch):

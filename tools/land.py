@@ -13,18 +13,28 @@ once a turn, after its answer is out, and makes only the GitHub calls it prints:
 
 1. tools/save_state.py stages the person's files, and nothing of the app's is committed
    (tools/personal_paths.py is the line); a commit when anything is staged.
-2. git fetch origin master, then git merge --no-edit origin/master, here, where the
-   row-by-row driver merges the state files. A conflict: the merge is aborted, exit 2.
-3. Nothing ahead of origin/master: "land: nothing to land", exit 0, and no check is run.
-4. ./tools/ci_local.sh --quick. Not green: its failing lines, exit 1.
-5. git push -u origin HEAD, a network failure retried four times (2, 4, 8 and 16 s).
-6. "land: ready <branch>", then the two GitHub calls to make (open the pull request, merge
+2. git fetch origin master, then git merge --no-edit origin/master, here, with the
+   row-by-row driver set first (a job's chat is a fresh clone that never ran the sync, and
+   two appended tracker rows stranded its drafts: the stranger audit, 2026-11-03). A file
+   the driver does not cover is settled, never left (merge_state.settle: neither side lost).
+3. Every earlier chat's or run's work still waiting on GitHub (waiting(), fetched fresh) is
+   brought in the same way, so it lands with this one: a job's chat, a brief and a chat
+   kept open for days all bring it in, not only a new chat's start.
+4. Nothing ahead of origin/master: "land: nothing to land", exit 0, and no check is run.
+5. ./tools/ci_local.sh --quick. Not green: its failing lines, exit 1.
+6. git push -u origin HEAD, a network failure retried four times (2, 4, 8 and 16 s).
+7. "land: ready <branch>", then the two GitHub calls to make (open the pull request, merge
    it) and --after-merge.
 
-Not green or a conflict still pushes this chat's branch (the commit before the merge, for a
-conflict), with no pull request, and says the work waits there: a cloud container is gone
-when its chat ends, and work only committed in it was lost with it (the release review,
-2026-11-03). --waiting lists every such branch, for the next chat or run to bring in.
+Not green, or a merge that could not be settled, still pushes this chat's branch (the commit
+before the merge, for a conflict), with no pull request, and says the work waits there: a
+cloud container is gone when its chat ends, and work only committed in it was lost with it
+(the release review, 2026-11-03). The next landing anywhere brings it in; --waiting lists
+each, with how long it has waited. A branch outside claude/ and chat/ (a background agent's
+worktree-...) is pushed under claude/, where the next landing looks.
+
+Two things are for the person, said once and plainly: GitHub refusing the save (their
+connection to Claude lapsed: the steps to connect it again), and a full disk.
 
 --after-merge: git fetch origin master; when the commit this landing pushed is on master
 now, the branch is reset to master (git checkout -B <branch> origin/master), so the next
@@ -37,7 +47,8 @@ master meanwhile (app_setup.take_master); a git command refused because another 
 git's own index.lock is tried again for a few seconds.
 
 Each git command is its own call, nothing is ever force-pushed, and everything printed is for
-Claude, never the person (CLAUDE.md, "Saving"). Exit 0 landed or ready, 1 not green or not
+Claude, never the person (CLAUDE.md, "Saving"), but a line that says "tell the person". Exit
+0 landed or ready, 1 not green or not
 merged yet, 2 stopped before the push (the line says why, and whether the work waits on its
 branch). The check can be replaced, for the tests only, by `check=` or LJS_LAND_CHECK (a
 command line).
@@ -46,6 +57,7 @@ from __future__ import annotations
 
 import contextlib
 import io
+import json
 import os
 import re
 import shlex
@@ -79,16 +91,31 @@ LOCK_WAITS = (0.5, 1, 2, 4)
 LOCK_FILE = "ljs-landing.lock"
 PUSHED_FILE = "ljs-landed"
 LOCK_STALE_S = 30 * 60
-# The branches a chat or a scheduled run works on: a cloud chat's and a run's (claude/...)
-# and a second chat's folder on a computer (sync_app.branch_name, chat/...).
-CHAT_BRANCHES = ("claude/", "chat/")
+# The branches a chat or a scheduled run works on: a cloud chat's and a run's (claude/...),
+# a second chat's folder on a computer (sync_app.branch_name, chat/...), and a background
+# agent's own worktree (Claude Code names its branch worktree-...), whose unlanded work was
+# pushed where no later chat looked (the stranger audit, 2026-11-03, X-35). Any other branch
+# is pushed under claude/ (_remote_name).
+CHAT_BRANCHES = ("claude/", "chat/", "worktree-")
+# A full disk names git's index.lock in git's own message ("index.lock write error. Out of
+# diskspace"), and was reported as another command running, waited on and never said
+# (the stranger audit, 2026-11-03, X-45).
+DISK_FULL = re.compile(r"no space left|out of diskspace|disk quota exceeded|\bENOSPC\b", re.I)
+# What the person hears, once, in these words. Plain, with one recommendation, and the steps
+# for another company's screens only as claude_surfaces prints them, checked that day
+# (CLAUDE.md, "Talking to the person").
+REFUSED_SAY = ("Your work isn't being saved: GitHub stopped letting Claude save to your copy. "
+               "Connecting it again fixes it, and everything after that is saved as usual.")
+DISK_FULL_SAY = ("This chat's computer has run out of space, so your latest work couldn't be "
+                 "saved here. Please start a new chat and ask it to carry on.")
 
 
 def _git(root: str, *args: str, waits=LOCK_WAITS) -> subprocess.CompletedProcess:
     r = subprocess.run(["git", "-C", root, *args], capture_output=True, text=True,
                        encoding="utf-8", errors="replace")
     for wait in waits:
-        if r.returncode == 0 or not INDEX_LOCK.search(r.stderr or ""):
+        err = r.stderr or ""
+        if r.returncode == 0 or DISK_FULL.search(err) or not INDEX_LOCK.search(err):
             break
         time.sleep(wait)
         r = subprocess.run(["git", "-C", root, *args], capture_output=True, text=True,
@@ -97,10 +124,53 @@ def _git(root: str, *args: str, waits=LOCK_WAITS) -> subprocess.CompletedProcess
 
 
 def _said(r: subprocess.CompletedProcess) -> str:
+    """git's reason, in one line: the disk, another command's lock, a refusal or the network
+    where git names one (a 403 is said in an earlier line than git's last), else its last."""
+    text = (r.stderr or "") + "\n" + (r.stdout or "")
+    if DISK_FULL.search(text):
+        return "the disk here is full"
     if INDEX_LOCK.search(r.stderr or ""):
         return "another git command was running here at the same time, for longer than it waited"
-    lines = (r.stderr.strip() or r.stdout.strip()).splitlines()
-    return lines[-1].strip() if lines else "no words from git"
+    lines = [ln.strip() for ln in (r.stderr.strip() or r.stdout.strip()).splitlines()
+             if ln.strip()]
+    for pat in (REFUSED, NETWORK):
+        hit = next((ln for ln in lines if pat.search(ln)), "")
+        if hit:
+            return hit
+    return lines[-1] if lines else "no words from git"
+
+
+def _told(why: str) -> None:
+    """The lines for a refused save or a full disk: for Claude, with the words for the
+    person. Said by whatever landing hit it, so a copy whose connection lapsed is told at
+    its first save, never left to lose every chat's work in silence (the stranger audit,
+    2026-11-03, X-26)."""
+    if why == "refused":
+        print("land: Claude, GitHub refused this save, so nothing reaches the person's copy "
+              "from any chat until they connect it again. Tell them once, in these words: "
+              f"\"{REFUSED_SAY}\" Then give the steps python3 tools/claude_surfaces.py steps "
+              "connect-github prints, after checking the page it names today. Their work "
+              "stays committed in this chat until a save goes through.")
+    elif why == "disk":
+        print("land: Claude, the disk here is full. Delete this chat's own scratch files "
+              "(never the person's) and land again. If it is still full, tell them once, in "
+              f"these words: \"{DISK_FULL_SAY}\"")
+
+
+# GitHub saying no to who is asking, not to what was sent: a push rejected because the branch
+# moved is none of these.
+NO_ACCESS = re.compile(r"\b40[13]\b|denied|permission|authenticat|could not read username|"
+                       r"not authorized|repository not found", re.I)
+
+
+def _trouble(r: subprocess.CompletedProcess) -> str:
+    """"refused", "disk" or "" for a git command that failed."""
+    text = (r.stderr or "") + "\n" + (r.stdout or "")
+    if DISK_FULL.search(text):
+        return "disk"
+    if r.returncode != 0 and NO_ACCESS.search(text):
+        return "refused"
+    return ""
 
 
 def _retried(root: str, *args: str, sleep=time.sleep, run=None) -> subprocess.CompletedProcess:
@@ -273,10 +343,13 @@ def _stage(root: str) -> tuple[bool, str]:
         buf = io.StringIO()
         with contextlib.redirect_stdout(buf):
             code = save_state.main([], root=root)
-        if code == 0 or wait is None or not INDEX_LOCK.search(buf.getvalue()):
+        if code == 0 or wait is None or DISK_FULL.search(buf.getvalue()) \
+                or not INDEX_LOCK.search(buf.getvalue()):
             break
         time.sleep(wait)
     if code != 0:
+        if DISK_FULL.search(buf.getvalue()):
+            return False, "the disk here is full"
         if INDEX_LOCK.search(buf.getvalue()):
             return False, ("another git command was running here at the same time, for longer "
                            "than it waited")
@@ -306,41 +379,204 @@ def _own_branch(root: str) -> tuple[str, str]:
     return name, ""
 
 
+def _remote_name(name: str) -> str:
+    """Where on GitHub a branch is pushed: as it is when the next landing looks there
+    (CHAT_BRANCHES), else under claude/."""
+    return name if name.startswith(CHAT_BRANCHES) else "claude/" + name
+
+
+def _push(root: str, name: str, sleep) -> tuple[str, subprocess.CompletedProcess]:
+    """(the name on GitHub, git's answer): this chat's branch pushed, never forced."""
+    there = _remote_name(name)
+    if there == name:
+        return there, _retried(root, "push", "-q", "-u", "origin", "HEAD", sleep=sleep)
+    return there, _retried(root, "push", "-q", "-u", "origin", "HEAD:refs/heads/" + there,
+                           sleep=sleep)
+
+
 def _wait_on_branch(root: str, head: str, sleep) -> None:
     """Not landed, but never lost: this chat's branch pushed with no pull request, so the
-    next chat or run finds it (--waiting). A cloud container is gone when its chat ends, and
-    work only committed there went with it (the release review, 2026-11-03)."""
+    next landing anywhere brings it in (waiting()). A cloud container is gone when its chat
+    ends, and work only committed there went with it (the release review, 2026-11-03)."""
     name, why = _own_branch(root)
     if name:
-        r = _retried(root, "push", "-q", "-u", "origin", "HEAD", sleep=sleep)
+        there, r = _push(root, name, sleep)
         if r.returncode == 0:
             print("%s; the work waits on %s, pushed with no pull request: open none. The next "
-                  "chat or run brings it in (python3 tools/land.py --waiting lists it) and lands "
-                  "it" % (head, name))
+                  "landing, in this chat or any other, brings it in and lands it" % (head, there))
             return
         why = _said(r)
+        print("%s; nothing was pushed (%s), and the work stays committed here" % (head, why))
+        _told(_trouble(r))
+        return
     print("%s; nothing was pushed (%s), and the work stays committed here" % (head, why))
 
 
+def _app_side(root: str, ref: str) -> list[str]:
+    """The app commits a branch's own update merges brought in: the other parent of each
+    "Sync from the app" merge on it that master lacks."""
+    out = []
+    for m in _git(root, "rev-list", "--merges", "origin/master.." + ref).stdout.split():
+        if _git(root, "log", "-1", "--format=%s", m).stdout.startswith("Sync from the app"):
+            out += _git(root, "rev-parse", m + "^@").stdout.split()[1:]
+    return out
+
+
+def _own_files(root: str, ref: str) -> list[str] | None:
+    """The files a branch's own commits changed: not master's, and not the app's that its
+    update brought in (a chat that took an update and then could not land was never listed,
+    and its work was lost: the stranger audit, 2026-11-03, X-31). None when git cannot say."""
+    r = _git(root, "log", "--no-merges", "--format=%x01%s", "--name-only", "-z",
+             "origin/master.." + ref, "--not", *_app_side(root, ref),
+             *(["--remotes=app"] if _git(root, "rev-parse", "-q", "--verify",
+                                         "refs/remotes/app/master").returncode == 0 else []))
+    if r.returncode != 0:
+        return None
+    files, skip = [], False
+    for part in r.stdout.replace("\n", "\0").split("\0"):
+        if part.startswith("\x01"):
+            # A sync's own "put back" commit restores the app's files: the app's, not theirs.
+            skip = part[1:].startswith("Sync from the app")
+            continue
+        if part and not skip:
+            files.append(part)
+    return list(dict.fromkeys(files))
+
+
 def waiting(root: str = ROOT) -> list[str]:
-    """The branches on GitHub (origin/claude/..., origin/chat/...) whose work is not on master
-    and is the person's alone: a landing that was not green or stopped on a conflict, a run
-    that could not finish. Each is brought in with git merge --no-edit <it>, and lands with
-    the work of whoever brings it in. A branch that changes any of the app's files is never
-    listed: no landing commits one, so it is not a chat's work."""
+    """The branches on GitHub (origin/claude/..., origin/chat/..., origin/worktree-...) whose
+    work is not on master and is the person's: a landing that was not green or stopped on a
+    conflict, a run that could not finish. Each is brought in by the next landing and lands
+    with its work. A branch whose own commits change any of the app's files is never listed:
+    no landing commits one, so it is not a chat's work; an update the branch took from the app
+    is the app's, never its own."""
     import personal_paths
     here = branch(root)
     r = _git(root, "for-each-ref", "--format=%(refname:short)", "--no-merged", "origin/master",
-             *("refs/remotes/origin/" + p.rstrip("/") for p in CHAT_BRANCHES))
+             *("refs/remotes/origin/" + (p if p.endswith("/") else p + "*")
+               for p in CHAT_BRANCHES))
     out = []
     for ref in (x.strip() for x in r.stdout.splitlines() if x.strip()):
-        if ref == "origin/" + here:
+        if ref in ("origin/" + here, "origin/" + _remote_name(here)):
             continue
-        d = _git(root, "diff", "--name-only", "-z", "origin/master..." + ref)
-        files = [p for p in d.stdout.split("\0") if p]
-        if d.returncode == 0 and files and all(personal_paths.is_personal(p) for p in files):
+        files = _own_files(root, ref)
+        if files and all(personal_paths.is_personal(p) for p in files):
             out.append(ref)
     return out
+
+
+def fetch_waiting(root: str = ROOT) -> bool:
+    """Every chat's branch as GitHub has it now: a chat's refs were only as fresh as its
+    clone, and a long-kept chat never saw a branch pushed after it started (the stranger
+    audit, 2026-11-03, X-34). Best effort; False where it could not be fetched."""
+    spec = ["+refs/heads/%s*:refs/remotes/origin/%s*" % (p, p) for p in CHAT_BRANCHES]
+    return _git(root, "fetch", "-q", "origin", "+refs/heads/master:refs/remotes/origin/master",
+                *spec).returncode == 0
+
+
+def ages(root: str, refs: list[str]) -> dict[str, int]:
+    """{ref: whole days since its newest commit}."""
+    now = time.time()
+    out = {}
+    for ref in refs:
+        t = _git(root, "log", "-1", "--format=%ct", ref).stdout.strip()
+        out[ref] = int((now - int(t)) // 86400) if t.isdigit() else 0
+    return out
+
+
+def unpushed(root: str = ROOT) -> int:
+    """Commits here that no branch on GitHub holds, as this checkout last saw them."""
+    r = _git(root, "rev-list", "--count", "HEAD", "--not", "--remotes=origin")
+    return int(r.stdout.strip() or 0) if r.returncode == 0 and r.stdout.strip().isdigit() else 0
+
+
+SAVE_HOLDS_A_DAY = 3
+SAVE_HELD = "ljs-save-held.json"
+
+
+def save_due(root: str = ROOT, chat: str = "", today: str = "") -> list[str]:
+    """What the app's hook holds a turn for (tools/learned.py): the person's files no commit
+    holds and commits no branch on GitHub holds, in a person's own copy, while no landing
+    runs. A chat that skipped its once-a-turn landing lost quick edits and taps with its
+    computer, and nobody was told (the stranger audit, 2026-11-03, X-62). Counts the hold:
+    [] once this chat was held SAVE_HOLDS_A_DAY times today, or where the count cannot be
+    kept (a hold that cannot be counted could never let go). Never raises."""
+    try:
+        top = _git(root, "rev-parse", "--show-toplevel").stdout.strip()
+        if not top or os.path.realpath(top) != os.path.realpath(root) or _the_app(root) \
+                or not os.path.isfile(os.path.join(root, "profile", "person.json")) \
+                or landing(root):
+            return []
+        import save_state
+        files = save_state.unsaved(root)
+        n = unpushed(root)
+        if not files and not n:
+            return []
+        path = os.path.join(git_dir(root), SAVE_HELD)
+        try:
+            with open(path, encoding="utf-8") as fh:
+                held = json.load(fh)
+        except (OSError, ValueError):
+            held = {}
+        held = held if isinstance(held, dict) else {}
+        day = today or time.strftime("%Y-%m-%d")
+        rec = held.get(chat) if isinstance(held.get(chat), dict) else {}
+        count = int(rec.get("n") or 0) if rec.get("day") == day else 0
+        if count >= SAVE_HOLDS_A_DAY:
+            return []
+        held[chat] = {"day": day, "n": count + 1}
+        with open(path, "w", encoding="utf-8", newline="\n") as fh:
+            json.dump(held, fh)
+        return files[:5] + (["%d commit(s) not on GitHub" % n] if n else [])
+    except Exception:  # noqa: BLE001  a hook must never break the chat
+        return []
+
+
+STRANDED_DAYS = 1
+
+
+def stranded(root: str = ROOT, fetch: bool = False) -> dict[str, int]:
+    """{branch: days} for the person's work that has waited off master a day or more: past
+    the landings that would have brought it in, so something keeps it out (a check that is
+    not green, a save GitHub refuses). Read by the start and said once (X-30)."""
+    if fetch:
+        fetch_waiting(root)
+    got = ages(root, waiting(root))
+    return {r: d for r, d in got.items() if d >= STRANDED_DAYS}
+
+
+def _driver(root: str) -> None:
+    """The row-by-row merge, set before anything is merged here: config is never committed,
+    and a fresh clone (every job's chat) had none (X-2)."""
+    try:
+        import merge_state
+        merge_state.install(root)
+    except Exception:  # noqa: BLE001  git merges lines, as it would have
+        pass
+
+
+def merge_in(root: str, ref: str) -> tuple[bool, list[str]]:
+    """git merge --no-edit <ref>, with every conflicted file of the person's settled
+    (merge_state.settle) and the merge committed. (merged, lines for Claude). Not merged: the
+    merge is aborted and nothing has changed."""
+    import merge_state
+    _driver(root)
+    r = _git(root, "merge", "--no-edit", ref)
+    if r.returncode == 0:
+        return True, []
+    if _git(root, "rev-parse", "-q", "--verify", "MERGE_HEAD").returncode != 0:
+        return False, ["%s could not be merged: %s" % (ref, _said(r))]
+    done, left = merge_state.settle(root)
+    still = [p for p in _git(root, "diff", "--name-only", "--diff-filter=U").stdout.splitlines()
+             if p]
+    if not left and not still:
+        c = _git(root, "commit", "--no-edit", "-q")
+        if c.returncode == 0:
+            return True, ["two chats changed the same file at once (%s): %s" % (ref, d)
+                          for d in done]
+        left = ["the commit: " + _said(c)]
+    _git(root, "merge", "--abort")
+    return False, ["a conflict in %s" % ", ".join(left or still)]
 
 
 def land(root: str = ROOT, message: str = "", check=None, sleep=time.sleep) -> int:
@@ -353,10 +589,23 @@ def land(root: str = ROOT, message: str = "", check=None, sleep=time.sleep) -> i
         return 2
     with _holding(root) as mine:
         if not mine:
-            print("land: another landing is running in this checkout; nothing was pushed, and "
-                  "the next turn's landing takes this work too")
+            print("land: another landing is running in this checkout; nothing was pushed. When "
+                  "it ends it says whether this work still waits; land again then")
             return 2
-        return _land(root, message, check, sleep)
+        code = _land(root, message, check, sleep)
+    # Work written while this ran (a second turn, a quick tap) was in no commit, and nothing
+    # started a landing for it once this one ended (the stranger audit, 2026-11-03, X-62).
+    try:
+        import save_state
+        later = save_state.unsaved(root)
+    except Exception:  # noqa: BLE001
+        later = []
+    if later:
+        print("land: %d file(s) of the person's were written while this ran and are not saved "
+              "yet (%s): once this landing's calls are made, run python3 tools/land.py again, "
+              "in the background" % (len(later), ", ".join(later[:4]) +
+                                     (" ..." if len(later) > 4 else "")))
+    return code
 
 
 def _land(root: str, message: str, check, sleep) -> int:
@@ -368,28 +617,35 @@ def _land(root: str, message: str, check, sleep) -> int:
     ok, why = _stage(root)
     if not ok:
         print("land: saving stopped: %s; nothing was pushed" % why)
+        _told("disk" if DISK_FULL.search(why) or why == "the disk here is full" else "")
         return 2
     if _git(root, "diff", "--cached", "--quiet").returncode != 0:
         r = _git(root, "commit", "-q", "-m", message.strip() or DEFAULT_MESSAGE)
         if r.returncode != 0:
             print("land: the commit was refused: %s; nothing was pushed" % _said(r))
+            _told(_trouble(r))
             return 2
 
     r = _retried(root, "fetch", "-q", "origin", "master", sleep=sleep)
     if r.returncode != 0:
         print("land: master could not be fetched: %s; nothing was pushed" % _said(r))
+        _told(_trouble(r))
         return 2
-    r = _git(root, "merge", "--no-edit", "origin/master")
-    if r.returncode != 0:
-        conflicted = [p for p in _git(root, "diff", "--name-only", "--diff-filter=U").stdout
-                      .splitlines() if p]
-        if _git(root, "rev-parse", "-q", "--verify", "MERGE_HEAD").returncode == 0:
-            _git(root, "merge", "--abort")
-        if conflicted:
-            _wait_on_branch(root, "land: a conflict in %s" % ", ".join(conflicted), sleep)
-        else:
-            _wait_on_branch(root, "land: master could not be merged: %s" % _said(r), sleep)
+    ok, said = merge_in(root, "origin/master")
+    for ln in said if ok else []:
+        print("land: " + ln)
+    if not ok:
+        _wait_on_branch(root, "land: " + (said[0] if said else "master could not be merged"),
+                        sleep)
         return 2
+    # Whatever earlier chats and runs left waiting comes in with this landing (X-34).
+    if fetch_waiting(root):
+        for ref in waiting(root):
+            ok, said = merge_in(root, ref)
+            if ok:
+                print("land: brought in work that waited on %s" % ref)
+            for ln in said:
+                print("land: " + ln if ok else "land: left %s as it is: %s" % (ref, ln))
 
     ahead = _git(root, "rev-list", "--count", "origin/master..HEAD").stdout.strip()
     if ahead in ("", "0"):
@@ -410,9 +666,10 @@ def _land(root: str, message: str, check, sleep) -> int:
     if not name:
         print("land: a branch could not be made: %s; nothing was pushed" % why)
         return 2
-    r = _retried(root, "push", "-q", "-u", "origin", "HEAD", sleep=sleep)
+    there, r = _push(root, name, sleep)
     if r.returncode != 0:
         print("land: the push was refused: %s; nothing was pushed" % _said(r))
+        _told(_trouble(r))
         return 2
     _record_pushed(root, name)
 
@@ -421,10 +678,10 @@ def _land(root: str, message: str, check, sleep) -> int:
     skipped = _skips(out)
     body = ("Checked here with ./tools/ci_local.sh --quick: green" +
             ("; skipped: " + ", ".join(skipped) if skipped else "") + ".")
-    print("land: ready %s (%s commit(s) ahead of master)" % (name, ahead))
+    print("land: ready %s (%s commit(s) ahead of master)" % (there, ahead))
     print("land: next, each its own call, and nothing said to the person:")
     print('  1. create_pull_request: owner "%s", repo "%s", head "%s", base "master", '
-          'title "%s", body "%s"' % (owner, repo, name, title.replace('"', "'"), body))
+          'title "%s", body "%s"' % (owner, repo, there, title.replace('"', "'"), body))
     print('  2. merge_pull_request: owner "%s", repo "%s", pullNumber <the number 1 gave>, '
           'merge_method "merge"; in the same message, as a separate call, '
           'unsubscribe_pr_activity for it where this chat has that tool' % (owner, repo))
@@ -489,13 +746,14 @@ def _after_merge(root: str, sleep) -> int:
     if not on("HEAD") and not _clean_merges(root):
         # Newer work of this chat's own since the push: kept, with master taken into it, for
         # the next landing.
-        r = _git(root, "merge", "--no-edit", "origin/master")
-        if r.returncode != 0:
-            if _git(root, "rev-parse", "-q", "--verify", "MERGE_HEAD").returncode == 0:
-                _git(root, "merge", "--abort")
+        ok, said = merge_in(root, "origin/master")
+        if not ok:
             print("land: landed, but master could not be merged into this branch's newer work: "
-                  "%s; nothing changed, and the next landing merges it" % _said(r))
+                  "%s; nothing changed, and the next landing merges it"
+                  % (said[0] if said else "no words from git"))
             return 2
+        for ln in said:
+            print("land: " + ln)
         _forget_pushed(root)
         print("land: landed; %s holds newer work of its own, with master merged in, for the "
               "next landing" % (name or "this chat"))
@@ -530,14 +788,16 @@ def main(argv: list[str] | None = None, root: str = ROOT, check=None, sleep=time
     if "--after-merge" in argv:
         return after_merge(root, sleep=sleep)
     if "--waiting" in argv:
-        found = waiting(root)
+        fetch_waiting(root)
+        found = ages(root, waiting(root))
         if not found:
             print("land: nothing waiting")
             return 0
-        print("land: work not on master yet, waiting on: %s" % ", ".join(found))
-        print("  bring in each: git merge --no-edit <it>, each its own command; one that stops "
-              "on a conflict: git merge --abort, and leave it. Then land as usual: this "
-              "landing takes it to master")
+        print("land: work not on master yet, waiting on: %s" % ", ".join(
+            "%s (%s)" % (r, "today" if d == 0 else "%d day%s" % (d, "" if d == 1 else "s"))
+            for r, d in found.items()))
+        print("  the next landing brings each in (python3 tools/land.py, in the background) and "
+              "takes it to master, settling a file two chats changed without losing either side")
         return 0
     message = ""
     if "--message" in argv:

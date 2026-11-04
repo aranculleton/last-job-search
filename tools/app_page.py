@@ -184,6 +184,224 @@ def render(model: dict) -> str:
     return re.sub(r"\{\{(TITLE|PALETTES|CSS|JS|MODEL|TABLES)\}\}", lambda m: fill[m.group(1)], page)
 
 
+# ------------------------------------------------------------------ the page in parts
+#
+# The page as one document was 0.7 to 1.6 MB, 95% of it the app's own script and stylesheet,
+# and the Artifact tool has a chat read every file it did not write, whole, before it
+# publishes it ("If Claude cannot read the file, it does not publish it"). So the first
+# publish cost about 200,000 tokens, every republish the same again, and a chat whose window
+# holds 200,000 could not publish at all (the stranger audit, 3 November, X-3). The parts
+# shape fixes that at the cause: the page Claude publishes is a small document (who it is
+# for, the engine's tables and the list of its code files), the search itself reaches it
+# through its own store (`app.py view` writes every section there already), and the code is
+# supporting files, one for each section of app.js and app.css, named by what they hold. A
+# file the published page already holds is left out of the next publish, and the Artifact
+# tool keeps it ("files it leaves out are kept"), so a republish reads the small page and only
+# the files that changed, and a change to one section is one small file.
+
+PART_MAX = 60 * 1024          # one Read of a few thousand tokens, far under its 256 KB limit
+BATCH_MAX = 160 * 1024        # what one publish sends, so one agent reads it at a time
+PAGE_MAX = 64 * 1024          # the small page, whatever the size of the search
+_JS_HEAD = re.compile(r"^  // -{10,}\s*(.*)$")
+_CSS_HEAD = re.compile(r"^/\* -{10,}\s*(.*?)(?:\*/)?\s*$")
+_TOP_DECL = re.compile(r"^  (?:async function|function|const|let|class) ")
+
+
+def _slug(text: str) -> str:
+    s = re.sub(r"[^a-z0-9]+", "-", text.lower()).strip("-")
+    return (s[:40].rstrip("-")) or "part"
+
+
+def _hash(text: str) -> str:
+    import hashlib
+    return hashlib.sha256(text.encode("utf-8")).hexdigest()[:10]
+
+
+def _sections(lines: list[str], head: "re.Pattern", first: str) -> list[tuple[str, list[str]]]:
+    out, name, cur = [], first, []
+    for ln in lines:
+        m = head.match(ln)
+        if m and cur:
+            out.append((name, cur))
+            cur = []
+        if m:
+            name = m.group(1) or "part"
+        cur.append(ln)
+    if cur:
+        out.append((name, cur))
+    return out
+
+
+def _cut(lines: list[str], fits) -> list[list[str]]:
+    """A section too big for one part, cut where a top-level declaration starts, so each
+    piece is still whole statements and the same edit always lands in the same piece."""
+    pieces, cur = [], []
+    for ln in lines:
+        if cur and _TOP_DECL.match(ln) and not fits(cur + [ln]):
+            pieces.append(cur)
+            cur = []
+        cur.append(ln)
+    if cur:
+        pieces.append(cur)
+    return pieces
+
+
+def _named(kind: str, parts: list[tuple[str, str]], ext: str) -> list[tuple[str, str]]:
+    out, used = [], {}
+    for name, text in parts:
+        slug = _slug(name)
+        used[slug] = used.get(slug, 0) + 1
+        if used[slug] > 1:
+            slug = f"{slug}-{used[slug]}"
+        out.append((f"code/{kind}/{slug}.{_hash(text)}.{ext}", text))
+    return out
+
+
+def js_parts() -> list[tuple[str, str]]:
+    """app.js as classic scripts, in order, sharing one scope: the page's own closure opened
+    out, so a top-level name in one is seen by the next (a classic script's const, let and
+    function are the window's own scope), cut at its section headings."""
+    lines = _read("app.js").split("\n")
+    try:
+        start = lines.index("(function () {")
+        end = len(lines) - 1 - lines[::-1].index("})();")
+    except ValueError as e:
+        raise ValueError("app.js must open with (function () { and end with })();") from e
+    body = [ln for ln in lines[start + 1:end] if ln.strip() != '"use strict";']
+    parts = []
+    for name, sec in _sections(body, _JS_HEAD, "start"):
+        fits = lambda ls: len(compact_js("\n".join(ls)).encode("utf-8")) <= PART_MAX  # noqa: E731
+        pieces = [sec] if fits(sec) else _cut(sec, fits)
+        for i, piece in enumerate(pieces):
+            text = compact_js("\n".join(piece))
+            if text.strip():
+                parts.append((name if i == 0 else f"{name} {i + 1}", '"use strict";\n' + text + "\n"))
+    return _named("js", parts, "js")
+
+
+def css_parts() -> list[tuple[str, str]]:
+    """The palettes, then app.css cut at its section headings, in the order they cascade."""
+    parts = [("palettes", palettes.css())]
+    for name, sec in _sections(_read("app.css").split("\n"), _CSS_HEAD, "start"):
+        text = compact_css("\n".join(sec))
+        if text.strip():
+            parts.append((name, text + "\n"))
+    return _named("css", parts, "css")
+
+
+def code_files() -> dict:
+    """{published path: its text} for every code file the page in parts loads."""
+    return dict(css_parts() + js_parts())
+
+
+# The sections the page takes from its own store (app.py view writes each as view/<name>):
+# the page in parts carries everything else, and these come from there.
+def _from_store() -> set:
+    import app_model
+    return (set(app_model.SECTIONS) | {"people_count", "lists", "listener", "schedule"}) - {"person"}
+
+
+def slim(model: dict) -> dict:
+    """The model the page in parts embeds: who it is for and what the store never carries.
+    With no `made_at`, the page takes every section its store holds (app.js recompute)."""
+    keep = {k: v for k, v in model.items() if k not in _from_store() and k != "made_at"}
+    keep["slim"] = True
+    return keep
+
+
+def render_parts(model: dict, built: str | None = None) -> tuple[str, dict]:
+    """(the small page, {published path: text}) for the page in parts. `built` is the moment
+    it was built (the model's own `made_at` unless given), which the page carries."""
+    css, js = css_parts(), js_parts()
+    page = _read("page.html")
+    # The guard first, inline: a code file that does not arrive or throws while the page
+    # starts is said in one line with one button that asks for the whole page again
+    # (templates/app/guard.js), and the last line tells it every file has run. It carries
+    # when the page was built: a republish goes up in batches, each with this page, so a
+    # file missing minutes after the build is one still on its way, not a page that failed.
+    when = str(built or (model.get("made_at") if isinstance(model, dict) else "") or "")
+    stamp = f' data-built="{html.escape(when)}"' if when else ""
+    guard = f"<script{stamp}>\n{compact_js(_read('guard.js')).strip()}\n</script>\n"
+    links = guard + "\n".join(f'<link rel="stylesheet" href="{p}">' for p, _ in css)
+    scripts = "\n".join(f'<script src="{p}"></script>' for p, _ in js) + \
+        "\n<script>window.__ljsGuard && window.__ljsGuard.end();</script>"
+    for old, new in (("<style>\n{{PALETTES}}\n</style>\n<style>\n{{CSS}}\n</style>", links),
+                     ("<script>\n{{JS}}\n</script>", scripts)):
+        if old not in page:
+            raise ValueError(f"page.html no longer holds {old.splitlines()[1]} as the parts expect")
+        page = page.replace(old, new)
+    fill = {"TITLE": html.escape(title_for(model), quote=False), "MODEL": embed_json(slim(model)),
+            "TABLES": embed_json(tables())}
+    page = re.sub(r"\{\{(TITLE|MODEL|TABLES)\}\}", lambda m: fill[m.group(1)], page)
+    return page, dict(css + js)
+
+
+def write_parts(model: dict, out_dir: str) -> dict:
+    """Write the page in parts under `out_dir` (page.html, code/...). {"page": its path,
+    "files": {published path: local path}, "sizes": {published path: bytes}}."""
+    page, files = render_parts(model)
+    os.makedirs(out_dir, exist_ok=True)
+    out = {"page": os.path.join(out_dir, "page.html"), "files": {}, "sizes": {}}
+    with open(out["page"], "w", encoding="utf-8", newline="\n") as fh:
+        fh.write(page)
+    out["sizes"]["page.html"] = len(page.encode("utf-8"))
+    for rel, text in files.items():
+        path = os.path.join(out_dir, *rel.split("/"))
+        os.makedirs(os.path.dirname(path), exist_ok=True)
+        with open(path, "w", encoding="utf-8", newline="\n") as fh:
+            fh.write(text)
+        out["files"][rel] = path
+        out["sizes"][rel] = len(text.encode("utf-8"))
+    return out
+
+
+def caps_hash() -> str:
+    """What the page's capabilities are, as one short word: a publish passes them only when
+    the published page was declared with others (or none were recorded), since a redeploy
+    that leaves them out keeps them, and one that declares them asks the person first."""
+    return _hash(json.dumps(capabilities(), sort_keys=True))
+
+
+def on_page(listing: str) -> dict:
+    """{published path: bytes} for each code file a listing of the published page names
+    (Artifact, action list, scope files: `- "code/js/x.1a2b3c4d5e.js"  text/javascript
+    1234 bytes`, as the host printed it on 2026-11-04). A path with no size is None."""
+    out: dict = {}
+    for m in re.finditer(r'"?(code/[A-Za-z0-9._/-]+\.(?:js|css))"?(?:[ \t]+\S+[ \t]+(\d+) bytes)?',
+                         listing):
+        out[m.group(1)] = int(m.group(2)) if m.group(2) else None
+    return out
+
+
+def plan(built: dict, held: list | None, caps: str = "", url: str = "",
+         listed: dict | None = None, whole: bool = False) -> dict:
+    """What to publish: {"new": [paths the page lacks], "gone": [paths it holds and no longer
+    loads], "missing": [paths it should hold and does not], "batches": [[paths], ...],
+    "capabilities": bool}. `held` is what the published page holds (profile/app.json
+    `code`), None for a page never published in parts. `listed` is what the host says it
+    holds (on_page), which wins over the record: a file the record names and the host lacks,
+    or holds at another size, goes up again. `whole`: every code file goes up again."""
+    have = set(held or [])
+    missing: list = []
+    if listed is not None:
+        sizes = built["sizes"]
+        good = {p for p, n in listed.items() if n is None or n == sizes.get(p, n)}
+        missing = sorted(p for p in built["files"] if p in have and p not in good)
+        have = good
+    new = [p for p in built["files"] if whole or p not in have]
+    gone = sorted((set(listed) if listed is not None else have) - set(built["files"])) if url else []
+    batches: list[list[str]] = [[]]
+    size = built["sizes"]["page.html"]
+    for p in new:
+        if batches[-1] and size + built["sizes"][p] > BATCH_MAX:
+            batches.append([])
+            size = built["sizes"]["page.html"]
+        batches[-1].append(p)
+        size += built["sizes"][p]
+    return {"new": new, "gone": gone, "missing": missing, "batches": batches,
+            "capabilities": not url or caps != caps_hash()}
+
+
 def standalone(page: str) -> str:
     """The page wrapped the way the Artifact tool wraps it, for a browser or a test."""
     return ("<!doctype html><html><head><meta charset=utf8>"

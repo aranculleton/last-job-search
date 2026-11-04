@@ -104,7 +104,9 @@ def test_an_interviews_bin_records_how_it_ended(run, tmp_path):
         {"hash": "interviews/int-harbourline-risk", "open": "ivbin:int-harbourline-risk", "read": "dialog[open]"},
         {"click": "I withdrew", "exact": True, "within": "dialog", "wait": 300},
     ], PHONE, clock=T)
-    assert "Is the" in got["after"][0]["text"] and "Harbourline" in got["after"][0]["text"]
+    # An interview moved or called off is its own choice, first (the audit, 2026-11-03).
+    assert "What happened to the" in got["after"][0]["text"] and "Harbourline" in got["after"][0]["text"]
+    assert "It was moved or cancelled" in got["after"][0]["text"]
     a = _one(got, "outcome.withdrawn")
     assert a["item"] == "int-harbourline-risk" and a["value"]["on"]
 

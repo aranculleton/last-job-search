@@ -346,8 +346,51 @@ def _no_body(d: dict) -> bool:
     return not (d.get("description") or d.get("descriptionText"))
 
 
+# freehire's own address for a posting, or a bare slug: what its detail command takes
+# (freehire-search's normalizeSlug).
+_FREEHIRE_SLUG = re.compile(r"/jobs/[^/?#]+|^[a-z0-9][a-z0-9-]*$", re.I)
+
+
+def _from_employer_board(job: dict) -> dict:
+    """The posting read from the employer's own board, for a job site's row whose link is
+    the employer's posting and not the job site's: freehire's detail was sent an
+    apply.workable.com address, answered "could not parse a freehire slug", and the
+    drafting stopped to ask for the posting by hand (the drafting child, 2026-11-03)."""
+    import openroles
+    from openroles.discover import parse
+    url = str(job.get("url") or "")
+    want = openroles.job_id(url)
+    host = re.sub(r"^https?://([^/]+).*$", r"\1", url) or "its own site"
+    board = parse(url)
+    try:
+        boards = [board] if board else (openroles.detect(str(job.get("company") or ""))
+                                        if job.get("company") else [])
+        found = []
+        for b in boards:
+            found += openroles.fetch(b)
+    except Exception as e:  # noqa: BLE001  a board that will not answer is said, never raised
+        return {**job, "hydrate_error": f"the posting is on {host}, and the employer's board "
+                                        f"could not be read ({str(e)[:120]})"}
+    title = " ".join(str(job.get("title") or "").lower().split())
+    hit = (next((j for j in found if want and j.id == want), None)
+           or next((j for j in found if j.url and url and j.url.rstrip("/") == url.rstrip("/")),
+                   None)
+           or next((j for j in found if title and " ".join(j.title.lower().split()) == title),
+                   None))
+    if hit is None or not (hit.description or "").strip():
+        return {**job, "hydrate_error": f"the posting is on {host}, which the job site's "
+                                        "detail cannot read, and the employer's board does not "
+                                        "list it now"}
+    return {**job, "desc": hit.description[:BODY_CAP]}
+
+
 def _fetch(job: dict, timeout: int) -> dict:
     portal = job.get("portal") or ""
+    ident = str(job.get("id") or "")
+    if portal == "freehire" and (not ident or ident == "None" or not _FREEHIRE_SLUG.search(ident)):
+        url = str(job.get("url") or "")
+        if not _FREEHIRE_SLUG.search(url) or "freehire" not in url:
+            return _from_employer_board(job)
     skill = SKILL.get(portal) or portals.skill_of(portal)
     resolve = CLI.get(portal) or (skill and portals.has_cli(skill)
                                   and functools.partial(portal_cli, skill))

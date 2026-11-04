@@ -22,6 +22,7 @@ nothing worth building") counts as done.
     python3 tools/profile_upgrades.py --check boards  # one upgrade: "done" or what is missing
     python3 tools/profile_upgrades.py --no <id>  # their no to a question: kept, dated, asked
                                                  # again when it changes or after REASK_DAYS
+    python3 tools/profile_upgrades.py --not-now "<why>"  # this chat cannot start them today
 
 Exit 0 always, except --check while its upgrade is pending: a pending upgrade never
 blocks a sync, a round or a session.
@@ -59,6 +60,7 @@ import argparse
 import contextlib
 import datetime as dt
 import fnmatch
+import glob
 import json
 import os
 import queue
@@ -190,7 +192,7 @@ def record_no(uid: str, today: dt.date | None = None) -> str:
     import json
     u = by_id(uid)
     got = asked()
-    got[uid] = {"no": (today or dt.date.today()).isoformat(), "version": u.ask_version}
+    got[uid] = {"no": (today or person.today()).isoformat(), "version": u.ask_version}
     p = _asked_path()
     with open(p, "w", encoding="utf-8", newline="\n") as fh:
         json.dump(got, fh, indent=2, sort_keys=True)
@@ -206,7 +208,7 @@ def again(uid: str, version: int, changed: str, today: dt.date | None = None) ->
     than the day it shipped (`added`): asked again at once only when it has changed since, and
     otherwise REASK_DAYS after that day, so a no given last week is not asked again now.
     """
-    today = today or dt.date.today()
+    today = today or person.today()
     rec = asked().get(uid)
     if rec is None:
         known = next((u for u in REGISTRY if u.id == uid), None)
@@ -381,10 +383,7 @@ ENGLISH_MARKETS = {"GB", "US", "CA", "AU", "NZ", "IE", "IN", "SG", "ZA", "PH", "
                    "NG", "KE", "GH", "PK", "JM", "TT"}
 # Resume headings written in English: a profile whose headings are not all in
 # this set writes its documents in another language.
-ENGLISH_HEADINGS = {"summary", "profile", "professional summary", "experience",
-                    "professional experience", "work experience", "employment", "skills",
-                    "technical skills", "key skills", "education", "certifications",
-                    "qualifications", "languages", "projects", "references", "interests"}
+from locale_rules import ENGLISH_HEADINGS  # noqa: E402,F401  (one definition, beside the dates)
 
 
 # ------------------------------------------------------------------ checks
@@ -532,6 +531,50 @@ def _brief_daily() -> str:
     except Exception:  # no profile or no registry yet: setup makes it
         return "no morning brief yet"
     return "" if any(routines._is_brief(r) for r in routines.work(reg or {})) else "no morning brief yet"
+
+
+def _copy_line() -> str:
+    """A scheduled task made before its stored prompt said how to get the copy, where its chat
+    has none: one whose chat was deleted wakes a new, empty chat and replied "could not read
+    the file" there every morning. Only the chat that answers the page mended it, so a copy
+    with no page, and a welcome-back or shortlist task, never got the line (X-43). The trace:
+    `copy` on each task in profile/routines.json (routines.py record, rebind, mended)."""
+    try:
+        import routines
+        reg = routines.load()
+    except Exception:  # noqa: BLE001  no registry: nothing scheduled
+        return ""
+    if routines.setup_of(reg) == "routines_screen":
+        return ""                      # each run is a new chat with the copy ticked
+    old = [r.get("name") or r.get("key") for r in routines.work(reg)
+           if r.get("trigger_id") and not r.get("copy") and r.get("key") != routines.UPKEEP_KEY]
+    return ("%s may not run if the chat it was set up in is gone" % ", ".join(old)) if old else ""
+
+
+def _setup_reminder() -> str:
+    """A page published, setup not finished, and nothing scheduled: nobody was ever reminded
+    (X-23)."""
+    try:
+        import routines
+        return "setup waits on the page, and nothing will remind them" if routines.remind_due() else ""
+    except Exception:  # noqa: BLE001
+        return ""
+
+
+def _bar_unstated() -> str:
+    """Postings a chat ruled out as failing "the candidate's bar" in a profile that states
+    none: the job round's prompt had every chat judge employers on one person's words (pay,
+    prestige or signal) and rule them out (X-18). Code re-cuts what the person's own rules
+    exclude, so lifting every such ruling loses nothing."""
+    if _mod("search") is None:
+        return ""
+    n = _probe("import bar, exclude; d = exclude._load(exclude.SEEN); print(0 if bar.applies() "
+               "else sum(1 for e in d['seen'].values() if isinstance(e, dict) and str(e.get("
+               "'status') or '').lower() == 'excluded' and str(e.get('exclusion_reason') or '')"
+               ".startswith(\"candidate's bar\") and bar.verdict(e.get('company'))[0] != "
+               "bar.EXCLUDED))").strip()
+    n = int(n) if n.isdigit() else 0
+    return ("%d posting(s) ruled out on a bar for employers your profile never set" % n) if n else ""
 
 
 def _brief_watch() -> str:
@@ -747,6 +790,43 @@ def _role_headings() -> str:
     return ""
 
 
+# Each job in 01-candidate-profile.md is a role in roles.py, and one whose achievements the
+# profile holds has bullets of its own. The renderer keyed everything by employer, so a
+# promotion or a job with no bullets failed the resume's check with nothing kept, and a
+# chat could make it pass by merging the two titles or deleting the job: what was lost is
+# listed here, and the bullets of an older title at one employer are pointed at it.
+_ROLES_CHECK = r"""
+import json, re, person, profile_facts as F, company_key as K, allocate
+lines = F._read()
+secs = F.sections(lines)
+roles = person.module("roles").ROLES
+keys = allocate.role_keys(roles)
+lib = person.module("bullets").LIB if person.exists("bullets.py") else {}
+def same(a, b):
+    return re.sub(r"\W+", " ", a.lower()).strip() == re.sub(r"\W+", " ", b.lower()).strip()
+out = []
+for h in sorted(F._experience_headings(secs, lines)):
+    m = F._ROLE_HEADING.match(F._plain(h))
+    if not m:
+        continue
+    title, company = m.group("title"), m.group("company")
+    hit = [k for k, r in zip(keys, roles) if K.key(r["employer"]) == K.key(company)
+           and same(r["title"], title)]
+    if not hit:
+        out.append("%s at %s is in your profile and not on your resume" % (title, company))
+    elif hit[0] not in lib and any(re.match(r"\s*[-*]\s+\S", x) for x in secs.get(h, [])):
+        out.append("%s at %s prints with no achievement, though your profile holds some"
+                   % (title, company))
+print("; ".join(out))
+"""
+
+
+def _roles_per_employer() -> str:
+    if not (person.exists("roles.py") and person.exists("01-candidate-profile.md")):
+        return ""
+    return _probe(_ROLES_CHECK)
+
+
 def _statement_templates() -> str:
     if not person.exists("CLAUDE.md"):
         return ""
@@ -755,6 +835,21 @@ def _statement_templates() -> str:
     if not any(re.search(r"statement", h, re.I) for h in heads):
         return "profile/CLAUDE.md has no profile statement templates of your own"
     return ""
+
+
+def _summary_statement() -> str:
+    """The general resume is drafted from the profile's Canonical Summary Statement and stops
+    without it; a setup that left the heading out met the stop every time (X-73)."""
+    if not person.exists("01-candidate-profile.md"):
+        return ""
+    try:
+        import general_resume
+        if general_resume.canonical_summary():
+            return ""
+    except Exception:  # noqa: BLE001  nothing to read it with: nothing to say
+        return ""
+    return ("01-candidate-profile.md has no Canonical Summary Statement for the general resume "
+            "to start from")
 
 
 def _dropped_rows() -> str:
@@ -1039,6 +1134,22 @@ def _market_week() -> str:
     return ""
 
 
+def _field_titles() -> set:
+    """Every title the field tables hold, lower case: US English, from O*NET."""
+    import glob
+    import json
+    out = set()
+    for path in glob.glob(os.path.join(ROOT, "tools", "markets", "fields", "*.json")):
+        try:
+            with open(path, encoding="utf-8") as fh:
+                rows = json.load(fh).get("titles") or []
+        except (OSError, ValueError):
+            continue
+        for t in rows:
+            out |= {re.sub(r"\s*\(.*\)$", "", str(v)).strip().lower() for v in t.get("value") or []}
+    return out
+
+
 def _market_language() -> str:
     c = person.country()
     if c and c not in ENGLISH_MARKETS:
@@ -1046,18 +1157,35 @@ def _market_language() -> str:
         if gone:
             return (f"{', '.join(gone)} still in English, so internal-only vacancies in your "
                     f"market's language are not cut and the portal probe may misfire")
+        # Searches seeded only with the field tables' US English titles find little on a
+        # market's own boards, where the work is posted in its own language.
+        queries = [str(q).strip().lower() for q in getattr(_mod("search"), "SCRAPE_QUERIES", ())
+                   or ()]
+        english = [q for q in queries if q in _field_titles()]
+        if english and len(english) == len(queries):
+            return (f"your searches use only the field tables' English titles ({', '.join(english[:3])}), "
+                    f"where your market posts this work in its own language")
     return ""
 
 
 def _letter_language() -> str:
     if not person.exists("person.json"):
         return ""
+    import locale_rules
+    spelling = person.get("documents.spelling", "")
+    if locale_rules.unknown_spelling(spelling):
+        # An English variety the checks cannot read checks no spelling at all.
+        return (f"your documents' spelling setting \"{spelling}\" is not one the checks "
+                f"read, so no spelling is checked in them")
     heads = person.get("documents.headings", {}) or {}
     values = heads.values() if isinstance(heads, dict) else heads
     other = [v for v in values if isinstance(v, str) and v.strip().lower() not in ENGLISH_HEADINGS]
     if other and (person.get("documents.salutation_prefix", None) is None
                   or person.get("documents.page_label", None) is None):
         return "your letters print 'Dear' and 'Page' in a document written in another language"
+    if other and locale_rules.dated_in_english(person.get("documents", {}) or {}):
+        return ("your letters are dated in English although they are written in another "
+                "language: the documents' language is not recorded")
     return ""
 
 
@@ -1088,7 +1216,37 @@ def unconfirmed() -> list[tuple[str, str]]:
             rel = local_path.rel(path, os.path.dirname(root))
             out += [(rel, (m.group(1) or "").strip() or "a fact marked unconfirmed")
                     for m in CONFIRM.finditer(text)]
+    rest = _built_without_rest(root)
+    if rest:
+        out.append(rest)
     return out
+
+
+BUILT_REST = ("Where you studied (subject and years), any certificates, and the languages you "
+              "speak")
+
+
+def _built_without_rest(root: str) -> tuple[str, str] | None:
+    """A resume built with Claude on the page before 3 November never asked its last question
+    (where they studied, certificates, languages: the stranger audit, X-40), so a profile set
+    up that way with no Education heading is asked it like any unconfirmed fact."""
+    try:
+        with open(os.path.join(root, "setup_answers.json"), encoding="utf-8") as fh:
+            got = json.load(fh)
+    except (OSError, ValueError):
+        return None
+    if not isinstance(got, dict) or (got.get("resume") or {}).get("source") != "build" \
+            or got.get("history_rest"):
+        return None
+    try:
+        with open(os.path.join(root, "01-candidate-profile.md"), encoding="utf-8") as fh:
+            text = fh.read()
+    except OSError:
+        return None
+    if re.search(r"^#{2,4}\s+Education\b", text, re.M | re.I):
+        return None
+    return (local_path.rel(os.path.join(root, "01-candidate-profile.md"),
+                           os.path.dirname(root)), BUILT_REST)
 
 
 def _unconfirmed() -> str:
@@ -1182,9 +1340,58 @@ def _never_said() -> str:
             + "; ".join(found[:4]) + (f"; {len(found) - 4} more" if len(found) > 4 else ""))
 
 
+def documents_lost() -> list[str]:
+    """The application folders (documents/applications/<slug>) whose resume or letter the
+    tracker names and no disk or commit holds, while their saved draft is there: a resume
+    named in the person's own word (Lebenslauf, currículo) was never saved, and went with its
+    chat (the stranger audit, 2026-11-03, X-22). Made again from the draft, they come back."""
+    import csv_store
+    path = person.state("job_search_tracker.csv")
+    if not os.path.exists(path):
+        return []
+    drafts = {}
+    for p in sorted(glob.glob(person.state("documents", "applications", "*", "draft.json"))):
+        try:
+            with open(p, encoding="utf-8") as fh:
+                abbr = str((json.load(fh) or {}).get("abbr") or "").strip().upper()
+        except (OSError, ValueError, AttributeError):
+            continue
+        if abbr:
+            drafts[abbr] = os.path.basename(os.path.dirname(p))
+    if not drafts:
+        return []
+    lost = []
+    for r in csv_store.read_rows(path):
+        for col in ("cv_file", "cover_letter_file"):
+            rel = str(r.get(col) or "").strip()
+            if not rel or os.path.exists(person.state(rel)):
+                continue
+            abbr = os.path.splitext(os.path.basename(rel))[0].rsplit("_", 1)[-1].upper()
+            if abbr in drafts:
+                lost.append(drafts[abbr])
+    return sorted(set(lost))
+
+
+def _documents_lost() -> str:
+    lost = documents_lost()
+    if not lost:
+        return ""
+    return (f"{len(lost)} application{'s' if len(lost) != 1 else ''} whose tailored resume or "
+            f"letter was never saved: {', '.join(lost[:3])}" + (" ..." if len(lost) > 3 else ""))
+
+
 # ------------------------------------------------------------------ registry
 
 REGISTRY: tuple[Upgrade, ...] = (
+    Upgrade("documents-saved", "2026-11-03",
+            "every tailored resume and letter your applications name is saved again, made "
+            "from its saved draft",
+            _documents_lost, "for each folder the check names, python3 tools/fit_to_page.py "
+            "documents/applications/<folder>/draft.json, which makes its resume and letter "
+            "again from the saved draft; then tools/verify_batch.sh on them, and commit the "
+            "files with the rest (python3 tools/save_state.py now saves them whatever their "
+            "name). Never send anything", "edit", "~2 min an application", conditional=True,
+            priority=2),
     Upgrade("unconfirmed-facts", "2026-10-15",
             "every fact in your profile confirmed by you, never guessed",
             _unconfirmed, "ask the person, at most three at the end of a session, and write "
@@ -1302,11 +1509,31 @@ REGISTRY: tuple[Upgrade, ...] = (
     Upgrade("brief-daily", "2026-10-29",
             "a short note every morning on your Brief: what is due today, and news that matters "
             "to your search",
-            _brief_daily, "in the chat that answers the page, in the cloud: `list_triggers` "
-            "(every page), `python3 tools/routines.py brief --triggers <each page>`, the calls "
-            "it prints, and the one line it prints to say. In a chat on their computer it prints "
-            "the line instead (one press of the bell starts it from the cloud): put it on their "
-            "page as a To do", "edit", "~1 min", priority=3),
+            _brief_daily, "in a cloud chat, with or without a page: `list_triggers` (every "
+            "page), `python3 tools/routines.py brief --triggers <each page> --own-initiative` "
+            "(it binds the brief to the chat that answers the page, or with no page to this "
+            "chat), the calls it prints, and the one line it prints to say, which names where "
+            "and when it comes. In a chat on their computer it prints the line instead (one "
+            "press of the bell starts it from the cloud; with no page, it says to make the page "
+            "first): put it on their page as a To do", "edit", "~1 min", priority=3),
+    Upgrade("brief-copy-line", "2026-11-03",
+            "your morning brief and your other scheduled tasks run even when the chat they "
+            "were set up in is gone",
+            _copy_line, "`list_triggers` (every page), `python3 tools/routines.py brief "
+            "--triggers <each page>`, make each `mend` call it prints, then `python3 "
+            "tools/routines.py mended`. Say nothing about it", "edit", "~1 min", priority=2),
+    Upgrade("setup-reminder", "2026-11-03",
+            "one reminder a day after your page went up, if setup is waiting on you there",
+            _setup_reminder, "`python3 tools/routines.py remind`, and make the call it prints, "
+            "then the `reminded` line it gives. Say nothing about it", "edit", "~1 min",
+            priority=2),
+    Upgrade("bar-unstated", "2026-11-03",
+            "jobs at employers a chat ruled out on a bar you never set come back to your search",
+            _bar_unstated, "python3 tools/exclude.py lift \"candidate's bar\" --why \"the "
+            "profile states no bar for employers\"", "instant",
+            command=("python3", "tools/exclude.py", "lift", "candidate's bar", "--why",
+                     "the profile states no bar for employers"),
+            paths=("job_scraper/seen_jobs.json",), conditional=True, priority=2),
     Upgrade("brief-watch", "2026-11-02",
             "the news in your brief follows what moves your own search, in your words, and you "
             "can change it in Edit the brief",
@@ -1454,6 +1681,20 @@ REGISTRY: tuple[Upgrade, ...] = (
             "'Title - Employer (dates), City', then python3 tools/network/prep.py --all",
             "edit", "~2 min",
             priority=3),
+    Upgrade("summary-statement", "2026-11-03",
+            "a general resume made at once, from your profile's own summary",
+            _summary_statement, "/setup --section history: write two or three sentences from "
+            "the profile in 01-candidate-profile.md, under the exact heading the example "
+            "has (## Canonical Summary Statement), as a '> ' quote", "edit",
+            "~2 min", priority=2),
+    Upgrade("roles-per-employer", "2026-11-03",
+            "every job on your resume under its own title and dates, a promotion included",
+            _roles_per_employer, "/setup --section history: give each job in "
+            "01-candidate-profile.md its own ROLES entry in roles.py, most recent first; an "
+            "older title at the same employer takes its bullets under a LIB key of its own, "
+            "named by lib= on its role; a job with none prints as its title line",
+            "edit", "~5 min",
+            priority=2),
     Upgrade("statement-templates", "2026-10-14",
             "resume summaries drafted from your own statement templates",
             _statement_templates, "/setup --section voice", "question", "~5 min",
@@ -1633,14 +1874,16 @@ REGISTRY: tuple[Upgrade, ...] = (
             priority=3),
     Upgrade("market-language", "2026-10-14",
             "internal-only vacancies cut and portals probed in your market's language",
-            _market_language, "/setup --section market", "research", "~10 min",
+            _market_language, "/setup --section market (and /setup --section search for "
+            "titles in the market's own language)", "research", "~10 min",
             names=("search.INTERNAL_ONLY", "search.INTERNAL_ONLY_TITLE", "search.CANARY_QUERY"),
             conditional=True,
             priority=3),
     Upgrade("letter-language", "2026-10-14",
-            "letters that greet and number pages in your document language",
+            "letters that greet, date and number pages in your document language, spelled as you spell",
             _letter_language, "/setup --section documents", "question", "~2 min",
-            names=("person.json:documents.salutation_prefix", "person.json:documents.page_label"),
+            names=("person.json:documents.salutation_prefix", "person.json:documents.page_label",
+                   "person.json:documents.spelling", "person.json:documents.language"),
             conditional=True,
             priority=4),
 )
@@ -1959,7 +2202,7 @@ def _line_key() -> tuple:
         kept = _stamps(state, 1)
         for name in _STATE_FOLDERS:
             kept += _stamps(os.path.join(state, name), 2)
-        return (ROOT, profile, state, dt.date.today().isoformat(), id(REGISTRY), len(REGISTRY),
+        return (ROOT, profile, state, person.today().isoformat(), id(REGISTRY), len(REGISTRY),
                 tuple(files), tuple(kept))
     except Exception:  # noqa: BLE001  an unreadable key is a miss, never an error
         return (object(),)
@@ -2250,23 +2493,155 @@ def _listed_path() -> str:
     return os.path.join(os.path.dirname(_marker()), "ljs-upgrades-listed.json")
 
 
-def remember_listed(rows: list[tuple[Upgrade, str]]) -> None:
-    sha, _when, _app = _sync_head()
-    try:
-        with open(_listed_path(), "w", encoding="utf-8", newline="\n") as fh:
-            json.dump({"sync": sha, "ids": [u.id for u, _ in rows]}, fh)
-    except OSError:
-        pass
-
-
-def listed_ids() -> list[str]:
+def _listed() -> dict:
     try:
         with open(_listed_path(), encoding="utf-8") as fh:
             got = json.load(fh)
     except (OSError, ValueError):
-        return []
+        return {}
+    return got if isinstance(got, dict) else {}
+
+
+def _save_listed(got: dict) -> bool:
+    try:
+        with open(_listed_path(), "w", encoding="utf-8", newline="\n") as fh:
+            json.dump(got, fh)
+        return True
+    except OSError:
+        return False
+
+
+def _day(today: dt.date | None = None) -> str:
+    """The person's own day (person.today), the one the app's hook counts by: on the
+    computer's clock, `--plan` on a Toronto evening in a cloud chat marked the improvements
+    started tomorrow, and the hook held the next turn to start them again (2026-11-03)."""
+    return (today or person.today()).isoformat()
+
+
+def _chat() -> str:
+    """This chat's id, as the page's listener knows it (app_listen.this_chat), or ""."""
+    try:
+        import app_listen
+        return app_listen.this_chat()
+    except Exception:  # noqa: BLE001
+        return ""
+
+
+def remember_listed(rows: list[tuple[Upgrade, str]], elsewhere: bool = False,
+                    today: dt.date | None = None) -> None:
+    """What the sync listed, with the day each was first listed (kept across syncs, so one
+    left waiting for days is known as such), whether another chat has them (`elsewhere`),
+    and today's start, each chat's reason not to, and the holds, which last the day."""
+    sha, _when, _app = _sync_head()
+    was = _listed()
+    since = was.get("since") if isinstance(was.get("since"), dict) else {}
+    day = _day(today)
+    got = {"sync": sha, "ids": [u.id for u, _ in rows], "day": day,
+           "since": {u.id: str(since.get(u.id) or day) for u, _ in rows},
+           "elsewhere": bool(elsewhere)}
+    if isinstance(was.get("started"), dict) and was["started"].get("day") == day:
+        got["started"] = was["started"]
+    for key in ("not_now", "held"):
+        kept = {c: v for c, v in (was.get(key) or {}).items()
+                if isinstance(v, dict) and v.get("day") == day} \
+            if isinstance(was.get(key), dict) else {}
+        if kept:
+            got[key] = kept
+    _save_listed(got)
+
+
+def listed_ids() -> list[str]:
+    got = _listed()
     return [i for i in (got.get("ids") or []) if isinstance(i, str)] \
-        if isinstance(got, dict) and got.get("sync") == _sync_head()[0] else []
+        if got.get("sync") == _sync_head()[0] else []
+
+
+def mark_started(today: dt.date | None = None) -> None:
+    """A chat started /upgrade on what the sync listed (its plan was read, or the app's hook
+    saw it start): nothing more is owed on them today, in any chat on this computer."""
+    got = _listed()
+    if got:
+        got["started"] = {"day": _day(today)}
+        _save_listed(got)
+
+
+def not_now(why: str, chat: str = "", today: dt.date | None = None) -> dict:
+    """Why this chat cannot start the listed improvements today: kept with the listing, for
+    this chat alone, and its turns are no longer held for them until tomorrow."""
+    why = " ".join(str(why or "").split())
+    if not why:
+        raise SystemExit("profile_upgrades: --not-now needs the reason they cannot start now")
+    got = _listed()
+    rec = {"day": _day(today), "why": why[:300]}
+    got.setdefault("not_now", {})[chat or _chat() or "this chat"] = rec
+    _save_listed(got)
+    return rec
+
+
+def _done_since(sha: str) -> set[str]:
+    """The ids of the upgrades committed here since the sync that listed them: done, never
+    started again (an improvement applied yesterday was announced as waiting and started a
+    second time the next morning, 2026-11-03)."""
+    if not sha:
+        return set()
+    out = _git("log", "--format=%s", f"{sha}..HEAD", "--grep=^Profile upgrade: ").stdout
+    return {ln.split(":", 1)[1].strip() for ln in out.splitlines()
+            if ln.startswith("Profile upgrade: ")}
+
+
+def unstarted(today: dt.date | None = None, chat: str = "") -> list[tuple[str, str]]:
+    """[(id, the day it was first listed)] for each improvement Claude makes alone that this
+    chat's sync listed and nobody has started today: what the app's hook holds a turn for.
+    Files and two git calls only; never raises. A chat-only person's copy listed upgrades
+    every morning for days and nothing started them, since starting them was a printed line
+    (2026-11-03).
+
+    A listing from an earlier day's check stands until today's check lists again only where
+    nobody ever started it: one an /upgrade took may be in place by now. One committed since
+    it was listed is done."""
+    try:
+        got = _listed()
+        ids = listed_ids()
+        day = _day(today)
+        if not ids or got.get("elsewhere"):
+            return []
+        mine = (got.get("not_now") or {}).get(chat or _chat() or "this chat") \
+            if isinstance(got.get("not_now"), dict) else None
+        if isinstance(mine, dict) and mine.get("day") == day:
+            return []
+        started = got.get("started") if isinstance(got.get("started"), dict) else None
+        if started and (str(got.get("day") or day) < day or started.get("day") == day):
+            return []
+        done = _done_since(str(got.get("sync") or ""))
+        since = got.get("since") if isinstance(got.get("since"), dict) else {}
+        known = {u.id: u for u in REGISTRY}
+        return [(i, str(since.get(i) or day)) for i in ids
+                if i in known and known[i].needs == "nobody" and i not in done]
+    except Exception:  # noqa: BLE001  the hook's check must never break the chat
+        return []
+
+
+HOLDS_A_DAY = 3
+
+
+def hold_once(chat: str = "", today: dt.date | None = None) -> bool:
+    """Count one hold of this chat's turn for the unstarted improvements: True while it is
+    within HOLDS_A_DAY today. False when the count cannot be kept: a hold that cannot be
+    counted could never let go."""
+    got = _listed()
+    if not got:
+        return False
+    day = _day(today)
+    held = got.get("held") if isinstance(got.get("held"), dict) else {}
+    key = chat or _chat() or "this chat"
+    rec = held.get(key) if isinstance(held.get(key), dict) and held[key].get("day") == day \
+        else {"day": day, "n": 0}
+    if int(rec.get("n") or 0) >= HOLDS_A_DAY:
+        return False
+    rec["n"] = int(rec.get("n") or 0) + 1
+    held[key] = rec
+    got["held"] = held
+    return _save_listed(got)
 
 
 _listed_ids = listed_ids  # the module's own name for it; other modules call listed_ids
@@ -2365,9 +2740,16 @@ def main(argv: list[str] | None = None) -> int:
     mode.add_argument("--no", metavar="ID",
                       help="record the person's no to one question, dated: it is asked again "
                            "when the question changes or after REASK_DAYS")
+    mode.add_argument("--not-now", metavar="WHY", dest="not_now",
+                      help="why this chat cannot start the listed improvements today")
     a = ap.parse_args(argv)
     if not person.exists():
         return 0                                    # the app, or a repo before /setup
+    if a.not_now is not None:
+        not_now(a.not_now)
+        print("profile_upgrades: noted for today; the next chat, or this one tomorrow, starts "
+              "them. Say nothing about it to the person.")
+        return 0
     if a.no:
         p = record_no(a.no)
         print(f"profile_upgrades: their no to {a.no} kept in {local_path.rel(p, ROOT)}; asked "
@@ -2440,6 +2822,26 @@ def main(argv: list[str] | None = None) -> int:
         said = sync_app.plain_state_endings(ROOT)
         if said:
             print("profile upgrades: " + said)
+        # The steps an older start printed are out of date once the update changed how a chat
+        # starts (X-78): said from here, the file the sync just brought in.
+        try:
+            import app_setup
+            said = app_setup.start_changed_line()
+        except Exception:  # noqa: BLE001  never breaks the sync
+            said = ""
+        if said:
+            print(said)
+    if rows and _setup_unfinished():
+        # Setup is still writing the profile (here or in another chat): an upgrade would write
+        # the same files beside it from a half-written profile (the stranger audit, X-65).
+        if a.plan:
+            print("[]")
+            return 0
+        if not a.line:
+            print(f"Profile upgrades: {len(rows)} pending; they wait until setup is finished. "
+                  "Claude: start nothing about them and say nothing about them to the person.")
+        say_page()
+        return 0
     if a.after and rows and _personal_repo() and not owner_elsewhere():
         # Pushed before this chat decides it owns them: of two chats that both found no other
         # claim, git takes one push and refuses the other, and the refused one sees the
@@ -2458,7 +2860,9 @@ def main(argv: list[str] | None = None) -> int:
             for note in run_instant(rows):
                 print(f"profile upgrades: {note}")
             rows = _look_again(first, seen, landed, _instant_due(rows))
-            remember_listed(rows)
+            remember_listed(rows, elsewhere=True)
+            for ln in say_changed():
+                print(ln)
         if rows and a.line:
             print(f"Profile upgrades: {len(rows)} pending, being applied by another chat "
                   f"until {elsewhere}.")
@@ -2481,6 +2885,8 @@ def main(argv: list[str] | None = None) -> int:
     if a.after:
         claim()
     if a.plan:
+        if rows:
+            mark_started()                  # /upgrade's first step: they are under way
         print(json.dumps(plan(rows), indent=1))
         done = sorted(set(already_in_place(rows)) | (landed & set(_listed_ids())))
         if done:
@@ -2504,13 +2910,49 @@ def main(argv: list[str] | None = None) -> int:
             print(f"profile upgrades: {note}")
         rows = _look_again(first, seen, landed, _instant_due(rows))
         remember_listed(rows)
+        for ln in say_changed():
+            print(ln)
     text = block(rows)
     print(text or "Profile upgrades: none pending.")
     say_page()
     return 0
 
 
+def _setup_unfinished() -> bool:
+    """Has setup started (profile/place.json's setup mark) and not finished?"""
+    try:
+        with open(person.path("place.json"), encoding="utf-8") as fh:
+            mark = (json.load(fh) or {}).get("setup") or {}
+        return bool(mark.get("started") and not mark.get("finished"))
+    except (OSError, ValueError, AttributeError, person.NoProfile):
+        return False
+
+
 LANDED = "LJS_UPDATE_LANDED"     # set to "1" by sync_app.py when its run took an update
+
+
+# Read once, when a chat starts or a skill is first used, and kept: an update that changed one
+# left a chat that answers the page handling every ring for the rest of the day with the old
+# skill in mind, told only that CLAUDE.md changed (the stranger audit, 2026-11-03, X-36).
+# sync_app.py names CLAUDE.md and AGENTS.md; the copy of it that ran may predate this, so the
+# skills are named here, from this file, which is always the one the update brought in.
+HELD_FILES = (".claude/skills/*/SKILL.md",)
+
+
+def say_changed() -> list[str]:
+    """One line for each kept instruction file the update this run took changed. Never
+    raises."""
+    if os.environ.get(LANDED) != "1":
+        return []
+    sha, _when, _app = _sync_head()
+    if not sha:
+        return []
+    r = _git("diff", "--name-only", f"{sha}^1", sha, "--", *HELD_FILES)
+    out = []
+    for p in sorted(p for p in r.stdout.split() if p) if r.returncode == 0 else []:
+        out.append(f"Claude: {p} changed. A chat that was already open is still following the "
+                   f"copy it read when it started: read {p} again now, before going on.")
+    return out
 
 
 def say_page() -> None:

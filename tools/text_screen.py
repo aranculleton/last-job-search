@@ -71,10 +71,24 @@ _BOUNDS = tuple(getattr(_S, "SALARY_RANGE_BOUNDS", (0, 10 ** 9)))
 # tools/bar.py (through salary_range) and tools/opportunity.py.
 # ---------------------------------------------------------------------------
 CODE = str(getattr(_S, "CURRENCY_CODE", "") or "")
+# Pay in the languages of the market tables' countries. Every word the screen read pay by
+# was English, so "Gehalt: 60.000 - 75.000 € brutto/Jahr" was read as no salary stated: a
+# band under the cut line was never cut, a good one never earned its points, and every card
+# said pay not stated. The words are the languages', not anybody's market: a person in any
+# country reads a posting in any of them.
+_PAY_LOCAL = (r"gehalt|jahresgehalt|bruttojahresgehalt|jahresbruttogehalt|monatsgehalt|"
+              r"bruttomonatsgehalt|verg[üu]tung|entgelt|salaire|r[ée]mun[ée]ration|salario|"
+              r"sueldo|retribuci[óo]n|remuneraci[óo]n|sal[áa]rio|remunera[çc][ãa]o|stipendio|"
+              r"retribuzione|ral|salaris|jaarsalaris|maandsalaris|wynagrodzenie|pensja|l[öo]n|"
+              r"m[åa]nadsl[öo]n|[åa]rsl[öo]n")
 _NUMBER = (r"\d{1,2}(?:,\d{2})+,\d{3}(?!\d)"                       # 12,50,000
            r"|\d{1,3}(?:(?:,|\.|[ \u00a0\u202f])\d{3}(?!\d))+(?:[.,]\d{1,2}(?!\d))?"
            r"|\d+(?:[.,]\d+)?")
-_RANGE_JOIN = re.compile(r"\s*(?:-|\u2013|\u2014|to|and|until)\s*", re.I)
+# The words a range is joined by, in the languages of the market tables' countries too:
+# "45.000 € bis 52.000 €", "entre 45 000 € et 55 000 €", "da 40.000 a 50.000", "tussen
+# €55.000 en €65.000", "od 8000 do 10000", "R$ 4.500 e R$ 5.500".
+_RANGE_JOIN = re.compile(r"\s*(?:-|\u2013|\u2014|~|\u301c|\uff5e|to|and|until|bis|und|à|a|al|y|e|et|"
+                         r"tot|en|do|i|och|till|até|ao)\s*", re.I)
 _SCALE = {"k": 1_000, "lakh": 100_000, "lakhs": 100_000, "lac": 100_000, "lacs": 100_000,
           "lpa": 100_000, "l": 100_000, "crore": 10_000_000, "crores": 10_000_000}
 _RUPEE_WORDS = {"lakh", "lakhs", "lac", "lacs", "lpa", "l", "crore", "crores"}
@@ -83,9 +97,12 @@ _RUPEE_WORDS = {"lakh", "lakhs", "lac", "lacs", "lpa", "l", "crore", "crores"}
 # figure anywhere else in a pay sentence is as often a bonus, an allowance or
 # the employer's turnover, so it is left alone, as it always was.
 _LABELLED = re.compile(
-    r"\b(?:salary|base pay|base salary|pay|compensation|remuneration|package)\b\W{0,3}"
-    r"(?:(?:is|of|circa|c\.|approx\w*\.?|around|about|will be)\s*)*"
-    r"(?:(?P<up>up to|max\w*\.?)\s*|(?P<from>from|starting (?:at|from)|min\w*\.?)\s*)?$",
+    r"\b(?:salary|base pay|base salary|pay|compensation|remuneration|package|" + _PAY_LOCAL + r")\b\W{0,3}"
+    r"(?:(?:is|of|circa|c\.|approx\w*\.?|around|about|will be|von|de|du|di|van|od|ist|est|"
+    r"es|é|è|ca\.?|bei|environ|aproximadamente|cerca de)\s*)*"
+    r"(?:(?P<up>up to|max\w*\.?|bis zu|jusqu['’]?à|hasta|até|fino a|tot|do|upp till)\s*"
+    r"|(?P<from>from|starting (?:at|from)|min\w*\.?|ab|à partir de|desde|a partir de|da|vanaf|od|"
+    r"från)\s*)?$",
     re.I)
 # A pay label a few plain words before the one figure a sentence states in the market's
 # currency: "The base salary for this role in Canada is C$253,500" (a country prefix on the
@@ -93,7 +110,7 @@ _LABELLED = re.compile(
 # no "plus" or "and", so a bonus or an allowance after the label is still left alone. Read
 # only when the sentence holds that one figure.
 _LABELLED_LOOSE = re.compile(
-    r"\b(?:salary|base pay|base salary|pay|compensation|remuneration|rate)\b"
+    r"\b(?:salary|base pay|base salary|pay|compensation|remuneration|rate|" + _PAY_LOCAL + r")\b"
     r"(?:(?!\b(?:plus|and|or|with|bonus\w*|allowance\w*|stipend|equity|sign(?:ing|-on)|"
     r"relocation|commission\w*|benefits?|pension|401k|revenues?|turnover|funding)\b)"
     r"[^.;\d$£€₹¥]){0,60}?"
@@ -108,8 +125,8 @@ ABOUT_THE_COMPANY = re.compile(
     r"seed round|arr|annual recurring|recurring revenue|customers|assets under management|"
     r"aum|market cap\w*)\b", re.I)
 PAY_WORDS = re.compile(r"\b(?:salary|salaries|compensation|remuneration|base pay|pay range|"
-                       r"pay band|pay rate|rate of pay|pay|wages?|hiring range|ote|ctc)\b",
-                       re.I)
+                       r"pay band|pay rate|rate of pay|pay|wages?|hiring range|ote|ctc|"
+                       + _PAY_LOCAL + r")\b", re.I)
 
 
 def about_the_company(sentence: str) -> bool:
@@ -163,15 +180,17 @@ def money_parser(cur: str, code: str = ""):
                 a[2] = b[2]
         return [int(round(v * _SCALE.get(mu, 1))) for _, v, mu, marked in found if marked]
 
-    def labelled(sentence: str) -> tuple[int | None, int | None]:
+    def labelled(sentence: str, per: int = 1) -> tuple[int | None, int | None]:
         """(low, high) for one figure introduced by a pay label, or (None, None).
         "up to" states only the top and "from" only the bottom; a bare label
-        states both."""
+        states both. `per` is how many of the stated period make a year (12 for a
+        month)."""
         hits = []
         for m in amount.finditer(sentence or ""):
             if not (m.group("pre") or m.group("post")):
                 continue
-            v = int(round(_number(m.group("num")) * _SCALE.get((m.group("mult") or "").lower(), 1)))
+            v = int(round(_number(m.group("num")) * _SCALE.get((m.group("mult") or "").lower(), 1)
+                          * per))
             if not _BOUNDS[0] <= v <= _BOUNDS[1]:
                 continue
             hits.append((m, v))
@@ -200,8 +219,32 @@ money_values, labelled_value = money_parser(CUR, CODE)
 RANGE_CUE = re.compile(r"salary|compensation|remuneration|\bpay\b|hiring range|"
                        r"annual|per year|/yr|per annum|\bp\.\s?a\b|\bpa\b|"
                        r"depending on experience|\bdoe\b|\bote\b|we offer|package|"
-                       r"\bctc\b|\blpa\b", re.I)
-HOURLY = re.compile(r"per hour|hourly|/\s?h(ou)?r|an hour", re.I)
+                       r"\bctc\b|\blpa\b|\b(?:" + _PAY_LOCAL + r")\b|brutto|bruts?\b|brut[oa]s?\b|"
+                       r"\blordo\b|\bbruto\b|wir bieten|nous offrons|ofrecemos|oferecemos|offriamo|"
+                       r"wij bieden|oferujemy|vi erbjuder", re.I)
+HOURLY = re.compile(r"per hour|hourly|/\s?h(ou)?r|an hour|pro stunde|stundenlohn|/\s?std\b|"
+                    r"par heure|de l['’]heure|por hora|all['’]ora|per uur|/\s?uur\b|za godzin\w*|"
+                    r"/\s?godz|i timmen|per timme|/\s?tim\b", re.I)
+# Pay by the month, which is how most postings in several markets state it (Singapore, the
+# UAE, Brazil, Mexico, India, Sweden): "R$ 4.500 - 5.500 per month" was read as a year's
+# pay and hard-cut as "a different job level", its ruling kept for good. A sentence that
+# names a year as well is read as stating the year's.
+MONTHLY = re.compile(r"per month|a month|/\s?month|/\s?mo\b|/\s?mth\b|\bpcm\b|monthly|per mensem|"
+                     r"(?<=\d{3})\s?p\.\s?m\.|pro monat|monatlich|monats\w*|/\s?monat\b|par mois|"
+                     r"mensuel\w*|/\s?mois\b|al mes\b|mensual\w*|/\s?mes\b|por m[êe]s|mensa(?:l|is)\b|"
+                     r"/\s?m[êe]s\b|al mese|mensil\w*|per maand|/\s?maand|maandsalaris|miesi[ęe]czn\w*|"
+                     r"/\s?mies\w*|per m[åa]nad|/\s?m[åa]n\b|i m[åa]naden|m[åa]nadsl[öo]n|月給|月額|月収",
+                     re.I)
+YEARLY = re.compile(r"per year|a year|annual\w*|per annum|\bp\.?\s?a\b|/\s?yr|/\s?year|yearly|\blpa\b|"
+                    r"\bctc\b|pro jahr|j[äa]hrlich|jahres\w*|/\s?jahr\b|par an\b|annuel\w*|/\s?an\b|"
+                    r"al a[ñn]o|anual\w*|por ano|annu[oa]\b|/\s?anno|per jaar|jaarsalaris|rocznie|"
+                    r"per [åa]r\b|[åa]rsl[öo]n|年収|年俸", re.I)
+
+
+def per_year(s: str) -> int:
+    """How many of the period a pay sentence states make a year: 12 for a month, 1 for a
+    year or no period said. By the hour is read where the band is (`_bands`)."""
+    return 12 if MONTHLY.search(s or "") and not YEARLY.search(s or "") else 1
 # The market's patterns are the profile's (search.py), loaded here:
 #   FOREIGN_CURRENCY  a range in another currency is not compared against the
 #                     floor, it is left to the scorer
@@ -232,24 +275,103 @@ LANGUAGE_GATE = list(getattr(_S, "LANGUAGE_GATE", []))
 # language context. So do the handful of others that are also English words or
 # nationalities: German, Italian, Dutch, Hebrew, Turkish, Korean.
 _HELD = {x.lower() for x in getattr(_S, "LANGUAGES_HELD", ("english",))}
+# A language the profile gates with its own row (search.py LANGUAGE_GATE) is judged by that
+# row in English, as its wording was written for: the list below leaves its English name out.
+_GATED = {str(g[0]).lower() for g in getattr(_S, "LANGUAGE_GATE", [])}
+# Every language by its English name. French and some twenty others were missing, so an
+# English speaker's shortlist kept "Fluent French required" at a score of 74: the list was
+# one market's, whose own profile gated French. The names that are also everyday English
+# words or nationalities need a language cue right beside them.
 _UNAMBIGUOUS_LANGUAGE = "|".join(
     x for x in ("mandarin|cantonese|chinese|spanish|portuguese|hindi|"
                 "punjabi|urdu|arabic|japanese|tagalog|vietnamese|"
-                "russian|ukrainian|farsi|persian").split("|") if x not in _HELD)
+                "russian|ukrainian|farsi|persian|french|swedish|norwegian|finnish|"
+                "czech|slovak|hungarian|romanian|bulgarian|croatian|serbian|slovenian|"
+                "lithuanian|latvian|estonian|icelandic|catalan|basque|galician|"
+                "thai|indonesian|malay|bahasa|tamil|bengali|telugu|kannada|malayalam|"
+                "marathi|gujarati|nepali|sinhala|burmese|khmer|swahili|amharic|afrikaans|"
+                "zulu|xhosa|somali|pashto|kurdish|greek|irish|gaelic|luxembourgish|"
+                "maltese|albanian|macedonian|georgian|armenian|azerbaijani|kazakh|"
+                "uzbek|mongolian|danish").split("|") if x not in _HELD | _GATED)
 _ALSO_AN_ENGLISH_WORD = "|".join(
-    x for x in "polish|german|italian|dutch|hebrew|turkish|korean".split("|") if x not in _HELD)
-# A language cue next to the word, on either side, is what makes it a language.
+    x for x in "polish|german|italian|dutch|hebrew|turkish|korean|welsh".split("|")
+    if x not in _HELD | _GATED)
+# The same languages in the words postings in the market tables' languages name them by:
+# "Französischkenntnisse", "français courant", "inglês fluente", "Frans". German writes a
+# language with a word for knowing it joined on. Each is read as the language its key names,
+# so the person's own (LANGUAGES_HELD, in English) is never cut in any of its names.
+_DE = r"(?:kenntniss\w*|sprachkenntniss\w*|sprachig\w*|e[nrms]?)?"
+LANGUAGE_WORDS = {
+    "english": r"englisch" + _DE + r"|anglais|ingl[ée]s|ingl[êe]s|inglese|engels|angielsk\w*|"
+               r"engelska|英語",
+    "french": r"franz[öo]sisch" + _DE + r"|fran[cç]ais|franc[ée]s|franc[êe]s|francese|frans|"
+              r"francusk\w*|franska|フランス語",
+    "german": r"deutsch" + _DE + r"|allemand|alem[áa]n|alem[ãa]o|tedesco|duits|niemieck\w*|"
+              r"tyska|ドイツ語",
+    "spanish": r"spanisch" + _DE + r"|espagnol|espa[ñn]ol|espanhol|spagnolo|spaans|"
+               r"hiszpa[ńn]sk\w*|spanska|スペイン語",
+    "portuguese": r"portugiesisch" + _DE + r"|portugais|portugu[ée]s|portugu[êe]s|portoghese|"
+                  r"portugees|portugalsk\w*|portugisiska",
+    "italian": r"italienisch" + _DE + r"|italiano|italiaans|w[łl]osk\w*|italienska",
+    "dutch": r"niederl[äa]ndisch" + _DE + r"|n[ée]erlandais|neerland[ée]s|holand[êe]s|olandese|"
+             r"nederlands|niderlandzk\w*|nederl[äa]ndska",
+    "polish": r"polnisch" + _DE + r"|polonais|polaco|polon[êe]s|polacco",
+    "swedish": r"schwedisch" + _DE + r"|su[ée]dois|sueco|svedese|zweeds|szwedzk\w*|svenska",
+    "danish": r"d[äa]nisch" + _DE + r"|danois|dan[ée]s|dinamarqu[êe]s|danese|deens|du[ńn]sk\w*|danska",
+    "norwegian": r"norwegisch" + _DE + r"|norv[ée]gien|noruego|noruegu[êe]s|norvegese|noors|"
+                 r"norwesk\w*|norska",
+    "finnish": r"finnisch" + _DE + r"|finnois|finland[êe]s|finlandese|fi[ńn]sk\w*|finska",
+    "russian": r"russisch" + _DE + r"|rosyjsk\w*|ryska",
+    "arabic": r"arabisch" + _DE + r"|arabe|[áa]rabe|arabo|arabsk\w*|arabiska",
+    "japanese": r"japanisch" + _DE + r"|japonais|japon[ée]s|japon[êe]s|giapponese|japans|"
+                r"japo[ńn]sk\w*|japanska|日本語",
+    "chinese": r"chinesisch" + _DE + r"|chinois|chin[êe]s|cinese|chinees|chi[ńn]sk\w*|"
+               r"kinesiska|中国語|中文",
+    "turkish": r"t[üu]rkisch" + _DE + r"|turc|turco|turecki\w*|turkiska",
+    "greek": r"griechisch" + _DE + r"|grec|griego|grego|greco|grieks|greck\w*|grekiska",
+}
+_LOCAL_LANGUAGE = "|".join(w for k, w in LANGUAGE_WORDS.items() if k not in _HELD)
+
+
+def language_named(word: str) -> str:
+    """The English name of the language a word names ("Französischkenntnisse" is "french"),
+    or the word itself, lower-cased, where it is already one."""
+    w = str(word or "").strip().lower()
+    for k, pat in LANGUAGE_WORDS.items():
+        if re.fullmatch(r"(?:" + pat + r")", w, re.I):
+            return k
+    return w
+
+
+# A language cue next to the word, on either side, is what makes it a language. The
+# languages' own: "fließend", "verhandlungssicher", "courant", "maîtrise", "fluido",
+# "dominio", "vloeiend", "biegły", "flytande", and the words for language and speaking.
 _LANG_CUE = (r"(?:language|fluen\w*|nativ\w*|speak\w*|spoken|written|"
-             r"bilingual|proficien\w*|literac\w*|translat\w*)")
+             r"bilingual|proficien\w*|literac\w*|translat\w*|"
+             r"sprachkenntniss\w*|kenntniss\w*|sprache|flie(?:ß|ss)end\w*|verhandlungssicher\w*|"
+             r"muttersprach\w*|courant\w*|bilingue\w*|ma[iî]trise|langue\w*|parl[ée]\w*|"
+             r"fluid[oaez]\w*|dominio|idioma\w*|lengua\w*|dom[íi]nio|l[íi]ngua\w*|madrelingua|"
+             r"conoscenza|vloeiend\w*|beheersing|taal\w*|bieg[łl]\w*|p[łl]ynn\w*|znajomo\w*|"
+             r"j[ęe]zyk\w*|flytande|spr[åa]k\w*|modersm[åa]l)")
 OTHER_LANGUAGE = re.compile("|".join(
     ([r"\b(?:" + _UNAMBIGUOUS_LANGUAGE + r")\b"] if _UNAMBIGUOUS_LANGUAGE else [])
+    + ([r"(?<!\w)(?:" + _LOCAL_LANGUAGE + r")(?!\w)"] if _LOCAL_LANGUAGE else [])
     + ([r"\b(?:" + _ALSO_AN_ENGLISH_WORD + r")\s+" + _LANG_CUE,
         _LANG_CUE + r"\s+(?:in\s+)?(?:" + _ALSO_AN_ENGLISH_WORD + r")\b"]
        if _ALSO_AN_ENGLISH_WORD else [])
 ) or r"(?!x)x", re.I)
+# A requirement word, or a level that is one, in the languages postings are written in.
+_REQUIRED_LOCAL = (r"erforderlich|zwingend\w*|vorausgesetzt|voraussetzung|unabdingbar|"
+                   r"unerl[äa]sslich|notwendig|flie(?:ß|ss)end\w*|verhandlungssicher\w*|"
+                   r"exig[ée]\w*|exige|requis\w*|obligatoire\w*|indispensable\w*|imp[ée]rati\w*|"
+                   r"courant\w*|imprescindible\w*|requerid\w*|requiere|necesari\w*|"
+                   r"obligatori\w*|obrigat[óo]ri\w*|necess[áa]ri\w*|exigid\w*|richiest\w*|"
+                   r"indispensabil\w*|obbligatori\w*|vereist|verplicht\w*|noodzakelijk|"
+                   r"vloeiend\w*|wymagan\w*|obowi[ąa]zkow\w*|niezb[ęe]dn\w*|bieg[łl]\w*|"
+                   r"p[łl]ynn\w*|krav\w*|kr[äa]vs|flytande|必須")
 LANGUAGE_REQUIRED = re.compile(
     r"\b(fluen\w*|nativ\w*|bilingual|proficien\w*|requir\w*|must speak|"
-    r"mandatory|essential|written and (spoken|oral))\b", re.I)
+    r"mandatory|essential|written and (spoken|oral)|" + _REQUIRED_LOCAL + r")(?!\w)", re.I)
 
 # A language named as a language, not as a market or a supplier. "Experience with Spanish
 # and Portuguese markets is required" and "analysing Chinese supplier lead times" were cut
@@ -261,24 +383,32 @@ LANGUAGE_REQUIRED = re.compile(
 # English words keep the closer reading OTHER_LANGUAGE gives them.
 _ANY_LANGUAGE = "|".join(sorted(
     {"english", "french", "welsh", "irish", "gaelic", "german", "italian", "dutch", "polish",
-     "hebrew", "turkish", "korean", *_UNAMBIGUOUS_LANGUAGE.split("|"), *_HELD,
-     *(str(g[0]).lower() for g in LANGUAGE_GATE)} - {""}, key=len, reverse=True))
-_LANG_SEP = r"[\s,/&()\-:]+"
+     "hebrew", "turkish", "korean", "danish", *_UNAMBIGUOUS_LANGUAGE.split("|"), *_HELD,
+     *(str(g[0]).lower() for g in LANGUAGE_GATE),
+     *LANGUAGE_WORDS.values()} - {""}, key=len, reverse=True))
+_LANG_SEP = r"[\s,/&()\-:'’]+"
 # A level is written as a test or a grade as often as a word: "Japanese (JLPT N2) required",
 # "German, C1, essential". Read the grade as filler and a short bracket as one step, or the
 # narrower reading lets a stated requirement through as a plus.
 _LANG_FILLER = (r"(?:in|of|and|or|both|either|business|professional|working|conversational|"
                 r"full|excellent|strong|good|advanced|fluent|written|spoken|oral|verbal|level|"
                 r"above|minimum|jlpt|hsk|cefr|dele|topik|[abc][12]|n[1-5]|"
+                # the same small words in the languages postings are written in
+                r"de|du|des|l|la|le|les|del|da|do|dos|das|em|en|der|die|das|und|et|y|e|o|ou|oder|"
+                r"i|och|van|het|von|w|z|sehr|gute?\w*|tr[eè]s|bonne?|buen[oa]?|bom|boa|ottim\w*|"
+                r"uitstekend\w*|goed\w*|dobr\w*|bra|niveau|nivel|n[íi]vel|livello|"
                 + _ANY_LANGUAGE + r")")
 _LANG_STEP = r"(?:" + _LANG_SEP + _LANG_FILLER + r"|\s*\([^()\n]{1,40}\))"
 _CUE_BEFORE = re.compile(r"\b" + _LANG_CUE + r"(?:" + _LANG_SEP + _LANG_FILLER + r"){0,4}"
                          + _LANG_SEP + r"$", re.I)
 _CUE_AFTER = re.compile(_LANG_STEP + r"{0,3}" + _LANG_SEP
                         + r"(?:" + _LANG_CUE + r"|(?:(?:is|are)\s+(?:also\s+)?)?"
-                        r"(?:required|essential|mandatory|necessary|a must)\b)", re.I)
-_UNAMBIGUOUS_RX = (re.compile(r"(?:" + _UNAMBIGUOUS_LANGUAGE + r")", re.I)
-                   if _UNAMBIGUOUS_LANGUAGE else _NEVER)
+                        r"(?:required|essential|mandatory|necessary|a must)\b"
+                        r"|(?:(?:ist|sind|est|sont|es|son|[ée]|s[ãa]o|[èe]|sono|is|zijn|jest|[äa]r)\s+)?"
+                        r"(?:" + _REQUIRED_LOCAL + r")(?!\w))", re.I)
+_UNAMBIGUOUS_RX = (re.compile(r"(?:" + "|".join(x for x in (_UNAMBIGUOUS_LANGUAGE, _LOCAL_LANGUAGE)
+                                                if x) + r")", re.I)
+                   if _UNAMBIGUOUS_LANGUAGE or _LOCAL_LANGUAGE else _NEVER)
 # A name joined to "speaking" or "language" and set before a word for a market, the people
 # in one or a thing names what the job deals with, not a language the person speaks:
 # "Experience with Spanish-speaking markets is required" and "Japanese-language source
@@ -469,6 +599,59 @@ def _languages_named(sentence: str):
             yield m
 
 
+# The words a job title in each language is written with, where English never writes them:
+# "Responsable marketing CRM", "Leiterin Strategischer Einkauf", "Analista de Marketing",
+# "Medewerker Klantenservice". A word two languages share is cut only where the person holds
+# neither ("responsable" is French and Spanish). Words English titles borrow are left out:
+# a Chef de Partie and a Sous Chef work in English kitchens, and "(m/w/d)" closes English
+# titles in Germany too.
+_TITLE_WORDS = (
+    # "Charge Nurse", "Commercial Analyst" and "Employee Relations" are English: "chargé"
+    # counts only before "de", and neither of the others is read.
+    (("French",), r"responsable\w*|charg[ée]e?s?\s+(?:de|d['’])|directeur|directrice|"
+                  r"ing[ée]nieure?|gestionnaire|conseill(?:er|[èe]re)|analyste|"
+                  r"d[ée]veloppeu(?:r|se)|technicien(?:ne)?|infirmi(?:er|[èe]re)|comptable|"
+                  r"stagiaire|alternan\w*|\(h/f\)|\(f/h\)|chef de projet|vendeu(?:r|se)"),
+    (("German",), r"leiter(?:in)?|leitung|referent(?:in)?|sachbearbeiter(?:in)?|"
+                  r"mitarbeiter(?:in)?|entwickler(?:in)?|berater(?:in)?|werkstudent(?:in)?|"
+                  r"ingenieur(?:in)?|kauf(?:mann|frau)|fachkraft|pflegefachkraft|"
+                  r"verk[äa]ufer(?:in)?|buchhalter(?:in)?|einkauf|vertrieb|\w+leiter(?:in)?"),
+    (("Spanish", "French"), r"responsable"),
+    (("Spanish",), r"jef[ea]|desarrollador(?:a)?|ingenier[oa]|asesor(?:a)?|enfermer[oa]|"
+                   r"coordinador(?:a)?|administrativ[oa]|becari[oa]|practicante|contable"),
+    (("Spanish", "Portuguese"), r"gerente|t[ée]cnic[oa]|especialista|programador(?:a)?|"
+                                r"contador(?:a)?|auxiliar"),
+    (("Spanish", "Portuguese", "Italian"), r"analista"),
+    (("Portuguese",), r"desenvolvedor(?:a)?|engenheir[oa]|enfermeir[oa]|coordenador(?:a)?|"
+                      r"assistente|estagi[áa]ri[oa]|vendedor(?:a)?"),
+    (("Italian",), r"responsabile|sviluppat(?:ore|rice)|ingegnere|impiegat[oa]|addett[oa]|"
+                   r"tecnico|stagista|commerciale"),
+    (("Dutch",), r"medewerker|beheerder|adviseur|ontwikkelaar|verpleegkundige|teamleider|"
+                 r"projectleider|stagiair|verkoper|boekhouder"),
+    (("Polish",), r"specjalist\w*|kierownik|programista|in[żz]ynier|ksi[ęe]gow\w*|analityk|"
+                  r"sta[żz]yst\w*|pracownik|doradca"),
+    (("Swedish",), r"handl[äa]ggare|utvecklare|projektledare|sjuksk[öo]terska|ingenj[öo]r|"
+                   r"utredare|samordnare|s[äa]ljare|ekonom"),
+    (("Japanese",), r"[\u3040-\u30ff]+"),
+    (("Korean",), r"[\uac00-\ud7af]+"),
+    (("Chinese",), r"[\u4e00-\u9fff]+"),
+)
+_TITLE_RX = tuple((langs, re.compile(r"(?<!\w)(?:" + pat + r")(?!\w)", re.I))
+                  for langs, pat in _TITLE_WORDS)
+
+
+def title_language(title: str) -> str:
+    """The language a job title is written in, where the person holds none of the languages
+    its words are, or "". English titles, and titles in a language held, are ""."""
+    for langs, rx in _TITLE_RX:
+        if rx.search(title or "") and not {x.lower() for x in langs} & _HELD:
+            # Japanese kana beside Han characters is Japanese; Han alone is read as Chinese.
+            if langs == ("Chinese",) and _TITLE_RX[-3][1].search(title or ""):
+                continue
+            return langs[0]
+    return ""
+
+
 def other_language_named(sentence: str):
     """The first language the candidate does not hold that `sentence` names as a language,
     as a match, or None. Its text is what a cut names ("Spanish", "fluent in German")."""
@@ -641,6 +824,15 @@ YEARS_IN = re.compile(
     r"(?:(?:or|and)\s+(?:more|above|over|greater)\s+)?(?:years?|yrs?)\s+in\s+"
     r"(?!(?:business|operation|operations|existence|service|our\b)\b)"
     r"(?:an?\s+|the\s+)?[a-z][\w-]*", re.I)
+# A years bar in the languages postings are written in: "Mindestens 8 Jahre
+# Berufserfahrung", "au moins 5 ans d'expérience", "5 años de experiencia", "5 anos de
+# experiência", "4 anni di esperienza", "6 jaar ervaring", "5 lat doświadczenia", "5 års
+# erfarenhet". Read as no bar, a role asking twice the person's years raised no flag.
+YEARS_LOCAL = re.compile(
+    r"\b(\d{1,2})\s*\+?\s*(?:(?:-|\u2013|bis|à|a|tot|do)\s*\d{1,2}\s*)?"
+    r"(?:jahren?|jahre|ans?|a[ñn]os|anos|anni|jaar|jaren|lat|[åa]rs?)\b[^.\n]{0,40}?"
+    r"(?:berufserfahrung|erfahrung|exp[ée]rience|experiencia|experi[êe]ncia|esperienz\w*|"
+    r"werkervaring|ervaring|do[śs]wiadczeni\w*|erfarenhet|praxis)", re.I)
 # A professional designation is a credential gate, not a skills gap: no amount
 # of adjacent experience substitutes for an examining body's credential. A
 # pricing posting can require an actuarial designation in progress, and a full
@@ -700,6 +892,8 @@ def under_minimum_qualifications(text, sentence):
 # statistics" or "a graduate degree" that the screen flagged, and the screen read
 # none in "M.S. in statistics" or "a doctoral degree" that the score docked.
 DEGREE = re.compile(r"\b(?:master|msc|m\.sc\.?|m\.s\.?|mba|ph\.?\s?d\.?|doctora\w*"
+                    r"|masterstudium|masterabschluss|master-abschluss|m[áa]ster|maestr[íi]a|mestrado"
+                    r"|laurea magistrale|doktorat|doctorat|doutorado|dottorato|promotion zum"
                     r"|(?:post-?)?graduate degree|advanced degree)(?:['\u2019]?s)?(?![\w'\u2019])",
                     re.I)
 # "Master" is a data-architecture word before it is a degree. A posting can
@@ -763,6 +957,14 @@ DEGREE_ROUTE = re.compile(
 # asset management team" and "a bonus-eligible role" as nice-to-haves, so a real
 # credential gate, a years bar and a required degree went unseen.
 PREFERRED = re.compile(
+    # The same in the languages postings are written in: "von Vorteil", "wünschenswert",
+    # "un atout", "souhaité", "se valorará", "deseable", "desejável", "diferencial",
+    # "gradito", "preferibile", "pluspunt", "mile widziane", "meriterande".
+    r"\bvon vorteil\b|\bw[üu]nschenswert\w*|\bein plus\b|\bidealerweise\b|\bgerne gesehen\b|"
+    r"\bun plus\b|\bun atout\b|\bsouhait[ée]\w*|\bappr[ée]ci[ée]\w*|\bid[ée]alement\b|"
+    r"\bvalorable\b|\bse valorar[áa]\b|\bdeseable\b|\bdesej[áa]vel\b|\bdiferencial\b|"
+    r"\bgradit[oa]\b|\bpreferibil\w*|\btitolo preferenziale\b|\bpluspunt\b|\been pr[ée]\b|"
+    r"\bmile widziane\b|\bmeriterande\b|歓迎|"
     r"\bpreferred\b|\bpreferably\b|\bnice[- ]to[- ]have\b|\bideally\b|\ba plus\b|\bdesirable\b"
     r"|\badvantageous\b|\bbonus points?\b"
     r"|\b(?:is|are|be|considered|seen as|counts as)\s+(?:an?\s+)?(?:(?:strong|definite|real|big|"
@@ -772,7 +974,11 @@ PREFERRED = re.compile(
 # "With more than 40 years of experience, we're the team behind <a lender>" must
 # not cut a role: company history is not a requirement. So a years cut needs a
 # requirement cue and must not carry a company-boast cue.
-WANTS = re.compile(r"\b(?:requir\w*|qualificat\w*|must have|minimum|at least|you have|"
+WANTS = re.compile(r"\b(?:mindestens|erforderlich|vorausgesetzt|sie bringen|sie haben|au moins|"
+                   r"requis\w*|exig[ée]\w*|vous avez|vous justifiez|vous disposez|al menos|m[íi]nimo|"
+                   r"requerid\w*|requisitos?|pelo menos|no m[íi]nimo|almeno|requisiti|richiest\w*|"
+                   r"minimaal|ten minste|vereist|co najmniej|wymagan\w*|minst|krav\w*|"
+                   r"requir\w*|qualificat\w*|must have|minimum|at least|you have|"
                    r"you'?ll bring|you bring|you'?ll need|you need|you should have|"
                    r"we'?re looking for|looking for|proven|demonstrated|ideal candidate|"
                    r"experience (?:in|with|as)|background in|track record|"
@@ -791,7 +997,8 @@ BOAST = re.compile(r"\b((?:we'?re|we are|we have|we'?ve)"
 # "in business" is the firm's age ("in business since 1994"), never a field: "two years of
 # experience in business operations" lost its bar to it (2026-10-24).
 # A figure this far out is a boast unless the sentence is unmistakably a bar.
-STRONG_WANT = re.compile(r"\b(requir|must|minimum|at least|qualificat)\w*", re.I)
+STRONG_WANT = re.compile(r"\b(requir|must|minimum|at least|qualificat|mindestens|au moins|al menos|"
+                         r"pelo menos|almeno|minimaal|co najmniej|minst)\w*", re.I)
 
 
 # A bullet list scraped out of HTML arrives with the punctuation stripped, so
@@ -993,15 +1200,37 @@ def years_bars(text: str) -> list[tuple[int, str]]:
         if BOAST.search(s) or not WANTS.search(s):
             continue
         seen = set()
-        for m in list(YEARS.finditer(s)) + list(YEARS_IN.finditer(s)):
+        here = []
+        for m in list(YEARS.finditer(s)) + list(YEARS_IN.finditer(s)) + list(YEARS_LOCAL.finditer(s)):
             if m.start() in seen:
                 continue
             seen.add(m.start())
             n = _num(m.group(1))
             if n > 25 or (n > 12 and not STRONG_WANT.search(s)) or _preferred_bar(s, m):
                 continue
-            found.append((n, s[:220]))
+            here.append((n, s[:220], _graduate_route(s, m)))
+        # "BS with 8+ years, MS with 6+ years, or PhD with 2+ years": the bar for someone
+        # with no graduate degree is the bachelor's eight. Read as the lowest, it was two,
+        # and a posting whose minimum he missed by four years scored 90 (2026-11-03).
+        if not GRADUATE_HELD and any(not g for _n, _s, g in here):
+            here = [x for x in here if not x[2]]
+        found += [(n, q) for n, q, _g in here]
     return sorted(found, key=lambda x: x[0])
+
+
+# A years figure stated for a graduate degree: the degree opens the clause the figure is in.
+_GRAD_ROUTE = re.compile(r"\b(?:ms|m\.s\.?|msc|m\.sc\.?|master['’]?s?|mba|ph\.?\s?d\.?|"
+                         r"doctora\w*|graduate degree|advanced degree)(?![\w'’])", re.I)
+# Does the person hold a graduate degree? The profile's DEGREE_FLAGS (on unless set off)
+# says a graduate degree is one they lack, the same reading fit.py makes.
+GRADUATE_HELD = not getattr(_S, "DEGREE_FLAGS", True)
+
+
+def _graduate_route(s: str, m) -> bool:
+    """Is the years figure at `m` the bar for a graduate degree ("or PhD with 2+ years")?"""
+    before = s[:m.start()]
+    clause = re.split(r"[,;(/]|\bor\b|\band\b", before)[-1]
+    return bool(_GRAD_ROUTE.search(clause))
 
 
 def _preferred_bar(s: str, m) -> bool:
@@ -1076,11 +1305,14 @@ def _home(text: str) -> bool:
 def _bands(s: str, loose: bool) -> list:
     """[(low, high, the part of the sentence that states it)] for each band in it."""
     hourly = bool(HOURLY.search(s))
+    month = per_year(s)
     out = []
     for part in _BAND_SPLIT.split(s) if len(money_values(s, loose)) > 2 else [s]:
         vals = money_values(part, loose)
         if hourly:
             vals = [v * HOURS_PER_YEAR for v in vals if v < 1000]
+        elif month != 1:
+            vals = [v * month for v in vals]
         vals = [v for v in vals if _BOUNDS[0] <= v <= _BOUNDS[1]]
         if len(vals) >= 2:
             out.append((min(vals), max(vals), part))
@@ -1116,7 +1348,7 @@ def salary_range(text: str) -> tuple[int | None, int | None, str]:
         for lo, hi, part in found:
             bands.append((lo, hi, s[:220], part, heading))
         if not found and not HOURLY.search(s):
-            one_lo, one_hi = labelled_value(s)
+            one_lo, one_hi = labelled_value(s, per_year(s))
             if one_lo or one_hi:
                 singles.append((one_lo, one_hi, s[:220]))
     if not bands:
@@ -1494,7 +1726,7 @@ CUTS = {
                       ("INTERNAL_ONLY", "INTERNAL_ONLY_TITLE")),
     "salary": ("stated range tops out at", ("SALARY_CUT_BELOW",)),
     "language": ("stated as a requirement", ("LANGUAGE_GATE", "LANGUAGES_HELD")),
-    "title_language": ("job title is in", ("TITLE_LANGUAGE",)),
+    "title_language": ("job title is in", ("TITLE_LANGUAGE", "LANGUAGES_HELD")),
     "designation": ("professional designation stated as a requirement",
                     ("DESIGNATION", "DESIGNATED_TITLE")),
     "research_ml": ("research-grade ML is the core of the role", ("RESEARCH_ML",)),
@@ -1625,6 +1857,15 @@ def ruling_refused(reason: str) -> bool:
         elif words.lower().endswith(CUTS["language"][0]):
             if not _language_refused(words[:-len(CUTS["language"][0])], quote):
                 return False
+        elif words.lower().startswith(CUTS["salary"][0]):
+            # A pay cut stands while its quote still reads under the cut line. One made on a
+            # band stated by the month, read as a year's, is released here: the posting is
+            # screened again when a round finds it.
+            if len(quote) >= 220:
+                return False
+            hi, _q = salary_max(quote)
+            if hi is None or hi < ABSURD_SALARY:
+                return False
         else:
             return False
     return True
@@ -1669,26 +1910,34 @@ def screen(job: dict) -> dict:
                      f'is a starting position and is often stale: "{q}"')
 
     under = _under_preference(text)
+    said = set()
     for row in LANGUAGE_GATE:
         for s, preferred in under:
             m = None if preferred else _gate_row_cut(s, row)
             if m is not None:
                 cuts.append(f'{row[0]} {CUTS["language"][0]}: "{evidence(s, m)}"')
+                said.add(str(row[0]).lower())
                 break
 
     for s, preferred in under:
         m = None if preferred else other_language_cut(s)
-        if m is not None:
+        if m is not None and language_named(m.group(0)) not in said:
             cuts.append(f'{m.group(0)} {CUTS["language"][0]}: "{evidence(s, m)}"')
             break
 
     # A title written in another language is that language's job: the whole
-    # working language is that one, whatever the body says.
+    # working language is that one, whatever the body says. The profile's own
+    # TITLE_LANGUAGE where it sets one; otherwise a title in a language the person does
+    # not hold (`title_language`), which setup never wrote and so never cut.
     title_lang = getattr(_S, "TITLE_LANGUAGE", None)
     head = (job.get("title") or "") + " " + text[:200]
     if title_lang and title_lang[1].search(head):
         cuts.append(f'{CUTS["title_language"][0]} {title_lang[0]}: '
                     f'"{(job.get("title") or head)[:120]}"')
+    elif not title_lang:
+        lang = title_language(job.get("title") or "")
+        if lang:
+            cuts.append(f'{CUTS["title_language"][0]} {lang}: "{(job.get("title") or "")[:120]}"')
 
     # Measured from the years held (see tools/fit.py), not from fixed numbers.
     n, q = stated_years(text)

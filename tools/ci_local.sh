@@ -181,9 +181,17 @@ if [ -f profile/person.json ]; then
   # match their own ordinary words in them (a first name an example shares, an employer
   # that is an English word) and block every merge (2026-10-22).
   if "$PY" -c "import sys; sys.path.insert(0, 'tools'); import sync_app; sys.exit(0 if sync_app.maintainers() else 1)" 2>/dev/null; then
-    LEAK_OUT="$(mktemp -d)"
-    run "leak scan (app tree built from HEAD)" "$PY" tools/build_app.py "$LEAK_OUT/app"
-    rm -rf "$LEAK_OUT"
+    if [ "$DATA_ONLY" = "1" ]; then
+      # The app tree built from HEAD is master's own when none of the app's files changed (or
+      # they are exactly the app's release): scanned when it landed, and their own files never
+      # reach it. Building it took two of the five minutes a data-only save waited (engine
+      # audit, 2026-11-03).
+      skip "leak scan (app tree built from HEAD)" "none of the app's files changed; --full runs it"
+    else
+      LEAK_OUT="$(mktemp -d)"
+      run "leak scan (app tree built from HEAD)" "$PY" tools/build_app.py "$LEAK_OUT/app"
+      rm -rf "$LEAK_OUT"
+    fi
   else
     printf '  %-42s n/a   (only the maintainer'"'"'s repo builds the app)\n' "leak scan (app tree built from HEAD)"
   fi
@@ -245,6 +253,12 @@ person.data("person")
 for f in sorted(glob.glob(person.path("*.py"))):
     person.module(os.path.basename(f)[:-3])
 '
+  # Loading is not enough: a profile with a setting missing (an empty search.py, a
+  # person.json with no identity) loaded, landed, and then broke every page update and the
+  # brief (the stranger audit, 2026-11-03, X-39). The page is built from them here, in full.
+  PYTHONDONTWRITEBYTECODE=1 run "your page can be built from your files" \
+    "$PY" tools/app.py model --out "${TMPDIR:-/tmp}/ljs-ci-model-$$.json"
+  rm -f "${TMPDIR:-/tmp}/ljs-ci-model-$$.json"
 fi
 # The person's own suite, against their profile, in its own process: the tools
 # read the profile once at import, so the two suites cannot share one. In parallel where it
@@ -263,7 +277,16 @@ if [ -d profile/tests ]; then
   # A failure here is often an update that changed or removed what the test pinned: say
   # which, and what to do, rather than leave a list of names to guess from.
   if [ "$FAIL" -gt "$before" ]; then
-    "$PY" tools/sync_app.py --own-tests 2>&1 | sed 's/^/      /'
+    if [ "$DATA_ONLY" = "1" ] && [ "$APP_RELEASE" = "0" ]; then
+      # No update in this change: "rewrite them after this update" told a chat to weaken the
+      # person's tests for a fault of this computer (engine audit, 2026-11-03).
+      echo "      Claude, not for the person: no update of the app is in this change, so these"
+      echo "      come from their own files or this computer. Read each failure: put their own"
+      echo "      data right where a test caught a real mistake; never rewrite or retire a test"
+      echo "      for it."
+    else
+      "$PY" tools/sync_app.py --own-tests 2>&1 | sed 's/^/      /'
+    fi
   fi
   "$PY" tools/sync_app.py --own-test-risks 2>/dev/null | sed 's/^/  /'
 fi

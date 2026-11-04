@@ -25,6 +25,9 @@ import opportunity  # noqa: E402
 def judged_file(tmp_path, monkeypatch):
     f = tmp_path / "employers_judged.json"
     monkeypatch.setattr(bar, "_judged_path", lambda: str(f))
+    # A person whose profile states a bar, its tier list written for another sector (the
+    # example person states none, and then no employer is judged at all: X-18).
+    monkeypatch.setattr(opportunity, "TIER_1", {"brindlecombe holdings"})
     bar._judged_cache.clear()
     yield f
     bar._judged_cache.clear()

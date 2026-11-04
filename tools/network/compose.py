@@ -310,7 +310,16 @@ _QUESTION_OPENER = re.compile(
     # stuck with me" is common ground, not a question.
     r"|(?:how|what|why|when|where|who|which)\s+(?:do|does|did|is|are|was|were|would|could|"
     r"can|should|has|have|had|will)"
-    r"|how (?:many|much|long|often|big)|any chance)\b", re.I)
+    r"|how (?:many|much|long|often|big)|any chance"
+    # A question in the languages a note may be written in, which ended on a full stop:
+    # "Hätten Sie Zeit für ein kurzes Gespräch", "Auriez-vous", "¿Tendría", "Você teria",
+    # "Avrebbe", "Zou u", "Skulle du", "Czy".
+    r"|(?:h[äa]tten|haben|k[öo]nnten|k[öo]nnen|w[üu]rden|w[äa]ren|sind|darf)\s+(?:sie|du|ihr|wir|ich)"
+    r"|gibt es|(?:auriez|seriez|pourriez|avez|[êe]tes|voudriez|aurais|serais|pourrais)-(?:vous|tu)"
+    r"|est-ce que|tendr[íi]a|podr[íi]a|estar[íi]a|le gustar[íi]a|te gustar[íi]a"
+    r"|(?:voc[êe]|o senhor|a senhora)\s+(?:teria|poderia|estaria|gostaria)|poderia|teria"
+    r"|avrebbe|potrebbe|sarebbe|avresti|potresti|(?:zou|heeft|hebt|kunt|wilt)\s+(?:u|je)"
+    r"|(?:heb|kun|wil)\s+je|(?:skulle|har|kan|vill)\s+(?:du|ni)|czy)(?!\w)|^\s*¿", re.I)
 
 
 def work_auth_line(seniority="peer") -> str:
@@ -547,16 +556,29 @@ def _first_word(name) -> str:
 
 
 _KNOWN: set | None = None
+_KNOWN_KEY: tuple | None = None
 
 
 def _known_names() -> frozenset:
     """One-word names this person's messages may open on, lowercased.
 
     The tools list above, the profile's employers and skills, and every company
-    in the contact book and the tracker. Read once per process.
+    in the contact book and the tracker. Read again whenever the books change or
+    another person's files are read: kept once per process, a chat that added an
+    employer, or the suite's next test on other files, lowered "Larkspur" to
+    "larkspur" in a nudge (CI, 2026-11-04).
     """
-    global _KNOWN
-    if _KNOWN is None:
+    global _KNOWN, _KNOWN_KEY
+    key = [os.environ.get("LJS_PROFILE", ""), os.environ.get("LJS_STATE", "")]
+    for f in ("network_contacts.csv", "job_search_tracker.csv"):
+        p = person.state(f)
+        try:
+            st = os.stat(p)
+            key.append((p, st.st_mtime_ns, st.st_size))
+        except OSError:
+            key.append((p, None, None))
+    if _KNOWN is None or _KNOWN_KEY != tuple(key):
+        _KNOWN_KEY = tuple(key)
         names = set(_TOOL_NAMES)
         for role in getattr(_ROLES, "ROLES", ()) or ():
             for n in [role.get("employer")] + list(
@@ -1070,13 +1092,24 @@ def _per_reader(got, default: dict) -> dict:
 
 
 # Whether a first message states work authorization. To a recruiter, whose reply is about
-# roles; to a decision-maker only once the messages the person approves say so (the
-# maintainer, 2026-10-22: a recruiter's by default, not a decision-maker's); never to a
-# peer, who keeps it for the reply or the referral stage. A reader the profile names keeps
-# the profile's answer.
+# roles, where the person's status needs saying (a permit, a visa: profile_facts
+# .status_needs_saying), which a citizen's does not; to a decision-maker only once the
+# messages the person approves say so; never to a peer, who keeps it for the reply or the
+# referral stage. A reader the profile names keeps the profile's answer.
 _ELIGIBILITY_SET = getattr(_NET, "ELIGIBILITY", None)
-ELIGIBILITY = _per_reader(_ELIGIBILITY_SET,
-                          {"recruiter": True, "decision_maker": False, "peer": False})
+
+
+def default_eligibility() -> dict:
+    """ELIGIBILITY where the profile names no reader."""
+    try:
+        import profile_facts
+        status = profile_facts.status_needs_saying()
+    except Exception:  # noqa: BLE001  no profile to read: nothing to state
+        status = False
+    return {"recruiter": status, "decision_maker": False, "peer": False}
+
+
+ELIGIBILITY = _per_reader(_ELIGIBILITY_SET, default_eligibility())
 
 
 # The channels a first message goes by; an approved "dm", "reply" or "nudge" is inside a
@@ -1853,6 +1886,52 @@ def thread_findings(text, thread, today=None) -> list:
                 "repeats_your_last_message",
                 f"\"{s.strip()[:120]}\" tells them again what your message of {when} already "
                 "said: leave it out, and follow up on that message instead"))
+    return out
+
+
+# What a draft says they said, offered or wrote, read against what they did. A nudge said
+# "you offered to refer me" to someone whose messages offered a recruiter's name, and a
+# "reply" said "sorry for the slow reply" to three people whose one row was a connection
+# request with no words (2026-11-03): the gate passed both, given the contact.
+_SORRY_LATE = re.compile(r"\b(?:sorry|apologies)\s+(?:for|about)\s+(?:the|my|this)\s+"
+                         r"(?:slow|late|delayed)\s+(?:reply|response|answer)\b", re.I)
+_SAYS_THEY_OFFERED = re.compile(
+    r"\byou\s+(?:very\s+|so\s+)?(?:kindly\s+|generously\s+)?offered\s+to\s+(?P<what>refer|"
+    r"introduc\w*|connect|put\s+me\s+in\s+touch|pass)", re.I)
+_REFER_WORDS = re.compile(r"\brefer(?:r(?:al|ed|ing))?s?\b|\breferral\b", re.I)
+
+
+def their_words_findings(text, thread, kind) -> list:
+    """What a draft claims about their side of the thread that their messages do not hold,
+    as tone.Violation: a reply (or an apology for a slow one) to someone who has said
+    nothing (`nothing_to_reply_to`), and an offer to refer the person that nobody made
+    (`not_in_their_messages`). [] when the log holds nothing for them: their history then
+    predates it, and the row is the record."""
+    import state
+    rows = _thread_rows(thread)
+    if not rows:
+        return []
+    t = tone._visible(str(text or ""))
+    theirs = [r for r in rows if state.said_something(r)]
+    out = []
+    # A call they held is something to answer too: the thank-you after it is a reply.
+    if not theirs and not any(state.call_held(r) for r in rows):
+        said = _SORRY_LATE.search(t) or _ANSWERS_THEM.search(t)
+        if kind == "reply" or said:
+            out.append(tone.Violation(
+                "nothing_to_reply_to",
+                ("\"%s\": " % said.group(0) if said else "")
+                + "they have not written anything to answer (a connection request with no "
+                  "note says nothing): write it as a first message, not a reply"))
+        return out
+    m = _SAYS_THEY_OFFERED.search(t)
+    if m and m.group("what").lower().startswith("refer"):
+        words = " ".join(str(r.get("full_text") or r.get("summary") or "") for r in theirs)
+        if not _REFER_WORDS.search(words):
+            out.append(tone.Violation(
+                "not_in_their_messages",
+                "\"%s\": nothing they wrote offers to refer you; say only what they offered, "
+                "in their words" % m.group(0)))
     return out
 
 
@@ -2670,6 +2749,13 @@ def validate(message, kind, name=None, seniority="peer", employers=(),
         out.append(tone.Violation("referrer_buried", str(referrer)))
     if contact:
         out += thread_findings(text, contact, today)
+        out += their_words_findings(text, contact, k)
+    # A start date the profile's notice period does not allow: "available straight away" went
+    # to a recruiter from someone with a month's notice (2026-10-21).
+    import check_claims
+    now = check_claims.available_now_clash(text)
+    if now:
+        out.append(tone.Violation("not_your_notice", now))
     if their_message:
         restated = tone.restate_ratio(text, their_message)
         if restated.flagged:

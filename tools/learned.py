@@ -152,6 +152,82 @@ def save_entries(rows: list[dict], offers_: list[dict] | None = None) -> None:
 _save = save_entries  # the module's own name for it; other modules call save_entries
 
 
+# ------------------------------------------------------------------ a rule is its setting
+
+# Rules whose setting the app knows, whatever words they come in: `record` writes the setting
+# in the same command and names it in `applied_to`, so a rule is never kept without it. The
+# person's "update only when I say" (2026-10-25) was recorded against an app file and never
+# written into person.json, and ten updates came in by themselves (engine audit, 2026-11-03).
+_ABOUT_UPDATES = re.compile(r"\b(?:the app|app'?s|sync\w*|updates|new versions?)\b", re.I)
+_UPDATES_WAIT = re.compile(
+    r"\b(?:only|never|don'?t|do not|no|stop|not)\b[^.;]{0,60}\bupdat|"
+    r"\bupdat\w*\b[^.;]{0,60}\b(?:only|unless|until|when|wait)\b[^.;]{0,30}"
+    r"\b(?:i|he|she|they|you|asked|told|say|says|said)\b", re.I)
+_UPDATES_AUTO = re.compile(r"\bupdat\w*\b[^.;]{0,40}\b(?:by (?:them|it)sel(?:f|ves)|"
+                           r"automatically|on (?:its|their) own)\b", re.I)
+# "only jobs from the last 10 days", "nothing older than a week" -> JOB_AGE_DAYS.
+_WINDOW = re.compile(r"\b(?:last|past|within|under|less than|no older than|not older than|"
+                     r"younger than|newer than|up to|at most)\s+(?:(\d{1,3})\s+days?|a\s+(week)|"
+                     r"(two|2)\s+weeks)\b", re.I)
+_JOBS_WORDS = re.compile(r"\b(?:jobs?|postings?|roles?|listings?|openings?|vacanc\w+|search)\b",
+                         re.I)
+
+
+def known_settings(area: str, said: str, rule: str) -> list[tuple[str, object]]:
+    """[(setting, value)] a rule says in any words, as `applied_to` names them: "profile/
+    person.json app_updates" (when_asked or auto) and "profile/search.py JOB_AGE_DAYS"."""
+    text = f"{said} {rule}"
+    out: list[tuple[str, object]] = []
+    if _ABOUT_UPDATES.search(text) and re.search(r"\bupdat", text, re.I):
+        if _UPDATES_WAIT.search(text):
+            out.append(("profile/person.json app_updates", "when_asked"))
+        elif _UPDATES_AUTO.search(text):
+            out.append(("profile/person.json app_updates", "auto"))
+    if area in ("search", "jobs", "targets", "other") and _JOBS_WORDS.search(text):
+        m = _WINDOW.search(text)
+        if m:
+            days = int(m.group(1)) if m.group(1) else 7 if m.group(2) else 14
+            # The window the search takes (run_round.job_age_ok): what is written here is
+            # what is searched, never a number the search reads as 14.
+            import run_round
+            if run_round.job_age_ok(days):
+                out.append(("profile/search.py JOB_AGE_DAYS", days))
+    return out
+
+
+def apply_setting(setting: str, value) -> None:
+    """One known setting written, the way the page's own Settings write it."""
+    where, _, key = setting.partition(" ")
+    if where.endswith("person.json"):
+        person.put([key], value)
+    else:
+        import profile_set
+        profile_set.set_line(os.path.basename(where), key, value)
+
+
+def _app_file(applied: str) -> str:
+    """The app's own file an `applied_to` names, or "": the next update puts an app file back,
+    so a rule kept there is a rule nobody follows."""
+    token = str(applied or "").strip().split(" ", 1)[0].strip("`'\"")
+    if not re.search(r"\.(?:py|json|md|csv|txt|tex|sh|js|ya?ml)$", token):
+        return ""
+    import personal_paths
+    root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+    if "/" in token:
+        rel = token.lstrip("./")
+        return rel if not personal_paths.is_personal(rel) and \
+            os.path.exists(os.path.join(root, rel)) else ""
+    try:
+        if os.path.exists(person.path(token)):
+            return ""                                    # one of their profile's files
+    except person.NoProfile:
+        pass
+    for rel in (os.path.join("tools", token), token):
+        if os.path.exists(os.path.join(root, rel)) and not personal_paths.is_personal(rel):
+            return rel.replace(os.sep, "/")
+    return ""
+
+
 def entries(area: str | None = None) -> list[dict]:
     """The active entries, oldest first, for one area or all of them."""
     return [r for r in load() if r.get("status", "active") == "active"
@@ -173,9 +249,22 @@ def record(area: str, said: str, rule: str, applied_to=(), never_say=(),
         raise SystemExit(f"learned: area {area!r}; one of {', '.join(AREAS)}")
     if not str(said or "").strip() or not str(rule or "").strip():
         raise SystemExit("learned: record needs what they said and the rule it gives")
+    applied_to = [str(a) for a in applied_to if str(a).strip()]
+    for a in applied_to:
+        app = _app_file(a)
+        if app:
+            raise SystemExit(f"learned: {app} is the app's own file, and the next update puts it "
+                             "back, so a rule kept there is never followed. Make it stick in "
+                             "their profile (the setting it governs there), and name that.")
+    # A rule the app knows the setting of is that setting, written now (never only noted).
+    written = known_settings(area, said, rule)
+    for setting, value in written:
+        apply_setting(setting, value)
+        if setting not in applied_to:
+            applied_to.append(setting)
     entry = {"date": today or dt.date.today().isoformat(), "area": area,
              "said": str(said).strip(), "rule": " ".join(str(rule).split()),
-             "applied_to": [str(a) for a in applied_to if str(a).strip()],
+             "applied_to": applied_to,
              "never_say": [str(p) for p in never_say if str(p).strip()],
              "status": "active"}
     over = [str(c).strip() for c in overrides if str(c).strip()]
@@ -209,7 +298,7 @@ def record(area: str, said: str, rule: str, applied_to=(), never_say=(),
     if answers:
         resolve_pending(entry["said"])
     return {**entry, "conflicts": found, "replaced": replaced,
-            "own_overlaps": own_overlaps(entry["never_say"])}
+            "own_overlaps": own_overlaps(entry["never_say"]), "set": written}
 
 
 def repeats(entry: dict, rows: list[dict]) -> list[int]:
@@ -422,9 +511,8 @@ def _uses(text: str, phrase: str) -> bool:
     if not _says(text, phrase):
         return False
     low, p = str(text or "").lower(), str(phrase).lower()
-    if p in low:
-        at = [m.start() for m in re.finditer(re.escape(p), low)]
-    else:                                        # said in other words: where they start
+    at = [m.start() for m in re.finditer(r"(?<!\w)%s(?!\w)" % re.escape(p), low)]
+    if not at:                                   # said in other words: where they start
         words = sorted(_content(p))
         at = [m.start() for w in words[:1]
               for m in re.finditer(r"\b%s\b" % re.escape(w), low)]
@@ -439,7 +527,7 @@ def _says(text: str, phrase: str) -> bool:
     """Does `text` say what `phrase` says: the phrase itself, or every word of it that
     carries meaning?"""
     low = str(text or "").lower()
-    if str(phrase).lower() in low:
+    if re.search(r"(?<!\w)%s(?!\w)" % re.escape(str(phrase).lower()), low):
         return True
     words = _content(phrase)
     return bool(words) and words <= _content(low)
@@ -628,21 +716,43 @@ def never_say() -> list[tuple[str, re.Pattern]]:
     out = []
     for r in entries():
         for phrase in r.get("never_say") or ():
-            # An apostrophe either way: a phrase typed on a phone arrives as "I’m", and the
-            # message checks straighten every draft to "I'm" first, so the curly one never
-            # matched anything (2026-10-20).
-            words = [re.escape(w).replace("’", "'").replace("'", "['’]")
-                     for w in str(phrase).split()]
-            if words:
+            body = phrase_pattern(phrase)
+            if body:
                 # Edges that work for a phrase that opens or closes on punctuation: \b
                 # needs a word character there, so "(remote)" or "[sic]" never matched.
                 # A phrase quoted in profile/CLAUDE.md's prose takes its capital from the
                 # sentence it was quoted in, so it is matched anywhere.
                 quoted = str(r.get("rule") or "").endswith(FROM_PROFILE_RULES)
                 start = _OPENS if opens_a_sentence(phrase) and not quoted else r"(?<!\w)"
-                out.append((phrase, re.compile(start + r"\s+".join(words) + r"(?!\w)",
-                                               re.I | re.M)))
+                # An initialism the person said to write in full (two or more capitals) is
+                # a word in capitals: read in any case, it matched inside names.
+                flags = re.M if _INITIALISM.fullmatch(str(phrase).strip()) else re.I | re.M
+                out.append((phrase, re.compile(start + body + r"(?!\w)", flags)))
     return out
+
+
+# A phrase that opens with the person saying what they did: "I made the move" is the same
+# words as "I've made the move" and "I have made the move", and only the first was refused,
+# so a follow-up saying "I've made the move" passed every check and was sent (2026-10-21).
+_SUBJECTS = frozenset({"i", "we"})
+_HELPER = r"(?:['’](?:ve|d)|\s+(?:have|had|has))?"
+_INITIALISM = re.compile(r"[A-Z]{2,5}")
+
+
+def phrase_pattern(phrase: str) -> str:
+    """The pattern for a never-say phrase, without its edges: each word as written (an
+    apostrophe either way), whitespace between, and, where it opens on "I" or "we" with a
+    verb after it, the same words with "'ve", "'d", "have" or "had" between them."""
+    # An apostrophe either way: a phrase typed on a phone arrives as "I’m", and the
+    # message checks straighten every draft to "I'm" first, so the curly one never
+    # matched anything (2026-10-20).
+    words = [re.escape(w).replace("’", "'").replace("'", "['’]")
+             for w in str(phrase or "").split()]
+    if not words:
+        return ""
+    if len(words) >= 2 and str(phrase).split()[0].lower() in _SUBJECTS:
+        return words[0] + _HELPER + r"\s+" + r"\s+".join(words[1:])
+    return r"\s+".join(words)
 
 
 def own_overlaps(phrases) -> list[tuple[str, str, str]]:
@@ -670,11 +780,12 @@ def own_overlaps(phrases) -> list[tuple[str, str, str]]:
         own.append(("OWN_VOICE", re.sub(r"\\(.)", r"\1", voice.pattern)))
     out = []
     for phrase in phrases:
-        words = [re.escape(w).replace("'", "['’]") for w in str(phrase).replace("’", "'").split()]
-        if not words:
+        body = phrase_pattern(str(phrase).replace("’", "'"))
+        if not body:
             continue
         start = _OPENS if opens_a_sentence(phrase) else r"(?<!\w)"
-        rx = re.compile(start + r"\s+".join(words) + r"(?!\w)", re.I | re.M)
+        flags = re.M if _INITIALISM.fullmatch(str(phrase).strip()) else re.I | re.M
+        rx = re.compile(start + body + r"(?!\w)", flags)
         out += [(phrase, setting, line) for setting, line in own if rx.search(line)]
     return out
 
@@ -717,7 +828,25 @@ def profile_never_phrases(text: str | None = None) -> list[tuple[str, str]]:
                 continue
             seen.add(low)
             out.append((phrase, " ".join((m.group(0) + clause).split())))
+    # A name the profile says to write in full is a ban on its initials: "Always write
+    # "<Employer Name>" in full" held no "never", so "ex-<initials>" passed every check and went in
+    # two sent messages (2026-10-21).
+    for m in _IN_FULL.finditer(text):
+        name = (m.group(1) or m.group(2)).strip()
+        caps = [w for w in name.split() if w[:1].isupper()]
+        short = "".join(w[0] for w in caps)
+        if len(caps) < 2 or len(caps) != len(name.split()) or short.lower() in seen:
+            continue
+        seen.add(short.lower())
+        rest = text[m.end():m.end() + 160]
+        end = _CLAUSE_END.search(rest)
+        out.append((short, " ".join((m.group(0) + (rest[:end.start()] if end else ""))
+                                    .split())))
     return out
+
+
+_IN_FULL = re.compile(r"\b(?:write|say|spell|name)\s+(?:out\s+)?(?:\"([^\"\n]{3,60})\"|"
+                      r"“([^”\n]{3,60})”)\s+(?:in full|out in full|out)\b", re.I)
 
 
 def unadopted() -> list[tuple[str, str]]:
@@ -901,12 +1030,30 @@ def superseded(rows: list[dict] | None = None) -> dict:
     for n, r in enumerate(active):
         text = str(r.get("rule") or "").lower()
         own = {str(p).lower() for p in r.get("never_say") or ()}
+        # One setting set twice: the later word is the one followed. "Ask me which place for
+        # each employer" stayed in every brief beside the rule that replaced it, "this
+        # employer hears one city, everyone else the other" (2026-11-03). Lists only grow.
+        mine = _one_settings(r)
+        later_same = next((x for x in active[n + 1:] if mine & _one_settings(x)
+                           and (x.get("rule") or "") != (r.get("rule") or "")), None)
+        if later_same is not None:
+            out[_key(r)] = later_same
+            continue
         for later in active[n + 1:]:
-            if any(p.strip() and p.lower() in text and p.lower() not in own
+            # As a phrase, never as letters inside a word: a ban on two initials overruled every
+            # earlier rule with "back" or "bank" in it.
+            if any(p.strip() and p.lower() not in own
+                   and re.search(r"(?<!\w)%s(?!\w)" % re.escape(p.lower()), text)
                    for p in map(str, later.get("never_say") or ())):
                 out[_key(r)] = later
                 break
     return out
+
+
+def _one_settings(r: dict) -> set:
+    """The settings an entry sets that hold one value (never a list a rule adds to)."""
+    return {str(a) for a in r.get("applied_to") or ()
+            if _SETTING.search(_FILE_NAME.sub(" ", str(a))) and not _LISTS.search(str(a))}
 
 
 def brief(area: str | None = None, channel: str | None = None, reader: str | None = None) -> str:
@@ -1676,22 +1823,338 @@ def hook(event: dict) -> dict:
         note_reaction(text)
     rows = _load_pending()
     waiting = [r for r in rows if not r.get("answered")]
+    undone = _undone(event, items)
+    # One hold a turn, in the form this chat's Claude Code honours (_page_hold_form): the
+    # reaction with whatever else is undone, else what is undone, else the page owed.
+    transcript = event.get("transcript_path") or ""
     if not waiting:
-        return {}
+        if undone:
+            return _page_hold_form("Not finished: " + " ".join(undone), transcript)
+        return _page_hold(event)
     first = waiting[0]
     held = int(first.get("held") or 0)
     if held >= HOLD_LIMIT:
         first["answered"] = dt.datetime.now().isoformat(timespec="seconds")
         first["let_go"] = True
         _save_pending(rows)
-        return {"systemMessage": f"learned.py: a reaction was let go unrecorded after {held} "
-                                 f"tries: \"{first['said'][:120]}\""}
+        # Shown to the person: their own words and what to do, never a file's name (X-75).
+        let_go = {"systemMessage": LET_GO.format(said=" ".join(first["said"].split())[:100])}
+        return dict(let_go, **_page_hold_form("Not finished: " + " ".join(undone), transcript)) \
+            if undone else let_go
     first["held"] = held + 1
     _save_pending(rows)
-    return {"decision": "block", "reason": refuse_over_pending("Not finished")}
+    return _page_hold_form(" ".join([refuse_over_pending("Not finished")] + undone), transcript)
+
+
+LET_GO = ("I couldn't keep what you said (\"{said}\") as a rule this time. Say it again "
+          "whenever you want it kept.")
+
+
+# ------------------------------------------------------------------ what a turn leaves undone
+#
+# Two things a chat was only told to do, and a chat-only person lost when it did not: saving
+# the turn's work (the stranger audit, 2026-11-03, X-62: quick edits and taps gone with the
+# computer) and starting the improvements the day's update check listed (the chat-only review,
+# S4: listed every morning for days, never started). The end of the turn is held for them the
+# way it is for a reaction: once a turn (never while Claude Code already continues for a hold,
+# stop_hook_active), a few times a day for each chat at most, with a way out recorded for a
+# chat that cannot start the improvements (profile_upgrades.py --not-now), never in a chat
+# started for one big job, and never breaking a chat. Days by one clock, the person's
+# (person.today).
+
+SAVE_STEPS = ("this turn's work is not saved anywhere that outlives this chat ({what}). Start "
+              "python3 tools/land.py --message \"<what changed>\" in the background (Bash, "
+              "run_in_background), then end the turn; nothing to say about it.")
+UPGRADE_STEPS = ("{n} improvement{s} to the person's search that the update check listed "
+                 "{have} not been started today. Start them now, never asking first: one "
+                 "background agent (model sonnet) that follows .claude/commands/upgrade.md, then "
+                 "end the turn; never show an id, a version or the word upgrade. Only if this "
+                 "chat cannot start one: python3 tools/profile_upgrades.py --not-now \"<why>\".")
+# Started: an agent given /upgrade, the skill itself, or its first step (reading the plan).
+_UPGRADE_STARTED = re.compile(r"\.claude/commands/upgrade\.md|(?:^|\s)/upgrade\b|"
+                              r"^upgrade(?:\s+\d+)?$|profile_upgrades\.py[\"']?\s+--plan\b")
+
+
+def _turn_tools(items: list) -> list[str]:
+    """What this turn ran: the commands after the last turn the chat finished, however the
+    turn opened (the person, a scheduled run, a notification)."""
+    i = len(items)
+    while i and items[i - 1][1] == "end":
+        i -= 1                          # this turn's own final message, already written
+    j = i
+    while j and items[j - 1][1] != "end":
+        j -= 1
+    return [t for _n, k, t in items[j:i] if k == "tool"]
+
+
+def _undone(event: dict, items: list) -> list[str]:
+    """The reasons this turn is not finished yet, beyond a reaction: [] to let it end."""
+    if event.get("stop_hook_active"):
+        return []
+    out = []
+    try:
+        import app_listen
+        import land
+        import profile_upgrades
+        chat = app_listen.this_chat() or str(event.get("session_id") or "")
+        today = person.today()
+        tools = _turn_tools(items)
+        if any(_UPGRADE_STARTED.search(t) for t in tools):
+            profile_upgrades.mark_started(today)
+        if any(_WORK_CHAT.search(t) for _n, _k, t in items) or _job_chat(event):
+            return out                  # a chat started for one big job: it lands its own work
+        ids = profile_upgrades.unstarted(today, chat)
+        if ids and profile_upgrades.hold_once(chat, today):
+            out.append(UPGRADE_STEPS.format(n=len(ids), s="s" if len(ids) != 1 else "",
+                                            have="have" if len(ids) != 1 else "has"))
+        what = land.save_due(person.state(), chat, today.isoformat())
+        if what:
+            out.append(SAVE_STEPS.format(what=", ".join(what)))
+    except Exception:  # noqa: BLE001  a hook must never break the chat it runs in
+        return out
+    return out
 
 
 _WORK_CHAT = re.compile(r"tools/app\.py start\b[^\n]*--work \S")
+
+
+def _job_chat(event: dict) -> bool:
+    """Was this chat started for one big job (`app.py start --work`, app_setup.job_chat)?
+    Its later messages no longer name the job, and the person may type in it."""
+    try:
+        import app_setup
+        return bool(app_setup.job_chat(str(event.get("session_id") or "")))
+    except Exception:  # noqa: BLE001  a hook must never break the chat it runs in
+        return False
+
+# ------------------------------------------------------------------ the page owed
+#
+# A person whose page was never published never learns they have one: start printed "page to
+# publish", the chat went on with what they asked, and nothing held it (the chat-only review,
+# S1; the stranger audit, X-25). While this chat owes the page (app_setup.page_owed: a copy of
+# their own with a profile, no page address, a clean record, no other chat setting them up,
+# and this chat never having said it cannot publish), a turn the person opened is held until
+# it is published, at most PAGE_HOLDS times a chat a day, and only where the hold can be
+# counted: a count that cannot be saved holds nothing, never every turn. The way out is this
+# chat's own (`app.py published none --why`), never the copy's.
+PAGE_HOLDS = 3
+PAGE_HELD = "ljs-page-held.json"
+_SCHEDULED = re.compile(r"^\s*(?:Scheduled run:|<\\?task-notification>)")
+PAGE_OWED = ("Not finished: this person's job search page has never been published, so nothing "
+             "tells them it exists. Before this turn ends, never asking first: python3 "
+             "tools/app.py start --on \"<this chat's model>\" --tools \"<browser tools>\" and its "
+             "page steps (build, publish, published), then the one line `published` gives you "
+             "to tell them. If this chat cannot publish (no Artifact tool, or a publish refused "
+             "twice): python3 tools/app.py published none --why \"<why>\", for this chat only.")
+PAGE_DUE = ("The person's job search page has never been published. In this turn, before the "
+            "rest and never asking first: python3 tools/app.py start and its page steps, then "
+            "tell them the one line `app.py published` gives you. If this chat cannot publish: "
+            "python3 tools/app.py published none --why \"<why>\" (this chat only).")
+
+
+def _page_today() -> str:
+    """The day in the person's own zone (a cloud computer's clock is UTC)."""
+    try:
+        import app_model
+        zone = person.home_zone_named(person.directory()) or "UTC"
+        return app_model.local_day(dt.datetime.now(dt.timezone.utc), zone).isoformat()
+    except Exception:  # noqa: BLE001  no zone known: the computer's day
+        return dt.date.today().isoformat()
+
+
+def _last_said(path: str) -> tuple[str, str]:
+    """(who, text) of the newest message in the chat that is not a tool's answer: "human"
+    when the person wrote it (or sent it while the chat worked), else what Claude Code says
+    sent it ("task-notification" for a scheduled run, a ring or a job finishing)."""
+    for line in reversed(_tail_lines(path)):
+        try:
+            d = json.loads(line)
+        except ValueError:
+            continue
+        if not isinstance(d, dict) or d.get("type") != "user" or d.get("isMeta") \
+                or d.get("isCompactSummary") or d.get("isSidechain"):
+            continue
+        msg = d.get("message") if isinstance(d.get("message"), dict) else {}
+        content = msg.get("content")
+        if isinstance(content, list):
+            if any(isinstance(c, dict) and c.get("type") == "tool_result" for c in content):
+                continue
+            content = "\n".join(str(c.get("text") or "") for c in content if isinstance(c, dict))
+        origin = d.get("origin") if isinstance(d.get("origin"), dict) else {}
+        return str(origin.get("kind") or "human"), str(content or "")
+    return "", ""
+
+
+# Stop's own feedback (hookSpecificOutput.additionalContext) keeps the turn going from Claude
+# Code 2.1.163 on, with no hook error shown to the person (its changelog: "Stop and SubagentStop
+# hooks can now return hookSpecificOutput.additionalContext to give Claude feedback and keep the
+# turn going without being labeled a hook error"); an older one ignores it and lets the turn
+# end. Each transcript entry carries the version that wrote it: from that version the page's
+# hold is the non-error form, below it or where none is known a block, which every version
+# honours (the chat-only branch's third round).
+PAGE_HOLD_CONTEXT_FROM = (2, 1, 163)
+
+
+def _page_hold_form(reason: str, path: str) -> dict:
+    version = ()
+    for line in reversed(_tail_lines(path)):
+        m = re.search(r'"version"\s*:\s*"(\d+)\.(\d+)\.(\d+)', line)
+        if m and ('"type":"user"' in line or '"type": "user"' in line
+                  or '"type":"assistant"' in line or '"type": "assistant"' in line):
+            version = tuple(int(x) for x in m.groups())
+            break
+    if version >= PAGE_HOLD_CONTEXT_FROM:
+        return {"hookSpecificOutput": {"hookEventName": "Stop", "additionalContext": reason}}
+    return {"decision": "block", "reason": reason}
+
+
+# `app.py published <url>` keeps the page's address in profile/app.json, on this chat's
+# computer until the chat saves it. One that never did lost it with a computer replaced
+# overnight, and the next day was held to publish a second page, with a second first-page line
+# and pin question. The chat's transcript comes back with it (code.claude.com/docs/en/
+# claude-code-on-the-web, "Environment expired": "Restored: your conversation history"), and
+# the address is in it: kept again from there, once a day, never a second page.
+_PUBLISHED_URL = re.compile(r"app\.py[\"']?\s+published\s+[\"']?(https://claude\.ai/[^\s\"'`]+)")
+PAGE_HEALED = ("The person's page address came back from this chat's own history (it was kept "
+               "on a computer since replaced, never saved): save it with the rest now (CLAUDE.md, "
+               "\"Saving\"). Nothing to tell the person about it.")
+
+
+def _published_here(path: str) -> str:
+    """The newest page address this chat kept, read back from its transcript, or ""."""
+    try:
+        fh = open(path, "rb")
+    except (OSError, TypeError):
+        return ""
+    with fh:
+        fh.seek(0, os.SEEK_END)
+        size = at = fh.tell()
+        rest = b""
+        while at > 0 and size - at < TAIL_MAX:
+            step = min(TAIL_BLOCK, at)
+            at -= step
+            fh.seek(at)
+            lines = (fh.read(step) + rest).split(b"\n")
+            rest = lines[0] if at > 0 else b""
+            for line in reversed(lines[1:] if at > 0 else lines):
+                if b"published" not in line or b'"tool_use"' not in line:
+                    continue
+                found = _PUBLISHED_URL.findall(line.decode("utf-8", "replace").replace('\\"', '"'))
+                if found:
+                    return found[-1]
+    return ""
+
+
+def _heal_page(chat: str, transcript: str) -> bool:
+    """Keep again the address this chat's own transcript shows it published, where the copy's
+    record says no page was ever made. True when it did."""
+    import app_listen
+    import app_setup
+    if not transcript or app_setup.page_owed(chat) != "new":
+        return False
+    path = app_setup._local_file(PAGE_HELD)
+    got = app_setup.read_json(path, {})
+    key, day = (chat or "this-folder") + ":heal", _page_today()
+    if got.get(key) == day:
+        return False
+    got[key] = day
+    try:
+        app_setup.write_json(path, got)
+    except OSError:
+        return False
+    url = _published_here(transcript)
+    if not url:
+        return False
+    app_setup.record_page(url, chat=chat, current=False)
+    app_listen.mark_introduced()
+    if not app_listen.pin_asked():
+        app_listen.record_pin_offered()          # offered when it was published
+    return True
+
+
+def _page_owed_here(transcript: str = "") -> tuple[str, str]:
+    """(this chat's id, "new") while this chat owes the person's first page, else ("", "")."""
+    try:
+        import app_listen
+        import app_setup
+        chat = app_listen.this_chat("")
+        _heal_page(chat, transcript)
+        owed = app_setup.page_owed(chat)
+        return (chat, owed) if owed else ("", "")
+    except Exception:  # noqa: BLE001  a hook never breaks the chat it runs in
+        return "", ""
+
+
+def _page_hold(event: dict) -> dict:
+    """The Stop hold while the page is owed: {} or a hold in the form this Claude Code takes.
+    Once a turn: never while Claude Code already continues for a hold (stop_hook_active)."""
+    if event.get("stop_hook_active"):
+        return {}
+    chat, owed = _page_owed_here(event.get("transcript_path") or "")
+    if not owed:
+        return {}
+    who, text = _last_said(event.get("transcript_path") or "")
+    if who != "human" or _SCHEDULED.match(text) or _WORK_CHAT.search(text) or _job_chat(event):
+        return {}                     # nobody here to tell: a scheduled run, a ring, a job chat
+    try:
+        import app_setup
+        path = app_setup._local_file(PAGE_HELD)
+        got = app_setup.read_json(path, {})
+        key, day = chat or "this-folder", _page_today()
+        me = got.get(key) if isinstance(got.get(key), dict) else {}
+        held = int(me.get("held") or 0) if me.get("day") == day else 0
+        if held >= PAGE_HOLDS:
+            return {}
+        got[key] = {"day": day, "held": held + 1}
+        app_setup.write_json(path, got)
+        if (app_setup.read_json(path, {}).get(key) or {}).get("held") != held + 1:
+            return {}                 # the count did not keep: never hold a turn for ever
+    except Exception:  # noqa: BLE001
+        return {}
+    return _page_hold_form(PAGE_OWED, event.get("transcript_path") or "")
+
+
+def _wake_due(event: dict) -> str:
+    """The page's Wake link types plain words into a new chat (app_listen.WAKE_PROMPT, never a
+    command a person would see: the stranger audit, X-84); this says what they mean."""
+    if (event.get("hook_event_name") or "") != "UserPromptSubmit":
+        return ""
+    try:
+        import app_listen
+        words = app_listen.WAKE_PROMPT.rstrip(".").lower()
+        if words not in " ".join(str(event.get("prompt") or "").lower().split()):
+            return ""
+        return ("The person opened this chat from their page to look after it. Start with "
+                f"{app_listen.WAKE_COMMAND} --on \"<this chat's model>\" --tools \"<browser "
+                "tools>\" instead of the plain start, and do what it prints.")
+    except Exception:  # noqa: BLE001
+        return ""
+
+
+def _page_due(event: dict) -> str:
+    """Said beside the person's own message while this chat owes the page, so the turn
+    publishes it before the hold has to."""
+    if (event.get("hook_event_name") or "") != "UserPromptSubmit":
+        return ""
+    prompt = str(event.get("prompt") or "")
+    if _SCHEDULED.match(prompt) or _WORK_CHAT.search(prompt) or _job_chat(event):
+        return ""
+    path = _path()
+    if path is None or person.in_example(path):
+        return ""
+    try:
+        import app_setup
+        had = bool(app_setup.page_record().get("url"))
+    except Exception:  # noqa: BLE001
+        had = True
+    owed = _page_owed_here(event.get("transcript_path") or "")[1]
+    if not had and not owed:
+        try:
+            if app_setup.page_record().get("url"):
+                return PAGE_HEALED
+        except Exception:  # noqa: BLE001
+            pass
+    return PAGE_DUE if owed else ""
 
 
 def _update_due(event: dict) -> str:
@@ -1703,7 +2166,7 @@ def _update_due(event: dict) -> str:
     the app's one hook, so it says this too, rather than a second hook."""
     if (event.get("hook_event_name") or "") != "UserPromptSubmit":
         return ""
-    if _WORK_CHAT.search(str(event.get("prompt") or "")):
+    if _WORK_CHAT.search(str(event.get("prompt") or "")) or _job_chat(event):
         # A chat started for one big job (tools/app.py child_prompt): the chat that answers
         # the page took the day's check, and a job must not take an update part way through.
         return ""
@@ -1712,7 +2175,28 @@ def _update_due(event: dict) -> str:
         return ""                     # the app, before /setup (its start syncs), the example person
     try:
         import sync_app
-        return sync_app.HOOK_LINE if sync_app.stale() else ""
+        # A check tried in the last few hours that could not finish is not asked for again
+        # on every message (the stranger audit, X-71).
+        return sync_app.HOOK_LINE if sync_app.stale() and sync_app.retry_due() else ""
+    except Exception:  # noqa: BLE001  a hook must never break the chat it runs in
+        return ""
+
+
+def _brief_unsent(event: dict) -> str:
+    """The person's next message in the chat a brief ran in, where that run's push was not
+    sent: said once, where the brief is (tools/brief.py unsent_line). Never on a scheduled
+    run's own turn, in the app or for its example person."""
+    prompt = str(event.get("prompt") or "")
+    if (event.get("hook_event_name") or "") != "UserPromptSubmit" or \
+            prompt.lstrip().startswith("Scheduled run:") or "task-notification" in prompt:
+        return ""
+    path = _path()
+    if path is None or person.in_example(path):
+        return ""
+    try:
+        import app_listen
+        import brief
+        return brief.unsent_line(app_listen.this_chat())
     except Exception:  # noqa: BLE001  a hook must never break the chat it runs in
         return ""
 
@@ -1732,7 +2216,9 @@ def _cli_hook() -> int:
     try:
         event = json.loads(sys.stdin.read() or "{}")
         event = event if isinstance(event, dict) else {}
-        out = _with_update(hook(event), _update_due(event))
+        due = "\n\n".join(x for x in (_update_due(event), _wake_due(event) or _page_due(event))
+                          if x)
+        out = _with_update(_with_update(hook(event), _brief_unsent(event)), due)
     except Exception as e:  # noqa: BLE001  a hook must never break the chat it runs in
         print(f"learned.py hook: {type(e).__name__}: {e}", file=sys.stderr)
         return 0
@@ -1842,6 +2328,8 @@ def main(argv=None) -> int:
         e = record(a.area, a.said, a.rule, a.applied_to, a.never_say, overrides=a.overrides,
                    replaces=a.replaces, length=a.length, via=a.via, output=a.output)
         print(f"learned: {e['area']}: {e['rule']}")
+        for setting, value in e.get("set") or ():
+            print(f"  set: {setting} = {json.dumps(value)} (the setting this rule is, written now)")
         for kind, per in (e.get("length") or {}).items():
             print("  length: " + ", ".join(f"{kind} to {'any reader' if who == 'any' else who}"
                                            f" runs to about {n} words" for who, n in per.items()))

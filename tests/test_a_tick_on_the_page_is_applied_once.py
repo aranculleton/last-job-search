@@ -236,6 +236,17 @@ def test_follow_ups_at_an_employer_judged_wanting_leave_to_do_and_say_so(search)
     assert before, "the invented search owes a follow-up at Fernhill Freight"
     env = dict(os.environ, LJS_PROFILE=search.profile, LJS_STATE=search.state)
     bar = os.path.join(ROOT, "tools", "bar.py")
+    # Only a bar the person's own profile states does this (X-18): with none, as the example
+    # person has, nothing is listed to judge and a "none" judged anyway hides nothing.
+    out = subprocess.run([sys.executable, bar, "unjudged", "--contacts"], env=env, capture_output=True,
+                         encoding="utf-8", timeout=60).stdout
+    assert "no bar" in out, out
+    subprocess.run([sys.executable, bar, "judge", "Fernhill Freight", "none", "small firm"],
+                   env=env, check=True, capture_output=True, timeout=60)
+    assert [d for d in search.model()["due"] if d["company"] == "Fernhill Freight" and d["kind"] != "reply"]
+    os.remove(os.path.join(search.profile, "employers_judged.json"))
+    with open(os.path.join(search.profile, "employers.py"), "a", encoding="utf-8") as fh:
+        fh.write("\nTIER_1 = {\"brindlecombe holdings\"}\n")
     out = subprocess.run([sys.executable, bar, "unjudged", "--contacts"], env=env, capture_output=True,
                          encoding="utf-8", timeout=60).stdout
     assert "Fernhill Freight" in out, out

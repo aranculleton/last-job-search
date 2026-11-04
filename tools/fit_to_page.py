@@ -381,6 +381,25 @@ def grow_resume(a, caps=None, skip=()):
     return b
 
 
+def hold_to_caps(a, caps=None) -> list:
+    """Take a role down to its cap for this posting (the profile's `cap`, lowered by
+    `cap_unless` where the posting is not its territory), keeping its strongest bullets in
+    their order. Returns the ids taken off. The fitter only ever grew within the caps, so a
+    draft that arrived over one kept it: a six-month role the profile holds to one bullet
+    outside its territory printed two on three postings that were not (2026-11-03)."""
+    caps = caps or allocate.caps_for(a.get("posting", ""))
+    scores = _scores(a)
+    gone = []
+    for j in a.get("jobs") or []:
+        cap = caps.get(_employer(j))
+        if cap is None or len(j["bullets"]) <= cap:
+            continue
+        keep = set(sorted(j["bullets"], key=lambda b: -scores.get(b, 0))[:max(cap, 0)])
+        gone += [b for b in j["bullets"] if b not in keep]
+        j["bullets"] = [b for b in j["bullets"] if b in keep]
+    return gone
+
+
 def trim_resume(a):
     """Remove the weakest bullet for THIS posting, honouring every floor.
 
@@ -552,7 +571,7 @@ def fit(a):
     abbr = a["abbr"] = R.final_abbr(a)
     R.jobs_for(a)                                   # dedupe + order before any cap reasoning
     caps = allocate.caps_for(a.get("posting", ""))  # once per fit
-    trimmed = set()
+    trimmed = set(hold_to_caps(a, caps))
     pages = _render_resume(a)
     for _ in range(9):
         if pages <= PAGES:

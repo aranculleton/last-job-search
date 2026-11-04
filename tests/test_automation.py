@@ -100,6 +100,26 @@ def test_a_routines_screen_task_must_notify():
     assert any("notifications on" in p for p in problems), problems
 
 
+def test_the_silent_upkeep_beside_a_routine_needs_no_push_and_saving_goes_on(tmp_path):
+    """X-33: a Routines-screen brief with no id, not every day, and a page: the day's tidy-up
+    made the silent upkeep, whose registry entry has no push, and from then on the local check
+    was red and nothing was saved again."""
+    path = tmp_path / "routines.json"
+    reg = {"setup": "routines_screen", "timezone": "America/New_York", "routines": [
+        {"key": "morning_brief", "name": "Job search: morning brief", "trigger_id": None,
+         "cron": "CRON_TZ=America/New_York 38 7 * * 1-5", "prompt_file": routines.BRIEF_FILE,
+         "notifications": {"push": True}}]}
+    path.write_text(json.dumps(reg), encoding="utf-8")
+    assert routines.check(reg) == [] and routines.needs_upkeep(reg)
+    routines.record_upkeep("session_EXAMPLEHELPER", "trig_EXAMPLEUP",
+                           "CRON_TZ=America/New_York 34 5 * * 0,6", path=str(path))
+    assert routines.check(json.loads(path.read_text(encoding="utf-8"))) == []
+    # A daily routine with no id needs no upkeep beside it at all.
+    daily = json.loads(json.dumps(reg))
+    daily["routines"][0]["cron"] = "CRON_TZ=America/New_York 38 7 * * *"
+    assert not routines.needs_upkeep(daily)
+
+
 def test_an_unknown_setup_is_refused():
     assert routines.check({**REG, "setup": "relay"})
 

@@ -123,18 +123,29 @@ def test_someone_in_the_book_and_never_written_to_is_queued_not_new(judged):
 
 # ------------------------------------------------------------ the employer
 
-def test_the_bar_decides_who_is_shown(judged):
+def test_the_bar_decides_who_is_shown(judged, monkeypatch):
     p = {"name": "Idris Corrie", "company": "Saltmarsh Casino"}
     got = surface.check(p, _ctx([]))
     assert not got["show"] and got["reason"].startswith("Saltmarsh Casino: a sector the candidate")
+    # With no bar of pay, prestige or signal in the profile (the example person's), nobody is
+    # held for a judgement, and a "none" a chat judged hides nobody (X-18).
     p = {"name": "Idris Corrie", "company": "Quayside Foods"}
+    assert surface.check(p, _ctx([]))["show"]
+    judged("Quayside Foods", verdict="none")
+    assert surface.check(p, _ctx([]))["show"]
+    # A profile that states a bar (an employer tier) holds and turns down as before.
+    import bar
+    import opportunity
+    monkeypatch.setattr(opportunity, "TIER_1", {"brindlecombe holdings"})
+    bar._judged_cache.clear()
+    p = {"name": "Idris Corrie", "company": "Ashcombe Provisions"}
     got = surface.check(p, _ctx([]))
     assert not got["show"] and "not judged against your bar yet" in got["reason"] \
-        and 'bar.py judge "Quayside Foods"' in got["reason"]
-    judged("Quayside Foods", verdict="none")
+        and 'bar.py judge "Ashcombe Provisions"' in got["reason"]
+    judged("Ashcombe Provisions", verdict="none")
     got = surface.check(p, _ctx([]))
     assert not got["show"] and "clears none of pay, prestige or signal" in got["reason"]
-    judged("Quayside Foods", verdict="signal")
+    judged("Ashcombe Provisions", verdict="signal")
     assert surface.check(p, _ctx([]))["show"]
 
 

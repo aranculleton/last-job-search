@@ -116,6 +116,10 @@ KIND_ORDER = {"reply": 0, "action_due": 1, "nudge": 2,
 PREP_WINDOW_DAYS = 7
 THANKS_DAYS = 7
 INTERVIEW_RANK = len(KIND_ORDER) - 1
+# A stage written before 4.7 says what it is only in its words: a test or a take-home is
+# something to finish by its day (the same words tools/upcoming.py reads).
+_TEST_WORDS = re.compile(r"\b(?:test|assessment(?! cent(?:re|er))|case study|take[- ]home|exercise|challenge|"
+                         r"hirevue|coding task|assignment|questionnaire)\b", re.I)
 # An interview, then nothing. A row at `interview` stays there however long the employer
 # is silent: the nudges are for sent applications, and a live process is never timed out
 # (followups.live_processes: a wrong nudge mid-process costs more than a missed one). So
@@ -133,15 +137,16 @@ def _tracker(path=TRACKER):
     return csv_store.tracker(path)
 
 
-def network_views(contacts, threads):
+def network_views(contacts, threads, index=None):
     """Every contact's derived status, and the two throttle views read from it.
 
     The heat, the replied-contact recipients and the referral holds all need
     the statuses, and the last two must judge the rows handed in rather than a
-    second read of the file, so they are computed once, here.
+    second read of the file, so they are computed once, here. `index` is
+    `state.by_contact(threads)` when the caller has it already.
     """
     live = {}
-    index = state.by_contact(threads)
+    index = state.by_contact(threads) if index is None else index
     for c in contacts:
         cid = str(c.get("contact_id") or "").strip()
         live[cid] = state.effective_status(c, list(index.get(cid, ())))
@@ -327,14 +332,56 @@ def _has_pack(files, stage, folder="") -> bool:
                for f in files)
 
 
-def _thanked(files, held_on) -> bool:
-    """A thank-you or follow-up note dated on or after the interview is in the folder."""
+# What "Done" on a thank-you writes into the row's notes (app_actions due.done): the note went
+# by some other way than a file in the folder. A thank-you row had no Done at all, and was
+# finished only by drafting one with Claude (the audit, 2026-11-03).
+THANKED_NOTE = "thank-you sent"
+
+
+def _thanked(files, held_on, notes="") -> bool:
+    """A thank-you or follow-up note dated on or after the interview is in the folder, or the
+    row's notes say one went on or after it."""
     for f in files:
         if f.startswith(("followup_", "thank_you_")):
             d = state.as_date(f)
             if d and d >= held_on:
                 return True
+    for m in re.finditer(r"(\d{4}-\d{2}-\d{2}):[^|]*\b%s\b" % re.escape(THANKED_NOTE),
+                         str(notes or "")):
+        d = state.as_date(m.group(1))
+        if d and d >= held_on:
+            return True
     return False
+
+
+def _held_by_now(st, now) -> bool:
+    """Has a stage booked for today, with its time on record, ended by `now` (UTC)? Its
+    thank-you is owed the same day, not the morning after (the audit, 2026-11-03)."""
+    if now is None or not st.get("time"):
+        return False
+    try:
+        import datetime as _dt
+        import zoneinfo
+        zone = st.get("zone") or ""
+        name = zone if "/" in zone else _stage_zone(zone)
+        h, m = (int(x) for x in st["time"].split(":"))
+        start = _dt.datetime.combine(_dt.date.fromisoformat(st["date"]), _dt.time(h, m),
+                                     tzinfo=zoneinfo.ZoneInfo(name))
+    except Exception:  # noqa: BLE001  no zone data, or a time that is not one
+        return False
+    return start + dt.timedelta(minutes=int(st.get("minutes") or 60)) <= now
+
+
+def _stage_zone(word) -> str:
+    """The zone a stage line's word names, else the person's own."""
+    import person
+    got = person.ZONE_WORDS.get(str(word or "").upper()) if word else ""
+    if got:
+        return got
+    try:
+        return person.home_zone_named(person.directory()) or "UTC"
+    except person.NoProfile:
+        return "UTC"
 
 
 def _last_word(row, files, stages, today):
@@ -380,45 +427,89 @@ def _last_word(row, files, stages, today):
     return what, when, sent_since
 
 
-def interview_items(tracker, today):
+def _days_said(days) -> str:
+    """"12, 13, 19 or 20 Nov": offered days said together."""
+    got = [d for d in (state.as_date(x) for x in days) if d]
+    words = []
+    for n, d in enumerate(got):
+        last = n == len(got) - 1 or got[n + 1].month != d.month
+        words.append("%d%s" % (d.day, " " + d.strftime("%b") if last else ""))
+    return words[0] if len(words) == 1 else ", ".join(words[:-1]) + " or " + words[-1]
+
+
+def interview_items(tracker, today, now=None, read_stages=None):
     """The interview half of the due list, from each live application's outcome.md.
 
     A booked stage with no pack, from PREP_WINDOW_DAYS before it (due today,
     because the pack is wanted before the day), and a stage that has been and
-    gone with no thank-you on file, for THANKS_DAYS after it. And an interview
+    gone with no thank-you on file, for THANKS_DAYS after it: from the day after, or the
+    same day once its time has passed (`now`). A test or a take-home is something to do by
+    its day, never a meeting to prepare a pack for or thank anyone after. An invitation
+    whose day is the person's to choose is a choice owed, by the day they are to answer.
+    These are `urgent`: they sort before everything else owed (urgency). And an interview
     row with no word for INTERVIEW_QUIET_DAYS and nothing booked: a status note or
-    the outcome, the person's call (after two notes, the outcome only).
+    the outcome, the person's call (after two notes, the outcome only). `read_stages` is
+    `stages`, or a caller's own reading of it once per application (the page's model).
     """
     today = state.as_date(today)
+    read_stages = read_stages or _stages
     items = []
     for row in tracker:
         status = (row.get("status") or "").strip().lower()
         if status in FINAL or status in throttle.UNSENT or not status:
             continue
-        folder, files, stages = _stages(row)
+        folder, files, stages = read_stages(row)
         company = (row.get("company") or "").strip()
         role = (row.get("role") or "").strip() or "role not recorded"
         for st in stages:
             held_on = state.as_date(st["date"])
+            offered = [d for d in (st.get("offered") or []) if state.as_date(d)
+                       and state.as_date(d) >= today]
+            if not held_on and offered and not st["done"]:
+                by = state.as_date(st.get("reply_by")) or state.as_date(offered[0])
+                due = min(by, state.as_date(offered[0]))
+                label = (st["label"][:1].lower() + st["label"][1:]) if st["label"] else "interview"
+                what = "choose your %s day (%s) and tell %s" % (
+                    label, _days_said(offered), st["with"] or "them")
+                items.append({
+                    "half": "application", "key": company_key(company), "rank": INTERVIEW_RANK,
+                    "name": "%s (%s)" % (company, role if len(role) <= 40 else role[:37] + "..."),
+                    "who": "%s - %s" % (company, role), "due": due.isoformat(),
+                    "late": max((today - due).days, 0), "what": what, "to": "", "text": "",
+                    "held": [], "quiet": False, "kind": "interview", "sub": "choose",
+                    "offered": offered, "urgent": True})
+                continue
             if not held_on:
                 continue
             days = (held_on - today).days
+            test = st.get("kind") == "test" or (not st.get("kind") and what_works.stage_step(
+                st["label"]) != "offer" and bool(_TEST_WORDS.search(st["label"] or "")))
             what = "%s, %s%s" % (st["label"] or "interview", st["date"],
                                  ", with " + st["with"] if st["with"] else "")
-            if not st["done"] and 0 <= days <= PREP_WINDOW_DAYS and not _has_pack(files, st, folder):
+            if test:
+                # Something to finish by its day: said as that, and nothing after it.
+                if st["done"] or not 0 <= days <= PREP_WINDOW_DAYS:
+                    continue
+                when = ("today" if days == 0 else "tomorrow" if days == 1
+                        else "by %s %d %s" % (held_on.strftime("%a"), held_on.day, held_on.strftime("%b")))
+                what = "do the %s %s (%s)" % (st["label"] or "test", when, st["date"])
+                due, late, sub = today, 0, "test"
+            elif not st["done"] and 0 <= days <= PREP_WINDOW_DAYS and \
+                    not _has_pack(files, st, folder) and not (days == 0 and _held_by_now(st, now)):
                 when = ("today" if days == 0 else "tomorrow" if days == 1
                         else "in %d days" % days)
                 what = "interview %s (%s), no pack yet: /interview %s" % (when, what, company)
-                due, late = today, 0
-            elif days < 0 and -days <= THANKS_DAYS and not _thanked(files, held_on) \
-                    and st["step"] != "offer":
+                due, late, sub = today, 0, "prep"
+            elif (days < 0 or (days == 0 and _held_by_now(st, now))) and -days <= THANKS_DAYS \
+                    and not _thanked(files, held_on, row.get("notes")) and st["step"] != "offer":
                 # An offer received is not a meeting to thank anyone for: it asked for a
                 # thank-you note after the offer, beside the one for the final round
                 # (2026-11-03).
                 what = ("thank-you not logged after the %s: /outcome %s records the stage "
                         "and drafts one" % (what, company))
-                due = held_on + dt.timedelta(days=1)
+                due = held_on if days == 0 else held_on + dt.timedelta(days=1)
                 late = (today - due).days
+                sub = "thank_you"
             else:
                 continue
             items.append({
@@ -426,7 +517,7 @@ def interview_items(tracker, today):
                 "name": "%s (%s)" % (company, role if len(role) <= 40 else role[:37] + "..."),
                 "who": "%s - %s" % (company, role), "due": due.isoformat(), "late": late,
                 "what": what, "to": "", "text": "", "held": [], "quiet": False,
-                "kind": "interview"})
+                "kind": "interview", "sub": sub, "urgent": True, "stage": st["label"]})
         if status not in INTERVIEWING or any(i["who"] == "%s - %s" % (company, role)
                                              for i in items):
             continue
@@ -449,7 +540,7 @@ def interview_items(tracker, today):
             "who": "%s - %s" % (company, role), "due": due.isoformat(),
             "late": (today - due).days, "what": what, "to": "", "text": "",
             "held": ["tracker note: " + followups._clip(hold)] if hold else [], "quiet": False,
-            "kind": "interview"})
+            "kind": "interview", "sub": "status_note"})
     return items
 
 
@@ -459,11 +550,14 @@ def _stored_draft(contact) -> str:
     return notes.split("| DRAFT:", 1)[1].strip() if "| DRAFT:" in notes else ""
 
 
-def due_items(contacts, threads, tracker, today, docs=None, network=None):
+def due_items(contacts, threads, tracker, today, docs=None, network=None, now=None,
+              index=None, read_stages=None):
     """Everything due today or overdue in both halves, plus what a hold is keeping back.
 
     `network` is `_network(contacts, threads)` when the caller has it already (the page's
     model does): on a big contact book it is the slowest part, and was worked out twice.
+    `index` is `state.by_contact(threads)`, likewise: the log grouped once, not five times,
+    and `read_stages` its reading of each application's stages (interview_items).
 
     Contacts: everything `state.owed` lists, which is only ever what is owed
     now (a reply the moment they answer, a nudge once its clock has run, a
@@ -475,8 +569,10 @@ def due_items(contacts, threads, tracker, today, docs=None, network=None):
     """
     today = state.as_date(today)
     by_id = {str(c.get("contact_id") or "").strip(): c for c in contacts}
+    index = (state.by_contact(threads) if threads else {}) if index is None else index
     items = []
-    for o in state.owed(contacts, threads, today):
+    for o in state.owed(contacts, threads, today, index=index,
+                        live=network[0] if network else None):
         # A reply nobody put a date on is owed all the same. Reading only
         # next_action_due dropped it, and the brief's first line said
         # "0 replies owed" while someone sat waiting for an answer.
@@ -508,7 +604,7 @@ def due_items(contacts, threads, tracker, today, docs=None, network=None):
     queued = [i for i in items if i["status"] == "not_contacted"]
     if queued:
         import surface
-        ctx = surface.context(contacts=contacts, threads=threads, today=today)
+        ctx = surface.context(contacts=contacts, threads=threads, today=today, index=index)
         for i in queued:
             got = surface.check(by_id.get(i["contact_id"]) or {"contact_id": i["contact_id"]},
                                 ctx, queued=True)
@@ -519,8 +615,7 @@ def due_items(contacts, threads, tracker, today, docs=None, network=None):
     # One asked for more than state.OLD_OWED_DAYS ago, with no date of the person's own on
     # it and none made for them since, is history like any other thread that has ended: set
     # aside, never "send it now" to someone who asked in 2021.
-    index = state.by_contact(threads) if threads else {}
-    for r in state.resumes_owed(contacts, threads, tracker):
+    for r in state.resumes_owed(contacts, threads, tracker, index=index):
         line = state.resume_owed_line(r)
         c = by_id.get(r["contact_id"], {})
         days = [d for d in (r["asked"], r["made"], r.get("made_on", "")) if d]
@@ -545,6 +640,7 @@ def due_items(contacts, threads, tracker, today, docs=None, network=None):
             "held": [h for h in (state.action_hold(c.get("next_action"), today),) if h],
             "quiet": False, "kind": "resume", "status": c.get("status", ""),
             "contact_id": r["contact_id"], "old": old})
+    _hold_by_rule(items, by_id, threads, index)
     _, warm, holds = network or _network(contacts, threads)
     for n in followups.review(tracker, today, warm, holds, docs or followups.DOCS):
         quiet = n["state"] == "quiet" and n["notice"]
@@ -561,15 +657,40 @@ def due_items(contacts, threads, tracker, today, docs=None, network=None):
             "to": followups.to_line(n) if n["state"] == "due" else "",
             "text": followups.body(n) if n["state"] == "due" else "",
             "held": list(n["held"]), "quiet": quiet, "ready": bool(n["message"])})
-    items += interview_items(tracker, today)
-    # An employer with a chat of its own (a campaign chat, interview_pack.py campaign) is
-    # that chat's: everything due there is shown as held by it, never as this chat's work.
+    items += interview_items(tracker, today, now, read_stages)
+    # An employer with a chat of its own (a campaign chat, interview_pack.py campaign): that
+    # chat drafts what is owed there, and nothing else writes it. It is still owed, and still
+    # shown: held, a reply about which interview day to choose reached no list, no Brief and
+    # no To do (the audit, 2026-11-03).
     owned = campaigns(tracker)
     for i in items:
         chat = owned.get(i.get("key") or "")
         if chat:
-            i["held"] = list(i.get("held") or []) + ["handled by its campaign chat (%s)" % chat]
+            i["campaign"] = chat
     return items
+
+
+def _hold_by_rule(items, by_id, threads, index=None) -> None:
+    """Every contact item the person's own surface rules stop (surface.held: their limit of
+    unanswered messages, an employer their bar turns down, somewhere outside where they
+    look, a request nobody accepted, a thread closed) is held with the reason, and carries
+    `rule` ({"why", "said"}) so a screen can say it: one check, so To do, Contacts, Messages
+    and the brief never disagree about who may be written to (2026-11-03: the brief's due
+    list and the page offered a third and a fourth message, and follow-ups at employers the
+    person had turned down)."""
+    import surface
+    if index is None:
+        index = state.by_contact(threads) if threads else {}
+    memo: dict = {}
+    for i in items:
+        if i.get("half") != "contact" or i.get("kind") == "request_pending":
+            continue
+        c = by_id.get(i.get("contact_id") or "") or {"contact_id": i.get("contact_id")}
+        got = surface.held(c, index.get(i.get("contact_id") or "", ()), i.get("status") or "",
+                           replying=i.get("kind") in ("reply", "resume"), memo=memo)
+        if got:
+            i["rule"] = got
+            i["held"] = list(i.get("held") or []) + [got["said"] or "closed"]
 
 
 def campaigns(tracker) -> dict:
@@ -591,7 +712,17 @@ def campaigns(tracker) -> dict:
 
 
 def urgency(i):
-    return (i["half"] != "contact", i["rank"], -i["late"], i["name"].lower())
+    """The order owed things are done in. An interview's own (its prep before the day, the
+    thank-you after it, a day to choose) first: its day is fixed and somebody is expecting
+    them, and behind 550 follow-ups it sat 100th of 150 and past the page's cut (the audit,
+    2026-11-03). Then people before applications, as before, except that any other interview
+    row sorts among the people waiting, before the follow-up nudges (INTERVIEW_RANK's note),
+    never after every contact item: with some 550 contact items it came at index 574 and the
+    page's due list, cut at 100, never showed it (journeys audit 5)."""
+    interview = i.get("kind") == "interview" and i["half"] == "application"
+    return (not i.get("urgent"), i["half"] != "contact" and not interview,
+            KIND_ORDER["nudge"] - 0.5 if interview else i["rank"], -i["late"],
+            i["name"].lower())
 
 
 _urgency = urgency  # the module's own name for it; other modules call urgency

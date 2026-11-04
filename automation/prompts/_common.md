@@ -35,11 +35,9 @@ The brief does all four of these in one command, given in its own file. Every ot
    itself, run `/upgrade 20` now; at the end of the message, one plain line per change it
    made for them, never a commit or a command. Never put a question to the person mid-run:
    at most three of the ones that need them go at the end of the message.
-3. Each branch `python3 tools/land.py --waiting` lists is earlier work that could not
-   land: `git merge --no-edit <it>` into this run's, and this run's landing takes it to
-   master. Only if that merge stops (`git merge --abort`), one plain line in the message:
-   "An earlier run's notes are not saved yet; the next run tries again." Never a branch, a
-   PR or a link.
+3. Earlier work that could not land comes in with this run's landing, by itself (it
+   settles a file two chats changed without losing either side). Nothing to say about it.
+   Never a branch, a PR or a link.
 4. `./tools/setup_env.sh --python` (seconds). Run it without `--python` only if this run
    compiles a document.
 
@@ -58,8 +56,8 @@ in). Merge refused: run `python3 tools/land.py` again, then merge the same PR.
 ## Delivering the message
 
 **Your final reply is the message.** It is what the person reads: the reply in the chat
-this task is bound to, or the push notification a Routines-screen task sends when it
-finishes. Write it last, and write nothing after it. Its last line is what `python3
+this task is bound to (its headline sent to their phone where the task's own lines ask), or
+the notification a Routines-screen task sends. Write it last, and write nothing after it. Its last line is what `python3
 tools/tips.py brief` prints (`search` for the job round), and nothing if it prints nothing
 (the brief's command has already taken it).
 
@@ -78,10 +76,9 @@ Claude_Code_Remote server and call it with `trigger_id` set to the `relay` entry
 the call is refused or fails, put one line saying so at the top of the reply. The reply
 stands either way.
 
-**Always deliver, even when there is nothing to report.** A day with no message is how
-the candidate finds out the automation is broken, so "Nothing due today" is still sent. If
-a step failed, the message says which step and what failed, in one line, before anything
-else.
+**Always deliver, even when there is nothing to report**: "Nothing due today" is still
+sent. If a step failed, the message says which step and what failed, in one line, before
+anything else.
 
 ## Style
 

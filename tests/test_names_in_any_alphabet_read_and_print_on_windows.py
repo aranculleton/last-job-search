@@ -56,10 +56,10 @@ def test_utf8_stdio_changes_only_a_stream_that_is_not_already_utf8(monkeypatch):
     assert python_floor.utf8_stdio(("stdout",)) == []
 
 
-def _profile(tmp_path, timezone):
+def _profile(tmp_path, timezone, city="Sydney"):
     d = tmp_path / "profile"
     d.mkdir(parents=True)
-    (d / "networking.py").write_text(f'HOME_CITY = "Sydney"\nTIMEZONE = "{timezone}"\n',
+    (d / "networking.py").write_text(f'HOME_CITY = "{city}"\nTIMEZONE = "{timezone}"\n',
                                      encoding="utf-8")
     return str(d)
 
@@ -84,13 +84,21 @@ def test_a_cloud_chat_works_in_the_persons_own_day(tmp_path, monkeypatch):
     assert person.cloud_day({"CLAUDE_CODE_REMOTE": "true", "TZ": "UTC"}, prof) == ""
     assert person.cloud_day({"CLAUDE_CODE_REMOTE": "true", "LJS_PROFILE": "x"}, prof) == ""
     assert person.cloud_day({"CLAUDE_CODE_REMOTE": "true"},
-                            _profile(tmp_path / "b", "Mars/Olympus_Mons")) == ""
+                            _profile(tmp_path / "b", "Mars/Olympus_Mons", city="")) == ""
+    # A zone named that this computer has no data for gives way to the city they live in.
+    assert person.cloud_day({"CLAUDE_CODE_REMOTE": "true"},
+                            _profile(tmp_path / "c", "Mars/Olympus_Mons")) == "Australia/Sydney"
 
 
-def test_the_zone_also_comes_from_the_brief_registry(tmp_path):
+def test_the_zone_never_comes_from_the_brief_registry(tmp_path):
+    # The brief's schedule zone is when a message is sent, not where the person lives: a
+    # person in Toronto whose brief ran on UK time had the page's every time five hours out
+    # (the audit, 2026-11-03, top 30 item 14). Their own words decide, or nothing does.
     d = tmp_path / "p"
     d.mkdir()
-    (d / "routines.json").write_text('{"timezone": "America/Toronto"}', encoding="utf-8")
+    (d / "routines.json").write_text('{"timezone": "Europe/London"}', encoding="utf-8")
+    assert person.home_zone_named(str(d)) == ""
+    (d / "networking.py").write_text('TIMEZONE = "Eastern (Toronto time)"\n', encoding="utf-8")
     assert person.home_zone_named(str(d)) == "America/Toronto"
 
 

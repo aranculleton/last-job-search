@@ -32,6 +32,9 @@ import bar  # noqa: E402
 def judged_file(tmp_path, monkeypatch):
     f = tmp_path / "employers_judged.json"
     monkeypatch.setattr(bar, "_judged_path", lambda: str(f))
+    # A profile that states a bar: with none, no "none" judgement counts (X-18).
+    import opportunity
+    monkeypatch.setattr(opportunity, "TIER_1", {"brindlecombe holdings"})
     bar._judged_cache.clear()
     yield f
     bar._judged_cache.clear()

@@ -63,6 +63,26 @@ _MONTH = r"(?:jan(?:uary)?|feb(?:ruary)?|mar(?:ch)?|apr(?:il)?|may|june?|july?|a
 
 _NUMS = r"(?:\d{1,2}|one|two|three|four|five|six|seven|eight|nine|ten|eleven|twelve|eighteen|" \
         r"twenty[- ]four)"
+FIXED_LOCAL = (r"\bbefristet\w*|\bzeitlich begrenzt\w*|\b(?:elternzeit|mutterschutz)vertretung\b|"
+               r"\bCDD\b|\bcontrat [àa] dur[ée]e d[ée]termin[ée]e\b|\bdur[ée]e d[ée]termin[ée]e\b|"
+               r"\bcontrato (?:temporal|por obra|eventual|de duraci[óo]n determinada)\b|"
+               r"\btiempo determinado\b|\bcontrato tempor[áa]rio\b|\bprazo determinado\b|"
+               r"\btempo determinato\b|\bcontratto a termine\b|\btijdelijk\w*|\bbepaalde tijd\b|"
+               r"\bna czas okre[śs]lony\b|\bvisstidsanst[äa]llning\b|\btidsbegr[äa]nsad\b|"
+               r"\bvikariat\b|契約社員|有期")
+PERMANENT_LOCAL = (r"\bunbefristet\w*|\bfestanstellung\b|\bCDI\b|\bdur[ée]e ind[ée]termin[ée]e\b|"
+                   r"\bcontrato indefinido\b|\btiempo indeterminado\b|\bprazo indeterminado\b|"
+                   r"\btempo indeterminato\b|\bvast(?:e)? (?:contract|aanstelling|dienstverband)\b|"
+                   r"\bonbepaalde tijd\b|\bna czas nieokre[śs]lony\b|\btillsvidare\w*|正社員")
+# A length in the languages postings are written in: "12 Monate", "6 mois", "12 mesi".
+_DURATION_LOCAL = re.compile(
+    r"\b(\d{1,2})\s*(monate?n?|mois|meses|mesi|maanden|miesi[ęe]c\w*|m[åa]nader|wochen|semaines|"
+    r"semanas|settimane|weken|tygodni\w*|veckor|jahre?n?|ans?|a[ñn]os|anos|anni|jaar|lat|[åa]r)\b",
+    re.I)
+_LOCAL_UNIT = {"week": ("wochen", "semaines", "semanas", "settimane", "weken", "tygodni",
+                        "veckor"),
+               "year": ("jahr", "jahre", "jahren", "an", "ans", "años", "anos", "anni", "jaar",
+                        "lat", "år", "ar")}
 FIXED = re.compile(
     r"\bfixed[- ]term\b|\bFTC\b|\btemporary (?:role|position|contract|assignment|post|job|"
     r"opportunity|vacancy)\b|\btemporary,? (?:full|part)[- ]time\b|\bon a temporary basis\b|"
@@ -91,7 +111,12 @@ FIXED = re.compile(
     r"(?:about\s+|approximately\s+|around\s+)?(?:\d{1,2}|" + _NUMS[3:-1] + r")\s*[- ]?"
     r"(?:months?|weeks?|years?)\b|"
     r"\b(?:on an interim basis|interim (?:role|position|basis|assignment|contract|post|appointment|"
-    r"engagement))\b",
+    r"engagement))\b|"
+    # The same in the languages postings are written in: "befristet auf 12 Monate", a CDD,
+    # "contrato temporal", "tempo determinato", "tijdelijk contract", "na czas określony",
+    # "visstidsanställning". Read as terms not stated, the question that holds a fixed-term
+    # role back before drafting never came.
+    + FIXED_LOCAL,
     re.I)
 # A title that says how the job is held, not what it is: "Analyst (Contract)", "Analyst -
 # Contract", "12 Month FTC", a maternity leave cover, an analyst contractor. A contract
@@ -146,7 +171,8 @@ CONTRACT = re.compile(
 PERMANENT = re.compile(
     r"\b(?:is|as) a permanent\b|\bis permanent\b|\bpermanent,? (?:(?:full|part)[- ]time,? )?(?:role|position|post|"
     r"job|contract|opportunity|vacancy|appointment|employment|hire|basis)\b|"
-    r"\b(?:employment|job|position|contract|work) type\W{0,3}\s*permanent\b|\bregular,? full[- ]time\b",
+    r"\b(?:employment|job|position|contract|work) type\W{0,3}\s*permanent\b|\bregular,? full[- ]time\b|"
+    + PERMANENT_LOCAL,
     re.I)
 # "Could become permanent", "with a view to a permanent position": a contract that may be.
 _MAYBE_PERMANENT = re.compile(r"\b(?:possib\w+|potential\w*|chance|opportunity|could|may|might|"
@@ -175,6 +201,9 @@ def _n(tok: str) -> int:
 
 def _months(n: int, unit: str) -> int:
     unit = unit.lower()
+    for kind, words in _LOCAL_UNIT.items():
+        if unit in words or (kind == "week" and unit.startswith("tygodni")):
+            unit = kind
     if unit.startswith("week"):
         return max(1, round(n / 4.345))
     if unit.startswith("year"):
@@ -248,7 +277,7 @@ def terms(text: str, title: str = "", today=None) -> dict:
             d = _date(end.group(1))
             if d and d >= today - dt.timedelta(days=31):
                 found["ends"] = d.isoformat()
-        span = _IN_MONTHS.search(s) or _DURATION.search(s)
+        span = _IN_MONTHS.search(s) or _DURATION.search(s) or _DURATION_LOCAL.search(s)
         if span and found["months"] is None:
             found["months"] = _months(_n(span.group(1)), span.group(2))
             # "Ending in four months" is counted from today; "a six-month contract" from
@@ -600,7 +629,20 @@ def read(row: dict, text: str, rows=None, today=None, seen_path=None, contacts_p
     return {"terms": terms(text, row.get("title") or "", today), "pay": pay(text),
             "years": years(text), "degree": degree(text), "where": where(row, text),
             "seen": seen(row, today, seen_path),
-            "employer": employer(row, rows, today, contacts_path)}
+            "employer": employer(row, rows, today, contacts_path),
+            "screen": screened(row, text)}
+
+
+def screened(row: dict, text: str) -> list:
+    """What today's text screen cuts this posting for, in its own words less the quote.
+
+    A row shortlisted under an older screen stays on the list until a round replaces it:
+    a posting requiring a language the person does not hold, or stating its pay or terms
+    in words the screen did not read then. Staging reads its body anyway, so it is asked
+    here, before anything is drafted, whatever round found it."""
+    import text_screen
+    got = text_screen.screen({**row, "desc": text or "", "title": row.get("title") or ""})
+    return [_QUOTED.sub("", c).strip(" :;") for c in got.get("cuts") or []]
 
 
 def _money(n) -> str:
@@ -775,6 +817,10 @@ def questions(prof: dict, row: dict) -> list:
         out.append({"id": "ruled_out", "question":
                     "%s at %s was ruled out before (%s). Do you still want it drafted?"
                     % (role, company, s["ruled_out"])})
+    elif prof.get("screen"):
+        out.append({"id": "screen", "question":
+                    "%s at %s would be left out by the search now (%s). Do you still want it "
+                    "drafted?" % (role, company, "; ".join(prof["screen"]))})
     w = prof["where"]
     if w["verdict"] == "FAIL":
         out.append({"id": "location", "question":

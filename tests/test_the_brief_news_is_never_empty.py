@@ -141,9 +141,10 @@ def test_the_page_shows_the_newest_earlier_news_while_todays_is_missing(tmp_path
     secs = app_model.brief_sections((d / "2026-11-02.md").read_text(encoding="utf-8"))
     assert app_model._news_fallback(types.SimpleNamespace(today=dt.date(2026, 11, 2)), secs,
                                     sorted(str(p) for p in d.iterdir())[:-1]) == ""
-    # The page names the day the items it shows were gathered.
+    # The page names the day the items it shows were gathered, and that today's search found
+    # nothing newer where it ran (2026-11-03).
     js = open(os.path.join(ROOT, "templates", "app", "app.js"), encoding="utf-8").read()
-    assert "newsAsOf(b.news_date || b.date)" in js
+    assert "newsAsOf(b.news_date || b.date, b.news_searched)" in js
 
 
 def test_the_reader_and_the_prompt_never_settle_for_nothing():

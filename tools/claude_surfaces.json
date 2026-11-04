@@ -24,9 +24,10 @@
       "goal": "make your own private copy",
       "how": "open github.com/new?template_owner=aranculleton&template_name=last-job-search&owner=%40me&name=my-job-search&visibility=private signed in to GitHub, check that Private is chosen, then Create repository; or on github.com/aranculleton/last-job-search, Use this template, then Create a new repository, Private chosen, then Create repository from template",
       "steps": [
-        "Open this link, signed in to GitHub: github.com/new?template_owner=aranculleton&template_name=last-job-search&owner=%40me&name=my-job-search&visibility=private A phone's web browser works too.",
+        "Open this link, signed in to GitHub: https://github.com/new?template_owner=aranculleton&template_name=last-job-search&owner=%40me&name=my-job-search&visibility=private A phone's web browser works too.",
         "It opens with the job search as the template and Private chosen. Check Private, then choose Create repository.",
-        "If the form opens empty: on github.com/aranculleton/last-job-search, choose Use this template, then Create a new repository, choose Private, then Create repository from template."
+        "If the form opens empty: on https://github.com/aranculleton/last-job-search, choose Use this template, then Create a new repository, choose Private, then Create repository from template.",
+        "Never choose Fork: a fork is public, and GitHub never lets one be made private."
       ],
       "sources": [
         {"url": "https://docs.github.com/en/repositories/creating-and-managing-repositories/creating-a-new-repository", "quote": "You can use query parameters to pre-fill form fields when creating a new repository."},
@@ -34,7 +35,8 @@
         {"url": "https://docs.github.com/en/repositories/creating-and-managing-repositories/creating-a-repository-from-a-template", "quote": "Above the file list, click Use this template."},
         {"url": "https://docs.github.com/en/repositories/creating-and-managing-repositories/creating-a-repository-from-a-template", "quote": "Choose a repository visibility."},
         {"url": "https://docs.github.com/en/repositories/creating-and-managing-repositories/creating-a-repository-from-a-template", "quote": "Click Create repository from template."},
-        {"url": "https://github.blog/changelog/2026-05-11-create-repositories-on-the-go-with-github-mobile/", "quote": "Optionally select a template."}
+        {"url": "https://github.blog/changelog/2026-05-11-create-repositories-on-the-go-with-github-mobile/", "quote": "Optionally select a template."},
+        {"url": "https://docs.github.com/en/pull-requests/collaborating-with-pull-requests/working-with-forks/about-forks", "quote": "Public repository forks are public, and private repository forks are private."}
       ],
       "status": "documented",
       "verified_on": "2026-10-25",
@@ -47,24 +49,25 @@
       "goal": "let Claude see your copy",
       "how": "at claude.ai/code, connect GitHub when it asks, then install the Claude GitHub App at github.com/apps/claude/installations/new with Only select repositories and your copy chosen",
       "steps": [
-        "Open claude.ai/code and sign in. When it asks to connect GitHub, follow it and approve.",
-        "Open github.com/apps/claude/installations/new, choose your account, then Only select repositories, pick your copy, and install.",
-        "Back at claude.ai/code (or the Code tab in the Claude app), choose your copy under the message box."
+        "Open https://claude.ai/code and sign in. When it asks to connect GitHub, follow it and approve.",
+        "Open https://github.com/apps/claude/installations/new, choose your account, then Only select repositories, pick your copy, and install.",
+        "Back at https://claude.ai/code (or the Code tab in the Claude app), choose your copy under the message box."
       ],
       "sources": [
         {"url": "https://code.claude.com/docs/en/web-quickstart", "quote": "claude.ai/code prompts you to connect GitHub."},
+        {"url": "https://code.claude.com/docs/en/web-quickstart", "quote": "Until then, that step shows \"GitHub access is required for Claude Code cloud sessions\" instead of a sign-in button."},
         {"url": "https://code.claude.com/docs/en/web-quickstart", "quote": "can work in a private repository only when the Claude GitHub App is installed on it."},
         {"url": "https://code.claude.com/docs/en/web-quickstart", "quote": "click the repository selector below the input box and choose a repository for Claude to work in."},
         {"url": "https://docs.github.com/en/apps/using-github-apps/installing-a-github-app-from-a-third-party", "quote": "If the app requires repository permissions, select All repositories or Only select repositories."}
       ],
       "status": "documented",
-      "verified_on": "2026-10-25",
-      "verified_against": "code.claude.com/docs/en/web-quickstart and docs.github.com's page on installing a GitHub App, read 2026-10-25",
+      "verified_on": "2026-11-03",
+      "verified_against": "code.claude.com/docs/en/web-quickstart read 2026-11-03 (its Team and Enterprise note: the GitHub connector an Owner turns on), and docs.github.com's page on installing a GitHub App, read 2026-10-25",
       "ui_sensitive": true
     },
     {
       "id": "make-private",
-      "claim": "A repository's owner makes it private from its own page on GitHub: Settings, then in the Danger Zone section Change visibility beside Change repository visibility, then confirm and Make this repository private. Setup refuses a public copy, because it would show the person's history, pay and contacts to anyone, and never changes the visibility itself.",
+      "claim": "A repository's owner makes it private from its own page on GitHub: Settings, then in the Danger Zone section Change visibility beside Change repository visibility, then confirm and Make this repository private. Setup refuses a public copy, because it would show the person's history, pay and contacts to anyone, and never changes the visibility itself. A fork is the exception: a fork of a public project is public and GitHub never lets it be made private, so a fork is replaced by a new private copy (make-copy) and is never given these steps.",
       "goal": "make your copy private",
       "how": "on your copy's page on GitHub, Settings, then in Danger Zone, Change visibility, then Make this repository private",
       "steps": [
@@ -74,11 +77,12 @@
       ],
       "sources": [
         {"url": "https://docs.github.com/en/repositories/managing-your-repositorys-settings-and-features/managing-repository-settings/setting-repository-visibility", "quote": "In the \"Danger Zone\" section, to the right of to \"Change repository visibility\", click Change visibility."},
-        {"url": "https://docs.github.com/en/repositories/managing-your-repositorys-settings-and-features/managing-repository-settings/setting-repository-visibility", "quote": "Click Make this repository public or Make this repository private."}
+        {"url": "https://docs.github.com/en/repositories/managing-your-repositorys-settings-and-features/managing-repository-settings/setting-repository-visibility", "quote": "Click Make this repository public or Make this repository private."},
+        {"url": "https://docs.github.com/en/pull-requests/collaborating-with-pull-requests/working-with-forks/about-forks", "quote": "You cannot change the visibility of a fork by itself."}
       ],
       "status": "documented",
-      "verified_on": "2026-10-25",
-      "verified_against": "docs.github.com's page on setting repository visibility, read 2026-10-25",
+      "verified_on": "2026-11-03",
+      "verified_against": "docs.github.com's pages on setting repository visibility and about forks, read 2026-11-03",
       "ui_sensitive": true
     },
     {
@@ -266,6 +270,20 @@
       "ui_sensitive": false
     },
     {
+      "id": "chat-push",
+      "claim": "A chat can send the person a phone notification with the PushNotification tool. The docs name it a phone push while Remote Control is connected, and Push when Claude decides (agentPushNotifEnabled, off by default) lets Claude send one; a cloud chat reads that setting from the copy's own .claude/settings.json, which turns it on. A scheduled run in a cloud chat was seen to send one: the tool answered Mobile push requested, with the push sent. A scheduled task bound to a chat has no notification of its own (create_trigger's notifications are only for a task that starts a new chat each run, and such a run gets no copy of the files and no add_repo to fetch one), so a brief that runs in a chat sends its headline this way; where the tool answers not sent, the person's next message in that chat says the brief is there.",
+      "sources": [
+        {"url": "https://code.claude.com/docs/en/tools-reference", "quote": "Sends a desktop notification, and a phone push when Remote Control is connected, so a long-running task or session-scoped scheduled task can reach you when you step away."},
+        {"url": "https://code.claude.com/docs/en/settings", "quote": "read in a session with one repository outside a project's threads, because the file is part of the clone and the session starts inside it"},
+        {"url": "tool:create_trigger", "quote": "Only fresh-session-per-fire scheduled tasks (create_new_session_on_fire=true) take this; the server rejects it for self-bind or persistent_session_id scheduled tasks."},
+        {"url": "observed:claude-code-2.1.316", "quote": "Mobile push requested."}
+      ],
+      "status": "observed",
+      "verified_on": "2026-11-03",
+      "verified_against": "observed: a scheduled run in a cloud chat on 2026-10-31 (Claude Code 2.1.316) called PushNotification and was answered Mobile push requested, with pushSent true; the same run, a task that started a new chat, had no copy of the files and no fire_trigger, as did two other such runs (2026-10-12, 2026-10-29); code.claude.com/docs/en/tools-reference (PushNotification), settings (Settings in cloud sessions) and settings-reference (agentPushNotifEnabled: Any file) read 2026-11-03",
+      "ui_sensitive": false
+    },
+    {
       "id": "cli-cloud",
       "claim": "claude --cloud starts a cloud chat from a terminal. It needs the terminal version of Claude Code, installed apart from the desktop app and signed in to the same claude.ai account, and it refuses to run without an interactive terminal: Claude cannot run it from its own shell, only the person can, in theirs.",
       "how": "in a terminal on your computer, in the folder {name}, run claude --cloud",
@@ -349,7 +367,7 @@
       ],
       "page_goal": "make each new chat start with the PDF tools in place",
       "page_steps": [
-        "Open your helper chat (Job search helper) at claude.ai/code.",
+        "Open any of your chats at claude.ai/code: the setting is the same for all of them.",
         "At the top of that chat, open the small arrow after its title and choose Edit cloud environment.",
         "Paste the line into Setup script, then save.",
         "It applies from the next new chat. Come back to this page and tap Done."
@@ -366,8 +384,44 @@
       "ui_sensitive": true
     },
     {
+      "id": "team-plan",
+      "claim": "On a Team or Enterprise plan two settings may be an Owner's: the GitHub connector, without which connecting GitHub shows \"GitHub access is required for Claude Code cloud sessions\" instead of a sign-in button, and an environment the organization shares, which opens read-only for its members, so an Owner changes its network access (or the member makes an environment of their own, New environment, with Full, and starts chats in it).",
+      "goal": "get past a setting a work or team plan has locked",
+      "how": "ask an Owner of your Claude organization to turn it on for you",
+      "sources": [
+        {"url": "https://code.claude.com/docs/en/web-quickstart", "quote": "Until then, that step shows \"GitHub access is required for Claude Code cloud sessions\" instead of a sign-in button."},
+        {"url": "https://code.claude.com/docs/en/cloud-environments", "quote": "opens read-only there, so an Owner changes its network access from the Cloud environments page in admin settings instead."},
+        {"url": "https://code.claude.com/docs/en/cloud-environments", "quote": "select New environment at the bottom of the menu to open the New environment dialog."}
+      ],
+      "status": "documented",
+      "verified_on": "2026-11-03",
+      "verified_against": "code.claude.com/docs/en/web-quickstart (Team and Enterprise note) and /cloud-environments (shared environments, New environment), read 2026-11-03",
+      "ui_sensitive": true
+    },
+    {
+      "id": "cloud-auto",
+      "claim": "A cloud chat runs in one of three modes: Accept edits, Plan or Auto, chosen from the mode menu in the row under the message box at claude.ai/code, or in the Claude app on a phone from the + in the message box, then Permission. Cloud chats make file edits without asking in every mode; Auto also runs routine steps without asking, with a separate check that stops anything risky, and is offered only where the person's organization allows it and the chosen model supports it. Outside Auto, a step the app's own settings do not pre-approve waits for the person to allow it in the chat, which may be one they are not reading.",
+      "goal": "let Claude carry on while you're away",
+      "how": "in the mode menu in the row under the message box (in the Claude app on a phone, the + in the message box, then Permission), Auto, where it is offered",
+      "steps": [
+        "In your job search chat, open the mode menu in the row under the message box (in the Claude app on a phone: the + in the message box, then Permission).",
+        "Choose Auto. If Auto is not there, your plan or organization does not offer it: Claude then asks before some steps, so answer in the chat when it does."
+      ],
+      "sources": [
+        {"url": "https://code.claude.com/docs/en/permission-modes", "quote": "use the mode dropdown in the row under the prompt box."},
+        {"url": "https://code.claude.com/docs/en/permission-modes", "quote": "In the mobile app, tap the + button in the prompt box, then Permission."},
+        {"url": "https://code.claude.com/docs/en/permission-modes", "quote": "Auto mode appears only when your organization allows it and the selected model supports it."},
+        {"url": "https://code.claude.com/docs/en/permission-modes", "quote": "Auto mode lets Claude execute without routine permission prompts."},
+        {"url": "https://code.claude.com/docs/en/web-quickstart", "quote": "Cloud sessions don't offer Manual or Bypass permissions."}
+      ],
+      "status": "documented",
+      "verified_on": "2026-11-03",
+      "verified_against": "code.claude.com/docs/en/permission-modes (Web and mobile, auto mode) and /web-quickstart (Choose a permission mode), read 2026-11-03",
+      "ui_sensitive": true
+    },
+    {
       "id": "cloud-internet",
-      "claim": "A cloud chat's network access is one of None, Trusted (the default: package registries, GitHub and cloud SDKs only), Full (any website) or Custom (the person's own list). Job sites are not on the Trusted list, so a cloud chat on the default cannot reach them. Set to Full, a running chat reaches them within about a minute, with no new chat.",
+      "claim": "A cloud chat's network access is one of None, Trusted (the default: package registries, GitHub and cloud SDKs only), Full (any website) or Custom (the person's own list). Job sites and employers' own websites are not on the Trusted list, so a cloud chat on the default cannot reach them; a Custom list reaches only the sites it names, so every employer's own site stays out, and Full is the setting that works. Set to Full, a running chat reaches them within about a minute, with no new chat. On a Team or Enterprise plan an environment an Owner shares opens read-only, so an Owner changes it, or the member makes an environment of their own (New environment) with Full and starts chats in it.",
       "goal": "let this chat reach job sites",
       "how": "at the top of this chat, the small arrow after its title, then Edit cloud environment, with Network access set to Full",
       "steps": [
@@ -376,19 +430,22 @@
       ],
       "page_goal": "let Claude reach job sites",
       "page_steps": [
-        "Open your helper chat (Job search helper) at claude.ai/code.",
+        "Open any of your chats at claude.ai/code: the setting is the same for all of them.",
         "At the top of that chat, open the small arrow after its title and choose Edit cloud environment.",
         "Set Network access to Full, then save. It reaches Claude within about a minute.",
+        "On a work or team plan where that setting is locked, ask an Owner of your Claude organization to change it.",
         "Come back to this page and tap Done."
       ],
       "sources": [
-        {"url": "https://code.claude.com/docs/en/cloud-environments", "quote": "The default level, Trusted, allows package registries and other allowlisted domains."},
+        {"url": "https://code.claude.com/docs/en/cloud-environments", "quote": "The default level, Trusted, allows package registries and other allowlisted domains"},
         {"url": "https://code.claude.com/docs/en/cloud-environments", "quote": "select the caret after the session title at the top, then select Edit cloud environment ."},
-        {"url": "https://code.claude.com/docs/en/cloud-environments", "quote": "its existing sessions follow the new setting within about a minute"}
+        {"url": "https://code.claude.com/docs/en/cloud-environments", "quote": "its existing sessions follow the new setting within about a minute"},
+        {"url": "https://code.claude.com/docs/en/cloud-environments", "quote": "opens read-only there, so an Owner changes its network access from the Cloud environments page in admin settings instead."},
+        {"url": "https://code.claude.com/docs/en/cloud-environments", "quote": "select New environment at the bottom of the menu to open the New environment dialog."}
       ],
       "status": "documented",
-      "verified_on": "2026-10-25",
-      "verified_against": "code.claude.com/docs/en/cloud-environments read 2026-10-25",
+      "verified_on": "2026-11-03",
+      "verified_against": "code.claude.com/docs/en/cloud-environments read 2026-11-03 (access levels, Custom, shared environments read-only, New environment)",
       "ui_sensitive": true
     },
     {

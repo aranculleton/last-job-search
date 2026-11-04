@@ -255,6 +255,29 @@ def families(field, root: str = DIR, today: dt.date | None = None) -> list[tuple
             for fam in _kept((f or {}).get("families"), False, today)]
 
 
+# The languages the country tables name, by their codes.
+LANGUAGE_NAMES = {"en": "English", "fr": "French", "de": "German", "es": "Spanish",
+                  "pt": "Portuguese", "it": "Italian", "nl": "Dutch", "pl": "Polish",
+                  "sv": "Swedish", "ja": "Japanese", "ar": "Arabic", "zh": "Chinese",
+                  "hi": "Hindi", "ms": "Malay", "ta": "Tamil", "af": "Afrikaans", "zu": "Zulu",
+                  "ga": "Irish", "cy": "Welsh", "mi": "Maori", "da": "Danish", "nb": "Norwegian",
+                  "fi": "Finnish", "ko": "Korean"}
+# The field tables' titles and tools are one list from a US source (O*NET), the same for
+# every country: said so wherever English is not among the country's languages, and the
+# local ones are researched (gaps), or a market posting in Portuguese was searched with
+# "Staff Nurse" and the systems US hospitals use.
+US_ENGLISH = "US English, from O*NET: a start for the words only, not this market's own"
+
+
+def _in_english(m: dict) -> bool:
+    return "en" in [str(x).lower() for x in m.get("languages") or []] or not m.get("languages")
+
+
+def _languages(m: dict) -> str:
+    names = [LANGUAGE_NAMES.get(str(x).lower(), str(x)) for x in m.get("languages") or []]
+    return " or ".join(n for n in names if n != "English") or "the local language"
+
+
 def gaps(country, field=None, level=None, region=None, city=None, employers: int = 0,
          root: str = DIR, today: dt.date | None = None) -> list[str]:
     """What setup still has to research for this person, in plain lines: everything the
@@ -278,6 +301,9 @@ def gaps(country, field=None, level=None, region=None, city=None, employers: int
                    "licences or registrations, its pay sources, its titles and tools")
     elif m["field"] and not [b for b in m["boards"] if b["scope"] == "field"]:
         out.append(f"the boards of {m['field_name'].lower()} in {m['name']}")
+    if m["field"] and not _in_english(m):
+        out.append(f"the titles this work is posted under in {_languages(m)}, and the tools "
+                   f"employers in {m['name']} use (the field table's are {US_ENGLISH.split(':')[0]})")
     if level and not m["level"]:
         out.append(f"what changes at {level} level: page length, graduate or executive boards")
     elif m["level"] in ("graduate", "executive") and not [b for b in m["boards"]
@@ -315,6 +341,9 @@ def brief(country, field=None, level=None, region=None, city=None, employers: in
     m = load(cc, field, level, region, root=root, today=today)
     lines = [f"Market: {m['name']} ({cc})"
              + "".join(f", {k} {m[k]}" for k in ("field", "level", "region") if m[k])]
+    if m.get("languages"):
+        lines.append("Languages: " + ", ".join(m["languages"]))
+    whose = "" if _in_english(m) else f" ({US_ENGLISH})"
     lines.append("Boards (robots.txt for search / posting, checked by code; /add-portal checks again):")
     for b in m["boards"]:
         r = b.get("robots") or {}
@@ -347,9 +376,9 @@ def brief(country, field=None, level=None, region=None, city=None, employers: in
                 v = f"{v} {i.get('url')}: {i.get('what', '')}"
             lines.append(f"- {v}{extra} ({i['source']})")
     if m["titles"]:
-        lines.append("Titles: " + "; ".join(", ".join(t["value"]) for t in m["titles"]))
+        lines.append(f"Titles{whose}: " + "; ".join(", ".join(t["value"]) for t in m["titles"]))
     if m["families"]:
-        lines.append("Interchangeable tools (add to skills.py FAMILIES): "
+        lines.append(f"Interchangeable tools{whose} (add to skills.py FAMILIES): "
                      + "; ".join(f"{f['family']}: " + ", ".join(n for n, _ in f["members"])
                                  for f in m["families"]))
     lines.append("Still to research:")

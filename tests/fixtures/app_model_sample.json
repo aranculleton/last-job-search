@@ -1051,6 +1051,9 @@
   "people": [
     {
       "id": "larkspur_retail_castellan",
+      "group": "now",
+      "owed": {"label": "Draft a reply", "kind": "reply", "id": "reply~larkspur_retail_castellan", "args": {"contact": "larkspur_retail_castellan"}, "logged": true, "due": "due-juno-reply", "reply": true},
+      "late": 0,
       "first_name": "Juno",
       "employer": "Larkspur Retail",
       "status": "replied_needs_response",
@@ -1085,6 +1088,9 @@
     },
     {
       "id": "fernhill_freight_halloway",
+      "group": "follow",
+      "owed": {"label": "Draft the follow-up", "kind": "follow_up", "id": "follow_up~fernhill_freight_halloway", "args": {"contact": "fernhill_freight_halloway"}, "due": "due-fernhill-nudge"},
+      "late": 1,
       "first_name": "Wren",
       "employer": "Fernhill Freight",
       "status": "awaiting_reply",
@@ -1100,6 +1106,9 @@
     },
     {
       "id": "copperleaf_pay_tamsin",
+      "group": "now",
+      "owed": {"label": "Draft a reply", "kind": "reply", "id": "reply~copperleaf_pay_tamsin", "args": {"contact": "copperleaf_pay_tamsin"}, "logged": true, "due": "due-tamsin-resume", "reply": true, "resume": true},
+      "late": 0,
       "first_name": "Tamsin",
       "employer": "Copperleaf Pay",
       "status": "referral_in_progress",
@@ -1124,6 +1133,9 @@
     },
     {
       "id": "copperleaf_pay_ash",
+      "group": "new",
+      "owed": {"kind": "draft", "label": "See the note", "message": "msg-ash-1", "reply": false},
+      "late": 0,
       "first_name": "Ash",
       "employer": "Copperleaf Pay",
       "status": "not_contacted",
@@ -1148,6 +1160,9 @@
     },
     {
       "id": "quayside_foods_ivo",
+      "group": "waiting",
+      "owed": null,
+      "late": 0,
       "first_name": "Ivo",
       "employer": "Quayside Foods",
       "status": "connected_no_reply",
@@ -1166,6 +1181,9 @@
     },
     {
       "id": "kestrel_mutual_sasha",
+      "group": "done",
+      "owed": null,
+      "late": 0,
       "first_name": "Sasha",
       "employer": "Kestrel Mutual",
       "status": "closed",
@@ -1181,6 +1199,9 @@
     },
     {
       "id": "ellerwick_trust_priya",
+      "group": "now",
+      "owed": {"kind": "draft", "label": "See the draft", "message": "msg-priya-thanks", "reply": true},
+      "late": 0,
       "first_name": "Marisol",
       "employer": "Ellerwick Trust",
       "status": "in_conversation",
@@ -1202,6 +1223,9 @@
     },
     {
       "id": "harbourline_bank_bea",
+      "group": "now",
+      "owed": {"label": "Prepare for the call", "kind": "prep", "id": "prep~call~harbourline_bank_bea", "args": {"contact": "harbourline_bank_bea", "call": true}},
+      "late": 0,
       "first_name": "Bea",
       "employer": "Harbourline Bank",
       "status": "call_booked",
@@ -1225,6 +1249,9 @@
     },
     {
       "id": "larkspur_retail_ltd_kit",
+      "group": "new",
+      "owed": {"kind": "draft", "label": "See the note", "message": "msg-kit-1", "reply": false},
+      "late": 0,
       "first_name": "Kit",
       "employer": "Larkspur Retail Ltd",
       "status": "not_contacted",
@@ -1247,6 +1274,9 @@
     },
     {
       "id": "quayside_foods_rafe",
+      "group": "new",
+      "owed": {"kind": "draft", "label": "See the note", "message": "msg-rafe-1", "reply": false},
+      "late": 0,
       "first_name": "Rafe",
       "employer": "Quayside Foods",
       "status": "not_contacted",
@@ -1265,6 +1295,9 @@
     },
     {
       "id": "brackenridge_advisory_noor",
+      "group": "new",
+      "owed": {"kind": "draft", "label": "See the note", "message": "msg-noor-1", "reply": false},
+      "late": 0,
       "first_name": "Noor",
       "employer": "Brackenridge Advisory",
       "status": "not_contacted",
@@ -1283,6 +1316,10 @@
     },
     {
       "id": "fernhill_freight_odile",
+      "group": "held",
+      "owed": null,
+      "late": 0,
+      "hold": "Your connection request has not been accepted yet",
       "first_name": "Odile",
       "employer": "Fernhill Freight",
       "status": "awaiting_reply",
@@ -1298,6 +1335,10 @@
     },
     {
       "id": "kestrel_mutual_pia",
+      "group": "held",
+      "owed": null,
+      "late": 0,
+      "hold": "Your connection request has not been accepted yet",
       "first_name": "Pia",
       "employer": "Kestrel Mutual",
       "status": "awaiting_reply",

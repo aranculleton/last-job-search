@@ -232,6 +232,20 @@ def fetch() -> str | None:
 # app's is the maintainer's and follows master; everyone else follows stable.
 # `"app_channel"` in profile/person.json overrides either way.
 
+def repo_of(url: str) -> tuple[str, str]:
+    """(owner, name) of a copy on GitHub from its address, in every form a chat's checkout
+    has: https, ssh, and a cloud chat's proxy (http://<host>/git/<owner>/<name>), which
+    app_setup.origin() could not read, so start called a person's own copy "not a copy" and
+    stopped before the update that would fix it (the stranger audit, 2026-11-03, X-54).
+    ("", "") for anything else: a folder on this computer, another host."""
+    u = str(url or "").strip().rstrip("/")
+    if u.endswith(".git"):
+        u = u[:-4]
+    m = re.search(r"github\.com[/:]([^/:]+)/([^/]+)$", u) or \
+        re.match(r"^https?://[^/]+/git/([^/]+)/([^/]+)$", u)
+    return (m.group(1), m.group(2)) if m else ("", "")
+
+
 def _owner(url: str) -> str:
     # A cloud container may reach GitHub through a local proxy, whose address carries the
     # owner after a "git" segment: http://<the proxy's host and port>/git/<owner>/<repo>.
@@ -319,6 +333,16 @@ def follow() -> str:
     return f"following the app's releases, newest {tag}"
 
 
+def channel_target() -> str:
+    """The app ref an update would take, as the last check left it, with no network: the
+    release the check fetched (STABLE) for a copy on releases, else the app's master. ""
+    when a copy on releases has none fetched here: nothing can be said to wait."""
+    if channel() == "master":
+        return MASTER
+    have = git("rev-parse", "-q", "--verify", f"refs/remotes/{STABLE}", check=False)
+    return STABLE if have.returncode == 0 else ""
+
+
 def _shallow() -> bool:
     return git("rev-parse", "--is-shallow-repository").stdout.strip() == "true"
 
@@ -389,6 +413,37 @@ def drift(ref: str = "HEAD", app: str | None = None) -> tuple[list[str], list[st
 
 def _dirty() -> list[str]:
     return git("status", "--porcelain", "--untracked-files=no").stdout.splitlines()
+
+
+SAVED_FIRST = "Saved before the day's update"
+
+
+def _unsaved() -> list[str]:
+    """What still stops the update once the person's own files left unsaved in a cloud chat
+    are saved. One unsaved file of theirs (a chat that never landed its work) stopped every
+    morning's update and every retry after it, and the copy stayed on an old version for days
+    (the chat-only review, 2026-11-03). Saving their files is always yes (CLAUDE.md,
+    "Saving"), so it is done here, in one commit of those files alone, and the turn's landing
+    takes it to master. Only in a cloud chat, where each chat has a computer of its own and
+    what is unsaved is its own; on a computer another chat may be writing them. Only when
+    every file is the person's and none is mid-merge: an app file changed here still stops
+    the update, as before."""
+    dirty = _dirty()
+    if not CLOUD or not dirty or any(ln[:2] in ("UU", "AA", "DD", "AU", "UA", "DU", "UD")
+                                     for ln in dirty) or \
+            git("rev-parse", "-q", "--verify", "MERGE_HEAD", check=False).returncode == 0:
+        return dirty
+    mine = []
+    for ln in dirty:
+        path = ln[3:].split(" -> ", 1)[-1].strip().strip('"')
+        if not path or not is_personal(path):
+            return dirty
+        mine.append(path)
+    if git("commit", "-q", "-m", SAVED_FIRST, "--", *mine, check=False).returncode != 0:
+        return dirty
+    print(f"sync_app: saved {len(mine)} of the person's own changed file(s) first, in a commit "
+          "of their own; nothing in them changed.")
+    return _dirty()
 
 
 def _abort(why: str, paths: list[str]) -> int:
@@ -466,7 +521,7 @@ def _stop_dirty(dirty: list[str]) -> int:
 def sync() -> int:
     """The update: the app's waiting commits merged in. Every run takes it by default; where
     the person's profile says updates wait for their word, only --update does."""
-    dirty = _dirty()
+    dirty = _unsaved()
     if dirty:
         return _stop_dirty(dirty)
     base = merge_base()
@@ -809,18 +864,20 @@ def _said_path(root: str | None = None) -> str | None:
     return os.path.join(dirs[1], SAID) if dirs else None
 
 
-def waiting() -> str:
-    """The app commit an update would bring in, or "" when this repo already holds it."""
-    if git("merge-base", "--is-ancestor", APP, "HEAD", check=False).returncode == 0:
+def waiting(ref: str | None = None) -> str:
+    """The app commit an update would bring in (from APP, or `ref`), or "" when this repo
+    already holds it."""
+    ref = ref or APP
+    if git("merge-base", "--is-ancestor", ref, "HEAD", check=False).returncode == 0:
         return ""
-    return git("rev-parse", "--verify", "-q", APP + "^{commit}", check=False).stdout.strip()
+    return git("rev-parse", "--verify", "-q", ref + "^{commit}", check=False).stdout.strip()
 
 
-def brings(base: str | None, maintainer: bool) -> str:
+def brings(base: str | None, maintainer: bool, ref: str | None = None) -> str:
     """What the waiting update brings, in plain words: its first change, and how many more.
     Read from the CHANGELOG entries it adds, as an update's own "What changed" lines are."""
     # Never synced: the copy was made from the app, so its own CHANGELOG is where it starts.
-    diff = git("diff", base or "HEAD", APP, "--", "CHANGELOG.md", check=False).stdout
+    diff = git("diff", base or "HEAD", ref or APP, "--", "CHANGELOG.md", check=False).stdout
     lines = [ln[1:] for ln in diff.splitlines()
              if ln.startswith("+") and not ln.startswith("+++") and ln[1:].strip()]
     heads = (headlines(lines, maintainer=maintainer)
@@ -834,9 +891,9 @@ def brings(base: str | None, maintainer: bool) -> str:
     return first + (f", and {more} more change{'' if more == 1 else 's'}" if more else "")
 
 
-def waiting_line(base: str | None, maintainer: bool) -> str:
+def waiting_line(base: str | None, maintainer: bool, ref: str | None = None) -> str:
     """The one line the person hears about a waiting update."""
-    return f'An update is waiting: {brings(base, maintainer)}. Say "update" when you want it.'
+    return f'An update is waiting: {brings(base, maintainer, ref)}. Say "update" when you want it.'
 
 
 def say_waiting(sha: str, line: str, root: str | None = None) -> bool:
@@ -864,7 +921,7 @@ def look() -> int:
     """A plain run and --if-stale where updates wait for the person's word: the app looked
     at and nothing of it taken. When a newer version is waiting, one line for the person,
     once for that version."""
-    dirty = _dirty()
+    dirty = _unsaved()
     if dirty:
         return _stop_dirty(dirty)   # the day's upkeep below commits; never over their work
     rc = check()
@@ -1023,15 +1080,25 @@ def pull_master() -> int:
         return after_rewrite(old)
     if git("merge-base", "--is-ancestor", "origin/master", "HEAD", check=False).returncode == 0:
         return 0
-    dirty = _dirty()
+    dirty = _unsaved()
     if dirty:
         print("sync_app: stopped, nothing changed. There are uncommitted changes, so master "
               "was not merged in; commit them (or set them aside), then run this again:")
         for line in dirty[:20]:
             print("  " + line)
         return 1
-    if git("merge", "-q", "--no-edit", "origin/master", check=False).returncode:
-        git("merge", "--abort", check=False)
+    # A clash in the person's own files is settled as a landing settles it (land.merge_in,
+    # merge_state.settle), never left for a chat to do by hand: two chats that took the same
+    # update a day apart stopped here on every call prep both had rebuilt (the 4.9.0
+    # rehearsal). Only a clash in an app file still stops.
+    try:
+        import land
+        merged, _lines = land.merge_in(ROOT, "origin/master")
+    except ImportError:              # a copy older than the landing tool: a plain merge
+        merged = git("merge", "-q", "--no-edit", "origin/master", check=False).returncode == 0
+        if not merged:
+            git("merge", "--abort", check=False)
+    if not merged:
         print("sync_app: stopped, nothing changed. master does not merge cleanly into this "
               "branch: run `git merge origin/master` and settle it (RUNBOOK.md, \"Landing on master\", says how).")
         return 1
@@ -1229,7 +1296,22 @@ def _utf8_stdio() -> None:
         pass
 
 
+# The runs that are the day's check: a plain run, --if-stale and --update.
+_NOT_THE_CHECK = ("--check", "--adopt", "--own-tests", "--own-test-risks", "--pull",
+                  "--worktree", "-h", "--help")
+
+
 def main(argv: list[str]) -> int:
+    rc = _main(argv)
+    if rc != 0 and not any(a in _NOT_THE_CHECK for a in argv) and not is_the_app():
+        # A check that could not finish: when it was tried (the hook waits RETRY_HOURS before
+        # asking again), and the page's steps all the same (X-46), from what is on disk.
+        _record_tried()
+        say_page()
+    return rc
+
+
+def _main(argv: list[str]) -> int:
     _utf8_stdio()
     ap = argparse.ArgumentParser(description=__doc__.split("\n")[0])
     mode = ap.add_mutually_exclusive_group()
@@ -1288,12 +1370,16 @@ def main(argv: list[str]) -> int:
         if not stale():
             print("sync_app: already checked today.")
             # A new chat on a day already checked still hears these: each chat runs on its
-            # own cloud computer, so blocked job sites are checked for every chat.
+            # own cloud computer, so blocked job sites are checked for every chat. The page
+            # first: a chat kept open for days heard about it only from the day's first
+            # check, last, under the job sites' block (the stranger audit, X-52).
+            say_page()
             network_check()
             place_check(a.tools)
             return 0
-        if _dirty():
-            return _stop_dirty(_dirty())  # changing nothing
+        dirty = _unsaved()
+        if dirty:
+            return _stop_dirty(dirty)  # changing nothing
         rc = pull_master()
         if rc:
             return rc
@@ -1320,7 +1406,6 @@ def main(argv: list[str]) -> int:
         if landed:
             own_tests()
         app_watch()
-        network_check()
         said = plain_state_endings()
         if said:
             print("sync_app: " + said)
@@ -1328,10 +1413,57 @@ def main(argv: list[str]) -> int:
         if n:
             print(f"sync_app: {n} file(s) on this computer given plain line endings, as the "
                   "app now keeps them; nothing in them changed")
+        # The improvements, then the page (profile_upgrades.say_page, at their end), then the
+        # job sites: a chat that stopped at the job sites' block to wait for the person never
+        # reached the page's line (X-52).
         upgrades("--after-sync", landed=landed)
+        network_check()
         model_check(a.on)
         place_check(a.tools)
     return rc
+
+
+def say_page() -> None:
+    """The person's page, missing or behind the code on disk, said by this run too: by a check
+    already run today (X-52) and by one that stopped (X-46), where the page steps came only
+    from a check that finished. Never breaks the run."""
+    try:
+        here = os.path.join(ROOT, "tools")
+        if here not in sys.path:
+            sys.path.insert(0, here)
+        import app_setup
+        said = app_setup.page_line()
+    except Exception:  # noqa: BLE001  an older or half-made copy: the start says it
+        said = ""
+    if said:
+        print(said)
+
+
+# How long a check that could not finish is left before the hook asks for it again: it asked
+# before every message, and every one failed the same way (the stranger audit, X-71).
+RETRY_HOURS = 3
+
+
+def _record_tried(root: str | None = None) -> None:
+    p = _stamp_path(root)
+    if p:
+        try:
+            with open(p + "-tried", "w", encoding="utf-8", newline="\n") as fh:
+                fh.write("%d\n" % int(__import__("time").time()))
+        except OSError:
+            pass
+
+
+def retry_due(now: float | None = None) -> bool:
+    """True unless today's check was tried and could not finish in the last RETRY_HOURS."""
+    import time
+    p = _stamp_path()
+    try:
+        with open(p + "-tried", encoding="utf-8") as fh:
+            at = float(fh.read().split()[0])
+    except (OSError, TypeError, ValueError, IndexError):
+        return True
+    return (time.time() if now is None else now) - at >= RETRY_HOURS * 3600
 
 
 # A failure that names a part of the app no longer there: the test pinned how the app
@@ -1681,8 +1813,8 @@ def network_check() -> None:
         return
     out = (r.stdout or "").strip()
     if out:
-        print("Job sites blocked. Claude: before anything else, tell the person this, in these "
-              "words, and run no search until they say it is done:")
+        print("Job sites blocked. Claude: after any line above about their page, tell the "
+              "person this, in these words, and run no search until they say it is done:")
         print("\n".join("  " + ln for ln in out.splitlines()))
         for ln in (r.stderr or "").splitlines():
             if ln.startswith("[claude_surfaces:"):      # the steps are old: yours, never said

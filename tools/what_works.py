@@ -596,7 +596,16 @@ _STAGE_WHEN = re.compile(r"\((?:(?P<sched>scheduled\s+)|(?P<due>due\s+))?(?P<dat
                          r"(?:,?\s*(?:at\s+)?(?P<time>\d{1,2}(?:[:.]\d{2})?\s*"
                          r"(?:[ap]\.?m\.?)?)(?:\s*(?-i:(?P<zone>[A-Z]{2,5}\b|[A-Z][A-Za-z_]+(?:/[A-Za-z0-9_+-]+)+)))?(?=\s*[,)]))?"
                          r"(?:\s*,\s*(?P<minutes>\d{1,3})\s*min\w*)?"
+                         r"(?:\s*,\s*on\s+(?P<place>[^,)]+?))?"
                          r"(?:\s*,\s*with\s+(?P<with>[^)]*))?\)", re.I)
+
+
+# An invitation that offers several days and leaves the choice to the person: `- [ ] Initial
+# round (offered 2026-11-12, 2026-11-13; reply by 2026-11-04, with the recruiter)`. It was
+# read as one day, or none, and the choice reached no list at all (the audit, 2026-11-03).
+_STAGE_OFFERED = re.compile(r"\(offered\s+(?P<days>\d{4}-\d{2}-\d{2}(?:\s*,\s*\d{4}-\d{2}-\d{2})*)"
+                            r"(?:\s*;\s*reply by\s+(?P<reply>\d{4}-\d{2}-\d{2}))?"
+                            r"(?:\s*,\s*with\s+(?P<with>[^)]*))?\)", re.I)
 
 
 def clock(text) -> str:
@@ -644,7 +653,7 @@ def _heading_stages(text: str, today: str) -> list[dict]:
         held = date < today
         out.append({"label": label, "step": stage_step(label), "done": held, "date": date,
                     "scheduled": not held, "with": "", "time": "", "zone": "", "kind": "",
-                    "minutes": 0})
+                    "minutes": 0, "offered": [], "reply_by": "", "place": ""})
     return out
 
 
@@ -671,8 +680,19 @@ def outcome_stages(text: str, today: str = "") -> list[dict]:
             continue
         text_ = hit.group(2)
         when = _STAGE_WHEN.search(text_)
+        offer = None if when else _STAGE_OFFERED.search(text_)
+        if offer:
+            label = text_[:offer.start()].strip()
+            out.append({"label": label, "step": stage_step(label),
+                        "done": hit.group(1).lower() == "x", "date": "", "scheduled": True,
+                        "kind": "", "minutes": 0,
+                        "with": " ".join((offer.group("with") or "").split()), "time": "",
+                        "zone": "", "place": "",
+                        "offered": re.findall(r"\d{4}-\d{2}-\d{2}", offer.group("days")),
+                        "reply_by": offer.group("reply") or ""})
+            continue
         label = (text_[:when.start()] if when else re.sub(r"\(.*?\)", "", text_)).strip()
-        out.append({"label": label, "step": stage_step(label),
+        out.append({"label": label, "step": stage_step(label), "offered": [], "reply_by": "",
                     "done": hit.group(1).lower() == "x",
                     "date": when.group("date") if when else "",
                     "scheduled": bool(when and (when.group("sched") or when.group("due"))),
@@ -681,7 +701,8 @@ def outcome_stages(text: str, today: str = "") -> list[dict]:
                     "minutes": int(when.group("minutes")) if when and when.group("minutes") else 0,
                     "with": " ".join((when.group("with") or "").split()) if when else "",
                     "time": clock(when.group("time")) if when else "",
-                    "zone": (when.group("zone") or "") if when else ""})
+                    "zone": (when.group("zone") or "") if when else "",
+                    "place": " ".join((when.group("place") or "").split()) if when else ""})
     return out or _heading_stages(whole, today or dt.date.today().isoformat())
 
 

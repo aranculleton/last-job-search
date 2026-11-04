@@ -33,7 +33,10 @@ Checks:
 Stdlib only. Exit 0 on success, 1 with a failure list otherwise.
 """
 
+from __future__ import annotations
+
 import json
+import re
 import sys
 from pathlib import Path
 
@@ -76,6 +79,15 @@ ALLOWED_PERMISSIONS = {
     "Bash(git switch --detach origin/master)",
     "Bash(python3 tools/sync_app.py:*)",
     "Bash(./tools/ci_local.sh:*)",
+    # The first command of every chat (CLAUDE.md: "Start every chat with one command"), and
+    # the one every job chat and the page's helper runs to read and write the person's page
+    # data. Outside Auto, a cloud chat stopped on it with an approval box nobody saw: the
+    # first thing a beginner met was an allow card for a raw command, and every job chat
+    # stopped there (the stranger audit, X-7, 2026-11-03). It runs the app's own engine on
+    # the person's own copy: no push, no merge and no network of its own (its update check is
+    # tools/sync_app.py, above). Landing (tools/land.py), installs (tools/setup_env.sh) and
+    # publishing (Artifact) still ask outside Auto; the page and setup say to choose Auto.
+    "Bash(python3 tools/app.py:*)",
     # The person's own page: every piece of work a chat does for it writes there, and each
     # write stopped at "Allow Claude to edit this artifact's data?", which brought the chat
     # to the front over the page every time (the maintainer, 2026-10-29: "keeps asking for
@@ -194,7 +206,9 @@ FORBIDDEN_SCRIPTS = {"preinstall", "install", "postinstall", "prepare", "prepack
 # that every Bash call sources, and `enableAllProjectMcpServers` with a server in
 # `.mcp.json`. The guard looked only at permissions.allow and hooks, and passed all of
 # them (2026-10-25). A key the app needs is added here in the same PR, like a permission.
-ALLOWED_SETTINGS_KEYS = {"$schema", "env", "permissions", "hooks"}
+# agentPushNotifEnabled lets Claude send the person a push it decides on (a brief bound to a
+# chat has no notification of its own; claude_surfaces: chat-push): it runs nothing.
+ALLOWED_SETTINGS_KEYS = {"$schema", "env", "permissions", "hooks", "agentPushNotifEnabled"}
 # permissions: rules that only narrow (deny, ask) are always fine; `defaultMode` and
 # `additionalDirectories` widen what runs or what is read, and are refused.
 ALLOWED_PERMISSION_KEYS = {"allow", "deny", "ask"}
@@ -204,6 +218,47 @@ ALLOWED_PERMISSION_KEYS = {"allow", "deny", "ask"}
 # its work every few steps (the maintainer, 2026-10-29: "whyre u compressing so much ... BACK
 # TO DEFAULT"), so CLAUDE_CODE_AUTO_COMPACT_WINDOW is refused like any name not listed.
 ALLOWED_ENV = {"PYTHONUTF8": "1", "GIT_TERMINAL_PROMPT": "0", "GCM_INTERACTIVE": "never"}
+
+# A skill's `allowed-tools` pre-approves each tool it lists "during the turn that invokes the
+# skill, so Claude can use them without prompting you" (code.claude.com/docs/en/skills, "Pre-
+# approve tools for a skill"), and the guard read only settings.json: the drafting skill,
+# itself pre-approved there as Skill(job-application-assistant) and run with a posting's
+# untrusted text in front of it, granted bare Bash and WebFetch (the stranger audit, X-61).
+# Every app-owned skill and command is held to this reviewed list, entry by entry, the same
+# way as a permission. Edit and Write stay where listed: a cloud chat makes file edits without
+# asking in every mode anyway. A bare Bash, or a WebFetch in the skill settings.json
+# pre-approves, is never allowed. A portal a person builds (.agents/skills/<name>, theirs) is
+# held to its own one CLI only.
+ALLOWED_SKILL_TOOLS = {
+    ".claude/skills/app/SKILL.md": {
+        "Read", "Bash(python3 tools/app.py *)", "Bash(python3 tools/routines.py *)",
+        "Bash(python3 tools/tidy.py *)", "ArtifactData", "Artifact", "ArtifactComments", "Agent",
+        "mcp__claude-code-remote__create_session", "mcp__claude-code-remote__send_message",
+        "mcp__claude-code-remote__list_sessions", "mcp__claude-code-remote__get_session",
+        "mcp__claude-code-remote__archive_session", "mcp__claude-code-remote__list_triggers",
+        "mcp__claude-code-remote__create_trigger", "mcp__claude-code-remote__update_trigger",
+        "mcp__claude-code-remote__set_session_title"},
+    ".claude/skills/job-application-assistant/SKILL.md": {
+        "Read", "Glob", "Grep", "WebSearch", "Edit", "Write", "AskUserQuestion",
+        "Bash(python3 tools/verify_pdf.py *)", "Bash(python3 tools/stage_picks.py *)",
+        "Bash(python3 tools/voice_check.py *)", "Bash(python3 tools/doc_name.py *)",
+        "Bash(python3 tools/markets.py *)", "Bash(python3 tools/history_interview.py *)",
+        "Bash(python3 tools/screening_answers.py *)", "Bash(python3 tools/design_check.py *)"},
+    ".claude/skills/job-scraper/SKILL.md": {
+        "Read", "Write", "Edit", "Glob", "Grep", "Bash(bun --version)",
+        "Bash(bun run .agents/skills/*/cli/src/cli.ts *)", "WebFetch", "WebSearch", "Agent",
+        "AskUserQuestion"},
+    ".claude/skills/upskill/SKILL.md": {
+        "Read", "Write", "Glob", "Grep", "WebFetch", "WebSearch",
+        "Bash(python3 tools/bridges.py *)"},
+    ".agents/skills/freehire-search/SKILL.md": {
+        "Bash(bun run .agents/skills/freehire-search/cli/src/cli.ts *)"},
+    ".agents/skills/linkedin-search/SKILL.md": {
+        "Bash(bun run .agents/skills/linkedin-search/cli/src/cli.ts *)"},
+}
+# Tools no pre-approved skill may grant itself: run with untrusted text in front of it, each
+# would act with no prompt at all.
+NEVER_IN_A_PRE_APPROVED_SKILL = {"Bash", "WebFetch"}
 
 
 def _hook_commands(event: str, entries: object):
@@ -307,6 +362,87 @@ def check_permissions() -> None:
         # Not an error: settings may legitimately drop an entry. But an
         # allowlist entry that no longer exists should be pruned.
         print(f"note: allowlisted permission not present in settings.json: {entry!r}")
+
+
+def _split_tools(value: str) -> list[str]:
+    """`allowed-tools` as its entries: commas outside parentheses, or a YAML list's items."""
+    out, depth, cur = [], 0, ""
+    for ch in value.strip().strip("[]"):
+        depth += ch == "("
+        depth -= ch == ")"
+        if ch == "," and depth == 0:
+            out.append(cur)
+            cur = ""
+        else:
+            cur += ch
+    out.append(cur)
+    return [x.strip().strip("'\"") for x in out if x.strip().strip("'\"")]
+
+
+def _allowed_tools(path: Path) -> list[str] | None:
+    """A skill's or command's `allowed-tools`, or None where its frontmatter has none."""
+    try:
+        text = path.read_text(encoding="utf-8")
+    except OSError:
+        return None
+    m = re.match(r"---\n(.*?)\n---", text, re.S)
+    if not m:
+        return None
+    lines = m.group(1).splitlines()
+    for i, line in enumerate(lines):
+        if line.startswith("allowed-tools:"):
+            value = line.split(":", 1)[1].strip()
+            if not value:          # a YAML list on the lines below
+                items = []
+                for more in lines[i + 1:]:
+                    if not more.startswith((" ", "\t")):
+                        break
+                    items.append(more.strip().lstrip("-").strip())
+                value = ", ".join(items)
+            return _split_tools(value)
+    return None
+
+
+def check_skill_tools() -> None:
+    """Every app-owned skill's and command's `allowed-tools` is the reviewed list's, entry by
+    entry (ALLOWED_SKILL_TOOLS); a pre-approved skill never grants bare Bash or WebFetch."""
+    sys.path.insert(0, str(ROOT / "tools"))
+    try:
+        import personal_paths
+    except ImportError:
+        personal_paths = None
+    pre = set()
+    try:
+        allow = json.loads((ROOT / ".claude" / "settings.json").read_text(encoding="utf-8"))
+        pre = {m.group(1) for a in allow.get("permissions", {}).get("allow", [])
+               for m in [re.fullmatch(r"Skill\(([^)]+)\)", str(a))] if m}
+    except (OSError, ValueError, AttributeError):
+        pass
+    files = sorted(list(ROOT.glob(".claude/skills/*/SKILL.md")) +
+                   list(ROOT.glob(".claude/commands/*.md")) +
+                   list(ROOT.glob(".agents/skills/*/SKILL.md")))
+    for path in files:
+        rel = path.relative_to(ROOT).as_posix()
+        got = _allowed_tools(path)
+        if got is None:
+            continue
+        if personal_paths and personal_paths.is_personal(rel):
+            continue           # a portal a person built is theirs; it ships to nobody else
+        reviewed = ALLOWED_SKILL_TOOLS.get(rel)
+        for entry in got:
+            if reviewed is None or entry not in reviewed:
+                errors.append(
+                    f"{rel}: allowed-tools entry not in the reviewed allowlist: {entry!r}. A "
+                    "skill's allowed-tools runs that tool with no prompt in the turn that "
+                    "invokes it. If it is intentional, add it to ALLOWED_SKILL_TOOLS in "
+                    "tools/security_guards.py in the same PR.")
+        name = path.parent.name if path.name == "SKILL.md" else path.stem
+        if name in pre:
+            for entry in set(got) & NEVER_IN_A_PRE_APPROVED_SKILL:
+                errors.append(
+                    f"{rel}: {entry!r} in a skill settings.json pre-approves (Skill({name})): "
+                    "it would run with no prompt at all while a posting's text is in front of "
+                    "it. Name the app's own commands instead, as Bash(python3 tools/<it>.py *).")
 
 
 def check_gitignore() -> None:
@@ -444,6 +580,7 @@ def check_tracked_caches() -> None:
 
 def main() -> int:
     check_permissions()
+    check_skill_tools()
     check_gitignore()
     check_package_manifests()
     check_tracked_caches()
@@ -453,7 +590,7 @@ def main() -> int:
             print(f"  - {err}")
         return 1
     print(
-        "security_guards: OK (settings, permissions and hooks allowlists, gitignore rules, "
+        "security_guards: OK (settings, permissions, hooks and skills' tools allowlists, gitignore rules, "
         "package manifests, nothing committed that runs by itself)"
     )
     return 0

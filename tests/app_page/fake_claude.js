@@ -9,6 +9,18 @@
 (() => {
   const cfg = window.__LJS_FAKE || {};
   const calls = (window.__calls = []);
+  // The tap a slow answer outlived (sample `spendTap`): the browser's own activation, read
+  // through this, says it is spent until the person's next press.
+  {
+    const real = navigator.userActivation;
+    if (real) {
+      try {
+        Object.defineProperty(navigator, "userActivation", {configurable: true, get: () => ({
+          get isActive() { return !window.__ljsTapSpent && real.isActive; }, get hasBeenActive() { return real.hasBeenActive; }})});
+      } catch (e) { /* left as the browser has it */ }
+      for (const ev of ["pointerdown", "keydown"]) window.addEventListener(ev, () => { window.__ljsTapSpent = false; }, true);
+    }
+  }
   if (cfg.noClaude) return;
   const has = (n) => !cfg.caps || cfg.caps.indexOf(n) >= 0;
   const later = (v) => Promise.resolve().then(() => v);
@@ -76,7 +88,11 @@
   }
   window.__ljsPush = applyChanges;
   async function write(op, path, data) {
-    if (cfg.failWrites) throw {code: "unavailable", message: "test"};
+    // A write the store refuses is still a write the page tried: a test of the page's silent
+    // drops reads every attempt, refused or not. `failWrites` may be changed while a test runs.
+    if (cfg.failWrites || (cfg.failDeletes && op === "delete")) { calls.push({cap: "db", op, path, failed: true}); throw {code: "unavailable", message: "test"}; }
+    // The first few writes fail and the rest go through: a send that failed, tried again.
+    if (cfg.failFirstWrites && (window.__ljsWriteN = (window.__ljsWriteN || 0) + 1) <= cfg.failFirstWrites) { calls.push({cap: "db", op, path, failed: true}); throw {code: "unavailable", message: "test"}; }
     calls.push({cap: "db", op, path});
     const r = await rpc(op, {path, data});
     if (r && r.error) throw {code: r.error, message: r.error};
@@ -114,7 +130,13 @@
       onSnapshot: (next, error) => {
         const l = {kind: "query", q, next, error, last: undefined};
         listeners.add(l);
-        ready.then(() => { l.last = key(l); next(evalQuery(q)); });
+        const subs = (window.__subs = window.__subs || {});
+        subs[q.path] = (subs[q.path] || 0) + 1;
+        ready.then(() => {
+          l.last = key(l); next(evalQuery(q));
+          // A feed that fails just after it delivers (`subError`: the collections it names).
+          if ((cfg.subError || []).includes(q.path)) setTimeout(() => { if (listeners.delete(l)) error({code: "unavailable", message: "test"}); }, 50);
+        });
         return () => listeners.delete(l);
       },
     };
@@ -147,6 +169,8 @@
       const active = ua ? ua.isActive : null;
       calls.push({cap: "comments", op: "sendToClaude", text: t.text, threadId: t.threadId || null, anchor: !!t.anchor, active});
       if (active === false && !cfg.anyTime) throw {code: "claude_unavailable", message: "not from the viewer's own recent gesture"};
+      // A thread that is gone (deleted, or from before the page was published again).
+      if (t.threadId && (cfg.deadThreads || []).indexOf(t.threadId) >= 0) throw {code: "not_found", message: "test"};
       if (cfg.sendError) throw {code: cfg.sendError, message: "test"};
       return {threadId: t.threadId || "thread" + (++threadN), commentId: "c" + calls.length};
     },
@@ -171,6 +195,11 @@
     calls.push({cap: "sample", op: "sample", input, tools: (opts.tools || []).map((t) => t.name), modelTier: opts.modelTier, cache: opts.cache});
     const plan = cfg.sample || {};
     return (async () => {
+      // A quick answer slow enough that the tap which asked has stopped counting (the browser
+      // keeps a tap live for a few seconds): the next tap of the person's own counts again.
+      if (plan.spendTap) window.__ljsTapSpent = true;
+      // An answer that has not come yet: it ends only when the page stops it.
+      if (plan.hang) await new Promise((res, rej) => { if (opts.signal) opts.signal.addEventListener("abort", () => rej({code: "cancelled", message: "stopped"})); });
       if (plan.error) throw {code: plan.error, message: "test", text: plan.partial};
       const results = [];
       for (const use of plan.toolCalls || []) {
@@ -291,6 +320,8 @@
   }
   window.claude = Object.freeze({
     use: (name) => {
+      // A capability that never answers (`hang`: its names), as a stuck runtime would.
+      if ((cfg.hang || []).includes(name)) return new Promise(() => {});
       if (!has(name) || !NS[name]) return later(null);
       if (name === "db") {
         if (!ready) ready = rpc("dump", {}).then((all) => { for (const [p, d] of all) cache.set(p, d); });

@@ -19,20 +19,23 @@ rank, stop at the shortlist, draft nothing until the candidate picks. `_common.m
    thin market. When the round prints "Tell the person" (this run's cloud settings block
    the job sites), those words open the message, and with no site reached there is no
    shortlist and no web search in its place.
-2. Judge every employer the bar does not know yet, once each (`python3 tools/bar.py
-   unjudged`, then `bar.py judge "<employer>" <verdict> "<why>"`): a "none" that says "not on
-   your employer lists yet" has not failed the bar. Then rule out each row failing the
-   candidate's bar (`tools/bar.py`, and the target sectors and exclusions in
-   `profile/CLAUDE.md`) with `python3 tools/exclude.py add <url> --title "<title>" --company
-   "<company>" --reason "candidate's bar: <why>"`, and cut the round again: `python3
-   tools/run_round.py --out "$SCRATCH/rN" --recut`. It refills the shortlist from the next
+2. `python3 tools/bar.py unjudged`. Where it says the profile states no bar, nothing is judged
+   or ruled out for one: go to step 3. Else judge each employer it lists once (`bar.py judge
+   "<employer>" <verdict> "<why>"`): a "none" that says "not on your employer lists yet" has
+   not failed the bar. Then rule out each row failing the candidate's own bar (`tools/bar.py`,
+   and the target sectors and exclusions in `profile/CLAUDE.md`) with `python3
+   tools/exclude.py add <url> --title "<title>" --company "<company>" --reason "candidate's
+   bar: <why>"`, and cut the round again: `python3 tools/run_round.py --out "$SCRATCH/rN"
+   --recut`. It refills the shortlist from the next
    rows that pass every rule, and says how many it found when the round ran out; never drop
    a row from the shortlist by hand. The round has already cut the rest (a live process or a
    referral hold, a role already drafted or applied to, anything older than `--jobage`, a
    second role at one employer). Keep warm-route warnings ("DO NOT APPLY COLD") visible next
    to the role.
 3. Commit `documents/rounds/<rN>.json` and `job_scraper/seen_jobs.json` (`git add -f` for
-   the latter) and land them per `_common.md`.
+   the latter). Where the person has a page (`profile/app.json` `url`), bring it up to date
+   before the message (`python3 tools/app.py view`, the app skill's step 5), so the shortlist
+   is on their Jobs when they read it. Then land per `_common.md`.
 4. The message, written to be read on a phone: one role per block, the role and employer
    first, the details on one short line, the link on its own line (a link inside a sentence
    breaks on a small screen). Dates as the profile writes them, pay only where a band is
@@ -51,6 +54,9 @@ Shortlist <rN>: <n> roles at 60+, <n> at 75+
 Reply in <the chat to reply in, per _common.md> with the numbers to draft, for example
 "draft 1, 3", and say if you have already applied to any.
 ```
+
+   With a page, its last line says instead: "Pick the ones to draft on your page: <its
+   link>", and picks made there reach the chat that answers the page.
 
    After the list: one plain line per change `/upgrade` made (what is different for them,
    never a commit or a command; an undo is yours to do when they ask), and at most three

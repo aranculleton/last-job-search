@@ -81,8 +81,8 @@ The fit assessment is the part that matters. Name the gap the person will probe,
 and the strongest honest framing for it.
 
 **Send the file**, on the person's page first (CLAUDE.md, "Every output is shown": the copy in
-the page's own store and `python3 tools/app.py view`, and one line in the chat); where there is
-no page, in the chat as RUNBOOK.md, "Delivering in the chat", says, and as follows. It goes
+the page's own store and `python3 tools/app.py view`); asked in the chat, or where there is
+no page, in the chat as well, as RUNBOOK.md, "Delivering in the chat", says, and as follows. It goes
 under the contact's name, as the copy `prep.py` prints on its `send:` line
 (`python3 tools/shown.py <the document>` after an edit by hand: every contact's file is
 called `prep.md`), with SendUserFile (`display: "render"`), and paste beside it the part to

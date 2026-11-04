@@ -84,8 +84,10 @@ def test_the_model_keeps_the_contract(small):
     assert m["jobs"]["filtered"]["count"] == 3
     kestrel = next(r for r in m["ready"] if r["company"] == "Kestrel Mutual")
     assert kestrel["pay"] == "GBP 42,000 to 48,000"
+    # Each answer carries the note it was drafted with, so it can be judged before copying
+    # (the jobs audit, B7).
     assert kestrel["screening"][1] == {"q": "Will you now or in future need sponsorship?",
-                                       "a": "No"}
+                                       "a": "No", "why": "A note."}
     assert kestrel["outreach"]["text"].startswith("Hi [name], I have applied")
     assert m["interviews"][0]["next_stage"] == "Panel interview"
     assert m["interviews"][0]["when"] == "2026-10-28"
@@ -219,8 +221,14 @@ def test_a_big_search_is_modelled_inside_two_seconds(tmp_path, monkeypatch):
     m, _ = app_model.build(today, now)
     took = time.process_time() - start
     # Every live contact is on the page whatever the book's size (here every one has
-    # something due); only finished history and the people beyond the budget fold away.
-    assert len(m["people"]) == m["people_count"]["live"] == m["people_count"]["all"]
+    # something due); only finished history and the people beyond the budget fold away. A
+    # thread gone quiet is finished whatever is due on it (the audit, contacts 13): those, and
+    # only those, are the ones left off.
+    assert len(m["people"]) == m["people_count"]["live"]
+    shown = {p["id"] for p in m["people"]}
+    book = app_state._csv_rows(os.path.join(big, "network_contacts.csv"))
+    assert m["people_count"]["all"] == len(book) == 2000
+    assert {r["status"] for r in book if r["contact_id"] not in shown} <= {"gone_cold"}
     assert took - fixed < 2.0, f"{took:.2f}s, of which {fixed:.2f}s any build takes"
 
 

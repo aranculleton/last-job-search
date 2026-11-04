@@ -177,6 +177,45 @@ def test_the_pages_address_and_a_suggestion_turned_down_meet_cleanly(repo):
     assert set(app_alerts.dismissed()) == {"ready~oakmere", "jobs~fernhill"}
 
 
+def _built_in_parts(repo, name, *code):
+    """A page folder as app.py page --out-dir leaves it, loading these code files."""
+    folder = os.path.join(repo.root, "..", name)
+    os.makedirs(folder, exist_ok=True)
+    with open(os.path.join(folder, "page.html"), "w", encoding="utf-8") as fh:
+        fh.write("".join(f'<script src="{c}"></script>' for c in code))
+    return folder
+
+
+@pytest.mark.parametrize("first_on", ["master", "other"])
+def test_two_chats_that_each_published_a_page_keep_the_first_whole(repo, first_on):
+    """X-57: two chats of one copy each published a page before either landed. The merge
+    keeps the page published first, as start adopts it, with what that page holds, never
+    one page's address beside the other page's files; a No thanks either side gave is kept."""
+    app_alerts.dismiss("ready~oakmere", "ready", dt.date(2026, 10, 20))
+    repo.commit("base")
+    early = NOW - dt.timedelta(minutes=20)
+    repo.side("other", new=True)
+    on_other = (PAGE, early, "cloud-1", ("code/a1.js",)) if first_on == "other" else \
+        (OTHER_PAGE, NOW, "cloud-1", ("code/b1.js", "code/b2.css"))
+    app_setup.record_page(on_other[0], chat=on_other[2], now=on_other[1],
+                          parts=_built_in_parts(repo, "other-page", *on_other[3]))
+    repo.commit("published on the cloud chat")
+    repo.side("master")
+    on_master = (PAGE, early, "computer-1", ("code/a1.js",)) if first_on == "master" else \
+        (OTHER_PAGE, NOW, "computer-1", ("code/b1.js", "code/b2.css"))
+    app_setup.record_page(on_master[0], chat=on_master[2], now=on_master[1],
+                          parts=_built_in_parts(repo, "master-page", *on_master[3]))
+    app_alerts.dismiss("jobs~fernhill", "jobs", dt.date(2026, 10, 25))
+    repo.commit("published on the computer chat")
+    r = repo.merge()
+    assert r.returncode == 0, r.stdout + r.stderr
+    got = json.loads(repo.read("profile/app.json"))
+    first = on_other if first_on == "other" else on_master
+    assert got["url"] == PAGE and got["by"] == first[2], got
+    assert got["code"] == ["code/a1.js"], got
+    assert set(got["suggest_no"]) == {"ready~oakmere", "jobs~fernhill"}
+
+
 def test_a_setting_and_a_place_an_employer_heard_meet_cleanly(repo):
     the_person(repo)
     repo.commit("base")

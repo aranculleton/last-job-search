@@ -84,6 +84,19 @@ def test_a_nudge_keeps_the_capital_on_a_name_it_knows():
     assert ("lowercase_name", "larkspur") in [(v.rule, v.text) for v in found]
 
 
+def test_the_names_kept_follow_the_books_read_now(tmp_path, monkeypatch):
+    """The names were read once per process: after a chat read other files (the suite's
+    previous test, or a person's book before a new employer), "Larkspur" came out
+    "larkspur" (CI, 2026-11-04)."""
+    real = os.environ["LJS_STATE"]
+    monkeypatch.setenv("LJS_STATE", str(tmp_path))             # a book with no Larkspur
+    assert compose.nudge("Robin Vale", "Larkspur opened a planning role").startswith(
+        "Hi Robin, larkspur")
+    monkeypatch.setenv("LJS_STATE", real)                      # the example search's own
+    assert compose.nudge("Robin Vale", "Larkspur opened a planning role").startswith(
+        "Hi Robin, Larkspur opened")
+
+
 def test_check_in_wording_is_refused_and_a_status_question_is_not():
     for text in ("Hi Robin, just checking in to see if you had a chance to look at my note",
                  "Hi Robin, bumping this to the top of your inbox",

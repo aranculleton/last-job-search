@@ -17,14 +17,18 @@ private page. It never sends anything for you.
 ## What you need
 
 - A GitHub account (free) and a paid Claude plan. Nothing to install: a phone is enough.
+  Claude reading LinkedIn profiles for you needs the Claude desktop app on a computer; on a
+  phone you paste them instead.
 - Using another agent tool? See [AGENTS.md](AGENTS.md).
 
 ## Get started
 
-1. On this page, **Use this template**, then **Create a new repository**, **Private**.
+1. On this page, **Use this template**, then **Create a new repository**, **Private**. Never
+   **Fork**: a fork is public, and GitHub never lets one be made private.
 2. Open [claude.ai/code](https://claude.ai/code), connect GitHub, and install the
    [Claude GitHub App](https://github.com/apps/claude/installations/new) on your copy only.
-3. Choose your copy and say **"set me up"**.
+3. Choose your copy and say **"set me up"**. Where the chat offers **Auto**, choose it, so
+   Claude carries on while you're away ([START_HERE.md](START_HERE.md) says where).
 
 No resume yet? Say "build one with me". [START_HERE.md](START_HERE.md) has each step, and
 [HELP.md](HELP.md) helps if something goes wrong.

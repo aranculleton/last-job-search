@@ -136,6 +136,17 @@ def _hold(ctx, company):
     return who, _first(who.get("name")) or "someone there"
 
 
+def _at(ctx, k: str) -> list:
+    """The contacts at employer key `k`, in the book's order: the build's own index
+    (app_model.Ctx.contacts_by_key) where there is one, so each card does not key the whole
+    book again."""
+    index = getattr(ctx, "contacts_by_key", None)
+    if index is not None:
+        return index.get(k, [])
+    from company_key import key
+    return [c for c in ctx.contacts if key(c.get("company")) == k]
+
+
 def _replied(ctx, company):
     """(contact row, first name, the day they last replied) of whoever there replied most
     lately: the throttle's warm set (throttle.RESPONDED), from the contact book itself."""
@@ -144,9 +155,9 @@ def _replied(ctx, company):
     from network import state
     k = key(company)
     best = None
-    for c in ctx.contacts:
+    for c in _at(ctx, k):
         cid = str(c.get("contact_id") or "").strip()
-        if not cid or key(c.get("company")) != k or ctx.live.get(cid) not in throttle.RESPONDED:
+        if not cid or ctx.live.get(cid) not in throttle.RESPONDED or not throttle.is_route(c):
             continue
         on = max((str(t.get("date") or "")[:10] for t in ctx.by_contact.get(cid) or []
                   if state.said_something(t)), default="")
@@ -213,19 +224,23 @@ def for_job(ctx, item: dict) -> tuple[list, dict | None]:
     held = _hold_alert(ctx, jid, company)
     if held:
         out.append(held)
-    if item["apply"]["status"] == "closed":
+    closed = item["apply"]["status"] == "closed"
+    if closed:
+        # Set aside for the reason it is known to be, the bin's own "It has closed": a
+        # null reason was asked again on the card, from a list without it (2026-11-03).
         out.append(alert("closed", jid, "This posting has closed.",
                          "The employer's own board no longer lists it"
                          + (f" (checked {item['apply']['checked_on']})."
                             if item["apply"].get("checked_on") else "."),
-                         act("Set it aside", "job.dismiss", jid)))
+                         act("Set it aside", "job.dismiss", jid, {"why": "closed"})))
     when = _soon(item.get("deadline"), ctx.today)
     if when:
         out.append(alert("deadline", jid, f"Applications close {when}.",
                          f"The posting gives {item['deadline']} as its closing date.",
                          go("Open its draft", "ready") if status == "ready"
                          else go("Draft it", "jobs", jid)))
-    return out, (None if held else _warm_suggest(ctx, jid, company))
+    # A closed posting has no role left to ask anyone about (2026-11-03).
+    return out, (None if held or closed else _warm_suggest(ctx, jid, company))
 
 
 _NOT_OWN = {"aggregator": "lists other sites' jobs", "board": "asks you to sign in"}
@@ -349,14 +364,29 @@ _SAID = {"under 200 characters": "under 200 characters", "200-300 characters":
          "asks a question": "that ask a question", "no question": "with no question"}
 
 
+def _rule_since() -> str:
+    """The day of the person's latest rule for how their messages are written (learned.json,
+    areas messages and voice), or "". Notes from before it were written another way, so they
+    say nothing about notes written to it: counted together, 804 old notes argued against the
+    recipe the person had asked to keep, on every note written to it (2026-11-03)."""
+    try:
+        import learned
+        days = [str(e.get("date") or e.get("recorded") or "")[:10] for e in learned.load()
+                if e.get("status") != "retired" and str(e.get("area") or "") in ("messages", "voice")]
+    except Exception:  # noqa: BLE001  no rules read: every note counts
+        return ""
+    return max((d for d in days if d), default="")
+
+
 def _clear_gaps(ctx) -> dict:
     """{feature: (best group, its rate, worst group, its rate)} for each feature of the
     person's own first notes whose best and worst groups differ clearly, counted the way
     what_works.brief_messages counts them (the same comparisons, the same test)."""
     def make():
         import what_works as ww
+        since = _rule_since()
         cases = [c for c in ww.message_cases(ctx.contacts, ctx.threads, ctx.today)
-                 if c["attempt"] == "opener"]
+                 if c["attempt"] == "opener" and (not since or c["date"] >= since)]
         tested = []
         for f in ("route", "found_via", "channel", "tier", "length", "question"):
             groups: dict = {}

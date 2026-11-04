@@ -10,6 +10,7 @@
     python3 tools/app.py pin <dump dir> --work ID --stage S [--line L] [--done N --total M]
                                          [--left-s S] [--log round.log] [--chat ID]
                                                                  progress, as it goes
+    python3 tools/app.py pin <dump dir> --work ID --blocked      its own chat waits on the person
     python3 tools/app.py busy <dump dir> "<a few words>" | --done
                                                                  what this chat does in the chat
     python3 tools/app.py progress <kind of work>                 its stages and their seconds
@@ -18,7 +19,12 @@
                                [--work ID] [--dump DIR]          what this chat does next, in any
                                                                  state: set up, part-way, old, new
     python3 tools/app.py start --paste                           the line for a chat on a computer
-    python3 tools/app.py published <url>|none [--chat ID]        the page's address, once published
+    python3 tools/app.py page --out-dir D [--url U]              the page in parts, and the
+         [--on-page FILE|-] [--whole]                            publishes that put it up (with
+                                                                 a url: after listing its files)
+    python3 tools/app.py published <url> [--parts D]|none [--why W]
+                                                                 the page's address, once published
+    python3 tools/app.py answer <step> [--text T] [--field k=v]  a setup answer given in the chat
     python3 tools/app.py listen <dump dir> --chat ID [--listen] [--helper] [--hand ID]
                                                                  is this chat the page's listener?
     python3 tools/app.py wake <dump dir> --chat ID [--on M] [--kind K] [--no-sessions]
@@ -225,12 +231,15 @@ def cmd_view(a) -> int:
         if doc_id not in page_db.addr_docs(reach):
             w.add("delete", "addr", doc_id, if_version=old["version"])
     old = (db.get("meta") or {}).get("current") if db else None
+    import app_listen
+    # Who wrote it, by this session's own id where there is one: the brief passed the word
+    # "brief", which no listener rule could compare with a chat (engine audit, 2026-11-03).
     w.add("set", "meta", "current", {"rev": model["rev"], "made_at": model["made_at"],
-                                     "model": model["model"], "by": a.chat,
+                                     "model": model["model"],
+                                     "by": app_listen.this_chat("") or a.chat,
                                      **_published()},
           if_version=old["version"] if old else None)
     batches = w.save("view")
-    import app_listen
     lines = app_listen.view_renewal(db, a.chat, now)
     print(_dump({"rev": model["rev"], "batches": batches,
                  **({"for_claude": lines} if lines else {})}), end="")
@@ -248,6 +257,26 @@ def cmd_page(a) -> int:
     spec = importlib.util.spec_from_file_location("app_page", path)
     app_page = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(app_page)
+    if getattr(a, "out_dir", "") and hasattr(app_page, "write_parts"):
+        # The page to publish: a small page and small code files, and the publishes that put
+        # up only what the page lacks (app_listen.parts_plan). A chat reads every file it did
+        # not write, whole, before it publishes it; one file of a megabyte could not be read.
+        import app_listen
+        import app_model
+        today, now = app_model.clock(a.today, a.now)
+        model, _ = _build(today, now)
+        built = app_page.write_parts(model, a.out_dir)
+        listing = None
+        if getattr(a, "on_page", None) is not None:
+            if a.on_page == "-":
+                listing = sys.stdin.read()
+            else:
+                with open(a.on_page, encoding="utf-8") as fh:
+                    listing = fh.read()
+        for line in app_listen.parts_plan(built, a.url or "", listing=listing,
+                                          whole=bool(getattr(a, "whole", False))):
+            print(line)
+        return 0
     if hasattr(app_page, "render"):
         import app_model
         today, now = app_model.clock(a.today, a.now)
@@ -333,7 +362,12 @@ def cmd_next(a) -> int:
 # even as background agents, a search and a networking run held it for 15 and 23 minutes and
 # the page waited on every tap (2026-10-29). Each gets a cloud chat of its own instead.
 CHILD_TITLE = "Job search: {title}"
-CHILD_TOOLS = ("ArtifactData", "ArtifactComments", "Artifact")
+# The page's data tools, which .claude/settings.json pre-approves. Artifact is not among them
+# (publishing or deleting a page still asks, tools/security_guards.py), and create_session
+# drops a tool its caller has not pre-approved, so naming it carried nothing (the stranger
+# audit, X-8). A job's chat never publishes the page; the page's own republish declares no
+# capabilities once the page has them (app_listen.parts_plan), so it is not asked about.
+CHILD_TOOLS = ("ArtifactData", "ArtifactComments")
 SKILL = os.path.join(os.path.dirname(_HERE), ".claude", "skills", "app", "SKILL.md")
 
 
@@ -392,6 +426,17 @@ def job_steps(chosen: dict, claimer: str, url: str, session: bool = True,
          f"meta and addr, each with out_dir $D and limit 1000. The item, its args and the "
          f"`answers` the person already gave on the page (never asked again) are in "
          f"$D/work/{wid.replace('~', '@')}.json.")
+    mates = [str(o.get("work") or "") for o in chosen.get("with") or [] if o.get("work")]
+    if mates:
+        # Every posting of a batch by its id: named only by its leader, a job drafted one of
+        # three and pinned one lease, and the other two were taken again by a second job
+        # (engine audit, 2026-11-03).
+        step(f"This job is {len(mates) + 1} items claimed together, each its own card: {wid} "
+             f"and {', '.join(mates)} (`with` {wid} in their files). Do them in one run, as the "
+             f"row below says for the item and each in `with`. Pin {wid} alone: its pin renews "
+             "the others and moves them with it, and names any they asked to stop under "
+             "`stopped`. Each one ends with its own app.py done (--work <its id>), as the "
+             "finish below says.")
     # The commands themselves, so the chat reads none of the skill for them: reading it was
     # steps and context before the job even started (2026-11-03).
     step(f"Do it, as the app skill's own table says for a {kind}: {row.rstrip('.')}. Read "
@@ -402,8 +447,14 @@ def job_steps(chosen: dict, claimer: str, url: str, session: bool = True,
          f"{claimer} --stage <stage> --line \"<one plain line>\", and send the batch it prints "
          f"(ArtifactData batch, url {url}). On a long stage, pin it again with a new line every "
          "ten minutes or so: the page counts a job with no word for half an hour as stopped. "
-         "\"stop_asked\": true means they tapped Stop: finish it stopped. A refused pin: read "
-         "work again and pin once more; claimed by another chat, write nothing else and stop.")
+         "\"stop_asked\": true means they tapped Stop (`stopped` names others of the job they "
+         f"stopped): end each with app.py done --work <its id> --chat {claimer} --stopped. A "
+         "question only the person can answer: app.py done --work <its id> --chat "
+         f"{claimer} --question \"<one plain question>\" puts it on their page, and their "
+         "answer puts it back in the queue; never wait in the chat. A refused write names the "
+         "record's version: python3 tools/app.py version \"$D\" <collection>/<doc id> "
+         "<that version>, and run it once more; refused again, read work again; claimed by "
+         "another chat, write nothing else and stop.")
     if kind == "search":
         step("Run run_round.py in the background (Bash, run_in_background). While it runs, "
              f"every ten minutes or so (its lease is thirty): python3 tools/app.py pin \"$D\" "
@@ -416,8 +467,12 @@ def job_steps(chosen: dict, claimer: str, url: str, session: bool = True,
         # receives your message but cannot message any session back yet"): a search told to
         # ask the chat that answers the page to bring it up to date found both ways refused,
         # and its ten jobs sat off the page (2026-11-03). It brings the page up to date itself.
+        # Landed or not: a failed check leaves the work for the next chat to land, and said
+        # nothing, so the page stayed stale with its card already Done (the audit, 2026-11-03).
         step(f"Finish as step 5 says ({done}), without its heartbeat line. Save and land your "
-             f"work on master (CLAUDE.md, \"Saving\"). Then bring the page up to date yourself: "
+             f"work on master (CLAUDE.md, \"Saving\"). Then, landed or not (a failed check "
+             f"leaves the work for the next chat to land, and this step still runs), bring the "
+             f"page up to date yourself: "
              f"ArtifactData query, url {url}, collections screen, meta, addr and work, out_dir "
              f"$D; python3 tools/app.py view \"$D/view\" --dump \"$D\" --chat <this chat's id> "
              "(it takes master first, so the page has every other chat's work too); and send "
@@ -435,8 +490,10 @@ def job_steps(chosen: dict, claimer: str, url: str, session: bool = True,
     else:
         step(f"Finish as step 5 says ({done}), without its heartbeat line and without app.py "
              f"view. Save and land your work on master (CLAUDE.md, \"Saving\"). Then end with "
-             f"one line: \"Finished {wid}, on master: bring the page up to date.\" Never write "
-             "to the person: the page shows how it went.")
+             f"one line, landed or not: \"Finished {wid}, on master: bring the page up to "
+             f"date.\", or where the check failed and the work waits on its branch, \"Finished "
+             f"{wid}, not landed: bring the page up to date.\" Never write to the person: the "
+             "page shows how it went.")
     return lines
 
 
@@ -491,14 +548,37 @@ def cmd_pin(a) -> int:
             left = seen["left_s"] if seen["left_s"] is not None else left
             # The round's own log knows which step it is on; the chat pins "scrape" throughout.
             stage = seen["stage"] or stage
-    try:
-        got = page_db.pin(db, a.work, now, a.out or os.path.join(a.dump, "out"),
-                          stage=stage, line=a.line, count=count, left_s=left, dump_dir=a.dump,
-                          chat=a.chat)
-    except KeyError as e:
-        print(f"app: {e.args[0]}", file=sys.stderr)
-        return 2
-    print(_dump(got), end="")
+    # Every item named, each its own write: with --work given for each member of a batch,
+    # only the last got one, and the rest read as stopped (the drafting child, 2026-11-03).
+    works = list(dict.fromkeys(a.work))
+    out = a.out or os.path.join(a.dump, "out")
+    if getattr(a, "blocked", False):
+        # Written by the chat that answers the page, about a job in a chat of its own whose
+        # status reads blocked: its card says it waits on the person there.
+        batches = []
+        for wid in works:
+            try:
+                batches += page_db.mark_blocked(db, wid, now, os.path.join(out, page_db.safe_id(wid)))["batches"]
+            except KeyError as e:
+                print(f"app: {e.args[0]}", file=sys.stderr)
+                return 2
+        print(_dump({"blocked": works, "batches": batches}), end="")
+        return 0
+    got_all = []
+    for wid in works:
+        try:
+            got_all.append(page_db.pin(db, wid, now, out if len(works) == 1 else
+                                       os.path.join(out, page_db.safe_id(wid)),
+                                       stage=stage, line=a.line, count=count, left_s=left,
+                                       dump_dir=a.dump, chat=a.chat))
+        except KeyError as e:
+            print(f"app: {e.args[0]}", file=sys.stderr)
+            return 2
+    if len(got_all) == 1:
+        print(_dump(got_all[0]), end="")
+    else:
+        print(_dump({"works": got_all, "stop_asked": any(g["stop_asked"] for g in got_all),
+                     "batches": [b for g in got_all for b in g["batches"]]}), end="")
     return 0
 
 
@@ -579,6 +659,12 @@ def cmd_start(a) -> int:
             return 1
         print(paste_line(owner, name))
         return 0
+    if a.work:
+        # Every later message of this chat is the job's too: the app's hook reads this.
+        try:
+            app_setup.record_job_chat(a.work)
+        except OSError:
+            pass
     code, lines = app_setup.start(on=a.on or "", tools=a.tools or "", page_url=a.page or "",
                                   work=a.work or "", data_current=data_current(a.dump))
     lines = app_listen.shape(code, lines, chat=app_listen.this_chat(a.chat), listen=a.listen,
@@ -618,24 +704,30 @@ def cmd_published(a) -> int:
     import app_model
     import app_setup
     if a.url == "none":
-        app_setup.record_no_page()
-        print("app: noted: this chat has no pages, so setup and the updates stay in the chat; "
-              "the sync stops asking for a month")
+        app_setup.record_no_page(chat=a.chat, why=a.why)
+        print("app: noted for this chat only: it cannot publish, so setup and the updates stay "
+              "in this chat, and it is not asked again for a month. Every other chat still "
+              "publishes the page.")
         return 0
-    first = not app_setup.page_record().get("url")
+    was = str(app_setup.page_record().get("url") or "")
+    first = not was
     chat = app_listen.this_chat(a.chat)
     try:
-        path = app_setup.record_page(a.url, chat=chat)
+        path = app_setup.record_page(a.url, chat=chat, parts=a.parts)
     except ValueError as e:
         print(f"app: {e}")
         return 2
+    # A page that could no longer be published to was put up afresh (X-44): the new one has
+    # an empty store, so this chat claims it as at a first publish, and the person hears the
+    # new address once.
+    replaced = bool(was) and was != a.url
     import local_path
     print(f"app: the page's address is kept in {local_path.rel(path, person.ROOT)}; save it "
           "with the rest (python3 tools/save_state.py)")
     _, now = app_model.clock(None, None)
     import tempfile
     out = a.out or tempfile.mkdtemp(prefix="ljs-listen-")      # never inside the profile
-    for line in app_listen.published_lines(a.url, chat, first, out, now):
+    for line in app_listen.published_lines(a.url, chat, first, out, now, replaced=replaced):
         print(line)
     if a.dump:
         import page_db
@@ -643,6 +735,65 @@ def cmd_published(a) -> int:
         if got["batches"]:
             print("app: the page no longer shows this update as waiting: send this batch "
                   f"(ArtifactData batch, url {a.url}): " + " ".join(got["batches"]))
+    return 0
+
+
+def running_elsewhere(db: dict, chat: str) -> list[tuple[str, str]]:
+    """[(work id, chat id)] for work running in a cloud chat of its own (claimed by another
+    session_ chat), not already said to wait on the person."""
+    out = []
+    for wid, doc in sorted((db.get("work") or {}).items()):
+        d = doc.get("data") or {}
+        by = str(d.get("claimed_by") or "")
+        if str(d.get("status") or "") in ("claimed", "running") and by.startswith("session_") \
+                and by != chat and not d.get("blocked_at"):
+            out.append((wid, by))
+    return out
+
+
+def cmd_answer(a) -> int:
+    """A setup answer the person gave in the chat rather than on the page, kept exactly as the
+    page's own answer is (app_actions setup.answer, into profile/setup_answers.json), so setup
+    carries on from it: a person who typed their answers or pasted their resume in the chat
+    was never set up (the stranger audit, X-58)."""
+    import tempfile
+    import app_actions
+    import app_model
+    import app_setup
+    import page_db
+    step = a.step
+    if step not in app_setup.STEP_IDS and step != "history":
+        print(f"app: {step} is not a setup question: one of {', '.join(app_setup.STEP_IDS)}")
+        return 2
+    value: dict = {}
+    for pair in a.field or []:
+        key, _, val = pair.partition("=")
+        if key:
+            value[key.strip()] = val.strip()
+    text = a.text
+    if a.text_file:
+        with open(a.text_file, encoding="utf-8") as fh:
+            text = fh.read()
+    if text:
+        fields = sorted(app_actions._setup_fields(step)) if step not in ("resume", "history") else []
+        value.setdefault("text" if not fields else fields[0], text)
+    today, now = app_model.clock(None, None)
+    try:
+        zone = person.home_zone_named(person.directory()) or "UTC"
+    except Exception:  # noqa: BLE001  no profile yet: the day is the clock's
+        zone = "UTC"
+    act = {"action": "setup.answer", "value": value, "at": app_model.stamp(now)}
+    run = app_actions.Run(f"chat-{step}", act, {"step": step}, {},
+                          page_db.Writes(tempfile.mkdtemp(prefix="ljs-answer-")), "chat", zone, now)
+    try:
+        got = app_actions._setup_answer(run)
+    except app_actions.Refused as e:
+        print(f"app: not kept: {e}")
+        return 1
+    done = sum(1 for s in app_setup.STEP_IDS if app_setup.answers().get(s))
+    print(f"app: kept as the answer to {step} ({done} of {len(app_setup.STEP_IDS)} answered): "
+          f"{got.get('note') or 'Saved.'} Carry on as .claude/commands/setup.md says; the page "
+          "shows it answered.")
     return 0
 
 
@@ -668,6 +819,7 @@ def check_in(dump: str, chat: str, now, out: str, listen: bool = False, helper: 
                             hand_to=hand, update=update)
     upkeep: list[str] = []
     old: list[str] = []
+    ended: dict = {"ended": [], "batches": []}
     if got["role"] == "listener":
         # The search's own upkeep, whether or not a brief is on (the brief did it alone
         # before 4.3, and it is off until asked for): applications gone quiet are closed,
@@ -693,6 +845,11 @@ def check_in(dump: str, chat: str, now, out: str, listen: bool = False, helper: 
             upkeep.append(f"upkeep: {len(timed)} interview time(s) said in a note or a message "
                           "were saved on the interview; save them with the rest and bring the "
                           "page up to date (python3 tools/app.py view), asking nobody")
+        # A job whose chat stopped twice (or that they asked to stop) is ended, in code, so
+        # its card offers Try again and nothing waits behind it (engine audit, 2026-11-03).
+        ended = page_db.fail_stranded(page_db.load(dump), now, os.path.join(out, "stranded"))
+        if ended["batches"]:
+            page_db.keep_landed(dump, ended["batches"])
         # The page's store kept small, in code: finished records over two months old go.
         old = page_db.prune(page_db.load(dump), now, os.path.join(out, "prune"))
     tidy_due = False
@@ -700,7 +857,7 @@ def check_in(dump: str, chat: str, now, out: str, listen: bool = False, helper: 
         import tidy
         tidy_due = bool(tidy.due())
     return {"read": [], "move": move["batches"], "got": got, "upkeep": upkeep, "prune": old,
-            "tidy": tidy_due}
+            "tidy": tidy_due, "stranded": ended["batches"]}
 
 
 READ_FIRST = ("listen: this page was made by an older version of the app, and its records "
@@ -736,6 +893,11 @@ def cmd_listen(a) -> int:
         print(line)
     for path in got["got"]["batches"]:
         print(path)
+    if got.get("stranded"):
+        print("listen: work whose chat stopped twice is ended, so the page offers Try again: "
+              "send this batch too, asking nobody:")
+        for path in got["stranded"]:
+            print(path)
     for line in got["upkeep"]:
         print(line)
     if got["prune"]:
@@ -940,6 +1102,7 @@ def cmd_wake(a) -> int:
             return 0
         sends += [(p, "move", False) for p in got["move"]]
         sends += [(p, "listen", i > 0) for i, p in enumerate(decided["batches"])]
+        sends += [(p, "listen", True) for p in got.get("stranded") or []]
         notes += [ln for ln in decided["lines"]
                   if not ln.startswith(("listen: this chat answers the page.",
                                         "listen: this chat answers the page now."))]
@@ -990,6 +1153,12 @@ def cmd_wake(a) -> int:
                 f"then python3 tools/app.py apply \"{a.dump}\" --chat {chat} --assets "
                 f"\"{a.dump}/assets\", send every batch it prints, and delete each asset a "
                 "receipt names in remove_assets (Artifact delete, url, path).")
+        # A setup answer or a resume given on the page: setup carries on here and now, as
+        # start says; a wake said only "nothing else is waiting" (journeys audit 13).
+        acts = page_db.load(a.dump).get("actions") or {}
+        if any(str(((acts.get(x) or {}).get("data") or {}).get("action") or "")
+               .startswith("setup.") for k in ("ok", "again") for x in got.get(k) or []):
+            notes += app_setup.carry_on()
         try:
             import routines
             if routines.calls():
@@ -1001,6 +1170,15 @@ def cmd_wake(a) -> int:
             pass
 
     db = page_db.load(a.dump)
+    away = running_elsewhere(db, chat)
+    if away:
+        # A job's own chat can stop on a question to the person (an approval it needs), with
+        # nobody there to see it: the page said only "may have stopped" (X-7, X-8).
+        notes.append("jobs in chats of their own: get_session each ("
+                     + ", ".join(f"{c} for {w}" for w, c in away) + "); for one whose "
+                     f"status_bucket is blocked: python3 tools/app.py pin \"{a.dump}\" --work "
+                     "<its work id> --blocked, and send the batch it prints. Say nothing about "
+                     "it in the chat: its card on the page says it.")
     chosen = choose(db, chat, kind, now, on=a.on, no_sessions=a.no_sessions,
                     claim_out=os.path.join(rd, "work"))
     then: list[str] = []
@@ -1123,6 +1301,20 @@ def cmd_pinned(a) -> int:
     return 0
 
 
+def cmd_told(a) -> int:
+    """Something said to the person once, from a chat with no page to carry it (choosing Auto,
+    the PDF tools' line, a state stuck for days): kept with their answers, so no chat says it
+    again (the page's card for it is ticked off by the same record)."""
+    import app_setup
+    try:
+        app_setup.record_told(a.key)
+    except ValueError as e:
+        print(f"app: {e}; one of {', '.join(app_setup.TOLD)}")
+        return 2
+    print("app: noted; it is not said again. Save it with the rest (python3 tools/save_state.py)")
+    return 0
+
+
 def cmd_resume_saved(a) -> int:
     import app_model
     import app_setup
@@ -1210,10 +1402,11 @@ def cmd_done(a) -> int:
             return 2
     try:
         got = page_db.finish(db, a.work, now, a.out or os.path.join(a.dump, "out"),
-                             summary=a.summary, status="failed" if a.failed else "done",
+                             summary=a.summary, status="failed" if a.failed else
+                             "stopped" if a.stopped else "done",
                              error=a.failed, links=_links(a.link), reply=reply, thread=a.thread,
                              chat_kind=a.kind or app_listen.chat_kind(), dump_dir=a.dump,
-                             chat=a.chat)
+                             chat=a.chat, question=a.question)
     except (KeyError, ValueError) as e:
         print(f"app: not finished: {e.args[0] if e.args else e}", file=sys.stderr)
         return 2
@@ -1244,6 +1437,20 @@ def cmd_ask(a) -> int:
     return 0
 
 
+def cmd_version(a) -> int:
+    """A refused write named a record's current version: kept in the folder, so the same
+    command run again pins to it (once; a second refusal means read again)."""
+    import page_db
+    try:
+        kept = page_db.note_version(a.dump, a.record, a.version)
+    except (KeyError, ValueError) as e:
+        print(f"app: {e.args[0] if e.args else e}", file=sys.stderr)
+        return 2
+    print(f"app: {kept} is at version {a.version} in this folder; run the refused command "
+          "again, once")
+    return 0
+
+
 CLAIMED_UNDER = ("the chat id this job was claimed under (app.py next --chat): a job another "
                  "chat has taken on since is refused, and nothing is written to it")
 
@@ -1263,8 +1470,17 @@ def main(argv=None) -> int:
     p.add_argument("out_dir")
     p.add_argument("--dump", default="", help="a dump of view/ and meta/, for the versions")
     p.add_argument("--chat", default="chat")
-    p = clocked(sub.add_parser("page", help="the whole page as one HTML file"))
+    p = clocked(sub.add_parser("page", help="the page to publish: in parts with --out-dir, "
+                                            "else as one HTML file"))
     p.add_argument("--out")
+    p.add_argument("--out-dir", dest="out_dir", default="",
+                   help="write the page in parts here and print the publishes to make")
+    p.add_argument("--url", default="", help="the page's address, when it is published already")
+    p.add_argument("--on-page", dest="on_page", default=None,
+                   help="what the published page holds, as Artifact list (scope files) printed "
+                        "it: a file, or - for what comes in")
+    p.add_argument("--whole", action="store_true",
+                   help="put every code file up again, not only the ones the page lacks")
     p = sub.add_parser("apply", help="apply the page's actions, with receipts")
     p.add_argument("dump")
     p.add_argument("--chat", default="chat", help="this chat's id, for the receipts")
@@ -1291,7 +1507,8 @@ def main(argv=None) -> int:
     p.add_argument("--now", default=None)
     p = sub.add_parser("pin", help="a running item's progress, with its lease renewed")
     p.add_argument("dump")
-    p.add_argument("--work", required=True, help="the work item's id")
+    p.add_argument("--work", required=True, action="append",
+                   help="the work item's id; once for each member of a batch")
     p.add_argument("--stage", default=None, help="the stage's key or number")
     p.add_argument("--line", default="", help="one plain line of what happened")
     p.add_argument("--done", type=int, default=0)
@@ -1302,6 +1519,8 @@ def main(argv=None) -> int:
     p.add_argument("--chat", default="", help=CLAIMED_UNDER)
     p.add_argument("--out", default="", help="where the batch goes (default <dump>/out)")
     p.add_argument("--now", default=None)
+    p.add_argument("--blocked", action="store_true",
+                   help="its own chat waits on the person (get_session says blocked)")
     p = sub.add_parser("busy", help="what this chat is doing for the person, on the page")
     p.add_argument("dump")
     p.add_argument("line", nargs="?", default="", help="a few plain words")
@@ -1332,6 +1551,9 @@ def main(argv=None) -> int:
     p.add_argument("--chat", default="")
     p.add_argument("--out", default="", help="where the listener's batch goes")
     p.add_argument("--dump", default="", help="the page's waiting republish requests, read")
+    p.add_argument("--parts", default="", help="the folder app.py page --out-dir built and "
+                                               "every publish it printed went through")
+    p.add_argument("--why", default="", help="with none: why this chat cannot publish")
     p = sub.add_parser("listen", help="is this chat the page's listener? and its check-in")
     p.add_argument("dump")
     p.add_argument("--chat", default="")
@@ -1356,8 +1578,17 @@ def main(argv=None) -> int:
     p = sub.add_parser("republish", help="ask the listener to publish the page's new code")
     p.add_argument("out_dir")
     p.add_argument("--now", default=None)
+    p = sub.add_parser("answer", help="a setup answer the person gave in the chat, kept as "
+                                      "the page keeps one")
+    p.add_argument("step", help="the setup question it answers (resume, work, ...)")
+    p.add_argument("--field", action="append", default=[], help="key=value, for a question "
+                                                                  "with more than one field")
+    p.add_argument("--text", default="", help="their words")
+    p.add_argument("--text-file", dest="text_file", default="", help="their words, in a file")
     p = sub.add_parser("pinned", help="their answer to pinning the page")
     p.add_argument("answer", choices=("yes", "no"))
+    p = sub.add_parser("told", help="something said to the person once, never again")
+    p.add_argument("key")
     p = sub.add_parser("resume-saved", help="the resume the page held, saved in the copy")
     p.add_argument("file")
     p.add_argument("--asset", default="")
@@ -1366,8 +1597,9 @@ def main(argv=None) -> int:
     p.add_argument("items", nargs="+", metavar="PATH ASSET")
     p = sub.add_parser("propose", help="the roles setup asks the person about")
     p.add_argument("roles", nargs="+")
-    p = sub.add_parser("done", help="a finished work item as one batch: done, its locks "
-                                    "removed, and the answer in its conversation")
+    p = sub.add_parser("done", help="a work item left as one batch: done, failed, stopped "
+                                    "or asked about, its locks removed, and the answer in its "
+                                    "conversation")
     p.add_argument("dump")
     p.add_argument("--work", required=True, help="the work item's id")
     p.add_argument("--summary", default="", help="one short sentence of what is ready")
@@ -1376,6 +1608,10 @@ def main(argv=None) -> int:
                         "from the input")
     p.add_argument("--thread", default="", help="the conversation (default: the item's own)")
     p.add_argument("--failed", default="", help="it did not finish: why, in plain words")
+    p.add_argument("--stopped", action="store_true", help="they tapped Stop: it stops here")
+    p.add_argument("--question", default="",
+                   help="it needs the person first: one plain question, asked on the page; "
+                        "their answer puts it back in the queue")
     p.add_argument("--link", action="append", default=[],
                    help="\"<label>=<address>\" shown with it (more than one allowed)")
     p.add_argument("--chat", default="", help=CLAIMED_UNDER)
@@ -1392,6 +1628,11 @@ def main(argv=None) -> int:
     p.add_argument("--chat", default="")
     p.add_argument("--out", default="", help="where the batch goes (default <dump>/out)")
     p.add_argument("--now", default=None)
+    p = sub.add_parser("version", help="a refused write named a record's version: keep it "
+                                       "in the folder, then run the command again")
+    p.add_argument("dump")
+    p.add_argument("record", help="<collection>/<doc id>, as the refusal named it")
+    p.add_argument("version", type=int)
     a = ap.parse_args(argv)
     if not a.cmd:
         ap.print_help()
@@ -1403,8 +1644,39 @@ def main(argv=None) -> int:
             "progress": cmd_progress, "check": cmd_check,
             "start": cmd_start, "published": cmd_published, "resume-saved": cmd_resume_saved,
             "files-saved": cmd_files_saved, "propose": cmd_propose, "listen": cmd_listen,
-            "republish": cmd_republish, "pinned": cmd_pinned, "done": cmd_done,
-            "ask": cmd_ask, "wake": cmd_wake}[a.cmd](a)
+            "republish": cmd_republish, "pinned": cmd_pinned, "told": cmd_told, "done": cmd_done,
+            "ask": cmd_ask, "wake": cmd_wake, "version": cmd_version,
+            "answer": cmd_answer}[a.cmd](a)
+
+
+def stopped_on(e: BaseException) -> str:
+    """One line for Claude in place of a traceback: what stopped, and the person's file it
+    stopped in where it was one of theirs. A profile missing a setting, or a full disk, broke
+    every page update with a raw traceback, and nothing said which file (the stranger audit,
+    2026-11-03, X-39, X-45)."""
+    import errno
+    import re
+    import traceback
+    if isinstance(e, OSError) and e.errno == errno.ENOSPC:
+        return ("app: the disk here is full, so nothing was written. Delete this chat's own "
+                "scratch files (never the person's) and run this again; if it is still full, "
+                "tell the person once: \"This chat's computer has run out of space. Please start "
+                "a new chat and ask it to carry on.\"")
+    said = " ".join(str(e).split())[:240]
+    m = re.search(r"module '(?:ljs_profile_)?(\w+)' has no attribute '(\w+)'", said)
+    where = (f"profile/{m.group(1)}.py has no {m.group(2)}" if m and "ljs_profile_" in said
+             else "")
+    if not where:
+        for fr in reversed(traceback.extract_tb(e.__traceback__)):
+            f = fr.filename.replace(os.sep, "/")
+            if "/profile/" in f:
+                where = f"in profile/{f.rsplit('/profile/', 1)[1]}, line {fr.lineno}"
+                break
+    return (f"app: stopped: {type(e).__name__}: {said}" + (f" ({where})" if where else "") +
+            ". Claude: a file of the person's is likely missing a setting or damaged: compare "
+            "it with profile.example/ and with the last commit where it worked (git log -p -- "
+            "<the file>), put back what is missing, save it, and run this again. Nothing for "
+            "the person unless it needs their answer.")
 
 
 if __name__ == "__main__":
@@ -1413,4 +1685,9 @@ if __name__ == "__main__":
         sys.exit(main())
     except csv_store.Conflicted as e:  # a merge left markers: say which file, read nothing
         print(f"app: {e}")
+        sys.exit(1)
+    except (KeyboardInterrupt, SystemExit):
+        raise
+    except Exception as e:  # noqa: BLE001  one line for Claude, never a traceback
+        print(stopped_on(e))
         sys.exit(1)

@@ -150,12 +150,14 @@ def test_contacts_counts_only_who_needs_the_person_and_the_follow_ups_apart(run,
     model = _sample()
     model["needs_you"] = []
     model["due"] = []
+    # Where each stands is the engine's answer (app_model.standing, 2026-11-03): four with a
+    # follow-up due, one waiting. The page counts what the engine says, never dates of its own.
     model["people"] = [
         {"id": "p-" + str(i), "first_name": n, "employer": "Tidewell Logistics", "status": "awaiting_reply",
-         "last": "2026-10-10", "next_action": "One nudge if no reply", "due": "2026-10-25", "rev": "r" + str(i)}
+         "group": "follow", "last": "2026-10-10", "next_action": "One nudge if no reply", "due": "2026-10-25", "rev": "r" + str(i)}
         for i, n in enumerate(["Ilse", "Bram", "Corin", "Dace"])
     ] + [{"id": "p-wait", "first_name": "Esk", "employer": "Tidewell Logistics", "status": "awaiting_reply",
-          "last": "2026-10-20", "due": "2026-11-20", "rev": "rw"}]
+          "group": "waiting", "last": "2026-10-20", "due": "2026-11-20", "rev": "rw"}]
     got = _go(run, tmp_path, [{"hash": "contacts", "read": "#main .sec-head"}], PHONE, model=copy.deepcopy(model), clock=T)
     head = got["after"][0]["text"]
     assert "Nobody is waiting on you." in head, head

@@ -262,8 +262,10 @@ def test_a_big_job_is_never_run_by_the_chat_that_answers_the_page(monkeypatch):
         assert tidy.APP_TITLE.match(call["title"])        # the daily tidy archives it
         assert call["source_url"] == "https://github.com/example-owner/example-copy"
         assert call["model"] == "sonnet"
-        # The page's tools go with it, so the job never stops on a permission prompt.
-        assert call["extra_allowed_tools"] == ["ArtifactData", "ArtifactComments", "Artifact"]
+        # The page's data tools go with it, so the job never stops on a prompt to write the
+        # page's data. Only what this chat has pre-approved is carried (create_session drops the
+        # rest), so Artifact, which still asks, is never claimed (the stranger audit, X-8).
+        assert call["extra_allowed_tools"] == ["ArtifactData", "ArtifactComments"]
         said = call["prompt"]
         assert f"--work {kind}~1" in said and "app.py pin" in said and PAGE in said
         assert "Never publish, watch or answer the page" in said

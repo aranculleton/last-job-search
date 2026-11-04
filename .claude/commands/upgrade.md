@@ -103,7 +103,11 @@ Return, in this order and nothing else:
 
 With a page, the session merges the branch and brings the page's data up to date
 (`python3 tools/app.py view`): the page shows each change with its undo, and asks the
-questions from 3 itself, one card each (Yes, or Not now), so the chat says nothing about them.
+questions from 3 itself, one card each (Yes, or Not now). The page is not the only place they
+are asked: a person who works only in the chat never opened those cards, and the facts stayed
+unconfirmed for good (the stranger audit, X-55). So the day's first chat (`app.py start`, after
+the update check) also asks at most three of them at the end of its reply, as below; an answer
+in either place counts, and the page's card goes once it is written down.
 Without one, the session merges the branch, gives the person the plain part of each line from
 1 (what it changed, never the commit or the command) at the end of its reply,
 and asks at most three of the questions from 3, each short and alone: no list of ids, no

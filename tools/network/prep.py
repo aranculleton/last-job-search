@@ -2109,6 +2109,36 @@ def check_answers(text, company="") -> list:
                                                voice_check.SCREEN_SECONDS)]
         if drafted(lines):
             out.append((DRAFT, q))
+    reported = {why for _q, why in out}
+    for where, gap in placeholders(text):
+        why = "a placeholder still to fill: %s" % gap
+        if why not in reported:
+            out.append((where, why))
+    return out
+
+
+# A gap to fill, as a person reads it: "[FILL IN: ...]", "[TODO]", "[TBC]". Only the bracket
+# kind: "<the number>" in a whole document is as often an address or a comment.
+_GAP = re.compile(r"\[\s*(?:fill[ -]?in|to ?do|tbc|tbd|insert|xx+)\b[^\]\n]*\]", re.I)
+# A note this app writes about a gap it left out, quoting it: not a gap in the document.
+_ABOUT_A_GAP = re.compile(r"\bgap to fill\b|\bstill to fill\b", re.I)
+
+
+def placeholders(text) -> list:
+    """[(the heading it sits under, the placeholder)] for every gap still to fill anywhere in
+    a prep document, outside comments. A gap under a heading that is not a question (a
+    story's) was read by nothing, and "[FILL IN: what you said or did about it]" sat in an
+    answer two days before the interview (2026-11-03)."""
+    out, head = [], "the document"
+    body = re.sub(r"<!--.*?-->", " ", str(text or ""), flags=re.S)
+    for line in body.splitlines():
+        m = re.match(r"^#{1,6}\s+(.*\S)", line)
+        if m:
+            head = m.group(1)
+            continue
+        if _ABOUT_A_GAP.search(line):
+            continue
+        out += [(head, g.group(0)) for g in _GAP.finditer(line)]
     return out
 
 

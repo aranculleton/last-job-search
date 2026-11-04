@@ -57,7 +57,8 @@ def test_a_thread_at_its_limit_offers_only_to_close_and_close_closes_it(book):
     lived_in(book)
     m = book.model()
     dev = next(p for p in m["people"] if p["id"] == "copperleaf_pay_raman")
-    assert dev["stopped"] is True and dev["owed"] is None, dev["owed"]
+    # The engine's one button for them is Close (tools/app_model.py standing), never a message.
+    assert dev["stopped"] is True and dev["owed"]["kind"] == "close", dev["owed"]
     due = next(d for d in m["due"] if d.get("item") == "copperleaf_pay_raman"
                or "copperleaf_pay_raman" in d["id"])
     assert due["leave"] is True and due["step"].startswith("No reply to 2 messages")
@@ -135,8 +136,10 @@ def test_contacts_says_what_to_do_once_and_agrees_with_to_do(run, page, vp, sche
     # No dangling "at" for someone with no employer, anywhere.
     assert "Sam at" not in contacts and not sam.split("\n")[2].endswith(" at")
     assert "Find more people at\n" not in sam + "\n"
-    # Their words are on their page, and someone who wrote first was not "written to".
-    assert "open to a chat" in sam and "Written to\n(not yet)" in sam
+    # Their words are on their page, and someone who wrote first was not "written to". Read as
+    # words: Chrome's engine breaks the line before the hidden "(not yet)" and Safari's does not
+    # (2026-11-04), while both show and read out the same.
+    assert "open to a chat" in sam and "Written to (not yet)" in " ".join(sam.split()), sam
     assert "Accepted your connection request." in dev
     # Dev's limit is reached: Close, never a third message, on the row and in To do.
     row = contacts.split("Dev at Copperleaf Pay")[1].split("More")[0]

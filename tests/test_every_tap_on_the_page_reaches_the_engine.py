@@ -199,7 +199,8 @@ def test_a_draft_marked_applied_and_a_note_marked_sent(run, tmp_path):
 def test_a_setting_changed_on_the_page_is_changed(run, tmp_path):
     where = Search(str(tmp_path / "s"))
     got, rec = _round_trip(run, tmp_path, where, "setting", [
-        {"hash": "settings", "open": "set-sum:tips", "click": "Off", "role": "radio", "exact": True, "wait": 900},
+        # On or off is a switch (the 3 November audit: one style for one kind of setting).
+        {"hash": "settings", "click": "Tips now and then", "role": "switch", "exact": True, "wait": 900},
     ])
     (a,) = [x for x in got["actions"] if x["action"] == "setting.set"]
     assert a["item"] == "setting-tips" and a["rev_seen"], a
@@ -212,10 +213,9 @@ def test_a_person_put_in_the_bin_is_never_messaged_again(run, tmp_path):
     # choice in its own sheet, applied by the engine, and the person shows as stopped.
     where = Search(str(tmp_path / "s"))
     got, rec = _round_trip(run, tmp_path, where, "bin", [
-        # Wren is owed only a follow-up, so is one tap below the people who need the person
-        # now; the fold says so ("1 with a follow-up you could send"), never "nothing owed".
-        {"hash": "contacts", "click": "more people, 1 with a follow-up you could send", "exact": False},
-        {"click": "Not Wren?", "exact": True},
+        # Wren is owed a follow-up: up front with everything else to do (the engine's group,
+        # app_model.standing, 2026-11-03), her bin named with her employer.
+        {"hash": "contacts", "click": "Not Wren at Fernhill Freight?", "exact": True},
         # The choice is the tap that does it (2026-11-03: a choice and then Done was two).
         {"click": "Don't contact Wren", "exact": True, "within": "dialog"},
     ])
@@ -278,7 +278,9 @@ def test_a_setup_answer_is_the_steps_own_fields_flat(run, tmp_path):
         {"click": "Paste it", "fill": {"Paste your resume here": "Analyst."}},
         {"click": "Save it"},
         {"fill": {"The work you want next": "Demand planning", "Where you'd like to work": "Leeds"}},
-        {"click": "Continue"},
+        # The question's own Continue: the setup card under it says Continue too once the
+        # resume is given (journeys audit 21: an answer counts before a chat takes it up).
+        {"click": "Continue", "within": "dialog"},
     ])
     (a,) = [x for x in got["actions"] if x["action"] == "setup.answer"]
     assert a["value"] == {"work": "Demand planning", "place": "Leeds"}, "the step's own fields, flat"
@@ -298,5 +300,7 @@ def test_two_setup_answers_in_a_row_are_both_applied(run, tmp_path):
         {"click": "Paste it", "fill": {"Paste your resume here": "Analyst at Brindle Hart Logistics, 2021 to now."}},
         {"click": "Save it"},
         {"fill": {"The work you want next": "Demand planning", "Where you'd like to work": "Leeds"}},
-        {"click": "Continue"},
+        # The question's own Continue: the setup card under it says Continue too once the
+        # resume is given (journeys audit 21: an answer counts before a chat takes it up).
+        {"click": "Continue", "within": "dialog"},
     ])

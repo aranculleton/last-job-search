@@ -141,6 +141,22 @@ def test_every_conditional_upgrade_has_its_own_test():
             assert f'by_id("{u.id}")' in here, f"{u.id} is conditional and has no test of its own"
 
 
+def test_rulings_on_a_bar_the_profile_never_set_are_lifted(profile):
+    """X-18: the job round had every chat rule postings out as failing "the candidate's bar",
+    one person's words, in profiles that state no bar at all."""
+    seen = os.path.join(os.environ[person.STATE_ENV], "job_scraper", "seen_jobs.json")
+    os.makedirs(os.path.dirname(seen), exist_ok=True)
+    with open(seen, "w", encoding="utf-8") as fh:
+        json.dump({"seen": {"https://jobs.example/1": {
+            "status": "excluded", "company": "Harborview Home Goods", "title": "Analyst",
+            "exclusion_reason": "candidate's bar: a regional retailer, none of the three"}}}, fh)
+    assert "1 posting" in U.by_id("bar-unstated").pending()
+    with open(profile / "employers.py", "a", encoding="utf-8") as fh:
+        fh.write('\nTIER_1 = {"brindlecombe holdings"}\n')
+    person._modules.clear()
+    assert U.by_id("bar-unstated").pending() == ""
+
+
 def test_a_bullet_theme_no_posting_word_matches(profile):
     path = profile / "bullets.py"
     path.write_text(path.read_text(encoding="utf-8").replace(
@@ -279,6 +295,7 @@ def test_a_letter_in_another_language_gets_its_own_greeting(profile):
     data["documents"]["headings"] = {"summary": "Profil", "experience": "Berufserfahrung",
                                      "skills": "Kenntnisse", "education": "Ausbildung",
                                      "certifications": "Zertifikate"}
+    data["documents"]["language"] = "de"         # setup writes it beside the headings
     path.write_text(json.dumps(data, indent=2), encoding="utf-8")
     person._data.clear()
     assert U.by_id("letter-language").pending() == ""        # it set its own words
@@ -980,3 +997,29 @@ def test_the_check_for_unconfirmed_facts_lists_every_one(profile, monkeypatch, c
     out = capsys.readouterr().out
     assert out.startswith("5 facts in your profile only you can confirm")
     assert all(f"  - {a} (" in out for a in asks), out
+
+
+def test_a_tailored_resume_never_saved_is_made_again_from_its_draft(profile):
+    """X-22's healing (the stranger audit, 2026-11-03): resumes named in the person's own word
+    (Lebenslauf) were never saved, and went with their chats; their drafts were kept. The
+    first update after the fix finds each one the tracker names and no copy holds, and makes
+    it again from its saved draft."""
+    state = os.environ[person.STATE_ENV]
+    u = U.by_id("documents-saved")
+    assert u.pending() == "" and u.needs == "nobody"
+    with open(os.path.join(state, "job_search_tracker.csv"), "a", encoding="utf-8") as fh:
+        fh.write("2026-11-02,Acme Logistik,Logistics,Analyst,data,company site,drafted,,70,,"
+                 "cv/Jonas_Brandt_Lebenslauf_ACME.tex,"
+                 "cover_letters/Jonas_Brandt_Cover_Letter_ACME.tex,,\n")
+    assert u.pending() == ""                           # no saved draft: nothing to make
+    folder = os.path.join(state, "documents", "applications", "acme_analyst")
+    os.makedirs(folder)
+    with open(os.path.join(folder, "draft.json"), "w", encoding="utf-8") as fh:
+        json.dump({"abbr": "ACME", "company": "Acme Logistik"}, fh)
+    assert "acme_analyst" in u.pending() and U.documents_lost() == ["acme_analyst"]
+    assert "fit_to_page.py documents/applications/<folder>/draft.json" in u.run
+    for rel in ("cv/Jonas_Brandt_Lebenslauf_ACME.tex",
+                "cover_letters/Jonas_Brandt_Cover_Letter_ACME.tex"):
+        os.makedirs(os.path.join(state, os.path.dirname(rel)), exist_ok=True)
+        open(os.path.join(state, rel), "w").close()
+    assert u.pending() == ""

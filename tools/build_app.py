@@ -89,6 +89,10 @@ INVENTED_FIRST_NAMES = frozenset({
     "Morgan", "Pell", "Quillon", "Quinn", "Raj", "Rhian", "Riley", "Robin", "Rosa", "Rosalind",
     "Sally", "Sasha", "Shirin", "Tamsin", "Taylor", "Thad", "Wren", "Wrenfield", "Xiu",
     "Zo", "Zoe",
+    "Ines", "Teo",  # tests/test_a_generated_document_passes_its_own_checker.py
+    "Quill",  # tests/test_contacts_show_only_what_the_persons_rules_allow.py (Quill Orme)
+    # "Bea", "Dev" and "Rosa", above, are also
+    # tests/test_someone_new_and_an_acceptance_are_recorded_by_command.py's
 })
 
 
