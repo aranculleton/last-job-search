@@ -8,6 +8,10 @@ __pycache__/
 *.pyo
 .venv/
 venv/
+# pip's download cache, which installing the packages on Windows left in the copy itself:
+# an ordinary day then looked like a change to the app, and every save ran the app's whole
+# suite (the computer check, 2026-11-04).
+/pip/
 
 # Compiled documents
 *.pdf
