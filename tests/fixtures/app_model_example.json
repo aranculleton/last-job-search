@@ -48,7 +48,7 @@
  ],
  "jobs": {
   "round": "r9",
-  "made_at": "2026-11-04T19:33:03Z",
+  "made_at": "2026-11-04T19:58:11Z",
   "met": false,
   "summary": "3 roles from the last search to look at, 1 of them scoring 75 or more. 3 left out, each with its reason.",
   "rows": [
@@ -843,7 +843,7 @@
    "when": "2026-10-28",
    "prep": {
     "path": "documents/applications/thornbury_bank_risk_analyst_thornbury/interview_prep.md",
-    "updated": "2026-11-04T19:33:03Z"
+    "updated": "2026-11-04T19:58:11Z"
    },
    "questions": 2,
    "all_day": true,
