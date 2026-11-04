@@ -14,6 +14,7 @@ from __future__ import annotations
 import os
 import subprocess
 import sys
+import time
 
 import pytest
 
@@ -587,11 +588,17 @@ def test_a_landing_holds_a_lock_and_a_second_one_waits_for_it(copy, capsys, monk
     monkeypatch.undo()
     # Another landing's lock, live: nothing is done.
     with open(lock, "w", encoding="utf-8") as fh:
-        fh.write("%d now\n" % os.getpid())
+        fh.write(land.lock_text())
     write(chat, "profile/notes.md", "third\n")
     code, out = _run(chat, check=NEVER, capsys=capsys)
     assert code == 2 and "another landing is running" in out
-    # One left by a landing killed long ago is stale, and ignored.
+    # One left by a landing killed long ago is stale, and ignored: aged by its stamp, and
+    # where it has none, by the file.
+    with open(lock, "w", encoding="utf-8") as fh:
+        fh.write(land.lock_text(time.time() - land.LOCK_STALE_S - 60))
+    assert not land.landing(str(chat))
+    with open(lock, "w", encoding="utf-8") as fh:
+        fh.write("%d\n" % os.getpid())
     os.utime(lock, (1, 1))
     assert not land.landing(str(chat))
 

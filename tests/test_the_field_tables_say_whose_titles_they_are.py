@@ -10,6 +10,7 @@ another language is told so by the market-language upgrade.
 """
 from __future__ import annotations
 
+import datetime as dt
 import os
 import sys
 
@@ -20,9 +21,12 @@ import markets  # noqa: E402
 import person  # noqa: E402
 import profile_upgrades as U  # noqa: E402
 
+CHECKED = dt.date(2026, 10, 25)          # the day the shipped tables were read: fresh then
+
 
 def test_a_non_english_market_is_told_the_titles_are_us_english():
-    text = markets.brief("br", field="healthcare-nursing", level="graduate", city="Recife")
+    text = markets.brief("br", field="healthcare-nursing", level="graduate", city="Recife",
+                         today=CHECKED)
     assert "Languages: pt" in text
     titles = next(ln for ln in text.splitlines() if ln.startswith("Titles"))
     assert "US English" in titles and "O*NET" in titles
@@ -34,7 +38,7 @@ def test_a_non_english_market_is_told_the_titles_are_us_english():
 
 
 def test_an_english_market_reads_them_as_they_are():
-    text = markets.brief("us", field="healthcare-nursing", level="graduate")
+    text = markets.brief("us", field="healthcare-nursing", level="graduate", today=CHECKED)
     assert "US English" not in text
     assert "posted under in" not in text.split("Still to research:")[1]
 

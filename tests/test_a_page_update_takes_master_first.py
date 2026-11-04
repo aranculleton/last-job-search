@@ -113,7 +113,7 @@ def test_a_page_update_takes_no_master_while_a_landing_runs(tmp_path, monkeypatc
     _here(monkeypatch, a)
     lock = os.path.join(land.git_dir(str(a)), land.LOCK_FILE)
     with open(lock, "w", encoding="utf-8") as fh:
-        fh.write("%d now\n" % os.getpid())
+        fh.write(land.lock_text())
     head = _git(a, "rev-parse", "HEAD").stdout
     assert app_setup.take_master() == ""
     assert _git(a, "rev-parse", "HEAD").stdout == head and not (a / "round.json").exists()

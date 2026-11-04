@@ -55,6 +55,7 @@ command line).
 """
 from __future__ import annotations
 
+import calendar
 import contextlib
 import io
 import json
@@ -91,6 +92,7 @@ LOCK_WAITS = (0.5, 1, 2, 4)
 LOCK_FILE = "ljs-landing.lock"
 PUSHED_FILE = "ljs-landed"
 LOCK_STALE_S = 30 * 60
+LOCK_STAMP = "%Y-%m-%dT%H:%M:%SZ"
 # The branches a chat or a scheduled run works on: a cloud chat's and a run's (claude/...),
 # a second chat's folder on a computer (sync_app.branch_name, chat/...), and a background
 # agent's own worktree (Claude Code names its branch worktree-...), whose unlanded work was
@@ -219,12 +221,25 @@ def landing(root: str = ROOT) -> bool:
         return False
     p = os.path.join(d, LOCK_FILE)
     try:
-        age = time.time() - os.path.getmtime(p)
         with open(p, encoding="utf-8") as fh:
-            pid = int((fh.read().split() or ["0"])[0])
+            words = fh.read().split()
+        pid = int((words or ["0"])[0])
+        # Its age on the clock that wrote it: the stamp the landing put in it. The file's own
+        # time is the disk's clock, which a Python whose clock was moved never agrees with:
+        # a landing read its own lock, a second old, as a month stale (the clock check,
+        # 2026-11-04). A lock with no stamp is aged by the file.
+        try:
+            began = calendar.timegm(time.strptime(words[1], LOCK_STAMP))
+        except (IndexError, ValueError):
+            began = os.path.getmtime(p)
     except (OSError, ValueError):
         return False
-    return age < LOCK_STALE_S and (pid <= 0 or _alive(pid))
+    return time.time() - began < LOCK_STALE_S and (pid <= 0 or _alive(pid))
+
+
+def lock_text(when: float | None = None) -> str:
+    """The lock's one line: this process, and when the landing began on its own clock."""
+    return "%d %s\n" % (os.getpid(), time.strftime(LOCK_STAMP, time.gmtime(when)))
 
 
 @contextlib.contextmanager
@@ -240,7 +255,7 @@ def _holding(root: str):
     p = os.path.join(d, LOCK_FILE)
     try:
         with open(p, "w", encoding="utf-8", newline="\n") as fh:
-            fh.write("%d %s\n" % (os.getpid(), time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime())))
+            fh.write(lock_text())
     except OSError:
         pass
     try:

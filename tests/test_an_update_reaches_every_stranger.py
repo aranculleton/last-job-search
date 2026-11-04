@@ -275,7 +275,7 @@ def test_a_turn_that_changed_the_persons_files_is_held_until_a_save_starts(copy,
     assert _stop(path, active=True) == {}
     lock = os.path.join(land.git_dir(str(copy)), land.LOCK_FILE)
     with open(lock, "w", encoding="utf-8") as fh:
-        fh.write("%d now\n" % os.getpid())
+        fh.write(land.lock_text())
     assert _stop(path) == {}                           # the landing is running
     os.remove(lock)
     git(copy, "add", "-f", "job_search_tracker.csv")

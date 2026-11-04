@@ -238,7 +238,10 @@ def test_when_a_file_was_written_is_its_commit_not_its_checkout(tmp_path):
     os.utime(f, (dt.datetime(2026, 10, 31).timestamp(),) * 2)       # checked out later
     assert app_model.saved_at(str(f)) == dt.datetime(2026, 9, 2, 10, tzinfo=dt.timezone.utc)
     f.write_text("[1]", encoding="utf-8")                              # changed since
-    assert app_model.saved_at(str(f)).date() == dt.date.today()
+    # Its own time, set here: the disk's clock is not Python's where the clock was moved, and
+    # a date compared with today's read UTC against the computer's zone.
+    os.utime(f, (dt.datetime(2026, 11, 1, 18, tzinfo=dt.timezone.utc).timestamp(),) * 2)
+    assert app_model.saved_at(str(f)) == dt.datetime(2026, 11, 1, 18, tzinfo=dt.timezone.utc)
 
 
 def test_a_commit_time_git_writes_with_a_z_is_read_on_every_python(tmp_path, monkeypatch):

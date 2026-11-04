@@ -666,7 +666,7 @@ METHODS: dict[str, dict] = {
             (18, "2026-11-02", False, "the brief searches what the person's own list watches (person.json brief.watch) and the employers in play, no fixed kinds of news; it republishes the page when an update changed the page's code, and asks for the watch list where none is written"),
             (19, "2026-11-03", False, "the brief stays bound to the chat that holds the copy, where it works: never made, moved or brought back from a break as a task that starts a new chat each run, and a working brief is never moved by the day's tidy-up (only one whose chat is deleted or a retired helper, and the shortlist with it); a brief bound to a chat sends its headline as a push at the end of each run, asked by brief.py alone, and where it was not sent the next message in that chat says so once; the line that sets it up says where and when it comes, with or without a page, and 5:38 where 7:38 falls in the scheduler's slow hours; a break whose day has passed, a zone this computer does not know and a brief that did not come are mended at any start, wake or brief; every task the app made gets the line for its files from any chat; run chats are remembered and tidied; the silent upkeep runs only on the brief's off days and needs no push in a routine's set-up; one setup reminder a day after the page goes up while setup waits; the tidy-up puts away only a chat the app started, never one you write in, and brings back once a chat of yours it put away before; a brief that did not come is judged by the page's own clock"),
         ),
-        "fingerprint": "3fec50e293671e8e",
+        "fingerprint": "cead8ebcc1992f0f",
     },
     "expand": {
         "by": "upgrade", "priority": 4, "time": "~15 min",

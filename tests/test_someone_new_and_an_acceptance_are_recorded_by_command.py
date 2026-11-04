@@ -188,8 +188,10 @@ def test_their_reply_pasted_again_on_another_day_is_not_logged_twice(book):
                   "2026-10-23", "--today", TODAY)
 
 
-def test_one_person_in_two_conversations_of_an_export_is_one_line(tmp_path):
+def test_one_person_in_two_conversations_of_an_export_is_one_line(tmp_path, monkeypatch):
+    import datetime
     import export as E
+    monkeypatch.setattr(E, "HERE", datetime.timezone.utc)   # the person's day, read in UTC
     me = "https://www.linkedin.com/in/morgan-ellis-example"
     them = "https://www.linkedin.com/in/example-tobias-brightwell"
     (tmp_path / "messages.csv").write_text(
