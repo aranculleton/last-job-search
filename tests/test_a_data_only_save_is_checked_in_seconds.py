@@ -115,6 +115,7 @@ def test_a_profile_missing_a_setting_never_lands_and_is_named_never_traced(copy)
                        capture_output=True, text=True, encoding="utf-8", errors="replace",
                        timeout=600)
     out = r.stdout + r.stderr
-    line = next(ln for ln in out.splitlines() if "your page can be built from your files" in ln)
+    line = next((ln for ln in out.splitlines() if "your page can be built from your files" in ln), None)
+    assert line is not None, out
     assert "FAIL" in line and r.returncode == 1, out
     assert "profile/search.py has no" in out

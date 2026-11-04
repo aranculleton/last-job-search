@@ -491,7 +491,7 @@ def interview_items(tracker, today, now=None, read_stages=None):
                 if st["done"] or not 0 <= days <= PREP_WINDOW_DAYS:
                     continue
                 when = ("today" if days == 0 else "tomorrow" if days == 1
-                        else "by %s" % held_on.strftime("%a %-d %b" if os.name != "nt" else "%a %d %b"))
+                        else "by %s %d %s" % (held_on.strftime("%a"), held_on.day, held_on.strftime("%b")))
                 what = "do the %s %s (%s)" % (st["label"] or "test", when, st["date"])
                 due, late, sub = today, 0, "test"
             elif not st["done"] and 0 <= days <= PREP_WINDOW_DAYS and \
