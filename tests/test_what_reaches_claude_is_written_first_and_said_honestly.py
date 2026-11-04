@@ -315,6 +315,29 @@ def test_work_waiting_its_turn_stays_in_line_and_a_batch_speaks_with_its_first_i
     assert "In line" in e2["text"] and "Starting" not in e2["text"]
 
 
+def test_a_batch_member_with_a_question_speaks_for_itself(run, tmp_path):
+    """The re-audit of 4 November: a member of a batch that stopped on a question to the person
+    was read as following its lead, so its card showed the lead's progress and no Answer, and
+    the lead's Try again queued it again over its question."""
+    w = lambda i: '[data-work="%s"]' % i  # noqa: E731
+    ask = "Is the Looker work the same as the Tableau work?"
+    seed = {"work/draft~a": _work("draft", "Draft: Harbourline Bank", "running", 50, claimed_by="child-1", claimed_at=_at(45), stage=1,
+                                  stage_at=_at(5), lease_until="2026-10-25T09:20:00Z", steps=[{"at": _at(4), "text": "Writing the CV"}]),
+            "work/draft~b": _work("draft", "Draft: Copperleaf Pay", "needs_you", 50, claimed_by=None, note=ask, **{"with": "draft~a"})}
+    got = _go(run, tmp_path, [{"hash": "jobs", "read": w("draft~b")}], WIDE, seed=seed, fake=FAKE, clock=T)
+    b = got["after"][0]["text"]
+    assert "Answer" in b and "Drafted in one go with" not in b and "Writing the CV" not in b, b
+    # The lead fails; its Try again takes the batch back whole, but never the question.
+    seed["work/draft~a"] = _work("draft", "Draft: Harbourline Bank", "failed", 50, error="The resume would not compile.", finished_at=_at(2))
+    seed["work/draft~c"] = _work("draft", "Draft: Kestrel Mutual", "claimed", 50, claimed_by="child-1", claimed_at=_at(45), **{"with": "draft~a"})
+    got = _go(run, tmp_path, [
+        {"hash": "work", "click": "Try again: Draft: Harbourline Bank", "exact": True, "wait": 300, "rings": True},
+    ], WIDE, seed=seed, fake=FAKE, clock=T)
+    work = {x["id"]: x for x in got["after"][0]["work"]}
+    assert work["draft~a"]["status"] == "queued" and work["draft~c"]["status"] == "queued"
+    assert work["draft~b"]["status"] == "needs_you", work["draft~b"]
+
+
 def test_waiting_work_counts_a_batch_once_against_the_cap():
     """Finding 9 in the engine: one chat drafting a batch of three filled a cap of three."""
     import page_db

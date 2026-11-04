@@ -185,7 +185,7 @@ async function open(o) {
     else await page.goto("https://ljs.test/" + (o.hash ? "#" + o.hash : ""));
     pages.push(page);
   }
-  if (o.javaScriptEnabled !== false) for (const p of pages) await settle(p);
+  if (o.javaScriptEnabled !== false && !o.noSettle) for (const p of pages) await settle(p);
   return {ctx, page: pages[0], pages, store, errors};
 }
 async function turn(page, n) {
@@ -481,11 +481,47 @@ S.parts = async (a) => {
       got.sections[id] = ((await one(page, "#main")) || "").replace(/\s+/g, " ").trim();
     }
     got.title = await page.evaluate(() => document.title);
+    got.broken = await one(page, "#ljs-broken");
     got.errors = o.errors;
     await o.ctx.close();
     out[key] = got;
   }
   return out;
+};
+
+// The page in parts with one code file withheld or throwing (the Python side changed the
+// files beside it): it says it did not load fully, and its one button asks Claude for the
+// whole page again: the request written to the store first, then the doorbell, in the tap.
+// Opened on `clock`, against the moment the page says it was built (a page built moments
+// ago whose file is missing is one still being put up, and says so with no button).
+S.broken = async (a) => {
+  const o = await open({html: a.parts, seed: a.seed || {}, viewport: a.viewport, noSettle: true, clock: a.clock});
+  const {page} = o;
+  await page.waitForSelector("#ljs-broken", {timeout: 8000}).catch(() => {});
+  await turn(page, 4);
+  const r = {box: await one(page, "#ljs-broken"), shell: await visible(page, "#shell"), opening: await visible(page, "#opening"),
+    button: !!(await page.$("#ljs-broken-ask")), built: await page.evaluate(() => (window.__ljsGuard || {}).built || null)};
+  if (r.button && a.tap) {
+    await page.click("#ljs-broken-ask");
+    await page.waitForFunction(() => /told|reach|reached/.test((document.querySelector("#ljs-broken [role=status]") || {}).textContent || ""), null, {timeout: 8000}).catch(() => {});
+    await turn(page, 4);
+    r.note = await one(page, "#ljs-broken [role=status]");
+  }
+  r.rings = (await calls(page)).filter((c) => c.cap === "comments" && c.op === "sendToClaude").map((c) => ({text: c.text, active: c.active}));
+  r.work = o.store.get("work/republish~whole") || null;
+  if (a.later) {
+    // Time moves on by `later` ms: a page still waiting on its update opens itself again.
+    let loads = 0;
+    page.on("load", () => { loads++; });
+    await page.clock.fastForward(a.later);
+    await page.waitForTimeout(1500);
+    await page.waitForSelector("#ljs-broken", {timeout: 8000}).catch(() => {});
+    r.reloads = loads;
+    r.later = await one(page, "#ljs-broken");
+  }
+  r.errors = o.errors;
+  await o.ctx.close();
+  return r;
 };
 
 S.sections = async (a) => {

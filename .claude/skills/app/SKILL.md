@@ -119,7 +119,7 @@ page, so never ask it again):
 | talk | read the thread's messages and their pictures ("A message in the chat", below); do what it asks; answer in the thread |
 | files | upload each file (Artifact publish, `asset: true`), then `app.py files-saved <path> <asset id>` for each |
 | tweak | `tweak.py apply --work <item>`, one `--work` for it and each in `with`; queue its `then`, call its `tools`; `needs_model` lists the redraft steps |
-| republish | the page's own code changed: `app.py page --out-dir <scratchpad>/page --url <url>`, then make exactly the publishes it prints: only the small files the page lacks, each read whole first, and capabilities only where it says (refused: read the page again and publish once more), then `app.py published <url> --parts <scratchpad>/page`. Never ask first. With `already: true`, publish nothing: finish it done |
+| republish | the page's own code changed: `app.py page --out-dir <scratchpad>/page --url <url>` (with `whole: true`, the page's own "did not load fully" button, add `--whole`: every code file goes up again), then do exactly the steps it prints: read the page, list its files and give that list to the same command, then the publishes, only the small files the page lacks (or holds wrong), each read whole first, and capabilities only where it says (refused: read the page again and publish once more), then `app.py published <url> --parts <scratchpad>/page`. Never ask first. With `already: true`, publish nothing: finish it done |
 
 ### A message in the chat
 

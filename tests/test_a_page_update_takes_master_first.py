@@ -137,6 +137,7 @@ def test_the_next_chat_is_told_of_work_waiting_since_an_earlier_day(tmp_path, mo
                             GIT_COMMITTER_DATE="2026-10-30T09:00:00"))
     _git(b, "push", "-q", "origin", "claude/earlier-chat")
     _here(monkeypatch, a)
+    monkeypatch.setenv("LJS_PROFILE", str(a / "profile"))
     assert list(app_setup._stranded()) == ["origin/claude/earlier-chat"]
     monkeypatch.setattr(app_setup, "state", lambda runner=None: {
         "repo": {"kind": "private"}, "setup": {"state": "here", "say": ""},
@@ -148,6 +149,16 @@ def test_the_next_chat_is_told_of_work_waiting_since_an_earlier_day(tmp_path, mo
     assert "origin/claude/earlier-chat" in said and "python3 tools/land.py" in said
     assert app_setup.UNSAVED_SAY in said
     _plain(app_setup.UNSAVED_SAY)
+    # Said once a day, and never twice in one start: the same work stuck for days is not
+    # also said with the makers' link (the re-audit of 4 November).
+    import report
+    monkeypatch.setattr(report, "stuck", lambda today=None, st=None: [
+        {"state": "waiting", "since": "2026-10-30", "days": 5, "say": report.STATES["waiting"][0],
+         "link": report.link(states=["waiting"])}])
+    _code, lines = app_setup.start(on="test", tools="none")
+    said = "\n".join(lines)
+    assert "origin/claude/earlier-chat" in said and "python3 tools/land.py" in said
+    assert app_setup.UNSAVED_SAY not in said and "told report-waiting" not in said
     _code, lines = app_setup.start(on="test", tools="none", work="draft~a")
     assert "earlier-chat" not in "\n".join(lines), "a job's own chat lands; it says nothing"
 

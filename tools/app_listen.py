@@ -644,13 +644,21 @@ def next_republish(db: dict, chat: str, now: dt.datetime) -> dict | None:
     if not queued:
         return None
     wid = queued[0][1]
+    item = db["work"][wid]["data"]
+    # The page's own "did not load fully" button (templates/app/guard.js): every code file
+    # goes up again, the page current or not, unless it was published since it asked.
+    whole = bool((item.get("args") or {}).get("whole"))
     try:
         import build_versions
         already = not build_versions.behind("page")
     except Exception:  # noqa: BLE001  no profile: publish it
         already = False
+    if whole:
+        import app_setup
+        since = str(app_setup.page_record().get("published_at") or "")
+        already = bool(since) and since > str(item.get("asked_at") or "")
     return {"work": wid, "version": db["work"][wid]["version"], "kind": "republish",
-            "title": REPUBLISH_TITLE, "locks": [], "already": already,
+            "title": REPUBLISH_TITLE, "locks": [], "already": already, "whole": whole,
             "stages": [{"key": k, "name": n, "est_s": s} for k, n, s in STAGES]}
 
 
@@ -1005,10 +1013,13 @@ def _publish_now(url: str, n: int) -> list[str]:
     """The republish itself, numbered from `n`: build and publish what changed, keep, one line.
     The build prints the publishes (`parts_plan`): only the small files the page lacks."""
     return [f"{n}. python3 tools/app.py page --out-dir <your scratchpad>/page --url {url}, then "
-            "make exactly the publishes it prints, reading each file it names whole first (each "
+            "do the read and the list of the page's files it asks for first, then make exactly "
+            "the publishes it prints, reading each file a publish names whole first (each "
             "is small; the code the page already holds is left out and kept). If a publish is "
             f"refused, read the page again and publish once more (Artifact, action read, url "
-            f"{url}, then the same publish). If the read says the page is not there or not this person's, build a new one "
+            f"{url}, then the same publish; refused again only as the same content sent "
+            "unchanged, send it once more as it is: the build is the whole page, so nothing on "
+            "the live page is lost). If the read says the page is not there or not this person's, build a new one "
             f"({REBUILD}) and publish that instead, then use its new url below. Only if a "
             f"publish is refused twice: python3 tools/app.py published {url}, then tell the "
             f"person this one line and stop: \"{say(SAY_NOT_UPDATED, url)}\"",
@@ -1029,43 +1040,55 @@ REBUILD = "python3 tools/app.py page --out-dir <your scratchpad>/page, with no -
 SMALL_WINDOW = 200_000
 
 
-def parts_plan(built: dict, url: str = "") -> list[str]:
+def parts_plan(built: dict, url: str = "", listing: str | None = None,
+               whole: bool = False) -> list[str]:
     """What `app.py page --out-dir` prints: the publishes that put the page in parts up, read
-    file by file. A page already published in parts (profile/app.json `code`, at this same
-    url) gets only the files it lacks; its capabilities are declared only when they changed,
-    since a publish that declares them asks the person first (code.claude.com/docs/en/
-    artifacts, "When Claude Code asks before publishing") and one that leaves them out keeps
-    them (the artifact-capabilities skill)."""
+    file by file. A page already published (a url) is first read and its files listed, and
+    the build is run again with that list (`--on-page`): only the files the page lacks go up,
+    so a file the record says it holds and the host does not (a publish cut short, a file
+    lost) goes up again, and every file the publish replaces or takes off is one this chat
+    has seen listed, as the Artifact tool asks. `whole` (the page's own "did not load fully"
+    button, templates/app/guard.js): every code file goes up again. Its capabilities are
+    declared only when they changed, since a publish that declares them asks the person
+    first (code.claude.com/docs/en/artifacts, "When Claude Code asks before publishing") and
+    one that leaves them out keeps them (the artifact-capabilities skill)."""
     import app_page
     import app_setup
     rec = app_setup.page_record()
     same = bool(url) and url == rec.get("url")
-    got = app_page.plan(built, rec.get("code") if same else None,
-                        str(rec.get("caps") or "") if same else "", url)
     sizes = built["sizes"]
+    folder = os.path.dirname(built["page"])
 
     def kb(n: int) -> int:
         return max(1, round(n / 1024))
+    if url and listing is None:
+        again = (f"python3 tools/app.py page --out-dir {folder} --url {url}"
+                 + (" --whole" if whole else "") + " --on-page - <<'EOF'")
+        return [f"app: the page is built in parts: {built['page']} ({kb(sizes['page.html'])} KB) "
+                f"and {len(built['files'])} small code files beside it. First see what the "
+                "published page holds, so only what it lacks goes up:",
+                f"1. Artifact, action read, url {url} (the small page: the tool asks for a read "
+                "before a publish to a page this chat did not publish).",
+                f"2. Artifact, action list, scope files, url {url}.",
+                f"3. {again}, then every line that list printed, exactly as it came, then a line "
+                "EOF; and make exactly the publishes that prints, in order."]
+    listed = app_page.on_page(listing) if listing is not None else None
+    got = app_page.plan(built, rec.get("code") if same else None,
+                        str(rec.get("caps") or "") if same else "", url, listed=listed, whole=whole)
     new_kb = kb(sum(sizes[p] for p in got["new"])) if got["new"] else 0
     out = [f"app: the page is built in parts: {built['page']} ({kb(sizes['page.html'])} KB) and "
-           f"{len(built['files'])} small code files beside it, {len(got['new'])} of them not on "
-           f"the page yet ({new_kb} KB). Read each file a publish names whole, just before "
+           f"{len(built['files'])} small code files beside it, {len(got['new'])} of them to "
+           f"put up ({new_kb} KB). Read each file a publish names whole, just before "
            "that publish; every one is small. A code file the page already holds is left out, "
            "and the page keeps it."]
+    if got["missing"]:
+        out.append(f"app: {len(got['missing'])} code files the page should hold are not on it "
+                   "as they were built; they go up again below.")
     caps = (", with the capabilities python3 tools/app_page.py --capabilities prints"
             if got["capabilities"] else ", with no capabilities (the page keeps its own)")
     first_at = f"url {url}" if url else "icon briefcase"
     later = f"url {url}" if url else "url <the url the first publish gave>"
     n = 1
-    if url:
-        out.append(f"{n}. Artifact, action read, url {url} (the small page: the tool asks for "
-                   "a read before a publish to a page this chat did not publish).")
-        n += 1
-    if got["gone"]:
-        out.append(f"{n}. Artifact, action list, scope files, url {url}: the old code files "
-                   "the publish below takes off the page must be ones this chat has seen "
-                   "listed.")
-        n += 1
     for i, batch in enumerate(got["batches"]):
         files: dict = {p: built["files"][p] for p in batch}
         if i == 0:

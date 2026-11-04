@@ -164,6 +164,48 @@ def test_holds_are_few_a_day_and_never_in_a_chat_for_one_big_job(copy, tmp_path)
     assert _stop(_transcript(tmp_path, TURN)).get("decision") == "block"
 
 
+def test_a_job_chat_stays_one_once_the_person_types_in_it(copy, tmp_path, monkeypatch):
+    """The re-audit of 4 November: a chat started for one big job was known only by the turn
+    that ran its start. Once the person typed in it, their message carried the day's update
+    check, and its turn's end was held for the improvements and the page like the chat that
+    answers the page. `start --work` records the chat in this checkout's own git folder, by
+    every name it goes by, and every check reads that record."""
+    for k in ("CLAUDE_CODE_SESSION_ID", "CLAUDE_CODE_REMOTE_SESSION_ID",
+              "CLAUDE_CODE_BRIDGE_SESSION_ID"):
+        monkeypatch.delenv(k, raising=False)
+    monkeypatch.setenv("LJS_CHAT", "session_JOBCHAT")
+    monkeypatch.setattr(sync_app, "stale", lambda: True)
+    monkeypatch.setattr(sync_app, "retry_due", lambda: True)
+    monkeypatch.setattr(learned, "_page_owed_here", lambda t="": ("session_JOBCHAT", "new"))
+    _listed()
+    said = "can you make the second paragraph shorter?"
+    later = [_line("user", text=said)] + TURN[1:]
+    path = _transcript(tmp_path, later)
+    ups = {"hook_event_name": "UserPromptSubmit", "prompt": said, "transcript_path": path,
+           "session_id": "local-1"}
+    stop = {"hook_event_name": "Stop", "transcript_path": path, "session_id": "local-1"}
+    items = learned._this_turn(learned._transcript_texts(path))
+    # An ordinary chat: told, and held.
+    assert learned._update_due(ups) and learned._page_due(ups)
+    assert learned._undone(stop, items) and learned._page_hold(stop)
+    r = subprocess.run([sys.executable, os.path.join(ROOT, "tools", "app.py"), "start",
+                        "--on", "m", "--tools", "none", "--work", "draft~r1-3"],
+                       capture_output=True, text=True, encoding="utf-8", errors="replace",
+                       env=dict(os.environ), cwd=str(copy), timeout=300)
+    assert app_setup.job_chat() == "draft~r1-3", r.stdout + r.stderr
+    assert learned._update_due(ups) == "" and learned._page_due(ups) == ""
+    assert learned._undone(stop, items) == [] and learned._page_hold(stop) == {}
+    # Known by Claude Code's own session id too, which is all a hook may be given.
+    monkeypatch.delenv("LJS_CHAT")
+    monkeypatch.setenv("CLAUDE_CODE_SESSION_ID", "abc")
+    assert app_setup.record_job_chat("draft~r1-4")
+    monkeypatch.delenv("CLAUDE_CODE_SESSION_ID")
+    assert learned._update_due(dict(ups, session_id="abc")) == ""
+    # Any other chat on this computer is still an ordinary one.
+    monkeypatch.setenv("LJS_CHAT", "session_OTHERCHAT")
+    assert learned._update_due(ups) and learned._page_due(ups)
+
+
 def test_an_improvement_done_since_it_was_listed_is_never_started_again(copy, tmp_path):
     _listed(("method-drafts", "method-interview"))
     git(copy, "commit", "-q", "--allow-empty", "-m", "Profile upgrade: method-drafts")

@@ -131,7 +131,7 @@ def test_the_due_list_keeps_every_application_row_at_any_size(tmp_path, monkeypa
         monkeypatch.setenv(k, v)
     monkeypatch.delenv("LJS_TODAY", raising=False)
     person.reset()
-    whole, _ = app_model.build(*app_model.clock("2026-10-25", NOW))
+    whole, targets = app_model.build(*app_model.clock("2026-10-25", NOW))
     own = [d for d in whole["due"] if "step" not in d and d.get("kind") != "hidden"]
     assert own, "the invented search has an application's or an interview's row"
     # Cut to no people at all: every one of those rows is still there.
@@ -140,6 +140,14 @@ def test_the_due_list_keeps_every_application_row_at_any_size(tmp_path, monkeypa
     cut, _ = app_model.build(*app_model.clock("2026-10-25", NOW))
     assert [d["id"] for d in cut["due"] if "step" not in d and d.get("kind") != "hidden"] == [d["id"] for d in own]
     assert any("step" in d for d in whole["due"]) and not any("step" in d for d in cut["due"]), "the people are what is cut"
+    # The people cut are counted, each once, in the one row that says what is not shown (the
+    # re-audit of 4 November: at 716 people To do listed 93 and said nothing of the rest).
+    people = {targets[d["id"]].get("contact") or d["id"] for d in whole["due"] if "step" in d}
+    hidden = [d for d in cut["due"] if d.get("kind") == "hidden"]
+    n = len(people)
+    said = f"{n} more {'person who needs' if n == 1 else 'people who need'} you {'is' if n == 1 else 'are'} in Contacts"
+    assert len(hidden) == 1 and hidden[0]["title"].endswith(said), hidden
+    assert not [d for d in whole["due"] if d.get("kind") == "hidden" and "in Contacts" in d["title"]]
 
 
 # ------------------------------------------------------------------ 7. never "Passed"

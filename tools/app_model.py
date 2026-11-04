@@ -2904,26 +2904,40 @@ def _due(ctx: Ctx, targets: dict) -> list:
     # in order (journeys audit 5: cut at 100 behind 550 people).
     rest = [d for d in out if d.get("kind") != "withdraw"]
     room = max(0, DUE_MAX - sum(1 for d in rest if halves.get(d["id"]) != "contact"))
-    shown = []
+    shown, cut = [], []
     for d in rest:
         if halves.get(d["id"]) == "contact":
             if room <= 0:
+                cut.append(d)
                 continue
             room -= 1
         shown.append(d)
     out = [d for d in out if d.get("kind") == "withdraw"] + shown
-    if ruled:
+    # The people the cut left off, each once (one person may owe two rows) and never one
+    # shown: at 716 people To do listed 93 and said nothing of the rest (the re-audit of
+    # 4 November).
+    def _who(d: dict) -> str:
+        return (targets.get(d["id"]) or {}).get("contact") or d["id"]
+    more = len({_who(d) for d in cut} - {_who(d) for d in shown
+                                         if halves.get(d["id"]) == "contact"})
+    if ruled or more:
         # Said once, quietly, so a shorter list is never a mystery: who the person's own rules
-        # keep off it, by why.
+        # keep off it, by why, and how many more are in Contacts. One row.
         hidden = sum(ruled.values())
         words = {"employer": "at employers you turned down", "place": "outside where you look",
                  "request": "whose connection request nobody accepted", "closed": "closed"}
         parts = [f"{n} {'person' if n == 1 else 'people'} {words.get(w, w)}"
                  for w, n in sorted(ruled.items(), key=lambda x: -x[1])]
+        said = [", ".join(parts) + " not shown"] if parts else []
+        if more:
+            said.append(f"{more} more {'person who needs' if more == 1 else 'people who need'} "
+                        f"you {'is' if more == 1 else 'are'} in Contacts")
         out.append({"id": "due-hidden", "kind": "hidden", "sub": "hidden",
-                    "title": ", ".join(parts) + " not shown", "context": "", "due": None,
+                    "title": ". ".join(said), "context": "", "due": None,
                     "company": "", "overdue_days": 0, "action": None, "item": None,
-                    "work": None, "done": None, "snooze": None, "rev": rev_of("due-hidden", hidden)})
+                    "work": None, "done": None, "snooze": None,
+                    "rev": rev_of("due-hidden", hidden, more) if more else
+                    rev_of("due-hidden", hidden)})
     return out
 
 
@@ -4649,7 +4663,8 @@ _ENUMS = {
     ("ready", "status"): {"drafted", "applied"},
     ("messages", "channel"): {"linkedin_note", "linkedin_message", "inmail", "email"},
     ("messages", "kind"): {"first_note", "follow_up", "reply", "referral_ask"},
-    ("due", "kind"): {"follow_up", "reply", "interview", "nudge", "withdraw"},
+    # "hidden": the one row saying who is not shown (_due's due-hidden), with no day of its own.
+    ("due", "kind"): {"follow_up", "reply", "interview", "nudge", "withdraw", "hidden"},
     ("upcoming", "kind"): {"interview", "test", "call", "deadline", "event"},
 }
 _JOB_STATUS = {"new", "drafting", "ready", "applied", "dismissed"}
@@ -4771,6 +4786,8 @@ def check(model: dict) -> list[str]:
         elif got["shown"] > got["total"] or not isinstance(got["counts"], dict):
             bad.append(f"lists.{name}: shows more than it holds")
     for item in model.get("due") or []:
+        if item.get("kind") == "hidden" and item.get("due") is None:
+            continue
         if not _ISO_DAY_ONLY.match(str(item.get("due") or "")):
             bad.append(f"due {item.get('id')}: due is not a date")
     for item in model.get("upcoming") or []:

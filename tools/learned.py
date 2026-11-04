@@ -1901,7 +1901,7 @@ def _undone(event: dict, items: list) -> list[str]:
         tools = _turn_tools(items)
         if any(_UPGRADE_STARTED.search(t) for t in tools):
             profile_upgrades.mark_started(today)
-        if any(_WORK_CHAT.search(t) for _n, _k, t in items):
+        if any(_WORK_CHAT.search(t) for _n, _k, t in items) or _job_chat(event):
             return out                  # a chat started for one big job: it lands its own work
         ids = profile_upgrades.unstarted(today, chat)
         if ids and profile_upgrades.hold_once(chat, today):
@@ -1916,6 +1916,16 @@ def _undone(event: dict, items: list) -> list[str]:
 
 
 _WORK_CHAT = re.compile(r"tools/app\.py start\b[^\n]*--work \S")
+
+
+def _job_chat(event: dict) -> bool:
+    """Was this chat started for one big job (`app.py start --work`, app_setup.job_chat)?
+    Its later messages no longer name the job, and the person may type in it."""
+    try:
+        import app_setup
+        return bool(app_setup.job_chat(str(event.get("session_id") or "")))
+    except Exception:  # noqa: BLE001  a hook must never break the chat it runs in
+        return False
 
 # ------------------------------------------------------------------ the page owed
 #
@@ -2084,7 +2094,7 @@ def _page_hold(event: dict) -> dict:
     if not owed:
         return {}
     who, text = _last_said(event.get("transcript_path") or "")
-    if who != "human" or _SCHEDULED.match(text) or _WORK_CHAT.search(text):
+    if who != "human" or _SCHEDULED.match(text) or _WORK_CHAT.search(text) or _job_chat(event):
         return {}                     # nobody here to tell: a scheduled run, a ring, a job chat
     try:
         import app_setup
@@ -2127,7 +2137,7 @@ def _page_due(event: dict) -> str:
     if (event.get("hook_event_name") or "") != "UserPromptSubmit":
         return ""
     prompt = str(event.get("prompt") or "")
-    if _SCHEDULED.match(prompt) or _WORK_CHAT.search(prompt):
+    if _SCHEDULED.match(prompt) or _WORK_CHAT.search(prompt) or _job_chat(event):
         return ""
     path = _path()
     if path is None or person.in_example(path):
@@ -2156,7 +2166,7 @@ def _update_due(event: dict) -> str:
     the app's one hook, so it says this too, rather than a second hook."""
     if (event.get("hook_event_name") or "") != "UserPromptSubmit":
         return ""
-    if _WORK_CHAT.search(str(event.get("prompt") or "")):
+    if _WORK_CHAT.search(str(event.get("prompt") or "")) or _job_chat(event):
         # A chat started for one big job (tools/app.py child_prompt): the chat that answers
         # the page took the day's check, and a job must not take an update part way through.
         return ""

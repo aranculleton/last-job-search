@@ -43,6 +43,7 @@ documents/network/linkedin_export.json merge=ljs-state text eol=lf
 # every tweak to an output (tools/merge_state.py JSON_FILES says how each one's writer uses it).
 profile/app.json merge=ljs-state text eol=lf
 profile/setup_answers.json merge=ljs-state text eol=lf
+profile/said_once.json merge=ljs-state text eol=lf
 profile/person.json merge=ljs-state text eol=lf
 profile/tweaks.json merge=ljs-state text eol=lf
 documents/applications/*/tweaks.json merge=ljs-state text eol=lf

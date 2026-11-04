@@ -1785,8 +1785,9 @@
     if (workWriting.has(id) || justAsked(w)) return;
     const t0 = now();
     // A batch is tried again whole: the drafts written with it (their `with`) go back too, so
-    // none is left claimed by a chat that stopped (the audit, 2026-11-03).
-    const ids = [id].concat(batchOf(id).filter((m) => ACTIVE.has(txt(workDoc(m).status)) && !workWriting.has(m)));
+    // none is left claimed by a chat that stopped (the audit, 2026-11-03). One waiting on the
+    // person's answer keeps its question (the re-audit of 4 November).
+    const ids = [id].concat(batchOf(id).filter((m) => ACTIVE.has(txt(workDoc(m).status)) && txt(workDoc(m).status) !== "needs_you" && !workWriting.has(m)));
     for (const x of ids) workWriting.add(x);
     (async () => {
       try {
@@ -1808,10 +1809,13 @@
   // The drafts claimed with a batch's first one (page_db.claim writes `with` on each), and the
   // one a draft was claimed with: a batch is one job, whose first item speaks for it.
   function batchOf(lead) { return [...allWork()].filter(([id, w]) => id !== lead && txt(w.with) === lead).map(([id]) => id); }
+  // A member stopped on its own question (needs_you) speaks for itself: its question and its
+  // Answer, never its lead's progress (the re-audit of 4 November).
   function leadOf(w) {
     const lid = txt(w && w.with);
     const lead = lid ? workDoc(lid) : null;
-    return lead && lead !== w && ACTIVE.has(txt(w.status)) && txt(w.status) !== "queued" && ACTIVE.has(txt(lead.status)) ? lead : null;
+    const st = txt(w && w.status);
+    return lead && lead !== w && ACTIVE.has(st) && st !== "queued" && st !== "needs_you" && ACTIVE.has(txt(lead.status)) ? lead : null;
   }
   function workBusy(id) { const w = workDoc(id); return !!(w && ACTIVE.has(txt(w.status) || "queued")); }
 
@@ -11348,7 +11352,12 @@
 
   // Nothing of the person's shows until the page knows its viewer is the owner: anyone else,
   // and any view with no way to tell, sees only the private notice.
+  // The page in parts carries a guard (templates/app/guard.js) that says so when a code file
+  // did not arrive or threw while the page started; told the first screen is drawn, it stops
+  // counting errors as a page that failed to load.
+  function loaded() { const g = window.__ljsGuard; if (g && typeof g.done === "function") g.done(); }
   function showPrivate(noViewer) {
+    loaded();
     const app = $("shell");
     if (app) { app.replaceChildren(); app.hidden = true; }
     for (const id of ["toasts", "opening"]) { const el = $(id); if (el) { el.replaceChildren(); el.hidden = true; } }
@@ -11430,6 +11439,7 @@
       if (S.model.slim) await within(firstViews, CAP_WAIT_MS);
       reveal();
       render();
+      loaded();
       if (fromHash && fromHash.work) openWork();
       if (S.focusItem) showItem(S.focusItem);
       setTimeout(() => { autoReading().catch(() => {}); }, 1500);

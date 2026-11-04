@@ -134,9 +134,12 @@ JSON_FILES = {
     # What the person answered on the page (app_actions._setup_*, app.py resume-saved and
     # propose): a record a step, written whole with its "at". history/jobs is the one list,
     # a job at a time, only ever added to; its undo takes the newest back. outside/<key> is
-    # when they said they had done a step outside the page.
+    # when they said they had done a step outside the page, as written before 4 November.
     "profile/setup_answers.json": {"lists": {"history/jobs": ()}, "stamps": ("at",),
                                    "dated": ("outside/*",), "indent": 2, "sort": "all"},
+    # Each thing said once, and its day (app_setup.save_said: a card's Done, `app.py told`,
+    # the start line about unsaved work): the later day stands.
+    "profile/said_once.json": {"dated": ("*",), "indent": 2, "sort": "all"},
     # Their settings (app_actions._save_person_json) and the place each employer heard
     # (told.record): nothing in it dates a change, and its lists are settings (an order, the
     # words to avoid), each replaced whole, so a value both changed is settled by each
@@ -353,6 +356,7 @@ JSON_NAMES = {
                      "ljs-applied.json", "ljs-place.json", "ljs-tidy.json",
                      "ljs-reactions.json", "ljs-upgrades-listed.json", "ljs_own_tests.json",
                      ".reactions.json", "ljs-no-page.json", "ljs-page-held.json",
+                     "ljs-job-chats.json",
                      "ljs-save-held.json"), _GITDIR),
     **dict.fromkeys(("claude_surfaces.json", "public_names.json", "removed_names.json",
                      "rule_map.json", "remote.json", "design_draft.json",

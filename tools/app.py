@@ -20,7 +20,8 @@
                                                                  state: set up, part-way, old, new
     python3 tools/app.py start --paste                           the line for a chat on a computer
     python3 tools/app.py page --out-dir D [--url U]              the page in parts, and the
-                                                                 publishes that put it up
+         [--on-page FILE|-] [--whole]                            publishes that put it up (with
+                                                                 a url: after listing its files)
     python3 tools/app.py published <url> [--parts D]|none [--why W]
                                                                  the page's address, once published
     python3 tools/app.py answer <step> [--text T] [--field k=v]  a setup answer given in the chat
@@ -265,7 +266,15 @@ def cmd_page(a) -> int:
         today, now = app_model.clock(a.today, a.now)
         model, _ = _build(today, now)
         built = app_page.write_parts(model, a.out_dir)
-        for line in app_listen.parts_plan(built, a.url or ""):
+        listing = None
+        if getattr(a, "on_page", None) is not None:
+            if a.on_page == "-":
+                listing = sys.stdin.read()
+            else:
+                with open(a.on_page, encoding="utf-8") as fh:
+                    listing = fh.read()
+        for line in app_listen.parts_plan(built, a.url or "", listing=listing,
+                                          whole=bool(getattr(a, "whole", False))):
             print(line)
         return 0
     if hasattr(app_page, "render"):
@@ -650,6 +659,12 @@ def cmd_start(a) -> int:
             return 1
         print(paste_line(owner, name))
         return 0
+    if a.work:
+        # Every later message of this chat is the job's too: the app's hook reads this.
+        try:
+            app_setup.record_job_chat(a.work)
+        except OSError:
+            pass
     code, lines = app_setup.start(on=a.on or "", tools=a.tools or "", page_url=a.page or "",
                                   work=a.work or "", data_current=data_current(a.dump))
     lines = app_listen.shape(code, lines, chat=app_listen.this_chat(a.chat), listen=a.listen,
@@ -1461,6 +1476,11 @@ def main(argv=None) -> int:
     p.add_argument("--out-dir", dest="out_dir", default="",
                    help="write the page in parts here and print the publishes to make")
     p.add_argument("--url", default="", help="the page's address, when it is published already")
+    p.add_argument("--on-page", dest="on_page", default=None,
+                   help="what the published page holds, as Artifact list (scope files) printed "
+                        "it: a file, or - for what comes in")
+    p.add_argument("--whole", action="store_true",
+                   help="put every code file up again, not only the ones the page lacks")
     p = sub.add_parser("apply", help="apply the page's actions, with receipts")
     p.add_argument("dump")
     p.add_argument("--chat", default="chat", help="this chat's id, for the receipts")

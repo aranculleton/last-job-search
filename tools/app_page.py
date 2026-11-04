@@ -309,12 +309,22 @@ def slim(model: dict) -> dict:
     return keep
 
 
-def render_parts(model: dict) -> tuple[str, dict]:
-    """(the small page, {published path: text}) for the page in parts."""
+def render_parts(model: dict, built: str | None = None) -> tuple[str, dict]:
+    """(the small page, {published path: text}) for the page in parts. `built` is the moment
+    it was built (the model's own `made_at` unless given), which the page carries."""
     css, js = css_parts(), js_parts()
     page = _read("page.html")
-    links = "\n".join(f'<link rel="stylesheet" href="{p}">' for p, _ in css)
-    scripts = "\n".join(f'<script src="{p}"></script>' for p, _ in js)
+    # The guard first, inline: a code file that does not arrive or throws while the page
+    # starts is said in one line with one button that asks for the whole page again
+    # (templates/app/guard.js), and the last line tells it every file has run. It carries
+    # when the page was built: a republish goes up in batches, each with this page, so a
+    # file missing minutes after the build is one still on its way, not a page that failed.
+    when = str(built or (model.get("made_at") if isinstance(model, dict) else "") or "")
+    stamp = f' data-built="{html.escape(when)}"' if when else ""
+    guard = f"<script{stamp}>\n{compact_js(_read('guard.js')).strip()}\n</script>\n"
+    links = guard + "\n".join(f'<link rel="stylesheet" href="{p}">' for p, _ in css)
+    scripts = "\n".join(f'<script src="{p}"></script>' for p, _ in js) + \
+        "\n<script>window.__ljsGuard && window.__ljsGuard.end();</script>"
     for old, new in (("<style>\n{{PALETTES}}\n</style>\n<style>\n{{CSS}}\n</style>", links),
                      ("<script>\n{{JS}}\n</script>", scripts)):
         if old not in page:
@@ -352,13 +362,34 @@ def caps_hash() -> str:
     return _hash(json.dumps(capabilities(), sort_keys=True))
 
 
-def plan(built: dict, held: list | None, caps: str = "", url: str = "") -> dict:
+def on_page(listing: str) -> dict:
+    """{published path: bytes} for each code file a listing of the published page names
+    (Artifact, action list, scope files: `- "code/js/x.1a2b3c4d5e.js"  text/javascript
+    1234 bytes`, as the host printed it on 2026-11-04). A path with no size is None."""
+    out: dict = {}
+    for m in re.finditer(r'"?(code/[A-Za-z0-9._/-]+\.(?:js|css))"?(?:[ \t]+\S+[ \t]+(\d+) bytes)?',
+                         listing):
+        out[m.group(1)] = int(m.group(2)) if m.group(2) else None
+    return out
+
+
+def plan(built: dict, held: list | None, caps: str = "", url: str = "",
+         listed: dict | None = None, whole: bool = False) -> dict:
     """What to publish: {"new": [paths the page lacks], "gone": [paths it holds and no longer
-    loads], "batches": [[paths], ...], "capabilities": bool}. `held` is what the published
-    page holds (profile/app.json `code`), None for a page never published in parts."""
+    loads], "missing": [paths it should hold and does not], "batches": [[paths], ...],
+    "capabilities": bool}. `held` is what the published page holds (profile/app.json
+    `code`), None for a page never published in parts. `listed` is what the host says it
+    holds (on_page), which wins over the record: a file the record names and the host lacks,
+    or holds at another size, goes up again. `whole`: every code file goes up again."""
     have = set(held or [])
-    new = [p for p in built["files"] if p not in have]
-    gone = sorted(have - set(built["files"])) if url else []
+    missing: list = []
+    if listed is not None:
+        sizes = built["sizes"]
+        good = {p for p, n in listed.items() if n is None or n == sizes.get(p, n)}
+        missing = sorted(p for p in built["files"] if p in have and p not in good)
+        have = good
+    new = [p for p in built["files"] if whole or p not in have]
+    gone = sorted((set(listed) if listed is not None else have) - set(built["files"])) if url else []
     batches: list[list[str]] = [[]]
     size = built["sizes"]["page.html"]
     for p in new:
@@ -367,7 +398,7 @@ def plan(built: dict, held: list | None, caps: str = "", url: str = "") -> dict:
             size = built["sizes"]["page.html"]
         batches[-1].append(p)
         size += built["sizes"][p]
-    return {"new": new, "gone": gone, "batches": batches,
+    return {"new": new, "gone": gone, "missing": missing, "batches": batches,
             "capabilities": not url or caps != caps_hash()}
 
 

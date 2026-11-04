@@ -3079,9 +3079,7 @@ def _setup_done(r: Run) -> dict:
             raise Refused("GitHub still shows your copy as public.")
         return {"note": "Your copy is private now.", "undo": None}
     if app_setup.set_up() or key in app_setup.TOLD:
-        a = app_setup.answers()
-        a.setdefault("outside", {})[key] = app_model.stamp(r.at)
-        app_setup.save_answers(a)
+        app_setup.save_said(key, app_model.stamp(r.at))
     return {"note": "Noted, thank you.", "undo": None}
 
 

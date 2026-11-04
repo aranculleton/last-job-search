@@ -176,11 +176,20 @@ def test_a_copy_stuck_for_days_is_told_once_with_the_link_and_the_page_shows_it(
     with open(os.path.join(c.profile, "place.json"), "w", encoding="utf-8") as fh:
         json.dump({"setup": {"started": "2026-10-20", "finished": "2026-10-20"}}, fh)
     said = c.run("start", "--on", "m", "--tools", "none")
-    # The page was never made, five days and more: said once, with the makers' link.
-    assert "stuck since 2026-10-20" in said and "told report-page" in said
+    # The page was never made, five days and more, and this start publishes it: it is never
+    # also said to be stuck, with the makers' link (the re-audit of 4 November).
+    assert "page to publish" in said
+    assert "stuck since" not in said and "told report-page" not in said
+    # A chat with no pages, its setup stopped five days ago with every answer in: said once,
+    # with the makers' link.
+    e = Copy(str(tmp_path / "nopage"), profile=True)
+    _six(e, at="2026-10-20T09:0{n}:00Z")
+    e.run("published", "none", "--why", "no pages in this chat")
+    said = e.run("start", "--on", "m", "--tools", "none")
+    assert "stuck since 2026-10-20" in said and "told report-setup" in said
     assert "github.com/aranculleton/last-job-search/issues/new?" in said
-    c.run("told", "report-page")
-    assert "told report-page" not in c.run("start", "--on", "m", "--tools", "none")
+    e.run("told", "report-setup")
+    assert "told report-setup" not in e.run("start", "--on", "m", "--tools", "none")
     # A copy with a page shows the stuck state as a To do card with the link to open.
     d = Copy(str(tmp_path / "paged"), profile=True)
     _six(d, at="2026-10-20T09:0{n}:00Z")     # every answer in five days ago, then nothing

@@ -669,7 +669,9 @@ def _finished() -> bool:
         return True
     if mark.get("started"):
         return False
-    return not os.path.isfile(os.path.join(profile_dir(), ANSWERS))
+    # A file holding only "outside" is the told records a copy wrote there before they had a
+    # file of their own (SAID): no answer, so an old copy that wrote one stays set up.
+    return not set(_read_json(os.path.join(profile_dir(), ANSWERS), {})) - {"outside"}
 
 
 def _setup_state() -> dict:
@@ -755,23 +757,41 @@ OUTSIDE = {
                                                 "This one never does"),
 }
 # 4.0 recommends no chat on the computer (UX_DECISIONS, "Chats"): there is no card for one.
-# The things said once, outside the page's own answers: answers()["outside"][<key>] holds the
-# day (a card's Done, or `app.py told <key>` from a chat with no page).
+# The things said once, outside the page's own answers: profile/said_once.json holds the day
+# of each (a card's Done, or `app.py told <key>` from a chat with no page). They were kept in
+# setup_answers.json under "outside" before 4 November, which made a finished copy read as
+# setup unfinished after its first one: those are still read, never written there again.
+SAID = "said_once.json"
 TOLD = tuple(OUTSIDE) + tuple("report-" + s for s in ("page", "setup", "waiting"))
+
+
+def said_once() -> dict:
+    """{key: the day}: every thing said once, the old answers file's "outside" under it."""
+    a = answers()
+    old = a.get("outside") if isinstance(a, dict) else None
+    got = _read_json(os.path.join(profile_dir(), SAID), {})
+    return {**(old if isinstance(old, dict) else {}), **(got if isinstance(got, dict) else {})}
 
 
 def told(key: str) -> str:
     """The day the person was told, or did, `key` (an OUTSIDE card or a report), or ""."""
-    got = (answers().get("outside") or {}) if isinstance(answers(), dict) else {}
-    return str(got.get(key) or "") if isinstance(got, dict) else ""
+    return str(said_once().get(key) or "")
+
+
+def save_said(key: str, day: str) -> str:
+    """Keep `day` for `key` in profile/said_once.json (merge_state: the later day stands)."""
+    path = os.path.join(profile_dir(), SAID)
+    if person.in_example(path):
+        return path                   # the app's example person records nothing
+    got = _read_json(path, {})
+    got = dict(got if isinstance(got, dict) else {}, **{key: day})
+    return _write_json(path, got)
 
 
 def record_told(key: str, today: dt.date | None = None) -> str:
     if key not in TOLD:
         raise ValueError(f"not something said once: {key}")
-    a = answers()
-    a.setdefault("outside", {})[key] = (today or dt.date.today()).isoformat()
-    return save_answers(a)
+    return save_said(key, (today or dt.date.today()).isoformat())
 
 
 def _cloud() -> bool:
@@ -1143,9 +1163,9 @@ def _publish_lines(st: dict, n: int) -> list[str]:
         lines += [f"{n}. The person's page is {url}, and an update changed it: republish it now, "
                   "never asking first. Build it again, in parts: python3 tools/app.py page "
                   f"--out-dir <your scratchpad>/page --url {url}",
-                  f"{n + 1}. Read the page first (Artifact, action read, url {url}), then "
-                  "publish the new files exactly as the build printed: only the small files it "
-                  "names, each read whole first; the page keeps the rest. If the publish is "
+                  f"{n + 1}. Do exactly the steps the build printed: read the page, list its "
+                  "files and give that list to the build, then publish only the small files it "
+                  "then names, each read whole first; the page keeps the rest. If the publish is "
                   "refused, read the page again and publish once more. If the read says the page "
                   f"is not there or not this person's, build a new one ({app_listen.REBUILD}) "
                   "and publish that instead. Only if a publish is refused twice, tell the person "
@@ -1196,15 +1216,17 @@ def _answered(st: dict) -> int:
     return got
 
 
-def _said_once(st: dict, no_page: bool) -> str:
+def _said_once(st: dict, no_page: bool, leave: tuple = ()) -> str:
     """The one thing this chat tells the person once and never again, or "": a state stuck
     for a day or more with the link to tell the app's makers (X-20), choosing Auto in a cloud
     chat (X-7), the line that puts the PDF tools in every new chat (X-59). With a page, its
     To do carries each as a card, so the chat says only what the page cannot: a page never
-    made. One at a time, the most pressing first."""
+    made. One at a time, the most pressing first. `leave`: the stuck states this start says
+    and mends otherwise (a page it publishes, work waiting that it lands), never said twice."""
     try:
         import report
-        stuck = [s for s in report.stuck(st=st) if not told("report-" + s["state"])]
+        stuck = [s for s in report.stuck(st=st)
+                 if s["state"] not in leave and not told("report-" + s["state"])]
     except Exception:  # noqa: BLE001  nothing to read: nothing stuck
         stuck = []
     page = bool(st["page"].get("url"))
@@ -1458,8 +1480,11 @@ def start(on: str = "", tools: str = "", page_url: str = "", runner=None, work: 
     if saving:
         steps.append(f"{n}. {saving}")
         n += 1
-    once = _said_once(st, no_page)
+    # A page this start publishes is never also said to be stuck unmade, with the link to the
+    # app's makers (the re-audit of 4 November).
+    leave = ("page",) if publishing else ()
     if _setup_open(st):
+        once = _said_once(st, no_page, leave)
         done = _answered(st)
         all_in = done == len(STEP_IDS)
         if no_page:
@@ -1496,13 +1521,25 @@ def start(on: str = "", tools: str = "", page_url: str = "", runner=None, work: 
         # Every landing brings in what waits (tools/land.py); work still off master a day on
         # is kept out by something, and nothing ever said so (the stranger audit, X-30).
         days = max(waits.values())
+        # Told once a day, not on every start (said_once.json's "unsaved"), and never again
+        # beside the stuck line below for the same work (the re-audit of 4 November).
+        today = person.today().isoformat()
+        tell = told(UNSAVED_KEY) != today
+        if tell:
+            try:
+                save_said(UNSAVED_KEY, today)
+            except OSError:
+                pass
         steps.append(f"{n}. Work of the person's has waited off their saved copy for {days} "
                      f"day{'s' if days != 1 else ''} ({', '.join(waits)}). Land this chat's "
                      "work now (python3 tools/land.py, in the background): it brings that in. "
                      "Not green: fix what its check names (their own tests after an update: "
-                     "RUNBOOK.md, \"Your own tests fail after an update\") and land again. Tell "
-                     f"the person once, in these words: \"{UNSAVED_SAY}\"")
+                     "RUNBOOK.md, \"Your own tests fail after an update\") and land again."
+                     + (f" Tell the person once, in these words: \"{UNSAVED_SAY}\"" if tell
+                        else " The person was told today: say nothing of it."))
         n += 1
+        leave += ("waiting",)
+    once = _said_once(st, no_page, leave)
     url = st["page"].get("url") or ""
     if url and not later:
         import app_listen
@@ -1562,6 +1599,7 @@ def _unstarted() -> list[tuple[str, str]]:
 
 UNSAVED_SAY = ("Some of your work from the last few days hadn't been saved yet. I'm saving it "
                "now.")
+UNSAVED_KEY = "unsaved"     # its day in profile/said_once.json: said once a day
 
 
 # Which version of the app this checkout's start last spoke for: an update that changes how a
@@ -1628,6 +1666,55 @@ def _local_file(name: str) -> str:
     merged), or beside the state where there is no git folder (a test's)."""
     d = _git_dir()
     return os.path.join(d, name) if d else os.path.join(person.state(), "." + name)
+
+
+# Which chats were started for one job (`app.py start --work <id>`): one record a chat, in this
+# checkout's git folder. The app's hook knew a job chat only from the turn that ran its start,
+# so once the person typed in it, it was given the day's update check and held at the turn's
+# end like the chat that answers the page (the re-audit of 4 November). Kept JOB_CHAT_DAYS.
+JOB_CHATS = "ljs-job-chats.json"
+JOB_CHAT_DAYS = 14
+
+
+def _chat_keys(session: str = "") -> set[str]:
+    """Every name this chat goes by: its id (app_listen.this_chat), and Claude Code's own
+    session id, which a hook is given as `session_id` (`session`) and a command reads from
+    CLAUDE_CODE_SESSION_ID."""
+    import app_listen
+    keys = {app_listen.this_chat()}
+    for s in (session, "" if session else os.environ.get("CLAUDE_CODE_SESSION_ID") or ""):
+        s = str(s or "").strip()
+        if s:
+            keys |= {s, "local-" + s}
+    return {k for k in keys if k}
+
+
+def record_job_chat(work: str, today: dt.date | None = None) -> bool:
+    """Remember that this chat was started for the work item `work`: False when no name for
+    it is known (nothing to key it by)."""
+    keys = _chat_keys()
+    if not keys or not work:
+        return False
+    day = today or dt.date.today()
+    since = (day - dt.timedelta(days=JOB_CHAT_DAYS)).isoformat()
+    path = _local_file(JOB_CHATS)
+    got = _read_json(path, {})
+    got = {k: v for k, v in got.items() if isinstance(v, dict) and str(v.get("day")) >= since}
+    for k in keys:
+        got[k] = {"work": work, "day": day.isoformat()}
+    _write_json(path, got)
+    return True
+
+
+def job_chat(session: str = "") -> str:
+    """The work item this chat was started for (record_job_chat), or "". `session` is the
+    hook's own `session_id`."""
+    got = _read_json(_local_file(JOB_CHATS), {})
+    for k in sorted(_chat_keys(session)):
+        v = got.get(k)
+        if isinstance(v, dict) and v.get("work"):
+            return str(v["work"])
+    return ""
 
 
 # Which chats said they cannot publish (`app.py published none`): one record a chat, in this
