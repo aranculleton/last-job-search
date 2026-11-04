@@ -33,6 +33,8 @@ Checks:
 Stdlib only. Exit 0 on success, 1 with a failure list otherwise.
 """
 
+from __future__ import annotations
+
 import json
 import re
 import sys
