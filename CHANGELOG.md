@@ -22,6 +22,10 @@ make sense to somebody whose repo just received it.
 
 ### Changed
 
+- **A recruiter at a recruitment agency is no longer hidden from Messages.** They were
+  held as "an employer you turned down" because of the agency they work for, even when they
+  had asked for your resume. Your bar now judges only where you would work; an employer you
+  named, or a recruiter in-house at one you turned down, is still held.
 - **The number of unread messages on your page no longer grows.** Each tap used to leave a
   message that stayed unread in the Claude app; Claude now clears it when the work is done,
   and clears the ones already piled up, once, without asking. Profile upgrade: doorbells
