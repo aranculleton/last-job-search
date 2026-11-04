@@ -33,6 +33,8 @@ def _write(root, day, owed):
 def test_two_rebuilds_of_one_prep_keep_the_later_and_leave_no_side_copy(tmp_path):
     root = tmp_path / "copy"
     _git(tmp_path, "init", "-q", "-b", "master", str(root))
+    _git(root, "config", "user.name", "t")              # a merge commits: a name of its own
+    _git(root, "config", "user.email", "t" + "@example.com")
     _write(root, "2026-11-02", 5)
     _git(root, "add", "-A")
     _git(root, "commit", "-qm", "a prep")
