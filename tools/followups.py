@@ -396,11 +396,12 @@ def review(rows: list[dict], today: datetime.date, warm: dict | None = None,
            holds: dict | None = None, docs: str = DOCS) -> list[dict]:
     """Where every sent application's follow-up stands, oldest first.
 
-    One entry per `applied` row with a readable date, in one of five states:
+    One entry per `applied` row with a readable date, in one of six states:
 
       due       a nudge is owed today or earlier; `to` says who it goes to
       held      a nudge would be owed and something says wait; `held` says what
       waiting   nothing is owed yet
+      unnamed   a nudge would be owed and nobody is on file to send it to: never listed
       quiet     gone quiet: stop chasing; `notice` is true on the one day to say so
       closed    a later row for the same role is the application now
 
@@ -499,8 +500,15 @@ def review(rows: list[dict], today: datetime.date, warm: dict | None = None,
             it.update(state="held", held=reasons)
             continue
 
-        it["state"] = "due"
         it["to"] = recipient(r, warm.get(k, ()), docs, today)
+        if not it["to"]:
+            # Nobody to write to is not a job: a row asking for a draft that cannot be
+            # made is noise (all of one person's 64 applications had no name, and 40 sat
+            # in To do). It stays a quiet "unnamed" row, listed nowhere, and turns due by
+            # itself the day a name, an outreach note or a reply at the employer exists.
+            it["state"] = "unnamed"
+            continue
+        it["state"] = "due"
         if it["to"] and not it["needs_role"]:
             word = heard is not None and (last is None or heard > last)
             tpl = NUDGE_AFTER_WORD if word else NUDGE_1 if n == 1 else NUDGE_2
