@@ -1580,11 +1580,12 @@ def queue_files(db: dict, apps: list, now: dt.datetime, out_dir: str, dump_dir: 
     title = "Make the files downloadable: " + (f"{len(left)} applications" if len(left) > 1
                                                else str(left[0].get("company") or "")
                                                or "your application")
+    # `applications` even for one: each card finds the work its files wait on by it
+    # (templates/app/app.js filesWorkFor), whatever the item's id is spelled as.
     args = {"application": str(left[0]["id"]),
+            "applications": [str(x["id"]) for x in left],
             "files": [n for x in left for n in x.get("files") or []],
             "paths": [p for x in left for p in x.get("paths") or []]}
-    if len(left) > 1:
-        args["applications"] = [str(x["id"]) for x in left]
     fields = {"kind": "files", "title": title[:140], "to": "either", "args": args,
               "asked_at": app_model.stamp(now), "asked_from": {"tab": "chat",
                                                                **({"chat": chat_id} if chat_id else {})},
