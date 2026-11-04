@@ -125,6 +125,22 @@ These apply whenever the change is to the app, whichever repo the session starte
   asking: `/upgrade` in the background, the sync itself for an instant one, or every round
   for screening. A new app file fails the same test until it is placed in a method or in
   `KEEPS_NOTHING`. The decision can be made either way; it cannot be skipped.
+- **What 4.9 paid for, kept as rules.** Each was found by an audit or a release run, and a
+  test holds it:
+  - A cache is keyed on what it reads: a file's time and size (`st_mtime_ns`, `st_size`) or
+    the data itself. Never the time alone (a yes and then a no in one Windows clock tick,
+    `check_claims.grounding_text`), and never a version number newer data can move past (the
+    phone Brief's counts, `fitBrief` in the page).
+  - A path handed to another program (Poppler, LaTeX, git) may hold an accent or a space, as
+    under a person's own user folder on Windows: Python's own file calls are safe there, another
+    program's arguments are not (`pdftext._poppler` hands Poppler a plain name).
+  - One clock: `person.today()` wherever a day is counted, and a test sets its day rather
+    than comparing with the machine's.
+  - Counts, who is owed, who may be shown and every status are computed once, in the
+    engine; the page only draws them.
+  - A test never reads or changes the checkout it runs in, which may be a person's copy
+    (`ci_local.sh` and the Windows computer check run the suite in one): it builds its own,
+    and `tests/repo_files.python_on_github` tells a tool an address without taking master.
 - **Anything the app says about the Claude app lives in `tools/claude_surfaces.json`**: what a
   chat on the computer, a cloud chat, a phone, the browser pane or a routine can do, and how a
   person reaches each. An entry carries the official page, a quote from it, `verified_on`,
@@ -220,6 +236,25 @@ version is built, before they say it, never after.
 - **No browser test reads the page after a fixed number of frames**: it waits for what it
   checks, with a time limit.
 
+**No whole-app audit again.** The 3 November QA audit (353 findings) and the stranger audit
+(85) are in the suite, each finding a test that fails without its fix; the 4.9.0 notes list
+every id with its outcome. A version reviews only its own `[Unreleased]` diff, once, through
+these lenses, and each real finding becomes a test the same way:
+- **The stranger**: a copy with no tie to the maintainer, made today or weeks behind, used
+  only in chats (a cloud chat, a phone with no page open), in another country and time zone,
+  on Windows under a user folder with an accent. Its journeys are tests a change extends
+  rather than re-audits: `test_a_stranger_sets_up_with_nobody_to_ask.py`,
+  `test_an_update_reaches_every_stranger.py`,
+  `test_a_strangers_brief_reaches_them_and_mends_itself.py`,
+  `test_a_page_owed_is_published_in_the_chat.py`.
+- **Real scale**: the states the tests build at the size of a real search (hundreds of people,
+  over a hundred owed, dozens of applications), never the three-row sample alone.
+- **Two chats at once**: the same file changed by both, a landing during a page update.
+- **Every engine**: a page change runs its browser tests in Safari's and Firefox's engines
+  before the push, and the **Platforms** workflow is started by hand on the branch
+  (Actions, Run workflow; free on the public app) as soon as the version has code in it,
+  not first on the release pull request: Windows found three real bugs in 4.9 only there.
+
 **How**, while the version is built and then at "release it":
 
 0. **Look and audit first, while building.** Claude Code's own documentation and two or
@@ -252,6 +287,12 @@ version is built, before they say it, never after.
    `python3 tools/release.py newest` says whether the newest version is out. Only if the
    workflow fails: Releases, **Draft a new release**, tag `vX.Y.Z` on master, title
    `vX.Y.Z`, the output of `python3 tools/release.py notes` as the notes, **Publish**.
+3a. **When the page's look changed, remake the README's four pictures** from the example
+   person, before the release pull request (4.9.0 shipped with 4.8's): `docs/images`
+   `page-brief.png` (1600x1250), `page-contacts.png` (dark, 1600x1000),
+   `page-coming-up-phone.png` (780x1688) and `page-demo.gif` (the tour, 1600x1000, under
+   700 KB). Take them at scale 2 (the phone at its own, 3), scale them to those sizes, and
+   look at each one before it is committed: no banner, no error, invented names only.
 4. **Check it reached people.** The release workflow green, the tag on the right commit
    (`python3 tools/release.py newest`) and the published notes as `release.py notes` makes
    them. The maintainer hears the number, the reason,
@@ -266,6 +307,26 @@ version is built, before they say it, never after.
    copyable block**, so the next chat is a paste away and never something they have to ask
    for (the maintainer, 2026-11-02: "where's the builder prompt"). Never start that chat
    yourself; the maintainer starts it with that prompt, when they choose.
+
+## How a builder works (learnt over 4.5 to 4.9)
+
+- **Decide, never ask.** Make the call, do it, and say it in one line with the reason.
+- **Token-cheap and still certain.** The maintainer runs short of tokens. A fix's test that
+  fails without it is the check: no separate sceptic per finding, one reviewer for what a
+  merge of several helpers could break, scripts for coverage (every id has an outcome), the
+  whole suite on GitHub only, one push per round. A long wait is a background run that wakes
+  the chat, never polling.
+- **Use the app as a tired job seeker and as a stranger would** (the lenses under
+  "Releasing"): 4.9's stranger audit found 85 things the maintainer's own use never showed.
+- **Helpers in worktrees start on old master**: tell each to `git reset --hard` to the
+  branch's head first, commit early and often (a container can restart mid-night and lose
+  every background agent; a lost one is re-created from the same brief), and give the merge
+  of many helpers to one careful agent with both sides' outcome tables.
+- **The push gate's leak scan reads every patch since master**: invented names only, the
+  app's address written in full (`aranculleton/last-job-search`); when an old patch holds a
+  flagged line, fold the unpushed commits into one (`git reset --soft origin/<branch>`).
+- **Say nothing about runs on a push you have replaced.** Speak when the latest push is
+  green or truly red, when work merges, and when the release is out.
 
 ## The builder prompt
 

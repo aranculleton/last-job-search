@@ -19,26 +19,13 @@ MAINTAINING.md first; this is only what 4.9 left.
   boards held to the search window, the scorer's baseline, a sample note using initials their
   own rules ban); the update tells their chat to bring them in line. Check it did.
 
-## How to work (the maintainer, 2026-10-30 to 2026-11-04)
+## How to work
 
-- **Decide, never ask.** Make the call, do it, say it in one line, with a reason.
-- **Use the app yourself, as a tired job seeker would, and as a stranger would**: a copy with
-  no tie to the maintainer, chat only, on a phone, weeks behind, in another country. 4.9's
-  stranger audit found 85 things the maintainer's own use never showed.
-- **Token-cheap, and still certain.** The maintainer runs short of tokens: no separate skeptic
-  per finding (a fix's test that fails first is the check), one reviewer for what merges broke,
-  scripts for coverage, the whole suite on GitHub only, one push per round.
-- **Helpers in worktrees start on old master**: tell each to `git reset --hard` to the
-  branch's head first. Merging many helpers is where new bugs come from: give the merge to one
-  careful agent with both sides' outcome tables.
-- **The container can restart mid-night** and lose every background agent: helpers commit
-  early and often; a lost one is re-created from the same brief.
-- **The push gate's leak scan reads every patch since master**: invented names only, never the
-  maintainer's employers, contacts or handle (write the app's address as
-  `aranculleton/last-job-search` in full); when an old patch holds a flagged line, fold the
-  unpushed commits into one (`git reset --soft origin/<branch>`).
-- **Say nothing about runs on a push you have replaced.** Speak when the latest push is green
-  or truly red, when work merges, and when the release is out.
+MAINTAINING.md now holds it for good: "How a builder works" (decide, never ask; cheap and
+still certain; helpers in worktrees; the leak scan) and, under "Releasing", the lenses a
+version is reviewed through instead of another whole-app audit (the stranger, real scale,
+two chats at once, every engine, with Platforms started by hand early). The lessons 4.9 paid
+for are rules under "Developer rules".
 
 ## What 4.9 decided, to keep
 
