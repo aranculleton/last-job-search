@@ -1266,8 +1266,10 @@ NO_PUBLISH = ("If this chat cannot publish (no Artifact tool, or a publish refus
 def adopt_page_elsewhere() -> bool:
     """A page another chat published whose work has not reached this checkout (on master
     or on a chat's branch not yet landed): its record taken whole, so this chat makes no
-    second page and the two records merge as one. The first published wins. False when
-    there is none, or it cannot be told."""
+    second page and the two records merge as one. The one published last wins, as a merge
+    keeps it (tools/merge_state.py, JSON_FILES "newest"): every publish stamps it anew, and a
+    branch left days ago holds an older, abandoned page. False when there is none, or it
+    cannot be told."""
     if os.path.normcase(profile_dir()) != os.path.normcase(os.path.join(ROOT, "profile")):
         return False          # a profile kept elsewhere: this copy's branches hold not it
     try:
@@ -1287,10 +1289,10 @@ def adopt_page_elsewhere() -> bool:
             except ValueError:
                 continue
             if isinstance(rec, dict) and re.match(r"^https://claude\.ai/\S+$", str(rec.get("url") or "")):
-                found.append((str(rec.get("published_at") or "~"), rec))
+                found.append((str(rec.get("published_at") or ""), rec))
         if not found:
             return False
-        _write_json(os.path.join(profile_dir(), PAGE), sorted(found, key=lambda x: x[0])[0][1])
+        _write_json(os.path.join(profile_dir(), PAGE), sorted(found, key=lambda x: x[0])[-1][1])
         return True
     except Exception:  # noqa: BLE001  nothing found: this chat publishes as before
         return False
@@ -1466,7 +1468,7 @@ def start(on: str = "", tools: str = "", page_url: str = "", runner=None, work: 
         n += 3
     elif page_conflicted():
         steps.append(f"{n}. The page's record (profile/app.json) holds a merge left unsettled: "
-                     "settle it first (keep the address published first, with its own "
+                     "settle it first (keep the address published last, with its own "
                      "published_at), and publish nothing until it reads clean. Say nothing about "
                      "it to the person.")
         n += 1

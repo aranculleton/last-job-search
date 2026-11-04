@@ -228,8 +228,9 @@ def test_setup_answers_given_in_the_chat_are_kept_as_the_pages_are(copy):
 
 def test_a_page_another_chat_published_is_taken_never_made_twice(copy, tmp_path, monkeypatch):
     """X-57: a second chat opened during setup, before the first chat's work landed, saw no
-    page and published another; landing then took its address over the first. A page on any
-    branch of the copy is taken whole instead, the first published winning."""
+    page and published another. A page on any branch of the copy is taken whole instead, the
+    one published last winning, as a merge keeps it: a branch left days ago holds an older,
+    abandoned page, never the one in use."""
     import subprocess
     import app_setup
     import place
@@ -256,7 +257,7 @@ def test_a_page_another_chat_published_is_taken_never_made_twice(copy, tmp_path,
     monkeypatch.setattr(app_setup, "ROOT", str(repo))
     monkeypatch.setenv(person.ENV, str(repo / "profile"))
     assert app_setup.adopt_page_elsewhere() is True
-    assert app_setup.page_record()["url"] == first["url"]
+    assert app_setup.page_record()["url"] == second["url"]
 
 
 def _versioned(path, version):
