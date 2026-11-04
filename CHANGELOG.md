@@ -22,6 +22,10 @@ make sense to somebody whose repo just received it.
 
 ### Changed
 
+- **A chat for a big job is tidied away as soon as the job is done.** An interview prep, a
+  search or a batch of drafts no longer leaves its chat in your list for two more days: once
+  the work is finished and saved, Claude puts the chat away soon after. Nothing in it is lost
+  and it can be brought back.
 - **Tapping on your page no longer counts as you giving feedback.** The page's own notices and
   card text were sometimes read as if you had said them, which held up Claude's reply until
   it dismissed a reaction you never made. Only what you type is read now.

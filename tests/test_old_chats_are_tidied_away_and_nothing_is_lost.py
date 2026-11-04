@@ -444,3 +444,58 @@ def test_a_registry_with_the_upkeep_in_it_is_clean(tmp_path, monkeypatch):
     assert routines.upkeep_entry(reg)["chat"] == {"session_id": HELPER}
     routines.forget_upkeep(path=str(path))
     assert routines.upkeep_entry(json.loads(path.read_text(encoding="utf-8"))) is None
+
+
+# ------------------------------------------------------------ a finished job's chat goes at once
+
+JOB = "session_EXAMPLEPREP"
+RECENT = "2026-10-29T06:00:00Z"                      # used hours ago, well inside the two days
+
+
+def _item(chat, status, finished="2026-10-29T05:50:00Z"):
+    d = {"kind": "prep", "status": status, "claimed_by": chat}
+    if status in ("done", "failed", "stopped"):
+        d["finished_at"] = finished
+    return {"data": d, "version": 2}
+
+
+def test_a_chat_whose_job_has_ended_is_archived_though_used_lately():
+    chats = CHATS + [chat(JOB, "Job search: Interview prep: Quillon", updated=RECENT)]
+    info = dict(INFO, **{JOB: detail(JOB)})
+    kept = _plan(chats=chats, info=info)
+    assert JOB not in {c["id"] for c in kept["archive"]}          # no word on its job: two days apply
+    db = {"work": {"prep~1": _item(JOB, "done"), "prep~2": _item(JOB, "failed")}}
+    jobs = tidy.finished_jobs(db)
+    assert set(jobs) == {JOB}
+    got = _plan(chats=chats, info=info, jobs=jobs)
+    assert JOB in {c["id"] for c in got["archive"]}
+
+
+def test_a_job_still_going_or_a_chat_that_is_not_safe_to_put_away_stays():
+    assert tidy.finished_jobs({"work": {"a": _item(JOB, "done"), "b": _item(JOB, "running")}}) == {}
+    assert tidy.finished_jobs({"work": {"a": _item(JOB, "done")}}, skip=JOB) == {}
+    jobs = {JOB: "2026-10-29T05:50:00Z", "session_EXAMPLEUNSAVED": "x", "session_EXAMPLEOWN": "x",
+            "session_EXAMPLEOTHERCOPY": "x", HELPER: "x", "session_EXAMPLEROUNDCHAT": "x",
+            "session_EXAMPLERUNNING": "x"}
+    chats = CHATS + [chat("session_EXAMPLERUNNING", "Job search: drafts", updated=RECENT,
+                          status="SESSION_STATUS_RUNNING", bucket="SESSION_STATUS_BUCKET_WORKING")]
+    info = dict(INFO, session_EXAMPLERUNNING=detail("session_EXAMPLERUNNING"))
+    ids = {c["id"] for c in _plan(chats=chats, info=info, jobs=jobs)["archive"]}
+    assert not ids & {"session_EXAMPLEUNSAVED", "session_EXAMPLEOWN", "session_EXAMPLEOTHERCOPY",
+                      HELPER, "session_EXAMPLEROUNDCHAT", "session_EXAMPLERUNNING"}
+
+
+def test_the_tidy_is_due_again_only_when_a_job_chat_has_finished_since_the_last(tmp_path, monkeypatch):
+    subprocess.run(["git", "init", "-q", str(tmp_path)], check=True)
+    monkeypatch.setattr(tidy, "_git_dir", lambda: str(tmp_path / ".git"))
+    monkeypatch.setattr(tidy, "archived", lambda: [])
+    tidy._mark_checked("2026-10-29", "2026-10-29T08:00:00Z")
+    due = lambda db: tidy.due("2026-10-29", db=db, skip=HELPER)  # noqa: E731
+    assert due({"work": {}}) is False                             # tidied today, nothing new
+    assert tidy.due("2026-10-29") is False
+    assert due({"work": {"p": _item(JOB, "done", "2026-10-29T07:00:00Z")}}) is False   # before it
+    assert due({"work": {"p": _item(JOB, "done", "2026-10-29T09:00:00Z"),
+                         "q": _item(JOB, "running")}}) is False                      # still going
+    assert due({"work": {"p": _item(HELPER, "done", "2026-10-29T09:00:00Z")}}) is False  # the page's chat
+    assert due({"work": {"p": _item(JOB, "done", "2026-10-29T09:00:00Z")}}) is True    # ended since
+    assert tidy.due("2026-10-30") is True                         # the day's own rule still holds
