@@ -132,6 +132,8 @@ def test_a_rule_in_their_own_words_sets_it_either_way(monkeypatch):
     assert off == [("profile/networking.py PLAIN_NUDGE", False)], off
     assert on == [("profile/networking.py PLAIN_NUDGE", True)], on
     assert learned.known_settings("messages", "never say just checking in", "no check-ins") == []
+    assert learned.known_settings("messages", "follow-ups never mention news about me",
+                                  "keep my news out of follow-ups") == []
     # A rule they gave before the setting existed is followed all the same.
     rule = {"date": "2026-10-20", "area": "messages", "said": "don't chase anyone unless there's news",
             "rule": "no follow-up without something new", "status": "active"}

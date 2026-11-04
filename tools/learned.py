@@ -176,8 +176,11 @@ _JOBS_WORDS = re.compile(r"\b(?:jobs?|postings?|roles?|listings?|openings?|vacan
 # short plain one unless the person said otherwise (followup_drafts.plain_nudge_allowed).
 _NUDGE_WORDS = re.compile(r"\b(?:nudg\w*|follow[- ]?ups?|follow(?:ing)? (?:them |people )?up|"
                           r"chas(?:e|es|ing))\b", re.I)
-_NEWS_WORDS = re.compile(r"\b(?:nothing (?:new|to say)|something new|(?:a |no |new )?reason|"
-                         r"news|anything new)\b", re.I)
+# Having something new to say, never news as a subject ("never mention news about me").
+_NEWS_WORDS = re.compile(r"\b(?:nothing (?:new|to say)|something new|anything new|new reason|"
+                         r"(?:a|no|any) reason|without (?:a |any )?(?:reason|news)|"
+                         r"(?:no|any|unless there(?:'?s| is)|if there(?:'?s| is)|when there(?:'?s| is)|"
+                         r"only with) (?:some )?news)\b", re.I)
 _PLAIN_ON = re.compile(r"\b(?:even|anyway|still|regardless|always)\b", re.I)
 _PLAIN_OFF = re.compile(r"\b(?:only|unless|never|don'?t|do not|stop|no|not|without)\b", re.I)
 
