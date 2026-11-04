@@ -80,6 +80,13 @@ make sense to somebody whose repo just received it.
 
 ### Fixed
 
+- **A search brings back only new jobs that pass every rule.** A job needing a language you
+  do not speak, a staffing agency, a job with no score, and one already on your list, drafted
+  or applied for are passed over and the next one taken, so asking for 20 brings 20 new ones
+  or says how many it found.
+- **You can draft just the resume, and your applications list only names files that were
+  made.** "Draft the resume only" is under a job's More, or ask a chat for it; no cover letter
+  is written or listed, and a file that was never made is never named.
 - **"Claude isn't listening" is said once, on its card in To do, with Wake Claude as its one
   button.** The line at the top no longer says it again, and on a phone nothing sends you out
   of the Claude app to your browser.
