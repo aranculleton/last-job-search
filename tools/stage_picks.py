@@ -18,8 +18,8 @@ with a document the employer never saw. Staging now derives the name, checks
 it against the tracker, and appends a PascalCase role token whenever the name
 belongs to a different application.
 
-    python3 tools/stage_picks.py stage <round_dir> <pick> [<pick> ...] [--both]
-    python3 tools/stage_picks.py single <dir> --company C --role R --posting-file F [--url U] [--fit N]
+    python3 tools/stage_picks.py stage <round_dir> <pick> [<pick> ...] [--both] [--resume-only]
+    python3 tools/stage_picks.py single <dir> --company C --role R --posting-file F [--url U] [--fit N] [--resume-only]
     python3 tools/stage_picks.py single <dir> --for-contact <contact_id> [--company C --role R --posting-file F] [--referral-field]
     python3 tools/stage_picks.py consent <round_dir> <pick> --yes A B --no C [--draft | --skip]
     python3 tools/stage_picks.py audit <round_dir> [--only <slug> ...] [--json]
@@ -449,13 +449,15 @@ def general_resume_for(contact_id: str, today=None, contacts_path: str = "") -> 
 def stage(round_dir: str, picks: list[str], rows: list[dict] | None = None,
           root: str = ROOT, shortlist: list[dict] | None = None,
           fetch=_hydrate, both: bool = False, today=None, for_contact: str = "",
-          referral_field: bool | None = None) -> list[dict]:
+          referral_field: bool | None = None, resume_only: bool = False) -> list[dict]:
     """Stage the picks and return every one, each with its `hold` questions (empty when
     nothing waits on the person). picks.json gets the ones nothing waits on, held.json
     the rest. `both` is the person saying they want two roles at one employer.
     `for_contact` is the contact_id of whoever asked for the resume: every pick is drafted
     for them (see the module's note). `referral_field`: they said to apply and name them,
-    so it goes in through the portal (None: read from their thread, `contact_route`)."""
+    so it goes in through the portal (None: read from their thread, `contact_route`).
+    `resume_only`: they asked for the resume alone, so no letter is drafted, audited, made
+    or named in the tracker (docpaths.has_letter)."""
     import posting_profile
     from company_key import key as company_key
     shortlist = load_shortlist(round_dir) if shortlist is None else shortlist
@@ -473,6 +475,7 @@ def stage(round_dir: str, picks: list[str], rows: list[dict] | None = None,
     # the employer's own board where one is on file (tools/apply_link.py), each board once.
     import apply_link
     links = apply_link.Checker()
+    only = {docpaths.RESUME_ONLY: True} if resume_only else {}
     for n, pick in enumerate(picks, 1):
         r = links.shown(_find(shortlist, pick))
         # Checked before the posting is fetched: a contact at another employer is a mistake.
@@ -536,6 +539,8 @@ def stage(round_dir: str, picks: list[str], rows: list[dict] | None = None,
         if mine:
             head.append(f"- for contact: {mine['for_contact_name']} ({mine['for_contact']}), who "
                         f"asked for it: {_network_state().route_words(mine['for_contact_route'])}")
+        if only:
+            head.append("- documents: the resume alone, as the person asked; no letter")
         # What code read from the posting, derived values only (no posting text above the
         # fence), so the researcher and the drafter know it as well as the person does.
         head += [f"- {line}" for line in posting_profile.lines(prof, quotes=False)]
@@ -551,8 +556,9 @@ def stage(round_dir: str, picks: list[str], rows: list[dict] | None = None,
         staged.append({"file": path, "company": r["company"], "role": r["title"],
                        "slug": s, "abbr": abbr, "ask_first": [x["skill"] for x in asks],
                        "ask_beside": {x["skill"]: x["have"][:1] for x in asks if x["have"]},
-                       "posting_profile": prof, "hold": hold, **mine})
-        apps_in.append(dict({k: v for k, v in r.items() if k != "desc"}, abbr=abbr, **mine))
+                       "posting_profile": prof, "hold": hold, **mine, **only})
+        apps_in.append(dict({k: v for k, v in r.items() if k != "desc"}, abbr=abbr, **mine,
+                            **only))
     # One role per employer, unless the person said both.
     by_employer: dict[str, list[dict]] = {}
     for p in staged:
@@ -996,6 +1002,11 @@ def assemble(round_dir: str, only=()) -> tuple[list[dict], list[str], list[str]]
                 # Who asked for it travels with the draft into its folder (draft.json), so a
                 # later render or outreach run still knows it goes to them.
                 d[k] = p[k]
+        if p.get(docpaths.RESUME_ONLY):
+            # The resume alone, as asked: kept on the draft (and its draft.json), so no
+            # render, check or tracker row ever makes or names a letter for it.
+            d = dict(d, **{docpaths.RESUME_ONLY: True}, p1="", p2="", lead="", cl_bullets=[],
+                     p4="")
         drafts.append(d)
     with open(os.path.join(round_dir, "drafts.json"), "w", encoding="utf-8", newline="\n") as fh:
         json.dump(drafts, fh, indent=1)
@@ -1010,6 +1021,8 @@ def _report(staged: list[dict], round_dir: str) -> None:
         if p.get("for_contact"):
             print(f"    for {p['for_contact_name']} ({p['for_contact']}), who asked for it: "
                   + _network_state().route_words(p.get("for_contact_route")))
+        if p.get(docpaths.RESUME_ONLY):
+            print("    the resume alone, as asked: no letter is drafted or made")
         for line in posting_profile.lines(p["posting_profile"]) if p.get("posting_profile") else ():
             print(f"    {line}")
     held = [p for p in staged if p.get("hold")]
@@ -1109,6 +1122,8 @@ def main() -> int:
     s.add_argument("--referral-field", action="store_true", default=None,
                    help="with --for-contact: they said to apply and name them as the referrer, "
                         "so it goes in through the portal, not to them")
+    s.add_argument("--resume-only", action="store_true",
+                   help="they asked for the resume alone: no letter is drafted or made")
     one = sub.add_parser("single", help="one posting that came from no round: /apply")
     one.add_argument("round_dir", help="a scratch directory for this application")
     one.add_argument("--company", default="")
@@ -1125,6 +1140,8 @@ def main() -> int:
     one.add_argument("--location", default="")
     one.add_argument("--fit", type=int, help="the 0-100 fit /apply Step 1 scored")
     one.add_argument("--deadline", default="")
+    one.add_argument("--resume-only", action="store_true",
+                     help="they asked for the resume alone: no letter is drafted or made")
     c = sub.add_parser("consent", help="record the person's answers for one pick")
     c.add_argument("round_dir")
     c.add_argument("pick", help="the slug or abbr stage printed, or the company")
@@ -1201,11 +1218,13 @@ def main() -> int:
         if args.deadline:
             row["deadline"] = args.deadline
         _report(stage(args.round_dir, ["1"], shortlist=[row], for_contact=args.for_contact,
-                      referral_field=args.referral_field), args.round_dir)
+                      referral_field=args.referral_field, resume_only=args.resume_only),
+                args.round_dir)
         return 0
     if args.cmd == "stage":
         _report(stage(args.round_dir, args.picks, both=args.both, for_contact=args.for_contact,
-                      referral_field=args.referral_field), args.round_dir)
+                      referral_field=args.referral_field, resume_only=args.resume_only),
+                args.round_dir)
         return 0
     drafts, missing, rejected = assemble(args.round_dir, args.only)
     print(f"assembled {len(drafts)} drafts into {os.path.join(args.round_dir, 'drafts.json')}")

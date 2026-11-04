@@ -13,7 +13,8 @@ export const meta = {
 // Args: the contents of round_dir/draft_args.json, written by
 //   python3 tools/draft_pack.py build <round_dir>
 // plus {today: 'YYYY-MM-DD'}: {today, round_dir, pack, pack_hash, picks: [{file, company,
-// role, slug, abbr, ask_first, skills_yes?, skills_no?, brief}], repo?, only?, outreach?}.
+// role, slug, abbr, ask_first, skills_yes?, skills_no?, resume_only?, brief}], repo?, only?,
+// outreach?}.
 // Args with no pack (only {today, round_dir, picks}, the older shape) still run: each
 // drafter builds and reads the pack itself, one extra command and no shared prompt cache,
 // and every draft it writes is flagged no-pack for the model auditor to rule on.
@@ -85,7 +86,10 @@ const repo = args.repo || 'the current working directory (the repository root; p
 const PACK = typeof args.pack === 'string' ? args.pack : ''
 const PACK_HASH = args.pack_hash || ''
 const ONLY = Array.isArray(args.only) ? args.only.map(String) : null
-const wantsNote = (p) => args.outreach === true || (Array.isArray(args.outreach) && args.outreach.map(String).includes(p.slug))
+// A pick the person asked for the resume alone (stage_picks.py --resume-only): no letter, so
+// no employer research for one, no note built from one, and its brief says so to the drafter.
+const resumeOnly = (p) => p.resume_only === true
+const wantsNote = (p) => !resumeOnly(p) && (args.outreach === true || (Array.isArray(args.outreach) && args.outreach.map(String).includes(p.slug)))
 
 // ------------------------------------------------------------------ telemetry
 const COST = {}
@@ -241,7 +245,9 @@ Do not research the candidate. Do not draft anything.`
 
 // An employer researched recently comes with its research already (draft_pack.py
 // cached_research): no agent to re-read what is saved.
+const NO_RESEARCH = { facts: [], team_context: '', do_not_claim: [], salary: '', work_model: '', location: '' }
 const research = (pick) => pick.research ? Promise.resolve(pick.research)
+  : resumeOnly(pick) ? Promise.resolve(NO_RESEARCH)
   : metered(pick, 'research', 'sonnet', researchPrompt(pick), () => agent(researchPrompt(pick),
     { label: `research:${pick.slug}`, phase: 'Research', schema: RESEARCH_SCHEMA, model: 'sonnet', effort: 'medium' }))
 
@@ -258,7 +264,7 @@ const draftPrompt = (pick, r) => {
 Repo: ${repo}. Today is ${today}. Round directory: ${scratch}. Slug: ${pick.slug}.
 ${posting}
 Verified employer research (the only employer facts you may use; cite each by its F id):
-${factLines(res) || '(none verified: p2 states no employer fact beyond what the posting says, cited POSTING; say so in notes_for_tracker)'}
+${factLines(res) || (resumeOnly(pick) ? '(none: the resume alone, so there is no letter for an employer fact)' : '(none verified: p2 states no employer fact beyond what the posting says, cited POSTING; say so in notes_for_tracker)')}
 Team: ${res.team_context || 'not stated'}. Do not claim: ${(res.do_not_claim || []).join('; ') || 'nothing listed'}. Named contact: ${res.named_contact || 'none'}. Requisition: ${res.req_id || 'none'}. Salary: ${res.salary || 'not stated'}. Deadline: ${res.deadline || 'none stated'}. Work model: ${res.work_model || 'not stated'}. Location: ${res.location || 'not stated'}.
 
 == WHAT TO DO ==

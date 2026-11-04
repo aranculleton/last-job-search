@@ -787,11 +787,16 @@ def _job_draft(r: Run) -> dict:
         return {"note": "Already on its way.", "undo": None}
     noun = str(person.get("documents.noun", "resume"))
     answers = r.value.get("answers") if isinstance(r.value.get("answers"), dict) else {}
-    doc = {"kind": "draft", "title": f"{noun[:1].upper() + noun[1:]} and letter: "
+    # The resume without a letter, when the person asked for it alone (the page's "Draft the
+    # resume only"): the chat stages it with --resume-only, so no letter is made or named.
+    alone = r.value.get("resume_only") is True
+    doc = {"kind": "draft", "title": f"{noun[:1].upper() + noun[1:]} "
+                                     f"{'only' if alone else 'and letter'}: "
                                      f"{t.get('company')}, {t.get('title')}",
            "to": str(r.value.get("to") or "cloud"),
            "args": {"round": t.get("round"), "rank": t.get("rank"), "url": t.get("url"),
-                    "company": t.get("company"), "title": t.get("title")},
+                    "company": t.get("company"), "title": t.get("title"),
+                    **({"resume_only": True} if alone else {})},
            "answers": answers, "asked_at": app_model.stamp(r.at),
            "asked_from": {"tab": r.act.get("tab") or ""}, "priority": 0, "status": "queued",
            "stages": [{"name": s["name"], "est_s": s["est_s"]}

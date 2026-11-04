@@ -2094,7 +2094,9 @@
   // One tap drafts (the maintainer, 2026-11-03: "when i press draft this, it doesnt draft, it
   // brings up this then i have to press draft again"). Already applied is the bin's own
   // choice and "I have applied" under More; the posting's own questions never held a draft up.
-  function askDraft(rows) {
+  // `alone`: the resume without a letter, the one choice where drafting is asked (a job's More,
+  // "Draft the resume only"): there was no way to ask for it (the maintainer, 2026-11-04).
+  function askDraft(rows, alone) {
     rows = rows.filter(Boolean);
     if (!rows.length) return;
     const ref = rows.length === 1 ? referralAt(rows[0].company, rows[0]) : null;
@@ -2102,9 +2104,9 @@
     // One wording for the toast and for a screen reader, and an Undo that calls the drafts off
     // before Claude starts, as "Don't do it" does (the walk-through, 2026-11-03: one tap now
     // drafts, and nothing took it back).
-    const said = (rows.length === 1 ? "Drafting " + txt(rows[0].company) : "Drafting " + rows.length + " applications") + ": in Jobs, under Drafts, in about " + plural(mins, "minute", "minutes") + ". Nothing is sent." +
+    const said = (rows.length === 1 ? "Drafting " + (alone ? "your " + noun() + " for " : "") + txt(rows[0].company) : "Drafting " + rows.length + " applications") + ": in Jobs, under Drafts, in about " + plural(mins, "minute", "minutes") + ". Nothing is sent." +
       (ref ? " " + txt(ref.first_name) + " put your name forward there: ask them before you send it." : "");
-    requestWork(rows.map((r) => draftSpec(r, [])), {said}).then((made) => {
+    requestWork(rows.map((r) => draftSpec(r, [], alone)), {said}).then((made) => {
       if (!arr(made).length) return;
       toast({text: said, ids: [], until: 0, seeLabel: "Undo", see: () => { for (const id of made) stopWork(id); toast({text: "Not drafting " + (made.length === 1 ? txt(rows[0].company) : made.length + " applications") + ".", ids: []}); }});
     });
@@ -2115,9 +2117,9 @@
   function draftAnswers(r, answerOf) {
     return arr(r.questions).filter((q) => !appliedQ(q)).map((q, i) => ({q: txt(q), a: answerOf(i)})).filter((x) => x.a === "yes" || x.a === "no");
   }
-  function draftSpec(r, answers) {
-    return {id: draftWorkId(r), kind: "draft", title: Noun() + " and letter: " + txt(r.company) + ", " + txt(r.title),
-      args: Object.assign({}, obj(obj(r.draft_work).args), {job: txt(r.id), round: txt(jobsBlock().round), rev: txt(r.rev), already_applied: "no", answers})};
+  function draftSpec(r, answers, alone) {
+    return {id: draftWorkId(r), kind: "draft", title: Noun() + (alone ? " only: " : " and letter: ") + txt(r.company) + ", " + txt(r.title),
+      args: Object.assign({}, obj(obj(r.draft_work).args), {job: txt(r.id), round: txt(jobsBlock().round), rev: txt(r.rev), already_applied: "no", answers}, alone ? {resume_only: true} : {})};
   }
   // Someone there has put the person's name forward: an application of their own lands as a
   // second, worse record, so marking one is asked once more. The only confirm on the page.
@@ -4863,6 +4865,7 @@
     }
     const ref = referralAt(r.company, r);
     const draft = () => (ref ? confirmApplied([r], () => askDraft([r]), "draft") : askDraft([r]));
+    const draftAlone = () => (ref ? confirmApplied([r], () => askDraft([r], true), "draft") : askDraft([r], true));
     const asks = live && !pending ? jobQuestions(r) : [];
     // Applied: the next thing at that employer is the card's state and its one button.
     const iv = st === "applied" ? relatedInterview(r) : null;
@@ -4895,6 +4898,8 @@
       relatedLinks(r.company, r.id, r),
       h("div", {class: "more-acts"},
         (st === "new" && !closed && (ref || asks.length)) ? btn("Draft this", draft, {small: true, key: "draft2:" + r.id, aria: "Draft this: " + about}) : null,
+        // The resume without a letter: the one choice where drafting is asked.
+        (st === "new" && !closed) ? btn("Draft the " + noun() + " only", draftAlone, {kind: "quiet", small: true, key: "draftalone:" + r.id, aria: "Draft the " + noun() + " only: " + about}) : null,
         // A closed posting has nothing left to ask about, look into or apply to: setting it
         // aside is all it offers (2026-11-03).
         live && !closed && !ref && warmPerson(r) && !(suggestionShown(suggestOf(r)) && obj(suggestOf(r)).kind === "warm") ? btn("Ask " + txt(warmPerson(r).first_name) + " for a referral for this role", () => askReferral(warmPerson(r), r), {small: true, key: "askref:" + r.id}) : null,

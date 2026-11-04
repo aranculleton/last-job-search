@@ -73,6 +73,9 @@ LETTER_BULLETS = 3
 # The fields a reader reads, in page order. cl_bullets[i] and outreach_body join them.
 RENDERED = ("summary", "p1", "p2", "lead", "p4")
 REQUIRED = ("company", "role", "summary", "tools", "p1", "p2", "lead", "cl_bullets", "p4")
+# What a draft of the resume alone needs (docpaths.has_letter), and the fields it leaves empty.
+LETTER_FIELDS = ("p1", "p2", "lead", "cl_bullets", "p4")
+RESUME_REQUIRED = tuple(k for k in REQUIRED if k not in LETTER_FIELDS)
 # What the drafter returns beside the draft, which is not prose anyone reads.
 NOT_PROSE = {"claim_map", "stretches", "posting", "research", "check_output", "pack_hash",
              "corpus_hash", "residual_risks", "consented_skills", "declined_skills", "rulings",
@@ -584,14 +587,23 @@ def rule_findings(d: dict, pick: dict, posting: str, corpus: dict | None = None,
     import audit_letters
     import check_claims
     import check_numbers
+    import docpaths
     import fit_to_page
     import learned
     import skills_block
     import voice_check
     findings, notes = [], []
-    for k in REQUIRED:
+    # The resume alone, as the person asked (stage_picks.py --resume-only): no letter is made,
+    # so none is required or checked, and a letter written anyway is a finding, never rendered.
+    makes_letter = docpaths.has_letter(pick) and docpaths.has_letter(d)
+    for k in REQUIRED if makes_letter else RESUME_REQUIRED:
         if not d.get(k):
             findings.append(_finding("missing-field", k, "", f"the draft has no {k}"))
+    if not makes_letter:
+        for k in LETTER_FIELDS:
+            if d.get(k):
+                findings.append(_finding("resume-only", k, "", "the person asked for the "
+                                         "resume alone: leave the letter's fields empty"))
     findings += malformed(d)
     if findings:
         return findings, notes
@@ -628,13 +640,13 @@ def rule_findings(d: dict, pick: dict, posting: str, corpus: dict | None = None,
             (findings if sev == "ERROR" or name == "declined-skill" else notes).append(item)
     # The letter checks a draft object can answer before it is rendered.
     try:
-        for f in audit_letters.draft_flags(d, batch):
+        for f in audit_letters.draft_flags(d, batch) if makes_letter else ():
             findings.append(_finding("letter", "letter", f, "rewrite that part of the letter"))
     except (KeyError, TypeError, AttributeError) as e:
         findings.append(_finding("letter", "letter", repr(e), "the letter fields are malformed"))
     # A letter bullet repeating a resume bullet, which verify_batch.sh finds only after the
     # render. The allocator is code, so the bullets the resume will open with are known now.
-    if posting.strip():
+    if posting.strip() and makes_letter:
         try:
             import render_application as R
             probe = dict(d, posting=posting)
@@ -656,12 +668,12 @@ def rule_findings(d: dict, pick: dict, posting: str, corpus: dict | None = None,
         findings.append(_finding("budget", "summary", f"{sw} words",
                                  f"the summary is {SUMMARY_WORDS[0]} to {SUMMARY_WORDS[1]} words"))
     bw = fit_to_page.body_words(d)
-    if not BODY_WORDS[0] <= bw <= BODY_WORDS[1]:
+    if makes_letter and not BODY_WORDS[0] <= bw <= BODY_WORDS[1]:
         findings.append(_finding("budget", "letter", f"{bw} body words",
                                  f"p1 + p2 + lead + p4 + the bullets are {BODY_WORDS[0]} to "
                                  f"{BODY_WORDS[1]} words"))
     bullets = d.get("cl_bullets") or []
-    if len(bullets) != LETTER_BULLETS:
+    if makes_letter and len(bullets) != LETTER_BULLETS:
         findings.append(_finding("budget", "cl_bullets", f"{len(bullets)} bullets",
                                  f"exactly {LETTER_BULLETS} letter bullets"))
     for i, b in enumerate(bullets):
@@ -1590,6 +1602,11 @@ def packet(round_dir: str, slug: str) -> str:
     lines += [f"- [{f['rule']}] {f['field']}: {f['text']} -- {f['fix']}"
               for f in mech["findings"]] or ["- none"]
     lines += ["", "== THE DRAFT =="]
+    import docpaths
+    if not (docpaths.has_letter(pick) and docpaths.has_letter(d)):
+        lines.append("THE RESUME ALONE, as the person asked: no letter is made, so the letter's "
+                     "fields stay empty and p1's hook is not asked for. Audit the summary, the "
+                     "skills line and any reworded bullet.")
     for k in ("summary", "tools", "p1", "p2", "lead"):
         lines.append(f"{k}: {plain(d.get(k))}")
     for i, b in enumerate(d.get("cl_bullets") or []):
