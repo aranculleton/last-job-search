@@ -63,12 +63,17 @@ URL="$(git -C "$MAINT" remote get-url origin 2>/dev/null || true)"
 if [ -n "$URL" ]; then
   if [ -d "$WORK/maint/.git" ]; then
     git -C "$WORK/maint" fetch -q origin 2>/dev/null \
-      && git -C "$WORK/maint" reset -q --hard FETCH_HEAD 2>/dev/null && SRC="$WORK/maint"
+      && git -C "$WORK/maint" reset -q --hard origin/HEAD 2>/dev/null && SRC="$WORK/maint"
   else
     rm -rf "$WORK/maint"
     git clone -q "$URL" "$WORK/maint" 2>/dev/null && SRC="$WORK/maint"
   fi
   [ "$SRC" = "$MAINT" ] && echo "push_gate: could not fetch $URL; the denylist is built from $MAINT as it is"
+  # The app's history beside it, as a person's sync keeps it: build_app sets aside only a
+  # word the app carried before the person wrote it down (set_aside), and with no app to
+  # compare with, every ordinary word in their tracker ("Visa") stopped the build.
+  [ "$SRC" != "$MAINT" ] && git -C "$SRC" fetch -q "$(git rev-parse --show-toplevel)" \
+    "+refs/remotes/origin/master:refs/remotes/app/master" 2>/dev/null
 fi
 SRC_HEAD="$(git -C "$SRC" rev-parse HEAD 2>/dev/null || echo none)"
 if [ ! -s "$TOKENS" ] || [ -n "$(find "$TOKENS" -mmin +720 2>/dev/null)" ] \
