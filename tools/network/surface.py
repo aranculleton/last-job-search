@@ -319,11 +319,28 @@ def check(person: dict, ctx: dict | None = None, queued: bool = False) -> dict:
 
 # ------------------------------------------------------------------ someone already written to
 
-def turned_down(company) -> str:
+def agency_recruiter(contact) -> bool:
+    """A recruiter by job at a recruitment or staffing agency (the person's own agency lists,
+    tools/sector.py). The agency is not where the person would work, so the employer bar
+    never judges it for their sake."""
+    try:
+        import sector
+        from compose import is_recruiter
+        c = contact or {}
+        return bool(is_recruiter(c.get("title")) and sector.is_agency(c.get("company")))
+    except Exception:  # noqa: BLE001  an unreadable list makes nobody an agency recruiter
+        return False
+
+
+def turned_down(company, agency=False) -> str:
     """Why the person's own bar turns this employer down, or "": a sector or employer the
     profile excludes, one listed or judged as clearing none of pay, prestige or signal, or
     the search's do-not-target list. One nobody has judged yet is never turned down for
-    that (bar.UNLISTED): it is judged first, never hidden unjudged."""
+    that (bar.UNLISTED): it is judged first, never hidden unjudged.
+
+    `agency`: the contact is a recruiter at an agency, which is not where the person would
+    work. Then only what the person said of that employer by name counts (an exclusion, a
+    decline, the do-not-target list), never that it clears none of pay, prestige or signal."""
     company = str(company or "").strip()
     if not company:
         return ""
@@ -333,7 +350,7 @@ def turned_down(company) -> str:
         from company_key import key
         verdict, why = bar.verdict(company)
         if verdict == bar.EXCLUDED or (verdict == bar.NONE and bar.applies()
-                                       and bar.UNLISTED not in why):
+                                       and bar.UNLISTED not in why and not agency):
             return why or "it clears none of pay, prestige or signal"
         return throttle.load_do_not_target().get(key(company), "") or ""
     except Exception:  # noqa: BLE001  a bar that cannot be read turns nobody down
@@ -391,9 +408,10 @@ def held(contact, msgs, status, replying=False, memo=None) -> dict | None:
     # (a book of 2,000 people asked the bar 2,000 times).
     memo = {} if memo is None else memo
     company = str(c.get("company") or "").strip()
-    if ("bar", company) not in memo:
-        memo[("bar", company)] = turned_down(company)
-    if memo[("bar", company)]:
+    agency = agency_recruiter(c)
+    if ("bar", company, agency) not in memo:
+        memo[("bar", company, agency)] = turned_down(company, agency)
+    if memo[("bar", company, agency)]:
         return {"why": "employer", "said": HELD_WORDS["employer"].format(company=company)}
     if replying or status in state.schema.OWED_BY_US:
         return None

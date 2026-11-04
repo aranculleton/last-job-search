@@ -532,8 +532,9 @@ METHODS: dict[str, dict] = {
             (68, "2026-11-04", False, "a LinkedIn download fills the name, employer and title a contact lacks from its connections, never over one already recorded, and says what it filled; the same download taken again on the page fills again rather than stopping at Already taken"),
             (69, "2026-11-04", False, "nobody is owed a follow-up message who cannot receive one: someone only ever sent an InMail, with no acceptance and no word back, is not listed, because a second would be a second InMail"),
             (70, "2026-11-04", False, "a follow-up finished with reply.py finish is checked as the follow-up it is, so one to someone who never wrote back is saved where Messages shows it instead of refused as a reply with nothing to answer, and its line says follow-up; nothing to redo"),
+            (71, "2026-11-04", False, "a recruiter at a recruitment or staffing agency is no longer hidden from Messages because the agency clears none of your bar: the bar judges where you would work; an employer you named, and an in-house recruiter at one you turned down, still hold"),
         ),
-        "fingerprint": "33f0a53aea6ce039",
+        "fingerprint": "0d3f647395c40587",
     },
     "network-notes": {
         "by": "network", "priority": 2, "applies": "queued_notes", "time": "~10 min",
@@ -640,8 +641,9 @@ METHODS: dict[str, dict] = {
             (35, "2026-11-03", False, "the search window holds for an employer's own board as for every other source, read from the posting's own date where the board gives one; nothing ruled out before needs looking at again"),
             (36, "2026-11-03", False, "the bar reads a public body its names miss from its own posting (\"is a provincial agency\", \"an agency of the Government of\"), where the profile excludes public bodies, so it is cut before the shortlist like one named; the paid exception holds; only the employer saying it of itself counts (\"We are a\", \"<employer> is a\", \"join the ... Public Service\"), never a client or a regulator the posting names, and only for an employer on none of the lists and judged by nobody"),
             (37, "2026-11-03", False, "a posting that only names the person's skills no longer scores 100: above 90 a point counts half and the posting alone stops at 98, so the top of a ranking tells rows apart; a live contact or an earlier interview still reaches 100; scores of 90 or under are unchanged; a years bar stated per degree is read for the degree held; an employer that clears none of the bar waits on the person before drafting; the pay answer on the form moves with the posting's own range; the search window is any whole number of days the person sets, not only 7, 14 or 30; a role applied to that went quiet is never surfaced again; a public body counts as paid only when the bottom of its stated range reaches the target, and gets no lift from an employer tier; a posting the person cleared stays cleared under every copy of it; a reply recorded as parked or no way in is not a warm route; a skill held under another name is never a near match; a bar of pay, prestige or signal applies only where the person's own profile states one (an employer tier or a frontier list), never because a chat judged an employer, and with none no employer is judged or ruled out for it; every language the person does not hold is a cut, in English or the posting's own words, and a title in one; pay, years, terms and degrees are read in German, French, Spanish, Portuguese, Italian, Dutch, Polish and Swedish; pay by the month is read as twelve months, and a pay ruling made on a monthly band is released by itself"),
+            (38, "2026-11-04", False, "the staffing-agency test is one named reading of the person's agency lists; screening is as before"),
         ),
-        "fingerprint": "f00a29b7884f5041",
+        "fingerprint": "75ad832fbed52387",
     },
     "routines": {
         "by": "you", "priority": 3, "applies": "routines",
