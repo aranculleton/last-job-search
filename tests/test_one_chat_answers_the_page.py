@@ -25,6 +25,7 @@ sys.path[:0] = [os.path.join(ROOT, "tools"), os.path.join(ROOT, "tests")]
 import pytest  # noqa: E402
 
 import app_state  # noqa: E402
+import repo_files  # noqa: E402
 
 APP = os.path.join(ROOT, "tools", "app.py")
 PAGE = "https://claude.ai/code/artifact/example-page"
@@ -136,7 +137,7 @@ class Copy:
         return env
 
     def run(self, *args, ok=(0,), **env):
-        r = subprocess.run([sys.executable, APP, *args], env=self.env(**env),
+        r = subprocess.run([*repo_files.python_on_github(APP), *args], env=self.env(**env),
                            capture_output=True, encoding="utf-8", errors="replace", timeout=120)
         assert r.returncode in ok, r.stdout + r.stderr
         return r.stdout

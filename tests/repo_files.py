@@ -18,6 +18,7 @@ space in two. So it reads `-z`, and leaves a person's own files out
 """
 from __future__ import annotations
 
+import functools
 import subprocess
 import sys
 from pathlib import Path
@@ -68,3 +69,35 @@ def tracked(*pathspecs: str, root: Path | str = ROOT, app_only: bool = True,
         import personal_paths
         names = [n for n in names if not personal_paths.is_personal(n)]
     return names
+
+
+# A copy's address on GitHub, for a test of what the app does with one where the checkout the
+# suite runs in has none: the computer check runs this suite in a person's copy cloned from a
+# folder (tools/platform_check.py), and there a big job went to a background agent rather than
+# a chat of its own, and a scheduled run had no copy to fetch (2026-11-04).
+ON_GITHUB = ("someone", "my-job-search")
+_BOOT = ("import os, runpy, sys\n"
+         "sys.argv = sys.argv[1:]\n"
+         "sys.path.insert(0, os.path.dirname(os.path.abspath(sys.argv[0])))\n"
+         "import app_setup, place\n"
+         "app_setup.origin = lambda: {on!r}\n"
+         "place.repo = lambda: {on!r}\n"
+         "runpy.run_path(sys.argv[0], run_name='__main__')\n")
+
+
+@functools.lru_cache(maxsize=None)
+def on_github(root: Path | str = ROOT) -> bool:
+    """Whether the checkout at `root` has an address on GitHub (tools/sync_app.repo_of)."""
+    sys.path.insert(0, str(Path(root) / "tools"))
+    import sync_app
+    got = subprocess.run(["git", "-C", str(root), "remote", "get-url", "origin"],
+                         capture_output=True, text=True, encoding="utf-8", errors="replace")
+    return got.returncode == 0 and sync_app.repo_of(got.stdout) != ("", "")
+
+
+def python_on_github(script: str) -> list[str]:
+    """The command that runs one of the app's tools: [python, script] where this checkout has
+    an address on GitHub, and where it has none, the same tool told ON_GITHUB is its address."""
+    if on_github():
+        return [sys.executable, script]
+    return [sys.executable, "-c", _BOOT.format(on=ON_GITHUB), script]

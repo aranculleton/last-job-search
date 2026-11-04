@@ -37,7 +37,9 @@ import test_one_chat_answers_the_page as one  # noqa: E402
 from test_a_tick_on_the_page_is_applied_once import KESTREL, NOW  # noqa: E402
 
 CHAT = "session_EXAMPLERING"
-SEND = re.compile(r"^\d+\. (\S+\.json)   \((.*)\)$")
+# A path may hold spaces: the tests' own folder does under a user named "Zoë Quillfeather"
+# (the computer check on Windows, 2026-11-04). Three spaces end it.
+SEND = re.compile(r"^\d+\. (.+?\.json)   \((.*)\)$")
 
 
 class Ring(one.Copy):
@@ -341,6 +343,9 @@ def test_a_chat_for_one_job_takes_no_update_and_is_given_its_commands(monkeypatc
     # The hook takes no update for it: the chat that answers the page took the day's.
     monkeypatch.setattr(learned, "_path", lambda: "/tmp/not-the-example/learned.json")
     monkeypatch.setattr(sync_app, "stale", lambda: True)
+    # No check tried and failed lately (sync_app.retry_due): this checkout's own git folder
+    # is not this test's, and in a person's copy it may hold one.
+    monkeypatch.setattr(sync_app, "retry_due", lambda: True)
     assert learned._update_due({"hook_event_name": "UserPromptSubmit", "prompt": prompt}) == ""
     assert learned._update_due({"hook_event_name": "UserPromptSubmit", "prompt": "hello"})
 

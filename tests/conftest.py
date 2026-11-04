@@ -14,6 +14,7 @@ interpreter.
 import atexit
 import os
 import shutil
+import sys
 import tempfile
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
@@ -31,6 +32,20 @@ os.environ.pop("LJS_LEDGER", None)
 # test of a cloud chat sets it itself.
 os.environ.pop("CLAUDE_CODE_REMOTE", None)
 atexit.register(shutil.rmtree, _state, ignore_errors=True)
+# The checkout the suite runs in is read as the app's own, wherever it is. In a person's copy
+# (ci_local.sh runs this suite there; the computer check runs it in one cloned from a folder)
+# the day's update check is the copy's, and where it has not run that day, start, a wake and
+# the hooks put it first (app_setup._sync_stale), so a test read the copy's day rather than
+# the app's answer (2026-11-04). There the app's address is this checkout's own; in the app
+# itself nothing changes.
+import subprocess  # noqa: E402
+_origin = subprocess.run(["git", "-C", ROOT, "remote", "get-url", "origin"], capture_output=True,
+                         text=True, encoding="utf-8", errors="replace")
+if _origin.returncode == 0 and _origin.stdout.strip():
+    sys.path.insert(0, os.path.join(ROOT, "tools"))
+    import sync_app as _sync_app  # noqa: E402
+    if not _sync_app.is_the_app(ROOT):
+        os.environ["LJS_APP_URL"] = _origin.stdout.strip()
 # Pages tools/company_research.py fetched, kept for the quote check: the tests' own, never
 # the machine's shared folder a real research run uses.
 _pages = tempfile.mkdtemp(prefix="ljs_pages_")
@@ -43,7 +58,6 @@ atexit.register(shutil.rmtree, _pages, ignore_errors=True)
 # free plan for a moment cannot fix the limits for every test after it in the same worker
 # (2026-10-29: a 209-character follow-up was checked against 180 on one parallel run and
 # 280 on another). A test that changes the plan reloads both (reload_limits below).
-import sys  # noqa: E402
 for _p in (os.path.join(ROOT, "tools", "network"), os.path.join(ROOT, "tools")):
     if _p not in sys.path:
         sys.path.insert(0, _p)
