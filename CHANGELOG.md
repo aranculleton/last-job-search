@@ -22,6 +22,9 @@ make sense to somebody whose repo just received it.
 
 ### Changed
 
+- **The number of unread messages on your page no longer grows.** Each tap used to leave a
+  message that stayed unread in the Claude app; Claude now clears it when the work is done,
+  and clears the ones already piled up, once, without asking. Profile upgrade: doorbells
 - **Tapping on your page no longer counts as you giving feedback.** The page's own notices and
   card text were sometimes read as if you had said them, which held up Claude's reply until
   it dismissed a reaction you never made. Only what you type is read now.

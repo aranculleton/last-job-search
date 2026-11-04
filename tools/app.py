@@ -56,6 +56,7 @@ network, no model call, the same answer on every computer.
 from __future__ import annotations
 
 import argparse
+import datetime as dt
 import json
 import os
 import sys
@@ -1016,6 +1017,13 @@ def _again(a, chat: str) -> str:
     return f"python3 tools/app.py wake \"{a.dump}\" --chat {chat}{flags}"
 
 
+# The ring is a comment sent to Claude; left open it stays unread in the Claude app for ever.
+RESOLVE_RING = ("last, once this wake's work is done: ArtifactComments resolve (url {url}, "
+                "thread_id: the thread this wake came on, which the notification that woke you "
+                "names as thread=...). Resolving is not answering: leave no reply. A wake with "
+                "no such thread (a timer, a run by hand) has nothing to resolve.")
+
+
 def cmd_wake(a) -> int:
     """A ring from the page, after one read into `dump` (WAKE_READS): the day's update check
     when it is due, the listener's check-in, the person's taps claimed and applied, and the
@@ -1219,7 +1227,7 @@ def cmd_wake(a) -> int:
             "Commit what the taps changed (python3 tools/save_state.py) with this wake's "
             "other work, then end the turn." if applied_any else "End the turn."))
     _save_wake_state(a.dump, {"phase": "done", "runs": run})
-    last = []
+    last = [RESOLVE_RING.format(url=url)]
     if phase in ("next", "apply") and (after or tidy_due):
         last.append("after this wake's work, asking nobody:")
         if after:
@@ -1319,6 +1327,23 @@ def cmd_told(a) -> int:
         print(f"app: {e}; one of {', '.join(app_setup.TOLD)}")
         return 2
     print("app: noted; it is not said again. Save it with the rest (python3 tools/save_state.py)")
+    return 0
+
+
+def cmd_doorbells(a) -> int:
+    """The page's old rings, cleared once: each tap leaves a comment sent to Claude that nothing
+    resolved, and the Claude app counts them as unread. The chat resolves them, then notes it."""
+    import app_setup
+    if a.done:
+        app_setup.save_said(app_setup.DOORBELLS, dt.date.today().isoformat())
+        print("app: noted; the page's old rings are not cleared again. Save it with the rest "
+              "(python3 tools/save_state.py)")
+        return 0
+    url = app_setup.page_record().get("url") or "<the page>"
+    print(f"doorbells: ArtifactComments read (url {url}), following the cursor while there is "
+          "more; resolve each thread whose first comment starts with [app] (ArtifactComments "
+          "resolve, the url and that thread's id), never any other thread, and leave no reply. "
+          "Then: python3 tools/app.py doorbells --done")
     return 0
 
 
@@ -1596,6 +1621,8 @@ def main(argv=None) -> int:
     p.add_argument("answer", choices=("yes", "no"))
     p = sub.add_parser("told", help="something said to the person once, never again")
     p.add_argument("key")
+    p = sub.add_parser("doorbells", help="the page's old rings, cleared once")
+    p.add_argument("--done", action="store_true", help="note they are cleared")
     p = sub.add_parser("resume-saved", help="the resume the page held, saved in the copy")
     p.add_argument("file")
     p.add_argument("--asset", default="")
@@ -1651,7 +1678,7 @@ def main(argv=None) -> int:
             "progress": cmd_progress, "check": cmd_check,
             "start": cmd_start, "published": cmd_published, "resume-saved": cmd_resume_saved,
             "files-saved": cmd_files_saved, "propose": cmd_propose, "listen": cmd_listen,
-            "republish": cmd_republish, "pinned": cmd_pinned, "told": cmd_told, "done": cmd_done,
+            "republish": cmd_republish, "pinned": cmd_pinned, "told": cmd_told, "doorbells": cmd_doorbells, "done": cmd_done,
             "ask": cmd_ask, "wake": cmd_wake, "version": cmd_version,
             "answer": cmd_answer}[a.cmd](a)
 
