@@ -526,6 +526,12 @@ def job_steps(chosen: dict, claimer: str, url: str, session: bool = True,
              "and send its batch, so the page shows how many job sites are done and how long "
              "is left.")
     done = f"its app.py done with --work {wid} --chat {claimer}"
+    # A draft's PDFs: this chat cannot upload (Artifact is not among its tools), so its
+    # app.py done queues one `files` item for the chat that answers the page, and nothing is
+    # uploaded here (the maintainer, 4 November).
+    files = (" Its PDFs reach the page's file store by themselves: app.py done queues the "
+             "upload for the chat that answers the page (send every batch it prints), so upload "
+             "nothing here." if kind in ("draft", "resume_for_contact") else "")
     if session:
         # A chat in the cloud cannot message another one (send_message: "a cloud session
         # receives your message but cannot message any session back yet"): a search told to
@@ -533,13 +539,14 @@ def job_steps(chosen: dict, claimer: str, url: str, session: bool = True,
         # and its ten jobs sat off the page (2026-11-03). It brings the page up to date itself.
         # Landed or not: a failed check leaves the work for the next chat to land, and said
         # nothing, so the page stayed stale with its card already Done (the audit, 2026-11-03).
-        step(f"Finish as step 5 says ({done}), without its heartbeat line. Save and land your "
-             f"work on master (CLAUDE.md, \"Saving\"). Then, landed or not (a failed check "
+        step(f"Finish as step 5 says ({done}), without its heartbeat line.{files} Save and land "
+             f"your work on master (CLAUDE.md, \"Saving\"). Then, landed or not (a failed check "
              f"leaves the work for the next chat to land, and this step still runs), bring the "
              f"page up to date yourself: "
              f"ArtifactData query, url {url}, collections screen, meta, addr and work, out_dir "
              f"$D; python3 tools/app.py view \"$D/view\" --dump \"$D\" --chat <this chat's id> "
-             "(it takes master first, so the page has every other chat's work too); and send "
+             f"--work {wid} (it takes master first, so the page has every other chat's work too, "
+             "and never writes over a screen drawn from a newer copy than this one); and send "
              "every batch it prints (ArtifactData batch). A refused batch: read those four again "
              "and run it once more. No chat will do it for you: a chat in the cloud cannot "
              "message another one. Never write to the person: the page shows how it went.")
@@ -553,7 +560,7 @@ def job_steps(chosen: dict, claimer: str, url: str, session: bool = True,
              "short.")
     else:
         step(f"Finish as step 5 says ({done}), without its heartbeat line and without app.py "
-             f"view. Save and land your work on master (CLAUDE.md, \"Saving\"). Then end with "
+             f"view.{files} Save and land your work on master (CLAUDE.md, \"Saving\"). Then end with "
              f"one line, landed or not: \"Finished {wid}, on master: bring the page up to "
              f"date.\", or where the check failed and the work waits on its branch, \"Finished "
              f"{wid}, not landed: bring the page up to date.\" Never write to the person: the "
