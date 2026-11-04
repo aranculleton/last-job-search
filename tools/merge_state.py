@@ -1295,6 +1295,13 @@ def merge(base: str, ours: str, theirs: str, path: str, later=None,
 # stranger audit, 2026-11-03, X-13). Each such file is settled here instead, losing neither
 # side, so the rest of the work lands:
 #
+# - one side holding only a copy the other side already had and moved on from (the same
+#   change made on both sides, the newer one changed it again; or, where earlier merges
+#   crossed, the copy one of the merge's common ancestors held): the newer copy, with
+#   nothing beside it and nothing asked, since the older side brought nothing of its own. A
+#   branch left nine days earlier, brought in whole, put copies of the person's own tests
+#   beside the newer ones and a [CONFIRM: ...] line on top of eight of them, though it had
+#   changed none of them itself (a report from a person's copy, 2026-11-04);
 # - the same improvement made by two chats (each side's own commits on the file are all
 #   "Profile upgrade: <id>", the same ids): master's copy, as RUNBOOK.md has always said;
 # - the person's own words in profile/ (.md, .txt): both versions kept, one after the
@@ -1375,6 +1382,35 @@ def _same_upgrade(root: str, path: str) -> bool:
     return bool(mine) and mine == theirs
 
 
+def _held_before(root: str, path: str, stages: dict) -> str:
+    """For a conflicted file one side holds only an older copy of: "--ours" or "--theirs",
+    the newer side; "" when each brought something of its own. A side's copy is older when
+    it is the copy one of the merge's common ancestors held (git conflicts there only where
+    earlier merges crossed and its base is a blend of several), or one the other side's own
+    commits already wrote and then changed again (the same change made on both sides)."""
+    if "2" not in stages or "3" not in stages or stages["2"] == stages["3"]:
+        return ""
+    held = set()
+    for b in _g(root, "merge-base", "--all", "HEAD", "MERGE_HEAD").stdout.split():
+        r = _g(root, "rev-parse", "-q", "--verify", f"{b}:{path}")
+        if r.returncode == 0:
+            held.add(r.stdout.strip())
+
+    def older(st: str, mine: str, other: str) -> bool:
+        if stages[st] in held:
+            return True
+        r = _g(root, "log", "--format=%H", "--find-object=" + stages[st], f"{mine}..{other}",
+               "--", path)
+        return r.returncode == 0 and bool(r.stdout.strip())
+    ours_old = older("2", "HEAD", "MERGE_HEAD")
+    theirs_old = older("3", "MERGE_HEAD", "HEAD")
+    if theirs_old and not ours_old:
+        return "--ours"
+    if ours_old and not theirs_old:
+        return "--theirs"
+    return ""
+
+
 def _side_path(root: str, path: str) -> str:
     side, n = path + SIDE, 1
     while os.path.exists(os.path.join(root, side)):
@@ -1428,11 +1464,15 @@ def settle(root: str) -> tuple[list[str], list[str]]:
             if name == p and len(parts) == 3:
                 stages[parts[2]] = parts[1]
         full = os.path.join(root, p)
+        newer = _held_before(root, p, stages)
         if "2" not in stages or "3" not in stages:
             keep = "--ours" if "2" in stages else "--theirs"
             _g(root, "checkout", keep, "--", p)
             done.append(f"{p}: one chat removed it and the other changed it; the changed "
                         "one is kept")
+        elif newer:
+            _g(root, "checkout", newer, "--", p)
+            done.append(f"{p}: one chat held only an older copy of it; the newer one is kept")
         elif _written(root, stages):
             # A document the app writes and dates ("Written 2026-11-04."), rebuilt by two chats
             # on different days: the later one is current and the next rebuild makes it so

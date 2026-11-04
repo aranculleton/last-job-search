@@ -292,6 +292,117 @@ def test_work_stranded_by_an_older_version_comes_back_at_the_next_landing(copy, 
     assert _run(late, "--waiting", capsys=capsys)[1].strip() == "land: nothing waiting"
 
 
+OWN_TEST = "profile/tests/test_my_floor.py"
+PLAN = "documents/plan.md"
+
+
+def _own_test(check):
+    return ("import search\n\n\ndef test_floor():\n    assert %s\n\n\n"
+            "def test_name():\n    assert search.__name__ == 'search'\n" % check)
+
+
+def _commit_all(repo, message):
+    git(repo, "add", "-A")
+    git(repo, "commit", "-q", "-m", message)
+
+
+def _base_with_own_files(copy):
+    """The person's own test and a plan on master, taken into the chat."""
+    origin, chat, other = _stranger(copy)
+    write(other, OWN_TEST, _own_test("search.SALARY_FLOOR > 0"))
+    write(other, PLAN, "Plan\n\nFirst: the base.\n\nSecond: kept.\n")
+    _land_other(other, "the person's own test and plan")
+    git(chat, "fetch", "-q", "origin", "master")
+    git(chat, "merge", "-q", "--ff-only", "origin/master")
+    return origin, chat, other
+
+
+def _no_copies_beside(chat):
+    out = git(chat, "ls-files", "--others", "--cached").stdout
+    return [p for p in out.splitlines() if ".from-another-chat" in p]
+
+
+@pytest.mark.parametrize("into", ["newer", "older"])
+def test_a_branch_holding_only_older_copies_leaves_the_newer_ones_alone(copy, into):
+    """A branch left days ago, brought in whole, held the same change to the person's own
+    test and plan that this chat made and then changed again: it brought nothing of its own
+    to either, so either way round the newer copies stand, with no copy beside them and no
+    [CONFIRM: ...] line (a report from a person's copy, 2026-11-04: eight of their tests were
+    marked and a dozen copies left beside files). A file both sides truly changed is still
+    settled as before, both kept and the person asked."""
+    origin, chat, other = _base_with_own_files(copy)
+    git(chat, "switch", "-q", "-c", "claude/upgrade-old")
+    write(chat, OWN_TEST, _own_test("search.SALARY_FLOOR >= 0"))
+    write(chat, PLAN, "Plan\n\nFirst: the base, made clearer.\n\nSecond: kept.\n")
+    write(chat, "profile/search.py", "SALARY_FLOOR = 55000\n")
+    _commit_all(chat, "Profile upgrade: own-tests")
+    git(chat, "switch", "-q", "claude/chat-1")
+    write(chat, OWN_TEST, _own_test("search.SALARY_FLOOR >= 0"))
+    write(chat, PLAN, "Plan\n\nFirst: the base, made clearer.\n\nSecond: kept.\n")
+    _commit_all(chat, "Save the search's work")
+    newer_test = _own_test("search.SALARY_FLOOR >= 0, 'a floor of nothing or more'")
+    newer_plan = "Plan\n\nFirst: the base, made clearer still.\n\nSecond: kept.\n"
+    write(chat, OWN_TEST, newer_test)
+    write(chat, PLAN, newer_plan)
+    write(chat, "profile/search.py", "SALARY_FLOOR = 60000\n")
+    _commit_all(chat, "Save the search's work")
+    if into == "older":
+        git(chat, "switch", "-q", "claude/upgrade-old")
+    ok, said = land.merge_in(str(chat), "claude/upgrade-old" if into == "newer"
+                             else "claude/chat-1")
+    assert ok, said
+    with open(os.path.join(str(chat), OWN_TEST), encoding="utf-8") as fh:
+        assert fh.read() == newer_test
+    with open(os.path.join(str(chat), PLAN), encoding="utf-8") as fh:
+        assert fh.read() == newer_plan
+    assert _no_copies_beside(chat) == ["profile/search.py.from-another-chat"]
+    with open(os.path.join(str(chat), "profile", "search.py"), encoding="utf-8") as fh:
+        assert "[CONFIRM: two of your chats changed this file" in fh.read()
+    assert any(OWN_TEST in ln and "the newer one is kept" in ln for ln in said), said
+
+
+def test_a_branch_whose_merges_crossed_keeps_the_newer_copy_it_never_changed(copy):
+    """Where earlier merges crossed (each branch brought in work the other also has), git's
+    common ancestor is a blend of two, and a file the old branch never changed itself
+    conflicts all the same. The copy it holds is one a common ancestor held, so the newer
+    one stands, alone."""
+    origin, chat, other = _base_with_own_files(copy)
+    base = git(chat, "rev-parse", "HEAD").stdout.strip()
+    git(chat, "switch", "-q", "-c", "claude/one", base)
+    write(chat, OWN_TEST, _own_test("search.SALARY_FLOOR >= 0"))
+    _commit_all(chat, "chat one")
+    git(chat, "switch", "-q", "-c", "claude/two", base)
+    write(chat, OWN_TEST, _own_test("search.SALARY_FLOOR > 1"))
+    _commit_all(chat, "chat two")
+    # This chat brought both in and settled them, then changed the test again.
+    git(chat, "switch", "-q", "claude/chat-1")
+    git(chat, "merge", "-q", "--no-edit", "claude/one")
+    git(chat, "merge", "-q", "--no-edit", "claude/two", check=False)
+    write(chat, OWN_TEST, _own_test("search.SALARY_FLOOR >= 1"))
+    _commit_all(chat, "both brought in")
+    newer = _own_test("search.SALARY_FLOOR >= 1, 'one or more'")
+    write(chat, OWN_TEST, newer)
+    _commit_all(chat, "Save the search's work")
+    # The old branch brought both in the other way round, kept chat two's copy, and made
+    # its own change elsewhere.
+    git(chat, "switch", "-q", "-c", "claude/upgrade-old", base)
+    git(chat, "merge", "-q", "--no-ff", "--no-edit", "claude/two")
+    git(chat, "merge", "-q", "--no-edit", "claude/one", check=False)
+    write(chat, OWN_TEST, _own_test("search.SALARY_FLOOR > 1"))
+    _commit_all(chat, "kept chat two's")
+    write(chat, "profile/notes.md", "the old branch's own note\n")
+    _commit_all(chat, "a note")
+    git(chat, "switch", "-q", "claude/chat-1")
+    assert len(git(chat, "merge-base", "--all", "HEAD", "claude/upgrade-old").stdout.split()) == 2
+    ok, said = land.merge_in(str(chat), "claude/upgrade-old")
+    assert ok, said
+    with open(os.path.join(str(chat), OWN_TEST), encoding="utf-8") as fh:
+        assert fh.read() == newer
+    with open(os.path.join(str(chat), "profile", "notes.md"), encoding="utf-8") as fh:
+        assert fh.read() == "the old branch's own note\n"
+    assert _no_copies_beside(chat) == []
+
+
 def test_a_branch_that_took_an_update_and_could_not_land_is_still_listed(copy, capsys):
     """X-31 (the stranger audit, 2026-11-03): a chat that took the day's update and then
     landed red pushed a branch whose diff held the app's files (its sync's merge), and
