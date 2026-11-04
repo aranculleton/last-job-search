@@ -4483,7 +4483,9 @@
       days && bars ? h("p", {class: "small muted"}, "The last " + days + " days") : null,
       h("div", {class: "bp-stats" + (bars ? "" : " is-alone")}, tile("applied", "applied", "applied"), tile("replies", "contact replied", "contacts replied"), tile("interviews", "interview", "interviews", true), tile("offers", "offer", "offers", true)),
       bars,
-      since && arr(since.items).length ? h("details", {class: "bp-all"}, h("summary", {"data-k": "bp-since"}, "Since your last brief"), briefItems(since.items, "since", 6)) : null],
+      // A fold that keeps its place across redraws (det): a plain one closed again on the next
+      // redraw, so a tap on it could come to nothing (Safari's engine, CI, 2026-11-04).
+      since && arr(since.items).length ? det("bp-since", false, {class: "bp-all"}, h("summary", {"data-k": "bp-since"}, "Since your last brief"), briefItems(since.items, "since", 6)) : null],
       null, {icon: "progress", w: 6}));
     fillRows(grid);
     const su = txt(obj(M().setup).state);
@@ -4493,7 +4495,7 @@
     const tip = pin ? null : briefTip();
     if (tip) put(wrap, h("p", {class: "bp-tip"}, h("span", {class: "bp-tip-k"}, "Tip"), h("span", {class: "bp-tip-t"}, tip.text), btn("Got it", tip.done, {kind: "link", key: "bp-tip"})));
     const older = arr(M().briefs).filter((x) => obj(x).date && obj(x).date !== b.date);
-    if (older.length) put(wrap, h("details", {class: "brief-earlier"}, h("summary", {}, plural(older.length, "earlier brief", "earlier briefs")),
+    if (older.length) put(wrap, det("brief-earlier", false, {class: "brief-earlier"}, h("summary", {}, plural(older.length, "earlier brief", "earlier briefs")),
       older.sort((x, y) => txt(y.date).localeCompare(txt(x.date))).slice(0, 10).map((x) => h("div", {class: "brief-old"}, h("p", {class: "card-title"}, fmtDay(x.date)),
         h("ul", {}, arr(x.lines).map((l) => h("li", {}, inlineMd(txt(typeof l === "object" && l ? l.text : l)))))))));
     return wrap;
