@@ -1298,6 +1298,57 @@ def adopt_page_elsewhere() -> bool:
         return False
 
 
+PAGE_HISTORY = 60
+
+
+def newer_page_kept() -> str:
+    """Where the page's record names another page than one this copy's history recorded
+    later (a merge put an older page back: a report from a person's copy, 2026-11-04, whose
+    next start moved everything to an abandoned page), that newer record is kept again,
+    whole, by the merge's own rule (tools/merge_state.py, JSON_FILES "newest"), and the line
+    saying so is returned; "" otherwise, or where git cannot say."""
+    if os.path.normcase(profile_dir()) != os.path.normcase(os.path.join(ROOT, "profile")):
+        return ""
+    try:
+        import merge_state
+        rule = merge_state.json_rules("profile/" + PAGE)["newest"]
+        now = page_record()
+        if not now.get(rule["key"]) or page_conflicted():
+            return ""
+        code, out = _git("log", f"-{PAGE_HISTORY}", "--format=%x01%H", "-p", "--unified=0",
+                         "--", f"profile/{PAGE}")
+        if code != 0:
+            return ""
+        best, at, commit = str(now.get(rule["stamp"]) or ""), "", ""
+        mark = re.compile(r'^\+\s*"%s":\s*"([^"]+)"' % re.escape(rule["stamp"]))
+        for line in out.splitlines():
+            if line.startswith("\x01"):
+                commit = line[1:].strip()
+                continue
+            m = mark.match(line)
+            if m and merge_state._later_of(m.group(1), best) == "a":
+                best, at = m.group(1), commit
+        if not at:
+            return ""
+        code, text = _git("show", f"{at}:profile/{PAGE}")
+        then = json.loads(text) if code == 0 else {}
+        if not isinstance(then, dict) or not then.get(rule["key"]) or \
+                then.get(rule["key"]) == now.get(rule["key"]):
+            return ""
+        was = now.get(rule["key"])
+        for f in rule["with"]:
+            if f in then:
+                now[f] = then[f]
+            else:
+                now.pop(f, None)
+        _write_json(os.path.join(profile_dir(), PAGE), now)
+        return (f"The page's record had gone back to an older page ({was}): a merge put it "
+                f"over the one published later, {now[rule['key']]}, which is kept again and is "
+                "the page from here on. Say nothing about it to the person.")
+    except Exception:  # noqa: BLE001  the record stays as it is; the start goes on
+        return ""
+
+
 def _resume_to_save(st: dict) -> str:
     """The step that saves a resume the person added on the page, or "" when none waits."""
     resume = (st["answers"].get("resume") or {}) if isinstance(st["answers"], dict) else {}
@@ -1457,6 +1508,12 @@ def start(on: str = "", tools: str = "", page_url: str = "", runner=None, work: 
         # page is taken, never a second one made beside it (X-57).
         if adopt_page_elsewhere():
             st["page"], st["page_current"] = page_record(), _page_current()
+    elif st["page"].get("url") and kind == "private":
+        back = newer_page_kept()
+        if back:
+            st["page"], st["page_current"] = page_record(), _page_current()
+            steps.append(f"{n}. {back}")
+            n += 1
     # A page already published waits for the day's check: the update it takes can change the
     # page, and the check itself says how to bring it up to date (app_listen.after_update),
     # so the page is published once, from the new code, never once before and once after.
