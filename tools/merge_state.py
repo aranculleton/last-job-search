@@ -849,6 +849,37 @@ def _further(base, ours, theirs) -> tuple[str, str]:
 PICKERS = {"higher_version": _higher_version, "further": _further}
 
 
+# Kept for a person's own tests that call it (tools/public_names.py): the page record now
+# merges by `newest_written`, the newer whole record winning (2026-11-04).
+def first_written(base, ours, theirs, rule: dict, settled: list | None = None) -> tuple:
+    """JSON_FILES `first`: where each side holds a different `key` that neither held in the
+    copy both began from, the side stamped first keeps its record, every field `with` names
+    copied onto the other side, so the merge that follows takes them whole and never mixes
+    one page's address with what the other page holds. (ours, theirs), changed or not."""
+    if not (isinstance(ours, dict) and isinstance(theirs, dict)):
+        return ours, theirs
+    base = base if isinstance(base, dict) else {}
+    key = rule["key"]
+    a, b = ours.get(key), theirs.get(key)
+    if not a or not b or a == b or base.get(key) in (a, b):
+        return ours, theirs
+    side = _later_of(ours.get(rule["stamp"]), theirs.get(rule["stamp"]))
+    if not side:
+        return ours, theirs
+    first, second = (theirs, ours) if side == "a" else (ours, theirs)
+    kept = dict(second)
+    for f in rule["with"]:
+        if f in first:
+            kept[f] = first[f]
+        else:
+            kept.pop(f, None)
+    if settled is not None:
+        settled.append(f"{key}: both sides wrote one: kept {_show(first[key])}, the first "
+                       f"(dated {first.get(rule['stamp'])}); the other side had "
+                       f"{_show(second[key])}")
+    return (kept, theirs) if side == "a" else (ours, kept)
+
+
 def newest_written(base, ours, theirs, rule: dict, settled: list | None = None) -> tuple:
     """JSON_FILES `newest`: where the two sides hold different records (the fields `with`
     names), the side stamped later (`stamp`) keeps its record, every one of those fields
