@@ -74,6 +74,38 @@ def test_the_text_is_the_message_then_the_lines_for_claude(tmp_path):
     assert "—" not in out
 
 
+def test_with_a_page_the_chat_gets_the_headline_the_lead_and_the_link(tmp_path):
+    """A brief run in a chat posted the whole phone message there (Owed, Since, Next three,
+    News) while the page held all of it (the maintainer, 2026-11-04). With a page, the chat's
+    message is the headline, the lead and the page's link; the push is unchanged."""
+    import json
+    state = _state(tmp_path)
+    page = "https://claude.ai/code/artifact/example-brief-page"
+    with open(os.path.join(_profile(state), "app.json"), "w", encoding="utf-8") as fh:
+        json.dump({"url": page}, fh)
+    r = _run(state, "--today", TODAY)
+    assert r.returncode == 0, r.stderr
+    message = r.stdout.split("\nFOR CLAUDE", 1)[0].strip().splitlines()
+    assert message[0] == "Sunday brief: 2 owed · 1 application live · 0 interviews"
+    assert "waiting on you: Juno (Larkspur Retail)" in message[1]
+    assert message[-1] == "Your page: " + page + "#todo"
+    assert len([ln for ln in message if ln]) == 3, message
+    for gone in ("Owed", "Next three", "News", "<NEWS>"):
+        assert gone not in message
+    claude = r.stdout.split("FOR CLAUDE, never in the message:\n", 1)[1]
+    assert "news reader" in claude or "news-reader" in claude   # the page still gets the news
+    # No page: the whole message, as before.
+    b = {"weekday": "Sunday", "counts": {"owed": 1, "applications": 0, "interviews": 0},
+         "lead": "x", "owed": [{"text": "one"}], "set_aside": [], "lines": [],
+         "since_counts": {"sent": 0, "replies": 0, "interviews": 0, "offers": 0, "rejections": 0},
+         "since": "2026-10-20", "next_three": ["a"], "url": "", "tip": ""}
+    assert "Owed" in brief.message_lines(b)
+    paged = brief.message_lines(dict(b, page=page, url=page + "#todo",
+                                     sync={"questions": ["q1", "q2"]}))
+    assert paged == [brief.headline(b), "x", "", "2 questions wait for you on your page.", "",
+                     "Your page: " + page + "#todo"]
+
+
 def test_the_same_state_prints_the_same_text(tmp_path):
     state = _state(tmp_path)
     assert _run(state, "--today", TODAY).stdout == _run(state, "--today", TODAY).stdout

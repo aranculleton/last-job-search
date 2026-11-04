@@ -282,15 +282,93 @@ def _health(t: dict | None) -> str:
     return ""
 
 
-def existing_brief(reg: dict | None, triggers=None) -> dict:
+def _at(stamp) -> datetime.datetime | None:
+    try:
+        got = datetime.datetime.fromisoformat(str(stamp or "").replace("Z", "+00:00"))
+    except ValueError:
+        return None
+    return got if got.tzinfo else got.replace(tzinfo=datetime.timezone.utc)
+
+
+def no_copy(reg: dict, r: dict, live: dict | None, now: datetime.datetime | None = None,
+            days_on_file=None, here: str = "") -> str:
+    """The day of a brief that ran in a chat without the person's files, or "": that day's
+    brief did not come (`overdue`), and its task fired at or after its time, or now wakes (or
+    last ran in) another chat than the one it was bound to. Its chat had been made again
+    empty, so the run could only say it could not read the files, wrote no record and sent
+    nothing, while `brief` said it was set up (the maintainer, 2026-11-04). Never for this
+    chat itself, which has the files."""
+    if not live or live.get("enabled") is False:
+        return ""
+    day = overdue(reg, now, days_on_file)
+    got = read_cron(r.get("cron") or "")
+    if not day or not got or not zone_ok(got.get("zone", "")):
+        return ""
+    bound = str((r.get("chat") or {}).get("session_id") or "")
+    run = live.get("last_run") or {}
+    woke = str(live.get("session") or "")
+    ran_in = str(run.get("session_id") or "")
+    if here and here in (woke or bound, ran_in):
+        return ""
+    if bound and any(s and s != bound for s in (woke, ran_in)):
+        return day
+    import zoneinfo
+    d = datetime.date.fromisoformat(day)
+    h, m = (int(x) for x in got["time"].split(":"))
+    due = datetime.datetime(d.year, d.month, d.day, h, m, tzinfo=zoneinfo.ZoneInfo(got["zone"]))
+    fired = _at(run.get("fired_at"))
+    return day if fired is not None and fired >= due - datetime.timedelta(minutes=5) else ""
+
+
+def move_here(reg: dict, r: dict, live: dict, day: str, here: str, repo: str,
+              today: datetime.date | None = None) -> dict:
+    """The calls that move a brief whose chat cannot open the copy into `here` (the chat that
+    answers the page), in order, as tidy.py moves one whose chat is gone: the new task first,
+    so a refusal leaves the old one running; the registry; then the old task turned off,
+    never deleted. Then that day's brief runs here, as the helper did by hand (2026-11-04)."""
+    cron = r.get("cron") or ""
+    prompt = with_copy(stub(reg, r.get("key") or "morning_brief", own_chat=True), repo)
+    calls = [
+        {"tool": "create_trigger", "args": {
+            "name": r.get("name") or BRIEF_NAME, "persistent_session_id": here,
+            "cron_expression": cron, "prompt": prompt, "connectors": [],
+            "initiation": "own_followup"},
+         "why": "the brief runs in this chat, which has the files, from now on"},
+        {"run": f"python3 tools/routines.py record --session {here} --trigger <the new task's "
+                f"id> --cron \"{cron}\"" + (" --own-chat" if setup_of(reg) == "ops_relay" else ""),
+         "why": "the registry names the new task and its chat"},
+        {"tool": "update_trigger", "args": {"trigger_id": live.get("id") or r.get("trigger_id"),
+                                            "enabled": False},
+         "why": "the old task is turned off, never deleted"}]
+    d = datetime.date.fromisoformat(day)
+    when = "this morning" if d == (today or person_today()) else "on " + _short(d)
+    return {"calls": calls,
+            "then": "then run the brief that did not come, here and now: follow "
+                    "automation/prompts/_common.md and automation/prompts/morning_brief.md as "
+                    "its scheduled run would",
+            "tell": f"Your brief didn't come {when}: the chat it ran in had lost your files. "
+                    "It comes from this chat from now on."}
+
+
+def person_today() -> datetime.date:
+    try:
+        import person
+        return person.today()
+    except Exception:  # noqa: BLE001  no profile: the machine's day
+        return datetime.date.today()
+
+
+def existing_brief(reg: dict | None, triggers=None, now: datetime.datetime | None = None,
+                   days_on_file=None, here: str = "", repo: str | None = None) -> dict:
     """Whether a brief already exists, found by the registry or by a task's own prompt.
 
     Never by its title: a person's brief may be called "Job search: brief (Mon and
     Thu)" or anything else, and a second brief is two messages every morning.
     `triggers` is the account's scheduled tasks as `listing` gives them, or None when the
     session cannot list them. An empty listing is a listing: a registry entry missing from
-    it is asked about, never read as set up.
-    Returns {"state": "registered" | "found" | "ask" | "none", "id", "name", "say"}.
+    it is asked about, never read as set up. A registered brief whose chat cannot open the
+    copy (`no_copy`) is "lost", with the calls that move it into `here`.
+    Returns {"state": "registered" | "lost" | "found" | "ask" | "none", "id", "name", "say"}.
     """
     listed = triggers is not None
     triggers = triggers or []
@@ -305,6 +383,20 @@ def existing_brief(reg: dict | None, triggers=None) -> dict:
                            + (f" ({r.get('trigger_id')})" if r.get("trigger_id") else "")
                            + ", and no scheduled task like it is listed: ask the person before "
                            "making another"}
+        lost = no_copy(reg, r, live, now, days_on_file, here) if live else ""
+        if lost:
+            what = (f"the brief {r.get('name')!r} ({live.get('id')}) ran in a chat that cannot "
+                    f"open the person's files: the brief due {lost} left no record. ")
+            if not here:
+                return {"state": "lost", "id": live.get("id", ""), "name": r.get("name", ""),
+                        "calls": [], "say": what + "Move it into this chat: this chat's id "
+                        "could not be read; get_session with no session_id gives it, then run "
+                        "this again with --chat <its id>"}
+            got = move_here(reg, r, live, lost, here, _repo() if repo is None else repo,
+                            today=now.date() if now else None)
+            return dict(got, state="lost", id=live.get("id", ""), name=r.get("name", ""),
+                        say=what + "Move it into this chat, with the calls below, in order, "
+                        "stopping at the first that fails.")
         moved = (f" The account lists it as {live['id']}: record that id (routines.py record)."
                  if live and live.get("id") and live["id"] != r.get("trigger_id") else "")
         return {"state": "registered", "id": r.get("trigger_id") or "", "name": r.get("name", ""),
@@ -1434,8 +1526,24 @@ def main(argv: list[str]) -> int:
             reg = load()
         except Exception:  # no profile yet (setup), no registry, or a bad one: none on file
             reg = None
-        found = existing_brief(reg, triggers)
+        here = chat_arg or (_page_chat() if has_page() else "")
+        if not here:
+            import app_listen
+            here = app_listen.this_chat()
+        here = here if str(here).startswith("session_") else ""
+        found = existing_brief(reg, triggers, here=here)
         print(f"{found['state']}: {found['say']}")
+        if found["state"] == "lost" and found.get("calls"):
+            import place
+            if place.surface() == "local":
+                print("tell them: " + BRIEF_BELL)
+                return 0
+            for i, c in enumerate(found["calls"], 1):
+                print(f"move {i}: " + (f"{c['tool']} {json.dumps(c['args'], ensure_ascii=False)}"
+                                       if c.get("tool") else c["run"]) + f" ({c['why']})")
+            print(f"move: {found['then']}; commit and land it. Tell the person only, as it is: "
+                  f"\"{found['tell']}\"")
+            return 0
         if more:
             print("more: the listing has another page (has_more); list it too and pass every "
                   "page with --triggers before deciding")

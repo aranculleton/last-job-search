@@ -308,6 +308,28 @@ def test_the_wake_link_opens_a_chat_that_takes_over_and_the_listener_hands_to_a_
     copy.run("listen", copy.dump(), "--chat", "session_EXAMPLEHELPER", "--listen")
 
 
+def test_a_new_helper_gives_the_link_at_once_shows_it_is_busy_and_ends_with_one_line(copy):
+    """A new helper chat took the page and ran the day's missed brief, then posted a
+    paragraph about what a helper is and the whole brief, with the page's link nowhere near
+    the start (the maintainer, 2026-11-04). Its start now says the link first, in one line,
+    shows the page busy while it works, and ends with one short line, the link again."""
+    copy.page()
+    assert copy.send(copy.run("listen", copy.dump(), "--chat", "big-chat"))
+    said = copy.run("start", "--on", "Opus 5.5", "--tools", "none", "--chat",
+                    "session_EXAMPLEHELPER", "--listen", "--helper")
+    steps = [ln for ln in said.splitlines() if re.match(r"\d+\. ", ln)]
+    assert f'"Your job search helper is starting: {PAGE}"' in steps[0]
+    assert "Your job search has its own page now" not in said     # the link is said once
+    busy = [ln for ln in steps if "tools/app.py busy" in ln]
+    assert busy and steps.index(busy[0]) < len(steps) - 1
+    assert f'"Your job search helper is ready: {PAGE}"' in steps[-1]
+    assert "--done" in steps[-1] and "brief" in steps[-1]
+    took = copy.run("listen", copy.dump(), "--chat", "session_EXAMPLEHELPER", "--listen",
+                    "--helper")
+    assert "set_session_title" in took and copy.send(took)
+    assert "This chat is your job search helper" not in took and "tell them" not in took
+
+
 def test_the_page_is_told_how_to_say_nobody_is_listening_and_what_is_true_of_its_privacy(copy):
     model = json.loads(copy.run("model", "--now", NOW))
     lis = model["listener"]

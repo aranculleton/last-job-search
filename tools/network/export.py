@@ -29,6 +29,10 @@ What it gives:
   match, else listed as not in the contact book. Running it twice adds nothing, and a
   message the app already logged is not added again. Status stays derived from the log,
   so afterwards `state.py` shows who replied and who is owed a reply;
+- **the names, employers and titles the contact book lacks**, from the connections, onto
+  a record matched surely (its profile address, or its name with a request in the log),
+  never over a value already recorded, and said by `take` (`fill_who`, `filled_line`);
+  the same download taken again on the page does this again (`again`);
 - **the invitations still waiting**: the ones sent and never accepted, older than
   PENDING_DAYS, oldest first, for the person to withdraw on LinkedIn themselves;
 - **what changed since the last download**, said first by `take`: new connections,
@@ -804,8 +808,9 @@ def take(srcs, contacts_path: str | None = None, threads_path: str | None = None
         lines.append(f"No history imported: {plan['problem']}.")
         return lines
     n = apply_history(threads, plan, contacts)
+    filled = plan.get("filled") or []
     dated = st.write_follow_ups(contacts, threads, today)
-    if n or dated:
+    if n or dated or filled:
         st.save_threads(threads, tp)
         st.save_contacts(contacts, cp)
     counts = {"imported": n}
@@ -829,10 +834,34 @@ def take(srcs, contacts_path: str | None = None, threads_path: str | None = None
             if n_out == 1 else
             f"{n_out} people in the history are not in the contact book ({len(wrote)} of them "
             "written to): `export.py history` lists them.")
+    if filled:
+        lines.append(filled_line(filled))
     if dated:
         lines.append(f"Follow-up dates written on {len(dated)} contact"
                      f"{'s' if len(dated) != 1 else ''} ({st.schema.follow_up_rule()}).")
     return lines
+
+
+def again(contacts_path: str | None = None, threads_path: str | None = None) -> dict:
+    """The download on file taken again (the page's same file, a second tap): its history
+    imported once more, which adds nothing already logged, and what the contact book lacks
+    filled again from its connections. It stopped at "Already taken" and refreshed nothing
+    (the maintainer, 2026-11-04). The day it was taken and what changed since the one
+    before stay as the first take recorded them. {"imported", "filled", "lines"}."""
+    st = _state()
+    cp, tp = contacts_path or st.CONTACTS_CSV, threads_path or st.THREADS_CSV
+    contacts, threads = st.load_contacts(cp), st.load_threads(tp)
+    plan = plan_history(contacts, threads, home())
+    if plan["problem"]:
+        return {"imported": 0, "filled": [], "lines": [f"No history imported: {plan['problem']}."]}
+    n = apply_history(threads, plan, contacts)
+    filled = plan.get("filled") or []
+    if n or filled:
+        st.save_threads(threads, tp)
+        st.save_contacts(contacts, cp)
+    lines = ([f"Imported {n} message row{'s' if n != 1 else ''} not logged before."] if n else []) \
+        + ([filled_line(filled)] if filled else [])
+    return {"imported": n, "filled": filled, "lines": lines}
 
 
 def _and(items) -> str:
@@ -1435,9 +1464,13 @@ def plan_history(contacts, threads, src=None, mine=None) -> dict:
             # review, 2026-11-03).
             co, ti = (r.get("Company") or "").strip(), (r.get("Position") or "").strip()
             sure = _how == "profile address" or (_how == "name" and bool(asked))
+            # Their name too, onto a record known by its profile address alone: the import
+            # filled employers and titles and never a name (the maintainer, 2026-11-04).
+            nm = name if _how == "profile address" else ""
             if sure and ((co and not str(c.get("company") or "").strip()) or
-                         (ti and not str(c.get("title") or "").strip())):
-                out["who"].append((c, co, ti))
+                         (ti and not str(c.get("title") or "").strip()) or
+                         (nm and not str(c.get("name") or "").strip())):
+                out["who"].append((c, co, ti, nm))
             if not asked:
                 continue           # connected before any request: nothing to accept
             since = st.as_date(asked[-1].get("date"))
@@ -1487,12 +1520,7 @@ def apply_history(threads, plan, contacts=None) -> int:
     behind put every imported thread in front of the person as a contradiction."""
     for row, text in plan["fill"]:
         row["full_text"] = text
-    who = 0
-    for c, co, ti in plan.get("who") or ():
-        if co and not str(c.get("company") or "").strip():
-            c["company"], who = co, who + 1
-        if ti and not str(c.get("title") or "").strip():
-            c["title"], who = ti, who + 1
+    plan["filled"] = fill_who(plan.get("who") or ())
     for row, summary in plan.get("mark") or ():
         row["summary"] = summary
     redate = plan.get("redate") or []
@@ -1509,7 +1537,45 @@ def apply_history(threads, plan, contacts=None) -> int:
         settle(contacts, threads, {r["contact_id"] for r in plan["add"]}
                | {str(r.get("contact_id") or "") for r, _ in plan["fill"]}
                | {str(r.get("contact_id") or "") for r, _ in redate})
-    return len(plan["add"]) + len(plan["fill"]) + len(redate) + len(plan.get("mark") or ()) + who
+    return len(plan["add"]) + len(plan["fill"]) + len(redate) + len(plan.get("mark") or ())
+
+
+def fill_who(who) -> list:
+    """The name, employer and title Connections.csv gives, onto each record that has none,
+    never over one it has: the export's employer and title are as of the day they connected,
+    and the record's own may be newer. Its employer's key with it, so the record sorts with
+    the rest of that employer's. [(contact, [fields filled])], for the take to say."""
+    st = _state()
+    out = []
+    for c, co, ti, *rest in who:
+        nm = rest[0] if rest else ""
+        got = []
+        for field, value in (("name", nm), ("company", co), ("title", ti)):
+            if value and not str(c.get(field) or "").strip():
+                c[field] = value
+                got.append(field)
+        if "company" in got and not str(c.get("company_key") or "").strip():
+            c["company_key"] = st.company_key(c["company"])
+        if got:
+            out.append((c, got))
+    return out
+
+
+FILL_WORDS = {"name": "name", "company": "employer", "title": "title"}
+
+
+def filled_line(filled) -> str:
+    """What a take filled, in one plain line, or ""."""
+    if not filled:
+        return ""
+    names = [str(c.get("name") or c.get("contact_id") or "") for c, _ in filled]
+    kinds = [k for k in FILL_WORDS if any(k in got for _, got in filled)]
+    what = [FILL_WORDS[k] for k in kinds]
+    what = what[0] if len(what) == 1 else ", ".join(what[:-1]) + " or " + what[-1]
+    shown = _and(names[:4] + ([f"{len(names) - 4} more"] if len(names) > 4 else []))
+    return (f"Filled the {what} missing on {len(filled)} contact"
+            f"{'s' if len(filled) != 1 else ''} from your connections ({shown}), as of the "
+            "day you connected; nothing already recorded was changed.")
 
 
 def settle(contacts, threads, ids) -> list:

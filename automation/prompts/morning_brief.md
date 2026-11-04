@@ -59,18 +59,17 @@ older than this version, republish it first: no other chat will.
 
 ## 5. The message
 
-Your final reply: the message brief.py printed, as it is, with `<NEWS>` replaced by the lines
-`brief.py news` printed for the message, without links; carried ones say their day. Never
-"Nothing new", "Quiet week" or any stand-in for news. Add only what a FOR CLAUDE line asks for
-(an upgrade's changes, the questions), and where step 2 put a draft in the pack, its Owed
-line says "draft ready". Change a line it printed only where you know it is wrong, and say
-nothing about how the brief was made. Under 200 words, for a phone. It is
-sent on each of the brief's days, even when nothing is owed.
+Your final reply: the message brief.py printed, as it is. With a page: the headline, the
+lead and the link, never the Owed list, Next three or news, which the page shows. Without one, `<NEWS>` takes the lines `brief.py news` printed for the message,
+without links; carried ones say their day. Never "Nothing new", "Quiet week" or any
+stand-in for news. Add only what a FOR CLAUDE line asks for (an upgrade's changes, the
+questions), and where step 2 put a draft in the pack, its Owed line says "draft ready".
+Change a line only where you know it is wrong, and say nothing about how the brief was
+made. Under 200 words, for a phone, on each of the brief's days, even when nothing is owed.
 
-With a page, they answer there (its To do), and the message links it. When they answer in
-this chat later, record each answer the way the line asks:
-`python3 tools/confirm.py applied|not-applied "<Employer>::<role>"` for an application they
-say went or did not, `/outcome` for a result, `/reply <name>` for a reply.
+With a page, they answer there (its To do). An answer in this chat later is recorded:
+`python3 tools/confirm.py applied|not-applied "<Employer>::<role>"` for an application,
+`/outcome` for a result, `/reply <name>` for a reply.
 
 ## 6. Land, after the message
 

@@ -117,6 +117,11 @@ only the person can, in theirs.
   whose day has passed is lifted and the brief turned on again, a time zone this computer does
   not know is rewritten to the person's own, and a brief that did not come owes one look at
   the scheduled tasks. Make each call it lists, then `routines.py called <n>`.
+- **A brief whose chat cannot open the files** (its task fired with no record of that day's
+  brief left, or it now wakes another chat than the one it was bound to: its chat was made
+  again empty) is never "set up": `brief` says `lost:` and prints `move 1` to `move 3`, the
+  brief moved into this chat. Make them in order, stopping at the first that fails, run the
+  brief that did not come here, and tell the person only the one line it gives.
 - **Every dated follow-up is automatic by construction**: the brief reads `next_action_due`
   from `network_contacts.csv` and the nudge schedule from the tracker, so a reminder is a
   date written into a state file, never another routine.
