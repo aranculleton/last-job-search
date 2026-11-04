@@ -1883,8 +1883,9 @@ def again_line(n: int, today: dt.date) -> str:
     while three ordinary searches straight after found a results miss and a funding round
     from the week before (the maintainer, 2026-11-04)."""
     month = today - dt.timedelta(days=WIDEN_DAYS[1])
-    return ("news: only %d came back, so search again yourself now, once: WebSearch each of the "
-            "brief's news searches, then the wider ones; keep reporting dated back to %s, its "
+    return ("news: only %d came back, so search again yourself now, once (the one exception to "
+            "\"nothing else finds the news\"): WebSearch each of the brief's news searches, then "
+            "the wider ones; keep reporting dated back to %s, its "
             "date read from its title, its text or its link (a path like /%s/ or %s), or an age "
             "it states counted back from %s, never guessed; then python3 tools/brief.py news "
             "--again with every line, the earlier ones and the new, each as \"- <what happened> "
