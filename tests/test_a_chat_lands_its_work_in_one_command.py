@@ -12,6 +12,7 @@ the branch starts from master with no checkout dance.
 from __future__ import annotations
 
 import os
+import pathlib
 import subprocess
 import sys
 import time
@@ -318,8 +319,11 @@ def _base_with_own_files(copy):
 
 
 def _no_copies_beside(chat):
-    out = git(chat, "ls-files", "--others", "--cached").stdout
-    return [p for p in out.splitlines() if ".from-another-chat" in p]
+    # Every file in the chat's folder, git's own excepted: a side copy is left untracked.
+    from tests import repo_files
+    root = pathlib.Path(chat)
+    return [str(p.relative_to(root)) for p in repo_files.files("**/*.from-another-chat*", root=root)
+            if ".git" not in p.relative_to(root).parts]
 
 
 @pytest.mark.parametrize("into", ["newer", "older"])
