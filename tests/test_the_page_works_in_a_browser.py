@@ -453,10 +453,11 @@ def test_to_do_groups_by_when_then_by_employer_in_the_order_things_are_done(run,
     answer = next(b for b in r["bands"] if b["band"] == "Needs your answer")["groups"]
     assert answer[0]["employer"] == "Fernhill Freight" and len(answer[0]["titles"]) == 2, "one employer's two questions together"
     late = next(b for b in r["bands"] if b["band"] == "Due or late")["groups"]
-    # The late follow-up first, on one card with the reply also drafted (2026-11-04: drafted
-    # messages are one card; tests/test_to_do_says_a_message_is_drafted_and_batches_them.py
-    # holds its rows and their order).
-    assert late[0]["titles"][0] == "2 messages ready to send", "the late thing first"
+    # The late things first: the follow-up and the thank-you, both two days late. The
+    # follow-up is on one card with the reply also drafted (2026-11-04: drafted messages are
+    # one card; tests/test_to_do_says_a_message_is_drafted_and_batches_them.py holds its rows).
+    assert sorted(g["titles"][0] for g in late[:2]) == [
+        "2 messages ready to send", "Thank-you note after your Harbourline Bank first interview"], "the late things first"
     titles = [t for b in r["bands"] for g in b["groups"] for t in g["titles"]]
     assert "Prepare for the Larkspur Retail phone screen" not in titles, "the interview's own card is its prep, never a second card"
     assert "Thank-you note after your Harbourline Bank first interview" in titles

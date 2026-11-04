@@ -720,7 +720,7 @@ METHODS: dict[str, dict] = {
             (20, "2026-11-04", True, "Claude\'s work opens and closes from the pill on every screen; closed and stopped rows leave their lists at once; a finished follow-up opens that person\'s message; held work counts the running work before the update; the settings gear is even and the Brief icon has clear gaps"),
             (21, "2026-11-04", True, "a To do row whose message is drafted says Draft ready and opens the draft, never drafts it again, an application\'s follow-up included; two or more drafted messages are one card, N messages ready to send, a row a person opening their draft and one button opening Messages"),
         ),
-        "fingerprint": "9032444f7bb41839",
+        "fingerprint": "8d1d52a042eaa471",
     },
     "upskill": {
         "by": "upgrade", "priority": 4, "applies": "upskill_plans", "time": "~10 min",

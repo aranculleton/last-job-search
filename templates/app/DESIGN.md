@@ -41,6 +41,9 @@ next?" in its first lines, and nothing asks for a decision a default could make.
   the draft, never drafts it again; two or more drafted are one card, "N messages ready to
   send", a row a person opening their draft and one button opening Messages. (drafted
   messages tests)
+- Many of one small thing are one checklist card, a row an item: each row has one action of
+  its own beside its bin, and the card's own actions keep to the card's anatomy above.
+  (layout 8)
 - One "?" a card at most, after the last word of its line, and no more than three on a first
   screen. (design test, budget test)
 

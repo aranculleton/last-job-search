@@ -607,7 +607,10 @@ function layoutMeasure() {
       // checked" target are parts of their own line, not actions.
       // A More holding one action shows that action in its place (4.3): it fills the More's
       // slot, not a button's.
-      buttons: own("button, a.btn").filter((b) => !b.closest("summary, .suggest, .alert, .warm") && !b.classList.contains("answer") && !b.classList.contains("q") && !b.classList.contains("icon-only") && !b.hasAttribute("data-more")).length,
+      buttons: own("button, a.btn").filter((b) => !b.closest("summary, .suggest, .alert, .warm, .g-row") && !b.classList.contains("answer") && !b.classList.contains("q") && !b.classList.contains("icon-only") && !b.hasAttribute("data-more")).length,
+      // A checklist card's rows are its items, each with its own one action beside its bin
+      // (DESIGN.md, "Many of one small thing"): counted a row at a time, never as the card's.
+      rowButtons: Math.max(0, ...own(".g-row").map((r) => [...r.querySelectorAll("button, a.btn")].filter((b) => vis(b) && !b.classList.contains("icon-only")).length)),
       // A person's name that opens them is the card's title, not one of its links.
       links: own("a:not(.btn)").filter((x) => !x.closest(".suggest, .alert, .warm") && !x.classList.contains("name-link")).length, more: own("details.more, details.more-menu, summary.more-btn, [data-more]").length};
   });
