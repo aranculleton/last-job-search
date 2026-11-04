@@ -678,8 +678,13 @@ def test_settings_says_ready_once(run, model, tmp_path):
     assert "Open this page in the Claude app on your computer to check it" not in got["after"][0]["text"]
 
 
-PLACED = ("(() => { const f = document.querySelector('.talk-form'); if (!f) return false; const r = f.getBoundingClientRect();"
-          " return r.bottom <= window.innerHeight + 2 && r.top >= 0; })()")
+# The box on screen and the newest message on screen just above it, not behind it, measured as
+# drawn (__drawnRect): the page is zoomed on a phone, and Safari's engine (Playwright 1.56's)
+# measured the scrolled box well below the screen while it was on it (CI, 2026-11-04). The box
+# sticks to the foot of the screen, so it alone says nothing about where the conversation stands.
+PLACED = ("(() => { const f = document.querySelector('.talk-form'), l = document.querySelector('.talk-list');"
+          " const m = l && l.lastElementChild; if (!f || !m) return false; const b = f.__drawnRect(), r = m.__drawnRect();"
+          " return b.top >= 0 && b.bottom <= window.innerHeight + 2 && r.bottom > 0 && r.bottom <= b.top + 2; })()")
 
 
 def test_chat_opens_on_its_newest_answers_unanswered_ones_and_dots_a_new_one(run, page):
@@ -694,7 +699,7 @@ def test_chat_opens_on_its_newest_answers_unanswered_ones_and_dots_a_new_one(run
     msgs["talk/cloud-1/messages/m22"] = {"from": "claude", "text": "Done: the old drafts are set aside.", "at": "2026-10-25T18:10:00Z", "_v": 1}
     got = run("engine", html=page, viewport=PHONE, clock=CLOCK, seed=msgs, steps=[
         {"hash": "contacts", "eval": "!!document.querySelector('.tab .navdot')"},
-        # Waited for, with a time limit: read after a set 300ms, Safari's engine on CI was not there yet.
+        # Waited for, with a time limit, never read after a set time.
         {"hash": "chat", "ready": PLACED, "eval": PLACED},
         {"hash": "chat", "read": "#main .talk-list"},
         {"hash": "contacts", "eval": "!!document.querySelector('.tab .navdot')"}])

@@ -2288,6 +2288,9 @@
 
   // ------------------------------------------------------------------ building blocks
 
+  // The address the page last took from a popstate, so the hashchange after it is not taken
+  // again (fromAddress); any address the page writes itself clears it.
+  let addrTaken = null;
   // A <details> keeps the person's open or closed choice across the re-renders live updates cause.
   const openState = new Map();
   document.addEventListener("toggle", (e) => { const k = e.target && e.target.dataset ? e.target.dataset.k : null; if (k && e.target.tagName === "DETAILS") openState.set(k, e.target.open); }, true);
@@ -7203,7 +7206,7 @@
     detailDlg.addEventListener("cancel", (e) => { e.preventDefault(); closeDetail(false); });
     document.body.appendChild(detailDlg);
     try { detailDlg.showModal(); } catch (e) { detailDlg.setAttribute("open", ""); }
-    if (!o.fromHistory) { try { history.pushState(null, "", "#" + section + "/" + id + "/open"); } catch (e) { /* the frame refuses */ } }
+    if (!o.fromHistory) { addrTaken = null; try { history.pushState(null, "", "#" + section + "/" + id + "/open"); } catch (e) { /* the frame refuses */ } }
     const hd = $("detail-title");
     if (hd) hd.focus();
   }
@@ -10385,10 +10388,22 @@
     document.body.appendChild(dockEl);
     document.body.appendChild(fabEl);
   }
-  function placeChat() {
-    if (!S.chatPlace || !talkForm) return;
+  // Chat opens on the end of its conversation: the newest message, the box under it. The box
+  // sticks to the foot of the screen on a phone, so placing the box itself moved the page a
+  // few pixels and left the newest message screens below it (2026-11-04): the section's end is
+  // placed instead. At once, never animated (no smooth scrolling anywhere on the page): in the
+  // move's own turn, then once more a frame later only if the end has moved since (a
+  // message's height or the type settling).
+  function placeChat(late) {
+    if (!talkEl || !talkEl.isConnected) return;
+    if (late && !S.chatPlace) {
+      const at = S.chatPlacedAt;
+      S.chatPlacedAt = null;
+      if (at === null || at === undefined || !chatShown() || Math.abs(talkEl.getBoundingClientRect().bottom - at) < 1) return;
+    } else if (!S.chatPlace) return;
     S.chatPlace = false;
-    try { talkForm.scrollIntoView({block: "end"}); } catch (e) { /* no layout */ }
+    try { talkEl.scrollIntoView({block: "end"}); } catch (e) { /* no layout */ }
+    S.chatPlacedAt = late ? null : talkEl.getBoundingClientRect().bottom;
   }
   // Called by render(): where the conversation sits, whether the panel and the button show.
   function renderDock() {
@@ -10400,9 +10415,8 @@
     // Opening Chat shows its newest message and the box under it, never the top of the history
     // (2026-11-03: on a phone the latest message sat two screens down). A move to Chat places it
     // in the same turn (go, after its scroll to the top); anything else a frame later, once
-    // drawn. Only a frame later, a read straight after the move found the top (Safari's
-    // engine on a busy machine, CI, 2026-11-04).
-    if (shown && !S.chatWasShown && talkForm) { S.chatPlace = true; requestAnimationFrame(placeChat); }
+    // drawn (placeChat).
+    if (shown && !S.chatWasShown && talkForm) { S.chatPlace = true; S.chatPlacedAt = null; requestAnimationFrame(() => placeChat(true)); }
     S.chatWasShown = shown;
     // Seen: the Chat tab's dot goes once its newest answer has been on screen.
     if (shown && lastAnswerAt() && lastAnswerAt() !== txt(pref("chat:seen", ""))) setPref("chat:seen", lastAnswerAt());
@@ -10781,9 +10795,18 @@
     if (S.split) hash += "+" + S.split;
     if (S.focusItem) hash += "/" + S.focusItem;
     if (location.hash === "#" + hash) return;
+    addrTaken = null;
     try { if (replace) history.replaceState(null, "", "#" + hash); else history.pushState(null, "", "#" + hash); } catch (e) { /* the frame refuses; the section still changes */ }
   }
-  function fromAddress() {
+  // One move of the address is two events in every engine, popstate and then hashchange
+  // (2026-11-04): it is taken once (addrTaken). Taken twice, the second went to the top of
+  // the screen after Chat had placed itself on its newest message.
+  function fromAddress(e) {
+    const type = e && e.type;
+    // Kept after a skip: two moves in one turn (the address set twice) are two popstates and
+    // then two hashchanges, both for the address already taken.
+    if (type === "hashchange" && addrTaken === location.hash) return;
+    addrTaken = type === "popstate" ? location.hash : null;
     const p = parseHash();
     if (!p) return;
     if (p.work) { openWork(); return; }

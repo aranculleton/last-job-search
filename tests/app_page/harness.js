@@ -112,11 +112,18 @@ class Store {
 
 // ---------------------------------------------------------------- opening a page
 let browser = null;
+// Where a box is drawn on the screen, in every engine: Safari's (Playwright 1.56's WebKit)
+// measures inside the zoomed body before the zoom but takes off the scroll as drawn, so a box
+// is put back where it is drawn by adding the scroll, zooming, and taking it off again. With no
+// scroll that is the plain zoom it was; scrolled, the box read lower than it was drawn by a
+// sixth of the scroll (CI, 2026-11-04: Chat's box read off the screen while on it).
 const DRAWN_RECT = `Element.prototype.__drawnRect = function () {
   const r = this.getBoundingClientRect(), b = document.body;
   if (!b || !b.offsetWidth || !b.contains(this)) return r;
   const d = (parseFloat(b.style.zoom) || 1) / (b.getBoundingClientRect().width / b.offsetWidth);
-  return Math.abs(d - 1) < 0.001 ? r : new DOMRect(r.x * d, r.y * d, r.width * d, r.height * d);
+  if (Math.abs(d - 1) < 0.001) return r;
+  const sx = window.scrollX || 0, sy = window.scrollY || 0;
+  return new DOMRect((r.x + sx) * d - sx, (r.y + sy) * d - sy, r.width * d, r.height * d);
 };`;
 async function open(o) {
   const ctx = await browser.newContext({
