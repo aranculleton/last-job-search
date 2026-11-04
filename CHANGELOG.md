@@ -25,6 +25,12 @@ make sense to somebody whose repo just received it.
 - **Tapping on your page no longer counts as you giving feedback.** The page's own notices and
   card text were sometimes read as if you had said them, which held up Claude's reply until
   it dismissed a reaction you never made. Only what you type is read now.
+- **Applications with nobody to write to are no longer chased.** A follow-up that cannot be
+  drafted because no recruiter or hiring manager is named stays off your To do list; it
+  appears the day a name is added or someone there replies.
+- **Nobody is listed for a follow-up who cannot get one.** Someone you only sent an InMail,
+  who has not answered or connected, is left alone (a second would be another InMail), and a
+  connection request nobody accepted is never a message to send.
 - **Claude's work opens and closes from one button on every screen.** On a wide screen the
   pill at the top opens the panel on the right and closes it again, like the menu's "Icons
   only", and the page remembers which you chose; the panel has its own Hide. Narrower, it
