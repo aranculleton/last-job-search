@@ -1401,14 +1401,25 @@ def push_line(b: dict) -> str:
     return text + tail
 
 
+def push_wanted() -> bool:
+    """Did the person choose a phone notification for their brief? Off unless they did
+    (person.json `brief_push`, Settings' "Phone notification"; the maintainer, 2026-11-04:
+    "make it off by default but maybe part of the setup")."""
+    try:
+        import person
+        return str(person.get("brief_push", "off") or "off").strip().lower() == "on"
+    except Exception:  # noqa: BLE001  no profile: nobody chose one
+        return False
+
+
 def push_due(b: dict) -> bool:
-    """Does this run send the person a push itself? A brief bound to a chat has no
-    notification of its own (routines.brief_pushes_itself); a Routines-screen task and an
-    older ops chat's relay send theirs, a brief asked for by hand is read in the chat, and a
-    paused search sends nothing. The setup reminder always does."""
+    """Does this run send the person a push itself? Only when they chose one (push_wanted).
+    A brief bound to a chat has no notification of its own (routines.brief_pushes_itself); a
+    Routines-screen task and an older ops chat's relay send theirs, a brief asked for by hand
+    is read in the chat, and a paused search sends nothing. The setup reminder always does."""
     if b.get("waiting"):
         return True
-    if b.get("paused"):
+    if b.get("paused") or not push_wanted():
         return False
     try:
         import routines

@@ -1,4 +1,5 @@
 {
+  "brief_push": "off",
   "_about": "The example person: Morgan Ellis, a fictional operations and supply-chain analyst in Manchester, UK. Every name, employer, number and contact detail here is invented. The app's own tests run against this profile (LJS_PROFILE=profile.example). It is never a fallback: with no profile/ the tools stop and say to run /setup.",
   "identity": {
     "name": "Morgan Ellis",

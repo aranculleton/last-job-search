@@ -1444,6 +1444,9 @@ def page_part(path: str | None = None, now: datetime.datetime | None = None,
             "time": got.get("time", ""), "zone": got.get("zone") or reg.get("timezone", ""),
             "paused": {"until": p["until"], "since": p.get("since", "")} if p else None,
             "waiting": len(reg.get("owed") or []),
+            # The run sends its own phone notification (brief.push_due), so Settings offers
+            # the person's choice; a Routines-screen task's comes from the task itself.
+            "push_here": r is not None and not brief_pushes_itself(reg),
             "actions": {"move": "brief.move", "pause": "brief.pause", "resume": "brief.resume",
                         "off": "brief.off", "on": "brief.on"}}
 

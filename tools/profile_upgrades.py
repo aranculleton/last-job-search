@@ -416,6 +416,24 @@ def _learned_choices() -> str:
         len(waiting), "; ".join(learned.question(o) for _, o in waiting[:3]))
 
 
+def _brief_push() -> str:
+    """A brief whose own run would send the phone notification, and nobody asked whether they
+    want one: off until they say (brief.push_wanted), and asked once, as the setup sheet asks."""
+    try:
+        import person
+        import routines
+        reg = routines.load()
+        if routines._brief(reg) is None or routines.brief_pushes_itself(reg):
+            return ""
+        if person.get("brief_push", None) is not None:
+            return ""
+    except Exception:  # noqa: BLE001  no profile or no brief: nothing to ask
+        return ""
+    return ("your brief can send a notification to your phone each morning, and nobody has "
+            "asked whether you want one (profile/person.json has no brief_push), so it sends "
+            "none")
+
+
 def _linkedin_plan() -> str:
     if _missing("networking", "LINKEDIN_PLAN"):
         return ("nobody has asked whether you pay for LinkedIn Premium (profile/networking.py "
@@ -1879,6 +1897,15 @@ REGISTRY: tuple[Upgrade, ...] = (
             names=("search.INTERNAL_ONLY", "search.INTERNAL_ONLY_TITLE", "search.CANARY_QUERY"),
             conditional=True,
             priority=3),
+    Upgrade("brief-push", "2026-11-04",
+            "a phone notification each morning when your brief is ready, only if you want one",
+            _brief_push, "write \"brief_push\": \"on\" or \"off\" into profile/person.json from "
+            "their answer (Settings, Phone notification, is the same setting)", "question",
+            "~0 min", conditional=True, priority=4,
+            needs="you",
+            ask="Do you want a notification on your phone each morning when your brief is ready?",
+            why_ask="It is off unless you say, and your brief still comes on your page and in "
+                    "its chat either way."),
     Upgrade("letter-language", "2026-10-14",
             "letters that greet, date and number pages in your document language, spelled as you spell",
             _letter_language, "/setup --section documents", "question", "~2 min",

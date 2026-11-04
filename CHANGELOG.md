@@ -20,6 +20,13 @@ make sense to somebody whose repo just received it.
 
 ## [Unreleased]
 
+### Changed
+
+- **Your brief's phone notification is off unless you want it.** Turning the brief on asks
+  whether you want one, and you can change it any time in Settings, under Your brief, Phone
+  notification. If you already have a brief, Claude asks you once. Your brief still comes on
+  your page and in its chat either way. Profile upgrade: brief-push.
+
 ## [4.9.1] - 2026-11-04
 
 ### Changed

@@ -4207,8 +4207,12 @@ SETTINGS = (
     ("calendar_reminder", "Calendar reminders", [["15", "15 minutes before"],
                                                  ["60", "An hour before"],
                                                  ["1440", "The day before"], ["off", "None"]]),
+    # The brief's headline sent to the phone (tools/brief.py push_due): off unless the person
+    # chose it, when the brief is set up or asked once after (profile_upgrades brief-push)
+    # (the maintainer, 2026-11-04: "make it off by default but maybe part of the setup").
+    ("brief_push", "Phone notification", [["off", "Off"], ["on", "On"]]),
 )
-SETTING_DEFAULTS = {"prep_days": "7", "calendar_reminder": "60"}
+SETTING_DEFAULTS = {"prep_days": "7", "calendar_reminder": "60", "brief_push": "off"}
 
 
 # The person's own time zone (person.json `time_zone`), said in their words ("Toronto",

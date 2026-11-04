@@ -2544,7 +2544,7 @@ def _setting_set(r: Run) -> dict:
     if value not in choices.get(key, ()):
         raise Refused(f"{value or 'nothing'} is not one of the choices.")
     old = app_model.setting_values().get(key)
-    if key in ("app_updates", "suggestions", "prep_days", "calendar_reminder"):
+    if key in ("app_updates", "suggestions", "prep_days", "calendar_reminder", "brief_push"):
         _save_person_json(key, value)
     elif key == "tips":
         import tips

@@ -8303,9 +8303,16 @@
         intro: "Each morning Claude writes you a short note: what is due today, and news that matters to your search. " + (helper ?
           "It comes from Claude's helper in the cloud, so it arrives with your computer off. Turning it on opens the helper's chat: press Send there, once." :
           "It appears here on your Brief, from the chat that already answers this page, so no new chat is made."),
-        cost: COST_WORDS[2] + ". Once each morning; nothing is sent.", fields: [], submit: "Turn it on", cancel: "Not now",
+        cost: COST_WORDS[2] + ". Once each morning; nothing is sent.", submit: "Turn it on", cancel: "Not now",
+        // Asked here, off unless chosen (the maintainer, 2026-11-04: "off by default but maybe
+        // part of the setup"); a brief set up in a chat is asked once by the update instead.
+        fields: [{id: "phone", type: "radio", pills: true, label: "Phone notification", value: "off",
+          hint: "A notification on your phone each morning when it is ready.", options: [["off", "Off"], ["on", "On"]]}],
         note: "Change the days or time, or turn it off, from this bell or in Settings.",
-        onSubmit: () => {
+        onSubmit: (v) => {
+          // Saved either way, so the update never asks again what was answered here.
+          const ph = allSettings().find((s) => txt(s.key) === "brief_push");
+          if (ph) act([{item: setId(ph), action: "setting.set", value: v.phone === "on" ? "on" : "off", rev: ph.rev}], "Phone notification: " + (v.phone === "on" ? "On" : "Off"));
           requestWork([{kind: "brief", title: "Set up your brief", args: {setup: true}}]);
           if (helper) { try { window.open(helperLink(), "_blank", "noopener"); } catch (e) { /* the row in Settings still has the link */ } sset("local", HELPER_ASKED, String(now())); }
         }});
@@ -10600,12 +10607,14 @@
     profile_reads: {label: "Reading their profiles", hint: "Claude reads them in the Claude app on your computer. Or paste each one yourself.", choices: {browser: ["Claude reads them"], paste: ["I paste them"]}},
     prep_days: {label: "Your next interview on the Brief", hint: "How long before it your next interview goes to the top of your Brief. Earlier gives more time to prepare."},
     calendar_reminder: {label: "Calendar reminders", hint: "When an interview or call you add to your calendar reminds you. A day with no time reminds you the afternoon before."},
+    // Off unless chosen (the maintainer, 2026-11-04): the brief still comes here either way.
+    brief_push: {label: "Phone notification", hint: "A notification on your phone each morning when your brief is ready. Your brief still comes here either way."},
     // The person's own zone, apart from when the brief comes (the audit, 2026-11-03).
     time_zone: {label: "Your time zone", hint: "Every time on this page, and each calendar link, is in it. Say your city or the zone: Toronto, Eastern, UK time."},
   };
   const SYNTH = [{key: "suggestions", label: "Suggestions", kind: "choice", value: "on", choices: [["on", "On"], ["urgent", "Only urgent"], ["off", "Off"]]}];
   // The usual value of each setting, for the summary's "changed from the usual".
-  const USUAL = {suggestions: "on", app_updates: "auto", tips: "on", prep_days: "7", calendar_reminder: "60"};
+  const USUAL = {suggestions: "on", app_updates: "auto", tips: "on", prep_days: "7", calendar_reminder: "60", brief_push: "off"};
   function settingLabel(s) { return (SETTING_COPY[txt(s.key)] || {}).label || txt(s.label); }
   function allSettings() {
     const list = arr(M().settings).slice();
@@ -10636,7 +10645,7 @@
     const wrap = h("section", {class: "sec", "aria-labelledby": "h-settings" + (where ? "-" + where : "")}, screenHead("settings", "Settings", sum, null, where));
     const byKey = new Map(all.map((s) => [txt(s.key), s]));
     const pick = (keys) => keys.map((k) => byKey.get(k)).filter(Boolean);
-    const known = new Set(["suggestions", "app_updates", "tips", "linkedin_plan", "profile_reads", "prep_days", "calendar_reminder", "time_zone"]);
+    const known = new Set(["suggestions", "app_updates", "tips", "linkedin_plan", "profile_reads", "prep_days", "calendar_reminder", "brief_push", "time_zone"]);
     const others = all.filter((s) => !known.has(txt(s.key)));
     if (waiting) put(wrap, settingsGroup("", [updateRow(waiting)]));
     // Questions an update brought live here, never in To do: nothing is late about them.
@@ -10650,7 +10659,8 @@
       h("span", {class: "set-name"}, "Your profile", h("span", {class: "hint block"}, profileSummary())), h("span", {class: "set-go", "aria-hidden": "true"}, "›"))].concat(pick(["time_zone"]).map((x) => settingRow(x)))));
     const search = searchRows().filter(Boolean);
     if (search.length) put(wrap, settingsGroup("Your search", search));
-    put(wrap, settingsGroup("Your brief", briefRows().concat(pick(["prep_days"]).map(settingRow))));
+    // The phone notification only where the brief's own run sends it (model.schedule.push_here).
+    put(wrap, settingsGroup("Your brief", briefRows().concat(pick(obj(M().schedule).push_here ? ["brief_push", "prep_days"] : ["prep_days"]).map(settingRow))));
     const cal = pick(["calendar_reminder"]).map(settingRow);
     if (cal.length) put(wrap, settingsGroup("Coming up", cal));
     put(wrap, settingsGroup("Appearance", [lookRow(), sizeRow()]));

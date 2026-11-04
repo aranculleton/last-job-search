@@ -141,6 +141,28 @@ def test_every_conditional_upgrade_has_its_own_test():
             assert f'by_id("{u.id}")' in here, f"{u.id} is conditional and has no test of its own"
 
 
+def test_a_brief_nobody_asked_about_its_phone_notification_asks_once(profile):
+    """The brief's phone notification is off unless the person chose it (2026-11-04): a brief
+    whose own run would send one, with no answer in person.json, is asked about once, and an
+    answer either way ends it."""
+    import brief
+    _drop_key(profile, "brief_push")
+    assert "no brief_push" in U.by_id("brief-push").pending()
+    assert brief.push_wanted() is False
+    assert brief.push_due({"lead": "One thing is due today."}) is False
+    for answer, sends in (("off", False), ("on", True)):
+        path = profile / "person.json"
+        data = json.loads(path.read_text(encoding="utf-8"))
+        data["brief_push"] = answer
+        path.write_text(json.dumps(data, indent=2), encoding="utf-8")
+        person._data.clear()
+        assert U.by_id("brief-push").pending() == ""
+        assert brief.push_due({"lead": "One thing is due today."}) is sends
+    # A paused search sends nothing, chosen or not; a setup left waiting always reminds.
+    assert brief.push_due({"paused": "2026-12-01"}) is False
+    assert brief.push_due({"waiting": True}) is True
+
+
 def test_rulings_on_a_bar_the_profile_never_set_are_lifted(profile):
     """X-18: the job round had every chat rule postings out as failing "the candidate's bar",
     one person's words, in profiles that state no bar at all."""
@@ -394,6 +416,10 @@ def test_only_what_truly_needs_the_person_waits_for_them():
                                                                  "profile-consistency",
                                                                  "message-texts",
                                                                  "voice-refresh",
+                                                                 # Off unless they choose it, as
+                                                                 # setting the brief up asks
+                                                                 # (2026-11-04).
+                                                                 "brief-push",
                                                                  # Only they can give their own
                                                                  # profile (2026-10-21).
                                                                  "own-profile-review",
