@@ -26,6 +26,7 @@ import os
 import shutil
 import subprocess
 import sys
+import tempfile
 
 
 class Unreadable(RuntimeError):
@@ -67,6 +68,21 @@ def _open(pdf):
         return None
 
 
+def _poppler(exe: str, pdf, *opts: str) -> subprocess.CompletedProcess:
+    """Run a Poppler tool on `pdf`, never handing it a path with a letter outside plain
+    ASCII: on Windows, Poppler read a folder named with "ë" as "Zo\ufffd" and could not open
+    the file (the computer check, a copy under "Zoë Quillfeather", 2026-11-04). Such a file
+    is copied under a plain name into a folder of its own, which the tool runs in, so the
+    accent only ever reaches it as the folder Windows starts it in."""
+    path = os.path.abspath(str(pdf))
+    run = dict(capture_output=True, text=True, encoding="utf-8", errors="replace")
+    if path.isascii():
+        return subprocess.run([exe, *opts, path, *(["-"] if opts else [])], **run)
+    with tempfile.TemporaryDirectory(prefix="ljs_pdf_") as d:
+        shutil.copyfile(path, os.path.join(d, "in.pdf"))
+        return subprocess.run([exe, *opts, "in.pdf", *(["-"] if opts else [])], cwd=d, **run)
+
+
 def pages(pdf) -> int | None:
     """The page count, or None when the file cannot be read (missing, damaged, or no
     reader here). Never a guess: a caller decides what an unreadable PDF means."""
@@ -82,8 +98,7 @@ def pages(pdf) -> int | None:
             return None
     exe = shutil.which("pdfinfo")
     if exe:
-        out = subprocess.run([exe, str(pdf)], capture_output=True, text=True,
-                             encoding="utf-8", errors="replace").stdout
+        out = _poppler(exe, pdf).stdout
         for line in out.splitlines():
             if line.startswith("Pages:"):
                 try:
@@ -98,9 +113,7 @@ def pages(pdf) -> int | None:
     exe = shutil.which("pdftotext")
     if not exe:
         return None
-    got = subprocess.run([exe, "-layout", "-enc", "UTF-8", str(pdf), "-"],
-                         capture_output=True, text=True, encoding="utf-8",
-                         errors="replace")
+    got = _poppler(exe, pdf, "-layout", "-enc", "UTF-8")
     if got.returncode != 0:
         return None
     return got.stdout.count("\f") or None
@@ -133,8 +146,7 @@ def text(pdf) -> str:
     if not exe:
         raise Unreadable("nothing here can read a PDF: the Python package pypdf is "
                          "missing. `python3 tools/env_check.py --fix` installs it")
-    got = subprocess.run([exe, "-layout", "-enc", "UTF-8", str(pdf), "-"],
-                         capture_output=True, text=True, encoding="utf-8", errors="replace")
+    got = _poppler(exe, pdf, "-layout", "-enc", "UTF-8")
     if got.returncode != 0:
         raise Unreadable(f"pdftotext could not read {pdf}: {got.stderr.strip()[:200]}")
     return got.stdout

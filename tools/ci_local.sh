@@ -215,8 +215,11 @@ echo "tests"
 # Parallel workers where pytest-xdist is installed: the suite in about a third of the time,
 # each file kept together. A cloud chat puts it in for itself, in seconds, once a container:
 # the person's own tests alone took nearly five minutes in one process at every save, and the
-# person waited on them (2026-11-03).
-if [ "${CLAUDE_CODE_REMOTE:-}" = "true" ] && ! "$PY" -c "import xdist" > /dev/null 2>&1; then
+# person waited on them (2026-11-03). GitHub's runners too: the computer check runs this in a
+# copy's own .venv, and on Windows the suite in one process took 41 minutes and ran the
+# release's step out of time (2026-11-04).
+if { [ "${CLAUDE_CODE_REMOTE:-}" = "true" ] || [ "${GITHUB_ACTIONS:-}" = "true" ]; } \
+    && ! "$PY" -c "import xdist" > /dev/null 2>&1; then
   "$PY" -m pip install --quiet pytest-xdist > /dev/null 2>&1 || true
 fi
 PAR=""

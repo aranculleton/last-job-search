@@ -82,6 +82,10 @@ _BOOT = ("import os, runpy, sys\n"
          "import app_setup, place\n"
          "app_setup.origin = lambda: {on!r}\n"
          "place.repo = lambda: {on!r}\n"
+         # The address is told, not real: the copy's own master is never taken by a test
+         # (a page update merged the computer check's copy, behind its folder origin, and
+         # stopped on its saved state, 2026-11-04).
+         "app_setup.take_master = lambda: ''\n"
          "runpy.run_path(sys.argv[0], run_name='__main__')\n")
 
 

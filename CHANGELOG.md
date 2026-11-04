@@ -27,6 +27,13 @@ make sense to somebody whose repo just received it.
 - **The folds on the Brief stay open while you read them.** "Since your last brief" and the
   earlier briefs closed again whenever your page refreshed itself, which it does often; they now
   keep their state like every other fold. Found by the Safari run of the 4.9.0 release.
+- **A PDF is read on Windows when your folder's name has an accent.** Where pypdf cannot run,
+  the app reads a PDF with Poppler, which could not open a file under a folder such as
+  "Zoë"; it is now handed a plain copy of the file instead. Found by the Windows run of the
+  4.9.0 release.
+- **The Windows check of a release finishes inside its time.** A copy's own checks use
+  several workers on GitHub's computers (41 minutes in one), and the app's tests never take
+  a copy's newer saved work while they run.
 
 ## [4.9.0] - 2026-11-04
 

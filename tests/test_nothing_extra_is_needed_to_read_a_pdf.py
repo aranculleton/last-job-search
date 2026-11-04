@@ -171,3 +171,30 @@ def test_the_letter_audit_reads_the_letter_with_it(tmp_path, monkeypatch, no_pop
     monkeypatch.setattr(AU.docpaths, "letter_pdf", lambda abbr: str(tmp_path / "none.pdf"))
     with pytest.raises(FileNotFoundError):
         AU.pdf_text("Acme")
+
+
+@pytest.mark.skipif(sys.platform == "win32", reason="the stand-in Poppler is a script; the "
+                    "computer check runs the real one under an accented folder on Windows")
+def test_a_poppler_that_cannot_take_an_accented_path_still_reads_the_file(tmp_path, monkeypatch):
+    """On Windows, Poppler read a folder named with "ë" as "Zo�" and could not open the
+    file (the computer check, 2026-11-04). A stand-in that refuses any argument outside plain
+    ASCII, as that one did, still reads the text and counts the pages."""
+    folder = tmp_path / "Zoë Quillfeather"
+    folder.mkdir()
+    pdf = _pdf(folder / "Zoë_CV.pdf", pages=2)
+    fake = tmp_path / "bin" / "pdftotext"
+    fake.parent.mkdir()
+    fake.write_text(
+        "#!" + sys.executable + "\n"
+        "import os, sys\n"
+        "if not all(a.isascii() for a in sys.argv[1:]):\n"
+        "    sys.stderr.write('I/O Error: Couldn\\'t open file\\n'); sys.exit(1)\n"
+        "name = sys.argv[-2]\n"
+        "assert os.path.isfile(name), name\n"
+        "sys.stdout.write('Morgan Ellis page one\\fpage two\\f')\n", encoding="utf-8")
+    fake.chmod(0o755)
+    monkeypatch.setattr(pdftext, "_pypdf", lambda: None)
+    monkeypatch.setattr(pdftext.shutil, "which",
+                        lambda n, *a, **k: str(fake) if n == "pdftotext" else None)
+    assert "Morgan Ellis" in pdftext.text(pdf)
+    assert pdftext.pages(pdf) == 2
