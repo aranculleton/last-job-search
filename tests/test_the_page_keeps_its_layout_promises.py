@@ -139,13 +139,16 @@ def test_4_the_control_row_is_one_row_with_no_sideways_scroll(layouts):
 # ------------------------------------------------------------------ 5 to 7: the frame
 
 
-def test_5_the_top_bar_is_small_and_the_pill_gives_way_to_the_rail(layouts, vp):
+def test_5_the_top_bar_is_small_and_the_pill_opens_and_closes_the_rail(layouts, vp):
+    # The pill is Claude's work's one button on every screen: beside an open rail it is how the
+    # rail closes (the maintainer, 2026-11-04: "when u press it, opens or closes the side
+    # panel"), where before it gave way to the rail and the rail could not be put away.
     bad = []
     for m, s, _, f in _sections(layouts):
         if vp == "phone" and (f["topH"] > 56 or set(f["topKids"]) - {"brand", "screen", "conn", "conn-btn", "pill", "gear"}):
             bad.append((m, s, f["topH"], f["topKids"]))
-        if vp == "wide" and f["rail"] and f["pill"]:
-            bad.append((m, s, "pill beside the rail"))
+        if vp == "wide" and f["rail"] and not f["pill"]:
+            bad.append((m, s, "an open rail with no pill to close it"))
     assert not bad, bad
 
 
