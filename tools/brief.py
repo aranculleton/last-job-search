@@ -1716,7 +1716,7 @@ def take_news(text: str, today: dt.date) -> dict:
             dropped.append(s)
             continue
         if len(kept) < NEWS_MAX:
-            kept.append(s)
+            kept.append(news_as_of(s, today))
     path = brief_path(today.isoformat())
     body = _read(path)
     carried, day = ([], "") if kept else carry_news(today)
@@ -1791,7 +1791,8 @@ def carry_news(today: dt.date, need: int = NEWS_MAX, skip=(), paths=None) -> tup
             texts.add(s)
             # A line written without its day keeps the day it was found, so a carried point
             # never reads as today's (the release review, 2026-11-03).
-            s = _UNDATED_SOURCE.sub(r"(\1, %s, \2)" % d.isoformat(), s, count=1)
+            s = news_as_of(_UNDATED_SOURCE.sub(r"(\1, %s, \2)" % d.isoformat(), s, count=1),
+                           today)
             items.append(s)
             texts.add(s)
             links |= got
@@ -1803,6 +1804,67 @@ def carry_news(today: dt.date, need: int = NEWS_MAX, skip=(), paths=None) -> tup
 
 _CARRIED = re.compile(r"Carried from the brief of (\d{4}-\d{2}-\d{2})")
 _UNDATED_SOURCE = re.compile(r"\(([^(),]{2,80}),\s*(https?://[^\s()]+)\)")
+
+# An item's time words count from the day its piece was dated, so a brief later than that day
+# says what they meant: the brief of 4 November said an employer "has a product launch event
+# next week" from a piece of 28 October, when that week had already come (the maintainer,
+# 2026-11-04). Only what happened is read this way; how to use it is the reader's, today's.
+_ITEM_SOURCE = re.compile(r"\((?P<src>[^()]{2,80}?),\s*(?P<date>\d{4}-\d{2}-\d{2})"
+                          r"(?:,\s*(?P<url>https?://[^\s()]+))?\)")
+_WEEKDAYS = ("Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday")
+_SOON = r"(early |late |later |earlier )?"
+
+
+def _month_name(d: dt.date, n: int) -> str:
+    y, m = divmod(d.month - 1 + n, 12)
+    return dt.date(d.year + y, m + 1, 1).strftime("%B")
+
+
+def news_as_of(line: str, today: dt.date) -> str:
+    """A news line whose piece is dated before `today`, its time words ("next week",
+    "tomorrow", "this month") written against that date instead; any other line as it is."""
+    m = _ITEM_SOURCE.search(line)
+    d = _d(m.group("date")) if m else None
+    if not d or d >= today:
+        return line
+    what = line[:m.start()]
+
+    def day(n: int) -> str:
+        return _short_date((d + dt.timedelta(days=n)).isoformat())
+    weekday = "|".join(_WEEKDAYS)
+    subs = (
+        (r"\blater today\b", "later on " + day(0)),
+        (r"\btoday's\b", day(0) + "'s"),
+        (r"\b(?:today|tonight)\b", day(0)),
+        (r"\b(?:yesterday|last night)\b", day(-1)),
+        (r"\btomorrow\b", day(1)),
+        (r"\bthis weekend\b", "the weekend after " + day(0)),
+        (r"\b%sthis week\b" % _SOON, r"\1in the week of " + day(0)),
+        (r"\b%snext week\b" % _SOON, r"\1in the week after " + day(0)),
+        (r"\blast week\b", "in the week before " + day(0)),
+        (r"\b%sthis month\b" % _SOON, r"\1in " + _month_name(d, 0)),
+        (r"\b%snext month\b" % _SOON, r"\1in " + _month_name(d, 1)),
+        (r"\blast month\b", "in " + _month_name(d, -1)),
+        (r"\b%sthis year\b" % _SOON, r"\1in %d" % d.year),
+        (r"\b%snext year\b" % _SOON, r"\1in %d" % (d.year + 1)),
+        (r"\blast year\b", "in %d" % (d.year - 1)),
+        (r"\bthis (%s)\b" % weekday,
+         lambda w: "%s %s" % (w.group(1).capitalize(), day(
+             (_WEEKDAYS.index(w.group(1).capitalize()) - d.weekday()) % 7))),
+        (r"\bnext (%s)\b" % weekday, lambda w: "the %s after %s" % (w.group(1).capitalize(),
+                                                                    day(0))),
+    )
+    for pat, new in subs:
+        what = re.sub(pat, new, what, flags=re.I)
+    return what + line[m.start():]
+
+
+def message_news(line: str) -> str:
+    """A news line for the chat's message: its source and day kept, its link left out."""
+    def short(m):
+        return "(%s, %s)" % (m.group("src").strip(), _short_date(m.group("date")))
+    line = _UNDATED_SOURCE.sub(r"(\1)", _ITEM_SOURCE.sub(short, line, count=1))
+    return re.sub(r"\s*https?://[^\s()]+", "", line).strip()
 
 
 def _note_news(kept: list[str], today: dt.date) -> list[str]:
@@ -1943,9 +2005,9 @@ def main(argv=None) -> int:
         if lines and page_url():
             print("news: on the page with today's record; the message carries none")
         elif lines:
-            print("for the message, the first %d without their links:" % setting("news"))
+            print("for the message, the first %d, each with its day:" % setting("news"))
             for ln in lines[:setting("news")]:
-                print("- " + ln)
+                print("- " + message_news(ln))
         return 0
     if argv[:1] == ["watch"]:
         return watch_main(argv[1:])
