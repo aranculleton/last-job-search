@@ -3571,6 +3571,9 @@ def set_contact(contacts, threads, who, status=None, next_action=None, due=None,
     if not row:
         raise ValueError(f"no contact matching {who!r}")
     said = []
+    if status is None and due is not None and call_is_past(row, today or datetime.date.today()):
+        # A date set on a contact whose call has happened is not the call's: it moves on.
+        status = "in_conversation"
     if status is not None:
         status = status.strip()
         if status not in schema.THREAD_STATUSES:
@@ -3597,6 +3600,54 @@ def set_contact(contacts, threads, who, status=None, next_action=None, due=None,
     if not said:
         raise ValueError("say what to change: --status, --next-action, --due or --note")
     return row, said
+
+
+# A call that has happened. The stored status moves on once the call's day has passed, and
+# its day is kept in the next action in these words (the maintainer, 2026-11-04: a contact
+# marked "call booked" kept that status after the call, and any later date on it showed in
+# Coming up as a call).
+CALL_OVER = re.compile(r"\ACall on (\d{4}-\d{2}-\d{2}) is over\b")
+
+
+def call_over_day(contact):
+    """The day of a call that has happened and is not yet thanked for (`move_past_calls`
+    wrote it), else None."""
+    m = CALL_OVER.match(" ".join(str(contact.get("next_action") or "").split()))
+    return as_date(m.group(1)) if m else None
+
+
+def call_is_past(contact, today) -> bool:
+    """Is this contact marked `call_booked` with a call day that has passed?"""
+    day = as_date(contact.get("next_action_due"))
+    return bool(str(contact.get("status") or "").strip() == "call_booked" and day
+                and day < as_date(today))
+
+
+def move_past_calls(contacts, today) -> list[str]:
+    """Move every `call_booked` contact whose call day has passed to `in_conversation`,
+    reading "Call on <day> is over: thank them and ask how it went", with the date cleared
+    (the day is in the words). Returns the ids moved; a second run moves nobody."""
+    moved = []
+    for c in contacts:
+        if call_is_past(c, today):
+            day = as_date(c.get("next_action_due")).isoformat()
+            c["status"] = "in_conversation"
+            c["next_action"] = f"Call on {day} is over: thank them and ask how it went"
+            c["next_action_due"] = ""
+            moved.append(str(c.get("contact_id") or ""))
+    return moved
+
+
+def advance_past_calls(today, path=None) -> list[str]:
+    """`move_past_calls` on the contact book on disk, saved only when someone moved."""
+    path = path or person.state("network_contacts.csv")
+    if not os.path.exists(path):
+        return []
+    contacts = load_contacts(path)
+    moved = move_past_calls(contacts, today)
+    if moved:
+        save_contacts(contacts, path)
+    return moved
 
 
 def _cli_set(argv) -> int:
@@ -4801,6 +4852,11 @@ def main(argv=None) -> int:
         return _cli_inmail_credits(argv[1:])
     if argv[:1] == ["set"]:
         return _cli_set(argv[1:])
+    if argv[:1] == ["advance-calls"]:
+        moved = advance_past_calls(datetime.date.fromisoformat(argv[1]) if argv[1:]
+                                   else datetime.date.today())
+        print(f"advance-calls: {len(moved)} call(s) over, moved on")
+        return 0
     if argv[:1] == ["no-reply"]:
         return _cli_no_reply(argv[1:])
     if argv[:1] == ["follow-ups"]:

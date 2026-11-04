@@ -26,6 +26,9 @@ make sense to somebody whose repo just received it.
   held as "an employer you turned down" because of the agency they work for, even when they
   had asked for your resume. Your bar now judges only where you would work; an employer you
   named, or a recruiter in-house at one you turned down, is still held.
+- **A call that has happened is no longer "booked".** Once its day passes, the person moves on
+  by itself to "thank them and ask how it went", and a later date on them is never shown as a
+  call in Coming up.
 - **The number of unread messages on your page no longer grows.** Each tap used to leave a
   message that stayed unread in the Claude app; Claude now clears it when the work is done,
   and clears the ones already piled up, once, without asking. Profile upgrade: doorbells

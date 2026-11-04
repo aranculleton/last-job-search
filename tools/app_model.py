@@ -2479,6 +2479,17 @@ def standing(ctx: Ctx, c: dict, cid: str, status: str, msgs: list, due_rows: lis
         out["next"] = reply.get("step") or "Reply"
         return out
     day = _date((call or {}).get("day"))
+    # A call that has happened (state.move_past_calls moved the row on, keeping its day in
+    # the next action): the thank-you is owed for THANKS_DAYS, until a message of ours went.
+    from network import state as _state
+    over = _state.call_over_day(c) if status == "in_conversation" else None
+    if over and 0 < (ctx.today - over).days <= THANKS_DAYS and \
+            not any(str(m.get("date") or "")[:10] > over.isoformat()
+                    and _state._direction(m) == "out" for m in msgs):
+        out.update(group="now", next="How did it go? Thank them while it is fresh", owed={
+            "kind": "thanks", "label": "Draft the thank-you", "id": f"reply~{cid}~thanks",
+            "args": {"contact": cid, "kind": "thank_you"}})
+        return out
     if status == "call_booked" and day:
         diff = (day - ctx.today).days
         if diff < 0 and -diff <= THANKS_DAYS:
