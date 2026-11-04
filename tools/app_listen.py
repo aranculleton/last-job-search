@@ -534,6 +534,13 @@ def draws_screens(db: dict, chat: str, work: str = "",
     mine = {c for c in (this_chat(""), this_chat(chat)) if c}
     if not who or who in mine:
         return True, ""
+    # A chat that took the page in this wake, after the read: its own claim, kept in this
+    # copy, is newer than the record the read holds. Never the other way: an old helper's
+    # own record of itself is older than the one that took the page from it.
+    took = seen().get("listener") or {}
+    if str(took.get("chat") or "") in mine and str(took.get("since") or "") > \
+            str(rec.get("since") or ""):
+        return True, ""
     jobs = db.get("work") or {}
     own = [w for w in (work, _job_chat()) if w]
     if any(page_db.safe_id(w) in jobs for w in own):

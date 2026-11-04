@@ -888,10 +888,6 @@ def check_in(dump: str, chat: str, now, out: str, listen: bool = False, helper: 
         page_db.moved_into(dump, move)
     got = app_listen.decide(move["db"], chat, out, now, listen=listen, helper=helper,
                             hand_to=hand, update=update)
-    if got["batches"]:
-        # The record as it will be once the check-in lands, so the rest of this wake (its
-        # page update above all) sees who answers the page now. Refused: a new read.
-        page_db.keep_landed(dump, got["batches"])
     upkeep: list[str] = []
     old: list[str] = []
     ended: dict = {"ended": [], "batches": []}
