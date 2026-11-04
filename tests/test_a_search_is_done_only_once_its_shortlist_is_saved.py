@@ -72,8 +72,8 @@ def test_a_search_is_not_done_while_its_shortlist_is_unsaved_and_is_done_once_it
     # The round saves its shortlist where Jobs reads it, as run_round.py does at its end.
     with open(os.path.join(state, "documents", "rounds", "r10.json"), "w",
               encoding="utf-8") as fh:
-        json.dump([{"title": "Demand Analyst", "company": "Sedgemoor Freight",
-                    "url": "https://jobs.example/sedgemoor/demand", "fit": 80,
+        json.dump([{"title": "Demand Analyst", "company": "Wexmoor Analytics",
+                    "url": "https://jobs.example/wexmoor/demand", "fit": 80,
                     "priority": 80, "first_seen": dt.date.today().isoformat()}], fh)
     later = _done(dump, env)
     assert later.returncode == 0, later.stdout + later.stderr

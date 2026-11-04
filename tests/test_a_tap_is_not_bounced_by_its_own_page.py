@@ -16,9 +16,16 @@ import sys
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 sys.path.insert(0, os.path.join(ROOT, "tests"))
 
-from test_a_tick_on_the_page_is_applied_once import KESTREL, Search, search  # noqa: E402,F401
+import pytest  # noqa: E402
+
+from test_a_tick_on_the_page_is_applied_once import KESTREL, Search  # noqa: E402
 
 LATER = "2026-11-20T18:00:00Z"
+
+
+@pytest.fixture
+def search(tmp_path):
+    return Search(str(tmp_path))
 
 
 def _seen(s: Search) -> dict:
@@ -73,15 +80,15 @@ def test_a_set_aside_on_a_search_ranked_afresh_reaches_the_posting_tapped(search
     for r in rows:
         r["fit"] = r["fit"] - 1
     rows.insert(0, {"priority": 95, "fit": 93, "title": "Network Planner",
-                    "company": "Sedgemoor Freight", "location": "Manchester",
-                    "url": "https://jobs.example/sedgemoor/planner", "portal": "linkedin"})
+                    "company": "Wexmoor Analytics", "location": "Manchester",
+                    "url": "https://jobs.example/wexmoor/planner", "portal": "linkedin"})
     with open(path, "w", encoding="utf-8") as fh:
         json.dump(rows, fh)
     aid = search.act("job.dismiss", "r9-1", rev=seen["rev"], value={"why": "too far"})
     got = search.apply()
     assert got["ok"] == [aid], search.receipt(aid)
     assert _excluded(search, "https://jobs.example/brindle/demand")
-    assert not _excluded(search, "https://jobs.example/sedgemoor/planner")
+    assert not _excluded(search, "https://jobs.example/wexmoor/planner")
 
 
 def test_a_posting_that_really_changed_is_still_refused(search):

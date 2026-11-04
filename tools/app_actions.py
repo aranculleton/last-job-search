@@ -47,7 +47,8 @@ item's rev now): one made on something that has changed since is refused, receip
 nothing written, so two devices that answered one question differently never overwrite
 each other. What only this batch's own earlier taps from the same window changed is still as
 the person saw it (they made those taps, and the page showed them at once), and an item's rev
-holds only what an action on it acts on, so a page drawn again never moves it. And a run keeps a ledger in the dump folder, so running `apply` again before
+holds only what an action on it acts on, so a page drawn again never moves it. And a run
+keeps a ledger in the dump folder, so running `apply` again before
 the receipts are written back re-sends the same receipts instead of applying twice. Every
 row an action writes is dated by the action's own time (`at`, in the person's zone), so two
 chats that both applied it would write the same row, which the row-wise merge keeps once.

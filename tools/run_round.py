@@ -367,16 +367,110 @@ def shown(show) -> int:
     return KEEP_TOP if n <= 0 else min(n, KEEP_TOP)
 
 
-def hard_rules(jobage, today, seen=None, keep_ruled_out=False):
+SET_ASIDE_ON_PAGE = "set aside on your page"
+
+
+def page_set_asides(dump_dir) -> tuple[set, set]:
+    """The postings the person set aside on their page whose tap is not applied yet, from a
+    page dump holding its `actions` and `receipts`: each Set aside with no receipt, not
+    taken back by a later tap (Undo, Bring back). A round that ran while they set jobs aside
+    listed them again (the helper chat's report, 2026-11-02). (links, revs): each tap's rev,
+    the posting and where it stood as the person saw it (app_model.job_rev), which any row of
+    the same posting has; and its link where it is found, by that rev in any saved round or
+    among the jobs they added, else by its round and rank, normalized."""
+    if not dump_dir or not os.path.isdir(dump_dir):
+        return set(), set()
+    import glob
+    import page_db
+    import app_model
+    import added_jobs
+    from lookup_score import norm
+    db = page_db.load(dump_dir)
+    receipts = db.get("receipts") or {}
+    acts = [(str(d["data"].get("at") or ""), aid, d["data"])
+            for aid, d in (db.get("actions") or {}).items() if aid not in receipts]
+    undone = {str(a.get("undoes") or (a.get("value") or {}).get("undoes") or "")
+              for _, _, a in acts if a.get("action") == "undo" and isinstance(a, dict)}
+    last: dict = {}
+    for _, aid, a in sorted(acts):
+        if a.get("action") in ("job.dismiss", "job.bring_back") and aid not in undone:
+            last[str(a.get("item") or "")] = a
+    taps = [a for a in last.values() if a.get("action") == "job.dismiss"]
+    if not taps:
+        return set(), set()
+    saved = {"added": added_jobs.load()}
+    for f in glob.glob(person.state(SUMMARY_DIR, "*.json")):
+        try:
+            rows = _read_json(f)
+        except Exception:  # noqa: BLE001  one unreadable round reads as none
+            rows = []
+        saved[os.path.splitext(os.path.basename(f))[0]] = rows if isinstance(rows, list) else []
+    by_rev = {}
+    for rows in saved.values():
+        for r in rows:
+            if isinstance(r, dict):
+                u, c, t = str(r.get("url") or ""), str(r.get("company") or ""), str(r.get("title") or "")
+                for st in ("new", "ready"):
+                    by_rev.setdefault(app_model.job_rev(u, c, t, st), u)
+    out = set()
+    for a in taps:
+        url = by_rev.get(str(a.get("rev_seen") or ""))
+        if url is None:
+            m = re.match(r"^(.+)-(\d+)$", str(a.get("item") or ""))
+            rows = saved.get(m.group(1)) or [] if m else []
+            n = int(m.group(2)) if m else 0
+            url = str((rows[n - 1] or {}).get("url") or "") if 0 < n <= len(rows) and \
+                isinstance(rows[n - 1], dict) else ""
+        if url and norm(url):
+            out.add(norm(url))
+    return out, {str(a.get("rev_seen") or "") for a in taps} - {""}
+
+
+def declined_now() -> dict:
+    """The employers turned down by name as the profile holds them now (search.py
+    BAR_DECLINED, keyed as bar.py looks them up), read from the file: bar.py keeps the copy
+    the round read when it started, so a "No more roles from them" said on the page while it
+    ran was never seen by its cut (2026-11-04)."""
+    try:
+        import profile_set
+        got = profile_set.get("search.py", "BAR_DECLINED")
+    except Exception:  # noqa: BLE001  no profile, or no such setting: none
+        return {}
+    return dict(got) if isinstance(got, dict) else {}
+
+
+def hard_rules(jobage, today, seen=None, keep_ruled_out=False, dump=None):
     """A function from a ranked row to the hard rule it fails now, or "": the search window,
     the candidate's bar (tools/bar.py, its hard rules, with the posting read), and a ruling
     or a hold made since the row was ranked (prefilter.already_ruled_out: seen_jobs.json,
     a referral in flight, do_not_target.json). The shortlist is cut with it (write_summary),
-    so a row failing one is passed over and the next row taken."""
+    so a row failing one is passed over and the next row taken. Made when the shortlist is
+    cut, so it reads every ruling as it stands then, a Set aside or an employer turned down
+    while the round ran included (declined_now); the person's own rulings hold even with --no-seen-read, which only looks again
+    at what a rule decided; and with `dump`, a page dump, the Set asides still waiting on the
+    page (page_set_asides)."""
     import bar
     import prefilter
     day = datetime.date.fromisoformat(today) if isinstance(today, str) else today
     ruled = prefilter.already_ruled_out(seen, keep_ruled_out, day) if seen else (lambda job: "")
+    own = (lambda job: "")
+    if seen and keep_ruled_out:
+        mine = {k: e for k, e in (prefilter._seen_entries(seen) or {}).items()
+                if isinstance(e, dict) and e.get("basis") == "person"}
+        own = prefilter.already_ruled_out(seen, False, day, entries=mine) if mine else own
+    waiting, revs = page_set_asides(dump)
+    declined = declined_now()
+    from company_key import key as company_key
+    from lookup_score import norm
+
+    def set_aside(row) -> bool:
+        if norm(row.get("url") or "") in waiting:
+            return True
+        if not revs:
+            return False
+        import app_model
+        u, c, t = (str(row.get(k) or "") for k in ("url", "company", "title"))
+        return any(app_model.job_rev(u, c, t, st) in revs for st in ("new", "ready"))
 
     def check(row) -> str:
         age = prefilter.age_days(row, day)
@@ -385,7 +479,12 @@ def hard_rules(jobage, today, seen=None, keep_ruled_out=False):
         verdict, why = bar.verdict(row.get("company"), row.get("desc") or "")
         if verdict == bar.EXCLUDED:
             return f"candidate's bar: {why}"
-        return ruled(row) or ""
+        k = company_key(str(row.get("company") or "")) if declined else ""
+        if k and k in declined:
+            return f"candidate's bar: {declined[k]}"
+        if (waiting or revs) and set_aside(row):
+            return SET_ASIDE_ON_PAGE
+        return ruled(row) or own(row) or ""
     return check
 
 
@@ -748,7 +847,8 @@ def recut(a) -> int:
     seen = a.seen or person.state("job_scraper", "seen_jobs.json")
     path = write_summary(short, where, name,
                          scraped_path=scraped if os.path.isfile(scraped) else None,
-                         show=a.show, rules=hard_rules(a.jobage, a.today, seen, a.no_seen_read),
+                         show=a.show, rules=hard_rules(a.jobage, a.today, seen, a.no_seen_read,
+                                                       dump=a.dump),
                          report=report, links=links)
     for line in say_cut(report, a.show):
         print(line)
@@ -833,6 +933,10 @@ def main():
     ap.add_argument("--keep-intermediates", dest="keep", action="store_true",
                     help="keep the stage files instead of pruning them; they are "
                          "reproducible, so this is for debugging a round that went wrong")
+    ap.add_argument("--dump", default=None,
+                    help="a page dump holding its actions and receipts, read when the "
+                         "shortlist is cut: a job set aside on the page and not yet applied "
+                         "is passed over and the next taken")
     ap.add_argument("--recut", action="store_true",
                     help="search nothing: cut the round in --out again, every hard rule "
                          "applied as it stands now (a ruling or a judgement made since), "
@@ -1000,7 +1104,7 @@ def main():
                             rules=hard_rules(a.jobage, a.today,
                                              a.seen or person.state("job_scraper",
                                                                     "seen_jobs.json"),
-                                             a.no_seen_read),
+                                             a.no_seen_read, dump=a.dump),
                             report=cut)
     # Counted on the list the person is shown, after the hard rules cut it: counted on the
     # ranked rows before the cut, 60 and more of them, a round met its target with rows the

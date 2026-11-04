@@ -57,6 +57,10 @@ make sense to somebody whose repo just received it.
   marked finished while it was still saving, so its card said the jobs were ready while Jobs
   said "Nothing new". Each search is also saved under the next number in your list of
   searches, never a name a chat made up.
+- **A job you set aside while a search is running stays set aside.** The search checks what
+  you have set aside, and any employer you said "No more roles from", again just before it
+  makes your list, including taps on your page Claude has not taken in yet, and fills each
+  place with the next best job, so you get the number you asked for.
 
 ## [4.9.1] - 2026-11-04
 
