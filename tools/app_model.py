@@ -664,7 +664,21 @@ def _app(ctx: Ctx, targets: dict) -> dict:
             "repo": f"https://github.com/{owner}/{name}" if owner and name else None,
             # The page's own code version, built into it when it is published: an open page
             # older than the one published since reloads itself (meta/now `page`, app.py view).
-            "page": _page_version()}
+            "page": _page_version(),
+            # How many pieces of the person's work have waited a day or more without being
+            # saved (land.stranded, read offline): the page says so, so work that never
+            # reached their copy is never silent (the stranger audit, X-30).
+            "not_saved": _not_saved()}
+
+
+def _not_saved() -> int:
+    try:
+        import land
+        if not hasattr(land, "stranded") or land._the_app(land.ROOT):
+            return 0
+        return len(land.stranded(land.ROOT, fetch=False))
+    except Exception:  # noqa: BLE001  no git here, or no copy: nothing to say
+        return 0
 
 
 def _page_version() -> int:
@@ -4444,7 +4458,7 @@ def brief_link(ctx: Ctx, line: str) -> dict:
 
 def _setup(ctx: Ctx, targets: dict) -> dict:
     import app_setup
-    return app_setup.setup_section(ctx.today, targets)
+    return app_setup.setup_section(ctx.today, targets, now=ctx.now)
 
 
 def _updates(ctx: Ctx, targets: dict) -> dict:
@@ -4497,7 +4511,7 @@ def _schedule(ctx: Ctx, targets: dict) -> dict:
     for a chat to make (tools/routines.py page_part), for Settings' "Your brief", with the
     id and rev brief.move, brief.pause and brief.resume act on."""
     import routines
-    part = routines.page_part()
+    part = routines.page_part(now=ctx.now, today=ctx.today)
     if part.get("paused") and _date(part["paused"].get("until")) and \
             _date(part["paused"]["until"]) <= ctx.today:
         part["paused"] = dict(part["paused"], over=True)   # its day came: resume lifts it
@@ -4639,7 +4653,7 @@ _ENUMS = {
     ("upcoming", "kind"): {"interview", "test", "call", "deadline", "event"},
 }
 _JOB_STATUS = {"new", "drafting", "ready", "applied", "dismissed"}
-_ISO_DAY = re.compile(r"^\d{4}-\d{2}-\d{2}$")
+_ISO_DAY_ONLY = re.compile(r"^\d{4}-\d{2}-\d{2}$")
 _ISO_TIME = re.compile(r"^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}Z$")
 # Where the person's own words are shown: their drafts and their own answers.
 OWN_TEXT = (("messages", "text"), ("ready", "outreach", "text"), ("ready", "screening"))
@@ -4757,10 +4771,10 @@ def check(model: dict) -> list[str]:
         elif got["shown"] > got["total"] or not isinstance(got["counts"], dict):
             bad.append(f"lists.{name}: shows more than it holds")
     for item in model.get("due") or []:
-        if not _ISO_DAY.match(str(item.get("due") or "")):
+        if not _ISO_DAY_ONLY.match(str(item.get("due") or "")):
             bad.append(f"due {item.get('id')}: due is not a date")
     for item in model.get("upcoming") or []:
-        if not _ISO_DAY.match(str(item.get("day") or "")):
+        if not _ISO_DAY_ONLY.match(str(item.get("day") or "")):
             bad.append(f"upcoming {item.get('id')}: day is not a date")
         if bool(item.get("start")) == bool(item.get("all_day")) or any(
                 item.get(k) and not _ISO_TIME.match(str(item[k])) for k in ("start", "end")):

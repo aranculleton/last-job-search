@@ -103,10 +103,16 @@ def bullets_per_role(lines, names, education):
     edu = re.compile("^" + re.escape(education)) if education else re.compile(r"(?!x)x")
     n: dict = {}
     e = ""
+    # Two roles at one employer open with the same name: the k-th time it opens is the k-th
+    # role of that name, in profile order.
+    opened: dict = {}
     for line in lines:
         hit = next((i for i, r in rx if r.search(line)), None)
         if hit is not None:
-            e = str(hit)
+            same = [j for j in range(len(names)) if names[j] == names[hit]]
+            k = opened.get(names[hit], 0)
+            opened[names[hit]] = k + 1
+            e = str(same[min(k, len(same) - 1)])
         if edu.search(line):
             e = ""
         if BULLET.search(line):
@@ -183,6 +189,16 @@ def _batch_flags(abbr: str, entry: dict, general: bool) -> list:
     except Exception:  # noqa: BLE001
         pass
     return out
+
+
+def _role_keys(roles) -> list:
+    """Each role's key into the allocator's caps (allocate.role_keys): two titles at one
+    employer are two roles with caps of their own."""
+    try:
+        import allocate
+        return allocate.role_keys(roles)
+    except Exception:  # noqa: BLE001  no allocator to read: the employer, as it was
+        return [r["employer"] for r in roles]
 
 
 def _caps(entry: dict) -> dict:
@@ -302,7 +318,8 @@ def main(argv=None) -> int:
         if c_pdf and cp != 1:
             p += f" LETTER_{cp_s}p"
         after_exp = next_heading(want, v["H_EXPERIENCE"])
-        if role_order(r_lines, names, v["H_EXPERIENCE"], after_exp) != v["ROLE_ORDER"]:
+        shown = role_order(r_lines, names, v["H_EXPERIENCE"], after_exp)
+        if shown != v["ROLE_ORDER"]:
             p += " CHRONO"
         if "Core Competencies" in rt_text:
             p += " COMPETENCIES"
@@ -400,8 +417,9 @@ def main(argv=None) -> int:
         if unaudited:
             p += " UNAUDITED"
         caps = _caps(entry)
+        keys = _role_keys(roles)
         for i, r in enumerate(roles):
-            cap = caps.get(r["employer"])
+            cap = caps.get(keys[i])
             if cap is not None and i < len(got) and int(got[i]) > cap:
                 p += f" {r.get('short') or i}_GT_{cap}"
         b = sum(1 for line in r_lines if BULLET.search(line))
@@ -411,6 +429,13 @@ def main(argv=None) -> int:
         _say("%-9s %s/%s  %-4s %-14s %s" % (a, rp_s, cp_s, b, cnt, p))
         if lost:
             _say("          contact lines not on the page: " + "; ".join(lost))
+        if " CHRONO" in p:
+            # Which job is missing or out of place, said, never only the flag.
+            want_roles = v["ROLE_ORDER"].rstrip(">").split(">")
+            got_roles = shown.rstrip(">").split(">")
+            gone = [x for x in dict.fromkeys(want_roles) if got_roles.count(x) < want_roles.count(x)]
+            _say("          the jobs on the page are not the profile's, in order: "
+                 + ("missing " + ", ".join(gone) if gone else "shown as " + " > ".join(got_roles)))
         if " ROUNDTRIP" in p:
             _say("\n".join("          " + line for line in rt.splitlines()))
         for field, sentence in unaudited[:5]:

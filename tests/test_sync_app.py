@@ -370,10 +370,16 @@ def test_if_stale_brings_in_master_first(repos, tmp_path):
 
 
 def test_if_stale_with_uncommitted_work_stops_and_records_nothing(repos, tmp_path):
+    """On a computer, where another chat may be writing them. A cloud chat saves the person's
+    own files first and takes the update (tests/test_an_update_reaches_every_stranger.py)."""
     app, me = repos
     _with_local_origin(me, tmp_path)
     write(me, "job_search_tracker.csv", "date,company\nunsaved\n")
-    rc, out = run(me, app, "--if-stale")
+    env = {k: v for k, v in ENV.items() if k != "CLAUDE_CODE_REMOTE"}
+    r = subprocess.run([sys.executable, os.path.join(me, "tools", "sync_app.py"), "--if-stale"],
+                       cwd=me, env=dict(env, LJS_APP_URL=app), text=True, encoding="utf-8",
+                       errors="replace", capture_output=True)
+    rc, out = r.returncode, r.stdout + r.stderr
     assert rc == 1 and "Commit or stash" in out
     assert _stamp(me) == ""
 

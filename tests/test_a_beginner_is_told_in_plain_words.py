@@ -180,9 +180,13 @@ def test_the_brief_is_made_with_nothing_for_the_person_to_type():
     # The bell does it; without a page, four words in the chat they already use.
     paste = re.search(r'\*\*"(set up my brief)"\*\*', readme)
     assert paste and "Press the bell on your Brief" in readme
-    said = routines.default("Europe/London")["say"]
+    said = routines.default("Europe/London", page=True)["say"]
     _plain(said)
     assert said.startswith("Your brief is on: every day at 7:38")
+    # With no page there is no bell: the line names the chat and the words to use (X-11).
+    said = routines.default("Europe/London", page=False)["say"]
+    _plain(said)
+    assert said.startswith("Your morning brief comes to this chat every day at 7:38")
     for line in claude_surfaces.steps("routines-cloud"):
         _plain(line)
 

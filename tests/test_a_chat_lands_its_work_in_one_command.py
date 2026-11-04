@@ -134,8 +134,8 @@ def test_a_red_check_pushes_its_branch_with_no_pull_request_and_the_next_chat_fi
     git(other, "fetch", "-q", "origin")
     assert land.waiting(str(other)) == ["origin/claude/chat-1"]
     code, out = _run(other, "--waiting", capsys=capsys)
-    assert code == 0 and "waiting on: origin/claude/chat-1" in out
-    assert "git merge --no-edit <it>" in out
+    assert code == 0 and "waiting on: origin/claude/chat-1 (today)" in out
+    assert "the next landing brings each in" in out
     # The chat's own branch is never listed to itself, and a branch of the app's is never one.
     assert land.waiting(str(chat)) == []
     git(other, "switch", "-q", "-c", "claude/app-change")
@@ -146,15 +146,19 @@ def test_a_red_check_pushes_its_branch_with_no_pull_request_and_the_next_chat_fi
     assert land.waiting(str(other)) == ["origin/claude/chat-1"]
 
 
-def test_a_conflict_pushes_the_work_from_before_the_merge_and_leaves_no_merge(copy, capsys):
+def test_a_conflict_that_cannot_be_settled_pushes_the_work_from_before_the_merge(copy, capsys):
+    """Only a file of the app's is never settled (merge_state.settle): two copies of the app
+    that disagree are not a person's choice. The work waits, as before, and loses nothing."""
     origin, chat, other = copy
-    write(other, "profile/notes.md", "theirs\n")
+    write(other, "tools/example.py", "print('theirs')\n")
     git(other, "commit", "-q", "-am", "theirs")
     git(other, "push", "-q", "origin", "master")
+    write(chat, "tools/example.py", "print('mine')\n")
+    git(chat, "commit", "-q", "-am", "an app file changed here")
     write(chat, "profile/notes.md", "mine\n")
     code, out = _run(chat, "--message", "Mine", check=NEVER, capsys=capsys)
     assert code == 2
-    assert out.startswith("land: a conflict in profile/notes.md; the work waits on claude/chat-1")
+    assert out.startswith("land: a conflict in tools/example.py; the work waits on claude/chat-1")
     assert "create_pull_request" not in out
     assert git(chat, "rev-parse", "-q", "--verify", "MERGE_HEAD", check=False).returncode != 0
     # Pushed as it was before the merge: the chat's own commit, master's not in it.
@@ -162,6 +166,248 @@ def test_a_conflict_pushes_the_work_from_before_the_merge_and_leaves_no_merge(co
     assert git(origin, "log", "-1", "--format=%s", "claude/chat-1").stdout.strip() == "Mine"
     assert git(origin, "merge-base", "--is-ancestor", "master", "claude/chat-1",
                check=False).returncode != 0
+
+
+def _stranger(copy):
+    """The copy with the row-by-row merge's files on master, as a person's copy has them:
+    .gitattributes, tools/merge_state.py and a tracker. Clones made after carry them, but no
+    clone has the driver set: config is never committed."""
+    origin, chat, other = copy
+    with open(os.path.join(ROOT, ".gitattributes"), encoding="utf-8") as fh:
+        write(other, ".gitattributes", fh.read())
+    for name in ("merge_state.py", "personal_paths.py", "python_floor.py"):
+        with open(os.path.join(ROOT, "tools", name), encoding="utf-8") as fh:
+            write(other, "tools/" + name, fh.read())
+    write(other, "job_search_tracker.csv", "date,company,role,status\n"
+                                           "2026-11-01,Alder Freight,Analyst,applied\n")
+    write(other, "profile/CLAUDE.md", "# Their own rules\n\n- One rule.\n")
+    write(other, "profile/search.py", "SALARY_FLOOR = 50000\n")
+    git(other, "add", "-A")
+    git(other, "add", "-f", "job_search_tracker.csv")
+    git(other, "commit", "-q", "-m", "the app's merge files and a tracker")
+    git(other, "push", "-q", "origin", "master")
+    git(chat, "fetch", "-q", "origin", "master")
+    git(chat, "merge", "-q", "--ff-only", "origin/master")
+    assert git(chat, "config", "--get", "merge.ljs-state.driver", check=False).stdout == ""
+    return origin, chat, other
+
+
+def _append(repo, rel, text):
+    with open(os.path.join(str(repo), rel), "a", encoding="utf-8") as fh:
+        fh.write(text)
+
+
+def _land_other(other, message):
+    """Another chat lands straight onto master (its pull request merged)."""
+    git(other, "add", "-A")
+    git(other, "add", "-f", "job_search_tracker.csv")
+    git(other, "commit", "-q", "-m", message)
+    git(other, "push", "-q", "origin", "master")
+
+
+def test_a_job_chats_rows_land_beside_anothers_without_the_sync_having_run(copy, capsys):
+    """X-2 (the stranger audit, 2026-11-03): a page job runs in a fresh clone that never ran
+    the sync, so the row-by-row driver was not set, and two appended tracker rows conflicted
+    as plain lines: the job's drafts waited on a branch while its card said Done. The
+    landing sets the driver itself before it merges."""
+    origin, chat, other = _stranger(copy)
+    _append(other, "job_search_tracker.csv", "2026-11-03,Birch Mutual,Analyst,applied\n")
+    _land_other(other, "a tap: applied")
+    _append(chat, "job_search_tracker.csv", "2026-11-03,Penrose Data,Analyst,drafted\n")
+    write(chat, "documents/applications/penrose_analyst/letter.md", "To Penrose Data, a letter\n")
+    code, out = _run(chat, "--message", "Draft Penrose", capsys=capsys)
+    assert code == 0 and "land: ready claude/chat-1" in out, out
+    tracker = git(origin, "show", "claude/chat-1:job_search_tracker.csv").stdout
+    assert "Birch Mutual" in tracker and "Penrose Data" in tracker and "<<<<" not in tracker
+    assert "documents/applications/penrose_analyst/letter.md" in git(
+        origin, "ls-tree", "-r", "--name-only", "claude/chat-1").stdout
+
+
+def test_two_chats_changing_the_same_rule_both_land_and_the_person_is_asked(copy, capsys):
+    """X-13 (the stranger audit, 2026-11-03): a conflict in a file the row merge does not
+    cover (the person's own rules, a setting) aborted the merge, and the whole chat's work,
+    tracker rows and drafts included, waited on a branch every later chat tried and left.
+    Each such file is settled now, losing neither side, and the rest lands."""
+    import profile_upgrades
+    origin, chat, other = _stranger(copy)
+    write(other, "profile/CLAUDE.md", "# Their own rules\n\n- One rule, said the first way.\n")
+    write(other, "profile/search.py", "SALARY_FLOOR = 55000\n")
+    _land_other(other, "chat A: a rule and a setting")
+    write(chat, "profile/CLAUDE.md", "# Their own rules\n\n- One rule, said the second way.\n")
+    write(chat, "profile/search.py", "SALARY_FLOOR = 60000\n")
+    _append(chat, "job_search_tracker.csv", "2026-11-03,Harrow Logistics,Analyst,drafted\n")
+    write(chat, "documents/applications/harrow_ops/letter.md", "To Harrow Logistics, a letter\n")
+    code, out = _run(chat, "--message", "Harrow", capsys=capsys)
+    assert code == 0 and "land: ready claude/chat-1" in out, out
+    assert "profile/CLAUDE.md: both versions kept" in out
+    shown = lambda rel: git(origin, "show", "claude/chat-1:" + rel).stdout  # noqa: E731
+    rules = shown("profile/CLAUDE.md")
+    assert "said the first way" in rules and "said the second way" in rules
+    assert "<<<<" not in rules and ">>>>" not in rules
+    assert profile_upgrades.CONFIRM.search(rules)
+    # A setting: this chat's kept, the other saved beside it, and the person asked.
+    search = shown("profile/search.py")
+    assert "SALARY_FLOOR = 60000" in search and profile_upgrades.CONFIRM.search(search)
+    assert "SALARY_FLOOR = 55000" in shown("profile/search.py.from-another-chat")
+    compile(search, "search.py", "exec")
+    # And the rest of the chat's work is on the branch the pull request takes to master.
+    assert "Harrow Logistics" in shown("job_search_tracker.csv")
+    assert "To Harrow Logistics, a letter" in shown("documents/applications/harrow_ops/letter.md")
+
+
+def test_work_stranded_by_an_older_version_comes_back_at_the_next_landing(copy, capsys,
+                                                                         monkeypatch):
+    """X-13, X-30 and X-34 healing an existing copy: a branch an older version left waiting
+    on a conflict, which every chat aborted, is brought in by the next landing anywhere
+    after the update, settled, and landed; a chat cloned before it was pushed sees it too."""
+    origin, chat, other = _stranger(copy)
+    late = str(chat) + "-late"
+    git(origin, "clone", "-q", str(origin), late)          # a chat kept open since before
+    # The stranded branch: an older landing that stopped on a conflict, pushed and left.
+    git(other, "switch", "-q", "-c", "claude/chat-b")
+    write(other, "profile/CLAUDE.md", "# Their own rules\n\n- One rule, chat B's way.\n")
+    _append(other, "job_search_tracker.csv", "2026-11-01,Osprey Media,Analyst,drafted\n")
+    _land_other_branch = ["add", "-A"]
+    git(other, *_land_other_branch)
+    git(other, "add", "-f", "job_search_tracker.csv")
+    git(other, "commit", "-q", "-m", "chat B's work")
+    git(other, "push", "-q", "origin", "claude/chat-b")
+    git(other, "switch", "-q", "master")
+    write(other, "profile/CLAUDE.md", "# Their own rules\n\n- One rule, chat A's way.\n")
+    _land_other(other, "chat A")
+    # The kept-open chat lands its own small change: chat B's work comes with it.
+    git(late, "switch", "-q", "-c", "claude/kept-open")
+    write(late, "profile/notes.md", "a note\n")
+    code, out = _run(late, "--message", "A note", capsys=capsys)
+    assert code == 0 and "land: brought in work that waited on origin/claude/chat-b" in out, out
+    shown = lambda rel: git(origin, "show", "claude/kept-open:" + rel).stdout  # noqa: E731
+    assert "Osprey Media" in shown("job_search_tracker.csv")
+    assert "chat B's way" in shown("profile/CLAUDE.md") and "chat A's way" in shown(
+        "profile/CLAUDE.md")
+    # Once that lands, nothing waits any more.
+    git(other, "fetch", "-q", "origin", "claude/kept-open")
+    git(other, "merge", "-q", "--no-ff", "--no-edit", "FETCH_HEAD")
+    git(other, "push", "-q", "origin", "master")
+    assert _run(late, "--waiting", capsys=capsys)[1].strip() == "land: nothing waiting"
+
+
+def test_a_branch_that_took_an_update_and_could_not_land_is_still_listed(copy, capsys):
+    """X-31 (the stranger audit, 2026-11-03): a chat that took the day's update and then
+    landed red pushed a branch whose diff held the app's files (its sync's merge), and
+    waiting() never listed it, so its work was lost. The app's commits a branch's own update
+    brought in are the app's; only the branch's own commits decide."""
+    origin, chat, other = copy
+    # The app's release, as the sync merges it: commits from the app's own history.
+    git(other, "switch", "-q", "--orphan", "app-release")
+    write(other, "tools/tidy.py", "print('the new release')\n")
+    git(other, "add", "tools/tidy.py")
+    git(other, "commit", "-q", "-m", "the app: a new release")
+    git(other, "switch", "-q", "-f", "master")
+    git(other, "switch", "-q", "-c", "claude/chat-x-77")
+    git(other, "merge", "-q", "--no-ff", "--allow-unrelated-histories", "-m",
+        "Sync from the app: 1 new commit(s)", "app-release")
+    write(other, "documents/applications/northgate_risk/letter.md", "To Northgate, a letter\n")
+    git(other, "add", "-f", "documents/applications/northgate_risk/letter.md")
+    git(other, "commit", "-q", "-m", "a draft")
+    git(other, "push", "-q", "origin", "claude/chat-x-77")
+    fresh = str(chat) + "-fresh"
+    git(origin, "clone", "-q", str(origin), fresh)
+    assert land.waiting(fresh) == ["origin/claude/chat-x-77"]
+    # A branch whose own commit changes an app file is still never listed.
+    git(other, "switch", "-q", "-c", "claude/edits-the-app", "master")
+    write(other, "tools/example.py", "print('edited by hand')\n")
+    git(other, "commit", "-q", "-am", "an app file edited")
+    git(other, "push", "-q", "origin", "claude/edits-the-app")
+    git(fresh, "fetch", "-q", "origin")
+    assert land.waiting(fresh) == ["origin/claude/chat-x-77"]
+
+
+def test_a_background_agents_branch_is_where_the_next_landing_looks(copy, capsys):
+    """X-35 (the stranger audit, 2026-11-03): a background agent works on Claude Code's own
+    worktree-agent-... branch, and its red landing pushed it there, where --waiting never
+    looked. It is looked for now, and any other name is pushed under claude/."""
+    origin, chat, other = copy
+    git(chat, "switch", "-q", "-c", "worktree-agent-a1b2c3d4e5f6")
+    write(chat, "profile/notes.md", "an agent's work\n")
+    code, out = _run(chat, "--message", "Agent work", check=RED, capsys=capsys)
+    assert code == 1 and "the work waits on worktree-agent-a1b2c3d4e5f6" in out
+    git(chat, "switch", "-q", "-c", "feature-of-mine", "origin/master")
+    write(chat, "profile/other.md", "another\n")
+    code, out = _run(chat, "--message", "Mine", check=RED, capsys=capsys)
+    assert code == 1 and "the work waits on claude/feature-of-mine" in out, out
+    git(other, "fetch", "-q", "origin")
+    assert sorted(land.waiting(str(other))) == ["origin/claude/feature-of-mine",
+                                                "origin/worktree-agent-a1b2c3d4e5f6"]
+
+
+def test_a_save_github_refuses_tells_the_person_how_to_connect_again(copy, capsys):
+    """X-26 (the stranger audit, 2026-11-03): with the copy's connection to Claude lapsed,
+    every landing failed with "the push was refused" and nothing else, so each chat's work
+    died with its computer and the person was never told a reconnect would fix it."""
+    sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+    from test_a_beginner_is_told_in_plain_words import _plain
+    origin, chat, _other = copy
+    hook = os.path.join(str(origin), "hooks", "pre-receive")
+    with open(hook, "w", encoding="utf-8") as fh:
+        fh.write("#!/bin/sh\necho 'Permission to stranger-ex/my-job-search.git denied to "
+                 "claude[bot].' >&2\necho 'fatal: The requested URL returned error: 403' >&2\n"
+                 "exit 1\n")
+    os.chmod(hook, 0o755)
+    write(chat, "profile/notes.md", "second\n")
+    code, out = _run(chat, capsys=capsys)
+    assert code == 2 and "Permission to" in out and "nothing was pushed" in out
+    assert land.REFUSED_SAY in out and "claude_surfaces.py steps connect-github" in out
+    _plain(land.REFUSED_SAY)
+    # A push turned away because the branch moved is not a lapsed connection.
+    moved = subprocess.CompletedProcess([], 1, "", " ! [rejected] HEAD -> claude/x "
+                                                  "(fetch first)\nerror: failed to push")
+    assert land._trouble(moved) == ""
+
+
+def test_a_full_disk_is_said_as_a_full_disk(copy, capsys, monkeypatch):
+    """X-45 (the stranger audit, 2026-11-03): git's message for a full disk names index.lock,
+    and the landing called it another command running, waited, and said nothing."""
+    sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+    from test_a_beginner_is_told_in_plain_words import _plain
+    full = subprocess.CompletedProcess([], 128, "", "fatal: sha1 file '.git/index.lock' write "
+                                                    "error. Out of diskspace")
+    assert land._said(full) == "the disk here is full" and land._trouble(full) == "disk"
+    import save_state
+    monkeypatch.setattr(save_state, "main", lambda argv, root: print(
+        "save_state: git refused: fatal: Unable to create '.git/index.lock': No space left on "
+        "device") or 1)
+    _origin, chat, _other = copy
+    code, out = _run(chat, check=NEVER, capsys=capsys)
+    assert code == 2 and "saving stopped: the disk here is full" in out
+    assert "another git command" not in out and land.DISK_FULL_SAY in out
+    _plain(land.DISK_FULL_SAY)
+
+
+def test_work_written_while_a_landing_ran_is_said_to_need_another(copy, capsys):
+    """X-62 (the stranger audit, 2026-11-03): a second turn's change, made while a landing
+    held the lock, was in no commit, and nothing started a landing for it after."""
+    _origin, chat, _other = copy
+    write(chat, "profile/notes.md", "second\n")
+    meanwhile = [sys.executable, "-c",
+                 "open('profile/later.md', 'w').write('a quick tap'); print('Green.')"]
+    code, out = _run(chat, check=meanwhile, capsys=capsys)
+    assert code == 0 and "land: ready" in out
+    assert "were written while this ran" in out and "profile/later.md" in out
+
+
+def test_work_waiting_a_day_or_more_is_known(copy, capsys, monkeypatch):
+    """X-30 (the stranger audit, 2026-11-03): work that has not reached master was invisible.
+    What has waited past a day's landings is named, with its age, for the start to say."""
+    origin, chat, other = copy
+    git(other, "switch", "-q", "-c", "claude/red-days-ago")
+    write(other, "profile/notes.md", "old work\n")
+    git(other, "add", "-A")
+    monkeypatch.setenv("GIT_COMMITTER_DATE", "2026-10-30T09:00:00")
+    git(other, "commit", "-q", "-m", "old work")
+    monkeypatch.delenv("GIT_COMMITTER_DATE")
+    git(other, "push", "-q", "origin", "claude/red-days-ago")
+    got = land.stranded(str(chat), fetch=True)
+    assert list(got) == ["origin/claude/red-days-ago"] and got["origin/claude/red-days-ago"] >= 1
 
 
 def test_nothing_ahead_of_master_lands_nothing_and_runs_no_check(copy, capsys):

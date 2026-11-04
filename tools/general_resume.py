@@ -155,9 +155,14 @@ def draft(role: str = "", style: str = "", summary: str = "") -> dict:
     skills = held_skills()
     text = str(summary or "").strip() or canonical_summary()
     if not text:
+        # Written into the profile, not only passed in: with --summary-file alone the same
+        # stop came back every time the resume was made again (the stranger audit, X-73).
         raise SystemExit("general: the profile has no Canonical Summary Statement "
-                         "(01-candidate-profile.md) and no --summary-file was given. Write the "
-                         "summary from the profile and run this again with --summary-file.")
+                         "(01-candidate-profile.md) and no --summary-file was given. Write two "
+                         "or three sentences from the profile into 01-candidate-profile.md "
+                         "under the exact heading \"## Canonical Summary Statement\", as a \"> \" "
+                         "quote (profile.example/01-candidate-profile.md shows it), save it, "
+                         "and run this again.")
     name, why = style_for(style)
     a = {"company": COMPANY, "role": roles[0] if roles else _cap(person.get("documents.noun",
                                                                             "resume")),

@@ -134,6 +134,13 @@ async function open(o) {
     if (url.startsWith("https://ljs.test/")) {
       const u = new URL(url);
       if (u.pathname.startsWith("/_blob/")) return route.fulfill({status: o.blobStatus || 200, contentType: "application/pdf", body: PDF});
+      // The page in parts (tools/app_page.py render_parts): its code files beside it, as the
+      // artifact serves its supporting files.
+      if (u.pathname.startsWith("/code/")) {
+        const file = path.join(path.dirname(o.html), ...u.pathname.slice(1).split("/"));
+        if (!fs.existsSync(file)) return route.fulfill({status: 404, body: ""});
+        return route.fulfill({status: 200, contentType: file.endsWith(".css") ? "text/css" : "text/javascript", body: fs.readFileSync(file, "utf8")});
+      }
       let body = fs.readFileSync(o.html, "utf8");
       for (const [from, to] of o.replace || []) body = body.split(from).join(to);
       return route.fulfill({status: 200, contentType: "text/html; charset=utf-8", body});
@@ -458,6 +465,27 @@ S.private_gate = async (a) => {
   const after = {shell: await visible(page, "#shell"), heading: await one(page, "#main h2")};
   await o.ctx.close();
   return {before, after, errors: o.errors};
+};
+
+// Each section's main text, the page as one document and the same page in parts (its search
+// from its store), side by side: the parts must draw exactly what the whole page draws.
+S.parts = async (a) => {
+  const out = {};
+  for (const [key, html, seed] of [["whole", a.whole, {}], ["parts", a.parts, a.seed || {}]]) {
+    const o = await open({html, seed, viewport: a.viewport});
+    const {page} = o;
+    const got = {opening: await visible(page, "#opening"), sections: {}};
+    for (const id of SECTIONS) {
+      await goto(page, id);
+      await turn(page, 2);
+      got.sections[id] = ((await one(page, "#main")) || "").replace(/\s+/g, " ").trim();
+    }
+    got.title = await page.evaluate(() => document.title);
+    got.errors = o.errors;
+    await o.ctx.close();
+    out[key] = got;
+  }
+  return out;
 };
 
 S.sections = async (a) => {

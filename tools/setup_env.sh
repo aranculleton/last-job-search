@@ -18,7 +18,13 @@
 # writing: python3 tools/claude_surfaces.py say cloud-environment) and this
 # script becomes a no-op check:
 #
-#     apt-get update -qq && apt-get install -y --no-install-recommends texlive-luatex texlive-latex-extra texlive-xetex texlive-fonts-recommended poppler-utils && pip3 install --upgrade cffi && pip3 install pytest pypdf pyyaml openpyxl ruff
+#     apt-get update -qq || true; apt-get install -y --no-install-recommends texlive-luatex texlive-latex-extra texlive-xetex texlive-fonts-recommended poppler-utils || true; pip3 install --upgrade cffi || true; pip3 install pytest pypdf pyyaml openpyxl ruff || true
+#
+# Every step ends `|| true`: a setup script that exits non-zero stops every new chat from
+# starting ("Exit zero: if the script exits non-zero, the session fails to start. Append
+# `|| true` to non-critical commands", code.claude.com/docs/en/cloud-environments, read
+# 2026-11-03), and one failed mirror did that with the `&&` line before 3 November. A step
+# that fails leaves the tool missing, which this script installs in the chat instead.
 #
 # It is deliberately NOT a SessionStart hook. tools/security_guards.py keeps
 # the hook allowlist empty because a hook runs on every fork with no prompt,
@@ -69,6 +75,10 @@ if [ "$PY_ONLY" = 0 ] && [ "$CONTAINER" = 1 ]; then
         texlive-fonts-recommended poppler-utils 2>&1); then
       echo "setup_env: apt-get install failed:"
       printf '%s\n' "$out" | tail -3 | sed 's/^/  /'
+    else
+      # Installed here, by this chat: the page tells LaTeX the cloud settings put in place
+      # (the pasted line) from LaTeX this script put in (tools/app_setup.py _setup_env_ran).
+      gd=$(git rev-parse --absolute-git-dir 2>/dev/null) && [ -n "$gd" ] && : > "$gd/ljs-setup-env"
     fi
   fi
 fi

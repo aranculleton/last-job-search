@@ -253,6 +253,12 @@ person.data("person")
 for f in sorted(glob.glob(person.path("*.py"))):
     person.module(os.path.basename(f)[:-3])
 '
+  # Loading is not enough: a profile with a setting missing (an empty search.py, a
+  # person.json with no identity) loaded, landed, and then broke every page update and the
+  # brief (the stranger audit, 2026-11-03, X-39). The page is built from them here, in full.
+  PYTHONDONTWRITEBYTECODE=1 run "your page can be built from your files" \
+    "$PY" tools/app.py model --out "${TMPDIR:-/tmp}/ljs-ci-model-$$.json"
+  rm -f "${TMPDIR:-/tmp}/ljs-ci-model-$$.json"
 fi
 # The person's own suite, against their profile, in its own process: the tools
 # read the profile once at import, so the two suites cannot share one. In parallel where it

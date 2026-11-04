@@ -64,11 +64,13 @@ SAY_OTHER_CHAT = ("Heads up: your page is looked after by {who}, so this chat le
 SAY_HELPER = ("This chat is your job search helper. It does what you ask for on your page, "
               "even with your computer off, and writes your morning brief if you turn it on. "
               "Leave it in your list; if it is ever closed, your page offers to start a new one.")
-# What the page's "Wake Claude" link types for the person; they only press Send. The chat
-# that opens runs the command and becomes the listener: a new chat with nothing else to do,
+# What the page's "Wake Claude" link types for the person; they only press Send. Plain words
+# (it is their message, in their list of chats: a command there broke the rule that a person
+# is never shown one, the stranger audit, X-84); the app's hook knows the words and tells the
+# chat to run WAKE_COMMAND, which makes it the listener: a new chat with nothing else to do,
 # so it is the helper itself and starts no other.
-WAKE_PROMPT = ("Look after my job search page from now on: python3 tools/app.py start "
-               "--listen --helper")
+WAKE_PROMPT = "Look after my job search page from now on."
+WAKE_COMMAND = "python3 tools/app.py start --listen --helper"
 REPUBLISH_TITLE = "Bringing your page up to date"
 # All the person hears about their page after an update: one line. A chat that took an
 # update (2026-10-26) asked whether to bring the page up, explained that a safety check had
@@ -80,6 +82,11 @@ REPUBLISH_TITLE = "Bringing your page up to date"
 SAY_UPDATED = "Your page is up to date: {url}"
 SAY_UPDATING = "Your page is being updated: {url}"
 SAY_NOT_UPDATED = "I couldn't update your page just now: {url}"
+# Said once, when a page first goes up after setup (or a page published before without a
+# word): what it is, in one line under 200 characters with its link (X-25).
+SAY_FIRST_PAGE = ("Your job search has its own page now: {url}. What I find and draft, and "
+                  "anything I need from you, shows there.")
+SAY_NEW_ADDRESS = "Your page has a new address: {url}"
 # A chat with the page's new code to put up takes the page from a listener quiet this long:
 # a watch Claude Code started by itself can end after hours with nothing happening, and an
 # update queued for a listener last heard from 12 hours before waited until the person asked
@@ -224,6 +231,15 @@ def role(chat: str, listen: bool = False, url: str = "") -> str:
         return "listener"            # its check-in reads the page and corrects a lost claim
     if not known or not got.get("confirmed"):
         return "claim"               # nobody, or another chat's claim nobody has seen win
+    # What this checkout saw is looked at again (the stranger audit, X-24): a session on a
+    # computer seen over an hour ago has likely ended (its id is new every session), and a
+    # cloud chat seen answering over a day ago may be archived or renewed since. Asking the
+    # page is one read, and its check-in takes the page only from a chat that stopped.
+    seen_at = _time(got.get("seen_at"))
+    computer = got.get("kind") == "computer" or str(known).startswith("local-")
+    if seen_at is None or (dt.datetime.now(dt.timezone.utc) - seen_at).total_seconds() > (
+            UPDATE_QUIET_S if computer else RENEW_S):
+        return "claim"
     return "other"
 
 
@@ -341,9 +357,23 @@ def decide(db: dict, chat: str, out_dir: str, now: dt.datetime | None = None,
                           "below, then stop this chat's watch: ArtifactComments, action "
                           "watch, url <the page>, on: false."]}
     gone = lapsed(rec, db, now)
-    if update and not gone and rec.get("chat") != chat:
+    # With the page's new code, a quiet listener is taken from, so an update never waits on a
+    # chat that stopped (2026-10-30); but never a helper the app started that is only idle: it
+    # answers when asked, and the chat the person opened for a question, which took it, is
+    # one they close (the stranger audit, X-64). It is asked to republish instead, and taken
+    # from once something waits on it unanswered (`lapsed`).
+    if update and not gone and rec.get("chat") != chat and not (
+            rec.get("helper") and rec.get("kind") == "cloud" and not helper):
         q = quiet_s(rec, db, now)
         gone = q is None or q >= UPDATE_QUIET_S
+    # The chat setting the person up answers the page while setup goes on: a second chat that
+    # took it then carried setup on beside it (the stranger audit, X-65).
+    if not mine and rec.get("chat") and _setting_up(rec.get("chat")):
+        _remember(rec, now)
+        return {"role": "other", "batches": [], "record": rec,
+                "lines": ["listen: the chat setting the person up answers the page until setup "
+                          "is done; this chat neither publishes nor watches it, and says nothing "
+                          "about it."]}
     # The cloud answers the page; a chat on the person's computer is for what only it can do
     # (the maintainer, 2026-10-29: "99% on the cloud, the computer for signed-in things").
     # So a computer chat never takes the page from a cloud chat that still answers it, even
@@ -375,22 +405,32 @@ def decide(db: dict, chat: str, out_dir: str, now: dt.datetime | None = None,
         lines.append("listen: this chat answers the page. Send the batch below (it says this "
                      "chat answered just now). If it is refused, another chat took the page "
                      "over: read meta/listen again and run this once more.")
+        lines.append(WATCH_LINE)
     elif take:
         new = {"chat": chat, "title": title or (HELPER_CHAT_TITLE if helper else "Job search"),
                "kind": chat_kind(), "helper": bool(helper), "since": at, "answered_at": at,
-               "watching": True, "took_from": rec.get("chat") or None}
+               "watching": True, "took_from": rec.get("chat") or None,
+               # Whether the chat it took from was one the app started: the tidy-up only ever
+               # puts away such a chat, never one the person writes in (X-4).
+               "took_from_helper": bool(rec.get("helper"))}
         w.add("set", DOC_COLLECTION, DOC_ID, new, if_version=version)
         lines.append("listen: this chat answers the page now. Send the batch below. If it is "
                      "refused, another chat got there first: read meta/listen again and run "
                      "this once more.")
+        # A chat watches only a page it published or one it asks to watch: one that took the
+        # page and never asked heard nothing, and the page went deaf after every renewal and
+        # every Wake Claude (the stranger audit, X-6).
+        lines.append(WATCH_LINE)
+        if waiting_since(db, now) is not None:
+            lines.append("listen: work waited while nobody answered: once the batch is sent, "
+                         "do what a ring does (the app skill, step 1: read the page and run "
+                         "python3 tools/app.py wake) so it starts now.")
         if rec.get("chat"):
+            # Never archived from here: the chat it took from may still be writing the brief
+            # or saving the morning's work. The tidy-up puts old helpers away, and keeps a
+            # chat that is running or holds work not landed (X-27).
             lines.append("listen: the chat that answered before stops by itself: its next "
                          "check finds this one.")
-            if rec.get("helper") and str(rec.get("chat")).startswith("session_"):
-                lines.append(f"listen: it was a helper the app started ({rec.get('chat')}): once "
-                             "this chat's batch is sent, archive it (archive_session) if "
-                             f"get_session still gives its title as \"{HELPER_CHAT_TITLE}\"; "
-                             "a chat the person named is left as it is.")
         if helper and chat.startswith("session_"):
             lines.append(f"listen: name this chat so the person knows what it is: "
                          f"set_session_title (session_id {chat}, title \"{HELPER_CHAT_TITLE}\"), "
@@ -411,11 +451,31 @@ def decide(db: dict, chat: str, out_dir: str, now: dt.datetime | None = None,
     return {"role": "listener", "lines": lines, "batches": w.save("listen"), "record": rec}
 
 
+# What a chat that answers the page asks for at every check-in: its watch, so a tap wakes it.
+WATCH_LINE = ("listen: keep this chat's watch on the page so a tap wakes it: ArtifactComments, "
+              "action watch, url <the page> (asking again when it already watches does no harm).")
+
+
+def _setting_up(chat: str) -> bool:
+    """Is `chat` the one setting the person up, its setup still going?"""
+    try:
+        import app_setup
+        mark = (app_setup.read_json(os.path.join(app_setup.profile_dir(), "place.json"), {})
+                .get("setup") or {})
+        return bool(mark.get("started") and not mark.get("finished")
+                    and mark.get("chat") == chat)
+    except Exception:  # noqa: BLE001  no profile: nobody is setting them up here
+        return False
+
+
 def renew_line(renew: dict) -> str:
-    """What the listener does when its day is up: start its fresh helper, unasked."""
+    """What the listener does when its day is up: start its fresh helper, unasked, once this
+    chat's own work is saved (a fresh helper started mid-brief took the page while the brief
+    was still saving, the stranger audit, X-27)."""
     return ("listen: renew: this chat has answered the page for a day (or its history has "
-            "grown long), and has no small job of its own in hand. Start its fresh helper "
-            "now, unasked and saying nothing to the person: create_session "
+            "grown long), and has no small job of its own in hand. Once this turn's work has "
+            "landed (python3 tools/land.py says ready, or there was nothing to save), start "
+            "its fresh helper, unasked and saying nothing to the person: create_session "
             + json.dumps(renew, ensure_ascii=False) +
             ". The new chat takes the page as it starts, and the work waiting with it; until "
             "then this one still answers, and its next check-in finds the new one and stops "
@@ -485,6 +545,11 @@ def renewal(rec: dict, db: dict, chat: str, now: dt.datetime) -> dict | None:
     import page_db
     if not chat or rec.get("chat") != chat or chat_kind() != "cloud":
         return None
+    # Only a helper the app started is renewed: the chat the person published from, and
+    # writes in, is theirs, and a helper started from it unasked archived it and took its
+    # brief (the stranger audit, X-4).
+    if not rec.get("helper"):
+        return None
     since = _time(rec.get("since"))
     if since is None:
         return None
@@ -513,11 +578,14 @@ def renewal(rec: dict, db: dict, chat: str, now: dt.datetime) -> dict | None:
         return None
     got["renewed_at"] = _stamp(now)
     _save_seen(got)
-    # The page's own tools carried over (create_session's extra_allowed_tools), so the fresh
-    # helper never stops on a permission prompt while the person is away (2026-11-03).
+    # The page's data tools carried over (create_session's extra_allowed_tools keeps only what
+    # this chat has pre-approved: ArtifactData and ArtifactComments, never Artifact), so the
+    # fresh helper never stops on a prompt to write the page's data while the person is away
+    # (2026-11-03); its republishes declare no capabilities once the page has them (X-8). The
+    # prompt is the person's plain words, and the app's hook says what they mean (X-84).
     return {"title": HELPER_CHAT_TITLE, "prompt": WAKE_PROMPT,
             "source_url": f"https://github.com/{owner}/{name}",
-            "extra_allowed_tools": ["ArtifactData", "ArtifactComments", "Artifact"]}
+            "extra_allowed_tools": ["ArtifactData", "ArtifactComments"]}
 
 
 def first_claim(chat: str, out_dir: str, now: dt.datetime | None = None,
@@ -839,21 +907,71 @@ def shape(code: int, lines: list[str], chat: str = "", listen: bool = False,
     return lines[:2] + out
 
 
+def introduced() -> bool:
+    """Was the person ever told what their page is? Told once (profile/app.json
+    `introduced`), or they answered about it (the pin), or setup said it ("Your setup is on
+    your page")."""
+    import app_setup
+    rec = app_setup.page_record()
+    return bool(rec.get("introduced") or (rec.get("pin") or {}).get("answer"))
+
+
+def mark_introduced(today: dt.date | None = None) -> None:
+    import app_setup
+    got = app_setup.page_record()
+    if got.get("url") and not got.get("introduced"):
+        got["introduced"] = (today or dt.date.today()).isoformat()
+        try:
+            app_setup.write_json(os.path.join(app_setup.profile_dir(), app_setup.PAGE), got)
+        except OSError:
+            pass
+
+
+def intro_line(url: str) -> str:
+    """The once-only line that tells the person what their page is (X-25, the chat-only
+    review's S1): a page published and never named was a page they never knew they had."""
+    return ("Tell the person once, at the start of your reply, in these words, before anything "
+            f"else about the page: \"{say(SAY_FIRST_PAGE, url)}\"")
+
+
 def published_lines(url: str, chat: str, first: bool, out_dir: str,
-                    now: dt.datetime | None = None) -> list[str]:
-    """What `app.py published` says after a publish: the first publish makes this chat the
-    listener (its record created on the page), and the pin is offered once."""
+                    now: dt.datetime | None = None, replaced: bool = False) -> list[str]:
+    """What `app.py published` says after a publish: the first publish (or a fresh page in
+    place of one that could no longer be published to) makes this chat the listener, its
+    record created on the page; the person is told once what the page is, or its new
+    address; and the pin is offered once."""
+    import app_setup
     out = []
-    if first and chat:
+    if (first or replaced) and chat:
         got = first_claim(chat, out_dir, now)
         out.append("app: this chat is the page's listener now: send this batch (ArtifactData "
                    f"batch, url {url}): " + " ".join(got["batches"]))
+    if replaced:
+        out.append("app: tell the person this one line, once: "
+                   f"\"{say(SAY_NEW_ADDRESS, url)}\"")
+        mark_introduced()
+    elif not introduced():
+        # During setup its own line says it ("Your setup is on your page: <link>"): one line,
+        # never two that each say "nothing more" (the chat-only review).
+        if app_setup.set_up() and app_setup._finished():
+            out.append("app: " + intro_line(url))
+        mark_introduced()
     if not pin_asked():
         out.append("app: " + pin_line(url))
         try:
             record_pin_offered()
         except OSError:
             pass
+    try:
+        import routines
+        if first and routines.remind_due():
+            # Nothing else is scheduled before setup's last step: a stranger who answered
+            # nothing in the first sitting was never contacted again (X-23).
+            out.append("app: setup waits on the page: python3 tools/routines.py remind, and make "
+                       "the call it prints (one reminder tomorrow, in this chat), asking nothing "
+                       "and saying nothing about it")
+    except Exception:  # noqa: BLE001  never breaks the publish
+        pass
     return out
 
 
@@ -884,19 +1002,85 @@ def _update_check(url: str, chat: str) -> str:
 
 
 def _publish_now(url: str, n: int) -> list[str]:
-    """The republish itself, numbered from `n`: build, read, publish, keep, and one line."""
-    return [f"{n}. python3 tools/app.py page --out <your scratchpad>/page.html",
-            f"{n + 1}. Artifact, action read, url {url}. Then Artifact, action publish, "
-            f"file_path <your scratchpad>/page.html, url {url}, with the capabilities python3 "
-            "tools/app_page.py --capabilities prints. If the publish is refused, read the page "
-            "again and publish once more; only if that is refused too, tell the person this one "
-            f"line and stop: \"{say(SAY_NOT_UPDATED, url)}\"",
-            f"{n + 2}. ArtifactData query (url {url}, collection work, where kind == republish, "
+    """The republish itself, numbered from `n`: build and publish what changed, keep, one line.
+    The build prints the publishes (`parts_plan`): only the small files the page lacks."""
+    return [f"{n}. python3 tools/app.py page --out-dir <your scratchpad>/page --url {url}, then "
+            "make exactly the publishes it prints, reading each file it names whole first (each "
+            "is small; the code the page already holds is left out and kept). If a publish is "
+            f"refused, read the page again and publish once more (Artifact, action read, url "
+            f"{url}, then the same publish). If the read says the page is not there or not this person's, build a new one "
+            f"({REBUILD}) and publish that instead, then use its new url below. Only if a "
+            f"publish is refused twice: python3 tools/app.py published {url}, then tell the "
+            f"person this one line and stop: \"{say(SAY_NOT_UPDATED, url)}\"",
+            f"{n + 1}. ArtifactData query (url {url}, collection work, where kind == republish, "
             f"out_dir <your scratchpad>/published), then python3 tools/app.py published {url} "
-            "--dump <your scratchpad>/published, and do what it prints: it closes any request "
-            "for this update still waiting on the page.",
-            f"{n + 3}. Tell the person this one line, and nothing else about the page or the "
+            "--parts <your scratchpad>/page --dump <your scratchpad>/published, and do what it "
+            "prints: it keeps which files the page holds and closes any request for this update "
+            "still waiting on the page.",
+            f"{n + 2}. Tell the person this one line, and nothing else about the page or the "
             f"update: \"{say(SAY_UPDATED, url)}\""]
+
+
+# A page whose address cannot be published to any more (deleted, or another account's):
+# built afresh, published as a new page, and its new address kept and said once (X-44).
+REBUILD = "python3 tools/app.py page --out-dir <your scratchpad>/page, with no --url"
+# A chat whose window holds this many tokens or fewer gives each publish after the first to
+# an agent of its own, so no one context reads every file of a first publish.
+SMALL_WINDOW = 200_000
+
+
+def parts_plan(built: dict, url: str = "") -> list[str]:
+    """What `app.py page --out-dir` prints: the publishes that put the page in parts up, read
+    file by file. A page already published in parts (profile/app.json `code`, at this same
+    url) gets only the files it lacks; its capabilities are declared only when they changed,
+    since a publish that declares them asks the person first (code.claude.com/docs/en/
+    artifacts, "When Claude Code asks before publishing") and one that leaves them out keeps
+    them (the artifact-capabilities skill)."""
+    import app_page
+    import app_setup
+    rec = app_setup.page_record()
+    same = bool(url) and url == rec.get("url")
+    got = app_page.plan(built, rec.get("code") if same else None,
+                        str(rec.get("caps") or "") if same else "", url)
+    sizes = built["sizes"]
+
+    def kb(n: int) -> int:
+        return max(1, round(n / 1024))
+    new_kb = kb(sum(sizes[p] for p in got["new"])) if got["new"] else 0
+    out = [f"app: the page is built in parts: {built['page']} ({kb(sizes['page.html'])} KB) and "
+           f"{len(built['files'])} small code files beside it, {len(got['new'])} of them not on "
+           f"the page yet ({new_kb} KB). Read each file a publish names whole, just before "
+           "that publish; every one is small. A code file the page already holds is left out, "
+           "and the page keeps it."]
+    caps = (", with the capabilities python3 tools/app_page.py --capabilities prints"
+            if got["capabilities"] else ", with no capabilities (the page keeps its own)")
+    first_at = f"url {url}" if url else "icon briefcase"
+    later = f"url {url}" if url else "url <the url the first publish gave>"
+    n = 1
+    if url:
+        out.append(f"{n}. Artifact, action read, url {url} (the small page: the tool asks for "
+                   "a read before a publish to a page this chat did not publish).")
+        n += 1
+    if got["gone"]:
+        out.append(f"{n}. Artifact, action list, scope files, url {url}: the old code files "
+                   "the publish below takes off the page must be ones this chat has seen "
+                   "listed.")
+        n += 1
+    for i, batch in enumerate(got["batches"]):
+        files: dict = {p: built["files"][p] for p in batch}
+        if i == 0:
+            files.update({p: None for p in got["gone"]})
+        tail = f", files {json.dumps(files, ensure_ascii=False)}" if files else ""
+        out.append(f"{n}. Artifact, action publish, file_path {built['page']}, "
+                   f"{first_at + caps if i == 0 else later}{tail}")
+        n += 1
+    if len(got["batches"]) > 1:
+        out.append(f"Where this chat's window holds {SMALL_WINDOW:,} tokens or fewer, give each "
+                   "publish after the first to an agent of its own (Agent tool), one after "
+                   "another, each told: \"Read each file this publish names whole, then Artifact, "
+                   f"action read, {later}, then make exactly this publish: <the step>\". So no "
+                   "one chat reads every file.")
+    return out
 
 
 def after_update(landed: bool = False, chat: str = "") -> list[str]:

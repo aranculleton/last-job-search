@@ -21,12 +21,17 @@ and keeps every chat that is:
 - or holding work that is not on master yet: a branch it pushed that master does not hold.
   The day's update lands such a branch; the chat is archived once it has.
 
-A brief in a chat of its own (set-up (a), from before 4.3) moves into the chat that answers
-the page first: a task bound to that chat on the same days and time, the old task turned off
-(kept, never deleted), and then its chat archived. A brief in the older ops chat moves the
-same way only once that chat is gone (not listed, and the task now names the empty chat it
-woke instead). Not while the brief is off or resting, never for a routine (each run its own
-chat, with the person's phone notification: the run chats are archived, the routine kept).
+A brief that works stays where it is, and so does its chat (the builder's decision of 3
+November: a working brief is never moved, turned off or made again). Only a brief whose chat
+no longer works moves into the chat that answers the page: a chat that was deleted, or a
+helper the page no longer uses (its renewal archives it). It moves as a task bound to that
+chat on the same days and time, the old task turned off (kept, never deleted), and then the
+old chat archived. The shortlist moves by the same rule. A brief in the older ops chat moves
+the same way only once that chat is gone (not listed, and the task now names the empty chat
+it woke instead). Not while the brief is off or resting, never for a routine (each run its
+own chat: the run chats are archived, the routine kept). list_sessions never lists a chat a
+scheduled task started, so each run's chat is read from list_triggers' last run and
+remembered (profile/tidy.json `runs`) until it is old enough to tidy.
 
     python3 tools/tidy.py due                        exit 0 when today's tidy-up is due
     python3 tools/tidy.py plan --dump <dir> --sessions <file>... --triggers <file>...
@@ -54,7 +59,11 @@ if _HERE not in sys.path:
 # The titles the app gives the chats it makes (routines.BRIEF_NAME, the job round, campaign
 # chats, child chats of up to three words, and the helpers of every version). A chat the
 # person named themself is never one of these unless they copied the app's own words.
-APP_TITLE = re.compile(r"^Job search(?::\s*\S.{0,60}|\s+helper\b.{0,60})$", re.I)
+# A chat a scheduled task starts carries a mark before its title ("⚡ Job search: morning
+# brief"), and without it in the pattern every such chat was read as the person's own and kept.
+APP_TITLE = re.compile(r"^(?:[^\w\s]{1,3}\s*)?Job search(?::\s*\S.{0,60}|\s+helper\b.{0,60})$",
+                       re.I)
+RUN_TITLE = "⚡ Job search: a scheduled run"
 IDLE_DAYS = 2           # quiet this long before it is tidied
 WAITING_DAYS = 7        # quiet this long when it was waiting on the person
 FILE = "tidy.json"      # in profile/: what was archived, so it can be brought back
@@ -207,21 +216,35 @@ def plan(chats: list[dict], triggers: list[dict], info: dict, reg: dict, listene
     "keep": [{id, title, why}], "brief": [calls] or []}."""
     import routines
     live_ids = {listener.get("chat") or "", this_chat} - {""}
-    known = {listener.get("took_from") or ""} - {""}
+    # The chat the page was taken from is put away only where the app started it: one the
+    # person writes in, whatever its title, is theirs (the stranger audit, X-4).
+    known = ({listener.get("took_from") or ""} - {""}) if listener.get("took_from_helper") else set()
     bound_on = {t.get("session") for t in triggers if t.get("session") and t.get("enabled")}
     ops = str((reg.get("ops_session") or {}).get("id") or "")
     brief = next((r for r in reg.get("routines") or [] if routines._is_brief(r)), None) or {}
     brief_chat = str((brief.get("chat") or {}).get("session_id") or "")
     out: dict = {"ask": [], "archive": [], "keep": [], "brief": []}
 
-    # The brief in a chat of its own moves into the chat that answers the page. A brief in
-    # the older ops chat stays there while that chat lives (it relays to the phone); once
-    # the chat is gone, the task wakes a new empty chat with no copy of the files every
-    # morning ("Morning brief could not start: no git repo", 2026-10-31), so it moves too.
+    # A brief stays where it works (the builder's decision, 2026-11-03: a working brief is
+    # never moved, turned off or made again). It moves into the chat that answers the page
+    # only when the chat it is bound to no longer works: deleted (not among the person's
+    # chats), or a helper the page no longer uses, which its renewal archives. A brief in the
+    # older ops chat stays there while that chat lives (it relays to the phone); once the
+    # chat is gone, the task wakes a new empty chat with no copy of the files every morning
+    # ("Morning brief could not start: no git repo", 2026-10-31), so it moves too. The job
+    # round moves by the same rule, so the chat it runs in is never archived under it (X-50).
     adopt = ""
     helper = listener.get("chat") or ""
     setup = routines.setup_of(reg)
     home = brief_chat or (ops if setup == "ops_relay" else "")
+    listed_ids = {s.get("id") for s in chats}
+    titles = {s.get("id"): str(s.get("title") or "") for s in chats}
+
+    def retired(sid: str) -> bool:
+        return bool(sid) and sid != helper and (
+            sid not in listed_ids or sid in known
+            or bool(re.search(r"\bhelper\b", titles.get(sid, ""), re.I)))
+
     if (setup in ("chat_per_briefing", "ops_relay") and home and helper.startswith("session_")
             and home != helper and not brief.get("off") and not reg.get("pause")
             and brief.get("trigger_id") and brief.get("cron")):
@@ -230,7 +253,6 @@ def plan(chats: list[dict], triggers: list[dict], info: dict, reg: dict, listene
         # names another chat, one that works on no copy at all (the empty one it woke
         # instead). All three, so a listing that missed a page never moves a brief whose ops
         # chat still relays, and a brief someone bound to a chat of their own stays there.
-        listed_ids = {s.get("id") for s in chats}
         woke = str((live or {}).get("session") or "")
         gone = False
         if home == ops and home not in listed_ids and woke not in ("", home, helper):
@@ -240,7 +262,7 @@ def plan(chats: list[dict], triggers: list[dict], info: dict, reg: dict, listene
                 out["ask"].append(woke)
             else:
                 gone = not _repo_of(info[woke])
-        if live and live.get("enabled") and (home != ops or gone):
+        if live and live.get("enabled") and ((home != ops and retired(home)) or gone):
             adopt = home
             stub = routines.with_copy(routines.stub(reg, brief["key"], own_chat=True), repo)
             out["brief"] = [
@@ -258,6 +280,33 @@ def plan(chats: list[dict], triggers: list[dict], info: dict, reg: dict, listene
                          "turned off in their list of scheduled tasks"}
                  if home == (listener.get("took_from") or "") and home != ops else
                  {"tool": "update_trigger", "args": {"trigger_id": brief["trigger_id"],
+                                                     "enabled": False},
+                  "why": "the old task is turned off, never deleted"})]
+
+    moved_from = {adopt} - {""}
+    out["moves"] = []
+    rnd = next((r for r in routines.work(reg) if r.get("key") == "job_round"), None) or {}
+    rchat = str((rnd.get("chat") or {}).get("session_id") or "")
+    if (rnd.get("trigger_id") and rnd.get("cron") and not rnd.get("paused") and rchat
+            and setup == "chat_per_briefing" and helper.startswith("session_")
+            and not reg.get("pause") and retired(rchat)):
+        live = next((t for t in triggers if t.get("id") == rnd["trigger_id"]), None)
+        if live and live.get("enabled"):
+            moved_from.add(rchat)
+            out["moves"] = [
+                {"tool": "create_trigger", "args": {
+                    "name": rnd.get("name") or "Job search: shortlist",
+                    "persistent_session_id": helper, "cron_expression": rnd["cron"],
+                    "prompt": routines.with_copy(routines.stub(reg, "job_round", own_chat=True), repo),
+                    "connectors": [], "initiation": "own_initiative"},
+                 "why": "the shortlist runs in the chat that answers the page from now on"},
+                {"run": f"python3 tools/routines.py rebind job_round --session {helper} "
+                        f"--trigger <the new task's id>",
+                 "why": "the registry names the new task and its chat"},
+                ({"tool": "delete_trigger", "args": {"trigger_id": rnd["trigger_id"]},
+                  "why": "the copy made for the helper this one replaced"}
+                 if rchat in known else
+                 {"tool": "update_trigger", "args": {"trigger_id": rnd["trigger_id"],
                                                      "enabled": False},
                   "why": "the old task is turned off, never deleted"})]
 
@@ -281,7 +330,7 @@ def plan(chats: list[dict], triggers: list[dict], info: dict, reg: dict, listene
         if sid == ops:
             keep("the older ops chat, which relays to the phone and is never rebuilt")
             continue
-        if sid in bound_on and sid != adopt:
+        if sid in bound_on and sid not in moved_from:
             keep("a scheduled task that is on runs in it")
             continue
         if sid in campaigns:
@@ -293,7 +342,7 @@ def plan(chats: list[dict], triggers: list[dict], info: dict, reg: dict, listene
             continue
         quiet = _days_since(s.get("updated_at") or s.get("created_at") or "", today)
         waits = "REQUIRES_ACTION" in status or "BLOCKED" in status
-        if sid != adopt and quiet < (WAITING_DAYS if waits else IDLE_DAYS):
+        if sid not in moved_from and quiet < (WAITING_DAYS if waits else IDLE_DAYS):
             keep(f"used {quiet:.0f} day(s) ago")
             continue
         d = info.get(sid)
@@ -313,15 +362,19 @@ def plan(chats: list[dict], triggers: list[dict], info: dict, reg: dict, listene
             keep("its work is not on master yet (" + ", ".join(left) + ")")
             continue
         why = ("the brief moved into the chat that answers the page" if sid == adopt else
+               "the shortlist moved into the chat that answers the page" if sid in moved_from else
                "a helper the page no longer uses" if sid in known or re.search(r"helper", title, re.I)
                else "a chat for one run or one job, finished")
         out["archive"].append({"id": sid, "title": title, "why": why})
     listed = {s.get("id") for s in chats}
     if adopt and adopt in listed and not any(a["id"] == adopt for a in out["archive"]):
         out["brief"] = []                             # its chat is kept: the brief stays put
+    if rchat in moved_from and rchat in listed and not any(a["id"] == rchat for a in out["archive"]):
+        out["moves"] = []                             # its chat is kept: the round stays put
     out["ask"] = list(dict.fromkeys(out["ask"]))
     if out["ask"]:
         out["brief"] = []                             # decided once every chat is read
+        out["moves"] = []
     out["upkeep"] = [] if out["ask"] else _upkeep_calls(reg, triggers, helper, listener, repo)
     # A brief that stays where it is, stored before its prompt said how to get a copy of the
     # files, is given that line, so it runs in whichever chat it lands in (routines.with_copy;
@@ -335,6 +388,11 @@ def plan(chats: list[dict], triggers: list[dict], info: dict, reg: dict, listene
                                                                 "prompt": fixed},
                              "why": "the brief runs in any chat it lands in, getting the files "
                                     "first where they are missing"}]
+    # Every other task of the app's that is on gets the same line (the job round, a welcome-back
+    # brief), unless it is moving or the day's listing is still being read (X-43).
+    skip = {brief.get("trigger_id")} | ({rnd.get("trigger_id")} if out["moves"] else set())
+    out["mend"] = [] if out["ask"] else [
+        c for c in routines.mend(triggers, repo) if c["args"]["trigger_id"] not in skip]
     return out
 
 
@@ -357,9 +415,18 @@ def _upkeep_calls(reg: dict, triggers: list[dict], helper: str, listener: dict,
     if not helper.startswith("session_"):
         return []
     bound = str(((up or {}).get("chat") or {}).get("session_id") or "")
+    # Only on the days the brief does not run (X-38): one made before that is corrected here.
+    want = routines.upkeep_cron(reg)
     if up and live and live.get("enabled") is not False and bound == helper:
+        if want and up.get("cron") and up["cron"] != want:
+            return [{"tool": "update_trigger", "args": {"trigger_id": up["trigger_id"],
+                                                        "cron_expression": want},
+                     "why": "it runs only on the days the brief does not"},
+                    {"run": f"python3 tools/routines.py upkeep-record --session {helper} --trigger "
+                            f"{up['trigger_id']} --cron \"{want}\"",
+                     "why": "the registry names its days"}]
         return []
-    cron = (up or {}).get("cron") or routines.upkeep_cron(reg)
+    cron = want or (up or {}).get("cron")
     if not cron:
         return []
     out = [{"tool": "create_trigger", "args": {
@@ -408,6 +475,50 @@ def _repo() -> str:
     return f"{owner}/{name}" if owner and name else ""
 
 
+def run_chats(tasks: list[dict], remembered: dict, done_before: set[str],
+              listed: set[str]) -> tuple[dict, list[dict]]:
+    """The chats the app's scheduled tasks started, one a run (a Routines-screen task, a
+    relay): list_sessions never lists a chat a scheduled task started, and list_triggers names
+    only each task's latest run, so each run's chat is remembered here (profile/tidy.json
+    `runs`) until it is old enough to tidy. Returns (what to remember, chats to judge)."""
+    import routines
+    runs = {k: v for k, v in (remembered or {}).items() if k not in done_before}
+    for t in tasks:
+        last = t.get("last_run") or {}
+        sid = str(last.get("session_id") or "")
+        if (sid.startswith("session_") and not t.get("session")
+                and routines._is_app_prompt(t.get("prompt"))):
+            runs.setdefault(sid, str(last.get("fired_at") or last.get("finished_at") or ""))
+    chats = [{"id": sid, "title": RUN_TITLE, "created_at": at, "updated_at": at}
+             for sid, at in sorted(runs.items()) if sid not in listed and at]
+    return runs, chats
+
+
+def _remembered_runs() -> dict:
+    try:
+        with open(_record_path(), encoding="utf-8") as fh:
+            got = json.load(fh).get("runs") or {}
+        return got if isinstance(got, dict) else {}
+    except (OSError, ValueError, AttributeError):
+        return {}
+
+
+def _remember_runs(runs: dict) -> None:
+    path = _record_path()
+    try:
+        with open(path, encoding="utf-8") as fh:
+            got = json.load(fh)
+    except (OSError, ValueError):
+        got = {}
+    if (got.get("runs") or {}) == runs:
+        return
+    got["runs"] = runs
+    os.makedirs(os.path.dirname(path), exist_ok=True)
+    with open(path, "w", encoding="utf-8", newline="\n") as fh:
+        json.dump(got, fh, indent=2, ensure_ascii=False)
+        fh.write("\n")
+
+
 def run_plan(a) -> int:
     import routines
     today = dt.date.fromisoformat(a.today) if a.today else dt.date.today()
@@ -418,6 +529,16 @@ def run_plan(a) -> int:
         reg = routines.load()
     except Exception:  # noqa: BLE001  no registry: no brief, no ops chat
         reg = {}
+    # A chat of the person's own that an earlier tidy-up put away because a helper had taken
+    # the page from it (the stranger audit, X-4): brought back once, before anything else.
+    wrong = [x for x in archived() if x.get("id") and not x.get("restored")
+             and not APP_TITLE.match(str(x.get("title") or ""))]
+    for x in wrong:
+        print(f"restore {x['id']}: unarchive_session {json.dumps({'session_id': x['id']})} "
+              f"({x.get('title') or 'a chat'}: a chat of the person's own, put away by mistake "
+              "before; say nothing about it)")
+    if wrong:
+        _mark_restored([x["id"] for x in wrong])
     import app_listen
     listener = _listener(a.dump)
     if not listener.get("chat"):
@@ -430,9 +551,13 @@ def run_plan(a) -> int:
         print("tidy: this copy's address is not known, so nothing is tidied today. "
               "python3 tools/tidy.py done")
         return 0
-    got = plan(sessions(_pages(a.sessions)), tasks, details(_pages(a.details)), reg,
+    done = {x["id"] for x in archived()}
+    listed = sessions(_pages(a.sessions))
+    runs, extra = run_chats(tasks, _remembered_runs(), done, {s.get("id") for s in listed})
+    _remember_runs(runs)
+    got = plan(listed + extra, tasks, details(_pages(a.details)), reg,
                listener, app_listen.this_chat(a.chat), repo, today,
-               _campaign_chats(), unmerged(), {x["id"] for x in archived()})
+               _campaign_chats(), unmerged(), done)
     if got["ask"]:
         print("tidy: read these chats first, each with get_session, and run this again with "
               "--details <each file>: " + " ".join(got["ask"]))
@@ -447,6 +572,17 @@ def run_plan(a) -> int:
             print(f"upkeep {i}: {c['tool']} {json.dumps(c['args'], ensure_ascii=False)} ({c['why']})")
         else:
             print(f"upkeep {i}: {c['run']} ({c['why']})")
+    for i, c in enumerate(got.get("moves") or [], 1):
+        if c.get("tool"):
+            print(f"shortlist {i}: {c['tool']} {json.dumps(c['args'], ensure_ascii=False)} ({c['why']})")
+        else:
+            print(f"shortlist {i}: {c['run']} ({c['why']})")
+    if got.get("moves"):
+        print("shortlist: make these in order and stop at the first that fails; say nothing about it")
+    for i, c in enumerate(got.get("mend") or [], 1):
+        print(f"mend {i}: {c['tool']} {json.dumps(c['args'], ensure_ascii=False)} ({c['why']})")
+    if got.get("mend"):
+        print("mend: make these, then python3 tools/routines.py mended; say nothing about it")
     if got.get("upkeep"):
         print("upkeep: make these in order and stop at the first that fails; say nothing about it")
     if len(got["brief"]) > 1:
@@ -467,6 +603,21 @@ def run_plan(a) -> int:
         for c in got["keep"]:
             print(f"keep {c['id']}: {c['title']} ({c['why']})")
     return 0
+
+
+def _mark_restored(ids: list[str]) -> None:
+    path = _record_path()
+    try:
+        with open(path, encoding="utf-8") as fh:
+            got = json.load(fh)
+    except (OSError, ValueError):
+        return
+    for a in got.get("archived") or []:
+        if isinstance(a, dict) and a.get("id") in ids:
+            a["restored"] = True
+    with open(path, "w", encoding="utf-8", newline="\n") as fh:
+        json.dump(got, fh, indent=2, ensure_ascii=False)
+        fh.write("\n")
 
 
 def run_done(ids: list[str], titles: dict, today: str) -> str:

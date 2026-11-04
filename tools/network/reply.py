@@ -413,6 +413,12 @@ REFERRAL = _rx(
 # is not one: that is accepting the request (low_effort, or substance if they wrote more).
 # "Feel free to talk to HR" and "open to talk with talented people" send them elsewhere,
 # so a talk with somebody other than the person writing is not one.
+# A call or a chat, however long and whatever kind: "a quick call", "a 20 minute call", "a
+# short introductory phone screen", "a coffee".
+_CALL = (r"(?:(?:quick|short|brief|informal|introductory|intro|initial|virtual|phone|video|zoom|"
+         r"teams|\d{1,3}[- ]?(?:min(?:ute)?s?|mins?)|half[- ]an[- ]hour|15|20|30)[\s-]+){0,3}"
+         r"(?:call|chat|phone\s+screen|phone\s+call|video\s+call|conversation|coffee|catch[- ]up)"
+         r"\b(?!\s+cent(?:re|er)s?\b)")
 CHAT_OFFER = re.compile(
     r"\b(?:happy|glad|keen|(?<!feel )free|available|open)\s+to\s+(?:"
     r"(?:have|grab|do|set up)\s+a\s+(?:quick\s+|short\s+|virtual\s+)?(?:chat|call|coffee)"
@@ -422,7 +428,14 @@ CHAT_OFFER = re.compile(
     r"(?!\s+(?:to|with)\s+(?:hr\b|our\b|the\b|an?\b|some(?:one|body)\b|any(?:one|body)\b"
     r"|people\b|recruit|talent|them\b|him\b|her\b))"
     r"|\blet'?s\s+(?:chat|talk|speak|meet|find a time|grab a (?:coffee|call|chat)|set up a (?:call|chat|time))\b"
-    r"|\bcoffee chat\b", re.I)
+    r"|\bcoffee chat\b"
+    # The forms an invitation most often takes, which were read as a long generous message
+    # and answered with "engage with the substance": "free for a 20 minute call", "available
+    # for a quick call", "time for a chat", "set up a call", "arrange a 30-minute phone
+    # screen", "open to a call". A call centre is somewhere, not a call.
+    r"|\b(?:(?<!feel )free|available|time|open)\s+(?:for|to)\s+an?\s+" + _CALL +
+    r"|\b(?:set\s+up|arrange|schedule|book|organi[sz]e)\s+(?:an?\s+|some\s+)?(?:time\s+for\s+an?\s+)?"
+    + _CALL, re.I)
 
 
 # An eligibility no is the one rejection that is about the applicant rather

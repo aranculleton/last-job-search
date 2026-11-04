@@ -26,6 +26,10 @@ os.environ["LJS_STATE"] = _state
 # A ledger the person exported for their own reads is never the tests' to write to: with it
 # unset, the ledger lives under the tests' own state.
 os.environ.pop("LJS_LEDGER", None)
+# The suite gives CI's answer wherever it runs: a cloud chat's own marker would add the cards
+# a cloud copy shows (choosing Auto, the PDF tools' line) to every model the tests build. A
+# test of a cloud chat sets it itself.
+os.environ.pop("CLAUDE_CODE_REMOTE", None)
 atexit.register(shutil.rmtree, _state, ignore_errors=True)
 # Pages tools/company_research.py fetched, kept for the quote check: the tests' own, never
 # the machine's shared folder a real research run uses.
@@ -200,6 +204,9 @@ def sync_steps(monkeypatch):
                  "place_check", "upgrades"):
         monkeypatch.setattr(sync_app, name, step(name))
     monkeypatch.setattr(sync_app, "is_the_app", lambda: False)
+    # A run that does not finish stamps when it was tried in the checkout's own git folder:
+    # here that is the real checkout's, never the tests' to write to.
+    monkeypatch.setattr(sync_app, "_record_tried", lambda *a, **k: None)
     monkeypatch.setattr(sync_app, "own_folder", lambda: "")
     monkeypatch.setattr(sync_app, "stale", lambda: state["stale"])
     monkeypatch.setattr(sync_app, "_dirty", lambda: False)

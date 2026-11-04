@@ -1,8 +1,8 @@
 # Daily upkeep
 
-A silent run, once a day, where the brief does not run every day: it keeps the person's copy
-and their page current, so a page opened with no chat running is today's. Nothing is said to
-the person, and nothing is sent anywhere but their own page.
+A quiet run on the days the brief does not run: it keeps the person's copy and their page
+current, so a page opened with no chat running is today's. Nothing is sent anywhere but their
+own page.
 
 After `_common.md`'s "Before anything else" (the update check there is this run's point: do
 the page steps it prints, at once, never asked):
@@ -14,4 +14,6 @@ the page steps it prints, at once, never asked):
 2. **Land** anything that changed, as `_common.md` "Landing work" says. Nothing changed,
    nothing to land.
 
-Your final reply: "Done." and nothing else. The page shows what changed.
+Your final reply, one plain line for a person who scrolls past it in this chat: "Kept your
+search up to date on a day with no brief" and, where something changed, what in a few words
+("the app's newest version", "your page"). Never a file, a command or a branch.

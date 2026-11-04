@@ -52,6 +52,7 @@ for _p in (_HERE, os.path.join(_HERE, "network")):
 
 import dates                                          # noqa: E402
 import docpaths                                       # noqa: E402
+import locale_rules                                   # noqa: E402
 import person                                         # noqa: E402
 import throttle                                       # noqa: E402
 from company_key import key as company_key            # noqa: E402
@@ -70,6 +71,30 @@ MAX_NUDGES = 2
 # an application at all. Imported rather than restated: two copies of one
 # threshold are two thresholds by the next time either is edited.
 SILENCE_DAYS = throttle.SILENCE_DAYS
+
+# The person's documents settings: a date in a message is written their way ("3 November",
+# "November 3"), never as the machine keeps it ("on 2026-11-03").
+try:
+    _DOCS = person.get("documents", {}) or {}
+except person.NoProfile:
+    _DOCS = {}
+
+
+def _said(iso: str) -> str:
+    """An ISO day as a person writes it in a message: the month by name, in the person's
+    order, with no year. The messages are written in English, so is the date."""
+    d = _iso(iso)
+    return locale_rules.long_date(d, _DOCS, year=False, language="en") if d else iso
+
+
+def closes_on(row: dict, applied: datetime.date | None = None) -> datetime.date | None:
+    """The posting's closing date (the tracker's `deadline`, which the drafter records),
+    when it falls after the application went; else None. Where postings close weeks after
+    an early application (public sector, health, universities, graduate schemes, much of
+    Europe), nothing is reviewed before it, so nothing is chased or closed before it."""
+    d = _iso(row.get("deadline"))
+    return d if d and (applied is None or d > applied) else None
+
 
 NUDGE_1 = ("Hi {name}, I applied for the {role} role on {date} and wanted to make sure it "
            "reached the right person. Happy to share anything that would help the review. "
@@ -430,6 +455,11 @@ def review(rows: list[dict], today: datetime.date, warm: dict | None = None,
         quiet_on = (heard or applied) + datetime.timedelta(days=SILENCE_DAYS)
         if len(sent) >= MAX_NUDGES and last is not None and not it["answered"]:
             quiet_on = min(quiet_on, last + datetime.timedelta(days=NUDGE_GAP_DAYS))
+        # Nothing is reviewed before the posting closes, so nothing goes quiet before the
+        # closing date and the same silence after it (two nudges sent too early included).
+        closes = closes_on(r, applied)
+        if closes is not None:
+            quiet_on = max(quiet_on, closes + datetime.timedelta(days=SILENCE_DAYS))
         it["quiet_on"] = quiet_on.isoformat()
         if today >= quiet_on:
             it.update(state="quiet", notice=_notice_day(quiet_on) == today)
@@ -438,10 +468,12 @@ def review(rows: list[dict], today: datetime.date, warm: dict | None = None,
             continue                         # both have gone; nothing left to send
 
         n = len(sent) + 1
+        # The first nudge a week after the posting closes, where it closes after it went.
+        start = max(applied, closes) if closes is not None else applied
         if n == 1:
-            due_on = applied + datetime.timedelta(days=FIRST_NUDGE_DAYS)
+            due_on = start + datetime.timedelta(days=FIRST_NUDGE_DAYS)
         else:
-            base = last or applied + datetime.timedelta(days=FIRST_NUDGE_DAYS)
+            base = last or start + datetime.timedelta(days=FIRST_NUDGE_DAYS)
             due_on = base + datetime.timedelta(days=NUDGE_GAP_DAYS)
         it.update(nudge=n, due_on=due_on.isoformat())
         if today < due_on:
@@ -473,7 +505,8 @@ def review(rows: list[dict], today: datetime.date, warm: dict | None = None,
             word = heard is not None and (last is None or heard > last)
             tpl = NUDGE_AFTER_WORD if word else NUDGE_1 if n == 1 else NUDGE_2
             it["message"] = tpl.format(name=it["to"].get("name") or "[name]",
-                                       role=role, date=it["date"], heard=it["heard"])
+                                       role=role, date=_said(it["date"]),
+                                       heard=_said(it["heard"]))
     out.sort(key=lambda x: -x["age"])
     return out
 
@@ -561,6 +594,10 @@ def close_quiet(path: str = TRACKER, today: datetime.date | None = None,
     rows = csv_store.read_rows(path)
     if not rows:
         return []
+    opened = reopen_early(rows, today) if write else []
+    if opened:
+        csv_store.write_rows(path, rows, list(dict.fromkeys(
+            csv_store.header(path) + list(throttle.CONFIRM_COLUMNS))))
     holds = throttle.referral_holds() if holds is None else holds
     running = live_processes(rows, superseded(rows))
     gone = [it for it in review(rows, today, holds=holds)
@@ -582,6 +619,34 @@ def close_quiet(path: str = TRACKER, today: datetime.date | None = None,
     csv_store.write_rows(path, rows, list(dict.fromkeys(
         csv_store.header(path) + list(throttle.CONFIRM_COLUMNS))))
     return gone
+
+
+REOPENED_NOTE = ("%s: opened again: closed as no reply before the posting's closing date "
+                 "(%s) and the wait after it, which is when employers like this one answer")
+
+
+def reopen_early(rows: list[dict], today: datetime.date) -> list[dict]:
+    """Rows the search closed on silence before their closing date and the silence after it,
+    opened again in place (status back to applied, the day it went kept), with a dated
+    note. The search closed rows before it read the closing date, so a copy that did is
+    put right by the next close, with nobody asking. Returns the rows opened."""
+    out = []
+    for r in rows:
+        if (_status(r) != "no_response"
+                or str(r.get("confirmed_by") or "").strip().lower() != "the search"):
+            continue
+        closes = closes_on(r, _iso(throttle.applied_on(r)))
+        shut = [_iso(m.group(1)) for m in _CLOSED_QUIET.finditer(r.get("notes") or "")]
+        if closes is None or not shut or shut[-1] is None:
+            continue
+        due = closes + datetime.timedelta(days=SILENCE_DAYS)
+        if shut[-1] >= due or today >= due:
+            continue
+        r["status"], r["confirmed_by"], r["confirmed_at"] = "applied", "", ""
+        note = REOPENED_NOTE % (today.isoformat(), closes.isoformat())
+        r["notes"] = ((r.get("notes") or "").rstrip() + " | " + note).strip(" |")
+        out.append(r)
+    return out
 
 
 # A row closed on silence is closed on a presumption, not an answer, and the note it

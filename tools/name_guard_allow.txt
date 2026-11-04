@@ -582,3 +582,40 @@ Zoe Quarry               # invented, tests/test_contacts_show_only_what_the_pers
 Northmere Transit Authority  # an invented public body, test_a_shortlist_holds_every_rule_the_person_gave
 Northmere Transit       # the same invented body, the same test
 Ash Penrose             # invented, the same test
+Alder Freight            # invented, tests/test_a_chat_lands_its_work_in_one_command.py
+Osprey Media             # invented, tests/test_a_chat_lands_its_work_in_one_command.py
+Ashcombe Provisions     # an invented employer, tests/test_one_check_before_anyone_is_shown.py
+Harborview Home Goods   # an invented employer, tests/test_a_strangers_brief_reaches_them_and_mends_itself.py
+Riverside Community Food Bank  # an invented charity, the same test
+Abgeschlossenes Masterstudium  # not a name: German posting words, tests/test_a_posting_is_read_in_its_own_language.py
+Analista de Marketing   # not a name: a Spanish job title, the same test
+Chef de Partie          # not a name: an English kitchen title, the same test
+Desenvolvedor Backend   # not a name: a Portuguese job title, the same test
+Die Stelle              # not a name: German posting words, the same test
+Employee Relations      # not a name: an English job title, the same test
+Employee Relations Advisor  # not a name: the same title
+Fließende Französischkenntnisse  # not a name: German posting words, the same test
+Fluent Afrikaans        # not a name: a language requirement, the same test
+Fluent Bengali          # not a name: a language requirement, the same test
+Fluent Finnish          # not a name: a language requirement, the same test
+Fluent Indonesian       # not a name: a language requirement, the same test
+Fluent Malay            # not a name: a language requirement, the same test
+Fluent Romanian         # not a name: a language requirement, the same test
+Fluent Tamil            # not a name: a language requirement, the same test
+Fluent Thai             # not a name: a language requirement, the same test
+Französischkenntnisse von Vorteil  # not a name: German posting words, the same test
+Hart Logistics'         # the example person's employer, quoted, tests/test_two_titles_at_one_employer_both_print.py
+Hätten Sie Zeit         # not a name: a German question, tests/test_what_the_app_says_fits_the_person_not_one_market.py
+Jahre Berufserfahrung   # not a name: German posting words, tests/test_a_posting_is_read_in_its_own_language.py
+Jahre Erfahrung         # not a name: German posting words, the same test
+Januar Februar März April  # not a name: German month names, tools/locale_rules.py MONTHS
+Mai Juni Juli August    # not a name: German month names, the same table
+September Oktober November Dezember  # not a name: German month names, the same table
+Leiterin Strategischer Einkauf  # not a name: a German job title, tests/test_a_posting_is_read_in_its_own_language.py
+Leitung Einkauf         # not a name: a German job title, the same test
+Medewerker Klantenservice  # not a name: a Dutch job title, the same test
+Native-level Danish     # not a name: a language requirement, the same test
+Sachbearbeiter Buchhaltung  # not a name: a German job title, the same test
+Sous Chef               # not a name: an English kitchen title, the same test
+Trainee Analyst         # not a name: a job title, tests/test_two_titles_at_one_employer_both_print.py
+Vloeiend Frans          # not a name: Dutch posting words, tests/test_a_posting_is_read_in_its_own_language.py

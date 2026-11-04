@@ -318,7 +318,9 @@ def test_the_helper_renews_with_work_waiting_and_asks_again_if_none_came(monkeyp
     monkeypatch.setattr(app_listen, "_save_seen", lambda data: store.update(data))
     import app_setup
     monkeypatch.setattr(app_setup, "origin", lambda: ("example-owner", "example-copy"))
-    rec = {"chat": "session_old", "since": "2026-10-31T17:58:52Z"}
+    # A helper the app started (`helper`): only such a chat is ever renewed, never the
+    # person's own (the stranger audit, X-4).
+    rec = {"chat": "session_old", "since": "2026-10-31T17:58:52Z", "helper": True}
     queued = db_of({"draft~a": (draft("Quillon Data"), 3),
                     "draft~b": (draft("Larkspur Retail", status="running",
                                       claimed_by="session_old", lease_until=S("18:20")), 4)})

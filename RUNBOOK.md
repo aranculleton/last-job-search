@@ -90,6 +90,9 @@ day's check is five steps, before anything else:
    - **What Claude can do alone** ("Claude applies these itself"): start one background agent
      at once (Agent tool, `model: "sonnet"`, `run_in_background: true`, `isolation: "worktree"`) running
      `/upgrade`, and go on with what the person asked. Their request never waits for it.
+     Until one is started, the app's hook holds the end of each turn for it (a few times a
+     day, never in a chat for one big job); a chat that cannot start an agent says why,
+     once a day: `python3 tools/profile_upgrades.py --not-now "<why>"`.
      When it reports, merge its branch into this session's work, then run `python3
      tools/network/state.py follow-ups --write`: it worked from an older copy of the
      messages. Its progress shows on the page.
@@ -483,11 +486,10 @@ works only if every branch lands on master before its chat ends: a chat that sta
 master cannot see work sitting on another chat's branch, and builds it a second time. So:
 
 1. **Start by pulling master and taking the app's updates** ("Start of a session", above),
-   before writing anything, not before pushing. Then bring in what an earlier chat could
-   not land: `python3 tools/land.py --waiting` lists each branch whose work waits (the
-   start command names them too); `git merge --no-edit <each>`, a command of its own, and
-   this chat's landing takes it to master. One that stops on a conflict: `git merge
-   --abort`, and leave it.
+   before writing anything, not before pushing. What an earlier chat could not land comes
+   in with this chat's landing, by itself (`python3 tools/land.py --waiting` lists it, with
+   how long it has waited); the start command names only work that has waited a day or
+   more, and what to do about it.
 2. **Finish by getting the work onto master.** Not "pushed to the branch": on master. Once
    the answer is out (the reply, the page brought up to date), and at most once a turn,
    start `python3 tools/land.py --message "<what changed>"` in the background (Bash,
@@ -508,8 +510,11 @@ master cannot see work sitting on another chat's branch, and builds it a second 
      same branch; then merge the same pull request again.
    - `land: not green` or `land: a conflict`: the work waits on this chat's branch, pushed
      with no pull request (a conflict pushes it as it was before the merge), so it outlives
-     this container. Open no pull request, leave it and say nothing; the next chat lands it.
-     `land: nothing to land`: done.
+     this container. Open no pull request and leave it; the next landing, in any chat,
+     brings it in. A file two chats changed at once is settled by the landing itself,
+     neither side lost (`tools/merge_state.py`, `settle`): only an app file stops it.
+     A line it gives for the person (GitHub refusing the save, a full disk) is said once,
+     in its words. `land: nothing to land`: done.
 
    Silently: never subscribe to it, set a check-in for it or wait on GitHub's checks, and
    never tell the person about it or its checks (CLAUDE.md, "Saving"). While it runs, the

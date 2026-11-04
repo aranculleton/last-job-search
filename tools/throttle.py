@@ -412,6 +412,11 @@ def is_silent(row: dict, today: "dt.date | None" = None) -> bool:
     if str(row.get("status") or "").strip().lower() in LIVE_PROCESS:
         return False
     age = _row_age_days(row, today)
+    # Silence counts from the posting's closing date where it closes after the application
+    # went: nothing is reviewed before it (tools/followups.py closes_on).
+    closes = days_since(row.get("deadline"), today, iso_only=True)
+    if age is not None and closes is not None:
+        age = min(age, closes)
     return age is not None and age >= SILENCE_DAYS
 
 

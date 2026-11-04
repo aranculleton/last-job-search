@@ -220,9 +220,10 @@ Optional arguments:
 ### Step 5: Present Results
 
 On the person's page first (CLAUDE.md, "Every output is shown"): the round reaches the page's
-Jobs list through `python3 tools/app.py view`, and the chat says the counts line below and
-where it is. Where there is no page, the chat shows it this way: one line of counts, then the
-table, then a line only for what is off. Never more.
+Jobs list through `python3 tools/app.py view`. Asked in the chat, or where there is no page,
+the chat shows it in full this way too: one line of counts, then the table, then a line only
+for what is off. Never more. Asked on the page, the chat says only the counts line and where
+it is.
 
 ```
 **P of N cleared the pass bar (60+), Q of them strong (75+); target 5 and 2: met** (or: missed after R rounds)

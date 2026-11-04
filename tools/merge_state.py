@@ -104,6 +104,9 @@ LIST_KEYS = {
 #              "merge", key by key where no date says (one day's short lists are one list)
 #   pick       a record settled by a rule of its own (PICKERS), never left for a person
 #   quiet      what it settles is the app's own record: nothing to tell the person
+#   first      a record two chats each wrote anew under a different `key` (two pages, each
+#              at its own address): the one stamped first (`stamp`) stands, its fields (`with`)
+#              taken whole, before anything else in the file is merged
 #   indent, sort ("all", "top" or None), ascii, newline   as its writer writes it, so a merge
 #              rewrites no line it did not merge; "ours" reads it from the file itself, for one
 #              Claude writes by hand
@@ -117,7 +120,16 @@ JSON_FILES = {
     # The page's address (app_setup.record_page, record_no_page: published_at, and the day
     # a chat said it cannot publish) and every No thanks to a suggestion, each dated with
     # its day (app_alerts.dismiss; undismiss takes one off). app_setup._write_json's format.
-    "profile/app.json": {"stamps": ("published_at", "on"), "dated": ("none",),
+    # `code` and `caps` (what the published page holds) go with the publish dated later;
+    # `introduced`, the day the person was told what their page is, is a date like `none`:
+    # set on both sides, the later is kept, and nothing is asked of the person. Two chats
+    # that each published a page of their own (two addresses) keep the one published first,
+    # whole, with what it holds, as start adopts it (the stranger audit, X-57); the second is
+    # never written to again.
+    "profile/app.json": {"stamps": ("published_at", "on"), "dated": ("none", "introduced"),
+                         "first": {"key": "url", "stamp": "published_at",
+                                   "with": ("url", "published_at", "by", "title_name", "code",
+                                            "caps")},
                          "indent": 2, "sort": "all"},
     # What the person answered on the page (app_actions._setup_*, app.py resume-saved and
     # propose): a record a step, written whole with its "at". history/jobs is the one list,
@@ -264,8 +276,8 @@ JSON_FILES = {
         "stamps": ("quote_checked", "last_checked", "fetched_date"), "indent": 2},
 }
 _JSON_DEFAULT = {"lists": None, "order": None, "stamps": (), "dated": (), "whole": (),
-                 "pick": None, "quiet": False, "indent": 2, "sort": None, "ascii": False,
-                 "newline": True}
+                 "pick": None, "first": None, "quiet": False, "indent": 2, "sort": None,
+                 "ascii": False, "newline": True}
 
 
 def _at(path: str, pattern: str) -> bool:
@@ -340,11 +352,13 @@ JSON_NAMES = {
     **dict.fromkeys(("ljs-app-watch.json", "ljs-job-sites.json", "ljs-listener.json",
                      "ljs-applied.json", "ljs-place.json", "ljs-tidy.json",
                      "ljs-reactions.json", "ljs-upgrades-listed.json", "ljs_own_tests.json",
-                     ".reactions.json"), _GITDIR),
+                     ".reactions.json", "ljs-no-page.json", "ljs-page-held.json",
+                     "ljs-save-held.json"), _GITDIR),
     **dict.fromkeys(("claude_surfaces.json", "public_names.json", "removed_names.json",
                      "rule_map.json", "remote.json", "design_draft.json",
                      "tools/leak_scan.py: **.json", "tools/markets.py: *.json",
-                     "tools/markets.py: .json"), _APP),
+                     "tools/markets.py: .json", "tools/locale_rules.py: .json",
+                     "tools/profile_upgrades.py: *.json"), _APP),
     **dict.fromkeys(("reading-ledger.json", "budget.json",
                      # a state folder outside git (a test's): the ledger in the computer's
                      # temporary folder, named for that folder (app_actions._kept_ledger_path)
@@ -821,6 +835,35 @@ def _further(base, ours, theirs) -> tuple[str, str]:
 
 PICKERS = {"higher_version": _higher_version, "further": _further}
 
+
+def first_written(base, ours, theirs, rule: dict, settled: list | None = None) -> tuple:
+    """JSON_FILES `first`: where each side holds a different `key` that neither held in the
+    copy both began from, the side stamped first keeps its record, every field `with` names
+    copied onto the other side, so the merge that follows takes them whole and never mixes
+    one page's address with what the other page holds. (ours, theirs), changed or not."""
+    if not (isinstance(ours, dict) and isinstance(theirs, dict)):
+        return ours, theirs
+    base = base if isinstance(base, dict) else {}
+    key = rule["key"]
+    a, b = ours.get(key), theirs.get(key)
+    if not a or not b or a == b or base.get(key) in (a, b):
+        return ours, theirs
+    side = _later_of(ours.get(rule["stamp"]), theirs.get(rule["stamp"]))
+    if not side:
+        return ours, theirs
+    first, second = (theirs, ours) if side == "a" else (ours, theirs)
+    kept = dict(second)
+    for f in rule["with"]:
+        if f in first:
+            kept[f] = first[f]
+        else:
+            kept.pop(f, None)
+    if settled is not None:
+        settled.append(f"{key}: both sides wrote one: kept {_show(first[key])}, the first "
+                       f"(dated {first.get(rule['stamp'])}); the other side had "
+                       f"{_show(second[key])}")
+    return (kept, theirs) if side == "a" else (ours, kept)
+
 # A research fact's own identity, as company_research._fact_id gives it: its page (the
 # link, scheme and host lower-cased, no trailing slash) and its words (the quote, else the
 # claim, with case, curly quotes, dashes and spacing folded), so one fact two chats saved
@@ -1221,10 +1264,188 @@ def merge(base: str, ours: str, theirs: str, path: str, later=None,
             return ours, [f"{path}: not JSON on one side ({e})"]
         rules = json_rules(path)
         quiet = noted if rules["quiet"] and noted is not None else settled
+        if rules["first"]:
+            o, t = first_written(b, o, t, rules["first"], quiet)
         merged, problems = merge_json(b, o, t, later=later, settled=quiet,
                                       lists=rules["lists"], rules=rules)
         return dump(merged, rules, ours), problems
     return merge_csv(base, ours, theirs, name, later=later, settled=settled, ending=ending)
+
+
+# ------------------------------------------------------------------ a merge that stopped
+#
+# A merge of two chats' work that stopped on a file the row merge does not cover (the
+# profile's own words, a setting, a draft) was aborted, and the whole chat's work waited on a
+# branch that every later chat tried, stopped on and left: drafts, tracker rows and all,
+# never on master, with a daily "the next run tries again" that never came true (the
+# stranger audit, 2026-11-03, X-13). Each such file is settled here instead, losing neither
+# side, so the rest of the work lands:
+#
+# - the same improvement made by two chats (each side's own commits on the file are all
+#   "Profile upgrade: <id>", the same ids): master's copy, as RUNBOOK.md has always said;
+# - the person's own words in profile/ (.md, .txt): both versions kept, one after the
+#   other, under a [CONFIRM: ...] line, which the page asks as a To do card (and a chat with
+#   no page asks through the unconfirmed-facts upgrade), so the person decides which stays;
+# - anything else: this side's version in place (the row merge's other rows kept), and the
+#   other side's whole file beside it as <file>.from-another-chat, saved with the rest; a
+#   profile .py also gets the [CONFIRM: ...] line, as a comment;
+# - a file one side removed and the other changed: the changed one is kept.
+#
+# Never an app file: a conflict there is left as it was, for the caller to stop on.
+
+SIDE = ".from-another-chat"
+_TEXT = (".md", ".txt")
+ASK_BOTH = ("[CONFIRM: two of your chats changed this part at the same time, and both "
+            "versions are kept below: which one stays]")
+ASK_SIDE = ("[CONFIRM: two of your chats changed this file at the same time; the later "
+            "version is kept here and the other is saved beside it as {name}: which one "
+            "stays]")
+
+
+def _g(root: str, *args: str, text: bool = True):
+    import subprocess
+    return subprocess.run(["git", "-C", root, *args], capture_output=True, check=False,
+                          **({"text": True, "encoding": "utf-8", "errors": "replace"}
+                             if text else {}))
+
+
+def _blocks(text: str, keep: str) -> tuple[str, int]:
+    """The file with each conflict block resolved: "ours", "theirs" or "both" (this side's
+    lines, then the other's, under ASK_BOTH). (text, blocks found)."""
+    out: list[str] = []
+    state, o, t, n = "", [], [], 0
+    for line in text.splitlines(keepends=True):
+        bare = line.rstrip("\r\n")
+        if not state and bare.startswith("<<<<<<<"):
+            state, o, t = "o", [], []
+            continue
+        if state == "o" and bare.startswith("|||||||"):
+            state = "b"
+            continue
+        if state in ("o", "b") and bare == "=======":
+            state = "t"
+            continue
+        if state == "t" and bare.startswith(">>>>>>>"):
+            n += 1
+            nl = "\r\n" if line.endswith("\r\n") else "\n"
+            if keep == "both":
+                both = o + t
+                both = [ln if ln.endswith(("\n", "\r")) else ln + nl for ln in both]
+                out += [ASK_BOTH + nl] + both
+            else:
+                out += o if keep == "ours" else t
+            state = ""
+            continue
+        if state == "o":
+            o.append(line)
+        elif state == "t":
+            t.append(line)
+        elif not state:
+            out.append(line)
+    return "".join(out), n
+
+
+def _same_upgrade(root: str, path: str) -> bool:
+    """Both sides changed `path` only in "Profile upgrade: <id>" commits, the same ids."""
+    base = _g(root, "merge-base", "HEAD", "MERGE_HEAD").stdout.strip()
+    if not base:
+        return False
+
+    def ids(side: str) -> set:
+        got = _g(root, "log", "--no-merges", "--format=%s", f"{base}..{side}", "--",
+                 path).stdout.splitlines()
+        if not got or not all(s.startswith("Profile upgrade: ") for s in got):
+            return set()
+        return {s.split(":", 1)[1].strip() for s in got}
+    mine, theirs = ids("HEAD"), ids("MERGE_HEAD")
+    return bool(mine) and mine == theirs
+
+
+def _side_path(root: str, path: str) -> str:
+    side, n = path + SIDE, 1
+    while os.path.exists(os.path.join(root, side)):
+        n += 1
+        side = f"{path}{SIDE}-{n}"
+    return side
+
+
+def settle(root: str) -> tuple[list[str], list[str]]:
+    """Settle every conflicted file of the person's in the merge stopped in `root`.
+    (what was done, one line each, for Claude; the paths left as they were). Each settled
+    file is staged; the caller commits the merge once nothing is left."""
+    try:
+        here = os.path.dirname(os.path.abspath(__file__))
+        if here not in sys.path:
+            sys.path.insert(0, here)
+        import personal_paths
+    except Exception:  # noqa: BLE001  nothing settled: the caller stops as before
+        return [], []
+    files = [p for p in _g(root, "diff", "--name-only", "-z", "--diff-filter=U").stdout
+             .split("\0") if p]
+    done: list[str] = []
+    left: list[str] = []
+    for p in files:
+        if not personal_paths.is_personal(p):
+            left.append(p)
+            continue
+        stages = {}
+        for ln in _g(root, "ls-files", "-u", "-z", "--", p).stdout.split("\0"):
+            meta, _, name = ln.partition("\t")
+            parts = meta.split()
+            if name == p and len(parts) == 3:
+                stages[parts[2]] = parts[1]
+        full = os.path.join(root, p)
+        if "2" not in stages or "3" not in stages:
+            keep = "--ours" if "2" in stages else "--theirs"
+            _g(root, "checkout", keep, "--", p)
+            done.append(f"{p}: one chat removed it and the other changed it; the changed "
+                        "one is kept")
+        elif _same_upgrade(root, p):
+            _g(root, "checkout", "--theirs", "--", p)
+            done.append(f"{p}: the same improvement made by two chats; the other's copy "
+                        "is kept")
+        else:
+            try:
+                with open(full, encoding="utf-8", newline="") as fh:
+                    text = fh.read()
+            except (OSError, UnicodeDecodeError):
+                text = ""
+            marked = "\n<<<<<<<" in "\n" + text and "\n>>>>>>>" in text
+            if marked and p.startswith("profile/") and p.endswith(_TEXT):
+                merged, _n = _blocks(text, "both")
+                with open(full, "w", encoding="utf-8", newline="") as fh:
+                    fh.write(merged)
+                done.append(f"{p}: both versions kept, and the person is asked which "
+                            "stays (a To do on the page)")
+            else:
+                side = _side_path(root, p)
+                if marked:
+                    kept, _n = _blocks(text, "ours")
+                    other, _n = _blocks(text, "theirs")
+                    with open(full, "w", encoding="utf-8", newline="") as fh:
+                        fh.write(kept)
+                    with open(os.path.join(root, side), "w", encoding="utf-8",
+                              newline="") as fh:
+                        fh.write(other)
+                else:
+                    _g(root, "checkout", "--ours", "--", p)
+                    blob = _g(root, "cat-file", "blob", stages["3"], text=False).stdout
+                    with open(os.path.join(root, side), "wb") as fh:
+                        fh.write(blob)
+                if p.startswith("profile/") and p.endswith(".py"):
+                    with open(full, encoding="utf-8", newline="") as fh:
+                        body = fh.read()
+                    ask = ASK_SIDE.format(name=os.path.basename(side))
+                    with open(full, "w", encoding="utf-8", newline="") as fh:
+                        fh.write("# " + ask + "\n" + body)
+                _g(root, "add", "-f", "--", side)
+                done.append(f"{p}: this chat's version kept, and the other saved beside "
+                            f"it as {side}")
+        r = _g(root, "add", "-f", "--", p)
+        if r.returncode != 0:
+            done.pop()
+            left.append(p)
+    return done, left
 
 
 # Exit codes. 0 merged; 1 merged with real conflicts marked for a person. Anything

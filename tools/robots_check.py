@@ -97,9 +97,31 @@ def decide(body, url):
     return 0, 'ALLOWED - robots.txt permits this path'
 
 
-def gate(url):
+def cloud_block(url, probe=None):
+    """The words for the person when this chat's own cloud settings refuse the site (the
+    proxy answers CONNECT with 403 or 407, as env_check.classify reads it), or "": no fetch
+    of any kind reaches it from here, and before this the chat said only UNCONFIRMED, so the
+    person never heard that one setting was the cause (the stranger audit, X-80)."""
+    try:
+        import env_check
+        verdict, _ = (probe or env_check.probe)(url)
+    except Exception:
+        return ''
+    if verdict != 'blocked':
+        return ''
+    host = urlsplit(url).hostname or url
+    return env_check.blocked_say([host]).replace(
+        "I won't search before then: it would only find old jobs.",
+        "Until then, paste the page's words here instead.")
+
+
+def gate(url, probe=None):
     body, last = read_policy(url)
     if body is None:
+        said = cloud_block(url, probe)
+        if said:
+            return 1, ('BLOCKED BY THIS CHAT\'S CLOUD SETTINGS - no fetch reaches it from here. '
+                       'Tell the person, in these words:\n' + said)
         return 1, 'UNCONFIRMED (%s) - do not retry, go to step 3' % last
     return decide(body, url)
 

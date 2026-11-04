@@ -13,19 +13,25 @@ registry, `profile/routines.json` (`profile.example/routines.json` shows the sha
 | **Job search: daily upkeep**, made by itself where the brief does not run every day | Nothing to read: once a day, silently, it takes the app's updates, brings the page's data up to date and starts any work still waiting, so a page opened with no chat running is today's. The chat that answers the page makes it in its daily tidy-up, moves it with itself as it renews (deleting the old copy, never piling copies up), and takes it away once a brief runs every day (`prompts/upkeep.md`). |
 | **Job search: shortlist**, optional and off by default | A scored round of new postings, best first (`prompts/job_round.md`). Reply with picks in the same chat and it drafts, verifies and records them. |
 
-**If no brief has arrived two hours after its time on one of its days, the automation is
-broken.** The brief is sent on each of its days even when nothing is due, so silence always
-means something failed.
-Tell any Claude chat "the scheduled tasks are down" and point it at this file.
+**Where it arrives.** Each brief is a reply in the chat it runs in, and on your Brief where you
+have a page. At the end of each run it sends its headline to your phone; that notification may
+not arrive; the brief itself is the record, and where it was not sent, your next message in
+that chat says so. A brief that does not come is noticed by the next chat that starts or wakes
+(`routines.py calls` owes it one look at the scheduled tasks, and `routines.py brief` says what
+is wrong and how to mend it); nobody has to watch for it.
 
 ## Set it up
 
-**Nothing to do: it is on from the start.** Set-up turns it on, and a copy set up before 4.3
-gets it by itself. The chat that answers your page sets the brief up in itself, every day at 7:38 your time, and runs a first one a few minutes later so you see
-it work (`python3 tools/routines.py brief` prints the calls). No new chat is made. Change its
-days or time, or turn it off, from the same bell or in Settings, Your brief; take a break from
-the whole search there too. With no page, say "set up my brief" in any chat. It is one
-short run each morning in a chat that already exists, so it never adds a chat.
+**Nothing to do: it is on from the start.** Set-up turns it on, with or without a page, and a
+copy set up before 4.3 gets it by itself. It is bound to the chat that answers your page, or
+with no page to the chat set-up ran in, every day at 7:38 your time (5:38 on the US west coast
+and in Mountain time, where 7:38 falls in the hours the scheduler runs late), and a first one
+runs a few minutes later so you see it work (`python3 tools/routines.py brief` prints the
+calls). No new chat is made. Change its days or time, or turn it off, from the same bell or in
+Settings, Your brief; take a break from the whole search there too. With no page, say "move
+my brief" or "stop my brief" in any chat. It is one short run each morning in a chat that
+already exists, so it never adds a chat. If set-up stops before its end, one reminder runs a
+day after your page went up, saying only that set-up waits there.
 
 Two set-ups work reliably, and they trade the same thing: where the briefing arrives. The bell
 makes (a).
@@ -33,9 +39,23 @@ makes (a).
 | | (a) In the chat that answers your page | (b) A routine, a new chat each run |
 |---|---|---|
 | Where the briefing arrives | Your Brief, and a reply in that chat | A new chat each run |
-| Push to your phone | No | Yes, where the app notifies you of the run |
+| Push to your phone | Each run sends its headline (seen sent from a cloud chat); where it is not sent, your next message there says so | Yes, where the app notifies you of the run |
 | Where you reply to the shortlist | The chat that answers your page | The chat that run opened |
 | Set up from | The bell (Claude does it) | A routine, made by you, once |
+
+<!-- claude-surface: chat-push claim -->
+<!-- checked 2026-11-03; https://code.claude.com/docs/en/tools-reference -->
+A chat can send the person a phone notification with the PushNotification tool. The docs
+name it a phone push while Remote Control is connected, and Push when Claude decides
+(agentPushNotifEnabled, off by default) lets Claude send one; a cloud chat reads that
+setting from the copy's own .claude/settings.json, which turns it on. A scheduled run in a
+cloud chat was seen to send one: the tool answered Mobile push requested, with the push
+sent. A scheduled task bound to a chat has no notification of its own (create_trigger's
+notifications are only for a task that starts a new chat each run, and such a run gets no
+copy of the files and no add_repo to fetch one), so a brief that runs in a chat sends its
+headline this way; where the tool answers not sent, the person's next message in that chat
+says the brief is there.
+<!-- /claude-surface -->
 
 Both run on **your private repo**, never on the public app: a chat on the app holds none of
 your state, and anything it pushed would be public.
@@ -64,29 +84,39 @@ only the person can, in theirs.
 
 ### For Claude: the rules of setting it up
 
-- **"Set up my brief" is set-up (a), asking nothing**: the bell's work item (`brief` with
-  `args.setup`, done by the chat that answers the page) or the words in a chat. `/setup`
-  never makes it. First list the account's scheduled tasks (`list_triggers`, every page) and
-  run `python3 tools/routines.py brief --triggers <each page>`: a brief that exists, whatever
-  it is called, is attached to and never made twice, and a task that only looks like one is
-  asked about.
+- **"Set up my brief" is set-up (a), asking nothing**: `/setup` Step 5 (with or without a
+  page), the bell's work item (`brief` with `args.setup`, done by the chat that answers the
+  page), the brief-daily upgrade (`--own-initiative`) or the words in a chat. First list the
+  account's scheduled tasks (`list_triggers`, every page) and run `python3 tools/routines.py
+  brief --triggers <each page>`: a brief that exists, whatever it is called, is attached to
+  and never made twice, and a task that only looks like one is asked about. Any `mend` call it
+  prints gives one of the app's tasks the line that gets its files in any chat: make it, then
+  `routines.py mended`.
 - **In a cloud chat** with none, `brief` prints the calls to make, in order: `create_trigger`
-  bound to this chat (`persistent_session_id`, this chat's own id), `CRON_TZ=<their zone> 38 7
-  * * *`, the stub as its prompt, `connectors: []`; and a one-off `run_once_at` first brief
-  bound to the same chat, never `fire_trigger`. Then `routines.py record`, and land it. No
-  chat is ever made for it: where this chat's id cannot be read, `brief` says to ask
-  `get_session` (no `session_id`) for it and run again with `--chat <its id>`.
+  bound to the chat that answers the page, or with no page this chat (`persistent_session_id`),
+  `CRON_TZ=<their zone> 38 7 * * *` (5:38 where 7:38 falls in the scheduler's slow hours), the
+  stub as its prompt, `connectors: []`; and a one-off `run_once_at` first brief bound to the
+  same chat, never `fire_trigger`. Then `routines.py record`, and land it. No chat is ever
+  made for it, and never a task that starts a new chat each run (it gets no copy of the
+  files): where this chat's id cannot be read, `brief` says to ask `get_session` (no
+  `session_id`) for it and run again with `--chat <its id>`.
 - **On their computer**, `brief` prints the one line to tell them: turn it on from the bell
-  on their Brief. The bell sends it to the chat in the cloud that answers the page (a brief
-  only runs there, `tools/page_db.py` `can_take`) and starts the helper where there is none.
-  Never make a desktop scheduled task for the brief, never start a cloud chat from your own
-  shell, and never make a routine for it from there.
+  on their Brief, and with no page, make the page first (`app.py start`). The bell sends it to
+  the chat in the cloud that answers the page (a brief only runs there, `tools/page_db.py`
+  `can_take`) and starts the helper where there is none. Never make a desktop scheduled task
+  for the brief, never start a cloud chat from your own shell, and never make a routine for
+  it from there.
 - The lines `routines.py brief` prints are for you: act on them, and tell the person only the
-  one line it gives ("Your brief is on: every day at 7:38. ..."), never its file, id or task
-  name.
-- The final reply of a run is the message; nothing depends on `fire_trigger`. Only a change
-  of schedule needs `update_trigger` or the routine's own page; a change to what a task does
-  is a pull request on its prompt file.
+  one line it gives (where and when it comes, and how to change it), never its file, id or
+  task name.
+- The final reply of a run is the message; nothing depends on `fire_trigger`. A run asked to
+  push is told so by `brief.py`'s own lines, the one place that asks. Only a change of schedule
+  needs `update_trigger` or the routine's own page; a change to what a task does is a pull
+  request on its prompt file.
+- **What code mends by itself** (`routines.py calls`, at every start, wake and brief): a break
+  whose day has passed is lifted and the brief turned on again, a time zone this computer does
+  not know is rewritten to the person's own, and a brief that did not come owes one look at
+  the scheduled tasks. Make each call it lists, then `routines.py called <n>`.
 - **Every dated follow-up is automatic by construction**: the brief reads `next_action_due`
   from `network_contacts.csv` and the nudge schedule from the tracker, so a reminder is a
   date written into a state file, never another routine.
@@ -117,21 +147,28 @@ binds a task to the chat doing the work (`create_trigger` with that chat's id, `
 zone> 38 7 * * *`, the morning brief stub below as its prompt, no connectors), and a one-off
 first run a few minutes later bound to the same chat; then `routines.py record` writes
 `profile/routines.json` and it lands on master. You answer nothing: the days and the time are
-defaults, and the zone is the one your profile names. Without a page, say
-**"set up my brief"** in the cloud chat you already use: it binds the task to that chat.
+defaults, and the zone is the one your profile names. Without a page, set-up binds it to the
+cloud chat it ran in, and the brief says so the first time it comes.
 
 Only if you want new postings searched on a schedule as well, say "set up my shortlist" in
-the same chat: both tasks run there, and no chat is made for either. Most people do not need
-it: "find me jobs" in any chat runs a round. Test each one as below; each briefing arrives as
-a reply in that chat, with no push.
+the same chat (`python3 tools/routines.py stub job_round` prints its prompt): both tasks run
+there, and no chat is made for either. Most people do not need it: "find me jobs" in any chat
+runs a round. Test each one as below; each briefing arrives as a reply in that chat, and the
+run sends its headline to your phone; your next message in that chat says so when it was not
+sent.
+
+The brief is never moved to a task that starts a new chat each run: such a run gets no copy of
+your files and no way to fetch one, so it could only say it could not start.
 
 **Old chats tidy themselves away.** Before 4.3 the brief had a chat of its own, long work could
 start a child chat, and a replaced helper stayed in the list. Once a day the chat that answers
-the page moves an older brief into itself (a new task on the same days and time, the old one
-turned off and kept) and archives the app's own chats it no longer uses: never one the person
-named, one a scheduled task that is on still uses, a live campaign's chat, one used in the
-last two days, or one whose work is not on master yet. An archived chat is kept, read-only,
-and comes back on request (`python3 tools/tidy.py undo`).
+the page archives the app's own chats it no longer uses: never one the person named, one a
+scheduled task that is on still uses, a live campaign's chat, one used in the last two days,
+or one whose work is not on master yet. A brief or shortlist that works where it is stays
+there; one whose chat no longer works (deleted, or a helper the page no longer uses) moves into
+the chat that answers the page (a new task on the same days and time, the old one turned off
+and kept). An archived chat is kept, read-only, and comes back on request (`python3
+tools/tidy.py undo`).
 
 ### (b) A routine, a new chat each run
 
@@ -161,8 +198,10 @@ and comes back on request (`python3 tools/tidy.py undo`).
    (`routines.py check` fails without it, because a task nobody hears from is broken), and
    the trigger ids from `list_triggers` if it can see them (they are optional here).
 5. Every run is a new chat, and its final reply is the briefing, and the notification where
-   the app sends one. Reply to the shortlist in the chat that run opened. Run chats more than
-   two days old are tidied away by themselves (archived, never deleted: `tools/tidy.py`).
+   the app sends one. Reply to the shortlist in the chat that run opened. The list of chats
+   Claude reads leaves out the ones a scheduled task started, so where you have a page, the
+   day's tidy-up reads each run's chat from your scheduled tasks, remembers it, and puts it
+   away once it is two days old (archived, never deleted: `tools/tidy.py`).
 
 ### Test it, without fire_trigger
 
@@ -212,7 +251,7 @@ can still make it.
 |---|---|
 | "Make the brief shorter", "add X to the TLDR", "stop drafting on Fridays" | Writes it into `profile/CLAUDE.md`, section "This search's automation", which every run reads and which is yours. The prompt files under `prompts/` are the app's: a sync puts an edit to them back. Takes effect on the next run. |
 | "Move the brief to 7:30", "run the round on Wednesdays too" | For the brief, `python3 tools/routines.py move --days <days> --time <time>` (the page's own way too: its action `brief.move`) writes `cron` in `profile/routines.json` and keeps the one call owed; for another task, edit its `cron`. Then, for (a), `update_trigger` on that `trigger_id` with the new cron (`CRON_TZ=<zone>` first); for (b), the same where it can see the task, and otherwise says what to change on the routine's own page; `routines.py called <n>` once made. Merges the registry. |
-| "I'm taking a break until 8 November", "pause my search" | `python3 tools/routines.py pause --until <date>` (the page's `brief.pause`): every follow-up is held (a contact's next action opens `HOLD until <date>`, a live application carries `DO NOT CHASE until <date>`), and the calls it lists turn the brief off and make one brief for the day they come back, which lifts the break. `routines.py resume` (`brief.resume`) ends it early and puts each hold back as it was. |
+| "I'm taking a break until 8 November", "pause my search" | `python3 tools/routines.py pause --until <date>` (the page's `brief.pause`): every follow-up is held (a contact's next action opens `HOLD until <date>`, a live application carries `DO NOT CHASE until <date>`), and the calls it lists turn the brief off and make one brief for the day they come back, bound to a chat with the copy, which lifts the break. If that one fails, the first start, wake or brief after the day lifts it all the same (`routines.py calls`). `routines.py resume` (`brief.resume`) ends it early and puts each hold back as it was. |
 | "Switch everything to <city> time" | Changes `timezone` and every `cron` to `CRON_TZ=<IANA zone>` at the same local times, applies them the same way, merges. |
 | "Add a task that does Y" | A new kind of task needs its own prompt file in the app (`prompts/<key>.md`), so it is a change to the app: the maintainer makes it, anyone else gets it written up as an issue. Until then, what an existing task should also do goes in `profile/CLAUDE.md`. |
 | "Pause the shortlist" | `update_trigger` with `enabled: false` (or the routine's own page), and `"paused": "<date> <reason>"` on the entry. |

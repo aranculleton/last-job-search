@@ -1,5 +1,5 @@
 ---
-framework_version: 1.0.1
+framework_version: 1.0.2
 ---
 
 # Setup, section by section
@@ -140,7 +140,8 @@ job posting.
   walk-away floor, the target and the top of the band, in the local currency. The tables
   name where pay is published (the country's statistics, its field's surveys), never the
   numbers, which are researched for this person. Where they gave no floor, the researched
-  one is written with `[CONFIRM: ...]`.
+  one is written with `[CONFIRM: ...]`. Every figure is a year's pay: a band a posting states
+  by the month is read as twelve months.
 <!-- /section -->
 <!-- section: documents -->
 - **Documents.** Local conventions: resume or CV, photo or not, paper size, spelling variant,
@@ -161,12 +162,17 @@ job posting.
   employers post under (a continent, EMEA, worldwide), which the location gate passes.
 <!-- /section -->
 <!-- section: market -->
-- **Languages.** Which languages postings in their market tend to require, for the language
-  gate.
+- **Languages.** `LANGUAGES_HELD` in `search.py`: every language they hold, by its English
+  name. The screen cuts a posting that requires any other language, written in English or in
+  the posting's own language, and a title written in a language they do not hold, with
+  nothing more to write. A `LANGUAGE_GATE` row only for a language whose wording in their
+  market needs patterns of its own (one usually asked as an asset); `TITLE_LANGUAGE` only to
+  override the title reading.
 <!-- /section -->
 <!-- section: search -->
 - **Search terms.** The titles their target work is posted under, including the ones they
-  did not think of (the field table's titles are a start), and the queries `/scrape` should
+  did not think of (the field table's titles are a start, in US English: where their market
+  posts in another language, the titles it uses there), and the queries `/scrape` should
   run.
 <!-- /section -->
 
@@ -181,7 +187,11 @@ nouns, spelling, paper, date format, headings, sign-off), from what they sent an
 research. The letter is printed on the resume's paper unless `documents.letter_paper` says
 otherwise. Also, from their market and level: `resume_pages` (1 unless their market or a
 long career expects 2), `section_order` (a recent graduate often leads with education), and,
-for a letter in another language, `salutation_prefix` and `page_label`. Where they will work
+for a letter in another language, `salutation_prefix`, `page_label` and `language` (its
+two-letter code, `de`, `fr`, `pt`: the letter is dated in it). `spelling` is one of
+`british`, `american`, `canadian` or `australian` (New Zealand, Ireland, India, South Africa
+and Singapore write `british`); leave it out for documents in another language.
+`date_format` is `day_month_year` or `month_day_year`. Where they will work
 is recorded by `python3 tools/place.py auto` once this file exists, or from their answer
 with `python3 tools/place.py record computer|phone|both`. **How the page looks**
 (`templates/doc_design.py`): write `documents.designs.kinds` from its `SUGGESTED_KINDS`,
@@ -197,7 +207,12 @@ fonts, sizes or margins; the page size comes from their country (`person.paper`)
 The source of truth for every fact about them. Everything established, with the detail that
 will not fit on one page kept under each role's "Additional detail available for tailoring".
 Each role's heading is `### Title - Employer (dates), City`, the dash separating title from
-employer, because the tools read the roles off those headings. Anything not yet confirmed is
+employer, because the tools read the roles off those headings. The summary sits under the
+exact heading `## Canonical Summary Statement`, as a `>` quote of two or three sentences, as
+in `profile.example/01-candidate-profile.md`: the general resume is drafted from it and stops
+without it. Education, Certifications and Languages each have their own heading; a resume
+built with Claude takes them from `history_rest` in `profile/setup_answers.json`, and every
+language held goes into `LANGUAGES_HELD` too. Anything not yet confirmed is
 written `[CONFIRM: ...]`, never guessed. Every one left is asked again, a few at a time at
 the end of later sessions, until it is answered (the `unconfirmed-facts` profile upgrade):
 nobody has to remember them.
@@ -250,8 +265,11 @@ resume summary from these, never from the example person's in `05-cv-templates.m
 
 <!-- section: search -->
 ### 8. Write the rest of `profile/`
-`roles.py` (chronology, titles, education, certifications), `bullets.py` (every achievement
-as a themed bullet, more than any one page needs), `skills.py` (what they hold, what they do
+`roles.py` (chronology, titles, education, certifications: one ROLES entry for every job,
+most recent first, two for a promotion at one employer), `bullets.py` (every achievement as a
+themed bullet, more than any one page needs, under the employer's name in LIB; an older
+title at the same employer has its own LIB key, named on its role with `lib=`, and a job
+with no achievement on file has no LIB entry and prints as its title line), `skills.py` (what they hold, what they do
 not, and the honest bridges between, with `FAMILIES` for the tools their field treats as
 interchangeable that `tools/bridges.py` FAMILIES does not already list: the field table's
 families, `markets.families("<field>")`, are in that shape already), `search.py` (pay,

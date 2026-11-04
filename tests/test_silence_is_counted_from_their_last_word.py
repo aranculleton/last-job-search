@@ -51,7 +51,7 @@ def test_the_nudge_dates_are_the_ones_claude_md_states():
 
 def test_a_nudge_after_their_word_says_so():
     it = F.review([_row(ASKED)], D(2026, 9, 14))[0]
-    assert it["message"].startswith("Hi Wren, thank you for your note on 2026-09-10.")
+    assert it["message"].startswith("Hi Wren, thank you for your note on 10 September.")
     assert "reached the right person" not in it["message"]
 
 

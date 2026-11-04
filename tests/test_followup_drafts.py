@@ -167,7 +167,7 @@ def test_an_application_follow_up_is_followups_text_through_the_gate():
             "text": followups.body(it), "to": followups.to_line(it), "held": [], "quiet": False}
     d = F.draft(item, {}, {}, rows, {}, [])
     assert d["status"] == "ready" and d["kind"] == "message"
-    assert d["text"].startswith("Hi Wren, I applied for the Demand Planner role on 2026-10-10")
+    assert d["text"].startswith("Hi Wren, I applied for the Demand Planner role on 10 October")
     # No recipient on file: nobody to write to, so nothing is drafted.
     none = F.draft(dict(item, ready=False, text="", to=followups.NO_RECIPIENT), {}, {}, rows, {}, [])
     assert none["status"] == "write" and none["who"] == "you" and "recipient" in none["why"]

@@ -31,6 +31,9 @@ def _said(out):
 def test_the_days_first_message_carries_the_check_and_later_ones_do_not(monkeypatch, tmp_path):
     monkeypatch.setattr(learned, "_path", lambda: str(tmp_path / "learned.json"))
     monkeypatch.setattr(sync_app, "stale", lambda: True)
+    # No check tried and failed in the last few hours (sync_app.retry_due): whatever this
+    # checkout's own git folder holds from a real run is not this test's.
+    monkeypatch.setattr(sync_app, "retry_due", lambda: True)
     out = learned._with_update(learned.hook(PROMPT), learned._update_due(PROMPT))
     assert out["hookSpecificOutput"]["hookEventName"] == "UserPromptSubmit"
     assert "Before anything else in this turn, run python3 tools/sync_app.py --if-stale" in _said(out)
@@ -41,6 +44,9 @@ def test_the_days_first_message_carries_the_check_and_later_ones_do_not(monkeypa
 def test_a_reaction_and_the_check_on_one_message_are_both_said(monkeypatch, tmp_path):
     monkeypatch.setattr(learned, "_path", lambda: str(tmp_path / "learned.json"))
     monkeypatch.setattr(sync_app, "stale", lambda: True)
+    # No check tried and failed in the last few hours (sync_app.retry_due): whatever this
+    # checkout's own git folder holds from a real run is not this test's.
+    monkeypatch.setattr(sync_app, "retry_due", lambda: True)
     reacted = {"hookSpecificOutput": {"hookEventName": "UserPromptSubmit",
                                       "additionalContext": "The person reacted (\"too formal\")."}}
     said = _said(learned._with_update(json.loads(json.dumps(reacted)), learned._update_due(PROMPT)))
@@ -50,6 +56,9 @@ def test_a_reaction_and_the_check_on_one_message_are_both_said(monkeypatch, tmp_
 def test_only_the_prompt_carries_it_and_a_broken_check_never_breaks_the_chat(monkeypatch, tmp_path):
     monkeypatch.setattr(learned, "_path", lambda: str(tmp_path / "learned.json"))
     monkeypatch.setattr(sync_app, "stale", lambda: True)
+    # No check tried and failed in the last few hours (sync_app.retry_due): whatever this
+    # checkout's own git folder holds from a real run is not this test's.
+    monkeypatch.setattr(sync_app, "retry_due", lambda: True)
     assert learned._update_due({"hook_event_name": "Stop"}) == ""
     def boom():
         raise RuntimeError("no git")

@@ -271,6 +271,7 @@ if __name__ == "__main__":
     with tempfile.TemporaryDirectory() as tmp:
         env = dict(os.environ, LJS_PROFILE=EXAMPLE, LJS_STATE=small(os.path.join(tmp, "s")),
                    LJS_COPY="private")
+        env.pop("CLAUDE_CODE_REMOTE", None)      # the model CI builds, never a cloud chat's
         out = os.path.join(ROOT, "tests", "fixtures", "app_model_example.json")
         subprocess.run([sys.executable, os.path.join(ROOT, "tools", "app.py"), "model",
                         "--now", NOW, "--out", out], env=env, check=True)

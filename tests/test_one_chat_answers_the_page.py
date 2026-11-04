@@ -314,7 +314,8 @@ def test_the_page_is_told_how_to_say_nobody_is_listening_and_what_is_true_of_its
     assert lis["quiet_after_s"] == 600
     url = lis["wake"]["url"]
     assert url.startswith("https://claude.ai/code?prompt=Look%20after%20my%20job%20search%20page")
-    assert "app.py%20start%20--listen" in url
+    # Plain words only: the link is the person's own first message (the stranger audit, X-84).
+    assert "python3" not in url and "--listen" not in url
     priv = model["app"]["privacy"]
     assert "unless you share it" in priv
     for word in ("first names", "employers", "drafts", "setup answers"):
@@ -394,8 +395,9 @@ def test_an_update_that_changed_the_page_republishes_it_at_once_and_never_asks(c
     assert copy.send(copy.run("listen", copy.dump(), "--chat", "helper-1", "--listen"))
     said = _after_sync(copy, "helper-1")
     _never_asks(said)
-    assert "Republish it:" in said and "python3 tools/app.py page --out" in said
-    assert "Artifact, action publish" in said and f"published {PAGE}" in said
+    assert "Republish it:" in said and "python3 tools/app.py page --out-dir" in said
+    # The build prints the publishes themselves, only the small files the page lacks (X-3).
+    assert "make exactly the publishes it prints" in said and f"published {PAGE}" in said
     # A refusal is tried once more, and only a second one is said, in its one line.
     assert "read the page again and publish once more" in said
     assert app_listen.say(app_listen.SAY_NOT_UPDATED, PAGE) in said
@@ -416,7 +418,7 @@ def test_an_update_that_changed_the_page_republishes_it_at_once_and_never_asks(c
     new = _after_sync(copy, "chat-new")
     _never_asks(new)
     assert "python3 tools/app.py listen" in new and "app.py republish" in new
-    assert "Artifact, action publish" in new
+    assert "make exactly the publishes it prints" in new
     # Once published, the sync says nothing more about the page.
     copy.page(current=True)
     assert "Claude: " not in _after_sync(copy, "helper-1")
@@ -585,10 +587,10 @@ def test_a_chat_answering_the_page_for_a_day_starts_a_fresh_helper_at_a_quiet_mo
                                     "version": 1}})
     assert not [ln for ln in app_listen.decide(busy, "session_old", str(tmp_path / "c"), now)["lines"]
                 if ln.startswith("listen: renew:")]
-    # The fresh helper takes it, and is told to archive the old helper by its title only.
+    # The fresh helper takes it, and never archives the old one: it may still be saving the
+    # brief; the tidy-up puts it away once it is idle (the stranger audit, X-27).
     took = app_listen.decide(quiet, "session_new", str(tmp_path / "d"), now, listen=True, helper=True)
-    assert took["role"] == "listener" and any("archive_session" in ln and app_listen.HELPER_CHAT_TITLE in ln
-                                              for ln in took["lines"])
+    assert took["role"] == "listener" and not any("archive_session" in ln for ln in took["lines"])
 
 
 def test_a_page_update_by_the_listener_brings_its_renewal(copy, tmp_path, monkeypatch):

@@ -53,7 +53,7 @@ APP_REPO = "aranculleton/last-job-search"
 # What this folder is, said instead of asked: for the app's own tests, which run inside the
 # app's checkout, and for a rehearsal on throwaway copies GitHub has never seen.
 COPY_ENV = "LJS_COPY"
-KINDS = ("app", "public", "private", "unknown", "none")
+KINDS = ("app", "public", "fork", "private", "unknown", "none")
 COPY_NAME = "my-job-search"
 # The make-copy entry's own link (tools/claude_surfaces.json), as a full address.
 COPY_LINK = ("https://github.com/new?template_owner=aranculleton&template_name=last-job-search"
@@ -101,8 +101,17 @@ _write_json = write_json  # the module's own name for it; other modules call wri
 
 
 def answers() -> dict:
-    """What the person answered on the page, by step: profile/setup_answers.json."""
-    return _read_json(os.path.join(profile_dir(), ANSWERS), {})
+    """What the person answered on the page, by step: profile/setup_answers.json. A typed
+    "that's all" saved as a job before 3 November (X-40) is read as the end of the jobs, so a
+    setup part way through takes it right, and /setup never writes it into a profile."""
+    got = _read_json(os.path.join(profile_dir(), ANSWERS), {})
+    h = got.get("history") if isinstance(got, dict) else None
+    if isinstance(h, dict) and isinstance(h.get("jobs"), list) and \
+            any(isinstance(j, str) and ENOUGH.match(j) for j in h["jobs"]):
+        got["history"] = dict(h, jobs=[j for j in h["jobs"]
+                                       if not (isinstance(j, str) and ENOUGH.match(j))],
+                              done=True)
+    return got
 
 
 def save_answers(data: dict) -> str:
@@ -114,18 +123,44 @@ def page_record() -> dict:
     return _read_json(os.path.join(profile_dir(), PAGE), {})
 
 
-def record_page(url: str, chat: str = "", now: dt.datetime | None = None) -> str:
+def parts_held(folder: str) -> list[str]:
+    """The code files a page built in parts (app.py page --out-dir) loads, from its page.html:
+    what the published page holds once every publish the build printed went through."""
+    try:
+        with open(os.path.join(folder, "page.html"), encoding="utf-8") as fh:
+            page = fh.read()
+    except OSError:
+        return []
+    return sorted(set(re.findall(r'<(?:script src|link rel="stylesheet" href)="(code/[^"]+)"',
+                                 page)))
+
+
+def record_page(url: str, chat: str = "", now: dt.datetime | None = None,
+                parts: str = "", current: bool = True) -> str:
     """Keep the page's address once a chat has published it, and mark the page's build part
-    done at this version (tools/build_versions.py "page")."""
+    done at this version (tools/build_versions.py "page"). `parts`: the folder it was built
+    in, in parts, every publish gone through: which code files the page holds (`code`) and
+    the capabilities it was declared with (`caps`) are kept, so the next publish sends only
+    what changed. Without it nothing is assumed, and the next publish sends every file."""
     import app_model
     url = str(url or "").strip()
     if not re.match(r"^https://claude\.ai/\S+$", url):
         raise ValueError("that is not a claude.ai page address")
     got = page_record()
+    held = parts_held(parts) if parts else []
+    if held:
+        import app_page
+        got.update(code=held, caps=app_page.caps_hash())
+    else:
+        got.pop("code", None)
+        got.pop("caps", None)
+    got.pop("none", None)        # a chat published it: whatever a chat said before is past
     got.update(url=url, published_at=app_model.stamp(now or dt.datetime.now(dt.timezone.utc)),
                by=chat or got.get("by") or "", title_name=_first_name())
     path = _write_json(os.path.join(profile_dir(), PAGE), got)
-    if set_up():
+    # `current` False: the address kept again from a chat's own history (learned._heal_page),
+    # not a publish just made, so whether the page's code is current is left as recorded.
+    if current and set_up():
         try:
             import build_versions
             build_versions.record(["page"])
@@ -184,10 +219,18 @@ def take_master() -> str:
         return ""
     if _git("merge-base", "--is-ancestor", "origin/master", "HEAD")[0] == 0:
         return ""
-    if _git("merge", "--no-edit", "-q", "origin/master", timeout=120)[0] == 0:
+    # The row-by-row driver set first, and a file two chats changed settled, never left: a
+    # job's chat is a fresh clone that never ran the sync, and its page update stopped on two
+    # appended tracker rows (the stranger audit, 2026-11-03, X-2).
+    try:
+        import land
+        ok, _said = land.merge_in(ROOT, "origin/master")
+    except Exception:  # noqa: BLE001  the merge as it was
+        ok = _git("merge", "--no-edit", "-q", "origin/master", timeout=120)[0] == 0
+        if not ok and _merging():
+            _git("merge", "--abort")
+    if ok:
         return ""
-    if _merging():                       # only the merge this started, never one before it
-        _git("merge", "--abort")
     return ("app: this copy is behind master, and taking master stopped on a change of this "
             "chat's own in the same file: save this chat's work first, then run this again. The "
             "page was left as it is, so nothing another chat saved is lost from it.")
@@ -198,10 +241,13 @@ def _merging() -> bool:
 
 
 def origin() -> tuple[str, str]:
-    """(owner, name) of this copy on GitHub, or ("", "") when it has none."""
+    """(owner, name) of this copy on GitHub, or ("", "") when it has none: one reader of the
+    address for every form (sync_app.repo_of), a cloud chat's proxy included."""
     code, url = _git("remote", "get-url", "origin")
-    m = re.search(r"github\.com[/:]([^/]+)/([^/]+?)(?:\.git)?/?$", url.strip()) if code == 0 else None
-    return (m.group(1), m.group(2)) if m else ("", "")
+    if code != 0:
+        return "", ""
+    import sync_app
+    return sync_app.repo_of(url)
 
 
 def _gh(*args, timeout: int = 60, runner=None) -> tuple[int, str]:
@@ -217,18 +263,24 @@ def _gh(*args, timeout: int = 60, runner=None) -> tuple[int, str]:
 
 
 def visibility(owner: str, name: str, runner=None) -> str:
-    """"private", "public", or "" when GitHub could not be asked. Never changed here."""
+    """"private", "public", "fork" (a public fork, which GitHub never lets be made private:
+    "You cannot change the visibility of a fork by itself", docs.github.com, About forks,
+    read 2026-11-03), or "" when GitHub could not be asked. Never changed here."""
     if not owner:
         return ""
-    code, out = _gh("api", f"repos/{owner}/{name}", "--jq", ".private", runner=runner)
-    word = out.strip().splitlines()[-1].strip().lower() if code == 0 and out.strip() else ""
-    return {"true": "private", "false": "public"}.get(word, "")
+    code, out = _gh("api", f"repos/{owner}/{name}", "--jq", '"\\(.private) \\(.fork)"',
+                    runner=runner)
+    words = out.strip().splitlines()[-1].strip().lower().split() if code == 0 and out.strip() \
+        else []
+    seen = {"true": "private", "false": "public"}.get(words[0] if words else "", "")
+    return "fork" if seen == "public" and words[1:2] == ["true"] else seen
 
 
 def repo_kind(runner=None) -> dict:
-    """What this folder is: {"kind": "app" | "public" | "private" | "unknown" | "none",
-    "owner", "name"}. "app" is the app itself; "public" any other public copy, a fork of the
-    app included; "none" a folder with no copy on GitHub behind it."""
+    """What this folder is: {"kind": "app" | "public" | "fork" | "private" | "unknown" |
+    "none", "owner", "name"}. "app" is the app itself; "fork" a public fork of it, which can
+    never be made private, so it is replaced by a new private copy; "public" any other public
+    copy; "none" a folder with no copy on GitHub behind it."""
     import sync_app
     owner, name = origin()
     told = os.environ.get(COPY_ENV, "")
@@ -239,8 +291,8 @@ def repo_kind(runner=None) -> dict:
     if not owner:
         return {"kind": "none", "owner": "", "name": ""}
     seen = visibility(owner, name, runner)
-    return {"kind": seen if seen in ("private", "public") else "unknown", "owner": owner,
-            "name": name}
+    return {"kind": seen if seen in ("private", "public", "fork") else "unknown",
+            "owner": owner, "name": name}
 
 
 def repo_kind_offline() -> dict:
@@ -357,6 +409,17 @@ HISTORY = {"id": "history", "kind": "text",
            "help": "One job at a time, newest first. Say \"that's all\" when you're done.",
            "options": [{"label": "That's all", "action": "setup.answer",
                         "value": {"done": True}}]}
+# Then the last question of building one (history_interview.ask rest=True): where they
+# studied, certificates, languages. It was marked done with the jobs and never asked, so a
+# resume built with Claude had no education and the language gate knew only English (X-40).
+HISTORY_REST = {"id": "history_rest", "kind": "text",
+                "fields": [{"key": "text", "kind": "text", "label": "In your words"}]}
+# What ends the jobs when it is typed rather than chosen: it was saved as a job (X-40).
+ENOUGH = re.compile(r"^\s*(?:that'?s (?:all|it)|that is (?:all|it)|thats (?:all|it)|done|"
+                    r"no more|nothing (?:more|else)|none)\s*[.!]*\s*$", re.I)
+# A setup whose answers are all in, and no chat finishing it: the page shows it stopped.
+SETUP_STOPPED = ("Your setup stopped part-way, with every answer in. Carry on, and Claude "
+                 "finishes it from your answers.")
 
 
 def _module(name: str):
@@ -406,7 +469,29 @@ def _known(step: str) -> tuple[dict, str]:
     return {}, ""
 
 
+COUNTRY_WORDS = "the country you work in"
+# The names a sentence gives a country with "the" before it.
+_THE = {"GB": "the UK", "US": "the US", "NL": "the Netherlands", "AE": "the UAE",
+        "PH": "the Philippines", "CZ": "the Czech Republic"}
+
+
+def country_name(code: str) -> str:
+    """A country as a sentence says it ("Germany", "the UK"), from its two-letter code and
+    the market tables (tools/markets/<cc>.json "name"); "" for anything that is not one."""
+    code = str(code or "").strip().upper()
+    if not re.fullmatch(r"[A-Z]{2}", code):
+        return ""
+    if code in _THE:
+        return _THE[code]
+    got = read_json(os.path.join(ROOT, "tools", "markets", code.lower() + ".json"), {})
+    name = str(got.get("name") or "") if isinstance(got, dict) else ""
+    return {"CA": "Canada", "AU": "Australia", "IE": "Ireland", "NZ": "New Zealand"}.get(
+        code, name)
+
+
 def _country() -> str:
+    """The country the right-to-work question names: a country's name, never a code or a
+    city ("Can you work in DE", "Can you work in Recife", "in ON" for "Toronto, ON": X-82)."""
     a = answers().get("work") or {}
     place = str(a.get("place") or "")
     if set_up():
@@ -414,10 +499,24 @@ def _country() -> str:
             c = person.country()
         except Exception:  # noqa: BLE001
             c = ""
-        if c:
-            return {"GB": "the UK", "US": "the US", "CA": "Canada", "AU": "Australia",
-                    "IE": "Ireland", "NZ": "New Zealand"}.get(c, c)
-    return place.split(",")[-1].strip() if "," in place else (place or "the country you named")
+        if country_name(c):
+            return country_name(c)
+    last = place.split(",")[-1].strip() if "," in place else ""
+    # "Leeds, UK", "Lyon, France": the last part, when it names a country.
+    alias = {"UK": "GB", "USA": "US", "U.S.": "US", "UAE": "AE", "ENGLAND": "GB",
+             "SCOTLAND": "GB", "WALES": "GB", "BRITAIN": "GB", "UNITED KINGDOM": "GB",
+             "UNITED STATES": "US"}
+    if last.upper() in alias:
+        return country_name(alias[last.upper()])
+    folder = os.path.join(ROOT, "tools", "markets")
+    for f in sorted(os.listdir(folder)) if last and os.path.isdir(folder) else []:
+        if f.endswith(".json") and len(f) == 7:
+            name = country_name(f[:2])
+            raw = str(read_json(os.path.join(folder, f), {}).get("name") or "")
+            if name and last.lower() in (raw.lower(), name.lower(),
+                                         re.sub(r"^the ", "", name.lower())):
+                return name
+    return COUNTRY_WORDS
 
 
 def _proposed() -> list[str]:
@@ -440,7 +539,32 @@ def _history_question(a: dict) -> str:
         return "Tell me about your latest job: title, employer, town and dates."
 
 
-def setup_section(today: dt.date, targets: dict) -> dict:
+def _answers_quiet(a: dict, hours: float, now: dt.datetime | None = None) -> bool:
+    """Whether the newest answer is older than `hours` (no answer with a time: not quiet)."""
+    got = []
+    for v in a.values():
+        try:
+            got.append(dt.datetime.fromisoformat(str(v.get("at") or "").replace("Z", "+00:00")))
+        except (AttributeError, ValueError):
+            continue
+    got = [g if g.tzinfo else g.replace(tzinfo=dt.timezone.utc) for g in got]
+    if not got:
+        return False
+    now = now or dt.datetime.now(dt.timezone.utc)
+    now = now if now.tzinfo else now.replace(tzinfo=dt.timezone.utc)
+    return (now - max(got)).total_seconds() > hours * 3600
+
+
+def _history_rest_question(a: dict) -> str:
+    try:
+        import history_interview
+        return history_interview.ask("computer", rest=True)
+    except Exception:  # noqa: BLE001
+        return ("Last one: where you studied (subject and years), any certificates, the "
+                "languages you speak, and anything else you're good at?")
+
+
+def setup_section(today: dt.date, targets: dict, now: dt.datetime | None = None) -> dict:
     """The model's `setup`: where setup is, each question as the page asks it (what is
     known prefilled, never asked again), what is left, the research and its progress."""
     import app_model
@@ -456,12 +580,15 @@ def setup_section(today: dt.date, targets: dict) -> dict:
         order.insert(1, dict(HISTORY, question=_history_question(a),
                              fields=[{"key": "text", "kind": "text",
                                       "label": "This job, in your words"}]))
+        order.insert(2, dict(HISTORY_REST, question=_history_rest_question(a)))
     for n, spec in enumerate(order, 1):
         sid = spec["id"]
         known, source = _known(sid)
         mine = a.get(sid) if isinstance(a.get(sid), dict) else {}
         if sid == "history":
             is_done = bool(mine.get("done"))
+        elif sid == "history_rest":
+            is_done = bool(mine)
         elif sid == "resume":
             is_done = bool(mine.get("source")) or bool(known)
         else:
@@ -489,19 +616,36 @@ def setup_section(today: dt.date, targets: dict) -> dict:
         elif status == "next":
             nxt = sid
         item = {"id": f"setup-{sid}", "step": sid, "n": n, "kind": spec["kind"],
-                "question": spec["question"].replace("{country}", _country()) if sid != "history"
-                else spec["question"],
+                "question": spec["question"].replace("{country}", _country())
+                if sid not in ("history", "history_rest") else spec["question"],
                 "help": spec.get("help", ""), "fields": fields,
                 "options": [dict(o) for o in spec.get("options", [])],
                 "known_from": source if (known and not mine) else ("your answer" if mine else ""),
                 "status": status, "waiting": waiting,
-                "skippable": sid in ("pay", "avoid", "right_to_work"),
+                "skippable": sid in ("pay", "avoid", "right_to_work", "history_rest"),
                 "rev": app_model.rev_of(sid, mine, known)}
         steps.append(item)
         targets[item["id"]] = {"kind": "setup_step", "step": sid, "rev": item["rev"]}
     total = len(steps)
     st = _setup_state()
-    return {"state": st["state"], "say": st["say"],
+    state, say = st["state"], st["say"]
+    # Every answer in: a chat is finishing setup (the research and the first round), or none
+    # is. The page showed a finished checklist under "6 short questions" either way, with
+    # nothing to tap (X-29). "searching" while a chat is on it, whose freshness the page
+    # judges by its own clock (stalled_hours), and "stopped" once nothing is.
+    import place
+    if total and done == total and state in ("self", "going", "partial", "stopped"):
+        # "partial": no chat has marked setup as its own; it is on while the last answer is
+        # fresh, and stopped once STALLED_HOURS pass with nothing (a chat that runs `view`
+        # for something else must not show it searching for ever).
+        quiet = state == "partial" and _answers_quiet(a, place.STALLED_HOURS, now)
+        state, say = (("searching", "") if state in ("self", "going") or
+                      (state == "partial" and not quiet) else ("stopped", SETUP_STOPPED))
+    elif state == "stopped":
+        say = SETUP_STOPPED.replace(", with every answer in", "")
+    targets["setup"] = {"kind": "setup", "rev": app_model.rev_of("setup", state, done)}
+    return {"state": state, "say": say, "id": "setup", "rev": targets["setup"]["rev"],
+            "stalled_hours": place.STALLED_HOURS,
             "progress": {"done": done, "total": total, "label": f"{min(done + 1, total)} of {total}"
                          if done < total else f"{total} of {total}"},
             "next": nxt, "steps": steps, "research": _research(a),
@@ -596,8 +740,53 @@ OUTSIDE = {
     "private": ("make-private", "Your copy must be private before anything about you goes in"),
     "job-sites": ("cloud-internet", "Lets this chat reach job sites"),
     "linkedin": ("browser-pane-stay-signed-in", "Signed in to LinkedIn on your computer"),
+    # A cloud chat outside Auto waits for the person to allow each step the app's settings
+    # do not pre-approve, in a chat they are not reading (the stranger audit, X-7).
+    "auto": ("cloud-auto", "Claude then carries on while you're away, instead of waiting "
+                           "for you to allow a step"),
+    # Every new cloud chat installs the PDF tools before its first draft without it, and the
+    # line was offered only while job sites were blocked (X-59).
+    "setup-script": ("cloud-setup-script", "Each new chat then starts with the PDF tools in "
+                                           "place, instead of installing them before a draft"),
+    # The line offered before 3 November stopped every new chat from starting when one
+    # install failed (X-60): a copy whose chats start with the tools gets the new line once.
+    "setup-script-line": ("cloud-setup-script", "The line from before 3 November stops every "
+                                                "new chat from starting if one install fails. "
+                                                "This one never does"),
 }
 # 4.0 recommends no chat on the computer (UX_DECISIONS, "Chats"): there is no card for one.
+# The things said once, outside the page's own answers: answers()["outside"][<key>] holds the
+# day (a card's Done, or `app.py told <key>` from a chat with no page).
+TOLD = tuple(OUTSIDE) + tuple("report-" + s for s in ("page", "setup", "waiting"))
+
+
+def told(key: str) -> str:
+    """The day the person was told, or did, `key` (an OUTSIDE card or a report), or ""."""
+    got = (answers().get("outside") or {}) if isinstance(answers(), dict) else {}
+    return str(got.get(key) or "") if isinstance(got, dict) else ""
+
+
+def record_told(key: str, today: dt.date | None = None) -> str:
+    if key not in TOLD:
+        raise ValueError(f"not something said once: {key}")
+    a = answers()
+    a.setdefault("outside", {})[key] = (today or dt.date.today()).isoformat()
+    return save_answers(a)
+
+
+def _cloud() -> bool:
+    return os.environ.get("CLAUDE_CODE_REMOTE", "").lower() == "true"
+
+
+def _tex() -> bool:
+    return bool(shutil.which("lualatex") or shutil.which("xelatex"))
+
+
+def _setup_env_ran() -> bool:
+    """tools/setup_env.sh installed the tools in this computer itself (its mark in the git
+    folder), so tools present without it came from the line in the cloud settings."""
+    d = _git_dir()
+    return bool(d) and os.path.isfile(os.path.join(d, "ljs-setup-env"))
 
 
 def setup_script_line() -> str:
@@ -650,7 +839,8 @@ def outside_items(targets: dict, kind: dict | None = None) -> list:
     out = []
     owner, name = (kind or {}).get("owner", ""), (kind or {}).get("name", "")
     k = (kind or {}).get("kind", "")
-    if k == "app":
+    if k in ("app", "fork"):
+        # A fork can never be made private (GitHub, About forks): a new private copy instead.
         out.append(outside_item("copy"))
     elif k == "public":
         out.append(outside_item("private", owner, name))
@@ -660,15 +850,65 @@ def outside_items(targets: dict, kind: dict | None = None) -> list:
         # it off by itself once the setting is changed.
         import claude_surfaces
         item = outside_item("job-sites")
-        item["body"] = (f"This chat can't reach job sites yet ({', '.join(blocked[:3])}). "
+        # "Claude", not "This chat": the person reads it on their page, and every chat of theirs
+        # shares the setting (the stranger audit, X-49).
+        item["body"] = (f"Claude can't reach job sites yet ({', '.join(blocked[:3])}). "
                         "I won't search before then: it would only find old jobs.")
         more = claude_surfaces.steps("cloud-setup-script", page=True)
         item["more"] = {"title": more[0].rstrip(":"), "steps": [ln for ln in more[1:] if ln],
                         "copy": setup_script_line(),
                         "checked": claude_surfaces.entry("cloud-setup-script").get("verified_on", "")}
         out.append(item)
+    if _cloud() and k not in ("app", "public", "fork", "none"):
+        if not told("auto"):
+            out.append(outside_item("auto"))
+        # The line in its own card, whenever a cloud chat starts without the PDF tools: it
+        # was offered only beside blocked job sites, so it went with them (X-59). A chat that
+        # starts with the tools it never installed has the line in its cloud settings: the old one is
+        # replaced once (X-60).
+        script = ("setup-script" if not _tex() and not blocked else
+                  "setup-script-line" if _tex() and not _setup_env_ran() else "")
+        if script and not told(script) and not (script == "setup-script-line"
+                                                and told("setup-script")):
+            item = outside_item(script)
+            item["more"] = {"title": "The line to paste", "steps": [], "copy": setup_script_line(),
+                            "checked": item["checked"]}
+            out.append(item)
+    if k not in ("app", "public", "fork", "none"):
+        out += report_items()
     for item in out:
         targets[item["id"]] = {"kind": "outside", "key": item["about"]["step"], "rev": item["rev"]}
+    return out
+
+
+def report_items(today: dt.date | None = None) -> list:
+    """A card for each state the copy has been stuck in for a day or more, said once: what
+    it is, and a link to tell the app's makers that carries nothing of the person's
+    (tools/report.py). Nothing is sent: the person opens it, or bins the card."""
+    import app_model
+    import report
+    try:
+        st = {"repo": repo_kind_offline(), "setup": _setup_state(), "page": page_record(),
+              "answers": answers(), "set_up": set_up()}
+        got = report.stuck(today, st)
+    except Exception:  # noqa: BLE001  nothing to read: nothing stuck
+        return []
+    out = []
+    for s in got:
+        key = "report-" + s["state"]
+        if told(key):
+            continue
+        since = dt.date.fromisoformat(s["since"])
+        out.append({"id": f"q-setup-{key}", "kind": "setup",
+                    "title": s["say"].rstrip("."),
+                    "body": (f"Since {since.day} {since.strftime('%B')}. "
+                             "Claude is told each time it starts. If it stays like this, you "
+                             "can tell the app's makers: the link opens a public page that "
+                             "carries nothing of yours, and nothing is sent unless you send it."),
+                    "steps": [], "link": "", "checked": "",
+                    "open": {"label": "Tell the app's makers", "url": s["link"]},
+                    "options": [{"label": "Done", "action": "setup.done"}],
+                    "about": {"step": key}, "rev": app_model.rev_of(key, s["since"])})
     return out
 
 
@@ -697,6 +937,11 @@ def _upgrade_commits(days: int = 60) -> list[dict]:
         parts = rec.strip("\n").split("\x1f")
         if len(parts) == 4 and parts[0].strip():
             sha, day, subject, body = parts
+            # --grep matches any line of the message: the app's own commits that came in with
+            # every sync say "Profile upgrade:" in their bodies, under subjects with no colon,
+            # and reading their id crashed the whole section, on every copy (X-15).
+            if not subject.startswith("Profile upgrade:"):
+                continue
             said = next((ln.strip() for ln in body.splitlines() if ln.strip()
                          and not ln.startswith(("Co-Authored-By:", "Claude-Session:"))), "")
             got.append({"sha": sha.strip(), "date": day, "id": subject.split(":", 1)[1].strip(),
@@ -745,14 +990,18 @@ def updates_section(today: dt.date, targets: dict) -> dict:
             mode = app_model.setting_values().get("app_updates", "auto")
         except Exception:  # noqa: BLE001  no profile yet: updates come by themselves
             mode = "auto"
-        text = _app_changelog(sync_app.APP)
+        # What this copy's channel takes, never the app's master as such: between releases
+        # master is ahead of the newest one, and a copy on releases was told an update waited
+        # that "update" could not take, and its queued work held behind it (X-28).
+        target = sync_app.channel_target()
+        text = _app_changelog(target) if target else ""
         if text:
             secs = release.sections(text)
             newest = secs[0]["version"] if secs else version
-        sha = sync_app.waiting() if text else ""
+        sha = sync_app.waiting(target) if text else ""
         if sha:
-            line = sync_app.waiting_line(None, False)
-            migration = is_migration(sync_app.APP)
+            line = sync_app.waiting_line(None, False, target)
+            migration = is_migration(target)
             import page_db
             est = page_db.progress("update")["total_s"]
             about = "about a minute" if est < 90 else f"about {round(est / 60)} minutes"
@@ -787,7 +1036,9 @@ def updates_section(today: dt.date, targets: dict) -> dict:
         by = {u.id: u for u in profile_upgrades.REGISTRY}
         pending = [{"id": i, "line": (by[i].gives[:1].upper() + by[i].gives[1:] + "."),
                     "needs": by[i].needs} for i in listed if i in by]
-    except Exception:  # noqa: BLE001
+    except Exception as e:  # noqa: BLE001  said, never silent: it hid X-15 on every copy
+        print(f"app: what the updates did could not be read ({type(e).__name__}: {e})",
+              file=sys.stderr)
         pending = []
     # The whole history, for anyone who wants more than the last few (the maintainer,
     # 2026-10-31): the app's own changelog, at the address the sync takes updates from.
@@ -887,24 +1138,29 @@ def state(runner=None) -> dict:
 def _publish_lines(st: dict, n: int) -> list[str]:
     url = st["page"].get("url", "")
     lines = []
+    import app_listen
     if url:
-        import app_listen
         lines += [f"{n}. The person's page is {url}, and an update changed it: republish it now, "
-                  "never asking first. Build it again: python3 tools/app.py page --out <your "
-                  "scratchpad>/page.html",
+                  "never asking first. Build it again, in parts: python3 tools/app.py page "
+                  f"--out-dir <your scratchpad>/page --url {url}",
                   f"{n + 1}. Read the page first (Artifact, action read, url {url}), then "
-                  f"publish the new file to that same url with the capabilities "
-                  "`python3 tools/app_page.py --capabilities` prints. If the publish is refused, "
-                  "read the page again and publish once more; only if that is refused too, tell "
-                  f"the person \"{app_listen.say(app_listen.SAY_NOT_UPDATED, url)}\" and go "
-                  f"on. Then python3 tools/app.py published {url}, and tell the person only: "
-                  f"\"{app_listen.say(app_listen.SAY_UPDATED, url)}\""]
+                  "publish the new files exactly as the build printed: only the small files it "
+                  "names, each read whole first; the page keeps the rest. If the publish is "
+                  "refused, read the page again and publish once more. If the read says the page "
+                  f"is not there or not this person's, build a new one ({app_listen.REBUILD}) "
+                  "and publish that instead. Only if a publish is refused twice, tell the person "
+                  f"\"{app_listen.say(app_listen.SAY_NOT_UPDATED, url)}\" and go on. Then "
+                  f"python3 tools/app.py published <its url> --parts <your scratchpad>/page, and "
+                  f"tell the person only: \"{app_listen.say(app_listen.SAY_UPDATED, url)}\" (or "
+                  "the one line it prints, for a page with a new address)"]
     else:
-        lines += [f"{n}. Build the person's page: python3 tools/app.py page --out <your "
-                  "scratchpad>/page.html",
-                  f"{n + 1}. Publish it (Artifact, action publish, icon briefcase), with the "
-                  "capabilities `python3 tools/app_page.py --capabilities` prints. Then keep its "
-                  "address: python3 tools/app.py published <the url the publish gave>"]
+        lines += [f"{n}. Build the person's page, in parts: python3 tools/app.py page --out-dir "
+                  "<your scratchpad>/page",
+                  f"{n + 1}. Publish it (Artifact, action publish, icon briefcase): exactly the "
+                  "publishes the build printed, each file they name read whole first (every one "
+                  "is small). Then keep its address: python3 tools/app.py published <the url the "
+                  "publish gave> --parts <your scratchpad>/page, and do what it prints (it says "
+                  f"the one line that tells the person what their page is). {NO_PUBLISH}"]
     lines.append(f"{n + 2}. Publishing makes this chat watch the page. If the publish result "
                  "says this chat is not watching it, watch it (ArtifactComments, watch).")
     return lines
@@ -915,10 +1171,107 @@ SYNC_DO = "the day's update check; do what it prints, then carry on"
 SYNC_PAGE = ". What it says about the person's page is done at once, and is never a question"
 
 
-NO_PUBLISH = ("If this chat cannot publish (no Artifact tool, or the publish is refused again "
-              "after one more try), run "
-              "python3 tools/app.py published none, ask setup's questions in this chat instead, "
-              "as .claude/commands/setup.md says, and say nothing about a page.")
+SAY_ON_PAGE = ("Your setup is on your page: <its url>. Answer there, one question at a time; "
+               "I'll do the rest.")
+SAY_FINISHING = ("Your answers are all in, so I'm finishing your setup now. Your first jobs "
+                 "will be on your page: <its url>.")
+SAY_CARRYING_ON = ("Your setup stopped part-way, so I'm carrying it on now from your answers. "
+                   "Your first jobs will be on your page: <its url>.")
+# Read by the day's first chat (start, after the update check).
+ASK_IN_CHAT = ("If the update check listed questions under \"These need you\" (facts to confirm, "
+               "a question an improvement needs), ask at most three, in plain words, at the end "
+               "of your reply, as .claude/commands/upgrade.md says: the page asks them too, and "
+               "an answer in either place counts.")
+
+
+def _answered(st: dict) -> int:
+    """The six questions answered on the page or already held in the profile, as the page
+    counts them (setup_section)."""
+    got = 0
+    for sid in STEP_IDS:
+        known, source = _known(sid)
+        if (st["answers"].get(sid) or {}) or (known and source == "your profile"
+                                              and _complete(sid, known)):
+            got += 1
+    return got
+
+
+def _said_once(st: dict, no_page: bool) -> str:
+    """The one thing this chat tells the person once and never again, or "": a state stuck
+    for a day or more with the link to tell the app's makers (X-20), choosing Auto in a cloud
+    chat (X-7), the line that puts the PDF tools in every new chat (X-59). With a page, its
+    To do carries each as a card, so the chat says only what the page cannot: a page never
+    made. One at a time, the most pressing first."""
+    try:
+        import report
+        stuck = [s for s in report.stuck(st=st) if not told("report-" + s["state"])]
+    except Exception:  # noqa: BLE001  nothing to read: nothing stuck
+        stuck = []
+    page = bool(st["page"].get("url"))
+    for s in stuck:
+        if not page or s["state"] == "page":
+            return (f"This has been stuck since {s['since']}: tell the person once, in these "
+                    f"words: \"{s['say']} I'm on it. If it keeps happening, you can tell the "
+                    f"app's makers here; it carries nothing of yours, and nothing is sent unless "
+                    f"you send it: {s['link']}\" Then python3 tools/app.py told "
+                    f"report-{s['state']}, and carry on with what fixes it.")
+    if page or not _cloud():
+        return ""
+    import claude_surfaces
+    if not told("auto"):
+        lines = " ".join(claude_surfaces.steps("cloud-auto"))
+        return (f"Tell the person once, in these words: \"{lines}\" Then python3 tools/app.py "
+                "told auto.")
+    if not _tex() and not told("setup-script"):
+        lines = " ".join(claude_surfaces.steps("cloud-setup-script"))
+        return (f"Tell the person once, in these words: \"{lines} The line: "
+                f"{setup_script_line()}\" Then python3 tools/app.py told setup-script.")
+    return ""
+
+
+# A fork of a public project is public, and GitHub never lets one be made private.
+FORK_SAY = ("Your copy is a fork, and GitHub never lets a fork be made private. Make a new "
+            "private copy instead (your fork holds nothing of yours, so it can simply be left):")
+
+
+NO_PUBLISH = ("If this chat cannot publish (no Artifact tool, or a publish refused again after "
+              "one more try), run python3 tools/app.py published none --why \"<why, in a few "
+              "words>\": that is this chat only, and every other chat still publishes. Then carry "
+              "on in this chat (during setup, ask setup's questions here, as "
+              ".claude/commands/setup.md says) and say nothing about a page.")
+
+
+def adopt_page_elsewhere() -> bool:
+    """A page another chat published whose work has not reached this checkout (on master
+    or on a chat's branch not yet landed): its record taken whole, so this chat makes no
+    second page and the two records merge as one. The first published wins. False when
+    there is none, or it cannot be told."""
+    if os.path.normcase(profile_dir()) != os.path.normcase(os.path.join(ROOT, "profile")):
+        return False          # a profile kept elsewhere: this copy's branches hold not it
+    try:
+        import place
+        place._git("fetch", "-q", "origin", timeout=60)
+        refs = ["origin/master"] + [
+            b.strip() for b in place._git("branch", "-r", "--no-merged",
+                                          "origin/master").splitlines()
+            if b.strip() and "->" not in b]
+        found = []
+        for ref in refs:
+            text = place._at(ref, f"profile/{PAGE}")
+            if not text or "<<<<<<<" in text:
+                continue
+            try:
+                rec = json.loads(text)
+            except ValueError:
+                continue
+            if isinstance(rec, dict) and re.match(r"^https://claude\.ai/\S+$", str(rec.get("url") or "")):
+                found.append((str(rec.get("published_at") or "~"), rec))
+        if not found:
+            return False
+        _write_json(os.path.join(profile_dir(), PAGE), sorted(found, key=lambda x: x[0])[0][1])
+        return True
+    except Exception:  # noqa: BLE001  nothing found: this chat publishes as before
+        return False
 
 
 def _resume_to_save(st: dict) -> str:
@@ -951,6 +1304,8 @@ def carry_on() -> list[str]:
               "set_up": set_up()}
     except Exception:  # noqa: BLE001  no copy to read: nothing to carry on
         return []
+    if st["setup"].get("state") == "going":
+        return []            # another chat is setting them up: never two at once (X-65)
     out = []
     saving = _resume_to_save(st)
     if saving:
@@ -991,7 +1346,19 @@ def start(on: str = "", tools: str = "", page_url: str = "", runner=None, work: 
     out: list[str] = []
     if kind == "none":
         out += ["app start: this folder is not a copy of the job search on GitHub.",
-                "Claude: nothing about the person may be written here. Tell them, in these words:"]
+                "Claude: nothing about the person may be written here."]
+        if sync and _git("remote", "get-url", "origin")[0] == 0 and \
+                os.path.isfile(os.path.join(ROOT, "tools", "sync_app.py")):
+            # A copy whose address this version cannot read still takes the update that
+            # reads it: a cloud chat's proxy address stopped every start here, before the
+            # update check, for good (the stranger audit, X-54).
+            out.append("First, in case this is their copy reached by an address this version "
+                       "cannot read, run the day's update check, then python3 tools/app.py "
+                       "start again:")
+            out += [f"  {cmd}" for cmd in sync]
+            out.append("If start says the same again, tell them, in these words:")
+        else:
+            out.append("Tell them, in these words:")
         out += ["  " + ln for ln in _steps("make-copy")]
         out.append("  Then open a chat on the new copy and say \"set me up\".")
         return 1, out
@@ -1010,17 +1377,32 @@ def start(on: str = "", tools: str = "", page_url: str = "", runner=None, work: 
                 "a cloud chat, attach it first (add_repo, access push) or ask them to open a "
                 "chat on it and say \"set me up\"."]
         return 1, out
-    if kind == "public":
+    if kind in ("public", "fork"):
         owner, name = st["repo"]["owner"], st["repo"]["name"]
-        out += ["app start: this copy is public. Nothing about the person may be written "
-                "here until it is private, and never change that yourself.",
-                "Claude: tell them why in one line (everything about them, their work history, "
-                "pay and every contact, goes into this copy, which anyone can read while it is "
-                "public), then, in these words:"]
+        # The day's update check comes first even here: it changes only the app's own files,
+        # and without it a copy that stops here never hears corrected words (a fork was told
+        # to make itself private, which GitHub refuses, on every start: the stranger audit,
+        # 2026-11-03).
+        out += ["app start: this copy is " + ("a fork, which is public" if kind == "fork" else
+                                              "public") + ". Nothing about the person may be "
+                "written here until it is private, and never change that yourself."]
+        if sync:
+            out += [f"Claude: first {sync[-1]}   ({SYNC_DO}; it changes only the app's own "
+                    "files). If it took an update, run python3 tools/app.py start again: its "
+                    "words may have changed."]
+        out.append("Claude: tell them why in one line (everything about them, their work "
+                   "history, pay and every contact, goes into this copy, which anyone can "
+                   "read while it is public), then, in these words:")
+        if kind == "fork":
+            out.append("  " + FORK_SAY)
+            out += ["  " + ln for ln in _steps("make-copy")]
+            out.append("  Then open a chat on the new copy and say \"set me up\".")
+            return 1, out
         out += ["  " + ln for ln in _steps("make-private", owner=owner, name=name)]
         out.append("  When they say it's done, run python3 tools/app.py start again.")
         return 1, out
     setup = st["setup"]["state"]
+    note_start()
     n = 1
     steps: list[str] = []
     if kind == "unknown":
@@ -1046,13 +1428,26 @@ def start(on: str = "", tools: str = "", page_url: str = "", runner=None, work: 
                      f"these words: \"{say}\"")
         return 0, ["app start: setup going in another chat", "Claude, do this:"] + steps
     no_page = _no_page_recently(st["page"])
+    if not st["page"].get("url") and not no_page and kind == "private" and not page_conflicted():
+        # Another chat published the page and its work has not reached this checkout: that
+        # page is taken, never a second one made beside it (X-57).
+        if adopt_page_elsewhere():
+            st["page"], st["page_current"] = page_record(), _page_current()
     # A page already published waits for the day's check: the update it takes can change the
     # page, and the check itself says how to bring it up to date (app_listen.after_update),
     # so the page is published once, from the new code, never once before and once after.
     later = bool(sync) and bool(st["page"].get("url"))
-    if not no_page and not later and (not st["page_current"] or not st["page"].get("url")):
+    publishing = (not no_page and not later and not page_conflicted()
+                  and (not st["page_current"] or not st["page"].get("url")))
+    if publishing:
         steps += _publish_lines(st, n)
         n += 3
+    elif page_conflicted():
+        steps.append(f"{n}. The page's record (profile/app.json) holds a merge left unsettled: "
+                     "settle it first (keep the address published first, with its own "
+                     "published_at), and publish nothing until it reads clean. Say nothing about "
+                     "it to the person.")
+        n += 1
     if os.environ.get("CLAUDE_CODE_REMOTE", "").lower() == "true" and \
             job_sites().get("checked") != dt.date.today().isoformat():
         try:
@@ -1063,67 +1458,235 @@ def start(on: str = "", tools: str = "", page_url: str = "", runner=None, work: 
     if saving:
         steps.append(f"{n}. {saving}")
         n += 1
+    once = _said_once(st, no_page)
     if _setup_open(st):
-        done = sum(1 for s in STEP_IDS if (st["answers"].get(s) or {}))
+        done = _answered(st)
+        all_in = done == len(STEP_IDS)
         if no_page:
             steps.append(f"{n}. Setup carries on from where it is ({done} of {len(STEP_IDS)} "
                          "answered), in this chat: this chat has no pages. Follow "
                          ".claude/commands/setup.md; it reads every answer already in "
                          "profile/setup_answers.json and never asks one again.")
+            n += 1
         else:
+            # Every answer in, the setup stopped or not: there is nothing left to answer, so
+            # the chat carries it on now and says so (X-83: "Answer there, one question at a
+            # time" was said with all six answered, and the stopped line never at all).
             steps.append(f"{n}. Setup carries on from where it is ({done} of {len(STEP_IDS)} "
                          "answered): follow .claude/commands/setup.md, which reads every "
                          "answer from profile/setup_answers.json and never asks one again. "
-                         "The page asks the rest, one at a time; this chat asks nothing.")
+                         + ("Every answer is in: carry setup on now, to its end."
+                            if all_in else "The page asks the rest, one at a time; this chat "
+                            "asks nothing."))
             n += 1
-            steps.append(f"{n}. Tell the person one line, and nothing more: \"Your setup is "
-                         "on your page: <its url>. Answer there, one question at a time; "
-                         "I'll do the rest.\"")
+            say = (SAY_FINISHING if all_in and setup != "stopped" else SAY_CARRYING_ON
+                   if all_in else SAY_ON_PAGE)
+            steps.append(f"{n}. Tell the person one line, and nothing more: \"{say}\""
+                         + ("" if all_in else " If they answer in this chat instead, take it: "
+                            "python3 tools/app.py answer <step> --text \"<their words>\" for "
+                            "each step they answered, then carry on as setup.md says."))
             n += 1
-            steps.append(f"{n}. {NO_PUBLISH}")
+        if once:
+            steps.append(f"{n}. {once}")
         head = "app start: " + ("setting up" if setup in ("none", "partial", "") else
                                 f"setup {setup}")
         return 0, [head, "Claude, do this, in order:"] + steps
-    waits = [] if work else _waiting_branches()
+    waits = {} if work else _stranded()
     if waits:
-        # A landing that was not green or stopped on a conflict pushed its chat's branch to
-        # wait there, and nothing brought it in (the release review, 2026-11-03).
-        steps.append(f"{n}. Work an earlier chat could not land waits on {', '.join(waits)}: "
-                     "bring each in with git merge --no-edit <it>, a command of its own (one "
-                     "that stops: git merge --abort, and leave it), and this chat's landing "
-                     "takes it to master. Say nothing about it to the person.")
+        # Every landing brings in what waits (tools/land.py); work still off master a day on
+        # is kept out by something, and nothing ever said so (the stranger audit, X-30).
+        days = max(waits.values())
+        steps.append(f"{n}. Work of the person's has waited off their saved copy for {days} "
+                     f"day{'s' if days != 1 else ''} ({', '.join(waits)}). Land this chat's "
+                     "work now (python3 tools/land.py, in the background): it brings that in. "
+                     "Not green: fix what its check names (their own tests after an update: "
+                     "RUNBOOK.md, \"Your own tests fail after an update\") and land again. Tell "
+                     f"the person once, in these words: \"{UNSAVED_SAY}\"")
         n += 1
-    steps.append(f"{n}. The page shows the updates and what each one did. If the update check "
-                 "listed improvements Claude applies itself, start the background /upgrade "
-                 "(.claude/commands/upgrade.md); its progress goes on the page.")
-    n += 1
+    url = st["page"].get("url") or ""
+    if url and not later:
+        import app_listen
+        if not app_listen.introduced():
+            # A page published before without a word to the person (a copy from before the
+            # page, or a first publish that said nothing): told once, here (X-25).
+            steps.append(f"{n}. {app_listen.intro_line(url)}")
+            n += 1
+            app_listen.mark_introduced()
+    # The improvements still unstarted, named on every start while they wait, not only by the
+    # day's first check: a second chat that day, or one whose turn went to the request, never
+    # heard of them again (the stranger audit, X-32). Said by page or no page.
+    ups = [] if work else _unstarted()
+    shown = ("its progress goes on the page" if st["page"].get("url") and not no_page else
+             "at the end of your reply give one plain line per change it made, never a command")
+    if ups:
+        since = min(d for _i, d in ups)
+        steps.append(f"{n}. {len(ups)} improvement{'s' if len(ups) != 1 else ''} to their "
+                     f"search {'have' if len(ups) != 1 else 'has'} waited since {since}: start "
+                     "them now, never asking first: one background agent (model sonnet) that "
+                     f"follows .claude/commands/upgrade.md; {shown}.")
+        n += 1
+    elif sync:
+        steps.append(f"{n}. If the update check listed improvements Claude applies itself, "
+                     "start them in this turn, never asking first: one background agent (model "
+                     f"sonnet) that follows .claude/commands/upgrade.md; {shown}.")
+        n += 1
+    if sync:
+        # Questions only the person can answer sat on page cards a chat-only person never
+        # opened, and the chat was told to say nothing (X-55): the day's first chat asks.
+        steps.append(f"{n}. {ASK_IN_CHAT}")
+        n += 1
+    if once:
+        steps.append(f"{n}. {once}")
+        n += 1
     if st["page"].get("url") and not work and not (data_current and not sync):
         steps.append(f"{n}. " + ("Unless the update check above just did it, b" if sync else "B") +
                      "ring the page's data up to date: python3 tools/app.py view <your "
                      "scratchpad>/view --dump <a dump of the page's view and meta> and send the "
                      "batch it prints. Then carry on with what the person asked.")
-    head = "app start: set up" + ("" if st["page_current"] else ", page to publish")
+    # "page to publish" only beside the steps that publish it: a chat that cannot publish was
+    # told the page waited, with nothing to do about it (X-21).
+    head = "app start: set up" + (", page to publish" if publishing else "")
     return 0, [head, "Claude, do this:"] + steps
 
 
-def _waiting_branches() -> list[str]:
-    """The branches whose work an earlier chat or run could not land (land.waiting), from
-    what this copy last fetched; [] in the app itself, or when it cannot be told."""
+def _unstarted() -> list[tuple[str, str]]:
+    """The improvements the update check listed that nobody has started today
+    (profile_upgrades.unstarted, for this chat): [] when none, or when it cannot be told."""
     try:
-        import land
-        return [] if land._the_app(ROOT) else land.waiting(ROOT)
-    except Exception:  # noqa: BLE001  the start goes on; the next one looks again
+        import app_listen
+        import profile_upgrades
+        return profile_upgrades.unstarted(chat=app_listen.this_chat())
+    except Exception:  # noqa: BLE001  the start goes on; the hook asks at the turn's end
         return []
 
 
-def _no_page_recently(rec: dict, today: dt.date | None = None) -> bool:
-    none = rec.get("none")
-    if not none or rec.get("url"):
-        return False
+UNSAVED_SAY = ("Some of your work from the last few days hadn't been saved yet. I'm saving it "
+               "now.")
+
+
+# Which version of the app this checkout's start last spoke for: an update that changes how a
+# chat starts makes the steps it printed out of date, and copies at 4.0 to 4.2 went on with
+# their old start's later steps after the update it took (the stranger audit, X-78).
+START_HEAD = "ljs-start-head"
+START_FILES = ("tools/app_setup.py", "tools/app_listen.py", "tools/app.py")
+
+
+def _head() -> str:
+    code, out = _git("rev-parse", "HEAD")
+    return out.strip() if code == 0 else ""
+
+
+def note_start() -> None:
+    """start spoke for this version of the app."""
+    head = _head()
+    if head:
+        try:
+            with open(_local_file(START_HEAD), "w", encoding="utf-8", newline="\n") as fh:
+                fh.write(head + "\n")
+        except OSError:
+            pass
+
+
+def start_changed_line() -> str:
+    """After a sync: the line telling a chat its start's steps are out of date, when the app
+    it took changed how a chat starts since start last spoke (or start never recorded it: a
+    version from before this one). Said once a version."""
+    head = _head()
+    if not head:
+        return ""
     try:
-        return ((today or dt.date.today()) - dt.date.fromisoformat(str(none)[:10])).days < NO_PAGE_DAYS
+        with open(_local_file(START_HEAD), encoding="utf-8") as fh:
+            was = fh.read().strip()
+    except OSError:
+        was = ""
+    if was == head:
+        return ""
+    changed = True
+    if was:
+        code, out = _git("diff", "--name-only", was, head, "--", *START_FILES)
+        changed = code != 0 or bool(out.strip())
+    note_start()
+    if not changed:
+        return ""
+    return ("Claude: this update changed how a chat starts. If python3 tools/app.py start printed "
+            "steps earlier in this chat, they are out of date: run it again now and follow what "
+            "it prints instead, never the steps from before.")
+
+
+def _stranded() -> dict[str, int]:
+    """{branch: days} for the person's work that has waited off master a day or more
+    (land.stranded, fetched fresh); {} in the app itself, or when it cannot be told."""
+    try:
+        import land
+        return {} if land._the_app(ROOT) else land.stranded(ROOT, fetch=True)
+    except Exception:  # noqa: BLE001  the start goes on; the next one looks again
+        return {}
+
+
+def _local_file(name: str) -> str:
+    """A record only this checkout needs, in its own git folder (never committed, never
+    merged), or beside the state where there is no git folder (a test's)."""
+    d = _git_dir()
+    return os.path.join(d, name) if d else os.path.join(person.state(), "." + name)
+
+
+# Which chats said they cannot publish (`app.py published none`): one record a chat, in this
+# checkout's git folder. It was one date in profile/app.json, saved and landed, so one chat
+# that could not publish once (a phone chat, a refused approval) hid the page from every chat
+# of the copy for a month, the ones that could publish included (the stranger audit, X-21).
+NO_PAGE = "ljs-no-page.json"
+
+
+def _chat_key(chat: str = "") -> str:
+    import app_listen
+    return app_listen.this_chat(chat) or "this-folder"
+
+
+def no_page_here(chat: str = "", today: dt.date | None = None) -> bool:
+    """Did this chat say, within NO_PAGE_DAYS, that it cannot publish? Never true once the
+    page has an address. A copy-wide `none` an older version wrote in profile/app.json is
+    another chat's word, and is not this one's."""
+    if page_record().get("url"):
+        return False
+    got = read_json(_local_file(NO_PAGE), {}).get(_chat_key(chat)) or {}
+    try:
+        day = dt.date.fromisoformat(str(got.get("day") or "")[:10])
     except ValueError:
         return False
+    return ((today or dt.date.today()) - day).days < NO_PAGE_DAYS
+
+
+def _no_page_recently(rec: dict, today: dt.date | None = None) -> bool:
+    """start's question, for this chat only (no_page_here)."""
+    return not rec.get("url") and no_page_here(today=today)
+
+
+def page_conflicted() -> bool:
+    """profile/app.json left with a merge's conflict markers: read as no record, it would
+    look like a page never published, and a second page would be made over the first."""
+    try:
+        with open(os.path.join(profile_dir(), PAGE), encoding="utf-8") as fh:
+            return "<<<<<<<" in fh.read()
+    except OSError:
+        return False
+
+
+def page_owed(chat: str = "") -> str:
+    """"new" when this chat should publish the person's first page now, else "": a copy of
+    the person's own with a profile, no page address, a readable record, this chat never
+    having said it cannot publish, and no other chat setting them up (it publishes there)."""
+    try:
+        if not os.path.isdir(profile_dir()) or page_record().get("url") or page_conflicted():
+            return ""
+        if repo_kind_offline()["kind"] in ("app", "none", "public"):
+            return ""
+        if no_page_here(chat):
+            return ""
+        if _setup_state().get("state") in ("going", "landed", "branch"):
+            return ""
+        return "new"
+    except Exception:  # noqa: BLE001  a question about the page must never break a chat
+        return ""
 
 
 def _steps(eid: str, owner: str = "", name: str = "") -> list[str]:
@@ -1134,11 +1697,17 @@ def _steps(eid: str, owner: str = "", name: str = "") -> list[str]:
 NO_PAGE_DAYS = 30
 
 
-def record_no_page(today: dt.date | None = None) -> str:
-    """This chat cannot publish (a surface with no pages): the sync stops asking for a month."""
-    got = page_record()
-    got["none"] = (today or dt.date.today()).isoformat()
-    return _write_json(os.path.join(profile_dir(), PAGE), got)
+def record_no_page(today: dt.date | None = None, chat: str = "", why: str = "") -> str:
+    """This chat cannot publish (a surface with no pages, or a publish refused twice): it is
+    not asked again for a month. Only this chat: every other chat still publishes."""
+    path = _local_file(NO_PAGE)
+    got = read_json(path, {})
+    got[_chat_key(chat)] = {"day": (today or dt.date.today()).isoformat(),
+                            "why": " ".join(str(why or "").split())[:200]}
+    # A month's records at most: one a chat, and a chat on a computer is new each session.
+    cut = ((today or dt.date.today()) - dt.timedelta(days=NO_PAGE_DAYS)).isoformat()
+    got = {k: v for k, v in got.items() if isinstance(v, dict) and str(v.get("day")) >= cut}
+    return _write_json(path, got)
 
 
 def page_line(today: dt.date | None = None, landed: bool = False) -> str:
@@ -1153,13 +1722,8 @@ def page_line(today: dt.date | None = None, landed: bool = False) -> str:
         if page_record().get("url"):
             import app_listen
             return "\n".join(app_listen.after_update(landed=landed))
-        if _page_current():
+        if _page_current() or page_conflicted() or no_page_here(today=today):
             return ""
-        none = page_record().get("none")
-        if none and not page_record().get("url"):
-            days = ((today or dt.date.today()) - dt.date.fromisoformat(str(none)[:10])).days
-            if days < NO_PAGE_DAYS:
-                return ""
     except Exception:  # noqa: BLE001
         return ""
     return ("Claude: the person's page is not published yet. Before the rest, run python3 "

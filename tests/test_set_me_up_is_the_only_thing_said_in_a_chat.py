@@ -178,7 +178,8 @@ def test_an_answer_on_the_page_is_kept_and_never_asked_again(fresh):
     assert step["status"] == "done" and step["known_from"] == "your answer"
     assert [f["value"] for f in step["fields"]] == ["Supply chain analyst", "Leeds, UK"]
     rtw = fresh.step("right_to_work")
-    assert "Can you work in UK without" in rtw["question"]
+    # A country's name, as a sentence says it (the stranger audit, X-82: "in UK", "in DE").
+    assert "Can you work in the UK without" in rtw["question"]
     assert fresh.model()["setup"]["progress"]["label"] == "2 of 6"
     # Taken back: as it was before.
     undo = fresh.act("undo", "", undoes=aid, rev="")

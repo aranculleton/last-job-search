@@ -319,6 +319,29 @@ def cloud_day(env=None, profile_dir: str | None = None) -> str:
 
 cloud_day()
 
+
+def home_zone():
+    """The person's own time zone as a tzinfo (home_zone_named, for the profile in use), or
+    None where none is named or this computer has no data for it: then this computer's own
+    clock."""
+    try:
+        import zoneinfo
+        z = home_zone_named(os.path.dirname(path("person.json")))
+        return zoneinfo.ZoneInfo(z) if z else None
+    except Exception:  # noqa: BLE001  no profile, or no data for that zone here
+        return None
+
+
+def today(now=None):
+    """The person's own day: the date in their zone, never the computer's, which in a cloud
+    chat runs on UTC and on a laptop can sit in another zone than the profile names. The app's
+    hook and the improvements' record count this one day: on two clocks, a Toronto evening
+    marked an improvement started tomorrow and the hold started a second one (2026-11-03)."""
+    import datetime as dt
+    now = now or dt.datetime.now(dt.timezone.utc)
+    z = home_zone()
+    return (now.astimezone(z) if z else now.astimezone()).date()
+
 # Another chat may hold the profile, or be writing it: look before starting again (2026-10-25).
 SETUP_HINT = ("no profile here: run `python3 tools/place.py state` first (another chat may hold "
               "it or be writing it), and run /setup only if it finds none")

@@ -161,7 +161,10 @@ def built(tmp_path_factory):
         for k, v in _env(prof, st, "private").items():
             mp.setenv(k, v)
         mp.delenv("LJS_TODAY", raising=False)
-        # A newer app is there to take: the stand-in for a fetch of the public app.
+        # A newer app is there to take: the stand-in for a fetch of the public app, on the
+        # ref this copy's channel takes (sync_app.channel_target reads what the last check
+        # fetched, which this test folder never did).
+        mp.setattr(sync_app, "channel_target", lambda *a, **k: sync_app.APP)
         mp.setattr(sync_app, "waiting", lambda *a, **k: "c" * 40)
         mp.setattr(sync_app, "waiting_line", lambda *a, **k: "A newer version is ready: 4.0.0.")
         mp.setattr(app_setup, "_app_changelog", lambda *a, **k: "## 4.0.0 (2026-10-26)\n\n- The page.\n")
@@ -311,6 +314,24 @@ def test_an_answer_goes_to_the_engine_as_the_steps_own_fields(run, built):
     (a,) = [x for x in got["actions"] if x["action"] == "setup.resume"]
     assert a["value"] == {"text": "Analyst, 2019 to now."}
     assert "Claude is reading your answer." in got["after"][-1]["text"] or "Question 2 of 6" in got["after"][-1]["dialog"]
+
+
+def test_a_setup_answer_that_could_not_reach_claude_never_spins(run, built):
+    """X-56 (the stranger audit): the first answer's ring asks the viewer to let the page
+    reach Claude; refused (or dismissed), the setup card said "Claude is reading your answer"
+    for ever and nothing said Claude could not hear the page. Now no spinner, and the To do
+    card says Claude isn't listening, with Open Claude, the one way that still works."""
+    for code in ("forbidden", "consent_required"):
+        got = _go(run, built, "fresh", hashes=["todo"], fake={"sendError": code}, steps=[
+            {"hash": "todo", "click": "Start"},
+            {"click": "Paste it", "fill": {"Paste your resume here": "Analyst, 2019 to now."}},
+            {"click": "Save it"},
+            {"hash": "todo", "read": "main"},
+        ])
+        assert [x for x in got["actions"] if x["action"] == "setup.resume"], code
+        last = got["after"][-1]["text"] + got["after"][-1].get("dialog", "")
+        assert "Claude is reading your answer." not in last, code
+        assert "Claude isn't listening right now" in last and "Open Claude" in last, (code, last)
 
 
 def test_on_the_app_itself_the_private_copy_comes_first_in_one_tap(run, built):

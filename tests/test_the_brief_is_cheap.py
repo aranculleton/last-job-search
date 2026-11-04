@@ -34,8 +34,11 @@ def test_the_brief_is_gathered_by_code_and_the_news_by_the_small_agent():
     for must in ("python3 tools/brief.py --start", "--write", "news-reader",
                  "python3 tools/brief.py news", "followup_drafts.py context --due",
                  "followup_drafts.py check - --pack", "Never run a search here",
-                 "silence is the alarm"):
+                 "even when nothing is owed"):
         assert must in brief, must
+    # Nothing says silence means failure: a person who was never told a brief comes cannot
+    # hear one missing, so the app notices a late brief itself (routines.overdue).
+    assert "silence" not in brief.lower() and "silence" not in _read("_common.md").lower()
     # The model reads no state file, pack or earlier brief itself.
     for never in ("network_threads.csv", "open_actions.py", "followup_pack_", "documents/briefs/*"):
         assert never not in brief, never

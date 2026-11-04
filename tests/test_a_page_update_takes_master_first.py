@@ -121,19 +121,23 @@ def test_a_page_update_takes_no_master_while_a_landing_runs(tmp_path, monkeypatc
     assert app_setup.take_master() == "" and (a / "round.json").exists()
 
 
-def test_the_next_chat_is_told_of_work_an_earlier_one_could_not_land(tmp_path, monkeypatch):
-    """A landing that was not green pushes its branch to wait; the start command names it,
-    so the next chat brings it in (the release review, 2026-11-03)."""
+def test_the_next_chat_is_told_of_work_waiting_since_an_earlier_day(tmp_path, monkeypatch):
+    """A landing that was not green pushes its branch to wait, and every landing after brings
+    it in (tools/land.py). Work still waiting a day later is kept out by something (a check
+    not green, a save refused), and nothing ever said so (the stranger audit, 2026-11-03,
+    X-30): the start names it, with what to do, and the line the person hears once."""
+    sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+    from test_a_beginner_is_told_in_plain_words import _plain
     a, b = _copies(tmp_path)
     _git(b, "switch", "-q", "-c", "claude/earlier-chat")
     (b / "job_search_tracker.csv").write_text("company\nKestrel Mutual\nLarkspur Retail\n")
-    _git(b, "commit", "-qam", "unlanded")
+    subprocess.run(["git", "-C", str(b), "commit", "-qam", "unlanded"], check=True,
+                   env=dict(os.environ, GIT_AUTHOR_NAME="t", GIT_AUTHOR_EMAIL="t@example.com",
+                            GIT_COMMITTER_NAME="t", GIT_COMMITTER_EMAIL="t@example.com",
+                            GIT_COMMITTER_DATE="2026-10-30T09:00:00"))
     _git(b, "push", "-q", "origin", "claude/earlier-chat")
-    _git(a, "fetch", "-q", "origin")
     _here(monkeypatch, a)
-    _git(a, "remote", "set-url", "origin", str(tmp_path / "origin.git"))
-    assert app_setup._waiting_branches() == ["origin/claude/earlier-chat"]
-    monkeypatch.setattr(app_setup, "_waiting_branches", lambda: ["origin/claude/earlier-chat"])
+    assert list(app_setup._stranded()) == ["origin/claude/earlier-chat"]
     monkeypatch.setattr(app_setup, "state", lambda runner=None: {
         "repo": {"kind": "private"}, "setup": {"state": "here", "say": ""},
         "page": {"url": "https://claude.ai/code/artifact/example"}, "page_current": True,
@@ -141,9 +145,11 @@ def test_the_next_chat_is_told_of_work_an_earlier_one_could_not_land(tmp_path, m
     monkeypatch.setattr(app_setup, "_finished", lambda: True)
     _code, lines = app_setup.start(on="test", tools="none")
     said = "\n".join(lines)
-    assert "waits on origin/claude/earlier-chat" in said and "git merge --no-edit" in said
+    assert "origin/claude/earlier-chat" in said and "python3 tools/land.py" in said
+    assert app_setup.UNSAVED_SAY in said
+    _plain(app_setup.UNSAVED_SAY)
     _code, lines = app_setup.start(on="test", tools="none", work="draft~a")
-    assert "earlier-chat" not in "\n".join(lines), "a job's own chat brings in nothing"
+    assert "earlier-chat" not in "\n".join(lines), "a job's own chat lands; it says nothing"
 
 
 def test_the_app_itself_and_a_copy_with_no_profile_are_left_alone(tmp_path, monkeypatch):

@@ -1033,6 +1033,32 @@ def not_its_claim(item: dict, chat: str) -> str:
     return ""
 
 
+BLOCKED_LINE = "Waiting for you in its own chat: it asked to go ahead with something there."
+
+
+def mark_blocked(db: dict, work_id: str, now: dt.datetime, out_dir: str) -> dict:
+    """A job running in a chat of its own that stopped on a question to the person (its chat's
+    status reads blocked, get_session): said on its card, in one line, with its lease kept, so
+    it is never taken for stopped and ended while it waits on them (the stranger audit, X-7
+    and X-8). Its own next pin clears it. {work, batches}."""
+    import app_model
+    doc = (db.get("work") or {}).get(safe_id(work_id))
+    if doc is None:
+        raise KeyError(f"no work {work_id!r} in the dump; read work again")
+    item = dict(doc["data"])
+    if str(item.get("status") or "") in ("done", "failed", "stopped"):
+        raise KeyError(f"work {work_id!r} has finished; write nothing more to it")
+    at = app_model.stamp(now)
+    fields = {"blocked_at": at,
+              "lease_until": app_model.stamp(now + dt.timedelta(seconds=LEASE_S))}
+    steps = list(item.get("steps") or [])
+    if not steps or steps[-1].get("text") != BLOCKED_LINE:
+        fields["steps"] = (steps + [{"at": at, "text": BLOCKED_LINE}])[-50:]
+    w = Writes(out_dir)
+    w.add("update", "work", work_id, fields, if_version=doc["version"])
+    return {"work": work_id, "batches": w.save("blocked")}
+
+
 def pin(db: dict, work_id: str, now: dt.datetime, out_dir: str, stage=None, line: str = "",
         count: dict | None = None, left_s: int | None = None, dump_dir: str = "",
         chat: str = "") -> dict:
@@ -1058,6 +1084,8 @@ def pin(db: dict, work_id: str, now: dt.datetime, out_dir: str, stage=None, line
     at = app_model.stamp(now)
     fields: dict = {"status": "running",
                     "lease_until": app_model.stamp(now + dt.timedelta(seconds=LEASE_S))}
+    if item.get("blocked_at"):
+        fields["blocked_at"] = None          # it moved on: no longer waiting on the person
     if stage is not None:
         idx = stage_index(str(item.get("kind") or ""), stage, item.get("stages"))
         if idx != item.get("stage") or not item.get("stage_at") \

@@ -1621,6 +1621,38 @@ def call_ctx(contact, role="", facts=None, research=None, application=None, toda
             "contacts": [contact] if contact else [], "elsewhere": 0}
 
 
+
+# A team someone ran, as a profile writes it: "Led a team of 3 marketing coordinators",
+# "managed four analysts", "line manager to two", "direct reports".
+_MANAGED = re.compile(r"\b(?:led|managed|manag(?:ing|e)|ran|built and led|line[- ]manag\w*|"
+                      r"supervis\w*)\s+(?:a\s+)?(?:team|group|department|staff|crew)\s+of\s+\w+"
+                      r"|\b(?:led|managed|supervised|line[- ]managed)\s+(?:\d+|two|three|four|five|six|"
+                      r"seven|eight|nine|ten|a dozen)\s+\w+|\bdirect reports?\b|\bline manager (?:to|of|for)\b",
+                      re.I)
+
+
+def manages_people() -> bool:
+    """Has the person managed people? Their search.py MANAGES_PEOPLE, or a bullet that says
+    they ran a team. The interview pack told everyone to claim no people management, which
+    was one person's growth area, and steered a manager away from their strongest answer."""
+    try:
+        if getattr(person.module("search"), "MANAGES_PEOPLE", False):
+            return True
+        lib = getattr(person.module("bullets"), "LIB", {}) if person.exists("bullets.py") else {}
+    except person.NoProfile:
+        return False
+    def texts(node):
+        if isinstance(node, str):
+            yield node
+        elif isinstance(node, dict):
+            for x in node.values():
+                yield from texts(x)
+        elif isinstance(node, (list, tuple)):
+            for x in node:
+                yield from texts(x)
+    return any(_MANAGED.search(t) for t in texts(lib))
+
+
 def answer_for(item, ctx) -> dict:
     """What to answer one question with: {kind, short, lines}. Sourced, never written here.
 
@@ -1716,9 +1748,14 @@ def answer_for(item, ctx) -> dict:
         led = [x for x in facts.get("strengths") or [] if re.search(
             r"\b(?:mentor|first|introduc|standard|train|onboard|set up|owned|led)\w*", _text(x), re.I)]
         lines += ["From your profile: %s (source: %s)" % (prep.clip(x, 170), prof) for x in led[:2]]
-        lines.append("Claim no people management your profile does not hold: lead from what "
-                     "you set up, the standards you brought in and who you brought along. Ask "
-                     "Claude for an example and it drafts one for you to check.")
+        if manages_people():
+            lines.append("You have managed people: lead with the team you ran, how many, and "
+                         "what it delivered because you led it. Ask Claude for an example and "
+                         "it drafts one for you to check.")
+        else:
+            lines.append("Claim no people management your profile does not hold: lead from "
+                         "what you set up, the standards you brought in and who you brought "
+                         "along. Ask Claude for an example and it drafts one for you to check.")
     elif re.search(r"interviewing anywhere else", q, re.I):
         n = ctx.get("elsewhere", 0)
         lines.append(("Yes: %s at an interview stage. Say so, name nobody, and invent no "

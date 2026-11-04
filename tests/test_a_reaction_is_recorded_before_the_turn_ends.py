@@ -108,7 +108,14 @@ def test_a_turn_is_held_a_few_times_then_let_go_with_a_warning(profile, tmp_path
     path = _transcript(tmp_path, TURN_ONE + [_line("user", text="this reads like a robot")])
     for _ in range(learned.HOLD_LIMIT):
         assert _stop(path)["decision"] == "block"
-    assert "let go unrecorded" in _stop(path)["systemMessage"]
+    # Shown to the person (X-75, the stranger audit, 2026-11-03): their own words and what to
+    # do, in plain words, never a file's name.
+    sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+    from test_a_beginner_is_told_in_plain_words import _plain
+    said = _stop(path)["systemMessage"]
+    assert "this reads like a robot" in said and "Say it again" in said
+    assert "learned.py" not in said and "unrecorded" not in said
+    _plain(said)
     assert learned.pending() == []
 
 

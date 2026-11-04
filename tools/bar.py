@@ -157,6 +157,7 @@ def excluded_by_name(company: str | None) -> str:
 UNLISTED = ("not on your employer lists yet, so this says nothing about it: judge its pay, "
             "prestige and signal once (`python3 tools/bar.py judge \"<company>\" <verdict> "
             "\"<why>\"`); never a reason to drop it unjudged")
+NO_BAR = "your profile sets no bar for employers, so this says nothing about it"
 JUDGED_FILE = "employers_judged.json"
 _judged_cache: dict = {}
 
@@ -352,9 +353,14 @@ def verdict(company: str | None, posting: str = "") -> tuple[str, str]:
             return SIGNAL, f"established technology company ({hit})"
     if score < 0 or collided:
         return NONE, why or "a different company wearing a listed employer's name"
+    stated = applies()
     j = judgement(name)
-    if j and j.get("verdict") in (PAY, PRESTIGE, SIGNAL, NONE):
+    if j and j.get("verdict") in ((PAY, PRESTIGE, SIGNAL, NONE) if stated else (PAY, PRESTIGE, SIGNAL)):
         return j["verdict"], f"judged {j.get('date', '')}: {j.get('why', '')}".replace(" :", ":")
+    if not stated:
+        # No bar of pay, prestige or signal in this profile: "none" says nothing about the
+        # employer, and a "none" a chat judged on someone else's words never counts (X-18).
+        return NONE, NO_BAR
     if mid is not None:
         return NONE, (f"stated range midpoint {CUR}{mid:,} is under the {CUR}{TARGET_MIDPOINT:,} "
                       f"target band, and {UNLISTED}")
@@ -393,12 +399,14 @@ def clears(company: str | None, posting: str = "") -> bool:
 
 
 def applies() -> bool:
-    """Does the profile set a bar of pay, prestige or signal at all: an employer tier, a
-    frontier list or a judgement? With none, every employer would come back "none", which
-    says nothing."""
+    """Does the person's own profile state a bar of pay, prestige or signal: an employer tier
+    (employers.py TIER_1, TIER_2) or a frontier list (search.py BAR_FRONTIER)? With none,
+    every employer would come back "none", which says nothing. A judgement is not a bar: the
+    brief had every chat judge employers on one person's words ("pay, prestige or signal"),
+    and once one was judged, every stranger's follow-ups there vanished (X-18)."""
     import opportunity
     return bool(getattr(opportunity, "TIER_1", None) or getattr(opportunity, "TIER_2", None)
-                or FRONTIER or judged())
+                or FRONTIER)
 
 
 def hold_question(company: str, posting: str = "") -> dict | None:
@@ -427,7 +435,10 @@ def hold_question(company: str, posting: str = "") -> dict | None:
 
 def unjudged(path: str | None = None) -> list[str]:
     """The employers in a saved shortlist (the newest in documents/rounds/ by default)
-    that no list names and nobody has judged, each once, in shortlist order."""
+    that no list names and nobody has judged, each once, in shortlist order. None where the
+    profile states no bar: there is nothing to judge them against (X-18)."""
+    if not applies():
+        return []
     if not path:
         from run_round import round_order
         found = sorted(glob.glob(os.path.join(glob.escape(person.state("documents", "rounds")), "*.json")),
@@ -451,7 +462,10 @@ def unjudged(path: str | None = None) -> list[str]:
 def unjudged_contacts(today=None) -> list[str]:
     """The employers of people with a follow-up owed (tools/open_actions.py) that no list
     names and nobody has judged, each once: judged, an employer that clears nothing stops
-    filling the person's To do (the maintainer, 2026-10-26)."""
+    filling the person's To do (the maintainer, 2026-10-26). None where the profile states no
+    bar (X-18)."""
+    if not applies():
+        return []
     import csv_store
     import open_actions
     def rows(name):
@@ -491,6 +505,9 @@ def main(argv: list[str]) -> int:
         except ValueError as e:                  # Unreadable among them
             print(f"bar: {e}")
             return 2
+        return 0
+    if argv[0] == "unjudged" and not applies():
+        print("no bar: your profile states none, so no employer is judged or ruled out for it")
         return 0
     if argv[0] == "unjudged" and argv[1:] == ["--contacts"]:
         names = unjudged_contacts()

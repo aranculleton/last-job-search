@@ -786,7 +786,7 @@
     const base = txt(S.model.made_at);
     let newer = new Map();
     let lists = new Map();
-    const take = () => { S.views = new Map([...lists, ...newer]); recompute(); };
+    const take = () => { S.views = new Map([...lists, ...newer]); recompute(); viewsIn(); };
     const all = db.collection("screen");
     if (!base) sub("view", all, (snap) => { newer = docsOf(snap); take(); });
     else {
@@ -1511,7 +1511,11 @@
     const failed = (e) => {
       const code = (e && e.code) || "upstream_error";
       if (code === "claude_unavailable") return "no_session";
-      if (code === "forbidden") { S.can.comments = "off"; return "off"; }
+      // Refused, or the viewer's prompt to let the page reach Claude dismissed (not asked
+      // again until the page is opened again, comments.d.ts): nothing can be rung from here,
+      // so the page says Claude isn't listening and offers Open Claude (the stranger audit,
+      // X-56), never a spinner waiting on a ring that never went.
+      if (code === "forbidden" || code === "consent_required") { S.can.comments = "off"; scheduleRender(); return "off"; }
       return code;
     };
     if (!thread && !S.bellAnchor) return Promise.resolve("not_ready");
@@ -3120,7 +3124,8 @@
     let small = null;
     const top = all.find((i) => i.band === "top");
     const iv = top ? interviewItems().find((x) => x.id === top.item) : null;
-    if (settingUp && txt(su.state) === "searching") sum = "Claude is finding your first jobs.";
+    if (settingUp && setupStalled()) sum = "Your setup stopped part-way: carry it on below.";
+    else if (settingUp && txt(su.state) === "searching") sum = "Claude is finding your first jobs.";
     else if (settingUp) {
       const total = Number(obj(su.progress).total) || 6;
       sum = "Let's set up your search: " + total + " short questions, about " + Math.max(1, Math.round(total * 0.8)) + " minutes.";
@@ -3562,6 +3567,8 @@
   // once the answers are in. With nothing set up and no setup written, one card that starts it.
   // A setup answer saved and not yet taken up by a chat (G1): the card says Claude is on it.
   function setupReading() {
+    // Nothing reached Claude: no spinner for a reading that is not happening (X-56).
+    if (S.can.comments === "off" || ["off", "no_session"].includes(txt(obj(S.setupRing).how))) return false;
     for (const r of S.local.values()) {
       if (/^setup\./.test(txt(r.doc && r.doc.action)) && (r.state === "saved" || r.state === "saving") && !S.receipts.has(r.id)) return true;
     }
@@ -3572,7 +3579,9 @@
   // Later (journeys audit 21).
   const SETUP_ACTS = ["setup.answer", "setup.resume", "setup.skip", "setup.build_resume"];
   function setupSteps() {
-    return arr(obj(M().setup).steps).map((s) => (txt(s.status) !== "done" && effective(txt(s.id), SETUP_ACTS) ? Object.assign({}, s, {status: "done"}) : s));
+    // The jobs are done only when they said so: one job told is not the end of them (X-40).
+    const ends = (s, r) => txt(s.step) !== "history" || obj(obj(r && r.doc).value).done === true || ENOUGH.test(txt(obj(obj(r && r.doc).value).text));
+    return arr(obj(M().setup).steps).map((s) => { const r = txt(s.status) !== "done" ? effective(txt(s.id), SETUP_ACTS) : null; return r && ends(s, r) ? Object.assign({}, s, {status: "done"}) : s; });
   }
   function setupNext(steps) {
     const su = obj(M().setup);
@@ -3580,18 +3589,48 @@
     return steps.find((s) => open(s) && (txt(s.step) === txt(su.next) || txt(s.id) === txt(su.next))) || steps.find((s) => txt(s.status) === "next")
       || steps.find((s) => open(s) && txt(s.status) !== "waiting") || null;
   }
+  // The setup section's own time: the chat that wrote it last. A setup chat that stopped
+  // writes nothing more, so the page judges the stall by its own clock (the stranger audit,
+  // X-29: a finished checklist under "6 short questions" for days, with nothing to tap).
+  function setupStalled() {
+    const su = obj(M().setup);
+    const st = txt(su.state);
+    if (st === "stopped") return true;
+    if (st !== "searching") return false;
+    const v = S.views.get("setup");
+    const at = Math.max(tms(obj(v).made_at) || 0, tms(M().made_at) || 0);
+    const hours = Number(su.stalled_hours) || 6;
+    return at > 0 && now() - at > hours * 3600000;
+  }
+  function setupResearchRunning() {
+    return arr(obj(M().setup).research).filter((r) => { const w = workDoc(txt(r.work)); return txt(r.status) === "running" || (w && ACTIVE.has(txt(w.status))); });
+  }
+  function setupStoppedCard() {
+    const su = obj(M().setup);
+    const words = txt(su.say) || "Your setup stopped part-way. Carry on, and Claude finishes it from your answers.";
+    const asked = effective("setup", ["setup.carry_on"]);
+    return card("article", {class: "card todo setup", "aria-labelledby": "setup-title", "data-item": "setup"},
+      h("div", {class: "todo-top"}, kindMark("setup"), stateWord("Stopped", "warn")),
+      h("p", {class: "card-title", id: "setup-title"}, "Your setup stopped part-way"),
+      h("p", {}, words),
+      h("div", {class: "card-actions"}, btn("Carry on", () => act([{item: "setup", action: "setup.carry_on", value: null, rev: txt(su.rev) || null}], "Carry on setting up"),
+        {kind: "primary", small: true, key: "setup-carry-on", pressed: !!asked})),
+      stateLine("setup", "setup"));
+  }
   function setupCard() {
     const su = obj(M().setup);
     const st = txt(su.state);
+    if (setupStalled()) return setupStoppedCard();
     // Every answer given: the first search runs, and the research lines tick as they finish.
     if (st === "searching") {
       const research = arr(su.research);
+      const busy = new Set(setupResearchRunning().map((r) => txt(r.topic)));
       return card("article", {class: "card todo setup", "aria-labelledby": "setup-title", "data-item": "setup"},
         h("div", {class: "todo-top"}, kindMark("search"), stateWord("Searching", "info")),
         h("p", {class: "card-title", id: "setup-title"}, "Your first shortlist"),
         h("p", {class: "reading-line"}, h("span", {class: "spin", "aria-hidden": "true"}), " Claude is searching your job sites and scoring what it finds."),
         research.length ? h("ol", {class: "plain task-list"}, research.map((r) => h("li", {class: "task"}, h("span", {class: "task-name"}, txt(r.label)),
-          stateWord(txt(r.status) === "done" ? "Done" : txt(r.status) === "running" ? "Now" : "Waiting", txt(r.status) === "done" ? "ok" : null)))) : null,
+          stateWord(txt(r.status) === "done" ? "Done" : busy.has(txt(r.topic)) ? "Now" : "Waiting", txt(r.status) === "done" ? "ok" : null)))) : null,
         h("p", {class: "small muted"}, "Your jobs appear in Jobs as soon as they are scored."),
         pinOffer("setup"));
     }
@@ -3601,7 +3640,7 @@
       const next = setupNext(steps);
       const prog = obj(su.progress);
       const done = Math.max(Number(prog.done) || 0, steps.filter((s) => txt(s.status) === "done").length);
-      const running = arr(su.research).filter((r) => txt(r.status) === "running");
+      const running = setupResearchRunning();
       const holding = next && txt(next.status) === "waiting";
       return card("article", {class: "card todo setup", "aria-labelledby": "setup-title", "data-item": "setup"},
         h("div", {class: "todo-top"}, kindMark("setup"), prog.label && done ? h("span", {class: "small muted"}, done + " of " + (Number(prog.total) || steps.length) + " done") : null),
@@ -3682,7 +3721,8 @@
           btn(dueLabel(d, kind), () => askDue(d), {kind: "quiet", small: true, key: "duework:" + (ctx.where || "") + ":" + d.id, aria: dueLabel(d, kind) + ": " + txt(d.title)}))]) : null),
       noteFor("duework:" + d.id), stateLine(d.id, "due:" + (ctx.where || "") + ":" + d.id));
   }
-  function openSetupQuestion(step) {
+  const ENOUGH = /^\s*(?:that'?s (?:all|it)|that is (?:all|it)|thats (?:all|it)|done|no more|nothing (?:more|else)|none)\s*[.!]*\s*$/i;
+  function openSetupQuestion(step, saidNow) {
     const su = obj(M().setup);
     const steps = setupSteps();
     const total = Number(obj(su.progress).total) || steps.length;
@@ -3711,7 +3751,7 @@
       const rest = steps.slice(i + 1).filter((s) => txt(s.status) !== "done" && txt(s.status) !== "waiting");
       if (rest.length) openSetupQuestion(rest[0]); else { close(); toast({text: "Saved. Claude carries on from here and tells you when your first jobs are in.", ids: [], until: 0}); }
     };
-    const running = arr(su.research).filter((r) => txt(r.status) === "running");
+    const running = setupResearchRunning();
     const form = h("form", {class: "q-form", novalidate: true, onsubmit: (e) => {
       e.preventDefault();
       const v = {};
@@ -3719,13 +3759,19 @@
       for (const f of fields) { v[f.id] = f.read(); f.flag(false); if (f.required && (v[f.id] === null || v[f.id] === "")) bad.push(f); }
       if (upload && !v.text) { errBox.hidden = false; errBox.replaceChildren(h("p", {class: "errors-title"}, "Paste it first.")); return; }
       if (bad.length) { errBox.hidden = false; errBox.replaceChildren(h("p", {class: "errors-title"}, "Answer this first.")); bad[0].flag(true); bad[0].focus(); return; }
-      if (!upload) { act([{item: txt(step.id), action: "setup.answer", value: v, rev: step.rev}], "Answered: " + clip(txt(step.question), 40)); advance(); return; }
+      if (!upload) {
+        act([{item: txt(step.id), action: "setup.answer", value: v, rev: step.rev}], "Answered: " + clip(txt(step.question), 40));
+        // A job told: the next one, until they say that's all (it moved on after one job, and
+        // read as if the history were done: the stranger audit, X-40).
+        if (txt(step.step) === "history" && !ENOUGH.test(txt(v.text))) { openSetupQuestion(step, "Saved. The job before that, the same way? Or That's all."); return; }
+        advance(); return;
+      }
       S.setupPaste = null;
       act([{item: txt(step.id), action: "setup.resume", value: {text: v.text}, rev: step.rev}], "Your " + noun() + " is saved"); advance();
     }},
     errBox, fields.map((f) => f.el),
     upload ? null : h("div", {class: "q-actions"}, h("button", {type: "submit", class: "btn primary", "data-k": "q-continue"}, "Continue"),
-      arr(step.options).map((op, k) => btn(txt(op.label), () => { act([{item: txt(step.id), action: txt(op.action), value: op.value === undefined ? null : op.value, rev: step.rev}], txt(op.label)); close(); }, {small: true, key: "q-op:" + k})),
+      arr(step.options).map((op, k) => btn(txt(op.label), () => { act([{item: txt(step.id), action: txt(op.action), value: op.value === undefined ? null : op.value, rev: step.rev}], txt(op.label)); advance(); }, {small: true, key: "q-op:" + k})),
       step.skippable ? btn("Skip this one", () => { act([{item: txt(step.id), action: "setup.skip", rev: step.rev}], "Skipped for now"); advance(); }, {kind: "quiet", small: true, key: "q-skip"}) : null),
     upload && pasting ? h("div", {class: "q-actions"}, h("button", {type: "submit", class: "btn primary", "data-k": "q-continue"}, "Save it")) : null);
     // The file: chosen, kept in the page's own store, and saved at once.
@@ -3764,6 +3810,7 @@
         btn("Finish later", close, {kind: "quiet", small: true, key: "q-later"})),
       running.length ? h("p", {class: "small muted q-research"}, "Claude is looking into " + running.map((r) => txt(r.label).toLowerCase()).join(", ") + ".") : null,
       h("div", {class: "q-body"}, h("p", {class: "small muted"}, "Question " + (Number(step.n) || i + 1) + " of " + total),
+        saidNow ? h("p", {class: "hint", role: "status", "data-k": "q-saved"}, saidNow) : null,
         h("h2", {class: "q-title", id: "q-title"}, txt(step.question)),
         step.help ? h("p", {class: "q-hint"}, txt(step.help)) : null,
         txt(step.known_from) ? h("p", {class: "hint"}, "Filled in from " + txt(step.known_from) + ": check it.") : null,
@@ -4086,6 +4133,17 @@
       h("header", {class: "brief-head"},
         h("div", {class: "brief-hello"}, h("h2", {id: "h-brief" + (where ? "-" + where : ""), tabindex: "-1", class: "screen-title"}, hello), h("div", {class: "summary"}, h("p", {class: "sum-small"}, dayLine))),
         bell || tweak ? h("div", {class: "head-tools"}, bell, tweak) : null));
+    // What did not happen by itself, said where the person looks first (the stranger audit):
+    // a brief that did not come (X-10, routines.page_part `late`), work not saved to their
+    // copy for a day or more (X-30, app `not_saved`), and improvements still being applied
+    // (X-32, updates `pending`). One plain line each, only when true.
+    const late = txt(obj(M().schedule).late);
+    const unsaved = Number(obj(M().app).not_saved) || 0;
+    const applying = arr(obj(M().updates).pending).length;
+    const notes = [late ? h("p", {"data-k": "brief-late"}, late) : null,
+      unsaved ? h("p", {"data-k": "not-saved"}, "Some of your work from the last few days hasn't been saved yet. Claude saves it the next time it works on your search.") : null,
+      applying ? h("p", {"data-k": "applying"}, "Claude is still applying " + nWord(applying, "improvement", "improvements") + " to your search.") : null].filter(Boolean);
+    if (notes.length) put(wrap, h("div", {class: "brief-notes small", role: "status"}, notes));
     const grid = h("div", {class: "brief-grid"});
     // ---- Each thing once (2026-11-02). The maintainer: "if we're just saying the same thing
     // ten times it can be a bit overwhelming", and a job-seeker's read of the Brief counted the
@@ -5198,6 +5256,8 @@
     // stands): never offered as ready to send. Its one filled button fixes it (2026-11-03: a
     // note naming sponsorship, and one over its limit, had Copy and I sent it like any other).
     const blocked = arr(m.blocked).map((x) => cap1(txt(obj(x).said) || txt(x))).filter(Boolean);
+    // Written before their profile was read: a stand-in, never sent as it stands (X-53).
+    const held = txt(m.hold);
     const fixBtn = blocked.length ? btn("Fix it", () => requestWork([{id: "tweak~" + seg(m.id) + "~rules~" + hash10(blocked.join("|") + "|" + txt(m.rev)), kind: "tweak", to: "either",
       title: "Fix the " + what + " to " + txt(m.first_name), args: {v: 1, target: tweakTarget("message", m), changes: [], text: "Rewrite it so it keeps my rules: " + blocked.join("; ") + ".", keep: null},
       stages: STAGES.tweak.filter((x) => !/PDF/.test(x[0])).map((x) => ({name: x[0], est_s: x[1]}))}]),
@@ -5218,7 +5278,8 @@
       parts.subject ? h("p", {class: "subject"}, h("span", {class: "muted"}, "Subject: "), h("span", {id: sid}, parts.subject), " ",
         copyButton(parts.subject, "Copy subject", "copy:" + sid, sid)) : null,
       parts.subject ? noteFor("copy:" + sid) : null,
-      h("div", {class: "sendbox"}, blocked.length ? null : copyBtn, h("p", {class: "sendtext big", id: tid}, parts.body)),
+      h("div", {class: "sendbox"}, blocked.length || held ? null : copyBtn, h("p", {class: "sendtext big", id: tid}, parts.body)),
+      held ? h("p", {class: "small hint-line msg-check msg-held", "data-k": "held:" + m.id}, "Not ready to send: " + lc1(held) + ".") : null,
       charCount(m, parts.body),
       // What breaks a rule, in words on the card; what Claude could not fix itself, its first
       // reason said and the rest behind the "?" (2026-11-03: "ignores your last message" sat
@@ -5228,7 +5289,7 @@
       : warnings.length ? h("p", {class: "small hint-line msg-check"}, "Read it once before you send it: " + lc1(warnings[0]) + ".",
         warnings.length > 1 ? hintQ("chk:" + m.id, warnings.slice(1).join(". "), "What else") : null) : null,
       cardNotes(m, {where: "drafts", section: "drafts", item: m.id}, true),
-      h("div", {class: "card-actions"}, blocked.length ? fixBtn : sentBtn, tweakIcon("message", m), openLink(m),
+      h("div", {class: "card-actions"}, blocked.length ? fixBtn : held ? null : sentBtn, tweakIcon("message", m), openLink(m),
         more("msg:" + m.id, "the " + what + " to " + txt(m.first_name), [m.why ? h("p", {class: "why"}, h("span", {class: "muted"}, "Why them: "), txt(m.why)) : null,
           moreAlerts(m, {where: "drafts", section: "drafts", item: m.id}),
           changedBox(m, changedKey, sentNow),
@@ -7581,7 +7642,7 @@
   function notListening() {
     if (freshHeartbeat()) return false;
     const helper = obj(obj(M().where).helper);
-    if (S.can.comments === "no_session" || S.lastRing === "no_session" || txt(helper.state) === "not_listening") return true;
+    if (S.can.comments === "no_session" || S.can.comments === "off" || S.lastRing === "no_session" || txt(helper.state) === "not_listening") return true;
     // Something has waited past the listener's quiet time with no answer since: work that
     // could start (never work waiting its turn behind the big jobs running now), or a tap.
     const li = obj(M().listener);
@@ -7837,8 +7898,9 @@
   const APP_ISSUES = "https://github.com/aranculleton/last-job-search/issues/new";
   function reportWrong(version) {
     const where = labelOf(S.section) || "the page";
+    const fault = S.drawFault ? "\nA part that could not be drawn: " + S.drawFault.where + " (" + S.drawFault.kind + ")" : "";
     const url = APP_ISSUES + "?title=" + encodeURIComponent("From the page: something looks wrong, or a suggestion (version " + version + ")") +
-      "&body=" + encodeURIComponent("Page version: " + version + "\nScreen: " + where + "\n\nWhat happened, or what would be better (this page is public: no names, please):\n");
+      "&body=" + encodeURIComponent("Page version: " + version + "\nScreen: " + where + fault + "\n\nWhat happened, or what would be better (this page is public: no names, please):\n");
     sheet({title: "Something looks wrong?", intro: "Tell Claude, and it is looked into and worked round for you. Or tell the app's makers, so it is fixed for everyone.",
       choices: [{label: "Tell Claude", key: "claude", run: () => { setTimeout(() => openDock({text: "Something on my job search page looks wrong. Page version " + version + ", on " + where + ". What I saw: "}), 0); }}],
       after: h("p", {}, h("a", {href: url, target: "_blank", rel: "noopener noreferrer", "data-k": "report-makers"}, "Tell the app's makers", h("span", {class: "sr-only"}, " (opens a public page in a new tab: leave out names)")),
@@ -8964,6 +9026,12 @@
       names.length ? h("p", {class: "small muted"}, names.slice(0, 5).join(", ") + (names.length > 5 ? " and " + (names.length - 5) + " more" : "")) : null,
       why ? h("p", {class: "small"}, why) :
         h("div", {class: "card-actions"}, btn("Read them", () => { S.reading.tried.clear(); readProfiles(queue, "reading"); }, {kind: "primary", small: true, key: "read-them"})),
+      // No computer: the card had no button and came back every week (the stranger audit,
+      // X-53). Pasting works on any device, and the setting takes the queue with it.
+      st === "desktop" && settingItem("profile_reads") ? h("div", {class: "card-actions"}, btn("I'll paste them instead", () => {
+        const s = settingItem("profile_reads");
+        act([{item: setId(s), action: "setting.set", value: {value: "paste"}, rev: txt(s.rev) || null}], "You paste profiles from now on");
+      }, {kind: "secondary", small: true, key: "read-paste"}), h("span", {class: "hint"}, "No computer? Copy a profile's text on your phone and paste it to Claude.")) : null,
       noteFor("reading"));
   }
   // The small panel for Claude's browser: what it is doing, and Close, which only hides it.
@@ -9257,8 +9325,11 @@
     // One honest word for waiting work, and the sentence under it says when: "Waiting to
     // start", "Waiting for Claude to start." and "Asked just now." said three things and none
     // said when (the walk-through, 2026-11-03).
-    const label = p.stopping ? "Stopping after this step" : picked ? "Starting" : st === "queued" ? (unsent ? "Not sent yet" : late ? "No answer yet" : inLine ? (place.pos === 1 ? "Next" : "In line") : waking ? (freshHeartbeat() ? "Sent" : "Waking Claude") : "Waiting for Claude") : st === "running" || st === "claimed" ? (slow ? "May have stopped" : null) : WORK_WORDS[st] || cap1(st);
-    const tone = p.stopping ? "held" : {done: "ok", failed: "bad", stopped: "held", needs_you: "warn"}[st] || (slow || late || unsent ? "warn" : null);
+    // Its own chat stopped on a question to the person (tools/page_db.py mark_blocked): said
+    // as that, never as a job that may have stopped (the stranger audit, X-7 and X-8).
+    const blocked = (st === "running" || st === "claimed") && !!txt(w.blocked_at);
+    const label = p.stopping ? "Stopping after this step" : picked ? "Starting" : st === "queued" ? (unsent ? "Not sent yet" : late ? "No answer yet" : inLine ? (place.pos === 1 ? "Next" : "In line") : waking ? (freshHeartbeat() ? "Sent" : "Waking Claude") : "Waiting for Claude") : st === "running" || st === "claimed" ? (blocked ? "Waiting for you" : slow ? "May have stopped" : null) : WORK_WORDS[st] || cap1(st);
+    const tone = p.stopping ? "held" : {done: "ok", failed: "bad", stopped: "held", needs_you: "warn"}[st] || (blocked || slow || late || unsent ? "warn" : null);
     const cur = p.stages[Math.min(p.i, p.n - 1)];
     // The newest line Claude wrote on it, from after it was asked (or answered).
     const steps = arr(v.steps);
@@ -11112,6 +11183,9 @@
     try { return fn(); }
     catch (e) {
       try { console.warn("ljs: a part of the page could not be drawn", e); } catch (x) { /* no console */ }
+      // Its kind only (the error's class name), never its words, which can carry the person's
+      // data: the report to the app's makers says what failed and where (the stranger audit).
+      S.drawFault = {kind: /^[A-Za-z]{2,40}$/.test(txt(e && e.name)) ? txt(e.name) : "Error", where: labelOf(S.section) || "the page"};
       return fallback ? fallback() : null;
     }
   }
@@ -11135,7 +11209,7 @@
     if (skipMain !== true) {
       main.classList.toggle("split", !!split);
       const node = (sec, b) => guarded(() => sectionNode(sec, b), () => h("section", {class: "section"},
-        empty("This part could not be shown.", "Something in it is not as the page expects. Refresh, and if it stays, tell Claude in a chat what you see.")));
+        empty("This part could not be shown.", "Something in it is not as the page expects. Refresh, and if it stays, tell Claude in a chat what you see, or the app's makers (Settings, Something looks wrong).")));
       patch(main, split ? [h("div", {class: "col"}, node(S.section)), h("div", {class: "col"}, node(S.split, "b"))] : [node(S.section)]);
     }
     const rail = $("rail");
@@ -11266,6 +11340,12 @@
 
   // ------------------------------------------------------------------ start
 
+  // A page published in parts carries only who it is for (tools/app_page.py slim): its search
+  // comes from its store, so the opening line stays until the store's first answer, or until
+  // there is no store to answer, never drawing "No search yet." over a search that has one.
+  let viewsIn = () => {};
+  const firstViews = new Promise((r) => { viewsIn = r; });
+
   // Nothing of the person's shows until the page knows its viewer is the owner: anyone else,
   // and any view with no way to tell, sees only the private notice.
   function showPrivate(noViewer) {
@@ -11347,6 +11427,7 @@
       try { own = !!(await u.isOwner()); } catch (e) { own = false; }
       if (!own) { showPrivate(false); return; }
       S.owner = true;
+      if (S.model.slim) await within(firstViews, CAP_WAIT_MS);
       reveal();
       render();
       if (fromHash && fromHash.work) openWork();
@@ -11354,7 +11435,7 @@
       setTimeout(() => { autoReading().catch(() => {}); }, 1500);
     });
     CAP.db.then((db) => {
-      if (!db) { S.flags.readOnly = true; scheduleRender(); return; }
+      if (!db) { S.flags.readOnly = true; viewsIn(); scheduleRender(); return; }
       S.flags.live = true;
       DB = db;
       subscribe(db);

@@ -133,7 +133,7 @@ The stage, date and interviewers head the pack, from `outcome.md`'s booked line;
 
 **Send it again once, at the end of a turn that changed it**, on the person's page first
 (CLAUDE.md, "Every output is shown": the copy in the page's own store and `python3
-tools/app.py view`, and one line in the chat); where there is no page, in the chat as
+tools/app.py view`); asked in the chat, or where there is no page, in the chat as well, as
 RUNBOOK.md, "Delivering in the chat", says. It is the copy named for this employer and role (the `send:` line `pack --write` prints, or `python3 tools/shown.py <the document>` after an edit by hand; every process's file is called `interview_prep.md`, so that name alone says nothing) with SendUserFile (`display: "render"`), and the one screen and whatever changed pasted beside it. A chat with no SendUserFile (usually one on the person's computer) pastes the one screen and writes the copy's full path on its own line, which opens when clicked in the desktop app. Several changes in one turn (new answers, a rebuild, a fact found) are one resend. The file is the record and the conversation is the delivery; its path alone is never the answer. Per-contact `/prep` documents at this employer link to it rather than repeat it.
 
 ### 7. One chat for the whole search

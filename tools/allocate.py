@@ -34,8 +34,29 @@ import person
 # The profile's roles, most recent first: months served, how recent (0 =
 # current), and the bullets each gets at least and at most.
 ROLES = person.module("roles").ROLES
-TENURE = {r["employer"]: r["tenure_months"] for r in ROLES}
-RECENCY_RANK = {r["employer"]: i for i, r in enumerate(ROLES)}
+
+
+def role_keys(roles=None) -> list:
+    """Each role's key into bullets.py LIB, most recent first.
+
+    A role names its own with `lib`. Otherwise the most recent role at an employer is the
+    employer's name, which is how every profile was written, and an older role there is
+    "<employer> | <title>". Everything was keyed by employer, so a promotion (two titles at
+    one employer) printed the current achievements under the older title and its dates,
+    with the older role's floor and cap, and the check failed with nothing kept."""
+    out, seen = [], set()
+    for r in ROLES if roles is None else roles:
+        key = r.get("lib") or (r["employer"] if r["employer"] not in seen
+                               else "%s | %s" % (r["employer"], r["title"]))
+        seen.add(r["employer"])
+        out.append(key)
+    return out
+
+
+KEYS = role_keys()
+BY_KEY = dict(zip(KEYS, ROLES))
+TENURE = {k: r["tenure_months"] for k, r in BY_KEY.items()}
+RECENCY_RANK = {k: i for i, k in enumerate(KEYS)}
 RECENCY_FACTOR = {0: 1.15, 1: 1.08, 2: 1.02, 3: 0.80}
 
 
@@ -44,8 +65,8 @@ def _recency(rank):
     return RECENCY_FACTOR.get(rank, RECENCY_FACTOR[max(RECENCY_FACTOR)])
 
 
-FLOOR = {r["employer"]: r["floor"] for r in ROLES}
-CAP = {r["employer"]: r["cap"] for r in ROLES}
+FLOOR = {k: r["floor"] for k, r in BY_KEY.items()}
+CAP = {k: r["cap"] for k, r in BY_KEY.items()}
 
 THEME_CUES = {
  # Pricing, packaging and monetization work IS experiment work: a pricing team
@@ -334,15 +355,17 @@ def caps_for(posting):
     """
     ts = theme_scores(posting)
     caps = dict(CAP)
-    for r in ROLES:
+    for k, r in BY_KEY.items():
         cu = r.get("cap_unless")
         if cu and max(ts.get(t, 0) for t in cu["themes"]) < cu["at_least"]:
-            caps[r["employer"]] = cu["cap"]
+            caps[k] = cu["cap"]
     return caps
 
 
 def allocate(posting, budget=11):
-    """Return {employer: [bullet ids]} in reverse-chronological employer order."""
+    """Return {role key: [bullet ids]} in reverse-chronological order: each role with
+    bullets on file (`role_keys`; for a profile with one role per employer, the
+    employer's name)."""
     scores = bullet_scores(posting)
     caps = caps_for(posting)
 
@@ -365,8 +388,9 @@ def allocate(posting, budget=11):
         relevance = 1.0 + RELEVANCE_PULL * ((rel[e] - lo) / span)
         weight[e] = tenure * recency * relevance
 
-    # Floors first, then hand out what is left by weight, respecting caps.
-    alloc = dict(FLOOR)
+    # Floors first, then hand out what is left by weight, respecting caps. A role with no
+    # bullets on file takes none of the budget: it prints as its title line.
+    alloc = {e: FLOOR[e] for e in LIB}
     left = budget - sum(alloc.values())
     while left > 0:
         opts = [e for e in LIB if alloc[e] < caps[e]]

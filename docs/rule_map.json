@@ -1624,10 +1624,10 @@
   {
    "id": "cloud-calls",
    "was": "Automation: what runs without anyone asking",
-   "rule": "In a cloud chat: create_trigger bound to this chat, a one-off first brief, never fire_trigger; a chat is made only where this chat's id is unknown.",
+   "rule": "In a cloud chat: create_trigger bound to the chat that answers the page, or with no page this chat, a one-off first brief, never fire_trigger and never a task that starts a new chat each run; no chat is made for it.",
    "bold": "In a cloud chat",
    "home": "automation/README.md",
-   "anchor": "bound to this chat (`persistent_session_id`, this chat's own id)",
+   "anchor": "bound to the chat that answers the page, or with no page this chat (`persistent_session_id`)",
    "needed_by": [
     "brief set-up",
     "/setup"
@@ -1682,10 +1682,10 @@
   {
    "id": "silence",
    "was": "Automation: what runs without anyone asking",
-   "rule": "Silence is the alarm: a brief day with no brief means the automation is broken.",
+   "rule": "Replaced 2026-11-03 (the stranger audit, X-10): a brief day with no brief is noticed by the app at the next start, wake or brief and mended, never left to the person to notice; nothing says silence means failure.",
    "bold": "Silence is the alarm",
    "home": "automation/README.md",
-   "anchor": "silence always means something failed",
+   "anchor": "A brief that does not come is noticed by the next chat that starts or wakes",
    "needed_by": [
     "brief set-up"
    ]

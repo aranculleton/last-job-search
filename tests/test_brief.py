@@ -458,6 +458,8 @@ def test_the_start_keeps_the_syncs_output_and_gathers_in_a_fresh_process(tmp_pat
             return Done(0, '  An update is waiting: small fixes. Say "update" when you want it.\n')
         if argv[:1] == ["git"] and "for-each-ref" in argv:      # land.waiting
             return Done(0, "origin/claude/ops-2026-10-22-morning_brief\n")
+        if argv[:1] == ["git"] and "log" in argv and "--name-only" in argv:   # its own files
+            return Done(0, "\x01Morning brief 2026-10-22\0documents/briefs/2026-10-22.md\0")
         if argv[:1] == ["git"] and "diff" in argv:
             return Done(0, "documents/briefs/2026-10-22.md\0")
         return Done(0)
@@ -465,6 +467,10 @@ def test_the_start_keeps_the_syncs_output_and_gathers_in_a_fresh_process(tmp_pat
     log = str(tmp_path / "sync.txt")
     monkeypatch.setenv("LJS_BRIEF_SYNC", log)
     monkeypatch.setattr(brief.subprocess, "run", fake)
+    # Work off master a day or more is what the brief names (land.stranded, X-30).
+    import land
+    monkeypatch.setattr(land, "stranded", lambda root=None, fetch=False: {
+        "origin/claude/ops-2026-10-22-morning_brief": 2}, raising=False)
     assert brief.start(["--on", "a model", "--write"], "a model") == 0
     sync = next(c for c in calls if "sync_app.py" in " ".join(c))
     assert sync[-3:] == ["--if-stale", "--on", "a model"]

@@ -91,3 +91,30 @@ def test_nothing_changed_skips_the_app_tree_and_never_blames_an_update(copy):
     assert "no update of the app is in this change" in out, out
     assert "after this update" not in out and "rewrite, retire" not in out, out
     assert took < 300, took
+
+
+def test_a_profile_missing_a_setting_never_lands_and_is_named_never_traced(copy):
+    """X-39 (the stranger audit, 2026-11-03): a hand edit or a merge left profile/search.py
+    with no SALARY_FLOOR. The check only loaded each file, so the change landed, and then
+    every page update and brief crashed with a raw traceback, naming nothing. The check now
+    builds the page from the person's files, and a build that stops says which file."""
+    (copy / "profile" / "search.py").write_text("# emptied by a merge\n", encoding="utf-8")
+    (copy / "profile" / "tests" / "test_this_computer.py").unlink()
+    _git(copy, "add", "-A")
+    _git(copy, "commit", "-qm", "a setting lost")
+    env = dict(os.environ, LJS_APP_URL="https://github.com/example-owner/last-job-search",
+               PYTHONDONTWRITEBYTECODE="1")
+    env.pop("LJS_PROFILE", None)
+    env.pop("LJS_STATE", None)
+    r = subprocess.run([sys.executable, "tools/app.py", "model"], cwd=copy, env=env,
+                       capture_output=True, text=True, encoding="utf-8", errors="replace")
+    out = r.stdout + r.stderr
+    assert r.returncode == 1 and "Traceback" not in out, out
+    assert "profile/search.py has no" in out, out
+    r = subprocess.run(["bash", "tools/ci_local.sh", "--quick"], cwd=copy, env=env,
+                       capture_output=True, text=True, encoding="utf-8", errors="replace",
+                       timeout=600)
+    out = r.stdout + r.stderr
+    line = next(ln for ln in out.splitlines() if "your page can be built from your files" in ln)
+    assert "FAIL" in line and r.returncode == 1, out
+    assert "profile/search.py has no" in out

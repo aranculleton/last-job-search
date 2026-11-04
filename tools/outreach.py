@@ -429,10 +429,12 @@ def write(a, meta, today):
         f.write(f"Words: {len(note.split())}. Characters: {len(note)}.\n\n")
         if len(note) > limit:
             short = short_note(a, limit)
+            # An InMail only where the plan has them: a free account has none.
+            inmail = (_schema.LIMITS.get("inmail_credits_per_month", 0) if _schema else 0) > 0
             f.write(f"Longer than a connection request ({limit} characters on your LinkedIn "
-                    "plan): send it as a message to someone you are already connected with, "
-                    "or as an InMail. To someone you are not connected with, send this as the "
-                    "connection request instead:\n\n")
+                    "plan): send it as a message to someone you are already connected with"
+                    + (", or as an InMail" if inmail else "") + ". To someone you are not "
+                    "connected with, send this as the connection request instead:\n\n")
             f.write("---\n\n" + (short or "(nothing fits; send the request without a note)")
                     + "\n\n---\n\n")
         problems = check_note(note)

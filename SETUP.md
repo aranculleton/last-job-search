@@ -18,9 +18,10 @@ about and never overwrites the rest; see [Resetting](#resetting) before starting
 
 ## A. Fresh cloud container
 
-Nobody using the app needs this section: the line START_HERE.md has you paste into the cloud
-environment's setup script does all of it, and `./tools/setup_env.sh` repeats it in a session
-if that was skipped. By hand, it is:
+Nobody using the app needs this section: the line the person's page offers for the cloud
+settings (the header of `tools/setup_env.sh`, each step ending `|| true` so one failed install
+never stops a chat from starting) does all of it, and `./tools/setup_env.sh` repeats it in a
+session where that line is not in place. By hand, it is:
 
 ```bash
 apt-get install -y --no-install-recommends \
@@ -92,7 +93,9 @@ sites instead, choose Custom, keep the default package managers, and add what
 `python3 tools/env_check.py --allowlist` prints: to start with `linkedin.com`,
 `www.linkedin.com`, `freehire.me`, `boards-api.greenhouse.io`, `api.lever.co`,
 `api.ashbyhq.com`, `*.myworkdayjobs.com`, and `api.openalex.org` for a field that publishes.
-Each new employer board can need one more, so a custom list needs keeping up. Meanwhile the
+Each new employer board can need one more, so a custom list needs keeping up, and no list
+reaches every employer's own careers site, which a draft's research and "Add a job" with a link
+read: those need Full. Meanwhile the
 fallback is `/apply <pasted posting text>`, which needs no network at all, and
 `run_round.py --from-scraped <earlier kept.json>`, which re-runs every free stage on a
 scrape that already succeeded (the earlier round must have run with `--keep-intermediates`,

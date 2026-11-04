@@ -1,15 +1,14 @@
 # If something goes wrong
 
-Tell Claude what you see, in your own words: it reads this app's own instructions and says
-what to change and where. The usual ones:
+Tell Claude what you see, in your own words. The usual ones:
 
-**"I don't have a resume."** Say "build one with me": Claude asks about one job at a time and
-makes a one-page resume from your answers.
+**"I don't have a resume."** Say "build one with me": Claude makes a one-page resume with you,
+one job at a time.
 
-**"This chat can't reach job sites."** A cloud chat starts with only a few websites allowed.
+**"This chat can't reach job sites."**
 
 <!-- claude-surface: cloud-internet -->
-<!-- checked 2026-10-25; https://code.claude.com/docs/en/cloud-environments -->
+<!-- checked 2026-11-03; https://code.claude.com/docs/en/cloud-environments -->
 To let this chat reach job sites:
 1. At the top of this chat, open the small arrow after its title and choose Edit cloud
    environment.
@@ -18,26 +17,26 @@ To let this chat reach job sites:
 Screens change: if yours looks different, tell Claude what you see.
 <!-- /claude-surface -->
 
-**Claude can't see your copy, or it isn't in the list.** A private copy needs the Claude
-GitHub App installed on it.
+**Claude can't see your copy.** It needs the Claude GitHub App on it.
 
 <!-- claude-surface: connect-github -->
-<!-- checked 2026-10-25; https://code.claude.com/docs/en/web-quickstart -->
+<!-- checked 2026-11-03; https://code.claude.com/docs/en/web-quickstart -->
 To let Claude see your copy:
-1. Open claude.ai/code and sign in. When it asks to connect GitHub, follow it and approve.
-2. Open github.com/apps/claude/installations/new, choose your account, then Only select
-   repositories, pick your copy, and install.
-3. Back at claude.ai/code (or the Code tab in the Claude app), choose your copy under the
-   message box.
+1. Open https://claude.ai/code and sign in. When it asks to connect GitHub, follow it and
+   approve.
+2. Open https://github.com/apps/claude/installations/new, choose your account, then Only
+   select repositories, pick your copy, and install.
+3. Back at https://claude.ai/code (or the Code tab in the Claude app), choose your copy
+   under the message box.
 
 Screens change: if yours looks different, tell Claude what you see.
 <!-- /claude-surface -->
 
-**Your copy is public.** Setup stops until it is private, because your copy holds your work
-history and the people you talk to.
+**Your copy is public.** Setup stops until it is private: it will hold your work history and
+contacts. A fork can't be made private: make a new copy ([START_HERE.md](START_HERE.md) step 1).
 
 <!-- claude-surface: make-private -->
-<!-- checked 2026-10-25;
+<!-- checked 2026-11-03;
 https://docs.github.com/en/repositories/managing-your-repositorys-settings-and-features/managing-repository-settings/setting-repository-visibility
 -->
 To make your copy private:
@@ -49,13 +48,22 @@ To make your copy private:
 Screens change: if yours looks different, tell Claude what you see.
 <!-- /claude-surface -->
 
-**Your page doesn't read LinkedIn profiles.** It reads them only when open in the Claude
-desktop app on your computer: allow Claude's browser when asked. Signed out? Press Open
-LinkedIn on the page, sign in, and come back.
+**Your page doesn't read LinkedIn profiles.** Only in the Claude desktop app on your
+computer: allow Claude's browser there, and sign in to LinkedIn when it asks.
 
-**No brief arrived on one of its days.** The brief comes even when nothing is due, so silence
-means it is broken: say "my brief didn't arrive" in Chat on your page. [automation/README.md](automation/README.md)
-has the rest.
+<!-- claude-surface: team-plan -->
+<!-- checked 2026-11-03; https://code.claude.com/docs/en/web-quickstart -->
+Get past a setting a work or team plan has locked: ask an Owner of your Claude organization
+to turn it on for you.
+<!-- /claude-surface -->
 
-**Something else.** Say what you were doing and what it said. It never sends anything to
-anyone, so nothing has gone out while it went wrong.
+**New chats won't start.** Tell Claude in a chat you already have: a line pasted into your
+cloud settings before 3 November needs replacing.
+
+**No brief arrived on one of its days.** The next chat you open notices and mends it by
+itself. To ask sooner, say "my brief didn't arrive" in any chat on your copy.
+[automation/README.md](automation/README.md) has the rest.
+
+**Something else.** Say what you were doing and what it said. It never sends anything, so
+nothing has gone out. Still wrong? Tell the app's makers:
+https://github.com/aranculleton/last-job-search/issues (public: no names).

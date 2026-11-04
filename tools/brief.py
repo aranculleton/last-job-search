@@ -616,6 +616,12 @@ def read_sync(today: dt.date, path: str | None = None) -> dict:
                 got["blocked"].append(nxt.strip())
         elif s.startswith("What changed"):
             for nxt in lines[i + 1:]:
+                more = re.match(r"\s*(?:\.\.\.|…)\s*and (\d+) more\b", nxt)
+                if more:
+                    # The sync lists twenty and counts the rest on one line: an update of 103
+                    # changes read "and 19 more" (X-70).
+                    got["more"] = int(more.group(1))
+                    break
                 if not nxt.startswith("  - "):
                     break
                 got["changed"].append(nxt[4:].strip())
@@ -660,11 +666,13 @@ def start(argv: list[str], model: str) -> int:
                            capture_output=True, encoding="utf-8", errors="replace")
         if s.returncode:
             setup = ((s.stderr or s.stdout or "").strip().splitlines() or ["failed"])[-1][:200]
-    # Every branch a landing left waiting, a chat's as well as a run's: one that was not green
-    # or stopped on a conflict pushes its branch, and only claude/ops-* was looked for here.
+    # The person's work that has waited off master a day or more (land.stranded): every
+    # landing brings in what waits, so only work something keeps out is named, never a branch
+    # a landing an hour ago left for the next one to bring in, and the line every morning was
+    # never true for long (X-30).
     try:
         import land
-        branches = " ".join(land.waiting(ROOT))
+        branches = " ".join(land.stranded(ROOT))
     except Exception:  # noqa: BLE001  the brief goes on; the next run looks again
         branches = ""
     with open(sync_log_path(), "w", encoding="utf-8", newline="\n") as fh:
@@ -672,10 +680,23 @@ def start(argv: list[str], model: str) -> int:
                  % (today.isoformat(), r.returncode, branches, setup, r.stdout or "",
                     r.stderr or ""))
     url = page_url()
-    if url and "--page-applied" not in argv:
+    if url and "--page-applied" not in argv and not setup_waiting():
         sys.stdout.write(page_first(url, argv))
         return 0
     return subprocess.run([py, os.path.abspath(__file__)] + argv, cwd=ROOT).returncode
+
+
+def setup_waiting() -> str:
+    """The page's link while setup waits on the person (a page, and setup not finished), else
+    "": then the run is the one setup reminder, and its whole message says so."""
+    url = page_url()
+    if not url:
+        return ""
+    try:
+        import app_setup
+        return "" if app_setup._finished() else url
+    except Exception:  # noqa: BLE001  cannot tell: the brief runs as usual
+        return ""
 
 
 def page_url() -> str:
@@ -733,6 +754,11 @@ def _gather(today: dt.date, write: bool) -> dict:
     tracker = open_actions._tracker()
     earlier = earlier_briefs(today)
     since = _d(os.path.basename(earlier[-1])) if earlier else today - dt.timedelta(days=DEFAULT_SINCE_DAYS)
+    # Nothing is counted from before the person set up, and nothing "has not gone out in 14
+    # days" for someone who started two days ago (X-72).
+    set_up_on = setup_day()
+    if set_up_on and since < set_up_on <= today:
+        since = set_up_on
     last_text = _read(earlier[-1]) if earlier else ""
 
     # The day's upkeep first, so everything below reads the state it leaves.
@@ -762,7 +788,7 @@ def _gather(today: dt.date, write: bool) -> dict:
                       and not throttle.is_process(r))
     warm = _warm_routes(contacts, threads)
     owned = open_actions.campaigns(tracker)
-    lead = _lead(counts, replies, nudges_due, sent_lately, warm, owned, today)
+    lead = _lead(counts, replies, nudges_due, sent_lately, warm, owned, today, set_up_on)
 
     sync = read_sync(today)
     brk = _break(today, write)
@@ -775,7 +801,7 @@ def _gather(today: dt.date, write: bool) -> dict:
     if sync.get("exit"):
         lines.append("Today's check for app updates did not finish; the next run tries again.")
     if sync.get("changed"):
-        more = len(sync["changed"]) - 1
+        more = len(sync["changed"]) - 1 + int(sync.get("more") or 0)
         lines.append("Updated: %s%s." % (sync["changed"][0].rstrip(". "),
                                          ", and %d more" % more if more > 0 else ""))
     if brk.get("over"):
@@ -792,8 +818,13 @@ def _gather(today: dt.date, write: bool) -> dict:
         lines.append(update)
 
     export_line, profile_line = _export_due(today, threads), _own_profile_due(today, contacts, threads)
+    page = page_url()
+    new = bool(set_up_on) and (today - set_up_on).days < QUIET_DAYS
     three = _next_three(got, counts, replies, unconfirmed(tracker, today), preps, export_line,
-                        profile_line, sent_lately, warm, today)
+                        profile_line, sent_lately, warm, today, page=bool(page), new=new)
+    where = _where_once(write)
+    if where:
+        lines.append(where)
 
     live_names = _live_employers(tracker, contacts, threads, today)
     claude_md = _profile_text("CLAUDE.md")
@@ -814,7 +845,7 @@ def _gather(today: dt.date, write: bool) -> dict:
         "what_counts": what_counts(claude_md, watch), "skip_links": links_sent(earlier),
         "sync": sync, "export_line": export_line, "profile_line": profile_line,
         "write_here": followup_drafts.to_write_here(got),
-        "url": _brief_url(iso), "page": page_url(), "tip": "", "written": write,
+        "url": _brief_url(iso), "page": page, "tip": "", "written": write,
         "paused": brk.get("until", "") if brk and brk.get("until", "") > iso else "",
     }
     if write:
@@ -979,7 +1010,28 @@ def _soonest(procs, today: dt.date) -> tuple:
     return best if best[0] is not None else ((procs[0], {}) if procs else (None, {}))
 
 
-def _lead(counts, replies, nudges_due, sent_lately, warm, owned, today) -> str:
+def setup_day() -> dt.date | None:
+    """The day setup finished (profile/place.json, setup.finished), or None."""
+    try:
+        with open(person.path("place.json"), encoding="utf-8") as fh:
+            got = json.load(fh)
+        return _d(str(((got or {}).get("setup") or {}).get("finished") or "")[:10])
+    except (person.NoProfile, OSError, ValueError, AttributeError):
+        return None
+
+
+def _where_once(write: bool) -> str:
+    """Once, on the first brief after this update or after it is made: where the brief comes
+    and when, so a person whose brief posts into a chat they never reopen is told where it is
+    (X-1, X-11). Never a promise of a push."""
+    try:
+        import routines
+        return routines.where_once(write)
+    except Exception:  # noqa: BLE001  no registry: nothing to say
+        return ""
+
+
+def _lead(counts, replies, nudges_due, sent_lately, warm, owned, today, set_up_on=None) -> str:
     procs = counts["processes"]
     if procs:
         r, st = _soonest(procs, today)
@@ -1018,8 +1070,13 @@ def _lead(counts, replies, nudges_due, sent_lately, warm, owned, today) -> str:
             if nudges_due else ""))
     if not sent_lately:
         routes = ", ".join("%s (%s)" % (first_name(w["name"]), w["company"]) for w in warm[:2])
+        warm_said = " Warm routes already in your contacts: %s." % routes if routes else ""
+        days = (today - set_up_on).days if set_up_on and set_up_on <= today else QUIET_DAYS
+        if days <= 1:
+            return ("Your search is set up.%s A fresh shortlist is one \"find me jobs\" away."
+                    % warm_said)
         return ("Nothing has gone out in %d days.%s A fresh shortlist is one \"find me jobs\" away."
-                % (QUIET_DAYS, " Warm routes already in your contacts: %s." % routes if routes else ""))
+                % (min(QUIET_DAYS, days), warm_said))
     return "Nothing is owed today."
 
 
@@ -1108,12 +1165,33 @@ def _on_page(item) -> bool:
     return bool(cid) and os.path.isfile(person.state("documents", "network", cid, "draft.md"))
 
 
+def _linkedin_on_file() -> bool:
+    try:
+        with open(person.path("person.json"), encoding="utf-8") as fh:
+            got = json.load(fh)
+        return bool(str(((got or {}).get("identity") or {}).get("linkedin") or "").strip())
+    except (person.NoProfile, OSError, ValueError, AttributeError):
+        return True
+
+
 def _next_three(got, counts, replies, drafted, preps, export_line, profile_line, sent_lately,
-                warm, today) -> list[str]:
+                warm, today, page: bool = True, new: bool = False) -> list[str]:
     """Exactly three things to do before the next brief, most valuable first, each one line
-    and under half an hour."""
+    and under half an hour. With no page, each says the words to use in a chat, never a
+    button they do not have (X-68). In the first fortnight after setup, a search comes before
+    the question about their own LinkedIn profile, which is asked as whether they have one
+    when none is on file (X-72)."""
     out: list[str] = []
     seen: set = set()
+    find_jobs = ("Find new jobs: Jobs, Find jobs." if page else
+                 "Find new jobs: say \"find me jobs\".")
+    find_people = ("Find people at an employer you want: Contacts, Find people." if page else
+                   "Find people at an employer you want: say \"who should I talk to at "
+                   "<employer>?\".")
+    watch = ("Watch an employer you would love to work at (Jobs, Change the search), and "
+             "Claude reads its own jobs every search." if page else
+             "Name an employer you would love to work at, and Claude reads its own jobs every "
+             "search.")
 
     def add(key, text):
         if key not in seen and len(out) < 3:
@@ -1156,10 +1234,16 @@ def _next_three(got, counts, replies, drafted, preps, export_line, profile_line,
     for ln in (preps or {}).get("research", [])[:1]:
         name = ln.split(":", 1)[0].strip()
         add("research:" + name, "Read the prep before your call with %s." % name)
+    if new and not sent_lately:
+        add("search", find_jobs)
     if profile_line:
         m = re.search(r"\"([^\"]+)\"", profile_line)
         if m:
-            add("own_profile", m.group(1))
+            ask = m.group(1)
+            if not _linkedin_on_file() and "LinkedIn profile" in ask:
+                ask = ("If you have a LinkedIn profile, want me to look it over once, for "
+                       "anything that would stop people replying?")
+            add("own_profile", ask)
     if export_line and export_line.startswith("Your LinkedIn download was asked for on"):
         add("export_wait", export_line)
     elif export_line and "asked for on" not in export_line:
@@ -1174,13 +1258,13 @@ def _next_three(got, counts, replies, drafted, preps, export_line, profile_line,
         for w in warm[:1]:
             add("warm", "Ask %s (%s) about the team there: a warm route you already have."
                 % (first_name(w["name"]), w["company"]))
-        add("search", "Find new jobs: Jobs, Find jobs.")
+        add("search", find_jobs)
     if counts.get("applications"):
-        add("outcome", "Heard back from anyone? Mark it on the application.")
-    add("search", "Find new jobs: Jobs, Find jobs.")
-    add("network", "Find people at an employer you want: Contacts, Find people.")
-    add("targets", "Watch an employer you would love to work at (Jobs, Change the search), and "
-        "Claude reads its own jobs every search.")
+        add("outcome", "Heard back from anyone? Mark it on the application." if page else
+            "Heard back from anyone? Tell me, and I'll mark it on the application.")
+    add("search", find_jobs)
+    add("network", find_people)
+    add("targets", watch)
     return out
 
 
@@ -1289,13 +1373,122 @@ def _tidy_due() -> str:
             "--triggers <each>; do what it prints (the app skill, \"Once a day\")")
 
 
+PUSH_MAX = 199          # PushNotification: "Keep it under 200 characters; mobile OSes truncate"
+
+
+def push_line(b: dict) -> str:
+    """The one plain line the run sends as a push at its end: the most pressing thing (the
+    message's lead), and the page's link where there is a page, under 200 characters."""
+    if b.get("waiting"):
+        text = "Your job search setup is waiting for you on your page."
+    elif b.get("paused"):
+        text = "Your search is paused until %s." % _short_date(b["paused"])
+    else:
+        text = b.get("lead") or (headline(b) if b.get("counts") else "Your brief is ready.")
+    tail = (" " + b["page"]) if b.get("page") else ""
+    room = PUSH_MAX - len(tail)
+    if len(text) > room:
+        text = text[:room - 1].rsplit(" ", 1)[0].rstrip(",;:") + "…"
+    return text + tail
+
+
+def push_due(b: dict) -> bool:
+    """Does this run send the person a push itself? A brief bound to a chat has no
+    notification of its own (routines.brief_pushes_itself); a Routines-screen task and an
+    older ops chat's relay send theirs, a brief asked for by hand is read in the chat, and a
+    paused search sends nothing. The setup reminder always does."""
+    if b.get("waiting"):
+        return True
+    if b.get("paused"):
+        return False
+    try:
+        import routines
+        reg = routines.load()
+        return routines._brief(reg) is not None and not routines.brief_pushes_itself(reg)
+    except Exception:  # noqa: BLE001  no registry: a brief asked for by hand
+        return False
+
+
+def push_step(b: dict) -> str:
+    """The one place a run is asked to push (the builder's decision of 3 November: the brief
+    stays bound to the chat with the copy and sends its headline itself): just before the
+    landing, so what the push answered is saved with the day's record. Nothing promises it
+    reaches a phone; where it was not sent, the person's next message in this chat says so,
+    once (unsent_line)."""
+    if not push_due(b):
+        return ""
+    return ("push, before step 6: PushNotification (ToolSearch select:PushNotification) with "
+            "%s, then python3 tools/brief.py pushed \"<its answer>\"; whatever it answers, "
+            "never mention it" % json.dumps(push_line(b), ensure_ascii=False))
+
+
+# The words app_setup.start says for the same (the saving fix, X-30), so the person hears one.
+UNSAVED_SAY = ("Some of your work from the last few days hadn't been saved yet. I'm saving it "
+               "now.")
+_PUSH_MARK = re.compile(r"\n*<!-- push: (sent|not sent); chat: (\S*) -->\n?")
+PUSH_SAID = "ljs-brief-push-said.txt"     # in the git folder: the day already said, never committed
+
+
+def pushed(answer: str, today: dt.date | None = None) -> str:
+    """What the run's PushNotification answered, noted on the day's record (saved with it by
+    the landing that follows), so the person's next message in this chat can say it was not
+    sent (unsent_line). A cloud run was answered "Mobile push requested."; anything saying
+    "not sent", or an error, is not sent."""
+    today = today or dt.date.today()
+    path = brief_path(today.isoformat())
+    if not os.path.exists(path):
+        return "brief: no record of today's brief to note the push on"
+    sent = not re.search(r"\bnot sent\b|\berror\b|\bfail|\bno such tool\b|\bunavailable\b",
+                         answer or "", re.I)
+    try:
+        import app_listen
+        chat = app_listen.this_chat()
+    except Exception:  # noqa: BLE001
+        chat = ""
+    text = _PUSH_MARK.sub("\n", _read(path)).rstrip("\n")
+    with open(path, "w", encoding="utf-8", newline="\n") as fh:
+        fh.write("%s\n\n<!-- push: %s; chat: %s -->\n" % (text, "sent" if sent else "not sent",
+                                                           chat or "-"))
+    return "brief: the push was %s; noted on today's record" % ("sent" if sent else "not sent")
+
+
+def unsent_line(chat: str, today: dt.date | None = None) -> str:
+    """For the person's next message in the chat a brief ran in, once: where the brief is,
+    when its push was not sent (the builder's decision of 3 November). "" otherwise, in any
+    other chat, and once said."""
+    today = today or dt.date.today()
+    if not str(chat or "").startswith("session_"):
+        return ""
+    for back in (0, 1):
+        day = (today - dt.timedelta(days=back)).isoformat()
+        m = _PUSH_MARK.search(_read(brief_path(day)))
+        if not m:
+            continue
+        if m.group(1) != "not sent" or m.group(2) != chat:
+            return ""
+        said = os.path.join(os.path.dirname(sync_log_path()), PUSH_SAID)
+        if _read(said).strip() == day:
+            return ""
+        try:
+            with open(said, "w", encoding="utf-8", newline="\n") as fh:
+                fh.write(day + "\n")
+        except OSError:
+            return ""
+        where = " and on your page" if page_url() else ""
+        return ("Tell the person once, at the start of your reply, in these words: \"Your "
+                "morning brief is earlier in this chat%s; %s notification could not be sent to "
+                "your phone.\"" % (where, "today's" if back == 0 else "yesterday's"))
+    return ""
+
+
 def claude_lines(b: dict) -> list[str]:
     """For the model only: what it acts on. Never in the message."""
     s = b["sync"] or {}
     out = []
     if b.get("paused"):
         return ["paused until %s: the message is the line above, as it is; no news search, no "
-                "drafts, nothing else to do or save" % b["paused"]]
+                "drafts, nothing else to do or save" % b["paused"]] + [
+                    x for x in [push_step(b)] if x]
     if not s and b.get("written"):
         out.append("the start did not run today: run python3 tools/brief.py --start --on "
                    "\"<model>\" --write")
@@ -1305,8 +1498,12 @@ def claude_lines(b: dict) -> list[str]:
         out.append("the update check stopped (exit %d): %s" % (s["exit"], s.get("first", "")[:160]))
     if s.get("setup"):
         out.append("setting up the Python side failed: %s" % s["setup"])
-    for br in s.get("earlier", []):
-        out.append("an earlier run's work is not saved (%s): land it as _common.md step 3 says" % br)
+    if s.get("earlier"):
+        # Only work off master a day or more (land.stranded), said once a day at most (X-30).
+        out.append("the person's work has waited off their saved copy a day or more (%s): this "
+                   "run's landing brings it in; not green, fix what its check names and land "
+                   "again. At the end of the message, the line: \"%s\"" % (
+                       " ".join(s["earlier"]), UNSAVED_SAY))
     out += s.get("for_claude", [])
     if s.get("upgrades"):
         out.append("run /upgrade 20 now (%d waiting); one plain line per change it made goes at "
@@ -1383,7 +1580,7 @@ def claude_lines(b: dict) -> list[str]:
                    "Then the app skill's steps 1 to 3, for work still waiting" % b["page"])
     try:
         import routines
-        owed = routines.calls()
+        owed = routines.calls(today=b.get("date") or "")
     except Exception:  # noqa: BLE001
         owed = []
     if owed:
@@ -1397,11 +1594,16 @@ def claude_lines(b: dict) -> list[str]:
     except Exception:  # noqa: BLE001  no profile or no contact book: nothing to judge
         names = []
     if names:
-        # Judged once, an employer that clears nothing stops filling the person's To do.
+        # Judged once, an employer that clears nothing stops filling the person's To do. Only
+        # where the person's own profile states a bar (bar.applies): unjudged_contacts is
+        # empty otherwise, and nobody is judged on words they never said (X-18).
         out.append("judge each employer once, from what you know of it (pay, prestige, signal "
                    "or none), with python3 tools/bar.py judge \"<employer>\" <verdict> \"<why>\": "
                    + "; ".join(names[:8]) + ("; and %d more (bar.py unjudged --contacts)"
                                               % (len(names) - 8) if len(names) > 8 else ""))
+    push = push_step(b)
+    if push:
+        out.append(push)
     return out
 
 
@@ -1742,6 +1944,9 @@ def main(argv=None) -> int:
         return 0
     if argv[:1] == ["watch"]:
         return watch_main(argv[1:])
+    if argv[:1] == ["pushed"]:
+        print(pushed(" ".join(argv[1:])))
+        return 0
     ap = argparse.ArgumentParser(description=__doc__.split("\n")[0])
     ap.add_argument("--write", action="store_true", help="do the day's upkeep and write the records")
     ap.add_argument("--start", action="store_true", help="a scheduled run's start, then the brief")
@@ -1754,8 +1959,23 @@ def main(argv=None) -> int:
         rest = [x for x in argv if x != "--start"]
         return start(rest, a.on)
     if not person.exists():
-        print("No profile yet, so there is no brief: set the search up first.")
+        # A copy that was reset (or never set up) with its scheduled tasks still on: said once,
+        # and the run turns them off, rather than "no profile" every morning for good (X-81).
+        print("Your job search was reset, so its morning brief is off now. Say \"set me up\" in "
+              "any chat to start again.\n\nFOR CLAUDE\n- no profile here: list_triggers (every "
+              "page) and turn off (update_trigger, enabled false) each task whose prompt starts "
+              "\"Scheduled run:\" and names automation/prompts/, this one included; then the "
+              "line above is the whole message. Nothing to save.")
         return 1
+    waiting = setup_waiting()
+    if waiting:
+        # Setup not finished: the one reminder's whole message (X-23).
+        b = {"waiting": True, "page": waiting}
+        print("Your job search setup is waiting for you on your page: %s. Answer there, one "
+              "question at a time; Claude does the rest.\n\nFOR CLAUDE\n- setup is not "
+              "finished: the line above is the whole message; no news, nothing to save\n- %s"
+              % (waiting, push_step(b)))
+        return 0
     today = _today(a.today)
     b = gather(today, write=a.write)
     sys.stdout.write(render_text(b))
@@ -1768,4 +1988,15 @@ if __name__ == "__main__":
         raise SystemExit(main())
     except csv_store.Conflicted as e:       # a merge left markers: say which file, read nothing
         print("brief: %s" % e, file=sys.stderr)
+        raise SystemExit(1) from None
+    except (KeyboardInterrupt, SystemExit):
+        raise
+    except Exception as e:  # noqa: BLE001  one line for Claude naming the file, never a traceback
+        # A profile file missing a setting broke every brief with a raw traceback (X-39).
+        try:
+            import app
+            said = app.stopped_on(e)
+        except Exception:  # noqa: BLE001  the plain line without the helper
+            said = "brief: stopped: %s: %s" % (type(e).__name__, " ".join(str(e).split())[:240])
+        print(said)
         raise SystemExit(1) from None

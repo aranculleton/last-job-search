@@ -23,16 +23,20 @@ where setup stands. Wherever a page is published, every question below is asked 
 page**, one at a time with "2 of 6", and never in the chat: the chat says the one line `start`
 prints, then works. Each answer reaches the repo when the page rings this chat and it applies
 the page's actions (the `app` skill: `python3 tools/app.py apply`), which writes them to
-`profile/setup_answers.json`. **Read every answer from there, never from the chat, and never
-ask one again**, here or on the page: a step already answered, or already held by the profile,
-shows as done. `python3 tools/app.py start` again, at any point, says what is left.
+`profile/setup_answers.json`. **Read every answer from there, and never ask one again**, here
+or on the page: a step already answered, or already held by the profile, shows as done. If they
+answer in the chat instead (their words typed, their resume pasted), keep each answer the way
+the page would: `python3 tools/app.py answer <step> --text "<their words>"` (or `--field
+key=value` for a step with more than one field), then carry on from it. `python3 tools/app.py start` again, at any point, says what is left.
 
 - **The resume** arrives as a file the page holds (`resume.asset`: save it the way `start`
   prints, then `python3 tools/app.py resume-saved <file> --asset <id>`, and delete it from the
   page), as pasted words already saved to `documents/cv/resume_pasted_*.txt` (`resume.file`),
   or as "build one with me" (`resume.source: build`): then the page asks one job at a time
   from `history_interview.py ask` and keeps each answer in `history.jobs`, which you write into
-  the profile as setup-sections.md, `history`, says.
+  the profile as setup-sections.md, `history`, says. Its last question, where they studied,
+  certificates and languages, is its own answer, `history_rest.text` (or skipped): write it
+  under Education, Certifications and Languages, and every language into `LANGUAGES_HELD`.
 - **The roles you propose**, once you have read the resume: `python3 tools/app.py propose
   "<role A>" "<role B>" "<role C>"`; the page's roles question shows them.
 - **The research** shows its progress on the page: each topic in Step 2.3 is a work item
@@ -91,7 +95,8 @@ every other chat's unlanded branch:
 - **`setup going in another chat`**: another chat is writing it. Say its one line ("Your
   setup is still going in your other chat; I'll be ready here once it's done.") and start
   nothing.
-- **`setup stopped`**: say its line; on "carry on", finish this setup from what is written.
+- **`setup stopped`**: carry it on now, from what is written, saying only the one line
+  `start` prints; never wait for "carry on" first (a chat that waited stalled again).
 - **`setup self`**: this chat is the one setting up; carry on where it is.
 - **`setting up`**: nothing anywhere. Set them up, from Step 1.
 
@@ -117,7 +122,8 @@ In the background, at once, none waiting on another (Bash with `run_in_backgroun
 - **The tools**: in a cloud chat `./tools/setup_env.sh`; on their computer
   `python3 tools/env_check.py --fix`. Nothing is asked of them for either.
 - **Job sites**: in a cloud chat, `python3 tools/env_check.py --say` prints the words to pass
-  on, word for word, when this chat cannot reach job sites. It reaches the running chat
+  on when this chat cannot reach job sites: word for word without a page; with one, the
+  page's own card carries them and the chat types none of it. It reaches the running chat
   within about a minute; setup carries on meanwhile, and only the search waits for it.
 
 With a page, say only the line `app.py start` printed; the page asks these two. Without one
@@ -222,8 +228,11 @@ Then the state files (setup-sections.md, the last section), and commit and push.
   (one whose own rules disallow it is built only on their yes while they are here, asked with
   the shortlist; setup-sections.md, `boards`); finish the remaining files;
   `python3 tools/build_versions.py record --setup`; `python3 tools/profile_upgrades.py`
-  (only the questions for later may stay pending: anything else it lists is a step skipped
-  here); `./tools/ci_local.sh --quick` (a failure naming an app-owned file is the app's:
+  (only the questions for later, `brief-watch` (written with the brief, Step 5) and
+  `public-holidays` (no built-in rules for 14 of the market tables' countries: Claude
+  researches them in the background and business days are counted when read) may stay
+  pending: anything else it lists is a step skipped here, and a setup is never read as
+  unfinished for those two); `./tools/ci_local.sh --quick` (a failure naming an app-owned file is the app's:
   never edit it here). Commit and land it.
 - **Their resume, if they had none**: `python3 tools/stage_picks.py general "$SCRATCH/general"`
   once the profile is written, while the round runs. It drafts, renders, checks and keeps a
@@ -244,13 +253,14 @@ Then the state files (setup-sections.md, the last section), and commit and push.
   few things that move this person's own search, in their own words and each as often as it
   changes (`python3 tools/brief.py watch --help` says what belongs), written with `python3
   tools/brief.py watch write`. Asking nothing: they see it and change it in Edit the brief.
-- **The brief is on from the start, every day.** Turn it on now, asking nothing: the chat
-  that answers the page is where it runs, so no chat is made for it. `list_triggers` (every
-  page), `python3 tools/routines.py brief --triggers <each page>`, and the calls it prints,
-  then pass on the one line it prints (the time, and that the bell on their Brief changes it
-  or turns it off). In a chat on their computer it prints the one line to pass on instead:
-  the bell starts it from the cloud with one press, so it comes with the computer off.
-  Where there is no page: automation/README.md, "For Claude".
+- **The brief is on from the start, every day, with or without a page.** Turn it on now,
+  asking nothing: it runs in the chat that answers the page, or with no page in this chat, so
+  no chat is made for it. `list_triggers` (every page), `python3 tools/routines.py brief
+  --triggers <each page>`, and the calls it prints, then keep the one line it prints (where
+  and when it comes, and how to change it) for the closing message. In a chat on their
+  computer it prints the one line to pass on instead: the bell starts it from the cloud with
+  one press, so it comes with the computer off (with no page, it makes the page first). The
+  rules: automation/README.md, "For Claude".
 - **Networking needs their page open once in the Claude desktop app**: it reads LinkedIn there
   by itself (allow Claude's browser when asked, sign in to LinkedIn if it says so), and the
   page's To do card walks them through it. Say it in one line; never call it optional.
@@ -267,6 +277,8 @@ Then the state files (setup-sections.md, the last section), and commit and push.
 >   name> and the careers pages of <the employers in `boards.py`>.
 > - Paste a posting, or its link, for a resume and cover letter written for it.
 > - Say **"who should I talk to at <employer>?"** to find people worth contacting.
+>
+> <the one line `routines.py brief` printed: where and when your morning brief comes>
 >
 > Want a quick tour of everything else? Say **"show me around"**.
 

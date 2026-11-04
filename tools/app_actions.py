@@ -216,6 +216,10 @@ ACTIONS = {
     "setup.restore": (("setup_step",), "profile/setup_answers.json: a step as it was",
                       "setup.restore"),
     "setup.done": (("outside",), "checked again (the job sites), or noted as done", ""),
+    # A setup that stopped with every answer in: nothing is written; the tap rings the chat
+    # that answers the page, and a setup.* action there carries setup on (app.py wake).
+    "setup.carry_on": (("setup",), "nothing written: the chat carries setup on from the "
+                       "answers (app.py wake prints how)", ""),
     "setup.make_copy": (("outside",), "gh repo create <name> --template the app --private", ""),
     "app.update_now": (("update",), "queues work/update~<sha> (db only)", "work.stop"),
     "upgrade.undo": (("upgrade",), "git revert of that improvement's own commit",
@@ -299,7 +303,7 @@ def _sections_for(item_id: str) -> tuple:
         return ("jobs",)
     if item_id.startswith("sg-"):
         return ("jobs", "ready", "messages", "interviews", "people")
-    if item_id.startswith("setup-"):
+    if item_id.startswith("setup-") or item_id == "setup":
         return ("setup",)
     if item_id == "update-now" or item_id.startswith("upg-"):
         return ("updates",)
@@ -2912,6 +2916,8 @@ def _setup_fields(step: str) -> set:
     import app_setup
     if step == "history":
         return {"text", "done"}
+    if step == "history_rest":
+        return {"text"}
     spec = next((s for s in app_setup.STEPS if s["id"] == step), None)
     return {f["key"] for f in (spec or {}).get("fields", ())}
 
@@ -2944,6 +2950,9 @@ def _setup_answer(r: Run) -> dict:
         text = str(r.value.get("text") or "").strip()
         if not text and not r.value.get("done"):
             raise Refused("Nothing was written.")
+        if app_setup.ENOUGH.match(text):
+            # Typed rather than chosen, it ends the jobs: it was kept as a job (X-40).
+            text, r.value = "", dict(r.value, done=True)
         if text:
             jobs.append(_clean(text))
         h.update(jobs=jobs, at=app_model.stamp(r.at))
@@ -3069,11 +3078,15 @@ def _setup_done(r: Run) -> dict:
         if kind["kind"] != "private":
             raise Refused("GitHub still shows your copy as public.")
         return {"note": "Your copy is private now.", "undo": None}
-    if app_setup.set_up():
+    if app_setup.set_up() or key in app_setup.TOLD:
         a = app_setup.answers()
         a.setdefault("outside", {})[key] = app_model.stamp(r.at)
         app_setup.save_answers(a)
     return {"note": "Noted, thank you.", "undo": None}
+
+
+def _setup_carry_on(r: Run) -> dict:
+    return {"note": "Claude carries your setup on from your answers now.", "undo": None}
 
 
 def _setup_make_copy(r: Run) -> dict:
@@ -3131,6 +3144,7 @@ HANDLERS = {
     "setup.build_resume": _setup_build, "setup.skip": _setup_skip,
     "setup.restore": _setup_restore, "setup.done": _setup_done,
     "setup.make_copy": _setup_make_copy, "app.update_now": _app_update_now,
+    "setup.carry_on": _setup_carry_on,
     "upgrade.undo": _upgrade_undo,
     "job.dismiss": _job_dismiss, "job.bring_back": _job_bring_back, "job.draft": _job_draft,
     "job.applied": _job_applied, "job.not_applied": _job_not_applied,
@@ -3186,6 +3200,7 @@ NO_UNDO = {
     "reading.done": "a reading is kept as read; a later one replaces it",
     "tip.seen": "a tip seen is seen: nothing about the search changed",
     "setup.done": "it only checks again what the person did outside the page",
+    "setup.carry_on": "it writes nothing: it only asks a chat to carry setup on",
     "hint.seen": "a hint seen is seen: nothing about the search changed",
     "pin.answer": "pinning is the sidebar's: Settings keeps the button, and a Not now comes "
                   "back by itself",
@@ -3468,7 +3483,7 @@ def apply_dir(dump_dir: str, chat: str = "chat", now: dt.datetime | None = None,
             if safe_only is None:
                 import app_setup
                 k = app_setup.repo_kind()["kind"]
-                safe_only = k in ("app", "public", "none")
+                safe_only = k in ("app", "public", "fork", "none")
             if safe_only:
                 summary.setdefault("waiting", []).append(aid)
                 continue           # nothing about the person is written here: it waits

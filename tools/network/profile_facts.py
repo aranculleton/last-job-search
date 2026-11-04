@@ -263,6 +263,33 @@ def work_authorization(secs) -> str:
     return ""
 
 
+# A status worth saying before anyone asks: a permit, a visa, a status short of citizenship,
+# a sponsorship need, a recent move. A citizen or a permanent resident applying where they
+# live is not asked to say so, and saying it unasked ("I'm a US citizen and need no
+# sponsorship") reads oddly to the employer it was meant to reassure.
+_NEEDS_SAYING = re.compile(
+    r"\b(?:permit|visa|settled status|pre-settled|working holiday|iec|graduate route|"
+    r"skilled worker|blue card|leave to remain|residence (?:card|permit)|ead|opt|h-?1b|tn status|"
+    r"dependant|dependent pass|employment pass|s pass|golden visa|"
+    r"(?:just|recently) (?:moved|relocated|arrived)|relocating|moving to)\b"
+    r"|(?<!no )(?<!not )\b(?:requires?|needs?|will need)\s+(?:visa\s+)?sponsorship\b", re.I)
+
+
+def status_needs_saying(text=None) -> bool:
+    """Is the person's right to work worth stating before an employer asks?
+
+    `text` is their work authorization as the profile states it (read from it when not
+    given). Yes for a permit, a visa, a status short of citizenship or a sponsorship need;
+    no for a citizen or a permanent resident, and no where the profile states nothing, so
+    nothing is claimed that it does not hold."""
+    if text is None:
+        try:
+            text = work_authorization(sections(_read()))
+        except Exception:  # noqa: BLE001  no profile to read: nothing to say
+            text = ""
+    return bool(_NEEDS_SAYING.search(str(text or "")))
+
+
 def _sentences_upto(text, count) -> list:
     body = _plain(text)
     parts = re.split(r"(?<=[.!?])\s+", body)

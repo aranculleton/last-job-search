@@ -44,7 +44,8 @@ NEVER = {
     "gmail_sync/**": "the mail cursor an older version left: message ids and subjects",
     "rounds/**": "a search round's working files, tens of megabytes, made again by the round",
     "job_scraper/notion_sync.json": "left by the removed /notion-sync, kept as it is",
-    ".agents/skills/**": "a job site of their own, committed by /add-portal with its code",
+    ".agents/skills/**": "a job site of their own: committed by /add-portal with its code, "
+                         "then saved like the profile once it is in the repo (own_portals)",
     "documents/linkedin/**": "the LinkedIn download: only its connections and invitations go",
     "documents/postings/**": "postings' own text, kept out like a round's",
     "documents/diplomas/**": "copies of their certificates, never committed",
@@ -56,8 +57,12 @@ FORCED = (
     "job_scraper/seen_jobs.json", "job_scraper/do_not_target.json",
     "documents/cv", "documents/applications", "documents/network", "documents/rounds",
     "documents/interview",
-    "cv/*_Resume_*.tex", "cv/*_Resume_*.pdf", "cv/*_CV_*.tex", "cv/*_CV_*.pdf",
-    "cover_letters/*_Cover_Letter_*.tex", "cover_letters/*_Cover_Letter_*.pdf",
+    # Every rendered document, whatever the person's word for it: a resume named in their
+    # own language (Lebenslauf, curriculo) matched neither "_Resume_" nor "_CV_", and every
+    # tailored one was lost with its chat (the stranger audit, 2026-11-03). The app's own
+    # templates there are left out by personal_paths.
+    "cv/*.tex", "cv/*.pdf", "cv/*.docx",
+    "cover_letters/*.tex", "cover_letters/*.pdf", "cover_letters/*.docx",
     "company_research/*.json", "upskill/*.md",
     # The LinkedIn download's connections and invitations, which later runs read (the ladder's
     # first rung, who has a request pending). In the cloud a chat's folder goes when it ends,
@@ -78,9 +83,30 @@ def _noise(rel: str) -> bool:
     return any(fnmatch.fnmatch(rel, pat) for pat in NOISE)
 
 
+def own_portals(root: str = ROOT) -> list[str]:
+    """The person's own job sites already in the repo (.agents/skills/<name>, committed by
+    /add-portal): a later fix to one was never saved, since only /add-portal's own first
+    commit ever added the folder (the stranger audit, 2026-11-03). Taken with a plain add,
+    so .gitignore keeps their node_modules and logs out."""
+    import personal_paths
+    base = os.path.join(root, ".agents", "skills")
+    try:
+        names = sorted(n for n in os.listdir(base) if os.path.isdir(os.path.join(base, n)))
+    except OSError:
+        return []
+    out = []
+    for n in names:
+        rel = f".agents/skills/{n}"
+        if personal_paths.is_personal(rel + "/SKILL.md") and \
+                _git(root, "ls-files", "--", rel).stdout.strip():
+            out.append(rel)
+    return out
+
+
 def paths(root: str = ROOT) -> tuple[list[str], list[str]]:
     """(plain, forced): the paths that exist, relative to `root`, in the rule's order."""
-    plain = [p for p in PLAIN if os.path.exists(os.path.join(root, p))]
+    import personal_paths
+    plain = [p for p in PLAIN if os.path.exists(os.path.join(root, p))] + own_portals(root)
     forced: list[str] = []
     for pat in FORCED:
         for full in sorted(glob.glob(os.path.join(glob.escape(root), pat))):
@@ -92,7 +118,7 @@ def paths(root: str = ROOT) -> tuple[list[str], list[str]]:
                         r = os.path.relpath(os.path.join(dp, f), root).replace(os.sep, "/")
                         if not _noise(r):
                             forced.append(r)
-            elif not _noise(rel):
+            elif not _noise(rel) and personal_paths.is_personal(rel):
                 forced.append(rel)
     return plain, list(dict.fromkeys(forced))
 
@@ -120,6 +146,21 @@ def gone(root: str = ROOT) -> list[str]:
     return [p for p in dict.fromkeys(r.stdout.split("\0")) if p and _under(p)
             and not any(p.startswith(d + "/") for d in PLAIN)]
 
+
+def unsaved(root: str = ROOT) -> list[str]:
+    """What this checkout holds of the person's that no commit holds yet: what a save would
+    stage (asked with git add --dry-run, so nothing is staged), what is staged already, and
+    what was taken away. [] when nothing waits."""
+    plain, forced = paths(root)
+    asks = ([["add", "-n", "--", *plain]] if plain else []) + \
+        [["add", "-n", "-f", "--", *forced[i:i + 200]] for i in range(0, len(forced), 200)]
+    out: list[str] = []
+    for args in asks:
+        out += [ln[5:-1] for ln in _git(root, *args).stdout.splitlines()
+                if ln.startswith("add '") and ln.endswith("'")]
+    out += gone(root)
+    out += _git(root, "diff", "--cached", "--name-only").stdout.split()
+    return list(dict.fromkeys(out))
 
 
 def _utf8_stdio() -> None:

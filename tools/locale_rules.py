@@ -190,6 +190,39 @@ IZE_SPELLINGS = {
 }
 
 
+# The variety a spelling setting names, however it is written. Setup writes the setting from
+# the market tables, which say "New Zealand English (British forms: colour, organise)",
+# "Irish and British English (en-IE)" or "en-GB"; the checks knew only the four bare words,
+# so any other value checked no spelling at all while the drafting pack promised a check.
+# Read in this order: a Canadian or Australian value may also say "British forms".
+_VARIETY_NAMED = (
+    ("canadian", r"canad\w*|en[-_ ]?ca"),
+    ("australian", r"australi\w*|aussie|en[-_ ]?au"),
+    ("american", r"americ\w*|us|usa|united states|en[-_ ]?us"),
+    ("british", r"brit\w*|uk|gb|england|english \(?uk\)?|united kingdom|en[-_ ]?gb|"
+                r"new[-_ ]?zealand|nz|en[-_ ]?nz|irish|ireland|ie|en[-_ ]?ie|indian?|en[-_ ]?in|"
+                r"south[-_ ]?african?|za|en[-_ ]?za|singapore\w*|sg|en[-_ ]?sg|hong kong|"
+                r"malaysia\w*|kenya\w*|nigeria\w*|pakistan\w*|ghana\w*|sri lanka\w*|"
+                r"scottish|welsh|commonwealth"),
+)
+
+
+def spelling_variety(value) -> str:
+    """The variety ("british", "american", "canadian" or "australian") a documents.spelling
+    value names, or "" for one that names none (a document in another language)."""
+    v = str(value or "").strip().lower()
+    for variety, words in _VARIETY_NAMED:
+        if re.search(r"(?<![a-z])(?:" + words + r")(?![a-z])", v):
+            return variety
+    return ""
+
+
+def unknown_spelling(value) -> bool:
+    """Is this an English spelling setting the checks cannot read, so nothing is checked?"""
+    v = str(value or "").strip().lower()
+    return bool(v) and not spelling_variety(v) and bool(re.search(r"english|\ben\b|^en[-_]", v))
+
+
 # The prefixes a word spelled -ise everywhere keeps that spelling under.
 _PREFIX = r"un|im|in|non|pre|re|mis|over|under|semi|self"
 
@@ -250,7 +283,8 @@ class Locale:
 
     def __init__(self, documents=None, legitimate_ise=()):
         doc = dict(documents or {})
-        self.spelling = str(doc.get("spelling", "") or "").lower()
+        self.spelling_setting = str(doc.get("spelling", "") or "")
+        self.spelling = spelling_variety(self.spelling_setting)
         self.noun = doc.get("noun", "resume")
         self.banned_nouns = list(doc.get("banned_nouns", []))
         self.banned_characters = tuple(doc.get("banned_characters", DEFAULT_BANNED_CHARACTERS))
@@ -341,6 +375,127 @@ def _quoted(text: str, m: re.Match) -> bool:
     return (before.count('"') % 2 == 1
             or before.count("\u201c") > before.count("\u201d")
             or opened > closed)
+
+
+# ------------------------------------------------------------------ dates
+
+# Resume headings written in English: a profile whose headings are not all in this set
+# writes its documents in another language.
+ENGLISH_HEADINGS = {"summary", "profile", "professional summary", "experience",
+                    "professional experience", "work experience", "employment", "skills",
+                    "technical skills", "key skills", "education", "certifications",
+                    "qualifications", "languages", "projects", "references", "interests"}
+
+# Month names, and how a date is written in full, in each language the market tables'
+# countries write documents in. A letter was dated with English month names in one of two
+# English orders whatever its language, so a German letter opened "Sehr geehrte" under
+# "3 November 2026". Polish takes the month in the genitive, as a date does.
+MONTHS = {
+    "en": "January February March April May June July August September October November December",
+    "de": "Januar Februar März April Mai Juni Juli August September Oktober November Dezember",
+    "fr": "janvier février mars avril mai juin juillet août septembre octobre novembre décembre",
+    "es": "enero febrero marzo abril mayo junio julio agosto septiembre octubre noviembre diciembre",
+    "pt": "janeiro fevereiro março abril maio junho julho agosto setembro outubro novembro dezembro",
+    "it": "gennaio febbraio marzo aprile maggio giugno luglio agosto settembre ottobre novembre "
+          "dicembre",
+    "nl": "januari februari maart april mei juni juli augustus september oktober november december",
+    "pl": "stycznia lutego marca kwietnia maja czerwca lipca sierpnia września października "
+          "listopada grudnia",
+    "sv": "januari februari mars april maj juni juli augusti september oktober november december",
+}
+MONTHS = {k: v.split() for k, v in MONTHS.items()}
+# (with the year, without it). English is the person's order, below.
+_DATE_FORM = {
+    "de": ("{d}. {M} {y}", "{d}. {M}"), "fr": ("{d} {M} {y}", "{d} {M}"),
+    "es": ("{d} de {M} de {y}", "{d} de {M}"), "pt": ("{d} de {M} de {y}", "{d} de {M}"),
+    "it": ("{d} {M} {y}", "{d} {M}"), "nl": ("{d} {M} {y}", "{d} {M}"),
+    "pl": ("{d} {M} {y}", "{d} {M}"), "sv": ("{d} {M} {y}", "{d} {M}"),
+    "ja": ("{y}年{m}月{d}日", "{m}月{d}日"),
+}
+
+
+def _headings_in_english(documents) -> bool:
+    heads = (documents or {}).get("headings") or {}
+    values = heads.values() if isinstance(heads, dict) else heads
+    return all(v.strip().lower() in ENGLISH_HEADINGS for v in values if isinstance(v, str))
+
+
+def _country_languages() -> list:
+    """The languages the market table of the person's country lists, or []."""
+    try:
+        cc = person.country().lower()
+    except Exception:  # noqa: BLE001  (no profile: no country)
+        return []
+    path = os.path.join(os.path.dirname(os.path.abspath(__file__)), "markets", cc + ".json")
+    if not cc or not os.path.exists(path):
+        return []
+    import json
+    try:
+        with open(path, encoding="utf-8") as fh:
+            return [str(x).lower() for x in json.load(fh).get("languages") or []]
+    except (OSError, ValueError):
+        return []
+
+
+def document_language(documents=None) -> str:
+    """The language a person's documents are written in, as a two-letter code: their
+    documents.language; "en" where the headings are English; else the one language their
+    country's market table lists; "" where it cannot be told."""
+    documents = documents or {}
+    lang = str(documents.get("language") or "").strip().lower()[:2]
+    if lang:
+        return lang
+    if _headings_in_english(documents):
+        return "en"
+    langs = [x for x in _country_languages() if x != "en"]
+    return langs[0] if len(langs) == 1 else ""
+
+
+def long_date(d, documents=None, year: bool = True, language: str = "") -> str:
+    """A date written out in the documents' language and the person's order.
+
+    English follows documents.date_format: a format that opens with the day
+    ("day_month_year", "DD/MM/YYYY") writes "3 November 2026", any other "November 3,
+    2026". Another language writes its own form ("3. November 2026", "3 de noviembre de
+    2026"). `language` overrides the documents' (a message written in English). The day
+    is formatted by hand: `%-d` raises on Windows."""
+    doc = documents or {}
+    lang = (language or document_language(doc) or "en")[:2]
+    if lang in _DATE_FORM:
+        form = _DATE_FORM[lang][0 if year else 1]
+        day = "1er" if lang == "fr" and d.day == 1 else str(d.day)
+        return form.format(d=day, m=d.month, y=d.year,
+                           M=MONTHS[lang][d.month - 1] if lang in MONTHS else "")
+    month = MONTHS["en"][d.month - 1]
+    if str(doc.get("date_format") or "").strip().lower().startswith("d"):
+        return f"{d.day} {month} {d.year}" if year else f"{d.day} {month}"
+    return f"{month} {d.day}, {d.year}" if year else f"{month} {d.day}"
+
+
+_ENGLISH_DATE = re.compile(r"^\s*(?:(\d{1,2})\s+([A-Za-z]+)|([A-Za-z]+)\s+(\d{1,2}),?)\s+(\d{4})\s*$")
+
+
+def read_long_date(text: str):
+    """The day an English long date names ("3 November 2026", "November 3, 2026"), or
+    None. A letter kept from before its language was known is dated this way, and a
+    re-render writes the same day in the letter's own language."""
+    import datetime
+    m = _ENGLISH_DATE.match(str(text or ""))
+    if not m:
+        return None
+    day, name = (m.group(1), m.group(2)) if m.group(1) else (m.group(4), m.group(3))
+    month = next((i for i, x in enumerate(MONTHS["en"], 1) if x.lower() == name.lower()), 0)
+    try:
+        return datetime.date(int(m.group(5)), month, int(day)) if month else None
+    except ValueError:
+        return None
+
+
+def dated_in_english(documents=None) -> bool:
+    """Would a letter in these documents be dated in English although it is written in
+    another language (one that cannot be told, or has no month names here)?"""
+    lang = document_language(documents)
+    return lang != "en" and lang not in _DATE_FORM
 
 
 def for_documents(documents=None, legitimate_ise=()) -> Locale:

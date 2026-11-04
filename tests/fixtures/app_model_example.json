@@ -1,7 +1,7 @@
 {
  "model": 1,
  "made_at": "2026-10-25T18:00:00Z",
- "rev": "faa0c96f7bc5",
+ "rev": "eb6568c5ddbd",
  "app": {
   "version": "4.8.0",
   "url": null,
@@ -13,7 +13,8 @@
   ],
   "privacy": "Only you can open this page unless you share it. It holds first names, employers, your drafts and your setup answers, so keep it unshared.",
   "repo": "https://github.com/aranculleton/last-job-search",
-  "page": 17
+  "page": 17,
+  "not_saved": 0
  },
  "person": {
   "first_name": "Morgan",
@@ -47,7 +48,7 @@
  ],
  "jobs": {
   "round": "r9",
-  "made_at": "2026-11-03T22:34:44Z",
+  "made_at": "2026-11-04T01:01:53Z",
   "met": false,
   "summary": "3 roles from the last search to look at, 1 of them scoring 75 or more. 3 left out, each with its reason.",
   "rows": [
@@ -841,7 +842,7 @@
    "when": "2026-10-28",
    "prep": {
     "path": "documents/applications/thornbury_bank_risk_analyst_thornbury/interview_prep.md",
-    "updated": "2026-11-03T22:34:44Z"
+    "updated": "2026-11-04T01:01:53Z"
    },
    "questions": 2,
    "all_day": true,
@@ -1728,8 +1729,8 @@
   "helper": "Job search helper",
   "wake": {
    "label": "Wake Claude",
-   "url": "https://claude.ai/code?prompt=Look%20after%20my%20job%20search%20page%20from%20now%20on%3A%20python3%20tools%2Fapp.py%20start%20--listen%20--helper&repositories=aranculleton%2Flast-job-search",
-   "prompt": "Look after my job search page from now on: python3 tools/app.py start --listen --helper"
+   "url": "https://claude.ai/code?prompt=Look%20after%20my%20job%20search%20page%20from%20now%20on.&repositories=aranculleton%2Flast-job-search",
+   "prompt": "Look after my job search page from now on."
   },
   "seen": {
    "title": null,
@@ -1743,6 +1744,7 @@
  "schedule": {
   "set_up": true,
   "off": false,
+  "late": "Your brief didn't come this morning. Claude is looking into it.",
   "when": "Every day at 7:38",
   "days": [
    0,
@@ -1765,7 +1767,7 @@
    "on": "brief.on"
   },
   "id": "schedule",
-  "rev": "577355c2132b"
+  "rev": "7cd56d1d27f9"
  },
  "you": {
   "id": "you",

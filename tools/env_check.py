@@ -358,6 +358,10 @@ def main(argv: list[str] | None = None) -> int:
         return installs.main(argv[1:] or ["all"])
     if argv[:1] == ["--allowlist"]:
         print("\n".join(allowlist()))
+        # A list reaches only the sites it names: employers' own careers pages, read for a
+        # draft's research and for "Add a job" with a link, need Full (X-80).
+        print("# Employers' own websites are not on this list and stay blocked with it: "
+              "Full is the setting that reaches them.", file=sys.stderr)
         return 0
     if argv[:1] == ["--https"]:
         url = argv[1] if argv[1:] else https_host()

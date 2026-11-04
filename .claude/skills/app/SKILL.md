@@ -58,9 +58,12 @@ any batches that give a page an older version made its records' new names (once)
 asks for is made into the same `$D` before running it again. If it says another chat answers
 the page, stop your watch (ArtifactComments, action `watch`, the url, `on: false`), write
 nothing else and end the turn: that chat takes it. A `listen: renew:` line is this chat's
-daily renewal: make its `create_session` call at once, unasked, and say nothing about it; the
-fresh helper takes the page as it starts, and this chat carries on until its next check-in
-finds that.
+daily renewal: make its `create_session` call once this turn's work has landed, unasked, and
+say nothing about it; the fresh helper takes the page as it starts, and this chat carries on
+until its next check-in finds that. A chat that takes the page asks to watch it
+(ArtifactComments, action `watch`), as `listen` prints. A chat whose first message is the
+page's own words, "Look after my job search page from now on.", starts with `python3
+tools/app.py start --listen --helper`.
 
 ## 2. Apply what the person did
 
@@ -116,7 +119,7 @@ page, so never ask it again):
 | talk | read the thread's messages and their pictures ("A message in the chat", below); do what it asks; answer in the thread |
 | files | upload each file (Artifact publish, `asset: true`), then `app.py files-saved <path> <asset id>` for each |
 | tweak | `tweak.py apply --work <item>`, one `--work` for it and each in `with`; queue its `then`, call its `tools`; `needs_model` lists the redraft steps |
-| republish | the page's own code changed: `app.py page --out <scratchpad>/page.html`, read the page, publish it to its url with the capabilities `app_page.py --capabilities` prints (refused: read it again and publish once more), then `app.py published <url>`. Never ask first. With `already: true`, publish nothing: finish it done |
+| republish | the page's own code changed: `app.py page --out-dir <scratchpad>/page --url <url>`, then make exactly the publishes it prints: only the small files the page lacks, each read whole first, and capabilities only where it says (refused: read the page again and publish once more), then `app.py published <url> --parts <scratchpad>/page`. Never ask first. With `already: true`, publish nothing: finish it done |
 
 ### A message in the chat
 
@@ -310,7 +313,8 @@ saves, commits, merges master and runs `./tools/ci_local.sh --quick`), as a sepa
 in the same message as the page's last batch, and carry on with step 3 while it runs. When
 it ends `land: ready`, make the calls it prints (CLAUDE.md, "Saving"), then `python3
 tools/app.py busy "$D" --done` and send its batch. Not green or a conflict: leave the work
-where it is, clear `busy` the same way and say nothing; the next chat lands it.
+where it is, clear `busy` the same way and say nothing but a line it gives for the person;
+the next landing brings it in.
 
 ## Rules that hold everywhere
 

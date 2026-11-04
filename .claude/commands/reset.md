@@ -164,6 +164,14 @@ Wait for the response.
 
 ### Profile reset
 
+First the scheduled tasks, which outlive the profile they are recorded in (a brief kept
+replying "No profile yet" into the old chat every morning): `list_triggers` (every page),
+and turn off (`update_trigger`, `enabled: false`; never delete) each task that is on whose
+prompt starts "Scheduled run:" and names `automation/prompts/` (the brief, the daily upkeep,
+the shortlist, a welcome-back or setup reminder). Where this chat has no such tool, a brief
+that runs after the reset turns itself off. Say it in the closing line: "Your morning brief
+is off; setting up again turns it back on."
+
 ```bash
 git rm -r -q --ignore-unmatch profile/
 rm -rf profile/

@@ -310,7 +310,16 @@ _QUESTION_OPENER = re.compile(
     # stuck with me" is common ground, not a question.
     r"|(?:how|what|why|when|where|who|which)\s+(?:do|does|did|is|are|was|were|would|could|"
     r"can|should|has|have|had|will)"
-    r"|how (?:many|much|long|often|big)|any chance)\b", re.I)
+    r"|how (?:many|much|long|often|big)|any chance"
+    # A question in the languages a note may be written in, which ended on a full stop:
+    # "Hätten Sie Zeit für ein kurzes Gespräch", "Auriez-vous", "¿Tendría", "Você teria",
+    # "Avrebbe", "Zou u", "Skulle du", "Czy".
+    r"|(?:h[äa]tten|haben|k[öo]nnten|k[öo]nnen|w[üu]rden|w[äa]ren|sind|darf)\s+(?:sie|du|ihr|wir|ich)"
+    r"|gibt es|(?:auriez|seriez|pourriez|avez|[êe]tes|voudriez|aurais|serais|pourrais)-(?:vous|tu)"
+    r"|est-ce que|tendr[íi]a|podr[íi]a|estar[íi]a|le gustar[íi]a|te gustar[íi]a"
+    r"|(?:voc[êe]|o senhor|a senhora)\s+(?:teria|poderia|estaria|gostaria)|poderia|teria"
+    r"|avrebbe|potrebbe|sarebbe|avresti|potresti|(?:zou|heeft|hebt|kunt|wilt)\s+(?:u|je)"
+    r"|(?:heb|kun|wil)\s+je|(?:skulle|har|kan|vill)\s+(?:du|ni)|czy)(?!\w)|^\s*¿", re.I)
 
 
 def work_auth_line(seniority="peer") -> str:
@@ -1083,13 +1092,24 @@ def _per_reader(got, default: dict) -> dict:
 
 
 # Whether a first message states work authorization. To a recruiter, whose reply is about
-# roles; to a decision-maker only once the messages the person approves say so (the
-# maintainer, 2026-10-22: a recruiter's by default, not a decision-maker's); never to a
-# peer, who keeps it for the reply or the referral stage. A reader the profile names keeps
-# the profile's answer.
+# roles, where the person's status needs saying (a permit, a visa: profile_facts
+# .status_needs_saying), which a citizen's does not; to a decision-maker only once the
+# messages the person approves say so; never to a peer, who keeps it for the reply or the
+# referral stage. A reader the profile names keeps the profile's answer.
 _ELIGIBILITY_SET = getattr(_NET, "ELIGIBILITY", None)
-ELIGIBILITY = _per_reader(_ELIGIBILITY_SET,
-                          {"recruiter": True, "decision_maker": False, "peer": False})
+
+
+def default_eligibility() -> dict:
+    """ELIGIBILITY where the profile names no reader."""
+    try:
+        import profile_facts
+        status = profile_facts.status_needs_saying()
+    except Exception:  # noqa: BLE001  no profile to read: nothing to state
+        status = False
+    return {"recruiter": status, "decision_maker": False, "peer": False}
+
+
+ELIGIBILITY = _per_reader(_ELIGIBILITY_SET, default_eligibility())
 
 
 # The channels a first message goes by; an approved "dm", "reply" or "nudge" is inside a

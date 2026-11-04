@@ -52,7 +52,7 @@ import sys
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 from company_key import key as company_key  # noqa: E402
-from text_screen import entry_years, money_values, salary_range  # noqa: E402
+from text_screen import _PAY_LOCAL, entry_years, money_values, salary_range  # noqa: E402
 from prefilter import age_days as _age_days, posted_age  # noqa: E402
 import person  # noqa: E402
 
@@ -216,7 +216,7 @@ SCALE = getattr(_S, "OPP_SCALE", None) or min(CALIBRATED_SCALE, ceiling())
 
 _PAY_CUE = re.compile(r"\b(?:salary|salaries|pay|paid|compensation|base|wage|remuneration|"
                       r"per (?:year|annum|hour)|annual(?:ly)?|/\s*(?:yr|year|hr|hour)|ote|"
-                      r"package|earn\w*|range)\b", re.I)
+                      r"package|earn\w*|range|" + _PAY_LOCAL + r")\b", re.I)
 
 
 def _public(company, posting) -> bool:

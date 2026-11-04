@@ -22,14 +22,18 @@ whenever ci_local.sh runs, and the app's tests check the example's.
     python3 tools/routines.py off | on       # the brief alone turned off, or on again
     python3 tools/routines.py calls | called <n> [--id <trig_...>]
                                              # the scheduled-task calls a chat still owes
+    python3 tools/routines.py remind | reminded --trigger <id>
+                                             # the one setup reminder, while setup waits
+    python3 tools/routines.py mended         # every task's prompt now gets its files
 
 Code cannot change a scheduled task: only a chat can (update_trigger, create_trigger). So
 `move`, `pause`, `resume`, `off` and `on` write the registry and the state files, and keep
 the calls a chat owes in the registry (`owed`) until `called` says each was made. The page
 queues the change (its actions brief.move, brief.pause, brief.resume, brief.off, brief.on);
-the chat that applies them, or the next one that starts, makes the calls. Nobody gets a
-brief they did not ask for: it is made only when the person turns it on (the bell on their
-Brief, or Settings), every day at 7:38 their time unless they choose other days.
+the chat that applies them, or the next one that starts, makes the calls. `calls` first
+mends what code can (heal: a break whose day passed, a zone this computer does not know, a
+brief that did not come). Setup turns the brief on, every day at 7:38 their time unless they
+choose other days; the bell on their Brief, or Settings, changes it or turns it off.
 
 Three set-ups are recognised (`setup` in the registry; automation/README.md
 walks through the first two):
@@ -172,7 +176,12 @@ def check(reg: dict, root: str = ROOT) -> list[str]:
         if setup != "routines_screen" and not r.get("trigger_id"):
             out.append(f"{name}: no trigger_id; a chat-bound task is created from a chat, "
                        f"which reports the id")
-        if setup == "routines_screen" and r.get("notifications", {}).get("push") is not True:
+        # A Routines-screen task that reports to the person notifies by itself (the brief run
+        # then sends no push of its own: brief_pushes_itself). The silent daily upkeep reports
+        # to nobody and needs none: requiring it turned the local check red for good once the
+        # upkeep was made, and nothing was saved again (X-33).
+        if setup == "routines_screen" and r.get("key") != UPKEEP_KEY \
+                and r.get("notifications", {}).get("push") is not True:
             out.append(f"{name}: a Routines-screen task needs notifications on "
                        f'("notifications": {{"push": true}}) or nobody hears from it')
     s = reg.get("stub", DEFAULT_STUB)
@@ -230,7 +239,33 @@ def listing(got) -> tuple[list, bool]:
 
 
 def _is_brief_prompt(prompt: str) -> bool:
+    if str(prompt or "").startswith(REMIND_STUB_HEAD):
+        return False                      # the one setup reminder, never a brief
     return BRIEF_FILE in (prompt or "") or "Scheduled run: morning brief" in (prompt or "")
+
+
+def _is_app_prompt(prompt: str) -> bool:
+    """A stored prompt the app made: its stub, naming a prompt file under automation/prompts."""
+    p = str(prompt or "")
+    return p.startswith("Scheduled run:") and "automation/prompts/" in p
+
+
+def mend(triggers, repo: str) -> list[dict]:
+    """The update_trigger calls that give each of the app's tasks that is on the line that
+    gets the copy where its chat has none (the brief, the job round, a welcome-back brief):
+    a task whose chat was deleted wakes a new, empty one, and without the line every run
+    replied "could not read the file" there (X-43). Any chat can make these, not only the one
+    that answers the page."""
+    out = []
+    for t in triggers or []:
+        prompt = str(t.get("prompt") or "")
+        fixed = with_copy(prompt, repo)
+        if t.get("id") and t.get("enabled") is not False and _is_app_prompt(prompt) \
+                and fixed != prompt:
+            out.append({"tool": "update_trigger", "args": {"trigger_id": t["id"], "prompt": fixed},
+                        "why": f"{t.get('name') or 'a scheduled task'} gets its files in any chat "
+                               "it lands in"})
+    return out
 
 
 def _health(t: dict | None) -> str:
@@ -300,6 +335,18 @@ BRIEF_NAME = "Job search: morning brief"
 # What a chat on the person's computer says to "set up my brief": the bell does it, in the cloud.
 BRIEF_BELL = ("Your morning brief is ready to start: press the bell on your Brief once. It "
               "comes from Claude's helper in the cloud, so it arrives when your computer is off.")
+# The same, with no page and so no bell (X-37): the page comes first, made by this chat.
+BRIEF_NO_PAGE_LOCAL = ("make their page first: python3 tools/app.py start, and do what it prints "
+                       "(it publishes the page); then tell them: " + BRIEF_BELL)
+# The one reminder made when the page goes up and setup is not finished: nothing else is
+# scheduled before setup's last step, and a stranger who answered nothing that first sitting
+# was never contacted again (X-23).
+REMIND_NAME = "Job search: setup reminder"
+REMIND_STUB_HEAD = "Scheduled run: setup reminder."
+REMIND_HOURS = 24
+# The scheduler's own slow window: "Runs that start between 6 AM and 9 AM Pacific time ...
+# can be delayed. If the user named no time, choose one outside those hours" (create_trigger).
+SLOW_ZONE, SLOW_FROM, SLOW_TO = "America/Los_Angeles", 6, 9
 BRIEF_DAYS = (0, 1, 2, 3, 4, 5, 6)      # every day: one short read each morning (the maintainer, 2026-10-29)
 DAY_NAMES = {1: "Mondays", 2: "Tuesdays", 3: "Wednesdays", 4: "Thursdays", 5: "Fridays",
              6: "Saturdays", 0: "Sundays", 7: "Sundays"}
@@ -350,30 +397,101 @@ def home_zone() -> str:
         return ""
 
 
-def default(zone: str = "", days=BRIEF_DAYS, hour: int = 8) -> dict:
-    """The brief as it is first made, with no questions: every day at 7:38 their time."""
+def zone_ok(zone: str) -> bool:
+    """A time zone this computer knows by name. "EST/EDT" has the shape of one and is not:
+    a brief made in it is refused or runs at the wrong hour (X-66)."""
+    if not TIMEZONE.fullmatch(str(zone or "")):
+        return False
+    try:
+        import zoneinfo
+        zoneinfo.ZoneInfo(zone)
+        return True
+    except Exception:  # noqa: BLE001  unknown here, or no zone data at all
+        return False
+
+
+def city_of(zone: str) -> str:
+    """"New York" for America/New_York: how the person says their own clock."""
+    return str(zone or "").rsplit("/", 1)[-1].replace("_", " ")
+
+
+def _slow(zone: str, h: int, m: int) -> bool:
+    """Does h:m in `zone` start inside the scheduler's slow window (6 to 9 AM Pacific), in
+    winter or in summer?"""
+    try:
+        import zoneinfo
+        here, there = zoneinfo.ZoneInfo(zone), zoneinfo.ZoneInfo(SLOW_ZONE)
+    except Exception:  # noqa: BLE001
+        return False
+    year = datetime.date.today().year
+    for month in (1, 7):
+        t = datetime.datetime(year, month, 15, h, m, tzinfo=here).astimezone(there)
+        if SLOW_FROM <= t.hour < SLOW_TO:
+            return True
+    return False
+
+
+def has_page() -> bool:
+    """Does the person have a page (profile/app.json `url`)? Without one there is no Brief
+    and no bell, and everything said about the brief names the chat instead (X-11)."""
+    try:
+        import person
+        with open(person.path("app.json"), encoding="utf-8") as fh:
+            got = json.load(fh)
+    except Exception:  # noqa: BLE001  no profile, no page record
+        return False
+    return isinstance(got, dict) and str(got.get("url") or "").startswith("https://claude.ai/")
+
+
+def default(zone: str = "", days=BRIEF_DAYS, hour: int = 8, page: bool | None = None) -> dict:
+    """The brief as it is first made, with no questions: every day at 7:38 their time, or
+    5:38 where 7:38 falls in the scheduler's slow window (US Pacific and Mountain, X-69). Its
+    line says where it comes and in whose time: the page's Brief, or with no page this chat,
+    which the person can change by saying so (X-11, X-1)."""
     zone = zone or home_zone()
+    if zone and not zone_ok(zone):
+        zone = ""
     h, m = brief_minute(hour=hour)
+    if zone and _slow(zone, h, m):
+        h = next((x for x in (h - 2, h + 2) if not _slow(zone, x, m)), h)
     named = day_words(days)
+    page = has_page() if page is None else page
+    at = f"{in_sentence(named)} at {h}:{m:02d}" + (f", {city_of(zone)} time" if zone else "")
+    say = (f"Your brief is on: {at}, on your page's Brief. Change it or turn it off from the "
+           f"bell there." if page else
+           f"Your morning brief comes to this chat {at}. Say \"move my brief\" or \"stop my "
+           f"brief\" in any chat to change it.")
     return {"zone": zone, "cron": f"CRON_TZ={zone} {m} {h} * * {_cron_days(days)}" if zone else "",
-            "when": f"{named} at {h}:{m:02d}",
-            "say": f"Your brief is on: {in_sentence(named)} at {h}:{m:02d}. Change it or turn it "
-                   f"off from the bell on your Brief."}
+            "when": f"{named} at {h}:{m:02d}", "say": say}
+
+
+def _page_chat() -> str:
+    """The chat that answers the page, as this checkout last saw it, or ""."""
+    try:
+        import app_listen
+        got = str((app_listen.seen().get("listener") or {}).get("chat") or "")
+    except Exception:  # noqa: BLE001  no record here
+        return ""
+    return got if got.startswith("session_") else ""
 
 
 def plan(owner: str, name: str, zone: str = "", now: datetime.datetime | None = None,
-         chat: str = "") -> dict:
+         chat: str = "", initiation: str = "human_request") -> dict:
     """The exact calls a cloud chat makes to set the brief up with no questions: a task
-    bound to the chat that answers the page (`chat`, this one by default), so the brief
-    starts no chat of its own, and one first run a few minutes on (never fire_trigger, which
-    starts a new chat with no copy in it). No chat is ever made for it: where this chat's id
-    cannot be read, `chat` is empty and the caller asks get_session for it first."""
+    bound to the chat that answers the page where there is one, else this chat (`chat`
+    overrides both), so the brief starts no chat of its own and never lands in whichever chat
+    a background upgrade happened to run in (X-11), and one first run a few minutes on (never
+    fire_trigger, which starts a new chat with no copy in it). No chat is ever made for it:
+    where this chat's id cannot be read, `chat` is empty and the caller asks get_session for
+    it first. `initiation` is own_initiative where nobody asked (the brief-daily upgrade)."""
     d = default(zone)
     stub_text = with_copy(DEFAULT_STUB.format(label="morning brief", Label="Morning brief",
                                               prompt_file=BRIEF_FILE, relay_id=""),
                           f"{owner}/{name}" if owner and name else "")
     now = now or datetime.datetime.now(datetime.timezone.utc)
     first = (now + datetime.timedelta(minutes=5)).replace(microsecond=0)
+    if not chat and has_page():
+        chat = _page_chat()
     if not chat:
         import app_listen
         chat = app_listen.this_chat()
@@ -382,14 +500,100 @@ def plan(owner: str, name: str, zone: str = "", now: datetime.datetime | None = 
     out = {
         "create_trigger": {"name": BRIEF_NAME, "persistent_session_id": sid,
                            "cron_expression": d["cron"], "prompt": stub_text,
-                           "connectors": [], "initiation": "human_request"},
+                           "connectors": [], "initiation": initiation},
         "first_brief": {"name": "Job search: first brief", "persistent_session_id": sid,
                         "run_once_at": first.strftime("%Y-%m-%dT%H:%M:%SZ"),
-                        "prompt": stub_text, "connectors": [], "initiation": "human_request"},
+                        "prompt": stub_text, "connectors": [], "initiation": initiation},
         "record": (f"python3 tools/routines.py record --session {sid} --trigger "
                    f"<the task's id> --cron \"{d['cron']}\""),
         "say": d["say"], "zone": d["zone"], "chat": chat}
     return out
+
+
+def where_line(reg: dict) -> str:
+    """Where the brief comes, when, and how to change it, in one plain line, or "" with no
+    brief on. Never a promise of a push: the reply is the record."""
+    r = _brief(reg)
+    if not r or r.get("off") or reg.get("pause"):
+        return ""
+    got = read_cron(r.get("cron") or "")
+    if not got.get("when"):
+        return ""
+    zone = got.get("zone", "")
+    city = f", {city_of(zone)} time" if zone_ok(zone) else ""
+    page = has_page()
+    where = ("as a new chat each time" if setup_of(reg) == "routines_screen" else "to this chat")
+    where += " and to your page's Brief" if page else ""
+    change = ("Change it from the bell on your Brief." if page else
+              "Say \"move my brief\" or \"stop my brief\" in any chat to change it.")
+    return f"Your brief comes {where} {in_sentence(got['when'])}{city}. {change}"
+
+
+def where_once(write: bool = False, path: str | None = None) -> str:
+    """where_line, once: the first brief after this update says where it comes (a brief made
+    before was posted into a chat nobody reopened, and nothing said so: X-1). Recorded with
+    `write`, so it is never said again."""
+    path = _path(path)
+    try:
+        reg = load(path)
+    except (OSError, ValueError):
+        return ""
+    if reg.get("told_where"):
+        return ""
+    line = where_line(reg)
+    if line and write:
+        reg["told_where"] = datetime.date.today().isoformat()
+        _save(reg, path)
+    return line
+
+
+def remind_plan(owner: str, name: str, chat: str = "",
+                now: datetime.datetime | None = None) -> dict:
+    """The one setup reminder: a run a day from now, bound to this chat, whose brief says only
+    that setup waits on the page and sends that line as a push (tools/brief.py). Made when the
+    page first goes up with setup unfinished; never a second (`remind_due`)."""
+    now = now or datetime.datetime.now(datetime.timezone.utc)
+    at = (now + datetime.timedelta(hours=REMIND_HOURS)).replace(microsecond=0)
+    if not chat:
+        import app_listen
+        chat = app_listen.this_chat()
+    chat = chat if str(chat).startswith("session_") else ""
+    prompt = with_copy(DEFAULT_STUB.format(label="setup reminder", Label="Setup reminder",
+                                           prompt_file=BRIEF_FILE, relay_id=""),
+                       f"{owner}/{name}" if owner and name else "")
+    return {"create_trigger": {"name": REMIND_NAME, "persistent_session_id": chat or
+                               "<the session id>", "run_once_at": at.strftime("%Y-%m-%dT%H:%M:%SZ"),
+                               "prompt": prompt, "connectors": [], "initiation": "own_initiative"},
+            "record": "python3 tools/routines.py reminded --trigger <the task's id>",
+            "chat": chat}
+
+
+def remind_due(path: str | None = None) -> bool:
+    """Is the setup reminder still to make: a page, setup not finished, and neither a brief
+    nor a reminder on file?"""
+    try:
+        import app_setup
+        if not has_page() or app_setup._finished():
+            return False
+    except Exception:  # noqa: BLE001
+        return False
+    try:
+        reg = load(_path(path))
+    except Exception:  # noqa: BLE001  no registry yet: nothing made
+        reg = {}
+    return not reg.get("reminder") and _brief(reg) is None
+
+
+def reminded(trigger: str, path: str | None = None) -> str:
+    path = _path(path)
+    try:
+        reg = load(path)
+    except (OSError, ValueError):
+        reg = {}
+    reg["reminder"] = {"trigger_id": trigger, "made": datetime.date.today().isoformat()}
+    if os.path.dirname(path):
+        os.makedirs(os.path.dirname(path), exist_ok=True)
+    return _save(reg, path)
 
 
 def record(session: str, trigger: str, cron: str = "", path: str | None = None,
@@ -409,6 +613,9 @@ def record(session: str, trigger: str, cron: str = "", path: str | None = None,
     reg.pop("_about", None) if reg.get("_about", "").startswith("The example person's") else None
     cron = cron or default()["cron"]
     m = re.match(r"CRON_TZ=(\S+) ", cron)
+    if m and not zone_ok(m.group(1)):
+        raise ValueError(f"{m.group(1)!r} is not a time zone this computer knows; make the task "
+                         f"again in the zone routines.py default names")
     # An older ops registry stays one (its relay and other tasks are checked as one); the
     # brief alone names the chat it moved into.
     reg["setup"] = setup_of(reg) or setup
@@ -421,6 +628,11 @@ def record(session: str, trigger: str, cron: str = "", path: str | None = None,
     was = next((r for r in reg.get("routines") or [] if _is_brief(r)), None) or {}
     if was.get("off"):
         entry["off"] = True
+    # The day it was made, so a brief due before it existed is never read as one that did not
+    # come (overdue); and its prompt is the stub with the line that gets the copy (plan()).
+    entry["made"] = was.get("made") or datetime.date.today().isoformat()
+    entry["copy"] = True
+    reg["told_where"] = reg.get("told_where") or entry["made"]   # its maker said where it comes
     ops = (reg.get("ops_session") or {}).get("id", "")
     if reg["setup"] == "chat_per_briefing" or (
             reg["setup"] == "ops_relay" and own_chat and session and session != ops):
@@ -452,9 +664,11 @@ def upkeep_entry(reg: dict) -> dict | None:
 
 
 def brief_every_day(reg: dict) -> bool:
-    """Is the brief on, with a task, every day of the week? Then it keeps things current."""
+    """Is the brief on, with a task, every day of the week? Then it keeps things current. A
+    Routines-screen task may carry no id (the README says it is optional): its cron is read
+    all the same, or the upkeep was made beside a daily routine (X-33)."""
     r = _brief(reg)
-    if not r or r.get("off") or not r.get("trigger_id"):
+    if not r or r.get("off") or not (r.get("trigger_id") or setup_of(reg) == "routines_screen"):
         return False
     return read_cron(r.get("cron") or "").get("days") == list(range(7))
 
@@ -464,12 +678,17 @@ def needs_upkeep(reg: dict) -> bool:
 
 
 def upkeep_cron(reg: dict) -> str:
-    """Once a day, before the person is up: 5-something in their zone, off the hour."""
+    """Once a day, before the person is up: 5-something in their zone, off the hour, and only
+    on the days the brief does not run, since a brief does the same (X-38)."""
     zone = reg.get("timezone") or home_zone()
     if not zone:
         return ""
     h, m = brief_minute(UPKEEP_NAME, hour=6)
-    return f"CRON_TZ={zone} {m} {h} * * *"
+    r = _brief(reg)
+    on = set(read_cron((r or {}).get("cron") or "").get("days") or []) \
+        if r and not r.get("off") else set()
+    rest = [d for d in range(7) if d not in on]
+    return f"CRON_TZ={zone} {m} {h} * * {_cron_days(rest or range(7))}"
 
 
 def upkeep_stub(repo: str = "") -> str:
@@ -499,6 +718,20 @@ def record_upkeep(session: str, trigger: str, cron: str, path: str | None = None
         json.dump(reg, fh, indent=2, ensure_ascii=False)
         fh.write("\n")
     return path
+
+
+def rebind(key: str, session: str, trigger: str, path: str | None = None) -> str:
+    """A task other than the brief (the job round) made again in another chat: its entry names
+    the new task and chat, and keeps its days, time and prompt file (tools/tidy.py)."""
+    path = _path(path)
+    reg = load(path)
+    r = next((x for x in reg.get("routines") or [] if x.get("key") == key), None)
+    if r is None:
+        raise ValueError(f"no task {key!r} in the registry")
+    r["trigger_id"] = trigger
+    r["chat"] = {"session_id": session}
+    r["copy"] = True
+    return _save(reg, path)
 
 
 def forget_upkeep(path: str | None = None) -> str:
@@ -618,6 +851,20 @@ def _brief(reg: dict) -> dict | None:
     return next((r for r in work(reg) if _is_brief(r)), None)
 
 
+def brief_pushes_itself(reg: dict) -> bool:
+    """Does the brief reach the person's phone without the run sending a push itself? A
+    Routines-screen task does (notifications on, which `check` requires), and so does an
+    older ops-chat brief with no chat of its own (the relay pushes). A brief bound to a chat
+    does not: create_trigger's notifications apply only to a task that starts a new chat on
+    each run, so the run sends its own (claude_surfaces: chat-push). A chat-only person's
+    brief posted into a chat nobody was looking at for days (2026-11-03)."""
+    setup = setup_of(reg)
+    if setup == "routines_screen":
+        return True
+    brief = _brief(reg) or {}
+    return setup == "ops_relay" and not brief.get("chat")
+
+
 def _owe(reg: dict, call: dict) -> None:
     """Keep a scheduled-task call a chat must make; a newer one for the same task and the
     same kind of change replaces an older one."""
@@ -633,12 +880,133 @@ def _owe(reg: dict, call: dict) -> None:
     reg["owed"] = owed
 
 
-def calls(path: str | None = None) -> list[dict]:
-    """The scheduled-task calls a chat still owes, oldest first; [] with no registry."""
+def calls(path: str | None = None, mend_first: bool = True, today: str = "") -> list[dict]:
+    """The scheduled-task calls a chat still owes, oldest first; [] with no registry. Every
+    chat that asks (a start, a wake, the brief) first has heal() mend what code can see is
+    wrong, so what it owes is here to make."""
+    if mend_first:
+        try:
+            heal(path, today=today)
+        except Exception:  # noqa: BLE001  a registry that cannot be mended is read as it is
+            pass
     try:
         return list(load(_path(path)).get("owed") or [])
     except (OSError, ValueError):
         return []
+
+
+def _repo() -> str:
+    try:
+        import place
+        owner, name = place.repo()
+        return f"{owner}/{name}" if owner and name else ""
+    except Exception:  # noqa: BLE001
+        return ""
+
+
+LATE_GRACE_H = 2        # a run may start late; past this, the brief has not come
+
+
+def _brief_days_on_file() -> set[str]:
+    try:
+        import person
+        folder = person.state("documents", "briefs")
+        return {f[:10] for f in os.listdir(folder) if re.fullmatch(r"\d{4}-\d{2}-\d{2}\.md", f)}
+    except Exception:  # noqa: BLE001  no folder yet
+        return set()
+
+
+def overdue(reg: dict, now: datetime.datetime | None = None, days_on_file=None) -> str:
+    """The day (YYYY-MM-DD) of the latest brief that was due and did not come, or "": its
+    time on one of its days passed more than LATE_GRACE_H hours ago, in its own zone, and no
+    record of that day or a later one is in documents/briefs/. Never for a brief that is off,
+    resting, made after that day, or with no record at all and no day it was made (an older
+    registry: nothing to measure from). The brief's silence was the only alarm, and a person
+    who never got a push did not know one was expected (X-10)."""
+    r = _brief(reg)
+    if not r or r.get("off") or reg.get("pause"):
+        return ""
+    got = read_cron(r.get("cron") or "")
+    if not got or not got.get("days") or not zone_ok(got.get("zone", "")):
+        return ""
+    import zoneinfo
+    tz = zoneinfo.ZoneInfo(got["zone"])
+    now = (now or datetime.datetime.now(datetime.timezone.utc)).astimezone(tz)
+    h, m = (int(x) for x in got["time"].split(":"))
+    have = _brief_days_on_file() if days_on_file is None else set(days_on_file)
+    made = str(r.get("made") or "")
+    if not made and not have:
+        return ""
+    for back in range(8):
+        day = now.date() - datetime.timedelta(days=back)
+        if (day.isoweekday() % 7) not in got["days"]:
+            continue
+        due = datetime.datetime(day.year, day.month, day.day, h, m, tzinfo=tz)
+        if now < due + datetime.timedelta(hours=LATE_GRACE_H):
+            continue
+        iso = day.isoformat()
+        if (made and iso <= made) or iso <= str(reg.get("back_on") or "") \
+                or any(d >= iso for d in have):
+            return ""
+        return iso
+    return ""
+
+
+def late_line(day: str, today: datetime.date | None = None) -> str:
+    """The plain line the page and a chat say for a brief that did not come."""
+    try:
+        d = datetime.date.fromisoformat(day)
+    except ValueError:
+        return ""
+    when = "this morning" if d == (today or datetime.date.today()) else f"on {_short(d)}"
+    return f"Your brief didn't come {when}. Claude is looking into it."
+
+
+def heal(path: str | None = None, today: str = "", now: datetime.datetime | None = None) -> list[str]:
+    """What code can mend in the registry by itself, at any start, wake or brief, with the
+    scheduled-task calls each needs kept owed for the chat: a break whose day has passed is
+    lifted (a welcome-back run that failed left the brief off for good while the page showed it
+    on, X-9); a time zone this computer does not know is rewritten to the person's own (X-66);
+    and a brief that did not come owes one look at the scheduled tasks, once for that day
+    (X-10). Returns plain lines for the person, one per change."""
+    path = _path(path)
+    try:
+        reg = load(path)
+    except (OSError, ValueError):
+        return []
+    if today and now is None:
+        d = datetime.date.fromisoformat(today)
+        now = datetime.datetime(d.year, d.month, d.day, 12, tzinfo=datetime.timezone.utc)
+    today = today or datetime.date.today().isoformat()
+    said = []
+    p = reg.get("pause") or {}
+    if p.get("until") and p["until"] <= today:
+        got = resume(today, path)
+        if got.get("resumed"):
+            said.append("Your break ended on %s, and your brief is on again." % _short(
+                datetime.date.fromisoformat(p["until"])))
+        reg = load(path)
+    tz = reg.get("timezone") or ""
+    if tz and _brief(reg) is not None and not zone_ok(tz):
+        home = home_zone()
+        if zone_ok(home):
+            try:
+                got = move(zone=home, path=path)
+                said.append(f"Your brief now comes {in_sentence(got['when'])}, "
+                            f"{city_of(home)} time.")
+            except ValueError:
+                pass
+            reg = load(path)
+    day = overdue(reg, now)
+    if day and reg.get("late_checked") != day:
+        reg["late_checked"] = day
+        _owe(reg, {"tool": "list_triggers", "for": "late", "args": {},
+                   "why": "the brief due %s has not come: list every page, then python3 "
+                          "tools/routines.py brief --triggers <each page> says what is wrong "
+                          "and the calls that mend it; tell the person in one line what was "
+                          "wrong" % day})
+        _save(reg, path)
+    return said
 
 
 def called(n: int, trigger: str = "", path: str | None = None) -> dict:
@@ -758,6 +1126,7 @@ def on(path: str | None = None) -> dict:
         return {"changed": False, "say": "Your brief is on already.", "undo": None,
                 "calls": reg.get("owed") or []}
     r.pop("off", None)
+    reg["back_on"] = datetime.date.today().isoformat()
     reg["owed"] = [c for c in reg.get("owed") or [] if c.get("for") != "off"]
     p = reg.get("pause") or {}
     if not p:
@@ -848,18 +1217,25 @@ def pause(until: str, today: str = "", path: str | None = None) -> dict:
         _owe(reg, {"tool": "update_trigger", "for": "pause",
                    "args": {**_task_ref(r, reg), "enabled": False},
                    "why": f"the brief rests until {end.isoformat()}"})
+        # With the line that gets the copy: the chat it is bound to may be archived or deleted
+        # by the day it fires, and a welcome-back that fails is the one thing that lifts the
+        # break on its day (X-9, X-43). A start, a wake or a brief lifts it too (heal()).
         back = {"name": "Job search: welcome back",
                 "run_once_at": _instant(end, (read_cron(r.get("cron")) or {}).get("time", ""),
                                         reg.get("timezone") or ""),
-                "prompt": stub(reg, r["key"]), "connectors": [], "initiation": "human_request"}
-        # The chat the brief runs in: a new one on firing has no copy of the files, so an
-        # older ops brief comes back in the ops chat.
+                "prompt": with_copy(stub(reg, r["key"]), _repo()), "connectors": [],
+                "initiation": "human_request"}
+        # The chat the brief runs in. A task that starts a new chat on firing gets no copy of
+        # the files and no add_repo to fetch one (seen 12, 29 and 31 Oct 2026), so it never
+        # makes one: an older ops brief comes back in the ops chat, and a routine's in the
+        # chat that asked for the break, which holds the copy.
         sid = (r.get("chat") or {}).get("session_id") or (
             (reg.get("ops_session") or {}).get("id") if setup_of(reg) == "ops_relay" else "")
-        if sid:
-            back["persistent_session_id"] = sid
-        else:
-            back["create_new_session_on_fire"] = True
+        if not sid:
+            import app_listen
+            sid = app_listen.this_chat()
+        back["persistent_session_id"] = (sid if str(sid).startswith("session_") else
+                                         "<this chat's id: get_session with no session_id>")
         _owe(reg, {"tool": "create_trigger", "for": "back", "args": back,
                    "why": "one brief on the day they come back, which turns the brief on again"})
     if path and os.path.dirname(path):
@@ -936,6 +1312,7 @@ def resume(today: str = "", path: str | None = None) -> dict:
                        "args": {"trigger_id": p["back_trigger"]},
                        "why": "the welcome-back brief is not needed now"})
     reg.pop("pause", None)
+    reg["back_on"] = today              # a brief due while it rested never reads as late
     _save(reg, path)
     return {"resumed": True, "early": early, "contacts": put_back,
             "say": "Welcome back: your search is running again.",
@@ -952,10 +1329,12 @@ def paused(today: str = "", path: str | None = None) -> dict:
     return {"until": p.get("until", ""), "since": p.get("since", "")} if p else {}
 
 
-def page_part(path: str | None = None) -> dict:
+def page_part(path: str | None = None, now: datetime.datetime | None = None,
+              today: datetime.date | None = None) -> dict:
     """What the page shows of the brief (its bell, and Settings' "Your brief"), and the
     actions that change it: on or off, its days and time in words, a break in force, and how
-    many changes still wait for a chat."""
+    many changes still wait for a chat. `now` and `today`: the page's own clock (the model's),
+    else this computer's."""
     try:
         reg = load(_path(path))
     except Exception:  # noqa: BLE001  no profile or no registry: no brief yet
@@ -963,7 +1342,12 @@ def page_part(path: str | None = None) -> dict:
     r = _brief(reg)
     got = read_cron((r or {}).get("cron") or "")
     p = reg.get("pause") or {}
+    try:
+        late = late_line(overdue(reg, now) or "", today)
+    except Exception:  # noqa: BLE001  never breaks the page
+        late = ""
     return {"set_up": r is not None, "off": bool((r or {}).get("off")),
+            **({"late": late} if late else {}),
             "when": got.get("when", ""), "days": got.get("days", []),
             "time": got.get("time", ""), "zone": got.get("zone") or reg.get("timezone", ""),
             "paused": {"until": p["until"], "since": p.get("since", "")} if p else None,
@@ -988,17 +1372,54 @@ def main(argv: list[str]) -> int:
         return 0
     if not argv or argv[0] not in ("check", "stub", "brief", "default", "record", "move",
                                    "pause", "resume", "off", "on", "calls", "called",
-                                   "upkeep-record", "upkeep-forget"):
+                                   "upkeep-record", "upkeep-forget", "remind", "reminded",
+                                   "mended", "rebind"):
         print(__doc__.split("\n\n")[1])
         return 2
     if argv[0] in ("move", "pause", "resume", "off", "on", "calls", "called"):
         return _schedule_cli(argv)
+    if argv[0] == "remind":
+        if not remind_due():
+            print("remind: nothing to make (setup is finished, or a brief or a reminder is on file)")
+            return 0
+        import place
+        owner, name = place.repo()
+        got = remind_plan(owner, name)
+        if not got["chat"]:
+            print("chat: this chat's id could not be read: get_session with no session_id gives it")
+            return 1
+        print("make it now, asking nothing (one run tomorrow, in this chat; it says only that "
+              "setup waits on their page):")
+        print(f"  create_trigger: {json.dumps(got['create_trigger'], ensure_ascii=False)}")
+        print(f"  then: {got['record']}, and say nothing about it")
+        return 0
+    if argv[0] == "reminded":
+        trig = argv[argv.index("--trigger") + 1] if "--trigger" in argv[:-1] else ""
+        print(reminded(trig))
+        return 0
+    if argv[0] == "mended":
+        path = _path(None)
+        reg = load(path)
+        for r in work(reg):
+            if r.get("trigger_id"):
+                r["copy"] = True
+        _save(reg, path)
+        print("routines.json: every task's prompt gets its files in any chat")
+        return 0
     if argv[0] == "upkeep-record":
         got = {argv[i][2:]: argv[i + 1] for i in range(1, len(argv) - 1, 2) if argv[i].startswith("--")}
         print(record_upkeep(got.get("session", ""), got.get("trigger", ""), got.get("cron", "")))
         return 0
     if argv[0] == "upkeep-forget":
         print(forget_upkeep())
+        return 0
+    if argv[0] == "rebind":
+        got = {argv[i][2:]: argv[i + 1] for i in range(2, len(argv) - 1, 2) if argv[i].startswith("--")}
+        try:
+            print(rebind(argv[1] if len(argv) > 1 else "", got.get("session", ""), got.get("trigger", "")))
+        except (ValueError, OSError) as e:
+            print(f"routines.json: nothing changed: {e}")
+            return 1
         return 0
     if argv[0] == "brief":
         triggers, more, chat_arg = None, False, ""
@@ -1019,18 +1440,29 @@ def main(argv: list[str]) -> int:
             print("more: the listing has another page (has_more); list it too and pass every "
                   "page with --triggers before deciding")
         import place
+        mends = mend(triggers, _repo()) if triggers is not None and not more else []
+        for i, c in enumerate(mends, 1):
+            print(f"mend {i}: update_trigger {json.dumps(c['args'], ensure_ascii=False)} ({c['why']})")
+        if mends:
+            print("mend: make these, then python3 tools/routines.py mended; say nothing about it")
+        elif triggers is not None and not more and reg and any(
+                r.get("trigger_id") and not r.get("copy") for r in work(reg)):
+            print("mend: every task already gets its files: python3 tools/routines.py mended")
         if place.surface() == "local":
             # A chat on their computer never makes the brief: a task made here would run on
             # the computer, or start a new chat every morning. The bell on the page queues it
             # for the chat in the cloud that answers the page (tools/page_db.py runs a brief
-            # only there), and starts that helper first where there is none.
-            print("tell them: " + (place.BRIEF_LOCAL if found["state"] in ("registered", "found")
-                                   else BRIEF_BELL))
+            # only there), and starts that helper first where there is none. With no page there
+            # is no bell: the page comes first (X-37).
+            print("tell them: " + place.BRIEF_LOCAL if found["state"] in ("registered", "found")
+                  else ("tell them: " + BRIEF_BELL) if has_page() else BRIEF_NO_PAGE_LOCAL)
         elif found["state"] == "none" and triggers is not None:
-            # A cloud chat makes it itself, asking nothing: a task bound to this chat and a
-            # first run in a few minutes (automation/README.md (a)). Never a chat of its own.
+            # A cloud chat makes it itself, asking nothing: a task bound to the chat that
+            # answers the page, or with no page this chat, and a first run in a few minutes
+            # (automation/README.md (a)). Never a chat of its own.
             owner, name = place.repo()
-            got = plan(owner, name, chat=chat_arg)
+            got = plan(owner, name, chat=chat_arg,
+                       initiation="own_initiative" if "--own-initiative" in argv else "human_request")
             if not got["zone"]:
                 print("zone: the profile names no time zone (networking.py TIMEZONE or "
                       "HOME_CITY): set it from where they live, then run this again")
@@ -1062,9 +1494,13 @@ def main(argv: list[str]) -> int:
             print("usage: routines.py record --session <id> --trigger <id> [--cron \"<cron>\"] "
                   "[--setup routines_screen]", file=sys.stderr)
             return 2
-        path = record(opt.get("--session", ""), opt["--trigger"], opt.get("--cron", ""),
-                      setup=opt.get("--setup", "chat_per_briefing"),
-                      title=opt.get("--title", ""), own_chat="--own-chat" in argv)
+        try:
+            path = record(opt.get("--session", ""), opt["--trigger"], opt.get("--cron", ""),
+                          setup=opt.get("--setup", "chat_per_briefing"),
+                          title=opt.get("--title", ""), own_chat="--own-chat" in argv)
+        except ValueError as e:
+            print(f"routines.json: nothing recorded: {e}")
+            return 1
         problems = check(load(path))
         for p_ in problems:
             print(f"routines.json: {p_}")
@@ -1074,7 +1510,7 @@ def main(argv: list[str]) -> int:
         if len(argv) < 2:
             print("usage: routines.py stub <key>", file=sys.stderr)
             return 2
-        print(stub(load(), argv[1]))
+        print(with_copy(stub(load(), argv[1]), _repo()))
         return 0
     path = argv[1] if len(argv) > 1 else None
     problems = check(load(path))
@@ -1101,7 +1537,7 @@ def _schedule_cli(argv: list[str]) -> int:
     a = ap.parse_args(argv[1:])
     try:
         if argv[0] == "calls":
-            print(json.dumps(calls(), ensure_ascii=False, indent=1))
+            print(json.dumps(calls(today=a.today), ensure_ascii=False, indent=1))
             return 0
         if argv[0] == "called":
             hit = called(a.n, a.id)

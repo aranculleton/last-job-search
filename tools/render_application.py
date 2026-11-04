@@ -13,6 +13,7 @@ import doc_name
 import person
 import company_key
 import tex_escape
+import locale_rules
 import bullet_rewording
 
 # Every bullet the profile supports, themed. The generator used to draw from
@@ -35,11 +36,14 @@ MIN_SUMMARY_WORDS, MAX_SUMMARY_WORDS = _SUMMARY_WORDS
 # The profile's roles, most recent first. What the resume prints for each:
 # dates (spaced hyphen: "2025-Present" is one token to a whitespace tokenizer),
 # title, location, and the \needspace lines when not the default.
+# Keyed by role (allocate.role_keys), never by employer: two titles at one employer are
+# two entries, each printed under its own title and dates.
 ROLES = person.module("roles").ROLES
-META = {r["employer"]: dict(dates=r["dates"], title=r["title"], loc=r["loc"],
-                            **({"ns": r["ns"]} if "ns" in r else {}))
-        for r in ROLES}
-_NO_SKILLS = {r["employer"] for r in ROLES if r.get("skills_context") is False}
+KEYS = allocate.role_keys(ROLES)
+META = {k: dict(employer=r["employer"], dates=r["dates"], title=r["title"], loc=r["loc"],
+                **({"ns": r["ns"]} if "ns" in r else {}))
+        for k, r in zip(KEYS, ROLES)}
+_NO_SKILLS = {k for k, r in zip(KEYS, ROLES) if r.get("skills_context") is False}
 _SALUTATION_SUFFIX = person.get("documents.salutation_suffix", " hiring team")
 AWS_KERN = re.compile(r"\bAWS\b")
 
@@ -55,7 +59,7 @@ DASH = re.compile(r"[–—]")
 # page read as a career going backwards and any ATS date parser saw an
 # unexplained inversion. Relevance is expressed by which bullets are chosen and
 # how they are framed, never by moving a job out of its place in time.
-CHRONO = [r["employer"] for r in ROLES]
+CHRONO = list(KEYS)
 
 # Bullets that say the same thing. A bullet that merges two others, rendered
 # beside either, printed the same figure twice in consecutive bullets. It
@@ -393,18 +397,22 @@ def build(a):
         bl = [kern_aws(reworded.get(b, BULLETS[b])) for b in keys]
         if not bl:
             continue
-        jobs.append(dict(employer=j["employer"], bullets=bl, **m))
+        jobs.append(dict(key=j["employer"], bullets=bl, **m))
     # A role the profile marks always_show stays on the page with its default
     # bullet when a draft gives it none: an unexplained gap in the dates reads
-    # worse than a short entry.
-    have = {j["employer"] for j in jobs}
-    for r in ROLES:
-        emp = r["employer"]
-        if emp not in have and r.get("always_show"):
+    # worse than a short entry. A role with no achievement on file (an early job given
+    # by its title and dates) prints as that line: it vanished, and the check failed.
+    have = {j["key"] for j in jobs}
+    for k, r in zip(KEYS, ROLES):
+        if k in have:
+            continue
+        if r.get("always_show"):
             b = r["always_show"]
-            jobs.append(dict(employer=emp, bullets=[kern_aws(reworded[b]) if b in reworded
-                                                    else BULLETS[b]], **META[emp]))
-    jobs.sort(key=lambda j: CHRONO.index(j["employer"]))
+            jobs.append(dict(key=k, bullets=[kern_aws(reworded[b]) if b in reworded
+                                             else BULLETS[b]], **META[k]))
+        elif k not in LIBRARY.LIB:
+            jobs.append(dict(key=k, bullets=[], **META[k]))
+    jobs.sort(key=lambda j: CHRONO.index(j["key"]))
     summary = cap_summary(clean(a["summary"]))
     # The filename suffix is derived, not chosen. A drafter picking it by hand
     # got it wrong on several documents in one batch, shipping the company
@@ -430,7 +438,7 @@ def build(a):
         # posting asks for them, the posting tier picks them up.
         skills=kern_aws(skills_block.render(
             clean(a.get("tools", "")),
-            context=" ".join([summary] + [b for j in jobs if j["employer"] not in _NO_SKILLS
+            context=" ".join([summary] + [b for j in jobs if j["key"] not in _NO_SKILLS
                                           for b in j["bullets"]]),
             posting=a.get("posting", ""), company=a["company"], consented=yes,
             max_tokens=skills_block.size_for(a))),
@@ -459,7 +467,13 @@ def build(a):
     # The letter's date is the day it was first rendered, kept in the draft so a
     # re-render from the kept draft.json (a renderer fix reaching an unsent
     # application) prints the date the letter was written, not the day of the fix.
-    if not str(a.get("letter_date") or "").strip():
+    # A date kept in English is written again, the same day, in the letter's language and
+    # the person's order: an unsent German letter dated "3 November 2026" before its
+    # language was known reads "3. November 2026" once the drafts are re-rendered.
+    kept = locale_rules.read_long_date(a.get("letter_date"))
+    if kept:
+        a["letter_date"] = gen._long_date(kept)
+    elif not str(a.get("letter_date") or "").strip():
         a["letter_date"] = gen._long_date()
     d["letter_date"] = a["letter_date"]
     # The requisition the letter answers, kept with it (the .tex header) and in

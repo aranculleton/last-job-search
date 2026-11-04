@@ -237,7 +237,7 @@ def test_a_break_holds_the_brief_and_every_follow_up_and_coming_back_early_undoe
     import followups
     live = [r for r in s.tracker() if r["status"] in ("applied", "interview")]
     assert live and all(followups.not_chased(r["notes"], dt.date(2026, 10, 30)) for r in live)
-    owed = json.loads(s.run("routines.py", "calls"))
+    owed = json.loads(s.run("routines.py", "calls", "--today", TODAY))
     assert [c["tool"] for c in owed] == ["update_trigger", "create_trigger"]
     assert owed[0]["args"] == {"trigger_id": "trig_EXAMPLEBRIEF", "enabled": False}
     back = owed[1]["args"]
@@ -261,7 +261,7 @@ def test_a_break_holds_the_brief_and_every_follow_up_and_coming_back_early_undoe
         assert after[cid]["next_action"] == before[cid]["next_action"]
     assert all("chase again (search resumed)" in r["notes"] for r in s.tracker()
                if r["status"] in ("applied", "interview"))
-    owed = json.loads(s.run("routines.py", "calls"))
+    owed = json.loads(s.run("routines.py", "calls", "--today", "2026-10-30"))
     assert [(c["tool"], c["args"]) for c in owed] == [
         ("update_trigger", {"trigger_id": "trig_EXAMPLEBRIEF", "enabled": True}),
         ("delete_trigger", {"trigger_id": "trig_EXAMPLEBACK"})]

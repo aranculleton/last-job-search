@@ -216,7 +216,10 @@ def employer_out(company: str, today=None) -> str:
     if why:
         return why
     verdict, why = bar.verdict(company)
-    if verdict == bar.NONE:
+    # Only a bar the person's own profile states turns an employer down or holds it for a
+    # judgement: with none, a stranger's every employer was refused until a chat judged it on
+    # someone else's words (X-18).
+    if verdict == bar.NONE and bar.applies():
         if bar.listed(company):
             return f"clears none of pay, prestige or signal: {why}"
         return (f"not judged against your bar yet: judge it once (python3 tools/bar.py judge "
@@ -329,7 +332,8 @@ def turned_down(company) -> str:
         import throttle
         from company_key import key
         verdict, why = bar.verdict(company)
-        if verdict == bar.EXCLUDED or (verdict == bar.NONE and bar.UNLISTED not in why):
+        if verdict == bar.EXCLUDED or (verdict == bar.NONE and bar.applies()
+                                       and bar.UNLISTED not in why):
             return why or "it clears none of pay, prestige or signal"
         return throttle.load_do_not_target().get(key(company), "") or ""
     except Exception:  # noqa: BLE001  a bar that cannot be read turns nobody down

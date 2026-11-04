@@ -1389,6 +1389,27 @@ def test_the_brief_opens_on_short_points_and_reads_its_news_whole(run, pages):
     assert all(not t.endswith("…") for t in r["found"][".bp-news .bp-text"])
 
 
+def test_the_brief_says_what_did_not_happen_by_itself(run, pages, tmp_path):
+    """The stranger audit, page side of X-10, X-30 and X-32: a brief that did not come
+    (routines.page_part `late`), work not saved to the copy for a day (app `not_saved`, from
+    land.stranded) and improvements still being applied (updates `pending`) are each one
+    plain line on the Brief, and nothing is said when none is true."""
+    sels = ['[data-k="brief-late"]', '[data-k="not-saved"]', '[data-k="applying"]']
+    quiet = run("look", html=pages["sample"], hash="brief", sels=sels)
+    _clean(quiet)
+    assert not any(quiet["found"][s] for s in sels), quiet["found"]
+    m = _sample()
+    m["schedule"] = dict(m.get("schedule") or {}, late="Your brief didn't come this morning. Claude is looking into it.")
+    m["app"] = dict(m["app"], not_saved=2)
+    m["updates"] = dict(m.get("updates") or {}, pending=[{"id": "a", "line": "One.", "needs": "nobody"},
+                                                         {"id": "b", "line": "Two.", "needs": "nobody"}])
+    r = run("look", html=_write(tmp_path, "notes", m), hash="brief", sels=sels)
+    _clean(r)
+    assert r["found"][sels[0]] == ["Your brief didn't come this morning. Claude is looking into it."]
+    assert "hasn't been saved yet" in r["found"][sels[1]][0]
+    assert r["found"][sels[2]] == ["Claude is still applying 2 improvements to your search."]
+
+
 def test_a_contact_says_who_they_came_through(run, pages, tmp_path):
     m = _sample()
     p = m["people"][0]
