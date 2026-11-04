@@ -192,7 +192,7 @@ Only draft unprompted if the user has explicitly said to in that request.
 
 ## One command
 
-`python3 tools/run_round.py --out rounds/<name> --jobage 14` runs every stage of a round in order and stops at the ranked shortlist. See `RUNBOOK.md`. When it cannot run, `manual-round.md` beside this file has every stage written out to do by hand: read it only then. Its step numbers are the ones cited below.
+`python3 tools/run_round.py --jobage 14` runs every stage of a round in order and stops at the ranked shortlist. Leave `--out` off: the round names itself, `r` and the next number, and prints its folder (`round: r12, its files in ...`), which is the folder `--recut` and a progress pin name. See `RUNBOOK.md`. When it cannot run, `manual-round.md` beside this file has every stage written out to do by hand: read it only then. Its step numbers are the ones cited below.
 
 ## How It Works
 

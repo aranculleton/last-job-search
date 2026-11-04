@@ -1,7 +1,7 @@
 {
  "model": 1,
  "made_at": "2026-10-25T18:00:00Z",
- "rev": "6b54a785d6a7",
+ "rev": "083c0a274790",
  "app": {
   "version": "4.9.1",
   "url": null,
@@ -48,7 +48,7 @@
  ],
  "jobs": {
   "round": "r9",
-  "made_at": "2026-11-04T19:00:07Z",
+  "made_at": "2026-11-04T19:33:03Z",
   "met": false,
   "summary": "3 roles from the last search to look at, 1 of them scoring 75 or more. 3 left out, each with its reason.",
   "rows": [
@@ -98,7 +98,7 @@
     "questions": [
      "Have you already applied?"
     ],
-    "rev": "a524ede52511",
+    "rev": "87ef0632d185",
     "alerts": [],
     "suggest": null,
     "related": {},
@@ -148,7 +148,7 @@
     "notes": [],
     "status": "ready",
     "questions": [],
-    "rev": "e55990f08a98",
+    "rev": "57412b9f3011",
     "alerts": [],
     "suggest": null,
     "related": {
@@ -210,7 +210,7 @@
     "questions": [
      "Have you already applied?"
     ],
-    "rev": "cfdcee975b63",
+    "rev": "f5d2c60a102e",
     "alerts": [],
     "suggest": null,
     "related": {},
@@ -262,7 +262,7 @@
     "questions": [
      "Have you already applied?"
     ],
-    "rev": "30f61ab71dd0",
+    "rev": "7b9461635278",
     "alerts": [],
     "suggest": {
      "level": 2,
@@ -698,7 +698,7 @@
      "due-reply-larkspur_retail_castellan"
     ]
    },
-   "rev": "ead1ea6c8a1f",
+   "rev": "68ac7b6b3d24",
    "alerts": [
     {
      "level": 1,
@@ -776,7 +776,7 @@
      "due-nudge-fernhill_freight_halloway"
     ]
    },
-   "rev": "940637f37e26",
+   "rev": "b27405fc8c16",
    "alerts": [],
    "suggest": null
   },
@@ -826,7 +826,7 @@
      "msg-kestrel_mutual_ansgar"
     ]
    },
-   "rev": "2f0b37216148",
+   "rev": "fcaad01498cf",
    "alerts": [],
    "suggest": null
   }
@@ -843,7 +843,7 @@
    "when": "2026-10-28",
    "prep": {
     "path": "documents/applications/thornbury_bank_risk_analyst_thornbury/interview_prep.md",
-    "updated": "2026-11-04T19:00:07Z"
+    "updated": "2026-11-04T19:33:03Z"
    },
    "questions": 2,
    "all_day": true,

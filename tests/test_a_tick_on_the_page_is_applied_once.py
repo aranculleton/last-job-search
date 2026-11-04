@@ -319,7 +319,10 @@ def test_a_receipt_names_nobody_in_full(search):
     for a in (aid, sent):
         text = json.dumps(search.receipt(a))
         assert "Ansgar" not in text and "@" not in text
-    assert search.receipt(sent)["result"] == "stale"      # the stop changed them first
+    # The stop, the person's own earlier tap in this window, never bounces the second one: it
+    # reaches its writer, which says plainly there is nothing logged to take back.
+    assert search.receipt(sent)["result"] == "conflict"
+    assert search.receipt(sent)["note"] == "nothing is logged as sent to Pell"
 
 
 def test_actions_another_chat_claimed_are_left_to_it(search):

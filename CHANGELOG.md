@@ -67,6 +67,19 @@ make sense to somebody whose repo just received it.
   none while ordinary searches found plenty. A result's day is now read from its title, its
   words or its link, and when fewer than three come back, Claude searches again once before
   the brief is written.
+- **A tap on your page is no longer turned back as "It changed since you saw it" when only
+  your own taps, or the page being drawn again, changed it.** "Not applying" and then "Set
+  aside" on one job, a Stop made the day before, or a job set aside while a search re-ranked
+  the list are all done as you asked; a tap is still turned back when the thing itself really
+  changed, or when two windows answered the same thing differently.
+- **A search says its shortlist is ready only once Jobs can show it.** A search could be
+  marked finished while it was still saving, so its card said the jobs were ready while Jobs
+  said "Nothing new". Each search is also saved under the next number in your list of
+  searches, never a name a chat made up.
+- **A job you set aside while a search is running stays set aside.** The search checks what
+  you have set aside, and any employer you said "No more roles from", again just before it
+  makes your list, including taps on your page Claude has not taken in yet, and fills each
+  place with the next best job, so you get the number you asked for.
 
 ## [4.9.1] - 2026-11-04
 

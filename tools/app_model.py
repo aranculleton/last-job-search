@@ -1167,6 +1167,14 @@ _WHY_PLAIN = [
 ]
 
 
+def job_rev(url: str, company: str, title: str, status: str) -> str:
+    """A job row's rev: what an action on it acts on, the posting and where it stands. Never
+    its score, rank or wording, which a search run again or a newer build redraws: a tap made
+    before that was refused as "changed since you saw it" (2026-11-04). A round reads the
+    page's waiting taps by it (run_round.page_set_asides)."""
+    return rev_of(url or (company, title), status)
+
+
 def draft_work_id(url: str, company: str = "", title: str = "") -> str:
     """The one id of the work that drafts a posting, for the page and the engine alike:
     the posting's own link, so the same posting found in two rounds is one draft."""
@@ -1317,7 +1325,7 @@ def _jobs(ctx: Ctx, targets: dict) -> dict:
                 "questions": (["Have you already applied?"] if status == "new" else [])
                 + [str(q) for q in (r.get("questions") if isinstance(r.get("questions"), list)
                                     else []) if str(q).strip()],
-                "rev": rev_of(url, status, company, title, score)}
+                "rev": job_rev(url, company, title, status)}
         _card(ctx, targets, item, "for_job")
         rows.append(item)
         targets[jid] = {"kind": "job", "round": rname, "rank": rank, "url": url,
@@ -2642,7 +2650,10 @@ def _people(ctx: Ctx, targets: dict) -> list:
                 # reply is drafted from words already kept (thread_of).
                 "thread": thread, "thread_more": earlier,
                 "related": {},        # filled by app_lists.link; counted in the budget
-                "rev": rev_of(cid, status, action, due, last, where["group"])}
+                # What an action on them acts on: their record and their messages, never the
+                # group the day puts them in, which moves with the clock while nothing about
+                # them changed: a Stop made the day before was refused (2026-11-04).
+                "rev": rev_of(cid, status, str(c.get("next_action") or ""), due, last)}
         if full[cid].get("initial"):
             item["initial"] = full[cid]["initial"]
         _card(ctx, targets, item, "for_person")
