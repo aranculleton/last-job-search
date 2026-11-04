@@ -1051,11 +1051,40 @@ def _keep_dump(dump_dir: str, collection: str, doc_id: str, fields: dict, versio
     os.makedirs(where, exist_ok=True)
     plain = os.path.join(where, safe_id(doc_id) + ".json")
     path = os.path.join(where, safe_id(doc_id).replace("~", "@") + ".json")
+    _keep_read_stamp(dump_dir, os.path.basename(where), safe_id(doc_id), (path, plain))
     if plain != path and os.path.exists(plain):
         os.remove(plain)
     with open(path, "w", encoding="utf-8", newline="\n") as fh:
         json.dump(dict(fields, **{VERSION_FIELD: version}), fh, ensure_ascii=False, indent=1)
         fh.write("\n")
+
+
+READ_STAMPS = ".read-stamps.json"     # in a dump folder: each record's own stamp as read
+
+
+def _keep_read_stamp(dump_dir: str, coll: str, doc_id: str, paths) -> None:
+    """Before the folder's copy of a record is moved on (as it will be once a write lands),
+    keep the stamp it carried as read, once: a refusal's version is kept beside that stamp
+    (note_version), the one every new read of the record still shows."""
+    key = f"{coll}/{doc_id}"
+    side = os.path.join(dump_dir, READ_STAMPS)
+    got = _read_json(side)
+    got = got if isinstance(got, dict) else {}
+    if key in got:
+        return
+    for p in paths:
+        raw = _read_json(p) if os.path.isfile(p) else None
+        if isinstance(raw, dict):
+            _f, v, real = _version_of(raw)
+            got[key] = None if real else v
+            break
+    else:
+        got[key] = None                     # made by this folder's own writes: no stamp read
+    try:
+        with open(side, "w", encoding="utf-8", newline="\n") as fh:
+            json.dump(got, fh, indent=1, sort_keys=True)
+    except OSError:
+        pass
 
 
 def _merged(old: dict, new: dict) -> dict:
@@ -1124,12 +1153,17 @@ def note_version(dump_dir: str, ref: str, version: int) -> str:
     # The stamp the record itself carries, as read: kept beside the store's number, so a new
     # read of the same record, still stamped wrong, is pinned right (KNOWN_VERSIONS).
     stamp = None
-    for name in (store_id.replace("~", "@"), store_id):
-        raw = _read_json(os.path.join(dump_dir, store_coll, name + ".json"))
-        if isinstance(raw, dict):
-            _f, v, real = _version_of(raw)
-            stamp = None if real else v
-            break
+    side = _read_json(os.path.join(dump_dir, READ_STAMPS))
+    if isinstance(side, dict) and f"{store_coll}/{store_id}" in side:
+        # Moved on in this folder by a write not yet landed: the stamp as read.
+        stamp = side[f"{store_coll}/{store_id}"]
+    else:
+        for name in (store_id.replace("~", "@"), store_id):
+            raw = _read_json(os.path.join(dump_dir, store_coll, name + ".json"))
+            if isinstance(raw, dict):
+                _f, v, real = _version_of(raw)
+                stamp = None if real else v
+                break
     if stamp is not None and stamp != int(version):
         remember_version(f"{store_coll}/{store_id}", stamp, int(version))
     _keep_dump(dump_dir, store_coll, store_id, dict(doc["data"]), int(version))

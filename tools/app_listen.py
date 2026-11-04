@@ -509,8 +509,11 @@ def renew_line(renew: dict) -> str:
 
 # What a chat that may not draw the page's screens says, once, and does instead.
 VIEW_LEFT = ("view: another chat answers the page, so this chat leaves the page's screens to it "
-             "and wrote nothing to them; its own work and receipts are on the page already. "
-             "Say nothing about it to the person.")
+             "and wrote nothing to them; its own work items and receipts are all it writes. "
+             "Work this chat does for the person is its own once begun with python3 "
+             "tools/app.py ask \"$D\" --kind <kind> --title \"<a few plain words>\" --here "
+             "--chat <this chat's id> (the app skill, \"Work asked for in a chat\"), and then "
+             "this draws the page. Say nothing about it to the person.")
 # How long after its own job finished a job's chat still draws the page: it does so once, at
 # its end, right after app.py done.
 OWN_JOB_S = 60 * 60
@@ -521,9 +524,11 @@ def draws_screens(db: dict, chat: str, work: str = "",
     """Whether this chat writes the page's screens (`app.py view`), and what it says when not.
 
     Only the chat that answers the page draws them, with two exceptions that keep a page from
-    going stale: a chat running a job of its own (`work`, the job it was started for, or one
-    it claimed), which no chat can tell the listener about (a chat in the cloud cannot message
-    another one), and any chat while nobody answers the page (the first publish). Every other
+    going stale: a chat doing work of its own for the person (`work`, the job it was started
+    for, or work it began with `ask --here`, still going or finished within OWN_JOB_S), which
+    no chat can tell the listener about (a chat in the cloud cannot message another one), and
+    any chat while nobody answers the page (the first publish). Small work an old helper took
+    as the listener is not its own in this sense: it hands the page on with it. Every other
     chat, an old helper after a hand-over above all, writes only its own work items and
     receipts: during a hand-over the old and new helper both rewrote whole screens, and each
     update bounced off the other's (the maintainer, 4 November)."""
@@ -547,7 +552,7 @@ def draws_screens(db: dict, chat: str, work: str = "",
         return True, ""
     for doc in jobs.values():
         d = doc.get("data") or {}
-        if str(d.get("claimed_by") or "") not in mine:
+        if not d.get("in_chat") or str(d.get("claimed_by") or "") not in mine:
             continue
         if str(d.get("status") or "") in page_db.ACTIVE:
             return True, ""

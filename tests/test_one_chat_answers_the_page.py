@@ -729,10 +729,22 @@ def test_only_the_chat_that_answers_the_page_draws_its_screens(copy):
     assert copy.send(copy.run("listen", copy.dump(), "--chat", "session_OLDHELPER", "--hand",
                               "session_NEWHELPER"))
     assert copy.listener()["chat"] == "session_NEWHELPER"
-    # The old helper, finishing up: nothing to any screen, and one line for Claude.
+    # The old helper, finishing up the reply it took as the listener: nothing to any screen,
+    # and one line for Claude.
+    def put_work(wid, **data):
+        os.makedirs(os.path.join(copy.db, "work"), exist_ok=True)
+        with open(os.path.join(copy.db, "work", wid + ".json"), "w", encoding="utf-8") as fh:
+            json.dump({"data": dict({"kind": "reply", "title": "A reply", "asked_at": NOW},
+                                    **data), "version": 2}, fh)
+    put_work("reply~juno", status="done", claimed_by="session_OLDHELPER",
+             finished_at="2026-10-25T17:59:00Z")
     got, writes = _view(copy, "session_OLDHELPER")
     assert got["batches"] == [] and writes == {}
-    assert got["for_claude"] == [app_listen.VIEW_LEFT]
+    assert got["for_claude"] == [app_listen.VIEW_LEFT] and "--here" in app_listen.VIEW_LEFT
+    # Work a chat the person opened began for them there (`ask --here`) is its own: it draws.
+    put_work("prep~kestrel", kind="prep", status="running", claimed_by="session_ASKED",
+             in_chat=True, lease_until="2026-10-25T18:20:00Z")
+    assert _view(copy, "session_ASKED")[0]["batches"]
     # The new one draws them, each saying which chat drew it and from which copy.
     got, writes = _view(copy, "session_NEWHELPER", base="2026-10-25T17:00:00Z")
     assert got["batches"] and _apply_all(copy, got)
@@ -797,6 +809,11 @@ def test_a_wrong_number_stored_in_the_listener_record_is_healed_not_bounced(copy
     said, entry, _body = check_in(read("first", _v=3))
     assert entry["if_version"] == 3
     assert "python3 tools/app.py version <this folder> meta/listen <that version>" in said
+    # A wake moves its folder on as each batch will land; the stamp as read is kept beside it.
+    import page_db
+    page_db.keep_landed(str(tmp_path / "first"),
+                        [ln for ln in said.splitlines() if ln.endswith(".json")])
+    assert page_db.load(str(tmp_path / "first"))["meta"]["listener"]["version"] == 4
     # The refusal named 7: kept, as the check-in says, and the same folder is pinned to it.
     kept = copy.run("version", str(tmp_path / "first"), "meta/listen", "7", LJS_VERSIONS=known)
     assert "meta/listen is at version 7" in kept
