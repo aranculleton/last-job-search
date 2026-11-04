@@ -53,11 +53,30 @@ BASE="$(git merge-base origin/master HEAD)"
 
 # The denylist: the maintainer's own people, from their profile and the history of their
 # tracker, contact book and message log (tools/build_app.py). Built once, kept 12 hours.
+# Built from the newest work the maintainer has saved, never only the folder given: their
+# copy here was a day behind GitHub, and an employer named since then reached the public app
+# in a code comment (4.9.0, 2026-11-04). Their copy is never changed: its GitHub copy is
+# fetched into this gate's own folder, and built again whenever it moves.
 TOKENS="$WORK/tokens"
-if [ ! -s "$TOKENS" ] || [ -n "$(find "$TOKENS" -mmin +720 2>/dev/null)" ]; then
+SRC="$MAINT"
+URL="$(git -C "$MAINT" remote get-url origin 2>/dev/null || true)"
+if [ -n "$URL" ]; then
+  if [ -d "$WORK/maint/.git" ]; then
+    git -C "$WORK/maint" fetch -q origin 2>/dev/null \
+      && git -C "$WORK/maint" reset -q --hard FETCH_HEAD 2>/dev/null && SRC="$WORK/maint"
+  else
+    rm -rf "$WORK/maint"
+    git clone -q "$URL" "$WORK/maint" 2>/dev/null && SRC="$WORK/maint"
+  fi
+  [ "$SRC" = "$MAINT" ] && echo "push_gate: could not fetch $URL; the denylist is built from $MAINT as it is"
+fi
+SRC_HEAD="$(git -C "$SRC" rev-parse HEAD 2>/dev/null || echo none)"
+if [ ! -s "$TOKENS" ] || [ -n "$(find "$TOKENS" -mmin +720 2>/dev/null)" ] \
+    || [ "$(cat "$WORK/tokens.head" 2>/dev/null)" != "$SRC_HEAD" ]; then
   rm -rf "$WORK/app"
-  (cd "$MAINT" && "$PY" tools/build_app.py "$WORK/app" --tokens-out "$TOKENS") > "$WORK/build.log" 2>&1 \
-    || { echo "push_gate: could not build the denylist from $MAINT"; tail -5 "$WORK/build.log"; exit 1; }
+  (cd "$SRC" && "$PY" tools/build_app.py "$WORK/app" --tokens-out "$TOKENS") > "$WORK/build.log" 2>&1 \
+    || { echo "push_gate: could not build the denylist from $SRC"; tail -5 "$WORK/build.log"; exit 1; }
+  echo "$SRC_HEAD" > "$WORK/tokens.head"
 fi
 
 echo "private data first (nothing is pushed unless all of these pass)"

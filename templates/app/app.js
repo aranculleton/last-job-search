@@ -2686,10 +2686,10 @@
     const rel = item && item.related && typeof item.related === "object" ? item.related : null;
     if (rel) {
       // The card's own role and its own draft are not "also" there: a draft read "Also at
-      // Calix: the role: Senior Data Scientist", its own role (2026-11-03).
+      // <its employer>: the role: <its own title>", its own role (2026-11-03).
       const own = new Set([txt(except), txt(item.job)].filter(Boolean));
-      // Each person once: a note to someone stands for them, never "the note to Calvin" and
-      // "Calvin" side by side (2026-11-03).
+      // Each person once: a note to someone stands for them, never "the note to <name>" and
+      // "<name>" side by side (2026-11-03).
       const noted = new Set(arr(rel.messages).map((id) => txt(obj(messageById(id)).contact)).filter(Boolean));
       for (const sec of Object.keys(REL_SECTION)) {
         for (const id of arr(rel[sec])) {
