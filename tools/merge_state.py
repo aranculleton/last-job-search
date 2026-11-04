@@ -104,9 +104,12 @@ LIST_KEYS = {
 #              "merge", key by key where no date says (one day's short lists are one list)
 #   pick       a record settled by a rule of its own (PICKERS), never left for a person
 #   quiet      what it settles is the app's own record: nothing to tell the person
-#   first      a record two chats each wrote anew under a different `key` (two pages, each
-#              at its own address): the one stamped first (`stamp`) stands, its fields (`with`)
-#              taken whole, before anything else in the file is merged
+#   newest     a record published again and again and dated each time (`stamp`), such as the
+#              page's address and what it holds: where the two sides hold different ones (the
+#              fields `with` names), the one stamped later stands, those fields taken whole,
+#              before anything else in the file is merged, whatever the copy both began from
+#              held, so no merge moves it back to an older one or to another address (`key`)
+#              published earlier
 #   indent, sort ("all", "top" or None), ascii, newline   as its writer writes it, so a merge
 #              rewrites no line it did not merge; "ours" reads it from the file itself, for one
 #              Claude writes by hand
@@ -122,12 +125,15 @@ JSON_FILES = {
     # its day (app_alerts.dismiss; undismiss takes one off). app_setup._write_json's format.
     # `code` and `caps` (what the published page holds) go with the publish dated later;
     # `introduced`, the day the person was told what their page is, is a date like `none`:
-    # set on both sides, the later is kept, and nothing is asked of the person. Two chats
-    # that each published a page of their own (two addresses) keep the one published first,
-    # whole, with what it holds, as start adopts it (the stranger audit, X-57); the second is
-    # never written to again.
+    # set on both sides, the later is kept, and nothing is asked of the person. Where the two
+    # sides hold different page records (two chats that each published a page, or a branch
+    # left days ago holding an older one), the one published later stands, whole, with what
+    # it holds, as start adopts it (app_setup.adopt_page_elsewhere): every publish stamps it
+    # anew, so the page in use is the newest. Keeping the first published let a branch left
+    # nine days earlier put its abandoned page back over the one in use, and the next start
+    # moved everything there (a report from a person's copy, 2026-11-04).
     "profile/app.json": {"stamps": ("published_at", "on"), "dated": ("none", "introduced"),
-                         "first": {"key": "url", "stamp": "published_at",
+                         "newest": {"key": "url", "stamp": "published_at",
                                    "with": ("url", "published_at", "by", "title_name", "code",
                                             "caps")},
                          "indent": 2, "sort": "all"},
@@ -279,7 +285,7 @@ JSON_FILES = {
         "stamps": ("quote_checked", "last_checked", "fetched_date"), "indent": 2},
 }
 _JSON_DEFAULT = {"lists": None, "order": None, "stamps": (), "dated": (), "whole": (),
-                 "pick": None, "first": None, "quiet": False, "indent": 2, "sort": None,
+                 "pick": None, "newest": None, "quiet": False, "indent": 2, "sort": None,
                  "ascii": False, "newline": True}
 
 
@@ -843,33 +849,34 @@ def _further(base, ours, theirs) -> tuple[str, str]:
 PICKERS = {"higher_version": _higher_version, "further": _further}
 
 
-def first_written(base, ours, theirs, rule: dict, settled: list | None = None) -> tuple:
-    """JSON_FILES `first`: where each side holds a different `key` that neither held in the
-    copy both began from, the side stamped first keeps its record, every field `with` names
-    copied onto the other side, so the merge that follows takes them whole and never mixes
-    one page's address with what the other page holds. (ours, theirs), changed or not."""
+def newest_written(base, ours, theirs, rule: dict, settled: list | None = None) -> tuple:
+    """JSON_FILES `newest`: where the two sides hold different records (the fields `with`
+    names), the side stamped later (`stamp`) keeps its record, every one of those fields
+    copied onto the other side, so the merge that follows takes it whole and never mixes one
+    page's address with what another page holds. The copy both began from plays no part: a
+    side that went back to an older record (a branch left for days, a record taken from one)
+    holds the older stamp, and the newer stands. (ours, theirs), changed or not."""
     if not (isinstance(ours, dict) and isinstance(theirs, dict)):
         return ours, theirs
-    base = base if isinstance(base, dict) else {}
-    key = rule["key"]
-    a, b = ours.get(key), theirs.get(key)
-    if not a or not b or a == b or base.get(key) in (a, b):
+    fields = rule["with"]
+    if all(ours.get(f) == theirs.get(f) for f in fields):
         return ours, theirs
     side = _later_of(ours.get(rule["stamp"]), theirs.get(rule["stamp"]))
     if not side:
         return ours, theirs
-    first, second = (theirs, ours) if side == "a" else (ours, theirs)
-    kept = dict(second)
-    for f in rule["with"]:
-        if f in first:
-            kept[f] = first[f]
+    newer, older = (ours, theirs) if side == "a" else (theirs, ours)
+    kept = dict(older)
+    for f in fields:
+        if f in newer:
+            kept[f] = newer[f]
         else:
             kept.pop(f, None)
-    if settled is not None:
-        settled.append(f"{key}: both sides wrote one: kept {_show(first[key])}, the first "
-                       f"(dated {first.get(rule['stamp'])}); the other side had "
-                       f"{_show(second[key])}")
-    return (kept, theirs) if side == "a" else (ours, kept)
+    key, stamp = rule["key"], rule["stamp"]
+    if settled is not None and older.get(key) and newer.get(key) != older.get(key):
+        settled.append(f"{key}: both sides hold one: kept {_show(newer.get(key))}, the one "
+                       f"published later (dated {newer.get(stamp)}); the other side had "
+                       f"{_show(older[key])} (dated {older.get(stamp)})")
+    return (ours, kept) if side == "a" else (kept, theirs)
 
 # A research fact's own identity, as company_research._fact_id gives it: its page (the
 # link, scheme and host lower-cased, no trailing slash) and its words (the quote, else the
@@ -1271,8 +1278,8 @@ def merge(base: str, ours: str, theirs: str, path: str, later=None,
             return ours, [f"{path}: not JSON on one side ({e})"]
         rules = json_rules(path)
         quiet = noted if rules["quiet"] and noted is not None else settled
-        if rules["first"]:
-            o, t = first_written(b, o, t, rules["first"], quiet)
+        if rules["newest"]:
+            o, t = newest_written(b, o, t, rules["newest"], quiet)
         merged, problems = merge_json(b, o, t, later=later, settled=quiet,
                                       lists=rules["lists"], rules=rules)
         return dump(merged, rules, ours), problems
@@ -1288,6 +1295,13 @@ def merge(base: str, ours: str, theirs: str, path: str, later=None,
 # stranger audit, 2026-11-03, X-13). Each such file is settled here instead, losing neither
 # side, so the rest of the work lands:
 #
+# - one side holding only a copy the other side already had and moved on from (the same
+#   change made on both sides, the newer one changed it again; or, where earlier merges
+#   crossed, the copy one of the merge's common ancestors held): the newer copy, with
+#   nothing beside it and nothing asked, since the older side brought nothing of its own. A
+#   branch left nine days earlier, brought in whole, put copies of the person's own tests
+#   beside the newer ones and a [CONFIRM: ...] line on top of eight of them, though it had
+#   changed none of them itself (a report from a person's copy, 2026-11-04);
 # - the same improvement made by two chats (each side's own commits on the file are all
 #   "Profile upgrade: <id>", the same ids): master's copy, as RUNBOOK.md has always said;
 # - the person's own words in profile/ (.md, .txt): both versions kept, one after the
@@ -1368,6 +1382,35 @@ def _same_upgrade(root: str, path: str) -> bool:
     return bool(mine) and mine == theirs
 
 
+def _held_before(root: str, path: str, stages: dict) -> str:
+    """For a conflicted file one side holds only an older copy of: "--ours" or "--theirs",
+    the newer side; "" when each brought something of its own. A side's copy is older when
+    it is the copy one of the merge's common ancestors held (git conflicts there only where
+    earlier merges crossed and its base is a blend of several), or one the other side's own
+    commits already wrote and then changed again (the same change made on both sides)."""
+    if "2" not in stages or "3" not in stages or stages["2"] == stages["3"]:
+        return ""
+    held = set()
+    for b in _g(root, "merge-base", "--all", "HEAD", "MERGE_HEAD").stdout.split():
+        r = _g(root, "rev-parse", "-q", "--verify", f"{b}:{path}")
+        if r.returncode == 0:
+            held.add(r.stdout.strip())
+
+    def older(st: str, mine: str, other: str) -> bool:
+        if stages[st] in held:
+            return True
+        r = _g(root, "log", "--format=%H", "--find-object=" + stages[st], f"{mine}..{other}",
+               "--", path)
+        return r.returncode == 0 and bool(r.stdout.strip())
+    ours_old = older("2", "HEAD", "MERGE_HEAD")
+    theirs_old = older("3", "MERGE_HEAD", "HEAD")
+    if theirs_old and not ours_old:
+        return "--ours"
+    if ours_old and not theirs_old:
+        return "--theirs"
+    return ""
+
+
 def _side_path(root: str, path: str) -> str:
     side, n = path + SIDE, 1
     while os.path.exists(os.path.join(root, side)):
@@ -1421,11 +1464,15 @@ def settle(root: str) -> tuple[list[str], list[str]]:
             if name == p and len(parts) == 3:
                 stages[parts[2]] = parts[1]
         full = os.path.join(root, p)
+        newer = _held_before(root, p, stages)
         if "2" not in stages or "3" not in stages:
             keep = "--ours" if "2" in stages else "--theirs"
             _g(root, "checkout", keep, "--", p)
             done.append(f"{p}: one chat removed it and the other changed it; the changed "
                         "one is kept")
+        elif newer:
+            _g(root, "checkout", newer, "--", p)
+            done.append(f"{p}: one chat held only an older copy of it; the newer one is kept")
         elif _written(root, stages):
             # A document the app writes and dates ("Written 2026-11-04."), rebuilt by two chats
             # on different days: the later one is current and the next rebuild makes it so

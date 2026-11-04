@@ -186,23 +186,23 @@ def _built_in_parts(repo, name, *code):
     return folder
 
 
-@pytest.mark.parametrize("first_on", ["master", "other"])
-def test_two_chats_that_each_published_a_page_keep_the_first_whole(repo, first_on):
+@pytest.mark.parametrize("newer_on", ["master", "other"])
+def test_two_chats_that_each_published_a_page_keep_the_newest_whole(repo, newer_on):
     """X-57: two chats of one copy each published a page before either landed. The merge
-    keeps the page published first, as start adopts it, with what that page holds, never
+    keeps the page published later, as start adopts it, with what that page holds, never
     one page's address beside the other page's files; a No thanks either side gave is kept."""
     app_alerts.dismiss("ready~oakmere", "ready", dt.date(2026, 10, 20))
     repo.commit("base")
     early = NOW - dt.timedelta(minutes=20)
     repo.side("other", new=True)
-    on_other = (PAGE, early, "cloud-1", ("code/a1.js",)) if first_on == "other" else \
-        (OTHER_PAGE, NOW, "cloud-1", ("code/b1.js", "code/b2.css"))
+    on_other = (OTHER_PAGE, NOW, "cloud-1", ("code/b1.js", "code/b2.css")) \
+        if newer_on == "other" else (PAGE, early, "cloud-1", ("code/a1.js",))
     app_setup.record_page(on_other[0], chat=on_other[2], now=on_other[1],
                           parts=_built_in_parts(repo, "other-page", *on_other[3]))
     repo.commit("published on the cloud chat")
     repo.side("master")
-    on_master = (PAGE, early, "computer-1", ("code/a1.js",)) if first_on == "master" else \
-        (OTHER_PAGE, NOW, "computer-1", ("code/b1.js", "code/b2.css"))
+    on_master = (OTHER_PAGE, NOW, "computer-1", ("code/b1.js", "code/b2.css")) \
+        if newer_on == "master" else (PAGE, early, "computer-1", ("code/a1.js",))
     app_setup.record_page(on_master[0], chat=on_master[2], now=on_master[1],
                           parts=_built_in_parts(repo, "master-page", *on_master[3]))
     app_alerts.dismiss("jobs~fernhill", "jobs", dt.date(2026, 10, 25))
@@ -210,10 +210,74 @@ def test_two_chats_that_each_published_a_page_keep_the_first_whole(repo, first_o
     r = repo.merge()
     assert r.returncode == 0, r.stdout + r.stderr
     got = json.loads(repo.read("profile/app.json"))
-    first = on_other if first_on == "other" else on_master
-    assert got["url"] == PAGE and got["by"] == first[2], got
-    assert got["code"] == ["code/a1.js"], got
+    newer = on_other if newer_on == "other" else on_master
+    assert got["url"] == OTHER_PAGE and got["by"] == newer[2], got
+    assert got["code"] == ["code/b1.js", "code/b2.css"], got
     assert set(got["suggest_no"]) == {"ready~oakmere", "jobs~fernhill"}
+
+
+THIRD_PAGE = "https://claude.ai/artifact/a-third-invented-page"
+
+
+@pytest.mark.parametrize("base_page", [None, PAGE, THIRD_PAGE])
+@pytest.mark.parametrize("into", ["master", "old"])
+def test_a_branch_left_days_ago_never_puts_its_older_page_back(repo, base_page, into):
+    """A branch left nine days ago holds the page it published then; master has published
+    another since and kept it current. Merging the two either way keeps the page in use,
+    whole, with its own stamp and what it holds; never the older one, whatever the copy
+    both began from held (a report from a person's copy, 2026-11-04: the older page came
+    back whole, and the next start moved everything to it)."""
+    if base_page:
+        app_setup.record_page(base_page, chat="first-chat", now=NOW - dt.timedelta(days=12))
+    app_alerts.dismiss("ready~oakmere", "ready", dt.date(2026, 10, 10))
+    repo.commit("base", when="2026-10-13T09:00:00Z")
+    repo.side("old", new=True)
+    app_setup.record_page(PAGE, chat="upgrade-chat", now=NOW - dt.timedelta(days=9),
+                          parts=_built_in_parts(repo, "old-page", "code/a1.js"))
+    app_alerts.dismiss("jobs~fernhill", "jobs", dt.date(2026, 10, 16))
+    repo.commit("an upgrade that published", when="2026-10-16T17:30:00Z")
+    repo.side("master")
+    app_setup.record_page(OTHER_PAGE, chat="computer-1", now=NOW - dt.timedelta(days=8))
+    repo.commit("the page in use", when="2026-10-17T17:30:00Z")
+    app_setup.record_page(OTHER_PAGE, chat="computer-1", now=NOW - dt.timedelta(hours=1),
+                          parts=_built_in_parts(repo, "page-now", "code/b1.js", "code/b2.css"))
+    repo.commit("the page brought up to date", when="2026-10-25T16:30:00Z")
+    if into == "old":
+        repo.side("old")
+    r = repo.merge("master" if into == "old" else "old")
+    assert r.returncode == 0, r.stdout + r.stderr
+    got = json.loads(repo.read("profile/app.json"))
+    assert got["url"] == OTHER_PAGE and got["by"] == "computer-1", got
+    assert got["published_at"].startswith("2026-10-25T16:30"), got
+    assert got["code"] == ["code/b1.js", "code/b2.css"], got
+    assert set(got["suggest_no"]) == {"ready~oakmere", "jobs~fernhill"}
+
+
+def test_a_side_gone_back_to_an_older_page_than_both_began_from_never_wins(repo):
+    """A branch that took an older page record whole (copied from a branch left behind)
+    holds a stamp older than the copy both began from: the page in use stands, whole."""
+    app_setup.record_page(OTHER_PAGE, chat="computer-1", now=NOW - dt.timedelta(days=2),
+                          parts=_built_in_parts(repo, "page-then", "code/b1.js"))
+    repo.commit("base", when="2026-10-23T18:00:00Z")
+    repo.side("other", new=True)
+    old = {"url": PAGE, "published_at": "2026-10-16T17:30:00Z", "by": "upgrade-chat",
+           "title_name": "Rowan", "code": ["code/a1.js"]}
+    with open(os.path.join(repo.profile, "app.json"), "w", encoding="utf-8") as fh:
+        json.dump(old, fh, indent=2, sort_keys=True)
+        fh.write("\n")
+    repo.commit("an older record taken whole", when="2026-10-25T10:00:00Z")
+    repo.side("master")
+    app_setup.record_page(OTHER_PAGE, chat="computer-1", now=NOW - dt.timedelta(hours=1),
+                          parts=_built_in_parts(repo, "page-now", "code/b1.js", "code/b2.css"))
+    app_alerts.dismiss("jobs~fernhill", "jobs", dt.date(2026, 10, 25))
+    repo.commit("the page brought up to date", when="2026-10-25T09:00:00Z")
+    r = repo.merge()
+    assert r.returncode == 0, r.stdout + r.stderr
+    got = json.loads(repo.read("profile/app.json"))
+    assert got["url"] == OTHER_PAGE and got["by"] == "computer-1", got
+    assert got["code"] == ["code/b1.js", "code/b2.css"], got
+    assert got["published_at"].startswith("2026-10-25T16:30"), got
+    assert set(got["suggest_no"]) == {"jobs~fernhill"}
 
 
 def test_a_setting_and_a_place_an_employer_heard_meet_cleanly(repo):

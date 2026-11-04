@@ -73,6 +73,16 @@ make sense to somebody whose repo just received it.
 
 ### Fixed
 
+- **Your page never switches back to an old one when two chats' work is joined.** The page
+  you use now is always the one kept, whole, never an older page another chat made earlier.
+- **Old unfinished work no longer overwrites newer work.** Work a chat left more than three
+  days ago, touching things you have changed since, is left aside instead of being brought
+  in; it is kept, never deleted.
+- **No more spare copies or "which one stays?" questions when nothing really clashed.** Where
+  one chat only held an older version of a file, the newer one is kept, with nothing left
+  beside it and nothing to answer.
+- **If your page's record ever does go back to an older page, the next chat puts the newer
+  one back** before doing anything on the page.
 - **Every follow-up and reply Claude writes shows in Messages straight away**, ready to copy,
   instead of only in the day's list of follow-ups. A follow-up to someone who never wrote back
   is no longer turned away as a reply with nothing to answer, and an application's follow-up
