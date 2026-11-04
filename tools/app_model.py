@@ -2765,6 +2765,12 @@ def _due(ctx: Ctx, targets: dict) -> list:
             about = key
             wkind = action.split(":", 1)[1]
             work = {"kind": wkind, "id": f"{wkind}~{key}", "args": {"contact": key}}
+            # Named after the person, never after their step: a step written as a note named
+            # the work "<who> at <where>: One follow-up sent 2026-10-21. No more after this" in
+            # Claude's work (the maintainer, 2026-11-04). Past their limit it is a close, as
+            # the title says.
+            if wkind == "follow_up" and not limit:
+                work["title"] = f"Follow up with {who}{where}"
             if raw == "resume":
                 work["ask"] = "role"       # which role: asked on the page at tap time
             sub = raw

@@ -22,6 +22,15 @@ make sense to somebody whose repo just received it.
 
 ### Changed
 
+- **Claude's work opens and closes from one button on every screen.** On a wide screen the
+  pill at the top opens the panel on the right and closes it again, like the menu's "Icons
+  only", and the page remembers which you chose; the panel has its own Hide. Narrower, it
+  opens as a panel on the right, and on a phone from the bottom.
+- **What you close or stop leaves its list at once.** Closing people in To do, or "No more
+  messages" to someone, takes them off the list straight away instead of waiting for Claude;
+  "11 closed: Show" brings them back with their Undo.
+- **A finished follow-up or reply opens that person's message**, in Contacts, never "Open in
+  Jobs", and it is named after the person ("Follow up with Wren at Harbourline Bank").
 - **Your brief's phone notification is off unless you want it.** Turning the brief on asks
   whether you want one, and you can change it any time in Settings, under Your brief, Phone
   notification. If you already have a brief, Claude asks you once. Your brief still comes on
@@ -29,6 +38,11 @@ make sense to somebody whose repo just received it.
 
 ### Fixed
 
+- **The settings gear is even all round, and the Brief's icon is sharp.** The gear's teeth
+  were lopsided, and the Brief's four boxes sat so close their edges blurred together.
+- **Work waiting behind an update says how long it really waits**: the work running now and
+  then the update, never only the update's own few minutes. A day on a work card reads "Wed
+  21 Oct", and its time is said once.
 - **Your brief's news is never empty because of how a date was shown.** The news search left
   out any result that did not show its date on its own line, so a brief could come back with
   none while ordinary searches found plenty. A result's day is now read from its title, its

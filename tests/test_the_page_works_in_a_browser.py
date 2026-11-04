@@ -1538,8 +1538,9 @@ def test_the_page_opened_with_no_chat_running_brings_itself_up_to_date_and_says_
     assert r["freshWork"] == 0
     # The pill on the Brief opens Claude's work.
     assert r["sheet"] is True and "Claude's work" in r["sheetText"]
-    # Time run counts from the start, not the ask a day before.
-    assert "29 hours" not in r["sheetText"] and "1 min so far" in r["sheetText"], r["sheetText"]
+    # Time run counts from the start, not the ask a day before: its one clock, the step's
+    # own while the first step is the whole run (2026-11-04).
+    assert "29 hours" not in r["sheetText"] and re.search(r"\b1m \d+s", r["sheetText"]), r["sheetText"]
     # Each week of the chart says its count to a pointer and a tap; leaving puts the line back.
     assert r["capBefore"].startswith("Applications each week")
     assert re.match(r"Week of .+: \d+ applications?\.$", r["capHover"]), r["capHover"]
