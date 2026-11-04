@@ -133,7 +133,7 @@ def test_what_to_avoid_is_changed_in_the_search_panel_which_has_one_name(run, tm
     ], vp, clock=T)
     panel = got["after"][1]["text"]
     assert panel.startswith("Change the search"), "the panel has the name of the button that opens it from Jobs"
-    assert "Edit the search" not in panel and "Something else? Say what to change" in panel
+    assert "Edit the search" not in panel and "What should change?" in panel
 
 
 # ------------------------------------------------------------------ 5. a phone toast keeps Close on its row

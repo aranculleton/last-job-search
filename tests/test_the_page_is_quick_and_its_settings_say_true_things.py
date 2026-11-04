@@ -327,7 +327,7 @@ def test_the_briefs_usual_is_only_rules_about_the_brief(run, tmp_path):
                      "said": "", "on": "2026-10-21", "retired": False, "rev": "l2"}]
     got = _go(run, tmp_path, [{"hash": "brief", "click": "Edit the brief", "read": ".tweak-panel"}], WIDE, model=m)
     panel = got["after"][0]["text"]
-    assert "Your usual: The brief leads with interviews" in panel and "Answer the question" not in panel, panel
+    assert "Keeping 1 rule of yours" in panel and "The brief leads with interviews" in panel and "Answer the question" not in panel, panel
 
 
 # ------------------------------------------------------------------ 15, 16, 17, 21: reach and focus

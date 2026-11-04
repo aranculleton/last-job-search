@@ -341,3 +341,17 @@ def test_a_card_of_notes_to_check_says_what_it_is(run, tmp_path):
     title, text = cards[0]
     assert title.startswith("2 messages to check before you send"), title
     assert "Written before their profile was read: read it first." in text and "Open in Contacts" in text, text
+
+
+def test_a_card_being_changed_says_so(run, tmp_path):
+    """After Apply on an edit, the note showed nothing while the change waited its turn (the
+    maintainer, 2026-11-04: "after i send a job is there an indication that that one is being
+    worked on in the list")."""
+    m = copy.deepcopy(_sample())
+    mid = m["messages"][0]["id"]
+    work = dict(QUEUED, kind="tweak", title="Edit message", args={"v": 1, "target": {"id": mid, "output": "message"}})
+    look = ("(() => { const c = document.querySelector('[data-item=\"" + mid + "\"]'); const g = c && c.querySelector('[data-tweak-going]');"
+            " return g ? g.textContent : null; })()")
+    got = _go(run, tmp_path, [{"hash": "drafts-messages", "eval": look}], WIDE, model=m, seed=dict(HEARD, **{"work/tweak~m1": work}), clock=T)
+    line = got["after"][0]["eval"]
+    assert line and line.startswith("Claude changes this next") and "See it" in line, line

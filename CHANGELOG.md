@@ -40,6 +40,11 @@ make sense to somebody whose repo just received it.
   Show lists them, and "Don't do them" calls off the lot.
 - **A To do card about several notes says what it is**: "4 messages to check before you
   send", with the reason under it, never the reason alone over a list of names.
+- **Editing something starts with your own words.** The box to say what to change is at the
+  top, two choices show with the rest under More choices, your rules fold to one line, and
+  Apply is the one button: it starts at once.
+- **A card being changed says so**: "Claude changes this next", with a link to it in
+  Claude's work, until the new version is there.
 - **What you close or stop leaves its list at once.** Closing people in To do, or "No more
   messages" to someone, takes them off the list straight away instead of waiting for Claude;
   "11 closed: Show" brings them back with their Undo.

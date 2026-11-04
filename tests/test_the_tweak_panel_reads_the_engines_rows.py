@@ -57,8 +57,8 @@ def test_the_resume_panel_shows_the_engines_labels_and_sends_its_codes(run, tmp_
     assert not got["errors"], got["errors"]
     resume = [r for r in _engine_rows() if "resume" in r["outputs"] and r["control"] != "per-bullet"]
     # The engine's order and labels: its fourth row is Name and dates, not the page's old "Your name".
-    assert "Name and dates" in got["text"] and "Your name" not in got["text"]
-    assert got["rows"] == 5 and len(resume) > 5
+    assert "Name and dates" in got["all"] and "Your name" not in got["all"]
+    assert got["rows"] == 2 and len(resume) > 5
     work = [d for _, d in got["work"] if d.get("kind") == "tweak"]
     assert work, got["work"]
     sent = work[-1]["args"]["changes"]
@@ -75,14 +75,14 @@ def test_a_letter_length_that_needs_a_model_says_so_before_apply(run, tmp_path, 
     short = run("tweak", html=path, viewport=vp, hash="drafts-applications", item=ITEM, entry="Edit the letter", exact=False, choose=[["L1", "short"]])
     # L1 is code for short and standard, and the engine's model_values make full a rewrite.
     assert got["after"]["line"] != short["after"]["line"]
-    assert "Addressed to" in got["text"]
+    assert "Addressed to" in got["all"]
 
 
 def test_without_the_engines_rows_the_page_keeps_its_own(run, tmp_path, vp):
     path = _write(tmp_path, "tp", _sample())
     got = run("tweak", html=path, viewport=vp, hash="drafts-applications", item=ITEM, entry="Edit the CV", exact=False)
     assert not got["errors"], got["errors"]
-    assert got["rows"] == 5 and "Summary" in got["text"]
+    assert got["rows"] == 2 and "Summary" in got["all"]
 
 
 def test_the_newest_kept_change_is_undone_with_the_engines_own_action(run, tmp_path, vp):
@@ -93,3 +93,18 @@ def test_the_newest_kept_change_is_undone_with_the_engines_own_action(run, tmp_p
     assert "Last change: Look: classic" in got["after"][0]["text"]
     a = _one(got, "tweak.undo")
     assert a["item"] == ITEM and a["value"] == {"key": "tw-k2"} and a["rev_seen"] == _item(m, ITEM)["rev"]
+
+
+def test_the_panel_leads_with_your_own_words_and_has_one_button(run, tmp_path, vp):
+    """The maintainer, 2026-11-04: "u seem to have to scroll down to get the text box", "a lot of
+    options its slightly overwhelming", and of Start now, With your next chat and Apply, "wtf
+    is the difference". The text box comes first, two choices show with the rest one tap below,
+    the person's rules fold to one line, and Apply is the one button."""
+    path = _write(tmp_path, "tw", _model())
+    got = run("tweak", html=path, viewport=vp, hash="drafts-applications", item=ITEM, entry="Edit the CV", exact=False)
+    assert not got["errors"], got["errors"]
+    text = got["text"]
+    assert text.index("What should change?") < text.index("More choices"), text
+    assert got["rows"] == 2
+    assert "Start now" not in got["all"] and "With your next chat" not in got["all"]
+    assert "Your usual:" not in got["all"]

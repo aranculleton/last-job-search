@@ -6474,7 +6474,10 @@
         onclick: (e) => { hint.hidden = !hint.hidden; e.currentTarget.setAttribute("aria-expanded", String(!hint.hidden)); }}, "?");
       return h("div", {class: "tweak-row", "data-p": r.p}, h("div", {class: "tweak-label"}, h("span", {class: "tw-label", id: lid}, r.label), q), control, hint);
     };
-    const main = rows.filter((r) => !r.extra).slice(0, 5);
+    // Two choices in view, the rest one tap below, and the person's own words first: five rows
+    // of choices pushed the text box out of sight (the maintainer, 2026-11-04: "a lot of options
+    // its slightly overwhelming, also u seem to have to scroll down to get the text box").
+    const main = rows.filter((r) => !r.extra).slice(0, 2);
     const extra = rows.filter((r) => r.extra || main.indexOf(r) < 0);
     const near = spec.doc ? arr(item.near).filter((n) => n && n.asked && n.have) : [];
     const nearBlock = near.length ? h("div", {class: "tweak-near"}, h("p", {class: "tw-label"}, "Similar skills"),
@@ -6491,19 +6494,25 @@
     const panel = h("section", {class: "tweak-panel", "aria-labelledby": "tweak-title", "data-output": st.output},
       h("div", {class: "tweak-head"},
         h("div", {class: "sum-words"}, h("h2", {class: "tweak-title", id: "tweak-title"}, spec.name ? spec.name : "Edit " + spec.what(item)),
-          h("div", {class: "summary"}, h("div", {class: "sum-words"}, h("p", {class: "sum"}, "Choose what to change, then Apply. Nothing is sent."),
-            usual.map((u) => h("p", {class: "sum-small"}, u))))),
+          h("div", {class: "summary"}, h("div", {class: "sum-words"}, h("p", {class: "sum"}, "Say what to change, or choose below, then Apply. Nothing is sent."),
+            // The person's rules it keeps, folded to one line: two in full stood as a wall of
+            // text above everything (the maintainer, 2026-11-04: "whats that wall of text").
+            usual.length ? h("details", {class: "tweak-usual sum-small"}, h("summary", {"data-k": "tweak-usual"}, "Keeping " + plural(usual.length, "rule of yours", "rules of yours")),
+              usual.map((u) => h("p", {class: "small muted"}, u.replace(/^Your usual: /, "")))) : null))),
         h("button", {type: "button", class: "btn quiet small tweak-close", "data-k": "tweak-close", onclick: closeTweak}, "Close")),
       h("div", {class: "tweak-body"},
+        // Always open and first: folded, it read as a heading with nothing under it (the
+        // maintainer, 2026-10-30), and under five rows of choices it was out of sight (2026-11-04).
+        h("div", {class: "tweak-else"}, h("label", {for: "tweak-text", class: "tweak-else-label", "data-k": "tweak-else"}, "What should change?"), textArea,
+          h("p", {class: "hint", id: "tweak-text-h"}, "Your own words, for this one only. They cannot add anything your profile does not hold, and nothing is sent.")),
         main.map(rowNode), nearBlock,
         extra.length ? h("details", {class: "tweak-extra"}, h("summary", {}, "More choices"), extra.map(rowNode)) : null,
-        // Always open: folded, it read as a heading with nothing under it, and Apply stayed
-        // grey (the maintainer, 2026-10-30: "this part ... doesnt seem to work").
-        h("div", {class: "tweak-else"}, h("label", {for: "tweak-text", class: "tweak-else-label", "data-k": "tweak-else"}, "Something else? Say what to change"), textArea,
-          h("p", {class: "hint", id: "tweak-text-h"}, "Your own words, for this one only. They cannot add anything your profile does not hold, and nothing is sent.")),
         h("div", {class: "tweak-keep"}, h("div", {class: "choice"}, keepBox, h("label", {for: "tweak-keep"}, "Keep this for next time")), keepRead, scope)),
       // One way out: Close at its top (a Close and a Cancel did the same, 2026-11-03).
-      h("div", {class: "tweak-foot"}, line, when, h("div", {class: "tweak-actions"}, apply)));
+      // Apply alone: "Start now" and "With your next chat" beside it asked what a default
+      // answers (the maintainer, 2026-11-04: "wtf is the difference between all these
+      // buttons?"). It starts now where Claude can be woken; the line says when it cannot.
+      h("div", {class: "tweak-foot"}, line, h("div", {class: "tweak-actions"}, apply)));
     keepBox.addEventListener("change", () => { st.keep = keepBox.checked; refresh(); });
     if (item.company && !spec.search) {
       for (const [v, label] of [["all", "Every one of your " + spec.plural()], ["employer", "Only " + spec.plural() + " to " + txt(item.company)]]) {
@@ -6577,6 +6586,15 @@
   }
   // What a finished tweak left: the new version beside the old one, and a way back.
   function tweakResult(item) {
+    // Being changed: the card says so, with its place in Claude's work. After Apply the note
+    // showed nothing at all (the maintainer, 2026-11-04: "after i send a job is there an
+    // indication that that one is being worked on in the list").
+    const going = [...allWork()].find(([id, w]) => id.startsWith("tweak~") && txt(obj(obj(w.args).target).id) === txt(item.id) && ACTIVE.has(txt(w.status) || "queued"));
+    if (going) {
+      const [gid, gw] = going;
+      return h("p", {class: "small tweak-going", "data-tweak-going": gid}, (txt(gw.status) === "queued" ? "Claude changes this next" : "Claude is changing this now") + ". It shows here when it is done. ",
+        btn("See it", () => openWork(gid), {kind: "link", key: "tweak-going:" + item.id}));
+    }
     const last = arr(item.tweaks_done)[0];
     const said = last ? arr(last.said).map(txt).filter(Boolean).join(", ") : "";
     if (last && last.undo && !effective(txt(item.id), ["tweak.undo"])) {

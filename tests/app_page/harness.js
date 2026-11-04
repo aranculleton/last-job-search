@@ -826,13 +826,18 @@ S.tweak = async (a) => {
     sheet: await page.evaluate(() => { const d = document.querySelector("dialog.tweak-sheet"); if (!d) return null; const r = d.__drawnRect(); return {top: r.top, bottom: r.bottom, h: r.height, vh: innerHeight}; }),
     rows: await panel.locator(".tweak-body > .tweak-row").count(), recs: await panel.locator(".rec").count(),
     pressed: await panel.locator('[aria-pressed="true"].tw-opt').count(), keepChecked: await panel.locator("#tweak-keep").isChecked(),
-    title: (await panel.locator(".tweak-title").textContent()).trim(), text: (await panel.innerText())};
+    title: (await panel.locator(".tweak-title").textContent()).trim(), text: (await panel.innerText()),
+    // Everything the panel holds, "More choices" and the folded rules included (2026-11-04).
+    all: (await panel.textContent())};
+  // Choices beyond the first two sit under "More choices" (2026-11-04): open it as a person would.
+  if ((a.choose || []).length || (a.type || []).length) await panel.evaluate((p) => { const d = p.querySelector("details.tweak-extra"); if (d) d.open = true; });
   for (const [pp, v] of a.choose || []) { await panel.locator('[data-k="tw:' + pp + ":" + v + '"]').click(); await turn(page, 1); }
   for (const [pp, v] of a.type || []) { await panel.locator('[data-k="tw:' + pp + '"]').fill(v); await turn(page, 1); }
   for (const k of a.near || []) { await panel.locator('[data-k="tw-near:' + k + '"]').click(); await turn(page, 1); }
   if (a.text) { await panel.locator("[data-k=tweak-else]").click(); await panel.locator("#tweak-text").fill(a.text); await turn(page, 1); }
   if (a.keep) { await panel.locator("#tweak-keep").check(); await turn(page, 1); out.keepRead = (await panel.locator("#tweak-keep-read").textContent()).trim(); }
-  if (a.when) { await panel.locator('[data-k="tweak-when:' + a.when + '"]').click(); await turn(page, 1); }
+  // No timing choice any more: Apply starts it where Claude can be woken (2026-11-04).
+  if (a.when && await panel.locator('[data-k="tweak-when:' + a.when + '"]').count()) { await panel.locator('[data-k="tweak-when:' + a.when + '"]').click(); await turn(page, 1); }
   out.after = await read();
   if (a.shot) out.shot = await shot(page, a.shot, false);
   if (a.apply) { await panel.locator("[data-k=tweak-apply]").click(); await turn(page, 6); }

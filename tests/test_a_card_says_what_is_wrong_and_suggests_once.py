@@ -386,6 +386,8 @@ def test_done_on_a_dated_action_and_on_a_follow_up_is_applied_and_can_be_taken_b
     trows.append({"date": "2026-10-14", "company": "Sedge Energy", "role": "Data Analyst",
                   "status": "applied", "applied_on": "2026-10-15", "notes": "applied online",
                   "confirmed_by": "chat", "confirmed_at": "2026-10-15 09:00",
+                  # Somebody to write to: with nobody named it is never chased (2026-11-04).
+                  "contact_person": "Rowan",
                   "source": "https://jobs.example/sedge/data"})
     app_state._save_csv(tpath, trows, list(trows[0].keys()))
     due = {d["id"]: d for d in search.model()["due"]}
