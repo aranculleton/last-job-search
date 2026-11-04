@@ -1195,9 +1195,10 @@ def carried(today: dt.date, newest: str = "", but=()) -> list[tuple[str, int, di
     kept for later, once each. The one answer to "is it on the list already": the page lists
     these as from an earlier search, and a search passes them over (run_round.already_had)."""
     from lookup_score import norm
+    skip = set(but)
     files = sorted((p for p in glob.glob(person.state("documents", "rounds", "*.json"))
                     if os.path.isfile(p) and p != newest
-                    and os.path.splitext(os.path.basename(p))[0] not in set(but)),
+                    and os.path.splitext(os.path.basename(p))[0] not in skip),
                    key=_round_key, reverse=True)
     kept = {norm(u): k for u, k in kept_jobs().items()}
     have = {norm(r.get("url") or "") for r in ((_json(newest, []) or []) if newest else [])
