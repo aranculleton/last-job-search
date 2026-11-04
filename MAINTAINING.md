@@ -211,8 +211,12 @@ Read what `[Unreleased]` holds: **patch** (3.3.0 to 3.3.1) when it is fixes only
 (3.3.0 to 3.4.0) when it adds or changes anything a person would notice; **major** (3.3.0
 to 4.0.0) only when a person has to change their own setup, or something they rely on goes
 away or works differently enough that they must learn it again. The number says what kind
-of change a release is, never how soon it came after the last one. Say the number and the
-reason in one line in the reply.
+of change a release is, never how soon it came after the last one. The maintainer batches:
+a builder is always running and they release when they choose, so most releases change
+something a person notices. A release that follows up the last one, fixing and finishing
+what its first use found, is a **patch** even where a person notices the fixes (4.9.1 after
+4.9.0, the maintainer's call); a batch carrying new notes is a **minor**. Say the number and
+the reason in one line in the reply.
 
 **Under 15 minutes, every time** (the maintainer, 2026-10-29). "Release it" means merge
 and publish, nothing else: the looking, the audit and the rehearsals are done while the
