@@ -247,7 +247,9 @@ def test_the_engine_puts_what_it_needs_on_a_refused_receipt(tmp_path):
     search.apply()
     r = search.receipt(later)
     assert r["result"] == "conflict" and r["note"] == "That day has not come yet."
-    assert r["ask"] == {"key": "on", "label": "Which day?", "type": "date"}
+    # The kind of answer it needs, as every ask names it (app_actions.clean_ask), and its
+    # older `type` for a page from before the kinds.
+    assert r["ask"] == {"key": "on", "label": "Which day?", "type": "date", "kind": "date"}
     w = search.receipt(word)
     assert w["ask"]["key"] == "on" and "2026-10-21" not in w["note"] and "2026-10-25" in w["note"], w
 

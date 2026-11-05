@@ -69,6 +69,7 @@ documents/page_assets.json merge=ljs-state text eol=lf
 documents/network/page_reads_queue.json merge=ljs-state text eol=lf
 documents/network/page_reader.json merge=ljs-state text eol=lf
 documents/applications/*/verify.json merge=ljs-state text eol=lf
+documents/applications/*/remake.json merge=ljs-state text eol=lf
 documents/network/own_profile_review.json merge=ljs-state text eol=lf
 documents/network/.page_reads.json merge=ljs-state text eol=lf
 documents/network/.signed_in.json merge=ljs-state text eol=lf

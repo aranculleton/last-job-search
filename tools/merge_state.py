@@ -240,6 +240,9 @@ JSON_FILES = {
     # An application's latest checks (verify_batch.py _record): the newer run stands whole.
     "documents/applications/*/verify.json": {"whole": ("",), "stamps": ("at",), "indent": 1,
                                              "ascii": True},
+    # The way a rerun of the drafts handed this application on (remake_drafts.py): the later
+    # run's record stands whole.
+    "documents/applications/*/remake.json": {"whole": ("",), "stamps": ("date",), "indent": 1},
     # The page as a reader of LinkedIn (place.PAGE_READS_FILE): the later check or read stands.
     "documents/network/page_reader.json": {"whole": ("",), "stamps": ("checked_at", "last_read_at"),
                                            "indent": 1, "ascii": True},
@@ -347,6 +350,7 @@ _PER_ROUND = ("named after the round that wrote it, once, and never written agai
 JSON_NAMES = {
     # run_round reads every round's summary to find a job set aside while a search ran; the
     # files themselves are wired as "documents/rounds/*.json" above.
+    "tools/app.py: *.json": "a page dump's screen documents, read only to tell whether the dump holds the page's screens (app.py no_screen), in the chat's scratch folder; never committed",
     "tools/run_round.py: *.json": "every round summary, read only, to hold a set-aside made during a search; written by write_summary, merged as documents/rounds/*.json",
     **dict.fromkeys(("00_portal_health.json", "01_dropped.json", "01_prefiltered.json",
                      "02_hydrated.json", "03_screened.json", "03_screened_all.json",
