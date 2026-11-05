@@ -699,7 +699,10 @@
     CAP[n] = use(n).then((v) => { S.caps[n] = v; return v; });
   }
   const capsSettled = {};
-  for (const n of Object.keys(CAP)) CAP[n].then(() => { capsSettled[n] = true; });
+  // What a capability settling late changes (the downloads, the assets, "cannot reach Claude")
+  // is drawn once it settles, for the owner: the page's 1.5 s redraw after opening drew it by
+  // accident until it went (2026-11-05), and a pinned page left open must not keep a stale line.
+  for (const n of Object.keys(CAP)) CAP[n].then(() => { capsSettled[n] = true; if (S.owner === true) scheduleRender(); });
 
   // ------------------------------------------------------------------ the live store
 

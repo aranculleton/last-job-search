@@ -72,6 +72,11 @@ release. What cost time:
   with four or five long tasks of 75 to 120 ms against three. It is marked timing and passes timed
   alone in the main run and here; the variants time it beside other tests. Look at whether
   tools/everywhere.sh runs the timing tests alone, as ci.yml does.
+- **Windows' computer-chat run** on the release branch failed one race test once:
+  tests/test_a_message_goes_out_by_hand_and_is_logged_once.py::test_two_chats_logging_the_same_send_at_once_write_one_row
+  (the first chat's tap came back conflict and the second's ok, where the test expects the other
+  order). It passed on master's Windows run before; look at whether it pins an order two chats at
+  once cannot promise.
 - **A live chat** has not run the new find-and-draft-all job, the job chat's send_message report and
   close, or the form-questions box end to end; their tests play Claude's side.
 - **The LinkedIn reads**: a page cannot hide Claude's browser pane or open a tab out of sight (the

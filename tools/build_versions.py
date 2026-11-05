@@ -771,8 +771,9 @@ METHODS: dict[str, dict] = {
             (40, "2026-11-05", True, "a job you added shows at the top of Jobs while Claude scores it, with its work line and Cancel"),
             (41, "2026-11-05", True, "a burst of live writes is folded into the next frame again, so a card shows its new state as soon as it is written"),
             (42, "2026-11-05", True, "away from the desktop app the page is not drawn again a second and a half after opening unless that changed what it says; a Tweak panel opened on a wide screen shows at once, without waiting for the next redraw"),
+            (43, "2026-11-05", True, "what a late capability changes is drawn once it settles"),
         ),
-        "fingerprint": "6c6e0d60ba41895b",
+        "fingerprint": "7ed6d6de13ea0340",
     },
     "upskill": {
         "by": "upgrade", "priority": 4, "applies": "upskill_plans", "time": "~10 min",
