@@ -1872,5 +1872,9 @@ ul.bp-news { max-width: 80ch; }
 .g-summary p { margin: 0; font-weight: 600; }
 .g-state { margin: 2px 0 0; font-size: var(--t-sm); display: flex; align-items: center; gap: 4px; }
 /* Scrolled up in a conversation: one small way back to its newest message, just above the box. */
-.talk-jump { position: sticky; bottom: 96px; margin: 0 0 8px auto; display: flex; box-shadow: var(--shadow); }
+.talk-jump { justify-self: end; display: flex; box-shadow: var(--shadow); }
+/* "Not confirmed yet" is a small pill, never a bar the width of its row (the review, 2026-11-05). */
+.up-main > .state-word, .bp-up-row .up-main > .state-word { justify-self: start; }
+/* On a phone the search takes its own row under the switch, which it squeezed unreadable. */
+@media (max-width: 759px) { .controls:has(> .searchf) { flex-wrap: wrap; } .controls > .searchf { order: 9; flex-basis: 100%; } }
 .talk-earlier-msgs { list-style: none; text-align: center; }

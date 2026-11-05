@@ -71,6 +71,8 @@ make sense to somebody whose repo just received it.
   and the same tidy puts older days in order from the download on file.
 - **Web addresses no longer fill the Brief's news**: each is a short link named by its site.
 - **Jobs has a search box beside Filter**, as Contacts does, once the list is long.
+- **A downloaded resume is named for the person reading it**: your name, the document and the
+  employer (`Morgan_Ellis_Resume_Kestrel_Foods.pdf`), never the role run together after it.
 - **Chat opens on its newest message.** It stays there as answers come in until you scroll up,
   a Latest button takes you back down, and it shows the last day, with earlier messages loading
   as you scroll up.

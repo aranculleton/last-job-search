@@ -800,8 +800,9 @@ METHODS: dict[str, dict] = {
             (53, "2026-11-05", True, "several drafted at once read as one line with one Cancel all and a word a row; finished answers group in Claude's work, folded ones too; a message sent while Claude answers the last goes to Claude; a chat message that does not save says so"),
             (54, "2026-11-05", True, "every trash sheet whose card has a box ends with Something else, opening that box; a skill question answered on a job card leaves it at once with only its answer ticked, and has a third answer, just for this role; Coming up and the Brief say Not confirmed yet, with its box wherever a day is given, and a call called off leaves Coming up at once; an I sent it the store never answers says Saving, then Not saved. Tap I sent it again., with the message back on its card"),
             (55, "2026-11-05", True, "Chat opens on its newest message and stays there until scrolled up, a Latest button when it is, and the last day shown with earlier messages twenty at a time"),
+            (56, "2026-11-05", True, "a downloaded resume or letter is named your name, the document and the employer, never the role run together; Chat's Latest sits above its box on a phone; Not confirmed yet is a small pill; on a phone Jobs' search has its own row; the pencil's box takes the cursor"),
         ),
-        "fingerprint": "dc5f2d274eb67073",
+        "fingerprint": "879d32209f3709ef",
     },
     "upskill": {
         "by": "upgrade", "priority": 4, "applies": "upskill_plans", "time": "~10 min",

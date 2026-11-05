@@ -860,7 +860,7 @@ def test_stop_says_what_is_kept(run, pages):
 def test_both_files_download_in_one_tap_and_a_draft_with_none_gets_them_by_itself(run, pages):
     r = run("downloads", html=pages["sample"])
     _clean(r)
-    assert [s["filename"] for s in r["saves"]] == ["Morgan_Ellis_CV_Ellerwick.pdf", "Morgan_Ellis_Cover_Letter_Ellerwick.pdf"]
+    assert [s["filename"] for s in r["saves"]] == ["Morgan_Ellis_CV_Ellerwick_Trust.pdf", "Morgan_Ellis_Cover_Letter_Ellerwick_Trust.pdf"]  # named for the reader since 2026-11-05
     assert all(s["blob"] and s["size"] > 100 for s in r["saves"])
     assert any("Saved." in n for n in r["note"])
     # What Claude can do by itself is never a button (the maintainer, 2026-11-05): no "Get my

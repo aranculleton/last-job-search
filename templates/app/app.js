@@ -2460,6 +2460,19 @@
     if (/^https:\/\//i.test(a) || (a.startsWith("/") && !/^\/[\/\\]/.test(a))) return a;
     return "/_blob/" + encodeURIComponent(a);
   }
+  // What the person attaches is named for the reader and for their own folder of downloads:
+  // "Morgan_Ellis_Resume_Kestrel_Foods.pdf", the employer written plainly, never the working name with
+  // the role run together after it (the maintainer, 2026-11-05: "this is quite a robotic name
+  // for a resume right?" and "it might be helpful to have the company name after if im
+  // downloading loads"). The kept copy keeps its full name.
+  function sendName(name, company) {
+    const n = txt(name);
+    const m = /^(.+?_(?:Resume|R[eé]sum[eé]|CV|Cover_Letter))(?:_[^.]*)?(\.[A-Za-z0-9]+)$/i.exec(n);
+    if (!m) return n;
+    const co = txt(company).normalize("NFKD").replace(/[\u0300-\u036f]/g, "").replace(/&/g, "and").replace(/['’.]/g, "")
+      .replace(/[^A-Za-z0-9]+/g, "_").replace(/^_+|_+$/g, "").slice(0, 40);
+    return m[1] + (co ? "_" + co : "") + m[2];
+  }
   async function download(file, key) {
     const set = (text, tone) => { S.notes.set(key, {text, tone}); scheduleRender(); };
     const dl = await CAP.downloads;
@@ -2473,7 +2486,7 @@
       blob = await r.blob();
     } catch (e) { set("Could not get the file. Try again in a moment.", "bad"); return; }
     try {
-      const res = await dl.save({filename: txt(file.name) || "document.pdf", data: blob});
+      const res = await dl.save({filename: sendName(file.name, file.company) || "document.pdf", data: blob});
       set(res && res.status === "delivered" ? "Sent where you chose." : "Saved.", "ok");
       announce(txt(file.name) + " saved.");
     } catch (e) {
@@ -6248,7 +6261,7 @@
   // list, opened at them (2026-11-05: a drafted job stood in Found and again in Drafts).
   function renderDrafts(where) { return renderJobs(where, true); }
   async function getFiles(a, files) {
-    for (const f of files) await download(f, "dl:" + a.id);
+    for (const f of files) await download(Object.assign({company: txt(a.company)}, f), "dl:" + a.id);
   }
   function readyCard(a) {
     const st = readyStatus(a);
@@ -6487,7 +6500,7 @@
       "aria-label": copied ? null : copyName, onclick: () => { S.copied.add(m.id); copyText(txt(draftGet(penKey)) || parts.body, (parts.subject ? "message" : what) + " to " + name, "copy:" + tid, tid); }},
       icon("copy"), copied ? (fresh ? "Copied" : "Copy again") : "Copy");
     // The pencil: the words changed in place, or Claude asked to change them.
-    const penBtn = btn("", () => { if (S.penOpen.has(m.id)) S.penOpen.delete(m.id); else S.penOpen.add(m.id); scheduleRender(); },
+    const penBtn = btn("", () => { if (S.penOpen.has(m.id)) S.penOpen.delete(m.id); else { S.penOpen.add(m.id); S.focusAfter = {key: "penask:" + m.id}; } scheduleRender(); },
       {kind: "quiet icon-only", small: true, icon: "tweak", key: "pen:" + m.id, aria: (pen ? "Done changing the " : "Change the ") + what + " to " + name, pressed: pen});
     penBtn.classList.add("bubble-pen");
     const sentNow = (text) => act([{item: m.id, action: "msg.sent", value: msgSentValue(m, text), rev: m.rev}], "Marked as sent: " + name);
@@ -12044,7 +12057,10 @@
       h("p", {class: "talk-privacy muted small"}, "To answer, Claude reads what is on this page."));
     talkSum = h("p", {class: "sum"}, "Ask anything about your search.");
     talkMenu = h("div", {class: "talk-menu"});
-    talkBody = h("div", {class: "talk-body"}, talkEarlier, talkList, talkStatus, buildTalkJump(), talkForm);
+    // The way back down sits in the box's own sticky area, just above the field, so it is on
+    // screen wherever the box is: below it, a phone's screen hid it (the review, 2026-11-05).
+    talkForm.prepend(buildTalkJump());
+    talkBody = h("div", {class: "talk-body"}, talkEarlier, talkList, talkStatus, talkForm);
     talkEl = h("section", {class: "talk sec", id: "talk-box", "aria-labelledby": "h-chat"},
       h("header", {class: "sec-head"}, h("h2", {id: "h-chat", tabindex: "-1", class: "screen-title"}, "Chat"),
         h("div", {class: "summary with-tool"}, h("div", {class: "sum-words"}, talkSum), talkMenu)),
