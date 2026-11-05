@@ -38,6 +38,14 @@ make sense to somebody whose repo just received it.
   (curly against straight), so an old message could land after your reply and a new reply was
   drafted. It now matches them, and copies already logged are taken out by themselves, any
   note that a resume went with the message kept. Profile upgrade: export-repeats.
+- **Messages from the same day are in the order they were sent.** The log keeps a day but no
+  time, so a message brought in from your LinkedIn download landed after a reply you sent later
+  that day, and someone you had answered read as waiting on you. New ones go in the right place,
+  and the same tidy puts older days in order from the download on file.
+- **Web addresses no longer fill the Brief's news**: each is a short link named by its site.
+- **Jobs has a search box beside Filter**, as Contacts does, once the list is long.
+- **A finished draft no longer says "Made, right length"** on every card: just its documents and
+  their length, each with its pencil.
 - **Claude's answers no longer say "Finished: putting it on your page"**, which squashed the
   work card's title on a narrow screen; a long state now wraps inside its own label.
 - **Claude's browser no longer opens a LinkedIn profile every time you come back to the page.**

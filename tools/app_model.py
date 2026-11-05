@@ -1890,8 +1890,11 @@ def _checks(files, expect_resume: int, noun: str = "resume") -> dict:
     # end of the line said nothing of which was which (2026-11-05).
     parts = [{"kind": f["kind"], "words": f"{said[f['kind']]} {f['pages']} page{'s' if f['pages'] != 1 else ''}"}
              for f in files]
-    lead = "Made, right length: "
-    return {"passed": True, "line": lead + ", ".join(p["words"] for p in parts), "lead": lead, "parts": parts}
+    # Said only as the documents and their length, each with its pencil: "Made, right length:"
+    # on every card read as a message the person had to do something about (the maintainer,
+    # 2026-11-05: "why do these all say made right length resume 1 page").
+    lead = ""
+    return {"passed": True, "line": ", ".join(p["words"] for p in parts), "lead": lead, "parts": parts}
 
 
 # verify_batch.py's flags, said plainly; anything else is said as "a check failed".

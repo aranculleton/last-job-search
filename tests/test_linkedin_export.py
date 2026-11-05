@@ -395,3 +395,58 @@ def test_a_tidy_takes_out_what_an_older_import_logged_twice_and_keeps_a_resume_s
     assert status != "replied_needs_response", status
     # Run again, it finds nothing.
     assert E.tidy(c, t)["removed"] == 0
+
+
+def _day_of_two(tmp_path, name="export_order"):
+    """Juno writes at 10:00 and Morgan answers at 11:00, the same day, in LinkedIn's download."""
+    import csv as _csv
+    src = tmp_path / name
+    src.mkdir()
+    with open(src / "messages.csv", "w", encoding="utf-8", newline="") as fh:
+        w = _csv.writer(fh)
+        w.writerow(["CONVERSATION ID", "FROM", "SENDER PROFILE URL", "TO", "RECIPIENT PROFILE URLS", "DATE", "CONTENT", "ATTACHMENTS"])
+        w.writerow(["c8", "Juno Castellan", "https://www.linkedin.com/in/example-juno-castellan", "Morgan Ellis",
+                    "https://www.linkedin.com/in/morgan-ellis-example", "2026-10-05 10:00:00 UTC", "Could you send your resume over?", ""])
+        w.writerow(["c8", "Morgan Ellis", "https://www.linkedin.com/in/morgan-ellis-example", "Juno Castellan",
+                    "https://www.linkedin.com/in/example-juno-castellan", "2026-10-05 11:00:00 UTC", "Thanks Juno, resume attached.", ""])
+    return src
+
+
+def _answered(cid):
+    return {"contact_id": cid, "date": "2026-10-05", "direction": "out", "channel": "message", "scenario": "reply",
+            "summary": "Reply sent (message)", "full_text": "Thanks Juno, resume attached.", "subject": ""}
+
+
+def test_a_message_sent_earlier_that_day_goes_before_the_reply_already_logged(tmp_path):
+    """The log holds a day and no time, and ordered a day by its place in the file, so the
+    export's 10:00 message added at the end sat after the 11:00 reply and read as owed one
+    (2026-11-05)."""
+    contacts, threads, _c, _t = _book(tmp_path)
+    cid = "larkspur_retail_castellan"
+    threads[:] = [r for r in threads if r["contact_id"] != cid] + [_answered(cid)]
+    plan = E.plan_history(contacts, threads, str(_day_of_two(tmp_path)))
+    E.apply_history(threads, plan, contacts)
+    rows = state.threads_for(threads, cid)
+    assert [r["direction"] for r in rows] == ["in", "out"], rows
+    assert state.derive_status(rows) != "replied_needs_response"
+
+
+def test_a_tidy_puts_a_day_an_older_import_misordered_in_the_order_sent(tmp_path):
+    contacts, threads, c, t = _book(tmp_path)
+    cid = "larkspur_retail_castellan"
+    theirs = {"contact_id": cid, "date": "2026-10-05", "direction": "in", "channel": "message", "scenario": "",
+              "summary": "Message received, from LinkedIn's export: Could you send your resume over?",
+              "full_text": "Could you send your resume over?", "subject": ""}
+    threads[:] = [r for r in threads if r["contact_id"] != cid] + [_answered(cid), theirs]
+    for p in contacts:
+        if p["contact_id"] == cid:
+            p["status"] = "replied_needs_response"
+    state.save_threads(threads, t)
+    state.save_contacts(contacts, c)
+    src = str(_day_of_two(tmp_path))
+    assert E.tidy(c, t, dry=True, src=src)["reordered"] == 1
+    got = E.tidy(c, t, src=src)
+    assert got["reordered"] == 1 and got["settled"], got
+    rows = state.threads_for(state.load_threads(t), cid)
+    assert [r["direction"] for r in rows] == ["in", "out"], rows
+    assert E.tidy(c, t, src=src)["reordered"] == 0

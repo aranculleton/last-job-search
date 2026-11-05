@@ -556,8 +556,9 @@ METHODS: dict[str, dict] = {
             (74, "2026-11-05", False, "the networking skill and /network say the page looks at LinkedIn once a day and opens nothing by itself, with reading.py linkedin-check for whether today's look is due; nothing to redo"),
             (75, "2026-11-05", False, "the app skill and /reply say a draft is shown on the person's card in Contacts, and followup_drafts prints where; nothing made before changes"),
             (76, "2026-11-05", False, "a message in LinkedIn's download is matched to one already logged whatever its quote marks or dashes (curly or straight), so it is not logged again; copies an older import wrote are taken out by the export-repeats profile upgrade, statuses set again from the log"),
+            (77, "2026-11-05", False, "a message the download shows was sent earlier in a day goes before a reply already logged that day, and the tidy puts a day an older import misordered in the order sent, so nobody reads as owed a reply they answered; a check that passed is said as the documents and their length alone"),
         ),
-        "fingerprint": "e2eb06138942bcfc",
+        "fingerprint": "02c79cc7bb4da71c",
     },
     "network-notes": {
         "by": "network", "priority": 2, "applies": "queued_notes", "time": "~10 min",
@@ -779,8 +780,9 @@ METHODS: dict[str, dict] = {
             (45, "2026-11-05", True, "a card's More stays beside its other buttons when opened and opens under the row, on every card; its buttons are one row that wraps only when it must; and Something else, last under every live card's More, opens the Chat about that card, what you send from it going to Claude as work about that card"),
             (46, "2026-11-05", True, "a LinkedIn read the page started by itself and that did not finish (Claude's browser closed, the page left) holds automatic reading until the next day, kept where every opening sees it, so a profile no longer opens in Claude's browser at each return to the page; a browser step that never answers gives up after a minute and a half"),
             (47, "2026-11-05", True, "Something else opens a box under its card instead of the Chat: the question goes to Claude in that card's own thread and Claude's answer shows under the card, with its work line while it runs; the Chat no longer fills with them; Paste a message, an interview not on the list, Tell Claude, Tidy these up and Bring them back answer where they are asked too; a draft that sends the resume carries the file; an answer is never left saying it is being put on your page"),
+            (48, "2026-11-05", True, "web addresses in the Brief's news are short links named by their site; Jobs has a search beside Filter, as Contacts does; a draft's check says the documents and their length, never \"Made, right length\""),
         ),
-        "fingerprint": "bf41f85805bec58f",
+        "fingerprint": "dc3d9e6db12af41e",
     },
     "upskill": {
         "by": "upgrade", "priority": 4, "applies": "upskill_plans", "time": "~10 min",

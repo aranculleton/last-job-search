@@ -1239,29 +1239,68 @@ def _twice(threads) -> list:
     return out
 
 
-def tidy(contacts_path: str | None = None, threads_path: str | None = None, dry: bool = False) -> dict:
-    """Each message the export logged twice taken out, and the statuses of the people it touched
-    set again from their log (`settle`). {"removed": n, "settled": [(id, old, new)]}."""
+def misordered(contacts, threads, src=None) -> list:
+    """[(the day's rows in the log's order, the same rows in the order they were sent)] for each
+    person's day whose rows the download on file times, every one, and the log has out of order:
+    an older import added a message at the end, after a reply sent later that day."""
+    st = _state()
+    try:
+        plan = plan_history(contacts, threads, src or home())
+    except Exception:  # noqa: BLE001  no download on file, or one that cannot be read
+        return []
+    times = plan.get("times") or {}
+    out = []
+    for rows in st.by_contact(threads).values():
+        days: dict = {}
+        for r in rows:
+            days.setdefault(str(r.get("date") or ""), []).append(r)
+        for group in days.values():
+            if len(group) < 2:
+                continue
+            # by_contact's lists hold the log's own rows, in the log's order for the day.
+            mine = group
+            if any(id(m) not in times for m in mine):
+                continue
+            ordered = sorted(mine, key=lambda m: times[id(m)])
+            if [id(m) for m in ordered] != [id(m) for m in mine]:
+                out.append((mine, ordered))
+    return out
+
+
+def tidy(contacts_path: str | None = None, threads_path: str | None = None, dry: bool = False,
+         src=None) -> dict:
+    """Each message the export logged twice taken out, each day the download on file shows out
+    of order put in the order it happened, and the statuses of the people it touched set again
+    from their log (`settle`). {"removed": n, "reordered": n, "settled": [(id, old, new)]}."""
     st = _state()
     cp, tp = contacts_path or st.CONTACTS_CSV, threads_path or st.THREADS_CSV
     threads = st.load_threads(tp)
+    contacts = st.load_contacts(cp)
     pairs = _twice(threads)
     twice = [r for r, _ in pairs]
-    if dry or not twice:
-        return {"removed": len(twice), "settled": []}
-    # What only the export's copy says went with the message (a resume attached) is kept on the
-    # row that stays: a resume sent is never forgotten by a tidy.
-    for r, kept in pairs:
-        said = _SENT_WITH.search(str(r.get("summary") or ""))
-        if said and not _SENT_WITH.search(str(kept.get("summary") or "")):
-            kept["summary"] = (str(kept.get("summary") or "").rstrip() + "; " + said.group(0)).lstrip("; ")
     gone = {id(r) for r in twice}
     kept = [r for r in threads if id(r) not in gone]
-    contacts = st.load_contacts(cp)
-    settled = settle(contacts, kept, {str(r.get("contact_id") or "").strip() for r in twice})
+    moved = misordered(contacts, kept, src)
+    if dry or not (twice or moved):
+        return {"removed": len(twice), "reordered": len(moved), "settled": []}
+    # What only the export's copy says went with the message (a resume attached) is kept on the
+    # row that stays: a resume sent is never forgotten by a tidy.
+    for r, stays in pairs:
+        said = _SENT_WITH.search(str(r.get("summary") or ""))
+        if said and not _SENT_WITH.search(str(stays.get("summary") or "")):
+            stays["summary"] = (str(stays.get("summary") or "").rstrip() + "; " + said.group(0)).lstrip("; ")
+    # Each misordered day's rows go back into the same places in the file, in the order sent.
+    place = {id(x): i for i, x in enumerate(kept)}
+    for mine, ordered in moved:
+        slots = sorted(place[id(m)] for m in mine)
+        for i, m in zip(slots, ordered):
+            kept[i] = m
+    touched = {str(r.get("contact_id") or "").strip() for r in twice} \
+        | {str(m[0].get("contact_id") or "").strip() for m, _ in moved}
+    settled = settle(contacts, kept, touched)
     st.save_threads(kept, tp)
     st.save_contacts(contacts, cp)
-    return {"removed": len(twice), "settled": settled}
+    return {"removed": len(twice), "reordered": len(moved), "settled": settled}
 
 
 def plan_history(contacts, threads, src=None, mine=None) -> dict:
@@ -1352,12 +1391,22 @@ def plan_history(contacts, threads, src=None, mine=None) -> dict:
                 marked[id(row)] = new
                 out["mark"].append((row, new))
 
+    # The time the export gives each message: a row it matches in the log, and each row it adds.
+    # The log holds a day and no time, and orders a day's rows by their place in the file, so a
+    # row added at the end sat after a reply sent later that day: their 15:30 message after our
+    # 16:00 answer read as owed a reply (2026-11-05). Each new row goes before the day's first
+    # row the export shows was sent later (`before`, applied by apply_history).
+    seen_at: dict = {}
+    new_at: list = []
+
     def add_message(cid, when, direction, text, subject, summary, attached="", at=""):
         rows = mine_for(cid)
         for r in rows:
             if st._direction(r) == direction and _near(st.as_date(r.get("date")), when,
                                                         MESSAGE_SLACK_DAYS) \
                     and same_text(r.get("full_text"), text):
+                if at and st.as_date(r.get("date")) == when:
+                    seen_at.setdefault(id(r), at)
                 return
         files = _file_names(attached)
         if not text and files:
@@ -1401,6 +1450,8 @@ def plan_history(contacts, threads, src=None, mine=None) -> dict:
                "full_text": text, "subject": subject}
         out["add"].append(row)
         logged(row)
+        if at:
+            new_at.append((row, cid, when.isoformat(), at))
         mark_repeat(row, rows + [row], at)
         if not text:
             claimed.add(id(row))
@@ -1581,6 +1632,16 @@ def plan_history(contacts, threads, src=None, mine=None) -> dict:
             had.update(last=u["last"], last_from=u["last_from"])
         had["name"], had["url"] = had["name"] or u["name"], had["url"] or u["url"]
     out["unmatched"] = sorted(merged.values(), key=lambda u: u["last"], reverse=True)
+    added = {id(r) for r in out["add"]}
+    before: dict = {}
+    for row, cid, day_, at in new_at:
+        later = [(seen_at[id(r)], r) for r in by_cid.get(cid, ())
+                 if id(r) not in added and id(r) in seen_at and str(r.get("date") or "") == day_
+                 and seen_at[id(r)] > at]
+        if later:
+            before[id(row)] = min(later, key=lambda x: x[0])[1]
+    out["before"] = before
+    out["times"] = seen_at
     return out
 
 
@@ -1605,7 +1666,15 @@ def apply_history(threads, plan, contacts=None) -> int:
             if str(c.get("contact_id") or "").strip() == cid \
                     and str(c.get("first_contacted") or "") in ("", old):
                 c["first_contacted"] = day_      # contact began when the request went
-    threads.extend(plan["add"])
+    # A row the export shows was sent before one already logged that day goes in front of it.
+    before = plan.get("before") or {}
+    for row in plan["add"]:
+        anchor = before.get(id(row))
+        at = next((i for i, r in enumerate(threads) if r is anchor), None) if anchor is not None else None
+        if at is None:
+            threads.append(row)
+        else:
+            threads.insert(at, row)
     if contacts is not None:
         settle(contacts, threads, {r["contact_id"] for r in plan["add"]}
                | {str(r.get("contact_id") or "") for r, _ in plan["fill"]}
@@ -2074,7 +2143,8 @@ def _cli_tidy(a) -> int:
     got = tidy(a.contacts, a.threads, a.dry)
     n = got["removed"]
     print(f"tidy: {n} message{'s' if n != 1 else ''} your LinkedIn download had logged twice"
-          + (" (nothing changed)" if a.dry else " taken out") + (
+          + (" (nothing changed)" if a.dry else " taken out")
+          + (f"; {got['reordered']} day{'s' if got['reordered'] != 1 else ''} put in the order sent" if got.get("reordered") else "") + (
           f"; {len(got['settled'])} contact{'s' if len(got['settled']) != 1 else ''} "
           "set again from their messages" if got["settled"] else ""))
     return 0

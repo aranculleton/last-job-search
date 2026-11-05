@@ -5279,12 +5279,12 @@
     // reads at a glance rather than as a paragraph (the maintainer, 2026-11-02).
     const newsPoint = (l) => {
       const it = obj(l);
-      if (!txt(it.what)) return h("li", {}, h("span", {class: "bp-text"}, inlineMd(txt(it.text))));
+      if (!txt(it.what)) return h("li", {}, h("span", {class: "bp-text"}, inlineMd(shortLinks(txt(it.text)))));
       // Two quiet lines: the news, then what to do with it and where it is from, in grey
       // with no underline or bold (the maintainer, 2026-11-02: "weird lines and underlines and
       // bold spammed").
       const src = txt(it.url) ? inlineMd("[" + txt(it.src).replace(/[\[\]]/g, "") + (txt(it.date) ? ", " + fmtDayMonth(txt(it.date)) : "") + "](" + txt(it.url) + ")") : null;
-      return h("li", {}, h("span", {class: "bp-text"}, inlineMd(txt(it.what))),
+      return h("li", {}, h("span", {class: "bp-text"}, inlineMd(shortLinks(txt(it.what)))),
         txt(it.use) || src ? h("span", {class: "bp-meta"}, txt(it.use) ? h("span", {class: "bp-use"}, inlineMd(txt(it.use).replace(/\.$/, ""))) : null,
           txt(it.use) && src ? " \u00b7 " : null, src ? h("span", {class: "bp-src"}, src) : null) : null);
     };
@@ -5614,7 +5614,9 @@
 
       ["Change the search", () => openTweak("jobs", jb), "tweak"],
     ]);
-    put(wrap, controlRow([jobsSwitch("found"), h("span", {class: "grow"}), filterButton(key, lo, f), menu]));
+    // Search beside Filter as Contacts has it, once the list is more than a glance (the
+    // maintainer, 2026-11-05: "the search bar is in contacts page but not jobs").
+    put(wrap, controlRow([jobsSwitch("found"), inThis.length > 8 ? searchField(key, lo) : h("span", {class: "grow"}), filterButton(key, lo, f), menu]));
     put(wrap, activeFilters(key, lo, f));
     const onCards = new Set(inThis.flatMap((r) => jobQuestions(r).map((n) => "need:" + n.id)));
     for (const a of inThis.map(listDraft).filter(Boolean)) for (const q of readyQuestions(a)) onCards.add("need:" + q.id);
@@ -6298,9 +6300,11 @@
         // letter 1 page ✎"), the two kept together so a pencil never wraps onto a line alone, and
         // the pencil itself parts them (a dot between was left alone at the end of a phone's
         // line): two side by side at the end said nothing of which was which.
-        live && !checkAlert && !asks.length && checks.passed && checks.line ? h("p", {class: "checks"}, h("span", {"aria-hidden": "true"}, "✓ "),
-          !forWho && txt(checks.lead) && arr(checks.parts).length
-            ? [txt(checks.lead), arr(checks.parts).map((p) => [h("span", {class: "doc-part"}, h("span", {class: "doc-words"}, txt(obj(p).words)),
+        // Said quietly as the documents and their length, each with its pencil, never "Made,
+        // right length:" on every card (the maintainer, 2026-11-05).
+        live && !checkAlert && !asks.length && checks.passed && checks.line ? h("p", {class: "checks"},
+          !forWho && arr(checks.parts).length
+            ? [txt(checks.lead), arr(checks.parts).map((p, i) => [i ? " " : null, h("span", {class: "doc-part"}, h("span", {class: "doc-words"}, i ? txt(obj(p).words) : cap1(txt(obj(p).words))),
               txt(obj(p).kind) === "letter" ? (letter.length ? docPencil(a, "letter") : null) : txt(obj(p).kind) === "resume" ? docPencil(a, "resume") : null)])]
             // With no parts from the engine, each pencil still beside its own document's word:
             // "All checks passed ✎ ✎" said nothing of which was which (the review, 2026-11-05).
@@ -6356,6 +6360,16 @@
         {kind: "secondary", small: true, key, aria: "Save " + (made ? "the " + noun() + " for " + who : "your " + noun()) + " to attach to the message to " + who})
         : btn("Your " + noun(), () => go("drafts", {focus: true, drafts: "apps", item: made ? made.id : txt(obj(M().resume).id) || "resume-general"}), {kind: "secondary", small: true, key, aria: "Your " + noun() + ", to attach to the message to " + who}),
       noteFor(key));
+  }
+  // A web address written out in a line of words is a short link named by its site, "(canada.ca)":
+  // whole addresses ran three lines in the Brief's news (the maintainer, 2026-11-05: "urls
+  // clogging news"). A link already written as one is left as it is.
+  function shortLinks(text) {
+    const host = (u) => { try { return new URL(u).hostname.replace(/^www\./, ""); } catch (e) { return "link"; } };
+    const clean = (u) => u.replace(/[.,;:!?]+$/, "");
+    return txt(text)
+      .replace(/(^|[^\]])\((https?:\/\/[^\s)]+)\)/g, (m, pre, u) => pre + "([" + host(clean(u)) + "](" + clean(u) + "))")
+      .replace(/(^|[\s])(https?:\/\/[^\s)\]]+)/g, (m, pre, u) => { const c = clean(u); return pre + "[" + host(c) + "](" + c + ")" + u.slice(c.length); });
   }
   function draftParts(m, o) {
     o = o || {};
@@ -9387,7 +9401,7 @@
       render: appRecordCard, box: (kids) => h("div", {class: "stack"}, kids)};
     const key = "jobs:applied";
     const f = listFacets(key, lo);
-    put(wrap, controlRow([jobsSwitch("applied"), h("span", {class: "grow"}), filterButton(key, lo, f)]));
+    put(wrap, controlRow([jobsSwitch("applied"), items.length > 8 ? searchField(key, lo) : h("span", {class: "grow"}), filterButton(key, lo, f)]));
     put(wrap, activeFilters(key, lo, f));
     put(wrap, listView(key, lo));
     return wrap;

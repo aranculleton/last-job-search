@@ -556,8 +556,8 @@
    ],
    "checks": {
     "passed": true,
-    "line": "Made, right length: CV 1 page, letter 1 page",
-    "lead": "Made, right length: ",
+    "line": "CV 1 page, letter 1 page",
+    "lead": "",
     "parts": [
      {
       "kind": "resume",
