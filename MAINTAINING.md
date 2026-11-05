@@ -343,6 +343,13 @@ these lenses, and each real finding becomes a test the same way:
   the chat, never polling.
 - **Use the app as a tired job seeker and as a stranger would** (the lenses under
   "Releasing"): 4.9's stranger audit found 85 things the maintainer's own use never showed.
+- **Review only what changed, scaled to the change** (the maintainer, 2026-11-05: "be smart
+  about how we do those reviewers ... updating the app ... should still be cheap and smart").
+  One reviewer for the version, once, near its end, never one per round of fixes: each screen
+  the version changed seen once, at the size where its change shows, dark only where colour
+  changed, a change a test already pins skipped unless it looks off. The stranger journeys are
+  the existing test files, run, never a fresh audit. A version that changed no screen has no
+  screen review.
 - **Helpers in worktrees start on old master**: tell each to `git reset --hard` to the
   branch's head first, commit early and often (a container can restart mid-night and lose
   every background agent; a lost one is re-created from the same brief), and give the merge
