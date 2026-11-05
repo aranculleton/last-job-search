@@ -903,8 +903,11 @@ dialog.sheet {
 }
 dialog.sheet form { display: grid; gap: 16px; }
 /* A long list of choices keeps Save and Cancel in reach: the row stays at the sheet's foot
-   while the list scrolls (the 3 November audit: Save 4,076px down a list of 73 roles). */
-dialog.sheet .sheet-actions { position: sticky; bottom: 0; z-index: 1; margin: 0 -24px -24px; padding: 12px 24px 24px; background: var(--surface); border-top: 1px solid var(--line); }
+   while the list scrolls (the 3 November audit: Save 4,076px down a list of 73 roles).
+   It sits in the sheet's 24px of padding, so it sticks 24px below the padding's edge: at
+   bottom 0 it was lifted out of its place over the last choice even when everything fitted,
+   with empty space under Cancel (the maintainer's iPhone, 2026-11-04: Add something). */
+dialog.sheet .sheet-actions { position: sticky; bottom: -24px; z-index: 1; margin: 0 -24px -24px; padding: 12px 24px 24px; background: var(--surface); border-top: 1px solid var(--line); }
 .sheet-title { font-size: var(--t-xl); font-weight: 600; padding-right: 8px; }
 .sheet-intro { color: var(--ink); }
 .sheet-cost { color: var(--muted); font-size: var(--t-sm); }

@@ -148,3 +148,6 @@ company_research/*.json
 # Claude Code puts an agent's isolated checkout here (CLAUDE.md starts /upgrade in one).
 # It is a whole second copy of the repo with its own .git, never part of this one.
 .claude/worktrees/
+
+# Copies of a file two chats changed that the app keeps out of the person's folders (merge_state.SPARE_DIR)
+.other-chat-copies/

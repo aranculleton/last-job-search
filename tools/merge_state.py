@@ -1338,6 +1338,11 @@ def merge(base: str, ours: str, theirs: str, path: str, later=None,
 # - the person's own words in profile/ (.md, .txt): both versions kept, one after the
 #   other, under a [CONFIRM: ...] line, which the page asks as a To do card (and a chat with
 #   no page asks through the unconfirmed-facts upgrade), so the person decides which stays;
+# - a document of theirs (under documents/, cv/ or cover_letters/) both chats changed: the
+#   one committed later, with no copy anywhere. A resume or a letter is made again by the
+#   app, and a copy beside it was left by the dozen (a report from a person's copy,
+#   2026-11-04). The person's own test (profile/tests/) is the same, but the other chat's
+#   version is kept in SPARE_DIR, out of their folders, which the app tidies;
 # - anything else: this side's version in place (the row merge's other rows kept), and the
 #   other side's whole file beside it as <file>.from-another-chat, saved with the rest; a
 #   profile .py also gets the [CONFIRM: ...] line, as a comment;
@@ -1442,6 +1447,45 @@ def _held_before(root: str, path: str, stages: dict) -> str:
     return ""
 
 
+# Where a copy goes that has to be kept but must not sit beside the person's files: one
+# folder at the top, never saved (.gitignore) and cleared after SPARE_DAYS by every settle.
+SPARE_DIR = ".other-chat-copies"
+SPARE_DAYS = 30
+_DOCS = ("documents/", "cv/", "cover_letters/")
+_OWN_TESTS = "profile/tests/"
+
+
+def _later_side(root: str, path: str) -> str:
+    """"--ours" or "--theirs": the side whose last commit on `path` is later (ours on a tie)."""
+    def when(ref):
+        got = _g(root, "log", "-1", "--format=%ct", ref, "--", path).stdout.strip()
+        return int(got) if got.isdigit() else 0
+    return "--theirs" if when("MERGE_HEAD") > when("HEAD") else "--ours"
+
+
+def _spare(root: str, path: str, blob: str) -> str:
+    """Keep a blob of the losing side in SPARE_DIR; its path (relative)."""
+    rel = f"{SPARE_DIR}/{path.replace('/', '__')}.{blob[:8]}"
+    os.makedirs(os.path.join(root, SPARE_DIR), exist_ok=True)
+    data = _g(root, "cat-file", "blob", blob, text=False).stdout
+    with open(os.path.join(root, rel), "wb") as fh:
+        fh.write(data)
+    return rel
+
+
+def tidy_spares(root: str, now: float | None = None) -> None:
+    """Remove what SPARE_DIR holds past SPARE_DAYS. Never raises."""
+    import time
+    base = os.path.join(root, SPARE_DIR)
+    try:
+        for n in os.listdir(base):
+            f = os.path.join(base, n)
+            if (now or time.time()) - os.path.getmtime(f) > SPARE_DAYS * 86400:
+                os.remove(f)
+    except OSError:
+        pass
+
+
 def _side_path(root: str, path: str) -> str:
     side, n = path + SIDE, 1
     while os.path.exists(os.path.join(root, side)):
@@ -1484,6 +1528,7 @@ def settle(root: str) -> tuple[list[str], list[str]]:
              .split("\0") if p]
     done: list[str] = []
     left: list[str] = []
+    tidy_spares(root)
     for p in files:
         if not personal_paths.is_personal(p):
             left.append(p)
@@ -1512,6 +1557,16 @@ def settle(root: str) -> tuple[list[str], list[str]]:
             keep = _written(root, stages)
             _g(root, "checkout", keep, "--", p)
             done.append(f"{p}: rebuilt by two chats; the later one is kept")
+        elif p.startswith(_DOCS) and not _written(root, stages):
+            keep = _later_side(root, p)
+            _g(root, "checkout", keep, "--", p)
+            done.append(f"{p}: changed by two chats; the later one is kept")
+        elif p.startswith(_OWN_TESTS):
+            keep = _later_side(root, p)
+            lost = stages["3" if keep == "--ours" else "2"]
+            _g(root, "checkout", keep, "--", p)
+            done.append(f"{p}: changed by two chats; the later one is kept, and the other "
+                        f"is saved as {_spare(root, p, lost)}")
         elif _same_upgrade(root, p):
             _g(root, "checkout", "--theirs", "--", p)
             done.append(f"{p}: the same improvement made by two chats; the other's copy "
@@ -1558,6 +1613,50 @@ def settle(root: str) -> tuple[list[str], list[str]]:
             done.pop()
             left.append(p)
     return done, left
+
+
+_COPY_PLACES = ("documents/", "cv/", "cover_letters/", "profile/tests/")
+
+
+def clear_old_copies(root: str) -> tuple[list[str], list[str]]:
+    """Clear the *.from-another-chat copies an older version left beside the person's
+    documents and own tests, once: where the file beside one is identical, or was changed
+    later than the copy was made. (cleared, undecided): any copy where the copy is the later
+    one or has no file beside it is left, named. Never raises."""
+    import local_path
+    cleared: list[str] = []
+    undecided: list[str] = []
+    try:
+        for full_dir, dirs, names in os.walk(root):
+            dirs[:] = [d for d in dirs if d not in (".git", "node_modules", SPARE_DIR)]
+            for n in names:
+                if SIDE not in n:
+                    continue
+                full = os.path.join(full_dir, n)
+                rel = local_path.rel(full, root)
+                if not rel.startswith(_COPY_PLACES):
+                    continue
+                beside = os.path.join(full_dir, n.split(SIDE)[0])
+                if not os.path.isfile(beside):
+                    undecided.append(rel)
+                    continue
+                with open(full, "rb") as a, open(beside, "rb") as b:
+                    same = a.read() == b.read()
+                base_rel = rel[:rel.index(SIDE)]
+                def last(path, disk):
+                    got = _g(root, "log", "-1", "--format=%ct", "--", path).stdout.strip()
+                    return int(got) if got.isdigit() else int(os.path.getmtime(disk))
+                if same or last(base_rel, beside) >= last(rel, full):
+                    if _g(root, "ls-files", "--error-unmatch", "--", rel).returncode == 0:
+                        _g(root, "rm", "-f", "-q", "--", rel)
+                    if os.path.exists(full):
+                        os.remove(full)
+                    cleared.append(rel)
+                else:
+                    undecided.append(rel)
+    except OSError:
+        pass
+    return cleared, undecided
 
 
 # Exit codes. 0 merged; 1 merged with real conflicts marked for a person. Anything

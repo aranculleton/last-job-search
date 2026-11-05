@@ -21,7 +21,10 @@ once a turn, after its answer is out, and makes only the GitHub calls it prints:
    brought in the same way, so it lands with this one: a job's chat, a brief and a chat
    kept open for days all bring it in, not only a new chat's start. A branch left behind
    (its own work more than STALE_DAYS older than master's later changes to the same files)
-   is never brought in: one line says so, and it stays where it is.
+   is never brought in: one line says so, and it stays where it is. So is a branch whose
+   own newest work is more than OLD_DAYS (7) old: named once to the person, in plain words.
+   Files unsaved in this checkout itself and over a week old are saved (they are the files
+   as they stand) and named once the same way.
 4. Nothing ahead of origin/master: "land: nothing to land", exit 0, and no check is run.
 5. ./tools/ci_local.sh --quick. Not green: its failing lines, exit 1.
 6. git push -u origin HEAD, a network failure retried four times (2, 4, 8 and 16 s).
@@ -480,6 +483,14 @@ def _own_files(root: str, ref: str) -> list[str] | None:
 # once a day, so work still off master STALE_DAYS on was left, not waiting. It is never
 # deleted, only left where it is.
 STALE_DAYS = 3
+# And a branch whose own newest work is older than OLD_DAYS is left whatever master changed:
+# 19-day-old work from a chat that could not save was brought in by a landing and swept
+# files and copies into the person's folders (the maintainer, 2026-11-04). A week: a landing
+# runs every day, so work still off master after a week was kept out by something (a check
+# not green, a save GitHub refused), is likely out of date, and the person should know
+# before it comes back. It is named once, in plain words; it stays on GitHub.
+OLD_DAYS = 7
+NAMED_FILE = "ljs-left-named"
 
 
 def _left_behind(root: str, ref: str, own: tuple[list[str], int]) -> tuple[int, list[str]]:
@@ -521,7 +532,10 @@ def _chat_branches(root: str) -> tuple[list[str], dict[str, tuple[int, list[str]
         if not own or not own[0] or not all(personal_paths.is_personal(p) for p in own[0]):
             continue
         days, files = _left_behind(root, ref, own)
-        if files:
+        if not files and own[1] and time.time() - own[1] > OLD_DAYS * 86400:
+            days, files = int((time.time() - own[1]) // 86400), []
+            left[ref] = (days, files)
+        elif files:
             left[ref] = (days, files)
         else:
             out.append(ref)
@@ -544,8 +558,42 @@ def left_behind(root: str = ROOT) -> dict[str, tuple[int, list[str]]]:
     return _chat_branches(root)[1]
 
 
-def left_line(ref: str, days: int, files: list[str]) -> str:
+def _named_once(root: str, ref: str) -> bool:
+    """True the first time a branch (at its present commit) is named to the person."""
+    tip = _git(root, "rev-parse", ref).stdout.strip()
+    path = os.path.join(git_dir(root), NAMED_FILE)
+    try:
+        with open(path, encoding="utf-8") as fh:
+            named = json.load(fh)
+    except (OSError, ValueError):
+        named = {}
+    if not isinstance(named, dict) or named.get(ref) == tip:
+        return False
+    named[ref] = tip
+    try:
+        with open(path, "w", encoding="utf-8", newline="\n") as fh:
+            json.dump(named, fh)
+    except OSError:
+        pass
+    return True
+
+
+def old_line(root: str, ref: str, days: int, consume: bool = True) -> str:
+    """The line for a branch left for its age: what to tell the person, once."""
+    if consume and not _named_once(root, ref):
+        return "left %s as it is (still %d days old; the person was told)" % (ref, days)
+    return ("left %s as it is: its work is %d days old, past the %d a landing brings in by "
+            "itself. It stays on GitHub, never deleted. Tell the person once: \"Some work "
+            "from an earlier chat, %d days ago, was never saved into your search. I have "
+            "left it out in case it is out of date; say 'bring it in' if you want it.\" To "
+            "bring it in when they ask: git merge %s" % (ref, days, OLD_DAYS, days, ref))
+
+
+def left_line(ref: str, days: int, files: list[str], root: str = "",
+              consume: bool = True) -> str:
     """The one line a landing says of a branch left behind, for Claude."""
+    if not files:
+        return old_line(root or ROOT, ref, days, consume)
     shown = ", ".join(files[:4]) + (" and %d more" % (len(files) - 4) if len(files) > 4 else "")
     return ("left %s as it is: its own work is %d days older than master's later changes to the "
             "same files (%s), so bringing it in would put older copies over newer ones. It stays "
@@ -701,6 +749,17 @@ def _land(root: str, message: str, check, sleep) -> int:
               "Nothing was pushed")
         return 2
 
+    try:
+        import save_state
+        old = save_state.old_unsaved(root)
+    except Exception:  # noqa: BLE001
+        old = []
+    if old:
+        print("land: %d file(s) here were last written over %d days ago and never saved (%s); "
+              "they are the files as they stand now, so they are saved, and nothing older is "
+              "put over anything newer. Tell the person once: \"Some of your work from over "
+              "a week ago had not been saved; it is now.\"" % (len(old), save_state.OLD_DAYS,
+                                                               ", ".join(old[:3])))
     ok, why = _stage(root)
     if not ok:
         print("land: saving stopped: %s; nothing was pushed" % why)
@@ -729,7 +788,7 @@ def _land(root: str, message: str, check, sleep) -> int:
     if fetch_waiting(root):
         refs, left = _chat_branches(root)
         for ref, (days, files) in left.items():
-            print("land: " + left_line(ref, days, files))
+            print("land: " + left_line(ref, days, files, root))
         for ref in refs:
             ok, said = merge_in(root, ref)
             if ok:
@@ -881,7 +940,7 @@ def main(argv: list[str] | None = None, root: str = ROOT, check=None, sleep=time
         fetch_waiting(root)
         refs, left = _chat_branches(root)
         for ref, (days, files) in left.items():
-            print("land: " + left_line(ref, days, files))
+            print("land: " + left_line(ref, days, files, root, consume=False))
         found = ages(root, refs)
         if not found:
             print("land: nothing waiting")

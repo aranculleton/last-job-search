@@ -61,11 +61,12 @@ oldest first. They withdraw them on LinkedIn, one at a time (`python3 tools/clau
 steps linkedin-withdraw-invitation`); the app never does. Record the ones they name with
 `python3 tools/network/export.py withdrawn <name>...` (or `--oldest <n>`).
 
-**Gone cold** third, as a list to close out rather than chase. These are the threads whose
-limit of unanswered messages is reached: the due list shows each one as a dated action
-(`action_due`) on the app's own line, "If still silent by the date, close it: state.py set
-<contact_id> --status gone_cold", on the day it falls due. Close the ones the person agrees
-to with that command; a reply that comes later reopens the thread by itself.
+**Gone cold** third, only when the person asks: the threads whose limit of unanswered
+messages is reached. Their row carries the app's own line ("Nudged: nothing more unless they
+reply", or "No more follow-ups: ...") and no date, since nothing is owed them, so no due list
+names them (`state.at_limit` says which they are). Close the ones the person names with
+`python3 tools/network/state.py set <contact_id> --status gone_cold`; a reply that comes later
+reopens the thread by itself.
 
 **Anything the person tells you about a thread** (a call booked, a referral put in, a new
 date, what was said) is written the same turn with

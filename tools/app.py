@@ -841,6 +841,14 @@ def check_in(dump: str, chat: str, now, out: str, listen: bool = False, helper: 
             upkeep.append(f"upkeep: {len(closed)} application(s) gone quiet were closed as no "
                           "reply (followups.py --close-quiet); save them with the rest, after "
                           "this wake's work (python3 tools/save_state.py)")
+        # A call whose day has passed is no longer booked: the stored status moves on, in
+        # code, on every wake of the chat that answers the page (with or without a brief).
+        try:
+            from network import state as _contacts
+            _contacts.advance_past_calls(app_model.local_day(
+                now, person.home_zone_named(person.directory()) or "UTC"))
+        except Exception:  # noqa: BLE001  no profile or no contact book yet
+            pass
         # An interview's time said in a note or a message goes on the interview's own
         # record, so the page shows it and nobody is asked to add it (2026-10-29).
         try:

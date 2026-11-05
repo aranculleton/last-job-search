@@ -345,6 +345,8 @@ def test_a_resume_drafted_for_a_contact_is_owed_until_it_is_logged(repo):
 # ------------------------------------------------------------------ 3. the guidance
 
 def test_the_guidance_says_which_resume_and_how_to_log_it(repo):
+    (repo / "documents" / "cv").mkdir(parents=True)
+    (repo / "documents" / "cv" / "Morgan_Ellis_CV_current.pdf").write_bytes(b"x")
     for text in ("Sure, send your CV to quillon@example.com", ASK):
         read = reply.classify(text)
         advice = reply.guidance(read, contact_id=CID)
@@ -362,11 +364,41 @@ def test_the_guidance_says_which_resume_and_how_to_log_it(repo):
                                          "quillon@example.com"), contact_id=CID)
     assert "--for-contact" in told["which_resume"]
     assert "attach" not in " ".join(str(v) for v in told.values()).lower()
-    (repo / "documents" / "cv").mkdir(parents=True)
-    (repo / "documents" / "cv" / "Morgan_Ellis_CV_current.pdf").write_bytes(b"x")
     assert "(documents/cv/Morgan_Ellis_CV_current.pdf)" in reply.guidance(
         "send_resume", "send it to quillon@example.com")["which_resume"]
     assert "which_resume" not in reply.guidance("calendar_link", "https://calendly.com/x/30")
+
+
+def test_an_old_hand_made_or_forbidden_resume_is_never_offered(repo):
+    """Reply guidance pointed at a hand-made ..._CURRENT_2026-09.pdf the person's rules forbid
+    whenever someone asked for "your resume" (2026-11-04). Only the app's own checked file
+    is offered; with none, the guidance says to make one."""
+    cv = repo / "documents" / "cv"
+    cv.mkdir(parents=True)
+    (cv / "Morgan_Ellis_CV_CURRENT_2026-09.pdf").write_bytes(b"x")
+    which = reply.guidance("send_resume", "send it to quillon@example.com")["which_resume"]
+    assert "CURRENT_2026-09" not in which and "make one for them" in which
+    assert docpaths.resume_to_offer() == ""
+    # The app's own file is offered, until the person's own profile says never to send it.
+    (cv / "Morgan_Ellis_CV_current.pdf").write_bytes(b"x")
+    assert docpaths.resume_to_offer() == "documents/cv/Morgan_Ellis_CV_current.pdf"
+    assert "(documents/cv/Morgan_Ellis_CV_current.pdf)" in reply.guidance(
+        "send_resume", "send it to quillon@example.com")["which_resume"]
+    import person
+    profile = Path(person.path("CLAUDE.md"))
+    profile.parent.mkdir(parents=True, exist_ok=True)
+    kept = profile.read_text(encoding="utf-8") if profile.exists() else None
+    profile.write_text("Do not send Morgan_Ellis_CV_current.pdf to anyone.\n", encoding="utf-8")
+    try:
+        assert docpaths.resume_to_offer() == ""
+        assert "make one for them" in reply.guidance(
+            "send_resume", "send it to quillon@example.com")["which_resume"]
+    finally:
+        # Put the file back as it was: in the app it is profile.example/CLAUDE.md itself.
+        if kept is None:
+            profile.unlink()
+        else:
+            profile.write_text(kept, encoding="utf-8")
 
 
 def test_passing_a_cv_on_is_not_a_no():

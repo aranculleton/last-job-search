@@ -97,13 +97,20 @@ def tech_name(company: str | None) -> str | None:
     return _in(c, TECH_COMPANIES) if c.strip() else None
 
 
+def is_agency(company: str | None) -> bool:
+    """Is this employer a recruitment or staffing agency, by the person's own lists
+    (employers.py AGENCY and EXTRA_AGENCY)? The one reading of them."""
+    c = " %s " % _norm(str(company or "").split("|")[0])
+    return bool(c.strip()) and bool(AGENCY.search(c) or _EXTRA_AGENCY.search(c))
+
+
 def verdict(company: str | None, posting: str = "") -> tuple[str, str]:
     """(sector, reason). See the module docstring for what each verdict means."""
     first = str(company or "").split("|")[0]
     c = " %s " % _norm(first)
     if not c.strip():
         return V_UNKNOWN, "no company name on the posting"
-    if AGENCY.search(c) or _EXTRA_AGENCY.search(c):
+    if is_agency(first):
         return V_OTHER, "staffing agency or body shop: the employer is undisclosed"
     n = tech_name(first)
     if n:

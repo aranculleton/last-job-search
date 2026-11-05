@@ -184,13 +184,17 @@ def _waiting():
 
 def test_claude_not_listening_is_said_in_the_header_and_its_card_has_no_bin(run, tmp_path):
     read = ("(() => ({bins: document.querySelectorAll('[data-item=\"listen\"] .hide-x').length, conn: document.getElementById('conn').getAttribute('data-state'),"
-            " pulse: document.getElementById('pulse').textContent, kind: document.querySelector('[data-item=\"listen\"] .kind').textContent}))()")
+            " dot: document.getElementById('conn').textContent, pulse: document.getElementById('pulse').hidden ? '' : document.getElementById('pulse').textContent,"
+            " kind: document.querySelector('[data-item=\"listen\"] .kind').textContent}))()")
     hide = ("(() => { localStorage.setItem('ljs:hidden', JSON.stringify({listen: Date.now() + 6e8})); LJS.render();"
             " return document.querySelectorAll('#main [data-item=\"listen\"]').length; })()")
     got = _go(run, tmp_path, [{"hash": "todo", "eval": read}, {"eval": hide}], PHONE, seed=_waiting(), clock="2026-10-25T09:00:00Z")
     r = got["after"][0]["eval"]
     assert r["bins"] == 0 and r["kind"] == "Claude", r
-    assert r["conn"] == "unheard" and "Claude isn't listening right now" in r["pulse"], r
+    # The header's dot says it; the line under the header no longer says it again beside the
+    # card (the maintainer, 2026-11-04: "Why is there a top Open Claude link").
+    assert r["conn"] == "unheard" and "Claude isn't listening right now" in r["dot"], r
+    assert "listening" not in r["pulse"], r
     assert got["after"][1]["eval"] == 1, "a week's hiding from before cannot hide it either"
 
 

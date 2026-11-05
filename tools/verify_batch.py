@@ -277,8 +277,9 @@ def main(argv=None) -> int:
     with open(drafts, encoding="utf-8") as fh:
         batch = json.load(fh)
     abbrs = [a["abbr"] for a in batch]
-    # A general resume has no letter (tools/general_resume.py): its letter checks are skipped.
-    general = {a["abbr"] for a in batch if a.get("general")}
+    # A general resume has no letter (tools/general_resume.py), nor has a resume asked for alone
+    # (docpaths.has_letter): their letter checks are skipped.
+    general = {a["abbr"] for a in batch if not docpaths.has_letter(a)}
     names = [r["employer"] for r in roles]
     want = json.loads(v["SECTIONS"])
     pages_allowed = int(v["RESUME_PAGES"])
@@ -500,7 +501,7 @@ def main(argv=None) -> int:
             _say("VOICE: FAILURES ABOVE")
             fail = 1
     else:
-        _say("no letters: a general resume")
+        _say("no letters: a general resume, or the resume alone as asked")
     # Each application's record says what the whole-batch checks found on its own documents
     # too: a claim, a number or a letter the batch failed on, with "flags": [] beside it, read
     # on the page as checked and clean (2026-11-03).

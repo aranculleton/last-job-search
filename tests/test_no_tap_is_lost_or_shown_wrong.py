@@ -54,29 +54,30 @@ def _mine(entry, item=ITEM):
 # ------------------------------------------------------------------ 1. one tap, one action
 
 
-# "N people haven't answered two messages": Close on a row stays on the card, pressed, as
-# the audit's Close on one person did (the busy week's invented Quinn).
-CLOSE = "Close: Quinn"
-LEAVE = "due-leave-0"
+# A checklist card whose rows each write an action and whose one button writes one for every
+# row: the busy week's "Did these notes go?". The audit found it on "N people haven't answered
+# two messages" and its Close, a card To do no longer has (the maintainer, 2026-11-04:
+# nothing to do is not a To do).
+SENT = "q-sent-fernhill_freight_halloway"
 
 
 # Two taps that land before the page has drawn again: the audit's real page took 1.2 s to draw
 # Contacts on a desktop and seconds on a phone, and the second tap of a double tap, or one
 # 400 ms later, landed on the same button.
-TWICE = ("(() => { const b = document.querySelector('[data-k=\"fgclose:todo:%s\"]'); b.click(); b.click(); return true; })()")
+TWICE = ("(() => { const b = document.querySelector('[data-k=\"sgy:todo:%s\"]'); b.click(); b.click(); return true; })()")
 
 
 def test_a_double_tap_writes_one_action(run, pages):
-    s = _script(run, pages["busy"], [{"hash": "todo", "eval": TWICE % LEAVE}, {"run": 500}])
-    assert len(_mine(s[-1], LEAVE)) == 1, _mine(s[-1], LEAVE)
+    s = _script(run, pages["busy"], [{"hash": "todo", "eval": TWICE % SENT}, {"run": 500}])
+    assert len(_mine(s[-1], SENT)) == 1, _mine(s[-1], SENT)
 
 
 def test_a_held_enter_writes_one_action(run, pages):
     # The card focused, as j and k leave it, and Enter held: each repeat pressed its main
-    # button, "Close them all", again (robustness audit 1: 7 + 7 actions).
-    s = _script(run, pages["busy"], [{"hash": "todo", "focus": '[data-card][data-item^="grp:leave"]'}, {"hold": "Enter", "repeats": 4}])
-    assert len(_mine(s[-1], LEAVE)) == 1, _mine(s[-1], LEAVE)
-    assert len(_mine(s[-1], "due-leave-1")) == 1
+    # button, "They all went" here, again (robustness audit 1: 7 + 7 actions).
+    s = _script(run, pages["busy"], [{"hash": "todo", "focus": '[data-card][data-item="grp:sent"]'}, {"hold": "Enter", "repeats": 4}])
+    items = [a.get("item") for a in s[-1]["actions"]]
+    assert SENT in items and len(items) == 2 and len(set(items)) == 2, s[-1]["actions"]
 
 
 def test_the_same_tap_in_a_second_window_is_the_same_action_and_one_undo_takes_back_every_copy(run, tmp_path):

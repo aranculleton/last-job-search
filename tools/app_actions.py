@@ -787,11 +787,16 @@ def _job_draft(r: Run) -> dict:
         return {"note": "Already on its way.", "undo": None}
     noun = str(person.get("documents.noun", "resume"))
     answers = r.value.get("answers") if isinstance(r.value.get("answers"), dict) else {}
-    doc = {"kind": "draft", "title": f"{noun[:1].upper() + noun[1:]} and letter: "
+    # The resume without a letter, when the person asked for it alone (the page's "Draft the
+    # resume only"): the chat stages it with --resume-only, so no letter is made or named.
+    alone = r.value.get("resume_only") is True
+    doc = {"kind": "draft", "title": f"{noun[:1].upper() + noun[1:]} "
+                                     f"{'only' if alone else 'and letter'}: "
                                      f"{t.get('company')}, {t.get('title')}",
            "to": str(r.value.get("to") or "cloud"),
            "args": {"round": t.get("round"), "rank": t.get("rank"), "url": t.get("url"),
-                    "company": t.get("company"), "title": t.get("title")},
+                    "company": t.get("company"), "title": t.get("title"),
+                    **({"resume_only": True} if alone else {})},
            "answers": answers, "asked_at": app_model.stamp(r.at),
            "asked_from": {"tab": r.act.get("tab") or ""}, "priority": 0, "status": "queued",
            "stages": [{"name": s["name"], "est_s": s["est_s"]}
@@ -2278,8 +2283,15 @@ def _export_take(r: Run) -> dict:
         if digest in (rec.get("taken_hashes") or []) and export._holds_any(export.default_folder()):
             got = export.again()
             said = " ".join(got["lines"]) or "Nothing in it was new."
-            return {"note": "That download was taken before. " + app_model.scrub(said, ()),
-                    "undo": None, "remove_assets": remove}
+            out = {"note": "That download was taken before. " + app_model.scrub(said, ()),
+                   "undo": None, "remove_assets": remove}
+            # Nothing imported and nothing filled: nothing changed, so there is nothing to take
+            # back, and the page says "Nothing new in that download". It said "Saved: 0
+            # messages" in To do, with "Only a chat can take this back" (the maintainer,
+            # 2026-11-04).
+            if not got["imported"] and not got["filled"]:
+                out["nothing_new"] = True
+            return out
         work = tempfile.mkdtemp(prefix="ljs_export_")
         try:
             for path, name, part in found:
@@ -2729,11 +2741,11 @@ def _due_done(r: Run) -> dict:
     if row is None:
         raise Refused("They are no longer in your contact book.")
     before = {"next_action": row.get("next_action") or "", "due": row.get("next_action_due") or ""}
-    # "Close" on a thread whose limit of unanswered messages is reached closes it, as the
-    # row's own words say (state.CLOSE_IT): only clearing the line left them "Connected" and
-    # waiting, counted among people waiting to hear back (2026-11-03).
-    # Or the person's own limit, counted from the log (surface.held), which the model marks on
-    # the row it offers Close on: the row's own words may still say to send another.
+    # Done on a row whose own words say their limit of unanswered messages is reached closes
+    # the thread: only clearing the line left them "Connected" and waiting, counted among
+    # people waiting to hear back (2026-11-03). To do no longer lists such a row (the
+    # maintainer, 2026-11-04), so this is a tap from a page drawn before that; the Close on
+    # their row in Contacts is person.status.
     leave = app_model.stopped(row.get("next_action")) or t.get("leave") is True
     argv = ["set", cid, "--next-action", "", "--due", "", "--note",
             "closed after no reply, said on the page" if leave else "done, said on the page",
@@ -3399,13 +3411,14 @@ def _one(aid: str, act: dict, index: Index, db: dict, w, chat: str, zone: str,
     after = got.get("target_after") or (undo or {}).get("target") or target
     out = _receipt("ok", got["note"], chat, now, aid, shown, undo=undo,
                    guard_after=guard(after) if after.get("kind") != "work" else "")
-    for k in ("counts", "remove_assets", "lines", "why"):
+    for k in ("counts", "remove_assets", "lines", "why", "nothing_new"):
         if k in got:
             out[k] = got[k]
-    if not undo and shown.get("action") != "undo":
+    if not undo and not got.get("nothing_new") and shown.get("action") != "undo":
         # No inverse here, said plainly rather than left blank (UX audit, 2026-10-25). An
         # inverse that exists has no time limit: it runs while the guard still holds. A Change
         # back is itself the way back: the note under it read as a dead end (journeys 22).
+        # Nor where nothing changed: there is nothing to take back (`nothing_new`).
         out["undo_note"] = "Only a chat can take this back: say so in a chat."
     if shown is not act:
         out["ran"] = name

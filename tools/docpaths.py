@@ -76,6 +76,31 @@ def letter_pdf(abbr: str) -> str:
     return person.state(letter_rel(abbr, ".pdf"))
 
 
+# The documents a draft makes. A resume for no posting (general_resume.py) has no letter, and
+# neither has one the person asked for alone: `resume_only` on the pick, which staging puts on
+# the draft (stage_picks.py --resume-only, the page's "Draft the resume only"). There was no
+# way to ask for a resume alone, and a resume-only run named letters in the tracker that were
+# never made (the maintainer, 2026-11-04).
+RESUME_ONLY = "resume_only"
+
+
+def has_letter(draft: dict | None) -> bool:
+    """Whether this draft makes a cover letter: the one answer every step reads (the drafter's
+    brief, the audits, the render, the checks, the note and the tracker row)."""
+    d = draft if isinstance(draft, dict) else {}
+    return not (d.get("general") or d.get(RESUME_ONLY))
+
+
+def made(rel: str) -> bool:
+    """Whether a document the tracker would name (its repo-relative path, as cv_file and
+    cover_letter_file store it) is on disk: its .tex or its .pdf."""
+    rel = str(rel or "").strip()
+    if not rel:
+        return False
+    stem = os.path.splitext(rel)[0]
+    return any(os.path.isfile(person.state(stem + ext)) for ext in (".tex", ".pdf"))
+
+
 # The person's own resume, the one they send when someone asks for it and names no role:
 # documents/cv/, which they fill (documents/README.md). A tailored resume for a role nobody
 # named is a guess, and the guess is what the reader sees.
@@ -128,6 +153,35 @@ def current_resume() -> str:
 
     current = [f for f in files if "current" in os.path.basename(f).lower()]
     return best(current) if current else best(files)
+
+
+_NEVER_SEND = re.compile(r"never send|do not send|don'?t send|not to be sent|must never be sent", re.I)
+
+
+def never_sent(rel_path: str) -> bool:
+    """Does the person's own profile/CLAUDE.md name this file in a line saying never to send
+    it? "Do not send it" beside the hand-made ..._CURRENT_2026-09.pdf is the rule."""
+    base = os.path.basename(str(rel_path or "")).lower()
+    if not base:
+        return False
+    try:
+        with open(person.path("CLAUDE.md"), encoding="utf-8") as f:
+            text = f.read()
+    except (OSError, person.NoProfile):
+        return False
+    return any(base in line.lower() and _NEVER_SEND.search(line) for line in text.splitlines())
+
+
+def resume_to_offer() -> str:
+    """The resume that may be offered or attached when someone asks for "your resume", or "".
+    Only the one the app made and checked (general_resume.py's own `_current` file), which
+    breaks none of the person's rules and which their profile does not say never to send. An
+    older hand-made file is never it, however it is named (2026-11-04: reply guidance pointed
+    at a ..._CURRENT_2026-09.pdf the person's rules forbid). "" means make one for them."""
+    own = "/".join(GENERAL_DIR + (resume_stem("current") + ".pdf",))
+    if own not in general_resumes() or never_sent(own) or resume_problems(own):
+        return ""
+    return own
 
 
 _problems_cache: dict = {}

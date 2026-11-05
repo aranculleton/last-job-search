@@ -39,7 +39,6 @@ import argparse
 import datetime
 import json
 import os
-import re
 import sys
 
 _HERE = os.path.dirname(os.path.abspath(__file__))
@@ -319,11 +318,28 @@ def check(person: dict, ctx: dict | None = None, queued: bool = False) -> dict:
 
 # ------------------------------------------------------------------ someone already written to
 
-def turned_down(company) -> str:
+def agency_recruiter(contact) -> bool:
+    """A recruiter by job at a recruitment or staffing agency (the person's own agency lists,
+    tools/sector.py). The agency is not where the person would work, so the employer bar
+    never judges it for their sake."""
+    try:
+        import sector
+        from compose import is_recruiter
+        c = contact or {}
+        return bool(is_recruiter(c.get("title")) and sector.is_agency(c.get("company")))
+    except Exception:  # noqa: BLE001  an unreadable list makes nobody an agency recruiter
+        return False
+
+
+def turned_down(company, agency=False) -> str:
     """Why the person's own bar turns this employer down, or "": a sector or employer the
     profile excludes, one listed or judged as clearing none of pay, prestige or signal, or
     the search's do-not-target list. One nobody has judged yet is never turned down for
-    that (bar.UNLISTED): it is judged first, never hidden unjudged."""
+    that (bar.UNLISTED): it is judged first, never hidden unjudged.
+
+    `agency`: the contact is a recruiter at an agency, which is not where the person would
+    work. Then only what the person said of that employer by name counts (an exclusion, a
+    decline, the do-not-target list), never that it clears none of pay, prestige or signal."""
     company = str(company or "").strip()
     if not company:
         return ""
@@ -333,7 +349,7 @@ def turned_down(company) -> str:
         from company_key import key
         verdict, why = bar.verdict(company)
         if verdict == bar.EXCLUDED or (verdict == bar.NONE and bar.applies()
-                                       and bar.UNLISTED not in why):
+                                       and bar.UNLISTED not in why and not agency):
             return why or "it clears none of pay, prestige or signal"
         return throttle.load_do_not_target().get(key(company), "") or ""
     except Exception:  # noqa: BLE001  a bar that cannot be read turns nobody down
@@ -391,9 +407,10 @@ def held(contact, msgs, status, replying=False, memo=None) -> dict | None:
     # (a book of 2,000 people asked the bar 2,000 times).
     memo = {} if memo is None else memo
     company = str(c.get("company") or "").strip()
-    if ("bar", company) not in memo:
-        memo[("bar", company)] = turned_down(company)
-    if memo[("bar", company)]:
+    agency = agency_recruiter(c)
+    if ("bar", company, agency) not in memo:
+        memo[("bar", company, agency)] = turned_down(company, agency)
+    if memo[("bar", company, agency)]:
         return {"why": "employer", "said": HELD_WORDS["employer"].format(company=company)}
     if replying or status in state.schema.OWED_BY_US:
         return None
@@ -404,11 +421,10 @@ def held(contact, msgs, status, replying=False, memo=None) -> dict | None:
     if place:
         return {"why": "place", "said": HELD_WORDS["place"].format(place=place)}
     import throttle
-    if status in throttle.SENT_NO_REPLY or status == "in_conversation":
-        ours = state._trailing_outbound(msgs) if msgs else 0
-        if ours >= state.schema.MAX_UNANSWERED or STOPPED.match(str(c.get("next_action") or "")):
-            n = max(ours, state.schema.MAX_UNANSWERED)
-            return {"why": "limit", "said": HELD_WORDS["limit"].format(n=n), "n": n}
+    # Their limit, the one answer the dates written on a row also read (state.at_limit).
+    if state.at_limit(c, msgs, status):
+        n = max(state._trailing_outbound(msgs) if msgs else 0, state.schema.MAX_UNANSWERED)
+        return {"why": "limit", "said": HELD_WORDS["limit"].format(n=n), "n": n}
     if status in throttle.SENT_NO_REPLY and state.request_pending(msgs) is not None:
         return {"why": "request", "said": HELD_WORDS["request"]}
     return None
@@ -416,8 +432,7 @@ def held(contact, msgs, status, replying=False, memo=None) -> dict | None:
 
 # The app's own line on a row whose limit is reached (state.FOLLOW_UP_STOP and the
 # two-message rule's "Nudged: nothing more"), however a page or a chat has said it since.
-STOPPED = re.compile(r"\s*(?:no more follow-ups: \d+ messages with no reply\b|nudged: nothing "
-                     r"more unless they reply\b|no reply to \d+ messages: leave it\b)", re.I)
+STOPPED = state.STOP_LINE
 
 
 OLD_CONNECTION = ("their employer and title come from your connections file (connected {day}), "

@@ -9,7 +9,7 @@
   },
   "drafts": {
     "date": "2026-11-04",
-    "version": 64
+    "version": 66
   },
   "expand": {
     "date": "2026-10-15",
@@ -28,16 +28,16 @@
     "version": 10
   },
   "network-notes": {
-    "date": "2026-11-03",
-    "version": 38
+    "date": "2026-11-05",
+    "version": 39
   },
   "networking": {
     "date": "2026-11-04",
-    "version": 70
+    "version": 73
   },
   "page": {
     "date": "2026-11-04",
-    "version": 21
+    "version": 23
   },
   "prep-docs": {
     "date": "2026-11-03",
@@ -52,8 +52,8 @@
     "version": 22
   },
   "screening": {
-    "date": "2026-11-03",
-    "version": 37
+    "date": "2026-11-04",
+    "version": 38
   },
   "search": {
     "date": "2026-11-03",

@@ -289,16 +289,20 @@ def _due_of(m, cid):
 # ------------------------------------------------------------------ the engine's one answer
 
 def test_past_their_limit_nobody_is_drafted_listed_or_offered_a_follow_up(model):
-    """contacts 6 and 20, contacts_chat_2 3: a third and a fourth message."""
+    """contacts 6 and 20, contacts_chat_2 3: a third and a fourth message. And nothing to
+    do is not a To do (the maintainer, 2026-11-04): they are left alone, in Contacts with
+    Close, never a To do row to close, nor counted there."""
     msgs = {x["contact"] for x in model["messages"]}
     for cid in ("harrow_freight_brook", "lark_retail_caddel"):
         p = _p(model, cid)
         assert p["group"] == "leave" and p["owed"]["kind"] == "close", p
+        assert p["owed"]["action"] == "person.status" and p["owed"]["due"] is None, p["owed"]
+        assert p["owed"]["value"]["status"] == "gone_cold", p["owed"]
         assert p["next"].startswith("No reply to ") and "leave it" in p["next"], p["next"]
         assert cid not in msgs, "a draft past the limit is never offered"
-        for d in _due_of(model, cid):
-            assert d.get("leave") is True and d["done"]["action"] == "due.done", d
-            assert "Follow up" not in d["title"] and "nudge" not in d["title"].lower(), d
+        assert not _due_of(model, cid), _due_of(model, cid)
+    hidden = next(d for d in model["due"] if d["kind"] == "hidden")
+    assert "limit" not in hidden["title"] and "messages" not in hidden["title"], hidden["title"]
 
 
 def test_a_turned_down_employer_and_a_place_outside_the_search_are_never_offered(model):
@@ -483,8 +487,10 @@ def test_contacts_shows_each_person_as_the_engine_says(run, page, model, vp):
     assert f"{pc['need']} need you, {pc['replies']} of them replies." in head, head
     assert f"{pc['follow']} follow-ups you could send." in head, head
     assert "waiting to hear back" not in top
-    # Past the limit: Close, never a follow-up of any kind.
-    juno = _row(top, "Juno at Harrow Freight")
+    # Past the limit: they need nothing from the person, so behind the fold (the maintainer,
+    # 2026-11-04); their row says to leave it, with Close, never a follow-up of any kind.
+    assert "Harrow Freight" not in top and "Lark Retail" not in top, top
+    juno = _row(all_, "Juno at Harrow Freight")
     assert "Close" in juno and "No reply to 2 messages: leave it unless they write back." in juno, juno
     for word in ("Draft the follow-up", "Follow up anyway", "See the draft", "Let it go"):
         assert word not in juno, (word, juno)

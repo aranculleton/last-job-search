@@ -22,6 +22,28 @@ make sense to somebody whose repo just received it.
 
 ### Changed
 
+- **A profile read just after midnight is kept.** One queued on your page before midnight and read after it was turned away and never read again; it is kept now.
+- **Reply help no longer points at an old resume your rules forbid.** It offers a resume only if
+  the app made and checked it and your own rules do not say never to send it; otherwise it says
+  to make one for that person.
+- **A short thank-you is no longer refused for repeating words.** Their name, their employer and
+  words like thanks never count as copying, and a note that names no place is no longer warned
+  that it named the wrong one.
+- **Saving no longer pulls in old unsaved work without telling you.** Work from an earlier
+  chat that is more than a week old is left where it is and mentioned once, so an old copy
+  can't land over newer files; files on your own computer still unsaved after a week are
+  saved, because they are what you have now, and mentioned once.
+- **Saving no longer leaves extra "from-another-chat" copies beside your resumes, letters and
+  tests.** When two chats changed the same document, the later one stays and nothing is left
+  beside it; a save also clears the extra copies older versions left, and names any it could
+  not tell apart in one line.
+- **A recruiter at a recruitment agency is no longer hidden from Messages.** They were
+  held as "an employer you turned down" because of the agency they work for, even when they
+  had asked for your resume. Your bar now judges only where you would work; an employer you
+  named, or a recruiter in-house at one you turned down, is still held.
+- **A call that has happened is no longer "booked".** Once its day passes, the person moves on
+  by itself to "thank them and ask how it went", and a later date on them is never shown as a
+  call in Coming up.
 - **The number of unread messages on your page no longer grows.** Each tap used to leave a
   message that stayed unread in the Claude app; Claude now clears it when the work is done,
   and clears the ones already piled up, once, without asking. Profile upgrade: doorbells
@@ -35,6 +57,10 @@ make sense to somebody whose repo just received it.
 - **Applications with nobody to write to are no longer chased.** A follow-up that cannot be
   drafted because no recruiter or hiring manager is named stays off your To do list; it
   appears the day a name is added or someone there replies.
+- **People who have not answered your messages stay out of To do.** Once someone has had as
+  many messages as your rule allows with no reply, there is nothing to do but wait, so they
+  are never a card to close and never get a date that brings them back. Their row in
+  Contacts says to leave it unless they write back, with Close if you are done waiting.
 - **Nobody is listed for a follow-up who cannot get one.** Someone you only sent an InMail,
   who has not answered or connected, is left alone (a second would be another InMail), and a
   connection request nobody accepted is never a message to send.
@@ -73,6 +99,21 @@ make sense to somebody whose repo just received it.
 
 ### Fixed
 
+- **A search brings back only new jobs that pass every rule.** A job needing a language you
+  do not speak, a staffing agency, a job with no score, and one already on your list, drafted
+  or applied for are passed over and the next one taken, so asking for 20 brings 20 new ones
+  or says how many it found.
+- **You can draft just the resume, and your applications list only names files that were
+  made.** "Draft the resume only" is under a job's More, or ask a chat for it; no cover letter
+  is written or listed, and a file that was never made is never named.
+- **"Claude isn't listening" is said once, on its card in To do, with Wake Claude as its one
+  button.** The line at the top no longer says it again, and on a phone nothing sends you out
+  of the Claude app to your browser.
+- **Every choice in a sheet shows whole.** In Add something, the second choice was half
+  hidden behind the row with Cancel.
+- **A LinkedIn download Claude has saved leaves To do.** One that brought nothing new says
+  "Nothing new in that download" in Settings, instead of "Saved: 0 messages" with a note about
+  taking it back.
 - **Your page never switches back to an old one when two chats' work is joined.** The page
   you use now is always the one kept, whole, never an older page another chat made earlier.
 - **Old unfinished work no longer overwrites newer work.** Work a chat left more than three

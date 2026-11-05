@@ -320,7 +320,8 @@ def test_a_setup_answer_that_could_not_reach_claude_never_spins(run, built):
     """X-56 (the stranger audit): the first answer's ring asks the viewer to let the page
     reach Claude; refused (or dismissed), the setup card said "Claude is reading your answer"
     for ever and nothing said Claude could not hear the page. Now no spinner, and the To do
-    card says Claude isn't listening, with Open Claude, the one way that still works."""
+    card says Claude isn't listening, with the one way that still works: on a phone, where Open
+    Claude would leave the Claude app for the browser, a computer (the maintainer, 2026-11-04)."""
     for code in ("forbidden", "consent_required"):
         got = _go(run, built, "fresh", hashes=["todo"], fake={"sendError": code}, steps=[
             {"hash": "todo", "click": "Start"},
@@ -331,7 +332,7 @@ def test_a_setup_answer_that_could_not_reach_claude_never_spins(run, built):
         assert [x for x in got["actions"] if x["action"] == "setup.resume"], code
         last = got["after"][-1]["text"] + got["after"][-1].get("dialog", "")
         assert "Claude is reading your answer." not in last, code
-        assert "Claude isn't listening right now" in last and "Open Claude" in last, (code, last)
+        assert "Claude isn't listening right now" in last and "Open this page on a computer to start it now." in last, (code, last)
 
 
 def test_on_the_app_itself_the_private_copy_comes_first_in_one_tap(run, built):

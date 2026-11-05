@@ -175,6 +175,41 @@ def unsaved(root: str = ROOT) -> list[str]:
     return list(dict.fromkeys(out))
 
 
+OLD_DAYS = 7
+
+
+def old_unsaved(root: str = ROOT, days: int = OLD_DAYS, now: float | None = None) -> list[str]:
+    """The files unsaved in this checkout that were last written more than `days` days ago.
+    A week: every landing and the daily brief save what is here, so a file still unsaved
+    after a week was held back for a reason, or is the person's own edit from long ago."""
+    import time
+    out = []
+    for rel in plain_files(root):
+        try:
+            if (now or time.time()) - os.path.getmtime(os.path.join(root, rel)) > days * 86400:
+                out.append(rel)
+        except OSError:
+            pass
+    return out
+
+
+def clear_copies(root: str = ROOT) -> None:
+    """Clear the side copies an older version left beside documents and tests, once (those
+    identical to the file beside them, or older than it), and name the rest in one line."""
+    try:
+        import merge_state
+        cleared, undecided = merge_state.clear_old_copies(root)
+    except Exception:  # noqa: BLE001  a save never stops for this
+        return
+    if cleared:
+        print(f"save_state: cleared {len(cleared)} extra copy(ies) an older version left beside "
+              "documents or tests; the files beside them are the ones in use")
+    if undecided:
+        print("save_state: tell the person once, plainly: %d extra copy(ies) of a document or "
+              "test were left by an older version and could not be told from the file beside "
+              "them (%s); nothing was removed" % (len(undecided), ", ".join(undecided[:3])))
+
+
 def _utf8_stdio() -> None:
     """The terminal in UTF-8 whatever the computer's code page (python_floor.utf8_stdio): a
     name with "Ł" in it stopped this on a cp1252 Windows terminal. Never raises."""
@@ -191,6 +226,8 @@ def main(argv: list[str] | None = None, root: str = ROOT) -> int:
     if argv[:1] in (["-h"], ["--help"]):
         print(__doc__.strip())
         return 0
+    if "--list" not in argv:
+        clear_copies(root)
     plain, forced = paths(root)
     removed = gone(root)
     if "--list" in argv:

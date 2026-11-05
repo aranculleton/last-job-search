@@ -158,6 +158,21 @@ def test_the_files_added_on_the_page_are_fetched_then_taken_once(page):
     assert (hal["company"], hal["company_key"]) == ("Fernhill Freight", "fernhill freight")
 
 
+def test_the_same_download_with_nothing_new_says_so_and_has_nothing_to_take_back(page):
+    """The page said "Saved: 0 messages" in To do with "Only a chat can take this back" under
+    it, for a download that changed nothing (the maintainer, 2026-11-04)."""
+    page.fetched()
+    first = page.take()
+    assert page.apply_assets()["ok"] == [first]
+    assert not page.receipt(first).get("nothing_new"), "the first take brought it all in"
+    page.written_back()
+    again = page.take("act-again")
+    assert page.apply_assets()["ok"] == [again]
+    r = page.receipt(again)
+    assert r["nothing_new"] is True and "undo_note" not in r, r
+    assert r["note"] == "That download was taken before. Nothing in it was new.", r
+
+
 def test_two_chats_taking_the_same_download_at_once_import_it_once(page):
     page.fetched()
     before = len(_rows(page))

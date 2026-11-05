@@ -214,8 +214,9 @@ def pages(tmp_path_factory):
         dict(nudge, id="due-nudge-%s" % p["id"], contact=p["id"], item=None, title="Follow up with %s at %s" % (p["first_name"], p["employer"]),
              context="Analyst at %s" % p["employer"], work={"kind": "follow_up", "id": "follow_up~%s" % p["id"], "args": {"contact": p["id"]}},
              rev="bn%d" % i) for i, p in enumerate(ppl)] + [
-        # Like items are grouped by what they ask (2026-10-30): eight replies owed, and two
-        # people to close after two unanswered messages. Invented names.
+        # Like items are grouped by what they ask (2026-10-30): eight replies owed. And two
+        # people at their limit of two unanswered messages, as a list written before To do
+        # stopped listing them (2026-11-04): the page never shows them. Invented names.
         *[dict(nudge, id="due-reply-%d" % i, kind="reply", action="work:reply", contact=ppl[i % 3]["id"], item=None,
                title="Reply to %s" % name, context="", work={"kind": "reply", "id": "reply~r%d" % i, "args": {"contact": ppl[i % 3]["id"]}},
                rev="br%d" % i)
@@ -652,13 +653,19 @@ def test_a_tap_rings_the_doorbell_inside_the_click_once_and_never_asks_send_this
 
 
 def test_with_no_chat_listening_it_says_when_it_starts_and_offers_to_start_it_now(run, pages):
-    r = run("no_listener", html=pages["sample"])
+    r = run("no_listener", html=pages["sample"], viewport={"width": 1280, "height": 900})
     _clean(r)
     assert r["calls"] == []
     assert any("not working on your search right now" in n for n in r["notes"])
     assert r["links"] and r["links"][0].startswith("https://claude.ai/code?prompt=")
     assert "repositories=morgan-example%2Fjob-search" in r["links"][0]
     assert r["work"]["status"] == "queued", "the request waits in the list whoever rings"
+    # On a phone, Open Claude would leave the Claude app for the browser: no link, and the
+    # note says where it does work (the maintainer, 2026-11-04).
+    r = run("no_listener", html=pages["sample"])
+    _clean(r)
+    assert r["links"] == [], r["links"]
+    assert any("not working on your search right now. Open this page on a computer to start it now." in n for n in r["notes"]), r["notes"]
 
 
 # ------------------------------------------------------------------ progress that costs nothing
@@ -1281,10 +1288,10 @@ def test_a_busy_week_is_a_few_checklists_not_a_card_each(run, pages):
     # Drafting them all takes each one's time, added up: "Draft all 25" said one draft's minutes.
     assert int(re.match(r"(\d+)", reply["cost"]).group(1)) >= n or reply["cost"].startswith("about"), reply["cost"]
     assert int(re.match(r"(\d+)", r["sum"]).group(1)) >= len(follow["rows"]) + n, ("a checklist of people counts each person", r["sum"])
-    leave = r["groups"]["grp:leave:now"]
-    assert leave["title"] == "2 people haven't answered two messages", leave
-    assert all(row["buttons"] == ["Close"] for row in leave["rows"]), leave
-    assert leave["actions"] == ["Close them all"] and "Leave them unless they write back" in leave["sub"], leave
+    # Nothing to do is not a To do (the maintainer, 2026-11-04): people at their limit of
+    # unanswered messages are left alone, in Contacts, never a card or a row here.
+    assert not [k for k in r["groups"] if k.startswith("grp:leave")], r["groups"]
+    assert "No reply to 2 messages" not in r["text"] and "answered two messages" not in r["text"]
     sent = r["groups"]["grp:sent"]
     assert sent["title"].startswith("Did these notes go?") and len(sent["rows"]) == 2 and "They all went" in sent["actions"]
     warn = [g for k, g in r["groups"].items() if k.startswith("grp:read_first")]

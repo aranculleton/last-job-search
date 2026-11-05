@@ -127,9 +127,12 @@ def test_a_thread_that_ended_long_ago_is_not_dated_and_an_app_date_on_one_is_set
                   scenario="nudge")]
     assert state.write_follow_ups(contacts, threads, TODAY) == []
     assert contacts[0]["next_action_due"] == ""
-    # What the app would have written on it in 2021: its own words and its own date.
-    contacts[0]["next_action"], contacts[0]["next_action_due"] = \
-        state.follow_up_plan(contacts[0], threads)
+    # What the app wrote on such a thread before 2026-11-04, when its line at the limit had a
+    # day to close it: its own words and its own date.
+    contacts[0]["next_action"] = ("Nudged: nothing more unless they reply. If still silent by "
+                                  "the date, close it: state.py set kestrel_ended --status "
+                                  "gone_cold")
+    contacts[0]["next_action_due"] = state.follow_up_on("2021-03-12").isoformat()
     (item,) = state.owed(contacts, threads, TODAY)
     assert item["kind"] == "action_due" and item["old"]
     out = open_actions.render_due(open_actions.due_items(contacts, threads, [], TODAY),

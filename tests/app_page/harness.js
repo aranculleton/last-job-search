@@ -1713,7 +1713,7 @@ S.tour = async (a) => {
 };
 
 S.no_listener = async (a) => {
-  const o = await open({html: a.html, hash: "jobs", fake: {canSend: "no_session"}});
+  const o = await open({html: a.html, hash: "jobs", fake: {canSend: "no_session"}, viewport: a.viewport});
   await draftViaDialog(o.page);
   await goto(o.page, "work");
   const r = {notes: await T(o.page, workSel("draft~r12-1") + " .note"), links: await o.page.$$eval(workSel("draft~r12-1") + " a.btn", (x) => x.map((e) => e.href)),

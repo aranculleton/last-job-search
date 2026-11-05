@@ -1005,7 +1005,9 @@
       saving: "Saving…",
       saved: savedWords(work, t.state === "saved" ? tapAhead(t.doc.at) : {}, waited ? (S.tries.get(t.id) ? "Saved, and sent to Claude. Not done yet." : "Saved, not done yet. It goes to Claude with your next tap here.") : ""),
       claimed: "Claude is doing this now.",
-      applied: t.doc.action === "undo" ? "Changed back." : "Done.",
+      // A download that brought nothing says so: "Saved: 0 messages" read as a count of
+      // something (the maintainer, 2026-11-04).
+      applied: t.doc.action === "undo" ? "Changed back." : r && r.nothing_new ? "Done. Nothing new in that download." : "Done.",
       refused: refusedWords(r),
       failed: "Not saved.",
       unsaved: "Not saved: this page cannot keep answers here. Open it in the Claude app.",
@@ -1139,7 +1141,7 @@
     // Some answers only a chat can take back (the engine says so on the receipt). A Change
     // back is itself the way back: "Only a chat can take this back" under it read as a dead
     // end (journeys audit 22).
-    if (t.state === "applied" && r && !r.undo && txt(r.undo_note) && t.doc.action !== "undo") return h("span", {class: "hint"}, " " + txt(r.undo_note));
+    if (t.state === "applied" && r && !r.undo && !r.nothing_new && txt(r.undo_note) && t.doc.action !== "undo") return h("span", {class: "hint"}, " " + txt(r.undo_note));
     return null;
   }
 
@@ -1706,8 +1708,10 @@
       else if (toComputer) S.workNote.set(id, {text: "This needs your computer: open Claude on it, and it starts there.", tone: "muted"});
       // Where this page cannot ring at all: saved, and the one way to start it now beside it
       // ("It starts next time Claude works on your search" never said when, the audit).
-      else if (how === "no_session") S.workNote.set(id, {text: "Claude is not working on your search right now. Open Claude to start this now.", tone: "warn", link: true});
-      else S.workNote.set(id, {text: "Saved. This page cannot reach Claude by itself: open Claude to start it now.", tone: "warn", link: true});
+      // The way to start it now is added where the note is drawn (noteWords): Open Claude only
+      // where that link is offered.
+      else if (how === "no_session") S.workNote.set(id, {text: "Claude is not working on your search right now.", tone: "warn", link: true});
+      else S.workNote.set(id, {text: "Saved. This page cannot reach Claude by itself.", tone: "warn", link: true});
     }
     scheduleRender();
   }
@@ -2090,7 +2094,9 @@
   // One tap drafts (the maintainer, 2026-11-03: "when i press draft this, it doesnt draft, it
   // brings up this then i have to press draft again"). Already applied is the bin's own
   // choice and "I have applied" under More; the posting's own questions never held a draft up.
-  function askDraft(rows) {
+  // `alone`: the resume without a letter, the one choice where drafting is asked (a job's More,
+  // "Draft the resume only"): there was no way to ask for it (the maintainer, 2026-11-04).
+  function askDraft(rows, alone) {
     rows = rows.filter(Boolean);
     if (!rows.length) return;
     const ref = rows.length === 1 ? referralAt(rows[0].company, rows[0]) : null;
@@ -2098,9 +2104,9 @@
     // One wording for the toast and for a screen reader, and an Undo that calls the drafts off
     // before Claude starts, as "Don't do it" does (the walk-through, 2026-11-03: one tap now
     // drafts, and nothing took it back).
-    const said = (rows.length === 1 ? "Drafting " + txt(rows[0].company) : "Drafting " + rows.length + " applications") + ": in Jobs, under Drafts, in about " + plural(mins, "minute", "minutes") + ". Nothing is sent." +
+    const said = (rows.length === 1 ? "Drafting " + (alone ? "your " + noun() + " for " : "") + txt(rows[0].company) : "Drafting " + rows.length + " applications") + ": in Jobs, under Drafts, in about " + plural(mins, "minute", "minutes") + ". Nothing is sent." +
       (ref ? " " + txt(ref.first_name) + " put your name forward there: ask them before you send it." : "");
-    requestWork(rows.map((r) => draftSpec(r, [])), {said}).then((made) => {
+    requestWork(rows.map((r) => draftSpec(r, [], alone)), {said}).then((made) => {
       if (!arr(made).length) return;
       toast({text: said, ids: [], until: 0, seeLabel: "Undo", see: () => { for (const id of made) stopWork(id); toast({text: "Not drafting " + (made.length === 1 ? txt(rows[0].company) : made.length + " applications") + ".", ids: []}); }});
     });
@@ -2111,9 +2117,9 @@
   function draftAnswers(r, answerOf) {
     return arr(r.questions).filter((q) => !appliedQ(q)).map((q, i) => ({q: txt(q), a: answerOf(i)})).filter((x) => x.a === "yes" || x.a === "no");
   }
-  function draftSpec(r, answers) {
-    return {id: draftWorkId(r), kind: "draft", title: Noun() + " and letter: " + txt(r.company) + ", " + txt(r.title),
-      args: Object.assign({}, obj(obj(r.draft_work).args), {job: txt(r.id), round: txt(jobsBlock().round), rev: txt(r.rev), already_applied: "no", answers})};
+  function draftSpec(r, answers, alone) {
+    return {id: draftWorkId(r), kind: "draft", title: Noun() + (alone ? " only: " : " and letter: ") + txt(r.company) + ", " + txt(r.title),
+      args: Object.assign({}, obj(obj(r.draft_work).args), {job: txt(r.id), round: txt(jobsBlock().round), rev: txt(r.rev), already_applied: "no", answers}, alone ? {resume_only: true} : {})};
   }
   // Someone there has put the person's name forward: an application of their own lands as a
   // second, worse record, so marking one is asked once more. The only confirm on the page.
@@ -2968,6 +2974,10 @@
     }
     for (const d of dueItems()) {
       if (PENDING_KINDS.has(txt(d.kind))) continue;   // one card for all of them (withdrawTodo)
+      // Someone at their limit of unanswered messages: nothing to do but leave them, so never
+      // a To do card (the maintainer, 2026-11-04). The engine lists none; a list it wrote
+      // before says so in the row. Their row in Contacts says it, with Close.
+      if (dueLeftAlone(d)) continue;
       // Its message marked sent on this page: done here at once, before a chat catches up.
       if (dueSentHere(d)) continue;
       // Done or put off on this page: off the list at once, its Undo in the toast (2026-11-03).
@@ -3013,12 +3023,12 @@
   }
   // Which like items a due row is grouped with, two or more in a band making one checklist
   // card (the maintainer, 2026-10-30: "a lot of them seem similar and a lot seem unique ...
-  // make this smart and reliable"). Grouped by what each asks of the person: someone to
-  // close after two unanswered messages, a follow-up, or the same kind of work (a reply, a
-  // thank-you). Anything else stays a card of its own. null: never grouped.
+  // make this smart and reliable"). Grouped by what each asks of the person: a follow-up, or
+  // the same kind of work (a reply, a thank-you). Anything else stays a card of its own.
+  // null: never grouped.
   const NO_REPLY = /: No reply to \d+ messages\b/;
+  function dueLeftAlone(d) { return !!dueContact(d) && (d.leave === true || NO_REPLY.test(txt(d.title))); }
   function dueGroupKey(d) {
-    if (dueContact(d) && (d.leave === true || NO_REPLY.test(txt(d.title))) && obj(d.done).action) return "leave";
     // Its message already drafted: never a row of a "Draft all". Two or more drafted are one
     // card, "6 messages ready to send", a row a person opening their draft (the maintainer,
     // 2026-11-04: "same with to do, batch would be easier to read"); one alone keeps its card.
@@ -3364,12 +3374,10 @@
   }
   // Follow-ups owed to several people: one card, a row each, and one button for them all.
   // One card for like due rows (dueGroupKey): a row each with its own button, and one button
-  // for them all where doing them all is one thing (drafting every follow-up or reply, or
-  // closing everyone who has not answered two messages).
+  // for them all where doing them all is one thing (drafting every follow-up or reply).
   const GROUP_WORDS = {
     follow: {title: (n) => "Follow up with " + plural(n, "person", "people"), all: "Draft all", row: "Draft", strip: /^Follow up with /},
     "work~reply": {title: (n) => "Reply to " + plural(n, "person", "people"), all: "Draft all", row: "Draft", strip: /^Reply to /},
-    leave: {title: (n) => plural(n, "person hasn't", "people haven't") + " answered two messages", sub: "Leave them unless they write back: close each, or all of them.", all: "Close them all", row: "Close", strip: NO_REPLY},
     // Drafted already: each row opens that person's draft and the card's one button Messages;
     // nothing drafts them again.
     drafted: {title: (n) => plural(n, "message", "messages") + " ready to send", row: "See the draft", strip: /^(?:Reply to|Follow up with|Follow up on|Write to|Send your \S+ to) /},
@@ -3445,25 +3453,23 @@
     const ds = list.map((i) => i.d);
     const kind = g.startsWith("work~") ? g.slice(5) : g === "follow" ? "follow_up" : "";
     const words = GROUP_WORDS[g] || {title: (n) => (DUE_WORK[kind] || "To do") + ": " + plural(n, "person", "people"), row: DUE_SUB[kind] ? "Draft" : "Do it", strip: null};
-    const leave = g === "leave";
     const drafted = g === "drafted";
     const busy = (d) => { const w = kind ? dueWork(d, kind) : null; return !!(w && ACTIVE.has(w.status)); };
     const open = ds.filter((d) => !busy(d) && !effective(d.id, ["due.done", "due.snooze"]));
-    // A row the person closed or finished leaves the list at once; "11 closed: Show" at the
-    // foot brings them back with their Undo. Eleven closed rows stayed in place reading
-    // "Saved. Claude will pick this up." while the chat was busy (the maintainer, 2026-11-04).
+    // A row the person finished leaves the list at once; "11 done: Show" at the foot brings
+    // them back with their Undo. Eleven finished rows stayed in place reading "Saved. Claude
+    // will pick this up." while the chat was busy (the maintainer, 2026-11-04).
     const gone = ds.filter((d) => !!effective(d.id, ["due.done", "due.snooze"]));
     const showGone = openState.get("grp-gone:" + hid) === true;
     const left = ds.filter((d) => showGone || gone.indexOf(d) < 0);
     const late = ds.filter((d) => gone.indexOf(d) < 0 && Number(d.overdue_days) > 0).length;
-    const close = (d) => act([{item: d.id, action: txt(obj(d.done).action), value: {on: todayIso()}, rev: d.rev}], "Closed: " + txt(d.title));
     const row = (d) => {
       const marked = !!effective(d.id, ["due.done", "due.snooze"]);
       const title = txt(d.title);
       const cid = isPerson(dueContact(d)) ? dueContact(d) : "";
       // A drafted message's row is the person it goes to, whatever the row was owed for.
       const who = drafted && cid ? personById(cid) : null;
-      const name = who ? whoAt(who.first_name, who.employer) : words.strip && words.strip.test(title) ? (leave ? title.split(":")[0] : title.replace(words.strip, "")) : title;
+      const name = who ? whoAt(who.first_name, who.employer) : words.strip && words.strip.test(title) ? title.replace(words.strip, "") : title;
       const draft = drafted ? dueDraft(d) : null;
       // One line under the name: who they are and the day it is about ("you wrote 21 Sept ·
       // no reply"), never Draft, Not now and a bin on every row (the walk-through, 2026-11-03).
@@ -3471,28 +3477,25 @@
         h("div", {class: "g-main"}, h("p", {class: "g-name"}, cid ? personName(cid, name, "fg:" + d.id) : name),
           dueWho(d) ? h("p", {class: "muted small"}, cap1(dueWho(d))) : null, stateLine(d.id, "due:" + where + ":" + d.id)),
         h("div", {class: "g-acts"}, busy(d) ? btn("See it", openWork, {small: true, kind: "quiet", key: "fgsee:" + where + ":" + d.id}) :
-          leave ? btn(words.row, () => close(d), {small: true, pressed: marked, key: "fgclose:" + where + ":" + d.id, aria: "Close: " + name}) :
           draft ? seeDraftBtn(draft, "fgdraft:" + where + ":" + d.id, "secondary") :
           btn(words.row, () => askDue(d), {small: true, key: "fgdo:" + where + ":" + d.id, aria: words.row + ": " + title}),
           // Its bin: the person's choices, and hiding this one row for a week.
-          cid && !marked && !leave ? btn("", () => askRemovePerson(cid, name.replace(/ at .*$/, ""), employerIn(title) || "", null, {hide: () => hideTodo("due:" + d.id, title)}),
+          cid && !marked ? btn("", () => askRemovePerson(cid, name.replace(/ at .*$/, ""), employerIn(title) || "", null, {hide: () => hideTodo("due:" + d.id, title)}),
             {kind: "quiet icon-only", small: true, icon: "bin", key: "fgbin:" + where + ":" + d.id, aria: "Not " + name + "? Or hide this for a week"}) : null));
     };
     // Drafted messages: the card's one filled button opens them all in Messages. Drafting them
     // all takes as long as each one does, added up: "Draft all 25" said one draft's minutes
     // (2026-11-03).
     const allBtn = drafted ? (ds.length > gone.length ? btn("Open Messages", () => go("drafts", {focus: true, drafts: "messages"}), {kind: "primary", small: true, key: "fg-msgs:" + where + ":" + band}) : null) :
-      open.length > 1 && words.all ? (leave ?
-      btn(words.all, () => { for (const d of open) close(d); }, {kind: "primary", small: true, key: "fg-all:" + where + ":" + g + ":" + band}) :
-      [btn(words.all + " " + open.length, () => requestWork(open.map(dueSpec)), {kind: "primary", small: true, key: "fg-all:" + where + ":" + g + ":" + band}),
-        costEl({state: WORK_COST[kind] === undefined ? 1 : WORK_COST[kind]}, kind, "fgc-" + where + "-" + seg(g) + "-" + band, open.length)]) : null;
+      open.length > 1 && words.all ? [btn(words.all + " " + open.length, () => requestWork(open.map(dueSpec)), {kind: "primary", small: true, key: "fg-all:" + where + ":" + g + ":" + band}),
+        costEl({state: WORK_COST[kind] === undefined ? 1 : WORK_COST[kind]}, kind, "fgc-" + where + "-" + seg(g) + "-" + band, open.length)] : null;
     // "25 late" read as 25 days: the chip says how many are overdue.
     return card("article", {class: "card todo group-card", "aria-labelledby": hid, "data-item": "grp:" + g + ":" + band},
-      h("div", {class: "todo-top"}, kindMark(leave ? "message" : dueKind(ds[0])), late ? h("span", {class: "chip tone-warn"}, late + " overdue") : null),
-      h("p", {class: "card-title", id: hid}, ds.length > gone.length ? words.title(ds.length - gone.length) : plural(gone.length, leave ? "person" : "thing", leave ? "people" : "things") + (leave ? " closed" : " done")),
+      h("div", {class: "todo-top"}, kindMark(dueKind(ds[0])), late ? h("span", {class: "chip tone-warn"}, late + " overdue") : null),
+      h("p", {class: "card-title", id: hid}, ds.length > gone.length ? words.title(ds.length - gone.length) : plural(gone.length, "thing", "things") + " done"),
       words.sub && ds.length > gone.length ? h("p", {class: "small muted"}, words.sub) : null,
       left.length ? groupRows("fg:" + where + ":" + g + ":" + band, left.map(row)) : null,
-      gone.length && !showGone ? h("p", {class: "fold"}, ds.length > gone.length ? h("span", {}, gone.length + (leave ? " closed: " : " done: ")) : null,
+      gone.length && !showGone ? h("p", {class: "fold"}, ds.length > gone.length ? h("span", {}, gone.length + " done: ") : null,
         btn(ds.length > gone.length ? "Show" : "Show them", () => { openState.set("grp-gone:" + hid, true); scheduleRender(); }, {kind: "link", key: "grpgone:" + hid})) : null,
       allBtn ? h("div", {class: "card-actions"}, allBtn) : null);
   }
@@ -3784,13 +3787,12 @@
     const kind = txt(d.action).replace(/^work:/, "");
     const hid = "due-" + (ctx.where || "") + "-" + seg(d.id);
     const when = late ? plural(n !== null && n < 0 ? -n : Number(d.overdue_days), "day", "days") + " late" : n === null ? "" : n === 0 ? "Today" : fmtDay(d.due);
-    // Two messages unanswered means leave it: the card offered "Draft the follow-up" under a
-    // title saying to leave it (2026-10-30). It only closes.
-    const leave = dueGroupKey(d) === "leave";
-    const hasWork = txt(d.action).startsWith("work:") && !leave;
+    // Someone at their limit of unanswered messages never reaches here (dueLeftAlone): a card
+    // offered "Draft the follow-up" under a title saying to leave it (2026-10-30).
+    const hasWork = txt(d.action).startsWith("work:");
     const w = hasWork ? dueWork(d, kind) : null;
     const busy = w && ACTIVE.has(w.status);
-    const done = leave ? Object.assign({}, obj(d.done), {label: "Close"}) : obj(d.done);
+    const done = obj(d.done);
     const marked = !!effective(d.id, ["due.done", "due.snooze"]);
     const draft = hasWork && !busy ? dueDraft(d) : null;
     // What they asked for leads, and its button makes it ("Make a CV for Juno"), never "Draft
@@ -4859,6 +4861,7 @@
     }
     const ref = referralAt(r.company, r);
     const draft = () => (ref ? confirmApplied([r], () => askDraft([r]), "draft") : askDraft([r]));
+    const draftAlone = () => (ref ? confirmApplied([r], () => askDraft([r], true), "draft") : askDraft([r], true));
     const asks = live && !pending ? jobQuestions(r) : [];
     // Applied: the next thing at that employer is the card's state and its one button.
     const iv = st === "applied" ? relatedInterview(r) : null;
@@ -4891,6 +4894,8 @@
       relatedLinks(r.company, r.id, r),
       h("div", {class: "more-acts"},
         (st === "new" && !closed && (ref || asks.length)) ? btn("Draft this", draft, {small: true, key: "draft2:" + r.id, aria: "Draft this: " + about}) : null,
+        // The resume without a letter: the one choice where drafting is asked.
+        (st === "new" && !closed) ? btn("Draft the " + noun() + " only", draftAlone, {kind: "quiet", small: true, key: "draftalone:" + r.id, aria: "Draft the " + noun() + " only: " + about}) : null,
         // A closed posting has nothing left to ask about, look into or apply to: setting it
         // aside is all it offers (2026-11-03).
         live && !closed && !ref && warmPerson(r) && !(suggestionShown(suggestOf(r)) && obj(suggestOf(r)).kind === "warm") ? btn("Ask " + txt(warmPerson(r).first_name) + " for a referral for this role", () => askReferral(warmPerson(r), r), {small: true, key: "askref:" + r.id}) : null,
@@ -5485,9 +5490,12 @@
       : ["gone_cold", "closed", "dropped", "converted_to_application", "cold", "stopped"].includes(st) ? "done" : "talking";
   }
   function personRank(p) { return GROUP_RANK[personGroup(p)]; }
+  // Someone at their limit of unanswered messages needs nothing from the person: below the fold
+  // with the held and the done, their row keeping its words and Close (the maintainer,
+  // 2026-11-04).
   function personLive(p) {
     const g = personGroup(p);
-    return ["now", "follow", "leave"].includes(g) || (p.live !== false && !["held", "done"].includes(g));
+    return ["now", "follow"].includes(g) || (p.live !== false && !["leave", "held", "done"].includes(g));
   }
   // What the engine says is next, in the person's words: its own step words ("Reply", "Follow
   // up") read on after "Next:", anything the person wrote kept as they wrote it, a name with its
@@ -5509,7 +5517,7 @@
       : "Nobody is waiting on you.") + (total && follow ? " " + plural(follow, "follow-up", "follow-ups") + " you could send." : "");
     // What there is to do comes first, the rest one tap below: a fold, never a filter left on,
     // so nobody is hidden without the page saying so.
-    const upFront = (p) => ["now", "follow", "leave"].includes(g(p));
+    const upFront = (p) => ["now", "follow"].includes(g(p));
     const anyUp = items.some(upFront);
     const front = anyUp ? upFront : personLive;
     const lo = {items, name: "contacts", one: "person", many: "people", live: front, fold: (p) => !front(p), remote: "people",
@@ -7802,10 +7810,13 @@
     }
     return false;
   }
+  // Nothing open can hear a ring from this page, known before the tap: then Wake Claude cannot
+  // work, and a chat started afresh (Open Claude) is the only way.
+  function nothingHears() { return S.can.comments === "no_session" || S.can.comments === "off" || S.lastRing === "no_session"; }
   function notListening() {
     if (freshHeartbeat()) return false;
     const helper = obj(obj(M().where).helper);
-    if (S.can.comments === "no_session" || S.can.comments === "off" || S.lastRing === "no_session" || txt(helper.state) === "not_listening") return true;
+    if (nothingHears() || txt(helper.state) === "not_listening") return true;
     // Something has waited past the listener's quiet time with no answer since: work that
     // could start (never work waiting its turn behind the big jobs running now), or a tap.
     const li = obj(M().listener);
@@ -7837,20 +7848,37 @@
   }
   function listenCard() {
     const told = S.notes.get("wake");
-    const noRing = S.can.comments === "no_session" || S.can.comments === "off" || S.lastRing === "no_session";
+    const noRing = nothingHears();
     const wake = obj(obj(M().listener).wake);
-    // Nothing open to hear a ring is known before the tap: then the one button is the one that
-    // can work, Open Claude, and Wake Claude is not offered (the 3 November audit). The card is
-    // about Claude, never "Setup".
+    // Said once, here: the line under the header said the same words on every screen with a
+    // second button (the maintainer, 2026-11-04). The one button is the one that works where
+    // the page is open, Wake Claude, rung through the page itself. Only when nothing open can
+    // hear a ring (known before the tap, the 3 November audit) is it Open Claude, a chat
+    // started afresh, which leaves the Claude app: on a phone it is left out (openClaude). The
+    // card is about Claude, never "Setup".
+    const out = noRing ? openClaude("wake-open", "btn primary small") : null;
     return card("article", {class: "card todo listen edge-warn", "aria-labelledby": "listen-title", "data-item": "listen"},
       h("div", {class: "todo-top"}, h("span", {class: "kind kind-setup"}, icon("k-setup"), h("span", {}, "Claude")), stateWord("Not listening", "warn")),
       h("p", {class: "card-title", id: "listen-title"}, "Claude isn't listening right now"),
-      h("p", {}, noRing ? "What you tap is saved and waits. Open Claude to start what is waiting." : "What you tap is saved and waits. Wake Claude to start it now."),
-      h("div", {class: "card-actions"},
-        noRing ? h("a", {class: "btn primary small", href: wakeUrl(), target: "_blank", rel: "noopener noreferrer", "data-k": "wake-open"}, "Open Claude", h("span", {class: "sr-only"}, " (opens Claude in a new tab)"))
-          : btn(txt(wake.label) || "Wake Claude", () => wakeClaude(), {kind: "primary", small: true, key: "wake"})),
+      h("p", {}, "What you tap is saved and waits. " + (!noRing ? "Wake Claude to start it now." : out ? "Open Claude to start what is waiting." : startNow())),
+      noRing && !out ? null : h("div", {class: "card-actions"}, out || btn(txt(wake.label) || "Wake Claude", () => wakeClaude(), {kind: "primary", small: true, key: "wake"})),
       told ? h("p", {class: "small", role: "status"}, told.text) : null);
   }
+  // A link that leaves the Claude app: Open Claude, a chat started afresh at claude.ai/code. On
+  // a phone the Claude app asks to open the phone's browser for it (the maintainer, 2026-11-04),
+  // and tools/claude_surfaces.json records nothing about what a phone does with one, so on a
+  // phone it is left out and its words say where it does work (startNow).
+  function openClaude(key, cls) {
+    if (phoneNow()) return null;
+    return h("a", {class: cls, href: wakeUrl(), target: "_blank", rel: "noopener noreferrer", "data-k": key}, "Open Claude", h("span", {class: "sr-only"}, " (opens Claude in a new tab)"));
+  }
+  // What starts waiting work now, in the words for where the page is open.
+  function startNow() {
+    if (!phoneNow()) return "Open Claude to start it now.";
+    return nothingHears() ? "Open this page on a computer to start it now." : "Wake Claude in To do to start it now.";
+  }
+  // A note under work the page could not send, with the way to start it now where there is one.
+  function noteWords(note) { return note.link ? note.text + " " + startNow() : note.text; }
   // The doorbell this page already rings for work (the comment to Claude); where nothing can
   // receive it, the link that starts a chat for the page, and the words for each.
   async function wakeClaude() {
@@ -7864,7 +7892,7 @@
     // It starts what it can at once; a big job waiting its turn starts when one running ends,
     // so "within a minute or two" promised what the cap prevents (the audit, 2026-11-03).
     S.notes.set("wake", how === "rang" ? {text: "Claude has been told. It starts on what is waiting as soon as it can, and this card goes once it answers.", tone: "ok"}
-      : {text: "Nothing is open to hear it. Open Claude, and it starts on what is waiting.", tone: "warn"});
+      : {text: phoneNow() ? "Nothing is open to hear it." : "Nothing is open to hear it. Open Claude, and it starts on what is waiting.", tone: "warn"});
     scheduleRender();
   }
   // G3. Where Claude works: one short checklist, each row its state and its one next step,
@@ -8662,27 +8690,28 @@
   function exportTodo() {
     const x = exportInfo();
     if (!Object.keys(x).length) return null;
-    const taken = exportTaken();
+    // A download Claude has saved is finished: it leaves To do at once, and its line stays on
+    // its own place, Settings > LinkedIn. It sat in Next 7 days as "Saved: 0 messages · Done.
+    // Only a chat can take this back" (the maintainer, 2026-11-04: "What's the 0 messages in
+    // next 7 days thing"). For as long as its line shows, the model may still say it is due
+    // (it catches up with the next update); after that, the model's own state asks again.
+    const got = exportTaken();
+    const done = !!got && !got.pending && receiptOk(got);
+    if (done && (now() - (tms(got.applied_at) || now()) < DONE_LINE_MS || !exportNeedsCard(x))) return null;
+    const taken = done ? null : got;
     if (!exportNeedsCard(x) && !taken) return null;
     const asked = exportAsked(x);
     const hours = asked ? (now() - (tms(asked) || Date.parse(asked + "T09:00:00Z"))) / 3600000 : null;
     // It rises once at 24 hours and once before the link stops working, then waits quietly.
     const band = taken ? "week" : !asked ? "week" : (hours >= 24 && hours < 30) || (hours >= 60 && hours < 72) ? "now" : "later";
-    return {key: "export", kind: "message", band, employer: null, tab: "contacts", counts: band === "now" && !taken, node: () => exportCard(x, asked, hours)};
+    return {key: "export", kind: "message", band, employer: null, tab: "contacts", counts: band === "now" && !taken, node: () => exportCard(x, asked, hours, taken)};
   }
-  function exportCard(x, asked, hours) {
-    const taken = exportTaken();
+  function exportCard(x, asked, hours, taken) {
     const steps = exportSteps(x);
     const link = exportLink(x);
     const changed = arr(x.changed).map(txt).filter(Boolean);
     let body;
-    if (taken && taken.result === "ok") {
-      const c = obj(taken.counts);
-      const msgs = Number(c.messages) || 0;
-      const fresh = Number(c.new_people || c.not_in_contacts) || 0;
-      body = [h("p", {class: "card-title", id: "export-title"}, "Saved: " + nWord(msgs, "message", "messages")),
-        fresh ? h("p", {}, plural(fresh, "person", "people") + " replied to you that weren't in your contacts. ", navLink("contacts", "See them in Contacts")) : null];
-    } else if (taken) {
+    if (taken) {
       body = [h("p", {class: "card-title", id: "export-title"}, "Saving your LinkedIn messages"),
         h("p", {class: "reading-line"}, h("span", {class: "spin", "aria-hidden": "true"}), " Claude reads the files and adds what is new to your contacts.")];
     } else {
@@ -9532,7 +9561,7 @@
         helperStarting() ? "Claude's helper is starting up. It takes this in a minute or two." :
         inLine ? (place.pos === 1 ? "Starts as soon as one of the " + place.busy + " jobs running now is done." : plural(place.pos - 1, "job", "jobs") + " before it, once one of the " + place.busy + " running now is done.") :
         ahead ? (ahead.pos === 1 ? "Next, after " : "In line, after ") + quoted(ahead.after) + "." :
-        late ? (p.sentAt ? "No answer from Claude in " + aboutMins((now() - p.sentAt) / 1000) + "." + ((S.tries.get(id) || 0) < RING_TRIES ? " It is sent again with your next tap here." : "") + " If its chat has closed, open Claude." : "Claude has not picked this up yet.") :
+        late ? (p.sentAt ? "No answer from Claude in " + aboutMins((now() - p.sentAt) / 1000) + "." + ((S.tries.get(id) || 0) < RING_TRIES ? " It is sent again with your next tap here." : "") + (phoneNow() ? "" : " If its chat has closed, open Claude.") : "Claude has not picked this up yet.") :
         waking ? (freshHeartbeat() ? "Sent to Claude, which is open now: it starts in a moment." : "Sent to Claude. Its chat is waking up, which usually takes about " + aboutMins(wakeS()) + ".") :
         tms(w.answered_at) ? "Answered " + askedWhen(w) + ". Your answer is with Claude." :
         "Asked " + askedWhen(w) + ". Claude starts it when it next looks at this page.";
@@ -9618,7 +9647,7 @@
     // "Claude has been told" says the doorbell rang; once Claude has the work, it says
     // nothing the card does not (the maintainer, 2026-10-30: "a bit redundant").
     const note = S.workNote.get(id);
-    if (note && st === "queued" && !picked) put(cardEl, h("p", {class: "note tone-" + note.tone}, note.text));
+    if (note && st === "queued" && !picked) put(cardEl, h("p", {class: "note tone-" + note.tone}, noteWords(note)));
     const acts = h("div", {class: "wc-actions"});
     // Work nobody has started yet is called off in one plain tap, first on its row.
     // Not sent: the one next step, though any tap on the page sends it too.
@@ -9637,7 +9666,9 @@
     if (st === "queued" && !toComputer && (late || (note && note.link && !canWake))) {
       // One name for starting a chat by hand, the same as the To do card's (the audit: eight
       // names for waking Claude).
-      put(acts, h("a", {class: "btn quiet small", href: wakeUrl(), target: "_blank", rel: "noopener noreferrer", "data-k": "prefill:" + id}, "Open Claude", h("span", {class: "sr-only"}, " (opens Claude in a new tab)")));
+      // Never on a phone, where it leaves the Claude app (openClaude).
+      const out = openClaude("prefill:" + id, "btn quiet small");
+      if (out) put(acts, out);
     }
     if (acts.childNodes.length) put(cardEl, acts);
     if (open) {
@@ -9814,8 +9845,8 @@
         h("div", {class: "wc-head"}, picked ? h("span", {class: "spin", "aria-hidden": "true"}) : h("span", {class: "dot tone-" + (ahead.away ? "warn" : "plain is-waiting"), "aria-hidden": "true"}),
           h("h3", {class: "wc-title", id: tid}, work.title), stateWord(picked ? "Starting" : ahead.after ? "Next" : ahead.away ? "No answer yet" : "Waiting for Claude", ahead.away ? "warn" : null)),
         h("p", {class: "wc-now"}, picked ? "Claude has picked this up" : ahead.after ? "Next, after " + quoted(ahead.after) + "." :
-          ahead.away ? "Claude's helper is not answering, so this waits. Open Claude to start it now." : "Asked " + askedWhen({asked_at: d.at}) + ". Claude starts it when it next looks at this page."),
-        ahead.away ? h("div", {class: "wc-actions"}, h("a", {class: "btn quiet small", href: wakeUrl(), target: "_blank", rel: "noopener noreferrer", "data-k": "prefill:tap:" + id}, "Open Claude", h("span", {class: "sr-only"}, " (opens Claude in a new tab)"))) : null));
+          ahead.away ? "Claude's helper is not answering, so this waits. " + startNow() : "Asked " + askedWhen({asked_at: d.at}) + ". Claude starts it when it next looks at this page."),
+        ahead.away && !phoneNow() ? h("div", {class: "wc-actions"}, openClaude("prefill:tap:" + id, "btn quiet small")) : null));
     }
     return out;
   }
@@ -11068,8 +11099,8 @@
     } else if (S.section === "contacts") {
       // Behind the fold unless it is something to do now, as renderContacts folds it.
       const p = peopleItems().find((x) => x.id === id);
-      const anyUp = peopleItems().some((x) => personRank(x) <= GROUP_RANK.leave);
-      if (p && !(anyUp ? personRank(p) <= GROUP_RANK.leave : personLive(p))) listState("contacts").open = true;
+      const anyUp = peopleItems().some((x) => personRank(x) <= GROUP_RANK.follow);
+      if (p && !(anyUp ? personRank(p) <= GROUP_RANK.follow : personLive(p))) listState("contacts").open = true;
     }
   }
   function go(id, o) {
@@ -11357,8 +11388,12 @@
     // until the new version is published and every open view reloads to it by itself.
     const updating = [...allWork()].find(([, w]) => (txt(w.kind) === "update" || txt(w.kind) === "republish") && ACTIVE.has(txt(w.status) || "queued"));
     if (pulse) {
-      const warn = state !== "live" && state !== "connecting";
+      // Nobody listening is said once, on its card in To do with its one button: this line said
+      // it again on every screen, with an Open Claude that left the Claude app on a phone (the
+      // maintainer, 2026-11-04: "Why is there a top Open Claude link"). The dot still says it,
+      // and tapped, this line reads it out.
       const unheardNow = state === "unheard";
+      const warn = state !== "live" && state !== "connecting" && !unheardNow;
       const queuedUp = updating && txt(updating[1].status) === "queued";
       const refreshing = updating && txt(updating[1].kind) === "update" && !!obj(updating[1].args).refresh;
       // Nothing heard the ask: said, with the one way to start a chat for the page, never a
@@ -11366,15 +11401,13 @@
       const note = queuedUp ? S.workNote.get(updating[0]) : null;
       const unheard = !!(note && note.link);
       pulse.hidden = !(S.connOpen || warn || old || newer || updating);
-      pulse.className = "pulse" + (warn || newer || unheard ? " tone-warn" : updating ? " is-updating" : "");
+      pulse.className = "pulse" + (warn || newer || unheard || (unheardNow && S.connOpen) ? " tone-warn" : updating ? " is-updating" : "");
       patch(pulse, updating && !warn && !newer && !S.connOpen ?
-        (unheard ? [h("span", {role: "status"}, note.text + " "),
-          h("a", {href: wakeUrl(), target: "_blank", rel: "noopener noreferrer", class: "btn link", "data-k": "refresh-wake"}, "Open Claude", h("span", {class: "sr-only"}, " (opens Claude in a new tab)"))] :
+        (unheard ? [h("span", {role: "status"}, noteWords(note) + " "), openClaude("refresh-wake", "btn link")] :
           [h("span", {class: "spin", "aria-hidden": "true"}), h("span", {role: "status"}, refreshing ? (queuedUp ? "Claude has been asked to bring your page up to date. " : "Bringing your page up to date. ")
             : queuedUp ? "An update is waiting for Claude. " : "Updating to the newest version. "),
           h("span", {class: "muted"}, "Keep using the page: it changes by itself when it is ready.")]) :
-        unheardNow ? [h("span", {}, words), " ", h("a", {href: wakeUrl(), target: "_blank", rel: "noopener noreferrer", class: "btn secondary small refresh-btn", "data-k": "conn-wake"}, "Open Claude", h("span", {class: "sr-only"}, " (opens Claude in a new tab)"))] :
-        [h("span", {}, words + (age ? " Updated " + age + "." : "") + (newer ? " A newer version is ready." : "")), " ",
+        [h("span", {}, [unheardNow && !S.connOpen ? "" : words, age ? "Updated " + age + "." : "", newer ? "A newer version is ready." : ""].filter(Boolean).join(" ")), " ",
           // A soft pill, the page's secondary button, not a link lost in the line (the
           // maintainer, 2026-11-02: "make the refresh button slightly more prominent").
           h("button", {type: "button", class: "btn secondary small refresh-btn", "data-k": "refresh", onclick: () => refreshPage(newest, newer)}, "Refresh"),
