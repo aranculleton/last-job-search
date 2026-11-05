@@ -641,6 +641,56 @@ def context_tokens() -> int:
     return max(0, (last or 0) - (first or 0)) if last is not None else 0
 
 
+# A republish reads the page's code into the chat, whole, file by file (some 200 KB): a new
+# helper that put an update up was told to hand over twenty minutes after it started (the
+# maintainer's live run, 2026-11-05), and its fresh helper would have read it all again. What
+# a republish adds is measured, from its build (`app.py page --out-dir`) to its record (`app.py
+# published`), and the growth that renews a helper leaves it out.
+REPUBLISH_FOR_S = 3600      # a republish never recorded as done counts this long, no longer
+
+
+def republish_started(chat: str, now: dt.datetime) -> None:
+    """This chat is about to read the page's code for a republish: note its size now."""
+    if not chat:
+        return
+    got = seen()
+    was = got.get("republish") or {}
+    if was.get("chat") == chat and was.get("at"):
+        t = _time(was["at"])
+        if t is not None and (now - t).total_seconds() < REPUBLISH_FOR_S:
+            return                                  # the second build of the same republish
+    got["republish"] = {"chat": chat, "at": _stamp(now), "tokens": context_tokens()}
+    _save_seen(got)
+
+
+def republish_done(chat: str, now: dt.datetime) -> None:
+    """The republish is recorded: what it added is set aside for good."""
+    got = seen()
+    was = got.pop("republish", None) or {}
+    if not chat or was.get("chat") != chat:
+        return
+    off = got.get("set_aside") if (got.get("set_aside") or {}).get("chat") == chat else {}
+    added = max(0, context_tokens() - int(was.get("tokens") or 0))
+    got["set_aside"] = {"chat": chat, "tokens": int((off or {}).get("tokens") or 0) + added}
+    _save_seen(got)
+
+
+def grown_tokens(chat: str, now: dt.datetime) -> int:
+    """How much this chat's history has grown, less what its republishes read (and, for one
+    still going, what it has read so far, for an hour at most)."""
+    got = seen()
+    off = got.get("set_aside") or {}
+    aside = int(off.get("tokens") or 0) if off.get("chat") == chat else 0
+    going = got.get("republish") or {}
+    t = _time(going.get("at"))
+    if going.get("chat") == chat and t is not None and \
+            (now - t).total_seconds() < REPUBLISH_FOR_S:
+        total = int(going.get("tokens") or 0)       # counted up to where the republish began
+    else:
+        total = context_tokens()
+    return max(0, total - aside)
+
+
 def renewal(rec: dict, db: dict, chat: str, now: dt.datetime) -> dict | None:
     """The create_session call for a fresh helper, or None. Only a cloud chat answering the
     page for RENEW_S (or grown by RENEW_TOKENS), with no small work of its own in hand, and
@@ -659,7 +709,7 @@ def renewal(rec: dict, db: dict, chat: str, now: dt.datetime) -> dict | None:
     since = _time(rec.get("since"))
     if since is None:
         return None
-    big = context_tokens() >= RENEW_TOKENS
+    big = grown_tokens(chat, now) >= RENEW_TOKENS     # a republish's reads left out
     if (now - since).total_seconds() < RENEW_S and not big:
         return None
     work = db.get("work") or {}
@@ -1017,6 +1067,14 @@ def shape(code: int, lines: list[str], chat: str = "", listen: bool = False,
         # The link once, first, in the helper's own line: the page's introduction would say it
         # a second time, in a paragraph.
         keep = [(step, t) for step, t in keep if not (step and t.startswith(_INTRO))]
+        # Its last reply is one line and nobody reads this chat: the steps that said to put
+        # the changes made and up to three questions at the end of the reply said the
+        # opposite of the last step (the maintainer's live run, 2026-11-05). They go on the
+        # page instead, each question a To do card (CLAUDE.md).
+        import app_setup
+        keep = [(step, app_setup.ASK_ON_PAGE if step and t == app_setup.ASK_IN_CHAT else
+                 t.replace(app_setup.SHOWN_IN_REPLY, app_setup.SHOWN_ON_PAGE) if step else t)
+                for step, t in keep]
         keep = [(True, helper_first(url))] + keep + [(True, helper_last(chat, url))]
     out, n = [], 0
     for step, t in keep:
@@ -1072,8 +1130,12 @@ def helper_last(chat: str, url: str) -> str:
             f"scratchpad>/beats --done --chat {chat or '<this chat id>'}, and send its batch "
             "(refused: read beats again and run it once more). Then say only this, as it is: "
             f"\"{say(SAY_HELPER_READY, url)}\" Nothing else in this reply: never the brief, its "
-            "news or its replies, and never what this chat is for; the page holds them. If the "
-            "check-in said another chat answers the page, say nothing more.")
+            "news or its replies, and never what this chat is for; the page holds them. That "
+            "goes for every line above that says to tell the person something at the end of a "
+            "reply (the changes an improvement made, its questions, an update waiting, a place "
+            "check): none is said in this chat. The page shows the changes, and asks each "
+            "question as a To do card. If the check-in said another chat answers the page, say "
+            "nothing more.")
 
 
 _INTRO = "Tell the person once, at the start of your reply, in these words"

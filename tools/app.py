@@ -140,6 +140,28 @@ def _published() -> dict:
         return {}
 
 
+def no_screen(dump: str, db: dict) -> str:
+    """The line `view` stops with when its dump holds none of the page's `screen` documents
+    while the page has some, else "". The page has them once it was drawn under the new
+    names (`meta/current`, stored as `meta/now`); a page a 4.2 chat left (only `view`, and
+    `meta/current` under its old name) and one never drawn have none yet, and their first
+    view creates them (an empty collection leaves no folder in a dump, so a fresh page's has
+    no meta either). Every set it printed went with no version, against documents that
+    exist, and all 43 were refused (the maintainer's live run, 2026-11-05: a dump of the old
+    `view` collection, left at version 3, and meta)."""
+    import glob
+    if glob.glob(os.path.join(dump, "screen", "*.json")):
+        return ""
+    cur = (db.get("meta") or {}).get("current") or {}
+    if not (cur.get("data") and not cur.get("old")):
+        return ""                                   # never drawn, or a 4.2 page: its first view
+    return ("view: nothing was written: this folder holds no dump of the page's screen "
+            "collection, where its view is kept (view is an old name), so every write would "
+            "be refused. Read the page's screen, meta, addr and work collections into a fresh "
+            "folder (ArtifactData query, one for each, out_dir that folder, limit 1000) and "
+            "run this again with --dump that folder.")
+
+
 def cmd_view(a) -> int:
     """The model as one document a section (`view/<section>`, in parts when it is too big for
     one: page_db.split) plus `meta/current` (stored as `meta/now`), so an open page updates live with no republish.
@@ -154,6 +176,10 @@ def cmd_view(a) -> int:
         return 3
     today, now = app_model.clock(a.today, a.now)
     db = page_db.load(a.dump) if a.dump else {}
+    missing = no_screen(a.dump, db) if a.dump else ""
+    if missing:
+        print(_dump({"rev": None, "batches": [], "for_claude": [missing]}), end="")
+        return 2
     import app_listen
     # Only the chat that answers the page draws its screens (and a job's own chat, which no
     # chat can tell): two helpers in a hand-over rewrote whole screens over each other, and
@@ -349,6 +375,9 @@ def cmd_page(a) -> int:
         today, now = app_model.clock(a.today, a.now)
         model, _ = _build(today, now)
         built = app_page.write_parts(model, a.out_dir)
+        # The reads it asks for are set aside from the growth that renews a helper (a new
+        # helper that put an update up was told to hand over twenty minutes on, 2026-11-05).
+        app_listen.republish_started(app_listen.this_chat(""), now)
         listing = None
         if getattr(a, "on_page", None) is not None:
             if a.on_page == "-":
@@ -910,6 +939,7 @@ def cmd_published(a) -> int:
     print(f"app: the page's address is kept in {local_path.rel(path, person.ROOT)}; save it "
           "with the rest (python3 tools/save_state.py)")
     _, now = app_model.clock(None, None)
+    app_listen.republish_done(chat, now)        # what the publish read is set aside for good
     import tempfile
     out = a.out or tempfile.mkdtemp(prefix="ljs-listen-")      # never inside the profile
     for line in app_listen.published_lines(a.url, chat, first, out, now, replaced=replaced):

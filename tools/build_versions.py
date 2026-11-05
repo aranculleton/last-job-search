@@ -370,8 +370,9 @@ METHODS: dict[str, dict] = {
             (69, "2026-11-05", False, "the runbook lists reading.py linkedin-check; no document changes"),
             (70, "2026-11-05", True, "a resume drafted alone, or a draft missing its letter, has its summary checked like any other and is made once both checks pass, and the tracker names a letter only where one was written; a reworded bullet the check passed is printed whenever the resume is made again, even without the posting beside it; a sentence ends after a name in capitals (AWS., SQL.) and never after an initial (U.S.), so a summary is cut where it should be and no sentence shows as unchecked; the drafting steps and the check read a research fact the same way, so a draft is never held back for a mismatch that was not there; unsent applications are made again"),
             (71, "2026-11-05", True, "making unsent applications again is done by the app's own code: each is checked, the newest version is kept only on the ones that pass, one that fails is given its own way forward by itself (its copied part rewritten, or one To do card where only you can settle it), a letter breaking its own rules now counts as failing on its record, and a tracker row naming a letter for an application with none is put right; this is recorded done only when every one has passed, so applications an earlier run left failing are made again and handed on"),
+            (72, "2026-11-05", False, "the run book names the whole command that records a no to an improvement's question, python3 tools/profile_upgrades.py --no <id>, never --no alone"),
         ),
-        "fingerprint": "15501a776f3a2d29",
+        "fingerprint": "35cc778a4951b15a",
     },
     "interview": {
         "by": "upgrade", "priority": 2, "applies": "live_interviews", "time": "~15 min",
@@ -694,8 +695,9 @@ METHODS: dict[str, dict] = {
             (21, "2026-11-04", False, "the page is told whether the brief\'s own run sends its phone notification, so Settings offers that choice only there"),
             (22, "2026-11-04", False, "the chat of a big job (an interview prep, a search, a batch of drafts) is put away soon after its job ends, not after two quiet days: the tidy-up is due again when such a job finishes, and archives its chat once its work is saved; a helper the page was taken from is renamed to finishing up at once and archived at the next check-in"),
             (23, "2026-11-05", False, "a big job's chat reports back to the chat that started it once its work is on master, and that chat puts the results on the page and archives it at once (tidy.py close and closed), the daily tidy-up kept for one that never reported; the tidy-up keeps each archived chat's real title itself, never through the shell, judges a chat it put away before by the title it has now, never brings one back for an empty stored title, and puts away again one of the app's chats an older tidy-up brought back by mistake; the live page helper is called Job search page, every older helper (Job search helper, finishing up) is put away as soon as its work is on master, never kept for being used lately, the brief moved into the live helper first (made, recorded, the old one turned off) and a chat holding a brief that is off kept for it; the first tidy-up after this update runs even if the day's already ran, so the helpers left over from before go by themselves; after a hand-over the tidy-up runs at once and again half an hour on, for a day, while the old helper still runs or holds unsaved work"),
+            (24, "2026-11-05", False, "the tidy-up never puts away a chat still at work: running or working by the sessions list's status or get_session's (a listing trimmed to status is read), an old helper used in the last ten minutes or waiting on the person, any task that is on firing into it (a one-time reminder as much as the brief) unless this same tidy-up moves that task, or a branch GitHub does not hold yet while it was used in the last two days; a brief bound to a chat kept for any of these stays where it is"),
         ),
-        "fingerprint": "3eb019a46bd14a1d",
+        "fingerprint": "04c1d1c8edf5094f",
     },
     "expand": {
         "by": "upgrade", "priority": 4, "time": "~15 min",

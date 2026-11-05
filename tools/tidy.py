@@ -91,6 +91,8 @@ SWEEP = "helpers-2026-11-04"
 # a day; after that the daily tidy-up has it.
 RETIRE_AGAIN_S = 30 * 60
 RETIRE_FOR_S = 24 * 3600
+# An old helper used this lately is still in use: kept until a later check-in.
+RECENT_S = 10 * 60
 RUN_TITLE = "⚡ Job search: a scheduled run"
 IDLE_DAYS = 2           # quiet this long before it is tidied
 WAITING_DAYS = 7        # quiet this long when it was waiting on the person
@@ -363,11 +365,62 @@ def unmerged() -> set[str] | None:
     return {ln.strip().removeprefix("origin/") for ln in r.stdout.splitlines() if ln.strip()}
 
 
+def _status(s: dict, d: dict | None) -> str:
+    """What the sessions list and get_session say of a chat's state, in small letters: the
+    list's `session_status` and `status_bucket`, and the plain `status` a trimmed listing or
+    get_session gives ("running", "working"). A live run read only `session_status` and took
+    a helper get_session called running for an idle one (2026-11-05)."""
+    out = []
+    for rec in (s or {}, d or {}):
+        for k in ("session_status", "status", "status_bucket"):
+            if rec.get(k):
+                out.append(str(rec[k]))
+    return " ".join(out).lower()
+
+
+def _running(status: str) -> bool:
+    return "running" in status or "working" in status
+
+
+def _last_used(s: dict, d: dict | None) -> str:
+    """The latest time either record gives for the chat's last use."""
+    import app_model
+    best, got = None, ""
+    for rec in (s or {}, d or {}):
+        for k in ("updated_at", "last_activity_at", "last_event_at"):
+            t = app_model.parse_time(rec.get(k))
+            if t is not None and (best is None or t > best):
+                best, got = t, str(rec.get(k))
+    return got or str((s or {}).get("created_at") or "")
+
+
+def _ago_s(stamp, now: dt.datetime) -> float:
+    """Seconds since `stamp`; unknown counts as long ago."""
+    import app_model
+    t = app_model.parse_time(stamp)
+    return float("inf") if t is None else (now - t).total_seconds()
+
+
 def _after(stamp, since) -> bool:
     """Is `stamp` later than `since`? False when either cannot be read."""
     import app_model
     a, b = app_model.parse_time(stamp), app_model.parse_time(since)
     return a is not None and b is not None and a > b
+
+
+def on_github() -> set[str] | None:
+    """Every branch GitHub holds for this copy, as the last fetch saw it (unmerged() fetches
+    first), or None when git cannot say."""
+    import person
+    try:
+        r = subprocess.run(["git", "-C", person.state(), "branch", "-r",
+                            "--format=%(refname:short)"], capture_output=True, text=True,
+                           encoding="utf-8", timeout=60)
+    except (OSError, subprocess.SubprocessError):
+        return None
+    if r.returncode != 0:
+        return None
+    return {ln.strip().removeprefix("origin/") for ln in r.stdout.splitlines() if ln.strip()}
 
 
 def _days_since(stamp: str, today: dt.date) -> float:
@@ -385,17 +438,28 @@ def _days_since(stamp: str, today: dt.date) -> float:
 def plan(chats: list[dict], triggers: list[dict], info: dict, reg: dict, listener: dict,
          this_chat: str, repo: str, today: dt.date, campaigns: set[str],
          branches: set[str] | None, done_before: set[str],
-         jobs: dict | None = None) -> dict:
+         jobs: dict | None = None, now: dt.datetime | None = None,
+         on_github: set[str] | None = None) -> dict:
     """{"ask": [ids to read with get_session], "archive": [{id, title, why}],
     "keep": [{id, title, why}], "brief": [calls] or []}. `jobs` is finished_jobs(): a chat in
-    it is not kept for being used lately."""
+    it is not kept for being used lately. `now` (else noon of `today`) times recent use;
+    `on_github`, every branch GitHub holds, tells a branch never pushed from one merged."""
     jobs = jobs or {}
     import routines
+    now = now or dt.datetime.combine(today, dt.time(12), tzinfo=dt.timezone.utc)
     live_ids = {listener.get("chat") or "", this_chat} - {""}
     # The chat the page was taken from is put away only where the app started it: one the
     # person writes in, whatever its title, is theirs (the stranger audit, X-4).
     known = ({listener.get("took_from") or ""} - {""}) if listener.get("took_from_helper") else set()
-    bound_on = {t.get("session") for t in triggers if t.get("session") and t.get("enabled")}
+    # Every task that is on, by the chat it fires into (a one-time reminder as much as the
+    # brief): a chat a live task fires into is never archived, only one whose every such task
+    # this same plan moves away (the maintainer's live run, 2026-11-05: two one-time tasks
+    # fired into a helper the tidy-up named for archiving).
+    fires: dict = {}
+    for t in triggers:
+        sid = str(t.get("session") or t.get("persistent_session_id") or "")
+        if sid and t.get("enabled") is not False:
+            fires.setdefault(sid, set()).add(str(t.get("id") or ""))
     ops = str((reg.get("ops_session") or {}).get("id") or "")
     brief = next((r for r in reg.get("routines") or [] if routines._is_brief(r)), None) or {}
     brief_chat = str((brief.get("chat") or {}).get("session_id") or "")
@@ -501,10 +565,16 @@ def plan(chats: list[dict], triggers: list[dict], info: dict, reg: dict, listene
     # deleted), so the chat it was bound to is not kept for it.
     up_calls = _upkeep_calls(reg, triggers, helper, listener, repo)
     up = routines.upkeep_entry(reg) or {}
-    if up.get("trigger_id") and any(c.get("tool") == "delete_trigger" and
-                                    c["args"].get("trigger_id") == up["trigger_id"]
-                                    for c in up_calls):
+    up_moves = bool(up.get("trigger_id")) and any(
+        c.get("tool") == "delete_trigger" and c["args"].get("trigger_id") == up["trigger_id"]
+        for c in up_calls)
+    if up_moves:
         moved_from |= {str((up.get("chat") or {}).get("session_id") or "")} - {"", helper}
+    # The tasks this plan moves away from their chats: only these stop keeping a chat.
+    moving = ({brief.get("trigger_id")} if adopt and out["brief"] else set()) | \
+        ({rnd.get("trigger_id")} if out["moves"] else set()) | \
+        ({up.get("trigger_id")} if up_moves else set())
+    moving -= {None, ""}
     for s in chats:
         sid = s.get("id") or ""
         title = str(s.get("title") or "")
@@ -520,7 +590,7 @@ def plan(chats: list[dict], triggers: list[dict], info: dict, reg: dict, listene
         if sid == ops:
             keep("the older ops chat, which relays to the phone and is never rebuilt")
             continue
-        if sid in bound_on and sid not in moved_from:
+        if fires.get(sid, set()) - moving:
             keep("a scheduled task that is on runs in it")
             continue
         if sid in campaigns:
@@ -537,18 +607,23 @@ def plan(chats: list[dict], triggers: list[dict], info: dict, reg: dict, listene
             # itself either): its chat is kept, so it never comes back on in an archived one.
             keep("the brief, turned off or resting, is bound to it")
             continue
-        status = str(s.get("session_status") or "") + " " + str(s.get("status_bucket") or "")
-        if "RUNNING" in status or "WORKING" in status:
+        d = info.get(sid)
+        status = _status(s, d)
+        if _running(status):
             keep("it is running")
             continue
-        quiet = _days_since(s.get("updated_at") or s.get("created_at") or "", today)
-        waits = "REQUIRES_ACTION" in status or "BLOCKED" in status
-        # An old helper is never kept for being used lately: its renewal used it minutes ago.
+        last = _last_used(s, d)
+        quiet = _days_since(last, today)
+        waits = "requires_action" in status or "blocked" in status
+        if sid in old_helpers and (waits or _ago_s(last, now) < RECENT_S):
+            # An old helper is not kept for two quiet days (its renewal used it minutes before
+            # a hand-over), but never put away while it is still in use or waiting on them.
+            keep("it was in use moments ago" if not waits else "it is waiting on the person")
+            continue
         if (sid not in moved_from and sid not in jobs and sid not in old_helpers
                 and quiet < (WAITING_DAYS if waits else IDLE_DAYS)):
             keep(f"used {quiet:.0f} day(s) ago")
             continue
-        d = info.get(sid)
         if d is None:
             out["ask"].append(sid)
             continue
@@ -563,6 +638,13 @@ def plan(chats: list[dict], triggers: list[dict], info: dict, reg: dict, listene
         left = [b for b in own if branches is not None and b in branches]
         if left:
             keep("its work is not on master yet (" + ", ".join(left) + ")")
+            continue
+        # A branch GitHub has never held: its work may be only where that chat ran (a chat
+        # on the person's computer). Merged branches stay on GitHub (land.py never deletes
+        # them), so lately it is kept; one quiet for days is put away as before.
+        local = [b for b in own if on_github is not None and b not in on_github]
+        if local and quiet < IDLE_DAYS:
+            keep("its work is not on GitHub yet (" + ", ".join(local) + ")")
             continue
         why = ("the brief moved into the chat that answers the page" if sid == adopt else
                "the shortlist moved into the chat that answers the page" if sid in moved_from else
@@ -768,9 +850,15 @@ def run_plan(a) -> int:
             jobs = finished_jobs(page_db.load(a.dump), listener.get("chat") or "")
         except Exception:  # noqa: BLE001  not a dump: no finished jobs known, the days rule holds
             jobs = {}
+    import app_model
+    now = app_model.parse_time(a.now) if a.now else None
+    if now is None and not a.today:
+        now = dt.datetime.now(dt.timezone.utc)
+    elif now is not None and not a.today:
+        today = now.date()
     got = plan(listed + extra, tasks, details(_pages(a.details)), reg,
                listener, app_listen.this_chat(a.chat), repo, today,
-               _campaign_chats(), unmerged(), done, jobs)
+               _campaign_chats(), unmerged(), done, jobs, now=now, on_github=on_github())
     if got["ask"]:
         print("tidy: read these chats first, each with get_session, and run this again with "
               "--details <each file>: " + " ".join(got["ask"]))
@@ -881,11 +969,13 @@ def run_done(ids: list[str], titles: dict, today: str) -> str:
 
 
 def close(sid: str, work: str, db: dict, info: dict, listener: dict, this_chat: str,
-          repo: str, branches: set[str] | None) -> tuple[str, str]:
+          repo: str, branches: set[str] | None,
+          github: set[str] | None = None) -> tuple[str, str]:
     """A big job's chat that reported back: ("archive", its title) when it is one of the app's
     own job chats on this copy, its job (and every item claimed with it) has ended and its
     work is on master; else ("keep", why). `info` is get_session's record of that chat, so the
-    title judged and recorded is the one it has now."""
+    title judged and recorded is the one it has now. Still running is expected: its report is
+    the last thing it does. `github`: every branch GitHub holds (on_github)."""
     import page_db
     d = info.get(sid) or {}
     title = str(d.get("title") or "").strip()
@@ -911,6 +1001,9 @@ def close(sid: str, work: str, db: dict, info: dict, listener: dict, this_chat: 
     left = [b for b in own if branches is not None and b in branches]
     if left:
         return "keep", "its work is not on master yet (" + ", ".join(left) + ")"
+    local = [b for b in own if github is not None and b not in github]
+    if local:
+        return "keep", "its work is not on GitHub yet (" + ", ".join(local) + ")"
     return "archive", title
 
 
@@ -922,7 +1015,7 @@ def run_close(a) -> int:
     except Exception:  # noqa: BLE001  no dump: nothing can be judged
         db = {}
     what, said = close(a.id, a.work, db, details(_pages(a.details)), _listener(a.dump),
-                       app_listen.this_chat(a.chat), _repo(), unmerged())
+                       app_listen.this_chat(a.chat), _repo(), unmerged(), on_github())
     if what != "archive":
         print(f"keep {a.id}: {said}. Leave it: the daily tidy-up puts it away once it can. "
               "Say nothing about it.")
@@ -948,6 +1041,7 @@ def main(argv: list[str]) -> int:
     p.add_argument("--details", action="append", default=[])
     p.add_argument("--chat", default="")
     p.add_argument("--today", default="")
+    p.add_argument("--now", default="")
     p.add_argument("--verbose", action="store_true")
     o = sub.add_parser("done")
     o.add_argument("ids", nargs="*")

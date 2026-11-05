@@ -103,11 +103,13 @@ day's check is five steps, before anything else:
      the end of the session, never at the start, **each as its short plain question first**,
      as the sync prints it (the page asks them as To do cards). Detail comes only after a yes
      (its steps) or a "why?" (one sentence), both in `profile_upgrades.py --plan`; a no gets
-     one line, "No problem, I'll ask again in a month.", and `--no <id>` records it. Never
-     paste a long block, an id, a version number or the word "upgrade". Write each answer
-     where its marker was and commit it. The rest wait for the next session. A no to any
-     question is for now, never for ever: `--no <id>` keeps it, dated, and it comes back when
-     the question changes or after `REASK_DAYS`; a setting the person kept over a new way
+     one line, "No problem, I'll ask again in a month.", and `python3
+     tools/profile_upgrades.py --no <id>` records it (the whole command: never `--no` alone).
+     Never paste a long block, an id, a version number or the word "upgrade". Write each
+     answer where its marker was and commit it. The rest wait for the next session. A no to
+     any question is for now, never for ever: `profile_upgrades.py --no <id>` keeps it, dated,
+     and it comes back when the question changes or after `REASK_DAYS`; a setting the person
+     kept over a new way
      (`learned.py offer`) is offered again after 30 days, saying when it was kept.
    If the sync printed nothing about upgrades (its first run after this arrived is the old
    copy), run `python3 tools/profile_upgrades.py` yourself and do the same.

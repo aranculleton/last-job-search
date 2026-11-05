@@ -2193,7 +2193,11 @@ def block(rows: list[tuple[Upgrade, str]]) -> str:
                  + ("give one line per change it made, then " if alone else "")
                  + "ask at most three questions, each as written, short and alone. Only a yes "
                  "brings its steps and only \"why?\" its reason (`--plan` has both); a no gets "
-                 f"\"{NO_REPLY}\", and `--no <id>` records it.")
+                 # The whole command: printed under the sync's own output, `--no <id>` alone
+                 # read as a flag of sync_app.py and failed (the maintainer's live run,
+                 # 2026-11-05).
+                 f"\"{NO_REPLY}\", and `python3 tools/profile_upgrades.py --no <id>` records "
+                 "it.")
     return "\n".join(lines)
 
 

@@ -226,6 +226,21 @@ make sense to somebody whose repo just received it.
   the sign-in when you choose. Profiles are read one after another in a single tab of Claude's
   browser, and someone whose page did not load is tried again the next day, or straight away
   with Read them, rather than every time the page opens.
+- **Claude never puts away a chat that is still working.** The tidy-up could name one of
+  Claude's older chats that was still running, had been used minutes before, held work not
+  yet saved, or had a reminder still to fire into it. Such a chat is now left until it is
+  idle and its work is saved, and your morning brief stays where it runs meanwhile.
+- **A new helper's first update of your page lands.** It read an old part of your page, so
+  everything it wrote was turned away. It reads the right part now, and if it has not read
+  it, it writes nothing and says so.
+- **A new helper no longer hands over minutes after it starts.** Putting an update on your
+  page means reading all of the page's code, and that counted as the chat growing too long.
+  It no longer counts.
+- **The chat looking after your page says one thing when it starts.** It was told both to
+  ask you questions at the end of its reply and to say only that it was ready. Its questions
+  now go on your page as To do cards.
+- **Saying no to one of Claude's questions about an improvement is recorded.** The command
+  for it was given in part, and failed.
 - **A finished chat no longer comes back to your list.** An interview prep's chat could be put
   away one day and brought back the next, taken for a chat of your own. Claude now keeps each
   chat's real name when it puts it away, and puts away again any of its chats brought back
