@@ -135,7 +135,8 @@ def test_a_draft_is_downloaded_marked_applied_and_its_follow_up_is_done_from_to_
     nxt["due"].append({"id": "due-ellerwick-follow", "kind": "follow_up", "title": "Follow up with Ellerwick Trust", "due": "2026-10-25", "overdue_days": 0,
                        "action": "work:follow_up", "application": "app-ellerwick-insight", "done": {"action": "due.done", "label": "Done"}, "rev": "d9"})
     got = _go(run, tmp_path, [
-        {"hash": "drafts", "click": "Get both files: Morgan_Ellis_CV_Ellerwick.pdf and Morgan_Ellis_Cover_Letter_Ellerwick.pdf", "calls": "downloads"},
+        # Its suggestion stands, so its files wait under its More (the card's budget, 2026-11-05).
+        {"hash": "drafts", "more": "app-ellerwick-insight", "click": "Get both files: Morgan_Ellis_CV_Ellerwick.pdf and Morgan_Ellis_Cover_Letter_Ellerwick.pdf", "calls": "downloads"},
         {"click": "I have applied: Ellerwick Trust, Research Analyst", "receipts": True, "view": {"ready": nxt["ready"], "due": nxt["due"]}},
         {"hash": "todo", "read": '[data-item="due-ellerwick-follow"]'},
         {"click": "Done: Follow up with Ellerwick Trust"},

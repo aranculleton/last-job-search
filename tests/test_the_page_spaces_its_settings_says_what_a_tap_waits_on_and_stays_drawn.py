@@ -367,7 +367,9 @@ def test_a_card_being_changed_says_so(run, tmp_path):
             " return g ? g.textContent : null; })()")
     got = _go(run, tmp_path, [{"hash": "contacts", "eval": look}], WIDE, model=m, seed=dict(HEARD, **{"work/tweak~m1": work}), clock=T)
     line = got["after"][0]["eval"]
-    assert line and line.startswith("Claude changes this next") and "See it" in line, line
+    # Said in Claude's work words with Cancel (the review, 2026-11-05: "See it" alone had no way
+    # to call it off).
+    assert line and line.strip().startswith("Claude changes this next") and "Cancel" in line, line
 
 
 def test_a_refused_tap_with_nothing_asked_still_has_a_way_out(run, tmp_path):

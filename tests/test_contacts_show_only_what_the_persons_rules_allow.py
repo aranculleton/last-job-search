@@ -392,6 +392,8 @@ def test_counts_are_one_number_each_agreeing_with_to_do(model):
     reply_rows = {d["item"] for d in model["due"] if d["kind"] == "reply"}
     replies = {p["id"] for p in model["people"] if (p["owed"] or {}).get("reply")}
     assert replies == reply_rows and pc["replies"] == len(replies)
+    # Who needs you is one meaning everywhere (app_model.NEEDS_YOU): a reply, a thank-you or a
+    # call owed; the follow-ups are counted apart (the maintainer, 2026-11-04).
     assert pc["need"] == sum(1 for p in model["people"] if p["group"] == "now")
 
 
@@ -557,7 +559,9 @@ def test_their_reply_logged_turns_the_row_at_once_and_let_it_go_is_in_the_bin(ru
         {"hash": "contacts", "read": "#main [data-item=\"zo_rendle\"]"}])
     assert not got["errors"], got["errors"]
     corwin = got["after"][2]["text"]
-    assert "Replied: your turn" in corwin and "Waiting for Claude" in corwin, corwin
+    # His turn became yours at once, and his reply is asked for: the state says so, never
+    # "Replied: your turn" over a reply Claude has in hand (the review, 2026-11-05).
+    assert "Reply asked for" in corwin and "Replied: your turn" not in corwin and "Waiting for Claude" in corwin, corwin
     assert "Draft the follow-up" not in corwin and "They replied\n" not in corwin, corwin
     acts = {a["action"] for a in got["actions"]}
     assert {"msg.received", "person.status"} <= acts, acts
@@ -753,6 +757,30 @@ def crowd(tmp_path_factory):
         with open(path, "w", encoding="utf-8") as fh:
             fh.write("Thanks, that would be great. Does Thursday at ten work for a call?\n")
     return b
+
+
+def test_at_scale_to_do_and_contacts_count_who_needs_you_the_same(crowd):
+    """To do said "1284 more people who need you are in Contacts" counting every row it left
+    off, a follow-up among them, while Contacts said "1279 need you" counting replies alone
+    (the review, 2026-11-05): both count who needs you one way (app_model.NEEDS_YOU), so the
+    people To do lists and the ones it says are in Contacts add up to Contacts' number, and the
+    follow-ups it left off are said apart, as Contacts says them."""
+    import re
+    m = crowd.model()
+    pc = m["people_count"]
+    need = {p["id"] for p in m["people"] if p["group"] == "now"}
+    could = {p["id"] for p in m["people"] if p["group"] == "follow"}
+    assert pc["need"] == len(need) >= 140 and len(could) >= 100, (pc, len(need), len(could))
+    hidden = next(d for d in m["due"] if d["kind"] == "hidden")
+    said = re.search(r"(\d+) more (?:person who needs|people who need) you", hidden["title"])
+    ups = re.search(r"(\d+) (?:more )?follow-ups? you could send", hidden["title"])
+    assert said and ups, hidden["title"]
+    # On To do: a row of their own, or their message on its "Messages to send" card.
+    listed = {p["id"] for p in m["people"] for d in m["due"]
+              if d["kind"] not in ("hidden", "withdraw") and (d.get("contact") == p["id"] or d.get("item") == p["id"])}
+    listed |= {x["contact"] for x in m["messages"] if x["id"] in m["to_send"]["ids"]}
+    assert int(said.group(1)) == len(need - listed), (hidden["title"], len(need), len(need & listed))
+    assert int(ups.group(1)) == len(could - listed), (hidden["title"], len(could), len(could & listed))
 
 
 def test_at_scale_the_counts_are_the_engines_and_a_message_past_five_opens(run, crowd):

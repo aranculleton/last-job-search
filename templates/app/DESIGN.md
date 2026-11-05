@@ -143,7 +143,8 @@ tests, `tests/test_contacts_is_one_page_with_each_persons_draft.py`)
 - On the card's face only what is done every time: the name, its state, the trash; one line
   of facts, the latest exchange only ("You wrote 2 Nov", "They replied 3 Nov"; when you
   first wrote and how many messages each way, the engine's `exchange`, are on their page), with
-  "Overdue" in the corner only when a follow-up or the message is late; the draft with Copy
+  "Overdue" in the corner only when something owed to them is late, by the engine's one late
+  (standing's `late`, as To do's); the draft with Copy
   and the pencil in its corner (a subject's Copy an icon at its line's end); then one row of
   pills: one filled (I sent it once copied, or the one owed step), at most two soft ones
   ("They replied"), and More. With a message on the card, "They replied" waits under More.
@@ -196,6 +197,10 @@ tests, `tests/test_contacts_is_one_page_with_each_persons_draft.py`)
   for a week, and "1 hidden this week: Show" at the end of To do brings it back, as "1 set
   aside: Show" does in Jobs). "I have applied" is under a job's More and on a draft's face,
   never in the trash as well.
+- Tomorrow and Next week put a dated row off to that day in the engine: put off is never done.
+  It leaves To do with "1 put off: Show" at its end, never under Done today nor in "x of N
+  done", and its person's card in Contacts says "Put off until <day>" with nothing owed on its
+  face. (reviewer's walk test)
 - A reason that changes something says so when it is given ("Set aside. Fewer jobs outside
   your field from now on.").
 - A card or a row the person has finished (binned, sent, answered, done, closed, no more
@@ -219,7 +224,8 @@ tests, `tests/test_contacts_is_one_page_with_each_persons_draft.py`)
   the app do it by itself (then it does, and says so)? Can it merge with another (one
   control)? Only then, where it lives: the card (the next step and at most two others), the
   pencil, the trash's choices, or More (rare). A card's budget is one filled pill, two soft
-  pills, the pencil, the trash, and the gauge where Claude wakes; more means a step above was
+  pills, the pencil, the trash, and the gauge where Claude wakes, its grey box's pills counted
+  among them: past it, the row's others go under More; more means a step above was
   skipped. Settings gets no new option for it: a default that suits nearly everyone is the
   setting. (the maintainer, 2026-11-05: "we also don't want to clutter the page with buttons
   and options and configurations by doing this, so be very smart about it"; action-row test)
@@ -240,7 +246,8 @@ tests, `tests/test_contacts_is_one_page_with_each_persons_draft.py`)
 - Text on a pill reads at 4.5:1 and a soft pill's edge at 3:1 against its card, in both looks;
   every control shows its focus ring. (colour tests, layout 14)
 - On a phone everything is drawn small with a full-size tap area (44px), and hover styles
-  apply only on devices that hover, so nothing needs two taps. (target probe, layout 14)
+  apply only on devices that hover, so nothing needs two taps. A switch or a checkbox is reached
+  through its whole row, its label. (target probe, layout 14)
 - Three sizes: Smaller, Standard (the default), Larger.
 
 ## Colour, type and space

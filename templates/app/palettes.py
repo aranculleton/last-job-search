@@ -178,6 +178,7 @@ def pairs() -> list:
         out += [("focus", s, 3.0, "focus ring"), ("mark", s, 3.0, "bars, the selected tab, a link's underline")]
     out += [("ink", "raised", 4.5, "a button or chip"), ("ink", "raised-hover", 4.5, "a button, hovered"),
             ("line-strong", "bg", 3.0, "input and control borders"), ("line-strong", "surface", 3.0, "input and control borders"),
+            ("muted", "st-running-bg", 3.0, "a soft pill's edge in a card's suggestion box"),
             ("link-line", "surface", 3.0, "a link's underline"), ("link-line", "bg", 3.0, "a link's underline"),
             ("ink", "accent-soft", 4.5, "the current section in the list"), ("accent-ink", "accent", 4.5, "text on a filled button"),
             ("accent-ink", "accent-hover", 4.5, "text on a filled button, hovered"), ("surface", "ink", 4.5, "a pressed filter"),

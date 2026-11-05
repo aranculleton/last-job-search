@@ -205,6 +205,27 @@ def test_every_rule_reads_as_one_sentence_with_what_it_left_out(state, profile):
     assert learned[0]["set_on"] == "2026-06-01"
 
 
+def test_your_rules_say_a_country_wide_search_as_remote_and_every_cut_has_its_row(state):
+    """Your rules said "You search in Manchester, Salford, Stockport and United Kingdom", the
+    country-wide remote search read as one more town, and summed fewer left out than Jobs said,
+    the qualification cut having no row (the review, 2026-11-05): the country is remote work
+    anywhere in it, said apart from the towns, and every kind of cut has its row, so Your
+    rules adds up to Jobs' own count."""
+    person.reset()
+    _left(state)
+    rows = rules_view.your_rules(TODAY, {})
+    by = {r["id"]: r for r in rows}
+    assert by["rule~places"]["sentence"] == (
+        "You search in Manchester, Salford and Stockport, and for remote work anywhere in the "
+        "United Kingdom; an on-site role anywhere else is left out."), by["rule~places"]["sentence"]
+    jobs = app_model._jobs(app_model.Ctx(TODAY, NOW), {})
+    lately = rules_view.recent(TODAY)
+    said = sum(r["left_out"] or 0 for r in rows if r["kind"] != "declined")
+    said += lately.get("declined", {}).get("n", 0) if any(r["kind"] == "declined" for r in rows) else 0
+    assert said == jobs["filtered"]["count"] == sum(v["n"] for v in lately.values()), (
+        said, jobs["filtered"]["count"], {k: v["n"] for k, v in lately.items()}, [(r["kind"], r["left_out"]) for r in rows])
+
+
 def test_an_old_busy_rule_asks_still_right_quietly_once_a_month(state, profile):
     _left(state)
     rules_view.note_set("rule~roles", "only analyst roles", "2026-06-01")

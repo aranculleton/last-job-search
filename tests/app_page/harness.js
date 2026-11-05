@@ -389,6 +389,29 @@ function targetsProbe() {
     const inline = getComputedStyle(el).display === "inline-block" && !!el.closest("p, li, h3, h4") && el.tagName !== "BUTTON" || (el.matches(".btn.link") && !!el.closest("p"));
     if (hgt < 43.5 || (wid < 43.5 && !inline)) small.push(el.tagName.toLowerCase() + "." + String(el.className).split(" ").join(".") + " \"" + (el.textContent || "").trim().slice(0, 30) + "\" " + Math.round(wid) + "x" + Math.round(hgt));
   }
+  // A checkbox or a radio is reached through its label: the whole row it sits in, when that
+  // label holds it or names it, is its target. It was skipped altogether, so a 20px box beside an
+  // 18px label passed (the review, 2026-11-05: Settings' "Tips now and then", the job sites).
+  const z = parseFloat(getComputedStyle(document.body).zoom) || 1;
+  const reach = (v) => Math.max(0, -(parseFloat(v) || 0)) * z;
+  const size = (el) => {
+    const r = el.__drawnRect();
+    const pa = getComputedStyle(el, "::after");
+    const on = pa.content && pa.content !== "none" && pa.position === "absolute";
+    return {w: r.width + (on ? reach(pa.left) + reach(pa.right) : 0), h: r.height + (on ? reach(pa.top) + reach(pa.bottom) : 0)};
+  };
+  for (const el of document.querySelectorAll("input[type=checkbox], input[type=radio]")) {
+    if (el.closest(".sr-only")) continue;
+    const lab = el.closest("label") || (el.id ? document.querySelector('label[for="' + (window.CSS && CSS.escape ? CSS.escape(el.id) : el.id) + '"]') : null);
+    // A label the first pass measured already (a pick, a choice, a look) is its target there.
+    if (lab && lab.matches(sel)) continue;
+    const box = lab && shown(lab) ? lab : shown(el) ? el : null;
+    if (!box) continue;
+    const r = size(box);
+    const own = shown(el) ? size(el) : {w: 0, h: 0};
+    const hgt = Math.max(r.h, own.h), wid = Math.max(r.w, own.w);
+    if (hgt < 43.5 || wid < 43.5) small.push("input[" + el.type + "] \"" + ((lab && lab.textContent) || el.getAttribute("aria-label") || "").trim().slice(0, 30) + "\" " + Math.round(wid) + "x" + Math.round(hgt));
+  }
   return small;
 }
 
@@ -1322,6 +1345,7 @@ S.draft = async (a) => {
   r.calls = (await calls(page)).filter((c) => c.cap === "comments" || c.cap === "room");
   r.doorbell = store.get("meta/doorbell");
   r.chip = await page.$eval('#main .card.job[aria-labelledby="job-r12-1"] .state-word', (x) => x.textContent).catch(() => null);
+  r.line = await page.$eval('#main .card.job[aria-labelledby="job-r12-1"] .work-inline', (x) => x.innerText).catch(() => null);
   r.pill = await one(page, "#pill");
   r.pageErrors = o.errors;
   if (a.shot) r.shot = await shot(page, a.shot);
@@ -1812,7 +1836,11 @@ S.downloads = async (a) => {
   const o = await open({html: a.html, hash: "drafts", fake: a.fake});
   const {page, store} = o;
   const r = {};
-  await page.getByRole("button", {name: "Get both files: Morgan_Ellis_CV_Ellerwick.pdf and Morgan_Ellis_Cover_Letter_Ellerwick.pdf"}).click();
+  // Its suggestion is decided first: while it stands, the files wait under its More, the card
+  // keeping to one filled pill and two soft ones (the review, 2026-11-05).
+  const both = page.getByRole("button", {name: "Get both files: Morgan_Ellis_CV_Ellerwick.pdf and Morgan_Ellis_Cover_Letter_Ellerwick.pdf"});
+  if (!(await both.isVisible().catch(() => false))) await openMore(page, "app-ellerwick-insight");
+  await both.click();
   await page.waitForTimeout(200);
   await turn(page, 8);
   r.saves = (await calls(page)).filter((c) => c.cap === "downloads");

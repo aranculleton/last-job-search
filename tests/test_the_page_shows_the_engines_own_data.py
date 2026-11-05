@@ -247,7 +247,10 @@ def test_every_section_shows_the_engines_items_in_plain_words(run, built):
     # Files not on the page yet are Claude's to put there by itself (the view queues them,
     # 2026-11-05): no "Get my files ready" to tap, and nothing about files until they are there.
     assert "Get my files ready" not in kestrel and "files are not on this page yet" not in t["drafts"], "nothing to tap for what Claude does"
-    assert "Replied: your turn" in t["contacts"], "every status the contact book holds has words"
+    # Every status the contact book holds has words; a reply that is late says Overdue in its
+    # corner, by the engine's one late, as To do does (the review, 2026-11-05).
+    assert ("Replied: your turn" in t["contacts"] or "Overdue" in t["contacts"]) and "replied_needs_response" not in t["contacts"], \
+        "every status the contact book holds has words"
     assert "Panel interview: Thornbury Bank" in t["interviews"]    # Coming up, by day (4.6)
     assert "1 earlier, finished: Show" in t["progress"]
 

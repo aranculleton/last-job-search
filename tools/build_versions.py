@@ -373,8 +373,9 @@ METHODS: dict[str, dict] = {
             (72, "2026-11-05", False, "the run book names the whole command that records a no to an improvement's question, python3 tools/profile_upgrades.py --no <id>, never --no alone"),
             (73, "2026-11-05", False, "a computer with no LaTeX leaves unsent applications as they are and tries again later, and a compile that fails puts the earlier PDF back; a skill whose reworded bullet the model audit removed or refused stays on the skills line with a note, never demanded again; a yes reaches every unsent resume waiting on it, whatever day it was drafted; the run book's round needs no folder named; documents render and are checked as before, so nothing made before needs making again"),
             (74, "2026-11-05", False, "a form's own questions (why us, why this role, a time you used a tool) are answered from your profile and the posting and kept with the application in its screening_answers.md (tools/form_answers.py), an example you asked for marked as a draft for you to confirm; the resume and the letter are never changed by it"),
+            (75, "2026-11-05", False, "the page's colour pairs (templates/app/palettes.py) hold a soft button's edge in a card's suggestion box; no document is made differently"),
         ),
-        "fingerprint": "7c699b4972d593ff",
+        "fingerprint": "45cd506560bcfbbb",
     },
     "interview": {
         "by": "upgrade", "priority": 2, "applies": "live_interviews", "time": "~15 min",
@@ -766,8 +767,9 @@ METHODS: dict[str, dict] = {
             (36, "2026-11-05", False, "the Jobs count beside the menu is read aloud as jobs to apply, the list it counts"),
             (37, "2026-11-05", True, "the word a person reads is trash, never bin, in the page's help and its tips"),
             (38, "2026-11-05", False, "one way to answer a quick question, with Another day? after It went"),
+            (39, "2026-11-05", True, "a job being drafted says how its draft is going with Cancel and stays in To apply; a job's question is on its own card; the Brief counts drafts being made apart; put off is not done; who needs you is one count; follow-ups on applications are one card; every control that wakes Claude shows its gauge and every card keeps to its budget; switches are whole-row taps; the foot keeps to the column"),
         ),
-        "fingerprint": "1fa29af2fe4c9e93",
+        "fingerprint": "b06b8774e7492644",
     },
     "upskill": {
         "by": "upgrade", "priority": 4, "applies": "upskill_plans", "time": "~10 min",
