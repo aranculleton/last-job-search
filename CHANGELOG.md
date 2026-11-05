@@ -20,6 +20,8 @@ make sense to somebody whose repo just received it.
 
 ## [Unreleased]
 
+## [4.10.0] - 2026-11-05
+
 ### Added
 
 - **A calmer page that does more by itself.** Contacts is one page, with each person's draft on
