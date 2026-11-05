@@ -285,7 +285,7 @@ def test_a_row_put_off_is_not_done_and_contacts_says_it_is_put_off(run, tmp_path
         {"tick": 12000, "read": "#main"},
         {"hash": "contacts", "read": wren},
     ], PHONE, model=m)
-    before, after, card = got["after"][0]["text"], got["after"][2]["text"], got["after"][3]["text"]
+    after, card = got["after"][2]["text"], got["after"][3]["text"]
     assert "done" not in after.split("\n")[0], after.split("\n")[0]
     assert "Done today" not in after, after[-400:]
     assert "1 put off" in after, after[-400:]
