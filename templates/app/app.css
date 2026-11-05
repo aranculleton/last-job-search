@@ -1871,3 +1871,6 @@ ul.bp-news { max-width: 80ch; }
 .g-summary { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 8px; padding: 8px 12px; border-radius: var(--r); background: var(--sunk); }
 .g-summary p { margin: 0; font-weight: 600; }
 .g-state { margin: 2px 0 0; font-size: var(--t-sm); display: flex; align-items: center; gap: 4px; }
+/* Scrolled up in a conversation: one small way back to its newest message, just above the box. */
+.talk-jump { position: sticky; bottom: 96px; margin: 0 0 8px auto; display: flex; box-shadow: var(--shadow); }
+.talk-earlier-msgs { list-style: none; text-align: center; }

@@ -12012,6 +12012,11 @@
       }
     } catch (e) { /* storage refused */ }
   }
+  function buildTalkJump() {
+    talkJump = h("button", {type: "button", class: "btn secondary small talk-jump", "data-k": "talk-jump", hidden: true, "aria-label": "Go to the latest message",
+      onclick: () => toChatEnd(dockOpen && dockBox && talkBody.parentNode === dockBox ? dockBox : null)}, "Latest \u2193");
+    return talkJump;
+  }
   function buildTalk() {
     talkList = h("ol", {class: "talk-list plain", role: "log", "aria-label": "Conversation", "aria-live": "polite"});
     talkStatus = h("p", {class: "talk-status muted small"});
@@ -12039,7 +12044,7 @@
       h("p", {class: "talk-privacy muted small"}, "To answer, Claude reads what is on this page."));
     talkSum = h("p", {class: "sum"}, "Ask anything about your search.");
     talkMenu = h("div", {class: "talk-menu"});
-    talkBody = h("div", {class: "talk-body"}, talkEarlier, talkList, talkStatus, talkForm);
+    talkBody = h("div", {class: "talk-body"}, talkEarlier, talkList, talkStatus, buildTalkJump(), talkForm);
     talkEl = h("section", {class: "talk sec", id: "talk-box", "aria-labelledby": "h-chat"},
       h("header", {class: "sec-head"}, h("h2", {id: "h-chat", tabindex: "-1", class: "screen-title"}, "Chat"),
         h("div", {class: "summary with-tool"}, h("div", {class: "sum-words"}, talkSum), talkMenu)),
@@ -12140,10 +12145,32 @@
     if (!talkEl) buildTalk();
     const fk = document.activeElement && document.activeElement.dataset ? document.activeElement.dataset.k : null;
     const viewing = S.viewConv && S.viewConv !== currentConv() ? S.viewConv : null;
-    const msgs = convMessages(viewing || currentConv());
+    const all = convMessages(viewing || currentConv());
     const box = dockOpen && dockBox && talkBody.parentNode === dockBox ? dockBox : null;
-    const atEnd = box ? box.scrollHeight - box.scrollTop - box.clientHeight < 64 : false;
+    const sc = chatScroller();
+    const atEnd = S.chatStick !== false || nearEnd(sc);
+    // The last day of the conversation, as a Claude chat opens on its latest: the whole history
+    // was drawn every time (the maintainer, 2026-11-05). Earlier messages come twenty at a time,
+    // by Show or by scrolling to the top, the place kept.
+    const dayAgo = new Date(now() - DAY).toISOString();
+    let from = all.findIndex((m) => txt(m.at) >= dayAgo);
+    if (from < 0) from = all.length;
+    from = Math.max(0, Math.min(from, all.length - 6) - (S.chatBack || 0));
+    const msgs = all.slice(from);
     const items = msgs.map((m, i) => talkMsg(m, m.from === "you" && !!msgs[i + 1] && msgs[i + 1].from === "you"));
+    if (from > 0) {
+      const more = () => { const before = sc ? sc.scrollHeight : 0; const top = sc ? sc.scrollTop : 0; S.chatBack = (S.chatBack || 0) + 20; S.chatStick = false; renderChat();
+        if (sc) sc.scrollTop = top + (sc.scrollHeight - before); };
+      const row = h("li", {class: "talk-earlier-msgs fold"}, h("span", {}, plural(from, "earlier message", "earlier messages") + ": "),
+        btn("Show", more, {kind: "link", key: "talk-earlier-msgs"}));
+      items.unshift(row);
+      // Scrolled to the top, the next twenty come by themselves.
+      if (window.IntersectionObserver) {
+        if (S.chatSeer) S.chatSeer.disconnect();
+        S.chatSeer = new IntersectionObserver((es) => { if (es.some((e) => e.isIntersecting) && S.chatStick === false) more(); }, {root: box || null});
+        requestAnimationFrame(() => { if (row.isConnected) S.chatSeer.observe(row); });
+      }
+    }
     if (S.sending) items.push(h("li", {class: "talk-msg pending"}, h("p", {class: "talk-text muted"}, "Adding your pictures…")));
     if (!viewing) {
       if (S.quick.busy) items.push(h("li", {class: "talk-msg from-claude pending"}, h("p", {class: "talk-who"}, "Claude"), h("p", {class: "talk-text"}, S.quick.partial || "Thinking…")));
@@ -12220,8 +12247,34 @@
     talkSend.disabled = disabled || S.quick.busy;
     talkStop.hidden = !S.quick.busy;
     if (fk && !refocus(talkEl, fk)) refocus(talkBody, fk);
-    if (box && atEnd) box.scrollTop = box.scrollHeight;
+    // Kept at the newest while the person has not scrolled up, whenever new messages land; the
+    // Latest button otherwise (the maintainer, 2026-11-05: opened at the top, no way down).
+    if (atEnd && chatShownHere(box)) toChatEnd(box);
+    jumpShown();
   }
+  function chatScroller() {
+    const box = dockOpen && dockBox && talkBody && talkBody.parentNode === dockBox ? dockBox : null;
+    return box || document.scrollingElement || document.documentElement;
+  }
+  function nearEnd(sc) { return !sc || sc.scrollHeight - sc.scrollTop - sc.clientHeight < 80; }
+  function chatShownHere(box) { return !!box || S.section === "chat"; }
+  function toChatEnd(box) {
+    const sc = box || chatScroller();
+    requestAnimationFrame(() => { try { sc.scrollTop = sc.scrollHeight; } catch (e) { /* no layout */ } S.chatStick = true; jumpShown(); });
+  }
+  let talkJump = null;
+  function jumpShown() {
+    if (!talkJump) return;
+    const shown = (dockOpen || S.section === "chat") && !nearEnd(chatScroller());
+    talkJump.hidden = !shown;
+  }
+  // The person's own scroll decides: up from the end lets go of it, back down holds it again.
+  function onChatScroll() {
+    if (!(dockOpen || S.section === "chat")) return;
+    S.chatStick = nearEnd(chatScroller());
+    jumpShown();
+  }
+  window.addEventListener("scroll", onChatScroll, {passive: true});
   function endPractice() {
     const m = S.quick.mode;
     if (!m) return;
@@ -12732,7 +12785,7 @@
   let dockBackTo = null;
   function chatShown() { return S.section === "chat" || (S.split === "chat" && S.section !== "chat" && wide()); }
   function buildDock() {
-    dockBox = h("div", {class: "dock-body"});
+    dockBox = h("div", {class: "dock-body", onscroll: onChatScroll});
     dockEl = h("section", {class: "chat-dock", id: "chat-dock", role: "dialog", "aria-modal": "false", "aria-labelledby": "h-dock", hidden: true,
       onkeydown: (e) => { if (e.key === "Escape" && !e.defaultPrevented) { e.preventDefault(); e.stopPropagation(); closeDock(true); } }},
       h("div", {class: "dock-top"}, h("h2", {id: "h-dock", class: "dock-title", tabindex: "-1"}, "Chat"),
@@ -12774,7 +12827,7 @@
     // (2026-11-03: on a phone the latest message sat two screens down). A move to Chat places it
     // in the same turn (go, after its scroll to the top); anything else a frame later, once
     // drawn (placeChat).
-    if (shown && !S.chatWasShown && talkForm) { S.chatPlace = true; S.chatPlacedAt = null; requestAnimationFrame(() => placeChat(true)); }
+    if (shown && !S.chatWasShown && talkForm) { S.chatPlace = true; S.chatPlacedAt = null; S.chatStick = true; S.chatBack = 0; requestAnimationFrame(() => placeChat(true)); }
     S.chatWasShown = shown;
     // Seen: the Chat tab's dot goes once its newest answer has been on screen.
     if (shown && lastAnswerAt() && lastAnswerAt() !== txt(pref("chat:seen", ""))) setPref("chat:seen", lastAnswerAt());

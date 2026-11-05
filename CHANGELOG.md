@@ -71,6 +71,9 @@ make sense to somebody whose repo just received it.
   and the same tidy puts older days in order from the download on file.
 - **Web addresses no longer fill the Brief's news**: each is a short link named by its site.
 - **Jobs has a search box beside Filter**, as Contacts does, once the list is long.
+- **Chat opens on its newest message.** It stays there as answers come in until you scroll up,
+  a Latest button takes you back down, and it shows the last day, with earlier messages loading
+  as you scroll up.
 - **Several things at once read at a glance.** Drafting a batch shows one line on its card
   ("Drafting 9: 1 being written, 8 in line") with one Cancel all, and each person a word; finished
   answers are one card in Claude's work. A message sent while Claude is answering the last one
