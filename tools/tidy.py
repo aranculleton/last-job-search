@@ -107,6 +107,15 @@ def person_started(s: dict) -> bool:
 # a day; after that the daily tidy-up has it.
 RETIRE_AGAIN_S = 30 * 60
 RETIRE_FOR_S = 24 * 3600
+# What keeps an old helper only for now: once it has finished, the live helper's own check-in,
+# a scheduled one, puts it away. Nothing rang the live helper again, so two "(finishing up)"
+# chats stayed until the next morning (the maintainer's live run, 2026-11-05).
+FOR_NOW = ("it was in use moments ago", "it is running", "they used it in the last hour",
+           "its work is not on master yet", "its work is not on GitHub yet")
+RECHECK_MIN = 31
+RECHECK = ("Scheduled check-in, after the hand-over: check in on the page as when it rings "
+           "(the app skill) and do the tidy-up it prints, so the helper this chat took the page "
+           "over from is put away once it has finished. Ask nobody and say nothing about it.")
 # An old helper used this lately is still in use: kept until a later check-in.
 RECENT_S = 10 * 60
 RUN_TITLE = "⚡ Job search: a scheduled run"
@@ -258,8 +267,37 @@ def _mark_checked(today: str, now: str = "") -> None:
     if not path:
         return
     at = now or dt.datetime.now(dt.timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
+    keep = {k: v for k, v in _checked().items() if k == "recheck"}
     with open(path, "w", encoding="utf-8", newline="\n") as fh:
-        json.dump({"checked": today, "at": at, "sweep": SWEEP}, fh)
+        json.dump({"checked": today, "at": at, "sweep": SWEEP, **keep}, fh)
+        fh.write("\n")
+
+
+def _checked() -> dict:
+    path = _checked_path()
+    try:
+        with open(path, encoding="utf-8") as fh:
+            got = json.load(fh)
+        return got if isinstance(got, dict) else {}
+    except (OSError, ValueError, TypeError):
+        return {}
+
+
+def recheck_due(now: dt.datetime) -> bool:
+    """No check-in asked for in the last half hour: one at a time, never a pile of them."""
+    import app_model
+    last = app_model.parse_time(_checked().get("recheck"))
+    return last is None or (now - last).total_seconds() >= RETIRE_AGAIN_S - 60
+
+
+def mark_recheck(now: dt.datetime) -> None:
+    path = _checked_path()
+    if not path:
+        return
+    got = _checked()
+    got["recheck"] = now.strftime("%Y-%m-%dT%H:%M:%SZ")
+    with open(path, "w", encoding="utf-8", newline="\n") as fh:
+        json.dump(got, fh)
         fh.write("\n")
 
 
@@ -698,6 +736,12 @@ def plan(chats: list[dict], triggers: list[dict], info: dict, reg: dict, listene
     if rchat in moved_from and rchat in listed and not any(a["id"] == rchat for a in out["archive"]):
         out["moves"] = []                             # its chat is kept: the round stays put
     out["ask"] = list(dict.fromkeys(out["ask"]))
+    # Run by the live helper within a day of its hand-over, with an old helper kept only for
+    # now: it asks for its own check-in, as nothing else may ring it before tomorrow's brief.
+    took = _after(now.strftime("%Y-%m-%dT%H:%M:%SZ"), listener.get("since")) and \
+        _ago_s(listener.get("since"), now) < RETIRE_FOR_S
+    out["recheck"] = bool(this_chat and this_chat == helper and took and not out["ask"] and any(
+        k["id"] in old_helpers and k["why"].startswith(FOR_NOW) for k in out["keep"]))
     if out["ask"]:
         out["brief"] = []                             # decided once every chat is read
         out["moves"] = []
@@ -944,6 +988,12 @@ def run_plan(a) -> int:
               f"{more} (all of them: {ids}); commit it")
     else:
         print("tidy: nothing to tidy. python3 tools/tidy.py done")
+    stamp = now or dt.datetime.combine(today, dt.time(12), tzinfo=dt.timezone.utc)
+    if got.get("recheck") and recheck_due(stamp):
+        mark_recheck(stamp)
+        print(f"check-in: send_later {json.dumps({'delay_minutes': RECHECK_MIN, 'message': RECHECK})} "
+              "(once, asking nobody; the helper this chat took over from is still finishing, and "
+              "it is put away at that check-in)")
     if a.verbose:
         for c in got["keep"]:
             print(f"keep {c['id']}: {c['title']} ({c['why']})")

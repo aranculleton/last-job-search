@@ -469,3 +469,25 @@ def test_a_brief_left_in_the_helper_a_hand_over_replaced_moves_and_that_helper_g
     # Used moments ago, it is kept, and so is the brief in it, until a later tidy-up.
     soon = _live_run(LIVE, now=dt.datetime(2026, 11, 5, 8, 50, tzinfo=dt.timezone.utc))
     assert OLD not in {c["id"] for c in soon["archive"]} and soon["brief"] == []
+
+
+def test_the_live_helper_asks_for_its_own_check_in_while_the_old_one_finishes(copy):
+    """After two hand-overs in an hour, both "(finishing up)" chats stayed until the next
+    morning: the new helper's first tidy-up kept each while it was still finishing, and nothing
+    rang the new helper again (the maintainer's live run, 2026-11-05). Run by the live helper
+    within a day of its hand-over, with an old helper kept only for now, the tidy-up asks for a
+    check-in half an hour on, one at a time; from any other chat, a day on, or with nothing
+    kept for now, it asks for none."""
+    soon = dt.datetime(2026, 11, 5, 8, 50, tzinfo=dt.timezone.utc)
+    assert _live_run(LIVE, now=soon)["recheck"] is True          # the old one used moments ago
+    assert _live_run(OWN, now=soon)["recheck"] is False          # not the live helper
+    assert _live_run(LIVE)["recheck"] is False                   # the old one put away instead
+    later = dt.datetime(2026, 11, 6, 8, 50, tzinfo=dt.timezone.utc)
+    assert _live_run(LIVE, now=later)["recheck"] is False        # a day on: the daily tidy-up
+    assert tidy.recheck_due(soon)
+    tidy.mark_recheck(soon)
+    assert not tidy.recheck_due(soon + dt.timedelta(minutes=10))
+    assert tidy.recheck_due(soon + dt.timedelta(minutes=31))
+    tidy._mark_checked("2026-11-05")                             # the day's mark keeps it
+    assert not tidy.recheck_due(soon + dt.timedelta(minutes=10))
+    assert tidy.RECHECK_MIN * 60 >= tidy.RETIRE_AGAIN_S          # due again by the check-in
