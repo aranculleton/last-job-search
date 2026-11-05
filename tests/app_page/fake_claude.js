@@ -255,6 +255,8 @@
     if (br.declined) throw Object.assign(new Error("declined"), {code: "not_in_manifest"});
     if ((tool === "navigate" || tool === "preview_start") && !(input && input.url)) throw Object.assign(new Error("url is required"), {code: "tool_error"});
     if (tool === "preview_start") return {payload: {tabId: 7}};
+    // The person closes Claude's browser as a profile starts to load (`closeOnProfile`).
+    if (tool === "navigate" && br.closeOnProfile && /\/in\//.test(input.url)) throw Object.assign(new Error("the tab was closed"), {code: "tool_error"});
     if (tool === "navigate") return {payload: {ok: true}};
     if (tool === "get_page_text" || tool === "read_page") {
       // As the real browser gives it (seen live, 2026-10-29): a header naming the page, then

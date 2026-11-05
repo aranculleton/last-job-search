@@ -28,6 +28,12 @@ make sense to somebody whose repo just received it.
 
 ### Fixed
 
+- **Claude's browser no longer opens a LinkedIn profile every time you come back to the page.**
+  Each opening started reading whoever was waiting, and when you closed Claude's browser (or
+  left the page) the read stopped unfinished, was never remembered, and started again at the
+  next opening. Now a read that does not finish stops automatic reading until the next day;
+  "Read them" on its card still reads at once, and a step Claude's browser never answers gives
+  up after a minute and a half instead of spinning.
 - **More stays beside the card's other buttons when you open it.** Opened, it jumped below "I
   sent it" and took the whole width; now it stays where it was and its choices open under the
   row, on every card. Its buttons are one row that wraps only when the screen is too narrow,

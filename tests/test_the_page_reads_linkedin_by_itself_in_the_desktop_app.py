@@ -208,6 +208,36 @@ def test_a_profile_read_today_is_not_read_again_at_the_next_opening(run, queued)
     assert went and all("example-person-two" in u for u in went), went
 
 
+def _profiles(calls):
+    return [c["input"]["url"] for c in calls if c["tool"] == "navigate" and "/in/" in c["input"].get("url", "")]
+
+
+def test_a_read_cut_short_holds_every_automatic_read_until_tomorrow(run, queued):
+    """The maintainer, 2026-11-05, over several versions: back on the pinned page, "Reading
+    someone's profile, 0 of 4" and their LinkedIn opened in Claude's browser, which they closed at
+    once, every time. Only a finished read was remembered, so each opening started the same one
+    again. Cut short, nothing more opens by itself that day, at any opening; the next day it
+    reads, and Read them waits on its card meanwhile."""
+    html, seed = queued
+    r = run("reading", html=html, seed=seed, signedIn=True, closeOnProfile=True, noStorage=True, clock=SAME_DAY,
+            again=[{"clock": LATER, "backFrom": True}, {"clock": NEXT_DAY}])
+    assert all(d["at"] >= NEXT_DAY[:10] for d in _did(r, "reading.done")), _did(r, "reading.done")
+    assert _profiles(r["browser"]), r["browser"]
+    assert _profiles(r["again0"]["browser"]) == [], r["again0"]["browser"]
+    assert "reading-queue" in r["again0"]["cards"], r["again0"]["cards"]
+    assert _profiles(r["again1"]["browser"]), r["again1"]["browser"]
+
+
+def test_an_opening_that_went_mid_read_holds_them_and_read_them_still_reads(run, queued):
+    """The page left while a read ran (its run never finished): the next opening that day loads
+    no profile by itself, and the person's own Read them still reads at once."""
+    html, seed = queued
+    seed = dict(seed, **{"meta/reads": {"day": "2026-10-25", "running": True, "cut": False}})
+    r = run("reading", html=html, seed=seed, signedIn=True, clock=SAME_DAY, tap="read-them")
+    assert _profiles(r["browser"]) == [], r["browser"]
+    assert len(_did(r, "reading.done")) == 3 and _profiles(r["browserAll"]), r["acts"]
+
+
 def test_signed_out_half_way_it_stops_and_never_saves_the_sign_in_page(run, queued):
     html, seed = queued
     r = run("reading", html=html, seed=seed, signedIn=True, signOutAfter=1)
