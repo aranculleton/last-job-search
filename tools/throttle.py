@@ -1133,6 +1133,24 @@ def referral_holds(path: str = CONTACTS, rows: list[dict] | None = None,
     return out
 
 
+def employer_stops(k: str, blocked: dict | None = None, holds: dict | None = None) -> str:
+    """Why a posting at employer key `k` is dropped for its employer alone, or "": the one
+    rule the early filter before scoring (prefilter.already_ruled_out) and the throttle both
+    call. Only a do-not-target entry drops it. A referral in progress (`holds`,
+    `referral_holds`) never does: the role is the one the referral can carry, so it is kept
+    everywhere and carries `referral_note` saying not to apply cold. The filter before
+    scoring dropped it while the throttle kept it, and a chat closed the referrer to get the
+    role back (2026-11-05)."""
+    if k and blocked and k in blocked:
+        return blocked[k]
+    return ""
+
+
+def referral_note(k: str, holds: dict | None = None) -> str:
+    """What a kept posting at employer key `k` says about a referral in progress there."""
+    return str((holds or {}).get(k) or "") if k else ""
+
+
 # Everything in a title but its letters and digits, in any script.
 _TITLE_NOISE = re.compile(r"[\W_]+")
 # A bracket that says how or where a role is posted, not which role it is.
@@ -1224,12 +1242,8 @@ def throttle(rows: list[dict], open_apps: dict[str, dict], urls: dict[str, str],
         verdict, verdict_why = bar.verdict(r.get("company"), r.get("desc") or "")
         if verdict == bar.EXCLUDED:
             reason = f"candidate's bar: {verdict_why}"
-        elif blocked and k and k in blocked:
-            reason = blocked[k]
-        elif holds and k and k in holds:
-            # The only contact state that stops an application instead of
-            # annotating it. Everything else about a conversation is a note.
-            reason = holds[k]
+        elif (stop := employer_stops(k, blocked, holds)):
+            reason = stop
         elif n and n in urls:
             reason = f"already ruled out, {urls[n]}"
         elif (pair_why := ruled_pair(pairs, r)):
@@ -1337,6 +1351,10 @@ def throttle(rows: list[dict], open_apps: dict[str, dict], urls: dict[str, str],
                     "DOCUMENTS ALREADY DRAFTED here and never sent: %s, %s. Send that one or "
                     "close it out before drafting another."
                     % (draft.get("role") or "?", draft.get("date") or "?"))}
+            held = referral_note(k, holds)
+            if held:
+                # The role the referral can carry: kept, and said never to go cold.
+                r = {**r, "referral_note": held}
             people = (warm or {}).get(k) or []
             if people:
                 r = {**r, "warm_route": people,
@@ -1554,7 +1572,7 @@ def main() -> int:
     for r in kept[:40]:
         print(f"  pri{r.get('priority', 0):>4} fit{r.get('fit', 0):>4} "
               f"{(r.get('company') or '')[:28]:28} {(r.get('title') or '')[:46]}")
-        for note in ("warm_route_note", "throttle_override_note", "drafted_note",
+        for note in ("warm_route_note", "referral_note", "throttle_override_note", "drafted_note",
                      "silent_application_note"):
             if r.get(note):
                 print(f"        {r[note][:110]}")

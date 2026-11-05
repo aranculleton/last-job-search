@@ -3626,6 +3626,39 @@
    "needed_by": [
     "every chat"
    ]
+  },
+  {
+   "id": "page-chat-does-it",
+   "was": "new in 4.0",
+   "rule": "The chat that answers the page does anything the app's commands do (a draft rewritten, a rule changed, a record corrected) and says in one line what changed; it never sends the person to another chat or says it cannot do it from there (the maintainer, 2026-11-05).",
+   "bold": "This chat does whatever the page asks, here.",
+   "home": ".claude/skills/app/SKILL.md",
+   "anchor": "It never sends the person anywhere else to have it done",
+   "needed_by": [
+    "page"
+   ]
+  },
+  {
+   "id": "page-no-chat-words",
+   "was": "new in 4.0",
+   "rule": "Nothing the person reads on the page mentions chats, helpers or sessions: no main chat, your chat, the helper or finishing up (the maintainer, 2026-11-05).",
+   "bold": "The page never mentions chats, helpers or sessions.",
+   "home": ".claude/skills/app/SKILL.md",
+   "anchor": "**The page never mentions chats, helpers or sessions.**",
+   "needed_by": [
+    "page"
+   ]
+  },
+  {
+   "id": "follow-ups-one-run",
+   "was": "new in 4.0",
+   "rule": "Follow-ups queued together are claimed together and drafted in one run of app.py follow-ups, in code, never one by one with a skill each (the maintainer, 2026-11-05).",
+   "bold": "",
+   "home": ".claude/skills/app/SKILL.md",
+   "anchor": "No skill is loaded and nothing is drafted one by one.",
+   "needed_by": [
+    "page"
+   ]
   }
  ]
 }

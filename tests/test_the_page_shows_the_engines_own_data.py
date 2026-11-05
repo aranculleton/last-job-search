@@ -237,9 +237,12 @@ def test_every_section_shows_the_engines_items_in_plain_words(run, built):
     import pdftext
     # Each document's words stand with its own pencil between them since 2026-11-05 ("CV 1 page ✎
     # · letter 1 page ✎"), so the text read has the pencils' names between the parts.
-    said = (["Made, right length:", "CV 1 page", "letter 1 page"] if pdftext.reader() or shutil.which("pdfinfo")
+    # Said as the documents and their length alone since 2026-11-05: "Made, right length:" on
+    # every card read as something to do.
+    said = (["CV 1 page", "letter 1 page"] if pdftext.reader() or shutil.which("pdfinfo")
             else ["Made; page count not read here"])
     assert all(s in t["drafts"] for s in said) and "\nChecked\n" not in t["drafts"], t["drafts"]
+    assert "Made, right length" not in t["drafts"], t["drafts"]
     fern = t["drafts"].split("Operations Analyst", 1)[1].split("Claims Forecasting Analyst", 1)[0]
     assert "Get the files" not in fern and "Get my files ready" not in fern, "a file not made yet is not offered"
     assert "Needs a fix" not in fern and "still to make" in t["drafts"], "a draft never made is still to make, never a fix"

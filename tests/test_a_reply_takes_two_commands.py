@@ -224,6 +224,73 @@ def test_finish_saves_the_draft_for_the_page_and_writes_the_finishing_batch(sear
         ("delete", "holds", f"contact~{LARKSPUR}", 2)      # the other job's lock stays
 
 
+THREAD = """Oct 20
+Morgan Ellis   9:14 AM
+Hi Juno, thanks again for passing my CV on. Anything else I can send, my email is morgan.ellis@example.com
+View Juno’s profile
+Juno Castellan   4:02 PM
+Thanks Morgan, the team are reviewing it this week.
+Today
+Morgan Ellis   8:30 AM
+Hi Juno, hope the week is going well. My email again in case it is easier: morgan.ellis@example.com
+Juno Castellan   10:42 AM
+Hi Morgan, all good here. The hiring manager would like a quick call on Thursday at 2pm, does that suit?
+"""
+
+
+def test_a_conversation_pasted_whole_logs_only_their_messages_on_their_own_days(search):
+    """A LinkedIn thread pasted whole, the person's own messages in it, was logged as two
+    rows of theirs on one day holding the person's words, and the person's own address in
+    it read as a request for the resume at 0.97 (2026-11-05)."""
+    code, out = run(search, "tools/network/reply.py", "prepare", LARKSPUR, "--text-file", "-",
+                    "--today", "2026-10-25", given=THREAD)
+    assert code == 0, out
+    ins = [r for r in rows_for(search, LARKSPUR) if r["direction"] in ("in", "inbound")]
+    new = [r for r in ins if r["date"] >= "2026-10-01"]
+    assert [r["date"] for r in new] == ["2026-10-20", "2026-10-25"], new
+    assert new[0]["full_text"] == "Thanks Morgan, the team are reviewing it this week."
+    assert new[1]["full_text"].startswith("Hi Morgan, all good here.")
+    assert not any("morgan.ellis@example.com" in r["full_text"] or "Hi Juno" in r["full_text"]
+                   for r in new)
+    assert "scenario: send_resume" not in out, out
+    assert "2 from Juno read as theirs, 2 of yours left out" in out, out
+    # Pasted again: nothing is logged twice.
+    code, out = run(search, "tools/network/reply.py", "prepare", LARKSPUR, "--text-file", "-",
+                    "--today", "2026-10-25", given=THREAD)
+    assert code == 0 and "nothing logged twice" in out, out
+    assert len([r for r in rows_for(search, LARKSPUR) if r["direction"] in ("in", "inbound")]) \
+        == len(ins)
+
+
+def test_the_persons_own_address_never_reads_as_one_they_were_given(search):
+    said = "Thanks, I will pass it to the team.\n\nMorgan Ellis\nmorgan.ellis@example.com"
+    code, out = run(search, "tools/network/reply.py", said)
+    assert code == 0 and "scenario: send_resume" not in out, out
+    code, out = run(search, "tools/network/reply.py",
+                    "Thanks, could you send your CV to juno.c@example.org?")
+    assert "scenario: send_resume" in out, out
+
+
+def test_what_worked_is_said_to_claude_and_never_in_the_reply_on_the_page(search):
+    """"35 of 627 (6%) answered" ended up in the reply the person read on the page
+    (2026-11-05): the counts are Claude's, said apart, and the page gets the reply alone."""
+    wid = "talk~cloud-c2~m1"
+    put(search, "work", wid, {"kind": "talk", "title": "Answer: Juno wrote", "to": "cloud",
+                              "args": {"thread": "cloud-c2", "message": "m1"},
+                              "status": "running", "stage": 1}, 3)
+    code, out = run(search, "tools/network/reply.py", "finish", LARKSPUR, "--draft-file", "-",
+                    "--work", wid, "--dump", search.dump, "--kind", "cloud", "--now", NOW,
+                    "--today", "2026-10-25",
+                    given="Thanks Juno, that is kind of you. I have sent my CV to your email.\n")
+    assert code == 0, out
+    assert "what worked (for you, not for the reply): " in out and "answered" in out, out
+    got = json.loads(out[out.index("{"):])
+    said = batch(got["batches"][0])[0]
+    assert said["collection"] == "talk/cloud-c2/messages"
+    assert "answered" not in said["body"]["text"] and "route" not in said["body"]["text"], \
+        said["body"]["text"]
+
+
 # ------------------------------------------------------------------ any other work
 
 

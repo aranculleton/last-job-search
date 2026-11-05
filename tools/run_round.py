@@ -278,7 +278,8 @@ SUMMARY_DIR = "documents/rounds"
 # later, after the round's own files are pruned.
 SUMMARY_FIELDS = ("priority", "fit", "fit_why", "opportunity", "title", "company", "location",
                   "date", "first_seen", "age_days", "url", "portal", "bar", "bar_reason",
-                  "warm_route_note", "outreach_pending_note", "throttle_override_note",
+                  "warm_route_note", "referral_note", "outreach_pending_note",
+                  "throttle_override_note",
                   "drafted_note", "silent_application_note", "apply_url", "link_kind",
                   "link_status", "link_check", "near", "salary")
 LINK_FIELDS = ("apply_url", "link_kind", "link_status", "link_check")

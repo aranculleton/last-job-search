@@ -889,6 +889,28 @@ def next_item(db: dict, chat_kind: str, now: dt.datetime,
                           and str(((d["data"].get("args") or {}).get("target") or {}).get("id")
                                   or "") == target and target)
             got["with"] = [{"work": w, "version": work[w]["version"]} for _, w in same]
+        elif item["kind"] == "follow_up":
+            # Follow-ups queued together are one job, as drafts are: "Draft all" for nine
+            # queued nine items, each claimed in its own batch (every claim writes the chat's
+            # heartbeat) and drafted one at a time by hand, and the maintainer saw it "burning
+            # tokens" (2026-11-05). Claimed `with` this one, `app.py follow-ups` drafts them all
+            # in one run, in code, and finishes them in one batch.
+            mine = set(got["locks"])
+            same = []
+            for _at, w in sorted((str(d["data"].get("asked_at") or ""), w) for w, d in work.items()
+                                 if w != wid and d["data"].get("kind") == "follow_up"
+                                 and str(d["data"].get("status") or "") == "queued"
+                                 and not d["data"].get("stop_asked")
+                                 and can_take(d["data"], chat_kind)):
+                theirs = locks_for(work[w]["data"])
+                if any(lk in held and held[lk] != w for lk in theirs) or mine & set(theirs):
+                    continue
+                same.append(w)
+                mine |= set(theirs)
+                if len(same) >= FOLLOW_UP_BATCH - 1:
+                    break
+            got["with"] = [{"work": w, "version": work[w]["version"]} for w in same]
+            got["locks"] = sorted(mine)
         elif item["kind"] == "draft":
             # Drafts queued together are one job: the drafting workflow takes a batch in one
             # run, so ten resumes asked for at once take one chat, never ten, and never wait
@@ -919,7 +941,7 @@ def next_item(db: dict, chat_kind: str, now: dt.datetime,
 STRANDED_SAID = "It stopped part way twice. Tap Try again to start it once more."
 # Work a chat began for the person in that chat, gone quiet: never started again elsewhere,
 # ended after a lease and as long again with no word, so a long step it forgot to pin keeps it.
-CHAT_STRANDED_SAID = "It stopped in its chat before it finished. Tap Try again to start it once more."
+CHAT_STRANDED_SAID = "It stopped before it finished. Tap Try again to start it once more."
 
 
 def _chat_quiet(item: dict, now: dt.datetime) -> bool:
@@ -1264,7 +1286,7 @@ def not_its_claim(item: dict, chat: str) -> str:
     return ""
 
 
-BLOCKED_LINE = "Waiting for you in its own chat: it asked to go ahead with something there."
+BLOCKED_LINE = "Waiting for you: Claude asked to go ahead with a step, in the Claude app."
 
 
 def mark_blocked(db: dict, work_id: str, now: dt.datetime, out_dir: str) -> dict:
@@ -1966,6 +1988,9 @@ def queue_files(db: dict, apps: list, now: dt.datetime, out_dir: str, dump_dir: 
 
 KEEP_DAYS = 60      # what the page shows of the past: its newest 300 actions and 500 receipts
 DRAFT_BATCH = 10    # drafts one job takes at most: the workflow's own batch
+# Follow-ups one job takes at most: each is drafted in code, so the bound is the finishing
+# batch (two writes each, BATCH_MAX a batch).
+FOLLOW_UP_BATCH = 20
 PRUNE_CAP = 150     # deletes a wake sends at most, so one wake never sends a long batch
 
 

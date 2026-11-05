@@ -1244,7 +1244,7 @@ def _set_routine(key: str, cron: str | None) -> dict:
         reg = json.load(fh)
     r = next((r for r in reg.get("routines") or [] if r.get("key") == key), None)
     if r is None:
-        raise Refused("There is no brief set up yet to change: say \"set up my brief\" in a chat.")
+        raise Refused("There is no brief set up yet to change: ask Claude to set up your brief.")
     before = r.get("cron")
     r["cron"] = cron
     with open(_routines_path(), "w", encoding="utf-8", newline="\n") as fh:
@@ -1508,8 +1508,13 @@ def _claim(d: dict, v) -> str:
             d[field] = rest
         else:
             d.pop(field, None)
-    skill_answers.record(skill, "yes", by="page", company=d.get("company") or "",
-                         role=d.get("role") or "")
+    if isinstance(v, dict) and v.get("scope") == skill_answers.ROLE:
+        # "Just for this role": this draft's own yes, never the profile's or another role's.
+        skill_answers.record_role(skill, [{"company": d.get("company") or "",
+                                           "role": d.get("role") or ""}], by="page")
+    else:
+        skill_answers.record(skill, "yes", by="page", company=d.get("company") or "",
+                             role=d.get("role") or "")
     return f"{skill} on your skills line"
 
 
@@ -1772,7 +1777,7 @@ def _stage_interview(work: dict, where: dict, p: dict) -> dict:
     return {"status": "needs_model", "key": p["key"], "round": round_dir, "packet": pfile,
             "summary": f"{len(questions)} answer{'s' if len(questions) != 1 else ''} to "
                        + ("draft for you to confirm" if drafts else f"fit {seconds} seconds")
-                       + ": the session's own model writes them, then the pack's check runs.",
+                       + ": Claude writes them, then the pack's check runs.",
             "steps": [
                 f"1. Write the answers {pfile} names into {where['file']}, on this session's "
                 "own model (never a smaller one).",
@@ -1844,8 +1849,8 @@ def _stage_message(work: dict, where: dict, p: dict, why: str = "") -> dict:
     with open(pfile, "w", encoding="utf-8", newline="\n") as fh:
         json.dump(pkt, fh, indent=1, ensure_ascii=False)
     return {"status": "needs_model", "key": p["key"], "round": round_dir, "packet": pfile,
-            "summary": (why + " " if why else "") + "This needs rewriting: the session's own "
-                       "model writes it from the packet, then the message checks run.",
+            "summary": (why + " " if why else "") + "This needs rewriting: Claude writes it "
+                       "from the packet, then the message checks run.",
             "steps": [f"1. Write the message from {pfile} into {round_dir}/message.txt, on "
                       "this session's own model, with the networking skill.",
                       f"2. python3 tools/tweak.py merge --work <this item> --round {round_dir}"]
@@ -1972,7 +1977,7 @@ def stage(work: dict, where: dict, p: dict, today: dt.date, why: str = "") -> di
         json.dump(pkt, fh, indent=1, ensure_ascii=False)
     slug = staged["slug"]
     return {"status": "needs_model", "key": p["key"], "round": round_dir, "packet": pfile,
-            "summary": "Some of this needs writing: the session's own model rewrites "
+            "summary": "Some of this needs writing: Claude rewrites "
                        + (", ".join(PART_NAMES.get(f, f) for f in fields) or
                           "what the person's words ask for") + ", then both audits run.",
             "steps": [
@@ -2055,8 +2060,8 @@ def undo(work: dict, where: dict | None = None) -> dict:
         # A settings tweak: each setting back as it was, while each still holds what the
         # tweak wrote (anything changed since is the person's, and stays).
         if any(_now_value(tuple(r["how"]) + (None,)) != r["after"] for r in rec["writes"]):
-            return {"status": "refused", "summary": "It has changed since: say what you want "
-                                                    "in a chat."}
+            return {"status": "refused", "summary": "It has changed since: ask Claude for what "
+                                                    "you want."}
         for r in reversed(rec["writes"]):
             _unwrite(r)
         line = ""
@@ -2072,10 +2077,10 @@ def undo(work: dict, where: dict | None = None) -> dict:
                            "cron_expression": r["before"]} for r in rec["writes"]
                           if r.get("routine") and r.get("trigger_id")]}
     if md5_file(where["file"]) != rec.get("result_md5"):
-        return {"status": "refused", "summary": "It has changed since: say what you want in a chat."}
+        return {"status": "refused", "summary": "It has changed since: ask Claude for what you want."}
     if not _restore(where, rec["before_md5"]):
-        return {"status": "refused", "summary": "The version before is not kept: say what you "
-                                                "want in a chat."}
+        return {"status": "refused", "summary": "The version before is not kept: ask Claude for "
+                                                "what you want."}
     undo_keep(rec.get("kept") or [])
     ok, line = (_render(where) if where["output"] in ("resume", "letter") else (True, ""))
     if not ok:

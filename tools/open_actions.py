@@ -621,11 +621,20 @@ def due_items(contacts, threads, tracker, today, docs=None, network=None, now=No
         days = [d for d in (r["asked"], r["made"], r.get("made_on", "")) if d]
         old = (bool(days) and state.owed_too_long(max(days), today)
                and not state.dated_by_person(c, index.get(r["contact_id"], ())))
+        # Asked long ago with nothing from them since: closed by itself, a date the chat
+        # wrote to record the ask notwithstanding (state.RESUME_ASK_LAPSE_DAYS). It leaves
+        # the owed list, the brief says so once, and their card and thread still hold it.
+        lapsed = state.resume_ask_lapsed(r["asked"], index.get(r["contact_id"], ()), today,
+                                         c.get("next_action_due")) if not (r["made"] or r.get("made_on")) else None
         got = next((i for i in items if i.get("contact_id") == r["contact_id"]), None)
         if got is not None:
-            if not old:
+            if lapsed:
+                got.update(old=True, lapsed_on=lapsed.isoformat(), what=line)
+            elif not old:
                 got["what"], got["old"] = line, False
             continue
+        if lapsed:
+            old = True
         name = r["name"] or r["contact_id"]
         due = (state.as_date(c.get("next_action_due")) or state.as_date(r["asked"] or r["made"])
                or today)
@@ -639,7 +648,8 @@ def due_items(contacts, threads, tracker, today, docs=None, network=None, now=No
             "late": (today - due).days, "what": line, "to": "", "text": "",
             "held": [h for h in (state.action_hold(c.get("next_action"), today),) if h],
             "quiet": False, "kind": "resume", "status": c.get("status", ""),
-            "contact_id": r["contact_id"], "old": old})
+            "contact_id": r["contact_id"], "old": old,
+            **({"lapsed_on": lapsed.isoformat(), "asked": r["asked"]} if lapsed else {})})
     _hold_by_rule(items, by_id, threads, index)
     _, warm, holds = network or _network(contacts, threads)
     for n in followups.review(tracker, today, warm, holds, docs or followups.DOCS):

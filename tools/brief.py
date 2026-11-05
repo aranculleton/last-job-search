@@ -810,6 +810,7 @@ def _gather(today: dt.date, write: bool) -> dict:
                                          ", and %d more" % more if more > 0 else ""))
     if brk.get("over"):
         lines.append(brk["over"])
+    lines += _lapsed_asks(got, since, today)
     if closed:
         lines.append("%s as no reply: %s. Say if any is still open." % (
             "Closing" if write else "Would close", "; ".join(
@@ -1121,6 +1122,22 @@ def _owed_line(i: dict) -> dict:
 
 def _noun() -> str:
     return str(person.get("documents.noun", "resume") or "resume")
+
+
+def _lapsed_asks(items, since, today) -> list[str]:
+    """A request for the resume closed by itself since the last brief (open_actions,
+    state.RESUME_ASK_LAPSE_DAYS), said once, on the brief after it closed."""
+    out = []
+    for i in items:
+        on = _d(i.get("lapsed_on"))
+        if on is None or not (since < on <= today):
+            continue
+        who = str(i.get("name") or "").split(" (")[0] or "Someone"
+        asked = _d(i.get("asked") or i.get("since"))
+        out.append("Closed by itself: %s's request for your %s%s, with nothing from them since. "
+                   "It stays on their card in Contacts, and a word from them opens it again."
+                   % (who, _noun(), " (asked %d %s)" % (asked.day, asked.strftime("%b")) if asked else ""))
+    return out
 
 
 def _set_aside(asks, old, held) -> list[str]:

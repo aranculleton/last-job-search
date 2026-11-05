@@ -222,6 +222,24 @@ def self_fixes(db: dict | None, model: dict, out_dir: str, now, dump_dir: str = 
             w.add("set", "work", wid, page_db.queued("draft", act.get("title") or "",
                                                      dict(act.get("args") or {}, auto=True), now),
                   if_version=None)
+    # A prep made for an earlier plan of rounds is updated by itself once the plan changes,
+    # never waiting for an "Update it" tap (the maintainer, 2026-11-05): once a change, under
+    # the prep's own work id, so the card shows it going. Work on its way, or one finished or
+    # stopped since the plan changed, is left as it is.
+    for iv in model.get("interviews") or []:
+        prep = iv.get("prep") or {}
+        if not prep.get("stale") or iv.get("past") or not iv.get("id"):
+            continue
+        wid = page_db.safe_id("prep~" + str(iv["id"]))
+        have = work.get(wid) or {}
+        d = have.get("data") or {}
+        if d and (str(d.get("status") or "queued") not in page_db.FINISHED
+                  or str(d.get("finished_at") or d.get("asked_at") or "") >= str(prep.get("stale_since") or "")):
+            continue
+        w.add("set", "work", wid, page_db.queued(
+            "prep", f"Interview prep: {iv.get('company') or ''}, {iv.get('role') or ''}",
+            {"interview": iv["id"], "note": None, "auto": True}, now),
+            if_version=have.get("version") if have else None)
     out = w.save("self") if w.entries else []
     ever = set()
     for d in work.values():
@@ -250,6 +268,15 @@ def cmd_view(a) -> int:
         print(_dump({"rev": None, "batches": [], "for_claude": [behind]}), end="")
         return 3
     today, now = app_model.clock(a.today, a.now)
+    import page_reads
+    planned = bool(a.dump) and os.path.isfile(os.path.join(a.dump, page_reads.PLAN))
+    if planned:
+        page_reads.assemble(a.dump, now)
+        need = page_reads.needs(a.dump)
+        if need:
+            print(_dump({"rev": None, "batches": [], "for_claude": [
+                page_reads.NEED_SCREENS.format(colls=" and ".join(need), dump=a.dump)]}), end="")
+            return 2
     db = page_db.load(a.dump) if a.dump else {}
     missing = no_screen(a.dump, db) if a.dump else ""
     if missing:
@@ -433,10 +460,53 @@ def cmd_view(a) -> int:
         redo = ""
     if redo:
         lines = list(lines or []) + [redo]
+    if getattr(a, "end", False) and a.dump:
+        # The save runs on by itself and wakes nobody: the page's "Saving your work" is
+        # cleared with the batch's own page update, never by a later turn.
+        me = app_listen.this_chat("") or app_listen.this_chat(a.chat)
+        beat = ((db.get("chats") or {}).get(page_db.safe_id(me)) or {}).get("data") or {}
+        if me and beat.get("busy"):
+            batches = list(batches) + page_db.busy_beat(
+                db, me, app_listen.chat_kind(), now, os.path.join(a.out_dir, "busy"), None)
+    if planned:
+        # The folder, and the copy this checkout keeps, as they will be once the batches are
+        # sent: the next wake pins to the versions they leave, with no screen read.
+        page_db.keep_landed(a.dump, batches)
+        page_reads.absorb(a.dump)
+    if getattr(a, "end", False):
+        lines = list(lines or []) + end_of_batch(a.chat, getattr(a, "message", "") or "", now)
     print(_dump({"rev": model["rev"], "batches": batches,
                  **({"kept_newer": kept} if kept else {}),
                  **({"for_claude": lines} if lines else {})}), end="")
     return 0
+
+
+def end_of_batch(chat: str, message: str, now) -> list[str]:
+    """The end of a batch of the page's work (`view --end`): the save started in a process of
+    its own (land.py --detach), once for the batch and waking no chat when it ends, and the
+    wake's cost kept (helper_usage). Lines only for what is left to do."""
+    import app_listen
+    import person
+    out: list[str] = []
+    root = person.state()
+    try:
+        import land
+        if land.git_dir(root) and not land._the_app(root):
+            import contextlib
+            import io
+            buf = io.StringIO()
+            with contextlib.redirect_stdout(buf):
+                code = land.detach(root, message or "Answer the page")
+            if code != 0:
+                out.append(buf.getvalue().strip())
+    except Exception:  # noqa: BLE001  never a reason the page is not answered
+        pass
+    try:
+        import helper_usage
+        helper_usage.record("wake", app_listen.this_chat("") or app_listen.this_chat(chat), now)
+    except Exception:  # noqa: BLE001  the log never stops a wake
+        pass
+    return [ln for ln in out if ln]
 
 
 def copy_basis() -> str:
@@ -1159,7 +1229,7 @@ def cmd_answer(a) -> int:
 
 
 def check_in(dump: str, chat: str, now, out: str, listen: bool = False, helper: bool = False,
-             hand: str = "", update: bool = False) -> dict:
+             hand: str = "", update: bool = False, partial: bool = False) -> dict:
     """The listener's check-in over a dump, as `listen` and `wake` both do it: {"read": the
     collections to read first, or []; "move": a 4.2 page's batches, first; "got":
     app_listen.decide's answer; "upkeep": lines; "prune": batches for after the wake's work;
@@ -1219,8 +1289,10 @@ def check_in(dump: str, chat: str, now, out: str, listen: bool = False, helper: 
         ended = page_db.fail_stranded(page_db.load(dump), now, os.path.join(out, "stranded"))
         if ended["batches"]:
             page_db.keep_landed(dump, ended["batches"])
-        # The page's store kept small, in code: finished records over two months old go.
-        old = page_db.prune(page_db.load(dump), now, os.path.join(out, "prune"))
+        # The page's store kept small, in code: finished records over two months old go,
+        # from a whole read only (the day's first wake reads whole).
+        old = [] if partial else page_db.prune(page_db.load(dump), now,
+                                               os.path.join(out, "prune"))
     tidy_due = retire = False
     if got["role"] == "listener" and app_listen.chat_kind() == "cloud":
         import tidy
@@ -1239,15 +1311,18 @@ READ_FIRST = ("listen: this page was made by an older version of the app, and it
               "person.")
 PRUNE_SAID = ("upkeep: old finished records the page no longer shows are deleted: send "
               "these batches after this wake's work, asking nobody:")
+# How the listings reach the tidy-up: in one heredoc, as the tools returned them, never typed
+# into files first (the maintainer's copy, 2026-11-05).
+TIDY_GIVE = ("list_sessions (mine: true) and list_triggers, every page; then python3 "
+             "tools/tidy.py plan --dump \"$D\" --stdin with one JSON object on standard input "
+             "(a quoted heredoc): {\"sessions\": <what list_sessions returned>, \"triggers\": "
+             "<what list_triggers returned>}, each page as it came (a list of them for several), "
+             "no file; do what it prints.")
 TIDY_SAID = ("tidy: once today, after this wake's work and asking nobody: the app's own "
-             "old chats (tools/tidy.py). list_sessions (mine: true) and list_triggers, every "
-             "page, each saved to a file in the scratchpad; python3 tools/tidy.py plan "
-             "--dump \"$D\" --sessions <each> --triggers <each>; do what it prints.")
+             "old chats (tools/tidy.py). " + TIDY_GIVE)
 TIDY_NOW = ("tidy: now, once the batches above are sent, asking nobody: the app's chat this one "
             "took the page over from is put away as soon as its work is saved, the brief "
-            "moved here first (tools/tidy.py). list_sessions (mine: true) and list_triggers, "
-            "every page, each saved to a file in the scratchpad; python3 tools/tidy.py plan "
-            "--dump \"$D\" --sessions <each> --triggers <each>; do what it prints.")
+            "moved here first (tools/tidy.py). " + TIDY_GIVE)
 
 
 def cmd_listen(a) -> int:
@@ -1295,11 +1370,18 @@ def cmd_listen(a) -> int:
 # the batches, in the order they must be sent, and the one thing left to do.
 
 WAKE_STATE = ".wake.json"            # in the wake's folder: how far this wake has got
+# Small work done here that one wake takes together, each claimed in the same pass: one talk
+# a wake, each followed by a new read, took ten questions about 15 minutes and some 30 reads
+# (the maintainer's copy, 2026-11-05). Never an update or a republish (they change the code or
+# the page itself) and never a brief.
+BATCH_HERE = ("talk", "reply", "follow_up", "tweak", "evaluate", "own_profile", "form_answers",
+              "files", "profile", "general_resume", "research")
+BATCH_MAX = 10
 WAKE_UPDATED = "LJS_WAKE_UPDATED_FROM"
 WAKE_SAID = "LJS_WAKE_SYNC_SAID"
 # What a wake reads, once: steps 1 to 3's records, and the page's view (`screen`), `meta` and
 # `addr`, so step 5's `app.py view` needs no second read.
-WAKE_READS = ("actions", "receipts", "work", "beats", "holds", "meta", "screen", "addr", "talk")
+WAKE_READS = ("actions", "receipts", "work", "beats", "holds", "meta", "screen", "addr")
 # What each batch is, as `wake` says it beside the batch. Batches that may be refused
 # together are sent as one, which the store takes whole or not at all: a refusal then means
 # another chat took the page or holds something claimed in it, and a new read and wake leave
@@ -1312,7 +1394,8 @@ SEND = {"move": "the page's records take their new names, once",
 REFUSED = ("Refused: another chat {who}, or a record's own stored number was wrong. First keep "
            "the version the refusal names: python3 tools/app.py version \"{dump}\" "
            "<collection>/<doc id> <that version> (a wrong number is put right that way, never "
-           "bounced on). Then read again into a new folder and wake once more")
+           "bounced on). Then read again into a new folder and wake once more (python3 "
+           "tools/app.py reads <it> first: a whole read)")
 
 
 def _wake_state(dump: str) -> dict:
@@ -1423,6 +1506,7 @@ def cmd_wake(a) -> int:
     after: list[str] = list(st.get("after") or [])
     tidy_due = bool(st.get("tidy"))
     applied_any = False
+    copy_now = False             # this run applies taps that change the copy, claimed before
 
     if phase == "new":
         if os.environ.get(WAKE_UPDATED):
@@ -1467,14 +1551,23 @@ def cmd_wake(a) -> int:
                                "still following the copy it loaded: read it again now, before "
                                "going on.")
                     n += 1
-                out.append(f"{n}. Then read the page again into a new folder (the collections "
-                           f"{', '.join(WAKE_READS)}) and wake once more with it: "
+                out.append(f"{n}. Then read the page again into a new folder (python3 "
+                           "tools/app.py reads <the new folder>, and its queries) and wake once "
+                           "more with it: "
                            + _again(a, chat).replace(f"\"{a.dump}\"", "\"<the new folder>\""))
                 out.append("What the day's update check printed:")
                 print("\n".join(out + said))
                 return 0
             head = [sync_line] + said + ["(end of what the update check printed)"]
-        got = check_in(a.dump, chat, now, os.path.join(rd, "listen"))
+        reads = {}
+        try:
+            import page_reads
+            if os.path.isfile(os.path.join(a.dump, page_reads.PLAN)):
+                reads = page_reads.assemble(a.dump, now)
+        except Exception:  # noqa: BLE001  a read made without `reads`: the folder as it is
+            reads = {}
+        got = check_in(a.dump, chat, now, os.path.join(rd, "listen"),
+                       partial=bool(reads) and not reads.get("full"))
         if got["read"]:
             print("\n".join(head + [READ_FIRST.format(more=", ".join(got["read"]))]))
             return 0
@@ -1494,15 +1587,25 @@ def cmd_wake(a) -> int:
                   if not ln.startswith(("listen: this chat answers the page.",
                                         "listen: this chat answers the page now."))]
         notes += got["upkeep"]
+        if reads:
+            notes.append(page_reads.summary(page_db.load(a.dump), chat, reads))
         after, tidy_due = list(got["prune"]), bool(got["tidy"])
         todo = app_actions.pending(page_db.load(a.dump), chat, now)
         phase = "next"
         if todo:
-            claim = app_actions.claim(a.dump, chat, now, os.path.join(rd, "taps"))
-            sends += [(p, "taps", True) for p in claim["batches"]]
+            # Only what is not this chat's already: a tap it claimed on an earlier wake (one
+            # that stopped before applying it), or applied whose receipt never landed, is
+            # applied or receipted now, never claimed again (the maintainer's copy, 2026-11-05).
+            need = app_actions.to_claim(todo, chat, now)
+            if need:
+                claim = app_actions.claim(a.dump, chat, now, os.path.join(rd, "taps"),
+                                          only=need)
+                sends += [(p, "taps", True) for p in claim["batches"]]
             phase = "apply"
-            if any(str(act.get("action") or "") not in app_actions.DB_ONLY
-                   for _aid, act, _v in todo):
+            changes = [aid for aid, act, _v in todo
+                       if str(act.get("action") or "") not in app_actions.DB_ONLY]
+            copy_now = bool(changes)
+            if set(changes) & set(need):
                 # A tap that changes the copy waits for its claim: if another chat holds it,
                 # nothing here may have changed.
                 _save_wake_state(a.dump, {"phase": "claimed", "runs": run, "after": after,
@@ -1518,7 +1621,7 @@ def cmd_wake(a) -> int:
     # Everything from the check-in on goes as one batch, unless this run changed the copy: a
     # batch refused after that would leave its receipts unsent, and a new read would apply
     # the taps again from a folder without this one's ledger.
-    joined = st.get("phase") is None
+    joined = st.get("phase") is None and not copy_now
 
     if phase == "apply":
         got = app_actions.apply_dir(a.dump, chat, now, os.path.join(rd, "apply"))
@@ -1574,17 +1677,55 @@ def cmd_wake(a) -> int:
         # Claimed, as it will be once sent: run again over this folder, `next` takes the one
         # after it, pinned to the versions this claim leaves.
         page_db.keep_landed(a.dump, chosen["batches"])
+        also: list[dict] = []
+
+        def small(c):
+            return bool(c) and c.get("run") == "here" and c.get("kind") in BATCH_HERE \
+                and not c.get("heavy")
+        if small(chosen):
+            # Every other small item waiting is taken in this same pass, each its own claim
+            # pinned to the versions the one before leaves (BATCH_HERE).
+            while len(also) < BATCH_MAX - 1:
+                nxt = choose(page_db.load(a.dump), chat, kind, now, on=a.on,
+                             no_sessions=a.no_sessions,
+                             claim_out=os.path.join(rd, f"work{len(also) + 2}"))
+                if not small(nxt):
+                    break
+                sends += [(p, "work", False) for p in nxt["batches"]]
+                page_db.keep_landed(a.dump, nxt["batches"])
+                also.append(nxt)
         more = choose(page_db.load(a.dump), chat, kind, now, on=a.on,
                       no_sessions=a.no_sessions) is not None
         shown = dict(chosen)
+
+        def with_item(c):
+            item = ((db.get("work") or {}).get(c["work"]) or {}).get("data") or {}
+            return dict(c, **{k: item[k] for k in ("args", "answers", "note") if k in item})
         if chosen.get("run") == "here":
-            item = ((db.get("work") or {}).get(chosen["work"]) or {}).get("data") or {}
-            shown.update({k: item[k] for k in ("args", "answers", "note") if k in item})
+            shown = with_item(chosen)
             # Finishing it writes the item, its locks and this chat's heartbeat, which this
             # folder does not see: the next item is taken from a new read.
-            then.append(f"then: once its claim is accepted, do it here, now, as step 4's row "
-                        f"says for a {chosen['kind']}. Its claim marks it running at its first "
-                        "stage, so no progress pin follows; finish it as step 5 says." + (
+            # Every follow-up claimed here is one run of one command, in code: never the
+            # networking skill or a draft by hand each (the maintainer, 2026-11-05).
+            ups = [c for c in [chosen] + also if c.get("kind") == "follow_up"]
+            n_ups = sum(1 + len(c.get("with") or []) for c in ups)
+            run_ups = (f"python3 tools/app.py follow-ups \"{a.dump}\" --chat {chat}, which "
+                       f"drafts the {n_ups} follow-up{'s' if n_ups != 1 else ''} claimed here in "
+                       "code and finishes them in one batch (load no skill for them), and do "
+                       "what it prints")
+            if not also and ups:
+                what = "run " + run_ups
+            else:
+                what = (f"do it here, now, as step 4's row says for a {chosen['kind']}" if not also
+                        else f"do each here, now, in order (the one under next:, then each "
+                             f"also:), as step 4's row says for its kind; they are "
+                             f"{len(also) + 1} items, every one claimed in this pass" +
+                             (f"; for the follow-ups, one run: {run_ups}" if ups else ""))
+            then.append(f"then: once {'its claim is' if not also else 'their claims are'} "
+                        f"accepted, {what}. Its claim marks it running at its first "
+                        "stage, so no progress pin follows; " + (
+                            "it finishes them itself." if not also and ups else
+                            "finish it as step 5 says.") + (
                             " More is waiting: then read again into a new folder and wake "
                             "once more (step 3 again)." if more else ""))
         else:
@@ -1596,6 +1737,8 @@ def cmd_wake(a) -> int:
                             " More is waiting: then run this again with the same folder (step "
                             "3 again): " + _again(a, chat) if more else ""))
         then.append("next: " + _dump(shown).rstrip("\n"))
+        for c in also:
+            then.append("also: " + _dump(with_item(c)).rstrip("\n"))
     else:
         then.append("then: nothing else is waiting for this chat. " + (
             "Commit what the taps changed (python3 tools/save_state.py) with this wake's "
@@ -1632,17 +1775,27 @@ def _send_as(sends, out_dir: str, dump: str = "$D") -> list[tuple[str, str]]:
         else:
             groups.append(([path], [what], set(mine)))
     out = []
+    # What a refusal means is said in full once, beside the first batch it applies to; every
+    # later one says only who: the same 300 characters beside each batch were read again at
+    # every later step of the chat (the maintainer, 2026-11-05).
+    told = False
+
+    def refused(who: str, tail: str = "") -> str:
+        nonlocal told
+        if told:
+            return f". Refused: another chat {who}; as above"
+        told = True
+        return ". " + REFUSED.format(who=who, dump=dump) + tail
     for n, (paths, whats, _docs) in enumerate(groups, 1):
         names = list(dict.fromkeys(whats))
         said = "; ".join(SEND[w] for w in names)
         if names == ["move"]:
-            said += ". " + REFUSED.format(who="did it already", dump=dump)
+            said += refused("did it already")
         elif names == ["work"]:
-            said += ". " + REFUSED.format(who="took it", dump=dump)
+            said += refused("took it")
         elif names != ["applied"]:
-            said += ". " + REFUSED.format(who="took the page or holds something claimed here",
-                                          dump=dump) \
-                + ", which leaves that to it"
+            said += refused("took the page or holds something claimed here",
+                            ", which leaves that to it")
         files = paths
         if len(paths) > 1:
             entries = []
@@ -1921,6 +2074,159 @@ def cmd_search_drafts(a) -> int:
     return 0
 
 
+FOLLOW_UP_DONE = "Your follow-up to {first} is ready to send."
+FOLLOW_UP_NONE = "No follow-up is owed to {first} now."
+FOLLOW_UP_ASK = "What should the follow-up to {first} say? I could not write one: {why}."
+
+
+def _next_dir(base: str) -> str:
+    n = 1
+    while os.path.exists(os.path.join(base, str(n))):
+        n += 1
+    return os.path.join(base, str(n))
+
+
+def follow_ups(dump: str, chat: str, now, today: str, out_dir: str,
+               written: list | None = None) -> dict:
+    """Every follow-up this chat holds (claimed together, `with` one another: page_db
+    next_item), drafted in one run: code drafts each (followup_drafts.drafts, the gate
+    included), keeps each clean draft where Messages shows it and finishes those items, all in
+    one batch. What code could not write is left `to_write`, with one context block for all of
+    it; `written` ([{"id": <contact id>, "text"}]) is what the chat wrote for those, gated the
+    same way, kept and finished. One needing the person is put to them as a question; an
+    application's or an interview's is left `by_hand` (/outcome Step 2b).
+    {done, to_write, asked, by_hand, refused, context, batches}."""
+    import followup_drafts
+    import page_db
+    db = page_db.load(dump)
+    held = sorted(((str(d["data"].get("asked_at") or ""), wid) for wid, d in
+                   (db.get("work") or {}).items()
+                   if d["data"].get("kind") == "follow_up"
+                   and str(d["data"].get("status") or "") in page_db.ACTIVE
+                   and str(d["data"].get("claimed_by") or "") == chat))
+    out = {"done": [], "to_write": [], "asked": [], "by_hand": [], "refused": [],
+           "context": "", "batches": []}
+    if not held:
+        return out
+    with followup_drafts.FoldersOnce():
+        items, contacts, threads, tracker = followup_drafts.load(today)
+        got = followup_drafts.drafts(items, contacts, threads, tracker, today)
+        by_contact = {str(i.get("contact_id") or ""): i for i in got if i.get("half") == "contact"}
+        names = {str(c.get("contact_id") or "").strip(): str(c.get("name") or "")
+                 for c in contacts}
+        passed: dict = {}
+        if written:
+            checked = followup_drafts.check(written, contacts, threads, today, got)
+            followup_drafts.keep_checked(checked, contacts)
+            passed = {c["id"]: c for c in checked if c["ok"]}
+            out["refused"] = [{"id": c["id"], "findings": c["findings"]}
+                              for c in checked if not c["ok"]]
+        finishes: list[dict] = []
+        keep = []
+        for _at, wid in held:
+            item = db["work"][wid]["data"]
+            args = item.get("args") if isinstance(item.get("args"), dict) else {}
+            cid = str(args.get("contact_id") or args.get("contact") or "")
+            if not cid:
+                out["by_hand"].append(wid)
+                continue
+            import app_model
+            first = app_model.first_name(names.get(cid) or "") or "them"
+            due = by_contact.get(cid)
+            d = (due or {}).get("draft") or {}
+            answered = item.get("answers") or args.get("answers")
+            if cid in passed:
+                finishes.append({"work": wid, "summary": FOLLOW_UP_DONE.format(first=first)})
+            elif due is None or d.get("status") == "none":
+                finishes.append({"work": wid, "summary": FOLLOW_UP_NONE.format(first=first)})
+            elif d.get("status") == "ready" and not answered:
+                keep.append(due)
+                finishes.append({"work": wid, "summary": FOLLOW_UP_DONE.format(first=first)})
+            elif d.get("status") == "write" and d.get("who") == "you" and not answered:
+                why = " ".join(str(d.get("why") or "").split()).rstrip(".")
+                finishes.append({"work": wid, "question": FOLLOW_UP_ASK.format(
+                    first=first, why=why or "nothing on file to follow up on")})
+            else:
+                # Advise flagged code's draft, a reply is owed, or the person answered a
+                # question about it: written here, from the thread, in one go with the rest.
+                if d.get("status") == "check":
+                    keep.append(due)
+                out["to_write"].append({"work": wid, "contact": cid,
+                                        **({"answers": answered} if answered else {})})
+        followup_drafts.keep_drafted(keep)
+        if out["to_write"]:
+            out["context"] = followup_drafts.context(
+                [t["contact"] for t in out["to_write"]], contacts, threads, today, got)
+    entries: list[dict] = []
+    for f in finishes:
+        res = page_db.finish(page_db.load(dump), f["work"], now,
+                             os.path.join(out_dir, "each", f["work"].replace("~", "@")),
+                             summary=f.get("summary", ""), chat=chat, dump_dir=dump,
+                             question=f.get("question", ""),
+                             answer={"kind": "text"} if f.get("question") else None)
+        for path in res["batches"]:
+            with open(path, encoding="utf-8") as fh:
+                entries += json.load(fh)
+        out["asked" if f.get("question") else "done"].append(f["work"])
+    if entries:
+        w = page_db.Writes(out_dir)
+        w.entries = entries
+        out["batches"] = w.save("follow-ups")
+    return out
+
+
+def cmd_follow_ups(a) -> int:
+    """Every follow-up this chat holds, drafted and finished in one run (follow_ups)."""
+    import app_listen
+    import app_model
+    import app_setup
+    import person
+    _, now = app_model.clock(a.today, a.now)
+    today = a.today or person.today(now).isoformat()
+    chat = app_listen.this_chat(a.chat)
+    written = None
+    if a.written:
+        try:
+            raw = sys.stdin.read() if a.written == "-" else open(a.written, encoding="utf-8").read()
+            written = json.loads(raw)
+            written = written if isinstance(written, list) else [written]
+        except (OSError, ValueError) as e:
+            print(f"app: --written is a JSON list of {{\"id\": \"<contact id>\", \"text\": "
+                  f"\"...\"}}: {e}", file=sys.stderr)
+            return 2
+    out_dir = a.out or _next_dir(os.path.join(a.dump, "follow-ups"))
+    got = follow_ups(a.dump, chat, now, today, out_dir, written=written)
+    url = app_setup.page_record().get("url") or "<the page>"
+    said = [f"follow-ups: {len(got['done'])} finished, each draft on its person's card in "
+            f"Messages; {len(got['asked'])} put to the person as a question; "
+            f"{len(got['to_write'])} to write here; {len(got['by_hand'])} by hand."]
+    if got["batches"]:
+        said.append(f"send each as one ArtifactData batch (url {url}, its entries as writes), "
+                    "in order:")
+        said += got["batches"]
+    for r in got["refused"]:
+        said.append(f"refused, write it again: {r['id']}: " + "; ".join(r["findings"]))
+    if got["to_write"]:
+        said.append(
+            f"then: write these {len(got['to_write'])} in one go, from what is below (an "
+            "`answers` is what the person said on the page), and pass them all at once: "
+            f"python3 tools/app.py follow-ups \"{a.dump}\" --chat {chat} --written - with "
+            "[{\"id\": \"<contact id>\", \"text\": \"...\"}] on its input. It gates each, keeps "
+            "the ones that pass on their cards and finishes them.")
+        said += [f"to write: {t['contact']} (work {t['work']})" + (
+            f", their answer: {json.dumps(t['answers'], ensure_ascii=False)}"
+            if t.get("answers") else "") for t in got["to_write"]]
+        said.append(got["context"].rstrip("\n"))
+    for wid in got["by_hand"]:
+        said.append(f"by hand: {wid}, an application's or an interview's follow-up: /outcome "
+                    "Step 2b, then its own app.py done.")
+    if got["done"] or got["asked"]:
+        said.append(f"last: once for all of them, python3 tools/app.py view \"{a.dump}/view\" "
+                    f"--dump \"{a.dump}\" --chat {chat}, and send its batch (step 5).")
+    print("\n".join(said))
+    return 0
+
+
 def cmd_ask(a) -> int:
     """Work queued from something said in a chat, as the page's own Ask queues it, so no chat
     writes a work item by hand. `next` takes it like any other."""
@@ -1954,8 +2260,41 @@ def cmd_version(a) -> int:
     except (KeyError, ValueError) as e:
         print(f"app: {e.args[0] if e.args else e}", file=sys.stderr)
         return 2
+    try:
+        import page_reads
+        page_reads.want_full()
+    except Exception:  # noqa: BLE001  nothing kept to read wholly
+        pass
     print(f"app: {kept} is at version {a.version} in this folder; run the refused command "
           "again, once")
+    return 0
+
+
+def cmd_reads(a) -> int:
+    """What a wake reads: the queries, one line each (page_reads)."""
+    import app_model
+    import app_setup
+    import page_reads
+    _, now = app_model.clock(None, a.now)
+    if not a.dump:
+        # The listener's own look at a ring that names the page's revision: no read at all.
+        if a.rev is None:
+            print("app: give a folder to read into, or --rev <the ring's revision>",
+                  file=sys.stderr)
+            return 2
+        print(page_reads.say_plan({"nothing": True}, "", "") if page_reads.seen_rev(a.rev)
+              else "reads: new since the last read: pass the ring on (the app skill, step 0).")
+        return 0
+    got = page_reads.plan(a.dump, now, full=a.full, rev=a.rev)
+    url = app_setup.page_record().get("url") or "<the page>"
+    print(page_reads.say_plan(got, a.dump, url))
+    try:
+        import land
+        waiting = land.github_waiting()
+    except Exception:  # noqa: BLE001  nothing kept of a landing
+        waiting = ""
+    if waiting:
+        print(waiting)
     return 0
 
 
@@ -1981,6 +2320,10 @@ def main(argv=None) -> int:
     p.add_argument("--work", default="", help="the job this chat was started for: a job's own "
                                               "chat draws the page once it is done, as the chat "
                                               "that answers the page does")
+    p.add_argument("--end", action="store_true",
+                   help="the end of this batch of work: start the save in the background (once "
+                        "for the batch) and keep what the wake cost")
+    p.add_argument("--message", default="", help="with --end: what changed, for the save")
     p = clocked(sub.add_parser("page", help="the page to publish: in parts with --out-dir, "
                                             "else as one HTML file"))
     p.add_argument("--out")
@@ -2162,6 +2505,15 @@ def main(argv=None) -> int:
                    help="the round has ended: the search has found all it will")
     p.add_argument("--out", default="", help="where the batch goes (default <dump>/out)")
     clocked(p)
+    p = sub.add_parser("follow-ups", help="every follow-up this chat holds, drafted in code "
+                                          "and finished in one batch")
+    p.add_argument("dump")
+    p.add_argument("--chat", required=True, help=CLAIMED_UNDER)
+    p.add_argument("--written", default="",
+                   help="what this chat wrote for those code could not: a JSON list of "
+                        "{id, text}, or - for what comes in")
+    p.add_argument("--out", default="", help="where the batch goes (default <dump>/follow-ups)")
+    clocked(p)
     p = sub.add_parser("ask", help="work queued from a chat message, as the page queues it")
     p.add_argument("dump")
     p.add_argument("--kind", required=True, help="the kind of work (app.py progress <kind>)")
@@ -2174,6 +2526,13 @@ def main(argv=None) -> int:
                         "running, so the page's work list shows it, its stages and its result")
     p.add_argument("--chat", default="")
     p.add_argument("--out", default="", help="where the batch goes (default <dump>/out)")
+    p.add_argument("--now", default=None)
+    p = sub.add_parser("reads", help="what a wake reads: only what changed since the last "
+                                     "read, as ArtifactData queries")
+    p.add_argument("dump", nargs="?", default="")
+    p.add_argument("--full", action="store_true", help="read every collection whole")
+    p.add_argument("--rev", type=int, default=None,
+                   help="the revision the page's ring named, when it names one")
     p.add_argument("--now", default=None)
     p = sub.add_parser("version", help="a refused write named a record's version: keep it "
                                        "in the folder, then run the command again")
@@ -2192,7 +2551,8 @@ def main(argv=None) -> int:
             "start": cmd_start, "published": cmd_published, "resume-saved": cmd_resume_saved,
             "files-saved": cmd_files_saved, "propose": cmd_propose, "listen": cmd_listen,
             "republish": cmd_republish, "pinned": cmd_pinned, "told": cmd_told, "doorbells": cmd_doorbells, "done": cmd_done,
-            "ask": cmd_ask, "wake": cmd_wake, "version": cmd_version, "search-drafts": cmd_search_drafts,
+            "ask": cmd_ask, "wake": cmd_wake, "version": cmd_version, "reads": cmd_reads, "search-drafts": cmd_search_drafts,
+            "follow-ups": cmd_follow_ups,
             "answer": cmd_answer}[a.cmd](a)
 
 

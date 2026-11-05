@@ -190,7 +190,7 @@ def test_a_chat_the_app_starts_is_granted_only_what_this_chat_holds(monkeypatch)
                                encoding="utf-8"))["permissions"]["allow"])
     assert set(app.CHILD_TOOLS) <= allow
     monkeypatch.setattr(app_listen, "chat_kind", lambda: "cloud")
-    monkeypatch.setattr(app_listen, "context_tokens", lambda: 0)
+    monkeypatch.setattr(app_listen, "history_tokens", lambda: 0)
     monkeypatch.setattr(app_listen, "seen", lambda: {})
     monkeypatch.setattr(app_listen, "_save_seen", lambda got: None)
     monkeypatch.setattr("app_setup.origin", lambda: ("example-owner", "my-job-search"))

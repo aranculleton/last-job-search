@@ -91,6 +91,8 @@
     // A write the store refuses is still a write the page tried: a test of the page's silent
     // drops reads every attempt, refused or not. `failWrites` may be changed while a test runs.
     if (cfg.failWrites || (cfg.failDeletes && op === "delete")) { calls.push({cap: "db", op, path, failed: true}); throw {code: "unavailable", message: "test"}; }
+    // A store that takes a write and never answers (`hangWrites`): the tap must not wait for ever.
+    if (cfg.hangWrites && op === "set") { calls.push({cap: "db", op, path, hung: true}); return new Promise(() => {}); }
     // The first few writes fail and the rest go through: a send that failed, tried again.
     if (cfg.failFirstWrites && (window.__ljsWriteN = (window.__ljsWriteN || 0) + 1) <= cfg.failFirstWrites) { calls.push({cap: "db", op, path, failed: true}); throw {code: "unavailable", message: "test"}; }
     calls.push({cap: "db", op, path});

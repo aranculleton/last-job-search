@@ -141,7 +141,7 @@ def test_a_draft_is_downloaded_marked_applied_and_its_follow_up_is_done_from_to_
         {"hash": "todo", "read": '[data-item="due-ellerwick-follow"]'},
         {"click": "Done: Follow up with Ellerwick Trust"},
     ], vp)
-    assert [c["filename"] for c in got["after"][0]["calls"]] == ["Morgan_Ellis_CV_Ellerwick.pdf", "Morgan_Ellis_Cover_Letter_Ellerwick.pdf"]
+    assert [c["filename"] for c in got["after"][0]["calls"]] == ["Morgan_Ellis_CV_Ellerwick_Trust.pdf", "Morgan_Ellis_Cover_Letter_Ellerwick_Trust.pdf"]  # named for the reader since 2026-11-05
     a = _one(got, "ready.applied")
     assert a["value"]["on"] and a["rev_seen"] == "a1"
     row = got["after"][2]["text"]
@@ -281,10 +281,11 @@ def test_a_first_note_is_copied_exactly_opened_and_logged_with_the_words_that_we
     # we need a slight edit"), where "I changed it first" was under More.
     got = _go(run, tmp_path, [
         {"hash": "contacts", "open": "pen:msg-ash-1"},
+        {"open": "penedit:msg-ash-1"},
         {"eval": "(() => { const t = document.querySelector('[data-k=\"pentext:msg-ash-1\"]'); t.value = " + json.dumps(edited) + "; t.dispatchEvent(new Event('input', {bubbles: true})); return document.querySelector('#cnt-msg-ash-1').className; })()"},
         {"click": "I sent it: the note to Ash"},
     ], vp)
-    assert "tone-bad" in got["after"][1]["eval"], "the count turns red over the limit, and nothing is cut"
+    assert "tone-bad" in got["after"][2]["eval"], "the count turns red over the limit, and nothing is cut"
     a = _one(got, "msg.sent")
     assert a["item"] == "msg-ash-1" and a["value"]["text"] == edited.strip()
 

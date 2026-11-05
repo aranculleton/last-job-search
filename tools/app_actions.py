@@ -82,6 +82,8 @@ import person  # noqa: E402
 
 LEDGER = "applied.json"
 CLAIM_S = 10 * 60
+# A claim of this chat's own with at least this long left is applied without claiming again.
+CLAIM_MARGIN_S = 2 * 60
 
 # name: (the item kinds it acts on, the writer, its undo). One table: the docstring above,
 # the receipts and the tests all read this.
@@ -1289,15 +1291,26 @@ def _outcome(r: Run, status: str) -> dict:
                     f", offered {', '.join(offered)}" + (f", reply by {reply_by}" if reply_by else "")
                     if offered else ", the day still to choose") + \
                 (f", with {who}" if who and not day else "")
+            # Asked for and not confirmed by them yet: ticked or not when the day is given;
+            # not said at all (a time added on its row), the line keeps what it said.
+            tentative = None if "tentative" not in r.value else bool(r.value.get("tentative"))
+            # The same round on a new day is the same plan of rounds: its prep stays current
+            # (a new day alone made it "for an earlier plan of rounds", 2026-11-05).
+            same_plan = day and any(x["label"].lower() == stage.lower() for x in
+                                    what_works.outcome_stages(before["md"] or "")) and \
+                not _prep_stale_now(folder, before["md"] or "", stage)
             changed = confirm.record_outcome(row, "interview", r.day,
                                              note=f"{stage} booked{when}",
                                              source="page", now=r.local)
             interview_pack.record_stage(folder, company, role, stage, day, who,
                                         today=r.day.isoformat(), time=clock, zone=zone,
                                         minutes=minutes, offered=offered, reply_by=reply_by,
-                                        place=r.words("place")[:60])
+                                        place=r.words("place")[:60], tentative=tentative)
+            if same_plan:
+                interview_pack.keep_built_for(folder, stage)
             said = (f"Booked: {stage} with {company} on {day}"
                     + (f" at {clock} {app_model.zone_words(zone)} time." if clock else ".")
+                    + (" Not confirmed yet." if tentative else "")
                     if day else
                     f"Saved: {stage} with {company}, offered on {len(offered)} days. Choose "
                     "yours on the interview's card, then tell them." if offered else
@@ -1328,6 +1341,16 @@ def _outcome(r: Run, status: str) -> dict:
         csv_store.header(path) + list(throttle.CONFIRM_COLUMNS))))
     return {"note": said, "undo": {"action": "outcome.undo", "target": dict(r.target),
                                    "value": before}}
+
+
+def _prep_stale_now(folder: str, md: str, stage: str) -> bool:
+    """Was the prep already for an earlier plan before this booking? Only then does a new day
+    for the same round leave it so."""
+    import interview_pack
+    text = app_model.read_text(os.path.join(folder, interview_pack.LIVING))
+    if not text:
+        return False
+    return app_model._prep_stale(folder, text, {"label": stage})
 
 
 def _rework(r: Run) -> dict:
@@ -1451,8 +1474,8 @@ def _thread_lock(wait: float = 30.0):
             except OSError:
                 continue
             if time.time() - start > wait:
-                raise Refused("Another chat is writing your messages right now: try again "
-                              "in a minute.") from None
+                raise Refused("Your messages are being written right now: try again in a "
+                              "minute.") from None
             time.sleep(0.05)
     try:
         yield
@@ -1534,6 +1557,9 @@ def _msg_sent(r: Run) -> dict:
             else:
                 argv = ["nudge" if kind == "follow_up" else "message", cid, "--text-file", path,
                         "--date", day, "--today", r.day.isoformat()]
+                if kind == "reply":
+                    # Drafted as the answer to their message: never logged as a chase.
+                    argv.append("--answers")
                 if channel in ("email", "inmail"):
                     argv += ["--channel", channel]
             if subject:
@@ -1937,9 +1963,13 @@ def _call_booked(r: Run) -> dict:
     at = (f" at {clock}" + (f" {app_model.zone_words(zone)} time" if zone and zone != home
                              else "")) if clock else ""
     cid = r.target.get("contact") or ""
-    before = _set_contact(r, "call_booked", f"Call on {day}{at}: prepare for it", day,
-                          f"call booked for {day}{at}, said on the page")
-    return {"note": f"Call with {_first(cid)} on {day}{at}. Prepare for it from their row.",
+    # Asked for and not confirmed by them yet: said in the call's own line, which every reader
+    # of the call reads (upcoming.call_tentative), and cleared when booked again without it.
+    maybe = ", not confirmed yet" if r.value.get("tentative") else ""
+    before = _set_contact(r, "call_booked", f"Call on {day}{at}{maybe}: prepare for it", day,
+                          f"call booked for {day}{at}{maybe}, said on the page")
+    return {"note": f"Call with {_first(cid)} on {day}{at}"
+                    + (", not confirmed yet" if maybe else "") + ". Prepare for it from their row.",
             "undo": {"action": "person.status", "target": {"kind": "person", "contact": cid},
                      "value": before}}
 
@@ -3135,14 +3165,23 @@ def _skill_answer(r: Run, t: dict) -> dict:
     posting that asked), redone with it by itself."""
     import skill_answers
     choice = r.words("value").lower()
-    if choice not in skill_answers.ANSWERS:
-        raise Refused("Yes or no: which?")
+    if choice not in skill_answers.ANSWERS + (skill_answers.ROLE,):
+        raise Refused("Yes, just for this role, or no: which?")
     skill = str(t.get("skill") or "")
-    if not skill_answers.record(skill, choice, by="page", at=r.at):
-        return {"note": f"You answered {skill} later in a chat, so that answer stands.",
+    # "Just for this role": a yes for the roles the question was asked for, never the
+    # profile's (the maintainer, 2026-11-05).
+    roles = [x for x in t.get("roles") or [] if isinstance(x, dict) and x.get("company")]
+    if choice == skill_answers.ROLE and not roles:
+        raise Refused("Which role: the question names none, so say yes or no.")
+    stands = (skill_answers.record_role(skill, roles, by="page", at=r.at)
+              if choice == skill_answers.ROLE
+              else skill_answers.record(skill, choice, by="page", at=r.at))
+    if not stands:
+        return {"note": f"You answered {skill} since, so that answer stands.",
                 "undo": None}
     if choice == "no":
         return {"note": f"Noted: {skill} stays off your resumes.", "undo": None}
+    where = " and ".join(dict.fromkeys(str(x["company"]) for x in roles))
     due = skill_answers.redo_due(skill, today=r.day)
     for d in due:
         if _on_its_way(r, d["work"]):
@@ -3152,7 +3191,9 @@ def _skill_answer(r: Run, t: dict) -> dict:
             "to": "either", "args": skill_answers.tweak_work(d)["args"],
             "asked_at": app_model.stamp(r.at), "priority": 0, "status": "queued",
             "stages": page_db.progress("tweak")["stages"], "stage": 0})
-    return {"note": f"Noted: you can claim {skill}." + (
+    first = (f"Noted: {skill} goes on your resume for {where} only, never on your profile."
+             if choice == skill_answers.ROLE else f"Noted: you can claim {skill}.")
+    return {"note": first + (
         f" Claude puts it on {'the resume' if len(due) == 1 else str(len(due)) + ' resumes'} "
         "still without it." if due else ""), "undo": None}
 
@@ -3220,7 +3261,7 @@ def _needs_answer(r: Run) -> dict:
                                      "answer": answer},
             "asked_at": app_model.stamp(r.at), "priority": 0, "status": "queued",
             "stages": page_db.progress("talk")["stages"], "stage": 0})
-        return {"note": "Your chat writes it in.", "undo": None}
+        return {"note": "Claude writes it into your profile next.", "undo": None}
     import profile_upgrades
     text = app_model.read_text(path)
     hit = next((m for m in profile_upgrades.CONFIRM.finditer(text)
@@ -3302,7 +3343,7 @@ def _needs_unanswer(r: Run) -> dict:
     at, answer, mark = int(r.value.get("at") or 0), str(r.value.get("answer") or ""), \
         str(r.value.get("mark") or "")
     if not answer or text[at:at + len(answer)] != answer:
-        raise Refused("Your profile has changed there since: say so in a chat.")
+        raise Refused("Your profile has changed there since: ask Claude to change it.")
     with open(path, "w", encoding="utf-8", newline="") as fh:
         fh.write(text[:at] + mark + text[at + len(answer):])
     return {"note": "The question is back.",
@@ -3468,9 +3509,9 @@ def _setup_done(r: Run) -> dict:
     if key == "job-sites":
         got = app_setup.check_job_sites(r.day.isoformat())
         if got.get("blocked"):
-            raise Refused("This chat still can't reach " + ", ".join(got["blocked"][:3])
+            raise Refused("Claude still can't reach " + ", ".join(got["blocked"][:3])
                           + ". It can take a minute after the change: try Done again shortly.")
-        return {"note": "This chat reaches the job sites now.", "undo": None}
+        return {"note": "Claude reaches the job sites now.", "undo": None}
     if key == "copy":
         return {"note": "Open a chat on your new copy and say \"set me up\". This page "
                         "carries on there.", "undo": None}
@@ -3531,7 +3572,7 @@ def _upgrade_undo(r: Run) -> dict:
     code, out = _git("revert", "--no-edit", sha)
     if code:
         _git("revert", "--abort")
-        raise Refused("It could not be taken back by itself: say so in a chat.")
+        raise Refused("It could not be taken back by itself: ask Claude to take it back.")
     code, new = _git("rev-parse", "HEAD")
     return {"note": "Taken back.",
             "undo": {"action": "upgrade.undo", "target": {"kind": "upgrade",
@@ -3696,11 +3737,11 @@ def _one(aid: str, act: dict, index: Index, db: dict, w, chat: str, zone: str,
         prior = done.get(first) or ((db.get("receipts") or {}).get(first) or {}).get("data")
         undo = (prior or {}).get("undo")
         if not prior or prior.get("result") != "ok" or not undo:
-            return _receipt("conflict", "There is nothing to undo there: say so in a chat.",
+            return _receipt("conflict", "There is nothing to undo there: ask Claude for what you want.",
                             chat, now, aid, act)
         target = dict(undo.get("target") or {})
         if prior.get("guard") and guard(target) != prior["guard"]:
-            return _receipt("stale", "It has changed since: say what you want in a chat.",
+            return _receipt("stale", "It has changed since: ask Claude for what you want.",
                             chat, now, aid, act)
         shown = act
         act = dict(act, action=undo["action"], value=undo.get("value") or {})
@@ -3754,7 +3795,7 @@ def _one(aid: str, act: dict, index: Index, db: dict, w, chat: str, zone: str,
         # inverse that exists has no time limit: it runs while the guard still holds. A Change
         # back is itself the way back: the note under it read as a dead end (journeys 22).
         # Nor where nothing changed: there is nothing to take back (`nothing_new`).
-        out["undo_note"] = "Only a chat can take this back: say so in a chat."
+        out["undo_note"] = "To take this back, ask Claude."
     if shown is not act:
         out["ran"] = name
     return out
@@ -3766,24 +3807,64 @@ def _claimed_by_other(act: dict, chat: str, now: dt.datetime) -> bool:
     return bool(by) and by != chat and until is not None and until > now
 
 
+def handed_over(db: dict, chat: str) -> set:
+    """The chat that answered the page before this one and handed it to it (meta/listener's
+    `handed_by`), when this chat answers it now. A tap such a chat claimed is
+    this chat's: the old helper is put away at the takeover, and its claim held "I sent it"
+    taps out of every wake until it ran out, with nothing to ring again (the maintainer's
+    copy, 2026-11-05)."""
+    doc = (db.get("meta") or {}).get("listener")
+    rec = (doc or {}).get("data") or {}
+    if not chat or str(rec.get("chat") or "") != chat:
+        return set()
+    return {str(rec.get("handed_by") or "")} - {"", chat}
+
+
 def pending(db: dict, chat: str, now: dt.datetime) -> list[tuple[str, dict, int | None]]:
     """(id, action, version) of every action with no receipt, oldest first, leaving out
-    those another chat has claimed and is still within its claim."""
+    those another chat has claimed and is still within its claim, unless that chat handed
+    the page to this one (handed_over)."""
     receipts = db.get("receipts") or {}
+    gone = handed_over(db, chat)
     out = []
     for aid, doc in (db.get("actions") or {}).items():
-        if aid in receipts or _claimed_by_other(doc["data"], chat, now):
+        if aid in receipts or (_claimed_by_other(doc["data"], chat, now)
+                               and str(doc["data"].get("claimed_by") or "") not in gone):
             continue
         at = app_model.parse_time(doc["data"].get("at"))
         out.append((at.timestamp() if at else 0.0, aid, doc))
     return [(aid, doc["data"], doc["version"]) for _, aid, doc in sorted(out)]
 
 
-def claim(dump_dir: str, chat: str, now: dt.datetime, out_dir: str) -> dict:
-    """The claim on every pending action, pinned to the version read, as one batch."""
+def to_claim(todo: list, chat: str, now: dt.datetime) -> list[str]:
+    """The pending actions that need a claim before they are applied: not one this chat holds
+    a claim on that still has time to run (CLAIM_MARGIN_S), and not one this copy applied
+    already whose receipt never landed (its receipt is only sent again). Two "Not this
+    person" taps were claimed again on every wake, version 1 to 2 to 3, while a wake that
+    stopped after its claim never applied them (the maintainer's copy, 2026-11-05)."""
+    kept = _kept_ledger_read()
+    out = []
+    for aid, act, _version in todo:
+        got = kept.get(aid)
+        if isinstance(got, dict) and got.get("fp") == _fingerprint(act):
+            continue
+        until = app_model.parse_time(act.get("claimed_until"))
+        if str(act.get("claimed_by") or "") == chat and until is not None and \
+                until > now + dt.timedelta(seconds=CLAIM_MARGIN_S):
+            continue
+        out.append(aid)
+    return out
+
+
+def claim(dump_dir: str, chat: str, now: dt.datetime, out_dir: str,
+          only: list[str] | None = None) -> dict:
+    """The claim on every pending action (or those in `only`), pinned to the version read,
+    as one batch."""
     db = page_db.load(dump_dir)
     w = page_db.Writes(out_dir)
     todo = pending(db, chat, now)
+    if only is not None:
+        todo = [t for t in todo if t[0] in set(only)]
     unpinned = []
     until = app_model.stamp(now + dt.timedelta(seconds=CLAIM_S))
     for aid, act, version in todo:

@@ -214,6 +214,133 @@ def test_a_tap_another_chat_holds_is_left_to_it_and_the_copy_is_untouched(ring):
     assert ring.tracker() == before and ring.stored("receipts", "act01") is None
 
 
+def test_two_not_this_person_taps_get_their_receipts_in_the_pass_that_applies_them(ring):
+    """Two "Not this person" taps were claimed again on every wake, their records moving from
+    version 1 to 2 to 3 before any receipt landed, and a later wake said "2 applied before"
+    (the maintainer's copy, 2026-11-05): a wake that stopped after its claim never applied
+    them, and one whose receipts never landed claimed them again. A tap this chat holds is
+    applied in the next pass with its receipt, and one applied already is only receipted:
+    neither is claimed twice."""
+    taps = [ring.act("person.stop", who, value={"why": "not the right person", "scope": "person"})
+            for who in ("kestrel_mutual_ansgar", "fernhill_freight_halloway")]
+    said = ring.wake(ring.read("wake1"))
+    assert parts(said) == [[CHECK_IN, TAPS]], said
+    assert all(land(ring, said)), said              # claimed, and that chat stopped there
+    # The next ring, from a new read: applied with their receipts, never claimed again.
+    said = ring.wake(ring.read("wake2"))
+    assert TAPS not in [w for p in parts(said) for w in p], said
+    assert APPLIED in [w for p in parts(said) for w in p], said
+    assert all(land(ring, said)), said
+    for aid in taps:
+        assert ring.stored("receipts", aid)["data"]["result"] == "ok", (aid, said)
+        assert ring.stored("actions", aid)["version"] == 2
+    again = ring.wake(ring.read("wake3"))
+    assert not [p for p in parts(again) if TAPS in p or APPLIED in p], again
+
+
+def _sent_rows(ring, cid):
+    import csv
+    with open(os.path.join(ring.state, "network_threads.csv"), encoding="utf-8") as fh:
+        return [r for r in csv.DictReader(fh) if r["contact_id"] == cid
+                and r["direction"] in ("out", "outbound")]
+
+
+@pytest.mark.parametrize("second", ["same folder", "new read"])
+def test_i_sent_it_is_claimed_and_applied_by_wake(ring, second):
+    """"I sent it" taps were applied only by running app.py apply by hand, never by `wake`
+    (the maintainer's copy, 2026-11-05). The tap changes the copy, so the first wake claims it
+    and the next applies it, whether that is the same folder again (as it says) or a new read
+    on the next ring: logged once, with its receipt."""
+    model = json.loads(ring.run("model", "--now", NOW))
+    msg = next(m for m in model["messages"] if m["contact"] == "kestrel_mutual_ansgar")
+    before = len(_sent_rows(ring, "kestrel_mutual_ansgar"))
+    aid = ring.act("msg.sent", msg["id"])
+    d = ring.read("wake1")
+    said = ring.wake(d)
+    assert parts(said) == [[CHECK_IN, TAPS]], said
+    assert all(land(ring, said)), said
+    said = ring.wake(d if second == "same folder" else ring.read("wake2"))
+    assert APPLIED in [w for p in parts(said) for w in p], said
+    assert TAPS not in [w for p in parts(said) for w in p], said
+    assert all(land(ring, said)), said
+    assert ring.stored("receipts", aid)["data"]["result"] == "ok", ring.stored("receipts", aid)
+    assert len(_sent_rows(ring, "kestrel_mutual_ansgar")) == before + 1
+    again = ring.wake(ring.read("wake3"))
+    assert not [p for p in parts(again) if TAPS in p or APPLIED in p], again
+    assert len(_sent_rows(ring, "kestrel_mutual_ansgar")) == before + 1
+
+
+def test_a_tap_the_helper_before_claimed_is_taken_by_the_one_it_handed_to(ring):
+    """The page handed to a fresh helper, the old one put away at the takeover: an "I sent
+    it" it had claimed was held out of every wake until its claim ran out, with nothing to
+    ring again, and only app.py apply by hand later took it (the maintainer's copy,
+    2026-11-05). The chat it was handed to claims it and applies it; a claim by any other chat
+    is still left to it."""
+    model = json.loads(ring.run("model", "--now", NOW))
+    msg = next(m for m in model["messages"] if m["contact"] == "kestrel_mutual_ansgar")
+    aid = ring.act("msg.sent", msg["id"])
+    doc = ring.stored("actions", aid)
+    ring.put("actions", aid, dict(doc["data"], claimed_by="session_EXAMPLEOLD",
+                                  claimed_until="2026-10-25T18:08:00Z", _v=2), version=2)
+    listen = ring.stored("meta", "listen")
+    ring.put("meta", "listen", dict(listen["data"], took_from="session_EXAMPLEOLD",
+                                    handed_by="session_EXAMPLEOLD", _v=listen["version"] + 1),
+             version=listen["version"] + 1)
+    d = ring.read("wake1")
+    said = ring.wake(d)
+    assert parts(said)[0] == [CHECK_IN, TAPS], said
+    assert all(land(ring, said)), said
+    said = ring.wake(d)
+    assert all(land(ring, said)), said
+    assert ring.stored("receipts", aid)["data"]["result"] == "ok"
+    assert len(_sent_rows(ring, "kestrel_mutual_ansgar")) == 1
+    # Not handed over by it: its claim stands.
+    listen = ring.stored("meta", "listen")
+    ring.put("meta", "listen", dict(listen["data"], handed_by=None, _v=listen["version"] + 1),
+             version=listen["version"] + 1)
+    other = ring.act("person.stop", "fernhill_freight_halloway",
+                     value={"why": "not the right person", "scope": "person"})
+    doc = ring.stored("actions", other)
+    ring.put("actions", other, dict(doc["data"], claimed_by="session_EXAMPLEOLD",
+                                    claimed_until="2026-10-25T18:08:00Z", _v=2), version=2)
+    said = ring.wake(ring.read("wake2"))
+    assert not [p for p in parts(said) if TAPS in p or APPLIED in p], said
+
+
+def test_a_tap_applied_whose_receipt_never_landed_is_receipted_not_claimed_again(ring):
+    aid = ring.act("person.stop", "kestrel_mutual_ansgar",
+                   value={"why": "not the right person", "scope": "person"})
+    d = ring.read("wake1")
+    assert all(land(ring, ring.wake(d)))
+    ring.wake(d)                                     # applied; its receipts never sent
+    assert ring.stored("receipts", aid) is None
+    said = ring.wake(ring.read("wake2"))
+    assert TAPS not in [w for p in parts(said) for w in p], said
+    assert all(land(ring, said)), said
+    assert ring.stored("receipts", aid)["data"]["result"] == "ok"
+    assert ring.stored("actions", aid)["version"] == 2
+
+
+def test_every_small_question_waiting_is_taken_in_one_wake(ring):
+    """One talk a wake, each followed by a new read, took ten questions about 15 minutes and
+    some 30 reads (the maintainer's copy, 2026-11-05). Every small item waiting is claimed in
+    the same pass, each its own claim, and named under next: and also:."""
+    for i in range(3):
+        ring.queue(f"talk~{i}", kind="talk", asked_at=f"2026-10-25T17:0{i}:00Z")
+    said = ring.wake(ring.read("wake1"))
+    assert all(land(ring, said)), said
+    took = [next_item(said)["work"]] + [
+        json.JSONDecoder().raw_decode(said[m.end():])[0]["work"]
+        for m in re.finditer(r"\nalso: ", said)]
+    assert sorted(took) == ["talk~0", "talk~1", "talk~2"], said
+    for wid in took:
+        doc = ring.stored("work", wid)["data"]
+        assert doc["status"] == "running" and doc["claimed_by"] == CHAT, (wid, doc)
+    assert "do each here, now, in order" in said and "More is waiting" not in said
+    again = ring.wake(ring.read("wake2"))
+    assert "nothing else is waiting for this chat" in again, again
+
+
 def test_a_ring_with_nothing_waiting_only_checks_in_and_another_chat_writes_nothing(ring):
     said = ring.wake(ring.read("wake1"))
     assert parts(said) == [[CHECK_IN]]
@@ -391,9 +518,20 @@ def test_the_skill_reads_once_and_wakes_once():
         skill = " ".join(fh.read().split())
     one_to_three = skill[skill.index("## 1. Read, in one go"):skill.index("## 4.")]
     assert "python3 tools/app.py wake \"$D\" --chat <your chat id>" in one_to_three
-    for coll in app.WAKE_READS:
+    # What is read is printed by code (`app.py reads`, tools/page_reads.py): the small
+    # collections whole, the rest only what changed, the screens only when another chat drew
+    # the page (the maintainer, 2026-11-05). A whole read is every collection a wake reads.
+    import page_reads
+    assert "python3 tools/app.py reads \"$D\"" in one_to_three
+    assert set(page_reads.FULL_READS) == set(app.WAKE_READS)
+    for coll in page_reads.WHOLE + page_reads.KEPT:
         assert f"`{coll}`" in one_to_three, coll
     assert "already loaded on a wake" in one_to_three
+    # What the reads saved is never shown in the chat: each later step re-reads all of it (a
+    # helper's history grew by every listing, the maintainer's copy, 2026-11-05).
+    assert "Never list, print or open what the reads saved" in one_to_three
+    # Every small item waiting is named in one wake (`also:`), never one a read.
+    assert "`also:`" in one_to_three
     progress = skill[skill.index("**Progress costs nothing extra**"):]
     assert "big jobs only" in progress[:400] and "every ten minutes" in progress[:1200]
 

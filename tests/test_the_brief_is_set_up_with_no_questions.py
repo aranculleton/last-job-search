@@ -187,12 +187,12 @@ def test_the_plan_binds_the_brief_to_the_chat_that_sets_it_up_and_makes_no_chat(
     assert task["cron_expression"] == "CRON_TZ=Europe/London 38 7 * * *"
     # The brief runs in any chat it lands in: where its chat is gone and the task wakes a new,
     # empty one, the prompt says how to get this copy first (2026-10-31).
-    assert task["prompt"] == routines.with_copy(STUB, "example-owner/my-job-search") and task["connectors"] == []
+    assert task["prompt"] == routines.with_copy(STUB, "example-owner/my-job-search") and "connectors" not in task
     assert "add_repo (owner example-owner, repo my-job-search, access push)" in task["prompt"]
     assert routines._is_brief_prompt(task["prompt"])
     assert task["initiation"] == "human_request"
     first = got["first_brief"]
-    assert first["run_once_at"] == "2026-10-25T14:05:00Z" and first["connectors"] == []
+    assert first["run_once_at"] == "2026-10-25T14:05:00Z" and "connectors" not in first
     assert first["persistent_session_id"] == "session_EXAMPLEHELPER"
     assert "--session session_EXAMPLEHELPER" in got["record"] and "--title" not in got["record"]
     assert "in the chat called" not in got["say"]
@@ -337,3 +337,22 @@ def test_a_workday_board_or_a_careers_site_is_found_before_the_profile_exists(tm
     assert "workday/acme.wd3/External: 2 open (no profile yet, so none judged in range)" in lines
     assert any(x.startswith("careersite/") and ": 1 open (no profile yet" in x for x in lines)
     assert "bodies asked: 0" in lines            # nothing can be judged, so no body is fetched
+
+
+def test_no_scheduled_task_the_app_prints_carries_a_connectors_field():
+    """Some organisations refuse create_trigger's `connectors` field outright ("not available
+    for this organization"), so a printed call that carried `"connectors": []` failed as
+    written (the maintainer's copy, 2026-11-05). The app connects nothing, so it never needs
+    the field: no tool spells it into a call."""
+    sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+    import repo_files
+    root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+    found = []
+    for path in map(str, repo_files.files("tools/**/*.py")):
+        if os.sep + "openroles" + os.sep in path:
+            continue
+        with open(path, encoding="utf-8") as fh:
+            for n, line in enumerate(fh, 1):
+                if '"connectors"' in line or "'connectors'" in line:
+                    found.append(f"{os.path.relpath(path, root)}:{n}")
+    assert found == []

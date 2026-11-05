@@ -68,7 +68,7 @@ class Search:
 def _questions(path):
     with open(path, "w", encoding="utf-8") as fh:
         fh.write("date: %s\nexit: 0\nearlier: \nsetup: \n---\n"
-                 "  These need you: one short question each, at the end of a session:\n"
+                 "  These need you: one short question each, on the page as a To do card:\n"
                  "    - Is your notice period still a month?  [fact]\n" % TODAY)
 
 

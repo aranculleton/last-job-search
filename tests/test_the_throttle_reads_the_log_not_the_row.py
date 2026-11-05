@@ -221,7 +221,10 @@ def test_fit_reads_the_tracker_and_contact_book_it_was_given(tmp_path, monkeypat
     assert row.get("warm_route") and row["warm_route"][0]["name"] == "Robin Vale"
 
 
-def test_the_prefilter_holds_on_the_contact_book_it_was_given(tmp_path, monkeypatch):
+def test_the_prefilter_keeps_a_role_the_given_books_referral_can_carry(tmp_path, monkeypatch):
+    """The contact book it was given is read, and a referral in progress there keeps the
+    role, by the throttle's own rule (throttle.employer_stops): it dropped it while the
+    throttle kept it (2026-11-05)."""
     import json
     import prefilter
     book = tmp_path / "network_contacts.csv"
@@ -235,5 +238,6 @@ def test_the_prefilter_holds_on_the_contact_book_it_was_given(tmp_path, monkeypa
                                       "--seen", str(tmp_path / "seen.json"),
                                       "--contacts", str(book)])
     prefilter.main()
-    assert json.loads(kept.read_text()) == []
-    assert "referral in progress" in json.loads(dropped.read_text())[0]["prefilter_reason"]
+    assert [r["company"] for r in json.loads(kept.read_text())] == ["Kestrel Mutual"]
+    assert not any("referral in progress" in str(r.get("prefilter_reason"))
+                   for r in json.loads(dropped.read_text()))

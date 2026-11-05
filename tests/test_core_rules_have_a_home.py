@@ -216,6 +216,7 @@ def test_the_rules_that_moved_point_back_from_the_core():
     by_name = {
         ".claude/skills/networking/SKILL.md": "networking skill",
         ".claude/skills/job-scraper/SKILL.md": "job-scraper skill",
+        ".claude/skills/app/SKILL.md": "the `app` skill",
         ".claude/skills/job-application-assistant/SKILL.md": "`/apply`",
         ".claude/skills/job-application-assistant/verification-checklist.md": "`/apply`",
         ".claude/commands/apply.md": "`/apply`",

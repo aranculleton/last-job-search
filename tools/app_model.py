@@ -809,19 +809,28 @@ def _skill_questions(ctx: Ctx, targets: dict) -> list:
             who = ", ".join(names[:2]) + " and " + (names[2] if len(names) == 3
                                                     else f"{len(names) - 2} more")
         qid = "q-skill-" + q["key"][:40]
+        # "Just for this role" (skill_answers.ROLE): a yes for the roles asking, and no other.
+        roles = [{"company": str(x.get("company") or "").strip(), "role": str(x.get("role") or "").strip()}
+                 for x in q["for"] if str(x.get("company") or "").strip()]
+        one = "Just for this role" if len(roles) == 1 else "Just for these roles"
+        only = ("" if not roles else f"{one} puts it on this role's resume only, never your "
+                "profile. " if len(roles) == 1 else f"{one} puts it on their resumes only, never "
+                "your profile. ")
         item = {"id": qid, "kind": "consent",
                 "title": f"Can you claim {q['skill']} and back it up in an interview?",
                 "body": ((f"{who} {'asks' if len(names) == 1 else 'ask'} for it, and your "
                           "profile doesn't list it. " if who else "A posting asks for it, and "
                           "your profile doesn't list it. ")
-                         + "Resumes leave it off until you say. A yes puts it on the ones "
-                           "waiting on it and on every one after; a no keeps it off them all."),
-                "options": [{"label": "Yes", "action": "needs.answer", "value": "yes"},
-                            {"label": "No", "action": "needs.answer", "value": "no"}],
+                         + "Resumes leave it off until you say. Yes adds it to your profile, "
+                           "for every resume. " + only + "No keeps it off them all."),
+                "options": [{"label": "Yes, add it to my profile", "action": "needs.answer", "value": "yes"}]
+                + ([{"label": one, "action": "needs.answer", "value": "role"}] if roles else [])
+                + [{"label": "No", "action": "needs.answer", "value": "no"}],
                 "about": {"company": names[0]} if len(names) == 1 else {},
-                "rev": rev_of(qid, q["skill"], q.get("asked"), names)}
+                "rev": rev_of(qid, q["skill"], q.get("asked"), names, roles)}
         out.append(item)
-        targets[qid] = {"kind": "skill_ask", "skill": q["skill"], "rev": item["rev"]}
+        targets[qid] = {"kind": "skill_ask", "skill": q["skill"], "roles": roles,
+                        "rev": item["rev"]}
     return out
 
 
@@ -1447,6 +1456,9 @@ def _jobs(ctx: Ctx, targets: dict) -> dict:
                          "applying again.")
         if r.get("outreach_pending_note"):
             notes.append(_pending_words(_waiting_at(ctx, company)))
+        if r.get("referral_note"):
+            # Kept, never dropped, for a referral in progress here (throttle.employer_stops).
+            notes.append("Someone is referring you here: apply through them, never on your own.")
         jid = f"{rname}-{rank}"
         top, at_target = _pay_top(pay)
         # Counted to today: the posting's own date where the search read one, else its age
@@ -1890,8 +1902,11 @@ def _checks(files, expect_resume: int, noun: str = "resume") -> dict:
     # end of the line said nothing of which was which (2026-11-05).
     parts = [{"kind": f["kind"], "words": f"{said[f['kind']]} {f['pages']} page{'s' if f['pages'] != 1 else ''}"}
              for f in files]
-    lead = "Made, right length: "
-    return {"passed": True, "line": lead + ", ".join(p["words"] for p in parts), "lead": lead, "parts": parts}
+    # Said only as the documents and their length, each with its pencil: "Made, right length:"
+    # on every card read as a message the person had to do something about (the maintainer,
+    # 2026-11-05: "why do these all say made right length resume 1 page").
+    lead = ""
+    return {"passed": True, "line": ", ".join(p["words"] for p in parts), "lead": lead, "parts": parts}
 
 
 # verify_batch.py's flags, said plainly; anything else is said as "a check failed".
@@ -2387,6 +2402,20 @@ def draft_limit(contact: dict, status: str, text: str = "") -> tuple[str, str, i
     return mtype, COMPOSE_KIND.get(mtype, "reply"), _limit(channel, kind)
 
 
+# A message whose words send the resume ("resume attached", "here's my resume", "my CV as
+# promised"): its card carries the document, ready to attach, so nobody hunts for the file
+# (the maintainer, 2026-11-05: "it would be great if the actual document was linked there").
+_SENDS_RESUME = re.compile(
+    r"\b(?:resume|r[ée]sum[ée]|cv)\b(?:\s+is)?\s+(?:attached|enclosed|as promised)"
+    r"|\bhere(?:'|\u2019)?s\s+(?:my|the)\s+(?:resume|r[ée]sum[ée]|cv)\b"
+    r"|\b(?:attached|attaching|enclosed)\s+(?:is\s+)?(?:my|the)\s+(?:resume|r[ée]sum[ée]|cv)\b", re.I)
+
+
+def sends_of(text) -> str | None:
+    """"resume" where a message's words send the resume with it, else None."""
+    return "resume" if _SENDS_RESUME.search(str(text or "")) else None
+
+
 def _messages(ctx: Ctx, targets: dict) -> list:
     files = sorted(glob.glob(person.state("documents", "network", "*", "draft.md")))
     ctx._got["message_by_contact"] = {}
@@ -2413,6 +2442,12 @@ def _messages(ctx: Ctx, targets: dict) -> list:
         if surface.held(c, ctx.by_contact.get(cid) or [], live,
                         replying=live == "replied_needs_response",
                         memo=ctx._got.setdefault("held_memo", {})):
+            continue
+        # A draft written before their newest message answers an older one (times offered
+        # that have passed, a request it never saw): never offered, and their message is
+        # owed a reply drafted afresh (2026-11-05).
+        from network import state as _st
+        if _st.draft_predates(cid, ctx.by_contact.get(cid) or []):
             continue
         channel = _channel(c, kind)
         hold = None
@@ -2453,6 +2488,7 @@ def _messages(ctx: Ctx, targets: dict) -> list:
         item["tweaks_done"] = _tweaks_done(os.path.dirname(f), f)
         item["paste"] = _paste(cid, item["first_name"], raw) if kind == "first_note" else None
         item["fix"] = message_fix(item)
+        item["sends"] = sends_of(body)
         _card(ctx, targets, item, "for_message")
         out.append(item)
         targets[mid] = {"kind": "message", "contact": cid, "text": body, "subject": subject,
@@ -2679,8 +2715,11 @@ def _call_of(cid: str, status: str, due: str, said: str = "", home: str = "",
                 clock, due = local.strftime("%H:%M"), local.date().isoformat()
             except Exception:  # noqa: BLE001  no zone data: the time as written
                 clock = w["time"]
+    import upcoming
     return {"day": (due or None) if status == "call_booked" else None,
             **({"time": clock} if clock else {}),
+            # Asked for and not confirmed by them yet, as the call's own line says it.
+            **({"tentative": True} if status == "call_booked" and upcoming.call_tentative(said) else {}),
             "prep": {"path": rel(path), "updated": _mtime(path), "text": _prep_text(path, names)}
             if have else None}
 
@@ -3498,8 +3537,11 @@ def _interviews(ctx: Ctx, targets: dict) -> list:
                 "offered": offered or None,
                 "reply_by": (stage.get("reply_by") or None) if offered else None,
                 "when": interview_when(stage.get("date"), clock, stage.get("zone"), ctx.zone),
+                # Asked for and not confirmed by them yet (the maintainer, 2026-11-05).
+                **({"tentative": True} if stage.get("tentative") and stage.get("date") else {}),
                 "prep": ({"path": rel(prep), "updated": _mtime(prep),
-                          **({"stale": True} if _prep_stale(folder, text, stage) else {})}
+                          **({"stale": True, "stale_since": _mtime(os.path.join(folder, "outcome.md"))}
+                             if _prep_stale(folder, text, stage) else {})}
                          if text else None),
                 "questions": len(re.findall(r"^- \*\*Q\.\*\* ", text, re.M)),
                 # A stage's day is a whole day in the person's own zone; a time shows only
@@ -3530,7 +3572,8 @@ def _interviews(ctx: Ctx, targets: dict) -> list:
                 "referrer": referrer_of(ctx, row),
                 "past": not live,
                 "rev": rev_of(iid, st, stage.get("label"), stage.get("date"), clock,
-                              stage.get("with"), bool(text), live, offered)}
+                              stage.get("with"), bool(text), live, offered,
+                              bool(stage.get("tentative")))}
         order[iid] = (str(stage.get("date") or min(offered or ["9999"])), clock)
         _card(ctx, targets, item, "for_interview")
         targets[iid] = dict(_row_target(row, rid), kind="interview", stage=item["next_stage"]

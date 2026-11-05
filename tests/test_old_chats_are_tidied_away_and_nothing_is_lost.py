@@ -110,7 +110,9 @@ def test_a_brief_whose_chat_no_longer_works_moves_into_the_helper():
     assert new["cron_expression"] == "CRON_TZ=Europe/London 38 7 * * 1,4"   # their own days kept
     # With the line that gets the files where the chat has none (routines.with_copy).
     assert new["prompt"] == routines.with_copy(routines.stub(REG, "morning_brief"), REPO)
-    assert new["connectors"] == []
+    # No connectors field at all: some organisations refuse it, and the printed call failed
+    # as written (the maintainer's copy, 2026-11-05).
+    assert "connectors" not in new
     assert "--session " + HELPER in calls[1]["run"]
     assert calls[2]["args"] == {"trigger_id": "trig_EXAMPLEBRIEF", "enabled": False}  # off, kept
     assert "delete_trigger" not in json.dumps(got)
@@ -379,7 +381,7 @@ def test_a_copy_with_no_daily_brief_gets_a_silent_daily_upkeep_bound_to_the_help
     # Only on the days the brief does not run, since a brief does the same (X-38).
     assert new["cron_expression"].startswith("CRON_TZ=Europe/London ") and \
         new["cron_expression"].endswith(" * * 0,2,3,5,6")
-    assert routines.at_most_daily(new["cron_expression"]) and new["connectors"] == []
+    assert routines.at_most_daily(new["cron_expression"]) and "connectors" not in new
     assert "automation/prompts/upkeep.md" in new["prompt"] and "add_repo (owner example-owner" in new["prompt"]
     assert "upkeep-record --session " + HELPER in up[1]["run"]
     # None at all yet (no brief ever set up): the upkeep is made too.

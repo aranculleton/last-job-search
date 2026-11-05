@@ -1,19 +1,19 @@
 {
  "model": 1,
  "made_at": "2026-10-25T18:00:00Z",
- "rev": "c88e300406ae",
+ "rev": "f34fc5bf0d55",
  "app": {
-  "version": "4.10.0",
+  "version": "4.10.1",
   "url": null,
   "update_waiting": null,
   "news": [
-   "A calmer page that does more by itself.",
-   "Questions on the form.",
-   "Jobs is one list."
+   "One helper chat, and two only while one hands over to the next.",
+   "The README and the start guide say the pencil and the trash.",
+   "The page never says \"Connected\" for a moment while it is still reconnecting."
   ],
   "privacy": "Only you can open this page unless you share it. It holds first names, employers, your drafts and your setup answers, so keep it unshared.",
   "repo": "https://github.com/aranculleton/last-job-search",
-  "page": 43,
+  "page": 55,
   "not_saved": 0
  },
  "person": {
@@ -48,7 +48,7 @@
  ],
  "jobs": {
   "round": "r9",
-  "made_at": "2026-11-05T07:36:14Z",
+  "made_at": "2026-11-05T19:44:50Z",
   "met": false,
   "summary": "3 roles from the last search to look at, 1 of them scoring 75 or more. 3 left out, each with its reason.",
   "rows": [
@@ -556,8 +556,8 @@
    ],
    "checks": {
     "passed": true,
-    "line": "Made, right length: CV 1 page, letter 1 page",
-    "lead": "Made, right length: ",
+    "line": "CV 1 page, letter 1 page",
+    "lead": "",
     "parts": [
      {
       "kind": "resume",
@@ -650,6 +650,7 @@
    "tweaks_done": [],
    "paste": null,
    "fix": null,
+   "sends": null,
    "alerts": [],
    "suggest": null,
    "related": {
@@ -966,7 +967,7 @@
    "when": "2026-10-28",
    "prep": {
     "path": "documents/applications/thornbury_bank_risk_analyst_thornbury/interview_prep.md",
-    "updated": "2026-11-05T07:36:14Z"
+    "updated": "2026-11-05T19:44:50Z"
    },
    "questions": 2,
    "all_day": true,
@@ -1069,7 +1070,7 @@
    ],
    "referrer": null,
    "past": false,
-   "rev": "872c75166933",
+   "rev": "070559dec4bc",
    "alerts": [],
    "suggest": null,
    "related": {
@@ -1456,11 +1457,23 @@
   ]
  },
  "updates": {
-  "version": "4.10.0",
-  "newest": "4.10.0",
+  "version": "4.10.1",
+  "newest": "4.10.1",
   "mode": "auto",
   "waiting": null,
   "changed": [
+   {
+    "version": "4.10.1",
+    "date": "2026-11-05",
+    "lines": [
+     "One helper chat, and two only while one hands over to the next.",
+     "The README and the start guide say the pencil and the trash.",
+     "The page never says \"Connected\" for a moment while it is still reconnecting.",
+     "Every screen is the whole width.",
+     "Icons only is its own section at the top of the side menu.",
+     "A long job title fills its line before it wraps."
+    ]
+   },
    {
     "version": "4.10.0",
     "date": "2026-11-05",
@@ -1472,24 +1485,12 @@
      "The pencil.",
      "What costs Claude's time shows."
     ]
-   },
-   {
-    "version": "4.9.1",
-    "date": "2026-11-04",
-    "lines": [
-     "A new helper chat gives your page's link straight away.",
-     "With a page, a brief in a chat is short.",
-     "A LinkedIn download fills in what your contacts lack.",
-     "An opened setting uses the whole width.",
-     "Your LinkedIn download has one button.",
-     "A saved tap says what happens next and where to see it."
-    ]
    }
   ],
   "done": [],
   "pending": [],
   "changelog": "https://github.com/aranculleton/last-job-search/blob/master/CHANGELOG.md",
-  "since": false
+  "since": true
  },
  "applications": [
   {
@@ -1992,12 +1993,13 @@
    },
    "note": "Risk Analyst, with the head of risk",
    "uid": "up-app-thornbury_bank_risk_analyst-stage-1",
+   "tentative": false,
    "cal": {
     "google": "https://calendar.google.com/calendar/render?action=TEMPLATE&text=Panel%20interview%3A%20Thornbury%20Bank&dates=20261028/20261029&details=Risk%20Analyst%2C%20with%20the%20head%20of%20risk",
     "outlook": "https://outlook.live.com/calendar/action/compose?path=%2Fcalendar%2Faction%2Fcompose&rru=addevent&startdt=2026-10-28&enddt=2026-10-29&allday=true&subject=Panel%20interview%3A%20Thornbury%20Bank&body=Risk%20Analyst%2C%20with%20the%20head%20of%20risk",
     "ics": "BEGIN:VEVENT\r\nUID:up-app-thornbury_bank_risk_analyst-stage-1.last-job-search\r\nDTSTAMP:20261025T000000Z\r\nSEQUENCE:297\r\nDTSTART;VALUE=DATE:20261028\r\nDTEND;VALUE=DATE:20261029\r\nSUMMARY:Panel interview: Thornbury Bank\r\nDESCRIPTION:Risk Analyst\\, with the head of risk\r\nBEGIN:VALARM\r\nACTION:DISPLAY\r\nDESCRIPTION:Panel interview: Thornbury Bank\r\nTRIGGER:-PT9H\r\nEND:VALARM\r\nEND:VEVENT\r\n"
    },
-   "rev": "205c22b25fa6"
+   "rev": "dcdfa09caa77"
   }
  ],
  "rules": {

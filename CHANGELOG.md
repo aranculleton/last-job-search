@@ -22,12 +22,81 @@ make sense to somebody whose repo just received it.
 
 ### Added
 
-- **Something else, on every card.** The last thing under a card's More opens the Chat with
-  "About <the person, job or interview>:" begun, so you can tell Claude anything the buttons do
-  not cover; what you send goes to Claude as work about that card.
+- **Something else, on every card, answered under that card.** The last thing under a card's
+  More opens a box right under it, so you can ask or tell Claude anything the buttons do not
+  cover; Claude's answer shows under the same card, and none of it goes into the Chat.
+- **Fewer trips to the Chat.** Paste a message, an interview not on your list, telling Claude
+  something looks wrong, tidying your rules and bringing back old chats each open a box where
+  you are, with Claude's answer shown there.
+- **The resume a message sends is on its card.** A draft that says "resume attached" or
+  "here's my resume" shows the file under it, ready to save and attach.
+- **Something else in the trash.** Putting away a person, a job, a draft or an interview now
+  ends with "Something else", which opens that card's box so you can say what is going on.
+- **"Just for this role" for a skill.** A question about a skill your profile lacks now has
+  three answers: add it to your profile, use it for this role's resume only, or no.
+- **Not confirmed yet.** An interview or call you asked for but they have not confirmed can be
+  marked so when you give its day, and Coming up and the Brief say "Not confirmed yet".
+- **Old resume requests close by themselves.** Someone who asked for your resume over two
+  months ago and has said nothing since leaves your list on their own; the brief says so once.
 
 ### Fixed
 
+- **The page chat stays small all day.** Each tap is answered by a short-lived helper whose work is thrown away afterwards, so the chat that looks after your page grows by a line a tap instead of thousands.
+- **A fresh page chat once a day.** It starts at the day's first tap (or sooner only when it is nearly full), carrying a short note of what is in flight and what you asked last.
+- **A tap reads only what changed.** Claude reads your page's new taps and work, keeps the rest from its last look, and reads everything again once a day or when something looks out of step.
+- **Saving happens once a batch, quietly.** Your work is saved in the background once each batch of answers is on your page, and finishing a save no longer wakes the page chat or holds it up.
+- **What answering your page costs is kept.** Each tap's cost is noted, and `python3 tools/helper_usage.py day` says it as one number for the day.
+- Answering a skill question on a job card takes it off the card at once, and only the
+  answer you gave is ticked.
+- A new day for the same interview no longer says your prep is out of date, and when the
+  rounds really change, your prep is updated by itself.
+- A call you call off leaves Coming up at once.
+- Moving a call they offered no longer counts as chasing them, so they are not marked "no
+  more follow-ups".
+- Saying someone needs no answer takes the first time, even when their message came in late
+  in your evening.
+- If "I sent it" cannot be saved, the message comes back on its card saying "Not saved. Tap
+  I sent it again.", instead of disappearing.
+- **"Draft all" for your follow-ups is one quick job, not one per person.** Follow-ups asked for together are taken together and written in one go, so nine follow-ups take a handful of steps instead of dozens.
+- **"I sent it" is always taken in.** A tap made just as Claude's daily fresh start on your page happened sat waiting; it is now taken in on Claude's next look.
+- **Your page no longer sends you to another chat.** Where a tap cannot do something, the page now asks Claude, who does it right there, and nothing on it talks about chats.
+- **Someone you had already answered no longer shows as waiting on you.** Bringing in your
+  LinkedIn download added some messages a second time when only their apostrophes differed
+  (curly against straight), so an old message could land after your reply and a new reply was
+  drafted. It now matches them, and copies already logged are taken out by themselves, any
+  note that a resume went with the message kept. Profile upgrade: export-repeats.
+- **Messages from the same day are in the order they were sent.** The log keeps a day but no
+  time, so a message brought in from your LinkedIn download landed after a reply you sent later
+  that day, and someone you had answered read as waiting on you. New ones go in the right place,
+  and the same tidy puts older days in order from the download on file.
+- **Web addresses no longer fill the Brief's news**: each is a short link named by its site.
+- **Jobs has a search box beside Filter**, as Contacts does, once the list is long.
+- **A form's answers are one tap away**: the line saying they are ready has Show it, which
+  opens them on the card, where it pointed "under More" and More held only the box to ask again.
+- **A downloaded resume is named for the person reading it**: your name, the document and the
+  employer (`Morgan_Ellis_Resume_Kestrel_Foods.pdf`), never the role run together after it.
+- **Chat opens on its newest message.** It stays there as answers come in until you scroll up,
+  a Latest button takes you back down, and it shows the last day, with earlier messages loading
+  as you scroll up.
+- **Several things at once read at a glance.** Drafting a batch shows one line on its card
+  ("Drafting 9: 1 being written, 8 in line") with one Cancel all, and each person a word; finished
+  answers are one card in Claude's work. A message sent while Claude is answering the last one
+  goes to Claude too, and one that does not save says "Not sent" instead of seeming to go.
+- **Contacts and Jobs open on the whole list, sorted, never left filtered.** Contacts puts who
+  is waiting on you first, then the other messages ready to send, then everyone else, with a
+  separate Sort by; the filters on both are the few that help (what to show, work style, when
+  posted) instead of eight groups.
+- **The pencil on a draft asks what to change.** It opens a box under the draft, big enough to
+  paste their message into, with Shorter, Warmer and More formal to fill it and one Ask Claude
+  to send it (or Cmd or Ctrl+Enter); Edit the words yourself is there for a small change by hand,
+  and Cancel closes it.
+- **The Brief opens what it names and lists what is ready.** A step about an application (a
+  thank-you after an interview) opens it; someone you told the page not to contact leaves the
+  steps at once; with nothing new found, the Jobs panel lists the drafts ready to apply.
+- **A finished draft no longer says "Made, right length"** on every card: just its documents and
+  their length, each with its pencil.
+- **Claude's answers no longer say "Finished: putting it on your page"**, which squashed the
+  work card's title on a narrow screen; a long state now wraps inside its own label.
 - **Claude's browser no longer opens a LinkedIn profile every time you come back to the page.**
   Each opening started reading whoever was waiting, and when you closed Claude's browser (or
   left the page) the read stopped unfinished, was never remembered, and started again at the
@@ -46,6 +115,68 @@ make sense to somebody whose repo just received it.
 - **An old chat that will not close yet is tried again, never handed to you.** Archiving the
   helper a hand-over replaced was refused while it was still finishing, and the page chat said
   "you can archive it yourself"; it now says nothing and tries again at that check-in.
+- **Closing someone in a chat now takes their draft off your page**, as the bin on the page
+  does: closed, gone quiet, set aside or nothing left to do, the note is kept but no longer
+  offered, and putting them back brings it back.
+- **A draft written before their newest message is no longer offered as the reply.** When they
+  write again, even in a message your LinkedIn download brings days later, the old draft is set
+  aside and Claude drafts the reply to what they actually said.
+- **Thanking someone who said they'll keep you in mind no longer sets a follow-up.** A kind
+  close and your thanks end it for now; if they write again, a reply is owed as usual.
+- **A whole LinkedIn conversation pasted into a chat now logs only their messages, each on its
+  own day.** Your own messages in it are left out, and your own email address in it is never
+  read as them asking for your resume.
+- **A message you wrote fresh is no longer read as an edit of an old draft.** Only words that
+  are plainly the draft changed teach Claude how you like to write.
+- **Claude's own notes on what worked no longer appear in a reply on your page.**
+- **"networking" now works everywhere a kind of rule is named**, the same as "messages".
+- **Saving your work from a cloud chat with no GitHub tools now uses steps that chat allows.**
+- **A job at an employer where someone is referring you now stays on your list everywhere.**
+  The first sift of a search dropped it while the later one kept it; now both follow one rule,
+  and the job says to apply through the person referring you, never on your own.
+
+- **Moving your brief or setting it up no longer fails in some organizations.** The steps
+  Claude follows to set up or move a scheduled task named an empty list of connected accounts,
+  which some organizations refuse outright, so the step failed as written. It is left out now.
+
+- **Your brief stays with the chat that answers your page.** Right after a new page chat took
+  over, its first tidy-up still went by what it had read a moment before the take-over, so it
+  moved your brief into the old chat it was replacing. It now goes by the take-over itself.
+
+- **A tap on the page is done once, and its tick shows.** When the page chat stopped right after
+  taking a tap (such as "Not this person"), each later visit took it again without doing it, so
+  it never showed as done; one done whose tick was lost was taken again too. Now a tap the
+  chat already holds is done on its next visit, and one already done only gets its tick.
+
+- **Questions after an update wait for you on the page.** The update's own instructions told
+  your page chat to ask its questions in a chat nobody reads, while its start said they go on
+  the page; both now say the page asks each as a To do card.
+
+- **One page chat, not three.** A new page chat's start alone made it look too long, so it
+  replaced itself within minutes and chats piled up. It now hands over only when it is truly
+  near full, or after a day with nothing to do, never in its first hour and never while the
+  chat before it is still there.
+- **The page chat a new one replaced goes at once.** It was kept for half an hour after every
+  hand-over, and your brief waited in it; now it is put away as soon as it has stopped, and
+  the brief moves to the new chat straight away.
+
+- **A new page chat hears your taps.** After one page chat took over from another, your taps
+  still went to the old chat's finished conversation, and nothing happened. The page now starts
+  a fresh one for the chat that answers it.
+
+- **Several questions on the page are answered in one go.** The page chat took one question at
+  a time and looked at the whole page again before each, so ten questions took about a quarter
+  of an hour. It now takes every small one waiting together.
+
+- **Tidying old chats takes fewer steps.** The page chat had to copy the list of chats and
+  scheduled tasks into files by hand before it could tidy; it now hands them over in one step.
+
+- **The page chat stays quick for longer.** It no longer shows itself the lists of everything it
+  read from your page, which made every later step slower.
+
+- **The app's own update check is quicker.** On the app maintainer's copy it re-checked the
+  whole public app on every run, which took over two minutes; it now does that once a day, and
+  again after an update.
 
 ## [4.10.1] - 2026-11-05
 

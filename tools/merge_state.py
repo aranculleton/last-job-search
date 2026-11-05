@@ -175,6 +175,11 @@ JSON_FILES = {
                            "indent": 2, "ascii": True},
     # The scheduled tasks (routines.record): one entry a task, known by its key.
     "profile/routines.json": {"lists": {"routines": ("key",)}, "indent": 2},
+    # What answering the page cost, a line a wake and a hand-over (helper_usage.record): a log
+    # only ever added to, each entry known by when, which chat and what; kept a month, so an
+    # entry one side let go of stays out.
+    "documents/helper_usage.json": {"lists": {"entries": ("at", "chat", "kind")},
+                                    "order": {"entries": "at"}, "indent": 1, "sort": "all"},
     # What the person booked that the app did not know of (upcoming.add): one entry each,
     # known by its id, so the page and a chat adding one each on the same day keep both.
     "documents/upcoming.json": {"lists": {"events": ("id",)}, "indent": 2},
@@ -191,8 +196,11 @@ JSON_FILES = {
                                     "indent": 1},
     "documents/skill_answers.json": {
         "whole": ("skills/*/answer",), "stamps": ("at",),
-        "lists": {"skills/*/for": {"key": ("company", "role"), "keep": True}},
-        "dated": {"skills/*/asked": "earlier", "skills/*/for/#/day": "later"},
+        # A yes "just for this role" (skill_answers.record_role): every role either side named.
+        "lists": {"skills/*/for": {"key": ("company", "role"), "keep": True},
+                  "skills/*/roles": {"key": ("company", "role"), "keep": True}},
+        "dated": {"skills/*/asked": "earlier", "skills/*/for/#/day": "later",
+                  "skills/*/roles/#/at": "later"},
         "indent": 1, "sort": "all"},
     # The findings the person read and kept (profile_consistency.keep): only ever added to.
     "profile/consistency_reviewed.json": {
@@ -281,6 +289,12 @@ JSON_FILES = {
     # The parts this contact's note was built from (parts.save): a snapshot of one note.
     "documents/network/*/draft.parts.json": {"whole": ("",), "indent": 1, "sort": "all",
                                              "newline": False},
+    # What a parked draft's row said when it was set aside (state.park_draft), so putting the
+    # row back as it was brings the draft back: a snapshot, the newer whole.
+    "documents/network/*/draft.not-needed.json": {"whole": ("",), "newline": False},
+    # The newest message of theirs a draft answered (state.save_answers): a snapshot of what
+    # the draft was written against, the newer whole.
+    "documents/network/*/draft.answers.json": {"whole": ("",), "newline": False},
     # ---- one application or interview process
     # The person's answer to a campaign chat (interview_pack.record_campaign), and what the
     # last build wrote into the living prep document (its built record): snapshots.
@@ -387,7 +401,15 @@ JSON_NAMES = {
                      "ljs-reactions.json", "ljs-upgrades-listed.json", "ljs_own_tests.json",
                      ".reactions.json", "ljs-no-page.json", "ljs-page-held.json",
                      "ljs-job-chats.json", "ljs-tidy-planned.json", "ljs-versions.json",
-                     "ljs-save-held.json"), _GITDIR),
+                     "ljs-save-held.json", "ljs-land-result.json", ".mirror.json"), _GITDIR),
+    # The page's records as this checkout last read them (page_reads, the mirror in its git
+    # folder), each under its own record's name: the meta records read by name, and every file
+    # of a collection copied whole.
+    **dict.fromkeys(("now.json", "current.json", "tools/page_reads.py: .json"),
+                    "the page database's records as this checkout last read them, in its git "
+                    "folder (page_reads.MIRROR) or a dump folder; never committed"),
+    ".reads.json": "a page dump folder's note of what was read, from when, in the chat's "
+                   "scratch folder; never committed",
     # A dump folder's own note of each record's stamp as read (page_db._keep_read_stamp):
     # written into the chat's scratch folder beside the dump, never into the person's files.
     ".read-stamps.json": "a page dump folder's note of each record's stamp as read, in the chat's scratch folder; never committed",

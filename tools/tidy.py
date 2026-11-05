@@ -113,9 +113,14 @@ RETIRE_FOR_S = 24 * 3600
 FOR_NOW = ("it was in use moments ago", "it is running", "they used it in the last hour",
            "its work is not on master yet", "its work is not on GitHub yet")
 RECHECK_MIN = 31
+# A check-in can fire after this chat has handed the page on again (seen 18 minutes on): then
+# it does nothing, and the chat that answers now tidies what is left at its own take-over
+# (`plan` judges every old helper and the brief's binding, not only the last hand-over's).
 RECHECK = ("Scheduled check-in, after the hand-over: check in on the page as when it rings "
            "(the app skill) and do the tidy-up it prints, so the helper this chat took the page "
-           "over from is put away once it has finished. Ask nobody and say nothing about it.")
+           "over from is put away once it has finished. Ask nobody and say nothing about it. If "
+           "the check-in says another chat answers the page, do nothing else: end with the one "
+           "line \"Another chat looks after the page now.\"")
 # An old helper used this lately is still in use: kept until a later check-in.
 RECENT_S = 10 * 60
 RUN_TITLE = "⚡ Job search: a scheduled run"
@@ -358,6 +363,35 @@ def _pages(paths) -> list:
     return out
 
 
+def _given(a) -> dict:
+    """What the chat passed on standard input with --stdin: one JSON object holding what
+    list_sessions, list_triggers and get_session returned, as they returned it
+    ({"sessions": ..., "triggers": ..., "details": ...}; each a whole result, a list of
+    results, or a bare list). The chat had typed each listing into a file by hand first (the
+    maintainer's copy, 2026-11-05): one heredoc is one step, and no file."""
+    if not getattr(a, "stdin", False):
+        return {}
+    raw = sys.stdin.read()
+    try:
+        got = json.loads(raw) if raw.strip() else {}
+    except ValueError:
+        raise SystemExit("tidy: what was given on standard input is not JSON: pass "
+                         "{\"sessions\": <list_sessions' result>, \"triggers\": "
+                         "<list_triggers' result>} as the tools returned them") from None
+    return got if isinstance(got, dict) else {}
+
+
+def _as_pages(value) -> list:
+    """One result, several pages of one, or a bare list, as a list of pages."""
+    if value is None:
+        return []
+    if isinstance(value, list) and value and all(
+            isinstance(v, dict) and any(k in v for k in ("data", "ccr", "triggers"))
+            for v in value):
+        return value
+    return [value]
+
+
 def sessions(pages) -> list[dict]:
     """Every chat in list_sessions' pages ({"ccr": {"data": [...]}} or {"data": [...]})."""
     out = []
@@ -585,7 +619,7 @@ def plan(chats: list[dict], triggers: list[dict], info: dict, reg: dict, listene
             out["brief"] = [
                 {"tool": "create_trigger", "args": {
                     "name": routines.BRIEF_NAME, "persistent_session_id": helper,
-                    "cron_expression": brief["cron"], "prompt": stub, "connectors": [],
+                    "cron_expression": brief["cron"], "prompt": stub,
                     "initiation": "own_initiative"},
                  "why": "the brief runs in the chat that answers the page from now on"},
                 {"run": f"python3 tools/routines.py record --session {helper} --trigger "
@@ -615,7 +649,7 @@ def plan(chats: list[dict], triggers: list[dict], info: dict, reg: dict, listene
                     "name": rnd.get("name") or "Job search: shortlist",
                     "persistent_session_id": helper, "cron_expression": rnd["cron"],
                     "prompt": routines.with_copy(routines.stub(reg, "job_round", own_chat=True), repo),
-                    "connectors": [], "initiation": "own_initiative"},
+                    "initiation": "own_initiative"},
                  "why": "the shortlist runs in the chat that answers the page from now on"},
                 {"run": f"python3 tools/routines.py rebind job_round --session {helper} "
                         f"--trigger <the new task's id>",
@@ -686,11 +720,21 @@ def plan(chats: list[dict], triggers: list[dict], info: dict, reg: dict, listene
         last = _last_used(s, d)
         quiet = _days_since(last, today)
         waits = "requires_action" in status or "blocked" in status
-        if sid in old_helpers and (waits or _ago_s(last, now) < RECENT_S):
-            # An old helper is not kept for two quiet days (its renewal used it minutes before
-            # a hand-over), but never put away while it is still in use or waiting on them.
-            keep("it was in use moments ago" if not waits else "it is waiting on the person")
+        if sid in old_helpers and waits:
+            keep("it is waiting on the person")
             continue
+        if sid in old_helpers and _ago_s(last, now) < RECENT_S:
+            # An old helper is not kept for two quiet days (its renewal used it minutes before
+            # a hand-over), but never put away while it is still in use. Used moments ago, it
+            # is read first, and one get_session calls idle is put away now: kept for a later
+            # check-in, two helpers stayed for half an hour after every hand-over, and a
+            # third came (the maintainer's copy, 2026-11-05).
+            if d is None:
+                out["ask"].append(sid)
+                continue
+            if not _status(None, d):
+                keep("it was in use moments ago")
+                continue
         if sid in started_helpers and _ago_s(last, now) < STARTED_QUIET_S:
             keep("they used it in the last hour")
             continue
@@ -728,10 +772,11 @@ def plan(chats: list[dict], triggers: list[dict], info: dict, reg: dict, listene
         out["archive"].append({"id": sid, "title": title, "why": why})
     listed = {s.get("id") for s in chats}
     if adopt and adopt in listed and not any(a["id"] == adopt for a in out["archive"]) \
-            and not (adopt == this_chat and old_helper(adopt)):
-        # Its chat is kept: the brief stays put. Not where it is an old helper running this
-        # very tidy-up (the brief's own run): the brief moves now and the next tidy-up, from
-        # another chat, puts this one away; else it stayed for good.
+            and not old_helper(adopt):
+        # Its chat is kept: the brief stays put. Never where it is an old helper, kept only
+        # until it finishes: the brief moves into the live helper in this same pass. Left
+        # there, the plan said "nothing to tidy" and the brief waited half an hour for a
+        # check-in in the helper being put away (the maintainer's copy, 2026-11-05).
         out["brief"] = []
     if rchat in moved_from and rchat in listed and not any(a["id"] == rchat for a in out["archive"]):
         out["moves"] = []                             # its chat is kept: the round stays put
@@ -801,7 +846,7 @@ def _upkeep_calls(reg: dict, triggers: list[dict], helper: str, listener: dict,
         return []
     out = [{"tool": "create_trigger", "args": {
                "name": routines.UPKEEP_NAME, "persistent_session_id": helper,
-               "cron_expression": cron, "prompt": routines.upkeep_stub(repo), "connectors": [],
+               "cron_expression": cron, "prompt": routines.upkeep_stub(repo),
                "initiation": "own_initiative"},
             "why": "once a day, silently, the copy and the page kept current"},
            {"run": f"python3 tools/routines.py upkeep-record --session {helper} --trigger "
@@ -815,17 +860,34 @@ def _upkeep_calls(reg: dict, triggers: list[dict], helper: str, listener: dict,
 
 def _listener(dump: str) -> dict:
     """The chat that answers the page: from this wake's dump, else what this checkout last
-    saw (the brief's run has no dump)."""
+    saw (the brief's run has no dump).
+
+    A folder read before this chat's own check-in took the page holds the chat it took the
+    page from: the start steps reuse that folder, and the first tidy-up bound the brief to the
+    helper just replaced and deleted the task (the maintainer's copy, 2026-11-05). What this
+    checkout wrote at that check-in (app_listen._remember) is newer, so it wins here."""
     import app_listen
+    seen = dict(app_listen.seen().get("listener") or {})
     if dump:
         import page_db
         try:
             rec, _ = app_listen.record(page_db.load(dump))
-            if rec:
-                return rec
         except Exception:  # noqa: BLE001  not a dump: what was seen
-            pass
-    return dict(app_listen.seen().get("listener") or {})
+            rec = {}
+        if rec:
+            return seen if _newer(seen, rec) else rec
+    return seen
+
+
+def _newer(seen: dict, rec: dict) -> bool:
+    """Is what this checkout saw a later hand-over than the record in the folder? Only a
+    different chat that took the page after the folder's own did, with the hand-over's
+    fields kept (a record from before they were kept is never trusted over the folder)."""
+    import app_model
+    if not seen.get("chat") or seen.get("chat") == rec.get("chat") or "took_from" not in seen:
+        return False
+    mine, theirs = app_model.parse_time(seen.get("since")), app_model.parse_time(rec.get("since"))
+    return mine is not None and (theirs is None or mine > theirs)
 
 
 def _campaign_chats() -> set[str]:
@@ -892,8 +954,9 @@ def _remember_runs(runs: dict) -> None:
 def run_plan(a) -> int:
     import routines
     today = dt.date.fromisoformat(a.today) if a.today else dt.date.today()
+    given = _given(a)
     tasks: list = []
-    for page in _pages(a.triggers):
+    for page in _pages(a.triggers) + _as_pages(given.get("triggers")):
         tasks += routines.listing(page)[0]
     try:
         reg = routines.load()
@@ -902,7 +965,7 @@ def run_plan(a) -> int:
     # A chat of the person's own that an earlier tidy-up put away because a helper had taken
     # the page from it (the stranger audit, X-4): brought back once, before anything else.
     # Judged by the title it has now as well as the one stored, never by a missing one.
-    listed = sessions(_pages(a.sessions))
+    listed = sessions(_pages(a.sessions) + _as_pages(given.get("sessions")))
     live = {s.get("id"): str(s.get("title") or "") for s in listed}
     records = archived()
     wrong = strangers(records, live)
@@ -941,12 +1004,14 @@ def run_plan(a) -> int:
     elif now is not None and not a.today:
         today = now.date()
     me = app_listen.this_chat(a.chat)
-    got = plan(listed + extra, tasks, details(_pages(a.details)), reg,
+    got = plan(listed + extra, tasks,
+               details(_pages(a.details) + _as_pages(given.get("details"))), reg,
                listener, me, repo, today,
                _campaign_chats(), unmerged(), done, jobs, now=now, on_github=on_github())
     if got["ask"]:
         print("tidy: read these chats first, each with get_session, and run this again with "
-              "--details <each file>: " + " ".join(got["ask"]))
+              "what each returned under \"details\" in the same standard input (or --details "
+              "<each file>): " + " ".join(got["ask"]))
         return 0
     for i, c in enumerate(got["brief"], 1):
         if c.get("tool"):
@@ -1138,6 +1203,8 @@ def main(argv: list[str]) -> int:
     p.add_argument("--sessions", action="append", default=[])
     p.add_argument("--triggers", action="append", default=[])
     p.add_argument("--details", action="append", default=[])
+    p.add_argument("--stdin", action="store_true",
+                   help='{"sessions": ..., "triggers": ..., "details": ...} on standard input')
     p.add_argument("--chat", default="")
     p.add_argument("--today", default="")
     p.add_argument("--now", default="")
@@ -1167,9 +1234,10 @@ def main(argv: list[str]) -> int:
     if a.cmd == "due":
         return 0 if due(a.today) else 1
     if a.cmd == "plan":
-        if not a.sessions:
+        if not a.sessions and not a.stdin:
             print("tidy: list the chats first (list_sessions, mine: true, every page) and pass "
-                  "each page with --sessions", file=sys.stderr)
+                  "them with --stdin: {\"sessions\": ..., \"triggers\": ...} on standard "
+                  "input", file=sys.stderr)
             return 2
         return run_plan(a)
     if a.cmd == "done":

@@ -110,8 +110,10 @@ release. What cost time:
   it stays a button on the prep's own page.
 - **The floating Chat button** stays on wide screens: it opens the chat beside the current screen,
   which the menu's Chat does not.
-- **Hand-overs came twice in an hour** on 5 November: a helper renews once its history has grown
-  by RENEW_TOKENS (200,000, app_listen.renewal), and a new helper that took an update and did a
-  morning's work grew that much in 40 minutes. Look at whether a helper that took the page less
-  than an hour ago should wait, or count growth from after its first check-in.
+- **Hand-overs came twice in an hour** on 5 November: a helper renewed once its history had
+  grown by 200,000 tokens, which a new helper's start-up alone did. Settled the same day, then
+  replaced at the maintainer's newest word: a helper is a fresh chat once a day (the first wake
+  or page update of a new day, with a short hand-over), or sooner only near 700,000 tokens of
+  history (RENEW_TOKENS), never in its first hour and never while its own hand-over is open;
+  and each wake's work runs in a short-lived subagent, so the helper itself stays small.
 - A pencil for a contact's name or employer was not built: the engine has no action to correct them.

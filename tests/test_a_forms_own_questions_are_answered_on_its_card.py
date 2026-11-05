@@ -89,14 +89,16 @@ def test_each_state_is_said_on_the_card_and_done_only_once_the_answers_are_on_it
         {"hash": "drafts", "read": LINE, "count": LINE + " .spin"},
         {"write": {"work/" + WID: done}, "read": LINE},
         {"view": {"ready": _answered(m)["ready"]}, "read": LINE},
-        {"click": "Why it scored 66: Ellerwick Trust, Research Analyst", "read": CARD + " .send"},
+        # The line itself opens the answer where it is (2026-11-05: it said "under More", and
+        # More held only the box to ask again).
+        {"click": "Show it", "read": CARD + " .send"},
         {"write": {"work/" + WID: failed}, "read": LINE},
     ], WIDE, model=m, seed=seed, clock=T)
     running, unshown, shown, copy_row, broke = (x for x in got["after"])
     assert running["text"].startswith("Claude is on it: writing your answers"), running["text"]
     assert running["count"] == 1 and "Cancel" in running["text"], "its spinner, and Cancel"
     assert "Finished: putting it on your page." in unshown["text"], unshown["text"]
-    assert shown["text"] == "Done: 1 answer ready to copy, under More.", shown["text"]
+    assert shown["text"].startswith("Done: 1 answer ready to copy.") and "Show it" in shown["text"], shown["text"]
     assert "Its research reaches the people it is written for." in copy_row["text"], "opened, with its answer"
     assert broke["text"].startswith("Claude could not finish this: The posting was not in its folder."), broke["text"]
     assert "Try again" in broke["text"]

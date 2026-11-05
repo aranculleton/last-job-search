@@ -131,6 +131,30 @@ def test_a_vanished_doorbell_thread_is_rung_again_on_a_fresh_one_in_the_same_tap
     assert "Not sent" not in after["text"] and "Saved. It starts next time" not in after["text"]
 
 
+def test_a_new_chat_answering_the_page_is_rung_on_a_fresh_thread(run, tmp_path):
+    """A new chat took the page at 17:01 and sat idle while seven taps from 17:19 went to the
+    thread the chat before it had made and resolved (the maintainer's copy, 2026-11-05). A
+    ring names the chat that answered when its thread was made; once another answers, the
+    next ring starts a fresh thread, and while the same chat answers, its thread is used."""
+    listen = {"chat": "session_EXAMPLENEW", "kind": "cloud", "helper": True,
+              "since": _at(30), "answered_at": _at(20), "watching": True}
+    steps = [{"hash": "chat", "type": "Find me five more analyst roles in Leeds"},
+             {"click": "Send", "exact": True, "wait": 400, "rings": True, "store": "meta/"}]
+    for before, ring in (("session_EXAMPLEOLD", (None, True)), (None, (None, True)),
+                         ("session_EXAMPLENEW", ("oldchat1", False))):
+        bell = {"rung_at": _at(60), "thread": "oldchat1", "ids": [], "rung": {}}
+        if before:
+            bell["listener"] = before
+        where = tmp_path / str(before)
+        where.mkdir()
+        got = _go(run, where, steps, PHONE,
+                  seed={"meta/doorbell": bell, "meta/listen": listen}, fake=FAKE, clock=T)
+        after = got["after"][1]
+        assert [(r["thread"], r["anchor"]) for r in after["rings"]] == [ring], (before, after["rings"])
+        kept = next(d for d in after["store"] if d["path"] == "meta/doorbell")
+        assert kept["listener"] == "session_EXAMPLENEW" and kept["thread"], kept
+
+
 def test_a_ring_that_fails_says_not_sent_with_one_way_to_send_it(run, tmp_path):
     """Finding 2: an upstream_error read exactly like a planned "later"."""
     got = _go(run, tmp_path, [

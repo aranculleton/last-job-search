@@ -194,6 +194,38 @@ FIRM = ("harrow", "kestrel", "lark", "moss", "quay", "rook", "sedge", "teal", "v
 KIND = ("freight", "mutual", "retail", "foods", "bank", "logistics", "health", "energy")
 
 
+def nudges_due(state: str, n: int = 9) -> list[str]:
+    """`n` more invented people in the small state, each owed one follow-up: a first note sent
+    a month ago and no answer, so the page's "Follow up with N people" lists them. Their ids."""
+    contacts = os.path.join(state, "network_contacts.csv")
+    crows = _csv_rows(contacts)
+    columns = list(crows[0].keys())
+    threads = os.path.join(state, "network_threads.csv")
+    trows = _csv_rows(threads)
+    tcols = list(trows[0].keys())
+    ids = []
+    for i in range(n):
+        first, last = FIRST[i % len(FIRST)].title(), LAST[i % len(LAST)].title()
+        firm = f"{FIRM[i % len(FIRM)].title()} {KIND[i % len(KIND)].title()}"
+        cid = f"{firm.lower().replace(' ', '_')}_{last.lower()}"
+        ids.append(cid)
+        crows.append(dict.fromkeys(columns, "") | {
+            "contact_id": cid, "name": f"{first} {last}", "title": "Head of Analytics",
+            "company": firm, "company_key": firm.lower(), "location": "Manchester",
+            "linkedin_url": "https://www.linkedin.com/in/example-person-" + str(900 + i),
+            "tier": "2", "route": "cold", "first_contacted": "2026-09-21", "channel": "linkedin",
+            "status": "awaiting_reply", "next_action": "One nudge if no reply",
+            "next_action_due": "2026-09-29", "notes": "example contact"})
+        trows.append(dict.fromkeys(tcols, "") | {
+            "contact_id": cid, "date": "2026-09-21", "direction": "outbound",
+            "channel": "linkedin", "scenario": "first_note", "summary": "first note",
+            "full_text": f"Hi {first}, hope you're well. I work in supply-chain analytics in "
+                         f"Manchester. How is the analytics team at {firm} set up?"})
+    _save_csv(contacts, crows, columns)
+    _save_csv(threads, trows, tcols)
+    return ids
+
+
 def many_jobs(state: str, n: int = 400) -> str:
     """The small state with a shortlist of `n` invented roles, every one scoring 60 or more,
     so the page's jobs section is far bigger than one database document holds."""

@@ -596,36 +596,54 @@ def _on_github(monkeypatch):
     monkeypatch.setattr(app_setup, "origin", lambda: ("someone", "my-job-search"))
 
 
-def test_a_chat_answering_the_page_for_a_day_starts_a_fresh_helper_at_a_quiet_moment(copy, tmp_path, monkeypatch):
-    """A chat re-reads its whole history at every wake, so one answering for days grew
-    dearer with every tap (2026-10-30). After a day, with nothing waiting, it starts a fresh
-    helper; until that one takes the page, it still answers."""
+def test_a_helper_is_a_fresh_chat_once_a_day_with_a_short_hand_over(copy, tmp_path, monkeypatch):
+    """A helper is a fresh chat once a day, at the first wake of a new day in the person's own
+    zone (the maintainer, 2026-11-05, newest: this replaces "near the limit or a day with
+    nothing to answer", which kept one helper growing for days), carrying only a short
+    hand-over: what is in flight and what the person asked last. Until the fresh one takes
+    the page, it still answers."""
     import app_listen
     monkeypatch.setattr(app_listen, "chat_kind", lambda: "cloud")
+    monkeypatch.setattr(app_listen, "_zone", lambda: "UTC")
     _on_github(monkeypatch)
-    monkeypatch.setattr(app_listen, "context_tokens", lambda: 0)
-    now = dt.datetime(2026, 10, 30, 12, 0, tzinfo=dt.timezone.utc)
-    rec = {"chat": "session_old", "kind": "cloud", "helper": True, "since": "2026-10-29T08:00:00Z",
-           "answered_at": "2026-10-30T11:00:00Z"}
-    quiet = {"meta": {"listener": {"data": rec, "version": 3}}, "work": {}}
-    got = app_listen.decide(quiet, "session_old", str(tmp_path / "a"), now)
-    renew = [ln for ln in got["lines"] if ln.startswith("listen: renew:")]
-    assert got["role"] == "listener" and len(renew) == 1 and app_listen.WAKE_PROMPT in renew[0]
-    # Once a day: asked again an hour later, nothing.
-    again = app_listen.decide(quiet, "session_old", str(tmp_path / "b"), now + dt.timedelta(hours=1))
-    assert not [ln for ln in again["lines"] if ln.startswith("listen: renew:")]
+    monkeypatch.setattr(app_listen, "history_tokens", lambda: 0)
+    rec = {"chat": "session_old", "kind": "cloud", "helper": True,
+           "since": "2026-10-30T08:00:00Z", "answered_at": "2026-10-30T11:00:00Z"}
+    work = {"draft~a": {"data": {"kind": "draft", "status": "queued", "title": "Resume and letter: "
+                                 "Quillon Data, Analyst", "asked_at": "2026-10-30T20:00:00Z"},
+                        "version": 2},
+            "talk~b": {"data": {"kind": "talk", "status": "done", "title": "Is my resume ok?",
+                                "asked_at": "2026-10-30T21:00:00Z"}, "version": 3}}
+    db = {"meta": {"listener": {"data": rec, "version": 3}}, "work": work}
+
+    def renews(now, name, data=db):
+        return [ln for ln in app_listen.decide(data, "session_old", str(tmp_path / name),
+                                               now)["lines"] if ln.startswith("listen: renew:")]
+    # The same day, however busy or quiet: it stays.
+    assert not renews(dt.datetime(2026, 10, 30, 23, 30, tzinfo=dt.timezone.utc), "a")
+    # The first wake of the next day: a fresh helper, with a hand-over of a few lines.
+    got = renews(dt.datetime(2026, 10, 31, 7, 0, tzinfo=dt.timezone.utc), "b")
+    assert len(got) == 1, got
+    call = json.loads(got[0].split("create_session ", 1)[1].split("}. ", 1)[0] + "}")
+    assert call["prompt"].startswith(app_listen.WAKE_PROMPT)
+    note = call["prompt"][len(app_listen.WAKE_PROMPT):].strip()
+    assert note == ("In flight: Resume and letter: Quillon Data, Analyst.\n"
+                    "Asked last: Is my resume ok?."), note
+    assert len(note) <= app_listen.HANDOVER_CHARS
+    # Once: asked again an hour later, nothing.
+    assert not renews(dt.datetime(2026, 10, 31, 8, 0, tzinfo=dt.timezone.utc), "c")
     # Never with small work of its own in hand (changed 2026-11-03, engine audit 7: work that
     # only waits in the queue moves with the page, and waiting on it kept one helper three days).
     app_listen._save_seen({k: v for k, v in app_listen.seen().items() if k != "renewed_at"})
-    busy = dict(quiet, work={"w1": {"data": {"status": "running", "kind": "talk",
-                                             "claimed_by": "session_old",
-                                             "lease_until": "2026-10-30T12:20:00Z"},
-                                    "version": 1}})
-    assert not [ln for ln in app_listen.decide(busy, "session_old", str(tmp_path / "c"), now)["lines"]
-                if ln.startswith("listen: renew:")]
+    busy = dict(db, work={"w1": {"data": {"status": "running", "kind": "talk",
+                                          "claimed_by": "session_old",
+                                          "lease_until": "2026-10-31T07:20:00Z"}, "version": 1}})
+    assert not renews(dt.datetime(2026, 10, 31, 7, 0, tzinfo=dt.timezone.utc), "d", busy)
     # The fresh helper takes it, and never archives the old one: it may still be saving the
     # brief; the tidy-up puts it away once it is idle (the stranger audit, X-27).
-    took = app_listen.decide(quiet, "session_new", str(tmp_path / "d"), now, listen=True, helper=True)
+    took = app_listen.decide(db, "session_new", str(tmp_path / "e"),
+                             dt.datetime(2026, 10, 31, 7, 1, tzinfo=dt.timezone.utc), listen=True,
+                             helper=True)
     assert took["role"] == "listener" and not any("archive_session" in ln for ln in took["lines"])
 
 
@@ -638,11 +656,12 @@ def test_a_page_update_by_the_listener_brings_its_renewal(copy, tmp_path, monkey
     import app_listen
     monkeypatch.setattr(app_listen, "chat_kind", lambda: "cloud")
     _on_github(monkeypatch)
-    monkeypatch.setattr(app_listen, "context_tokens", lambda: 0)
+    monkeypatch.setattr(app_listen, "history_tokens", lambda: 0)
     monkeypatch.setenv("LJS_CHAT", "session_old")
     now = dt.datetime(2026, 11, 3, 8, 0, tzinfo=dt.timezone.utc)
+    monkeypatch.setattr(app_listen, "_zone", lambda: "UTC")
     rec = {"chat": "session_old", "kind": "cloud", "helper": True, "since": "2026-11-01T08:00:00Z",
-           "answered_at": "2026-11-02T16:20:00Z"}
+           "answered_at": "2026-11-02T07:20:00Z"}
     db = {"meta": {"listener": {"data": rec, "version": 12}}, "work": {}}
     lines = app_listen.view_renewal(db, "brief", now)
     assert len(lines) == 1 and lines[0].startswith("listen: renew:")
@@ -659,10 +678,11 @@ def test_a_page_update_by_the_listener_brings_its_renewal(copy, tmp_path, monkey
     assert app_listen.view_renewal(db, "brief", now) == []
 
 
-def test_a_helper_that_rereads_a_lot_hands_over_within_the_day(copy, tmp_path, monkeypatch):
-    """A helper three days old re-read some 535,000 tokens at every step, and a one-line reply
-    took minutes (2026-11-03). Once its history has grown by RENEW_TOKENS it hands over at its
-    next quiet moment, even inside its first day, and never more than once a day."""
+def test_a_helper_hands_over_only_near_the_most_a_chat_can_hold(copy, tmp_path, monkeypatch):
+    """A helper three days old re-read some 535,000 tokens at every step (2026-11-03), and
+    the rule that followed, a history grown by 200,000, renewed every new helper within
+    minutes of its start-up (2026-11-05). It hands over once its history nears the most a
+    chat holds, read from the last turn of its session file, and not before."""
     import app_listen
     import json as _json
     _on_github(monkeypatch)
@@ -674,23 +694,52 @@ def test_a_helper_that_rereads_a_lot_hands_over_within_the_day(copy, tmp_path, m
     home = tmp_path / "claude"
     (home / "projects" / "-home-user").mkdir(parents=True)
     log = home / "projects" / "-home-user" / "a1.jsonl"
-    log.write_text("\n".join(_json.dumps(x) for x in [
-        {"type": "user", "message": {"content": "hi"}},
-        {"type": "assistant", "message": {"usage": {"input_tokens": 2, "cache_read_input_tokens": 98000,
-                                                     "cache_creation_input_tokens": 0}}},
-        {"type": "assistant", "message": {"usage": {"input_tokens": 2, "cache_read_input_tokens": 320000,
-                                                     "cache_creation_input_tokens": 900}}}]) + "\n")
+
+    def turns(last):
+        log.write_text("\n".join(_json.dumps(x) for x in [
+            {"type": "user", "message": {"content": "hi"}},
+            {"type": "assistant", "message": {"usage": {"input_tokens": 2,
+                                                         "cache_read_input_tokens": 98000,
+                                                         "cache_creation_input_tokens": 0}}},
+            {"type": "assistant", "message": {"usage": {"input_tokens": 2,
+                                                         "cache_read_input_tokens": last,
+                                                         "cache_creation_input_tokens": 900}}}]) + "\n")
     monkeypatch.setenv("CLAUDE_CONFIG_DIR", str(home))
-    # Grown by its history alone: a fresh chat already starts near 100,000.
-    assert app_listen.context_tokens() == 222900
-    got = app_listen.decide(db, "session_new", str(tmp_path / "a"), now)
+    turns(320000)                          # grown by 222,900: the old rule renewed it here
+    assert app_listen.history_tokens() == 320902 and app_listen.context_tokens() == 222900
+    assert not [ln for ln in app_listen.decide(db, "session_new", str(tmp_path / "a"), now)["lines"]
+                if ln.startswith("listen: renew:")]
+    turns(705000)
+    got = app_listen.decide(db, "session_new", str(tmp_path / "b"), now)
     assert [ln for ln in got["lines"] if ln.startswith("listen: renew:")], got["lines"]
-    # A small one, six hours old, keeps the page.
+    # No session file: only a new day renews it.
     monkeypatch.setenv("CLAUDE_CONFIG_DIR", str(tmp_path / "nowhere"))
     app_listen._save_seen({k: v for k, v in app_listen.seen().items() if k != "renewed_at"})
-    assert app_listen.context_tokens() == 0
-    assert not [ln for ln in app_listen.decide(db, "session_new", str(tmp_path / "b"), now)["lines"]
+    assert app_listen.history_tokens() == 0
+    assert not [ln for ln in app_listen.decide(db, "session_new", str(tmp_path / "c"), now)["lines"]
                 if ln.startswith("listen: renew:")]
+
+
+def test_a_helper_never_renews_while_its_own_hand_over_is_open(copy, tmp_path, monkeypatch):
+    """A chat that took the page at 17:01 renewed at 17:19, and three chats were live (the
+    maintainer's copy, 2026-11-05). Never in its first hour, and never while the helper it
+    took over from is still to be put away: two chats at most."""
+    import app_listen
+    import tidy
+    _on_github(monkeypatch)
+    monkeypatch.setattr(app_listen, "chat_kind", lambda: "cloud")
+    monkeypatch.setattr(app_listen, "history_tokens", lambda: 720_000)
+    rec = {"chat": "session_new", "kind": "cloud", "helper": True, "since": "2026-11-05T17:01:00Z",
+           "answered_at": "2026-11-05T17:15:00Z", "took_from": "session_old",
+           "took_from_helper": True}
+    db = {"meta": {"listener": {"data": rec, "version": 4}}, "work": {}}
+    at = dt.datetime(2026, 11, 5, 17, 19, tzinfo=dt.timezone.utc)
+    assert app_listen.renewal(rec, db, "session_new", at) is None          # its first hour
+    later = dt.datetime(2026, 11, 5, 19, 0, tzinfo=dt.timezone.utc)
+    assert tidy.retiring(rec, later) == "session_old"
+    assert app_listen.renewal(rec, db, "session_new", later) is None       # the old one still there
+    monkeypatch.setattr(tidy, "archived", lambda: [{"id": "session_old"}])
+    assert app_listen.renewal(rec, db, "session_new", later)               # put away: it may
 
 
 def _view(copy, chat, *extra, base=None, now=NOW, sha=None):
@@ -902,3 +951,45 @@ def test_a_newer_copy_is_judged_by_its_commit_not_its_clock(copy):
     got, writes = _view(copy, "session_JOB", "--work", "draft~kestrel",
                         base="2026-10-25T16:00:00Z", sha="0" * 40, now="2026-10-28T09:00:00Z")
     assert ("meta", "now") not in writes and not [d for (c, d) in writes if c == "screen"]
+
+
+def test_a_tidy_up_from_a_folder_read_before_the_take_over_binds_this_chat(copy, monkeypatch):
+    """The start steps reuse the folder read before `listen`'s take-over was sent, so its
+    meta/listen still named the helper just replaced: the first tidy-up made the brief's new
+    task in that old helper and deleted the one that worked (the maintainer's copy,
+    2026-11-05). What this checkout wrote at the take-over is newer, and wins."""
+    import routines
+    import tidy
+    old, new = "session_EXAMPLEOLDPAGE", "session_EXAMPLENEWPAGE"
+    copy.page()
+    cloud = {"CLAUDE_CODE_REMOTE": "true"}
+    assert copy.send(copy.run("listen", copy.dump(), "--chat", old, "--helper",
+                              "--now", "2026-11-05T16:00:00Z", **cloud))
+    folder = copy.dump("before")                       # read before the take-over
+    took = copy.run("listen", folder, "--chat", new, "--listen", "--helper",
+                    "--now", "2026-11-05T17:01:00Z", **cloud)
+    assert "this chat answers the page now" in took and copy.send(took)
+    assert copy.listener()["chat"] == new
+
+    monkeypatch.setenv("LJS_STATE", copy.state)
+    got = tidy._listener(folder)
+    assert got["chat"] == new and got["took_from"] == old and got["took_from_helper"] is True
+
+    reg = {"setup": "chat_per_briefing", "timezone": "Europe/London", "routines": [
+        {"key": "morning_brief", "name": "Job search: brief", "trigger_id": "trig_EXAMPLEBRIEF",
+         "cron": "CRON_TZ=Europe/London 56 7 * * *", "prompt_file": routines.BRIEF_FILE,
+         "chat": {"session_id": old}}]}
+    chats = [{"id": cid, "title": "Job search page", "session_status": "SESSION_STATUS_IDLE",
+              "created_at": "2026-11-05T08:00:00Z", "updated_at": "2026-11-05T16:30:00Z"}
+             for cid in (old, new)]
+    plan = tidy.plan(chats, [{"id": "trig_EXAMPLEBRIEF", "session": old, "enabled": True}],
+                     {cid: {"id": cid, "session_context": {"sources": [{"git_repository": {
+                         "url": "https://github.com/example-owner/my-job-search"}}]}}
+                      for cid in (old, new)},
+                     reg, got, new, "example-owner/my-job-search", dt.date(2026, 11, 5),
+                     set(), set(), set(),
+                     now=dt.datetime(2026, 11, 5, 17, 5, tzinfo=dt.timezone.utc))
+    assert plan["ask"] == []
+    made = plan["brief"][0]
+    assert made["tool"] == "create_trigger" and made["args"]["persistent_session_id"] == new
+    assert [a["id"] for a in plan["archive"]] == [old]

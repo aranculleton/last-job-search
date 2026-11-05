@@ -1405,7 +1405,7 @@ def _main(argv: list[str]) -> int:
         landed = git("rev-parse", "HEAD", check=False).stdout.strip() != before
         if landed:
             own_tests()
-        app_watch()
+        app_watch(landed)
         said = plain_state_endings()
         if said:
             print("sync_app: " + said)
@@ -1778,18 +1778,38 @@ def own_tests_after_sync(root: str | None = None) -> None:
     own_tests(root)
 
 
-def app_watch() -> None:
+WATCHED = "ljs-app-watch-day"       # in the git folder: the day the app watch last finished
+
+
+def app_watch(landed: bool = False) -> None:
     """In the maintainer's own repo only: the public app checked for this repo's names
-    (tools/app_watch.py), once a day with the sync. Anyone else's repo prints nothing.
-    A finding goes first in the reply; it never changes the sync's exit code."""
+    (tools/app_watch.py), once a day with the sync, and again when the sync took an update.
+    Anyone else's repo prints nothing. A finding goes first in the reply; it never changes
+    the sync's exit code. It builds the denylist from the whole history of the state files
+    and reads every branch of the app, and it ran on every sync: a `--on` run on a day with
+    no update took over two minutes (the maintainer's copy, 2026-11-05)."""
     script = os.path.join(ROOT, "tools", "app_watch.py")
-    if not os.path.isfile(script):
+    if not os.path.isfile(script) or not maintainers():
         return
+    dirs = _git_dirs(ROOT)
+    mark = os.path.join(dirs[0], WATCHED) if dirs else None
+    if mark and not landed:
+        try:
+            with open(mark, encoding="utf-8") as fh:
+                if not _stale_day(fh.read().strip()):
+                    return
+        except OSError:
+            pass
     try:
         r = subprocess.run([sys.executable, script], cwd=ROOT, text=True,
                            capture_output=True, timeout=300, encoding="utf-8", errors="replace")
         if (r.stdout or "").strip():
             print(r.stdout.rstrip())
+        # Only a look that reached the app counts as the day's: a finding is said again at
+        # every sync until it is gone, and a failed reach tries again at the next.
+        if mark and r.returncode == 0:
+            with open(mark, "w", encoding="utf-8", newline="\n") as fh:
+                fh.write(_day_line() + "\n")
     except (OSError, subprocess.TimeoutExpired):
         print("App watch: did not finish in five minutes; the next sync tries again.")
 

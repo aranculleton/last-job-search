@@ -175,6 +175,10 @@
     if (id === "drafts-messages" || id === "messages") return {section: "contacts"};
     if (id === "drafts-applications" || id === "ready") return {section: "drafts", drafts: "apps"};
     if (id === "work") return {section: null, work: true};
+    // An application is in Jobs, on its Applied tab: a Brief step about one ("Send the
+    // thank-you after your interview at ...") drew as plain text with nothing to tap (the
+    // maintainer, 2026-11-05: "i cant click the top one here").
+    if (id === "applications" || id === "applied") return {section: "jobs", applied: true};
     if (SECTION_IDS.has(id)) return {section: id};
     if (ALIAS[id]) return {section: ALIAS[id]};
     return null;
@@ -197,6 +201,12 @@
   const S = {
     model: readModel(),
     m: null,
+    // A card's own questions (Something else): its thread's id while its box is open, and the
+    // threads themselves, kept apart from the Chat's (cardTalk).
+    cardAsk: new Set(),
+    // A draft's pencil box open with its words as a field (Edit the words yourself).
+    penEdit: new Set(),
+    cardThreads: new Map(),
     views: new Map(),
     caps: {},
     owner: null,
@@ -821,7 +831,14 @@
     // Records only chats write live under 4.3's own names (tools/page_db.py STORE), so none
     // needs the version of a record made before every write carried one (_v).
     sub("chats", db.collection("beats"), (snap) => { S.chats = docsOf(snap); });
-    sub("talk", db.collection("talk"), (snap) => { S.threads = docsOf(snap); followThreads(); });
+    // A card's own questions (Something else) are threads of their own, kept apart from the
+    // Chat's so they never show there: talk/<card thread> carries `card` (cardTalk).
+    sub("talk", db.collection("talk"), (snap) => {
+      const all = [...docsOf(snap)];
+      S.threads = new Map(all.filter(([, t]) => !obj(t).card));
+      S.cardThreads = new Map(all.filter(([, t]) => !!obj(t).card));
+      followThreads();
+    });
     sub("meta", db.doc("meta/now"), (d) => { S.meta = d && d.exists ? d.data() : null; });
     // The last ring, read before any tap so the next one can reply in its thread at once.
     sub("bell", db.doc("meta/doorbell"), (d) => { S.bell = d && d.exists ? d.data() : null; });
@@ -857,6 +874,9 @@
     const ids = new Set();
     for (const to of TALK_TO) ids.add(currentThread(to));
     if (S.viewConv) for (const [id, t] of S.threads) if (convOf(id, t) === S.viewConv) ids.add(id);
+    // The cards' own questions, the newest few of the last fortnight, so an answer reaches its
+    // card while the page is open.
+    for (const th of recentCardThreads()) ids.add(th);
     // At most 64 live subscriptions a view (db.d.ts): conversations no longer shown are let go,
     // so a long search never reaches the cap (contract audit, 2026-10-29).
     for (const key of [...unsubs.keys()]) if (key.startsWith("msgs:") && !ids.has(key.slice(5))) unsub(key);
@@ -880,8 +900,12 @@
         // A chat answer is said as one ("Answer: “…”: ready." repeated itself), and a question
         // is answered from its one card, which the pill points to: a third "Answer it" in the
         // toast was one place too many (the audit, 2026-11-03).
+        const card = txt(w.kind) === "talk" ? obj(obj(w.args).about) : {};
         const talk = txt(w.kind) === "talk";
-        toast({text: (talk ? (w.status === "done" ? "Claude answered in Chat." : w.status === "failed" ? "Claude could not answer in Chat." : "Claude has a question about your message.") :
+        // A card's own question is answered under that card, and its toast points there.
+        if (card.kind && card.id) toast({text: w.status === "done" ? "Claude answered under " + txt(card.label || "the card") + "." : w.status === "failed" ? "Claude could not answer that." : "Claude has a question about that.",
+          ids: [], bad: w.status === "failed", see: () => go(CARD_HOME[card.kind] || "contacts", {focus: true, item: txt(card.id)}), seeLabel: "See it"});
+        else toast({text: (talk ? (w.status === "done" ? "Claude answered in Chat." : w.status === "failed" ? "Claude could not answer in Chat." : "Claude has a question about your message.") :
           workName(w) + (w.status === "done" ? ": ready." : w.status === "failed" ? ": did not finish." : ": Claude has a question.")), ids: [], bad: w.status === "failed",
           see: w.status === "needs_you" ? null : w.status === "failed" ? openWork : tab ? () => go(tab, {focus: true}) : openWork, seeLabel: "See it"});
       }
@@ -1034,6 +1058,8 @@
   // A finished tap's line is kept for two days: "Done. Change back" still sat on an Applied
   // card two weeks later (journeys audit 24).
   const DONE_LINE_MS = 2 * DAY;
+  // A tap not saved, said with the button to tap again where the card has one by that name.
+  const FAILED_AGAIN = {"msg.sent": "I sent it"};
   function stateLine(item, key) {
     const t0 = lastTouch(item);
     if (!t0) return null;
@@ -1042,7 +1068,9 @@
     // Saving takes a moment and its toast follows at once: nothing to say on the item meanwhile.
     // A failure likewise: said in its toast while it is up, on its row after (the 3 November
     // audit: "Not saved. Try again" twice at once).
-    if (t.state === "saving" || ((t.state === "saved" || t.state === "failed") && toastCarries(t.id))) return null;
+    // A write still going after a few seconds says "Saving…" (SAVING_QUIET_MS), so a store that
+    // never answers is never silence.
+    if ((t.state === "saving" && now() - (tms(t.doc.at) || now()) < SAVING_QUIET_MS) || ((t.state === "saved" || t.state === "failed") && toastCarries(t.id))) return null;
     const r = S.receipts.get(t.id);
     if (t.state === "applied" && r && now() - (tms(r.applied_at) || now()) > DONE_LINE_MS) return null;
     // Saved and waiting past the late limit: said, with when it goes ("Saved. Claude will
@@ -1057,7 +1085,7 @@
       // something (the maintainer, 2026-11-04).
       applied: t.doc.action === "undo" ? "Changed back." : r && r.nothing_new ? "Done. Nothing new in that download." : "Done.",
       refused: refusedWords(r),
-      failed: "Not saved.",
+      failed: FAILED_AGAIN[txt(t.doc.action)] ? "Not saved. Tap " + FAILED_AGAIN[txt(t.doc.action)] + " again." : "Not saved.",
       unsaved: "Not saved: this page cannot keep answers here. Open it in the Claude app.",
     }[t.state];
     if (!words) return null;
@@ -1173,15 +1201,19 @@
     if (shown) input.addEventListener("input", () => { shown.textContent = input.value; });
     const tid = fid + "-t";
     const time = kind === "date" && txt(a.time) ? h("input", {id: tid, type: "time", class: "fix-in fix-time", "data-k": "fix-time:" + key, "aria-label": "Time, if you know it"}) : null;
+    // A tick beside the day where the asker gives one (`a.tick`: its label; `a.ticked`: set).
+    const kid = fid + "-k";
+    const tick = kind === "date" && txt(a.tick) ? h("input", {id: kid, type: "checkbox", "data-k": "fix-tick:" + key, checked: !!a.ticked}) : null;
     return h("form", Object.assign({class: "fix", onsubmit: (e) => {
       e.preventDefault();
       const v = txt(input.value).trim();
       if (!v) { input.focus(); return; }
       const tv = time ? txt(time.value).trim() : "";
       const words = kind === "date" ? (fmtDay(v) || v) + (tv ? " at " + tv : "") : v;
-      send({value: v, time: tv, words});
+      send(Object.assign({value: v, time: tv, words}, tick ? {tick: !!tick.checked} : {}));
     }}, o.form || {}), h("label", {for: fid, class: "small"}, label || "Your answer"), input, shown,
       time ? [h("span", {class: "small muted", "aria-hidden": "true"}, "at"), time] : null,
+      tick ? h("span", {class: "choice tick"}, tick, h("label", {for: kid, class: "small"}, txt(a.tick))) : null,
       h("button", {type: "submit", class: "btn primary small", "data-k": "fix-go:" + key}, "Send"));
   }
   // The thing a tap was about, by name, from whichever list holds it.
@@ -1304,6 +1336,12 @@
   // that never answered left "Saving…" for ever (robustness audit 9).
   const CAP_WAIT_MS = 10000;
   function capReady(name) { return within(CAP[name], CAP_WAIT_MS); }
+  // How long one tap's write may take before it is said not saved, as the Chat's own send:
+  // a store that took "I sent it" and never answered left the message gone from its card with
+  // no word that it was not kept (the maintainer, 2026-11-05).
+  const ACT_WRITE_MS = 20000;
+  // A write still going after this long says "Saving…" on its card, so nothing is silent.
+  const SAVING_QUIET_MS = 3000;
   async function act(list, label, more) {
     if (readOnlyTap()) return [];
     noteFocus();
@@ -1347,9 +1385,18 @@
       scheduleRender();
       return recs;
     }
+    setTimeout(scheduleRender, SAVING_QUIET_MS + 50);
     await Promise.all(recs.map(async (r) => {
       try {
-        await db.doc("actions/" + r.id).set(Object.assign({}, r.doc, {_v: nextV(S.actions.get(r.id))}));
+        const write = db.doc("actions/" + r.id).set(Object.assign({}, r.doc, {_v: nextV(S.actions.get(r.id))}));
+        if (await within(write, ACT_WRITE_MS) === "timeout") {
+          r.state = "failed";
+          r.code = "timeout";
+          // Landing after the page said it was not saved: taken off again, so a tap the person
+          // is asked to make again is never applied twice.
+          Promise.resolve(write).then(() => { if (r.state === "failed") db.doc("actions/" + r.id).delete().catch(() => {}); }, () => {});
+          return;
+        }
         if (r.state === "saving") r.state = "saved";
         // Undone while it was being written: the write that landed after the delete goes too.
         else if (r.state === "undone") await db.doc("actions/" + r.id).delete().catch(() => {});
@@ -1651,7 +1698,12 @@
         ids.every((id) => arr(bell.ids).includes(id)) &&
         arr(bell.ids).every((id) => { const w = workDoc(id); return w && w.status === "queued"; })) return Promise.resolve("coalesced");
     const text = "[app] [" + (tag || "work") + ":" + ids.join(",") + "]";
-    const thread = bell ? txt(bell.thread) : "";
+    // The thread is the chat's that answered when it was made: a new chat that took the page
+    // sat idle while seven taps went to the thread the one before it had resolved (the
+    // maintainer's copy, 2026-11-05). Once another chat answers, a ring starts a fresh thread.
+    const answering = txt(obj(S.listener).chat);
+    const sameChat = !answering || txt(obj(bell).listener) === answering;
+    const thread = bell && (sameChat || !S.bellAnchor) ? txt(bell.thread) : "";
     for (const id of ids) S.tried.set(id, now());
     S.lastTry = now();
     const send = (where) => { try { return Promise.resolve(c.sendToClaude(Object.assign({text}, where))); } catch (e) { return Promise.reject(e); } };
@@ -1664,6 +1716,7 @@
       if (tag !== "act") for (const id of ids) { rung[id] = at; S.rang.set(id, now()); }
       const keep = Object.keys(rung).slice(-50);
       const rec = {rung_at: at, tab: S.tab, ids: ids.slice(0, 50), thread: (res && res.threadId) || used || null,
+        listener: answering || null,
         rung: Object.fromEntries(keep.map((k) => [k, rung[k]])), wakes: arr(obj(S.bell).wakes).slice(-7), woke_for: txt(obj(S.bell).woke_for) || null};
       S.bell = rec;
       const db = S.caps.db;
@@ -2065,11 +2118,14 @@
     // asked for a reason and then a second tap on "Done" took two taps to put one thing away
     // (the walk-through, 2026-11-03). Cancel is the only other button.
     const choices = arr(o.choices).filter(Boolean);
+    // A choice whose work is on the page behind the sheet (Something else opening a card's
+    // box) runs once the sheet has closed, so its focus is not handed back to the opener.
+    let afterClose = null;
     const submit = choices.length ? null : h("button", {type: "submit", class: "btn primary", "data-k": "sheet-go"}, o.submit || "Start");
     dlg._submit = submit;
     const cancel = h("button", {type: "button", class: "btn quiet", "data-k": "sheet-cancel", onclick: () => close()}, o.cancel || "Cancel");
     const choiceRow = choices.length ? h("div", {class: "sheet-choices", role: "group", "aria-labelledby": "sheet-title"}, choices.map((c, i) =>
-      h("button", {type: "button", class: "btn secondary choice-btn", "data-k": "sheet-choice:" + (c.key || i), onclick: () => { const keep = c.run(); if (keep !== true) close(); }}, c.label))) : null;
+      h("button", {type: "button", class: "btn secondary choice-btn", "data-k": "sheet-choice:" + (c.key || i), onclick: () => { if (c.after) afterClose = c.after; const keep = c.run ? c.run() : undefined; if (keep !== true) close(); }}, c.label))) : null;
     add(form, [h("h2", {id: "sheet-title", class: "sheet-title"}, o.title), o.lead || null, o.intro ? h("p", {class: "sheet-intro"}, o.intro) : null,
       o.cost ? h("p", {class: "sheet-cost"}, costNode(o.cost)) : null, errBox, fields.map((f) => f.el), (syncShown(), null), choiceRow, o.note ? h("p", {class: "hint"}, o.note) : null, o.after || null, h("div", {class: "sheet-actions"}, submit, cancel)]);
     dlg.appendChild(form);
@@ -2079,6 +2135,7 @@
     const fromItem = opener && opener.closest ? (opener.closest("[data-item]") || {getAttribute: () => null}).getAttribute("data-item") : null;
     dlg.addEventListener("close", () => {
       dlg.remove();
+      if (afterClose) { const f = afterClose; afterClose = null; f(); return; }
       if (opener && opener.isConnected && opener.focus) { opener.focus(); return; }
       let c = null;
       try { c = fromItem ? $("main").querySelector('[data-item="' + (window.CSS && CSS.escape ? CSS.escape(fromItem) : fromItem) + '"]') : null; } catch (e) { c = null; }
@@ -2163,6 +2220,11 @@
       const inp = h("input", {type: "time", id, value: f.value || "", step: "60", "aria-describedby": id + "-e"});
       el = h("div", {class: "field"}, h("label", {for: id}, f.label), f.hint ? h("p", {class: "hint"}, f.hint) : null, err, inp);
       read = () => inp.value || null;
+    } else if (f.type === "tick") {
+      // One checkbox, reached through its whole row, its label: true or false.
+      const inp = h("input", {type: "checkbox", id, checked: !!f.value});
+      el = h("div", {class: "field choice tick"}, inp, h("label", {for: id}, f.label));
+      read = () => !!inp.checked;
     } else if (f.type === "checks") {
       const opts = arr(f.options).map((op, i) => {
         const oid = id + "-" + i;
@@ -2398,6 +2460,19 @@
     if (/^https:\/\//i.test(a) || (a.startsWith("/") && !/^\/[\/\\]/.test(a))) return a;
     return "/_blob/" + encodeURIComponent(a);
   }
+  // What the person attaches is named for the reader and for their own folder of downloads:
+  // "Morgan_Ellis_Resume_Kestrel_Foods.pdf", the employer written plainly, never the working name with
+  // the role run together after it (the maintainer, 2026-11-05: "this is quite a robotic name
+  // for a resume right?" and "it might be helpful to have the company name after if im
+  // downloading loads"). The kept copy keeps its full name.
+  function sendName(name, company) {
+    const n = txt(name);
+    const m = /^(.+?_(?:Resume|R[eé]sum[eé]|CV|Cover_Letter))(?:_[^.]*)?(\.[A-Za-z0-9]+)$/i.exec(n);
+    if (!m) return n;
+    const co = txt(company).normalize("NFKD").replace(/[\u0300-\u036f]/g, "").replace(/&/g, "and").replace(/['’.]/g, "")
+      .replace(/[^A-Za-z0-9]+/g, "_").replace(/^_+|_+$/g, "").slice(0, 40);
+    return m[1] + (co ? "_" + co : "") + m[2];
+  }
   async function download(file, key) {
     const set = (text, tone) => { S.notes.set(key, {text, tone}); scheduleRender(); };
     const dl = await CAP.downloads;
@@ -2411,7 +2486,7 @@
       blob = await r.blob();
     } catch (e) { set("Could not get the file. Try again in a moment.", "bad"); return; }
     try {
-      const res = await dl.save({filename: txt(file.name) || "document.pdf", data: blob});
+      const res = await dl.save({filename: sendName(file.name, file.company) || "document.pdf", data: blob});
       set(res && res.status === "delivered" ? "Sent where you chose." : "Saved.", "ok");
       announce(txt(file.name) + " saved.");
     } catch (e) {
@@ -2790,7 +2865,9 @@
 
   function listState(key, chips) {
     let st = S.lists.get(key);
-    if (!st) { st = {q: "", open: false, pages: 1, chips: obj(pref("f:" + key, null) || chips || {})}; S.lists.set(key, st); }
+    // Each visit opens the whole list: a filter chosen once stayed on for good, so Contacts kept
+    // opening on "Needs you" (DESIGN.md: never a filter left on; the maintainer, 2026-11-05).
+    if (!st) { st = {q: "", open: false, pages: 1, chips: obj(chips || {})}; S.lists.set(key, st); }
     return st;
   }
   // The switch at the head of Jobs: what was found, what is drafted, what was sent. One place
@@ -3499,7 +3576,7 @@
       return h("li", {class: "g-row", "data-item": d ? d.id : m.id},
         h("div", {class: "g-main"}, h("p", {class: "g-name"}, cid ? personName(cid, name, "send:" + m.id) : h("bdi", {}, name),
           fs === "going" ? [" ", chip("Claude is fixing it", "info")] : flag || fs === "failed" ? [" ", chip("Check first", "warn")] : null),
-          why ? h("p", {class: "muted small"}, why) : null, d ? stateLine(d.id, "send:" + where + ":" + d.id) : null),
+          why ? h("p", {class: "muted small"}, why) : null, stateLine(m.id, "send:" + where + ":msg:" + m.id) || (d ? stateLine(d.id, "send:" + where + ":" + d.id) : null)),
         h("div", {class: "g-acts"}, seeDraftBtn(m, "send:" + where + ":" + m.id, "secondary"),
           cid ? btn("", () => askRemovePerson(cid, txt(p ? p.first_name : m.first_name), txt(p ? p.employer : m.employer), null, Object.assign({skip, replied: p && canSayReplied(p) ? () => logReply(p) : null}, d ? {later: laterChoices(d), hide: () => hideTodo("due:" + d.id, txt(d.title))} : {})),
             {kind: "quiet icon-only", small: true, icon: "bin", key: "sendbin:" + where + ":" + m.id, aria: "Not " + name + "?"}) : null));
@@ -3931,7 +4008,8 @@
       // The same actions as its card in Coming up (ivActs), and its bin the same choices.
       // A new day waits under More, alone or not (DESIGN.md: an interview's card): "New day" on
       // the face beside Prepare me and Add to calendar (the review, 2026-11-05).
-      h("div", {class: "card-actions"}, acts.main, more("soon:" + k, txt(iv.company), [h("div", {class: "more-acts"}, acts.more), acts.tweak], true)));
+      h("div", {class: "card-actions"}, acts.main, more("soon:" + k, txt(iv.company), [h("div", {class: "more-acts"}, acts.more), acts.tweak], true)),
+      cardTalk("interview", iv.id, "the interview with " + txt(iv.company)));
   }
   // An interview's actions, defined once for every card that shows it (its card in Coming up,
   // its card in To do), with the same names everywhere (the UX review, 2026-11-05: To do
@@ -3952,7 +4030,7 @@
     const what = lc1(txt(iv.next_stage) || "interview");
     const read = (kind) => btn("Read your prep", () => openDetail("interview", iv.id), {kind, small: true, key: "read:" + k, aria: "Read your prep for your " + what + " with " + txt(iv.company)});
     const prepBtn = (kind) => btn(has ? "Update my prep" : "Prepare me", () => askPrep(iv), {kind, small: true, key: "prep:" + k, aria: (has ? "Update my prep for " : "Prepare me for ") + txt(iv.company)});
-    const bin = IV_OVER[txt(iv.status)] ? null : btn("", () => askEndApplication(iv, "the " + what + " with " + txt(iv.company), gone ? null : () => askMoved(iv)),
+    const bin = IV_OVER[txt(iv.status)] ? null : btn("", () => askEndApplication(iv, "the " + what + " with " + txt(iv.company), gone ? null : () => askMoved(iv), ["interview", iv.id]),
       {kind: "quiet icon-only", small: true, icon: "bin", key: "ivbin:" + k, aria: "Not going ahead: " + txt(iv.company)});
     if (bin) bin.setAttribute("data-bin", "1");
     if (gone) {
@@ -3995,7 +4073,7 @@
       return;
     }
     if (op.work) { requestWork([Object.assign({id: txt(obj(op.work).kind) + "~" + seg(n.id)}, obj(op.work))]); return; }
-    const value = op.value === undefined ? (/\.answer$/.test(txt(op.action)) ? txt(op.label) : null) : op.value;
+    const value = needValue(op);
     const another = txt(op.action) === "msg.sent" ? {seeLabel: "Another day?", see: () => {
       const last = effective(n.id, ["msg.sent"]);
       sheet({title: "When did it go?", intro: txt(n.title).replace(/^Did your note to /, "Your note to ").replace(/ go\?$/, "."), submit: "Save",
@@ -4003,6 +4081,18 @@
         onSubmit: (v) => { if (last) undo([last.id]); act([{item: n.id, action: "msg.sent", value: Object.assign({}, obj(op.value), {on: v.on || todayIso()}), rev: n.rev}], "It went on " + fmtDay(v.on || todayIso()) + ": " + txt(n.title)); }});
     }} : undefined;
     act([{item: txt(op.item) || n.id, action: txt(op.action), value, rev: op.item ? revOf(txt(op.item)) || n.rev : n.rev}], "Answered: " + txt(op.label), another);
+  }
+  // What an answer sends: its value, else, for an answer, its own words.
+  function needValue(op) {
+    op = obj(op);
+    return op.value === undefined ? (/\.answer$/.test(txt(op.action)) ? txt(op.label) : null) : op.value;
+  }
+  // The answer given is the one ticked, by its action and its value: a skill's Yes and No are
+  // one action each, so comparing the action alone ticked both at once (the maintainer,
+  // 2026-11-05).
+  function opChosen(chosen, op) {
+    if (!chosen || chosen.doc.action !== txt(obj(op).action)) return false;
+    return JSON.stringify(chosen.doc.value === undefined ? null : chosen.doc.value) === JSON.stringify(needValue(op));
   }
   function needCard(n, ctx) {
     ctx = ctx || {};
@@ -4017,7 +4107,7 @@
       hints.length ? h("ul", {class: "hints"}, hints) : null,
       h("div", {class: "opts", role: "group", "aria-labelledby": hid},
         arr(n.options).map((op, i) => btn(txt(op.label), () => answer(op),
-          {kind: "answer", small: true, key: "need:" + (ctx.where || "") + ":" + n.id + ":" + i, pressed: chosen ? chosen.doc.action === op.action : false}))),
+          {kind: "answer", small: true, key: "need:" + (ctx.where || "") + ":" + n.id + ":" + i, pressed: opChosen(chosen, op)}))),
       stateLine(n.id, "need:" + (ctx.where || "") + ":" + n.id));
   }
   function dueSpec(d) {
@@ -4120,6 +4210,25 @@
     const showGone = openState.get("grp-gone:" + hid) === true;
     const left = ds.filter((d) => showGone || gone.indexOf(d) < 0);
     const late = ds.filter((d) => gone.indexOf(d) < 0 && Number(d.overdue_days) > 0).length;
+    // Several drafted at once: one line at the top says where they all stand, with one Cancel,
+    // and each row a word ("In line", "Writing", "Done"): nine rows each saying "Saved. Sent to
+    // Claude, which is open now: it starts in a moment" with its own Cancel was not clear at a
+    // glance (the maintainer, 2026-11-05).
+    const working = left.map((d) => (busy(d) ? dueWorkEntry(d, kind) : null)).filter(Boolean);
+    const compact = working.length >= 2;
+    const rowWord = (w) => {
+      const st = txt(w.status) || "queued";
+      return st === "running" || st === "claimed" ? h("p", {class: "g-state"}, h("span", {class: "spin", "aria-hidden": "true"}), " Writing")
+        : st === "needs_you" ? h("p", {class: "g-state tone-warn"}, "Has a question")
+        : h("p", {class: "g-state muted"}, h("span", {class: "dot is-waiting", "aria-hidden": "true"}), " In line");
+    };
+    const summary = compact ? (() => {
+      const run = working.filter(([, w]) => ["running", "claimed"].includes(txt(w.status))).length;
+      const doneN = ds.filter((d) => { const w = kind ? dueWork(d, kind) : null; return w && txt(w.status) === "done"; }).length;
+      const words2 = ["Drafting " + (working.length + doneN), doneN ? doneN + " written" : "", run ? run + " being written" : "", working.length - run ? (working.length - run) + " in line" : ""].filter(Boolean);
+      return h("div", {class: "g-summary", role: "status"}, h("p", {}, run ? h("span", {class: "spin", "aria-hidden": "true"}) : h("span", {class: "dot is-waiting", "aria-hidden": "true"}), " " + words2[0] + ": " + words2.slice(1).join(", ")),
+        h("div", {class: "card-actions"}, btn("Cancel all", () => working.forEach(([id]) => stopWork(id)), {kind: "secondary", small: true, key: "fg-stop:" + where + ":" + g + ":" + band, aria: "Cancel all " + working.length})));
+    })() : null;
     const row = (d) => {
       const marked = !!effective(d.id, ["due.done", "due.snooze"]);
       const title = txt(d.title);
@@ -4136,7 +4245,7 @@
       return h("li", {class: "g-row" + (marked ? " is-marked" : ""), "data-item": d.id},
         h("div", {class: "g-main"}, h("p", {class: "g-name"}, cid ? personName(cid, name, "fg:" + d.id) : name),
           dueWho(d) ? h("p", {class: "muted small"}, cap1(dueWho(d))) : null, stateLine(d.id, "due:" + where + ":" + d.id),
-          we ? workInline(we[0], we[1], {key: "fgw:" + where + ":" + d.id}) : null),
+          we ? (compact ? rowWord(we[1]) : workInline(we[0], we[1], {key: "fgw:" + where + ":" + d.id})) : null),
         h("div", {class: "g-acts"}, busy(d) ? null :
           draft ? seeDraftBtn(draft, "fgdraft:" + where + ":" + d.id, "secondary") :
           // What wakes Claude carries the gauge beside it (DESIGN.md, Buttons): the row's Draft
@@ -4163,6 +4272,7 @@
         h("span", {class: "chip tone-plain", "data-k": "grp-done:" + hid}, gone.length + " of " + ds.length + " done"))),
       h("p", {class: "card-title", id: hid}, ds.length > gone.length ? words.title(ds.length - gone.length) : plural(gone.length, "thing", "things") + " done"),
       words.sub && ds.length > gone.length ? h("p", {class: "small muted"}, words.sub) : null,
+      summary,
       left.length ? groupRows("fg:" + where + ":" + g + ":" + band, left.map(row)) : null,
       gone.length && !showGone ? h("p", {class: "fold"}, ds.length > gone.length ? h("span", {}, gone.length + " done: ") : null,
         btn(ds.length > gone.length ? "Show" : "Show them", () => { openState.set("grp-gone:" + hid, true); scheduleRender(); }, {kind: "link", key: "grpgone:" + hid})) : null,
@@ -4221,6 +4331,9 @@
   // was made before the finish): "Finished: putting it on your page", never "Done" over a
   // card that still shows the old state (DESIGN.md, "Moving parts"). The next model says Done.
   function notOnPageYet(w) {
+    // An answer is its own result, written with the finish: never "putting it on your page"
+    // (the maintainer, 2026-11-05, a squashed work card saying so over an answer shown under it).
+    if (txt(obj(w).kind) === "talk") return false;
     const fin = tms(obj(w).finished_at);
     // The page's data is as new as its newest part: a section a chat wrote live after the work
     // finished carries its result, so Done is said then, not three minutes on.
@@ -4318,7 +4431,7 @@
       n.body ? h("p", {class: "body"}, txt(n.body)) : null,
       h("div", {class: "card-actions"}, go,
         arr(n.options).map((op, i) => btn(txt(op.label), () => act([{item: n.id, action: txt(op.action), value: op.value === undefined ? null : op.value, rev: n.rev}], txt(op.label) + ": " + txt(n.title)),
-          {kind: !go && i === 0 ? "primary" : "answer", small: true, key: "need:" + (ctx.where || "") + ":" + n.id + ":" + i, pressed: chosen ? chosen.doc.action === op.action : false})),
+          {kind: !go && i === 0 ? "primary" : "answer", small: true, key: "need:" + (ctx.where || "") + ":" + n.id + ":" + i, pressed: opChosen(chosen, op)})),
         more("setup:" + n.id, txt(n.title), detail)),
       noteFor("browser:" + n.id), stateLine(n.id, "need:" + (ctx.where || "") + ":" + n.id));
   }
@@ -4623,8 +4736,9 @@
     const it = obj(l);
     const named = resolveSection(txt(it.section));
     const sec = it.item ? (sectionOfItem(it.item) || (named ? named.section : null)) : (named ? named.section : null);
-    const goTo = (e) => { e.preventDefault(); const r = resolveSection(sec) || {section: sec}; go(r.section, {focus: true, drafts: r.drafts, item: it.item || null}); };
-    const href = sec ? "#" + sec + (it.item ? "/" + txt(it.item) : "") : null;
+    const goTo = (e) => { e.preventDefault(); const r = resolveSection(sec) || {section: sec}; if (r.applied) setPref("jobs:tab", "applied"); go(r.section, {focus: true, drafts: r.drafts, item: it.item || null}); };
+    const where = sec ? (resolveSection(sec) || {section: sec}).section || sec : null;
+    const href = sec ? "#" + where + (it.item ? "/" + txt(it.item) : "") : null;
     // The line itself opens what it is about; a line with a source link of its own keeps that
     // link and opens its item from a small "Open" beside it, since links cannot nest.
     if (sec && !/\]\(/.test(txt(it.text))) return h("li", {}, h("a", {href, class: "bp-text bp-link", "data-k": "bp-go:" + key, onclick: goTo}, inlineMd(txt(it.text))));
@@ -5003,7 +5117,9 @@
       const d = dueItems().find((x) => x.id === id);
       if (d) return dueSentHere(d);
       const p = peopleItems().find((x) => x.id === id);
-      return !!p && personSentHere(p);
+      // Sent, or put away here (Don't contact, closed): gone from the Brief at once, as from
+      // every other screen, before Claude has caught up (the maintainer, 2026-11-05).
+      return !!p && (personSentHere(p) || personClosedHere(p));
     };
     const stepsFrom = (next.length ? next : owed).filter((l) => !(jobsShown && !txt(obj(l).item) && txt(obj(l).section) === "jobs") && !sentStep(obj(l).item))
       .map((l, i) => ({keys: stepKeys(l), node: () => briefRow(l, "next:" + i), l}));
@@ -5244,10 +5360,17 @@
       : nWord(tally.making, "draft", "drafts") + " being made";
     const sendLine = toSend ? h("p", {class: "bp-lead bp-send"}, h("a", {href: "#drafts", class: "bp-text bp-link", "data-k": "bp-drafts",
       onclick: (e) => { e.preventDefault(); setPref("drafts:view", "apps"); go("drafts", {focus: true}); }}, h("strong", {}, sendWords))) : null;
-    put(grid, briefPanel("jobs", "Jobs", [sendLine, best.length ? h("ul", {class: "plain bp-list", "data-fit": "2,3,2"}, best.slice(0, 5).map((r) => h("li", {},
-      h("a", {href: "#jobs/" + r.id, class: "bp-text bp-link", "data-k": "bp-job:" + r.id, onclick: (e) => { e.preventDefault(); go("jobs", {focus: true, item: r.id}); }},
-        h("strong", {}, txt(r.title)), h("span", {class: "bp-at"}, txt(r.company))),
-      r.score != null ? h("span", {class: "bp-score tone-" + (txt(r.band) || "plain"), title: SCORE_MEANS}, String(r.score)) : null)))
+    // With nothing new found, the drafts ready to apply are the list, best fit first: the panel
+    // said "36 drafts ready to apply" over empty space (the maintainer, 2026-11-05: "jobs panel
+    // looking empty").
+    const readyRows = best.length ? [] : readyItems().filter((a) => readyLive(a) && !draftUnmade(a))
+      .map((a) => ({a, j: sameJob(a)})).sort((x, y) => (Number(obj(y.j).score) || 0) - (Number(obj(x.j).score) || 0));
+    const jobLi = (id, title, company, score, band) => h("li", {},
+      h("a", {href: "#jobs/" + id, class: "bp-text bp-link", "data-k": "bp-job:" + id, onclick: (e) => { e.preventDefault(); go("jobs", {focus: true, item: id}); }},
+        h("strong", {}, txt(title)), h("span", {class: "bp-at"}, txt(company))),
+      score != null ? h("span", {class: "bp-score tone-" + (txt(band) || "plain"), title: SCORE_MEANS}, String(score)) : null);
+    put(grid, briefPanel("jobs", "Jobs", [sendLine, best.length ? h("ul", {class: "plain bp-list", "data-fit": "2,3,2"}, best.slice(0, 5).map((r) => jobLi(r.id, r.title, r.company, r.score, r.band)))
+      : readyRows.length ? h("ul", {class: "plain bp-list", "data-fit": "2,3,2"}, readyRows.slice(0, 5).map(({a, j}) => jobLi(a.id, a.role || a.title, a.company, j && j.score != null ? j.score : null, j ? j.band : null)))
       : searching ? h("p", {class: "muted"}, "Searching now.") : toSend ? null : h("p", {class: "muted"}, "Nothing new to look at.")],
       [best.length ? navLink("jobs", "All " + best.length + " new") : null,
         !searching ? h("button", {type: "button", class: "btn link", "data-k": "bp-search", onclick: () => askSearch()}, "Find jobs") : null],
@@ -5257,12 +5380,12 @@
     // reads at a glance rather than as a paragraph (the maintainer, 2026-11-02).
     const newsPoint = (l) => {
       const it = obj(l);
-      if (!txt(it.what)) return h("li", {}, h("span", {class: "bp-text"}, inlineMd(txt(it.text))));
+      if (!txt(it.what)) return h("li", {}, h("span", {class: "bp-text"}, inlineMd(shortLinks(txt(it.text)))));
       // Two quiet lines: the news, then what to do with it and where it is from, in grey
       // with no underline or bold (the maintainer, 2026-11-02: "weird lines and underlines and
       // bold spammed").
       const src = txt(it.url) ? inlineMd("[" + txt(it.src).replace(/[\[\]]/g, "") + (txt(it.date) ? ", " + fmtDayMonth(txt(it.date)) : "") + "](" + txt(it.url) + ")") : null;
-      return h("li", {}, h("span", {class: "bp-text"}, inlineMd(txt(it.what))),
+      return h("li", {}, h("span", {class: "bp-text"}, inlineMd(shortLinks(txt(it.what)))),
         txt(it.use) || src ? h("span", {class: "bp-meta"}, txt(it.use) ? h("span", {class: "bp-use"}, inlineMd(txt(it.use).replace(/\.$/, ""))) : null,
           txt(it.use) && src ? " \u00b7 " : null, src ? h("span", {class: "bp-src"}, src) : null) : null);
     };
@@ -5476,17 +5599,15 @@
     return d === 0 ? "found today" : d === 1 ? "found yesterday" : fmtDayMonth(r.found_on) ? "found " + fmtDayMonth(r.found_on) : "found " + d + " days ago";
   }
   const posted = (r, n) => r.posted_days !== undefined && r.posted_days !== null && Number(r.posted_days) <= n;
+  // The few filters that change what is worth doing next, each a plain choice: eight groups of
+  // nineteen read as a form to fill in (the maintainer, 2026-11-05: "less cluttered, combine if
+  // needed ... less info overload and more genuinely useful"). How well it fits, when it was
+  // posted and when it closes are what Sort by is for.
   function jobChips() {
-    return [{key: "score", label: "How well it fits you", options: [["75", "Strong, 75 and up", (r) => Number(r.score) >= 75], ["60", "Good, 60 and up", (r) => Number(r.score) >= 60]]},
-      {key: "new", label: "Posted", options: [["1", "Today or yesterday", (r) => posted(r, 1)], ["7", "This week", (r) => posted(r, 7)], ["30", "This month", (r) => posted(r, 30)]]},
-      {key: "closing", label: "Closing date", options: [["7", "Closes within a week", (r) => r.deadline && dayDiff(r.deadline) !== null && dayDiff(r.deadline) >= 0 && dayDiff(r.deadline) <= 7],
-        ["set", "Has a closing date", (r) => !!txt(r.deadline)]]},
+    return [{key: "stage", label: "Show", options: [["ready", "Drafts ready to send", (r) => !!listDraft(r) && readyLive(listDraft(r))], ["todo", "Not drafted yet", (r) => !listDraft(r) && jobStatus(r) === "new"],
+        ["warm", "Someone there you know", (r) => !!txt(r.warm)], ["strong", "Strong fit, 75 and up", (r) => Number(r.score) >= 75]]},
       {key: "style", label: "Work style", options: [["remote", "Remote", (r) => REMOTE(r) === "remote"], ["hybrid", "Hybrid", (r) => REMOTE(r) === "hybrid"], ["onsite", "On site", (r) => REMOTE(r) === "on site"]]},
-      {key: "pay", label: "Pay", options: [["stated", "Pay stated", payStated], ["target", "At or above my target", (r) => obj(r.pay).at_target === true]]},
-      {key: "way", label: "Your way in", options: [["warm", "Someone there you know", (r) => !!txt(r.warm)], ["cold", "Nobody there yet", (r) => !txt(r.warm)]]},
-      {key: "where", label: "Where to apply", options: [["employer", "On the employer's own site", (r) => txt(obj(r.apply).kind) === "employer"], ["linkedin", "On LinkedIn", (r) => txt(obj(r.apply).kind) === "linkedin"],
-        ["board", "On a job site", (r) => ["board", "aggregator"].includes(txt(obj(r.apply).kind))]]},
-      {key: "stage", label: "Where it stands", options: [["ready", "Draft ready", (r) => jobStatus(r) === "ready"], ["todo", "Not drafted yet", (r) => jobStatus(r) === "new"]]}];
+      {key: "new", label: "Posted", options: [["7", "This week", (r) => posted(r, 7)], ["1", "Today or yesterday", (r) => posted(r, 1)]]}];
   }
   function jobSort() {
     const s = txt(pref("jobs:sort", "match"));
@@ -5592,7 +5713,9 @@
 
       ["Change the search", () => openTweak("jobs", jb), "tweak"],
     ]);
-    put(wrap, controlRow([jobsSwitch("found"), h("span", {class: "grow"}), filterButton(key, lo, f), menu]));
+    // Search beside Filter as Contacts has it, once the list is more than a glance (the
+    // maintainer, 2026-11-05: "the search bar is in contacts page but not jobs").
+    put(wrap, controlRow([jobsSwitch("found"), inThis.length > 8 ? searchField(key, lo) : h("span", {class: "grow"}), filterButton(key, lo, f), menu]));
     put(wrap, activeFilters(key, lo, f));
     const onCards = new Set(inThis.flatMap((r) => jobQuestions(r).map((n) => "need:" + n.id)));
     for (const a of inThis.map(listDraft).filter(Boolean)) for (const q of readyQuestions(a)) onCards.add("need:" + q.id);
@@ -5789,6 +5912,7 @@
         pending ? null : h("div", {class: "card-actions"}, primary,
           st === "applied" || facePills([face, warmBox, draftLine]) + (primary ? 1 : 0) >= FACE_PILLS ? null : applyLink(r.apply, "apply:" + r.id, null, true), m.toggle),
         pending ? null : m.panel,
+        pending ? null : cardTalk("job", r.id, about),
         why, stateLine(r.id, "job:" + r.id)));
   }
   // The bin on a job: why it goes, asked once, so the right thing happens (the maintainer,
@@ -5816,7 +5940,8 @@
         extra.letGo ? {label: "Let it go: they have not replied", key: "letgo", run: () => extra.letGo()} : null,
         {label: "Don't contact " + who, key: "person", run: () => stop("person")},
         employer ? {label: "Not interested in " + employer + " any more", key: "employer", run: () => stop("employer")} : null,
-        {label: "Already in touch another way", key: "other", run: () => stop("other")}]});
+        {label: "Already in touch another way", key: "other", run: () => stop("other")},
+        elseChoice(extra.talk ? extra.talk[0] : "person", extra.talk ? extra.talk[1] : cid)]});
   }
   // A person's name that opens everything about them: the thread, what is owed, where they
   // work (the maintainer, 2026-10-29: "i forgot who this guy is, why cant i click his name").
@@ -5849,17 +5974,18 @@
     // 2026-10-29: "does this just block the company?").
     sheet({title: "Not sending this one?", intro: txt(a.role) + " at " + co + ". Your files are kept either way.",
       choices: binReasons(co, Object.keys(obj(a.apply)).length ? a.apply : obj(j).apply, obj(j).posted_days).map(([w, label]) => ({label, key: "why-" + w,
-        run: () => act([{item: a.id, action: "ready.not_applying", value: {why: w === "role" ? "not this role" : w}, rev: a.rev}], w === "employer" ? "No more roles from " + co : "Not applying: " + co)}))});
+        run: () => act([{item: a.id, action: "ready.not_applying", value: {why: w === "role" ? "not this role" : w}, rev: a.rev}], w === "employer" ? "No more roles from " + co : "Not applying: " + co)})).concat([elseChoice("application", a.id)])});
   }
   // The bin on an application or an interview: it is over, said the way the tracker records
   // it (the same outcomes as "I heard back").
-  function askEndApplication(item, what, moved) {
+  function askEndApplication(item, what, moved, talk) {
     const end = (w) => act([{item: txt(item.id), action: "outcome." + w, value: {on: todayIso()}, rev: item.rev}], (ACTION_WORDS["outcome." + w] || "Saved") + ": " + txt(item.company));
     // An interview moved or called off is not the end of the process: its own choice, which
     // asks the new day, if there is one (the audit, 2026-11-03).
     sheet({title: moved ? "What happened to " + what + "?" : "Is " + what + " over?", intro: moved ? "Moved keeps the process going. The others move it to Closed in Applied, and nothing more is chased there." : "It moves to Closed in Applied, and nothing more is chased there.",
       choices: (moved ? [{label: "It was moved or cancelled", key: "moved", run: () => { setTimeout(moved, 0); }}] : []).concat([{label: "They said no", key: "rejected", run: () => end("rejected")}, {label: "I withdrew", key: "withdrawn", run: () => end("withdrawn")},
-        {label: "No reply, and I have stopped waiting", key: "no_response", run: () => end("no_response")}])});
+        {label: "No reply, and I have stopped waiting", key: "no_response", run: () => end("no_response")},
+        talk ? elseChoice(talk[0], talk[1]) : null])});
   }
   // An interview's own application, by the ids the engine gives them, never by the employer's
   // name: with two roles at one employer, I heard back recorded against the other one (the
@@ -5879,7 +6005,7 @@
   }
   function askMoved(iv) {
     const app = ivApplication(iv);
-    heardBack(app, {stage: cap1(txt(iv.next_stage) || "Interview"), with: txt(iv.with), moved: true});
+    heardBack(app, {stage: cap1(txt(iv.next_stage) || "Interview"), with: txt(iv.with), moved: true, tentative: !!iv.tentative});
   }
   function askRemoveJob(r) {
     const co = txt(r.company);
@@ -5887,7 +6013,7 @@
       choices: binReasons(co, r.apply, r.posted_days).map(([w, label]) => ({label, key: "why-" + w, run: () => {
         const value = w === "employer" ? {why: "employer", scope: "employer"} : w === "role" ? {why: "not this role"} : {why: w};
         act([{item: r.id, action: "job.dismiss", value, rev: r.rev}], w === "employer" ? "No more roles from " + co : asideWords(w, co));
-      }}))});
+      }})).concat([elseChoice("job", r.id)])});
   }
   // What a reason in the job bin changes, said as it is set aside: pay, place and field teach
   // the next ranking (tools/app_actions.py _dismiss_rule), and a toast that said only
@@ -6135,7 +6261,7 @@
   // list, opened at them (2026-11-05: a drafted job stood in Found and again in Drafts).
   function renderDrafts(where) { return renderJobs(where, true); }
   async function getFiles(a, files) {
-    for (const f of files) await download(f, "dl:" + a.id);
+    for (const f of files) await download(Object.assign({company: txt(a.company)}, f), "dl:" + a.id);
   }
   function readyCard(a) {
     const st = readyStatus(a);
@@ -6275,9 +6401,11 @@
         // letter 1 page ✎"), the two kept together so a pencil never wraps onto a line alone, and
         // the pencil itself parts them (a dot between was left alone at the end of a phone's
         // line): two side by side at the end said nothing of which was which.
-        live && !checkAlert && !asks.length && checks.passed && checks.line ? h("p", {class: "checks"}, h("span", {"aria-hidden": "true"}, "✓ "),
-          !forWho && txt(checks.lead) && arr(checks.parts).length
-            ? [txt(checks.lead), arr(checks.parts).map((p) => [h("span", {class: "doc-part"}, h("span", {class: "doc-words"}, txt(obj(p).words)),
+        // Said quietly as the documents and their length, each with its pencil, never "Made,
+        // right length:" on every card (the maintainer, 2026-11-05).
+        live && !checkAlert && !asks.length && checks.passed && checks.line ? h("p", {class: "checks"},
+          !forWho && arr(checks.parts).length
+            ? [txt(checks.lead), arr(checks.parts).map((p, i) => [i ? " " : null, h("span", {class: "doc-part"}, h("span", {class: "doc-words"}, i ? txt(obj(p).words) : cap1(txt(obj(p).words))),
               txt(obj(p).kind) === "letter" ? (letter.length ? docPencil(a, "letter") : null) : txt(obj(p).kind) === "resume" ? docPencil(a, "resume") : null)])]
             // With no parts from the engine, each pencil still beside its own document's word:
             // "All checks passed ✎ ✎" said nothing of which was which (the review, 2026-11-05).
@@ -6292,6 +6420,7 @@
         // a recruiter's call there is no cold application (2026-11-05).
         h("div", {class: "card-actions"}, kept, m.toggle),
         m.panel,
+        live ? cardTalk("application", a.id, about) : null,
         stateLine(a.id, "ready:" + a.id)));
   }
   // The message drafted to someone, on their card under their name: open, and folded by a tap
@@ -6314,6 +6443,35 @@
     if (!cur && tries < (fix.must ? 2 : 1)) return "going";
     return fix.must ? "failed" : null;
   }
+  // The document a message's words send with it (the engine's `sends`): the resume made for
+  // them where there is one, else the current one, saved in a tap to attach; where it is not
+  // on the page yet, the way to it (the maintainer, 2026-11-05: "it would be great if the
+  // actual document was linked there").
+  function sendsLine(m) {
+    if (txt(m.sends) !== "resume") return null;
+    const made = readyItems().find((a) => readyLive(a) && txt(obj(a.for_contact).id || a.for_contact) === txt(m.contact));
+    const theirs = made ? arr(made.files).find((f) => f.kind === "resume" && f.asset) : null;
+    const cur = obj(obj(M().resume).file);
+    const f = theirs || (cur.asset ? {kind: "resume", name: txt(cur.name), asset: cur.asset} : null);
+    const key = "dl:sends:" + m.id;
+    const who = txt(m.first_name);
+    return h("div", {class: "sends-line"},
+      h("span", {class: "small muted"}, "Goes with it: "),
+      f ? btn((made ? "The " + noun() + " for " + who : "Your " + noun()) + " (" + (txt(f.name).split(".").pop() || "pdf").toUpperCase() + ")", () => download(f, key),
+        {kind: "secondary", small: true, key, aria: "Save " + (made ? "the " + noun() + " for " + who : "your " + noun()) + " to attach to the message to " + who})
+        : btn("Your " + noun(), () => go("drafts", {focus: true, drafts: "apps", item: made ? made.id : txt(obj(M().resume).id) || "resume-general"}), {kind: "secondary", small: true, key, aria: "Your " + noun() + ", to attach to the message to " + who}),
+      noteFor(key));
+  }
+  // A web address written out in a line of words is a short link named by its site, "(canada.ca)":
+  // whole addresses ran three lines in the Brief's news (the maintainer, 2026-11-05: "urls
+  // clogging news"). A link already written as one is left as it is.
+  function shortLinks(text) {
+    const host = (u) => { try { return new URL(u).hostname.replace(/^www\./, ""); } catch (e) { return "link"; } };
+    const clean = (u) => u.replace(/[.,;:!?]+$/, "");
+    return txt(text)
+      .replace(/(^|[^\]])\((https?:\/\/[^\s)]+)\)/g, (m, pre, u) => pre + "([" + host(clean(u)) + "](" + clean(u) + "))")
+      .replace(/(^|[\s])(https?:\/\/[^\s)\]]+)/g, (m, pre, u) => { const c = clean(u); return pre + "[" + host(c) + "](" + c + ")" + u.slice(c.length); });
+  }
   function draftParts(m, o) {
     o = o || {};
     const tid = "msgt-" + seg(m.id);
@@ -6322,7 +6480,12 @@
     const parts = msgParts(m);
     // Changed here with the pencil: what is copied and logged as sent is these words.
     const penKey = "changed:" + m.id;
+    // The pencil opens a box under the draft asking what to change, as Something else does;
+    // the words themselves become a field only from its "Edit the words yourself" (the
+    // maintainer, 2026-11-05: "the pencil opens the actual text box rather than one below that
+    // just asks what youd like to change").
     const pen = S.penOpen.has(m.id);
+    const editing = pen && S.penEdit.has(m.id);
     const edited = txt(draftGet(penKey));
     const body = edited || parts.body;
     const copied = S.copied.has(m.id);
@@ -6337,7 +6500,7 @@
       "aria-label": copied ? null : copyName, onclick: () => { S.copied.add(m.id); copyText(txt(draftGet(penKey)) || parts.body, (parts.subject ? "message" : what) + " to " + name, "copy:" + tid, tid); }},
       icon("copy"), copied ? (fresh ? "Copied" : "Copy again") : "Copy");
     // The pencil: the words changed in place, or Claude asked to change them.
-    const penBtn = btn("", () => { if (S.penOpen.has(m.id)) S.penOpen.delete(m.id); else S.penOpen.add(m.id); scheduleRender(); },
+    const penBtn = btn("", () => { if (S.penOpen.has(m.id)) S.penOpen.delete(m.id); else { S.penOpen.add(m.id); S.focusAfter = {key: "penask:" + m.id}; } scheduleRender(); },
       {kind: "quiet icon-only", small: true, icon: "tweak", key: "pen:" + m.id, aria: (pen ? "Done changing the " : "Change the ") + what + " to " + name, pressed: pen});
     penBtn.classList.add("bubble-pen");
     const sentNow = (text) => act([{item: m.id, action: "msg.sent", value: msgSentValue(m, text), rev: m.rev}], "Marked as sent: " + name);
@@ -6346,13 +6509,24 @@
       {kind: copied ? "primary" : "secondary", small: true, key: "sent:" + m.id, aria: "I sent it: the " + what + " to " + name}) : null;
     const sid = "msgs-" + seg(m.id);
     const heading = (DRAFT_WORD[txt(m.type)] || DRAFT_WORD[txt(m.kind)] || "Your message") + (CHANNEL[txt(m.channel)] ? " · " + CHANNEL[txt(m.channel)] : "");
-    const area = pen ? h("textarea", {id: tid, class: "sendtext big pen-text", rows: 5, "data-k": "pentext:" + m.id, "aria-label": "The " + what + " to " + name + ", to change",
+    const area = editing ? h("textarea", {id: tid, class: "sendtext big pen-text", rows: 5, "data-k": "pentext:" + m.id, "aria-label": "The " + what + " to " + name + ", to change",
       oninput: (e) => { draftSet(penKey, e.target.value); const c = $("cnt-" + seg(m.id)); const w = countWords(m, e.target.value.length); if (c && w) { c.textContent = w.text; c.className = "count tone-" + w.tone; } }}, body) : null;
     const askId = "pa-" + seg(m.id);
-    const askField = pen ? h("input", {id: askId, type: "text", class: "pen-ask", "data-k": "penask:" + m.id, maxlength: 300, placeholder: "or tell Claude what to change"}) : null;
+    // Room for their whole message pasted in, growing with what is put in it (the maintainer,
+    // 2026-11-05: "the actual text box is too short, i was gonna paste his reply there").
+    const grow = (t) => { t.style.height = "auto"; t.style.height = Math.min(t.scrollHeight + 2, 480) + "px"; };
+    const askField = pen ? h("textarea", {id: askId, rows: 3, class: "pen-ask", "data-k": "penask:" + m.id, maxlength: 8000,
+      placeholder: "Shorter, mention the call on Thursday, or paste what they sent…",
+      oninput: (e) => { draftSet("penask:" + m.id, e.target.value); grow(e.target); }}) : null;
+    // Cmd or Ctrl+Enter sends; Enter alone is a new line in a pasted message (the maintainer,
+    // 2026-11-05: "i tried pressing enter but nothing").
+    if (askField) askField.addEventListener("keydown", (e) => { if (e.key === "Enter" && (e.metaKey || e.ctrlKey)) { e.preventDefault(); askClaude(askField.value); } });
+    if (askField) { askField.value = draftGet("penask:" + m.id) || ""; if (askField.value) requestAnimationFrame(() => grow(askField)); }
     const askClaude = (words) => {
       if (!txt(words)) return;
       S.penOpen.delete(m.id);
+      S.penEdit.delete(m.id);
+      draftSet("penask:" + m.id, null);
       requestWork([{id: "tweak~" + seg(m.id) + "~" + stamp(), kind: "tweak", to: "either", title: "Change the " + what + " to " + name,
         args: {v: 1, target: tweakTarget("message", m), changes: [], text: txt(words), keep: null},
         stages: STAGES.tweak.filter((x) => !/PDF/.test(x[0])).map((x) => ({name: x[0], est_s: x[1]}))}]);
@@ -6365,12 +6539,22 @@
         h("button", {type: "button", class: "btn secondary small copy icon-only", "data-k": "copy:" + sid, "aria-label": "Copy subject", title: "Copy subject",
           onclick: () => copyText(parts.subject, "subject", "copy:" + sid, sid)}, icon("copy"))) : null,
       parts.subject ? noteFor("copy:" + sid) : null,
-      h("div", {class: "sendbox"}, ready ? copyBtn : null, penBtn, pen ? area : h("p", {class: "sendtext big", id: tid}, body)),
-      pen ? h("div", {class: "pen-tell"}, h("label", {class: "sr-only", for: askId}, "Or tell Claude what to change"), askField,
-        h("div", {class: "opts"}, PEN_CHIPS.map(([l, t]) => btn(l, () => askClaude(t), {kind: "answer", small: true, key: "penchip:" + m.id + ":" + l, aria: l + ": ask Claude to change the " + what + " to " + name, wakes: "tweak"})),
-          btn("Ask Claude", () => askClaude(askField.value), {kind: "secondary", small: true, key: "pengo:" + m.id, aria: "Ask Claude to change the " + what + " to " + name, wakes: true}),
-          costEl({state: WORK_COST.tweak === undefined ? 1 : WORK_COST.tweak}, "tweak", "cost-pen-" + seg(m.id)))) : null,
+      h("div", {class: "sendbox"}, ready ? copyBtn : null, penBtn, editing ? area : h("p", {class: "sendtext big", id: tid}, body)),
+      pen ? h("div", {class: "pen-tell"}, h("label", {class: "small pen-label", for: askId}, "What would you like changed?"), askField,
+        // A quick choice fills the box, so one Ask Claude (and one gauge) sends whatever is asked.
+        h("div", {class: "opts"}, PEN_CHIPS.map(([l, t]) => btn(l, () => { const f = $(askId); if (f) { f.value = (txt(f.value).trim() ? txt(f.value).trim().replace(/[.\s]*$/, ". ") : "") + t; draftSet("penask:" + m.id, f.value); f.focus(); } },
+          {kind: "answer", small: true, key: "penchip:" + m.id + ":" + l, aria: l + ": add it to what Claude changes"})),
+          btn("Ask Claude", () => askClaude(askField.value), {kind: "primary", lead: true, small: true, key: "pengo:" + m.id, aria: "Ask Claude to change the " + what + " to " + name, wakes: true}),
+          costEl({state: WORK_COST.tweak === undefined ? 1 : WORK_COST.tweak}, "tweak", "cost-pen-" + seg(m.id)),
+          // A word or two changed by hand: the words themselves become the field, free.
+          btn(editing ? "Done editing" : "Edit the words yourself", () => { if (S.penEdit.has(m.id)) S.penEdit.delete(m.id); else S.penEdit.add(m.id); scheduleRender(); },
+            {kind: "secondary", small: true, key: "penedit:" + m.id, aria: (editing ? "Done editing the " : "Edit the words of the ") + what + " to " + name, pressed: editing}),
+          // Closed without asking anything: what was typed in the box waits for next time
+          // (the maintainer, 2026-11-05: "i cant see a way to close that").
+          btn("Cancel", () => { S.penOpen.delete(m.id); S.penEdit.delete(m.id); scheduleRender(); },
+            {kind: "secondary", small: true, key: "penx:" + m.id, aria: "Close the box: no change to the " + what + " to " + name}))) : null,
       held ? h("p", {class: "small hint-line msg-check msg-held", "data-k": "held:" + m.id}, "Not ready to send: " + lc1(held) + ".") : null,
+      sendsLine(m),
       h("span", {id: "cnt-" + seg(m.id), class: "cnt-wrap"}, charCount(m, body)),
       // Where they live is not on record, so the person's own rule about where people are cannot
       // be checked (2026-11-03): a fact of the card, never a fix.
@@ -6407,11 +6591,12 @@
         h("div", {class: "job-top"}, h("h3", {id: hid}, toWho(m)),
           h("span", {class: "top-end"}, d.blocked ? stateWord("Breaks your rules", "bad") : m.due && dayDiff(m.due) !== null && dayDiff(m.due) < 0 ? stateWord("Overdue", "warn") : null,
             txt(m.contact) && !txt(m.application) ? btn("", () => askRemovePerson(txt(m.contact), txt(m.first_name), txt(m.employer), revOf(txt(m.contact)),
-              txt(m.kind) === "first_note" ? {skip: () => act([{item: m.id, action: "msg.skip", rev: m.rev}], "Set aside: the note to " + txt(m.first_name))} : {}),
+              Object.assign({talk: ["message", m.id]}, txt(m.kind) === "first_note" ? {skip: () => act([{item: m.id, action: "msg.skip", rev: m.rev}], "Set aside: the note to " + txt(m.first_name))} : {})),
             {kind: "quiet icon-only", small: true, icon: "bin", key: "mbin:" + m.id, aria: "Trash it: not now, or not " + txt(m.first_name) + "?"}) : null)),
         m.why ? h("p", {class: "meta"}, txt(m.why) + ".") : null,
         d.box, d.notes,
         h("div", {class: "card-actions"}, d.act, more("msg:" + m.id, "the message to " + txt(m.first_name), [h("div", {class: "more-acts"}, d.extra, elseBtn("message", m.id, "the message to " + txt(m.first_name), "msg:" + m.id)), relatedLinks(m.employer, m.id, m)], true)),
+        cardTalk("message", m.id, "the message to " + txt(m.first_name)),
         d.line));
   }
 
@@ -6489,6 +6674,14 @@
     const up = (p) => !!p.__msg || !!personDraft(p) || ["now", "follow"].includes(personGroup(p));
     return items.some(up) ? up : personLive;
   }
+  function contactSort(g, pos) {
+    const s = txt(pref("contacts:sort", "need"));
+    const last = (p) => txt(p.last || obj(p.exchange).last_on || "");
+    if (s === "recent") return (a, b) => last(b).localeCompare(last(a)) || (pos(a) - pos(b));
+    if (s === "name") return (a, b) => txt(a.first_name).localeCompare(txt(b.first_name)) || (pos(a) - pos(b));
+    const band = (p) => (p.__msg ? (txt(obj(p.__msg).type) === "reply" ? 0 : 1) : needsYou(g(p)) ? 0 : personDraft(p) ? 1 : 2);
+    return (a, b) => (band(a) - band(b)) || ((a.__msg ? 0 : personRank(a)) - (b.__msg ? 0 : personRank(b))) || (pos(a) - pos(b));
+  }
   function renderContacts(where) {
     const people = peopleItems();
     const lone = loneMessages(people);
@@ -6517,10 +6710,13 @@
     const pos = (p) => (p.__msg ? -1 : order.has(p) ? order.get(p) : 1e9);
     const lo = {items, name: "contacts", one: "person", many: "people", live: front, fold: (p) => !front(p), remote: "people",
       foldLabel: (k) => plural(k, "more person", "more people") + (anyUp ? ", nothing to do for them now" : ""), foldShow: "Show them",
-      sort: (a, b) => (((a.__msg || personDraft(a)) ? 0 : 1) - ((b.__msg || personDraft(b)) ? 0 : 1)) || ((a.__msg ? 0 : personRank(a)) - (b.__msg ? 0 : personRank(b))) || (pos(a) - pos(b)),
-      chips: [{key: "status", label: "Where it stands", options: [["draft", "A message to send", (p) => !!(p.__msg || personDraft(p))], ["now", "Needs you", (p) => needsYou(g(p))], ["follow", "Follow-up you could send", (p) => g(p) === "follow"],
-        ["waiting", "Waiting for a reply", (p) => g(p) === "waiting"],
-        ["new", "Not written to", (p) => g(p) === "new"]]},
+      // Sorted, never filtered, by default: who is waiting on you first, then the other messages
+      // ready to send, then everyone else in the engine's order (the maintainer, 2026-11-05: "the
+      // way it sorts the list should sort need you at the top followed by rest").
+      sort: contactSort(g, pos),
+      sorts: [["need", "Waiting on you first"], ["recent", "Most recent"], ["name", "Name"]], sortPref: "contacts:sort",
+      chips: [{key: "status", label: "Show", options: [["now", "Waiting on you", (p) => needsYou(g(p))], ["draft", "A message to send", (p) => !!(p.__msg || personDraft(p))],
+        ["waiting", "Waiting on them", (p) => g(p) === "waiting"], ["new", "Not written to yet", (p) => g(p) === "new"]]},
         // Who they are, so a recruiter or the person who referred you is one tap away.
         {key: "who", label: "Who they are", options: [["recruiter", "Recruiters", (p) => txt(p.who) === "recruiter"], ["referrer", "Referrers", (p) => txt(p.who) === "referrer"],
           ["hiring", "Hiring managers and HR", (p) => txt(p.who) === "hiring"], ["peer", "People in your field", (p) => txt(p.who) === "peer"]]}],
@@ -6534,8 +6730,12 @@
       // is doing is the header's work pill and each card's own line, never a third line here.
       screenHead("contacts", "Contacts", sum, null, where, h("div", {class: "head-tools"},
         runBtn("network", "Find people", () => askFindPeople(), {small: true, key: "head-find-people", icon: "k-search"}),
-        btn("Paste a message", (e) => openDock({opener: e.currentTarget, text: "Help me reply to this message: "}), {small: true, key: "got-msg" + (where ? ":" + where : ""),
-          aria: picsOn() ? "Paste a message or a screenshot someone sent you" : "Paste a message someone sent you"})), {quiet: true}));
+        btn("Paste a message", () => openPlace("paste"), {small: true, key: "got-msg" + (where ? ":" + where : ""),
+          aria: "Paste a message someone sent you"})), {quiet: true}),
+      // Its box and Claude's answer right under the header, never in the Chat; a screenshot
+      // still goes in the Chat, which reads pictures.
+      placeTalk("paste", {hint: picsOn() ? h("p", {class: "small muted"}, "A screenshot? ", h("a", {href: "#chat", "data-k": "paste-shot",
+        onclick: (e) => { e.preventDefault(); openDock({opener: e.currentTarget, text: "Help me reply to this message: "}); }}, "Add it in Chat"), ", which reads pictures.") : null}));
     if (!items.length) {
       put(wrap, empty("Who could refer you?", "Someone inside who refers you beats applying cold. Find people looks at the employers you want."));
       return wrap;
@@ -6728,12 +6928,178 @@
     const wrote = typeof p.wrote === "boolean" ? p.wrote : st !== "not_contacted";
     return !personGotHere(p) && !personClosedHere(p) && (personSentHere(p) || ["waiting", "talking", "follow", "leave"].includes(personGroup(p))) && wrote && st !== "replied_needs_response";
   }
-  // Anything else to tell Claude about a card, in words: the last thing under its More, opening
-  // the Chat with what it is about, its words going to Claude as work about that card (the
-  // maintainer, 2026-11-05: "there should be a 'something else' button if i need to feed back").
-  // It only opens the box, so it carries no gauge; sending is what wakes Claude.
+  // Anything else to ask or tell Claude about a card, in words: the last thing under its More.
+  // It opens a box under that card, its words go to Claude as work about that card, and the
+  // answer shows under the card, never in the Chat (the maintainer, 2026-11-05: "it opens a
+  // text box UNDER THAT PARTICULAR THING ... and then the response shows underneath ... the
+  // chat is being clogged up with everything"). It only opens the box, so it carries no gauge;
+  // the box's Ask Claude does.
   function elseBtn(kind, id, label, key) {
-    return btn("Something else", (e) => openDock({opener: e.currentTarget, about: {kind, id: txt(id), label}}), {small: true, key: "else:" + key, aria: "Something else about " + label});
+    const th = cardThread(kind, id);
+    return btn("Something else", () => {
+      if (S.cardAsk.has(th)) S.cardAsk.delete(th); else S.cardAsk.add(th);
+      sset("local", "ljs:ct-hide:" + th, null);
+      if (S.cardAsk.has(th)) S.focusAfter = {key: "ct-text:" + th};
+      scheduleRender();
+    }, {small: true, key: "else:" + key, aria: "Something else about " + label, pressed: S.cardAsk.has(th)});
+  }
+  // The last choice of a trash sheet whose card has a box: none of the reasons fits, so the
+  // sheet closes and that card's box opens under it, to say in words what is going on (the
+  // maintainer, 2026-11-05: the person's trash offered Don't contact, In touch another way
+  // and Cancel, and nothing for anything else). It only opens the box, so it carries no
+  // gauge: the box's Ask Claude does.
+  function elseChoice(kind, id) {
+    return {label: "Something else", key: "else", after: () => openCardAsk(kind, id)};
+  }
+  // Opens a card's box where the card is: here when this screen draws it (a job in Jobs, an
+  // interview in To do), else on the card's own place (a person's box is in Contacts).
+  function openCardAsk(kind, id) {
+    const th = cardThread(kind, id);
+    const key = "ct-text:" + th;
+    S.cardAsk.add(th);
+    sset("local", "ljs:ct-hide:" + th, null);
+    S.focusAfter = {key};
+    render();
+    if (refocus(document, key) || !CARD_HOME[kind]) return;
+    go(CARD_HOME[kind], {focus: false, item: txt(id)});
+    refocus(document, key);
+  }
+  // Where a card's answer is seen: its kind's own place.
+  const CARD_HOME = {person: "contacts", message: "contacts", job: "jobs", application: "jobs", interview: "interviews", place: "contacts"};
+  // Asks that belong to a place rather than a card, each answered where it was asked, never in
+  // the Chat (the maintainer, 2026-11-05: "there are quite a few places in the app which
+  // unecessarily go to chat and could be done inline"): [screen, what it is about, the box's
+  // question]. Setting up, a practice interview, screenshots and how-to questions stay in the
+  // Chat: those are conversations, or need pictures.
+  const PLACES = {
+    paste: ["contacts", "a message someone sent you", "Paste what they sent, who it is from, and what you want to say back"],
+    interview: ["interviews", "an interview", "Which interview? Who it is with, when, and the role"],
+    wrong: ["settings", "something on this page", "What looks wrong, and where?"],
+    rules: ["settings", "your rules", ""],
+    chats: ["settings", "your old chats", ""]};
+  function placeTalk(id, o) {
+    const pl = PLACES[id];
+    return cardTalk("place", id, pl[1], Object.assign({prompt: pl[2], rows: id === "paste" ? 5 : 2, max: id === "paste" ? 20000 : 4000}, o || {}));
+  }
+  // Opens a place's box (going there first), its words begun where given.
+  function openPlace(id, text) {
+    const pl = PLACES[id];
+    const th = cardThread("place", id);
+    S.cardAsk.add(th);
+    sset("local", "ljs:ct-hide:" + th, null);
+    if (text && !draftGet("ct:" + th)) draftSet("ct:" + th, text);
+    if (S.section !== pl[0]) go(pl[0], {focus: false});
+    S.focusAfter = {key: "ct-text:" + th};
+    scheduleRender();
+  }
+  // A place's ask with its words fixed (Tidy these up, Bring them back): sent at once, its
+  // answer under the place.
+  function askPlace(id, text) {
+    const pl = PLACES[id];
+    const th = cardThread("place", id);
+    sset("local", "ljs:ct-hide:" + th, null);
+    return askCard({kind: "place", id, label: pl[1]}, text, th);
+  }
+  function cardThread(kind, id) { return "card-" + seg(txt(kind) + "-" + txt(id)).slice(0, 120); }
+  function recentCardThreads() {
+    const since = now() - 14 * DAY;
+    return [...S.cardThreads.entries()]
+      .filter(([, t]) => (tms(t.last_at || t.created_at) || 0) > since)
+      .sort((a, b) => txt(b[1].last_at || b[1].created_at).localeCompare(txt(a[1].last_at || a[1].created_at)))
+      .slice(0, 12).map(([id]) => id);
+  }
+  // What was asked under a card and Claude's answers, the newest three, each answer under its
+  // question, the one still going as its work line (Saved, In line, Claude is on it, Cancel), and
+  // the box while it is open. A finished exchange stays two days, then folds away by itself;
+  // Hide puts it away sooner, and the next question brings it back.
+  function cardTalk(kind, id, label, o) {
+    o = o || {};
+    const th = cardThread(kind, id);
+    const open = S.cardAsk.has(th);
+    const msgs = (S.msgs.get(th) || []).slice().sort((a, b) => txt(a.at).localeCompare(txt(b.at)));
+    const asks = [];
+    for (const m of msgs) {
+      if (m.from === "you") asks.push({q: m, a: []});
+      else if (asks.length && m.from !== "note") asks[asks.length - 1].a.push(m);
+    }
+    const last = asks[asks.length - 1];
+    const lastWork = last ? workDoc(txt(last.q.work)) : null;
+    const going = !!lastWork && ACTIVE.has(txt(lastWork.status) || "queued") && !last.a.length;
+    const lastAt = last ? txt((last.a[last.a.length - 1] || last.q).at) : "";
+    const hidden = last && sget("local", "ljs:ct-hide:" + th) === txt(last.q.id);
+    const fresh = !!last && !hidden && (going || (tms(lastAt) || 0) > now() - 2 * DAY);
+    if (!open && !fresh) return null;
+    const shown = open || fresh ? asks.slice(-3) : [];
+    const box = open ? cardBox(kind, id, label, th, o) : null;
+    return h("div", {class: "card-talk", "data-k": "ct:" + th, "aria-label": "Asked Claude about " + label, role: "group"},
+      shown.map((x) => {
+        const w = workDoc(txt(x.q.work));
+        const answered = x.a.filter((m) => txt(m.text));
+        return h("div", {class: "ct-pair"},
+          h("p", {class: "ct-q"}, h("span", {class: "ct-who"}, "You asked"), " ", txt(x.q.text).replace(/^about [^:]{1,80}:\s*/i, "")),
+          answered.length ? answered.map((m) => h("p", {class: "ct-a"}, h("span", {class: "ct-who"}, "Claude"), " ", txt(m.text)))
+            : w ? workInline(txt(x.q.work), w, {key: "ct:" + th, done: () => null}) : null);
+      }),
+      box,
+      !open && last && !going ? h("div", {class: "card-actions"},
+        btn("Ask more", () => { S.cardAsk.add(th); S.focusAfter = {key: "ct-text:" + th}; scheduleRender(); }, {kind: "secondary", small: true, key: "ct-more:" + th, aria: "Ask Claude more about " + label}),
+        btn("Hide", () => { sset("local", "ljs:ct-hide:" + th, txt(last.q.id)); scheduleRender(); }, {kind: "secondary", small: true, key: "ct-hide:" + th, aria: "Hide what Claude said about " + label})) : null);
+  }
+  function cardBox(kind, id, label, th, o) {
+    o = o || {};
+    const fid = "ct-f-" + seg(th);
+    const field = h("textarea", {id: fid, class: "ct-text", rows: o.rows || 2, maxlength: o.max || 4000, "data-k": "ct-text:" + th, placeholder: o.placeholder || "Ask Claude or tell it something about this",
+      oninput: (e) => draftSet("ct:" + th, e.currentTarget.value)});
+    field.value = draftGet("ct:" + th) || "";
+    const send = (e) => {
+      const text = txt(field.value).trim();
+      if (!text) { field.focus(); return; }
+      askCard({kind, id: txt(id), label}, text, th).then((ok) => { if (ok) { draftSet("ct:" + th, null); S.cardAsk.delete(th); scheduleRender(); } });
+    };
+    field.addEventListener("keydown", (e) => { if (e.key === "Enter" && (e.metaKey || e.ctrlKey)) { e.preventDefault(); send(); } });
+    return h("div", {class: "ct-box"},
+      h("label", {class: "small ct-label", for: fid}, o.prompt || "Anything else about " + label + "?"),
+      o.hint || null,
+      field,
+      // The box's own row, as They replied's: its one filled step while it is open, and Cancel.
+      h("div", {class: "card-actions"}, btn("Ask Claude", send, {kind: "primary", small: true, key: "ct-go:" + th, wakes: "talk", lead: true, aria: "Ask Claude about " + label}),
+        btn("Cancel", () => { S.cardAsk.delete(th); scheduleRender(); }, {kind: "secondary", small: true, key: "ct-x:" + th, aria: "Cancel the question about " + label})));
+  }
+  // The question is written to the card's own thread and its work, and only then rung, while the
+  // tap still counts, as the Chat's own messages are (handOff). Claude answers in that thread
+  // (`app.py done --reply-file`), and the answer shows under the card.
+  async function askCard(about, text, th) {
+    const t0 = now();
+    const db = await CAP.db;
+    if (!db) { shout("This page cannot reach Claude here. Open it in the Claude app."); return false; }
+    const to = whereTo();
+    const mid = "m" + stamp() + rand4();
+    const wid = "talk~" + seg(th) + "~" + mid;
+    const msgRef = db.doc("talk/" + th + "/messages/" + mid);
+    const at = iso();
+    try {
+      const doc = Object.assign({}, obj(S.cardThreads.get(th)), {to, card: about, title: "About " + about.label, last_at: at, _v: 1});
+      if (!doc.created_at) doc.created_at = at;
+      S.cardThreads.set(th, doc);
+      await db.doc("talk/" + th).set(doc);
+      const msg = {from: "you", text, at, work: wid, _v: 1};
+      await msgRef.set(msg);
+      S.msgs.set(th, (S.msgs.get(th) || []).filter((x) => x.id !== mid).concat([Object.assign({id: mid}, msg)]));
+      const made = await createWork(db, {id: wid, kind: "talk", to, title: "About " + about.label + ": “" + clipWords(text, 50) + "”",
+        args: {thread: th, message: mid, about: {kind: about.kind, id: about.id, label: about.label}}, slot: false});
+      if (!made.ok) throw new Error("work");
+    } catch (e) {
+      msgRef.delete().catch(() => {});
+      S.msgs.set(th, (S.msgs.get(th) || []).filter((x) => x.id !== mid));
+      shout("Not sent. Try again.");
+      return false;
+    }
+    followThreads();
+    announce("Sent to Claude. The answer shows here.");
+    const reach = to === "cloud" || computerListening();
+    ringNote([wid], reach ? await toClaude([wid], "work", t0, false) : canRing() ? "later" : "none");
+    scheduleRender();
+    return true;
   }
   function theyRepliedBtn(p, key, open, kind) {
     return btn("They replied", open, {kind: kind || "secondary", small: true, key, aria: "They replied: paste what " + txt(p.first_name) + " sent"});
@@ -6943,6 +7309,7 @@
         // The gauge only beside what wakes Claude: a draft's own act (I sent it, Copy) is the
         // page's alone, and carried a follow-up's two minutes (the review, 2026-11-05).
         h("div", {class: "card-actions"}, owed, owedCost(p, d ? null : owed, going || box), d ? null : theyReplied, more("person:" + p.id, whoAt(name, p.employer), extra)),
+        cardTalk("person", p.id, whoAt(name, p.employer)),
         noteFor("reply:" + p.id), due ? stateLine(due.id, "pdue:" + p.id) : null, d ? d.line : done1 ? stateLine(done1.id, "msg:" + done1.id) : null,
         going ? null : stateLine(p.id, "person:" + p.id)));
   }
@@ -6959,6 +7326,20 @@
   // Calendar or any other app (a page may not save an .ics itself, so the file is a zip
   // holding one), or the details copied.
   const UP_WORDS = {interview: "Interview", test: "Due", call: "Call", deadline: "Closes", event: "Added by you"};
+  // A booked thing asked for and not confirmed by them yet, said one way everywhere.
+  const NOT_CONFIRMED = "Not confirmed yet";
+  // The page's own latest tap on a call's person, while it stands: one that takes them out of
+  // a booked call (called off, closed, let go) takes the call off Coming up at once.
+  const CALL_TURNS = ["person.status", "person.stop", "person.call_booked", "undo"];
+  function callGone(u) {
+    const g = obj(u.go);
+    if (txt(g.to) !== "contacts" || !txt(g.item)) return false;
+    const e = effective(txt(g.item), CALL_TURNS);
+    // Applied and already in the list the page holds: the list speaks for itself.
+    if (!e || (e.state === "applied" && txt(e.doc.at) < txt(M().made_at))) return false;
+    const a = txt(e.doc.action);
+    return a === "person.stop" || (a === "person.status" && txt(obj(e.doc.value).status) !== "call_booked");
+  }
   function upcomingItems() {
     // An interview ended on this page leaves at once, with every row of it.
     const ended = new Set(allInterviews().filter(ivEnd).map((i) => txt(i.id)));
@@ -6968,6 +7349,9 @@
       // The last word on one the person added: a removal hides it, Change back shows it again.
       const last = u.own ? effective(txt(u.id), ["upcoming.remove", "upcoming.add", "undo"]) : null;
       if (last && txt(last.doc.action) === "upcoming.remove") return false;
+      // A booked call called off, or its person put away, here: off at once, from this page's
+      // own taps, never only once the page is drawn again (the maintainer, 2026-11-05).
+      if (u.kind === "call" && callGone(u)) return false;
       // Over once it has ended, never at midnight: an interview at six sat in Coming up and
       // on the Brief as today's all evening (the audit, 2026-11-03).
       const ends = tms(u.end) !== null ? tms(u.end) : tms(u.start) !== null ? tms(u.start) + 3600000 : null;
@@ -7061,10 +7445,10 @@
   function upDayForm(u) {
     const tg = S.upEdit === u.id ? upTimeTarget(u) : null;
     if (!tg) return null;
-    return answerControl({kind: "date", key: "on", time: "time", label: "The new day"}, "up-day:" + u.id, (got) => {
+    return answerControl({kind: "date", key: "on", time: "time", label: "The new day", tick: NOT_CONFIRMED, ticked: !!u.tentative}, "up-day:" + u.id, (got) => {
       S.upEdit = null;
       upTimed.add(u.id);
-      act([{item: tg.item, action: tg.action, value: Object.assign({}, tg.value, {on: got.value}, got.time ? {time: got.time} : {}), rev: tg.rev}],
+      act([{item: tg.item, action: tg.action, value: Object.assign({}, tg.value, {on: got.value}, got.tick || u.tentative ? {tentative: !!got.tick} : {}, got.time ? {time: got.time} : {}), rev: tg.rev}],
         "Moved: " + txt(u.title) + " to " + got.words);
     });
   }
@@ -7122,14 +7506,24 @@
     const rm = u.own && !brief && !u.pending ? btn("", () => act([{item: txt(u.id), action: "upcoming.remove", rev: txt(u.rev)}], "Taken off: " + txt(u.title)),
       {kind: "quiet icon-only", small: true, icon: "bin", key: "up-rm:" + u.id, aria: "Take off: " + txt(u.title)}) : null;
     const prep = upPrep(u, prepped || new Set());
+    // Asked for and not confirmed by them yet: said on its row, here and on the Brief.
+    const maybe = u.tentative ? stateWord(NOT_CONFIRMED, null) : null;
     if (brief) return h("li", {class: "bp-up-row"},
-      h("span", {class: "up-main"}, h("span", {class: "up-when"}, [upDayLabel(u.day), upWhen(u)].filter(Boolean).join(" · ")), h("span", {class: "up-title"}, upGo(u)), prep), add);
+      h("span", {class: "up-main"}, h("span", {class: "up-when"}, [upDayLabel(u.day), upWhen(u)].filter(Boolean).join(" · ")), h("span", {class: "up-title"}, upGo(u)), maybe, prep), add);
     const sub = [UP_WORDS[txt(u.kind)] || "", txt(u.note), txt(u.place)].filter(Boolean).join(" · ");
     return h("li", {class: "up-row", "data-item": u.id, "data-card": "1", tabindex: "-1"},
       h("span", {class: "up-when"}, upWhen(u) || (u.own || u.pending ? "" : addTimeBtn(u))),
-      h("span", {class: "up-main"}, h("span", {class: "up-title"}, upGo(u)), sub ? h("span", {class: "up-note small muted"}, sub) : null, prep,
+      h("span", {class: "up-main"}, h("span", {class: "up-title"}, upGo(u)), maybe, sub ? h("span", {class: "up-note small muted"}, sub) : null, prep,
         upTimeForm(u), upDayForm(u), upTimed.has(u.id) ? stateLine(txt(obj(upTimeTarget(u)).item), "up:" + u.id) : null),
-      h("span", {class: "up-acts"}, upDayBtn(u), add, rm));
+      h("span", {class: "up-acts"}, upDayBtn(u), add, rm || callOff(u)));
+  }
+  // A booked call called off: the trash on its row, one answer, done at once with Undo. The
+  // person stays in the conversation; the row leaves Coming up at once (upcomingItems).
+  function callOff(u) {
+    const p = u.kind === "call" && txt(obj(u.go).to) === "contacts" ? personById(txt(obj(u.go).item)) : null;
+    if (!p || u.pending) return null;
+    return btn("", () => act([{item: p.id, action: "person.status", value: {status: "in_conversation", why: "the call was called off, said on the page"}, rev: p.rev}], "The call with " + txt(p.first_name) + " is off"),
+      {kind: "quiet icon-only", small: true, icon: "bin", key: "up-off:" + u.id, aria: "The call is off: " + txt(u.title)});
   }
   // The first week open; past that, folded behind one button once the list is long.
   const UP_OPEN = 8;
@@ -7289,7 +7683,8 @@
     const heard = items.filter((i) => past(i) && !ivEnd(i) && (daysSince(i.when) === null || daysSince(i.when) <= 14)).length;
     const tools = none ? null : h("div", {class: "head-tools"}, btn("Add something", () => askAddSomething(), {small: true, key: "up-add"}),
       heard && up.length && items.length ? btn(plural(heard, "to hear back from", "to hear back from"), () => { setPref("up:view", "interviews"); render(); }, {small: true, key: "up-heard", aria: "See the interviews you are waiting to hear back from"}) : null);
-    const wrap = h("section", {class: "sec", "aria-labelledby": "h-interviews" + (where ? "-" + where : "")}, screenHead("interviews", "Coming up", small ? [sum, " ", small] : sum, null, where, tools, {quiet: true}));
+    const wrap = h("section", {class: "sec", "aria-labelledby": "h-interviews" + (where ? "-" + where : "")}, screenHead("interviews", "Coming up", small ? [sum, " ", small] : sum, null, where, tools, {quiet: true}),
+      where ? null : placeTalk("interview"));
     if (none) {
       put(wrap, empty("Your interviews and calls show here", "Interviews, calls, tests and closing days, by day, each a tap from your calendar.",
         btn("Add something", () => askAddSomething(), {kind: "secondary", small: true, key: "iv-empty-chat"})));
@@ -7365,6 +7760,7 @@
       gone ? h("div", {class: "card-actions"}, acts.main) : h("div", {class: "card-actions"}, acts.main,
         more("iv:" + iv.id, txt(iv.company), [has ? h("p", {class: "small muted"}, "Prep updated " + ago(prep.updated) + ".") : null, relatedLinks(iv.company, iv.id, iv),
           h("div", {class: "more-acts"}, acts.more), acts.tweak])),
+      gone ? null : cardTalk("interview", iv.id, "the interview with " + txt(iv.company)),
       stateLine(iv.id, "iv:" + iv.id));
   }
 
@@ -8092,7 +8488,13 @@
     return workInline(id, w, {key: "form:" + a.id, item: a, done: (x) => {
       if (!formShown(a, x)) return null;
       const n = arr(obj(x.result).questions).length;
-      return n ? "Done: " + nWord(n, "answer", "answers") + " ready to copy, under More." : "Done" + (txt(obj(x.result).summary) ? ": " + lc1(firstSentence(txt(obj(x.result).summary))) : ".");
+      // The answers are in the card's details, "To copy": the line opens them there, where it
+      // said "under More" and More held only the box to ask again (the maintainer, 2026-11-05:
+      // "wheres the answer to the question i requested").
+      return n ? ["Done: " + nWord(n, "answer", "answers") + " ready to copy. ", btn(n === 1 ? "Show it" : "Show them", () => {
+        openState.set("det:info:app:" + a.id, true); openState.set("det:copy:" + a.id, true); scheduleRender();
+        setTimeout(() => { const c = document.querySelector('[data-k="det:copy:' + a.id + '"]'); if (c) { try { c.scrollIntoView({block: "center"}); } catch (e) { /* gone */ } } }, 60);
+      }, {kind: "link", key: "form-show:" + a.id})] : "Done" + (txt(obj(x.result).summary) ? ": " + lc1(firstSentence(txt(obj(x.result).summary))) : ".");
     }});
   }
   // The answers to copy into the form: a draft's note to the hiring manager and every answer
@@ -8402,7 +8804,10 @@
   // A to-do about one job or one draft is asked on that card, which moves to the top of its
   // list, instead of in a box of its own above the list.
   function needsAbout(company, role) {
-    return needsItems().filter((n) => txt(n.kind) !== "setup" && !settledAction(n.id) && txt(obj(n.about).company) === txt(company) &&
+    // Answered here, it leaves the card at once, its Undo in the toast, as To do's does: kept
+    // until Claude had applied it, a No stayed on the job's card under "Answered: No" (the
+    // maintainer, 2026-11-05). A refused answer is not standing, so the question comes back.
+    return needsItems().filter((n) => txt(n.kind) !== "setup" && !effective(n.id) && txt(obj(n.about).company) === txt(company) &&
       (!txt(obj(n.about).role) || !role || txt(obj(n.about).role) === txt(role)));
   }
   // A question about a job is asked on that job's one card, whichever kind it is: "Did you
@@ -8433,7 +8838,7 @@
       n.body ? h("p", {class: "q-why"}, txt(n.body)) : null,
       h("div", {class: "opts", role: "group", "aria-labelledby": qid},
         arr(n.options).map((op, i) => btn(txt(op.label), () => answerNeed(n, op),
-          {kind: "answer", small: true, key: "q:" + (ctx.where || "") + ":" + n.id + ":" + i, pressed: chosen ? chosen.doc.action === op.action : false}))),
+          {kind: "answer", small: true, key: "q:" + (ctx.where || "") + ":" + n.id + ":" + i, pressed: opChosen(chosen, op)}))),
       stateLine(n.id, "q:" + (ctx.where || "") + ":" + n.id));
   }
 
@@ -8580,9 +8985,10 @@
     const name = txt(p.first_name);
     sheet({title: "A call with " + name, intro: "The day you agreed. Claude can prepare you for it.",
       fields: [{id: "on", type: "date", label: "The day", required: true, value: p.call && (p.call.day || p.call.on) ? txt(p.call.day || p.call.on) : ""},
-        {id: "time", type: "text", label: "The time", hint: zoneHint(), max: 20, value: p.call && p.call.time ? txt(p.call.time) : ""}],
+        {id: "time", type: "text", label: "The time", hint: zoneHint(), max: 20, value: p.call && p.call.time ? txt(p.call.time) : ""},
+        {id: "tentative", type: "tick", label: NOT_CONFIRMED, value: !!obj(p.call).tentative}],
       submit: "Save the call", validate: (v) => (timeOk(v.time) ? null : TIME_HELP),
-      onSubmit: (v) => act([{item: p.id, action: "person.call_booked", value: Object.assign({on: v.on}, txt(v.time) ? {time: txt(v.time), zone: zone() || null} : {}), rev: p.rev}], "Call booked with " + name)});
+      onSubmit: (v) => act([{item: p.id, action: "person.call_booked", value: Object.assign({on: v.on}, v.tentative || obj(p.call).tentative ? {tentative: !!v.tentative} : {}, txt(v.time) ? {time: txt(v.time), zone: zone() || null} : {}), rev: p.rev}], "Call booked with " + name)});
   }
   function askCallPrep(p) {
     const name = txt(p.first_name);
@@ -8644,7 +9050,7 @@
   // anything else (a referral's recruiter call, say), the chat registers it.
   function haveInterview(pre) {
     const live = applicationItems().filter(appLive);
-    if (!live.length) { startChat("I have an interview: "); return; }
+    if (!live.length) { openPlace("interview"); return; }
     // Those already interviewing first, the rest in a list to pick from: 67 buttons in a sheet
     // 5,000 pixels tall was no way to choose (the audit, 2026-11-03).
     const word = (a) => txt(a.role) + " at " + txt(a.company);
@@ -8657,7 +9063,7 @@
         : {id: "a", type: "radio", label: "Which is it for?", required: true, error: "Choose one.",
           options: ivs.concat(rest).concat([["other", "Something else"]])}],
       onSubmit: (v) => {
-        if (v.a === "other") { setTimeout(() => startChat("I have an interview: "), 0); return; }
+        if (v.a === "other") { setTimeout(() => openPlace("interview"), 0); return; }
         const a = live.find((x) => txt(x.id) === v.a);
         if (a) setTimeout(() => heardBack(a, pre || {}), 0);
       }});
@@ -8693,6 +9099,10 @@
           // 2pm Toronto, and a zone typed with it ("10am ET") is read as written (the audit).
           if (t) { val.time = t; val.zone = zone() || null; }
           if (w) val.with = w;
+          // Asked for and not confirmed by them yet: sent when ticked, or unticked over a day that
+          // was not confirmed (confirmed now); otherwise the record keeps what it said.
+          const maybe = !!stageField.querySelector("#hb-tentative").checked;
+          if (maybe || (pre && pre.tentative)) val.tentative = maybe;
           if (pre && pre.moved) val.moved = true;
         }
         act([{item: a.id, action: "outcome." + v.kind, value: val, rev: a.rev}], (ACTION_WORDS["outcome." + v.kind] || "Saved") + ": " + txt(a.company));
@@ -8701,7 +9111,8 @@
       h("div", {class: "field"}, h("label", {for: "hb-stage"}, "Which stage"), h("input", {type: "text", id: "hb-stage", maxlength: 80, placeholder: "Phone screen"})),
       h("div", {class: "field"}, h("label", {for: "hb-day"}, "The day"), h("input", {type: "date", id: "hb-day"})),
       h("div", {class: "field"}, h("label", {for: "hb-time"}, "The time", h("span", {class: "optional"}, " (if you like)")), h("p", {class: "hint"}, zoneHint()), h("input", {type: "text", id: "hb-time", maxlength: 20, placeholder: "13:00 or 1pm ET"})),
-      h("div", {class: "field"}, h("label", {for: "hb-with"}, "With whom", h("span", {class: "optional"}, " (if you like)")), h("input", {type: "text", id: "hb-with", maxlength: 80})));
+      h("div", {class: "field"}, h("label", {for: "hb-with"}, "With whom", h("span", {class: "optional"}, " (if you like)")), h("input", {type: "text", id: "hb-with", maxlength: 80})),
+      h("div", {class: "field choice tick"}, h("input", {type: "checkbox", id: "hb-tentative"}), h("label", {for: "hb-tentative"}, NOT_CONFIRMED)));
     if (pre && dlg) {
       const r = dlg.querySelector('input[type=radio][value="interview"]');
       if (r) r.checked = true;
@@ -8709,6 +9120,7 @@
       whenShown(dlg, false);
       const fill = (id, v) => { const el = stageField.querySelector("#" + id); if (el && v) el.value = v; };
       fill("hb-stage", txt(pre.stage)); fill("hb-day", txt(pre.day)); fill("hb-time", txt(pre.time)); fill("hb-with", txt(pre.with));
+      stageField.querySelector("#hb-tentative").checked = !!pre.tentative;
     }
     return dlg;
   }
@@ -9190,7 +9602,7 @@
       render: appRecordCard, box: (kids) => h("div", {class: "stack"}, kids)};
     const key = "jobs:applied";
     const f = listFacets(key, lo);
-    put(wrap, controlRow([jobsSwitch("applied"), h("span", {class: "grow"}), filterButton(key, lo, f)]));
+    put(wrap, controlRow([jobsSwitch("applied"), items.length > 8 ? searchField(key, lo) : h("span", {class: "grow"}), filterButton(key, lo, f)]));
     put(wrap, activeFilters(key, lo, f));
     put(wrap, listView(key, lo));
     return wrap;
@@ -9238,6 +9650,7 @@
     if (peopleItems().some((p) => p.id === id)) return "contacts";
     if (interviewItems().some((i) => i.id === id)) return "interviews";
     if (dueItems().some((d) => d.id === id) || needsItems().some((n) => n.id === id)) return "todo";
+    if (applicationItems().some((a) => a.id === id)) return "applications";
     return null;
   }
 
@@ -9409,7 +9822,8 @@
     const n = Number(t.count) || 0;
     if (!n) return null;
     return h("li", {class: "task where-tidied"}, h("p", {class: "small muted"}, "Claude tidied away " + plural(n, "old chat", "old chats") + " it no longer used" + (t.on ? ", last on " + fmtDay(txt(t.on)) : "") + (n === 1 ? ". Nothing in it was lost." : ". Nothing in them was lost.")),
-      btn(n === 1 ? "Bring it back" : "Bring them back", () => { handOff(n === 1 ? "Bring back the old chat you tidied away." : "Bring back the old chats you tidied away.", true); toast({text: n === 1 ? "Asked. It comes back in your list of chats; the answer is in Chat." : "Asked. They come back in your list of chats; the answer is in Chat.", ids: []}); }, {small: true, kind: "quiet", key: "where-untidy"}));
+      btn(n === 1 ? "Bring it back" : "Bring them back", () => { askPlace("chats", n === 1 ? "Bring back the old chat you tidied away." : "Bring back the old chats you tidied away."); }, {small: true, kind: "quiet", key: "where-untidy"}),
+      placeTalk("chats"));
   }
   // The brief is not a place Claude works: it is set from its bell and in Your brief above.
   // The helper's own state: the computer's row shows only once it is ready, so "2 of 2 ready"
@@ -9514,8 +9928,8 @@
     // later one replaced, each offered to you before it goes (the maintainer, 2026-10-30).
     const intro = foldBody(
       h("p", {class: "small muted"}, "Everything you have told Claude about how you like things. Each one shapes what it writes and finds, so if one is wrong, it is usually better to say in Chat what you want instead; Remove is still here."),
-      btn("Tidy these up", () => { handOff("Tidy what I have taught you: find rules the app now does by itself, rules that say the same thing, and rules a later one replaced, and show me each before anything goes.", true); toast({text: "Asked. Claude shows you what it would tidy before anything goes.", ids: []}); },
-        {small: true, kind: "secondary", key: "learned-tidy"}), null, {class: "learned-intro"});
+      [btn("Tidy these up", () => { askPlace("rules", "Tidy what I have taught you: find rules the app now does by itself, rules that say the same thing, and rules a later one replaced, and show me each before anything goes."); },
+        {small: true, kind: "secondary", key: "learned-tidy", wakes: "talk"})], placeTalk("rules"), {class: "learned-intro"});
     // The newest five, then the rest one tap below, with a search: all 173 at once were a wall
     // 32,700px tall on a phone (the 3 November audit). Each is said to the person ("say").
     const lo = {items, name: "what you have taught it", one: "rule", many: "rules", fold: (x) => !!x.retired, foldLabel: (k) => plural(k, "earlier rule", "earlier rules"),
@@ -9551,7 +9965,7 @@
     const url = APP_ISSUES + "?title=" + encodeURIComponent("From the page: something looks wrong, or a suggestion (version " + version + ")") +
       "&body=" + encodeURIComponent("Page version: " + version + "\nScreen: " + where + fault + "\n\nWhat happened, or what would be better (this page is public: no names, please):\n");
     sheet({title: "Something looks wrong?", intro: "Tell Claude, and it is looked into and worked round for you. Or tell the app's makers, so it is fixed for everyone.",
-      choices: [{label: "Tell Claude", key: "claude", run: () => { setTimeout(() => openDock({text: "Something on my job search page looks wrong. Page version " + version + ", on " + where + ". What I saw: "}), 0); }}],
+      choices: [{label: "Tell Claude", key: "claude", run: () => { setTimeout(() => openPlace("wrong", "On " + where + " (page version " + version + "): "), 0); }}],
       after: h("p", {}, h("a", {href: url, target: "_blank", rel: "noopener noreferrer", "data-k": "report-makers"}, "Tell the app's makers", h("span", {class: "sr-only"}, " (opens a public page in a new tab: leave out names)")),
         h("span", {class: "hint block"}, "A public page: it carries this page's version and nothing of yours. Leave out names.")),
       cancel: "Not now"});
@@ -11253,10 +11667,12 @@
       // person's message (the maintainer, 2026-11-04).
       const who = w.kind === "follow_up" || w.kind === "reply" ? txt(obj(w.args).contact) : "";
       const note = who ? messageItems().find((m) => txt(m.contact) === who && msgLive(m)) : null;
-      const goTo = note || who ? "contacts" : WORK_HOME[w.kind];
+      // A card's own question opens that card, where its answer is (cardTalk), never Chat.
+      const card = w.kind === "talk" ? obj(obj(w.args).about) : {};
+      const goTo = note || who ? "contacts" : card.kind ? CARD_HOME[card.kind] : WORK_HOME[w.kind];
       // Its bin puts it with the finished ones now, rather than in a minute (2026-10-30).
       // Its way there is a pill in the row, never underlined text (DESIGN.md, Buttons).
-      const there = goTo ? tabLink(goTo, note ? note.id : who || null) : null;
+      const there = goTo ? tabLink(goTo, note ? note.id : who || txt(card.id) || null) : null;
       if (there) there.addEventListener("click", () => workSeenAt.set(id, 0));
       put(cardEl, h("div", {class: "wc-actions"}, there,
         btn("", () => { workSeenAt.set(id, 0); scheduleRender(); }, {kind: "quiet icon-only", small: true, icon: "bin", key: "wput:" + id, aria: "Put away: " + txt(w.title)})));
@@ -11352,15 +11768,19 @@
   // displaying it in this list rather than scrolling through like 50 items").
   const RUN_MIN = 4;
   const BATCH_WORDS = {follow_up: ["follow-up", "follow-ups"], reply: ["reply", "replies"], draft: ["application", "applications"],
-    network: ["search for people", "searches for people"], prep: ["prep", "preps"], files: ["set of files", "sets of files"], evaluate: ["job to score", "jobs to score"]};
+    network: ["search for people", "searches for people"], prep: ["prep", "preps"], files: ["set of files", "sets of files"], evaluate: ["job to score", "jobs to score"],
+    talk: ["answer", "answers"]};
   function workRuns(items) {
     const by = new Map();
     for (const [id, w] of items) {
       const st = txt(w.status) || "queued";
-      if ((st !== "queued" && st !== "done") || txt(w.kind) === "update" || txt(w.kind) === "talk") continue;
+      // Finished answers group too, as "5 answers done" (the maintainer, 2026-11-05: "we already
+      // bulk some running tasks, why arent these ones grouped too?"); one waiting is a chat's.
+      if ((st !== "queued" && st !== "done") || txt(w.kind) === "update" || (txt(w.kind) === "talk" && st !== "done")) continue;
       if (st === "queued" && workSay(id, w).picked) continue;
-      if (st === "done" && workFolded(id, w)) continue;
-      const key = st + ":" + txt(w.kind);
+      // Finished and folded away is grouped too, under "N finished": fifty-two answers listed one
+      // card each when it was opened (the maintainer, 2026-11-05).
+      const key = (st === "done" && workFolded(id, w) ? "old" : st) + ":" + txt(w.kind);
       if (!by.has(key)) by.set(key, []);
       by.get(key).push([id, w]);
     }
@@ -11371,8 +11791,9 @@
       // In the order they were asked for, the order they are done in.
       list.sort((a, b) => txt(a[1].asked_at).localeCompare(txt(b[1].asked_at)));
       for (const [id] of list) members.add(id);
-      const st = key.split(":")[0];
-      cards.push(["run~" + key, {kind: txt(list[0][1].kind), status: st, run: list,
+      const old = key.split(":")[0] === "old";
+      const st = old ? "done" : key.split(":")[0];
+      cards.push(["run~" + key, {kind: txt(list[0][1].kind), status: st, run: list, folded: old,
         asked_at: list.map(([, w]) => txt(w.asked_at)).sort()[0] || "",
         finished_at: st === "done" ? new Date(Math.max(...list.map(([, w]) => finishedAt(w)))).toISOString() : undefined}]);
     }
@@ -11386,7 +11807,7 @@
     const open = openState.get("det:run:" + gid) === true;
     // Seen here as one card: each folds away a minute on, as a finished card does.
     if (done) for (const [id] of list) if (!workSeenAt.has(id)) workSeenAt.set(id, now());
-    const names = list.map(([, w]) => workName(w).replace(/^(Follow up with|Reply to|Draft:?|Prepare for)\s+/i, "")).filter(Boolean);
+    const names = list.map(([, w]) => workName(w).replace(/^(Follow up with|Reply to|Draft:?|Prepare for)\s+/i, "").replace(/^(Answer:\s*)?[“"]?(About\s+)?/i, "").replace(/:.*$|[”"…]+$/g, "")).filter(Boolean);
     const shown = names.slice(0, 3).join(", ") + (names.length > 3 ? " and " + (names.length - 3) + " more" : "");
     const notes = done ? list.filter(([, w]) => { const c = txt(obj(w.args).contact); return c && messageItems().some((m) => txt(m.contact) === c && msgLive(m)); }).length : 0;
     const hid = "wrun-" + seg(gid);
@@ -11437,7 +11858,7 @@
       helperStartingCard(),
       tapCards(),
       listView("work", {items, name: "work", live: ([, w]) => ACTIVE.has(txt(w.status) || "queued"),
-        fold: ([id, w]) => (w.run ? false : workFolded(id, w)),
+        fold: ([id, w]) => (w.run ? !!w.folded : workFolded(id, w)),
         foldLabel: (k) => k + " finished",
         sort: (a, b) => ((WORK_ORDER[a[1].status] === undefined ? 3 : WORK_ORDER[a[1].status]) - (WORK_ORDER[b[1].status] === undefined ? 3 : WORK_ORDER[b[1].status])) ||
           (TERMINAL.has(a[1].status) ? finishedAt(b[1]) - finishedAt(a[1]) : txt(a[1].asked_at).localeCompare(txt(b[1].asked_at))),
@@ -11610,6 +12031,11 @@
       }
     } catch (e) { /* storage refused */ }
   }
+  function buildTalkJump() {
+    talkJump = h("button", {type: "button", class: "btn secondary small talk-jump", "data-k": "talk-jump", hidden: true, "aria-label": "Go to the latest message",
+      onclick: () => toChatEnd(dockOpen && dockBox && talkBody.parentNode === dockBox ? dockBox : null)}, "Latest \u2193");
+    return talkJump;
+  }
   function buildTalk() {
     talkList = h("ol", {class: "talk-list plain", role: "log", "aria-label": "Conversation", "aria-live": "polite"});
     talkStatus = h("p", {class: "talk-status muted small"});
@@ -11637,6 +12063,9 @@
       h("p", {class: "talk-privacy muted small"}, "To answer, Claude reads what is on this page."));
     talkSum = h("p", {class: "sum"}, "Ask anything about your search.");
     talkMenu = h("div", {class: "talk-menu"});
+    // The way back down sits in the box's own sticky area, just above the field, so it is on
+    // screen wherever the box is: below it, a phone's screen hid it (the review, 2026-11-05).
+    talkForm.prepend(buildTalkJump());
     talkBody = h("div", {class: "talk-body"}, talkEarlier, talkList, talkStatus, talkForm);
     talkEl = h("section", {class: "talk sec", id: "talk-box", "aria-labelledby": "h-chat"},
       h("header", {class: "sec-head"}, h("h2", {id: "h-chat", tabindex: "-1", class: "screen-title"}, "Chat"),
@@ -11738,10 +12167,32 @@
     if (!talkEl) buildTalk();
     const fk = document.activeElement && document.activeElement.dataset ? document.activeElement.dataset.k : null;
     const viewing = S.viewConv && S.viewConv !== currentConv() ? S.viewConv : null;
-    const msgs = convMessages(viewing || currentConv());
+    const all = convMessages(viewing || currentConv());
     const box = dockOpen && dockBox && talkBody.parentNode === dockBox ? dockBox : null;
-    const atEnd = box ? box.scrollHeight - box.scrollTop - box.clientHeight < 64 : false;
+    const sc = chatScroller();
+    const atEnd = S.chatStick !== false || nearEnd(sc);
+    // The last day of the conversation, as a Claude chat opens on its latest: the whole history
+    // was drawn every time (the maintainer, 2026-11-05). Earlier messages come twenty at a time,
+    // by Show or by scrolling to the top, the place kept.
+    const dayAgo = new Date(now() - DAY).toISOString();
+    let from = all.findIndex((m) => txt(m.at) >= dayAgo);
+    if (from < 0) from = all.length;
+    from = Math.max(0, Math.min(from, all.length - 6) - (S.chatBack || 0));
+    const msgs = all.slice(from);
     const items = msgs.map((m, i) => talkMsg(m, m.from === "you" && !!msgs[i + 1] && msgs[i + 1].from === "you"));
+    if (from > 0) {
+      const more = () => { const before = sc ? sc.scrollHeight : 0; const top = sc ? sc.scrollTop : 0; S.chatBack = (S.chatBack || 0) + 20; S.chatStick = false; renderChat();
+        if (sc) sc.scrollTop = top + (sc.scrollHeight - before); };
+      const row = h("li", {class: "talk-earlier-msgs fold"}, h("span", {}, plural(from, "earlier message", "earlier messages") + ": "),
+        btn("Show", more, {kind: "link", key: "talk-earlier-msgs"}));
+      items.unshift(row);
+      // Scrolled to the top, the next twenty come by themselves.
+      if (window.IntersectionObserver) {
+        if (S.chatSeer) S.chatSeer.disconnect();
+        S.chatSeer = new IntersectionObserver((es) => { if (es.some((e) => e.isIntersecting) && S.chatStick === false) more(); }, {root: box || null});
+        requestAnimationFrame(() => { if (row.isConnected) S.chatSeer.observe(row); });
+      }
+    }
     if (S.sending) items.push(h("li", {class: "talk-msg pending"}, h("p", {class: "talk-text muted"}, "Adding your pictures…")));
     if (!viewing) {
       if (S.quick.busy) items.push(h("li", {class: "talk-msg from-claude pending"}, h("p", {class: "talk-who"}, "Claude"), h("p", {class: "talk-text"}, S.quick.partial || "Thinking…")));
@@ -11818,8 +12269,34 @@
     talkSend.disabled = disabled || S.quick.busy;
     talkStop.hidden = !S.quick.busy;
     if (fk && !refocus(talkEl, fk)) refocus(talkBody, fk);
-    if (box && atEnd) box.scrollTop = box.scrollHeight;
+    // Kept at the newest while the person has not scrolled up, whenever new messages land; the
+    // Latest button otherwise (the maintainer, 2026-11-05: opened at the top, no way down).
+    if (atEnd && chatShownHere(box)) toChatEnd(box);
+    jumpShown();
   }
+  function chatScroller() {
+    const box = dockOpen && dockBox && talkBody && talkBody.parentNode === dockBox ? dockBox : null;
+    return box || document.scrollingElement || document.documentElement;
+  }
+  function nearEnd(sc) { return !sc || sc.scrollHeight - sc.scrollTop - sc.clientHeight < 80; }
+  function chatShownHere(box) { return !!box || S.section === "chat"; }
+  function toChatEnd(box) {
+    const sc = box || chatScroller();
+    requestAnimationFrame(() => { try { sc.scrollTop = sc.scrollHeight; } catch (e) { /* no layout */ } S.chatStick = true; jumpShown(); });
+  }
+  let talkJump = null;
+  function jumpShown() {
+    if (!talkJump) return;
+    const shown = (dockOpen || S.section === "chat") && !nearEnd(chatScroller());
+    talkJump.hidden = !shown;
+  }
+  // The person's own scroll decides: up from the end lets go of it, back down holds it again.
+  function onChatScroll() {
+    if (!(dockOpen || S.section === "chat")) return;
+    S.chatStick = nearEnd(chatScroller());
+    jumpShown();
+  }
+  window.addEventListener("scroll", onChatScroll, {passive: true});
   function endPractice() {
     const m = S.quick.mode;
     if (!m) return;
@@ -11862,17 +12339,14 @@
     S.viewConv = null;
     // A picture always goes to a chat: only a chat can read it (and the reply, the job or the
     // call it is about needs one anyway). Sent inside this click, so the ring can go.
-    // Written from a card's Something else, and still about it: straight to Claude as work about
-    // that card, never a quick answer that cannot change a record.
-    // Its lead alone ("About Rafe at Kestrel Foods:") is nothing said yet: the box waits for more.
-    if (!S.quick.mode && S.talkAbout && text === S.talkAbout.lead && !withPics) { talkInput.focus(); return; }
-    const about = !S.quick.mode && S.talkAbout && text.startsWith(S.talkAbout.lead) && text.length > S.talkAbout.lead.length ? S.talkAbout : null;
-    if (about) S.talkAbout = null;
-    if (withPics) { handOff(text, true, pics.splice(0), about); renderPics(); return; }
-    if (about) { handOff(text, true, null, about); return; }
+    if (withPics) { handOff(text, true, pics.splice(0)); renderPics(); return; }
     if (!S.quick.mode && capsSettled.sample && !S.caps.sample) { handOff(text, true); return; }
     if (!S.quick.mode && pastedSomething(text)) { handOff(text, true); readPasted(text); return; }
     if (!S.quick.mode && asksForWork(text)) { handOff(text, true); return; }
+    // Claude is answering this conversation, or just has: what follows is part of it and goes
+    // to Claude too, never to the quick answer (the maintainer, 2026-11-05: a pasted thread,
+    // then "lets make it go somewhere", and the second made no work and was seen by chance).
+    if (!S.quick.mode && talkGoing()) { handOff(text, true); return; }
     askQuick(text);
   }
   // A request for work goes to Claude in the Send tap itself: the quick helper can only hand
@@ -11883,11 +12357,22 @@
   // "Draft looks good", "Search results look thin, why?", "Book club tonight" are remarks:
   // the verb must have something to act on after it (the release review, 2026-11-03), and a
   // question goes to the quick answer unless it is a request ("can you find ...?").
-  const WORK_LEAD = "(?:(?:also|please|pls|plz|now|ok|okay|and|then|just|so|right|i want you to|i need you to|i'd like you to|id like you to|go ahead and)[\\s,]+)*";
+  const WORK_LEAD = "(?:(?:also|please|pls|plz|now|ok|okay|and|then|just|so|right|lets|let's|let us|i want you to|i need you to|i'd like you to|id like you to|go ahead and)[\\s,]+)*";
   const WORK_ASK = "(?:can you|could you|would you|will you|can u|could u)[\\s,]+";
   const WORK_VERB = "(?:find|search|look for|look up|scratch|scrap|scrape|delete|remove|clear|bin|ditch|drop|draft|redraft|write|rewrite|redo|apply|tailor|prep|prepare|update|change|edit|fix|add|make|build|send|message|reply|follow up|chase|network|connect|book|cancel|reschedule|move|run|start|stop|set up|tidy|research|get)";
   const WORK_OBJ = "\\s+(?:me|us|him|her|them|it|this|that|these|those|the|a|an|my|our|his|their|some|more|all|every|each|any|another|new|other|\\d+|ten|five|three|two|to|for|with|on|at|in|up|out|back|off|jobs?|roles?|people|contacts?|interviews?|drafts?|messages?|replies|notes?|resumes?|cvs?|letters?)\\b";
   const ASKS_FOR_WORK = new RegExp("^" + WORK_LEAD + "(" + WORK_ASK + ")?" + WORK_VERB + WORK_OBJ, "i");
+  function talkGoing() {
+    for (const to of TALK_TO) {
+      if (to === "quick") continue;
+      const th = currentThread(to);
+      for (const m of (S.msgs.get(th) || []).slice(-6)) {
+        const w = m.work ? workDoc(txt(m.work)) : null;
+        if (w && (ACTIVE.has(txt(w.status) || "queued") || now() - finishedAt(w) < 10 * 60000)) return true;
+      }
+    }
+    return false;
+  }
   function asksForWork(text) {
     const t = txt(text).trim();
     if (!t || t.length > 600) return false;
@@ -11900,9 +12385,7 @@
   // The person's words are written to their thread and its work first, and only then rung,
   // while the tap still counts (toClaude): a ring before the writes woke a chat that read the
   // page 1.9 s too early and found nothing (the audit, 2026-11-03). Returns the work's id.
-  // `about`: the card it was written from (Something else under its More), so Claude reads the
-  // words as about that one person, job or interview.
-  function handOff(text, inClick, sent, about) {
+  function handOff(text, inClick, sent) {
     const shots = arr(sent);
     const to = whereTo();
     const th = currentThread(to);
@@ -11944,10 +12427,12 @@
         // adding it again showed the message twice (the maintainer, 2026-10-29).
         const have = S.msgs.get(th) || [];
         if (!have.some((x) => x.id === mid)) S.msgs.set(th, have.concat([Object.assign({id: mid}, msg)]));
-        await Promise.all(writes);
+        // A save that never comes back is a save that failed: the message showed here and
+        // reached nobody (the maintainer, 2026-11-05). Said "Not sent", its words back in the box.
+        if (await within(Promise.all(writes), 20000) === "timeout") throw new Error("not saved");
         S.lastSent = {text, at: now()};
         // A title cut at a word, never mid-word ("…find 10 m…", the audit).
-        const made = await createWork(db, {id: wid, kind: "talk", to, title: "Answer: “" + clipWords(said, 50) + "”", args: Object.assign({thread: th, message: mid}, about ? {about: {kind: about.kind, id: about.id}} : {}), slot: false});
+        const made = await createWork(db, {id: wid, kind: "talk", to, title: "Answer: “" + clipWords(said, 50) + "”", args: {thread: th, message: mid}, slot: false});
         if (!made.ok) throw new Error("work");
       } catch (e) {
         // Nothing half sent: a message kept without its work waited for an answer that
@@ -12322,7 +12807,7 @@
   let dockBackTo = null;
   function chatShown() { return S.section === "chat" || (S.split === "chat" && S.section !== "chat" && wide()); }
   function buildDock() {
-    dockBox = h("div", {class: "dock-body"});
+    dockBox = h("div", {class: "dock-body", onscroll: onChatScroll});
     dockEl = h("section", {class: "chat-dock", id: "chat-dock", role: "dialog", "aria-modal": "false", "aria-labelledby": "h-dock", hidden: true,
       onkeydown: (e) => { if (e.key === "Escape" && !e.defaultPrevented) { e.preventDefault(); e.stopPropagation(); closeDock(true); } }},
       h("div", {class: "dock-top"}, h("h2", {id: "h-dock", class: "dock-title", tabindex: "-1"}, "Chat"),
@@ -12364,7 +12849,7 @@
     // (2026-11-03: on a phone the latest message sat two screens down). A move to Chat places it
     // in the same turn (go, after its scroll to the top); anything else a frame later, once
     // drawn (placeChat).
-    if (shown && !S.chatWasShown && talkForm) { S.chatPlace = true; S.chatPlacedAt = null; requestAnimationFrame(() => placeChat(true)); }
+    if (shown && !S.chatWasShown && talkForm) { S.chatPlace = true; S.chatPlacedAt = null; S.chatStick = true; S.chatBack = 0; requestAnimationFrame(() => placeChat(true)); }
     S.chatWasShown = shown;
     // Seen: the Chat tab's dot goes once its newest answer has been on screen.
     if (shown && lastAnswerAt() && lastAnswerAt() !== txt(pref("chat:seen", ""))) setPref("chat:seen", lastAnswerAt());
@@ -12391,12 +12876,9 @@
     try { const n = talkInput.value.length; talkInput.setSelectionRange(n, n); } catch (e) { /* not a text field */ }
   }
   // o.opener: what focus goes back to on Close; o.text: words to start the message with.
-  // o.about: the card it is opened from ({kind, id, label}); what is sent starting with its lead
-  // goes to Claude as work about that card (sendChat).
   function openDock(o) {
     o = o || {};
     if (S.owner !== true) return;
-    if (o.about) { const lead = "About " + txt(o.about.label) + ":"; S.talkAbout = {kind: txt(o.about.kind), id: txt(o.about.id), lead}; o = Object.assign({}, o, {text: lead + " "}); }
     if (!dockEl) buildDock();
     if (chatShown()) { focusTalk(o.text); return; }
     // A phone has the Chat tab: the panel there was a second chat window over the first.
@@ -12511,7 +12993,7 @@
     put(wrap, settingsGroup("Help", [actionRow("Show me around", () => showTour(0), "help-tour"),
       // The chat bubble, where the person is, rather than taking them away to Chat (2026-10-30).
       actionRow("Ask Claude how something works", () => openDock({text: "How does "}), "help-how"),
-      actionRow("Something looks wrong", () => reportWrong(txt(obj(M().app).version || u.version)), "help-wrong")].concat(pick(["tips"]).map(settingRow))));
+      actionRow("Something looks wrong", () => reportWrong(txt(obj(M().app).version || u.version)), "help-wrong"), placeTalk("wrong")].concat(pick(["tips"]).map(settingRow))));
     put(wrap, settingsGroup("Your data", [infoRow("privacy", "Where your data lives", null, h("p", {}, privacyText())),
       infoRow("device-link", "Open on another device", null, anotherDeviceBody()),
       infoRow("news", "What's new", waiting ? null : "Up to date", updatesBody()),
@@ -13311,6 +13793,8 @@
     document.title = (n ? "(" + n + ") " : "") + base;
     const fa = S.focusAfter;
     S.focusAfter = null;
+    // A box just opened (a card's Something else, a place's ask): its field takes the focus.
+    if (fa && fa.key && refocus(document, fa.key)) return;
     if (fk && refocus(document, fk)) return;
     if (fa && fa.item) {
       const root = $("main");

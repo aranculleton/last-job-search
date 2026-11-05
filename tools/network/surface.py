@@ -423,7 +423,7 @@ def held(contact, msgs, status, replying=False, memo=None) -> dict | None:
     import throttle
     # Their limit, the one answer the dates written on a row also read (state.at_limit).
     if state.at_limit(c, msgs, status):
-        n = max(state._trailing_outbound(msgs) if msgs else 0, state.schema.MAX_UNANSWERED)
+        n = max(state._chases(msgs) if msgs else 0, state.schema.MAX_UNANSWERED)
         return {"why": "limit", "said": HELD_WORDS["limit"].format(n=n), "n": n}
     if status in throttle.SENT_NO_REPLY and state.request_pending(msgs) is not None:
         return {"why": "request", "said": HELD_WORDS["request"]}

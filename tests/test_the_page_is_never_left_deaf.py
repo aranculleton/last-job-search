@@ -45,12 +45,16 @@ def test_the_persons_own_chat_is_never_renewed_into_a_helper(copy, monkeypatch):
     brief). A helper the app started still renews."""
     import app_listen
     monkeypatch.setattr(app_listen, "chat_kind", lambda: "cloud")
-    monkeypatch.setattr(app_listen, "context_tokens", lambda: 0)
+    monkeypatch.setattr(app_listen, "history_tokens", lambda: 0)
     monkeypatch.setattr("app_setup.origin", lambda: ("example-owner", "my-job-search"))
     own = {"chat": "session_PERSONSOWN", "kind": "cloud", "helper": False,
            "since": "2026-11-03T08:00:00Z", "answered_at": "2026-11-04T16:00:00Z"}
     assert app_listen.renewal(own, _db(own), "session_PERSONSOWN", NOW) is None
-    helper = dict(own, chat="session_EXAMPLEHELPERA", helper=True)
+    # A day with nothing to answer: the helper renews (the rule of 2026-11-05), the person's
+    # own chat never does.
+    idle = dict(own, answered_at="2026-11-03T09:00:00Z")
+    assert app_listen.renewal(idle, _db(idle), "session_PERSONSOWN", NOW) is None
+    helper = dict(idle, chat="session_EXAMPLEHELPERA", helper=True)
     assert app_listen.renewal(helper, _db(helper), "session_EXAMPLEHELPERA", NOW)
     # The record of a take keeps whether the chat it took from was a helper, so the tidy-up
     # only ever puts away a chat the app started.

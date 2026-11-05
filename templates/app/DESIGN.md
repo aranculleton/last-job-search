@@ -73,6 +73,9 @@ next?" in its first lines, and nothing asks for a decision a default could make.
   its progress, and a find offers Draft this; drafts first, then finds by fit; the tab, the
   summary, the menu and the Brief count the same two things, drafts to send and jobs to look at.
   A posting that has closed waits under the list ("1 closed: Show"). (jobs page tests)
+- On a phone, Jobs' search takes its own row under the To apply / Applied switch once the list
+  is long: beside it the switch was squeezed unreadable (the review, 2026-11-05). Every other
+  control row stays one row.
 - Jobs' header is the same on both tabs: its title, its one short line and when it searched, with
   Find jobs and then "Add a job" and your resume as soft pills beside it, as Contacts'. What
   Claude is doing is the header's work pill and each card's own line, never a line here.
@@ -98,6 +101,10 @@ next?" in its first lines, and nothing asks for a decision a default could make.
   once its result is on the card. (form questions tests)
 - A state is a small tinted pill in words a person uses, never a code word: ok green, info
   blue, warn amber, bad red, held violet, waiting grey. (status audit, colour tests)
+- A booked round or call asked for and not confirmed by them yet says "Not confirmed yet",
+  a grey pill on its row in Coming up and on the Brief; the box of the same words is there
+  wherever its day is given, and booked again without it, it is confirmed. Why: a day only
+  asked for read as fixed (the maintainer, 2026-11-05). (not-confirmed tests)
 - Every message drafted and waiting is one card, "Messages to send (N)": the drafted
   replies and follow-ups, the week's first notes and the ones to check first together, a row a
   person, each opening their draft in Contacts, and one button opening Contacts. A row Claude
@@ -158,10 +165,13 @@ tests, `tests/test_contacts_is_one_page_with_each_persons_draft.py`)
   me a job, the referral, read their profile, Claude's ideas and notes. Never editing (the
   pencil), never the card's facts (its line), and no More on a card with nothing
   rare. Why: More became a drawer of everything, so nothing in it was found.
-- The pencil changes the draft in place: the words edited where they are (what Copy copies
-  and I sent it logs), and one small field, "or tell Claude what to change", with Shorter,
-  Warmer and More formal, each queuing the change with the card's line. Why: a slight edit is
-  the commonest change, and it was buried under More.
+- The pencil opens a box under the draft, "What would you like changed?", as Something else
+  does: room for a pasted message that grows with it, Shorter, Warmer and More formal filling
+  it, one filled Ask Claude (Cmd or Ctrl+Enter) with the box's one gauge, and "Edit the words
+  yourself", which makes the draft's own words the field (what Copy copies and I sent it logs).
+  Why: a slight edit is the commonest change, and it was buried under More; then the pencil
+  opened the words as a field with a one-line box under it, too short to paste into and with
+  a gauge on every chip (the maintainer, 2026-11-05).
 - A draft that fails a check with a clear fix (too long for the channel, a phrase that reads
   machine-written, asking them for a job, a rule of theirs) is fixed by Claude by itself: the
   engine finds it (`app_model.message_fix`) and the view queues the fix with no tap; the card
@@ -170,7 +180,7 @@ tests, `tests/test_contacts_is_one_page_with_each_persons_draft.py`)
   fact only the person knows is asked through the one rare question. Why: where there is
   clearly a recommended option, the app does it.
 - What wakes Claude carries its cost beside it (the gauge: "Draft my reply", "Ask Claude",
-  the chips, "Draft the follow-up"); what only the page does (I sent it, an edit in place,
+  "Draft the follow-up"; the pencil box's chips only fill it); what only the page does (I sent it, an edit in place,
   the trash) carries none, and wakes nothing. (`data-wakes` marks the first kind.)
 - The header is its title and one short line, "4 to send · 8 need you", with Find people and
   "Paste a message" (a message from someone not on the list) as soft pills beside it. What
@@ -200,8 +210,14 @@ tests, `tests/test_contacts_is_one_page_with_each_persons_draft.py`)
   more, in touch another way); an interview
   or an application (they said no, I withdrew, stopped waiting); a reminder in To do (hide it
   for a week, and "1 hidden this week: Show" at the end of To do brings it back, as "1 set
-  aside: Show" does in Jobs). "I have applied" is under a job's More and on a draft's face,
+  aside: Show" does in Jobs); a booked call on Coming up (the call is off, one answer, its
+  row gone at once). "I have applied" is under a job's More and on a draft's face,
   never in the trash as well.
+- A trash sheet whose card has a box (a person, a message, a job, a draft, an interview) ends
+  with **Something else**: the sheet closes and that card's box opens under it, its field
+  focused, as Something else under More does; a person's trash in To do opens their box on
+  their card in Contacts. Why: none of the reasons fitted what was going on, and there was no
+  way to say it in words (the maintainer, 2026-11-05). (trash something-else test)
 - Tomorrow and Next week put a dated row off to that day in the engine: put off is never done.
   It leaves To do with "1 put off: Show" at its end, never under Done today nor in "x of N
   done", and its person's card in Contacts says "Put off until <day>" with nothing owed on its
@@ -246,12 +262,26 @@ tests, `tests/test_contacts_is_one_page_with_each_persons_draft.py`)
   panel's width, never a line a kind; a note or a link in a sentence follows them. Why: opened
   inside the row it took the whole width and dropped below "I sent it", and a row a kind left
   one button alone on a line (the maintainer, 2026-11-05). (More test)
-- The last thing under every live card's More is **Something else**: it opens the Chat with
-  "About <the card>:" begun, and what is sent from it goes to Claude as work about that card
-  (`args.about` on the talk), never a quick answer. It is the way to tell Claude anything the
-  card's buttons do not cover, so it is not counted in More's five and carries no gauge: only
-  sending wakes Claude. (the maintainer, 2026-11-05: "there should be a 'something else' button
-  if i need to feed back"; More test)
+- The last thing under every live card's More is **Something else**: it opens a box right
+  under that card ("Anything else about Juno at Lark?", Ask Claude, Cancel), and what is sent
+  goes to Claude as work about that card, in the card's own thread (`talk/card-<kind>-<id>`,
+  `args.about`), never in the Chat. The question and Claude's answer show under the card, the
+  work line between (Saved, In line, Claude is on it, Cancel); a finished exchange stays two days
+  with Ask more and Hide, then folds away. It is the way to ask or tell Claude anything the
+  card's buttons do not cover, so it is not counted in More's five and carries no gauge: the
+  box's Ask Claude does. Why: everything opening the Chat clogged it with tasks, and an answer
+  belongs where its question was asked (the maintainer, 2026-11-05: "it opens a text box UNDER
+  THAT PARTICULAR THING IM QUERYING ... and then the response shows underneath"; More test)
+- The same box serves an ask that belongs to a place rather than a card (`PLACES`): Paste a
+  message under Contacts' header, an interview not on the list under Coming up's, Tell Claude
+  under Settings' Something looks wrong, Tidy these up under Your rules, Bring them back on
+  its own row. The Chat keeps only what is a conversation or needs pictures: setting up, a
+  practice interview, screenshots, and how the page works. (the maintainer, 2026-11-05: "quite
+  a few places in the app which unecessarily go to chat and could be done inline")
+- A draft whose words send the resume ("resume attached", "here's my resume") carries the
+  file under it, "Goes with it: Your resume (PDF)", saved in a tap to attach; the engine's
+  `sends` says which (the maintainer, 2026-11-05: "it would be great if the actual document
+  was linked there").
 - Every control that wakes Claude carries the gauge beside it: the same bars, size and place,
   with its minutes shown, and its "?" or a long press says it in one line ("About 3 minutes of
   Claude's time, from your Claude allowance"). A control that only runs code (marking sent, a
@@ -284,6 +314,11 @@ tests, `tests/test_contacts_is_one_page_with_each_persons_draft.py`)
   Work waiting its turn behind the big jobs stays "In line" however long it waits, and drafts
   written together show their batch's progress and one Stop. The chat's line under a message
   is the same words as its card. (what-reaches-Claude tests)
+- A tap's write has the Chat's own limit, 20 seconds: past a few seconds its card says
+  "Saving…", and one not saved is undone on its card at once, said in its toast while it is
+  up and then on its card, in words that name what to tap ("Not saved. Tap I sent it again.")
+  with Try again. Why: a store that never answered left "I sent it" gone from its card with
+  nothing said (the maintainer, 2026-11-05). (send-tap test)
 - A tap is "Saved" once written and "Done" once Claude's receipt says so. Saved says what it
   waits for and where it shows: "Claude makes the change next, and this line says Done when it
   has", what it waits behind ("after “Reply to Juno”", light work running in the chat that

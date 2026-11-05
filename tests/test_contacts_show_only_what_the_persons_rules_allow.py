@@ -524,10 +524,12 @@ def test_contacts_shows_each_person_as_the_engine_says(run, page, model, vp):
 
 def test_a_filter_shows_its_people_and_a_search_is_not_a_filter(run, page, model):
     """contacts 4, 29 and 30, contacts_chat_2 14."""
-    follow = [p for p in model["people"] if p["group"] == "follow"]
+    # The filter's choices are the few that matter since 2026-11-05 ("less info overload"):
+    # Waiting on them shows everyone a message has gone to and who has not answered.
+    follow = [p for p in model["people"] if p["group"] == "waiting"]
     got = run("engine", html=page, viewport=WIDE, clock=CLOCK, steps=[
         {"hash": "contacts", "open": "filter:contacts", "read": "dialog"},
-        {"click": "Follow-up you could send"},
+        {"click": "Waiting on them"},
         {"hash": "contacts", "eval": "document.querySelectorAll('#main [data-list=contacts] li.person').length"}])
     assert not got["errors"], got["errors"]
     assert got["after"][2]["eval"] >= len(follow) > 0, got["after"][2]["text"][:400]

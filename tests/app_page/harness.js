@@ -2103,7 +2103,8 @@ S.chat_dock = async (a) => {
     await goto(page, "contacts");
     await page.getByRole("button", {name: /^Paste a message/}).first().click();
     await turn(page, 6);
-    r.phone = {hash: await page.evaluate(() => location.hash), dock: await vis("#chat-dock"), focus: await focusK(), value: await page.inputValue("#main #talk-text")};
+    r.phone = {hash: await page.evaluate(() => location.hash), dock: await vis("#chat-dock"), focus: await focusK(),
+      box: await page.evaluate(() => !!document.querySelector('#main [data-k="ct-text:card-place-paste"]'))};
     r.errors = o.errors;
     await o.ctx.close();
     return r;
@@ -2134,15 +2135,17 @@ S.chat_dock = async (a) => {
   await page.keyboard.press("Escape");
   await turn(page, 4);
   r.esc = {dock: await vis("#chat-dock"), fab: await vis("#chat-fab"), focus: await focusK()};
-  // Someone wrote to them: one line on Contacts opens the chat ready for it.
+  // Someone wrote to them: Paste a message opens its box under Contacts' header, never the
+  // Chat (the maintainer, 2026-11-05: places that "unecessarily go to chat").
+  await page.keyboard.press("Escape");
+  await turn(page, 4);
   const got = page.getByRole("button", {name: /^Paste a message/}).first();
   r.got = {label: (await got.innerText()).trim()};
   await got.click();
   await turn(page, 6);
-  Object.assign(r.got, {dock: await vis("#chat-dock"), focus: await focusK(), value: await page.inputValue("#talk-text")});
-  await page.keyboard.press("Escape");
-  await turn(page, 4);
-  r.got.back = await focusK();
+  await page.waitForTimeout(200);
+  Object.assign(r.got, {dock: await vis("#chat-dock"), focus: await focusK(),
+    box: await page.evaluate(() => !!document.querySelector('#main [data-k="ct-text:card-place-paste"]'))});
   await page.click("#chat-fab");
   await turn(page, 4);
   await page.click("#chat-dock [data-k=dock-full]");
@@ -2815,7 +2818,8 @@ S.big = async (a) => {
   // Over 25 the Filter sheet holds an employer search (LAYOUT_SPEC 4.2).
   await o.page.locator("#main .filter-btn").first().click();
   await turn(o.page, 3);
-  r.search = !!(await o.page.$("dialog.filter-sheet input[type=search]"));
+  // Beside Filter on the screen since 2026-11-05, as Contacts has it; in the sheet before.
+  r.search = !!(await o.page.$("dialog.filter-sheet input[type=search], #main .searchf input[type=search]"));
   await o.page.keyboard.press("Escape");
   await turn(o.page, 3);
   await menuPick(o.page, "Select several");
