@@ -448,8 +448,15 @@ def test_every_count_of_jobs_to_look_at_agrees_and_leaves_out_a_closed_one(run, 
                               {"hash": "brief", "eval": "document.querySelector('#main .bp-jobs').textContent"}], vp, clock=T)
     a = got["after"][0]["eval"]
     jobs_line, todo_line, panel = got["after"][1]["eval"], got["after"][2]["eval"], got["after"][3]["eval"]
-    assert a["nav"] == a["brief"] and jobs_line.startswith("%d to look at" % a["nav"]), (a, jobs_line)
-    assert (not todo_line) or todo_line.startswith("%d new" % a["nav"]), todo_line
+    # Jobs is one list since 2026-11-05 ("To apply": drafts to send, then finds to look at), so
+    # its badge counts that list, as its tab does; the Brief lists the finds and names the
+    # drafts ready apart. Every number agrees with the Jobs summary.
+    import re
+    send = int((re.search(r"(\d+) to send", jobs_line) or [0, 0])[1])
+    look = int((re.search(r"(\d+) to look at", jobs_line) or [0, 0])[1])
+    assert a["nav"] == send + look and a["brief"] == look, (a, jobs_line)
+    assert (not send) or ("%d draft" % send) in panel, panel
+    assert (not todo_line) or todo_line.startswith("%d new" % look), todo_line
     assert "Analytics Consultant" not in panel, panel      # its posting has closed
 
 
@@ -665,7 +672,9 @@ def test_the_bin_says_posted_too_long_ago_not_too_old(run, tmp_path):
     got = _go(run, tmp_path, [{"hash": "jobs", "click": "Not for me: Harbourline Bank, Pricing Analyst", "read": "dialog[open]"}], PHONE, clock=T, model=m)
     sheet = got["after"][0]["text"]
     assert "Posted too long ago" in sheet and "Too old" not in sheet, sheet
-    fresh = _go(run, tmp_path, [{"hash": "jobs", "click": "Not for me: Copperleaf Pay, Data Analyst, Payments", "read": "dialog[open]"}], PHONE, clock=T)
+    # The same find at its own five days (the sample's other fresh one is drafted, so since Jobs
+    # became one list it shows as its draft's card, with that card's own trash).
+    fresh = _go(run, tmp_path, [{"hash": "jobs", "click": "Not for me: Harbourline Bank, Pricing Analyst", "read": "dialog[open]"}], PHONE, clock=T)
     assert "Posted too long ago" not in fresh["after"][0]["text"] and "It has closed" not in fresh["after"][0]["text"]
 
 

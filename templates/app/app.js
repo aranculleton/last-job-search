@@ -12503,7 +12503,7 @@
 
   // A quiet count beside the sections a person checks (the maintainer, 2026-10-26): jobs to
   // look at, drafts to send, interviews coming up. To do keeps the one coloured badge.
-  const NAV_COUNT_WORDS = {jobs: " to look at", drafts: " to send", interviews: " coming up"};
+  const NAV_COUNT_WORDS = {jobs: " to apply", drafts: " to send", interviews: " coming up"};
   // When Claude last answered in the conversation, or "".
   function lastAnswerAt() {
     const ms = convMessages(currentConv()).filter((m) => !m.node && m.from !== "you" && m.from !== "note" && txt(m.at));
