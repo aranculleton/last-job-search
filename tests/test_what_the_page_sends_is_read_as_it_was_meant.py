@@ -101,8 +101,28 @@ def _closed(search, rank=4):
         json.dump(rows, fh)
 
 
+def _closed_draft(search, company="Fernhill Freight"):
+    """A drafted application whose posting has closed: its card's alert offers Not applying,
+    a button that acts on that card. (A closed find is set aside by the engine itself since
+    2026-11-05, so the find's own Set it aside button is gone.)"""
+    import csv
+    path = os.path.join(search.state, "job_search_tracker.csv")
+    with open(path, encoding="utf-8", newline="") as fh:
+        rows = list(csv.DictReader(fh))
+        fields = list(rows[0].keys())
+    for r in rows:
+        if r.get("company") == company:
+            r["notes"] = (str(r.get("notes") or "") + " Link closed: no longer on the board, "
+                          "checked 2026-10-24 09:00 UTC").strip()
+    with open(path, "w", encoding="utf-8", newline="") as fh:
+        w = csv.DictWriter(fh, fieldnames=fields)
+        w.writeheader()
+        w.writerows(rows)
+
+
 def test_every_button_on_an_alert_or_a_suggestion_carries_its_cards_rev(search):
     _closed(search)
+    _closed_draft(search)
     m = search.model()
     seen = 0
     for section in ("ready", "messages", "interviews"):
@@ -122,11 +142,11 @@ def test_every_button_on_an_alert_or_a_suggestion_carries_its_cards_rev(search):
 
 
 def test_a_button_on_an_alert_applies_with_the_rev_it_carries(search):
-    _closed(search)
+    _closed_draft(search)
     m = search.model()
-    card = next(r for r in m["jobs"]["rows"] if r["id"] == "r9-4")
-    button = card["alerts"][0]["action"]
-    assert button["action"] == "job.dismiss"
+    card = next(r for r in m["ready"] if r["company"] == "Fernhill Freight")
+    button = next(a["action"] for a in card["alerts"] if (a.get("action") or {}).get("type") == "act")
+    assert button["action"] == "ready.not_applying"
     aid = search.act(button["action"], button["item"], value=button["value"], rev=button["rev"])
     got = search.apply()
     assert got["ok"] == [aid], search.receipt(aid)

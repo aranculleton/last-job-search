@@ -864,7 +864,7 @@ def _repo(path):
     def g(*args):
         return subprocess.run(["git", "-C", path, "-c", "user.name=t",
                                "-c", "user.email=t" + "@example.com", *args],
-                              capture_output=True, text=True, check=True).stdout.strip()
+                              capture_output=True, text=True, encoding="utf-8", check=True).stdout.strip()
     g("init", "-q")
     with open(os.path.join(path, "a.txt"), "w", encoding="utf-8") as fh:
         fh.write("one\n")

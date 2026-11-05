@@ -765,8 +765,9 @@ METHODS: dict[str, dict] = {
             (35, "2026-11-05", True, "To do has one card an act and a person: every message to send on one card counted as Contacts counts it, a person's rows and their referral on one card, the small questions one at a time, Done on checklist rows with They replied in the bin, no fix buttons (Claude fixes a failing application by itself), a closed posting set aside by itself and a referral a note; an interview's actions are the same on To do and Coming up; headers are one line"),
             (36, "2026-11-05", False, "the Jobs count beside the menu is read aloud as jobs to apply, the list it counts"),
             (37, "2026-11-05", True, "the word a person reads is trash, never bin, in the page's help and its tips"),
+            (38, "2026-11-05", False, "one way to answer a quick question, with Another day? after It went"),
         ),
-        "fingerprint": "5e35b87914f06682",
+        "fingerprint": "1fa29af2fe4c9e93",
     },
     "upskill": {
         "by": "upgrade", "priority": 4, "applies": "upskill_plans", "time": "~10 min",

@@ -8142,15 +8142,6 @@
   }
   function jobQuestions(r) { return needsAbout(r.company, r.title).filter((n) => needTab(n) === "jobs"); }
   function readyQuestions(a) { return needsAbout(a.company, a.role).filter((n) => needTab(n) === "drafts"); }
-  function answerNeed(n, op) {
-    if (txt(op.input) === "text") {
-      sheet({title: txt(n.title), intro: txt(n.body) || null, fields: [{id: "words", type: "text", long: true, label: txt(op.label), required: true, max: 500}], submit: "Save",
-        onSubmit: (v) => { act([{item: n.id, action: txt(op.action), value: v.words, rev: n.rev}], "Answered: " + txt(n.title)); }});
-      return;
-    }
-    if (op.work) { requestWork([Object.assign({id: txt(obj(op.work).kind) + "~" + seg(n.id)}, obj(op.work))]); return; }
-    act([{item: txt(op.item) || n.id, action: txt(op.action), value: op.value === undefined ? (/\.answer$/.test(txt(op.action)) ? txt(op.label) : null) : op.value, rev: op.item ? revOf(txt(op.item)) || n.rev : n.rev}], "Answered: " + txt(op.label));
-  }
   function questionBlock(n, ctx) {
     ctx = ctx || {};
     const chosen = effective(n.id);

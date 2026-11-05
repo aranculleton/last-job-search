@@ -114,6 +114,7 @@ def state(tmp_path, monkeypatch):
     return st
 
 
+@pytest.mark.timing
 def test_thirteen_thousand_left_out_read_as_one_row_a_rule(state):
     _left(state)
     t0 = time.monotonic()
