@@ -113,3 +113,16 @@ def test_reading_the_contact_book_and_the_messages_creates_neither(tmp_path, mon
     assert not book.exists() and not log.exists()
     state.save_contacts([], str(book))
     assert book.read_text(encoding="utf-8").startswith("contact_id")
+
+
+def test_a_read_queued_before_midnight_and_made_after_it_is_still_allowed(here):
+    """The page queued a read on one day's list and made it after midnight: it was refused
+    as "not on today's short list" and taken off the queue for good, though the profile was
+    already open (the suite crossing midnight, 2026-11-05). Yesterday's list still allows
+    someone on it whose page is unread; one from two days ago does not."""
+    day = datetime.date(2026, 11, 4)
+    reading._save_shortlist(["ana_rook"], day)
+    assert reading.on_shortlist("ana_rook", day)
+    assert reading.on_shortlist("ana_rook", day + datetime.timedelta(days=1))
+    assert not reading.on_shortlist("ana_rook", day + datetime.timedelta(days=2))
+    assert not reading.on_shortlist("bo_venn", day + datetime.timedelta(days=1))

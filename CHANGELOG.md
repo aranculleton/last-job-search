@@ -22,6 +22,7 @@ make sense to somebody whose repo just received it.
 
 ### Changed
 
+- **A profile read just after midnight is kept.** One queued on your page before midnight and read after it was turned away and never read again; it is kept now.
 - **Reply help no longer points at an old resume your rules forbid.** It offers a resume only if
   the app made and checked it and your own rules do not say never to send it; otherwise it says
   to make one for that person.

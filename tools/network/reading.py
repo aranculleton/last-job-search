@@ -2660,7 +2660,15 @@ def shortlist(ids, today: datetime.date | None = None, contacts=None, remove=(),
 
 
 def on_shortlist(contact_id: str, today: datetime.date | None = None) -> bool:
-    return contact_id in _shortlist_file(today or datetime.date.today())
+    """Is a browser read of them one today's list allows? Today's list, or yesterday's for
+    someone on it whose page is still unread: a read the page queued before midnight and
+    made after it was refused and taken off the queue for good, though their profile was
+    already open (a check that ran across midnight, 2026-11-05)."""
+    today = today or datetime.date.today()
+    if contact_id in _shortlist_file(today):
+        return True
+    yday = today - datetime.timedelta(days=1)
+    return contact_id in _shortlist_file(yday) and not _read_on(contact_id, yday.isoformat())
 
 
 def next_up(today: datetime.date | None = None, contacts=None) -> dict | None:

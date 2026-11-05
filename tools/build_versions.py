@@ -592,8 +592,9 @@ METHODS: dict[str, dict] = {
             (36, "2026-10-26", False, "the same checks on saving a note; the page flags a waiting draft that ignores or repeats the person's last message"),
             (37, "2026-10-29", False, "unused helpers removed (last_browser_read, reads_today); notes are written as before; a note waiting on a read is rewritten with every other read since Claude last ran, in one piece of work"),
             (38, "2026-11-03", False, "the person's own time zone and a place's are read the one way the whole app reads them (tools/person.py), from their own words, never from when their brief is scheduled; notes are written as before"),
+            (39, "2026-11-05", False, "a profile read queued before midnight and made after it is kept, not refused as off today's list; notes are written as before"),
         ),
-        "fingerprint": "b9eb8c14dd19a8a2",
+        "fingerprint": "0d9c8472816f55ad",
     },
     "screening": {
         "by": "round", "priority": 2,
