@@ -1,7 +1,7 @@
 {
  "model": 1,
  "made_at": "2026-10-25T18:00:00Z",
- "rev": "33a40959e1f5",
+ "rev": "bb336ed9dc08",
  "app": {
   "version": "4.9.1",
   "url": null,
@@ -13,7 +13,7 @@
   ],
   "privacy": "Only you can open this page unless you share it. It holds first names, employers, your drafts and your setup answers, so keep it unshared.",
   "repo": "https://github.com/aranculleton/last-job-search",
-  "page": 32,
+  "page": 33,
   "not_saved": 0
  },
  "person": {
@@ -48,7 +48,7 @@
  ],
  "jobs": {
   "round": "r9",
-  "made_at": "2026-11-05T02:11:12Z",
+  "made_at": "2026-11-05T02:14:27Z",
   "met": false,
   "summary": "3 roles from the last search to look at, 1 of them scoring 75 or more. 3 left out, each with its reason.",
   "rows": [
@@ -305,8 +305,16 @@
    "count": 3,
    "groups": [
     {
-     "reason": "location",
+     "id": "filtered~place",
+     "kind": "place",
+     "reason": "Outside your places",
+     "label": "Outside your places",
      "count": 2,
+     "last": null,
+     "examples": [
+      "Data Analyst",
+      "Planner"
+     ],
      "items": [
       {
        "id": "r9-f1",
@@ -315,7 +323,8 @@
        "place": "London",
        "url": "https://jobs.example/quayside/1",
        "reason": "location: on-site outside Greater Manchester (london)",
-       "rev": "cde36ac432ac"
+       "rev": "cde36ac432ac",
+       "g": "filtered~place"
       },
       {
        "id": "r9-f2",
@@ -324,15 +333,48 @@
        "place": "Bristol",
        "url": "https://jobs.example/quayside/2",
        "reason": "location: on-site outside Greater Manchester (bristol)",
-       "rev": "542a63e5924c"
+       "rev": "542a63e5924c",
+       "g": "filtered~place"
       }
      ],
-     "id": "filtered~location",
-     "rev": "9b6ba9490837"
+     "held": 2,
+     "check": [
+      {
+       "id": "r9-f1",
+       "company": "Quayside Foods",
+       "title": "Data Analyst",
+       "place": "London",
+       "url": "https://jobs.example/quayside/1",
+       "reason": "location: on-site outside Greater Manchester (london)",
+       "rev": "cde36ac432ac",
+       "g": "filtered~place"
+      },
+      {
+       "id": "r9-f2",
+       "company": "Quayside Foods",
+       "title": "Planner",
+       "place": "Bristol",
+       "url": "https://jobs.example/quayside/2",
+       "reason": "location: on-site outside Greater Manchester (bristol)",
+       "rev": "542a63e5924c",
+       "g": "filtered~place"
+      }
+     ],
+     "edit": {
+      "what": "places"
+     },
+     "rev": "80ae18713858"
     },
     {
-     "reason": "screen",
+     "id": "filtered~credential",
+     "kind": "credential",
+     "reason": "Needs a qualification you do not hold",
+     "label": "Needs a qualification you do not hold",
      "count": 1,
+     "last": null,
+     "examples": [
+      "Inventory Lead"
+     ],
      "items": [
       {
        "id": "r9-f3",
@@ -341,11 +383,25 @@
        "place": "",
        "url": "https://jobs.example/dovecote/lead",
        "reason": "professional designation stated as a requirement",
-       "rev": "46e8ab8d54a0"
+       "rev": "46e8ab8d54a0",
+       "g": "filtered~credential"
       }
      ],
-     "id": "filtered~screen",
-     "rev": "f42bc0491e9b"
+     "held": 1,
+     "check": [
+      {
+       "id": "r9-f3",
+       "company": "Dovecote Freight",
+       "title": "Inventory Lead",
+       "place": "",
+       "url": "https://jobs.example/dovecote/lead",
+       "reason": "professional designation stated as a requirement",
+       "rev": "46e8ab8d54a0",
+       "g": "filtered~credential"
+      }
+     ],
+     "edit": null,
+     "rev": "ce30fb43a788"
     }
    ]
   }
@@ -863,7 +919,7 @@
    "when": "2026-10-28",
    "prep": {
     "path": "documents/applications/thornbury_bank_risk_analyst_thornbury/interview_prep.md",
-    "updated": "2026-11-05T02:11:12Z"
+    "updated": "2026-11-05T02:14:27Z"
    },
    "questions": 2,
    "all_day": true,
@@ -1895,6 +1951,114 @@
    "rev": "205c22b25fa6"
   }
  ],
+ "rules": {
+  "id": "your-rules",
+  "rows": [
+   {
+    "id": "rule~places",
+    "kind": "place",
+    "name": "Where",
+    "sentence": "You search in Manchester, Salford, Stockport and United Kingdom; an on-site role anywhere else is left out.",
+    "set_on": null,
+    "words": null,
+    "review_on": null,
+    "left_out": 2,
+    "edit": {
+     "what": "places"
+    },
+    "drop": null,
+    "still_right": false,
+    "rev": "f70bf82dda85"
+   },
+   {
+    "id": "rule~roles",
+    "kind": "field",
+    "name": "Your field",
+    "sentence": "You search for supply chain analyst, operations analyst, demand planning analyst, data analyst, logistics analyst, inventory analyst and 2 more; a title outside your field is left out.",
+    "set_on": null,
+    "words": null,
+    "review_on": null,
+    "left_out": 0,
+    "edit": {
+     "what": "roles"
+    },
+    "drop": null,
+    "still_right": false,
+    "rev": "f823125c6a4c"
+   },
+   {
+    "id": "rule~window",
+    "kind": "age",
+    "name": "How recent",
+    "sentence": "A job posted more than 14 days ago is left out.",
+    "set_on": null,
+    "words": null,
+    "review_on": null,
+    "left_out": 0,
+    "edit": {
+     "what": "window"
+    },
+    "drop": null,
+    "still_right": false,
+    "rev": "68f8d5cece4d"
+   },
+   {
+    "id": "rule~pay",
+    "kind": "pay",
+    "name": "Pay",
+    "sentence": "Your pay floor is £42,000; a stated range topping out under £32,000 is left out.",
+    "set_on": null,
+    "words": null,
+    "review_on": null,
+    "left_out": 0,
+    "edit": {
+     "what": "pay"
+    },
+    "drop": null,
+    "still_right": false,
+    "rev": "c16429553eff"
+   },
+   {
+    "id": "rule~languages",
+    "kind": "language",
+    "name": "Languages",
+    "values": [
+     "English"
+    ],
+    "sentence": "You work in English; a job that needs another language is left out.",
+    "set_on": null,
+    "words": null,
+    "review_on": null,
+    "left_out": 0,
+    "edit": {
+     "what": "languages"
+    },
+    "drop": null,
+    "still_right": false,
+    "rev": "1043766b8ee2"
+   },
+   {
+    "id": "rule~sector~a-sector-the-candidate-will-not-work-in-",
+    "kind": "sector",
+    "name": "Kinds of employer",
+    "sentence": "Left out: A sector you will not work in (gambling and tobacco).",
+    "set_on": null,
+    "words": null,
+    "review_on": null,
+    "left_out": 0,
+    "edit": null,
+    "drop": {
+     "kind": "sector",
+     "why": "a sector the candidate will not work in (gambling and tobacco)"
+    },
+    "still_right": false,
+    "rev": "8254c94cfb38"
+   }
+  ],
+  "brief_line": null,
+  "still_right": 0,
+  "rev": "5f0ba4f627f5"
+ },
  "people_count": {
   "shown": 3,
   "all": 3,
@@ -1934,6 +2098,17 @@
      "30": 1
     }
    }
+  },
+  "filtered": {
+   "total": 3,
+   "shown": 3,
+   "folded": {
+    "count": 0,
+    "days": null
+   },
+   "parts": 1,
+   "doc": "list~filtered",
+   "counts": {}
   },
   "interviews": {
    "total": 1,

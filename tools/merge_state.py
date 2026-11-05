@@ -182,6 +182,13 @@ JSON_FILES = {
     # record a skill. Its answer is dated and kept whole from the side that answered later, so
     # two chats that each took an answer keep the later one; the applications that asked are
     # every one either side named, the later day standing; it was first asked on the earlier.
+    # When each rule was set and in whose words (rules_view.note_set): each rule's record
+    # taken whole from the side that set it later, so two chats changing two rules keep both.
+    "documents/rules/set.json": {"whole": ("*",), "stamps": ("set_on",), "indent": 1},
+    # Rules the person kept when asked "Still right?", and the month the Brief's line was set
+    # aside: the later day of each stands.
+    "documents/rules/review.json": {"dated": {"kept/*": "later", "brief_dismissed": "later"},
+                                    "indent": 1},
     "documents/skill_answers.json": {
         "whole": ("skills/*/answer",), "stamps": ("at",),
         "lists": {"skills/*/for": {"key": ("company", "role"), "keep": True}},
@@ -351,6 +358,7 @@ JSON_NAMES = {
     # run_round reads every round's summary to find a job set aside while a search ran; the
     # files themselves are wired as "documents/rounds/*.json" above.
     "tools/app.py: *.json": "a page dump's screen documents, read only to tell whether the dump holds the page's screens (app.py no_screen), in the chat's scratch folder; never committed",
+    "tools/rules_view.py: *.json": "each search's left-out list, read only for how many each rule left out (rules_view.left_counts); merged as documents/rounds/filtered/*.json",
     "tools/run_round.py: *.json": "every round summary, read only, to hold a set-aside made during a search; written by write_summary, merged as documents/rounds/*.json",
     **dict.fromkeys(("00_portal_health.json", "01_dropped.json", "01_prefiltered.json",
                      "02_hydrated.json", "03_screened.json", "03_screened_all.json",

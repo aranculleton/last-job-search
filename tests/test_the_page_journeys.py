@@ -459,6 +459,9 @@ def test_changing_your_mind_keeps_the_reason_and_brings_things_back(run, tmp_pat
         # reason is the tap that does it (2026-11-03).
         {"click": "The pay", "exact": True, "within": "dialog"},
         {"click": "41 left out by the search", "exact": False},
+        # Left out by rule (2026-11-05): the rule's own rows open with See them.
+        {"click": "See the jobs left out as", "exact": False,
+         "within": ".f-rule:has-text('Needs a driving licence')"},
         {"click": "Bring back Transport Planning Analyst at Fernhill Freight"},
         {"click": "Set it aside", "exact": True},
     ], vp)

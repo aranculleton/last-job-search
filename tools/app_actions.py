@@ -113,6 +113,14 @@ ACTIONS = {
     "rule.lift": (("rule",), "exclude.py lift on the person's own rulings of that kind; or the "
                              "employer off do_not_target.json", "rule.restore"),
     "rule.restore": (("rule",), "the rulings back as they were", "rule.lift"),
+    "rule.drop": (("your_rule",), "a rule taken off from Your rules by its own writer: "
+                                  "BAR_DECLINED, BAR_EXCLUDED_OFF in search.py, or learned.py "
+                                  "retire", "rule.undrop"),
+    "rule.undrop": (("your_rule",), "the rule back as it was", "rule.drop"),
+    "rule.keep": (("your_rule",), "rules_view.keep_rule: Still right? answered yes, not asked "
+                                  "again for three months", ""),
+    "rules.seen": (("your_rules",), "rules_view.dismiss_brief: the Brief's line about old rules "
+                                    "set aside for the month", ""),
     "brief.move": (("schedule",), "routines.py move: the brief's days and time ({days, time} "
                                   "or {cron}) in profile/routines.json, and the one "
                                   "update_trigger call kept for a chat (routines.py calls)",
@@ -1763,6 +1771,11 @@ def _decline_employer(company: str, why: str, day: str) -> str:
         return ""
     have[k] = f"turned down on the page, {day}: {why}"
     profile_set.set_line("search.py", "BAR_DECLINED", have)
+    try:
+        import rules_view
+        rules_view.note_set(f"rule~declined~{k}", why, day, name=" ".join(company.split()))
+    except Exception:  # noqa: BLE001  the day is kept in the setting's own words too
+        pass
     return k
 
 
@@ -2088,6 +2101,8 @@ def _search_set(r: Run) -> dict:
     on it queued (a search, an employer's board found)."""
     import tweak
     what = r.words("what")
+    if what == "languages":
+        return _languages_set(r)
     p = _SEARCH_ROWS.get(what)
     if not p:
         raise Refused("That is not a search setting the page can change.")
@@ -2132,6 +2147,10 @@ def _search_set(r: Run) -> dict:
                                          "asked_at": app_model.stamp(r.at), "priority": 0,
                                          "status": "queued", "stage": 0,
                                          "stages": page_db.progress(item["kind"])["stages"]})
+        if what in ("places", "roles", "window", "pay"):
+            # The day it was set and their words, for Your rules (tools/rules_view.py).
+            import rules_view
+            rules_view.note_set(f"rule~{what}", r.words("said"), r.day.isoformat())
         return got
 
     if steps is not None:
@@ -2208,6 +2227,122 @@ def _rule_restore(r: Run) -> dict:
             e.pop("lifted_because", None)
     exclude.save_seen(data, path)
     return {"note": "Left out again.", "undo": None}
+
+
+# ---- Your rules (tools/rules_view.py): drop one, keep one as it is, the Brief's line set aside
+
+
+def _set_list(key: str, values: list) -> None:
+    import profile_set
+    profile_set.set_line("search.py", key, values)
+
+
+def _got_list(key: str) -> list:
+    import profile_set
+    got = profile_set.get("search.py", key)
+    return list(got) if isinstance(got, (list, tuple)) and got is not profile_set.MISSING else []
+
+
+def _rule_drop(r: Run) -> dict:
+    """A rule taken off from Your rules, through its own writer: an employer turned down by
+    name comes off BAR_DECLINED; a kind of employer ruled out is named in BAR_EXCLUDED_OFF
+    (its patterns are code no page writes); a learned rule is retired (learned.py, kept as
+    history). Each holds from the next read of the rules: Jobs at once, a search from the next."""
+    import rules_view
+    t = r.target
+    drop = t.get("drop") if isinstance(t.get("drop"), dict) else {}
+    kind = drop.get("kind")
+    if kind == "declined":
+        k = str(drop.get("key") or "")
+        if k not in run_round_declined():
+            raise Refused("That employer is not turned down any more.")
+        why = run_round_declined()[k]
+        _undecline(k)
+        undo = {"kind": "declined", "key": k, "why": why}
+        said = "Their roles are shown again from now on."
+    elif kind == "sector":
+        why = str(drop.get("why") or "")
+        off = _got_list("BAR_EXCLUDED_OFF")
+        if why in off:
+            raise Refused("That rule is off already.")
+        _set_list("BAR_EXCLUDED_OFF", off + [why])
+        undo = {"kind": "sector", "why": why}
+        said = "Those employers are shown again from now on."
+    elif kind == "learned":
+        import learned
+        try:
+            learned.retire(int(drop.get("n") or 0))
+        except SystemExit as e:
+            raise Refused(str(e).replace("learned: ", "")) from None
+        undo = {"kind": "learned", "n": int(drop["n"])}
+        said = "That rule no longer applies."
+    else:
+        raise Refused("That rule is changed with its pencil, not taken off.")
+    rules_view.drop_set(str(t.get("id") or ""))
+    return {"note": said, "undo": {"action": "rule.undrop", "target": dict(t), "value": undo}}
+
+
+def run_round_declined() -> dict:
+    import run_round
+    return run_round.declined_now()
+
+
+def _rule_undrop(r: Run) -> dict:
+    v = r.value
+    if v.get("kind") == "declined":
+        import profile_set
+        have = dict(run_round_declined())
+        have[str(v["key"])] = str(v.get("why") or "turned down on the page")
+        profile_set.set_line("search.py", "BAR_DECLINED", have)
+    elif v.get("kind") == "sector":
+        _set_list("BAR_EXCLUDED_OFF", [x for x in _got_list("BAR_EXCLUDED_OFF")
+                                       if x != v.get("why")])
+    elif v.get("kind") == "learned":
+        import learned
+        rows = learned.load()
+        n = int(v.get("n") or 0)
+        if 1 <= n <= len(rows):
+            rows[n - 1]["status"] = "active"
+            learned._save(rows)
+    return {"note": "Back as it was.", "undo": None}
+
+
+def _rule_keep(r: Run) -> dict:
+    """"Still right?" answered yes: kept as it is, and not asked again for three months."""
+    import rules_view
+    rules_view.keep_rule(str(r.target.get("id") or ""), r.day.isoformat())
+    return {"note": "Kept as it is.", "undo": None}
+
+
+def _rules_seen(r: Run) -> dict:
+    """The Brief's line about old rules set aside: not said again this month."""
+    import rules_view
+    rules_view.dismiss_brief(r.day.isoformat())
+    return {"note": "Not shown again this month.", "undo": None}
+
+
+def _languages_set(r: Run) -> dict:
+    """A language the person works in, added or taken off (search.py LANGUAGES_HELD): a job
+    needing it is left out, or no longer, from the next read of the rules."""
+    import rules_view
+    have = [str(x).lower() for x in _got_list("LANGUAGES_HELD")] or ["english"]
+    add, rem = r.words("add").lower(), r.words("remove").lower()
+    if not add and not rem:
+        raise Refused("Say which language to add or take off.",
+                      ask=ask("add", "A language you work in", "text"))
+    if add and not re.fullmatch(r"[a-z][a-z -]{1,30}", add):
+        raise Refused("Give the language by its name, in English.")
+    if add and add in have or rem and rem not in have:
+        return {"note": "It was like that already.", "undo": None}
+    if rem and len(have) == 1:
+        raise Refused("That is the only language you work in.")
+    new = have + [add] if add else [x for x in have if x != rem]
+    _set_list("LANGUAGES_HELD", new)
+    rules_view.note_set("rule~languages", r.words("said"), r.day.isoformat())
+    back = {"what": "languages", "remove": add} if add else {"what": "languages", "add": rem}
+    return {"note": (f"{add.capitalize()} added: a job needing it is no longer left out." if add
+                     else f"{rem.capitalize()} taken off."),
+            "undo": {"action": "search.set", "target": dict(r.target), "value": back}}
 
 
 # ---- the brief's schedule and a break (tools/routines.py: move, pause, resume)
@@ -3401,12 +3536,16 @@ HANDLERS = {
     "upcoming.add": _upcoming_add, "upcoming.remove": _upcoming_remove,
     "requests.unwithdrawn": _unwithdrawn, "search.set": _search_set,
     "search.unset": _search_unset, "rule.lift": _rule_lift, "rule.restore": _rule_restore,
+    "rule.drop": _rule_drop, "rule.undrop": _rule_undrop, "rule.keep": _rule_keep,
+    "rules.seen": _rules_seen,
     "brief.move": _brief_move, "brief.pause": _brief_pause, "brief.resume": _brief_resume,
     "brief.off": lambda r: _brief_switch(r, "off"), "brief.on": lambda r: _brief_switch(r, "on"),
 }
 assert set(HANDLERS) | {"undo"} == set(ACTIONS)
 # The two answers nothing on the page takes back, and why: said in a chat instead.
 NO_UNDO = {
+    "rule.keep": "a rule kept as it is changes nothing; the rule's own pencil or bin changes it",
+    "rules.seen": "the Brief's line set aside for the month; it comes back next month by itself",
     "outcome.undo": "it is itself the taking back of an outcome",
     "interview.unrework": "it is itself the taking back of an answer kept to work on",
     "process.register": "a hiring process registered is a tracker row and its folder that "

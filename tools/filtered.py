@@ -157,9 +157,16 @@ def add(summary_dir: str, name: str, found: list[dict]) -> str | None:
 def _save(path: str, name: str, counts: dict, found: list[dict]) -> None:
     os.makedirs(os.path.dirname(path), exist_ok=True)
     # One posting a line: a round can filter a thousand, and a line each keeps the file a
-    # third the size of an indented one and its changes readable.
-    head = json.dumps({"round": name, "counts": dict(sorted(counts.items(), key=lambda kv: -kv[1]))},
-                      ensure_ascii=False)
+    # third the size of an indented one and its changes readable. The first line holds the
+    # counts, by the stage's rule and by the person's rule in plain words (rules_view.kinds_of),
+    # so Your rules reads a month of searches by their first lines alone.
+    head = {"round": name, "counts": dict(sorted(counts.items(), key=lambda kv: -kv[1]))}
+    try:
+        import rules_view
+        head["kinds"] = dict(sorted(rules_view.kinds_of(found).items(), key=lambda kv: -kv[1]))
+    except Exception:  # noqa: BLE001  no profile to read the rules by: the counts alone
+        pass
+    head = json.dumps(head, ensure_ascii=False)
     with open(path, "w", encoding="utf-8", newline="\n") as fh:
         fh.write(head[:-1] + ', "filtered": [\n'
                  + ",\n".join(json.dumps(e, ensure_ascii=False) for e in found) + "\n]}\n")

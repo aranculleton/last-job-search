@@ -178,6 +178,8 @@ def test_bringing_back_a_posting_the_search_left_out(run, tmp_path):
     where = Search(str(tmp_path / "s"))
     got, rec = _round_trip(run, tmp_path, where, "back", [
         {"hash": "jobs", "click": "left out by the search"},
+        # Left out by rule (2026-11-05): a rule's own rows open with See them.
+        {"click": "See the jobs left out as", "exact": False},
         {"click": "Bring back", "exact": False},
     ])
     (a,) = [x for x in got["actions"] if x["action"] == "job.bring_back"]

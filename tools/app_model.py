@@ -57,11 +57,10 @@ CLOCK_KEYS = frozenset({"made_at", "updated", "seen_at", "seen_recently"})
 SECTIONS = ("app", "person", "needs_you", "jobs", "ready", "messages", "due", "people",
             "interviews", "done", "settings", "brief", "setup", "updates", "applications",
             "referrals", "message_budget", "linkedin", "learned", "help", "resume",
-            "search", "where", "listener", "schedule", "you", "upcoming")
+            "search", "where", "listener", "schedule", "you", "upcoming", "rules")
 # The page shows every live contact, then the rest by recency up to a size budget
 # (tools/app_lists.py PEOPLE_BYTES); the whole book is in the page's database for "Show".
 DUE_MAX = 100
-FILTERED_PER_GROUP = 20
 # An application sent this recently stays under Drafts, ticked, so the tick can
 # be seen and undone where it was made.
 RECENT_APPLIED_DAYS = 14
@@ -1460,7 +1459,7 @@ def _jobs(ctx: Ctx, targets: dict) -> dict:
                         for r in rows], len(rows), 0, doc=False)
     good, strong = run_round.yield_of(path)
     met = good >= run_round.YIELD_60 and strong >= run_round.YIELD_75
-    filtered = _filtered(name, targets)
+    filtered = _filtered(name, targets, ctx)
     # What Jobs lists to look at, counted once here: a role not applied for, not set aside,
     # not closed and not drafted. "10 roles on the shortlist" counted the one applied for
     # and the one set aside beside a page that said 4 (2026-11-03).
@@ -1562,36 +1561,36 @@ def bar_words(verdict, reason: str) -> str:
     return (why[:1].upper() + why[1:]).rstrip(".") + "." if why else ""
 
 
-def _filtered(name: str, targets: dict) -> dict:
-    data = _json(person.state("documents", "rounds", "filtered", f"{name}.json"), {})
+def _filtered(name: str, targets: dict, ctx: Ctx | None = None) -> dict:
+    """What the newest search left out, grouped by the person's rule that cut each row, in
+    plain words (tools/rules_view.py left_view): its count, the day it last cut, three
+    examples, its first rows, a few across the whole of it to check, the pencil's setting.
+    The rows the page holds for each rule's search box go to the database as the `filtered`
+    list, never all of them: a search left out 13,168 (2026-11-05)."""
+    import rules_view
+    path = person.state("documents", "rounds", "filtered", f"{name}.json")
+    data = _json(path, {})
     found = (data.get("filtered") if isinstance(data, dict) else data) or []
     found = [e for e in found if isinstance(e, dict)]
-    groups: dict = {}
-    for n, e in enumerate(found, 1):
-        rule = str(e.get("rule") or e.get("stage") or "other")
-        g = groups.setdefault(rule, {"reason": rule, "count": 0, "items": []})
-        g["count"] += 1
-        if len(g["items"]) < FILTERED_PER_GROUP:
-            fid = f"{name}-f{n}"
-            item = {"id": fid, "company": str(e.get("company") or ""),
-                    "title": str(e.get("title") or ""), "place": str(e.get("location") or ""),
-                    "url": str(e.get("url") or ""), "reason": str(e.get("reason") or rule),
-                    "rev": rev_of(e.get("url"), e.get("company"), e.get("title"), rule)}
-            g["items"].append(item)
-            targets[fid] = {"kind": "filtered", "round": name, "n": n,
-                            "url": item["url"], "company": item["company"],
-                            "title": item["title"], "rev": item["rev"]}
-    ordered = sorted(groups.values(), key=lambda g: (-g["count"], g["reason"]))
-    # A whole group brought back at once: the page names it filtered~<reason> (its seg()).
-    for g in ordered:
-        gid = "filtered~" + seg(g["reason"])
-        ns = [n for n, e in enumerate(found, 1)
-              if str(e.get("rule") or e.get("stage") or "other") == g["reason"]]
-        g["id"] = gid
-        g["rev"] = rev_of(gid, [(found[n - 1].get("url"), found[n - 1].get("title")) for n in ns])
-        targets[gid] = {"kind": "filtered_group", "round": name, "reason": g["reason"],
-                        "ns": ns, "rev": g["rev"]}
-    return {"count": len(found), "groups": ordered}
+
+    def item_of(n: int, e: dict) -> dict:
+        fid = f"{name}-f{n}"
+        item = {"id": fid, "company": str(e.get("company") or ""),
+                "title": str(e.get("title") or ""), "place": str(e.get("location") or ""),
+                "url": str(e.get("url") or ""), "reason": str(e.get("reason") or e.get("rule") or ""),
+                "rev": rev_of(e.get("url"), e.get("company"), e.get("title"),
+                              str(e.get("rule") or e.get("stage") or "other"))}
+        targets[fid] = {"kind": "filtered", "round": name, "n": n, "url": item["url"],
+                        "company": item["company"], "title": item["title"], "rev": item["rev"]}
+        return item
+
+    # A whole rule comes back by its id, as before: filtered~<its kind>.
+    got = rules_view.left_view(found, name, rules_view.content_day(rounds_dir(name)), targets,
+                               item_of)
+    held = got.pop("held")
+    if ctx is not None:
+        _list(ctx, "filtered", held, sum(len(g["items"]) for g in got["groups"]), 0)
+    return got
 
 
 def seg(text) -> str:
@@ -4829,6 +4828,27 @@ def _schedule(ctx: Ctx, targets: dict) -> dict:
     return part
 
 
+def _rules(ctx: Ctx, targets: dict) -> dict:
+    """Your rules (tools/rules_view.py your_rules): every rule that shapes the search and the
+    messages, each one plain sentence with the day it was set, the person's words, what it
+    left out in the last 30 days, the pencil's setting and the bin's writer, and a quiet
+    "Still right?" where it is old and busy; `brief_line`, the Brief's one line about them,
+    at most once a month. The person: "how easy is it to change the rules ... which might be
+    permanent despite someone's preferences changing over time?" (2026-11-05)."""
+    import rules_view
+    rows = rules_view.your_rules(ctx.today, ctx.seen)
+    for r in rows:
+        r["rev"] = rev_of(r["id"], r["sentence"], r.get("drop"), r.get("edit"), r["still_right"])
+        targets[r["id"]] = {"kind": "your_rule", "id": r["id"], "drop": r.get("drop"),
+                            "label": r["sentence"], "rev": r["rev"]}
+    line = rules_view.review_line(rows, ctx.today)
+    out = {"id": "your-rules", "rows": rows, "brief_line": line,
+           "still_right": sum(1 for r in rows if r["still_right"])}
+    out["rev"] = rev_of(out["id"], line, out["still_right"])
+    targets["your-rules"] = {"kind": "your_rules", "rev": out["rev"]}
+    return out
+
+
 BUILDERS = {"app": _app, "person": _person, "needs_you": _needs_you, "jobs": _jobs,
             "ready": _ready, "messages": _messages, "due": _due, "people": _people,
             "interviews": _interviews, "done": _done, "settings": _settings, "brief": _brief,
@@ -4836,7 +4856,7 @@ BUILDERS = {"app": _app, "person": _person, "needs_you": _needs_you, "jobs": _jo
             "referrals": _referrals, "message_budget": _message_budget,
             "linkedin": _linkedin, "learned": _learned, "help": _help, "resume": _resume,
             "search": _search, "where": _where, "listener": _listener,
-            "schedule": _schedule, "you": _you, "upcoming": _upcoming}
+            "schedule": _schedule, "you": _you, "upcoming": _upcoming, "rules": _rules}
 
 # What a section is before there is a profile to build it from: a setup still running, or
 # none started. The page shows the setup then, and every other section empty.
@@ -4857,6 +4877,7 @@ EMPTY = {
                              "rev": "none"}},
     "learned": [], "help": {"tip": None, "tour": [], "off": False}, "resume": None,
     "search": None, "where": None, "schedule": None, "upcoming": [],
+    "rules": {"id": "your-rules", "rows": [], "brief_line": None, "still_right": 0, "rev": "none"},
     "jobs": {"round": "", "made_at": None, "met": False, "summary": "No search has run yet.",
              "rows": [], "filtered": {"count": 0, "groups": []}},
     "done": {"counts": {"applied": 0, "interviews": 0, "offers": 0, "replies": 0},

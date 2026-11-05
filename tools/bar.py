@@ -72,7 +72,11 @@ _S = person.module("search")
 CUR = getattr(_S, "CURRENCY_SYMBOL", "$")
 TARGET_MIDPOINT = getattr(_S, "BAR_TARGET_MIDPOINT", _S.SALARY_TARGET)
 _NEVER = re.compile(r"(?!x)x")
-EXCLUDED_RULES = list(getattr(_S, "BAR_EXCLUDED", []))
+# A kind of employer the person ruled out once and no longer does: BAR_EXCLUDED is written as
+# patterns, which no page writer can edit, so Your rules' bin names the reason here instead
+# (search.py BAR_EXCLUDED_OFF, a plain list) and the rule stops applying (2026-11-05).
+EXCLUDED_OFF = set(getattr(_S, "BAR_EXCLUDED_OFF", ()) or ())
+EXCLUDED_RULES = [r for r in getattr(_S, "BAR_EXCLUDED", []) if r[1] not in EXCLUDED_OFF]
 DECLINED = dict(getattr(_S, "BAR_DECLINED", {}))
 PUBLIC_PRESTIGE, _PRESTIGE_WHY = getattr(_S, "BAR_PUBLIC_PRESTIGE", (_NEVER, ""))
 PENSIONS, _TARGETS_WHY = getattr(_S, "BAR_PUBLIC_TARGETS", (_NEVER, ""))

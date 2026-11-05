@@ -22,6 +22,23 @@ make sense to somebody whose repo just received it.
 
 ### Changed
 
+- **What a search left out is sorted by the rule that left it out.** Instead of one long
+  list, each rule gets one line in plain words ("Not your field: 5,183", "Needs French:
+  2,100"), with when it last left something out and three examples. Open one to search its
+  jobs and bring any back, look over a few picked from across all of them, or change the rule
+  itself with the pencil.
+- **Your rules, in Settings.** Every rule that shapes your search is listed in one place, each
+  as one sentence: where you search, your field, how recent, pay, languages, employers you
+  turned down, kinds of employer you rule out, and what Claude has learned from you. Each
+  shows when you set it, in your own words where you gave them, and how many jobs it left
+  out in the last 30 days. Change it with the pencil or drop it with the bin.
+- **A rule that may be out of date is mentioned quietly.** If you set a rule over three months
+  ago and it still leaves out a lot, its row asks "Still right?". The Brief mentions it at
+  most once a month, and never as a To do. A rule you set "for now" is asked about after a
+  month.
+- **A job title written in two languages is no longer left out for the second one.** "Data
+  Analyst // Analyste de données" is read as an English title; whether the job needs French
+  is decided from the posting itself.
 - **To do counts cards, not people.** Its badge and summary count the cards due today; a card
   listing several people counts as one and says "2 of 8 done". The summary says how far today
   has gone ("3 of 9 done"), and "All done for today" once nothing is left.

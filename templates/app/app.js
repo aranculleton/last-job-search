@@ -4438,7 +4438,8 @@
     const applying = arr(obj(M().updates).pending).length;
     const notes = [late ? h("p", {"data-k": "brief-late"}, late) : null,
       unsaved ? h("p", {"data-k": "not-saved"}, "Some of your work from the last few days hasn't been saved yet. Claude saves it the next time it works on your search.") : null,
-      applying ? h("p", {"data-k": "applying"}, "Claude is still applying " + nWord(applying, "improvement", "improvements") + " to your search.") : null].filter(Boolean);
+      applying ? h("p", {"data-k": "applying"}, "Claude is still applying " + nWord(applying, "improvement", "improvements") + " to your search.") : null,
+      rulesLine()].filter(Boolean);
     if (notes.length) put(wrap, h("div", {class: "brief-notes small", role: "status"}, notes));
     const grid = h("div", {class: "brief-grid"});
     // ---- Each thing once (2026-11-02). The maintainer: "if we're just saying the same thing
@@ -5242,28 +5243,138 @@
   const ASIDE_TEACHES = {field: "Fewer jobs outside your field from now on.", pay: "Fewer jobs paying like this from now on.",
     place: "Fewer jobs in places like this from now on."};
   function asideWords(w, co) { return ASIDE_TEACHES[w] ? "Set aside. " + ASIDE_TEACHES[w] : "Set aside: " + co; }
+  // What a search left out, one row a rule in plain words, never a flat list (tools/rules_view.py
+  // left_view): its count, when it last cut something and three examples; opened, its rows with
+  // a search box, fifty at a time; "Check a few", some from across the whole of it to look over;
+  // and the pencil, the setting the rule rests on. 13,168 rows under "Title · 5183" was no way to
+  // change a rule or spot a wrong cut (the maintainer, 2026-11-05).
   function filteredBlock() {
     const f = obj(jobsBlock().filtered);
     const groups = arr(f.groups);
     if (!Number(f.count) && !groups.length) return null;
     const st = listState("jobs:filtered");
     const n = Number(f.count) || groups.reduce((a, g) => a + (Number(g.count) || 0), 0);
-    const line = h("p", {class: "fold"}, h("span", {}, n + " left out by the search: "),
+    const line = h("p", {class: "fold"}, h("span", {}, n.toLocaleString(LOC) + " left out by the search: "),
       btn(st.open ? "Hide" : "Show", () => { st.open = !st.open; scheduleRender(); }, {kind: "link", key: "fold:filtered", aria: (st.open ? "Hide " : "Show ") + n + " left out by the search"}));
     if (!st.open) return line;
-    // One posting at a time comes back, by its own id and rev; a whole group is never sent as
-    // a reason the engine cannot find.
+    const held = fullList("filtered");
     return h("div", {class: "filtered"}, line,
-      h("p", {class: "hint"}, "Each was left out for the reason shown. Bring one back and it joins your list."),
-      groups.map((g) => h("section", {class: "f-group", "aria-label": cap1(txt(g.reason))}, h("p", {class: "f-reason"}, cap1(txt(g.reason)), h("span", {class: "f-count"}, " · " + String(g.count))),
-        h("ul", {class: "plain filtered-list"}, arr(g.items).map((it) => {
-          const on = effective(it.id, ["job.bring_back", "filtered.bring_back"]);
-          return h("li", {"data-item": it.id}, h("span", {class: "f-what"}, h("bdi", {}, txt(it.title)), h("span", {class: "muted"}, " · " + txt(it.company) + (it.place ? " · " + txt(it.place) : ""))),
-            btn(on ? "Brought back" : "Bring back", () => { if (!on) act([{item: it.id, action: "job.bring_back", value: {why: "brought back on the page"}, rev: it.rev}], "Brought back: " + txt(it.title)); else undo([on.id]); },
-              {kind: "quiet", small: true, pressed: !!on, key: "fb:" + it.id, aria: "Bring back " + txt(it.title) + " at " + txt(it.company)}),
-            stateLine(it.id, "fb:" + it.id));
-        })),
-        Number(g.count) > arr(g.items).length ? h("p", {class: "hint"}, "And " + (Number(g.count) - arr(g.items).length) + " more left out for the same reason.") : null)));
+      h("p", {class: "hint"}, "Grouped by the rule that left each out. Open one to look through it or bring a job back, or change the rule itself."),
+      h("ul", {class: "plain f-rules"}, groups.map((g) => leftRule(g, held))));
+  }
+  function leftRule(g, held) {
+    const key = "left:" + txt(g.id);
+    const st = listState(key);
+    const name = cap1(txt(g.label || g.reason));
+    const count = Number(g.count) || 0;
+    const facts = [count.toLocaleString(LOC) + " left out", g.last ? "last on " + fmtDay(txt(g.last)) : null].filter(Boolean).join(" · ");
+    const such = arr(g.examples).filter(Boolean).length ? "Such as " + arr(g.examples).filter(Boolean).map(txt).join("; ") + "." : "";
+    const acts = h("div", {class: "card-actions"},
+      btn(st.open ? "Hide them" : "See them", () => { st.open = !st.open; st.check = false; scheduleRender(); }, {kind: "quiet", small: true, key: key + ":see", aria: (st.open ? "Hide the jobs left out as " : "See the jobs left out as ") + name}),
+      count > 1 ? btn(st.check ? "Done checking" : "Check a few", () => { st.check = !st.check; st.open = false; scheduleRender(); }, {kind: "quiet", small: true, key: key + ":check", aria: "Check a few left out as " + name}) : null,
+      g.edit ? pencilBtn("Change this rule", () => askChangeRule(obj(g.edit)), key + ":edit", name) : null);
+    let body = null;
+    if (st.open) {
+      const have = new Set(arr(g.items).map((it) => txt(it.id)));
+      const items = arr(g.items).concat(held.filter((it) => txt(it.g) === txt(g.id) && !have.has(txt(it.id))));
+      body = h("div", {class: "f-rows"},
+        listView(key, {items, name: "left out", one: "job", many: "jobs", bar: true, search: (it) => [it.title, it.company, it.place].map(txt).join(" "), searchLabel: "Title, employer or place",
+          render: leftRow, box: (kids) => h("ul", {class: "plain filtered-list"}, kids), empty: () => empty("Nothing to show", "The next search lists them again.")}),
+        count > items.length ? h("p", {class: "hint"}, "A search here looks through the " + items.length.toLocaleString(LOC) + " newest of " + count.toLocaleString(LOC) + ".") : null);
+    } else if (st.check) {
+      body = h("div", {class: "f-rows"}, h("p", {class: "hint"}, "A few from across all " + count.toLocaleString(LOC) + ". If one is a job you would want, bring it back, and change the rule if it is wrong."),
+        h("ul", {class: "plain filtered-list"}, arr(g.check).map(leftRow)));
+    }
+    return h("li", {class: "f-rule", "data-item": txt(g.id)}, h("p", {class: "f-reason"}, name, h("span", {class: "f-count"}, " · " + facts)),
+      such ? h("p", {class: "small muted"}, such) : null, acts, body);
+  }
+  // One posting at a time comes back, by its own id and rev.
+  function leftRow(it) {
+    const on = effective(it.id, ["job.bring_back", "filtered.bring_back"]);
+    return h("li", {"data-item": it.id}, h("span", {class: "f-what"}, h("bdi", {}, txt(it.title)), h("span", {class: "muted"}, " · " + txt(it.company) + (it.place ? " · " + txt(it.place) : ""))),
+      btn(on ? "Brought back" : "Bring back", () => { if (!on) act([{item: it.id, action: "job.bring_back", value: {why: "brought back on the page"}, rev: it.rev}], "Brought back: " + txt(it.title)); else undo([on.id]); },
+        {kind: "quiet", small: true, pressed: !!on, key: "fb:" + it.id, aria: "Bring back " + txt(it.title) + " at " + txt(it.company)}),
+      stateLine(it.id, "fb:" + it.id));
+  }
+  function pencilBtn(label, fn, key, whose) {
+    const b = btn([icon("tweak"), h("span", {}, label), whose ? h("span", {class: "sr-only"}, ": " + whose) : null], fn, {small: true, kind: "secondary", key});
+    b.setAttribute("title", label);
+    return b;
+  }
+  // The setting a rule rests on, changed in place: the same writers as Settings, Your search.
+  function askChangeRule(edit) {
+    const s = obj(M().search);
+    const sid = txt(s.id) || "search-settings";
+    const what = txt(edit.what);
+    const set = (value, label) => act([{item: sid, action: "search.set", value: Object.assign({what}, value), rev: txt(s.rev) || null}], label);
+    const list = (xs) => arr(xs).map(txt).filter(Boolean);
+    if (what === "roles" || what === "places") {
+      const label = what === "roles" ? "Roles" : "Where";
+      const now = list(what === "roles" ? s.roles : s.places);
+      sheet({title: label, intro: "Untick any to take off, and add new ones. The next search reads them.",
+        fields: [now.length ? {id: "keep", type: "checks", label: "Searched now", options: now.map((x) => [x, x]), value: now} : null,
+          {id: "add", type: "text", long: true, max: 600, label: what === "roles" ? "Add roles" : "Add places", hint: "One a line."}].filter(Boolean),
+        submit: "Save", onSubmit: (v) => {
+          const add = String(v.add || "").split(/\n+/).map((x) => x.trim()).filter((x) => x && !now.includes(x));
+          const remove = now.filter((x) => !arr(v.keep).includes(x));
+          if (add.length || remove.length) set({add, remove}, label + ": " + [add.length ? "add " + add.join(", ") : "", remove.length ? "take off " + remove.join(", ") : ""].filter(Boolean).join("; "));
+        }});
+      return;
+    }
+    if (what === "window") {
+      const now = String(Number(s.window_days) || 14);
+      sheet({title: "How recent", fields: [{id: "v", type: "radio", label: "Leave out jobs posted more than", value: now, options: [["7", "7 days ago"], ["14", "14 days ago"], ["30", "30 days ago"]]}], submit: "Save",
+        onSubmit: (v) => { if (v.v !== now) set({value: Number(v.v)}, "Search window: " + v.v + " days"); }});
+      return;
+    }
+    if (what === "pay") {
+      const pay = obj(s.pay);
+      sheet({title: "Pay", fields: [{id: "v", type: "text", label: "The lowest pay you would take" + (txt(pay.currency) ? ", in " + txt(pay.currency) : ""), hint: "One number, for example 90000 or 90k", value: pay.floor ? String(pay.floor) : "", required: true, max: 20}], submit: "Save",
+        validate: (v) => (payNumber(v.v) === null ? "Write one yearly figure, like 90000 or 90k." : null),
+        onSubmit: (v) => { const n = payNumber(v.v); if (n) set({value: n}, "Pay: " + n.toLocaleString(LOC)); }});
+      return;
+    }
+    if (what === "languages") {
+      const row = arr(obj(M().rules).rows).find((r) => txt(r.id) === "rule~languages") || {};
+      const now = list(row.values);
+      const asked = txt(edit.language);
+      sheet({title: "Languages", intro: asked ? "Jobs that need " + asked + " are left out because you do not work in it. Add it if you do." : "A job that needs a language you do not work in is left out.",
+        fields: [{id: "add", type: "text", label: "A language you work in", value: asked && !now.includes(asked) ? asked : "", max: 40, hint: now.length ? "You work in " + now.join(", ") + " now." : null}], submit: "Save",
+        onSubmit: (v) => { const add = txt(v.add).trim(); if (add) set({add}, "Languages: add " + add); }});
+      return;
+    }
+    // An employer turned down, or a kind ruled out: each is its own row in Your rules.
+    go("settings", {focus: false});
+  }
+  // The Brief's one line about rules to look at again, at most once a month (rules_view
+  // review_line); never a To do. Setting it aside is remembered for the month.
+  function rulesLine() {
+    const r = obj(M().rules);
+    const line = txt(r.brief_line);
+    if (!line || effective("your-rules", ["rules.seen"])) return null;
+    const [said] = line.split(": Your rules");
+    return h("p", {"data-k": "rules-line"}, said + ": ",
+      btn("Your rules", () => go("settings", {focus: false}), {kind: "link", key: "rules-line:go"}), " · ",
+      btn("Not now", () => act([{item: "your-rules", action: "rules.seen", rev: txt(r.rev) || null}], "Not shown again this month"), {kind: "link", key: "rules-line:seen"}));
+  }
+  // Your rules, in Settings: each rule one sentence, the day it was set and the person's own
+  // words, what it left out lately, its pencil and its bin, and a quiet "Still right?" where it
+  // is old and busy (rules_view.still_right). Nothing here asks to be done.
+  function yourRulesRows() {
+    const r = obj(M().rules);
+    return arr(r.rows).filter((x) => !effective(txt(x.id), ["rule.drop"])).map((x) => {
+      const id = txt(x.id);
+      const n = Number(x.left_out);
+      const kept = effective(id, ["rule.keep"]);
+      const value = x.still_right && !kept ? "Still right?" : x.left_out === null || x.left_out === undefined ? null : n ? n.toLocaleString(LOC) + " left out lately" : "None left out lately";
+      const facts = [x.set_on ? "Set " + fmtDay(txt(x.set_on)) : null, x.words ? "In your words: “" + txt(x.words) + "”" : null,
+        x.left_out === null || x.left_out === undefined ? null : (n ? "Left out " + plural(n, "job", "jobs") : "Left out none") + " in the last 30 days"].filter(Boolean);
+      const acts = [x.edit ? pencilBtn("Change", () => askChangeRule(obj(x.edit)), "rule-edit:" + id, txt(x.name)) : null,
+        x.still_right && !kept ? btn("Keep it", () => act([{item: id, action: "rule.keep", rev: txt(x.rev) || null}], "Kept: " + txt(x.name)), {kind: "quiet", small: true, key: "rule-keep:" + id, aria: "Keep it as it is: " + txt(x.name)}) : null,
+        x.drop ? btn("", () => act([{item: id, action: "rule.drop", rev: txt(x.rev) || null}], "Taken off: " + txt(x.name)), {kind: "quiet icon-only", small: true, icon: "bin", key: "rule-bin:" + id, aria: "Take this rule off: " + txt(x.name)}) : null];
+      return infoRow("rule-" + seg(id), txt(x.name), value, foldBody([h("p", {}, txt(x.sentence)), facts.length ? h("p", {class: "small muted"}, facts.join(" · ")) : null,
+        x.still_right && !kept ? h("p", {class: "small"}, "Set a while ago and still leaving out a lot. If it still suits you, keep it; Claude does not ask again for three months.") : null], acts, stateLine(id, "rule:" + id)));
+    });
   }
 
   // ------------------------------------------------------------------ Drafts: applications and messages
@@ -11459,6 +11570,8 @@
       h("span", {class: "set-name"}, "Your profile", h("span", {class: "hint block"}, profileSummary())), h("span", {class: "set-go", "aria-hidden": "true"}, "›"))].concat(pick(["time_zone"]).map((x) => settingRow(x)))));
     const search = searchRows().filter(Boolean);
     if (search.length) put(wrap, settingsGroup("Your search", search));
+    const yours = yourRulesRows();
+    if (yours.length) put(wrap, settingsGroup("Your rules", yours));
     // The phone notification only where the brief's own run sends it (model.schedule.push_here).
     put(wrap, settingsGroup("Your brief", briefRows().concat(pick(obj(M().schedule).push_here ? ["brief_push", "prep_days"] : ["prep_days"]).map(settingRow))));
     const cal = pick(["calendar_reminder"]).map(settingRow);

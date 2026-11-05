@@ -442,7 +442,11 @@ def declined_now() -> dict:
         got = profile_set.get("search.py", "BAR_DECLINED")
     except Exception:  # noqa: BLE001  no profile, or no such setting: none
         return {}
-    return dict(got) if isinstance(got, dict) else {}
+    # Not set at all is profile_set.MISSING, itself a dict ({"missing": True}): read as the
+    # setting, it turned down an employer called Missing and named it in Your rules.
+    if got is profile_set.MISSING or not isinstance(got, dict):
+        return {}
+    return {str(k): str(v) for k, v in got.items() if isinstance(v, str)}
 
 
 def family(name: str) -> set:

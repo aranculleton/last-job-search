@@ -2014,6 +2014,9 @@ SAFE_DEFAULTS: dict[str, str] = {
     "person.json:documents.style": "none: the colour comes from documents.styles or is "
                                    "black, as before",
     "search.JOB_AGE_DAYS": "14, the search window run_round.py used before it was a setting",
+    # Written only by Your rules' bin on a kind of employer ruled out (tools/app_actions.py
+    # rule.drop, 2026-11-05); with none, every BAR_EXCLUDED rule applies, as before.
+    "search.BAR_EXCLUDED_OFF": "[]: every kind of employer the profile rules out stays ruled out",
     # Read in the browser a chat has, with no question first, since 2026-10-25: the question
     # and its warnings kept a person's computer chat from reading at all.
     "networking.PROFILE_READS": "\"browser\": the profiles of the people a run writes to are "

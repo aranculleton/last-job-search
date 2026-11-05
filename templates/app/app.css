@@ -431,6 +431,11 @@ details.more[open] > .more-btn::before { transform: rotate(-135deg) translateY(-
 .filtered-list { display: grid; gap: 4px; }
 .filtered-list li { display: grid; grid-template-columns: minmax(0, 1fr) auto auto; align-items: center; gap: 4px 12px; padding: 8px 0; border-top: 1px solid var(--line); }
 .filtered-list .state { grid-column: 1 / -1; }
+.f-rules { display: grid; gap: 0; }
+.f-rules > .f-rule { padding: 12px 0; border-top: 1px solid var(--line); }
+.f-rule .f-reason { font-weight: 600; margin-bottom: 2px; }
+.f-rule .card-actions { margin-top: 8px; }
+.f-rows { margin-top: 8px; }
 .f-count { font: 600 var(--t-sm) var(--font-data); color: var(--muted); }
 
 /* ------------------------------------------------------------------ drafts */

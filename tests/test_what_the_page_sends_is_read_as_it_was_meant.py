@@ -146,9 +146,9 @@ def test_the_whole_pages_rev_is_never_compared_with_an_items(search):
 
 def test_bring_back_on_a_filtered_group_brings_back_every_posting_in_it(search):
     m = search.model()
-    group = next(g for g in m["jobs"]["filtered"]["groups"] if g["reason"] == "location")
-    assert group["id"] == "filtered~location" and group["rev"]
-    aid = search.act("job.bring_back", "filtered~location", value="location",
+    group = next(g for g in m["jobs"]["filtered"]["groups"] if g["kind"] == "place")
+    assert group["id"] == "filtered~place" and group["rev"]
+    aid = search.act("job.bring_back", "filtered~place", value="location",
                      rev=group["rev"])
     got = search.apply()
     assert got["ok"] == [aid], search.receipt(aid)
@@ -163,7 +163,7 @@ def test_bring_back_on_a_filtered_group_brings_back_every_posting_in_it(search):
 
 def test_a_group_sent_with_its_own_rev_applies_too(search):
     group = next(g for g in search.model()["jobs"]["filtered"]["groups"]
-                 if g["reason"] == "screen")
+                 if g["kind"] == "credential")
     aid = search.act("job.bring_back", group["id"], rev=group["rev"])
     assert search.apply()["ok"] == [aid], search.receipt(aid)
     assert "Dovecote Freight" in [r["company"] for r in search.model()["jobs"]["rows"]
