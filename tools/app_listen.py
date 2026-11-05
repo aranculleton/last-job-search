@@ -100,19 +100,21 @@ SAY_NEW_ADDRESS = "Your page has a new address: {url}"
 # update queued for a listener last heard from 12 hours before waited until the person asked
 # in the chat whether it was happening (2026-10-30).
 UPDATE_QUIET_S = 60 * 60
-# A chat re-reads its whole history at every wake, so one answering the page for days grew
-# dearer with every tap. Once it has answered for this long, at a quiet moment (nothing queued
-# or running), it starts a fresh helper, which takes the page on its own start (the
-# maintainer, 2026-10-30). Until the new one has taken it, the old one still answers: a fresh
-# chat that never starts changes nothing.
+# How long the page's renewal rule waited, by the clock alone, before 4.10.2: kept for the
+# check-in's own look (`role`), which asks the page again after a cloud chat seen this long ago.
 RENEW_S = 20 * 3600
-# A helper whose history has grown by more than this since its first turn answers slowly:
-# one answering the page since three days before re-read some 535,000 tokens a step, and a
-# one-line LinkedIn reply took minutes that a fresh chat does at once (the maintainer,
-# 2026-11-03: "the entire app is so unnecessarily slow"). Past it, the helper hands over at
-# its next quiet moment. Growth, not size: a fresh chat already starts near 100,000, and a
-# size of 150,000 would have started a new helper about every hour (the release review).
-RENEW_TOKENS = 200_000
+# A helper renews only near the real limit of what a chat can hold (the maintainer,
+# 2026-11-05). The rule before, a day by the clock or a history grown by 200,000 tokens, fired
+# within minutes of a new helper's start: its start-up alone (every page collection and the
+# big screen documents) grew it that far, so each new helper renewed at once and chats
+# multiplied, three live at once. This is the history's whole size, the last turn's input.
+RENEW_TOKENS = 700_000
+# ... or after a long gap with nothing asked of it: a day since it last answered.
+RENEW_IDLE_S = 24 * 3600
+# Never in its first hour on the page, and never while the hand-over to it is still open
+# (the helper it took over from not put away yet): a chat that took the page at 17:01
+# renewed at 17:19, and three chats were live (the maintainer's copy, 2026-11-05).
+RENEW_MIN_S = 60 * 60
 # A fresh helper asked for and never come: asked for again after this long, while this chat
 # still answers the page. It was a whole day, from the moment the call was printed, made or
 # not (engine audit, 2026-11-03).
@@ -217,8 +219,11 @@ def _remember(listener: dict | None, now: dt.datetime, confirmed: bool = True) -
     sent: until a read of the page shows who won, it decides nothing for another chat."""
     got = seen()
     if listener and listener.get("chat"):
+        # The hand-over fields too: a folder read before this chat took the page shows the
+        # chat it took from, and the tidy-up reads what was taken from here (tidy._listener).
         got["listener"] = {k: listener.get(k) for k in ("chat", "title", "kind", "since",
-                                                         "helper")}
+                                                         "helper", "took_from",
+                                                         "took_from_helper")}
         got["listener"].update(seen_at=_stamp(now), confirmed=confirmed)
     else:
         got.pop("listener", None)
@@ -512,8 +517,9 @@ def renew_line(renew: dict) -> str:
     """What the listener does when its day is up: start its fresh helper, unasked, once this
     chat's own work is saved (a fresh helper started mid-brief took the page while the brief
     was still saving, the stranger audit, X-27)."""
-    return ("listen: renew: this chat has answered the page for a day (or its history has "
-            "grown long), and has no small job of its own in hand. Once this turn's work has "
+    return ("listen: renew: this chat's history is near the most a chat can hold (or it has "
+            "had nothing to answer for a day), and it has no small job of its own in hand. "
+            "Once this turn's work has "
             "landed (python3 tools/land.py says ready, or there was nothing to save), start "
             "its fresh helper, unasked and saying nothing to the person: create_session "
             + json.dumps(renew, ensure_ascii=False) +
@@ -642,8 +648,21 @@ def view_renewal(db: dict, chat: str, now: dt.datetime) -> list[str]:
 def context_tokens() -> int:
     """How much this chat's history has grown since its first turn: its last turn's input
     less its first's, from the newest session file Claude Code keeps under ~/.claude/projects
-    (CLAUDE_CONFIG_DIR where set). 0 when there is none or it cannot be read: then only the
-    day decides."""
+    (CLAUDE_CONFIG_DIR where set). 0 when there is none or it cannot be read."""
+    first, last = _turns()
+    return max(0, (last or 0) - (first or 0)) if last is not None else 0
+
+
+def history_tokens() -> int:
+    """This chat's whole history as its last turn read it (its input, cached or not), from
+    the same file. 0 when there is none or it cannot be read: then only the idle gap renews."""
+    _first, last = _turns()
+    return last or 0
+
+
+def _turns() -> tuple:
+    """(the first turn's input, the last turn's) from the newest session file, or (None,
+    None)."""
     root = os.path.join(os.environ.get("CLAUDE_CONFIG_DIR") or os.path.expanduser("~/.claude"),
                         "projects")
     try:
@@ -652,14 +671,14 @@ def context_tokens() -> int:
                  for f in os.listdir(os.path.join(root, d)) if f.endswith(".jsonl")]
         newest = max(files, key=os.path.getmtime) if files else ""
         if not newest:
-            return 0
+            return None, None
         size = os.path.getsize(newest)
         with open(newest, "rb") as fh:
             head = fh.read(min(size, 262144)).decode("utf-8", "replace")
             fh.seek(max(0, size - 262144))
             tail = fh.read().decode("utf-8", "replace")
     except OSError:
-        return 0
+        return None, None
 
     def used(lines):
         for line in lines:
@@ -672,8 +691,7 @@ def context_tokens() -> int:
             except (ValueError, KeyError, TypeError):
                 continue
         return None
-    last, first = used(reversed(tail.splitlines())), used(head.splitlines())
-    return max(0, (last or 0) - (first or 0)) if last is not None else 0
+    return used(head.splitlines()), used(reversed(tail.splitlines()))
 
 
 # A republish reads the page's code into the chat, whole, file by file (some 200 KB): a new
@@ -727,9 +745,11 @@ def grown_tokens(chat: str, now: dt.datetime) -> int:
 
 
 def renewal(rec: dict, db: dict, chat: str, now: dt.datetime) -> dict | None:
-    """The create_session call for a fresh helper, or None. Only a cloud chat answering the
-    page for RENEW_S (or grown by RENEW_TOKENS), with no small work of its own in hand, and
-    not asked for in the last RENEW_RETRY_S. Work waiting in the queue moves with the page:
+    """The create_session call for a fresh helper, or None. Only a cloud chat whose history
+    is near the limit (RENEW_TOKENS) or that has had nothing to answer for RENEW_IDLE_S, on
+    the page for RENEW_MIN_S at least, its own hand-over closed (the helper it took over from
+    put away), with no small work of its own in hand, and not asked for in the last
+    RENEW_RETRY_S. Work waiting in the queue moves with the page:
     the new helper takes it. Waiting on it kept one helper answering for three days, against
     a day, while a draft sat queued (engine audit, 2026-11-03); a big job runs in a chat of
     its own, whichever chat claimed it."""
@@ -742,10 +762,17 @@ def renewal(rec: dict, db: dict, chat: str, now: dt.datetime) -> dict | None:
     if not rec.get("helper"):
         return None
     since = _time(rec.get("since"))
-    if since is None:
+    if since is None or (now - since).total_seconds() < RENEW_MIN_S:
         return None
-    big = grown_tokens(chat, now) >= RENEW_TOKENS     # a republish's reads left out
-    if (now - since).total_seconds() < RENEW_S and not big:
+    try:
+        import tidy
+        if tidy.retiring(rec, now):
+            return None                     # two chats already: never a third
+    except Exception:  # noqa: BLE001  no record of what was put away: the rest decides
+        pass
+    answered = _time(rec.get("answered_at")) or since
+    idle = (now - answered).total_seconds() >= RENEW_IDLE_S
+    if not idle and history_tokens() < RENEW_TOKENS:
         return None
     work = db.get("work") or {}
     for doc in work.values():

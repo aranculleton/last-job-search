@@ -95,7 +95,7 @@ only the person can, in theirs.
 - **In a cloud chat** with none, `brief` prints the calls to make, in order: `create_trigger`
   bound to the chat that answers the page, or with no page this chat (`persistent_session_id`),
   `CRON_TZ=<their zone> 38 7 * * *` (5:38 where 7:38 falls in the scheduler's slow hours), the
-  stub as its prompt, `connectors: []`; and a one-off `run_once_at` first brief bound to the
+  stub as its prompt, and no `connectors` field (some organizations refuse it); and a one-off `run_once_at` first brief bound to the
   same chat, never `fire_trigger`. Then `routines.py record`, and land it. No chat is ever
   made for it, and never a task that starts a new chat each run (it gets no copy of the
   files): where this chat's id cannot be read, `brief` says to ask `get_session` (no

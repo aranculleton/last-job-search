@@ -729,3 +729,29 @@ def test_the_days_check_is_kept_by_one_clock_whoever_writes_it():
     assert sync_app._stale_day("", None)
 
 
+
+
+def test_the_app_watch_runs_once_a_day_not_on_every_sync(tmp_path, monkeypatch):
+    """The app watch (the maintainer's own repo only) builds the denylist from the whole history
+    of the state files and reads every branch of the app; run on every sync, a `--on` run on a
+    day with no update took over two minutes (the maintainer's copy, 2026-11-05). Once a day,
+    and again after an update; anyone else's repo starts nothing."""
+    sys.path.insert(0, os.path.join(ROOT, "tools"))
+    import sync_app
+    calls = []
+
+    def fake_run(cmd, **kw):
+        calls.append(cmd)
+        return subprocess.CompletedProcess(cmd, 0, stdout="App watch: clean (nothing new).\n",
+                                           stderr="")
+    monkeypatch.setattr(sync_app.subprocess, "run", fake_run)
+    monkeypatch.setattr(sync_app, "_git_dirs", lambda root: (str(tmp_path), str(tmp_path)))
+    monkeypatch.setattr(sync_app, "maintainers", lambda: False)
+    sync_app.app_watch()
+    assert calls == []                                   # not the maintainer's: nothing started
+    monkeypatch.setattr(sync_app, "maintainers", lambda: True)
+    sync_app.app_watch()
+    sync_app.app_watch()
+    assert len(calls) == 1
+    sync_app.app_watch(landed=True)
+    assert len(calls) == 2

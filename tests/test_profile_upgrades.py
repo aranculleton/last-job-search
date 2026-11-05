@@ -513,6 +513,20 @@ def test_the_sync_block_splits_what_claude_does_from_what_needs_you(profile):
     assert "[linkedin-plan]" in yours and "Premium" in yours
 
 
+def test_the_sync_says_where_questions_go_as_start_does(profile):
+    """Start told the page's helper its questions go on the page, as To do cards, never in
+    its chat; the update's own output told it to ask them at the end of its reply (the
+    maintainer's copy, 2026-11-05). Both now say the same."""
+    import app_setup
+    _drop(profile, "networking", "LINKEDIN_PLAN")
+    block = U.block(U.pending())
+    claude = block[block.index("  Claude: "):]
+    assert "To do card" in block and "an answer there counts" in claude
+    assert "The chat that answers the page asks none of them in its chat" in claude
+    assert "At the end of your reply ask" not in claude
+    assert "To do card" in app_setup.ASK_ON_PAGE and "none of them in this chat" in app_setup.ASK_ON_PAGE
+
+
 def _read(*parts):
     return open(os.path.join(ROOT, *parts), encoding="utf-8").read()
 

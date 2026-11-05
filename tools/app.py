@@ -1239,15 +1239,18 @@ READ_FIRST = ("listen: this page was made by an older version of the app, and it
               "person.")
 PRUNE_SAID = ("upkeep: old finished records the page no longer shows are deleted: send "
               "these batches after this wake's work, asking nobody:")
+# How the listings reach the tidy-up: in one heredoc, as the tools returned them, never typed
+# into files first (the maintainer's copy, 2026-11-05).
+TIDY_GIVE = ("list_sessions (mine: true) and list_triggers, every page; then python3 "
+             "tools/tidy.py plan --dump \"$D\" --stdin with one JSON object on standard input "
+             "(a quoted heredoc): {\"sessions\": <what list_sessions returned>, \"triggers\": "
+             "<what list_triggers returned>}, each page as it came (a list of them for several), "
+             "no file; do what it prints.")
 TIDY_SAID = ("tidy: once today, after this wake's work and asking nobody: the app's own "
-             "old chats (tools/tidy.py). list_sessions (mine: true) and list_triggers, every "
-             "page, each saved to a file in the scratchpad; python3 tools/tidy.py plan "
-             "--dump \"$D\" --sessions <each> --triggers <each>; do what it prints.")
+             "old chats (tools/tidy.py). " + TIDY_GIVE)
 TIDY_NOW = ("tidy: now, once the batches above are sent, asking nobody: the app's chat this one "
             "took the page over from is put away as soon as its work is saved, the brief "
-            "moved here first (tools/tidy.py). list_sessions (mine: true) and list_triggers, "
-            "every page, each saved to a file in the scratchpad; python3 tools/tidy.py plan "
-            "--dump \"$D\" --sessions <each> --triggers <each>; do what it prints.")
+            "moved here first (tools/tidy.py). " + TIDY_GIVE)
 
 
 def cmd_listen(a) -> int:
@@ -1295,6 +1298,13 @@ def cmd_listen(a) -> int:
 # the batches, in the order they must be sent, and the one thing left to do.
 
 WAKE_STATE = ".wake.json"            # in the wake's folder: how far this wake has got
+# Small work done here that one wake takes together, each claimed in the same pass: one talk
+# a wake, each followed by a new read, took ten questions about 15 minutes and some 30 reads
+# (the maintainer's copy, 2026-11-05). Never an update or a republish (they change the code or
+# the page itself) and never a brief.
+BATCH_HERE = ("talk", "reply", "follow_up", "tweak", "evaluate", "own_profile", "form_answers",
+              "files", "profile", "general_resume", "research")
+BATCH_MAX = 10
 WAKE_UPDATED = "LJS_WAKE_UPDATED_FROM"
 WAKE_SAID = "LJS_WAKE_SYNC_SAID"
 # What a wake reads, once: steps 1 to 3's records, and the page's view (`screen`), `meta` and
@@ -1423,6 +1433,7 @@ def cmd_wake(a) -> int:
     after: list[str] = list(st.get("after") or [])
     tidy_due = bool(st.get("tidy"))
     applied_any = False
+    copy_now = False             # this run applies taps that change the copy, claimed before
 
     if phase == "new":
         if os.environ.get(WAKE_UPDATED):
@@ -1498,11 +1509,19 @@ def cmd_wake(a) -> int:
         todo = app_actions.pending(page_db.load(a.dump), chat, now)
         phase = "next"
         if todo:
-            claim = app_actions.claim(a.dump, chat, now, os.path.join(rd, "taps"))
-            sends += [(p, "taps", True) for p in claim["batches"]]
+            # Only what is not this chat's already: a tap it claimed on an earlier wake (one
+            # that stopped before applying it), or applied whose receipt never landed, is
+            # applied or receipted now, never claimed again (the maintainer's copy, 2026-11-05).
+            need = app_actions.to_claim(todo, chat, now)
+            if need:
+                claim = app_actions.claim(a.dump, chat, now, os.path.join(rd, "taps"),
+                                          only=need)
+                sends += [(p, "taps", True) for p in claim["batches"]]
             phase = "apply"
-            if any(str(act.get("action") or "") not in app_actions.DB_ONLY
-                   for _aid, act, _v in todo):
+            changes = [aid for aid, act, _v in todo
+                       if str(act.get("action") or "") not in app_actions.DB_ONLY]
+            copy_now = bool(changes)
+            if set(changes) & set(need):
                 # A tap that changes the copy waits for its claim: if another chat holds it,
                 # nothing here may have changed.
                 _save_wake_state(a.dump, {"phase": "claimed", "runs": run, "after": after,
@@ -1518,7 +1537,7 @@ def cmd_wake(a) -> int:
     # Everything from the check-in on goes as one batch, unless this run changed the copy: a
     # batch refused after that would leave its receipts unsent, and a new read would apply
     # the taps again from a folder without this one's ledger.
-    joined = st.get("phase") is None
+    joined = st.get("phase") is None and not copy_now
 
     if phase == "apply":
         got = app_actions.apply_dir(a.dump, chat, now, os.path.join(rd, "apply"))
@@ -1574,16 +1593,40 @@ def cmd_wake(a) -> int:
         # Claimed, as it will be once sent: run again over this folder, `next` takes the one
         # after it, pinned to the versions this claim leaves.
         page_db.keep_landed(a.dump, chosen["batches"])
+        also: list[dict] = []
+
+        def small(c):
+            return bool(c) and c.get("run") == "here" and c.get("kind") in BATCH_HERE \
+                and not c.get("heavy")
+        if small(chosen):
+            # Every other small item waiting is taken in this same pass, each its own claim
+            # pinned to the versions the one before leaves (BATCH_HERE).
+            while len(also) < BATCH_MAX - 1:
+                nxt = choose(page_db.load(a.dump), chat, kind, now, on=a.on,
+                             no_sessions=a.no_sessions,
+                             claim_out=os.path.join(rd, f"work{len(also) + 2}"))
+                if not small(nxt):
+                    break
+                sends += [(p, "work", False) for p in nxt["batches"]]
+                page_db.keep_landed(a.dump, nxt["batches"])
+                also.append(nxt)
         more = choose(page_db.load(a.dump), chat, kind, now, on=a.on,
                       no_sessions=a.no_sessions) is not None
         shown = dict(chosen)
+
+        def with_item(c):
+            item = ((db.get("work") or {}).get(c["work"]) or {}).get("data") or {}
+            return dict(c, **{k: item[k] for k in ("args", "answers", "note") if k in item})
         if chosen.get("run") == "here":
-            item = ((db.get("work") or {}).get(chosen["work"]) or {}).get("data") or {}
-            shown.update({k: item[k] for k in ("args", "answers", "note") if k in item})
+            shown = with_item(chosen)
             # Finishing it writes the item, its locks and this chat's heartbeat, which this
             # folder does not see: the next item is taken from a new read.
-            then.append(f"then: once its claim is accepted, do it here, now, as step 4's row "
-                        f"says for a {chosen['kind']}. Its claim marks it running at its first "
+            what = (f"do it here, now, as step 4's row says for a {chosen['kind']}" if not also
+                    else f"do each here, now, in order (the one under next:, then each also:), "
+                         f"as step 4's row says for its kind; they are {len(also) + 1} items, "
+                         "every one claimed in this pass")
+            then.append(f"then: once {'its claim is' if not also else 'their claims are'} "
+                        f"accepted, {what}. Its claim marks it running at its first "
                         "stage, so no progress pin follows; finish it as step 5 says." + (
                             " More is waiting: then read again into a new folder and wake "
                             "once more (step 3 again)." if more else ""))
@@ -1596,6 +1639,8 @@ def cmd_wake(a) -> int:
                             " More is waiting: then run this again with the same folder (step "
                             "3 again): " + _again(a, chat) if more else ""))
         then.append("next: " + _dump(shown).rstrip("\n"))
+        for c in also:
+            then.append("also: " + _dump(with_item(c)).rstrip("\n"))
     else:
         then.append("then: nothing else is waiting for this chat. " + (
             "Commit what the taps changed (python3 tools/save_state.py) with this wake's "

@@ -2217,7 +2217,7 @@ def block(rows: list[tuple[Upgrade, str]]) -> str:
         for u, _why in alone:
             lines.append(f"    - {u.gives[:1].upper() + u.gives[1:]}.  [{u.id}]")
     if yours:
-        lines.append("  These need you: one short question each, at the end of a session:")
+        lines.append("  These need you: one short question each, on the page as a To do card:")
         for u, why in yours:
             lines.append(f"    - {u.ask or why}  [{u.id}]")
             if why.startswith("you said no"):
@@ -2229,9 +2229,15 @@ def block(rows: list[tuple[Upgrade, str]]) -> str:
                  + ("start one background agent now (model sonnet) that follows "
                     ".claude/commands/upgrade.md, and carry on with the person's request. "
                     if alone else "")
-                 + "Never show an id, a version or the word upgrade. At the end of your reply "
-                 + ("give one line per change it made, then " if alone else "")
-                 + "ask at most three questions, each as written, short and alone. Only a yes "
+                 + "Never show an id, a version or the word upgrade. "
+                 + ("At the end of your reply give one line per change it made. " if alone else "")
+                 # As start says it (app_setup.ASK_ON_PAGE, ASK_IN_CHAT): the sync's own words
+                 # told the page's helper to ask in its chat, which nobody reads, while its
+                 # start said the page asks them (the maintainer's copy, 2026-11-05).
+                 + "Each question is on the page as a To do card, and an answer there counts. "
+                 "The chat that answers the page asks none of them in its chat; a chat the "
+                 "person writes in asks at most three, at the end of its reply, each as "
+                 "written, short and alone. Only a yes "
                  "brings its steps and only \"why?\" its reason (`--plan` has both); a no gets "
                  # The whole command: printed under the sync's own output, `--no <id>` alone
                  # read as a flag of sync_app.py and failed (the maintainer's live run,

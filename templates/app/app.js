@@ -1675,7 +1675,12 @@
         ids.every((id) => arr(bell.ids).includes(id)) &&
         arr(bell.ids).every((id) => { const w = workDoc(id); return w && w.status === "queued"; })) return Promise.resolve("coalesced");
     const text = "[app] [" + (tag || "work") + ":" + ids.join(",") + "]";
-    const thread = bell ? txt(bell.thread) : "";
+    // The thread is the chat's that answered when it was made: a new chat that took the page
+    // sat idle while seven taps went to the thread the one before it had resolved (the
+    // maintainer's copy, 2026-11-05). Once another chat answers, a ring starts a fresh thread.
+    const answering = txt(obj(S.listener).chat);
+    const sameChat = !answering || txt(obj(bell).listener) === answering;
+    const thread = bell && (sameChat || !S.bellAnchor) ? txt(bell.thread) : "";
     for (const id of ids) S.tried.set(id, now());
     S.lastTry = now();
     const send = (where) => { try { return Promise.resolve(c.sendToClaude(Object.assign({text}, where))); } catch (e) { return Promise.reject(e); } };
@@ -1688,6 +1693,7 @@
       if (tag !== "act") for (const id of ids) { rung[id] = at; S.rang.set(id, now()); }
       const keep = Object.keys(rung).slice(-50);
       const rec = {rung_at: at, tab: S.tab, ids: ids.slice(0, 50), thread: (res && res.threadId) || used || null,
+        listener: answering || null,
         rung: Object.fromEntries(keep.map((k) => [k, rung[k]])), wakes: arr(obj(S.bell).wakes).slice(-7), woke_for: txt(obj(S.bell).woke_for) || null};
       S.bell = rec;
       const db = S.caps.db;

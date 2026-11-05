@@ -78,6 +78,49 @@ make sense to somebody whose repo just received it.
   helper a hand-over replaced was refused while it was still finishing, and the page chat said
   "you can archive it yourself"; it now says nothing and tries again at that check-in.
 
+- **Moving your brief or setting it up no longer fails in some organizations.** The steps
+  Claude follows to set up or move a scheduled task named an empty list of connected accounts,
+  which some organizations refuse outright, so the step failed as written. It is left out now.
+
+- **Your brief stays with the chat that answers your page.** Right after a new page chat took
+  over, its first tidy-up still went by what it had read a moment before the take-over, so it
+  moved your brief into the old chat it was replacing. It now goes by the take-over itself.
+
+- **A tap on the page is done once, and its tick shows.** When the page chat stopped right after
+  taking a tap (such as "Not this person"), each later visit took it again without doing it, so
+  it never showed as done; one done whose tick was lost was taken again too. Now a tap the
+  chat already holds is done on its next visit, and one already done only gets its tick.
+
+- **Questions after an update wait for you on the page.** The update's own instructions told
+  your page chat to ask its questions in a chat nobody reads, while its start said they go on
+  the page; both now say the page asks each as a To do card.
+
+- **One page chat, not three.** A new page chat's start alone made it look too long, so it
+  replaced itself within minutes and chats piled up. It now hands over only when it is truly
+  near full, or after a day with nothing to do, never in its first hour and never while the
+  chat before it is still there.
+- **The page chat a new one replaced goes at once.** It was kept for half an hour after every
+  hand-over, and your brief waited in it; now it is put away as soon as it has stopped, and
+  the brief moves to the new chat straight away.
+
+- **A new page chat hears your taps.** After one page chat took over from another, your taps
+  still went to the old chat's finished conversation, and nothing happened. The page now starts
+  a fresh one for the chat that answers it.
+
+- **Several questions on the page are answered in one go.** The page chat took one question at
+  a time and looked at the whole page again before each, so ten questions took about a quarter
+  of an hour. It now takes every small one waiting together.
+
+- **Tidying old chats takes fewer steps.** The page chat had to copy the list of chats and
+  scheduled tasks into files by hand before it could tidy; it now hands them over in one step.
+
+- **The page chat stays quick for longer.** It no longer shows itself the lists of everything it
+  read from your page, which made every later step slower.
+
+- **The app's own update check is quicker.** On the app maintainer's copy it re-checked the
+  whole public app on every run, which took over two minutes; it now does that once a day, and
+  again after an update.
+
 ## [4.10.1] - 2026-11-05
 
 ### Fixed

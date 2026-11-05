@@ -188,7 +188,7 @@ def test_a_job_that_stopped_twice_is_ended_at_the_check_in(tmp_path, monkeypatch
     """Engine 4: `search~x` running, attempt 2, lease out at 12:00: at 18:00 nothing took it,
     nothing failed it, the page refused every new search, and the renewal never fired."""
     monkeypatch.setattr(app_listen, "chat_kind", lambda: "cloud")
-    monkeypatch.setattr(app_listen, "context_tokens", lambda: 0)
+    monkeypatch.setattr(app_listen, "history_tokens", lambda: 0)
     monkeypatch.setattr(app_listen, "_save_seen", lambda data: None)
     monkeypatch.setattr(app_listen, "seen", lambda: {})
     stuck = {"kind": "search", "status": "running", "attempt": 2, "lease_until": S("12:00"),
@@ -313,7 +313,7 @@ def test_the_helper_renews_with_work_waiting_and_asks_again_if_none_came(monkeyp
     blocked the renewal; and `renewed_at` was kept before the new chat was ever made."""
     store = {}
     monkeypatch.setattr(app_listen, "chat_kind", lambda: "cloud")
-    monkeypatch.setattr(app_listen, "context_tokens", lambda: 0)
+    monkeypatch.setattr(app_listen, "history_tokens", lambda: 0)
     monkeypatch.setattr(app_listen, "seen", lambda: dict(store))
     monkeypatch.setattr(app_listen, "_save_seen", lambda data: store.update(data))
     import app_setup

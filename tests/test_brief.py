@@ -349,7 +349,7 @@ def test_what_the_sync_printed_is_decided_into_lines(tmp_path):
                    "Improvements waiting for your search (2):\n"
                    "  Claude applies these itself, in the background. Nothing for you to do:\n"
                    "    - Your job boards rebuilt.  [boards-v4]\n"
-                   "  These need you: one short question each, at the end of a session:\n"
+                   "  These need you: one short question each, on the page as a To do card:\n"
                    "    - Shall I set your brief up the new way?  [routines]\n"
                    "  Claude: start a background agent now.\n"
                    "Claude, not for the person: their own tests, 2 now fail after this update.\n"

@@ -466,9 +466,14 @@ def test_a_brief_left_in_the_helper_a_hand_over_replaced_moves_and_that_helper_g
     got = _live_run(OLD)
     assert [c["tool"] for c in got["brief"] if "tool" in c] == ["create_trigger", "delete_trigger"]
     assert {c["id"]: c["why"] for c in got["keep"]}[OLD] == "it is this chat"
-    # Used moments ago, it is kept, and so is the brief in it, until a later tidy-up.
+    # Used moments ago, with no status read for it, it is kept until a later tidy-up; the
+    # brief in it is not: it moves into the live helper in this same pass (the maintainer's
+    # copy, 2026-11-05: left there, it waited half an hour for a check-in).
     soon = _live_run(LIVE, now=dt.datetime(2026, 11, 5, 8, 50, tzinfo=dt.timezone.utc))
-    assert OLD not in {c["id"] for c in soon["archive"]} and soon["brief"] == []
+    assert OLD not in {c["id"] for c in soon["archive"]}
+    assert [c.get("tool") or "run" for c in soon["brief"]] == [
+        "create_trigger", "run", "delete_trigger"]
+    assert soon["brief"][0]["args"]["persistent_session_id"] == LIVE
 
 
 def test_the_live_helper_asks_for_its_own_check_in_while_the_old_one_finishes(copy):
@@ -491,3 +496,33 @@ def test_the_live_helper_asks_for_its_own_check_in_while_the_old_one_finishes(co
     tidy._mark_checked("2026-11-05")                             # the day's mark keeps it
     assert not tidy.recheck_due(soon + dt.timedelta(minutes=10))
     assert tidy.RECHECK_MIN * 60 >= tidy.RETIRE_AGAIN_S          # due again by the check-in
+
+
+def test_a_new_helper_tidies_what_earlier_hand_overs_left_without_their_check_in():
+    """A check-in scheduled into a helper fired after that helper had handed the page on again
+    (18 minutes on), so it could not tidy, and the "finishing up" chat and the brief bound to
+    it waited on the newest helper (the maintainer's copy, 2026-11-05). The newest helper's own
+    take-over tidy-up puts away every old helper at rest, not only the one it took over from,
+    and moves the brief out of whichever holds it; a check-in in a chat that no longer answers
+    does nothing."""
+    first, second = "session_EXAMPLEFIRSTHELPER", "session_EXAMPLESECONDHELPER"
+    seed = {"origin": "claude_code_mcp_seed"}
+    chats = [dict(_chat(first, "Job search page (finishing up)", updated="2026-11-05T08:00:00Z"),
+                  **seed),
+             dict(_chat(second, "Job search page (finishing up)", updated="2026-11-05T08:30:00Z"),
+                  **seed),
+             dict(_chat(LIVE, "Job search page", updated="2026-11-05T08:40:00Z"), **seed)]
+    reg = {"setup": "chat_per_briefing", "timezone": "Europe/London", "routines": [
+        {"key": "morning_brief", "name": "Job search: brief", "trigger_id": "trig_EXAMPLEFIRST",
+         "cron": "CRON_TZ=Europe/London 56 7 * * *", "prompt_file": routines.BRIEF_FILE,
+         "chat": {"session_id": first}}]}
+    triggers = [{"id": "trig_EXAMPLEFIRST", "persistent_session_id": first, "enabled": True}]
+    listener = {"chat": LIVE, "helper": True, "since": "2026-11-05T08:35:00Z",
+                "took_from": second, "took_from_helper": True}
+    info = {c["id"]: dict(_detail(c["id"], c["title"]), status="idle") for c in chats}
+    got = tidy.plan(chats, triggers, info, reg, listener, LIVE, REPO, TODAY, set(), set(), set(),
+                    now=dt.datetime(2026, 11, 5, 8, 41, tzinfo=dt.timezone.utc))
+    assert got["ask"] == []
+    assert {c["id"] for c in got["archive"]} == {first, second}
+    assert got["brief"][0]["args"]["persistent_session_id"] == LIVE
+    assert "another chat answers the page, do nothing else" in tidy.RECHECK

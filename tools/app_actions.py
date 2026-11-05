@@ -82,6 +82,8 @@ import person  # noqa: E402
 
 LEDGER = "applied.json"
 CLAIM_S = 10 * 60
+# A claim of this chat's own with at least this long left is applied without claiming again.
+CLAIM_MARGIN_S = 2 * 60
 
 # name: (the item kinds it acts on, the writer, its undo). One table: the docstring above,
 # the receipts and the tests all read this.
@@ -3779,11 +3781,35 @@ def pending(db: dict, chat: str, now: dt.datetime) -> list[tuple[str, dict, int 
     return [(aid, doc["data"], doc["version"]) for _, aid, doc in sorted(out)]
 
 
-def claim(dump_dir: str, chat: str, now: dt.datetime, out_dir: str) -> dict:
-    """The claim on every pending action, pinned to the version read, as one batch."""
+def to_claim(todo: list, chat: str, now: dt.datetime) -> list[str]:
+    """The pending actions that need a claim before they are applied: not one this chat holds
+    a claim on that still has time to run (CLAIM_MARGIN_S), and not one this copy applied
+    already whose receipt never landed (its receipt is only sent again). Two "Not this
+    person" taps were claimed again on every wake, version 1 to 2 to 3, while a wake that
+    stopped after its claim never applied them (the maintainer's copy, 2026-11-05)."""
+    kept = _kept_ledger_read()
+    out = []
+    for aid, act, _version in todo:
+        got = kept.get(aid)
+        if isinstance(got, dict) and got.get("fp") == _fingerprint(act):
+            continue
+        until = app_model.parse_time(act.get("claimed_until"))
+        if str(act.get("claimed_by") or "") == chat and until is not None and \
+                until > now + dt.timedelta(seconds=CLAIM_MARGIN_S):
+            continue
+        out.append(aid)
+    return out
+
+
+def claim(dump_dir: str, chat: str, now: dt.datetime, out_dir: str,
+          only: list[str] | None = None) -> dict:
+    """The claim on every pending action (or those in `only`), pinned to the version read,
+    as one batch."""
     db = page_db.load(dump_dir)
     w = page_db.Writes(out_dir)
     todo = pending(db, chat, now)
+    if only is not None:
+        todo = [t for t in todo if t[0] in set(only)]
     unpinned = []
     until = app_model.stamp(now + dt.timedelta(seconds=CLAIM_S))
     for aid, act, version in todo:

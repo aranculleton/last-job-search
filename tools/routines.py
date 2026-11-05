@@ -331,7 +331,7 @@ def move_here(reg: dict, r: dict, live: dict, day: str, here: str, repo: str,
     calls = [
         {"tool": "create_trigger", "args": {
             "name": r.get("name") or BRIEF_NAME, "persistent_session_id": here,
-            "cron_expression": cron, "prompt": prompt, "connectors": [],
+            "cron_expression": cron, "prompt": prompt,
             "initiation": "own_followup"},
          "why": "the brief runs in this chat, which has the files, from now on"},
         {"run": f"python3 tools/routines.py record --session {here} --trigger <the new task's "
@@ -592,10 +592,10 @@ def plan(owner: str, name: str, zone: str = "", now: datetime.datetime | None = 
     out = {
         "create_trigger": {"name": BRIEF_NAME, "persistent_session_id": sid,
                            "cron_expression": d["cron"], "prompt": stub_text,
-                           "connectors": [], "initiation": initiation},
+                           "initiation": initiation},
         "first_brief": {"name": "Job search: first brief", "persistent_session_id": sid,
                         "run_once_at": first.strftime("%Y-%m-%dT%H:%M:%SZ"),
-                        "prompt": stub_text, "connectors": [], "initiation": initiation},
+                        "prompt": stub_text, "initiation": initiation},
         "record": (f"python3 tools/routines.py record --session {sid} --trigger "
                    f"<the task's id> --cron \"{d['cron']}\""),
         "say": d["say"], "zone": d["zone"], "chat": chat}
@@ -655,7 +655,7 @@ def remind_plan(owner: str, name: str, chat: str = "",
                        f"{owner}/{name}" if owner and name else "")
     return {"create_trigger": {"name": REMIND_NAME, "persistent_session_id": chat or
                                "<the session id>", "run_once_at": at.strftime("%Y-%m-%dT%H:%M:%SZ"),
-                               "prompt": prompt, "connectors": [], "initiation": "own_initiative"},
+                               "prompt": prompt, "initiation": "own_initiative"},
             "record": "python3 tools/routines.py reminded --trigger <the task's id>",
             "chat": chat}
 
@@ -1315,7 +1315,7 @@ def pause(until: str, today: str = "", path: str | None = None) -> dict:
         back = {"name": "Job search: welcome back",
                 "run_once_at": _instant(end, (read_cron(r.get("cron")) or {}).get("time", ""),
                                         reg.get("timezone") or ""),
-                "prompt": with_copy(stub(reg, r["key"]), _repo()), "connectors": [],
+                "prompt": with_copy(stub(reg, r["key"]), _repo()),
                 "initiation": "human_request"}
         # The chat the brief runs in. A task that starts a new chat on firing gets no copy of
         # the files and no add_repo to fetch one (seen 12, 29 and 31 Oct 2026), so it never

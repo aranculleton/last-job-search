@@ -67,9 +67,10 @@ REG = {"setup": "chat_per_briefing", "timezone": "Europe/London", "routines": [
 
 
 def _tidy(copy, tmp_path, monkeypatch, *, listed="idle", told="idle", used="2026-11-01T08:00:00Z",
-          once=True, unmerged=(), github=(BRANCH,)):
+          once=True, unmerged=(), github=(BRANCH,), stdin=False):
     """tidy.py plan over trimmed listings, as the live run had them: sessions with their
-    status alone, tasks with persistent_session_id and enabled alone."""
+    status alone, tasks with persistent_session_id and enabled alone. `stdin`: given in one
+    JSON object on standard input, as the steps say, rather than as files."""
     monkeypatch.setattr(tidy, "_listener", lambda d: {"chat": LIVE, "kind": "cloud", "helper": True})
     monkeypatch.setattr(tidy, "_repo", lambda: REPO)
     monkeypatch.setattr(tidy, "_campaign_chats", lambda: set())
@@ -88,37 +89,77 @@ def _tidy(copy, tmp_path, monkeypatch, *, listed="idle", told="idle", used="2026
                   "sources": [{"git_repository": {"url": f"https://github.com/{REPO}"}}],
                   "outcomes": [{"git_repository": {"git_info": {"repo": REPO, "branches": [BRANCH]}}}]}}
     buf = io.StringIO()
+    if stdin:
+        given = json.dumps({"sessions": sessions, "triggers": [{"data": tasks, "has_more": False}],
+                            "details": detail})
+        monkeypatch.setattr(sys, "stdin", io.StringIO(given))
+        args = ["--stdin"]
+    else:
+        args = ["--sessions", _json(tmp_path, "s.json", sessions),
+                "--triggers", _json(tmp_path, "t.json", {"data": tasks}),
+                "--details", _json(tmp_path, "d.json", detail)]
     with contextlib.redirect_stdout(buf):
-        assert tidy.main(["plan", "--chat", LIVE, "--today", TODAY, "--verbose",
-                          "--sessions", _json(tmp_path, "s.json", sessions),
-                          "--triggers", _json(tmp_path, "t.json", {"data": tasks}),
-                          "--details", _json(tmp_path, "d.json", detail)]) == 0
+        assert tidy.main(["plan", "--chat", LIVE, "--today", TODAY, "--verbose", *args]) == 0
     return buf.getvalue()
 
 
+def test_the_listings_are_given_in_one_heredoc_never_typed_into_files(copy, tmp_path, monkeypatch):
+    """The tidy-up wanted each listing saved to a file, and the tools give them in the chat,
+    so the chat typed each one out by hand (the maintainer's copy, 2026-11-05). They are given
+    in one JSON object on standard input, as the tools returned them, and the plan is the
+    same; the printed steps say so."""
+    import app
+    by_file = _tidy(copy, tmp_path, monkeypatch, once=False)
+    given = _tidy(copy, tmp_path, monkeypatch, once=False, stdin=True)
+    assert given == by_file and f"archive {DESK}" in given
+    for said in (app.TIDY_SAID, app.TIDY_NOW):
+        assert "--stdin" in said and "saved to a file" not in said and "--sessions" not in said
+
+
 def test_a_helper_still_at_work_is_never_named_for_archiving(copy, tmp_path, monkeypatch):
-    """The live run's chat, every sign at once: kept, and its brief stays where it works. Its
-    branch was one GitHub did not hold (the work of a chat on the person's computer), so the
-    branch check alone, which knew only branches GitHub holds, let it through."""
+    """The live run's chat, every sign at once: kept. Its branch was one GitHub did not hold
+    (the work of a chat on the person's computer), so the branch check alone, which knew only
+    branches GitHub holds, let it through. Its brief moves into the live helper at once all
+    the same (the maintainer's copy, 2026-11-05: left in the old helper, it waited half an
+    hour for a check-in)."""
     said = _tidy(copy, tmp_path, monkeypatch, listed="running", told="running",
                  used="2026-11-05T11:56:00Z", github=())
-    assert f"archive {DESK}" not in said and "brief 1:" not in said, said
+    assert f"archive {DESK}" not in said, said
     assert f"keep {DESK}:" in said
+    assert f'"persistent_session_id": "{LIVE}"' in next(
+        ln for ln in said.splitlines() if ln.startswith("brief 1:"))
 
 
 @pytest.mark.parametrize("sign,kw,why", [
     ("two one-time tasks fire into it", {"once": True}, "a scheduled task that is on runs in it"),
     ("the trimmed list says running", {"once": False, "listed": "running"}, "it is running"),
     ("get_session says running", {"once": False, "told": "running"}, "it is running"),
-    ("used minutes ago", {"once": False, "used": "2026-11-05T11:56:00Z"}, "in use moments ago"),
     ("its branch is not merged", {"once": False, "unmerged": {BRANCH}}, "not on master yet"),
     ("its branch never reached GitHub", {"once": False, "github": (),
                                          "used": "2026-11-04T20:00:00Z"}, "not on GitHub yet"),
 ])
 def test_each_sign_of_a_chat_at_work_keeps_it_alone(copy, tmp_path, monkeypatch, sign, kw, why):
     said = _tidy(copy, tmp_path, monkeypatch, **kw)
-    assert f"archive {DESK}" not in said and "brief 1:" not in said, (sign, said)
+    assert f"archive {DESK}" not in said, (sign, said)
     assert why in next(ln for ln in said.splitlines() if ln.startswith(f"keep {DESK}:")), sign
+    # Kept until it finishes; the brief is not: it moves into the live helper now.
+    assert f'"persistent_session_id": "{LIVE}"' in next(
+        ln for ln in said.splitlines() if ln.startswith("brief 1:")), sign
+
+
+def test_an_old_helper_used_moments_ago_goes_once_get_session_calls_it_idle(copy, tmp_path, monkeypatch):
+    """Kept for being used in the last ten minutes, the helper a hand-over replaced stayed for
+    half an hour beside the new one after every hand-over, and a third chat came (the
+    maintainer's copy, 2026-11-05). Read with get_session, one at rest goes now, its brief
+    moved first; one get_session calls running stays."""
+    said = _tidy(copy, tmp_path, monkeypatch, once=False, used="2026-11-05T11:56:00Z")
+    assert f"archive {DESK}: Job search helper" in said, said
+    assert f'"persistent_session_id": "{LIVE}"' in next(
+        ln for ln in said.splitlines() if ln.startswith("brief 1:"))
+    said = _tidy(copy, tmp_path, monkeypatch, once=False, used="2026-11-05T11:56:00Z",
+                 told="running")
+    assert f"archive {DESK}" not in said
+    assert f"keep {DESK}: Job search helper (it is running)" in said, said
 
 
 def test_an_old_helper_at_rest_is_put_away_once_the_brief_has_moved(copy, tmp_path, monkeypatch):
@@ -154,23 +195,25 @@ def test_the_refresh_reads_screen_and_view_stops_without_it(copy, tmp_path):
 # ------------------------------------------------------------------ 3. a republish costs no helper
 
 
-def test_a_republishs_reads_never_renew_the_helper(copy, monkeypatch):
-    """What a republish read, from its build to its record, is left out of the growth that
-    renews a helper: a new helper with a big republish behind it stays."""
+def test_a_new_helpers_start_up_never_renews_it(copy, monkeypatch):
+    """A new helper's start-up alone (every page collection, the big screen documents, a
+    republish) grew its history past the old 200,000 mark within minutes, so each new helper
+    renewed at once and chats multiplied (the maintainer's copy, 2026-11-05). A helper renews
+    only near the most a chat can hold, or after a day with nothing to answer, and never in
+    its first hour on the page."""
     now = dt.datetime(2026, 11, 5, 9, 20, tzinfo=dt.timezone.utc)
-    rec = {"chat": LIVE, "helper": True, "since": "2026-11-05T09:00:00Z"}
+    rec = {"chat": LIVE, "helper": True, "since": "2026-11-05T09:00:00Z",
+           "answered_at": "2026-11-05T09:15:00Z"}
     monkeypatch.setattr(app_listen, "chat_kind", lambda: "cloud")
     monkeypatch.setattr(app_setup, "origin", lambda: ("example-owner", "example-copy"))
-    size = {"n": 110_000}
-    monkeypatch.setattr(app_listen, "context_tokens", lambda: size["n"])
-    app_listen.republish_started(LIVE, now)
-    size["n"] = 300_000                                  # the page's code, read whole
-    assert app_listen.renewal(rec, {"work": {}}, LIVE, now) is None   # while it is going
-    app_listen.republish_done(LIVE, now)
-    size["n"] = 345_000                                  # and a little real work since
-    assert app_listen.renewal(rec, {"work": {}}, LIVE, now) is None
-    size["n"] = 460_000                                  # real growth still renews it
-    assert app_listen.renewal(rec, {"work": {}}, LIVE, now)["title"] == "Job search page"
+    size = {"n": 460_000}
+    monkeypatch.setattr(app_listen, "history_tokens", lambda: size["n"])
+    assert app_listen.renewal(rec, {"work": {}}, LIVE, now) is None   # its start-up
+    later = now + dt.timedelta(hours=3)
+    assert app_listen.renewal(rec, {"work": {}}, LIVE, later) is None  # big, not near the limit
+    size["n"] = 720_000
+    assert app_listen.renewal(rec, {"work": {}}, LIVE, now) is None   # its first hour, still
+    assert app_listen.renewal(rec, {"work": {}}, LIVE, later)["title"] == "Job search page"
     # The record step sets it aside: `app.py published` says the republish is done.
     import app
     called = []
