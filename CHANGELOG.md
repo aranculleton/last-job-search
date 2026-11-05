@@ -32,6 +32,8 @@ make sense to somebody whose repo just received it.
   the page on and you have not used it for an hour, it is put away too. A chat of yours that
   never had that name is never touched.
 - **The README and the start guide say the pencil and the trash**, as the page does.
+- **The page never says "Connected" for a moment while it is still reconnecting.** A feed that
+  came back and failed again at once turned the header to "Connected" on every retry.
 
 ### Changed
 

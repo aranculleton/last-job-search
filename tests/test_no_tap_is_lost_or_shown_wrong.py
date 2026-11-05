@@ -257,6 +257,22 @@ def test_a_feed_that_keeps_failing_backs_off_and_is_never_shown_as_connected(run
     assert s[-1]["conn"].startswith("reconnecting"), s[-1]["conn"]
 
 
+def test_a_feed_back_for_a_moment_is_never_shown_as_connected(run, tmp_path):
+    """A feed that comes back and dies again 50 ms later turned the header to "Connected" on
+    every retry, for that moment (CI, 2026-11-05, which read the header then): a feed back after
+    failing counts as up only once it has stayed up. Every state the header takes over a minute
+    of retries is kept, so no moment is missed."""
+    html = _page(tmp_path)
+    watch = ("(() => { const seen = (window.__states = []); const read = () => { const c = document.getElementById('conn');"
+             " const v = c && c.getAttribute('data-state'); if (v && seen[seen.length - 1] !== v) seen.push(v); };"
+             " new MutationObserver(read).observe(document.documentElement, {subtree: true, childList: true, attributes: true,"
+             " attributeFilter: ['data-state']}); read(); return seen.slice(); })()")
+    s = _script(run, html, [{"hash": "todo", "run": 200}, {"eval": watch}, {"run": 60000, "eval": "window.__states"}],
+                fake={"subError": ["work"]})
+    assert s[1]["eval"] == ["reconnecting"], s[1]["eval"]
+    assert s[2]["eval"] == ["reconnecting"], ("the header said another state while the feed kept failing", s[2]["eval"])
+
+
 # ------------------------------------------------------------------ 14. hiding with storage refused
 
 

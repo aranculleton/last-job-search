@@ -736,7 +736,16 @@
   // flapped every second or two (robustness audit 13). The wait starts over only once a feed
   // has stayed up for half a minute.
   const SUB_HEALTHY_MS = 30000;
+  // A feed back after failing counts as up once it has stayed up this long: one that died 50 ms
+  // after each delivery turned the header to "Connected" on every retry (CI, 2026-11-05).
+  const SUB_STEADY_MS = 1000;
   const subErr = new Map();
+  function feedUp(key) {
+    const was = subErr.size;
+    subErr.delete(key);
+    if (!subErr.size && S.flags.dbError && S.flags.dbError !== "revoked") S.flags.dbError = null;
+    if (was && !subErr.size) retryFailedTaps();
+  }
   function sub(key, ref, apply, plain) {
     if (unsubs.has(key)) return;
     const again = (e) => {
@@ -758,10 +767,15 @@
         const r = SUB_RETRY.get(key);
         if (r && !r.ok) r.ok = now();
         apply(snap);
-        const was = subErr.size;
-        subErr.delete(key);
-        if (!subErr.size && S.flags.dbError && S.flags.dbError !== "revoked") S.flags.dbError = null;
-        if (was && !subErr.size) retryFailedTaps();
+        if (subErr.has(key)) {
+          const at = r ? r.ok : 0;
+          setTimeout(() => {
+            const q = SUB_RETRY.get(key);
+            if (!unsubs.has(key) || !subErr.has(key) || (q ? q.ok : 0) !== at) return;  // died again
+            feedUp(key);
+            liveRender();
+          }, SUB_STEADY_MS);
+        } else feedUp(key);
         liveRender();
       }, again));
     } catch (e) { again(e); }
