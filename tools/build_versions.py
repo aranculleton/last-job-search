@@ -783,8 +783,9 @@ METHODS: dict[str, dict] = {
             (48, "2026-11-05", True, "web addresses in the Brief's news are short links named by their site; Jobs has a search beside Filter, as Contacts does; a draft's check says the documents and their length, never \"Made, right length\""),
             (49, "2026-11-05", True, "a Brief step about an application opens it in Jobs, Applied; someone put away on the page leaves the Brief's steps at once; with nothing new found, the Brief's Jobs panel lists the drafts ready to apply, best fit first"),
             (50, "2026-11-05", True, "a draft's pencil opens a box asking what to change, room for a pasted message, its quick choices filling it and one Ask Claude (Cmd or Ctrl+Enter) with one gauge; Edit the words yourself makes the words the field"),
+            (51, "2026-11-05", True, "every visit opens the whole list, never a filter left on; Contacts sorts who is waiting on you first, with a Sort by beside it; the filters on Contacts and Jobs are the few that matter; the pencil box has Cancel"),
         ),
-        "fingerprint": "879e776768588b3f",
+        "fingerprint": "a6591aa7ca3cebe8",
     },
     "upskill": {
         "by": "upgrade", "priority": 4, "applies": "upskill_plans", "time": "~10 min",

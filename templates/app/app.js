@@ -2814,7 +2814,9 @@
 
   function listState(key, chips) {
     let st = S.lists.get(key);
-    if (!st) { st = {q: "", open: false, pages: 1, chips: obj(pref("f:" + key, null) || chips || {})}; S.lists.set(key, st); }
+    // Each visit opens the whole list: a filter chosen once stayed on for good, so Contacts kept
+    // opening on "Needs you" (DESIGN.md: never a filter left on; the maintainer, 2026-11-05).
+    if (!st) { st = {q: "", open: false, pages: 1, chips: obj(chips || {})}; S.lists.set(key, st); }
     return st;
   }
   // The switch at the head of Jobs: what was found, what is drafted, what was sent. One place
@@ -5514,17 +5516,15 @@
     return d === 0 ? "found today" : d === 1 ? "found yesterday" : fmtDayMonth(r.found_on) ? "found " + fmtDayMonth(r.found_on) : "found " + d + " days ago";
   }
   const posted = (r, n) => r.posted_days !== undefined && r.posted_days !== null && Number(r.posted_days) <= n;
+  // The few filters that change what is worth doing next, each a plain choice: eight groups of
+  // nineteen read as a form to fill in (the maintainer, 2026-11-05: "less cluttered, combine if
+  // needed ... less info overload and more genuinely useful"). How well it fits, when it was
+  // posted and when it closes are what Sort by is for.
   function jobChips() {
-    return [{key: "score", label: "How well it fits you", options: [["75", "Strong, 75 and up", (r) => Number(r.score) >= 75], ["60", "Good, 60 and up", (r) => Number(r.score) >= 60]]},
-      {key: "new", label: "Posted", options: [["1", "Today or yesterday", (r) => posted(r, 1)], ["7", "This week", (r) => posted(r, 7)], ["30", "This month", (r) => posted(r, 30)]]},
-      {key: "closing", label: "Closing date", options: [["7", "Closes within a week", (r) => r.deadline && dayDiff(r.deadline) !== null && dayDiff(r.deadline) >= 0 && dayDiff(r.deadline) <= 7],
-        ["set", "Has a closing date", (r) => !!txt(r.deadline)]]},
+    return [{key: "stage", label: "Show", options: [["ready", "Drafts ready to send", (r) => !!listDraft(r) && readyLive(listDraft(r))], ["todo", "Not drafted yet", (r) => !listDraft(r) && jobStatus(r) === "new"],
+        ["warm", "Someone there you know", (r) => !!txt(r.warm)], ["strong", "Strong fit, 75 and up", (r) => Number(r.score) >= 75]]},
       {key: "style", label: "Work style", options: [["remote", "Remote", (r) => REMOTE(r) === "remote"], ["hybrid", "Hybrid", (r) => REMOTE(r) === "hybrid"], ["onsite", "On site", (r) => REMOTE(r) === "on site"]]},
-      {key: "pay", label: "Pay", options: [["stated", "Pay stated", payStated], ["target", "At or above my target", (r) => obj(r.pay).at_target === true]]},
-      {key: "way", label: "Your way in", options: [["warm", "Someone there you know", (r) => !!txt(r.warm)], ["cold", "Nobody there yet", (r) => !txt(r.warm)]]},
-      {key: "where", label: "Where to apply", options: [["employer", "On the employer's own site", (r) => txt(obj(r.apply).kind) === "employer"], ["linkedin", "On LinkedIn", (r) => txt(obj(r.apply).kind) === "linkedin"],
-        ["board", "On a job site", (r) => ["board", "aggregator"].includes(txt(obj(r.apply).kind))]]},
-      {key: "stage", label: "Where it stands", options: [["ready", "Draft ready", (r) => jobStatus(r) === "ready"], ["todo", "Not drafted yet", (r) => jobStatus(r) === "new"]]}];
+      {key: "new", label: "Posted", options: [["7", "This week", (r) => posted(r, 7)], ["1", "Today or yesterday", (r) => posted(r, 1)]]}];
   }
   function jobSort() {
     const s = txt(pref("jobs:sort", "match"));
@@ -6463,7 +6463,11 @@
           costEl({state: WORK_COST.tweak === undefined ? 1 : WORK_COST.tweak}, "tweak", "cost-pen-" + seg(m.id)),
           // A word or two changed by hand: the words themselves become the field, free.
           btn(editing ? "Done editing" : "Edit the words yourself", () => { if (S.penEdit.has(m.id)) S.penEdit.delete(m.id); else S.penEdit.add(m.id); scheduleRender(); },
-            {kind: "secondary", small: true, key: "penedit:" + m.id, aria: (editing ? "Done editing the " : "Edit the words of the ") + what + " to " + name, pressed: editing}))) : null,
+            {kind: "secondary", small: true, key: "penedit:" + m.id, aria: (editing ? "Done editing the " : "Edit the words of the ") + what + " to " + name, pressed: editing}),
+          // Closed without asking anything: what was typed in the box waits for next time
+          // (the maintainer, 2026-11-05: "i cant see a way to close that").
+          btn("Cancel", () => { S.penOpen.delete(m.id); S.penEdit.delete(m.id); scheduleRender(); },
+            {kind: "secondary", small: true, key: "penx:" + m.id, aria: "Close the box: no change to the " + what + " to " + name}))) : null,
       held ? h("p", {class: "small hint-line msg-check msg-held", "data-k": "held:" + m.id}, "Not ready to send: " + lc1(held) + ".") : null,
       sendsLine(m),
       h("span", {id: "cnt-" + seg(m.id), class: "cnt-wrap"}, charCount(m, body)),
@@ -6585,6 +6589,14 @@
     const up = (p) => !!p.__msg || !!personDraft(p) || ["now", "follow"].includes(personGroup(p));
     return items.some(up) ? up : personLive;
   }
+  function contactSort(g, pos) {
+    const s = txt(pref("contacts:sort", "need"));
+    const last = (p) => txt(p.last || obj(p.exchange).last_on || "");
+    if (s === "recent") return (a, b) => last(b).localeCompare(last(a)) || (pos(a) - pos(b));
+    if (s === "name") return (a, b) => txt(a.first_name).localeCompare(txt(b.first_name)) || (pos(a) - pos(b));
+    const band = (p) => (p.__msg ? (txt(obj(p.__msg).type) === "reply" ? 0 : 1) : needsYou(g(p)) ? 0 : personDraft(p) ? 1 : 2);
+    return (a, b) => (band(a) - band(b)) || ((a.__msg ? 0 : personRank(a)) - (b.__msg ? 0 : personRank(b))) || (pos(a) - pos(b));
+  }
   function renderContacts(where) {
     const people = peopleItems();
     const lone = loneMessages(people);
@@ -6613,10 +6625,13 @@
     const pos = (p) => (p.__msg ? -1 : order.has(p) ? order.get(p) : 1e9);
     const lo = {items, name: "contacts", one: "person", many: "people", live: front, fold: (p) => !front(p), remote: "people",
       foldLabel: (k) => plural(k, "more person", "more people") + (anyUp ? ", nothing to do for them now" : ""), foldShow: "Show them",
-      sort: (a, b) => (((a.__msg || personDraft(a)) ? 0 : 1) - ((b.__msg || personDraft(b)) ? 0 : 1)) || ((a.__msg ? 0 : personRank(a)) - (b.__msg ? 0 : personRank(b))) || (pos(a) - pos(b)),
-      chips: [{key: "status", label: "Where it stands", options: [["draft", "A message to send", (p) => !!(p.__msg || personDraft(p))], ["now", "Needs you", (p) => needsYou(g(p))], ["follow", "Follow-up you could send", (p) => g(p) === "follow"],
-        ["waiting", "Waiting for a reply", (p) => g(p) === "waiting"],
-        ["new", "Not written to", (p) => g(p) === "new"]]},
+      // Sorted, never filtered, by default: who is waiting on you first, then the other messages
+      // ready to send, then everyone else in the engine's order (the maintainer, 2026-11-05: "the
+      // way it sorts the list should sort need you at the top followed by rest").
+      sort: contactSort(g, pos),
+      sorts: [["need", "Waiting on you first"], ["recent", "Most recent"], ["name", "Name"]], sortPref: "contacts:sort",
+      chips: [{key: "status", label: "Show", options: [["now", "Waiting on you", (p) => needsYou(g(p))], ["draft", "A message to send", (p) => !!(p.__msg || personDraft(p))],
+        ["waiting", "Waiting on them", (p) => g(p) === "waiting"], ["new", "Not written to yet", (p) => g(p) === "new"]]},
         // Who they are, so a recruiter or the person who referred you is one tap away.
         {key: "who", label: "Who they are", options: [["recruiter", "Recruiters", (p) => txt(p.who) === "recruiter"], ["referrer", "Referrers", (p) => txt(p.who) === "referrer"],
           ["hiring", "Hiring managers and HR", (p) => txt(p.who) === "hiring"], ["peer", "People in your field", (p) => txt(p.who) === "peer"]]}],

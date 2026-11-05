@@ -2818,7 +2818,8 @@ S.big = async (a) => {
   // Over 25 the Filter sheet holds an employer search (LAYOUT_SPEC 4.2).
   await o.page.locator("#main .filter-btn").first().click();
   await turn(o.page, 3);
-  r.search = !!(await o.page.$("dialog.filter-sheet input[type=search]"));
+  // Beside Filter on the screen since 2026-11-05, as Contacts has it; in the sheet before.
+  r.search = !!(await o.page.$("dialog.filter-sheet input[type=search], #main .searchf input[type=search]"));
   await o.page.keyboard.press("Escape");
   await turn(o.page, 3);
   await menuPick(o.page, "Select several");

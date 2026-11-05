@@ -335,7 +335,9 @@ def test_shorter_warmer_more_formal_pin_it_and_make_one_carry_the_gauge(run, tmp
         {"hash": "jobs", "eval": NO_GAUGE, "read": '#main [data-item="resume-current"]'},
     ], WIDE, model=m)
     pen, brief, jobs = got["after"]
-    assert pen["eval"] == [] and pen["count"] >= 3, pen["eval"]
+    # Since 2026-11-05 the chips fill the box and its one Ask Claude carries the one gauge (the
+    # maintainer: a gauge on every chip was clutter).
+    assert pen["eval"] == [] and pen["count"] == 1, pen["eval"]
     assert "Pin it" in brief["text"] and brief["eval"] == [], brief["eval"]
     assert "Make one" in jobs["text"] and jobs["eval"] == [], jobs["eval"]
 
