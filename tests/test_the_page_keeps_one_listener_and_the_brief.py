@@ -410,7 +410,8 @@ def test_todays_late_follow_up_opens_its_draft(run, tmp_path, vp):
                               {"eval": "(() => { document.querySelector('#main .bp-today .bp-iv .btn').click(); return 1; })()"},
                               {"eval": "location.hash"}], vp, clock=T)
     assert got["after"][0]["eval"] == "See the draft", got["after"][0]["eval"]
-    assert "messages/msg-wren" in got["after"][2]["eval"], got["after"][2]["eval"]   # on the draft itself
+    # On the draft itself: Wren's card in Contacts, where it is (one page since 2026-11-04).
+    assert got["after"][2]["eval"] == "#contacts/fernhill_freight_halloway", got["after"][2]["eval"]
 
 
 # Refresh with yesterday's data and the Claude allowance used up says so, never "Up to date".
@@ -550,39 +551,44 @@ def test_coming_up_marks_today_and_tomorrow_calmly(run, tmp_path, vp):
 # ------------------------------------------------------------------ a draft already made is shown, never made again
 
 # A message already drafted is opened, never drafted a second time (2026-11-02): To do's
-# "Follow up with Fernhill Freight" queued new work while the follow-up sat ready in Messages.
+# "Follow up with Fernhill Freight" queued new work while the follow-up sat ready in Messages
+# (now on Wren's own card in Contacts, 2026-11-04).
 def test_a_follow_up_already_drafted_opens_from_to_do_and_is_never_drafted_again(run, tmp_path, vp):
     row = '[data-item="due-fernhill-nudge"]'
     got = _go(run, tmp_path, [
         {"hash": "todo", "read": row},
-        {"click": "See the draft", "within": row, "until": "location.hash === '#drafts-messages/msg-wren-2'"},
+        {"click": "See the draft", "within": row, "until": "location.hash === '#contacts/fernhill_freight_halloway'"},
     ], vp, clock=T)
     text = got["after"][0]["text"]
     assert "See the draft" in text and "Draft the follow-up" not in text, text
-    assert got["after"][1]["hash"] == "#drafts-messages/msg-wren-2"
+    assert got["after"][1]["hash"] == "#contacts/fernhill_freight_halloway"
     assert not [w for w in got["work"] if w and w.get("kind") in ("follow_up", "nudge")], got["work"]
 
 
-# A reply drafted for Juno and a thank-you for Marisol: their To do row, their Contacts row and
-# their own page each open the draft, and nothing offers "Draft a reply" over it.
+# A reply drafted for Juno and a thank-you for Marisol: their To do row and their own page open
+# the draft, their card in Contacts shows it (one page since 2026-11-04), and nothing offers
+# "Draft a reply" over it.
 def test_a_reply_already_drafted_opens_from_to_do_contacts_and_their_page(run, tmp_path, vp):
     juno, marisol = '[data-item="larkspur_retail_castellan"]', '[data-item="ellerwick_trust_priya"]'
     got = _go(run, tmp_path, [
         {"hash": "todo", "read": '[data-item="due-juno-reply"]'},
         {"hash": "contacts", "read": juno},
         {"read": marisol},
-        {"hash": "drafts-messages", "click": "Juno", "role": "link", "within": '[data-item="msg-juno-1"]', "read": "dialog.detail"},
-        {"click": "See the draft", "within": "dialog.detail", "until": "location.hash === '#drafts-messages/msg-juno-1'",
+        {"hash": "contacts", "click": "Juno", "role": "link", "within": juno, "read": "dialog.detail"},
+        {"click": "See the draft", "within": "dialog.detail", "until": "location.hash === '#contacts/larkspur_retail_castellan'",
          "eval": "document.querySelectorAll('dialog.detail[open]').length"},
     ], vp, clock=T)
-    for n in (0, 1, 2):
+    todo = got["after"][0]["text"]
+    assert "See the draft" in todo and "Draft a reply" not in todo, todo
+    for n in (1, 2):
         text = got["after"][n]["text"]
-        assert "See the draft" in text and "Draft a reply" not in text, (n, text)
-    assert "Next: Thank-you note" in got["after"][2]["text"]
+        assert "I sent it" in text and "Copy" in text and "Draft a reply" not in text, (n, text)
+    assert "Thursday at 12 suits me well" in got["after"][1]["text"], "her card shows the draft that is ready"
+    assert "Your thank-you" in got["after"][2]["text"], got["after"][2]["text"]
     page = got["after"][3]["text"]
     assert "See the draft" in page and "Draft a reply" not in page, page
     assert "Thursday at 12 suits me well" in page, "their page shows the draft that is ready"
-    assert got["after"][4]["eval"] == 0 and got["after"][4]["hash"] == "#drafts-messages/msg-juno-1"
+    assert got["after"][4]["eval"] == 0 and got["after"][4]["hash"] == "#contacts/larkspur_retail_castellan"
     assert not [w for w in got["work"] if w and w.get("kind") in ("reply", "follow_up")], got["work"]
 
 
@@ -596,8 +602,8 @@ def test_i_sent_it_is_done_in_contacts_to_do_and_the_brief_at_once(run, tmp_path
     got = _go(run, tmp_path, [
         {"hash": "todo", "eval": BADGE},
         {"hash": "brief", "read": "#main .bp-next"},
-        {"hash": "drafts-messages", "click": "Copy", "within": '[data-item="msg-juno-1"]'},
-        {"click": "I sent it", "within": '[data-item="msg-juno-1"]'},
+        {"hash": "contacts", "click": "Copy", "within": juno},
+        {"click": "I sent it", "within": juno},
         {"hash": "contacts", "read": "#main .sec-head"},
         {"open": "fold:contacts", "read": juno},
         {"hash": "todo", "count": '[data-item="due-juno-reply"]', "eval": BADGE},
@@ -614,8 +620,8 @@ def test_i_sent_it_is_done_in_contacts_to_do_and_the_brief_at_once(run, tmp_path
 
 
 # A person's page: where it stands is a line of words with ticks, never outlined pills that
-# look like the buttons under them; its blocks stand apart; and Back names Messages when that
-# is where the person came from.
+# look like the buttons under them; its blocks stand apart; and Back names where the person came
+# from (Contacts, where each message is on its person's card since 2026-11-04).
 STEPS = ("(() => { const p = document.querySelector('dialog.detail .d-steps'); if (!p) return null; const c = p.cloneNode(true); "
          "c.querySelectorAll('.sr-only').forEach((s) => s.remove()); "
          "return [c.textContent, [...p.querySelectorAll('*')].some((e) => parseFloat(getComputedStyle(e).borderTopWidth) > 0)]; })()")
@@ -623,13 +629,13 @@ GAPS = ("(() => { const kids = [...document.querySelector('dialog.detail .detail
         "return Math.min(...kids.slice(1).map((e, i) => Math.round(e.getBoundingClientRect().top - kids[i].getBoundingClientRect().bottom))); })()")
 
 
-def test_a_persons_page_says_where_it_stands_in_words_and_back_names_messages(run, tmp_path, vp):
+def test_a_persons_page_says_where_it_stands_in_words_and_back_names_where_it_came_from(run, tmp_path, vp):
     got = _go(run, tmp_path, [
-        {"hash": "drafts-messages", "click": "Juno", "role": "link", "within": '[data-item="msg-juno-1"]', "read": '[data-k="detail-back"]', "eval": STEPS},
+        {"hash": "contacts", "click": "Juno", "role": "link", "within": '[data-item="larkspur_retail_castellan"]', "read": '[data-k="detail-back"]', "eval": STEPS},
         {"eval": GAPS},
         {"eval": "document.querySelectorAll('dialog.detail .stepper').length"},
     ], vp, clock=T)
-    assert got["after"][0]["text"].replace("‹", "").strip() == "Messages", got["after"][0]["text"]
+    assert got["after"][0]["text"].replace("‹", "").strip() == "Contacts", got["after"][0]["text"]
     assert got["after"][0]["eval"], "the stages are a line of words"
     words, bordered = got["after"][0]["eval"]
     assert " ".join(words.split()) == "Written to ✓ · Replied ✓ · Talked · Referral", words
@@ -671,7 +677,7 @@ def test_a_screen_reader_hears_note_before_what_is_not_a_fix(run, tmp_path):
 
 def test_i_sent_it_is_named_by_its_visible_words_first(run, tmp_path, vp):
     names = "['msg-juno-1', 'msg-ash-1'].map((id) => document.querySelector('[data-k=\"sent:' + id + '\"]').getAttribute('aria-label'))"
-    got = _go(run, tmp_path, [{"hash": "drafts-messages", "eval": names}], vp, clock=T)
+    got = _go(run, tmp_path, [{"hash": "contacts", "eval": names}], vp, clock=T)
     assert got["after"][0]["eval"] == ["I sent it: the message to Juno", "I sent it: the note to Ash"]
 
 
@@ -693,9 +699,10 @@ def test_a_new_person_is_asked_to_start_everywhere_until_a_step_is_done(run, tmp
     assert got["after"][0]["eval"] == ["Continue setting up"], got["after"]
 
 
-def test_messages_opened_by_its_own_link_is_called_messages(run, tmp_path):
+def test_messages_old_link_opens_contacts(run, tmp_path):
+    # Messages was a view of its own until Contacts became one page (2026-11-04).
     got = _go(run, tmp_path, [{"hash": "messages", "eval": "document.querySelector('#main h2').textContent"}], PHONE, model=copy.deepcopy(EMPTY), clock=T)
-    assert got["after"][0]["eval"] == "Messages"
+    assert got["after"][0]["eval"] == "Contacts"
 
 
 # ------------------------------------------------------------------ the brief's phone notification

@@ -737,8 +737,9 @@ METHODS: dict[str, dict] = {
             (22, "2026-11-04", True, "To do never lists someone who has not answered your limit of messages: nothing to do is not a To do, so the card to close them all is gone; in Contacts they wait below the fold with the others who need nothing from you, their row saying to leave it unless they write back, with Close"),
             (23, "2026-11-04", True, "a job's More offers Draft the resume only, the resume without a letter, as one tap"),
             (24, "2026-11-05", True, "LinkedIn is looked at once a day, and the look is kept in your search's own store, so switching to another chat and back never loads LinkedIn again that day; the page never opens Claude's browser by itself (Open LinkedIn opens the sign-in at your tap), reads the tab it keeps as it stands before loading anything, and someone whose page did not load is read again the next day or with Read them, never at every opening"),
+            (25, "2026-11-05", True, "Contacts is one page: each person's card carries the message drafted to them, open, until I sent it, and people with one come first; They replied opens a labelled box under the person, whose line says where the reply stands, with Cancel while it waits or runs, Finished until the draft is on the card and Try again after a failure; an old Messages address and To do's messages ready to send open Contacts on the person; the card says the latest exchange only, and when you first wrote and how many each way are under More"),
         ),
-        "fingerprint": "d6f1bbf4afc7ac5c",
+        "fingerprint": "599c4b3cfc58bae6",
     },
     "upskill": {
         "by": "upgrade", "priority": 4, "applies": "upskill_plans", "time": "~10 min",

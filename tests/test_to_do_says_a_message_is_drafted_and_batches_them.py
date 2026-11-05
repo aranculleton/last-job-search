@@ -5,11 +5,13 @@ From the maintainer's own page (2026-11-04):
   ready, so the person tapped Follow up again and nineteen were queued a second time. A row
   whose message is drafted says "Draft ready" and its one button opens the draft; a second
   tap never queues drafting again.
-- An application's follow-up drafted in Messages was never found from its own To do row: the
-  row names the application and the message is its own.
+- An application's follow-up drafted (in Messages, then) was never found from its own To do
+  row: the row names the application and the message is its own.
 - Six drafted messages were six cards ("same with to do, batch would be easier to read"):
   two or more are one card, "N messages ready to send", a row a person opening their draft,
-  and one button that opens Messages. One alone keeps its own card. A row sent leaves at once.
+  and one button that opens Contacts at the drafted people (Contacts is one page since
+  2026-11-04, each message on its person's card). One alone keeps its own card. A row sent
+  leaves at once.
 
 Every person and employer is invented (tests/fixtures/app_model_sample.json).
 """
@@ -55,8 +57,10 @@ def test_two_drafted_messages_are_one_card_whose_rows_open_each_draft(run, tmp_p
     got = _go(run, tmp_path, [
         {"hash": "todo", "read": GROUP, "eval": ROWS},
         {"eval": "document.querySelectorAll('#main .due-row[data-item=\"due-fernhill-nudge\"], #main .due-row[data-item=\"due-juno-reply\"]').length"},
-        {"click": "See the draft", "within": '[data-item="due-juno-reply"]', "until": "location.hash === '#drafts-messages/msg-juno-1'"},
-        {"hash": "todo", "click": "Open Messages", "within": GROUP, "until": "location.hash.startsWith('#drafts-messages')"},
+        {"click": "See the draft", "within": '[data-item="due-juno-reply"]', "until": "location.hash === '#contacts/larkspur_retail_castellan'",
+         "eval": "!!document.querySelector('#main [data-item=\"larkspur_retail_castellan\"] details.pdraft[open]')"},
+        {"hash": "todo", "click": "Open Contacts", "within": GROUP, "until": "location.hash.startsWith('#contacts')",
+         "eval": "document.querySelector('#main ul.people > li').dataset.item"},
     ], vp, clock=T)
     card = got["after"][0]["text"]
     assert "2 messages ready to send" in card, card
@@ -66,8 +70,11 @@ def test_two_drafted_messages_are_one_card_whose_rows_open_each_draft(run, tmp_p
     assert all(r[3] and r[3][0] == "See the draft" for r in rows), rows
     assert "Draft all" not in card and "Draft the follow-up" not in card and "Draft a reply" not in card, card
     assert got["after"][1]["eval"] == 0, "no drafted message is a card of its own while two are drafted"
-    assert got["after"][2]["hash"] == "#drafts-messages/msg-juno-1"
-    assert got["after"][3]["hash"].startswith("#drafts-messages")
+    # Her draft opens on her card in Contacts; the card's button opens Contacts on the first of
+    # the drafted people, who come first.
+    assert got["after"][2]["hash"] == "#contacts/larkspur_retail_castellan" and got["after"][2]["eval"] is True, got["after"][2]
+    assert got["after"][3]["hash"].startswith("#contacts"), got["after"][3]["hash"]
+    assert got["after"][3]["eval"] in ("fernhill_freight_halloway", "larkspur_retail_castellan"), got["after"][3]["eval"]
     _no_drafting(got)
 
 
@@ -78,13 +85,13 @@ def test_one_drafted_message_keeps_its_card_says_draft_ready_and_opens_it(run, t
     got = _go(run, tmp_path, [
         {"hash": "todo", "read": row, "count": GROUP,
          "eval": "[...document.querySelectorAll('#main .due-row[data-item=\"due-fernhill-nudge\"] .todo-top .chip')].map((c) => c.textContent)"},
-        {"click": "See the draft", "within": row, "until": "location.hash === '#drafts-messages/msg-wren-2'"},
-        {"hash": "todo", "click": "See the draft", "within": row, "until": "location.hash === '#drafts-messages/msg-wren-2'"},
+        {"click": "See the draft", "within": row, "until": "location.hash === '#contacts/fernhill_freight_halloway'"},
+        {"hash": "todo", "click": "See the draft", "within": row, "until": "location.hash === '#contacts/fernhill_freight_halloway'"},
     ], vp, model=m, clock=T)
     assert got["after"][0]["count"] == 0, "one alone is not a batch"
     assert "Draft ready" in got["after"][0]["eval"], got["after"][0]["eval"]
     assert "See the draft" in got["after"][0]["text"] and "Draft the follow-up" not in got["after"][0]["text"]
-    assert got["after"][2]["hash"] == "#drafts-messages/msg-wren-2", "a second tap opens it again"
+    assert got["after"][2]["hash"] == "#contacts/fernhill_freight_halloway", "a second tap opens it again"
     _no_drafting(got)
 
 
@@ -105,18 +112,20 @@ def test_an_applications_follow_up_drafted_opens_from_its_own_row(run, tmp_path,
     row = '[data-item="due-quayside-ops-follow"]'
     got = _go(run, tmp_path, [
         {"hash": "todo", "read": row},
-        {"click": "See the draft", "within": row, "until": "location.hash === '#drafts-messages/msg-app-quayside-ops'"},
+        # Nobody on the list carries it: its own card in Contacts.
+        {"click": "See the draft", "within": row, "until": "location.hash === '#contacts/msg-app-quayside-ops'",
+         "eval": "!!document.querySelector('#main [data-item=\"msg-app-quayside-ops\"] details.pdraft[open]')"},
     ], vp, model=m, clock=T)
     text = got["after"][0]["text"]
     assert "Draft ready" in text and "See the draft" in text and "Draft the follow-up" not in text, text
-    assert got["after"][1]["hash"] == "#drafts-messages/msg-app-quayside-ops"
+    assert got["after"][1]["hash"] == "#contacts/msg-app-quayside-ops" and got["after"][1]["eval"] is True, got["after"][1]
     _no_drafting(got)
 
 
 def test_a_drafted_message_sent_leaves_the_batch_at_once(run, tmp_path, vp):
     got = _go(run, tmp_path, [
-        {"hash": "drafts-messages", "click": "Copy", "within": '[data-item="msg-wren-2"]'},
-        {"click": "I sent it", "within": '[data-item="msg-wren-2"]'},
+        {"hash": "contacts", "click": "Copy", "within": '[data-item="fernhill_freight_halloway"]'},
+        {"click": "I sent it", "within": '[data-item="fernhill_freight_halloway"]'},
         {"hash": "todo", "count": GROUP, "eval": "document.querySelectorAll('#main [data-item=\"due-fernhill-nudge\"]').length"},
         {"read": '[data-item="due-juno-reply"]'},
     ], vp, clock=T)

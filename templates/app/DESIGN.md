@@ -8,14 +8,15 @@ next?" in its first lines, and nothing asks for a decision a default could make.
 ## Places
 
 - Seven places: **Brief** (the home screen), **To do**, **Jobs** (Found, Drafts, Applied),
-  **Contacts** (People, Messages), **Coming up** and **Chat** together in the side menu, and
-  **Settings** alone at its foot. Five sit in the phone's tab bar (Brief, To do, Jobs,
-  Contacts, Chat); To do alone carries a coloured badge, and Chat a small grey dot while an
-  answer waits unseen. (layout 6, nav order test; contacts rules test)
+  **Contacts** (one list, each person with what to send them), **Coming up** and **Chat**
+  together in the side menu, and **Settings** alone at its foot. Five sit in the phone's tab
+  bar (Brief, To do, Jobs, Contacts, Chat); To do alone carries a coloured badge, and Chat a
+  small grey dot while an answer waits unseen. (layout 6, nav order test; contacts rules test)
 - Each screen: its title, one plain summary line, at most three blocks before the first item.
   (layout 1 to 3)
 - A long list opens on its first few and folds the rest one tap below ("Show 6 more"): To do
-  five today, Drafts and Messages five, Contacts who needs you. Never a filter left on.
+  five today, Drafts five, Contacts who has a message to send and who needs you. Never a
+  filter left on.
   (layout 2, crowd tests)
 - To do's five are what is late or due today first, then the questions; setting-up cards wait
   behind the fold. (tired-person tests)
@@ -45,13 +46,65 @@ next?" in its first lines, and nothing asks for a decision a default could make.
   blue, warn amber, bad red, held violet, waiting grey. (status audit, colour tests)
 - A To do row whose message is already drafted says "Draft ready" and its one button opens
   the draft, never drafts it again; two or more drafted are one card, "N messages ready to
-  send", a row a person opening their draft and one button opening Messages. (drafted
-  messages tests)
+  send", a row a person opening their draft and one button opening Contacts at the drafted
+  people. (drafted messages tests)
 - Many of one small thing are one checklist card, a row an item: each row has one action of
   its own beside its bin, and the card's own actions keep to the card's anatomy above.
   (layout 8)
 - One "?" a card at most, after the last word of its line, and no more than three on a first
   screen. (design test, budget test)
+
+## Contacts
+
+One page, one card a person: what to send them and where they stand, together. (contacts page
+tests, `tests/test_contacts_is_one_page_with_each_persons_draft.py`)
+
+- No People and Messages tabs: each card shows the message drafted to them under their name,
+  open, and folded by a tap on its heading. Why: the person and what to send them were two
+  tabs apart, so one reply meant finding the same name twice.
+- "I sent it" takes the message off the card at once; the person then waits for their reply,
+  or for the follow-up when one is due. Why: a sent message is done, and the card says what
+  happens next instead.
+- People with a message drafted come first, then who needs you, in the engine's order
+  (`app_model._people`). A message with nobody on the list (an application's follow-up) is a
+  card of its own among them. Why: what is already written is the quickest thing to finish.
+- Someone you have written to has one main button, "They replied". It opens a labelled box
+  right under them, "Paste what Juno sent", with one filled "Draft my reply" (the screen's one
+  filled button while it is open). A reply already kept opens the same box, asking only what
+  to say back. Why: the paste is the one step the person must do; it cannot be tucked away.
+- Draft my reply queues the reply for that person (a "They replied" action, which queues the
+  reply work) and frees the box at once, so ten replies go in one after another without
+  waiting for any. Why: someone talking to many people pastes several in a row.
+- From then the card says where its reply stands, in one line in Claude's work words, read
+  the way its work card reads it (Saved, Waiting for Claude, Next, In line, Claude is on it
+  with the spinner and, after a few seconds, its clock). Read from the tap and its work item,
+  never from this tab's memory, so it is the same after a reload or a live update. Claude's
+  draft lands in that same card, ready to Copy and "I sent it". Why: with ten queued, each
+  card shows which are waiting, which is running and which are done.
+- The line has one quiet control. Cancel, while it waits or runs: a tap Claude has not taken
+  goes at once with the pasted words back in the box; waiting work stops at once; running
+  work says "Stopping after this step", then "Stopped". A reply finished but not on the page
+  yet says "Finished · Putting it on your page" and the draft replaces it when it comes, never
+  "Done" over nothing. One that failed says why, with Try again. Why: nobody is left
+  wondering, and nothing they pasted is lost.
+- On the card's face only what is done every time: the name, its state, the trash; one line
+  of facts, the latest exchange only ("You wrote 2 Nov", "They replied 3 Nov"), with
+  "Overdue" in the corner only when a follow-up or the message is late; the draft with Copy
+  in its corner (a subject's Copy an icon at its line's end); then one row of pills: "I sent
+  it" (filled once copied) or the one owed step, "They replied", and More. With a message on
+  the card, "They replied" waits under More. The rest is behind More: edit or rewrite the
+  message, their profile link, "I changed it first", why them, a call booked, they sent me a
+  job, the referral, read their profile, when you first wrote and how many messages each
+  way (the engine's `exchange`). Why: five buttons a card read as five jobs, and three dates
+  a card as none.
+- Rarely, Claude cannot write a reply honestly without asking (their message is unclear, a
+  claim it cannot ground). Then the card asks one question in its one soft grey box, in place
+  of the draft until answered: the words it is about as a small quote, the question, and a tap
+  to answer where one fits (yes or no, a choice), the work's own `needs`, drawn by the page's
+  one shared renderer. The answer resumes that same reply, its line showing it. Why: asked
+  where the reply is, never a thread of bubbles somewhere else.
+- The trash keeps one place for putting anyone or anything away: the person's choices, and
+  for an unsent first note "set this note aside" as well.
 
 ## The bin
 

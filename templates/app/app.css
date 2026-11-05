@@ -802,6 +802,24 @@ p.count.tone-warn { color: var(--st-overdue); }
 .changed[open] > summary::before { transform: rotate(90deg); }
 @media (hover: hover) { .changed > summary:hover { color: var(--ink); } }
 .changed[open] { display: grid; gap: 8px; }
+/* Contacts is one page (2026-11-04): the message drafted to someone sits on their card under
+   their name, open, and folds by a tap on its heading. */
+.pdraft { display: grid; gap: 8px; }
+.pdraft > summary { cursor: pointer; font-weight: 600; font-size: var(--t-sm); color: var(--muted); min-height: var(--target); display: flex; align-items: center; gap: 4px; list-style: none; }
+.pdraft > summary::-webkit-details-marker { display: none; }
+.pdraft > summary::before { content: "›"; display: inline-block; width: 12px; font-size: 1.125rem; line-height: 1; transition: transform 0.15s; }
+.pdraft[open] > summary::before { transform: rotate(90deg); }
+@media (hover: hover) { .pdraft > summary:hover { color: var(--ink); } }
+/* "They replied": a labelled box right under the person, its field the card's full width. */
+.reply-box { display: grid; gap: 8px; }
+.reply-label { font-weight: 600; }
+.reply-box textarea { width: 100%; }
+/* Where the reply being written for them stands: the spinner or a breathing dot, then words. */
+.going { display: flex; align-items: center; flex-wrap: wrap; gap: 4px; }
+.going .dot { width: 10px; height: 10px; }
+.going-word { font-weight: 600; }
+/* The words a question is about, as a small quote above it. */
+.needs-about { margin: 0; padding-left: 8px; color: var(--muted); font-style: italic; }
 .wave { display: grid; gap: 12px; }
 .wave-head { display: grid; gap: 4px; }
 .wave-group { display: grid; gap: 8px; }

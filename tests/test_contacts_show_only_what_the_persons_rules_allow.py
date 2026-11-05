@@ -532,9 +532,10 @@ def test_a_filter_shows_its_people_and_a_search_is_not_a_filter(run, page, model
 
 
 def test_messages_never_offer_a_draft_that_breaks_a_rule(run, page):
-    """contacts 5, 34 and 37, contacts_chat_2 19, 20 and 22."""
+    """contacts 5, 34 and 37, contacts_chat_2 19, 20 and 22. The note is on Zoe's own card in
+    Contacts (one page since 2026-11-04)."""
     got = run("engine", html=page, viewport=PHONE, clock=CLOCK, steps=[
-        {"hash": "drafts-messages", "read": "#main [data-item=\"msg-rook_health_quarry\"]"}])
+        {"hash": "contacts", "read": "#main [data-item=\"rook_health_quarry\"]"}])
     assert not got["errors"], got["errors"]
     zoe = got["after"][0]["text"]
     assert "Breaks your rules" in zoe and "Not ready to send: it asks them for a job." in zoe, zoe
@@ -544,17 +545,18 @@ def test_messages_never_offer_a_draft_that_breaks_a_rule(run, page):
 
 def test_their_reply_logged_turns_the_row_at_once_and_let_it_go_is_in_the_bin(run, page):
     """contacts 19, contacts_chat_2 5."""
+    # Pasted in the box under him (Contacts, 2026-11-04), never a sheet: his reply is drafted.
     got = run("engine", html=page, viewport=WIDE, clock=CLOCK, steps=[
-        {"hash": "contacts", "click": "Log Corwin's reply"},
-        {"fill": {"Paste what Corwin said": "Thanks Morgan, happy to talk next week."}, "submit": True},
+        {"hash": "contacts", "click": "They replied: paste what Corwin sent"},
+        {"fillMain": {"Paste what Corwin sent": "Thanks Morgan, happy to talk next week."}, "then": "Draft my reply to Corwin"},
         {"hash": "contacts", "read": "#main [data-item=\"teal_retail_nettle\"]"},
         {"hash": "contacts", "open": "fold:contacts", "click": "Not Zo R.?"},
         {"click": "Let it go: they have not replied"},
         {"hash": "contacts", "read": "#main [data-item=\"zo_rendle\"]"}])
     assert not got["errors"], got["errors"]
     corwin = got["after"][2]["text"]
-    assert "Replied: your turn" in corwin and "Their reply is kept: your turn." in corwin, corwin
-    assert "Draft a reply" in corwin and "Draft the follow-up" not in corwin, corwin
+    assert "Replied: your turn" in corwin and "Waiting for Claude" in corwin, corwin
+    assert "Draft the follow-up" not in corwin and "They replied\n" not in corwin, corwin
     acts = {a["action"] for a in got["actions"]}
     assert {"msg.received", "person.status"} <= acts, acts
 
@@ -575,13 +577,15 @@ def test_a_persons_page_has_their_link_and_a_late_step_reads_late(run, page):
 def test_a_draft_a_reply_on_a_kept_reply_never_asks_for_their_words(run, page):
     """contacts 1 and 43, contacts_chat_2 1 and 2 (already fixed on 3 November: the engine
     writes the thread); re-run on the exact steps."""
+    buttons = "[...document.querySelectorAll('#main [data-item=\"kestrel_bank_lowther\"] .card-actions > .btn')].map((b) => b.textContent.trim())"
     got = run("engine", html=page, viewport=PHONE, clock=CLOCK, steps=[
-        {"hash": "contacts", "read": "#main [data-item=\"kestrel_bank_lowther\"]"},
-        {"hash": "contacts", "click": "Draft a reply to Shirin", "read": "dialog"}])
+        {"hash": "contacts", "read": "#main [data-item=\"kestrel_bank_lowther\"]", "eval": buttons},
+        # The box under her, as every reply is drafted on Contacts (2026-11-04).
+        {"hash": "contacts", "click": "Draft a reply to Shirin", "read": "#main [data-item=\"kestrel_bank_lowther\"]"}])
     assert not got["errors"], got["errors"]
-    row, sheet = got["after"][0]["text"], got["after"][1]["dialog"]
-    assert "They replied" not in row, row
-    assert "already kept" in sheet and "Paste what Shirin said" not in sheet, sheet
+    face, box = got["after"][0]["eval"], got["after"][1]["text"]
+    assert "They replied" not in face, face
+    assert "already kept" in box and "Paste what Shirin sent" not in box, box
 
 
 def test_small_things_each_say_what_they_are(run, page):
@@ -606,14 +610,16 @@ def test_small_things_each_say_what_they_are(run, page):
         "shirin_page": {"hash": "contacts", "open": "pname:row:kestrel_bank_lowther", "read": "dialog"},
         "stop": {"click": "Don't contact again", "eval": "[...document.querySelectorAll('dialog[open]')].map((d) => d.textContent).join(' | ')"},
         "close2": {"eval": close},
-        "rafe": {"hash": "drafts-messages", "read": "#main [data-item=\"msg-kestrel_foods_thorne\"]",
-                 "count": "#main [data-item=\"msg-kestrel_foods_thorne\"] button"},
-        "kit": {"hash": "drafts-messages", "read": "#main [data-item=\"msg-sedge_foods_glen\"]"},
-        "panel": {"hash": "drafts-messages", "open": "tweak:message:msg-kestrel_foods_thorne", "eval": "(document.querySelector('.tweak-panel') || {}).innerText || ''"},
+        # Each message is on its person's card in Contacts (2026-11-04); the buttons counted are
+        # the ones on its face, More's left folded.
+        "rafe": {"hash": "contacts", "read": "#main [data-item=\"kestrel_foods_thorne\"]",
+                 "count": "#main [data-item=\"kestrel_foods_thorne\"] button:not(details.more:not([open]) button)"},
+        "kit": {"hash": "contacts", "read": "#main [data-item=\"sedge_foods_glen\"]"},
+        "panel": {"hash": "contacts", "more": "kestrel_foods_thorne", "open": "tweak:message:msg-kestrel_foods_thorne", "eval": "(document.querySelector('.tweak-panel') || {}).innerText || ''"},
         "close3": {"open": "tweak-close"},
         # What the live region says is set a moment after the tap (announce): waited for, never
         # read after a set time (CI, 2026-11-04: read before it was said).
-        "copy": {"hash": "drafts-messages", "click": "Copy message to Rafe", "ready": "/copied/.test(document.getElementById('live').textContent)",
+        "copy": {"hash": "contacts", "click": "Copy message to Rafe", "ready": "/copied/.test(document.getElementById('live').textContent)",
                  "eval": "document.getElementById('live').textContent"},
         "toast": {"hash": "contacts", "click": "Draft it: Taylor at Vale Freight", "ready": "/^Asked/.test(document.getElementById('live').textContent)",
                   "eval": "document.getElementById('live').textContent"},
@@ -647,7 +653,7 @@ def test_small_things_each_say_what_they_are(run, page):
 def test_a_messages_own_change_never_says_it_makes_a_pdf(run, page):
     """contacts 32."""
     got = run("engine", html=page, viewport=WIDE, clock=CLOCK, steps=[
-        {"hash": "drafts-messages", "open": "tweak:message:msg-kestrel_foods_thorne"},
+        {"hash": "contacts", "more": "kestrel_foods_thorne", "open": "tweak:message:msg-kestrel_foods_thorne"},
         {"eval": "(() => { const t = document.getElementById('tweak-text'); t.value = 'Shorter, please'; t.dispatchEvent(new Event('input', {bubbles: true})); return 1; })()"},
         {"open": "tweak-apply"}])
     assert not got["errors"], got["errors"]
@@ -745,12 +751,13 @@ def test_at_scale_the_counts_are_the_engines_and_a_message_past_five_opens(run, 
     path = os.path.join(crowd.root, "page.html")
     with open(out, encoding="utf-8") as fh, open(path, "w", encoding="utf-8") as w:
         w.write(app_page.standalone(fh.read()))
-    msgs = [x["id"] for x in m["messages"] if x["type"] == "reply"]
-    last = msgs[-1]
+    msgs = [x for x in m["messages"] if x["type"] == "reply"]
+    # A message's old address opens its person's card in Contacts (one page since 2026-11-04).
+    last, whose = msgs[-1]["id"], msgs[-1]["contact"]
     got = run("engine", html=path, viewport=PHONE, clock=CLOCK, steps=[
         {"hash": "contacts"},
-        {"hash": "drafts-messages/" + last, "until": "!!document.querySelector('[data-item=\"%s\"]')" % last,
-         "eval": "!!document.querySelector('[data-item=\"%s\"]')" % last}])
+        {"hash": "drafts-messages/" + last, "until": "!!document.querySelector('[data-item=\"%s\"] details.pdraft[open]')" % whose,
+         "eval": "!!document.querySelector('[data-item=\"%s\"] details.pdraft[open]')" % whose}])
     assert not got["errors"], got["errors"]
     head = "\n".join(got["after"][0]["text"].split("\n")[:6])
     assert f"{pc['need']} need you" in head and f"{pc['follow']} follow-ups you could send" in head, head

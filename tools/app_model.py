@@ -2623,6 +2623,35 @@ def _said(m) -> bool:
     return state.said_something(m)
 
 
+def exchange_of(msgs: list) -> dict | None:
+    """The latest exchange with someone and how it began, for their card (the latest only)
+    and its More (when you first wrote, how many each way): worked out once here, never on the
+    page. A message of ours (never a request taken back) and a message of theirs with words
+    (never an acceptance, a call or an auto-reply) count; nothing else does. None with neither."""
+    from network import state
+    said = []
+    for m in msgs:
+        day = str(m.get("date") or "")[:10]
+        if not _date(day):
+            continue
+        if state.direction(m) == "out" and not state.is_withdrawal(m) and not state.is_call(m):
+            said.append((day, "you"))
+        elif state.said_something(m):
+            said.append((day, "them"))
+    if not said:
+        return None
+    said.sort(key=lambda x: x[0])
+    last_day, last_who = said[-1]
+    first_day, first_who = said[0]
+    return {"last": last_who, "last_on": last_day,
+            # Their message after one of ours is a reply; one with nothing of ours before it
+            # is them writing first.
+            "replied": last_who == "them" and any(w == "you" for _d, w in said[:-1]),
+            "first": first_who, "first_on": first_day,
+            "out": sum(1 for _d, w in said if w == "you"),
+            "in": sum(1 for _d, w in said if w == "them")}
+
+
 def _people(ctx: Ctx, targets: dict) -> list:
     """Every live contact (a conversation going, a reply or anything else owed, a note
     waiting to go, a message out in the last 60 days), then the rest by recency until the
@@ -2701,7 +2730,10 @@ def _people(ctx: Ctx, targets: dict) -> list:
         (app_lists.ago(r[4], ctx.today) is not None and app_lists.ago(r[4], ctx.today) <= fold)
         or (not r[5] and r[2] in schema.NEVER_SENT and r[8]["group"] == "new"))]
     order = {g: n for n, g in enumerate(GROUPS)}
-    live_rows.sort(key=lambda x: (order[x[8]["group"]], -x[8]["late"],
+    # Someone with a message already drafted first, then who needs you: Contacts is one page,
+    # each person with what to send them, and what is written is the quickest thing to finish
+    # (the maintainer, 2026-11-04).
+    live_rows.sort(key=lambda x: (x[1] not in shown, order[x[8]["group"]], -x[8]["late"],
                                   -open_actions.HEAT.get(x[2], 0), x[3] or "9999", x[1]))
     rest.sort(key=lambda x: (x[4] or "", x[1]), reverse=True)
     out, used = [], 2
@@ -2720,6 +2752,8 @@ def _people(ctx: Ctx, targets: dict) -> list:
                 "wrote": any(state.direction(t) == "out" and not state.is_withdrawal(t)
                              for t in msgs),
                 "last": last, "title": title or None,
+                # The latest exchange, for the card's line; how it began, for its More.
+                "exchange": exchange_of(msgs),
                 "next_action": action, "link": link, "due": due or None,
                 "route": full[cid]["route"],
                 # Who they came through (the book's referred_by: a contact id or a name), so the
@@ -2759,7 +2793,9 @@ def _people(ctx: Ctx, targets: dict) -> list:
                                 "rest": len(full) - len(out), "need": counts["now"],
                                 "replies": replies, "follow": counts["follow"],
                                 "leave": counts["leave"], "waiting": counts["waiting"],
-                                "held": counts["held"]}
+                                "held": counts["held"],
+                                # People with a message drafted to them, on the list's top.
+                                "drafted": sum(1 for r in live_rows if r[1] in shown)}
     _list(ctx, "people", whole, len(out))
     return out
 

@@ -436,7 +436,7 @@ function budgetProbe() {
 }
 
 // ---------------------------------------------------------------- scenarios
-const SECTIONS = ["brief", "todo", "jobs", "drafts", "drafts-messages", "contacts", "interviews", "progress", "chat", "settings", "profile"];
+const SECTIONS = ["brief", "todo", "jobs", "drafts", "contacts", "interviews", "progress", "chat", "settings", "profile"];
 const S = {};
 async function openMore(page, item) {
   await page.locator('[data-item="' + item + '"] summary.more-btn').first().click();
@@ -774,6 +774,18 @@ S.engine = async (a) => {
       await (st.within ? page.locator(st.within) : page).getByRole(st.role || "button", {name: st.click, exact: !!st.exact}).first().click(); await turn(page, 6); }
     if (st.fill) for (const [label, value] of Object.entries(st.fill)) await page.locator("dialog").getByLabel(label, {exact: false}).first().fill(value);
     if (st.file) { await page.setInputFiles('dialog input[type="file"]', {name: st.file, mimeType: "application/pdf", buffer: PDF}); await turn(page, 8); }
+    // A box on the screen itself, not in a sheet (Contacts' "They replied", 2026-11-04).
+    if (st.fillMain) for (const [label, value] of Object.entries(st.fillMain)) await page.locator("#main").getByLabel(label, {exact: false}).first().fill(value);
+    if (st.then) { await page.getByRole("button", {name: st.then, exact: !!st.exact}).first().click(); await turn(page, 6); }
+    // Taps one after another as fast as a person makes them: one turn between each, never a
+    // wait for the one before (ten replies pasted in a row, 2026-11-04).
+    for (const q of st.quick || []) {
+      const at = q.within ? page.locator(q.within) : page;
+      if (q.click) await at.getByRole("button", {name: q.click, exact: !!q.exact}).first().click();
+      if (q.fill) for (const [label, value] of Object.entries(q.fill)) await at.getByLabel(label, {exact: false}).first().fill(value);
+      await turn(page, 1);
+    }
+    if (st.reload) { await page.reload(); await settle(page); }
     if (st.submit) { await page.locator("dialog [data-k=sheet-go]").click(); await turn(page, 6); }
     if (st.wait) { await page.waitForTimeout(st.wait); await turn(page, 6); }
     // A chat, played: every action so far applied, then the next state of the model.
@@ -855,22 +867,28 @@ S.tweak = async (a) => {
 };
 
 S.action_receipt = async (a) => {
-  const o = await open({html: a.html, hash: "drafts-messages"});
+  // Juno's reply is on her card in Contacts (one page since 2026-11-04).
+  const o = await open({html: a.html, hash: "contacts"});
+  const drafts = () => page.$$eval("#main details.pdraft", (x) => x.length);
   const {page, store} = o;
+  const movedBefore = await drafts();
   await clickText(page, "button", "I sent it: the message to Juno");
   await turn(page, 4);
   const ids = store.list("actions/");
   const doc = ids.length ? store.get(ids[0]) : null;
   const text = (sel) => page.$eval(sel, (e) => e.textContent.trim()).catch(() => null);
-  const saved = await text('#main [data-item="msg-juno-1"] .state');
+  const saved = await text('#main [data-item="larkspur_retail_castellan"] .state');
   const toast = await one(page, ".toast");
-  const focusAfter = await page.evaluate(() => { const e = document.activeElement; return {k: e.dataset ? e.dataset.k : null, inCard: !!(e.closest && e.closest('[data-item="msg-juno-1"]')), tag: e.tagName, inMain: !!(e.closest && e.closest("#main"))}; });
+  const focusAfter = await page.evaluate(() => { const e = document.activeElement; return {k: e.dataset ? e.dataset.k : null, inCard: !!(e.closest && e.closest('[data-item="larkspur_retail_castellan"]')), tag: e.tagName, inMain: !!(e.closest && e.closest("#main"))}; });
   const id = ids[0].split("/")[1];
   store.chat("receipts/" + id, {applied_at: new Date().toISOString(), by: "cloud-1", result: "ok", note: "", undo: {action: "msg.unsent", target: "msg-juno-1", value: null}});
   await turn(page, 6);
-  const done = await text("#main .gone .state");
-  const back = await T(page, "#main .gone button");
-  const moved = await page.$$eval("#main .card.msg", (x) => x.length);
+  // Sent, she waits for a reply below the fold, her card saying it is done, with its way back.
+  await page.locator('[data-k="fold:contacts"]').first().click().catch(() => {});
+  await turn(page, 4);
+  const done = await page.$$eval('#main [data-item="larkspur_retail_castellan"] .state', (x) => x.map((e) => e.textContent.trim()).join(" | ")).catch(() => null);
+  const back = await T(page, '#main [data-item="larkspur_retail_castellan"] .state button');
+  const moved = await drafts();
   // A refused one: the item changed since it was shown.
   await goto(page, "todo");
   await clickText(page, "button", "Yes, I have");
@@ -879,7 +897,7 @@ S.action_receipt = async (a) => {
   store.chat("receipts/" + ids2[0].split("/")[1], {applied_at: new Date().toISOString(), by: "cloud-1", result: "conflict", note: "Answered differently on your phone."});
   await turn(page, 6);
   const refused = await one(page, '#main [data-item="q-larkspur-data-looker"] .state');
-  const result = {ids, doc, saved, toast, focusAfter, done, back, moved, refused, errors: o.errors};
+  const result = {ids, doc, saved, toast, focusAfter, done, back, moved, movedBefore, refused, errors: o.errors};
   await o.ctx.close();
   return result;
 };
@@ -921,19 +939,19 @@ S.undo = async (a) => {
 
 // A failed write says so, at once, with a way to try again, and never "Saved".
 S.write_fail = async (a) => {
-  const o = await open({html: a.html, hash: "drafts-messages", fake: {failWrites: true}});
+  const o = await open({html: a.html, hash: "contacts", fake: {failWrites: true}});
   const {page} = o;
   await clickText(page, "button", "I sent it: the message to Juno");
   await turn(page, 8);
   // The alert is emptied, then written 30ms later so a screen reader says it again; a busy
   // machine read it in between (CI, 2026-10-29). Waited for, never assumed.
   await page.waitForFunction(() => document.getElementById("alert").textContent !== "", null, {timeout: 3000}).catch(() => {});
-  const r = {toast: await T(page, ".toast"), state: await one(page, '#main [data-item="msg-juno-1"] .state'), alert: await page.evaluate(() => document.getElementById("alert").textContent),
+  const r = {toast: await T(page, ".toast"), state: await one(page, '#main [data-item="larkspur_retail_castellan"] .state'), alert: await page.evaluate(() => document.getElementById("alert").textContent),
     live: await page.evaluate(() => document.getElementById("live").textContent), errors: o.errors};
   // Once the toast has gone, the card says it (a failure's toast stays 16 seconds).
   await page.clock.runFor(17000);
   await turn(page, 6);
-  r.stateAfter = await one(page, '#main [data-item="msg-juno-1"] .state');
+  r.stateAfter = await one(page, '#main [data-item="larkspur_retail_castellan"] .state');
   await o.ctx.close();
   return r;
 };
@@ -1348,14 +1366,14 @@ S.two_tabs = async (a) => {
   // Both windows show the one job, live.
   r.seen = [await one(p1, "#pill"), await one(p2, "#pill")];
   // The same tick from both windows is one action.
-  await p1.evaluate(() => { location.hash = "drafts-messages"; });
-  await p2.evaluate(() => { location.hash = "drafts-messages"; });
+  await p1.evaluate(() => { location.hash = "contacts"; });
+  await p2.evaluate(() => { location.hash = "contacts"; });
   await turn(p1, 4); await turn(p2, 4);
   await p1.getByRole("button", {name: "I sent it: the message to Juno"}).click();
   await turn(p1, 6); await turn(p2, 6);
   // The other window shows it marked at once, live, with nothing left to press twice.
   r.otherWindow = {chip: await T(p2, "#main .card.msg.is-marked .state-word"), buttons: await p2.$$eval('#main button[aria-label="I sent it: the message to Juno"]', (x) => x.length),
-    gone: await T(p2, "#main .gone li")};
+    card: await (async () => { await p2.locator('[data-k="fold:contacts"]').first().click().catch(() => {}); await turn(p2, 4); return (await one(p2, '#main [data-item="larkspur_retail_castellan"]')) || ""; })()};
   r.actions = o.store.list("actions/");
   r.errors = o.errors;
   await o.ctx.close();
@@ -1788,14 +1806,14 @@ S.downloads = async (a) => {
 };
 
 S.copy = async (a) => {
-  const o = await open({html: a.html, hash: "drafts-messages", clipboard: !a.denied, fake: {clipboardDenied: !!a.denied}});
+  const o = await open({html: a.html, hash: "contacts", clipboard: !a.denied, fake: {clipboardDenied: !!a.denied}});
   const {page} = o;
   const main = (sel) => page.$eval(sel, (x) => x.hasAttribute("data-primary"));
-  const before = {copy: await main('#main [data-item="msg-juno-1"] button.copy'), sent: await main('#main [data-item="msg-juno-1"] [data-k="sent:msg-juno-1"]')};
+  const before = {copy: await main('#main [data-item="larkspur_retail_castellan"] button.copy'), sent: await main('#main [data-item="larkspur_retail_castellan"] [data-k="sent:msg-juno-1"]')};
   await page.getByRole("button", {name: "Copy message to Juno"}).click();
   await turn(page, 6);
-  const r = {before, label: await T(page, '#main [data-item="msg-juno-1"] button.copy'), note: await T(page, "#main .card.msg .note"),
-    sentFilled: await main('#main [data-item="msg-juno-1"] [data-k="sent:msg-juno-1"]'),
+  const r = {before, label: await T(page, '#main [data-item="larkspur_retail_castellan"] button.copy'), note: await T(page, '#main [data-item="larkspur_retail_castellan"] .note'),
+    sentFilled: await main('#main [data-item="larkspur_retail_castellan"] [data-k="sent:msg-juno-1"]'),
     selected: await page.evaluate(() => String(window.getSelection())), errors: o.errors};
   if (!a.denied) r.clip = await copied(page);
   await o.ctx.close();

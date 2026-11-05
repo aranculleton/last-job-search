@@ -277,6 +277,8 @@ def test_a_long_unbroken_name_never_pushes_the_page_sideways(run, tmp_path):
         if x.get("contact") == m["people"][0]["id"]:
             x["to"] = long
     html = _page(tmp_path, model=m)
+    # Contacts carries each message on its person's card (one page since 2026-11-04), its old
+    # address included.
     s = _script(run, html, [{"hash": "contacts"}, {"hash": "drafts-messages"}], viewport=PHONE)
     assert all(x["width"] <= PHONE["width"] for x in s), [x["width"] for x in s]
 

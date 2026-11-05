@@ -38,8 +38,6 @@ FIRST_LIMIT = {"phone": 270, "wide": 300}
 # in both themes.
 BOTH = {"phone", "wide"}
 KNOWN = {
-    # 8: an email note carries Copy subject beside Copy message and its Sent button.
-    (8, "drafts-messages", "msg-priya-thanks"): BOTH, (8, "drafts-messages", "msg-noor-1"): BOTH,
     # 9: two applications at one employer, each row named by the employer alone.
     (9, "progress", "Ellerwick Trust"): {"wide"},
 }

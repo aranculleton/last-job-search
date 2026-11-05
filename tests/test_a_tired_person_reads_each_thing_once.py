@@ -40,10 +40,12 @@ def test_the_side_menu_has_coming_up_with_the_places_and_settings_alone_at_its_f
     assert phone == ["Brief", "To do", "Jobs", "Contacts", "Chat"], ("five places at most on a phone", phone)
 
 
-def test_a_message_marked_sent_leaves_messages_with_its_one_undo_in_the_toast(run, tmp_path):
-    card = "!!document.querySelector('#main .card.msg[data-item=\"msg-juno-1\"]')"
+def test_a_message_marked_sent_leaves_its_card_with_its_one_undo_in_the_toast(run, tmp_path):
+    # Juno's reply is on her card in Contacts (one page since 2026-11-04): sent, the draft and
+    # her card leave the list's top at once.
+    card = "!!document.querySelector('#main [data-item=\"larkspur_retail_castellan\"] details.pdraft')"
     got = _go(run, tmp_path, [
-        {"hash": "drafts-messages", "eval": card},
+        {"hash": "contacts", "eval": card},
         {"click": "I sent it: the message to Juno", "eval": "[" + card + ", " + TOASTS + ", document.querySelectorAll('#main button.undo').length]"},
     ], PHONE, clock=T)
     assert got["after"][0]["eval"] is True

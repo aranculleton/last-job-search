@@ -350,9 +350,10 @@ def test_a_card_being_changed_says_so(run, tmp_path):
     m = copy.deepcopy(_sample())
     mid = m["messages"][0]["id"]
     work = dict(QUEUED, kind="tweak", title="Edit message", args={"v": 1, "target": {"id": mid, "output": "message"}})
-    look = ("(() => { const c = document.querySelector('[data-item=\"" + mid + "\"]'); const g = c && c.querySelector('[data-tweak-going]');"
+    # The message is on its person's card in Contacts (one page since 2026-11-04).
+    look = ("(() => { const c = document.querySelector('[data-msg=\"" + mid + "\"]'); const g = c && c.querySelector('[data-tweak-going]');"
             " return g ? g.textContent : null; })()")
-    got = _go(run, tmp_path, [{"hash": "drafts-messages", "eval": look}], WIDE, model=m, seed=dict(HEARD, **{"work/tweak~m1": work}), clock=T)
+    got = _go(run, tmp_path, [{"hash": "contacts", "eval": look}], WIDE, model=m, seed=dict(HEARD, **{"work/tweak~m1": work}), clock=T)
     line = got["after"][0]["eval"]
     assert line and line.startswith("Claude changes this next") and "See it" in line, line
 

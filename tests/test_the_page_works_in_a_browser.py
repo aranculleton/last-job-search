@@ -301,9 +301,9 @@ def test_without_a_store_the_page_says_it_is_read_only(run, pages):
 
 # ------------------------------------------------------------------ every section, full and empty
 
-# Drafts are a view of Jobs, the messages to send a view of Contacts, and the Brief greets the
-# person by name (4.3).
-LABELS = {"brief": "Good morning, Morgan", "todo": "To do", "jobs": "Jobs", "drafts": "Jobs", "drafts-messages": "Contacts",
+# Drafts are a view of Jobs, the messages to send are on each person's card in Contacts (one
+# page since 2026-11-04), and the Brief greets the person by name (4.3).
+LABELS = {"brief": "Good morning, Morgan", "todo": "To do", "jobs": "Jobs", "drafts": "Jobs",
           "contacts": "Contacts", "interviews": "Coming up", "progress": "Progress", "chat": "Chat", "settings": "Settings",
           "profile": "Your profile"}
 JARGON = re.compile(r"\b(?:repository|repo|branch|worktree|commit|pull request|PR|git|json|database|db|artifact|webhook|"
@@ -323,7 +323,7 @@ def test_every_section_full_shows_its_items_in_plain_words(run, pages):
         assert "—" not in got["text"] and "–" not in got["text"], sid
         heads = re.findall(r"^(?:To do here|Needs your answer|Due or late|Next 7 days|Later)$", got["text"], re.M)
         assert not OLD_NAMES.search(" ".join(heads)), sid
-    for sid, n in {"todo": 8, "jobs": 3, "drafts": 2, "drafts-messages": 2, "contacts": 4, "interviews": 2, "progress": 10}.items():
+    for sid, n in {"todo": 8, "jobs": 3, "drafts": 2, "contacts": 4, "interviews": 2, "progress": 10}.items():
         assert r[sid]["items"] >= n, (sid, r[sid]["items"])
     jobs = r["jobs"]["text"]
     # A job with no pay loses nothing and says nothing: "Pay not stated" stood on nearly every
@@ -339,9 +339,10 @@ def test_every_section_full_shows_its_items_in_plain_words(run, pages):
     assert "put your name forward here" not in drafts, "the referrer's own resume carries no hold"
     # Drafts are a view of Jobs: its switch, Found, Drafts and Applied (4.3).
     assert "Found" in drafts and "Applied" in drafts
-    msgs = r["drafts-messages"]["text"]
-    assert "First notes this week" in msgs and "3 notes ready. 3 sent this week of about 20." in msgs
-    assert "LinkedIn InMail" in msgs and "Subject:" in msgs and "Copy subject" in msgs
+    # Each message on its person's card; the week's first notes against the limit in the summary.
+    msgs = r["contacts"]["text"]
+    assert "3 sent this week of about 20." in msgs and "7 messages to send." in msgs, msgs[:400]
+    assert "LinkedIn InMail" in msgs and "Subject:" in msgs, msgs[:400]
     assert "Every application" in r["progress"]["text"] and "earlier, finished" in r["progress"]["text"]
     settings = r["settings"]["text"]
     assert "An update is waiting" in settings and "4.0.1" not in settings
@@ -377,7 +378,7 @@ def test_every_control_on_every_screen_does_something_and_nothing_throws(run, pa
 def test_every_section_empty_says_what_will_appear_and_offers_one_step(run, pages):
     r = run("sections", html=pages["nothing"], viewport=PHONE)
     _clean(r)
-    expect = {"jobs": "No shortlist yet.", "drafts": "Nothing drafted yet.", "drafts-messages": "No messages to send.",
+    expect = {"jobs": "No shortlist yet.", "drafts": "Nothing drafted yet.",
               "contacts": "Who could refer you?", "interviews": "Your interviews and calls show here", "progress": "Nothing counted yet."}
     for sid, title in expect.items():
         assert r[sid]["empty"] == [title], (sid, r[sid]["empty"])
@@ -411,14 +412,17 @@ def test_a_long_history_shows_every_live_thing_without_a_tap_and_folds_only_the_
     assert r["progressRows"] == 40, "40 live applications, all shown"
     assert any(f.startswith("20 earlier, finished") for f in r["progressFold"])
     assert r["progressSearch"] and r["contactSearch"]
-    assert r["contactDefault"] == 8 and not r["defaultChips"], \
-        "Contacts opens on the 8 who need the person, with no filter left on (4.3)"
+    # The crowd keeps the sample's seven messages, to people not in its book: each is a card of
+    # its own, first, as a message with nobody on the list is (2026-11-04).
+    msgs = len(_sample()["messages"])
+    assert r["contactDefault"] == 8 + msgs and not r["defaultChips"], \
+        "Contacts opens on the messages to send and the 8 who need the person, with no filter left on (4.3)"
     assert any(f.startswith("292 more people, nothing to do for them now") for f in r["contactFold"]), r["contactFold"]
     assert r["searched"] >= 1 and r["searchFocus"] == "search", "typing in the search box keeps its focus"
     # A search is not a filter: it never says the rest are "hidden by your filters" (2026-11-03).
     assert not any("hidden by your filters" in f for f in r["hidden"]), r["hidden"]
-    assert r["cleared"] == 8
-    assert r["unfolded"] == 8 + 50, "the fold opens fifty at a time beyond the ones who need you"
+    assert r["cleared"] == 8 + msgs
+    assert r["unfolded"] == 8 + msgs + 50, "the fold opens fifty at a time beyond the ones up front"
     assert r["overflow"]["sw"] <= r["overflow"]["cw"]
 
 
@@ -472,7 +476,8 @@ def test_to_do_groups_by_when_then_by_employer_in_the_order_things_are_done(run,
     assert r["chips"] == 0, "no kind chips on To do"
     assert r["filled"] == 0 and r["answers"] >= 8, "a question never fills one of its answers"
     assert r["jobsQuestion"] and "Have you used Looker?" in r["jobsQuestion"], "Jobs asks its question on the role's own card"
-    assert r["juno"]["state"] == "Replied: your turn" and "See the draft" in r["juno"]["buttons"], r["juno"]
+    # Her reply is on her card in Contacts (2026-11-04): Copy, then I sent it, never drafted again.
+    assert r["juno"]["state"] in ("Replied: your turn", "Overdue") and "I sent it" in r["juno"]["buttons"], r["juno"]
     assert "Draft a reply" not in r["juno"]["buttons"], r["juno"]
 
 
@@ -515,12 +520,13 @@ def test_a_tap_is_saved_only_when_it_is_and_done_when_its_receipt_arrives(run, p
     doc = r["doc"]
     assert doc["item"] == "msg-juno-1" and doc["action"] == "msg.sent" and doc["rev_seen"] == "m1"
     assert doc["tab"] and doc["at"].endswith("Z")
-    # A message marked sent leaves Messages at once, its Undo in the toast and never a second
-    # one on a card left standing (the walk-through, 2026-11-03).
+    # A message marked sent leaves Juno's card at once, and she the list's top, its Undo in the
+    # toast and never a second one on a card left standing (the walk-through, 2026-11-03;
+    # Contacts is one page since 2026-11-04).
     assert r["saved"] is None, "the card left the list: nothing says Saved under the toast"
     assert "Marked as sent: Juno" in r["toast"] and "Undo" in r["toast"]
     assert r["focusAfter"]["inMain"] and r["focusAfter"]["tag"] != "BODY", ("the card gone, focus is on what took its place, never lost", r["focusAfter"])
-    assert r["done"].startswith("Done.") and r["moved"] == 3, "once done it moves to Sent or skipped: three of four cards left"
+    assert r["done"].startswith("Done.") and r["moved"] == r["movedBefore"] - 1, ("once done her card says so, and one draft fewer is shown", r["done"], r["moved"], r["movedBefore"])
     assert "Change back" in r["back"], "and where the chat left a way back, it can be changed back"
     # A refusal says the engine's own reason, once: "this changed since you saw it" only for a
     # stale one, never over a conflict that says something else (the audit, 2026-11-03).
@@ -633,10 +639,10 @@ def test_two_windows_pressing_draft_at_once_make_one_job_and_one_ring(run, pages
     assert r["tabs"][0] != r["tabs"][1], "each window has its own id for its actions"
     assert all(s and "1 waiting" in s for s in r["seen"]), r["seen"]
     assert _base(r["actions"]) == ["actions/act~msg-juno-1~msg.sent"]
-    # Sent, it leaves Messages in every window at once and is listed under Sent or skipped
-    # (2026-11-03: a finished card leaves its list); the other window cannot tick it again.
+    # Sent, it leaves Juno's card in every window at once, her card saying it went (2026-11-03:
+    # a finished card leaves its list); the other window cannot tick it again.
     assert r["otherWindow"]["buttons"] == 0 and r["otherWindow"]["chip"] == [], "the other window cannot tick it again"
-    assert any(g.startswith("To Juno") and "sent" in g for g in r["otherWindow"]["gone"]), r["otherWindow"]
+    assert "Message sent" in r["otherWindow"]["card"], r["otherWindow"]
 
 
 def test_a_tap_rings_the_doorbell_inside_the_click_once_and_never_asks_send_this(run, pages):
@@ -1250,7 +1256,6 @@ def test_screenshots_for_a_person_to_judge(run, pages):
     if not SHOTS:
         pytest.skip("set LJS_SHOTS to a folder to write the screenshots")
     files = run("shots", html=pages["sample"], list=[
-        {"name": "phone-messages", "viewport": PHONE, "hash": "drafts-messages"},
         {"name": "phone-contacts", "viewport": PHONE, "hash": "contacts"},
         {"name": "phone-interviews", "viewport": PHONE, "hash": "interviews"},
         {"name": "phone-progress", "viewport": PHONE, "hash": "progress", "full": True},

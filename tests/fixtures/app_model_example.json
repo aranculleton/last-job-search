@@ -1,7 +1,7 @@
 {
  "model": 1,
  "made_at": "2026-10-25T18:00:00Z",
- "rev": "d107893d91d9",
+ "rev": "c0cce7bb1cfe",
  "app": {
   "version": "4.9.1",
   "url": null,
@@ -13,7 +13,7 @@
   ],
   "privacy": "Only you can open this page unless you share it. It holds first names, employers, your drafts and your setup answers, so keep it unshared.",
   "repo": "https://github.com/aranculleton/last-job-search",
-  "page": 24,
+  "page": 25,
   "not_saved": 0
  },
  "person": {
@@ -48,7 +48,7 @@
  ],
  "jobs": {
   "round": "r9",
-  "made_at": "2026-11-05T00:22:31Z",
+  "made_at": "2026-11-05T00:49:27Z",
   "met": false,
   "summary": "3 roles from the last search to look at, 1 of them scoring 75 or more. 3 left out, each with its reason.",
   "rows": [
@@ -637,6 +637,57 @@
  ],
  "people": [
   {
+   "id": "kestrel_mutual_ansgar",
+   "first_name": "Pell",
+   "employer": "Kestrel Mutual",
+   "status": "not_contacted",
+   "status_word": "Not written to",
+   "group": "new",
+   "owed": {
+    "kind": "draft",
+    "label": "See the note",
+    "message": "msg-kestrel_mutual_ansgar",
+    "reply": false
+   },
+   "next": "Your note to them is written: send it",
+   "late": 0,
+   "hold": null,
+   "stopped": false,
+   "wrote": false,
+   "last": null,
+   "title": "Claims Analytics Lead",
+   "exchange": null,
+   "next_action": "Send the first note; call if needed",
+   "link": null,
+   "due": null,
+   "route": "alumni",
+   "came_through": null,
+   "who": "hiring",
+   "replied": false,
+   "live": true,
+   "call": null,
+   "paste": null,
+   "where_unknown": false,
+   "asked_sent": null,
+   "is_process_stage": false,
+   "thread": [],
+   "thread_more": 0,
+   "related": {
+    "jobs": [
+     "r9-2"
+    ],
+    "ready": [
+     "app-kestrel_mutual_claims_forecasting_analyst"
+    ],
+    "messages": [
+     "msg-kestrel_mutual_ansgar"
+    ]
+   },
+   "rev": "fcaad01498cf",
+   "alerts": [],
+   "suggest": null
+  },
+  {
    "id": "larkspur_retail_castellan",
    "first_name": "Juno",
    "employer": "Larkspur Retail",
@@ -661,6 +712,15 @@
    "wrote": true,
    "last": "2026-09-12",
    "title": "Analytics Manager",
+   "exchange": {
+    "last": "them",
+    "last_on": "2026-09-12",
+    "replied": true,
+    "first": "you",
+    "first_on": "2026-09-10",
+    "out": 1,
+    "in": 1
+   },
    "next_action": "send the CV",
    "link": null,
    "due": "2026-10-20",
@@ -747,6 +807,15 @@
    "wrote": true,
    "last": "2026-09-21",
    "title": "Head of Supply Chain Analytics",
+   "exchange": {
+    "last": "you",
+    "last_on": "2026-09-21",
+    "replied": false,
+    "first": "you",
+    "first_on": "2026-09-21",
+    "out": 1,
+    "in": 0
+   },
    "next_action": "One nudge if no reply",
    "link": null,
    "due": "2026-09-29",
@@ -779,56 +848,6 @@
    "rev": "b27405fc8c16",
    "alerts": [],
    "suggest": null
-  },
-  {
-   "id": "kestrel_mutual_ansgar",
-   "first_name": "Pell",
-   "employer": "Kestrel Mutual",
-   "status": "not_contacted",
-   "status_word": "Not written to",
-   "group": "new",
-   "owed": {
-    "kind": "draft",
-    "label": "See the note",
-    "message": "msg-kestrel_mutual_ansgar",
-    "reply": false
-   },
-   "next": "Your note to them is written: send it",
-   "late": 0,
-   "hold": null,
-   "stopped": false,
-   "wrote": false,
-   "last": null,
-   "title": "Claims Analytics Lead",
-   "next_action": "Send the first note; call if needed",
-   "link": null,
-   "due": null,
-   "route": "alumni",
-   "came_through": null,
-   "who": "hiring",
-   "replied": false,
-   "live": true,
-   "call": null,
-   "paste": null,
-   "where_unknown": false,
-   "asked_sent": null,
-   "is_process_stage": false,
-   "thread": [],
-   "thread_more": 0,
-   "related": {
-    "jobs": [
-     "r9-2"
-    ],
-    "ready": [
-     "app-kestrel_mutual_claims_forecasting_analyst"
-    ],
-    "messages": [
-     "msg-kestrel_mutual_ansgar"
-    ]
-   },
-   "rev": "fcaad01498cf",
-   "alerts": [],
-   "suggest": null
   }
  ],
  "interviews": [
@@ -843,7 +862,7 @@
    "when": "2026-10-28",
    "prep": {
     "path": "documents/applications/thornbury_bank_risk_analyst_thornbury/interview_prep.md",
-    "updated": "2026-11-05T00:22:31Z"
+    "updated": "2026-11-05T00:49:27Z"
    },
    "questions": 2,
    "all_day": true,
@@ -1885,7 +1904,8 @@
   "follow": 1,
   "leave": 0,
   "waiting": 0,
-  "held": 0
+  "held": 0,
+  "drafted": 1
  },
  "lists": {
   "applications": {

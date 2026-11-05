@@ -50,6 +50,18 @@ make sense to somebody whose repo just received it.
 - **No two of Claude's chats share a name.** A second job like one still running gets "(2)"
   after its name.
 
+- **Contacts is one page.** There are no People and Messages tabs any more: each person's card
+  shows the message written for them under their name, ready to copy, until you tap I sent it.
+  People with a message to send come first. An old link to Messages opens Contacts on that
+  person, and To do's "messages ready to send" opens Contacts at them.
+- **Pasting a reply is one box under the person.** Tap They replied, paste what they sent and
+  tap Draft my reply. You can do the next one straight away: each card says where its reply
+  stands (waiting, next, in line, Claude is on it), and Claude's reply appears on that same
+  card, ready to copy. This holds after a reload too.
+- **Fewer buttons on a contact's card.** Editing the message, their profile link and "I changed
+  it first" are under More, with when you first wrote to them and how many messages each way.
+  The card itself says only the latest exchange ("You wrote 2 Nov", "They replied 3 Nov"), and
+  "Overdue" in its corner when a follow-up is late.
 - **Reply help no longer points at an old resume your rules forbid.** It offers a resume only if
   the app made and checked it and your own rules do not say never to send it; otherwise it says
   to make one for that person.

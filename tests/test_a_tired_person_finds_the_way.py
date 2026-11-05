@@ -224,7 +224,7 @@ def test_to_do_opens_on_what_is_late_or_due_today_and_folds_the_setup(run, tmp_p
     r = got["after"][0]["eval"]
     titles = [c["title"] for c in r["cards"]]
     # The Fernhill Freight follow-up and the reply to Juno are drafted, so they share one card
-    # that opens Messages (2026-11-04).
+    # that opens Contacts at them (2026-11-04).
     for owed in ("Thank-you note after your Harbourline Bank first interview", "2 messages ready to send", "Send your CV to Tamsin"):
         assert owed in titles, (owed, titles)
     bands = [c["band"] for c in r["cards"]]
@@ -237,7 +237,7 @@ def test_to_do_opens_on_what_is_late_or_due_today_and_folds_the_setup(run, tmp_p
 
 
 # Found along the way, 2026-11-02. "Did your note to Wren go?" is answered once the note is
-# marked sent in Messages, never asked again.
+# marked sent (on her card in Contacts, its old Messages address kept), never asked again.
 UNFOLD = "(() => { [...document.querySelectorAll('#main button')].filter((b) => /^Show \\d+ more/.test(b.textContent.trim())).forEach((b) => b.click()); return 1; })()"
 ASKED = "document.querySelector('#main').innerText.includes('Did your note to Wren go?')"
 
