@@ -344,10 +344,11 @@ def test_no_scheduled_task_the_app_prints_carries_a_connectors_field():
     for this organization"), so a printed call that carried `"connectors": []` failed as
     written (the maintainer's copy, 2026-11-05). The app connects nothing, so it never needs
     the field: no tool spells it into a call."""
-    import glob
+    sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+    import repo_files
     root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
     found = []
-    for path in glob.glob(os.path.join(root, "tools", "**", "*.py"), recursive=True):
+    for path in map(str, repo_files.files("tools/**/*.py")):
         if os.sep + "openroles" + os.sep in path:
             continue
         with open(path, encoding="utf-8") as fh:

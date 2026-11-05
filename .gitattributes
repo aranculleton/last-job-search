@@ -83,6 +83,8 @@ documents/network/.title_yield.json merge=ljs-state text eol=lf
 documents/network/*/reading.json merge=ljs-state text eol=lf
 documents/network/*/own_facts.json merge=ljs-state text eol=lf
 documents/network/*/draft.parts.json merge=ljs-state text eol=lf
+documents/network/*/draft.not-needed.json merge=ljs-state text eol=lf
+documents/network/*/draft.answers.json merge=ljs-state text eol=lf
 documents/applications/*/campaign.json merge=ljs-state text eol=lf
 documents/applications/*/.interview_prep.built.json merge=ljs-state text eol=lf
 documents/applications/*/draft.json merge=ljs-state text eol=lf

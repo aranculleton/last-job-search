@@ -281,6 +281,12 @@ JSON_FILES = {
     # The parts this contact's note was built from (parts.save): a snapshot of one note.
     "documents/network/*/draft.parts.json": {"whole": ("",), "indent": 1, "sort": "all",
                                              "newline": False},
+    # What a parked draft's row said when it was set aside (state.park_draft), so putting the
+    # row back as it was brings the draft back: a snapshot, the newer whole.
+    "documents/network/*/draft.not-needed.json": {"whole": ("",), "newline": False},
+    # The newest message of theirs a draft answered (state.save_answers): a snapshot of what
+    # the draft was written against, the newer whole.
+    "documents/network/*/draft.answers.json": {"whole": ("",), "newline": False},
     # ---- one application or interview process
     # The person's answer to a campaign chat (interview_pack.record_campaign), and what the
     # last build wrote into the living prep document (its built record): snapshots.
