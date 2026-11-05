@@ -2899,11 +2899,12 @@
   }
   // A job's draft, where it is one to show in the list in the job's place: still to send, or
   // sent today, so its mark can be undone where it was made.
+  // A draft applied to leaves To apply at once, its Undo in the toast: kept there a day,
+  // marked, it read as still to do at the foot of the list (the maintainer, 2026-11-05: "why
+  // are jobs ive applied for showing at the bottom of the to apply list?").
   function draftInList(a) {
     if (!a) return false;
-    if (readyLive(a)) return true;
-    const ago = daysSince(a.applied_on || a.sent_on);
-    return (ago === null && !!settledAction(a.id)) || (ago !== null && ago <= 1);
+    return readyLive(a) && !effective(a.id, ["ready.applied"]);
   }
   function listDraft(r) {
     if (r && r.__draft) return r.__draft;
@@ -5636,7 +5637,11 @@
     // waits under the list, one tap away, as what was set aside does, never among the roles to
     // look at with a red note of its own (2026-11-05).
     const shut = tab === "new" ? rows.filter((r) => txt(obj(r.apply).status) === "closed" && inTab(jobStatus(r), tab) && !jobPending(r) && aside.indexOf(r) < 0) : [];
-    const found = rows.filter((r) => ((inTab(jobStatus(r), tab) && !(tab !== "new" && jobPending(r))) || (tab === "new" && jobPending(r))) && aside.indexOf(r) < 0 && shut.indexOf(r) < 0);
+    // One marked applied here leaves To apply at once, never kept at its foot until Claude has
+    // caught up; Applied shows it (the maintainer, 2026-11-05).
+    const appliedHere = (r) => { const e = effective(r.id, ["job.dismiss", "job.applied"]); return !!(e && e.doc.action === "job.applied") || (!!sameDraft(r) && !!effective(sameDraft(r).id, ["ready.applied"])); };
+    const found = rows.filter((r) => ((inTab(jobStatus(r), tab) && !(tab !== "new" && jobPending(r))) || (tab === "new" && jobPending(r))) && aside.indexOf(r) < 0 && shut.indexOf(r) < 0
+      && !(tab === "new" && appliedHere(r)));
     // Each job once, at its own stage: a drafted one is its draft's card, with the job's
     // score, facts and reasons; a draft with no job in the list (an older search's, a resume
     // made for someone) is a card of its own. Drafts first, then the finds by fit.
@@ -9574,6 +9579,11 @@
   }
   // Jobs, Applied: every application, from any round or from outside the app, each a record
   // with its next step and "I heard back".
+  // By the date it was applied, or the day of the tap where Claude has not caught up yet. Dates
+  // carry no hour, so "the last day" is today or yesterday: never a role applied to last night
+  // missing by morning.
+  function appliedOn(a) { const e = effective(a.id, ["job.applied", "ready.applied"]); return txt(obj(e && e.doc.value).on) || a.applied_on || a.sent_on || a.last; }
+  function appliedWithin(a, days) { const d = daysSince(appliedOn(a)); return d !== null && d <= days; }
   function renderApplied(where) {
     // Only what was sent: a drafted application is in Drafts, never here with "I heard back".
     const items = applicationItems().filter((a) => !["drafted", "not_applying"].includes(txt(a.status)));
@@ -9595,12 +9605,18 @@
         const rank = (x) => (appInterview(x) ? 0 : appNudge(x) ? 1 : appLive(x) ? 2 : 3);
         return (rank(a) - rank(b)) || txt(b.applied_on || b.last).localeCompare(txt(a.applied_on || a.last));
       },
-      chips: [{key: "group", label: "Where it stands", options: [["waiting", "Waiting on them", (a) => APP_GROUP[txt(a.status)] === "waiting"], ["progress", "In progress", (a) => APP_GROUP[txt(a.status)] === "progress"],
+      chips: [{key: "when", label: "Applied", options: [["day", "Today or yesterday", (a) => appliedWithin(a, 1)], ["week", "This week", (a) => appliedWithin(a, 7)]]},
+        {key: "group", label: "Where it stands", options: [["waiting", "Waiting on them", (a) => APP_GROUP[txt(a.status)] === "waiting"], ["progress", "In progress", (a) => APP_GROUP[txt(a.status)] === "progress"],
         ["closed", "Closed", (a) => APP_GROUP[txt(a.status)] === "closed"]]}],
       search: (a) => [a.company, a.role].join(" "), searchLabel: "Employer or role",
       empty: () => empty("Nothing applied yet", "Roles you apply to move here."),
       render: appRecordCard, box: (kids) => h("div", {class: "stack"}, kids)};
     const key = "jobs:applied";
+    // Opens on what was applied to in the last day, said as a filter on its own chip with Clear
+    // all beside it, so the whole list is one tap away (the maintainer, 2026-11-05: "lets have
+    // the applied list do a default filter of 24hrs but its made clear that its a filter u can
+    // remove"). Never with nothing to show: an empty last day opens on everything.
+    if (!S.lists.has(key)) listState(key, items.some((a) => appliedWithin(a, 1)) ? {when: ["day"]} : {});
     const f = listFacets(key, lo);
     put(wrap, controlRow([jobsSwitch("applied"), items.length > 8 ? searchField(key, lo) : h("span", {class: "grow"}), filterButton(key, lo, f)]));
     put(wrap, activeFilters(key, lo, f));
@@ -12268,6 +12284,7 @@
     talkStatus.hidden = !status;
     talkSend.disabled = disabled || S.quick.busy;
     talkStop.hidden = !S.quick.busy;
+    rescueQuick();
     if (fk && !refocus(talkEl, fk)) refocus(talkBody, fk);
     // Kept at the newest while the person has not scrolled up, whenever new messages land; the
     // Latest button otherwise (the maintainer, 2026-11-05: opened at the top, no way down).
@@ -12359,7 +12376,7 @@
   // question goes to the quick answer unless it is a request ("can you find ...?").
   const WORK_LEAD = "(?:(?:also|please|pls|plz|now|ok|okay|and|then|just|so|right|lets|let's|let us|i want you to|i need you to|i'd like you to|id like you to|go ahead and)[\\s,]+)*";
   const WORK_ASK = "(?:can you|could you|would you|will you|can u|could u)[\\s,]+";
-  const WORK_VERB = "(?:find|search|look for|look up|scratch|scrap|scrape|delete|remove|clear|bin|ditch|drop|draft|redraft|write|rewrite|redo|apply|tailor|prep|prepare|update|change|edit|fix|add|make|build|send|message|reply|follow up|chase|network|connect|book|cancel|reschedule|move|run|start|stop|set up|tidy|research|get)";
+  const WORK_VERB = "(?:log|mark|record|find|search|look for|look up|scratch|scrap|scrape|delete|remove|clear|bin|ditch|drop|draft|redraft|write|rewrite|redo|apply|tailor|prep|prepare|update|change|edit|fix|add|make|build|send|message|reply|follow up|chase|network|connect|book|cancel|reschedule|move|run|start|stop|set up|tidy|research|get)";
   const WORK_OBJ = "\\s+(?:me|us|him|her|them|it|this|that|these|those|the|a|an|my|our|his|their|some|more|all|every|each|any|another|new|other|\\d+|ten|five|three|two|to|for|with|on|at|in|up|out|back|off|jobs?|roles?|people|contacts?|interviews?|drafts?|messages?|replies|notes?|resumes?|cvs?|letters?)\\b";
   const ASKS_FOR_WORK = new RegExp("^" + WORK_LEAD + "(" + WORK_ASK + ")?" + WORK_VERB + WORK_OBJ, "i");
   function talkGoing() {
@@ -12538,6 +12555,19 @@
     renderChat();
     askQuick("Please start the practice interview.", true);
   }
+  const QUICK_MS = 45000;
+  // A question kept in the quick chat with no answer after it (the page closed while it was
+  // answered, or an older page dropped it) goes to Claude once, on this visit.
+  function rescueQuick() {
+    if (S.quick.mode || S.quickRescued) return;
+    const th = currentThread("quick");
+    const list = S.msgs.get(th) || [];
+    if (!list.length) return;
+    S.quickRescued = true;
+    const dayAgo = new Date(now() - DAY).toISOString();
+    const last = list[list.length - 1];
+    if (last.from === "you" && txt(last.at) >= dayAgo && now() - (tms(last.at) || 0) > 2 * 60000 && txt(last.text)) handOff(txt(last.text), false);
+  }
   async function askQuick(text, hidden) {
     const sample = await CAP.sample;
     if (!sample) { if (!S.quick.mode) handOff(text, true); return; }
@@ -12586,7 +12616,10 @@
     try {
       const opts = {modelTier: "quick", signal: S.quick.ctl.signal, onText: (u) => { S.quick.partial = u.text; renderChat(); }};
       if (tools) opts.tools = tools; else opts.cache = false;
-      const r = await sample(input, opts);
+      // An answer that never comes is handed to Claude, never left unanswered (the maintainer,
+      // 2026-11-05: two messages saved in the quick chat that nothing answered).
+      const r = await within(sample(input, opts), QUICK_MS);
+      if (r === "timeout") { try { S.quick.ctl.abort(); } catch (e) { /* gone */ } throw Object.assign(new Error("timeout"), {code: "timeout"}); }
       answer = txt(r && r.text);
       if (!withTools && /^\s*NEEDS CHAT:/i.test(answer)) handoff = clip(answer.replace(/^\s*NEEDS CHAT:\s*/i, "").split(/[.\n]/)[0], 160);
     } catch (e) {
@@ -12596,6 +12629,8 @@
       if (code === "rate_limited") { S.flags.limit = now() + Math.max(60000, Number(e && e.retryAfterMs) || 0); answer = answer || "Claude has reached your plan's limit for now. Try again later."; }
       else if (code === "not_granted" || code === "sampling_disabled" || code === "not_declared" || code === "capability_disabled" || code === "capability_removed" || code === "session_expired") { S.caps.sample = null; capsSettled.sample = true; if (!S.quick.mode) handoff = "quick answers are off for this page"; }
       else if (code === "cancelled") answer = answer ? answer + " (stopped)" : "Stopped.";
+      // Any other failure goes to Claude, as a question that needs it does.
+      else if (!S.quick.mode) handoff = "the quick answer did not come";
       else answer = answer ? answer + " (cut off)" : "That did not work. Try again.";
     }
     S.quick.busy = false;

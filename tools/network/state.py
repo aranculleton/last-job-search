@@ -1471,9 +1471,72 @@ def effective_status(contact, thread_rows) -> str:
         return derived
     if not thread_rows and stored != "not_contacted":
         return stored
+    if unheard(contact, thread_rows, derived):
+        # A conversation or a call the log has no word of theirs for: what the log shows wins.
+        return "connected_no_reply" if derived == "awaiting_reply" and connected(contact) else derived
     if stored not in DERIVABLE:
         return stored
     return derived
+
+
+# The statuses that claim they took part. Imported from earlier notes ("varying engagement")
+# with nothing but our own unaccepted request in the log, one kept "Talking" for good and
+# the page queued "Write to <name>" off a reply never sent (the maintainer, 2026-11-05).
+CLAIMS_THEIR_WORD = frozenset({"in_conversation", "call_booked"})
+
+
+# What `set_contact` writes into the notes when the person says, on the page or in a chat,
+# that they are talking to someone the log has no word from (in touch another way, a
+# referral that ended): their own word is the evidence.
+SAID_BY_HAND = "set by hand, with no message from them on file"
+_SAID_BY_HAND = re.compile(r"\b(?:in_conversation|call_booked) " + re.escape(SAID_BY_HAND))
+_A_CALL = re.compile(r"\ACall on \d{4}-\d{2}-\d{2}\b")
+
+
+def unheard(contact, rows, derived=None) -> bool:
+    """Does the row claim a conversation or a call when the log, which has rows, holds no
+    message from them and no call, and nothing else says so: no call day on the row (Call
+    booked, or one that is over) and no status the person set themselves? An empty log is
+    the log behind (`effective_status`), and one the log cannot read at all keeps the row."""
+    stored = str(contact.get("status") or "").strip()
+    if stored not in CLAIMS_THEIR_WORD or not rows:
+        return False
+    if (derived or derive_status(rows)) == "not_contacted":
+        return False
+    if any(said_something(r) or is_call(r) for r in rows):
+        return False
+    if _A_CALL.match(" ".join(str(contact.get("next_action") or "").split())):
+        return False
+    return not _SAID_BY_HAND.search(str(contact.get("notes") or ""))
+
+
+def _url_key(url) -> str:
+    u = str(url or "").strip().lower().split("?")[0].split("#")[0].rstrip("/")
+    return re.sub(r"^https?://(?:[a-z]{2,3}\.)?(?:www\.)?", "", u)
+
+
+_CONNECTED = {}
+
+
+def connected(contact, path=None) -> bool:
+    """Is this contact among the person's LinkedIn connections, by the export's
+    Connections.csv? By profile address, or by name where either side has none. Read once
+    per file as it stands."""
+    path = path or person.local_state("documents", "linkedin", "Connections.csv")
+    try:
+        stamp = os.stat(path).st_mtime_ns
+    except OSError:
+        return False
+    got = _CONNECTED.get(path)
+    if not got or got[0] != stamp:
+        rows = first_degree(path)
+        got = (stamp, {_url_key(r["linkedin_url"]) for r in rows if r.get("linkedin_url")},
+               {_match_name(r["name"]) for r in rows})
+        _CONNECTED[path] = got
+    url = _url_key(contact.get("linkedin_url") or contact.get("url"))
+    if url and url in got[1]:
+        return True
+    return bool(_match_name(contact.get("name"))) and _match_name(contact.get("name")) in got[2]
 
 
 # Findings that are a note rather than a job. `history_not_logged` is a
@@ -1635,6 +1698,11 @@ def reconcile(contacts, threads, tracker=None) -> list[dict]:
         elif stored in DERIVABLE and stored != derived:
             flag(cid, name, stored, derived, "contradicts_log",
                  "the log says the status is " + derived)
+        elif unheard(contact, rows, derived):
+            # An error, never a note: the page reads them as talking and asks for a reply.
+            flag(cid, name, stored, effective_status(contact, rows), "no_word_from_them",
+                 "status says they took part, but the log holds no message from them and "
+                 "no call; read as " + effective_status(contact, rows) + " until one is logged")
         elif stored in schema.TERMINAL and reopened(contact, rows, derived):
             flag(cid, name, stored, derived, "reopened",
                  "thread was closed and they have since replied")
@@ -3893,7 +3961,11 @@ def set_contact(contacts, threads, who, status=None, next_action=None, due=None,
             raise ValueError(f"{status!r} is not a status; one of: "
                              f"{', '.join(schema.THREAD_STATUSES)}")
         row["status"] = status
-        shown = effective_status(row, threads_for(threads, row.get("contact_id", "")))
+        mine = threads_for(threads, row.get("contact_id", ""))
+        if unheard(row, mine):
+            # The person's own word that they are talking, which the log cannot show.
+            _note(row, "notes", f"{today or datetime.date.today().isoformat()}: {status} {SAID_BY_HAND}")
+        shown = effective_status(row, mine)
         said.append(f"status {status}" + ("" if shown == status else
                                           f" (the message log still shows {shown}: a reply "
                                           "owed, or a later message, outranks it)"))

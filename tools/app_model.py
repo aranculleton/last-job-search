@@ -1397,6 +1397,7 @@ def _jobs(ctx: Ctx, targets: dict) -> dict:
         print(f"app: Jobs is shown without its rules read again ({e})", file=sys.stderr)
         cut = _no_rules
     left = ctx._got.setdefault("jobs_left_out", [])
+    staged: list[list] = []
     for rname, rank, r in found:
         if not isinstance(r, dict):
             continue
@@ -1459,8 +1460,6 @@ def _jobs(ctx: Ctx, targets: dict) -> dict:
         if r.get("referral_note"):
             # Kept, never dropped, for a referral in progress here (throttle.employer_stops).
             notes.append("Someone is referring you here: apply through them, never on your own.")
-        jid = f"{rname}-{rank}"
-        top, at_target = _pay_top(pay)
         # Counted to today: the posting's own date where the search read one, else its age
         # on the day the search ran plus the days since. A search's own count stays as it
         # was, so a row found on the 21st said "posted 1 day ago" a week on (2026-10-29).
@@ -1476,8 +1475,8 @@ def _jobs(ctx: Ctx, targets: dict) -> dict:
         if posted is None:
             posted = app_lists.ago(r.get("first_seen"), ctx.today)
         # Never the search file's own time, which a fresh copy of the files moves.
-        found = found_on(r, entry)
-        found = min(found, ctx.today) if found else None   # never "found" after today
+        found_day = found_on(r, entry)
+        found_day = min(found_day, ctx.today) if found_day else None   # never after today
         # Past the person's own search window, a posting nobody has decided on leaves the list
         # by itself, counted to today from its own date: the week rule hung on a chat
         # remembering to clear it, measured from the day it was found (2026-11-03).
@@ -1506,6 +1505,31 @@ def _jobs(ctx: Ctx, targets: dict) -> dict:
         elif status in ("new", "ready", "applied"):
             cut.note(r, "you added it" if added else f"from search {rname}" if earlier
                      else "from this search")
+        staged.append({"rname": rname, "rank": rank, "r": r, "added": added, "earlier": earlier,
+                       "score": score, "url": url, "company": company, "title": title,
+                       "status": status, "place": place, "pay": pay, "notes": notes,
+                       "posted": posted, "found_day": found_day,
+                       "open": status == "new" and not mine and not why})
+    # One open role per employer across the whole list, whichever search found it: of the
+    # roles nobody has decided on, the one that fits best stays and each other is set aside
+    # with its reason and its way back (Bring back marks it lifted, so it stays). Only one
+    # search's own shortlist kept to one, so three roles at one employer from three searches
+    # all reached Jobs (the maintainer, 2026-11-05). A role the person added, kept, brought
+    # back, drafted or applied for is never one of them.
+    contending = [c for c in staged if c["open"]]
+    for at, why in run_round.extra_roles([c["r"] for c in contending]).items():
+        c = contending[at]
+        left.append((c["rname"], c["rank"], c["r"], why))
+        c["status"] = "dismissed"
+        c["notes"].append(left_words(why))
+    for c in staged:
+        rname, rank, r, added, earlier = c["rname"], c["rank"], c["r"], c["added"], c["earlier"]
+        score, url, company, title, status = (c["score"], c["url"], c["company"], c["title"],
+                                              c["status"])
+        place, pay, notes, posted, found_day = (c["place"], c["pay"], c["notes"], c["posted"],
+                                                c["found_day"])
+        jid = f"{rname}-{rank}"
+        top, at_target = _pay_top(pay)
         item = {"id": jid, "rank": rank, "score": score, "band": _band(score),
                 "company": company, "title": title, "place": place, "remote": _remote(place),
                 "place_short": short_place(place),
@@ -1515,8 +1539,8 @@ def _jobs(ctx: Ctx, targets: dict) -> dict:
                 # The day it was first found, for "found today" on its card: searches run more
                 # than once, and one surfaced weeks ago may be one to put away (the
                 # maintainer, 2026-11-05).
-                "found_on": found.isoformat() if found else None,
-                "found_days": (ctx.today - found).days if found else None,
+                "found_on": found_day.isoformat() if found_day else None,
+                "found_days": (ctx.today - found_day).days if found_day else None,
                 # The tools it asks for that the person holds one of the same kind for (fit.py
                 # near_matches, kept by the round), for "Asked for Tableau, you have Power BI".
                 "near": [{"asked": str(x.get("asked") or ""), "have": str(x.get("have") or "")}

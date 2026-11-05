@@ -577,9 +577,13 @@ def plan(chats: list[dict], triggers: list[dict], info: dict, reg: dict, listene
     old_helpers = ({sid for sid, t in titles.items() if HELPER_NAME.match(t.strip())} | known) \
         - live_ids - mine_only - {theirs, ""}
 
+    # The chat that handed the page to the live helper, by the page's own record: a brief
+    # still firing in it has not moved, whatever its title (the maintainer's copy, 2026-11-05).
+    handed = {str(listener.get("handed_by") or "")} - {"", helper}
+
     def retired(sid: str) -> bool:
         return bool(sid) and sid != helper and (
-            sid not in listed_ids or sid in known or sid in old_helpers
+            sid not in listed_ids or sid in known or sid in old_helpers or sid in handed
             or bool(re.search(r"\bhelper\b", titles.get(sid, ""), re.I)))
 
     def old_helper(sid: str) -> bool:
@@ -590,16 +594,26 @@ def plan(chats: list[dict], triggers: list[dict], info: dict, reg: dict, listene
     # Where the brief runs is where its task fires: a registry that names no chat, or the ops
     # chat, while the task wakes an old helper (the maintainer's live run, 2026-11-05: a brief
     # remade in the helper a hand-over had just replaced) kept that helper for good.
+    # The listing, never the registry, says where it fires: a registry that already named
+    # this chat while the task still fired in the old one let the helper report the brief
+    # moved when it had not (the maintainer's copy, 2026-11-05). A registry naming a task the
+    # listing lacks is read by the brief's own prompt instead.
     live_brief = next((t for t in triggers if brief.get("trigger_id")
-                       and t.get("id") == brief.get("trigger_id")), None) or {}
+                       and t.get("id") == brief.get("trigger_id")), None) or (next(
+                           (t for t in triggers if t.get("enabled") is not False
+                            and routines._is_brief_prompt(str(t.get("prompt") or ""))), None)
+                           if brief else None) or {}
+    tid = str(live_brief.get("id") or brief.get("trigger_id") or "")
     fired_in = str(live_brief.get("session") or live_brief.get("persistent_session_id") or "")
-    if fired_in and fired_in != home and fired_in in listed_ids and old_helper(fired_in):
+    if fired_in and fired_in != home and (
+            home == helper or (fired_in in listed_ids and old_helper(fired_in))):
         home = fired_in
+    out["brief_fires"] = fired_in
 
     if (setup in ("chat_per_briefing", "ops_relay") and home and helper.startswith("session_")
             and home != helper and not brief.get("off") and not reg.get("pause")
-            and brief.get("trigger_id") and brief.get("cron")):
-        live = next((t for t in triggers if t.get("id") == brief["trigger_id"]), None)
+            and tid and brief.get("cron")):
+        live = next((t for t in triggers if t.get("id") == tid), None)
         # Gone, for the ops chat: not among the person's chats, and the task itself now
         # names another chat, one that works on no copy at all (the empty one it woke
         # instead). All three, so a listing that missed a page never moves a brief whose ops
@@ -626,11 +640,11 @@ def plan(chats: list[dict], triggers: list[dict], info: dict, reg: dict, listene
                         f"<the new task's id> --cron \"{brief['cron']}\""
                         + (" --own-chat" if setup == "ops_relay" else ""),
                  "why": "the registry names the new task and its chat"},
-                ({"tool": "delete_trigger", "args": {"trigger_id": brief["trigger_id"]},
+                ({"tool": "delete_trigger", "args": {"trigger_id": tid},
                   "why": "the copy made for the helper this one replaced: one a day piled up "
                          "turned off in their list of scheduled tasks"}
                  if home == (listener.get("took_from") or "") and home != ops else
-                 {"tool": "update_trigger", "args": {"trigger_id": brief["trigger_id"],
+                 {"tool": "update_trigger", "args": {"trigger_id": tid,
                                                      "enabled": False},
                   "why": "the old task is turned off, never deleted"})]
 
@@ -1013,6 +1027,17 @@ def run_plan(a) -> int:
               "what each returned under \"details\" in the same standard input (or --details "
               "<each file>): " + " ".join(got["ask"]))
         return 0
+    if app_listen.nested(me):
+        # This chat can make no scheduled task (chats nest only so deep, 2026-11-05): the
+        # brief, the shortlist and the upkeep stay where they are and keep their chats, and
+        # the fresh helper the brief's next run starts moves them. Never a dead end.
+        moved = ("the brief moved", "the shortlist moved")
+        if got["brief"] or got.get("moves") or got.get("upkeep"):
+            print("tidy: this chat cannot make scheduled tasks, so the brief and the other "
+                  "tasks stay where they are, and so do their chats; the fresh helper moves "
+                  "them. Say nothing about it.")
+        got["brief"], got["moves"], got["upkeep"], got["recheck"] = [], [], [], False
+        got["archive"] = [c for c in got["archive"] if not c["why"].startswith(moved)]
     for i, c in enumerate(got["brief"], 1):
         if c.get("tool"):
             print(f"brief {i}: {c['tool']} {json.dumps(c['args'], ensure_ascii=False)} ({c['why']})")
@@ -1038,9 +1063,23 @@ def run_plan(a) -> int:
         print("upkeep: make these in order and stop at the first that fails; say nothing about it")
     if len(got["brief"]) > 1:
         print("brief: make these in order and stop at the first that fails; archive the old "
-              "brief's chat only once all three are made")
+              "brief's chat only once all three are made. Never say the brief moved until a "
+              "new list_triggers shows its task firing in the chat that answers the page "
+              "(this plan, run again on it, says so)")
     elif got["brief"]:
         print("brief: make this call, then carry on")
+    fires = str(got.get("brief_fires") or "")
+    if fires and fires == listener.get("chat"):
+        print("brief: the task listing shows the brief fires in the chat that answers the page")
+    elif fires and len(got["brief"]) <= 1:
+        print(f"brief: the task listing shows the brief still fires in {fires}, not in the chat "
+              "that answers the page: it has not moved, so never say it has")
+    if got["brief"] or got.get("moves") or got.get("upkeep") or got.get("recheck"):
+        print("nested: where a create_trigger (or send_later) is turned down because this "
+              "chat cannot start any more chats or scheduled tasks: python3 tools/app.py nested "
+              f"--chat {me or '<this chat id>'}, keep the chat that task is in (archive nothing "
+              "for it) and carry on with the rest; the fresh helper the brief's next run "
+              "starts moves it. Say nothing about it.")
     for c in got["archive"]:
         print(f"archive {c['id']}: {c['title']} ({c['why']})")
     if got["archive"]:
@@ -1060,6 +1099,10 @@ def run_plan(a) -> int:
                   f"if one is, send_later {json.dumps({'delay_minutes': RECHECK_MIN, 'message': RECHECK})} "
                   "once, and that check-in tries again"
                   if me and me == listener.get("chat") else "the next tidy-up tries again"))
+    elif got["brief"] or got.get("moves") or got.get("upkeep") or got.get("mend"):
+        # Never "nothing to tidy" over calls still to make: the helper took it as the brief
+        # already moved (the maintainer's copy, 2026-11-05).
+        print("tidy: no chat to archive; make the calls above, then python3 tools/tidy.py done")
     else:
         print("tidy: nothing to tidy. python3 tools/tidy.py done")
     stamp = now or dt.datetime.combine(today, dt.time(12), tzinfo=dt.timezone.utc)

@@ -53,3 +53,15 @@ def test_chat_opens_at_its_newest_shows_the_last_day_and_has_a_way_down(run, tmp
     assert first["end"] and first["today"] == 20 and first["older"] == 0 and first["earlier"], first
     assert got["after"][2]["eval"]["jump"], got["after"][2]["eval"]
     assert got["after"][3]["eval"]["end"], got["after"][3]["eval"]
+
+
+def test_a_question_the_quick_answer_fails_goes_to_claude(run, tmp_path):
+    """The maintainer, 2026-11-05: two messages saved in the page's quick chat that nothing
+    answered and that never reached Claude. A quick answer that fails or never comes hands the
+    question to Claude, as one that needs Claude does."""
+    html = _write(tmp_path, "quickfail", _sample())
+    got = run("talk", html=html, question="What did Juno say about the role last week?", sample={"error": "upstream_error"})
+    assert not got["errors"], got["errors"]
+    talk = [w for w in got["work"] if w.get("kind") == "talk"]
+    assert len(talk) == 1, (got["work"], got["quick"])
+    assert not any("That did not work" in t for t in got["quick"]), got["quick"]

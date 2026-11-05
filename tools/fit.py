@@ -387,8 +387,10 @@ def _family_tokens(ttoks: str) -> str:
     return head if IN_FAMILY_HEAD.search(head) else ttoks
 
 
-def fit(job: dict) -> dict:
-    """0-100. The probability-shaped question, not the desirability one."""
+def fit(job: dict, lifts=()) -> dict:
+    """0-100. The probability-shaped question, not the desirability one. `lifts`, (points,
+    reason) for each person vouching for the role (a live contact, an earlier interview:
+    main), are counted before the top of the scale, never after it."""
     title = job.get("title") or ""
     ttoks = _title_tokens(title)
     body = (job.get("desc") or "")[:20000]
@@ -577,9 +579,17 @@ def fit(job: dict) -> dict:
             why.append("+0 graduate degree mentioned, but with an equivalence route "
                        f"or not asked of {_HIM}")
 
+    # Added after the top of the scale, a lift took every strong role at one employer to the
+    # same 100: a live contact's 12 on a posting at 88, 94 or 98 made 100 each time, and
+    # three roles at one employer from three searches all read 98 to 100 (the maintainer,
+    # 2026-11-05). Counted first, they keep their order: 100 is still reachable, by a lift.
+    for p, label in lifts:
+        pts += p
+        why.append(f"+{p} {label}")
     if pts > TOP_KNEE:
         # Rounded up, so 91 stays 91 rather than tying with 90 (round() takes a half to even).
-        top = min(POSTING_MAX, TOP_KNEE + math.ceil((pts - TOP_KNEE) * TOP_TAPER))
+        top = min(100 if lifts else POSTING_MAX,
+                  TOP_KNEE + math.ceil((pts - TOP_KNEE) * TOP_TAPER))
         # Not a gap, so not written as one: the page shows the largest "-N" as the gap.
         why.append(f"top of the scale: {pts} counted as {top} (above {TOP_KNEE} a match "
                    f"counts half, and the posting alone stops at {POSTING_MAX})")
@@ -674,20 +684,14 @@ def main() -> int:
         route = warm.get(_ckey(j.get("company")), []) if _ckey else []
         # Known before scoring, so the gap-softening a live contact earns
         # (W_WARM) applies; attached only afterwards, it never did in a round.
-        f = fit(dict(j, warm_route=route) if route else j)
-        if route:
-            f = dict(f)
-            f["fit"] = min(100, f["fit"] + REFERRAL_BONUS)
-            f["warm_route"] = route
-            f["fit_why"] = list(f["fit_why"]) + [
-                "+%d live contact at this employer (%s), so this is not a cold "
-                "application" % (REFERRAL_BONUS, route[0]["name"])]
         before = interviewed.get(_ckey(j.get("company"))) if _ckey else None
-        if before:
-            f = dict(f)
-            f["fit"] = min(100, f["fit"] + INTERVIEWED_BONUS)
-            f["fit_why"] = list(f["fit_why"]) + [
-                "+%d they interviewed you before (%s)" % (INTERVIEWED_BONUS, before)]
+        lifts = ([(REFERRAL_BONUS, "live contact at this employer (%s), so this is not a cold "
+                                   "application" % route[0]["name"])] if route else []) \
+            + ([(INTERVIEWED_BONUS, "they interviewed you before (%s)" % before)]
+               if before else [])
+        f = fit(dict(j, warm_route=route) if route else j, lifts=lifts)
+        if route:
+            f = dict(f, warm_route=route)
         opp = j.get("opportunity")
         # Product, not sum: neither score may compensate for the other.
         o = opp if opp is not None else 60

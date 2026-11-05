@@ -617,7 +617,10 @@ def test_bulk_select_is_a_mode_and_marks_several_each_their_own_action(run, page
     got = sorted((a["item"], a["action"]) for a in r["actions"])
     assert got == [("r12-1", "job.applied"), ("r12-3", "job.applied")]
     assert all(len(a["value"]["on"]) == 10 for a in r["actions"]), "the day it went, as the engine reads it"
-    assert sorted(r["after"]) == ["Data Analyst, Payments", "Pricing Analyst"], "they stay in place, marked, until done"
+    # They leave To apply at once, Undo in the toast; kept in place, marked, they read as still
+    # to do (the maintainer, 2026-11-05: "why are jobs ive applied for showing at the bottom of
+    # the to apply list?").
+    assert r["after"] == [], "they leave To apply at once"
     assert sorted(_base(r["readyActions"])) == ["actions/act~app-ellerwick-insight~ready.applied", "actions/act~app-quayside-demand~ready.applied"]
     assert r["toastAboveBulk"] in (True, None), "a toast never covers the bulk bar"
 

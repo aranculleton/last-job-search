@@ -191,3 +191,32 @@ def test_a_note_written_from_their_public_work_leaves_the_queue(book, capsys):
     # Read long enough ago, it is read again before it goes.
     later = TODAY + datetime.timedelta(days=reading.FRESH_DAYS + 1)
     assert "kestrel_haldane" in [c["contact_id"] for c in reading.queue(CONTACTS, later)]
+
+
+def test_a_note_to_someone_already_talked_to_never_waits_on_a_read(book, monkeypatch):
+    """WAITS ON A READ belongs on a first note only. A follow-up's draft opened on "WAITS ON A
+    READ: nothing was read about ..." though the person had already talked to them (the
+    maintainer's copy, 2026-11-05): a follow-up or a reply rests on the conversation, never
+    on a profile read, and one left over from before the conversation gives way to it."""
+    import followup_drafts
+    log = book / "threads.csv"
+    monkeypatch.setattr(state, "THREADS_CSV", str(log))
+    state.save_threads([{"contact_id": "kestrel_example", "direction": "out",
+                         "date": "2026-10-01", "full_text": "Hi Shirin, a note."},
+                        {"contact_id": "kestrel_example", "direction": "in",
+                         "date": "2026-10-03", "full_text": "Hi, thanks for reaching out."}],
+                       str(log))
+    draft = book / "documents" / "network" / "kestrel_example" / "draft.md"
+    # The draft written before they talked still opens on the line; a follow-up kept now
+    # takes its place, with no line.
+    assert reading.waits_on_read("kestrel_example")
+    assert followup_drafts.keep([("kestrel_example", "Hi Shirin, following up on my note.")]) \
+        == ["kestrel_example"]
+    assert draft.read_text(encoding="utf-8") == "Hi Shirin, following up on my note.\n"
+    # Written through the networking path, the same: no line on a note to someone talked to.
+    reading.write_draft("kestrel_example", "Hi Shirin, a second follow-up.", "Shirin Example")
+    assert draft.read_text(encoding="utf-8") == "Hi Shirin, a second follow-up.\n"
+    assert not reading.marked("kestrel_example")
+    # Someone nobody has written to yet still gets the line on a first note.
+    assert reading.draft_text("kestrel_haldane", "Hi Corwin").startswith("WAITS ON A READ")
+    assert followup_drafts.keep([("kestrel_haldane", "Hi Corwin, following up.")]) == []

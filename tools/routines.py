@@ -9,9 +9,12 @@ whenever ci_local.sh runs, and the app's tests check the example's.
 
     python3 tools/routines.py check [path]   # exit 0 clean, 1 with every problem listed
     python3 tools/routines.py stub <key>     # the exact prompt to store for that task
-    python3 tools/routines.py brief [--triggers <listing.json>]...
+    python3 tools/routines.py brief [--triggers <listing.json>]... [--chat <id>] [--page-chat <id>]
                                              # is there a brief already? never make a second;
-                                             # in a cloud chat, the calls that make one
+                                             # in a cloud chat, the calls that make one; one
+                                             # firing in a chat that handed the page on is moved
+                                             # to the chat that answers it (--page-chat, else
+                                             # the one this copy last saw)
     python3 tools/routines.py default        # the brief's days, time and zone, and the line
     python3 tools/routines.py record --session <id> --trigger <id> [--cron "<cron>"] [--own-chat]
                                              # write the brief made into profile/routines.json
@@ -326,9 +329,32 @@ def move_here(reg: dict, r: dict, live: dict, day: str, here: str, repo: str,
     answers the page), in order, as tidy.py moves one whose chat is gone: the new task first,
     so a refusal leaves the old one running; the registry; then the old task turned off,
     never deleted. Then that day's brief runs here, as the helper did by hand (2026-11-04)."""
+    calls = move_calls(reg, r, live, here, repo)
+    d = datetime.date.fromisoformat(day)
+    when = "this morning" if d == (today or person_today()) else "on " + _short(d)
+    return {"calls": calls,
+            "then": "then run the brief that did not come, here and now: follow "
+                    "automation/prompts/_common.md and automation/prompts/morning_brief.md as "
+                    "its scheduled run would",
+            "tell": f"Your brief didn't come {when}: the chat it ran in had lost your files. "
+                    "It comes from this chat from now on."}
+
+
+def handed_over(reg: dict, chat: str) -> bool:
+    """Has `chat`, a brief's task fires in it while another chat answers the page, handed the
+    page on? Every chat the app bound a brief to answered the page when it did (`plan` binds
+    it there), except the older ops chat, which relays to the phone and keeps its brief."""
+    ops = str((reg.get("ops_session") or {}).get("id") or "")
+    return bool(chat) and not (ops and chat == ops)
+
+
+def move_calls(reg: dict, r: dict, live: dict, here: str, repo: str) -> list[dict]:
+    """The calls that move a brief's task into `here`, in order: the new task first, so a
+    refusal leaves the old one running; the registry; then the old task turned off, never
+    deleted."""
     cron = r.get("cron") or ""
     prompt = with_copy(stub(reg, r.get("key") or "morning_brief", own_chat=True), repo)
-    calls = [
+    return [
         {"tool": "create_trigger", "args": {
             "name": r.get("name") or BRIEF_NAME, "persistent_session_id": here,
             "cron_expression": cron, "prompt": prompt,
@@ -340,14 +366,6 @@ def move_here(reg: dict, r: dict, live: dict, day: str, here: str, repo: str,
         {"tool": "update_trigger", "args": {"trigger_id": live.get("id") or r.get("trigger_id"),
                                             "enabled": False},
          "why": "the old task is turned off, never deleted"}]
-    d = datetime.date.fromisoformat(day)
-    when = "this morning" if d == (today or person_today()) else "on " + _short(d)
-    return {"calls": calls,
-            "then": "then run the brief that did not come, here and now: follow "
-                    "automation/prompts/_common.md and automation/prompts/morning_brief.md as "
-                    "its scheduled run would",
-            "tell": f"Your brief didn't come {when}: the chat it ran in had lost your files. "
-                    "It comes from this chat from now on."}
 
 
 def person_today() -> datetime.date:
@@ -359,7 +377,8 @@ def person_today() -> datetime.date:
 
 
 def existing_brief(reg: dict | None, triggers=None, now: datetime.datetime | None = None,
-                   days_on_file=None, here: str = "", repo: str | None = None) -> dict:
+                   days_on_file=None, here: str = "", repo: str | None = None,
+                   page: str = "") -> dict:
     """Whether a brief already exists, found by the registry or by a task's own prompt.
 
     Never by its title: a person's brief may be called "Job search: brief (Mon and
@@ -367,8 +386,11 @@ def existing_brief(reg: dict | None, triggers=None, now: datetime.datetime | Non
     `triggers` is the account's scheduled tasks as `listing` gives them, or None when the
     session cannot list them. An empty listing is a listing: a registry entry missing from
     it is asked about, never read as set up. A registered brief whose chat cannot open the
-    copy (`no_copy`) is "lost", with the calls that move it into `here`.
-    Returns {"state": "registered" | "lost" | "found" | "ask" | "none", "id", "name", "say"}.
+    copy (`no_copy`) is "lost", with the calls that move it into `here`. One whose task
+    fires in a chat that has handed the page on, while `page` answers it now, is
+    "elsewhere", with the calls that move it into `page`.
+    Returns {"state": "registered" | "lost" | "elsewhere" | "found" | "ask" | "none", "id",
+    "name", "say"}.
     """
     listed = triggers is not None
     triggers = triggers or []
@@ -397,6 +419,22 @@ def existing_brief(reg: dict | None, triggers=None, now: datetime.datetime | Non
             return dict(got, state="lost", id=live.get("id", ""), name=r.get("name", ""),
                         say=what + "Move it into this chat, with the calls below, in order, "
                         "stopping at the first that fails.")
+        # Where its task fires, by the listing: "set up" said over a brief still bound to a
+        # chat that had handed the page on, so the helper took it as moved (the maintainer's
+        # copy, 2026-11-05). `page` is the chat that answers the page now.
+        woke = str((live or {}).get("session") or "")
+        if live and live.get("enabled") is not False and page and woke and woke != page \
+                and r.get("cron") and handed_over(reg or {}, woke):
+            return {"state": "elsewhere", "id": live.get("id", ""), "name": r.get("name", ""),
+                    "calls": move_calls(reg or {}, r, live, page,
+                                        _repo() if repo is None else repo),
+                    "then": "it has moved only once a new list_triggers shows its task firing "
+                            f"in {page}: never say it moved before",
+                    "tell": "",
+                    "say": f"the brief {r.get('name')!r} ({live.get('id')}) still fires in "
+                           f"{woke}, a chat that has handed the page on, not in the chat that "
+                           f"answers the page ({page}): it has not moved. Move it there with "
+                           "the calls below, in order, stopping at the first that fails"}
         moved = (f" The account lists it as {live['id']}: record that id (routines.py record)."
                  if live and live.get("id") and live["id"] != r.get("trigger_id") else "")
         return {"state": "registered", "id": r.get("trigger_id") or "", "name": r.get("name", ""),
@@ -1517,10 +1555,12 @@ def main(argv: list[str]) -> int:
             return 1
         return 0
     if argv[0] == "brief":
-        triggers, more, chat_arg = None, False, ""
+        triggers, more, chat_arg, page_arg = None, False, "", ""
         for i, a in enumerate(argv):
             if a == "--chat" and i + 1 < len(argv):
                 chat_arg = argv[i + 1]
+            if a == "--page-chat" and i + 1 < len(argv):
+                page_arg = argv[i + 1]
             if a == "--triggers" and i + 1 < len(argv):
                 with open(argv[i + 1], encoding="utf-8") as fh:
                     page, more = listing(json.load(fh))
@@ -1534,8 +1574,19 @@ def main(argv: list[str]) -> int:
             import app_listen
             here = app_listen.this_chat()
         here = here if str(here).startswith("session_") else ""
-        found = existing_brief(reg, triggers, here=here)
+        # The chat that answers the page now (meta/listen's, as this checkout last saw it):
+        # the brief belongs there, whichever chat asks.
+        page_chat = page_arg or (_page_chat() if has_page() else "")
+        found = existing_brief(reg, triggers, here=here,
+                               page=page_chat if str(page_chat).startswith("session_") else "")
         print(f"{found['state']}: {found['say']}")
+        if found["state"] == "elsewhere" and found.get("calls"):
+            for i, c in enumerate(found["calls"], 1):
+                print(f"move {i}: " + (f"{c['tool']} {json.dumps(c['args'], ensure_ascii=False)}"
+                                       if c.get("tool") else c["run"]) + f" ({c['why']})")
+            print(f"move: {found['then']}; commit and land it, and say nothing about it to the "
+                  "person")
+            return 0
         if found["state"] == "lost" and found.get("calls"):
             import place
             if place.surface() == "local":
