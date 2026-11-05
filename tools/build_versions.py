@@ -781,8 +781,10 @@ METHODS: dict[str, dict] = {
             (46, "2026-11-05", True, "a LinkedIn read the page started by itself and that did not finish (Claude's browser closed, the page left) holds automatic reading until the next day, kept where every opening sees it, so a profile no longer opens in Claude's browser at each return to the page; a browser step that never answers gives up after a minute and a half"),
             (47, "2026-11-05", True, "Something else opens a box under its card instead of the Chat: the question goes to Claude in that card's own thread and Claude's answer shows under the card, with its work line while it runs; the Chat no longer fills with them; Paste a message, an interview not on the list, Tell Claude, Tidy these up and Bring them back answer where they are asked too; a draft that sends the resume carries the file; an answer is never left saying it is being put on your page"),
             (48, "2026-11-05", True, "web addresses in the Brief's news are short links named by their site; Jobs has a search beside Filter, as Contacts does; a draft's check says the documents and their length, never \"Made, right length\""),
+            (49, "2026-11-05", True, "a Brief step about an application opens it in Jobs, Applied; someone put away on the page leaves the Brief's steps at once; with nothing new found, the Brief's Jobs panel lists the drafts ready to apply, best fit first"),
+            (50, "2026-11-05", True, "a draft's pencil opens a box asking what to change, room for a pasted message, its quick choices filling it and one Ask Claude (Cmd or Ctrl+Enter) with one gauge; Edit the words yourself makes the words the field"),
         ),
-        "fingerprint": "dc3d9e6db12af41e",
+        "fingerprint": "879e776768588b3f",
     },
     "upskill": {
         "by": "upgrade", "priority": 4, "applies": "upskill_plans", "time": "~10 min",

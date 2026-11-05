@@ -175,6 +175,10 @@
     if (id === "drafts-messages" || id === "messages") return {section: "contacts"};
     if (id === "drafts-applications" || id === "ready") return {section: "drafts", drafts: "apps"};
     if (id === "work") return {section: null, work: true};
+    // An application is in Jobs, on its Applied tab: a Brief step about one ("Send the
+    // thank-you after your interview at ...") drew as plain text with nothing to tap (the
+    // maintainer, 2026-11-05: "i cant click the top one here").
+    if (id === "applications" || id === "applied") return {section: "jobs", applied: true};
     if (SECTION_IDS.has(id)) return {section: id};
     if (ALIAS[id]) return {section: ALIAS[id]};
     return null;
@@ -200,6 +204,8 @@
     // A card's own questions (Something else): its thread's id while its box is open, and the
     // threads themselves, kept apart from the Chat's (cardTalk).
     cardAsk: new Set(),
+    // A draft's pencil box open with its words as a field (Edit the words yourself).
+    penEdit: new Set(),
     cardThreads: new Map(),
     views: new Map(),
     caps: {},
@@ -4645,8 +4651,9 @@
     const it = obj(l);
     const named = resolveSection(txt(it.section));
     const sec = it.item ? (sectionOfItem(it.item) || (named ? named.section : null)) : (named ? named.section : null);
-    const goTo = (e) => { e.preventDefault(); const r = resolveSection(sec) || {section: sec}; go(r.section, {focus: true, drafts: r.drafts, item: it.item || null}); };
-    const href = sec ? "#" + sec + (it.item ? "/" + txt(it.item) : "") : null;
+    const goTo = (e) => { e.preventDefault(); const r = resolveSection(sec) || {section: sec}; if (r.applied) setPref("jobs:tab", "applied"); go(r.section, {focus: true, drafts: r.drafts, item: it.item || null}); };
+    const where = sec ? (resolveSection(sec) || {section: sec}).section || sec : null;
+    const href = sec ? "#" + where + (it.item ? "/" + txt(it.item) : "") : null;
     // The line itself opens what it is about; a line with a source link of its own keeps that
     // link and opens its item from a small "Open" beside it, since links cannot nest.
     if (sec && !/\]\(/.test(txt(it.text))) return h("li", {}, h("a", {href, class: "bp-text bp-link", "data-k": "bp-go:" + key, onclick: goTo}, inlineMd(txt(it.text))));
@@ -5025,7 +5032,9 @@
       const d = dueItems().find((x) => x.id === id);
       if (d) return dueSentHere(d);
       const p = peopleItems().find((x) => x.id === id);
-      return !!p && personSentHere(p);
+      // Sent, or put away here (Don't contact, closed): gone from the Brief at once, as from
+      // every other screen, before Claude has caught up (the maintainer, 2026-11-05).
+      return !!p && (personSentHere(p) || personClosedHere(p));
     };
     const stepsFrom = (next.length ? next : owed).filter((l) => !(jobsShown && !txt(obj(l).item) && txt(obj(l).section) === "jobs") && !sentStep(obj(l).item))
       .map((l, i) => ({keys: stepKeys(l), node: () => briefRow(l, "next:" + i), l}));
@@ -5266,10 +5275,17 @@
       : nWord(tally.making, "draft", "drafts") + " being made";
     const sendLine = toSend ? h("p", {class: "bp-lead bp-send"}, h("a", {href: "#drafts", class: "bp-text bp-link", "data-k": "bp-drafts",
       onclick: (e) => { e.preventDefault(); setPref("drafts:view", "apps"); go("drafts", {focus: true}); }}, h("strong", {}, sendWords))) : null;
-    put(grid, briefPanel("jobs", "Jobs", [sendLine, best.length ? h("ul", {class: "plain bp-list", "data-fit": "2,3,2"}, best.slice(0, 5).map((r) => h("li", {},
-      h("a", {href: "#jobs/" + r.id, class: "bp-text bp-link", "data-k": "bp-job:" + r.id, onclick: (e) => { e.preventDefault(); go("jobs", {focus: true, item: r.id}); }},
-        h("strong", {}, txt(r.title)), h("span", {class: "bp-at"}, txt(r.company))),
-      r.score != null ? h("span", {class: "bp-score tone-" + (txt(r.band) || "plain"), title: SCORE_MEANS}, String(r.score)) : null)))
+    // With nothing new found, the drafts ready to apply are the list, best fit first: the panel
+    // said "36 drafts ready to apply" over empty space (the maintainer, 2026-11-05: "jobs panel
+    // looking empty").
+    const readyRows = best.length ? [] : readyItems().filter((a) => readyLive(a) && !draftUnmade(a))
+      .map((a) => ({a, j: sameJob(a)})).sort((x, y) => (Number(obj(y.j).score) || 0) - (Number(obj(x.j).score) || 0));
+    const jobLi = (id, title, company, score, band) => h("li", {},
+      h("a", {href: "#jobs/" + id, class: "bp-text bp-link", "data-k": "bp-job:" + id, onclick: (e) => { e.preventDefault(); go("jobs", {focus: true, item: id}); }},
+        h("strong", {}, txt(title)), h("span", {class: "bp-at"}, txt(company))),
+      score != null ? h("span", {class: "bp-score tone-" + (txt(band) || "plain"), title: SCORE_MEANS}, String(score)) : null);
+    put(grid, briefPanel("jobs", "Jobs", [sendLine, best.length ? h("ul", {class: "plain bp-list", "data-fit": "2,3,2"}, best.slice(0, 5).map((r) => jobLi(r.id, r.title, r.company, r.score, r.band)))
+      : readyRows.length ? h("ul", {class: "plain bp-list", "data-fit": "2,3,2"}, readyRows.slice(0, 5).map(({a, j}) => jobLi(a.id, a.role || a.title, a.company, j && j.score != null ? j.score : null, j ? j.band : null)))
       : searching ? h("p", {class: "muted"}, "Searching now.") : toSend ? null : h("p", {class: "muted"}, "Nothing new to look at.")],
       [best.length ? navLink("jobs", "All " + best.length + " new") : null,
         !searching ? h("button", {type: "button", class: "btn link", "data-k": "bp-search", onclick: () => askSearch()}, "Find jobs") : null],
@@ -6379,7 +6395,12 @@
     const parts = msgParts(m);
     // Changed here with the pencil: what is copied and logged as sent is these words.
     const penKey = "changed:" + m.id;
+    // The pencil opens a box under the draft asking what to change, as Something else does;
+    // the words themselves become a field only from its "Edit the words yourself" (the
+    // maintainer, 2026-11-05: "the pencil opens the actual text box rather than one below that
+    // just asks what youd like to change").
     const pen = S.penOpen.has(m.id);
+    const editing = pen && S.penEdit.has(m.id);
     const edited = txt(draftGet(penKey));
     const body = edited || parts.body;
     const copied = S.copied.has(m.id);
@@ -6403,13 +6424,24 @@
       {kind: copied ? "primary" : "secondary", small: true, key: "sent:" + m.id, aria: "I sent it: the " + what + " to " + name}) : null;
     const sid = "msgs-" + seg(m.id);
     const heading = (DRAFT_WORD[txt(m.type)] || DRAFT_WORD[txt(m.kind)] || "Your message") + (CHANNEL[txt(m.channel)] ? " · " + CHANNEL[txt(m.channel)] : "");
-    const area = pen ? h("textarea", {id: tid, class: "sendtext big pen-text", rows: 5, "data-k": "pentext:" + m.id, "aria-label": "The " + what + " to " + name + ", to change",
+    const area = editing ? h("textarea", {id: tid, class: "sendtext big pen-text", rows: 5, "data-k": "pentext:" + m.id, "aria-label": "The " + what + " to " + name + ", to change",
       oninput: (e) => { draftSet(penKey, e.target.value); const c = $("cnt-" + seg(m.id)); const w = countWords(m, e.target.value.length); if (c && w) { c.textContent = w.text; c.className = "count tone-" + w.tone; } }}, body) : null;
     const askId = "pa-" + seg(m.id);
-    const askField = pen ? h("input", {id: askId, type: "text", class: "pen-ask", "data-k": "penask:" + m.id, maxlength: 300, placeholder: "or tell Claude what to change"}) : null;
+    // Room for their whole message pasted in, growing with what is put in it (the maintainer,
+    // 2026-11-05: "the actual text box is too short, i was gonna paste his reply there").
+    const grow = (t) => { t.style.height = "auto"; t.style.height = Math.min(t.scrollHeight + 2, 480) + "px"; };
+    const askField = pen ? h("textarea", {id: askId, rows: 3, class: "pen-ask", "data-k": "penask:" + m.id, maxlength: 8000,
+      placeholder: "Shorter, mention the call on Thursday, or paste what they sent…",
+      oninput: (e) => { draftSet("penask:" + m.id, e.target.value); grow(e.target); }}) : null;
+    // Cmd or Ctrl+Enter sends; Enter alone is a new line in a pasted message (the maintainer,
+    // 2026-11-05: "i tried pressing enter but nothing").
+    if (askField) askField.addEventListener("keydown", (e) => { if (e.key === "Enter" && (e.metaKey || e.ctrlKey)) { e.preventDefault(); askClaude(askField.value); } });
+    if (askField) { askField.value = draftGet("penask:" + m.id) || ""; if (askField.value) requestAnimationFrame(() => grow(askField)); }
     const askClaude = (words) => {
       if (!txt(words)) return;
       S.penOpen.delete(m.id);
+      S.penEdit.delete(m.id);
+      draftSet("penask:" + m.id, null);
       requestWork([{id: "tweak~" + seg(m.id) + "~" + stamp(), kind: "tweak", to: "either", title: "Change the " + what + " to " + name,
         args: {v: 1, target: tweakTarget("message", m), changes: [], text: txt(words), keep: null},
         stages: STAGES.tweak.filter((x) => !/PDF/.test(x[0])).map((x) => ({name: x[0], est_s: x[1]}))}]);
@@ -6422,11 +6454,16 @@
         h("button", {type: "button", class: "btn secondary small copy icon-only", "data-k": "copy:" + sid, "aria-label": "Copy subject", title: "Copy subject",
           onclick: () => copyText(parts.subject, "subject", "copy:" + sid, sid)}, icon("copy"))) : null,
       parts.subject ? noteFor("copy:" + sid) : null,
-      h("div", {class: "sendbox"}, ready ? copyBtn : null, penBtn, pen ? area : h("p", {class: "sendtext big", id: tid}, body)),
-      pen ? h("div", {class: "pen-tell"}, h("label", {class: "sr-only", for: askId}, "Or tell Claude what to change"), askField,
-        h("div", {class: "opts"}, PEN_CHIPS.map(([l, t]) => btn(l, () => askClaude(t), {kind: "answer", small: true, key: "penchip:" + m.id + ":" + l, aria: l + ": ask Claude to change the " + what + " to " + name, wakes: "tweak"})),
-          btn("Ask Claude", () => askClaude(askField.value), {kind: "secondary", small: true, key: "pengo:" + m.id, aria: "Ask Claude to change the " + what + " to " + name, wakes: true}),
-          costEl({state: WORK_COST.tweak === undefined ? 1 : WORK_COST.tweak}, "tweak", "cost-pen-" + seg(m.id)))) : null,
+      h("div", {class: "sendbox"}, ready ? copyBtn : null, penBtn, editing ? area : h("p", {class: "sendtext big", id: tid}, body)),
+      pen ? h("div", {class: "pen-tell"}, h("label", {class: "small pen-label", for: askId}, "What would you like changed?"), askField,
+        // A quick choice fills the box, so one Ask Claude (and one gauge) sends whatever is asked.
+        h("div", {class: "opts"}, PEN_CHIPS.map(([l, t]) => btn(l, () => { const f = $(askId); if (f) { f.value = (txt(f.value).trim() ? txt(f.value).trim().replace(/[.\s]*$/, ". ") : "") + t; draftSet("penask:" + m.id, f.value); f.focus(); } },
+          {kind: "answer", small: true, key: "penchip:" + m.id + ":" + l, aria: l + ": add it to what Claude changes"})),
+          btn("Ask Claude", () => askClaude(askField.value), {kind: "primary", lead: true, small: true, key: "pengo:" + m.id, aria: "Ask Claude to change the " + what + " to " + name, wakes: true}),
+          costEl({state: WORK_COST.tweak === undefined ? 1 : WORK_COST.tweak}, "tweak", "cost-pen-" + seg(m.id)),
+          // A word or two changed by hand: the words themselves become the field, free.
+          btn(editing ? "Done editing" : "Edit the words yourself", () => { if (S.penEdit.has(m.id)) S.penEdit.delete(m.id); else S.penEdit.add(m.id); scheduleRender(); },
+            {kind: "secondary", small: true, key: "penedit:" + m.id, aria: (editing ? "Done editing the " : "Edit the words of the ") + what + " to " + name, pressed: editing}))) : null,
       held ? h("p", {class: "small hint-line msg-check msg-held", "data-k": "held:" + m.id}, "Not ready to send: " + lc1(held) + ".") : null,
       sendsLine(m),
       h("span", {id: "cnt-" + seg(m.id), class: "cnt-wrap"}, charCount(m, body)),
@@ -9449,6 +9486,7 @@
     if (peopleItems().some((p) => p.id === id)) return "contacts";
     if (interviewItems().some((i) => i.id === id)) return "interviews";
     if (dueItems().some((d) => d.id === id) || needsItems().some((n) => n.id === id)) return "todo";
+    if (applicationItems().some((a) => a.id === id)) return "applications";
     return null;
   }
 

@@ -413,26 +413,30 @@ def test_the_pencil_changes_the_words_in_place_or_asks_claude(run, page, model):
     rafe = "kestrel_foods_thorne"
     new = "Thanks Rafe, I'd love to hear how the planning team works."
     got = run("engine", html=page, viewport=PHONE, clock=CLOCK, seed=fixed(model), steps=[
+        # The pencil asks what to change; its "Edit the words yourself" makes the words a field
+        # (the maintainer, 2026-11-05).
         {"hash": "contacts", "open": "pen:msg-" + rafe},
+        {"open": "penedit:msg-" + rafe},
         {"eval": "(() => { const t = document.querySelector('[data-k=\"pentext:msg-%s\"]'); t.value = %s; t.dispatchEvent(new Event('input', {bubbles: true})); return 1; })()" % (rafe, json.dumps(new))},
         {"click": "Copy message to Rafe", "clip": True},
         {"click": "I sent it: the message to Rafe"},
     ])
     assert not got["errors"], got["errors"]
-    assert got["after"][2]["clip"] == new, got["after"][2]["clip"]
+    assert got["after"][3]["clip"] == new, got["after"][3]["clip"]
     sent = next(a for a in got["actions"] if a["action"] == "msg.sent")
     assert sent["value"]["text"] == new, sent
     got = run("engine", html=page, viewport=PHONE, clock=CLOCK, seed=fixed(model), steps=[
         {"hash": "contacts", "open": "pen:msg-" + rafe, "count": _card(rafe) + " .pen-tell .cost"},
-        {"click": "Shorter: ask Claude to change the message to Rafe", "read": _card(rafe)},
+        # A quick choice fills the box; one Ask Claude sends it, with the box's one gauge (the
+        # maintainer, 2026-11-05: four gauges in a row were clutter).
+        {"click": "Shorter: add it to what Claude changes"},
+        {"click": "Ask Claude to change the message to Rafe", "read": _card(rafe)},
     ])
     assert not got["errors"], got["errors"]
-    # Each control that wakes Claude carries its own gauge: Shorter, Warmer, More formal and Ask
-    # Claude (DESIGN.md: "the chips"; the review, 2026-11-05: the chips drew none).
-    assert got["after"][0]["count"] == 4, "what wakes Claude carries its cost"
-    w = [x for x in got["after"][1]["work"] if x.get("kind") == "tweak" and not x["args"].get("auto")]
+    assert got["after"][0]["count"] == 1, "one gauge, beside Ask Claude"
+    w = [x for x in got["after"][2]["work"] if x.get("kind") == "tweak" and not x["args"].get("auto")]
     assert w and w[0]["args"]["text"] == "Make it shorter." and w[0]["args"]["target"]["contact"] == rafe, w
-    assert "Make it shorter" in got["after"][1]["text"] and "Cancel" in got["after"][1]["text"], got["after"][1]["text"]
+    assert "Make it shorter" in got["after"][2]["text"] and "Cancel" in got["after"][2]["text"], got["after"][2]["text"]
 
 
 # ------------------------------------------------------------------ More on a card

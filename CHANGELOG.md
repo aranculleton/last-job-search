@@ -44,6 +44,12 @@ make sense to somebody whose repo just received it.
   and the same tidy puts older days in order from the download on file.
 - **Web addresses no longer fill the Brief's news**: each is a short link named by its site.
 - **Jobs has a search box beside Filter**, as Contacts does, once the list is long.
+- **The pencil on a draft asks what to change.** It opens a box under the draft, big enough to
+  paste their message into, with Shorter, Warmer and More formal to fill it and one Ask Claude
+  to send it (or Cmd or Ctrl+Enter); Edit the words yourself is there for a small change by hand.
+- **The Brief opens what it names and lists what is ready.** A step about an application (a
+  thank-you after an interview) opens it; someone you told the page not to contact leaves the
+  steps at once; with nothing new found, the Jobs panel lists the drafts ready to apply.
 - **A finished draft no longer says "Made, right length"** on every card: just its documents and
   their length, each with its pencil.
 - **Claude's answers no longer say "Finished: putting it on your page"**, which squashed the

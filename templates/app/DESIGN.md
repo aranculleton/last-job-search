@@ -158,10 +158,13 @@ tests, `tests/test_contacts_is_one_page_with_each_persons_draft.py`)
   me a job, the referral, read their profile, Claude's ideas and notes. Never editing (the
   pencil), never the card's facts (its line), and no More on a card with nothing
   rare. Why: More became a drawer of everything, so nothing in it was found.
-- The pencil changes the draft in place: the words edited where they are (what Copy copies
-  and I sent it logs), and one small field, "or tell Claude what to change", with Shorter,
-  Warmer and More formal, each queuing the change with the card's line. Why: a slight edit is
-  the commonest change, and it was buried under More.
+- The pencil opens a box under the draft, "What would you like changed?", as Something else
+  does: room for a pasted message that grows with it, Shorter, Warmer and More formal filling
+  it, one filled Ask Claude (Cmd or Ctrl+Enter) with the box's one gauge, and "Edit the words
+  yourself", which makes the draft's own words the field (what Copy copies and I sent it logs).
+  Why: a slight edit is the commonest change, and it was buried under More; then the pencil
+  opened the words as a field with a one-line box under it, too short to paste into and with
+  a gauge on every chip (the maintainer, 2026-11-05).
 - A draft that fails a check with a clear fix (too long for the channel, a phrase that reads
   machine-written, asking them for a job, a rule of theirs) is fixed by Claude by itself: the
   engine finds it (`app_model.message_fix`) and the view queues the fix with no tap; the card
@@ -170,7 +173,7 @@ tests, `tests/test_contacts_is_one_page_with_each_persons_draft.py`)
   fact only the person knows is asked through the one rare question. Why: where there is
   clearly a recommended option, the app does it.
 - What wakes Claude carries its cost beside it (the gauge: "Draft my reply", "Ask Claude",
-  the chips, "Draft the follow-up"); what only the page does (I sent it, an edit in place,
+  "Draft the follow-up"; the pencil box's chips only fill it); what only the page does (I sent it, an edit in place,
   the trash) carries none, and wakes nothing. (`data-wakes` marks the first kind.)
 - The header is its title and one short line, "4 to send · 8 need you", with Find people and
   "Paste a message" (a message from someone not on the list) as soft pills beside it. What
