@@ -6,8 +6,9 @@ nobody there to answer recorded "no" so it could carry on: one resume recorded n
 and another yes two hours later (the maintainer, 2026-11-04). Now the answer is one record per
 skill (tools/skill_answers.py), every chat reads it, an unanswered question is put to the
 person once on their page while the draft waits on it without the skill, the later explicit
-answer wins (merged by its date between two chats), and a yes redoes every resume drafted that
-day by itself. Every person and employer here is invented.
+answer wins (merged by its date between two chats), and a yes redoes, by itself, every unsent
+resume waiting on it and every one drafted that day that asked. Every person and employer here
+is invented.
 """
 from __future__ import annotations
 
@@ -211,7 +212,7 @@ def test_a_yes_on_the_page_redoes_every_resume_drafted_that_day_by_itself(t):
     aid = t.act("needs.answer", "q-skill-looker", "yes")
     got = t.apply()
     assert got["ok"] == [aid], got
-    assert "Claude puts it on the resume drafted today" in t.receipt(aid)["note"]
+    assert "Claude puts it on the resume still without it" in t.receipt(aid)["note"]
     wid = skill_answers.work_id(KESTREL, "Looker")
     with open(page_db.body_path(os.path.join(t.dump, "out"), "work", wid), encoding="utf-8") as fh:
         work = json.load(fh)
@@ -231,8 +232,19 @@ def test_a_yes_on_the_page_redoes_every_resume_drafted_that_day_by_itself(t):
         "import skill_answers; skill_answers.main(['redo', '--today', '2026-10-25'])")
 
 
-def test_a_yes_redoes_only_the_resumes_drafted_that_day(t):
+def test_a_yes_redoes_a_resume_waiting_on_it_whatever_day_it_was_drafted(t):
+    """A yes redid only the resumes drafted that day, so one staged the night before and
+    left waiting on the skill never got it. Every unsent draft waiting on it is redone."""
     _asked_today(t, day="2026-10-24", waiting_skills=["Looker"])
+    aid = t.act("needs.answer", "q-skill-looker", "yes")
+    assert t.apply()["ok"] == [aid]
+    assert os.path.exists(page_db.body_path(os.path.join(t.dump, "out"), "work",
+                                            skill_answers.work_id(KESTREL, "Looker")))
+    assert "Claude puts it on the resume" in t.receipt(aid)["note"]
+
+
+def test_a_yes_leaves_an_earlier_days_resume_that_is_not_waiting_on_it(t):
+    _asked_today(t, day="2026-10-24")
     aid = t.act("needs.answer", "q-skill-looker", "yes")
     assert t.apply()["ok"] == [aid]
     assert not os.path.exists(page_db.body_path(os.path.join(t.dump, "out"), "work",

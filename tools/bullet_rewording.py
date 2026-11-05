@@ -87,6 +87,10 @@ sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import person  # noqa: E402
 
 FIELD = "bullet_rewordings"
+# The skills whose rewording the model auditor removed, or refused by name, for this draft:
+# it judged that no bullet here is work that plausibly used them. Kept on the draft itself
+# (written by draft_audit.write_verdict), so every later code audit of it agrees.
+REFUSED = "rewordings_refused"
 # "At most a few bullets": enough to put a yes beside the work that used it, never a
 # resume rewritten around the posting.
 MAX_REWORDINGS = 3
@@ -284,7 +288,11 @@ def profile_work() -> dict:
         work: dict = {}
         try:
             facts = draft_pack.facts()
-        except Exception:      # a profile the reader cannot parse names nothing anywhere
+        except Exception as e:  # a profile the reader cannot parse names nothing anywhere
+            # Said, never silent: the rule then ties nothing, and the audit and the render
+            # would both refuse what the profile places, which is the safe side.
+            print(f"bullet_rewording: the candidate profile could not be read for where "
+                  f"each skill was used ({e}); that rule ties nothing", file=sys.stderr)
             facts = []
         for f in facts:
             if f.get("resume") or f.get("kind") not in ("bullet", "detail", "reserve"):
@@ -499,6 +507,33 @@ def problems(rewordings, yes=(), no=(), held=()) -> list[dict]:
     return out
 
 
+def held_all() -> list[str]:
+    """Every single skill the profile holds (skills.py ITEMS), as it spells them."""
+    import skills_block
+    return clean_names(p for _c, item, _p in getattr(person.module("skills"), "ITEMS", ())
+                       for p in skills_block.parts(item))
+
+
+def answers(a: dict, pick: dict | None = None, posting: str | None = None) -> tuple:
+    """(yes, no, held): what a draft's rewordings are judged against, the one reading the
+    code audit (tools/draft_audit.py) and the renderer (usable, through fit_to_page and
+    render_application) both take. The answers are the pick's where it has them, else the
+    draft's own (assemble copies one into the other); `held` is the held skills the posting
+    names, and with no posting text to hand (a kept draft.json re-rendered without its
+    job_posting.md) every held skill, since holding one is the person's yes whatever the
+    posting. The audit refused nothing the render then took, but the render refused a held
+    skill the audit had passed, and printed the profile's own bullet (the maintainer,
+    2026-11-05: the two checks disagreed)."""
+    pick = pick if isinstance(pick, dict) else {}
+    a = a if isinstance(a, dict) else {}
+    yes = list(pick.get("skills_yes") or a.get("consented_skills") or [])
+    no = list(pick.get("skills_no") or a.get("declined_skills") or [])
+    text = str((a.get("posting") if posting is None else posting) or "")
+    company = str(a.get("company") or pick.get("company") or "")
+    held = held_named(text, company) if text.strip() else held_all()
+    return yes, no, held
+
+
 def usable(a: dict) -> tuple[dict, list[str]]:
     """({bullet id: plain text}, [why each one left out]) for a draft about to be rendered:
     every rewording the guard accepts for this draft's own answers (consented_skills,
@@ -508,8 +543,7 @@ def usable(a: dict) -> tuple[dict, list[str]]:
     got = a.get(FIELD)
     if got in (None, "", [], {}):
         return {}, []
-    yes, no = a.get("consented_skills") or [], a.get("declined_skills") or []
-    held = held_named(a.get("posting") or "", a.get("company") or "")
+    yes, no, held = answers(a)
     if not isinstance(got, list):
         return {}, [f"{FIELD} is not a list, so none is used"]
     use, why = {}, []
@@ -533,8 +567,23 @@ def usable(a: dict) -> tuple[dict, list[str]]:
     return use, why
 
 
+def refused_by_audit(before, after, named=(), kept=()) -> list[str]:
+    """The skills the model auditor took out of this draft's rewordings: each a rewording
+    in `before` (the drafter's) named that no rewording in `after` (its corrected copy)
+    names, with those it refused by name (`named`) and any already recorded (`kept`)."""
+    def skills(rewordings):
+        out = []
+        for r in rewordings if isinstance(rewordings, list) else ():
+            if isinstance(r, dict):
+                out += skill_names([r.get("skill")] if r.get("skill") else [])
+        return out
+    left = {s.casefold() for s in skills(after)}
+    gone = [s for s in skills(before) if s.casefold() not in left]
+    return clean_names(list(kept or ()) + gone + skill_names(named or ()))
+
+
 def unplaced(posting: str, bullets, rewordings=None, yes=(), no=(),
-             company: str = "") -> tuple[list[dict], list[str]]:
+             company: str = "", refused=()) -> tuple[list[dict], list[str]]:
     """(problems, notes) for each skill the person said yes to, or holds and the posting
     names (held_named), that no bullet on this resume names, `bullets` being the ids the
     page prints (read with this draft's rewordings the guard accepts).
@@ -545,8 +594,15 @@ def unplaced(posting: str, bullets, rewordings=None, yes=(), no=(),
     (the maintainer, 2026-11-04). A note, never a failure, where nothing can take it: no
     bullet on the page is work the profile ties it to, or the rewordings are spent on
     bullets that are not. Forcing it into unrelated work would be the claim the guard
-    exists to refuse, so there it stays on the skills line, and the note says why."""
+    exists to refuse, so there it stays on the skills line, and the note says why.
+
+    A note too for a skill in `refused` (REFUSED on the draft): the model auditor removed
+    its rewording, or refused it, for this draft, as work that did not plausibly use it.
+    Demanding it again failed the corrected draft for ever: the drafter put it back, and the
+    auditor took it out."""
     ids = [str(b).strip() for b in bullets or () if str(b).strip()]
+    refused = {x.casefold() for x in skill_names(refused if isinstance(refused, (list, tuple))
+                                                  else ())}
     nos = {x.casefold() for x in clean_names(no)}
     skills = [s for s in clean_names(skill_names(yes) + held_named(posting, company))
               if s.casefold() not in nos]
@@ -565,7 +621,10 @@ def unplaced(posting: str, bullets, rewordings=None, yes=(), no=(),
             continue
         takers = [b for b in ids if not named(s, original(b) or "") and related(s, b)]
         open_ = [b for b in takers if room or b in reworded]
-        if open_:
+        if s.casefold() in refused:
+            notes.append(f"{s} stays on the skills line: the model audit judged that no bullet "
+                         "on this resume is work that plausibly used it")
+        elif open_:
             out.append(_problem("", "skill-not-in-work", s,
                                 f"the posting names {s}, which the person holds or said yes "
                                 "to, and no bullet on this resume names it, so it sits on the "
@@ -592,9 +651,9 @@ def main(argv=None) -> int:
         got = json.load(fh)
     bad = 0
     for d in got if isinstance(got, list) else [got]:
-        yes = args.yes if args.yes is not None else d.get("consented_skills") or []
-        no = args.no if args.no is not None else d.get("declined_skills") or []
-        held = held_named(d.get("posting") or "", d.get("company") or "")
+        d_yes, d_no, held = answers(d)
+        yes = args.yes if args.yes is not None else d_yes
+        no = args.no if args.no is not None else d_no
         for p in problems(d.get(FIELD), yes, no, held):
             bad += 1
             print(f"{d.get('company', '?')}: {p['id'] or FIELD}: [{p['rule']}] {p['text']}: {p['fix']}")

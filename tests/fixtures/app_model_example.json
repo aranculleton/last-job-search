@@ -1,7 +1,7 @@
 {
  "model": 1,
  "made_at": "2026-10-25T18:00:00Z",
- "rev": "d107893d91d9",
+ "rev": "4d4305f3fb4f",
  "app": {
   "version": "4.9.1",
   "url": null,
@@ -13,7 +13,7 @@
   ],
   "privacy": "Only you can open this page unless you share it. It holds first names, employers, your drafts and your setup answers, so keep it unshared.",
   "repo": "https://github.com/aranculleton/last-job-search",
-  "page": 24,
+  "page": 38,
   "not_saved": 0
  },
  "person": {
@@ -48,7 +48,7 @@
  ],
  "jobs": {
   "round": "r9",
-  "made_at": "2026-11-05T00:22:31Z",
+  "made_at": "2026-11-05T04:25:52Z",
   "met": false,
   "summary": "3 roles from the last search to look at, 1 of them scoring 75 or more. 3 left out, each with its reason.",
   "rows": [
@@ -61,6 +61,7 @@
     "title": "Demand Planning Analyst",
     "place": "Manchester (hybrid)",
     "remote": "hybrid",
+    "place_short": "Manchester (hybrid)",
     "pay": {
      "text": "not stated",
      "stated": false,
@@ -68,6 +69,8 @@
      "at_target": null
     },
     "posted_days": null,
+    "found_on": null,
+    "found_days": null,
     "near": [],
     "deadline": null,
     "warm": null,
@@ -83,6 +86,10 @@
      }
     },
     "why": [],
+    "reasons": {
+     "good": "",
+     "watch": ""
+    },
     "from_round": null,
     "added": false,
     "kept": false,
@@ -101,6 +108,7 @@
     "rev": "87ef0632d185",
     "alerts": [],
     "suggest": null,
+    "near_words": "",
     "related": {},
     "draft": null
    },
@@ -113,6 +121,7 @@
     "title": "Claims Forecasting Analyst",
     "place": "Manchester",
     "remote": "",
+    "place_short": "Manchester",
     "pay": {
      "text": "not stated",
      "stated": false,
@@ -120,6 +129,8 @@
      "at_target": null
     },
     "posted_days": null,
+    "found_on": null,
+    "found_days": null,
     "near": [],
     "deadline": null,
     "warm": null,
@@ -135,6 +146,10 @@
      }
     },
     "why": [],
+    "reasons": {
+     "good": "",
+     "watch": ""
+    },
     "from_round": null,
     "added": false,
     "kept": false,
@@ -151,6 +166,7 @@
     "rev": "57412b9f3011",
     "alerts": [],
     "suggest": null,
+    "near_words": "",
     "related": {
      "ready": [
       "app-kestrel_mutual_claims_forecasting_analyst"
@@ -173,6 +189,7 @@
     "title": "Inventory Analyst",
     "place": "Remote, UK",
     "remote": "remote",
+    "place_short": "Remote, UK",
     "pay": {
      "text": "not stated",
      "stated": false,
@@ -180,6 +197,8 @@
      "at_target": null
     },
     "posted_days": null,
+    "found_on": null,
+    "found_days": null,
     "near": [],
     "deadline": null,
     "warm": null,
@@ -195,6 +214,10 @@
      }
     },
     "why": [],
+    "reasons": {
+     "good": "",
+     "watch": ""
+    },
     "from_round": null,
     "added": false,
     "kept": false,
@@ -213,6 +236,7 @@
     "rev": "f5d2c60a102e",
     "alerts": [],
     "suggest": null,
+    "near_words": "",
     "related": {},
     "draft": null
    },
@@ -225,6 +249,7 @@
     "title": "Supply Analyst",
     "place": "Leeds",
     "remote": "",
+    "place_short": "Leeds",
     "pay": {
      "text": "not stated",
      "stated": false,
@@ -232,6 +257,8 @@
      "at_target": null
     },
     "posted_days": null,
+    "found_on": null,
+    "found_days": null,
     "near": [],
     "deadline": null,
     "warm": "Juno at Larkspur Retail has replied to you: ask them first.",
@@ -247,6 +274,10 @@
      }
     },
     "why": [],
+    "reasons": {
+     "good": "",
+     "watch": ""
+    },
     "from_round": null,
     "added": false,
     "kept": false,
@@ -287,6 +318,7 @@
      "since": "2026-10-25",
      "rev": "2bc575fd9c93"
     },
+    "near_words": "",
     "related": {
      "people": [
       "larkspur_retail_castellan"
@@ -305,8 +337,16 @@
    "count": 3,
    "groups": [
     {
-     "reason": "location",
+     "id": "filtered~place",
+     "kind": "place",
+     "reason": "Outside your places",
+     "label": "Outside your places",
      "count": 2,
+     "last": null,
+     "examples": [
+      "Data Analyst",
+      "Planner"
+     ],
      "items": [
       {
        "id": "r9-f1",
@@ -315,7 +355,8 @@
        "place": "London",
        "url": "https://jobs.example/quayside/1",
        "reason": "location: on-site outside Greater Manchester (london)",
-       "rev": "cde36ac432ac"
+       "rev": "cde36ac432ac",
+       "g": "filtered~place"
       },
       {
        "id": "r9-f2",
@@ -324,15 +365,48 @@
        "place": "Bristol",
        "url": "https://jobs.example/quayside/2",
        "reason": "location: on-site outside Greater Manchester (bristol)",
-       "rev": "542a63e5924c"
+       "rev": "542a63e5924c",
+       "g": "filtered~place"
       }
      ],
-     "id": "filtered~location",
-     "rev": "9b6ba9490837"
+     "held": 2,
+     "check": [
+      {
+       "id": "r9-f1",
+       "company": "Quayside Foods",
+       "title": "Data Analyst",
+       "place": "London",
+       "url": "https://jobs.example/quayside/1",
+       "reason": "location: on-site outside Greater Manchester (london)",
+       "rev": "cde36ac432ac",
+       "g": "filtered~place"
+      },
+      {
+       "id": "r9-f2",
+       "company": "Quayside Foods",
+       "title": "Planner",
+       "place": "Bristol",
+       "url": "https://jobs.example/quayside/2",
+       "reason": "location: on-site outside Greater Manchester (bristol)",
+       "rev": "542a63e5924c",
+       "g": "filtered~place"
+      }
+     ],
+     "edit": {
+      "what": "places"
+     },
+     "rev": "80ae18713858"
     },
     {
-     "reason": "screen",
+     "id": "filtered~credential",
+     "kind": "credential",
+     "reason": "Needs a qualification you do not hold",
+     "label": "Needs a qualification you do not hold",
      "count": 1,
+     "last": null,
+     "examples": [
+      "Inventory Lead"
+     ],
      "items": [
       {
        "id": "r9-f3",
@@ -341,11 +415,25 @@
        "place": "",
        "url": "https://jobs.example/dovecote/lead",
        "reason": "professional designation stated as a requirement",
-       "rev": "46e8ab8d54a0"
+       "rev": "46e8ab8d54a0",
+       "g": "filtered~credential"
       }
      ],
-     "id": "filtered~screen",
-     "rev": "f42bc0491e9b"
+     "held": 1,
+     "check": [
+      {
+       "id": "r9-f3",
+       "company": "Dovecote Freight",
+       "title": "Inventory Lead",
+       "place": "",
+       "url": "https://jobs.example/dovecote/lead",
+       "reason": "professional designation stated as a requirement",
+       "rev": "46e8ab8d54a0",
+       "g": "filtered~credential"
+      }
+     ],
+     "edit": null,
+     "rev": "ce30fb43a788"
     }
    ]
   }
@@ -422,6 +510,8 @@
     }
    ],
    "suggest": null,
+   "near_words": "",
+   "place_short": "",
    "related": {
     "people": [
      "fernhill_freight_halloway"
@@ -467,6 +557,17 @@
    "checks": {
     "passed": true,
     "line": "Made, right length: CV 1 page, letter 1 page",
+    "lead": "Made, right length: ",
+    "parts": [
+     {
+      "kind": "resume",
+      "words": "CV 1 page"
+     },
+     {
+      "kind": "letter",
+      "words": "letter 1 page"
+     }
+    ],
     "verify": null
    },
    "outreach": {
@@ -492,6 +593,8 @@
    "tweaks_done": [],
    "alerts": [],
    "suggest": null,
+   "near_words": "",
+   "place_short": "Manchester",
    "related": {
     "jobs": [
      "r9-2"
@@ -546,6 +649,7 @@
    "parts": false,
    "tweaks_done": [],
    "paste": null,
+   "fix": null,
    "alerts": [],
    "suggest": null,
    "related": {
@@ -637,6 +741,57 @@
  ],
  "people": [
   {
+   "id": "kestrel_mutual_ansgar",
+   "first_name": "Pell",
+   "employer": "Kestrel Mutual",
+   "status": "not_contacted",
+   "status_word": "Not written to",
+   "group": "new",
+   "owed": {
+    "kind": "draft",
+    "label": "See the note",
+    "message": "msg-kestrel_mutual_ansgar",
+    "reply": false
+   },
+   "next": "Your note to them is written: send it",
+   "late": 0,
+   "hold": null,
+   "stopped": false,
+   "wrote": false,
+   "last": null,
+   "title": "Claims Analytics Lead",
+   "exchange": null,
+   "next_action": "Send the first note; call if needed",
+   "link": null,
+   "due": null,
+   "route": "alumni",
+   "came_through": null,
+   "who": "hiring",
+   "replied": false,
+   "live": true,
+   "call": null,
+   "paste": null,
+   "where_unknown": false,
+   "asked_sent": null,
+   "is_process_stage": false,
+   "thread": [],
+   "thread_more": 0,
+   "related": {
+    "jobs": [
+     "r9-2"
+    ],
+    "ready": [
+     "app-kestrel_mutual_claims_forecasting_analyst"
+    ],
+    "messages": [
+     "msg-kestrel_mutual_ansgar"
+    ]
+   },
+   "rev": "fcaad01498cf",
+   "alerts": [],
+   "suggest": null
+  },
+  {
    "id": "larkspur_retail_castellan",
    "first_name": "Juno",
    "employer": "Larkspur Retail",
@@ -661,6 +816,15 @@
    "wrote": true,
    "last": "2026-09-12",
    "title": "Analytics Manager",
+   "exchange": {
+    "last": "them",
+    "last_on": "2026-09-12",
+    "replied": true,
+    "first": "you",
+    "first_on": "2026-09-10",
+    "out": 1,
+    "in": 1
+   },
    "next_action": "send the CV",
    "link": null,
    "due": "2026-10-20",
@@ -747,6 +911,15 @@
    "wrote": true,
    "last": "2026-09-21",
    "title": "Head of Supply Chain Analytics",
+   "exchange": {
+    "last": "you",
+    "last_on": "2026-09-21",
+    "replied": false,
+    "first": "you",
+    "first_on": "2026-09-21",
+    "out": 1,
+    "in": 0
+   },
    "next_action": "One nudge if no reply",
    "link": null,
    "due": "2026-09-29",
@@ -779,56 +952,6 @@
    "rev": "b27405fc8c16",
    "alerts": [],
    "suggest": null
-  },
-  {
-   "id": "kestrel_mutual_ansgar",
-   "first_name": "Pell",
-   "employer": "Kestrel Mutual",
-   "status": "not_contacted",
-   "status_word": "Not written to",
-   "group": "new",
-   "owed": {
-    "kind": "draft",
-    "label": "See the note",
-    "message": "msg-kestrel_mutual_ansgar",
-    "reply": false
-   },
-   "next": "Your note to them is written: send it",
-   "late": 0,
-   "hold": null,
-   "stopped": false,
-   "wrote": false,
-   "last": null,
-   "title": "Claims Analytics Lead",
-   "next_action": "Send the first note; call if needed",
-   "link": null,
-   "due": null,
-   "route": "alumni",
-   "came_through": null,
-   "who": "hiring",
-   "replied": false,
-   "live": true,
-   "call": null,
-   "paste": null,
-   "where_unknown": false,
-   "asked_sent": null,
-   "is_process_stage": false,
-   "thread": [],
-   "thread_more": 0,
-   "related": {
-    "jobs": [
-     "r9-2"
-    ],
-    "ready": [
-     "app-kestrel_mutual_claims_forecasting_analyst"
-    ],
-    "messages": [
-     "msg-kestrel_mutual_ansgar"
-    ]
-   },
-   "rev": "fcaad01498cf",
-   "alerts": [],
-   "suggest": null
   }
  ],
  "interviews": [
@@ -843,7 +966,7 @@
    "when": "2026-10-28",
    "prep": {
     "path": "documents/applications/thornbury_bank_risk_analyst_thornbury/interview_prep.md",
-    "updated": "2026-11-05T00:22:31Z"
+    "updated": "2026-11-05T04:25:52Z"
    },
    "questions": 2,
    "all_day": true,
@@ -1411,6 +1534,8 @@
     "outcome.withdrawn"
    ],
    "rev": "16a35d81a7da",
+   "slug": "thornbury_bank_risk_analyst_thornbury",
+   "screening": [],
    "apply": {
     "url": "https://jobs.example/thornbury/risk",
     "kind": "employer",
@@ -1611,7 +1736,7 @@
    "id": "tip-search",
    "area": "search",
    "tab": "jobs",
-   "text": "Tap Edit on anything Claude writes to make it shorter, warmer or reworded. Claude learns your style from your changes.",
+   "text": "Tap the pencil on anything Claude writes to make it shorter, warmer or reworded. Claude learns your style from your changes.",
    "rev": "cf41ba3338e1"
   },
   "tour": [
@@ -1625,7 +1750,7 @@
     "key": "todo",
     "tab": "todo",
     "title": "To do",
-    "text": "What needs you, five at a time, most urgent first: a question, a follow-up that is due, an interview coming up. A card's filled button is its next step; the bin puts it away."
+    "text": "What needs you, five at a time, most urgent first: a question, a follow-up that is due, an interview coming up. A card's filled button is its next step; the trash puts it away."
    },
    {
     "key": "jobs",
@@ -1875,6 +2000,114 @@
    "rev": "205c22b25fa6"
   }
  ],
+ "rules": {
+  "id": "your-rules",
+  "rows": [
+   {
+    "id": "rule~places",
+    "kind": "place",
+    "name": "Where",
+    "sentence": "You search in Manchester, Salford, Stockport and United Kingdom; an on-site role anywhere else is left out.",
+    "set_on": null,
+    "words": null,
+    "review_on": null,
+    "left_out": 2,
+    "edit": {
+     "what": "places"
+    },
+    "drop": null,
+    "still_right": false,
+    "rev": "f70bf82dda85"
+   },
+   {
+    "id": "rule~roles",
+    "kind": "field",
+    "name": "Your field",
+    "sentence": "You search for supply chain analyst, operations analyst, demand planning analyst, data analyst, logistics analyst, inventory analyst and 2 more; a title outside your field is left out.",
+    "set_on": null,
+    "words": null,
+    "review_on": null,
+    "left_out": 0,
+    "edit": {
+     "what": "roles"
+    },
+    "drop": null,
+    "still_right": false,
+    "rev": "f823125c6a4c"
+   },
+   {
+    "id": "rule~window",
+    "kind": "age",
+    "name": "How recent",
+    "sentence": "A job posted more than 14 days ago is left out.",
+    "set_on": null,
+    "words": null,
+    "review_on": null,
+    "left_out": 0,
+    "edit": {
+     "what": "window"
+    },
+    "drop": null,
+    "still_right": false,
+    "rev": "68f8d5cece4d"
+   },
+   {
+    "id": "rule~pay",
+    "kind": "pay",
+    "name": "Pay",
+    "sentence": "Your pay floor is £42,000; a stated range topping out under £32,000 is left out.",
+    "set_on": null,
+    "words": null,
+    "review_on": null,
+    "left_out": 0,
+    "edit": {
+     "what": "pay"
+    },
+    "drop": null,
+    "still_right": false,
+    "rev": "c16429553eff"
+   },
+   {
+    "id": "rule~languages",
+    "kind": "language",
+    "name": "Languages",
+    "values": [
+     "English"
+    ],
+    "sentence": "You work in English; a job that needs another language is left out.",
+    "set_on": null,
+    "words": null,
+    "review_on": null,
+    "left_out": 0,
+    "edit": {
+     "what": "languages"
+    },
+    "drop": null,
+    "still_right": false,
+    "rev": "1043766b8ee2"
+   },
+   {
+    "id": "rule~sector~a-sector-the-candidate-will-not-work-in-",
+    "kind": "sector",
+    "name": "Kinds of employer",
+    "sentence": "Left out: A sector you will not work in (gambling and tobacco).",
+    "set_on": null,
+    "words": null,
+    "review_on": null,
+    "left_out": 0,
+    "edit": null,
+    "drop": {
+     "kind": "sector",
+     "why": "a sector the candidate will not work in (gambling and tobacco)"
+    },
+    "still_right": false,
+    "rev": "8254c94cfb38"
+   }
+  ],
+  "brief_line": null,
+  "still_right": 0,
+  "rev": "5f0ba4f627f5"
+ },
  "people_count": {
   "shown": 3,
   "all": 3,
@@ -1885,7 +2118,14 @@
   "follow": 1,
   "leave": 0,
   "waiting": 0,
-  "held": 0
+  "held": 0,
+  "drafted": 1
+ },
+ "to_send": {
+  "n": 1,
+  "ids": [
+   "msg-kestrel_mutual_ansgar"
+  ]
  },
  "lists": {
   "applications": {
@@ -1913,6 +2153,17 @@
      "30": 1
     }
    }
+  },
+  "filtered": {
+   "total": 3,
+   "shown": 3,
+   "folded": {
+    "count": 0,
+    "days": null
+   },
+   "parts": 1,
+   "doc": "list~filtered",
+   "counts": {}
   },
   "interviews": {
    "total": 1,
@@ -2952,6 +3203,47 @@
  "hints": {
   "tweak": false
  },
+ "refusal_asks": {
+  "outcome.interview": {
+   "key": "on",
+   "label": "Which day is it?",
+   "kind": "date",
+   "type": "date",
+   "time": "time"
+  },
+  "person.call_booked": {
+   "key": "on",
+   "label": "Which day is the call?",
+   "kind": "date",
+   "type": "date",
+   "time": "time"
+  },
+  "job.applied": {
+   "key": "on",
+   "label": "When did you apply?",
+   "kind": "date",
+   "type": "date"
+  },
+  "ready.applied": {
+   "key": "on",
+   "label": "When did you apply?",
+   "kind": "date",
+   "type": "date"
+  },
+  "due.snooze": {
+   "key": "until",
+   "label": "Until which day?",
+   "kind": "date",
+   "type": "date"
+  },
+  "brief.pause": {
+   "key": "until",
+   "label": "Until which day?",
+   "kind": "date",
+   "type": "date"
+  }
+ },
+ "work_time": {},
  "pin": {
   "due": true
  }

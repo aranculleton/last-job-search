@@ -57,10 +57,12 @@ CLOCK_KEYS = frozenset({"made_at", "updated", "seen_at", "seen_recently"})
 SECTIONS = ("app", "person", "needs_you", "jobs", "ready", "messages", "due", "people",
             "interviews", "done", "settings", "brief", "setup", "updates", "applications",
             "referrals", "message_budget", "linkedin", "learned", "help", "resume",
-            "search", "where", "listener", "schedule", "you", "upcoming")
+            "search", "where", "listener", "schedule", "you", "upcoming", "rules")
 # The page shows every live contact, then the rest by recency up to a size budget
 # (tools/app_lists.py PEOPLE_BYTES); the whole book is in the page's database for "Show".
 DUE_MAX = 100
+# The rows a left-out group shows before "See them" (tools/rules_view.py FIRST): kept under
+# its old name for a person's own tests.
 FILTERED_PER_GROUP = 20
 # An application sent this recently stays under Drafts, ticked, so the tick can
 # be seen and undone where it was made.
@@ -773,6 +775,7 @@ def _needs_you(ctx: Ctx, targets: dict) -> list:
         out += sent
         out += _own_profile_card(ctx, targets)
         out += _tweak_offers(ctx, targets)
+        out += _remade_cards(ctx, targets)
     except person.NoProfile:
         pass
     ups = app_setup.upgrade_questions(targets)
@@ -812,7 +815,7 @@ def _skill_questions(ctx: Ctx, targets: dict) -> list:
                           "profile doesn't list it. " if who else "A posting asks for it, and "
                           "your profile doesn't list it. ")
                          + "Resumes leave it off until you say. A yes puts it on the ones "
-                           "drafted today and on every one after; a no keeps it off them all."),
+                           "waiting on it and on every one after; a no keeps it off them all."),
                 "options": [{"label": "Yes", "action": "needs.answer", "value": "yes"},
                             {"label": "No", "action": "needs.answer", "value": "no"}],
                 "about": {"company": names[0]} if len(names) == 1 else {},
@@ -913,6 +916,39 @@ def _tweak_offers(ctx: Ctx, targets: dict) -> list:
                 "about": {"tweak_offer": o["id"]}, "rev": rev_of(qid, o["line"], o["times"])}
         out.append(item)
         targets[qid] = {"kind": "tweak_offer", "id": o["id"], "rev": item["rev"]}
+    return out
+
+
+def _remade_cards(ctx: Ctx, targets: dict) -> list:
+    """An unsent application the drafts rerun made again that failed in a way only the
+    person can settle (tools/remake_drafts.py, its remake.json): one To do card naming it,
+    with the app's own way forward, until it passes. One that a redraft can put right is
+    queued instead, and has no card (remake_drafts.page_work)."""
+    try:
+        import remake_drafts
+        cards = remake_drafts.todo_cards()
+    except Exception:  # noqa: BLE001  nothing remade to read: no card
+        return []
+    rows = {rid: row for row, rid in zip(ctx.tracker, ctx.tracker_ids)}
+    out = []
+    for c in cards:
+        row = rows.get(c["app"])
+        if row is None:
+            continue
+        why = c["why"][:1].upper() + c["why"][1:] if c["why"] else "A check did not pass"
+        item = {"id": c["id"], "kind": "suggest",
+                "title": f"{c['company']}: made again with the newest checks, and it did "
+                         "not pass",
+                "body": f"{why}. It is not sent until it passes.",
+                "options": [{"label": "Make it again",
+                             "work": {"kind": "draft", "id": f"draft~{c['app']}",
+                                      "args": {"company": c["company"], "role": c["role"],
+                                               "application": c["app"], "redo": True}}},
+                            {"label": "Not applying", "action": "ready.not_applying"}],
+                "about": {"company": c["company"], "role": c["role"]},
+                "rev": rev_of(c["id"], c["why"], c["version"])}
+        out.append(item)
+        targets[c["id"]] = dict(_row_target(row, c["app"]), rev=item["rev"])
     return out
 
 
@@ -1106,6 +1142,18 @@ def tracker_match(ctx: Ctx, company, title) -> dict | None:
 _tracker_match = tracker_match  # the module's own name for it; other modules call tracker_match
 
 
+def _tracker_by_link(ctx: Ctx, url) -> dict | None:
+    """The tracker's row whose posting link (`source`) is this one, or None."""
+    from lookup_score import norm
+    u = norm(str(url or ""))
+    if not u:
+        return None
+    by = ctx._once("tracker_by_link", lambda: {
+        norm(str(r.get("source") or "")): r for r in ctx.tracker
+        if str(r.get("source") or "").startswith("http")})
+    return by.get(u)
+
+
 def _warm(ctx: Ctx, company) -> str | None:
     from company_key import key
     _, warm, holds = ctx.network
@@ -1175,34 +1223,85 @@ def kept_jobs() -> dict:
 def why_of(fit_why) -> list[str]:
     """Two short reasons for a score, from the round's own fit reasons: the strongest match
     and the strongest gap, each without its points."""
+    r = reasons_of(fit_why)
+    return [x.rstrip(".") for x in (r["good"], r["watch"]) if x]
+
+
+def reasons_of(fit_why) -> dict:
+    """The score's reasons as More says them, apart: `good`, the strongest match, and
+    `watch`, the strongest gap, each one plain sentence or "". Run together ("Why 100:
+    Matches your skills ... Asks for a graduate degree") a gap read as a contradiction of
+    the 100 (the maintainer, 2026-11-04)."""
     plus, minus = [], []
     for w in fit_why or ():
         m = re.match(r"^\s*([+-])\s*(\d+)\s+(.*)$", str(w))
         if not m:
             continue
         (plus if m.group(1) == "+" else minus).append((int(m.group(2)), m.group(3).strip()))
-    out = []
-    for group in (plus, minus):
+    out = {"good": "", "watch": ""}
+    for key, group in (("good", plus), ("watch", minus)):
         if group:
             text = max(group)[1]
             text = re.split(r";", text)[0].strip()
             for rx, plain in _WHY_PLAIN:
                 text = rx.sub(plain, text)
-            out.append(text[:1].upper() + text[1:120])
+            text = " ".join(text.split()).strip(" ,")
+            if text:
+                out[key] = (text[:1].upper() + text[1:120]).rstrip(".") + "."
     return out
 
 
 # The score's reasons as the card says them: the scorer writes for the chat ("core match",
 # "live contact at this employer (...), so this is not a cold application").
 _WHY_PLAIN = [
+    (re.compile(r"\s*\(softened from [^)]*\)", re.I), ""),
     (re.compile(r"^core match: ", re.I), "matches your skills: "),
     (re.compile(r"^live contact at this employer \(([^)]*)\).*$", re.I), r"you know \1 there"),
     (re.compile(r"^they interviewed you before \(([^)]*)\)$", re.I), r"they interviewed you before, for \1"),
+    # "with no other way in" read as a riddle (2026-11-04).
     (re.compile(r"^graduate degree stated without an equivalence route.*$", re.I),
-     "asks for a graduate degree, with no other way in"),
+     "asks for a graduate degree, and does not say experience can stand in for one"),
     (re.compile(r"^(senior|mid|junior)[^,]*, the band the profile holds$", re.I),
      r"\1, the level you are at"),
+    (re.compile(r"^stated (\d+)\+ years(?:, a [^,]*)?(?: against (\d+) held)?.*$", re.I),
+     lambda m: f"asks for {m.group(1)}+ years" + (f"; you have {m.group(2)}" if m.group(2) else "")),
+    (re.compile(r"^(\d+)\+ years (?:wanted|demanded) in a domain not worked \(([^)]*)\).*$", re.I),
+     r"asks for \1+ years in \2, which you have not worked in"),
+    (re.compile(r"^junior, new-grad or student posting.*$", re.I), "a junior or graduate role, below your level"),
+    (re.compile(r"^location flagged: ", re.I), ""),
 ]
+
+
+def short_place(place) -> str:
+    """A posting's place as a card's one line of facts says it: the town alone where the
+    posting adds its region and country ("Toronto, Ontario, Canada" is "Toronto", the
+    maintainer, 2026-11-04), and a place that starts with how it is worked ("Remote, UK")
+    kept whole."""
+    s = " ".join(str(place or "").split())
+    parts = [x.strip() for x in s.split(",") if x.strip()]
+    if len(parts) < 2 or re.fullmatch(r"(?i)remote|hybrid|on[- ]?site|anywhere|various", parts[0]):
+        return s
+    how = re.search(r"\(([^)]*)\)\s*$", parts[-1])
+    head = parts[0]
+    return head + (f" ({how.group(1)})" if how and how.group(1).lower() not in head.lower() else "")
+
+
+def near_words(item: dict, noun: str = "resume") -> str:
+    """The near matches on a job or a draft in one plain sentence for its More, or "" when
+    there are none, or when the card's own suggestion already offers the one there is."""
+    sg = item.get("suggest") or {}
+    offered = str(sg.get("text") or "").lower() if sg.get("kind") == "near" else ""
+    near = [n for n in item.get("near") or [] if isinstance(n, dict) and n.get("asked") and n.get("have")
+            and not (offered and str(n["asked"]).lower() in offered)]
+    if not near:
+        return ""
+    if len(near) > 1:
+        return (f"It asks for {len(near)} tools you have close matches for; your {noun} "
+                "names yours.")
+    one = near[0]
+    if one.get("yes"):
+        return f"It asks for {one['asked']}, which you said you have used."
+    return f"It asks for {one['asked']}. You have {one['have']}, so your {noun} names {one['have']}."
 
 
 def job_rev(url: str, company: str, title: str, status: str) -> str:
@@ -1275,10 +1374,20 @@ def _jobs(ctx: Ctx, targets: dict) -> dict:
     raw = raw if isinstance(raw, list) else list(raw.values()) if isinstance(raw, dict) else []
     rows = []
     kept = {norm(u) for u in kept_jobs()}
+    # A posting's title, pay or place as the person corrected it on its card (job.edit), kept
+    # with the posting in the kept list: what the search read was wrong (2026-11-05).
+    corrected = {norm(u): k.get("edit") for u, k in kept_jobs().items()
+                 if isinstance(k, dict) and isinstance(k.get("edit"), dict)}
     window = run_round._job_age_days()
     import added_jobs
     found = ([("added", n, r) for n, r in enumerate(added_jobs.load(), 1)]
              + [(name, rank, r) for rank, r in enumerate(raw, 1)] + _earlier_rows(ctx, path))
+    try:
+        cut = run_round.page_rules(ctx.today)
+    except Exception as e:  # noqa: BLE001  the rules unreadable: the list as the search left it
+        print(f"app: Jobs is shown without its rules read again ({e})", file=sys.stderr)
+        cut = _no_rules
+    left = ctx._got.setdefault("jobs_left_out", [])
     for rname, rank, r in found:
         if not isinstance(r, dict):
             continue
@@ -1289,7 +1398,9 @@ def _jobs(ctx: Ctx, targets: dict) -> dict:
         url = r.get("url") or ""
         company, title = str(r.get("company") or ""), str(r.get("title") or "")
         entry = ctx.seen.get(norm(url) or url) if url else None
-        tracked = _tracker_match(ctx, company, title)
+        # By the employer and the role, else by the posting's own link: the role applied to
+        # under a title the board has changed since read "Draft this" (2026-11-05).
+        tracked = _tracker_match(ctx, company, title) or _tracker_by_link(ctx, url)
         st = _status(tracked) if tracked else ""
         # Ruled out by the person, or by a chat that found it is not one they can take (a draft
         # stopped on where the job is open): either way it leaves the list and its counts. One
@@ -1313,6 +1424,11 @@ def _jobs(ctx: Ctx, targets: dict) -> dict:
             status = "new"
         place = str(r.get("location") or "")
         pay = str(r.get("salary") or r.get("pay") or "").strip()
+        fixed = corrected.get(norm(url)) if url else None
+        if fixed:
+            title = str(fixed.get("title") or title)
+            place = str(fixed.get("place") or place)
+            pay = str(fixed.get("pay") or pay)
         notes = []
         if (earlier or added) and status not in ("new", "ready"):
             continue               # decided since: an earlier search's row stays there
@@ -1330,8 +1446,7 @@ def _jobs(ctx: Ctx, targets: dict) -> dict:
             notes.append("You applied here before and never heard back: check before "
                          "applying again.")
         if r.get("outreach_pending_note"):
-            notes.append("Someone here has your message and has not replied: applying is "
-                         "fine, a second message is not.")
+            notes.append(_pending_words(_waiting_at(ctx, company)))
         jid = f"{rname}-{rank}"
         top, at_target = _pay_top(pay)
         # Counted to today: the posting's own date where the search read one, else its age
@@ -1348,17 +1463,48 @@ def _jobs(ctx: Ctx, targets: dict) -> dict:
             posted = gate if posted is None else max(posted, gate)
         if posted is None:
             posted = app_lists.ago(r.get("first_seen"), ctx.today)
+        # Never the search file's own time, which a fresh copy of the files moves.
+        found = found_on(r, entry)
+        found = min(found, ctx.today) if found else None   # never "found" after today
         # Past the person's own search window, a posting nobody has decided on leaves the list
         # by itself, counted to today from its own date: the week rule hung on a chat
         # remembering to clear it, measured from the day it was found (2026-11-03).
         if status == "new" and not added and posted is not None and posted > window \
                 and not (url and norm(url) in kept):
             continue
+        # The search's own hard rules, read down the list (run_round.page_rules, the one
+        # function its shortlist is cut by): a row failing one now is never a fresh find. A
+        # "find 20 more" left 18 of 37 to clear by hand, US-based, failing the bar, or a copy
+        # of a role drafted or applied for (2026-11-05). What the person chose stays: a job
+        # they added, kept or brought back, and one they took off a ruling.
+        mine = added or (url and norm(url) in kept) or bool(r.get("brought_back")) \
+            or (entry is not None and str(entry.get("status") or "").lower() == "lifted")
+        why = cut(r) if status == "new" and not mine else ""
+        # A posting the employer's own board no longer lists is set aside by itself, with its
+        # way back under Set aside: a card asking to set it aside was one more thing to do
+        # about nothing (the UX review, 2026-11-05). Brought back, it stays (lifted).
+        if not why and status == "new" and not mine and apply_link(r).get("status") == "closed":
+            why = CLOSED_WHY
+        if why:
+            left.append((rname, rank, r, why))
+            if earlier:
+                continue               # an earlier search's row: it stays with that search
+            status = "dismissed"
+            notes.append(left_words(why))
+        elif status in ("new", "ready", "applied"):
+            cut.note(r, "you added it" if added else f"from search {rname}" if earlier
+                     else "from this search")
         item = {"id": jid, "rank": rank, "score": score, "band": _band(score),
                 "company": company, "title": title, "place": place, "remote": _remote(place),
+                "place_short": short_place(place),
                 "pay": {"text": pay or "not stated", "stated": bool(pay), "top": top,
                         "at_target": at_target},
                 "posted_days": posted,
+                # The day it was first found, for "found today" on its card: searches run more
+                # than once, and one surfaced weeks ago may be one to put away (the
+                # maintainer, 2026-11-05).
+                "found_on": found.isoformat() if found else None,
+                "found_days": (ctx.today - found).days if found else None,
                 # The tools it asks for that the person holds one of the same kind for (fit.py
                 # near_matches, kept by the round), for "Asked for Tableau, you have Power BI".
                 "near": [{"asked": str(x.get("asked") or ""), "have": str(x.get("have") or "")}
@@ -1368,6 +1514,7 @@ def _jobs(ctx: Ctx, targets: dict) -> dict:
                                "args": {"round": rname, "rank": rank, "url": url,
                                         "company": company, "title": title}},
                 "why": [scrub(w, ctx.names) for w in why_of(r.get("fit_why"))],
+                "reasons": {k: scrub(v, ctx.names) for k, v in reasons_of(r.get("fit_why")).items()},
                 "from_round": rname if earlier else None,
                 "added": added,
                 "kept": norm(url) in kept if url else False,
@@ -1377,6 +1524,7 @@ def _jobs(ctx: Ctx, targets: dict) -> dict:
                                     else []) if str(q).strip()],
                 "rev": job_rev(url, company, title, status)}
         _card(ctx, targets, item, "for_job")
+        item["near_words"] = near_words(item, _noun())
         rows.append(item)
         targets[jid] = {"kind": "job", "round": rname, "rank": rank, "url": url,
                         "company": company, "title": title, "place": place,
@@ -1389,7 +1537,7 @@ def _jobs(ctx: Ctx, targets: dict) -> dict:
                         for r in rows], len(rows), 0, doc=False)
     good, strong = run_round.yield_of(path)
     met = good >= run_round.YIELD_60 and strong >= run_round.YIELD_75
-    filtered = _filtered(name, targets)
+    filtered = _filtered(name, targets, ctx)
     # What Jobs lists to look at, counted once here: a role not applied for, not set aside,
     # not closed and not drafted. "10 roles on the shortlist" counted the one applied for
     # and the one set aside beside a page that said 4 (2026-11-03).
@@ -1406,6 +1554,96 @@ def _jobs(ctx: Ctx, targets: dict) -> dict:
     return {"round": name, "made_at": stamp(made) if made else None, "met": met,
             "summary": summary,
             "rows": rows, "filtered": filtered}
+
+
+def found_on(row: dict, seen: dict | None = None, ran: dt.date | None = None) -> dt.date | None:
+    """The day a job was first found: the earliest of the day the searches first saw its
+    posting (the round's `first_seen`, the seen list's own) and the day the person added it,
+    else `ran`, a day its search is known to have run, or None."""
+    days = [_date(str(x or "")[:10]) for x in (row.get("first_seen"), (seen or {}).get("first_seen"),
+                                               row.get("added_on"))]
+    days = [d for d in days if d]
+    return min(days) if days else ran
+
+
+def _noun() -> str:
+    """What the person calls the document: resume, or CV (person.json `documents.noun`)."""
+    try:
+        return str(person.get("documents.noun", "resume") or "resume")
+    except person.NoProfile:
+        return "resume"
+
+
+def _waiting_at(ctx: Ctx, company: str) -> list:
+    """The people at `company` who have the person's message and have not replied, from
+    the contact book as it stands (throttle.pending_outreach, the round's own reading of
+    it), less anyone who has replied since."""
+    from company_key import key
+    import throttle
+
+    def make():
+        try:
+            return throttle.pending_outreach(rows=ctx.contacts, live=ctx.live)
+        except Exception:  # noqa: BLE001  no book, no names: the note says "someone"
+            return {}
+    return ctx._once("pending_outreach", make).get(key(company)) or []
+
+
+def _pending_words(waiting) -> str:
+    """Who has the person's message and has not replied, by first name, for a job at their
+    employer: "Someone here" sat beside a box saying someone there had replied, and the two
+    read as one person said two ways (the maintainer, 2026-11-04)."""
+    names = []
+    for q in waiting if isinstance(waiting, list) else []:
+        n = first_name(q.get("name")) if isinstance(q, dict) else ""
+        if n and n not in names:
+            names.append(n)
+    if not names:
+        return ("Someone here has your message and has not replied: applying is fine, a "
+                "second message is not.")
+    if len(names) == 1:
+        return (f"{names[0]} has your message and has not replied: applying is fine, a "
+                "second message is not.")
+    who = (" and ".join(names) if len(names) == 2 else ", ".join(names[:2])
+           + (f" and {names[2]}" if len(names) == 3 else f" and {len(names) - 2} more"))
+    return f"{who} have your message and have not replied: applying is fine, a second message is not."
+
+
+def _no_rules(row) -> str:
+    """No rule read: every row as the search left it."""
+    return ""
+
+
+_no_rules.note = lambda row, where="": None
+
+
+def left_out(today: dt.date, now: dt.datetime | None = None) -> list[tuple[str, int, dict, str]]:
+    """(round, rank, row, why) for every row a search found that the page's Found list leaves
+    out by the search's own hard rules (run_round.page_rules), as _jobs reads them: the one
+    answer a round takes off the list with (run_round.leave_out)."""
+    ctx = Ctx(today, now or dt.datetime.now(dt.timezone.utc))
+    _jobs(ctx, {})
+    return list(ctx._got.get("jobs_left_out") or [])
+
+
+# A hard rule's reason as a job's card says it: the rule in the person's words, then why.
+# A posting found closed is left out like a rule's cut, its note in plain words.
+CLOSED_WHY = "closed: the employer's own board no longer lists it"
+_LEFT_WORDS = (("closed: ", "The posting has closed: "),
+               ("candidate's bar: ", "It does not clear your employer bar: "),
+               ("place: ", "Not where you can work: "), ("screen: ", "The posting rules you out: "))
+
+
+def left_words(why: str) -> str:
+    """The note on a job the search's own rules left out, in plain words."""
+    text = " ".join(str(why or "").split())
+    for head, said in _LEFT_WORDS:
+        if text.startswith(head):
+            text = said + text[len(head):]
+            break
+    else:
+        text = text[:1].upper() + text[1:]
+    return "Left out: " + text.rstrip(".")[:240] + "."
 
 
 def to_look_at(r: dict) -> bool:
@@ -1457,36 +1695,36 @@ def bar_words(verdict, reason: str) -> str:
     return (why[:1].upper() + why[1:]).rstrip(".") + "." if why else ""
 
 
-def _filtered(name: str, targets: dict) -> dict:
-    data = _json(person.state("documents", "rounds", "filtered", f"{name}.json"), {})
+def _filtered(name: str, targets: dict, ctx: Ctx | None = None) -> dict:
+    """What the newest search left out, grouped by the person's rule that cut each row, in
+    plain words (tools/rules_view.py left_view): its count, the day it last cut, three
+    examples, its first rows, a few across the whole of it to check, the pencil's setting.
+    The rows the page holds for each rule's search box go to the database as the `filtered`
+    list, never all of them: a search left out 13,168 (2026-11-05)."""
+    import rules_view
+    path = person.state("documents", "rounds", "filtered", f"{name}.json")
+    data = _json(path, {})
     found = (data.get("filtered") if isinstance(data, dict) else data) or []
     found = [e for e in found if isinstance(e, dict)]
-    groups: dict = {}
-    for n, e in enumerate(found, 1):
-        rule = str(e.get("rule") or e.get("stage") or "other")
-        g = groups.setdefault(rule, {"reason": rule, "count": 0, "items": []})
-        g["count"] += 1
-        if len(g["items"]) < FILTERED_PER_GROUP:
-            fid = f"{name}-f{n}"
-            item = {"id": fid, "company": str(e.get("company") or ""),
-                    "title": str(e.get("title") or ""), "place": str(e.get("location") or ""),
-                    "url": str(e.get("url") or ""), "reason": str(e.get("reason") or rule),
-                    "rev": rev_of(e.get("url"), e.get("company"), e.get("title"), rule)}
-            g["items"].append(item)
-            targets[fid] = {"kind": "filtered", "round": name, "n": n,
-                            "url": item["url"], "company": item["company"],
-                            "title": item["title"], "rev": item["rev"]}
-    ordered = sorted(groups.values(), key=lambda g: (-g["count"], g["reason"]))
-    # A whole group brought back at once: the page names it filtered~<reason> (its seg()).
-    for g in ordered:
-        gid = "filtered~" + seg(g["reason"])
-        ns = [n for n, e in enumerate(found, 1)
-              if str(e.get("rule") or e.get("stage") or "other") == g["reason"]]
-        g["id"] = gid
-        g["rev"] = rev_of(gid, [(found[n - 1].get("url"), found[n - 1].get("title")) for n in ns])
-        targets[gid] = {"kind": "filtered_group", "round": name, "reason": g["reason"],
-                        "ns": ns, "rev": g["rev"]}
-    return {"count": len(found), "groups": ordered}
+
+    def item_of(n: int, e: dict) -> dict:
+        fid = f"{name}-f{n}"
+        item = {"id": fid, "company": str(e.get("company") or ""),
+                "title": str(e.get("title") or ""), "place": str(e.get("location") or ""),
+                "url": str(e.get("url") or ""), "reason": str(e.get("reason") or e.get("rule") or ""),
+                "rev": rev_of(e.get("url"), e.get("company"), e.get("title"),
+                              str(e.get("rule") or e.get("stage") or "other"))}
+        targets[fid] = {"kind": "filtered", "round": name, "n": n, "url": item["url"],
+                        "company": item["company"], "title": item["title"], "rev": item["rev"]}
+        return item
+
+    # A whole rule comes back by its id, as before: filtered~<its kind>.
+    got = rules_view.left_view(found, name, rules_view.content_day(rounds_dir(name)), targets,
+                               item_of)
+    held = got.pop("held")
+    if ctx is not None:
+        _list(ctx, "filtered", held, sum(len(g["items"]) for g in got["groups"]), 0)
+    return got
 
 
 def seg(text) -> str:
@@ -1647,8 +1885,13 @@ def _checks(files, expect_resume: int, noun: str = "resume") -> dict:
     unread = [f["kind"] for f in files if f["pages"] is None]
     if unread:
         return {"passed": True, "line": "Made; page count not read here"}
-    return {"passed": True, "line": "Made, right length: " + ", ".join(
-        f"{said[f['kind']]} {f['pages']} page{'s' if f['pages'] != 1 else ''}" for f in files)}
+    # Each document's own words as well as the line, so the page sets the pencil for the resume
+    # beside "CV 1 page" and the letter's beside "letter 1 page": two pencils side by side at the
+    # end of the line said nothing of which was which (2026-11-05).
+    parts = [{"kind": f["kind"], "words": f"{said[f['kind']]} {f['pages']} page{'s' if f['pages'] != 1 else ''}"}
+             for f in files]
+    lead = "Made, right length: "
+    return {"passed": True, "line": lead + ", ".join(p["words"] for p in parts), "lead": lead, "parts": parts}
 
 
 # verify_batch.py's flags, said plainly; anything else is said as "a check failed".
@@ -1666,9 +1909,13 @@ VERIFY_WORDS = {
     "ROUNDTRIP": "a line of the draft is missing from the PDF's text",
     "NO_PINNED_SKILL": "the skill you always show is missing", "SKILLPARENS":
     "the skills line has brackets", "DUPBULLET": "a bullet is there twice",
-    "UNAUDITED": "a sentence was changed after the checks read it",
+    # Said as a person would: "a sentence was changed after the checks read it" asked them
+    # to picture the pipeline (2026-11-05).
+    "UNAUDITED": "it was changed after it was last checked",
     "CLAIMS": "something on it breaks your own rules or is not in your profile",
     "NUMBERS": "a number on it is not in your profile",
+    "LETTERS": "the cover letter breaks one of the letter's rules",
+    "VOICE": "the cover letter has wording it must never carry",
 }
 VERIFY_PASSED = ("one page each", "jobs in date order", "text an applicant tracking system "
                  "reads cleanly", "your contact details in the text", "every line of the "
@@ -1810,6 +2057,8 @@ def _ready(ctx: Ctx, targets: dict) -> list:
         item["near"] = _near(folder, draft)
         item["tweaks_done"] = _tweaks_done(folder, os.path.join(folder, "draft.json"))
         _card(ctx, targets, item, "for_ready", row, folder)
+        item["near_words"] = near_words(item, _noun())
+        item["place_short"] = short_place(item.get("place"))
         out.append(item)
         targets[rid] = dict(_row_target(row, rid), rev=item["rev"])
     out.sort(key=lambda i: (i["status"] != "drafted", i["company"].lower(), i["role"].lower()))
@@ -2079,6 +2328,53 @@ def message_blocks(text: str, mtype: str, contact: dict, today=None) -> list[dic
     return out[:4]
 
 
+# How many times Claude fixes a draft by itself before the card says it could not: twice for
+# a draft that breaks the person's rules (never offered as ready until it passes), once for
+# one that only reads better changed (offered as it is after).
+FIX_TRIES = {"must": 2, "may": 1}
+
+
+def message_fix(item: dict) -> dict | None:
+    """What Claude fixes in a draft by itself, the moment the check finds it, with no tap (the
+    maintainer, 2026-11-04: "if there is clearly a recommended option ... we just do it
+    autonomously"): {"work" (the tweak's own id), "reasons", "text" (what to change), "must"
+    (it breaks the person's rules, so it is not ready until fixed)}. None when it passes, or
+    when it waits for their profile to be read, which no rewrite fixes. `app.py view` queues
+    it; a fact only the person knows is asked through the work's one question (`needs`)."""
+    if item.get("hold"):
+        return None
+    must = [b["said"] for b in item.get("blocked") or [] if b.get("said")]
+    may = []
+    for w in item.get("warnings") or []:
+        said = str((w.get("said") or w.get("words") or w.get("text") or "") if isinstance(w, dict) else w)
+        # What Claude already judged and kept is never rewritten again.
+        if said and not said.lower().startswith("claude left this as it is"):
+            may.append(said.rstrip("."))
+    reasons = must + [x for x in may if x not in must]
+    if not reasons:
+        return None
+    import page_db
+    key = rev_of(reasons, item.get("rev"))[:10]
+    return {"work": page_db.safe_id(f"tweak~{item['id']}~fix~{key}"), "reasons": reasons,
+            "must": bool(must),
+            "text": ("Rewrite it so it keeps my rules: " if must else
+                     "Rewrite it so it reads as I would write it: ") + "; ".join(reasons) + "."}
+
+
+def to_send(messages: list) -> dict:
+    """The messages drafted and waiting for the person to send, counted once: one a person
+    (each has one draft at a time) and one for each message with nobody on the list (an
+    application's follow-up). {"n", "ids"}: Contacts' header ("4 to send") and To do's one
+    card ("Messages to send (4)") both draw it, and say the same number (the UX review,
+    2026-11-05: Contacts counted every draft, To do the drafted rows and a wave card apart).
+    The ids are every message in order, so a page can leave out one sent there before a chat
+    has caught up."""
+    seen: set = set()
+    for m in messages or []:
+        seen.add(str(m.get("contact") or "") or "msg:" + str(m.get("id") or ""))
+    return {"n": len(seen), "ids": [str(m.get("id") or "") for m in messages or []]}
+
+
 def draft_limit(contact: dict, status: str, text: str = "") -> tuple[str, str, int | None]:
     """(what a draft waiting for this contact is, the composer's kind it is checked as, the
     most characters it may run to), read from their status now: the one answer the page
@@ -2156,6 +2452,7 @@ def _messages(ctx: Ctx, targets: dict) -> list:
         item["parts"] = parts.load(cid, text) is not None
         item["tweaks_done"] = _tweaks_done(os.path.dirname(f), f)
         item["paste"] = _paste(cid, item["first_name"], raw) if kind == "first_note" else None
+        item["fix"] = message_fix(item)
         _card(ctx, targets, item, "for_message")
         out.append(item)
         targets[mid] = {"kind": "message", "contact": cid, "text": body, "subject": subject,
@@ -2623,6 +2920,35 @@ def _said(m) -> bool:
     return state.said_something(m)
 
 
+def exchange_of(msgs: list) -> dict | None:
+    """The latest exchange with someone and how it began, for their card (the latest only)
+    and its More (when you first wrote, how many each way): worked out once here, never on the
+    page. A message of ours (never a request taken back) and a message of theirs with words
+    (never an acceptance, a call or an auto-reply) count; nothing else does. None with neither."""
+    from network import state
+    said = []
+    for m in msgs:
+        day = str(m.get("date") or "")[:10]
+        if not _date(day):
+            continue
+        if state.direction(m) == "out" and not state.is_withdrawal(m) and not state.is_call(m):
+            said.append((day, "you"))
+        elif state.said_something(m):
+            said.append((day, "them"))
+    if not said:
+        return None
+    said.sort(key=lambda x: x[0])
+    last_day, last_who = said[-1]
+    first_day, first_who = said[0]
+    return {"last": last_who, "last_on": last_day,
+            # Their message after one of ours is a reply; one with nothing of ours before it
+            # is them writing first.
+            "replied": last_who == "them" and any(w == "you" for _d, w in said[:-1]),
+            "first": first_who, "first_on": first_day,
+            "out": sum(1 for _d, w in said if w == "you"),
+            "in": sum(1 for _d, w in said if w == "them")}
+
+
 def _people(ctx: Ctx, targets: dict) -> list:
     """Every live contact (a conversation going, a reply or anything else owed, a note
     waiting to go, a message out in the last 60 days), then the rest by recency until the
@@ -2701,7 +3027,10 @@ def _people(ctx: Ctx, targets: dict) -> list:
         (app_lists.ago(r[4], ctx.today) is not None and app_lists.ago(r[4], ctx.today) <= fold)
         or (not r[5] and r[2] in schema.NEVER_SENT and r[8]["group"] == "new"))]
     order = {g: n for n, g in enumerate(GROUPS)}
-    live_rows.sort(key=lambda x: (order[x[8]["group"]], -x[8]["late"],
+    # Someone with a message already drafted first, then who needs you: Contacts is one page,
+    # each person with what to send them, and what is written is the quickest thing to finish
+    # (the maintainer, 2026-11-04).
+    live_rows.sort(key=lambda x: (x[1] not in shown, order[x[8]["group"]], -x[8]["late"],
                                   -open_actions.HEAT.get(x[2], 0), x[3] or "9999", x[1]))
     rest.sort(key=lambda x: (x[4] or "", x[1]), reverse=True)
     out, used = [], 2
@@ -2720,6 +3049,8 @@ def _people(ctx: Ctx, targets: dict) -> list:
                 "wrote": any(state.direction(t) == "out" and not state.is_withdrawal(t)
                              for t in msgs),
                 "last": last, "title": title or None,
+                # The latest exchange, for the card's line; how it began, for its More.
+                "exchange": exchange_of(msgs),
                 "next_action": action, "link": link, "due": due or None,
                 "route": full[cid]["route"],
                 # Who they came through (the book's referred_by: a contact id or a name), so the
@@ -2759,7 +3090,9 @@ def _people(ctx: Ctx, targets: dict) -> list:
                                 "rest": len(full) - len(out), "need": counts["now"],
                                 "replies": replies, "follow": counts["follow"],
                                 "leave": counts["leave"], "waiting": counts["waiting"],
-                                "held": counts["held"]}
+                                "held": counts["held"],
+                                # People with a message drafted to them, on the list's top.
+                                "drafted": sum(1 for r in live_rows if r[1] in shown)}
     _list(ctx, "people", whole, len(out))
     return out
 
@@ -3360,6 +3693,14 @@ def _applications(ctx: Ctx, targets: dict) -> list:
                 "followed_up": len(re.findall(r"followed up \d{4}-\d{2}-\d{2}",
                                               str(row.get("notes") or ""))),
                 "heard": list(HEARD.get(st, ())), "rev": ""}
+        # Its folder's answers to the form, as on its draft: an applied card says what the
+        # form was told, and a form's own questions asked after it went land there too
+        # (form_answers, 2026-11-05).
+        import outreach
+        folder = outreach.app_folder(row.get("company"), row.get("role") or "")
+        if os.path.isdir(folder):
+            item["slug"] = os.path.basename(folder)
+            item["screening"] = _screening(folder)
         # The posting it went to, so an applied card links to it with no job row left.
         link = _link_on_row(row, {})
         if link.get("url") or link.get("apply_url"):
@@ -4652,6 +4993,27 @@ def _schedule(ctx: Ctx, targets: dict) -> dict:
     return part
 
 
+def _rules(ctx: Ctx, targets: dict) -> dict:
+    """Your rules (tools/rules_view.py your_rules): every rule that shapes the search and the
+    messages, each one plain sentence with the day it was set, the person's words, what it
+    left out in the last 30 days, the pencil's setting and the trash's writer, and a quiet
+    "Still right?" where it is old and busy; `brief_line`, the Brief's one line about them,
+    at most once a month. The person: "how easy is it to change the rules ... which might be
+    permanent despite someone's preferences changing over time?" (2026-11-05)."""
+    import rules_view
+    rows = rules_view.your_rules(ctx.today, ctx.seen)
+    for r in rows:
+        r["rev"] = rev_of(r["id"], r["sentence"], r.get("drop"), r.get("edit"), r["still_right"])
+        targets[r["id"]] = {"kind": "your_rule", "id": r["id"], "drop": r.get("drop"),
+                            "label": r["sentence"], "rev": r["rev"]}
+    line = rules_view.review_line(rows, ctx.today)
+    out = {"id": "your-rules", "rows": rows, "brief_line": line,
+           "still_right": sum(1 for r in rows if r["still_right"])}
+    out["rev"] = rev_of(out["id"], line, out["still_right"])
+    targets["your-rules"] = {"kind": "your_rules", "rev": out["rev"]}
+    return out
+
+
 BUILDERS = {"app": _app, "person": _person, "needs_you": _needs_you, "jobs": _jobs,
             "ready": _ready, "messages": _messages, "due": _due, "people": _people,
             "interviews": _interviews, "done": _done, "settings": _settings, "brief": _brief,
@@ -4659,7 +5021,7 @@ BUILDERS = {"app": _app, "person": _person, "needs_you": _needs_you, "jobs": _jo
             "referrals": _referrals, "message_budget": _message_budget,
             "linkedin": _linkedin, "learned": _learned, "help": _help, "resume": _resume,
             "search": _search, "where": _where, "listener": _listener,
-            "schedule": _schedule, "you": _you, "upcoming": _upcoming}
+            "schedule": _schedule, "you": _you, "upcoming": _upcoming, "rules": _rules}
 
 # What a section is before there is a profile to build it from: a setup still running, or
 # none started. The page shows the setup then, and every other section empty.
@@ -4680,6 +5042,7 @@ EMPTY = {
                              "rev": "none"}},
     "learned": [], "help": {"tip": None, "tour": [], "off": False}, "resume": None,
     "search": None, "where": None, "schedule": None, "upcoming": [],
+    "rules": {"id": "your-rules", "rows": [], "brief_line": None, "still_right": 0, "rev": "none"},
     "jobs": {"round": "", "made_at": None, "met": False, "summary": "No search has run yet.",
              "rows": [], "filtered": {"count": 0, "groups": []}},
     "done": {"counts": {"applied": 0, "interviews": 0, "offers": 0, "replies": 0},
@@ -4693,7 +5056,8 @@ EMPTY = {
 
 
 def build(today: dt.date | None = None, now: dt.datetime | None = None,
-          only=None, shown: dict | None = None, full: dict | None = None) -> tuple[dict, dict]:
+          only=None, shown: dict | None = None, full: dict | None = None,
+          work_time: dict | None = None) -> tuple[dict, dict]:
     """(the model, what each item id stands for in the repo). `only` builds just those
     sections, for an applier that needs one item's rev and not the whole page. `shown` is
     {suggestion id: the day it first showed} from the page's database, so at most three new
@@ -4716,6 +5080,8 @@ def build(today: dt.date | None = None, now: dt.datetime | None = None,
             model[name] = json.loads(json.dumps(EMPTY.get(name)))
     if "people_count" in ctx._got:
         model["people_count"] = ctx._got["people_count"]
+    if isinstance(model.get("messages"), list):
+        model["to_send"] = to_send(model["messages"])
     if only is None and ctx._got.get("lists"):
         import app_lists
         model["lists"] = {}
@@ -4739,6 +5105,14 @@ def build(today: dt.date | None = None, now: dt.datetime | None = None,
         except Exception:  # noqa: BLE001  no profile yet: no buttons, no usual
             model["tweaks"] = {"rows": tweak.table(), "buttons": [], "usual": {}, "rules": {}}
         model["hints"] = tweak.hints()
+        # The answer an older refusal (one with none of its own) asks for, by its action:
+        # the page draws that control under it, never "Say it in Chat" (2026-11-05).
+        import app_actions
+        model["refusal_asks"] = app_actions.OLD_REFUSAL_ASKS
+        # How long each kind of work takes this copy's Claude, from its own finished work
+        # (page_db.work_times, read from the page's database by `app.py view`): the gauge's
+        # minutes, the app's defaults only where there is no history yet.
+        model["work_time"] = dict(work_time or {})
         # Whether the page offers to pin itself now (app_listen.pin_due: never once pinned,
         # and a Not now is asked again a month later, three times at most).
         try:

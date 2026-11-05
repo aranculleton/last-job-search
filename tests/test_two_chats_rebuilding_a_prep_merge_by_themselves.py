@@ -36,6 +36,10 @@ def test_two_rebuilds_of_one_prep_keep_the_later_and_leave_no_side_copy(tmp_path
     _git(root, "config", "user.name", "t")              # a merge commits: a name of its own
     _git(root, "config", "user.email", "t" + "@example.com")
     _write(root, "2026-11-02", 5)
+    # A person's copy never saves the spare folder (.gitignore), where the earlier rebuild is
+    # kept, out of their folders, as the other side is on every path a merge settles.
+    with open(os.path.join(root, ".gitignore"), "w", encoding="utf-8") as fh:
+        fh.write(".other-chat-copies/\n")
     _git(root, "add", "-A")
     _git(root, "commit", "-qm", "a prep")
     _git(root, "checkout", "-q", "-b", "other")
@@ -51,3 +55,6 @@ def test_two_rebuilds_of_one_prep_keep_the_later_and_leave_no_side_copy(tmp_path
     assert "Written 2026-11-04" in text and "<<<<<<<" not in text
     assert not os.path.exists(os.path.join(root, PREP + ".from-another-chat"))
     assert _git(root, "status", "--porcelain").stdout.strip() == ""
+    import merge_state
+    spare = os.listdir(os.path.join(root, merge_state.SPARE_DIR))
+    assert len(spare) == 1 and spare[0].startswith(PREP.replace("/", "__")), spare

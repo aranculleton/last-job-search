@@ -137,14 +137,32 @@ if _days:
     # would hide the time-zone bugs this check is for.
     time_machine.travel(time.time() + int(_days) * 86400, tick=True).start()
     # git keeps the real clock unless told: its commits are dated on the moved one too, so a
-    # commit's age is read on the same clock as everything else.
+    # commit's age is read on the same clock as everything else. A stamp this hook put in a
+    # child's environment is that moment's, frozen: a child Python (a test worker) kept it and
+    # dated every later commit at the moment it started, while its own clock moved on, so
+    # "nine days ago" read as eight (2026-11-05). The stamp is marked, and a child takes its
+    # own parent's off and stamps with its own clock; a date a caller set itself is kept.
+    _KEYS = ("GIT_COMMITTER_DATE", "GIT_AUTHOR_DATE")
+    _given = os.environ.pop("LJS_CLOCK_STAMP", None)
+    for _k in _KEYS:
+        if _given and os.environ.get(_k) == _given:
+            del os.environ[_k]
     _init = subprocess.Popen.__init__
 
     def _popen(self, *a, **kw):
         env = dict(kw.get("env") if kw.get("env") is not None else os.environ)
         stamp = "%d +0000" % time.time()
-        for k in ("GIT_COMMITTER_DATE", "GIT_AUTHOR_DATE"):
-            env.setdefault(k, stamp)
+        if env.get("LJS_CLOCK_STAMP"):
+            for k in _KEYS:
+                if env.get(k) == env["LJS_CLOCK_STAMP"]:
+                    del env[k]
+        mine = [k for k in _KEYS if k not in env]
+        for k in mine:
+            env[k] = stamp
+        if mine:
+            env["LJS_CLOCK_STAMP"] = stamp
+        else:
+            env.pop("LJS_CLOCK_STAMP", None)
         kw["env"] = env
         return _init(self, *a, **kw)
     subprocess.Popen.__init__ = _popen

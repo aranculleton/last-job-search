@@ -221,23 +221,32 @@ def test_every_section_shows_the_engines_items_in_plain_words(run, built):
     # What Juno asked for leads, with its button, and the one day it is about (the walk-through,
     # 2026-11-03: "Reply to Juno" with "Draft a reply" over a request for the CV).
     assert "Juno at Larkspur Retail asked for your CV" in t["todo"] and "Make a CV for Juno" in t["todo"], t["todo"]
-    assert "asked 12 Sep" in t["todo"] and "first wrote" not in t["todo"] and "Not made yet" in t["todo"]
-    assert "Operations Analyst at Fernhill Freight" in t["todo"], "a draft's To do card names its employer"
-    assert "Brindle Hart Logistics · Manchester (hybrid)\n" in t["jobs"], "hybrid is said once"
+    # A draft never made is Claude's to make by itself (tools/app.py self_fixes): said on its
+    # card in Drafts, never a To do (the UX review, 2026-11-05).
+    assert "asked 12 Sep" in t["todo"] and "first wrote" not in t["todo"] and "Not made yet" not in t["todo"] and "Not made yet" in t["drafts"]
+    # Its referral is a note (said on Wren's card) and its files are Claude's to make: no To do
+    # card of its own (the UX review, 2026-11-05).
+    assert "Operations Analyst at Fernhill Freight" not in t["todo"] and "Operations Analyst" in t["drafts"], t["todo"]
+    # Its line of facts ends with its details fold, "Why" (2026-11-05): the score is beside the title.
+    assert "Brindle Hart Logistics · Manchester (hybrid) · Why" in t["jobs"] and "Hybrid" not in t["jobs"], "hybrid is said once"
     assert "Juno at Larkspur Retail replied to you on 12 Sep" in t["jobs"] and "Write to Juno" in t["jobs"]
     assert "Pay not stated" not in t["jobs"] + t["drafts"], "said on nearly every card, it said nothing"
-    assert "Uses some of your Claude allowance, about" in t["jobs"], "a suggestion's cost is the amount and its real time"
+    assert "of Claude's time, from your Claude allowance" in t["jobs"], "a suggestion's cost is its real time, from the allowance (DESIGN.md, the gauge)"
     # The check that passed says what it checked (2026-11-03: "✓ Checked" said nothing of what);
     # where no PDF reader is installed (the browser job on GitHub) it says the count was not read.
     import pdftext
-    said = ("Made, right length: CV 1 page, letter 1 page" if pdftext.reader() or shutil.which("pdfinfo")
-            else "Made; page count not read here")
-    assert said in t["drafts"] and "\nChecked\n" not in t["drafts"], t["drafts"]
+    # Each document's words stand with its own pencil between them since 2026-11-05 ("CV 1 page ✎
+    # · letter 1 page ✎"), so the text read has the pencils' names between the parts.
+    said = (["Made, right length:", "CV 1 page", "letter 1 page"] if pdftext.reader() or shutil.which("pdfinfo")
+            else ["Made; page count not read here"])
+    assert all(s in t["drafts"] for s in said) and "\nChecked\n" not in t["drafts"], t["drafts"]
     fern = t["drafts"].split("Operations Analyst", 1)[1].split("Claims Forecasting Analyst", 1)[0]
     assert "Get the files" not in fern and "Get my files ready" not in fern, "a file not made yet is not offered"
     assert "Needs a fix" not in fern and "still to make" in t["drafts"], "a draft never made is still to make, never a fix"
     kestrel = t["drafts"].split("Claims Forecasting Analyst", 1)[1]
-    assert "Get my files ready" in kestrel and "files are not on this page yet" not in t["drafts"], "the card's own button, said once"
+    # Files not on the page yet are Claude's to put there by itself (the view queues them,
+    # 2026-11-05): no "Get my files ready" to tap, and nothing about files until they are there.
+    assert "Get my files ready" not in kestrel and "files are not on this page yet" not in t["drafts"], "nothing to tap for what Claude does"
     assert "Replied: your turn" in t["contacts"], "every status the contact book holds has words"
     assert "Panel interview: Thornbury Bank" in t["interviews"]    # Coming up, by day (4.6)
     assert "1 earlier, finished: Show" in t["progress"]
@@ -246,11 +255,14 @@ def test_every_section_shows_the_engines_items_in_plain_words(run, built):
 def test_finished_history_opens_from_the_database_and_related_things_link(run, built):
     got = _go(run, built, "small", steps=[
         {"hash": "progress", "click": "Show", "read": "#main"},
-        {"hash": "jobs", "more": "r9-2", "read": '[data-item="r9-2"]'},
+        # A drafted job is its draft's card in the one list; its details from "Why".
+        {"hash": "jobs", "click": "Why it scored 81: Kestrel Mutual, Claims Forecasting Analyst",
+         "read": '[data-item="app-kestrel_mutual_claims_forecasting_analyst"]'},
     ])
     assert "Quayside Foods" in got["after"][0]["text"], "the rest of the list comes from view/list~applications~1"
     rel = got["after"][1]["text"]
-    assert "Also at Kestrel Mutual" in rel and "your draft" in rel and "the note to Pell" in rel
+    # The card's own draft is its "See the draft", never "also" there (2026-11-04).
+    assert "Also at Kestrel Mutual" in rel and "the note to Pell" in rel and "your draft" not in rel
 
 
 @pytest.fixture(scope="module")
@@ -357,8 +369,11 @@ def test_the_private_copy_link_is_githubs_own_form_with_private_chosen(run, buil
 def test_one_card_an_item_however_many_things_are_wrong_and_no_button_twice(run, built):
     got = _go(run, built, "rich", hashes=["todo", "drafts"])
     todo, drafts = got["texts"]["todo"], got["texts"]["drafts"]
-    assert todo.count("Operations Analyst") == 1, "the referral and the missing files are one card"
-    assert "Wren has put your name forward at Fernhill Freight" in todo and "Not made yet" in todo
+    # A referral in flight is a note on the draft's own card, and on its person's card in To do
+    # where they have a row there, never a card of its own; files never made are Claude's to
+    # make by itself, said on the draft's card (the UX review, 2026-11-05).
+    assert todo.count("Wren has put your name forward at Fernhill Freight") == 1, "said once, in Wren's own card's grey box"
+    assert "Not made yet" not in todo and "Not made yet" in drafts
     assert "has put your name forward here: ask before" not in drafts, "the engine's alert says it once"
     assert "The posting asks for Looker; you have Power BI" in drafts
     assert "Confirm the call time" in todo or "Tam" in todo
@@ -401,9 +416,10 @@ def test_an_alerts_own_action_carries_the_items_rev(run, built):
     model = built["models"]["rich"]
     pell = next(m for m in model["messages"])
     assert pell is not None
-    got = _go(run, built, "rich", steps=[{"hash": "jobs", "click": "No thanks"}])
-    (a,) = [x for x in got["actions"] if x["action"] == "suggest.dismiss"]
+    # The job's own suggestion, on its card: the drafts above it in the one list carry theirs.
     job = next(r for r in model["jobs"]["rows"] if r.get("suggest"))
+    got = _go(run, built, "rich", steps=[{"hash": "jobs", "click": "No thanks", "within": '[data-item="%s"]' % job["id"]}])
+    (a,) = [x for x in got["actions"] if x["action"] == "suggest.dismiss"]
     assert a["item"] == job["suggest"]["id"] and a["rev_seen"] == job["suggest"]["rev"]
 
 

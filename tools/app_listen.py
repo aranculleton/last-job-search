@@ -358,9 +358,10 @@ def decide(db: dict, chat: str, out_dir: str, now: dt.datetime | None = None,
                               "to hand over"]}
         new = {"chat": hand_to, "title": HELPER_CHAT_TITLE, "kind": "cloud", "helper": True,
                "since": at, "answered_at": None, "took_from": chat,
-               "took_from_helper": bool(rec.get("helper"))}
+               "took_from_helper": bool(rec.get("helper")), "handed_by": chat}
         w.add("set", DOC_COLLECTION, DOC_ID, new, if_version=version)
         _remember(new, now, confirmed=False)
+        handed_here(chat, now)
         return {"role": "other", "record": new, "batches": w.save("listen"),
                 "lines": ["listen: the page is handed to the helper chat. Send the batch "
                           "below, then stop this chat's watch: ArtifactComments, action "
@@ -541,15 +542,16 @@ def draws_screens(db: dict, chat: str, work: str = "",
                   now: dt.datetime | None = None) -> tuple[bool, str]:
     """Whether this chat writes the page's screens (`app.py view`), and what it says when not.
 
-    Only the chat that answers the page draws them, with two exceptions that keep a page from
-    going stale: a chat doing work of its own for the person (`work`, the job it was started
-    for, or work it began with `ask --here`, still going or finished within OWN_JOB_S), which
-    a job chat reports to the chat that started it, but no other chat hears of it), and
-    any chat while nobody answers the page (the first publish). Small work an old helper took
-    as the listener is not its own in this sense: it hands the page on with it. Every other
-    chat, an old helper after a hand-over above all, writes only its own work items and
-    receipts: during a hand-over the old and new helper both rewrote whole screens, and each
-    update bounced off the other's (the maintainer, 4 November)."""
+    Any chat draws them: "I applied to <employer>" said in the person's own chat left the
+    page stale while that chat said it was up to date, when only the listener drew them (the
+    engine review, 2026-11-05). The one exception is a chat that answered the page and has
+    handed it on (handed_on: the old helper in a hand-over), which writes only its own work
+    items and receipts: during a hand-over the old and new helper both rewrote whole screens,
+    and each update bounced off the other's (the maintainer, 4 November). Even it draws for
+    work of its own for the person (`work`, the job it was started for, or work it began
+    with `ask --here`, still going or finished within OWN_JOB_S); small work it took as the
+    listener is not its own in this sense: it hands the page on with it. Whatever chat
+    draws, a screen another chat drew from a newer copy is never written over (app.py view)."""
     import page_db
     now = now or dt.datetime.now(dt.timezone.utc)
     rec, _version = record(db)
@@ -563,6 +565,8 @@ def draws_screens(db: dict, chat: str, work: str = "",
     took = seen().get("listener") or {}
     if str(took.get("chat") or "") in mine and str(took.get("since") or "") > \
             str(rec.get("since") or ""):
+        return True, ""
+    if not handed_on(rec, mine):
         return True, ""
     jobs = db.get("work") or {}
     own = [w for w in (work, _job_chat()) if w]
@@ -578,6 +582,37 @@ def draws_screens(db: dict, chat: str, work: str = "",
         if done is not None and (now - done).total_seconds() < OWN_JOB_S:
             return True, ""
     return False, VIEW_LEFT
+
+
+def handed_on(rec: dict, mine: set) -> bool:
+    """This chat answered the page and handed it on, and another answers it now: the page's
+    record names another chat and says this one handed it over (`handed_by`; before it was
+    kept, `took_from` an app-started helper), or this checkout's own record says so
+    (handed_here). A chat the page was only taken from, the person's own chat gone quiet
+    above all, is not: it draws the screens like any other."""
+    if not mine or str(rec.get("chat") or "") in mine:
+        return False
+    if str(rec.get("handed_by") or "") in mine:
+        return True
+    if str(rec.get("took_from") or "") in mine and rec.get("took_from_helper") \
+            and "handed_by" not in rec:
+        return True
+    return any(c in (seen().get("handed_on") or {}) for c in mine)
+
+
+def handed_here(chat: str, now: dt.datetime) -> None:
+    """Keep, in this checkout, that this chat handed the page on (handed_on reads it once
+    another chat answers). Never raises."""
+    if not chat:
+        return
+    try:
+        got = seen()
+        handed = got.get("handed_on") if isinstance(got.get("handed_on"), dict) else {}
+        handed[chat] = _stamp(now)
+        got["handed_on"] = handed
+        _save_seen(got)
+    except (OSError, ValueError):
+        pass
 
 
 def _job_chat() -> str:
@@ -641,6 +676,56 @@ def context_tokens() -> int:
     return max(0, (last or 0) - (first or 0)) if last is not None else 0
 
 
+# A republish reads the page's code into the chat, whole, file by file (some 200 KB): a new
+# helper that put an update up was told to hand over twenty minutes after it started (the
+# maintainer's live run, 2026-11-05), and its fresh helper would have read it all again. What
+# a republish adds is measured, from its build (`app.py page --out-dir`) to its record (`app.py
+# published`), and the growth that renews a helper leaves it out.
+REPUBLISH_FOR_S = 3600      # a republish never recorded as done counts this long, no longer
+
+
+def republish_started(chat: str, now: dt.datetime) -> None:
+    """This chat is about to read the page's code for a republish: note its size now."""
+    if not chat:
+        return
+    got = seen()
+    was = got.get("republish") or {}
+    if was.get("chat") == chat and was.get("at"):
+        t = _time(was["at"])
+        if t is not None and (now - t).total_seconds() < REPUBLISH_FOR_S:
+            return                                  # the second build of the same republish
+    got["republish"] = {"chat": chat, "at": _stamp(now), "tokens": context_tokens()}
+    _save_seen(got)
+
+
+def republish_done(chat: str, now: dt.datetime) -> None:
+    """The republish is recorded: what it added is set aside for good."""
+    got = seen()
+    was = got.pop("republish", None) or {}
+    if not chat or was.get("chat") != chat:
+        return
+    off = got.get("set_aside") if (got.get("set_aside") or {}).get("chat") == chat else {}
+    added = max(0, context_tokens() - int(was.get("tokens") or 0))
+    got["set_aside"] = {"chat": chat, "tokens": int((off or {}).get("tokens") or 0) + added}
+    _save_seen(got)
+
+
+def grown_tokens(chat: str, now: dt.datetime) -> int:
+    """How much this chat's history has grown, less what its republishes read (and, for one
+    still going, what it has read so far, for an hour at most)."""
+    got = seen()
+    off = got.get("set_aside") or {}
+    aside = int(off.get("tokens") or 0) if off.get("chat") == chat else 0
+    going = got.get("republish") or {}
+    t = _time(going.get("at"))
+    if going.get("chat") == chat and t is not None and \
+            (now - t).total_seconds() < REPUBLISH_FOR_S:
+        total = int(going.get("tokens") or 0)       # counted up to where the republish began
+    else:
+        total = context_tokens()
+    return max(0, total - aside)
+
+
 def renewal(rec: dict, db: dict, chat: str, now: dt.datetime) -> dict | None:
     """The create_session call for a fresh helper, or None. Only a cloud chat answering the
     page for RENEW_S (or grown by RENEW_TOKENS), with no small work of its own in hand, and
@@ -659,7 +744,7 @@ def renewal(rec: dict, db: dict, chat: str, now: dt.datetime) -> dict | None:
     since = _time(rec.get("since"))
     if since is None:
         return None
-    big = context_tokens() >= RENEW_TOKENS
+    big = grown_tokens(chat, now) >= RENEW_TOKENS     # a republish's reads left out
     if (now - since).total_seconds() < RENEW_S and not big:
         return None
     work = db.get("work") or {}
@@ -1017,6 +1102,14 @@ def shape(code: int, lines: list[str], chat: str = "", listen: bool = False,
         # The link once, first, in the helper's own line: the page's introduction would say it
         # a second time, in a paragraph.
         keep = [(step, t) for step, t in keep if not (step and t.startswith(_INTRO))]
+        # Its last reply is one line and nobody reads this chat: the steps that said to put
+        # the changes made and up to three questions at the end of the reply said the
+        # opposite of the last step (the maintainer's live run, 2026-11-05). They go on the
+        # page instead, each question a To do card (CLAUDE.md).
+        import app_setup
+        keep = [(step, app_setup.ASK_ON_PAGE if step and t == app_setup.ASK_IN_CHAT else
+                 t.replace(app_setup.SHOWN_IN_REPLY, app_setup.SHOWN_ON_PAGE) if step else t)
+                for step, t in keep]
         keep = [(True, helper_first(url))] + keep + [(True, helper_last(chat, url))]
     out, n = [], 0
     for step, t in keep:
@@ -1072,8 +1165,12 @@ def helper_last(chat: str, url: str) -> str:
             f"scratchpad>/beats --done --chat {chat or '<this chat id>'}, and send its batch "
             "(refused: read beats again and run it once more). Then say only this, as it is: "
             f"\"{say(SAY_HELPER_READY, url)}\" Nothing else in this reply: never the brief, its "
-            "news or its replies, and never what this chat is for; the page holds them. If the "
-            "check-in said another chat answers the page, say nothing more.")
+            "news or its replies, and never what this chat is for; the page holds them. That "
+            "goes for every line above that says to tell the person something at the end of a "
+            "reply (the changes an improvement made, its questions, an update waiting, a place "
+            "check): none is said in this chat. The page shows the changes, and asks each "
+            "question as a To do card. If the check-in said another chat answers the page, say "
+            "nothing more.")
 
 
 _INTRO = "Tell the person once, at the start of your reply, in these words"

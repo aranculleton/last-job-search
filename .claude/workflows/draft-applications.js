@@ -218,9 +218,16 @@ const acceptedOf = (out) => {
 // The research as the drafter sees it. tools/draft_pack.py research_lines() writes the
 // same lines, and the audit numbers the facts the same way, so an F id means one thing.
 const UNREAD = ' | NOT READ ON THE PAGE (a search summary): never cite it'
-const factLines = (research) => ((research && research.facts) || [])
-  .filter(f => f && typeof f === 'object' && !Array.isArray(f)).map((f, i) =>
-    `F${i + 1}: ${f.claim || ''} | quote: "${f.quote || ''}" | ${f.url || ''}${f.caution ? ' | caution: ' + f.caution : ''}${f.read === false ? UNREAD : ''}`).join('\n')
+// One field of a fact as its line shows it, as draft_pack.fact_text() reads it: text as
+// written, a list joined by "; ", a whole number as its digits, anything else as nothing.
+const factText = (v) => typeof v === 'string' ? v
+  : Array.isArray(v) ? v.map(factText).filter(x => x).join('; ')
+  : Number.isSafeInteger(v) ? String(v) : ''
+const factLines = (research) => ((research && Array.isArray(research.facts)) ? research.facts : [])
+  .filter(f => f && typeof f === 'object' && !Array.isArray(f)).map((f, i) => {
+    const caution = factText(f.caution)
+    return `F${i + 1}: ${factText(f.claim)} | quote: "${factText(f.quote)}" | ${factText(f.url)}${caution ? ' | caution: ' + caution : ''}${f.read === false ? UNREAD : ''}`
+  }).join('\n')
 // FNV-1a over the UTF-16 code units of the fact lines: tools/draft_audit.py research_hash()
 // computes it the same way from research_<slug>.json.
 const researchHash = (research) => {

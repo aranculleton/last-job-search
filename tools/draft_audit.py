@@ -605,9 +605,16 @@ def rule_findings(d: dict, pick: dict, posting: str, corpus: dict | None = None,
             if d.get(k):
                 findings.append(_finding("resume-only", k, "", "the person asked for the "
                                          "resume alone: leave the letter's fields empty"))
-    findings += malformed(d)
-    if findings:
+    # Only a field of the wrong shape stops the rest, which reads each field as the contract
+    # says. A letter missing, or written for a resume asked for alone, stopped every check
+    # here too, so the summary of a letterless draft was never read by voice_check or
+    # check_claims at all (the maintainer, 2026-11-05): the resume is checked whole whatever
+    # the letter's state, and the letter's own checks run only on a letter that is all there.
+    shape = malformed(d)
+    findings += shape
+    if shape:
         return findings, notes
+    whole_letter = makes_letter and all(d.get(k) for k in LETTER_FIELDS)
     # voice_check, as --json read the drafter's file: every string the draft carries.
     def walk(node, trail):
         if isinstance(node, str):
@@ -641,13 +648,13 @@ def rule_findings(d: dict, pick: dict, posting: str, corpus: dict | None = None,
             (findings if sev == "ERROR" or name == "declined-skill" else notes).append(item)
     # The letter checks a draft object can answer before it is rendered.
     try:
-        for f in audit_letters.draft_flags(d, batch) if makes_letter else ():
+        for f in audit_letters.draft_flags(d, batch) if whole_letter else ():
             findings.append(_finding("letter", "letter", f, "rewrite that part of the letter"))
     except (KeyError, TypeError, AttributeError) as e:
         findings.append(_finding("letter", "letter", repr(e), "the letter fields are malformed"))
     # A letter bullet repeating a resume bullet, which verify_batch.sh finds only after the
     # render. The allocator is code, so the bullets the resume will open with are known now.
-    if posting.strip() and makes_letter:
+    if posting.strip() and whole_letter:
         try:
             import render_application as R
             probe = dict(d, posting=posting)
@@ -669,12 +676,12 @@ def rule_findings(d: dict, pick: dict, posting: str, corpus: dict | None = None,
         findings.append(_finding("budget", "summary", f"{sw} words",
                                  f"the summary is {SUMMARY_WORDS[0]} to {SUMMARY_WORDS[1]} words"))
     bw = fit_to_page.body_words(d)
-    if makes_letter and not BODY_WORDS[0] <= bw <= BODY_WORDS[1]:
+    if whole_letter and not BODY_WORDS[0] <= bw <= BODY_WORDS[1]:
         findings.append(_finding("budget", "letter", f"{bw} body words",
                                  f"p1 + p2 + lead + p4 + the bullets are {BODY_WORDS[0]} to "
                                  f"{BODY_WORDS[1]} words"))
     bullets = d.get("cl_bullets") or []
-    if makes_letter and len(bullets) != LETTER_BULLETS:
+    if whole_letter and len(bullets) != LETTER_BULLETS:
         findings.append(_finding("budget", "cl_bullets", f"{len(bullets)} bullets",
                                  f"exactly {LETTER_BULLETS} letter bullets"))
     for i, b in enumerate(bullets):
@@ -700,13 +707,13 @@ def rule_findings(d: dict, pick: dict, posting: str, corpus: dict | None = None,
     # facts and numbers, every tool the work used still named, nothing else added, and
     # work the skill plausibly belonged to (tools/bullet_rewording.py, the one copy).
     # A held skill the posting names is the person's standing yes, guarded the same way.
+    # What the guard is given is read by the one function the renderer reads it with
+    # (bullet_rewording.answers), so the two can never judge one rewording apart.
     import bullet_rewording
-    yes_here = pick.get("skills_yes") or d.get("consented_skills") or []
-    no_here = pick.get("skills_no") or d.get("declined_skills") or []
+    yes_here, no_here, held_here = bullet_rewording.answers(d, pick, posting)
     company = str(d.get("company") or pick.get("company") or "")
     for p in bullet_rewording.problems(
-            d.get(bullet_rewording.FIELD), yes_here, no_here,
-            bullet_rewording.held_named(posting, company)):
+            d.get(bullet_rewording.FIELD), yes_here, no_here, held_here):
         findings.append(_finding("rewording:" + p["rule"],
                                  f"bullet_rewordings ({p['id']})" if p["id"] else "bullet_rewordings",
                                  p["text"], p["fix"]))
@@ -722,7 +729,8 @@ def rule_findings(d: dict, pick: dict, posting: str, corpus: dict | None = None,
         except Exception:  # noqa: BLE001 - no page to read: nothing to say about it
             on_page = []
         missing, why = bullet_rewording.unplaced(posting, on_page, d.get(bullet_rewording.FIELD),
-                                                 yes_here, no_here, company)
+                                                 yes_here, no_here, company,
+                                                 refused=d.get(bullet_rewording.REFUSED) or ())
         # Filed under the resume's bullets, not bullet_rewordings: a rewording already there
         # is not refused by it, and keeps its question for the model auditor.
         for p in missing:
@@ -1048,11 +1056,10 @@ def rewording_flags(d: dict, pick: dict, findings=(), posting: str = "") -> list
     refused = {str(f.get("field") or "") for f in findings
                if str(f.get("rule") or "").startswith("rewording:")}
     out = []
-    yes = bullet_rewording.skill_names(pick.get("skills_yes") or d.get("consented_skills") or [])
+    yes, _no, held = bullet_rewording.answers(d, pick, posting or None)
+    yes = bullet_rewording.skill_names(yes)
     folded = {y.casefold() for y in yes}
-    held = [h for h in bullet_rewording.held_named(posting or str(d.get("posting") or ""),
-                                                   str(d.get("company") or pick.get("company") or ""))
-            if h.casefold() not in folded]
+    held = [h for h in held if h.casefold() not in folded]
     for r in rw if isinstance(rw, list) else []:
         if not isinstance(r, dict):
             continue
@@ -1082,8 +1089,11 @@ def mechanical(d: dict, pick: dict, posting: str, research: dict | None,
     """The whole mechanical audit of one draft: findings, flags, notes, and the gate."""
     import draft_pack
     findings, notes = rule_findings(d, pick, posting, corpus, batch)
+    # Only a malformed draft, or one with no summary, is too broken to read for grounding: a
+    # letter missing (or left out of a resume asked for alone) leaves the resume's
+    # sentences, the summary's among them, to be read as ever.
     broken = any(f["rule"] == "malformed" or (f["rule"] == "missing-field"
-                                                and f["field"] in RENDERED) for f in findings)
+                                                and f["field"] == "summary") for f in findings)
     flags = [] if broken else grounding_flags(d, pick, posting, research, evidence, facts)
     if not broken:
         flags += near_ends(d, corpus if corpus is not None else letter_corpus())
@@ -1236,6 +1246,16 @@ def write_verdict(round_dir: str, slug: str, verdict: dict) -> str:
         verdict = dict(verdict, draft={**{k: v for k, v in d.items()
                                           if k not in ("pack_hash", "research_hash")},
                                        **verdict["draft"]})
+        # A rewording it took out, or refused by name, is its ruling that the work did not
+        # plausibly use the skill: kept on the corrected draft, so the code audit never
+        # demands it back (tools/bullet_rewording.py unplaced).
+        import bullet_rewording
+        corrected = verdict["draft"]
+        refused = bullet_rewording.refused_by_audit(
+            d.get(bullet_rewording.FIELD), corrected.get(bullet_rewording.FIELD),
+            verdict.get("refused_rewordings"), corrected.get(bullet_rewording.REFUSED))
+        if refused:
+            verdict["draft"] = dict(corrected, **{bullet_rewording.REFUSED: refused})
     if str(verdict.get("audited_md5") or "") != md5(d):
         raise SystemExit("verdict: audited_md5 is not the md5 of the draft as it stands "
                          f"({md5(d)}): the draft changed, so print the packet again and audit "
@@ -1585,10 +1605,9 @@ def _rules_changed(round_dir: str, built: str) -> list[str]:
 def _held_here(d: dict, pick: dict, posting: str) -> list[str]:
     """The held skills this posting names (bullet_rewording.held_named), less any yes."""
     import bullet_rewording
-    yes = {y.casefold() for y in bullet_rewording.skill_names(pick.get("skills_yes") or [])}
-    return [h for h in bullet_rewording.held_named(posting, str(d.get("company")
-                                                               or pick.get("company") or ""))
-            if h.casefold() not in yes]
+    yes, _no, held = bullet_rewording.answers(d, pick, posting)
+    folded = {y.casefold() for y in bullet_rewording.skill_names(yes)}
+    return [h for h in held if h.casefold() not in folded]
 
 
 def packet(round_dir: str, slug: str) -> str:
@@ -1756,7 +1775,8 @@ def packet(round_dir: str, slug: str) -> str:
               "with every change>, \"changes\": [{\"field\", "
               "\"before\", \"after\", \"reason\"}], \"residual_risks\": [what an interviewer "
               "could still probe], \"rulings\": [{\"sentence\", \"flag\", \"ruling\": "
-              "\"supported\" | \"fixed\" | \"removed\", \"why\"}], \"audited_md5\": "
+              "\"supported\" | \"fixed\" | \"removed\", \"why\"}], \"refused_rewordings\": "
+              "[a held skill no bullet here plausibly used, by name; optional], \"audited_md5\": "
               f"\"{md5(base)}\", \"rules_hash\": \"{mech['rules_hash']}\"}}. A sentence you keep "
               "under a flag needs a \"supported\" ruling with that sentence and flag; a flag "
               "about the whole draft (profile-changed, no-pack, no-research-hash) is ruled with "

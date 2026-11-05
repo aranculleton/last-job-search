@@ -121,9 +121,13 @@ def clean(s):
 
 # One sentence splitter for the whole generator, so the summary cap, the
 # letter trimmer, the audit and the outreach note agree on where a sentence
-# ends. "e.g.", "i.e.", "vs." and a single capital ("U.S.") are not ends.
+# ends. "e.g.", "i.e.", "vs." and a single capital at a word's start ("U.S.", "J. Smith")
+# are not ends; an acronym is ("on AWS. Built"): any capital before the full stop kept
+# "AWS." and "SQL." from ending a sentence, so a summary sentence after one was read as part
+# of the one before, and verify_batch showed it as unaudited (the maintainer, 2026-11-05).
+# tools/network/tone.py keeps its own copy of this pattern, the same.
 SENT_SPLIT = re.compile(r"(?<!\be\.g\.)(?<!\bi\.e\.)(?<!\bvs\.)(?<!\betc\.)(?<!\bInc\.)"
-                        r"(?<!\bLtd\.)(?<![A-Z]\.)(?<=[.!?])\s+")
+                        r"(?<!\bLtd\.)(?<!\b[A-Z]\.)(?<=[.!?])\s+")
 
 
 def split_sentences(text):

@@ -260,16 +260,23 @@ METHODS: dict[str, dict] = {
     "drafts": {
         "by": "upgrade", "priority": 2, "applies": "unsent_drafts", "time": "~5 min",
         "gives": "applications not yet sent re-rendered and re-checked by the current build",
-        "run": "for each tracker row still at `drafted`, python3 tools/fit_to_page.py "
-               "documents/applications/<slug>/draft.json, then tools/verify_batch.sh on them; "
-               "never one already sent",
+        # All of it in code: each unsent application made again and checked, the version
+        # kept on each that passes, a redraft or a To do card for each that fails, the
+        # tracker put right, and the method recorded only once every one has passed. Said
+        # as a sentence for an agent, it rendered 17, three failed, and it was recorded done
+        # with nothing made for the three (the maintainer, 2026-11-05).
+        "run": "python3 tools/remake_drafts.py, which never touches one already sent; say the "
+               "one line it prints, if any, and nothing else",
+        "records": True,
+        "check": "remake_drafts.pending",
         "files": ("templates/*.py", "templates/README.md", "tools/render_application.py", "tools/bullet_rewording.py",
+                  "tools/remake_drafts.py",
                   "tools/fit_to_page.py",
                   "tools/posting_profile.py", "tools/draft_pack.py", "tools/draft_audit.py",
                   "tools/draft_cost.py",
                   "tools/skills_block.py", "tools/allocate.py", "tools/bullet_library.py",
                   "tools/docpaths.py", "tools/doc_name.py", "tools/outreach.py",
-                  "tools/screening_answers.py", "tools/record_drafts.py", "tools/stage_picks.py",
+                  "tools/screening_answers.py", "tools/form_answers.py", "tools/record_drafts.py", "tools/stage_picks.py",
                   "tools/check_claims.py", "tools/check_numbers.py", "tools/voice_check.py",
                   "tools/locale_rules.py",
                   "tools/audit_letters.py", "tools/verify_pdf.py", "tools/verify_batch.sh",
@@ -361,8 +368,13 @@ METHODS: dict[str, dict] = {
             (67, "2026-11-05", True, "a skill the profile holds that the posting names goes into one to three of the resume's own bullets, lightly reworded with the same numbers and never asked about, and the check holds back a resume that leaves it, or a yes, on the skills line alone where a bullet could take it; a tool the profile names at an employer can be named in that employer's bullets; the skills line names each skill once, a yes inside a grouped item included, so unsent applications are made again to take the repeat out"),
             (68, "2026-11-05", False, "a skill question nobody answered is never a no: the answer is one record per skill that every chat and application reads (tools/skill_answers.py), the later answer winning, a question still open put to the person once on their page while the draft goes on without the skill, waiting on it, and a yes redoing every resume drafted that day with it; a draft with no skill waiting renders and is checked as before, so nothing made before needs making again"),
             (69, "2026-11-05", False, "the runbook lists reading.py linkedin-check; no document changes"),
+            (70, "2026-11-05", True, "a resume drafted alone, or a draft missing its letter, has its summary checked like any other and is made once both checks pass, and the tracker names a letter only where one was written; a reworded bullet the check passed is printed whenever the resume is made again, even without the posting beside it; a sentence ends after a name in capitals (AWS., SQL.) and never after an initial (U.S.), so a summary is cut where it should be and no sentence shows as unchecked; the drafting steps and the check read a research fact the same way, so a draft is never held back for a mismatch that was not there; unsent applications are made again"),
+            (71, "2026-11-05", True, "making unsent applications again is done by the app's own code: each is checked, the newest version is kept only on the ones that pass, one that fails is given its own way forward by itself (its copied part rewritten, or one To do card where only you can settle it), a letter breaking its own rules now counts as failing on its record, and a tracker row naming a letter for an application with none is put right; this is recorded done only when every one has passed, so applications an earlier run left failing are made again and handed on"),
+            (72, "2026-11-05", False, "the run book names the whole command that records a no to an improvement's question, python3 tools/profile_upgrades.py --no <id>, never --no alone"),
+            (73, "2026-11-05", False, "a computer with no LaTeX leaves unsent applications as they are and tries again later, and a compile that fails puts the earlier PDF back; a skill whose reworded bullet the model audit removed or refused stays on the skills line with a note, never demanded again; a yes reaches every unsent resume waiting on it, whatever day it was drafted; the run book's round needs no folder named; documents render and are checked as before, so nothing made before needs making again"),
+            (74, "2026-11-05", False, "a form's own questions (why us, why this role, a time you used a tool) are answered from your profile and the posting and kept with the application in its screening_answers.md (tools/form_answers.py), an example you asked for marked as a draft for you to confirm; the resume and the letter are never changed by it"),
         ),
-        "fingerprint": "d2f5040675f4b80d",
+        "fingerprint": "7c699b4972d593ff",
     },
     "interview": {
         "by": "upgrade", "priority": 2, "applies": "live_interviews", "time": "~15 min",
@@ -541,8 +553,9 @@ METHODS: dict[str, dict] = {
             (72, "2026-11-04", False, "a short thank-you is no longer refused for sharing their name, their employer or thank with what they wrote, and a note naming no place is no longer warned that it named the wrong one"),
             (73, "2026-11-04", False, "nobody at their limit of unanswered messages, closed, set aside or gone cold is given a date by any writer (state.put_next), so a follow-up run never brings them back as owed; the check before anyone is shown reads their limit from the same place (state.at_limit); nothing to redo"),
             (74, "2026-11-05", False, "the networking skill and /network say the page looks at LinkedIn once a day and opens nothing by itself, with reading.py linkedin-check for whether today's look is due; nothing to redo"),
+            (75, "2026-11-05", False, "the app skill and /reply say a draft is shown on the person's card in Contacts, and followup_drafts prints where; nothing made before changes"),
         ),
-        "fingerprint": "10ec6de0feb877bb",
+        "fingerprint": "e5353e4aa54cd121",
     },
     "network-notes": {
         "by": "network", "priority": 2, "applies": "queued_notes", "time": "~10 min",
@@ -652,8 +665,9 @@ METHODS: dict[str, dict] = {
             (36, "2026-11-03", False, "the bar reads a public body its names miss from its own posting (\"is a provincial agency\", \"an agency of the Government of\"), where the profile excludes public bodies, so it is cut before the shortlist like one named; the paid exception holds; only the employer saying it of itself counts (\"We are a\", \"<employer> is a\", \"join the ... Public Service\"), never a client or a regulator the posting names, and only for an employer on none of the lists and judged by nobody"),
             (37, "2026-11-03", False, "a posting that only names the person's skills no longer scores 100: above 90 a point counts half and the posting alone stops at 98, so the top of a ranking tells rows apart; a live contact or an earlier interview still reaches 100; scores of 90 or under are unchanged; a years bar stated per degree is read for the degree held; an employer that clears none of the bar waits on the person before drafting; the pay answer on the form moves with the posting's own range; the search window is any whole number of days the person sets, not only 7, 14 or 30; a role applied to that went quiet is never surfaced again; a public body counts as paid only when the bottom of its stated range reaches the target, and gets no lift from an employer tier; a posting the person cleared stays cleared under every copy of it; a reply recorded as parked or no way in is not a warm route; a skill held under another name is never a near match; a bar of pay, prestige or signal applies only where the person's own profile states one (an employer tier or a frontier list), never because a chat judged an employer, and with none no employer is judged or ruled out for it; every language the person does not hold is a cut, in English or the posting's own words, and a title in one; pay, years, terms and degrees are read in German, French, Spanish, Portuguese, Italian, Dutch, Polish and Swedish; pay by the month is read as twelve months, and a pay ruling made on a monthly band is released by itself"),
             (38, "2026-11-04", False, "the staffing-agency test is one named reading of the person's agency lists; screening is as before"),
+            (39, "2026-11-05", False, "a job title written in two languages (\"Data Analyst // Analyste de données\") is in the one you work in: the title gate and the screen no longer cut it as the other, and whether that language is required is read from the posting; a ruling made on such a title is released by itself, and the title gate's drops are decided again on every round, so nothing needs redoing; a kind of employer you ruled out can be turned back on from Your rules (search.py BAR_EXCLUDED_OFF)"),
         ),
-        "fingerprint": "75ad832fbed52387",
+        "fingerprint": "b74f7499fef0d9d9",
     },
     "routines": {
         "by": "you", "priority": 3, "applies": "routines",
@@ -685,8 +699,9 @@ METHODS: dict[str, dict] = {
             (21, "2026-11-04", False, "the page is told whether the brief\'s own run sends its phone notification, so Settings offers that choice only there"),
             (22, "2026-11-04", False, "the chat of a big job (an interview prep, a search, a batch of drafts) is put away soon after its job ends, not after two quiet days: the tidy-up is due again when such a job finishes, and archives its chat once its work is saved; a helper the page was taken from is renamed to finishing up at once and archived at the next check-in"),
             (23, "2026-11-05", False, "a big job's chat reports back to the chat that started it once its work is on master, and that chat puts the results on the page and archives it at once (tidy.py close and closed), the daily tidy-up kept for one that never reported; the tidy-up keeps each archived chat's real title itself, never through the shell, judges a chat it put away before by the title it has now, never brings one back for an empty stored title, and puts away again one of the app's chats an older tidy-up brought back by mistake; the live page helper is called Job search page, every older helper (Job search helper, finishing up) is put away as soon as its work is on master, never kept for being used lately, the brief moved into the live helper first (made, recorded, the old one turned off) and a chat holding a brief that is off kept for it; the first tidy-up after this update runs even if the day's already ran, so the helpers left over from before go by themselves; after a hand-over the tidy-up runs at once and again half an hour on, for a day, while the old helper still runs or holds unsaved work"),
+            (24, "2026-11-05", False, "the tidy-up never puts away a chat still at work: running or working by the sessions list's status or get_session's (a listing trimmed to status is read), an old helper used in the last ten minutes or waiting on the person, any task that is on firing into it (a one-time reminder as much as the brief) unless this same tidy-up moves that task, or a branch GitHub does not hold yet while it was used in the last two days; a brief bound to a chat kept for any of these stays where it is"),
         ),
-        "fingerprint": "3eb019a46bd14a1d",
+        "fingerprint": "04c1d1c8edf5094f",
     },
     "expand": {
         "by": "upgrade", "priority": 4, "time": "~15 min",
@@ -737,8 +752,22 @@ METHODS: dict[str, dict] = {
             (22, "2026-11-04", True, "To do never lists someone who has not answered your limit of messages: nothing to do is not a To do, so the card to close them all is gone; in Contacts they wait below the fold with the others who need nothing from you, their row saying to leave it unless they write back, with Close"),
             (23, "2026-11-04", True, "a job's More offers Draft the resume only, the resume without a letter, as one tap"),
             (24, "2026-11-05", True, "LinkedIn is looked at once a day, and the look is kept in your search's own store, so switching to another chat and back never loads LinkedIn again that day; the page never opens Claude's browser by itself (Open LinkedIn opens the sign-in at your tap), reads the tab it keeps as it stands before loading anything, and someone whose page did not load is read again the next day or with Read them, never at every opening"),
+            (25, "2026-11-05", True, "Contacts is one page: each person's card carries the message drafted to them, open, until I sent it, and people with one come first; They replied opens a labelled box under the person, whose line says where the reply stands, with Cancel while it waits or runs, Finished until the draft is on the card and Try again after a failure; an old Messages address and To do's messages ready to send open Contacts on the person; the card says the latest exchange only, and when you first wrote and how many each way are under More"),
+            (26, "2026-11-05", True, "a question is answered on its card with the control its answer needs: a refused day with a date picker and its time, a choice as chips, a yes or no in one tap, a number, a slider, never Say it in Chat; a question Claude stops on shows the words it is about, quoted, and its control on its To do card and in Claude's work, and the answer carries the work on; Coming up adds a missing time with a time picker on its row; a card has one bin and says Not done once; Show N more goes once it has shown them; a card's actions are one row of pills, the next step semibold, More a pill, and the Brief's tile links are pills too; the menu folds to its icons from beside the page's title, Settings last under one rule; finished work says Finished: putting it on your page until the page has it; an interview leads To do only when it is today or tomorrow or has no prep; the fold of what is not due yet is Not due yet (N)"),
+            (27, "2026-11-05", True, "Find jobs can draft every one as it is found, as one job: its card counts them, \"2 of 5 drafted\" (a count says its own word)"),
+            (28, "2026-11-05", True, "a bin's choices are whole above its foot, or scroll clear of it with a fade saying there is more, and Cancel is a soft pill; the gauge is beside every control that wakes Claude and says this copy's own minutes for that kind of work, from its finished work; a booked interview or call is moved from its Coming up row with its pencil; a double tap on Try again is one write in Firefox too"),
+            (29, "2026-11-05", True, "Contacts round two: a draft that breaks the person's rules is fixed by Claude by itself, queued by the engine with no tap, its line on the card (Claude is fixing it), and offered as ready only once it passes; no Fix it button; the pencil sits beside Copy, the words changed in place (what is copied and logged as sent) or Claude asked to change them (Shorter, Warmer, More formal, or in their words); what wakes Claude carries its cost; More holds only what is rare; when you first wrote is on their page; the header is one short line with Paste a message beside Find people"),
+            (30, "2026-11-05", True, "a message being changed with the pencil says so on its card until the new words are there; a control that wakes Claude names its kind so its gauge is drawn"),
+            (31, "2026-11-05", True, "To do counts cards, a checklist one with its own x of N done; it says how far today has gone and when all is done; Done today replaces Recent changes; a row is put off to tomorrow or next week in the engine from its bin; help that asks nothing today is one line at the end, and a computer-only card is not shown on a phone"),
+            (32, "2026-11-05", False, "More is a full tap target on a phone; work finished says Done once a section the chat wrote after it is on the page, Finished: putting it on your page until then; the words changed under the pencil are sent trimmed"),
+            (33, "2026-11-05", True, "what a search left out reads as one row a rule in plain words, with its count, when it last cut, three examples, its rows behind See them with a search box, Check a few and the pencil for the rule's own setting; Settings has Your rules, each rule one sentence with the day it was set, your words, what it left out lately, its pencil and its bin, and a quiet Still right? on an old busy one; the Brief says so at most once a month"),
+            (34, "2026-11-05", True, "Jobs is one list of the jobs you might apply to, each once at its own stage, with Applied beside it; a drafted job is its draft's card with the job's fit and reasons; one line of facts (the employer, the town, posted and found, the pay) ending with its details fold (Why, Details); More holds only the rare; every action a pill, the next step marked the same on every card; a pencil beside the resume's and the letter's own words opens the Tweak panel, and one on a job corrects its title, pay or place; a draft's remake and its files are queued by the view, never Make it again or Get my files ready; Questions on the form under More, its answers on the card; every control that wakes Claude carries the gauge; the header has no line about a search, and Add a job and your resume are soft pills beside Find jobs"),
+            (35, "2026-11-05", True, "To do has one card an act and a person: every message to send on one card counted as Contacts counts it, a person's rows and their referral on one card, the small questions one at a time, Done on checklist rows with They replied in the bin, no fix buttons (Claude fixes a failing application by itself), a closed posting set aside by itself and a referral a note; an interview's actions are the same on To do and Coming up; headers are one line"),
+            (36, "2026-11-05", False, "the Jobs count beside the menu is read aloud as jobs to apply, the list it counts"),
+            (37, "2026-11-05", True, "the word a person reads is trash, never bin, in the page's help and its tips"),
+            (38, "2026-11-05", False, "one way to answer a quick question, with Another day? after It went"),
         ),
-        "fingerprint": "d6f1bbf4afc7ac5c",
+        "fingerprint": "1fa29af2fe4c9e93",
     },
     "upskill": {
         "by": "upgrade", "priority": 4, "applies": "upskill_plans", "time": "~10 min",
@@ -775,6 +804,8 @@ KEEPS_NOTHING: dict[str, str] = {
     "tools/local_path.py": "finds the tools a computer installed (bun, TeX) for the session that "
                            "runs; keeps nothing",
     "tools/local_path.sh": "the same, for the shell scripts; keeps nothing",
+    "tools/file_clock.py": "reads the clock files are stamped with, to measure a file's age; "
+                           "the file it writes for that is removed at once, so it keeps nothing",
     "tools/network/own_profile.py": "looks over the person's own LinkedIn profile when due; its "
                                     "one record, documents/network/own_profile_review.json, is "
                                     "kept by the own-profile-review upgrade and by `due`",
@@ -840,6 +871,7 @@ KEEPS_NOTHING: dict[str, str] = {
     "tools/profile_set.py": "writes one profile setting the person changed on the page through the profile's own files; keeps nothing of its own",
     "tools/app_lists.py": "derives the page's lists, their folds and filter counts from the records, on every run; keeps nothing",
     "tools/app_model.py": "the page's view, derived from the state files on every run",
+    "tools/rules_view.py": "reads the rules and what each left out for the page on every run; the day a rule was set and a Still right? kept are the person's own records, never remade",
     "tools/upcoming.py": "derives Coming up from the records on every run; what the person adds is their own record (documents/upcoming.json), never remade",
     "tools/page_db.py": "reads and writes the page's database dumps; keeps nothing of its own",
     "tools/app_actions.py": "writes the person's own answers through confirm, exclude, state.py, learned and settings; nothing it wrote is remade",

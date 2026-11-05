@@ -46,9 +46,11 @@ connection to Claude lapsed: the steps to connect it again), and a full disk.
 
 --after-merge: git fetch origin master; when the commit this landing pushed is on master
 now, the branch is reset to master (git checkout -B <branch> origin/master), so the next
-piece of work starts current, with no stash and no checkout of master. A page update that
-took master since (app_setup.take_master) adds only a merge commit, which is no reason to
-say "not merged"; newer work of the chat's own is kept, with master merged into it.
+piece of work starts current, with no stash and no checkout of master, and its copy on
+GitHub is moved up to master with it (a fast-forward push), so nothing reads as unpushed. A
+page update that took master since (app_setup.take_master) adds only a merge commit, which
+is no reason to say "not merged"; newer work of the chat's own is kept, with master merged
+into it, and merges that hold nothing master lacks are no newer work.
 
 While it runs it holds a lock in the checkout's git folder, and a page update takes no
 master meanwhile (app_setup.take_master); a git command refused because another one holds
@@ -366,11 +368,17 @@ def _stage(root: str) -> tuple[bool, str]:
         buf = io.StringIO()
         with contextlib.redirect_stdout(buf):
             code = save_state.main([], root=root)
-        if code == 0 or wait is None or DISK_FULL.search(buf.getvalue()) \
-                or not INDEX_LOCK.search(buf.getvalue()):
+        if code in (0, save_state.LEFT_OUT) or wait is None \
+                or DISK_FULL.search(buf.getvalue()) or not INDEX_LOCK.search(buf.getvalue()):
             break
         time.sleep(wait)
-    if code != 0:
+    # What the save says to tell the person reaches the landing's own lines (what git would
+    # not take, an older version's copies it could not decide): swallowed with the rest of
+    # its words, they never reached the person.
+    for ln in buf.getvalue().splitlines():
+        if ln.startswith("save_state: ") and TELL.search(ln) and not NOTHING_TO_TELL.search(ln):
+            print("land: " + ln[len("save_state: "):])
+    if code != 0 and code != save_state.LEFT_OUT:
         if DISK_FULL.search(buf.getvalue()):
             return False, "the disk here is full"
         if INDEX_LOCK.search(buf.getvalue()):
@@ -387,6 +395,10 @@ def _stage(root: str) -> tuple[bool, str]:
         print("land: left out %d file(s) of the app's, never committed from here: %s"
               % (len(apps), ", ".join(apps[:8]) + (" ..." if len(apps) > 8 else "")))
     return True, ""
+
+
+TELL = re.compile(r"\btell the person\b", re.I)
+NOTHING_TO_TELL = re.compile(r"\bnothing to tell the person\b", re.I)
 
 
 def _own_branch(root: str) -> tuple[str, str]:
@@ -499,6 +511,9 @@ NAMED_FILE = "ljs-left-named"
 def _left_behind(root: str, ref: str, own: tuple[list[str], int]) -> tuple[int, list[str]]:
     """(days, files) for a branch left behind, else (0, [])."""
     files, mine = set(own[0]), own[1]
+    # A file the driver merges row by row keeps both chats' rows: master changing it later
+    # never puts an older copy over a newer one, so it never leaves a branch behind.
+    files -= _row_merged(root, files)
     if not files or not mine:
         return 0, []
     r = _git(root, "log", "--no-merges", "--format=%x01%ct", "--name-only", "-z",
@@ -561,24 +576,62 @@ def left_behind(root: str = ROOT) -> dict[str, tuple[int, list[str]]]:
     return _chat_branches(root)[1]
 
 
+SAID_ONCE = "profile/said_once.json"
+
+
+def _said_key(ref: str, tip: str) -> str:
+    return "left-branch:%s@%s" % (ref, tip[:12])
+
+
 def _named_once(root: str, ref: str) -> bool:
-    """True the first time a branch (at its present commit) is named to the person."""
+    """True the first time a branch (at its present commit) is named to the person. Kept in
+    the person's own said-once record (profile/said_once.json, committed with this landing
+    and merged by the later day), so a fresh container does not say it again: kept in .git,
+    it was said again in every new cloud container. The .git record older versions kept is
+    still read."""
     tip = _git(root, "rev-parse", ref).stdout.strip()
-    path = os.path.join(git_dir(root), NAMED_FILE)
+    if not tip:
+        return False
+    try:
+        with open(os.path.join(git_dir(root), NAMED_FILE), encoding="utf-8") as fh:
+            old = json.load(fh)
+    except (OSError, ValueError):
+        old = {}
+    if isinstance(old, dict) and old.get(ref) == tip:
+        return False
+    path = os.path.join(root, *SAID_ONCE.split("/"))
+    if not os.path.isdir(os.path.dirname(path)):
+        return True
     try:
         with open(path, encoding="utf-8") as fh:
-            named = json.load(fh)
+            said = json.load(fh)
     except (OSError, ValueError):
-        named = {}
-    if not isinstance(named, dict) or named.get(ref) == tip:
+        said = {}
+    said = said if isinstance(said, dict) else {}
+    if _said_key(ref, tip) in said:
         return False
-    named[ref] = tip
     try:
-        with open(path, "w", encoding="utf-8", newline="\n") as fh:
-            json.dump(named, fh)
+        import person
+        day = person.today().isoformat()
+    except Exception:  # noqa: BLE001 - no profile to read the day from: this computer's
+        day = time.strftime("%Y-%m-%d")
+    said[_said_key(ref, tip)] = day
+    try:
+        tmp = path + ".tmp"
+        with open(tmp, "w", encoding="utf-8", newline="\n") as fh:
+            json.dump(said, fh, indent=2, ensure_ascii=False, sort_keys=True)
+            fh.write("\n")
+        os.replace(tmp, path)
     except OSError:
         pass
     return True
+
+
+def _commit_said(root: str) -> None:
+    """Commit the said-once record when this landing added to it, so it lands with the work."""
+    if _git(root, "status", "--porcelain", "--", SAID_ONCE).stdout.strip():
+        _git(root, "add", "--", SAID_ONCE)
+        _git(root, "commit", "-q", "-m", "What the person was told once", "--", SAID_ONCE)
 
 
 def old_line(root: str, ref: str, days: int, consume: bool = True) -> str:
@@ -592,15 +645,39 @@ def old_line(root: str, ref: str, days: int, consume: bool = True) -> str:
             "bring it in when they ask: git merge %s" % (ref, days, OLD_DAYS, days, ref))
 
 
+def _lacks(root: str, ref: str) -> list[str]:
+    """The files a branch's own commits wrote that master does not have at all."""
+    own = _own(root, ref)
+    return [p for p in (own[0] if own else [])
+            if _git(root, "cat-file", "-e", "%s:%s" % (ref, p)).returncode == 0
+            and _git(root, "cat-file", "-e", "origin/master:" + p).returncode != 0]
+
+
+def _some(paths: list[str]) -> str:
+    return ", ".join(paths[:4]) + (" and %d more" % (len(paths) - 4) if len(paths) > 4 else "")
+
+
 def left_line(ref: str, days: int, files: list[str], root: str = "",
               consume: bool = True) -> str:
-    """The one line a landing says of a branch left behind, for Claude."""
+    """The one line a landing says of a branch left behind, for Claude. Where the branch
+    holds work master has none of, the person is told once: dropped whole and unsaid, a
+    chat's new work was lost to them with no word."""
     if not files:
         return old_line(root or ROOT, ref, days, consume)
-    shown = ", ".join(files[:4]) + (" and %d more" % (len(files) - 4) if len(files) > 4 else "")
-    return ("left %s as it is: its own work is %d days older than master's later changes to the "
+    root = root or ROOT
+    line = ("left %s as it is: its own work is %d days older than master's later changes to the "
             "same files (%s), so bringing it in would put older copies over newer ones. It stays "
-            "on GitHub, never deleted; nothing to tell the person" % (ref, days, shown))
+            "on GitHub, never deleted" % (ref, days, _some(files)))
+    lacking = _lacks(root, ref)
+    if not lacking:
+        return line + "; nothing to tell the person"
+    if consume and not _named_once(root, ref):
+        return line + "; it also holds %s, which master lacks (the person was told)" % (
+            _some(lacking))
+    return (line + ". It also holds %s, which master lacks. Tell the person once: \"Some work "
+            "from an earlier chat was never saved into your search, and part of it is older "
+            "than what you have now, so I have left it out. Say 'bring it in' if you want it.\" "
+            "To bring it in when they ask: git merge %s" % (_some(lacking), ref))
 
 
 def fetch_waiting(root: str = ROOT) -> bool:
@@ -802,18 +879,22 @@ def _last(root: str, rng: str, paths) -> int:
     return int(got) if got.isdigit() else 0
 
 
-def _held(root: str, ref: str, mine) -> tuple[dict[str, str], list[str]]:
+def _held(root: str, ref: str, mine, sweep: bool = True) -> tuple[dict[str, str], list[str]]:
     """({path: the side whose whole copy is kept, "HEAD" or ref}, lines for Claude) for a
     merge of `ref` into HEAD, decided before git merges a line of it.
 
     - An application both sides changed: every made document of it from one side (units):
       this chat's where `mine` (the files this chat's own commits changed) names one of its
-      files, else the side that changed it last; this side on a tie.
-    - With `mine` (another chat's branch being brought in), a file outside any application
-      that this chat changed and the branch changed too: this chat's whole file, never a line
-      merge of the two. The person's own profile is the exception (what they told either
-      chat is kept, and a clash is settled with them asked: merge_state.settle), and so is a
-      state file the driver merges row by row, where both chats' rows are kept."""
+      files, else the side that changed it last; this side on a tie. Master's merge is given
+      `mine` too: given none, a tweak this chat had not landed yet was dropped for master's
+      later copy with no word. Where this chat's copy is not the one kept, the person is told.
+    - With `mine` and `sweep` (another chat's branch being brought in), a file outside any
+      application that this chat changed and the branch changed too: this chat's whole file,
+      never a line merge of the two. The person's own profile is the exception (what they
+      told either chat is kept, and a clash is settled with them asked: merge_state.settle),
+      and so is a state file the driver merges row by row, where both chats' rows are kept.
+      Master's merge (no `sweep`) merges such a file line by line, and only a real clash
+      takes one side whole (merge_state.settle, the other kept in its spare folder)."""
     base = _git(root, "merge-base", "HEAD", ref).stdout.strip()
     if not base:
         return {}, []
@@ -852,10 +933,19 @@ def _held(root: str, ref: str, mine) -> tuple[dict[str, str], list[str]]:
                                                        else "application"))
             said.append(line)
         else:
-            said.append("%s: an application both sides changed; the later one is kept, every "
-                        "file of it from %s (%s)" % (app, "this side" if side == "HEAD" else ref,
-                                                     ", ".join(everything)))
-    if mine:
+            line = ("%s: an application both sides changed; the later one is kept, every "
+                    "file of it from %s (%s)" % (app, "this side" if side == "HEAD" else ref,
+                                                 ", ".join(everything)))
+            # This chat's copy of a document they would see is not the one kept: said.
+            if side != "HEAD" and any(not p.endswith(("/cost.json", "/verify.json"))
+                                      for p in here):
+                who = employer.get(app)
+                line += (". Tell the person once: \"Two of your chats changed your %s at the "
+                         "same time; the newer one is kept, and the other is saved in case you "
+                         "want it back.\"" % (("application to " + who) if who
+                                              else "application"))
+            said.append(line)
+    if mine and sweep:
         row = _row_merged(root, theirs)
         whole = sorted(p for p in theirs if p in mine and p not in held and p not in row
                        and not p.startswith("profile/"))
@@ -879,18 +969,20 @@ def _take(root: str, path: str, side: str) -> bool:
     return r.returncode == 0
 
 
-def merge_in(root: str, ref: str, mine=None) -> tuple[bool, list[str]]:
+def merge_in(root: str, ref: str, mine=None, sweep: bool = True) -> tuple[bool, list[str]]:
     """git merge --no-edit <ref>, with every conflicted file of the person's settled
     (merge_state.settle) and the merge committed. (merged, lines for Claude). Not merged: the
     merge is aborted and nothing has changed.
 
-    An application both sides changed comes whole from one side, and with `mine` (the files
-    this chat's own commits changed, given when another chat's branch is brought in) a file
-    this chat changed keeps this chat's whole copy (_held): a line merge of the two is never
-    made under a line that says one was kept."""
+    An application both sides changed comes whole from one side, this chat's where `mine`
+    (the files this chat's own commits changed) names one of its files; and with `sweep`
+    (another chat's branch being brought in) a file this chat changed keeps this chat's
+    whole copy (_held): a line merge of the two is never made under a line that says one was
+    kept. The side not kept of each such file is kept in the spare folder here
+    (merge_state.SPARE_DIR) as well as in the saved history."""
     import merge_state
     _driver(root)
-    held, told = _held(root, ref, mine)
+    held, told = _held(root, ref, mine, sweep)
     if not held:
         r = _git(root, "merge", "--no-edit", ref)
         if r.returncode == 0:
@@ -901,6 +993,15 @@ def merge_in(root: str, ref: str, mine=None) -> tuple[bool, list[str]]:
         if r.returncode == 0:
             return True, []
         return False, ["%s could not be merged: %s" % (ref, _said(r))]
+    for p, side in sorted(held.items()):
+        lost = _git(root, "rev-parse", "-q", "--verify",
+                    "%s:%s" % (ref if side == "HEAD" else "HEAD", p)).stdout.strip()
+        kept = _git(root, "rev-parse", "-q", "--verify", "%s:%s" % (side, p)).stdout.strip()
+        if lost and lost != kept:
+            try:
+                merge_state._spare(root, p, lost)
+            except OSError:
+                pass
     bad = [p for p, side in sorted(held.items()) if not _take(root, p, side)]
     done, left = merge_state.settle(root)
     left = bad + left
@@ -979,7 +1080,9 @@ def _land(root: str, message: str, check, sleep) -> int:
         print("land: master could not be fetched: %s; nothing was pushed" % _said(r))
         _told(_trouble(r))
         return 2
-    ok, said = merge_in(root, "origin/master")
+    # An application this chat changed keeps this chat's copy over master's too (_held).
+    own = _own(root, "HEAD")
+    ok, said = merge_in(root, "origin/master", mine=set(own[0]) if own else None, sweep=False)
     for ln in said if ok else []:
         print("land: " + ln)
     if not ok:
@@ -1000,8 +1103,9 @@ def _land(root: str, message: str, check, sleep) -> int:
                 print("land: brought in work that waited on %s" % ref)
             for ln in said:
                 print("land: " + ln if ok else "land: left %s as it is: %s" % (ref, ln))
+        _commit_said(root)
 
-    ahead = _git(root, "rev-list", "--count", "origin/master..HEAD").stdout.strip()
+    ahead =_git(root, "rev-list", "--count", "origin/master..HEAD").stdout.strip()
     if ahead in ("", "0"):
         print("land: nothing to land")
         return 0
@@ -1108,10 +1212,15 @@ def _after_merge(root: str, sleep) -> int:
             return 2
         for ln in said:
             print("land: " + ln)
-        _forget_pushed(root)
-        print("land: landed; %s holds newer work of its own, with master merged in, for the "
-              "next landing" % (name or "this chat"))
-        return 0
+        # "Newer work" that, master merged in, holds nothing master lacks (merges that
+        # _clean_merges could not tell clean, as on a git before 2.38): no work of its own,
+        # so it starts from master like any other, and is never left commits ahead of GitHub.
+        if _git(root, "rev-parse", "HEAD^{tree}").stdout.strip() != \
+                _git(root, "rev-parse", "origin/master^{tree}").stdout.strip():
+            _forget_pushed(root)
+            print("land: landed; %s holds newer work of its own, with master merged in, for the "
+                  "next landing" % (name or "this chat"))
+            return 0
     if name:
         r = _git(root, "checkout", "-q", "--no-track", "-B", name, "origin/master")
     else:
@@ -1121,8 +1230,27 @@ def _after_merge(root: str, sleep) -> int:
               % _said(r))
         return 2
     _forget_pushed(root)
+    if name:
+        _level(root, name, sleep)
     print("land: landed; %s starts from master now" % (name or "this chat"))
     return 0
+
+
+def _level(root: str, name: str, sleep) -> None:
+    """GitHub's copy of this branch moved up to master with it, a plain fast-forward (its
+    work is on master, so master holds the copy's commit). Left at the commit the landing
+    pushed, the branch stood one merge commit (master's own) ahead of its copy on GitHub, and
+    a check for unpushed work held the chat for it until it was pushed by hand (a live
+    session, 2026-11-05). Never forced; where it cannot be moved, one line says so."""
+    there = _remote_name(name)
+    if _git(root, "rev-parse", "-q", "--verify", "refs/remotes/origin/" + there).stdout.strip() \
+            == _git(root, "rev-parse", "HEAD").stdout.strip():
+        return
+    _where, r = _push(root, name, sleep)
+    if r.returncode != 0:
+        print("land: GitHub's copy of %s stays where the landing pushed it (%s); nothing is "
+              "lost, and the next landing moves it" % (there, _said(r)))
+        _told(_trouble(r))
 
 
 def _utf8_stdio() -> None:

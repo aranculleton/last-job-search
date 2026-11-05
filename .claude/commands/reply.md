@@ -23,7 +23,7 @@ Nothing is ever sent.
    `--thread <t>` for a message in its chat). It runs step 5's check, and refuses, saving
    nothing, while the check finds anything or a reaction of theirs waits unrecorded
    (`learned.py record` or `skip` first): rewrite and run it again. Passed, it saves the
-   draft where the page's Messages shows it with Copy and "I sent it", prints step 7's line
+   draft where the person's card in Contacts shows it with Copy and "I sent it", prints step 7's line
    and the tip to end with, and with `--work` writes the page's finishing batch: send it.
 
 The steps the two commands carry, for when one is done by hand:

@@ -140,6 +140,103 @@ def _published() -> dict:
         return {}
 
 
+def fix_work(messages: list, have: dict, now) -> list:
+    """(work id, fields) for each draft's fix not yet asked for: the tweak the page's own Fix it
+    asked for until 2026-11-04, now queued by the engine (app_model.message_fix)."""
+    import app_model
+    import page_db
+    out = []
+    for m in messages:
+        fix = m.get("fix") or {}
+        wid = fix.get("work")
+        if not wid or wid in have:
+            continue
+        mine = page_db.safe_id(f"tweak~{m['id']}~fix~")
+        if sum(1 for k in have if k.startswith(mine)) >= app_model.FIX_TRIES["must" if fix.get("must") else "may"]:
+            continue
+        what = "note" if m.get("kind") == "first_note" else "message"
+        target = {"id": m["id"], "output": "message", "rev": m.get("rev")}
+        if m.get("employer"):
+            target["company"] = m["employer"]
+        if m.get("contact"):
+            target["contact"] = m["contact"]
+        out.append((wid, {"kind": "tweak", "title": f"Fix the {what} to {m.get('first_name') or 'them'}",
+                          "to": "either", "args": {"v": 1, "target": target, "changes": [],
+                                                   "text": fix["text"], "keep": None, "auto": True},
+                          "asked_at": app_model.stamp(now), "asked_from": {"tab": "engine"},
+                          "priority": 0, "status": "queued", "stage": 0, "stage_at": None,
+                          "stages": [x for x in page_db.progress("tweak")["stages"]
+                                     if "PDF" not in x["name"]],
+                          "steps": [], "claimed_by": None, "claimed_at": None,
+                          "stop_asked": False, "attempt": 1}))
+    return out
+def no_screen(dump: str, db: dict) -> str:
+    """The line `view` stops with when its dump holds none of the page's `screen` documents
+    while the page has some, else "". The page has them once it was drawn under the new
+    names (`meta/current`, stored as `meta/now`); a page a 4.2 chat left (only `view`, and
+    `meta/current` under its old name) and one never drawn have none yet, and their first
+    view creates them (an empty collection leaves no folder in a dump, so a fresh page's has
+    no meta either). Every set it printed went with no version, against documents that
+    exist, and all 43 were refused (the maintainer's live run, 2026-11-05: a dump of the old
+    `view` collection, left at version 3, and meta)."""
+    import glob
+    if glob.glob(os.path.join(dump, "screen", "*.json")):
+        return ""
+    cur = (db.get("meta") or {}).get("current") or {}
+    if not (cur.get("data") and not cur.get("old")):
+        return ""                                   # never drawn, or a 4.2 page: its first view
+    return ("view: nothing was written: this folder holds no dump of the page's screen "
+            "collection, where its view is kept (view is an old name), so every write would "
+            "be refused. Read the page's screen, meta, addr and work collections into a fresh "
+            "folder (ArtifactData query, one for each, out_dir that folder, limit 1000) and "
+            "run this again with --dump that folder.")
+
+
+def self_fixes(db: dict | None, model: dict, out_dir: str, now, dump_dir: str = "") -> list[str]:
+    """The batches that queue, once each, what a draft on the page needs and Claude can do
+    with no one asking: its remake where a check failed with a fix Claude makes (the checks
+    alert's own `draft` work, its `redo`; never one the drafts rerun handed to the person,
+    tools/remake_drafts.py's "todo"), and one `files` item for the drafts whose PDFs the page
+    lacks that no files work has ever covered (page_db.queue_files). Each id is a create the
+    store refuses twice, so a view run again queues nothing more."""
+    import app_model
+    import page_db
+    if db is None:
+        return []
+    work = db.get("work") or {}
+    try:
+        import remake_drafts
+        theirs = {c["app"] for c in remake_drafts.todo_cards()}
+    except Exception:  # noqa: BLE001  no rerun record: none is the person's
+        theirs = set()
+    w = page_db.Writes(out_dir)
+    for item in model.get("ready") or []:
+        if item.get("status") != "drafted" or item.get("id") in theirs:
+            continue
+        for al in item.get("alerts") or []:
+            act = al.get("action") or {}
+            wid = page_db.safe_id(str(act.get("id") or ""))
+            if al.get("kind") != "checks" or act.get("type") != "work" or act.get("kind") != "draft" \
+                    or not wid or wid in work:
+                continue
+            w.add("set", "work", wid, page_db.queued("draft", act.get("title") or "",
+                                                     dict(act.get("args") or {}, auto=True), now),
+                  if_version=None)
+    out = w.save("self") if w.entries else []
+    ever = set()
+    for d in work.values():
+        x = d.get("data") or {}
+        if x.get("kind") == "files":
+            args = x.get("args") if isinstance(x.get("args"), dict) else {}
+            ever |= {str(i) for i in args.get("applications") or []} | {str(args.get("application") or "")}
+    missing = [x for x in app_model.files_missing() if str(x.get("id") or "") not in ever]
+    if missing:
+        q = page_db.queue_files(db, missing, now, os.path.join(out_dir, "files"), dump_dir=dump_dir)
+        if q:
+            out = out + list(q["batches"])
+    return out
+
+
 def cmd_view(a) -> int:
     """The model as one document a section (`view/<section>`, in parts when it is too big for
     one: page_db.split) plus `meta/current` (stored as `meta/now`), so an open page updates live with no republish.
@@ -154,39 +251,60 @@ def cmd_view(a) -> int:
         return 3
     today, now = app_model.clock(a.today, a.now)
     db = page_db.load(a.dump) if a.dump else {}
+    missing = no_screen(a.dump, db) if a.dump else ""
+    if missing:
+        print(_dump({"rev": None, "batches": [], "for_claude": [missing]}), end="")
+        return 2
     import app_listen
-    # Only the chat that answers the page draws its screens (and a job's own chat, which no
-    # chat can tell): two helpers in a hand-over rewrote whole screens over each other, and
-    # every update bounced (the maintainer, 4 November).
+    # Any chat draws the page's screens but an old helper that handed the page on: two
+    # helpers in a hand-over rewrote whole screens over each other, and every update bounced
+    # (the maintainer, 4 November), and only the listener drawing them left the page stale
+    # after "I applied" in the person's own chat (the engine review, 2026-11-05).
     draws, said = app_listen.draws_screens(db, a.chat, getattr(a, "work", "") or "", now)
     if not draws:
         print(_dump({"rev": None, "batches": [], "for_claude": [said]}), end="")
         return 0
     base = copy_basis()
+    base_sha = copy_basis_sha()
     me = {c for c in (app_listen.this_chat(""), app_listen.this_chat(a.chat)) if c}
     by = app_listen.this_chat("") or a.chat
+    ahead_of_us: dict = {}
 
     def newer(old) -> bool:
         """Is the page's copy drawn by another chat from a newer copy than this one? Never
-        written over: a copy behind another's would put back what that one moved on."""
+        written over: a copy behind another's would put back what that one moved on. Judged
+        by its commit where this copy knows it (theirs is newer when it is not in this copy's
+        history), and by the time only where it does not: by the time alone, a job chat's
+        commit not landed yet, or a computer with a fast clock, kept the listener from ever
+        writing its screens again."""
         d = (old or {}).get("data") if isinstance(old, dict) else None
-        if not base or not isinstance(d, dict):
+        if not isinstance(d, dict) or str(d.get("by") or "") in me:
             return False
+        theirs_sha = str(d.get("base_sha") or "")
+        if theirs_sha and base_sha:
+            if theirs_sha not in ahead_of_us:
+                # In this copy's whole history, its own commits not landed yet included.
+                ahead_of_us[theirs_sha] = commit_ahead(
+                    theirs_sha, os.environ.get("LJS_BASIS_SHA") or "HEAD")
+            if ahead_of_us[theirs_sha] is not None:
+                return ahead_of_us[theirs_sha]
         theirs = str(d.get("base") or "")
-        return bool(theirs) and theirs > base and str(d.get("by") or "") not in me
+        return bool(base) and bool(theirs) and theirs > base
     kept: list = []
-    stamp = {"by": by, **({"base": base} if base else {})}
+    stamp = {"by": by, **({"base": base} if base else {}),
+             **({"base_sha": base_sha} if base_sha else {})}
     # The suggestions already on the page keep their day, so no more than three new ones
     # reach it a day.
     full: dict = {}
-    model, _ = _build(today, now, shown=app_alerts.shown_in(db.get("view") or {}), full=full)
+    model, _ = _build(today, now, shown=app_alerts.shown_in(db.get("view") or {}), full=full,
+                      work_time=page_db.work_times(db, now) if db else None)
     w = page_db.Writes(a.out_dir)
     views = (db.get("view") or {}) if db else {}
     # Only what changed is written: every update rewrote all 37 documents, about 1.5 MB, when
     # one card had changed (2026-11-03). The page takes each document newer than its own copy,
     # so one left as it was still shows; a section in parts is kept or rewritten whole, so
     # its parts never mix two revs.
-    volatile = ("rev", "made_at", page_db.VERSION_FIELD, "by", "base")
+    volatile = ("rev", "made_at", page_db.VERSION_FIELD, "by", "base", "base_sha")
 
     def unchanged(doc_id, doc):
         old = (views.get(doc_id) or {}).get("data")
@@ -266,6 +384,12 @@ def cmd_view(a) -> int:
     for doc_id, old in sorted(have.items()):
         if doc_id not in page_db.addr_docs(reach):
             w.add("delete", "addr", doc_id, if_version=old["version"])
+    # A draft that fails a check with a clear fix is fixed by Claude by itself, the moment the
+    # check finds it: its tweak queued here, with no tap (the maintainer, 2026-11-04). Never a
+    # second time for the same draft and reasons, and only so many tries a draft.
+    if a.dump:
+        for doc_id, fields in fix_work(model.get("messages") or [], db.get("work") or {}, now):
+            w.add("set", "work", doc_id, fields)
     old = (db.get("meta") or {}).get("current") if db else None
     # Who wrote it, by this session's own id where there is one: the brief passed the word
     # "brief", which no listener rule could compare with a chat (engine audit, 2026-11-03).
@@ -274,8 +398,29 @@ def cmd_view(a) -> int:
                                          "model": model["model"], **stamp, **_published()},
               if_version=old["version"] if old else None)
     batches = w.save("view") if w.entries else []
+    # A redraft the drafts rerun handed out (tools/remake_drafts.py) goes on the work list by
+    # itself, once: read against the page's own work list, and sent in a batch of its own,
+    # so a refusal can never hold back the screens (each is a create, which the store refuses
+    # for an id it holds). Without a dump of the page there is nothing to read it against,
+    # and nothing is queued.
+    if a.dump:
+        try:
+            import remake_drafts
+            batches = list(batches) + remake_drafts.page_writes(
+                db, os.path.join(a.out_dir, "remade"), now)
+        except Exception:  # noqa: BLE001  nothing remade to read: nothing to queue
+            pass
+    # What a draft needs that Claude can do by itself is queued by itself, once: a check
+    # with its fix in hand made again, and the PDFs the page lacks put on it. Never "Make it
+    # again" or "Get my files ready" for the person to tap (the maintainer, 2026-11-05).
+    if a.dump:
+        try:
+            batches = list(batches) + self_fixes(db, model, os.path.join(a.out_dir, "self"), now,
+                                                 dump_dir=a.dump)
+        except Exception:  # noqa: BLE001  nothing to read it against: nothing queued
+            pass
     lines = app_listen.view_renewal(db, a.chat, now)
-    # A yes the person gave, in another chat or on the page, that a resume drafted today still
+    # A yes the person gave, in another chat or on the page, that an unsent resume still
     # leaves off: this chat redoes it, unasked (tools/skill_answers.py). Work already on its way
     # for it is left to run.
     try:
@@ -317,6 +462,45 @@ def copy_basis() -> str:
     return dt.datetime.fromtimestamp(secs, dt.timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
 
 
+def _git_out(*args: str) -> tuple[int, str]:
+    import subprocess
+    try:
+        r = subprocess.run(["git", "-C", person.state(), *args], capture_output=True, text=True,
+                           encoding="utf-8", errors="replace", timeout=10,
+                           stdin=subprocess.DEVNULL)
+        return r.returncode, r.stdout.strip()
+    except (OSError, subprocess.TimeoutExpired):
+        return 1, ""
+
+
+def copy_basis_sha() -> str:
+    """The commit this copy is based on, which each screen carries as `base_sha`: the newest
+    of this copy's commits that master has (so a commit not landed yet, which no other chat
+    can know, never hides it), else this copy's newest. "" where it cannot be told (the app
+    itself, no git). LJS_BASIS_SHA is for tests."""
+    given = os.environ.get("LJS_BASIS_SHA")
+    if given is not None:
+        return given
+    if not os.path.isfile(os.path.join(person.ROOT, "profile", "person.json")):
+        return ""
+    code, out = _git_out("merge-base", "HEAD", "origin/master")
+    if code != 0 or not out:
+        code, out = _git_out("rev-parse", "HEAD")
+    return out if code == 0 else ""
+
+
+def commit_ahead(theirs: str, ours: str) -> bool | None:
+    """Whether commit `theirs` is ahead of this copy's `ours`: True when this copy knows it
+    and it is not in ours's history, False when it is, None when this copy has never seen it
+    (the caller then goes by the time)."""
+    if _git_out("cat-file", "-e", theirs + "^{commit}")[0] != 0:
+        return None
+    code, _out = _git_out("merge-base", "--is-ancestor", theirs, ours)
+    if code not in (0, 1):
+        return None
+    return code == 1
+
+
 def cmd_page(a) -> int:
     path = os.path.join(_HERE, "app_page.py")
     if not os.path.isfile(path):
@@ -337,6 +521,9 @@ def cmd_page(a) -> int:
         today, now = app_model.clock(a.today, a.now)
         model, _ = _build(today, now)
         built = app_page.write_parts(model, a.out_dir)
+        # The reads it asks for are set aside from the growth that renews a helper (a new
+        # helper that put an update up was told to hand over twenty minutes on, 2026-11-05).
+        app_listen.republish_started(app_listen.this_chat(""), now)
         listing = None
         if getattr(a, "on_page", None) is not None:
             if a.on_page == "-":
@@ -547,7 +734,27 @@ def job_steps(chosen: dict, claimer: str, url: str, session: bool = True,
              f"--work {wid} --chat {claimer} --stage scrape --log <the round's folder>/round.log, "
              "and send its batch, so the page shows how many job sites are done and how long "
              "is left.")
-    done = f"its app.py done with --work {wid} --chat {claimer}"
+    if kind == "search" and chosen.get("draft_all"):
+        # One job, not two searches and 13 chats run by hand (the maintainer, 2026-11-05): the
+        # search drafts each job as it is found, in this chat, the drafts written together.
+        draft = work_row("draft")
+        step(f"This search drafts every job it finds, {chosen['draft_all']} at most, in this "
+             "chat, each as it is found. Each time one of its shortlists is saved (the round's "
+             "log says \"shortlist summary:\"; a wider round saves its own), and once more with "
+             f"--last after its --recut: python3 tools/app.py search-drafts \"$D\" --work {wid} "
+             f"--chat {claimer}, and send its batch. It queues a draft of each job that passes "
+             "every rule, claimed with this search (its card counts them, \"2 of 5 drafted\"), and "
+             "stops a draft not begun whose job fails a rule now, taking the next. Draft what it "
+             "queued at once, while the search goes on, all of them in one run, as the app "
+             f"skill's table says for a draft: {draft.rstrip('.')}. Pin this search alone (--stage "
+             "draft). As each draft's documents are made and checked, finish it on its own "
+             f"(app.py done --work <its id> --chat {claimer}; one that stops because the job is "
+             "not one they can take: --left-out \"<why, plain>\"), send its batch and bring the "
+             "page up to date (the finish step below), so it is in Drafts at once. The search "
+             "finishes by itself with its last draft; never app.py done it yourself.")
+    done = (f"each draft's own app.py done, with --chat {claimer}: {wid} finishes with the last"
+            if kind == "search" and chosen.get("draft_all")
+            else f"its app.py done with --work {wid} --chat {claimer}")
     # A draft's PDFs: this chat cannot upload (Artifact is not among its tools), so its
     # app.py done queues one `files` item for the chat that answers the page, and nothing is
     # uploaded here (the maintainer, 4 November).
@@ -878,6 +1085,7 @@ def cmd_published(a) -> int:
     print(f"app: the page's address is kept in {local_path.rel(path, person.ROOT)}; save it "
           "with the rest (python3 tools/save_state.py)")
     _, now = app_model.clock(None, None)
+    app_listen.republish_done(chat, now)        # what the publish read is set aside for good
     import tempfile
     out = a.out or tempfile.mkdtemp(prefix="ljs-listen-")      # never inside the profile
     for line in app_listen.published_lines(a.url, chat, first, out, now, replaced=replaced):
@@ -1599,13 +1807,34 @@ def cmd_done(a) -> int:
         if not reply:
             print("app: the answer file is empty", file=sys.stderr)
             return 2
+    left = " ".join(str(getattr(a, "left_out", "") or "").split())
+    if left:
+        # A draft that stops because the job is not one they can take (where it is open, a hard
+        # rule): the job leaves Jobs in the same step, ruled out with its reason, so the Brief and
+        # Jobs stop counting it. Left to a second command, it stayed in "10 jobs to look at"
+        # (2026-10-30) and a search's drafting left 18 of 37 to clear by hand (2026-11-05).
+        item = ((db.get("work") or {}).get(page_db.safe_id(a.work)) or {}).get("data") or {}
+        args = item.get("args") if isinstance(item.get("args"), dict) else {}
+        if not args.get("url"):
+            print("app: not finished: --left-out is for a job's draft, and this one names no "
+                  "posting to take off Jobs", file=sys.stderr)
+            return 2
+        import exclude
+        import person
+        exclude.add(str(args["url"]), left, title=str(args.get("title") or ""),
+                    company=str(args.get("company") or ""), basis="rules",
+                    # The person's own day, never the computer's UTC date.
+                    today=person.today(now).isoformat(),
+                    path=person.state("job_scraper", "seen_jobs.json"))
+        a.stopped, a.summary = True, a.summary or f"Not drafted: {left.rstrip('.')}."
     try:
         got = page_db.finish(db, a.work, now, a.out or os.path.join(a.dump, "out"),
                              summary=a.summary, status="failed" if a.failed else
                              "stopped" if a.stopped else "done",
                              error=a.failed, links=_links(a.link), reply=reply, thread=a.thread,
                              chat_kind=a.kind or app_listen.chat_kind(), dump_dir=a.dump,
-                             chat=a.chat, question=a.question)
+                             chat=a.chat, question=a.question, about=a.about,
+                             answer=_answer(a), answered=a.answered)
     except (KeyError, ValueError) as e:
         print(f"app: not finished: {e.args[0] if e.args else e}", file=sys.stderr)
         return 2
@@ -1626,6 +1855,68 @@ def cmd_done(a) -> int:
         if queued:
             got["files"] = {"work": queued["work"], "applications": queued["applications"]}
             got["batches"] = list(got["batches"]) + queued["batches"]
+    print(_dump(got), end="")
+    return 0
+
+
+def _answer(a) -> dict | None:
+    """The kind of answer a --question needs, as `done` takes it: --answer <kind>, each
+    --choice "<value>=<words>" (or just its words), --min and --max for a number or a scale."""
+    if not a.answer:
+        return None
+    choices = []
+    for c in a.choice or []:
+        value, _, words = str(c).partition("=")
+        choices.append({"value": value.strip(), "label": (words or value).strip()})
+    out = {"kind": a.answer, "choices": choices}
+    for k in ("min", "max"):
+        v = getattr(a, k)
+        if v is not None:
+            out[k] = int(v) if float(v).is_integer() else v
+    if a.time_key:
+        out["time"] = a.time_key
+    return out
+
+
+def cmd_search_drafts(a) -> int:
+    """A search that drafts what it finds: a draft of each job on Jobs now that passes every
+    rule, up to the number asked for, claimed with the search so this chat drafts them
+    together (page_db.search_drafts); a draft not begun whose job fails a rule now stopped and
+    the next taken. Run each time one of the search's shortlists is saved, and with --last
+    once the round has ended."""
+    import app_model
+    import page_db
+    from lookup_score import norm
+    today, now = app_model.clock(a.today, a.now)
+    db = page_db.load(a.dump)
+    ctx = app_model.Ctx(today, now)
+    jobs = app_model._jobs(ctx, {})
+    rows = [dict(r["draft_work"]["args"]) for r in jobs["rows"]
+            if app_model.to_look_at(r) and not r.get("from_round") and not r.get("added")]
+    listed = {norm(str(r["draft_work"]["args"].get("url") or "")) for r in jobs["rows"]
+              if r["status"] in ("new", "ready", "applied")}
+    # Why a job left Jobs, in plain words: a ruling on it, the newest search's left-out list,
+    # or the page's own read of the rules.
+    why = {k: str(e.get("exclusion_reason") or "") for k, e in ctx.seen.items()
+           if str(e.get("status") or "").lower() == "excluded"}
+    try:
+        import filtered
+        newest = os.path.splitext(os.path.basename(app_model.newest_round()))[0]
+        for e in (filtered.load(newest).get("filtered") or []) if newest else ():
+            if isinstance(e, dict) and e.get("url"):
+                why.setdefault(norm(str(e["url"])), str(e.get("reason") or ""))
+    except SystemExit:
+        pass                       # no left-out list for it: the rulings and the page say why
+    why.update({norm(str(row.get("url") or "")): w
+                for _n, _k, row, w in ctx._got.get("jobs_left_out") or []})
+    left = {u: app_model.left_words(w)[len("Left out: "):] for u, w in why.items() if u and w}
+    try:
+        got = page_db.search_drafts(db, a.work, rows, now, a.out or os.path.join(a.dump, "out"),
+                                    chat=a.chat, left=left, last=a.last, dump_dir=a.dump,
+                                    listed=listed)
+    except (KeyError, ValueError) as e:
+        print(f"app: no drafts queued: {e.args[0] if e.args else e}", file=sys.stderr)
+        return 2
     print(_dump(got), end="")
     return 0
 
@@ -1833,13 +2124,44 @@ def main(argv=None) -> int:
     p.add_argument("--stopped", action="store_true", help="they tapped Stop: it stops here")
     p.add_argument("--question", default="",
                    help="it needs the person first: one plain question, asked on the page; "
-                        "their answer puts it back in the queue")
+                        "their answer puts it back in the queue. Only when it cannot be "
+                        "finished honestly without them (templates/app/DESIGN.md, \"Asking "
+                        "the person\")")
+    p.add_argument("--about", default="",
+                   help="with --question: the exact words of the draft or of their message "
+                        "it is about, shown quoted over it")
+    p.add_argument("--answer", default="", choices=("", "yesno", "choice", "date", "time",
+                                                    "number", "scale", "text"),
+                   help="with --question: the kind of answer, so the page draws its control "
+                        "(a Yes and a No, chips, a date picker, a time, a number, a slider); "
+                        "text only when nothing else fits")
+    p.add_argument("--choice", action="append", default=[],
+                   help="with --answer choice: \"<value>=<words>\", two to six of them")
+    p.add_argument("--min", type=float, default=None, help="with --answer number or scale")
+    p.add_argument("--max", type=float, default=None, help="with --answer number or scale")
+    p.add_argument("--time-key", dest="time_key", default="",
+                   help="with --answer date: ask the time beside the day")
     p.add_argument("--link", action="append", default=[],
                    help="\"<label>=<address>\" shown with it (more than one allowed)")
     p.add_argument("--chat", default="", help=CLAIMED_UNDER)
     p.add_argument("--kind", default="", choices=("", "cloud", "computer"))
+    p.add_argument("--answered", action="append", default=[],
+                   help="a form's question answered (form_answers), in the form's own words: "
+                        "its card says Done once each is on it (more than one allowed)")
     p.add_argument("--out", default="", help="where the batch goes (default <dump>/out)")
+    p.add_argument("--left-out", dest="left_out", default="",
+                   help="a draft stopped because the job is not one they can take: why, in "
+                        "plain words; the job leaves Jobs, ruled out with that reason")
     p.add_argument("--now", default=None)
+    p = sub.add_parser("search-drafts", help="a search that drafts what it finds: a draft of "
+                                             "each job that passes every rule, claimed with it")
+    p.add_argument("dump")
+    p.add_argument("--work", required=True, help="the search's work id")
+    p.add_argument("--chat", default="", help=CLAIMED_UNDER)
+    p.add_argument("--last", action="store_true",
+                   help="the round has ended: the search has found all it will")
+    p.add_argument("--out", default="", help="where the batch goes (default <dump>/out)")
+    clocked(p)
     p = sub.add_parser("ask", help="work queued from a chat message, as the page queues it")
     p.add_argument("dump")
     p.add_argument("--kind", required=True, help="the kind of work (app.py progress <kind>)")
@@ -1870,7 +2192,7 @@ def main(argv=None) -> int:
             "start": cmd_start, "published": cmd_published, "resume-saved": cmd_resume_saved,
             "files-saved": cmd_files_saved, "propose": cmd_propose, "listen": cmd_listen,
             "republish": cmd_republish, "pinned": cmd_pinned, "told": cmd_told, "doorbells": cmd_doorbells, "done": cmd_done,
-            "ask": cmd_ask, "wake": cmd_wake, "version": cmd_version,
+            "ask": cmd_ask, "wake": cmd_wake, "version": cmd_version, "search-drafts": cmd_search_drafts,
             "answer": cmd_answer}[a.cmd](a)
 
 

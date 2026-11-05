@@ -148,6 +148,9 @@ RUNNING = {"kind": "reply", "title": "Reply to Juno", "to": "cloud", "args": {},
 QUEUED = {"kind": "follow_up", "title": "Follow up with Wren", "to": "cloud", "args": {}, "asked_at": "2026-10-25T08:58:00.000Z", "status": "queued",
           "stages": [{"name": "Writing", "est_s": 120}], "stage": 0, "steps": [], "attempt": 1}
 TAP = {"action": "export.take", "item": "2026-10", "value": {"assets": []}, "at": "2026-10-25T08:59:00.000Z", "rev": None}
+# What one measured px is in the viewport's px: 1 in Chrome's and Firefox's engines, which
+# measure after the body's zoom, and the zoom itself in Safari's, which measures before it.
+DRAWN = "const k = document.documentElement.getBoundingClientRect().width / (document.body.getBoundingClientRect().width || 1);"
 HEARD = {"chats/cloud-1": {"kind": "cloud", "seen_at": "2026-10-25T08:58:30.000Z", "watching": True},
          "meta/listener": {"chat": "cloud-1", "kind": "cloud", "answered_at": "2026-10-25T08:56:00.000Z", "since": "2026-10-24T08:00:00.000Z"}}
 LINE = "(document.querySelector('[data-k=\"det:info:linkedin-download\"] .state') || {}).textContent || ''"
@@ -245,9 +248,14 @@ def test_the_pill_opens_and_closes_claudes_work_on_every_screen(run, tmp_path):
     a sheet across the whole page there (the maintainer, 2026-11-04: "just having this
     persistent every page but when u press it, opens or closes the side panel"). The pill opens
     and closes one panel on every screen, Hide closes it, and the choice is remembered."""
+    # In the page's drawn px in every engine: Safari's measures a box inside the zoomed body
+    # before the zoom (1584 for a rail drawn at 1440 under 0.9, Safari 4.10), Chrome's and
+    # Firefox's after it (app.js drawnPerPx). The body spans the viewport, so the viewport
+    # over the body's measured width puts any of them in the viewport's px.
     rail = ("(() => { const hd = document.getElementById('h-work-rail'); const pill = document.getElementById('pill');"
+            f" {DRAWN}"
             " const r = hd && hd.getClientRects().length ? document.getElementById('rail').getBoundingClientRect() : null;"
-            " return [r ? Math.round(r.right) : null, innerWidth, pill ? pill.getAttribute('aria-expanded') : null]; })()")
+            " return [r ? Math.round(r.right * k) : null, innerWidth, pill ? pill.getAttribute('aria-expanded') : null]; })()")
     seed = dict(HEARD, **{"work/reply~1": RUNNING, "work/follow_up~2": QUEUED})
     d = tmp_path / "wide"
     d.mkdir()
@@ -263,8 +271,11 @@ def test_the_pill_opens_and_closes_claudes_work_on_every_screen(run, tmp_path):
 
 
 def test_narrower_claudes_work_opens_on_the_right_and_on_a_phone_from_the_bottom(run, tmp_path):
+    # Measured in the viewport's px in every engine (DRAWN): Safari gave [1137.78, 0, 360,
+    # 853.33, 1024, 768], a sheet at the right edge measured before the body's 0.9 zoom.
     box = ("(() => { const d = document.querySelector('dialog.work-sheet[open]'); if (!d) return null;"
-           " const r = d.getBoundingClientRect(); return [r.right, r.top, r.width, r.bottom, innerWidth, innerHeight]; })()")
+           f" {DRAWN}"
+           " const r = d.getBoundingClientRect(); return [r.right * k, r.top * k, r.width * k, r.bottom * k, innerWidth, innerHeight]; })()")
     seed = dict(HEARD, **{"work/reply~1": RUNNING, "work/follow_up~2": QUEUED})
     for vp, side in (({"width": 1024, "height": 768}, True), (PHONE, False)):
         d = tmp_path / ("side" if side else "phone")
@@ -322,8 +333,9 @@ def test_a_run_of_like_work_is_one_card_with_its_count(run, tmp_path):
 
 def test_a_card_of_notes_to_check_says_what_it_is(run, tmp_path):
     """Four notes held for an unread profile made a To do card titled with the warning alone,
-    over a list of names (the maintainer, 2026-11-04: "idk what the bottom one is"). Its title
-    says what it is, the reason sits under it, and its link says where they are."""
+    over a list of names (the maintainer, 2026-11-04: "idk what the bottom one is"). They are
+    rows of the one card of messages to send (the UX review, 2026-11-05): its title says what it
+    is, each held row says "Check first" and why, and its button opens Contacts."""
     m = copy.deepcopy(_sample())
     held = [x for x in m["messages"] if x.get("kind") == "first_note"][:2]
     assert len(held) == 2
@@ -339,8 +351,8 @@ def test_a_card_of_notes_to_check_says_what_it_is(run, tmp_path):
     cards = got["after"][0]["eval"]
     assert cards, "the held notes make a card in To do"
     title, text = cards[0]
-    assert title.startswith("2 messages to check before you send"), title
-    assert "Written before their profile was read: read it first." in text and "Open in Contacts" in text, text
+    assert title.startswith("Messages to send ("), title
+    assert text.count("Check first") == 2 and "Written before their profile was read: read it first" in text and "Open Contacts" in text, text
 
 
 def test_a_card_being_changed_says_so(run, tmp_path):
@@ -350,9 +362,10 @@ def test_a_card_being_changed_says_so(run, tmp_path):
     m = copy.deepcopy(_sample())
     mid = m["messages"][0]["id"]
     work = dict(QUEUED, kind="tweak", title="Edit message", args={"v": 1, "target": {"id": mid, "output": "message"}})
-    look = ("(() => { const c = document.querySelector('[data-item=\"" + mid + "\"]'); const g = c && c.querySelector('[data-tweak-going]');"
+    # The message is on its person's card in Contacts (one page since 2026-11-04).
+    look = ("(() => { const c = document.querySelector('[data-msg=\"" + mid + "\"]'); const g = c && c.querySelector('[data-tweak-going]');"
             " return g ? g.textContent : null; })()")
-    got = _go(run, tmp_path, [{"hash": "drafts-messages", "eval": look}], WIDE, model=m, seed=dict(HEARD, **{"work/tweak~m1": work}), clock=T)
+    got = _go(run, tmp_path, [{"hash": "contacts", "eval": look}], WIDE, model=m, seed=dict(HEARD, **{"work/tweak~m1": work}), clock=T)
     line = got["after"][0]["eval"]
     assert line and line.startswith("Claude changes this next") and "See it" in line, line
 
@@ -361,7 +374,8 @@ def test_a_refused_tap_with_nothing_asked_still_has_a_way_out(run, tmp_path):
     """A tap refused before refusals carried their question sat in To do as "Setup ... Not
     done: Which day is it? Give it as 2026-10-28" with no button at all (the maintainer,
     2026-11-04: "doesn't seem to have any options"). It is marked by what it was about, its
-    day reads as a day, and it can be said in Chat or put away."""
+    day reads as a day, and its question is answered on the card with a date picker, or it is
+    put away with its one bin; never "Say it in Chat" (the maintainer, 2026-11-05)."""
     m = copy.deepcopy(_sample())
     app = m["applications"][0]
     aid = "act~" + app["id"] + "~outcome.interview~old"
@@ -370,10 +384,10 @@ def test_a_refused_tap_with_nothing_asked_still_has_a_way_out(run, tmp_path):
                           "receipts/" + aid: {"result": "conflict", "note": "Which day is it? Give it as 2026-10-28.",
                                               "applied_at": "2026-10-25T08:51:00Z", "by": "cloud-1"}})
     look = ("(() => { const c = document.querySelector('[data-item=\"refused:" + aid + "\"]'); if (!c) return null;"
-            " return [c.querySelector('.kind').textContent, c.textContent, !!c.querySelector('[data-k^=\"rf-bin:\"]'), !!c.querySelector('[data-k^=\"rf-chat:\"]')]; })()")
+            " return [c.querySelector('.kind').textContent, c.textContent, c.querySelectorAll('[data-bin]').length === 1, !!c.querySelector('input[type=date]')]; })()")
     got = _go(run, tmp_path, [{"hash": "todo", "eval": look}], WIDE, model=m, seed=seed, clock=T)
     card = got["after"][0]["eval"]
     assert card, "the refused tap has its card in To do"
-    kind, text, has_bin, has_chat = card
+    kind, text, one_bin, has_date = card
     assert kind != "Setup" and "2026-10-28" not in text and "28 Oct" in text, card
-    assert has_bin and has_chat, card
+    assert one_bin and has_date and "in Chat" not in text, card

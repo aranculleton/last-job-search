@@ -1211,6 +1211,15 @@ ASK_IN_CHAT = ("If the update check listed questions under \"These need you\" (f
                "a question an improvement needs), ask at most three, in plain words, at the end "
                "of your reply, as .claude/commands/upgrade.md says: the page asks them too, and "
                "an answer in either place counts.")
+# The same for the page's helper, whose last reply is one line and which nobody reads: its
+# start said to ask up to three questions and give the changes at the end of the reply, then
+# that the reply was only "ready" (the maintainer's live run, 2026-11-05). On the page they
+# go, as CLAUDE.md says of every question for the person (app_listen.shape swaps them in).
+ASK_ON_PAGE = ("If the update check listed questions under \"These need you\" (facts to "
+               "confirm, a question an improvement needs), ask none of them in this chat: the "
+               "page asks each as a To do card, and an answer there counts.")
+SHOWN_ON_PAGE = "its progress goes on the page"
+SHOWN_IN_REPLY = "at the end of your reply give one plain line per change it made, never a command"
 
 
 def _answered(st: dict) -> int:
@@ -1621,8 +1630,7 @@ def start(on: str = "", tools: str = "", page_url: str = "", runner=None, work: 
     # day's first check: a second chat that day, or one whose turn went to the request, never
     # heard of them again (the stranger audit, X-32). Said by page or no page.
     ups = [] if work else _unstarted()
-    shown = ("its progress goes on the page" if st["page"].get("url") and not no_page else
-             "at the end of your reply give one plain line per change it made, never a command")
+    shown = SHOWN_ON_PAGE if st["page"].get("url") and not no_page else SHOWN_IN_REPLY
     if ups:
         since = min(d for _i, d in ups)
         steps.append(f"{n}. {len(ups)} improvement{'s' if len(ups) != 1 else ''} to their "
@@ -1645,9 +1653,13 @@ def start(on: str = "", tools: str = "", page_url: str = "", runner=None, work: 
         n += 1
     if st["page"].get("url") and not work and not (data_current and not sync):
         steps.append(f"{n}. " + ("Unless the update check above just did it, b" if sync else "B") +
-                     "ring the page's data up to date: python3 tools/app.py view <your "
-                     "scratchpad>/view --dump <a dump of the page's view and meta> and send the "
-                     "batch it prints. Then carry on with what the person asked.")
+                     "ring the page's data up to date: read the page's screen, meta, addr and "
+                     "work collections into a fresh folder in your scratchpad (ArtifactData "
+                     f"query, url {st['page'].get('url')}, one for each, out_dir that folder, "
+                     "limit 1000; the page's view is stored as screen, and view is an old name), "
+                     "then python3 tools/app.py view <your scratchpad>/view --dump <that "
+                     "folder> and send the batch it prints. Then carry on with what the person "
+                     "asked.")
     # "page to publish" only beside the steps that publish it: a chat that cannot publish was
     # told the page waited, with nothing to do about it (X-21).
     head = "app start: set up" + (", page to publish" if publishing else "")

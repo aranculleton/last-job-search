@@ -38,8 +38,6 @@ FIRST_LIMIT = {"phone": 270, "wide": 300}
 # in both themes.
 BOTH = {"phone", "wide"}
 KNOWN = {
-    # 8: an email note carries Copy subject beside Copy message and its Sent button.
-    (8, "drafts-messages", "msg-priya-thanks"): BOTH, (8, "drafts-messages", "msg-noor-1"): BOTH,
     # 9: two applications at one employer, each row named by the employer alone.
     (9, "progress", "Ellerwick Trust"): {"wide"},
 }
@@ -170,8 +168,12 @@ def test_6_five_tabs_and_only_to_do_shows_a_badge_the_summary_shares(layouts, vp
 
 
 def test_7_at_most_one_primary_button_and_no_answer_is_primary(layouts):
+    # One filled pill a screen; every other card's next step a semibold soft pill (Buttons),
+    # one a card either way.
     bad = [(m, s, v["primary"], v["qPrimary"]) for m, s, v, _ in _sections(layouts) if v["primary"] > 1 or v["qPrimary"]]
     assert not bad, bad
+    twice = [(m, s, c["item"]) for m, s, v, _ in _sections(layouts) for c in v["cards"] if c["primary"] > 1]
+    assert not twice, twice
 
 
 # ------------------------------------------------------------------ 8 to 12: cards, names, type
@@ -183,10 +185,13 @@ def test_8_a_closed_card_has_one_state_one_alert_two_buttons_one_link_and_more(l
     found = set()
     for _, s, v, _ in _sections(layouts):
         for c in v["cards"]:
-            # A checklist's row is held to one action of its own (its bin aside), and its
-            # buttons are the row's, never the card's (2026-11-04: drafted messages, one card).
-            if c["states"] > 1 or c["alerts"] + c["suggests"] > 1 or c["buttons"] > 2 or c["links"] > 1 or c["more"] > 1 \
-                    or c.get("rowButtons", 0) > 1:
+            # A checklist's row is held to its own next step and Done (its bin aside), and its
+            # buttons are the row's, never the card's (2026-11-04: drafted messages, one card;
+            # 2026-11-05: Done on every row). A Jobs card's actions are one row of pills, three
+            # at most before More (2026-11-05: "See the posting" a pill beside "See the draft",
+            # never underlined words).
+            if c["states"] > 1 or c["alerts"] + c["suggests"] > 1 or c["buttons"] > (3 if c.get("own") else 2) or c["links"] > 1 or c["more"] > 1 \
+                    or c.get("rowButtons", 0) > 2:
                 found.add((8, s, c["item"]))
     new, gone = _gaps(found, 8, vp)
     assert not new, ("cards over the anatomy", new)
@@ -276,6 +281,18 @@ def test_14_at_double_text_nothing_scrolls_sideways_or_is_cut(layouts):
             bad.append((s, b))
     assert layouts["sample"]["big"], "nothing was measured at double text"
     assert not bad, bad
+
+
+def test_16_a_jobs_cards_facts_are_one_line_on_a_wide_screen(layouts, vp):
+    """The employer and place on one line and when it was posted on the next read as two
+    things (the maintainer, 2026-11-04): a Found, Drafts or Applied card says its facts on one
+    line wide. A phone wraps them as words do."""
+    if vp != "wide":
+        pytest.skip("a phone wraps the line as words do")
+    cards = [(m, s, c) for m, s, v, _ in _sections(layouts) for c in v["cards"] if c["own"]]
+    assert {s for _, s, _ in cards} >= {"jobs", "drafts"}, "Found and Drafts were measured"
+    two = [(m, s, c["item"], c["factLines"]) for m, s, c in cards if c["factLines"] > 1]
+    assert not two, two
 
 
 def test_15_is_settled_by_people_not_a_test():

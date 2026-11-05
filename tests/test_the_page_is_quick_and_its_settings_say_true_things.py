@@ -434,11 +434,14 @@ def test_keyboard_shortcuts_are_not_offered_where_there_is_no_keyboard(run, tmp_
     assert got["after"][0]["eval"] is True
 
 
-def test_the_menu_fold_is_its_last_control_and_an_empty_fortnight_is_one_line(run, tmp_path):
+def test_the_menu_fold_sits_beside_the_title_settings_is_last_and_an_empty_fortnight_is_one_line(run, tmp_path):
+    """The fold moved beside the page's title (the maintainer, 2026-11-05: the menu's foot
+    had a second divider and an empty block under Settings); Settings is the menu's last."""
     m = _sample()
     m["interviews"] = []
     m["upcoming"] = []
-    order = "(() => { const s = document.getElementById('side'); const c = [...s.querySelectorAll('a, button')]; return c[c.length - 1].dataset.k; })()"
+    order = ("(() => { const s = document.getElementById('side'); const c = [...s.querySelectorAll('a, button')];"
+             " const t = document.querySelector('#top [data-k=\"side-toggle\"]'); return [c[c.length - 1].dataset.k, !!t && t.previousElementSibling.id]; })()")
     got = _go(run, tmp_path, [{"hash": "brief", "eval": order, "count": '[data-k^="week:"]', "read": '#main [data-k="bp-up-add"]'}], WIDE, model=m)
-    assert got["after"][0]["eval"] == "side-toggle"
+    assert got["after"][0]["eval"] == ["side:settings", "brand"], got["after"][0]["eval"]
     assert got["after"][0]["count"] == 0 and got["after"][0]["text"] == "Add something"

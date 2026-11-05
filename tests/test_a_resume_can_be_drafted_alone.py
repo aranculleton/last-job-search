@@ -239,3 +239,85 @@ def test_the_check_after_writing_names_a_file_the_tracker_holds_and_nobody_made(
     _make(docpaths.resume_rel("Ottergate"))
     _make(docpaths.letter_rel("Ottergate"))
     assert record_drafts.unmade(done, tracker) == []
+
+
+# ------------------------------------------------------------------ checked whole, assembled
+
+# The maintainer, 2026-11-05: the code audit stopped at the letter's fields, so voice_check,
+# check_claims and the grounding flags never read the summary of a draft with no letter, and
+# the tracker still named a letter for one. A summary with an em dash (voice_check), the word
+# the example person never uses for the document (check_claims) and a sentence no claim-map
+# entry covers (the grounding flags).
+SUMMARY_FAULTS = ("Operations analyst with seven years — and a resume — turning "
+                  "warehouse data into forecasts operations teams plan against. "
+                  + FIXTURE["draft"]["summary"].split(". ", 1)[1])
+
+
+def _summary_checked(r):
+    rules = {f["rule"] for f in r["mechanical"]["findings"]}
+    flags = {(f["flag"], f["field"]) for f in r["mechanical"]["flags"]}
+    assert "voice:em-dash" in rules, r["mechanical"]["findings"]
+    assert any(x.startswith("claims:the-word-resume") for x in rules), rules
+    assert ("unmapped", "summary") in flags, flags
+
+
+def test_a_resume_alone_with_a_letter_written_anyway_still_has_its_summary_checked(tmp_path):
+    d = dict(copy.deepcopy(FIXTURE["draft"]), summary=SUMMARY_FAULTS)
+    [r] = stage_picks.audit(str(_alone(tmp_path, d)))
+    assert {f["field"] for f in r["mechanical"]["findings"] if f["rule"] == "resume-only"} \
+        == set(LETTER)
+    _summary_checked(r)
+
+
+def test_a_letter_left_out_of_a_full_application_still_has_its_summary_checked(tmp_path):
+    d = {k: v for k, v in copy.deepcopy(FIXTURE["draft"]).items() if k not in LETTER}
+    d["summary"] = SUMMARY_FAULTS
+    [r] = stage_picks.audit(str(make_round(tmp_path, d)))
+    # The letter is still required where one was asked for, and nothing else is skipped.
+    assert {f["field"] for f in r["mechanical"]["findings"] if f["rule"] == "missing-field"} \
+        == set(LETTER)
+    _summary_checked(r)
+
+
+def _model_pass(rd, slug):
+    import draft_audit
+    base = json.loads((rd / f"draft_{slug}.json").read_text(encoding="utf-8"))
+    (rd / f"model_audit_{slug}.json").write_text(json.dumps({
+        "verdict": "pass", "draft": base, "changes": [], "residual_risks": [], "rulings": [],
+        "audited_md5": draft_audit.md5(base), "rules_hash": draft_pack.rules_hash()}),
+        encoding="utf-8")
+
+
+def test_a_resume_alone_that_passes_both_audits_is_assembled_and_names_no_letter(tmp_path, state):
+    # The drafter left the letter's fields out altogether.
+    d = {k: v for k, v in copy.deepcopy(FIXTURE["draft"]).items() if k not in LETTER}
+    d["claim_map"] = [c for c in d["claim_map"] if c["field"] not in LETTER]
+    rd = _alone(tmp_path, d)
+    [r] = stage_picks.audit(str(rd))
+    assert r["mechanical"]["findings"] == [] and r["mechanical"]["flags"] == []
+    _model_pass(rd, FIXTURE["slug"])
+    [r] = stage_picks.audit(str(rd))
+    assert r["verdict"] == "pass", r["mechanical"]
+    [got], missing, rejected = stage_picks.assemble(str(rd))
+    assert not missing and not rejected and got[docpaths.RESUME_ONLY] is True
+    # The tracker names the resume alone, even with a letter an earlier render left on disk
+    # under the same name.
+    abbr = record_drafts.outreach.R.final_abbr(got)
+    _make(docpaths.resume_rel(abbr))
+    _make(docpaths.letter_rel(abbr))
+    done = record_drafts.record([dict(got, abbr=abbr)], {abbr.upper(): {"fit": 70}}, TODAY,
+                                path=str(state / "job_search_tracker.csv"), exists=docpaths.made)
+    [(_action, row)] = done
+    assert row["cv_file"] == docpaths.resume_rel(abbr) and row["cover_letter_file"] == ""
+
+
+def test_a_draft_with_no_letter_in_it_never_has_one_named():
+    # Not marked resume-only, and no letter written: the tracker names none.
+    bare = {k: v for k, v in copy.deepcopy(FIXTURE["draft"]).items() if k not in LETTER}
+    for d in (dict(bare, abbr="Kestrel"),
+              dict(bare, abbr="Kestrel", p1="", p2="", lead="", cl_bullets=[], p4="")):
+        assert record_drafts._row_for(d, {"fit": 70}, TODAY, "")["cover_letter_file"] == ""
+    # A draft with its letter names it, as before.
+    full = dict(copy.deepcopy(FIXTURE["draft"]), abbr="Kestrel")
+    assert record_drafts._row_for(full, {"fit": 70}, TODAY, "")["cover_letter_file"] \
+        == docpaths.letter_rel("Kestrel")

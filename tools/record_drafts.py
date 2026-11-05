@@ -207,9 +207,10 @@ def _row_for(draft: dict, meta: dict, today: str, round_name: str,
         "fit_rating": "" if fit is None else str(int(round(float(fit)))),
         "notes": notes,
         "cv_file": docpaths.resume_rel(abbr),
-        # A resume asked for alone, or a general one, has no letter: none is named.
+        # A resume asked for alone, a general one, or a draft with no letter in it has no
+        # letter: none is named.
         "cover_letter_file": (docpaths.letter_rel(abbr)
-                              if docpaths.has_letter(draft) and docpaths.has_letter(meta)
+                              if docpaths.writes_letter(draft) and docpaths.has_letter(meta)
                               else ""),
         "source": meta.get("url", "") or (f"contact:{str(who.get('contact_id')).strip()}"
                                           if who else ""),

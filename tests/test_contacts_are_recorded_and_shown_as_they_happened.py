@@ -18,6 +18,7 @@ from __future__ import annotations
 
 import json
 import os
+import re
 import sys
 
 import pytest
@@ -156,9 +157,14 @@ def test_contacts_says_what_to_do_once_and_agrees_with_to_do(run, page, vp, sche
     # The summary counts what To do lists, and the fold never says nothing is owed when it is.
     group = todo.split("Follow up with 2 people", 1)[1].split("Draft all", 1)[0]
     assert "Wren at Fernhill Freight" in group and "Rhian at Northwind Analytics" in group, todo
-    assert "2 follow-ups you could send" in contacts, contacts.split("\n")[2]
+    # The header is one short line since 2026-11-04 (the maintainer: "quite cluttered"): the
+    # follow-ups are counted by their cards, the same two To do lists.
+    assert contacts.count("Draft the follow-up") == 2 and "follow-ups you could send" not in contacts, contacts.split("\n")[2]
     assert "nothing owed to them now" not in contacts
-    # The run's first notes are one card in To do.
-    assert "first notes ready to send" in todo
-    card = todo.split("first notes ready to send", 1)[1].split("Open them", 1)[0]
-    assert card.count("ready.") == 1, card     # "3 notes ready. 3 notes ready." said it twice
+    # The run's first notes are rows of To do's one card of messages to send (the UX review,
+    # 2026-11-05), and its count is the one Contacts says: the engine's own.
+    sent = re.search(r"Messages to send \((\d+)\)", todo)
+    assert sent, todo
+    assert re.search(r"\b%s to send\b" % sent.group(1), contacts), (sent.group(0), contacts[:300])
+    card = todo.split(sent.group(0), 1)[1].split("Open Contacts", 1)[0]
+    assert "notes ready." not in card and card.count("sent this week") <= 1, card     # "3 notes ready. 3 notes ready." said it twice

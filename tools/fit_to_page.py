@@ -132,15 +132,41 @@ def _compile(engine, tex, cwd, pdf, passes=1):
     correspond to its own .tex. The failure is silent by construction: the file
     is there, it is a valid PDF, and it is the wrong one.
 
-    So the target is deleted before the run and its absence afterwards is the
-    failure signal, which is stronger than the exit status alone: lualatex
+    So the target is moved aside before the run and its absence afterwards is
+    the failure signal, which is stronger than the exit status alone: lualatex
     exits non-zero on warnings it recovers from, and exits zero in
     nonstopmode on some errors that still produce no output.
+
+    Moved aside, never deleted: deleting it meant a computer with no LaTeX, or a
+    compile that failed, lost the only PDF there was (every unsent resume, on one
+    rerun of the drafts). The earlier PDF is put back on any failure, over any
+    wrong one the failed run wrote, and goes only once a new one is made.
     """
+    aside = pdf + ".before"
+    if os.path.exists(aside):
+        # Left by a run that was killed: the earlier PDF, unless a newer one was made.
+        if os.path.exists(pdf):
+            os.remove(aside)
+        else:
+            os.replace(aside, pdf)
+    had = os.path.exists(pdf)
+    if had:
+        os.replace(pdf, aside)
+    made = False
     try:
-        os.remove(pdf)
-    except FileNotFoundError:
-        pass
+        pages = _compile_once(engine, tex, cwd, pdf, passes)
+        made = True
+        return pages
+    finally:
+        if had:
+            if made:
+                os.remove(aside)
+            else:
+                os.replace(aside, pdf)
+
+
+def _compile_once(engine, tex, cwd, pdf, passes):
+    """_compile's run, with the target already out of the way."""
     last = None
     for _ in range(passes):
         try:

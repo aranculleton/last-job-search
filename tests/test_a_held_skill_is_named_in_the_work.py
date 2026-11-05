@@ -276,3 +276,38 @@ def test_a_skill_goes_where_the_profile_itself_puts_it(held):
     prof = held / "01-candidate-profile.md"
     prof.write_text(prof.read_text(encoding="utf-8").replace(DETAIL, "\n"), encoding="utf-8")
     assert bullet_rewording.related("Google Analytics", "SALT_FORECAST") == ""
+
+
+def test_a_rewording_the_model_audit_removed_is_never_demanded_again(tmp_path, held):
+    """The model auditor rules on whether the work plausibly used the skill, and removes a
+    rewording where it did not. The code audit then failed the corrected draft for leaving
+    the held skill on the skills line alone, so the drafter put it back, the auditor took it
+    out, and the draft never passed. A skill whose rewording the model audit removed (or
+    refused, by name) for this draft is a note on the skills line, never a finding."""
+    rd, pick = make_round(tmp_path, REWORDED)
+    base = json.loads((rd / f"draft_{SLUG}.json").read_text(encoding="utf-8"))
+    draft_audit.write_verdict(str(rd), SLUG, {
+        "verdict": "fixed", "draft": {"bullet_rewordings": []},
+        "changes": [{"field": "bullet_rewordings", "before": FORECAST_BQ, "after": FORECAST,
+                     "reason": "this forecasting work did not plausibly run on BigQuery"}],
+        "residual_risks": [],
+        "rulings": [{"sentence": FORECAST_BQ, "flag": "reworded-bullet", "ruling": "removed",
+                     "why": "not plausible"},
+                    {"sentence": PIPE_BQ, "flag": "reworded-bullet", "ruling": "removed",
+                     "why": "not plausible"}],
+        "audited_md5": draft_audit.md5(base), "rules_hash": draft_pack.rules_hash()})
+    [r] = stage_picks.audit(str(rd))
+    mech = r["mechanical"]
+    assert not [f for f in mech["findings"] if f["rule"] == "rewording:skill-not-in-work"], \
+        mech["findings"]
+    assert any(n["text"] == "BigQuery" and "model audit" in n["fix"] for n in mech["notes"]), \
+        mech["notes"]
+    assert r["verdict"] == "fixed", mech
+    # The record travels with the draft, so a later check of the kept draft agrees.
+    final, _d, _m = draft_audit.final_draft(str(rd), SLUG)
+    assert final.get("rewordings_refused") == ["BigQuery"]
+    # A skill refused by name, with no rewording ever written, is a note the same way.
+    probs, notes = bullet_rewording.unplaced(POSTING, ["BH_FORECAST", "BH_PIPE"], [],
+                                             refused=["BigQuery"])
+    assert not [p for p in probs if p["text"] == "BigQuery"]
+    assert any(n.startswith("BigQuery stays on the skills line: the model audit") for n in notes)

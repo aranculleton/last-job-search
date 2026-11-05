@@ -20,8 +20,134 @@ make sense to somebody whose repo just received it.
 
 ## [Unreleased]
 
+### Added
+
+- **Questions on the form.** When an application form asks more than your CV and letter answer
+  ("why us?", "why this role?", "a time you used a tool"), paste the questions under that
+  application's More, on its draft or once it is sent. Claude writes each answer from your
+  profile and the posting and puts it on the card, ready to copy, kept with the application. An
+  example you asked for is marked as a draft for you to check. Say what to change in your CV or
+  letter in the same box and it goes to that document; nothing else about them changes. The
+  card says where it stands as it goes, with Cancel while it waits or runs.
+- **Jobs is one list.** Found and Drafts are one list of the jobs you might apply to, each job
+  once at its own stage: a drafted job shows where to apply and "I have applied" right on its
+  card, with its score and why; one being written shows how it is going; the rest offer Draft
+  this. Drafts come first. Applied stays its own place.
+- **Claude fixes a draft and puts its files on your page by itself.** No more "Make it again" or
+  "Get my files ready": the card says Claude is making it again, or putting your files on the
+  page, and the files are there to get once they are.
+- **The pencil.** The pencil beside your CV and letter opens the changes you can ask for; the one
+  at the end of a job's line corrects its title, pay or place if the search read them wrong.
+- **What costs Claude's time shows.** Every button that wakes Claude carries the small gauge
+  with its minutes; everything else costs nothing.
+- **More is only for the rare.** A job's details open from "Why" at the end of its line; More
+  keeps the rare actions, and a card with none has no More. Add a job and your CV are buttons
+  beside Find jobs on both of Jobs' tabs, and the header no longer has a line about what Claude
+  is doing: the card it is working on says so.
+- **Each job says when it was found**, beside when it was posted ("Posted 5 days ago · found
+  today"), so a role surfaced weeks ago is easy to spot and put away.
+
 ### Changed
 
+- **The bin is called the trash everywhere**: on every card, in the tips and in the page's help.
+- **One card for every message to send.** The drafted replies and follow-ups, the week's first
+  notes and the ones to check first are one card in To do, "Messages to send (7)", a row a
+  person opening their draft, with the same number Contacts shows in "7 to send".
+- **One card a person.** Someone you owe a follow-up who also asked for your CV, and who has
+  put your name forward for a job, is one card in To do, the referral in its grey box, and its
+  Done finishes all of it.
+- **Small questions are one card.** Yes or no and short choices are "4 quick answers", one
+  question at a time with "1 of 4", among the first five things in To do.
+- **Done on every checklist row.** A row of a checklist has its next step and Done; its bin
+  has They replied, Tomorrow, Next week and the person's choices.
+- **To do never asks you to fix something Claude can fix.** A draft or a message Claude is
+  fixing by itself is not on To do at all, and one it could not fix is said there with no
+  button. A closed posting is set aside by itself, with Bring back under Set aside; a referral
+  in flight is a note on the job's card, not something to do.
+- **An interview offers the same things everywhere.** To do's card has Read your prep,
+  Practise with Claude, Add to calendar, a new day and its bin's choices, as in Coming up.
+- **Headers are one line.** To do's way to the new jobs is a soft pill beside its summary, and
+  Coming up no longer has a line of its own for what Claude is doing.
+- **The Jobs cards are calmer.** Each says its facts on one line, with the town alone
+  ("Toronto", never "Toronto, Ontario, Canada"). More stays beside the buttons and opens into
+  short labelled rows: why it scored what it did, what to watch out for, what is worth knowing,
+  the skills, the posting, and what else there is at that employer, grouped and each link saying
+  what it opens. Every button is a pill, and each card's next step stands out the same
+  way on every card. A contact who can help you is said once, in the grey box. A posting that has closed
+  waits under the list.
+- **The Brief's Jobs tile leads with what you owe.** Drafts made and not yet sent come first
+  ("12 drafts ready to apply", opening them), then new finds; it says "Nothing new" only when
+  there is neither.
+- **A draft that needs checking again says so plainly, once.** "It was changed after it was
+  last checked." replaces a line about the checks that ended in two full stops.
+- **A score's reasons read plainly.** The good reasons and the watch-outs are said apart, and the
+  scorer's own phrasing is put in plain words ("Asks for 5+ years; you have 4").
+- **A note about an unanswered message names who has it**, so it no longer seems to contradict a
+  box saying someone else there replied.
+- **What a search left out is sorted by the rule that left it out.** Instead of one long
+  list, each rule gets one line in plain words ("Not your field: 5,183", "Needs French:
+  2,100"), with when it last left something out and three examples. Open one to search its
+  jobs and bring any back, look over a few picked from across all of them, or change the rule
+  itself with the pencil.
+- **Your rules, in Settings.** Every rule that shapes your search is listed in one place, each
+  as one sentence: where you search, your field, how recent, pay, languages, employers you
+  turned down, kinds of employer you rule out, and what Claude has learned from you. Each
+  shows when you set it, in your own words where you gave them, and how many jobs it left
+  out in the last 30 days. Change it with the pencil or drop it with the bin.
+- **A rule that may be out of date is mentioned quietly.** If you set a rule over three months
+  ago and it still leaves out a lot, its row asks "Still right?". The Brief mentions it at
+  most once a month, and never as a To do. A rule you set "for now" is asked about after a
+  month.
+- **A job title written in two languages is no longer left out for the second one.** "Data
+  Analyst // Analyste de données" is read as an English title; whether the job needs French
+  is decided from the posting itself.
+- **To do counts cards, not people.** Its badge and summary count the cards due today; a card
+  listing several people counts as one and says "2 of 8 done". The summary says how far today
+  has gone ("3 of 9 done"), and "All done for today" once nothing is left.
+- **"Done today" in place of "Recent changes".** One line at the end of To do lists what you
+  finished today, each with its Undo or Change back where there is one, and an answer in the
+  words you chose.
+- **Put a row off until tomorrow or next week.** Its bin offers Tomorrow and Next week first,
+  and the row comes back that day on every device, not only this one.
+- **Help that asks nothing today waits at the end.** Finishing your profile, letting Claude
+  read profiles and a LinkedIn download not yet due are one line, "Help Claude do more", and a
+  card only the computer can act on is not shown on a phone.
+- **A bin's last choice is never cut in half.** Where its choices fit, they all show above
+  Cancel; where they do not, the list scrolls with a soft fade saying there is more, and its
+  last choice comes fully clear of the foot. Cancel is a rounded button like the rest.
+- **The gauge says what Claude will take, from your own work.** A button that wakes Claude has
+  the small bars and minutes beside it, worked out from how long that kind of work has taken
+  you lately; a button that costs nothing (Done, a date, the bin) has none.
+- **Move an interview or a call from Coming up.** The pencil on its row opens the new day and
+  time in place.
+- **Try again tapped twice in Firefox asks once.**
+- **A question is answered on its card, not in Chat.** When Claude could not book something
+  because it needs a day, the card now has a date picker (with the time beside it for an
+  interview or a call); a choice is a row of buttons, a yes or no is one tap, a number has a
+  number box. "Say it in Chat" is gone from these cards.
+- **Claude asks only when it must, with the right control.** When a piece of work needs you
+  mid-way, its card in To do and in Claude's work shows the words it is about and a control
+  for the answer (a date, a time, a few choices, yes or no, a number or a slider); your
+  answer carries the work on, and its card shows it going, with Don't do it while it waits.
+- **Add the time in Coming up is a time picker on the row.** It used to start a line in Chat.
+- **One bin on each To do card, and "Not done" said once.** A card Claude could not finish had
+  two bins side by side and said "Not done" twice.
+- **"Show 1 more" goes once it has shown them.** It stayed under To do after showing the card,
+  still saying "Show 1 more"; now it goes, and the first card it showed is where you are.
+- **Every button beside another looks like one.** A card's actions are one row of the same
+  rounded buttons: its next step stands out, everything else is the same soft grey button,
+  and More is one too. Links under the Brief's panels are buttons now as well.
+- **A search never leaves a job you can't take on your Jobs list.** Jobs is checked with the
+  same rules the search uses: a role somewhere you can't work, an employer you turned down or
+  that clears none of your bar, a staffing agency, a language you don't have, or a second copy
+  of a role you already drafted, applied to or have on the list. What a search rules out is
+  taken off in the same step, each with its reason under "left out", where Bring back puts it
+  back. Jobs from earlier searches are checked again too, so ones already on your page go by
+  themselves the next time it updates.
+- **"Find jobs and draft them all" is one job.** Find jobs can now draft every one as it is
+  found (up to 25): you start it once, one card shows "2 of 5 drafted", and each draft is in
+  Drafts as soon as it is written. A draft that stops because the job turns out to be one you
+  can't take also takes that job off Jobs.
 - **A profile read just after midnight is kept.** One queued on your page before midnight and read after it was turned away and never read again; it is kept now.
 - **A skill your profile holds now goes into your resume's bullets, not only the skills line.**
   When a posting names a skill you hold (BigQuery, deep learning) and no bullet mentions it,
@@ -50,6 +176,43 @@ make sense to somebody whose repo just received it.
 - **No two of Claude's chats share a name.** A second job like one still running gets "(2)"
   after its name.
 
+- **Contacts is one page.** There are no People and Messages tabs any more: each person's card
+  shows the message written for them under their name, ready to copy, until you tap I sent it.
+  People with a message to send come first. An old link to Messages opens Contacts on that
+  person, and To do's "messages ready to send" opens Contacts at them.
+- **Pasting a reply is one box under the person.** Tap They replied, paste what they sent and
+  tap Draft my reply. You can do the next one straight away: each card says where its reply
+  stands (waiting, next, in line, Claude is on it), and Claude's reply appears on that same
+  card, ready to copy. This holds after a reload too.
+- **A message that breaks your rules is fixed by itself.** Too long for LinkedIn, a phrase that
+  reads machine-written, asking for a job: Claude rewrites it without you tapping anything,
+  the card says "Claude is fixing it", and you get Copy and I sent it once it passes.
+- **The pencil on a message.** It sits beside Copy: change the words where they are, or tell
+  Claude what to change (Shorter, Warmer, More formal). Anything that uses Claude shows how
+  much beside its button.
+- **Fewer buttons on a contact's card.** Only rare things are under More, such as their profile
+  link. The card says only the latest exchange ("You wrote 2 Nov", "They replied 3 Nov"); when
+  you first wrote and how many messages each way are on their page; and "Overdue" in its
+  corner when a follow-up is late. Contacts' header is one short line, with Paste a message
+  beside Find people.
+- **An application made again after an update is only counted as done once it passes.**
+  When the app remakes your unsent applications with its newest checks, each one that passes
+  is marked done; each that fails is sorted out by itself: a part that copied the posting is
+  rewritten for you, and anything only you can settle becomes one To do card naming it. You
+  hear about it in one line at most. Applications an earlier remake left failing are made
+  again and handed on the same way, and a tracker row naming a cover letter for an
+  application without one is put right.
+- **A resume drafted on its own gets every check a resume gets.** Its summary is checked for
+  wording, claims and what backs each sentence, as on any application, and once both checks
+  pass it is made; your tracker names a cover letter only where one was written.
+- **A reworded bullet that passed the check is the one printed.** Remaking an application
+  without its posting beside it could print your original bullet instead of the reworded one
+  the check had passed; both now read the same answers.
+- **A sentence ending in a name in capitals is read as ending.** "AWS." or "SQL." no longer
+  runs into the next sentence, so a summary is cut in the right place and no sentence is shown
+  as unchecked; "U.S." still never ends one.
+- **A draft is no longer held back for a research mismatch that was not there.** The drafting
+  steps and the check now read each researched fact the same way, so the two always agree.
 - **Reply help no longer points at an old resume your rules forbid.** It offers a resume only if
   the app made and checked it and your own rules do not say never to send it; otherwise it says
   to make one for that person.
@@ -86,6 +249,16 @@ make sense to somebody whose repo just received it.
   same setting or note, this chat's version is kept, the other is kept in your saved history,
   and nothing is put beside your files; a save clears the copies older versions left beside
   notes and settings too, except one you are still being asked about.
+- **Saving no longer stops when a file disappears for a moment.** If something is making a
+  resume's PDF again while your work is being saved, that one file is skipped and saved next
+  time, and everything else is saved as usual. Only if a file that is still there could not
+  be saved does Claude tell you, once.
+- **How old a file is comes from the file itself.** Where a computer's clock and its files'
+  disagree (a shared or network folder, say), a note written a minute ago is no longer called
+  a week old, and a shortlist just saved is no longer called unsaved.
+- **After your work is saved, nothing is left looking unsaved.** The copy of your work on
+  GitHub is brought level with the one in the chat, so Claude no longer stops to push it
+  again by hand.
 - **A recruiter at a recruitment agency is no longer hidden from Messages.** They were
   held as "an employer you turned down" because of the agency they work for, even when they
   had asked for your resume. Your bar now judges only where you would work; an employer you
@@ -162,6 +335,21 @@ make sense to somebody whose repo just received it.
   the sign-in when you choose. Profiles are read one after another in a single tab of Claude's
   browser, and someone whose page did not load is tried again the next day, or straight away
   with Read them, rather than every time the page opens.
+- **Claude never puts away a chat that is still working.** The tidy-up could name one of
+  Claude's older chats that was still running, had been used minutes before, held work not
+  yet saved, or had a reminder still to fire into it. Such a chat is now left until it is
+  idle and its work is saved, and your morning brief stays where it runs meanwhile.
+- **A new helper's first update of your page lands.** It read an old part of your page, so
+  everything it wrote was turned away. It reads the right part now, and if it has not read
+  it, it writes nothing and says so.
+- **A new helper no longer hands over minutes after it starts.** Putting an update on your
+  page means reading all of the page's code, and that counted as the chat growing too long.
+  It no longer counts.
+- **The chat looking after your page says one thing when it starts.** It was told both to
+  ask you questions at the end of its reply and to say only that it was ready. Its questions
+  now go on your page as To do cards.
+- **Saying no to one of Claude's questions about an improvement is recorded.** The command
+  for it was given in part, and failed.
 - **A finished chat no longer comes back to your list.** An interview prep's chat could be put
   away one day and brought back the next, taken for a chat of your own. Claude now keeps each
   chat's real name when it puts it away, and puts away again any of its chats brought back
@@ -219,6 +407,34 @@ make sense to somebody whose repo just received it.
   you have set aside, and any employer you said "No more roles from", again just before it
   makes your list, including taps on your page Claude has not taken in yet, and fills each
   place with the next best job, so you get the number you asked for.
+- **A computer without the document maker no longer loses your unsent resumes.** Making your
+  applications again on a computer that cannot make PDFs used to delete each resume's PDF and
+  give you a To do for every one. They are now left as they are and made again on the next
+  run that can, and a resume that fails to make keeps the one you had.
+- **A skill Claude judged did not fit your work stops being asked for.** When the final check
+  took a skill out of a bullet because that work did not really use it, the first check
+  asked for it back, so the application never finished. It now stays on your skills line,
+  and the application goes on.
+- **A yes to a skill reaches every resume waiting on it.** Only resumes drafted that day got
+  it, so one drafted the night before, waiting on your answer, never did.
+- **Your page stays up to date from any chat.** Saying "I applied to ..." in a chat of your
+  own now updates your page there, as it says it does. Only an old helper that has handed
+  your page on to a new one leaves it alone, and no chat draws your page over a newer copy
+  of it.
+- **Saving keeps your own changes and tells you what you need to know.** A change you made
+  to an application in one chat is kept when another chat changed it too, and you are told
+  once which copy you have. Two chats' changes to different lines of one note are both kept,
+  and where they truly clash, the other copy is kept aside for you. Work an earlier chat
+  never saved, and that your search does not have, is mentioned to you once, in any chat,
+  never again in each new one. One file that cannot be saved no longer holds back the rest of
+  its folder.
+- **A search is finished only once its own list is saved,** even in a chat started after it,
+  and a search never saves over an earlier one's list.
+- **Your brief's phone notification keeps coming if it already did.** It became a setting on
+  4 November, off unless you choose it, so a brief that had been sending one stopped the day
+  it took the update. One that sent it before keeps it, and Settings shows it on. Profile
+  upgrade: brief-push-kept.
+- **A job left out of a draft is dated by your own day,** not the computer's.
 
 ## [4.9.1] - 2026-11-04
 

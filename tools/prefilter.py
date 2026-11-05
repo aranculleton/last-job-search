@@ -347,6 +347,22 @@ def title_verdict(title: str) -> tuple[str, str]:
     low = (title or "").lower()
     if not low:
         return "FLAG", "no title; Tier 2 decides"
+    verdict = _one_title(low)
+    if verdict[0] == "FAIL":
+        # A title written twice, in two languages ("Staff Data Analyst // Analyste de données
+        # principal", as Canadian employers write them): one form in the person's field is
+        # their job, and whether the other language is required is the posting's to say
+        # (the text screen's language gate). Cut on its French half, a Toronto role whose
+        # posting asked for no French never reached the ranking (2026-11-05).
+        from text_screen import title_parts
+        for part in title_parts(low):
+            one = _one_title(part)
+            if one[0] == "PASS":
+                return "PASS", f"a title in two forms; {part!r} {one[1]}"
+    return verdict
+
+
+def _one_title(low: str) -> tuple[str, str]:
     for pat, why in NEGATIVE:
         if re.search(pat, low):
             return "FAIL", why

@@ -9,7 +9,7 @@
   },
   "drafts": {
     "date": "2026-11-05",
-    "version": 69
+    "version": 74
   },
   "expand": {
     "date": "2026-10-15",
@@ -33,11 +33,11 @@
   },
   "networking": {
     "date": "2026-11-05",
-    "version": 74
+    "version": 75
   },
   "page": {
     "date": "2026-11-05",
-    "version": 24
+    "version": 38
   },
   "prep-docs": {
     "date": "2026-11-03",
@@ -49,11 +49,11 @@
   },
   "routines": {
     "date": "2026-11-05",
-    "version": 23
+    "version": 24
   },
   "screening": {
-    "date": "2026-11-04",
-    "version": 38
+    "date": "2026-11-05",
+    "version": 39
   },
   "search": {
     "date": "2026-11-03",

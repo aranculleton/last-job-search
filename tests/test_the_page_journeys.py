@@ -265,8 +265,9 @@ def test_a_first_note_is_copied_exactly_opened_and_logged_with_the_words_that_we
     m = _sample()
     edited = "Hello Ash, I saw you moved to Copperleaf Pay from Quayside Foods. " + "I work on supply chain analytics in Manchester. " * 6
     got = _go(run, tmp_path, [
-        {"hash": "contacts", "open": "contsw:messages", "click": "Copy note to Ash", "clip": True, "read": '[data-item="msg-ash-1"]'},
-        {"click": "I sent it: the note to Ash", "read": '[data-item="msg-ash-1"]'},
+        # Each note is on its person's card in Contacts (one page since 2026-11-04).
+        {"hash": "contacts", "click": "Copy note to Ash", "clip": True, "read": '[data-item="copperleaf_pay_ash"]'},
+        {"click": "I sent it: the note to Ash", "read": '[data-item="copperleaf_pay_ash"]'},
     ], vp)
     note = _item(m, "msg-ash-1")
     assert got["after"][0]["clip"] == note["text"], "exactly the words, no label, no count"
@@ -274,14 +275,15 @@ def test_a_first_note_is_copied_exactly_opened_and_logged_with_the_words_that_we
     a = _one(got, "msg.sent")
     assert a["item"] == "msg-ash-1" and a["value"]["text"] == note["text"] and a["value"]["on"]
     _rev_is_the_items(m, a)
-    # Changed before sending: the words that went are logged, and the count turns red over the limit.
+    # Changed before sending: the words that went are logged, and the count turns red over the
+    # limit. Changed in place under the pencil since 2026-11-04 (the maintainer: "the pencil when
+    # we need a slight edit"), where "I changed it first" was under More.
     got = _go(run, tmp_path, [
-        {"hash": "contacts", "open": "contsw:messages"},
-        {"open": "changed-sum:msg-ash-1"},
-        {"eval": "(() => { const t = document.querySelector('#chg-msg-ash-1'); t.value = " + json.dumps(edited) + "; t.dispatchEvent(new Event('input', {bubbles: true})); return document.querySelector('#chg-msg-ash-1-n').className; })()"},
-        {"click": "I sent these words"},
+        {"hash": "contacts", "open": "pen:msg-ash-1"},
+        {"eval": "(() => { const t = document.querySelector('[data-k=\"pentext:msg-ash-1\"]'); t.value = " + json.dumps(edited) + "; t.dispatchEvent(new Event('input', {bubbles: true})); return document.querySelector('#cnt-msg-ash-1').className; })()"},
+        {"click": "I sent it: the note to Ash"},
     ], vp)
-    assert "tone-bad" in got["after"][2]["eval"], "the count turns red over the limit, and nothing is cut"
+    assert "tone-bad" in got["after"][1]["eval"], "the count turns red over the limit, and nothing is cut"
     a = _one(got, "msg.sent")
     assert a["item"] == "msg-ash-1" and a["value"]["text"] == edited.strip()
 
@@ -290,8 +292,8 @@ def test_an_inmail_copies_subject_and_message_apart(run, tmp_path, vp):
     m = _sample()
     noor = _item(m, "msg-noor-1")
     got = _go(run, tmp_path, [
-        {"hash": "contacts", "open": "contsw:messages", "click": "Copy subject", "within": '[data-item="msg-noor-1"]', "clip": True},
-        {"click": "Copy message", "within": '[data-item="msg-noor-1"]', "clip": True},
+        {"hash": "contacts", "click": "Copy subject", "within": '[data-item="brackenridge_advisory_noor"]', "clip": True},
+        {"click": "Copy message", "within": '[data-item="brackenridge_advisory_noor"]', "clip": True},
     ], vp)
     assert got["after"][0]["clip"] == noor["subject"]
     assert got["after"][1]["clip"] == noor["body"] and "Subject:" not in got["after"][1]["clip"]
@@ -300,25 +302,31 @@ def test_an_inmail_copies_subject_and_message_apart(run, tmp_path, vp):
 def test_an_email_opens_in_the_mail_app_with_subject_and_body_filled(run, tmp_path, vp):
     seed = {"reach/ellerwick_trust_priya": {"email": "priya@example.com"}}
     got = _go(run, tmp_path, [
-        {"hash": "contacts", "open": "contsw:messages", "attr": ['[data-k="open:msg-priya-thanks"]', "href"]},
+        {"hash": "contacts", "attr": ['[data-k="open:msg-priya-thanks"]', "href"]},
     ], vp, seed=seed)
     href = got["after"][0]["attr"]
     assert href.startswith("mailto:priya%40example.com?subject=Thank%20you%20for%20Thursday&body=")
     assert "%0D%0A" in href and "\n" not in href
-    got = _go(run, tmp_path, [{"hash": "contacts", "open": "contsw:messages", "count": '[data-k="open:msg-priya-thanks"]'}], vp)
+    got = _go(run, tmp_path, [{"hash": "contacts", "count": '[data-k="open:msg-priya-thanks"]'}], vp)
     assert got["after"][0]["count"] == 0, "no address on file: no button, never a guess"
 
 
-def test_a_wave_of_first_notes_is_grouped_by_employer_with_the_week_s_budget(run, tmp_path, vp):
+def test_a_wave_of_first_notes_is_on_each_persons_card_with_the_week_s_budget(run, tmp_path, vp):
+    """Each first note on its person's card (one page since 2026-11-04), and the week's count
+    against the limit once, on To do's one card of messages to send (the UX review,
+    2026-11-05: the wave is rows of it, never a card of its own)."""
+    notes = ("copperleaf_pay_ash", "larkspur_retail_ltd_kit", "quayside_foods_rafe")
     got = _go(run, tmp_path, [
-        {"hash": "contacts", "open": "contsw:messages", "read": "#main .wave"},
-        {"hash": "todo", "count": '#main [data-item^="wave:"]'},
+        {"hash": "contacts", "read": "#main .sec-head",
+         "eval": "[%s].map((id) => !!document.querySelector('#main [data-item=\"' + id + '\"] details.pdraft[open]'))" % ", ".join("'%s'" % n for n in notes)},
+        {"hash": "todo", "count": '#main [data-item^="wave:"]', "read": '#main [data-item="grp:send"]'},
+        {"click": "Open Contacts at the people with a message to send", "until": "location.hash.startsWith('#contacts')"},
     ], vp)
-    wave = got["after"][0]["text"]
-    for employer in ("Copperleaf Pay", "Larkspur Retail Ltd", "Quayside Foods"):
-        assert employer in wave, employer
-    assert "3 notes ready. 3 sent this week of about 20." in wave
-    assert got["after"][1]["count"] == 1, "one card for the wave in To do, never one a note"
+    assert "sent this week" not in got["after"][0]["text"], got["after"][0]["text"]
+    assert "3 sent this week of about 20." in got["after"][1]["text"], got["after"][1]["text"]
+    assert got["after"][0]["eval"] == [True, True, True], got["after"][0]["eval"]
+    assert got["after"][1]["count"] == 0, "the wave is rows of the messages card, never a card of its own"
+    assert got["after"][2]["hash"].startswith("#contacts/"), got["after"][2]["hash"]
 
 
 def test_a_reply_owed_says_so_and_drafts_from_their_words_already_kept(run, tmp_path, vp):
@@ -329,11 +337,12 @@ def test_a_reply_owed_says_so_and_drafts_from_their_words_already_kept(run, tmp_
     m["messages"] = [x for x in m["messages"] if x["id"] != "msg-juno-1"]
     got = _go(run, tmp_path, [
         {"hash": "contacts", "read": '[data-item="larkspur_retail_castellan"]'},
-        {"click": "Draft a reply to Juno", "read": "dialog"},
-        {"fill": {"Anything you want to say back": "Yes, Thursday at 12 works."}, "submit": True},
+        # The box under her on Contacts (2026-11-04), asking only what to say back.
+        {"click": "Draft a reply to Juno", "read": '[data-item="larkspur_retail_castellan"]'},
+        {"fillMain": {"Anything you want to say back": "Yes, Thursday at 12 works."}, "then": "Draft my reply to Juno"},
     ], vp, model=m)
     assert "Replied: your turn" in got["after"][0]["text"]
-    assert "Paste what Juno said" not in got["after"][1]["dialog"]
+    assert "Paste what Juno sent" not in got["after"][1]["text"] and "already kept" in got["after"][1]["text"], got["after"][1]["text"]
     w = [x for x in got["work"] if x and x.get("kind") == "reply"]
     assert len(w) == 1 and w[0]["args"] == {"contact": "larkspur_retail_castellan", "want": "Yes, Thursday at 12 works."}
 
@@ -418,7 +427,8 @@ def test_a_resume_asked_for_is_made_for_that_person_and_logged_with_its_file(run
 def test_a_referral_led_screen_with_no_application_names_the_referrer(run, tmp_path, vp):
     got = _go(run, tmp_path, [
         {"hash": "interviews/int-copperleaf-payments", "read": '[data-item="int-copperleaf-payments"]'},
-        {"hash": "jobs", "more": "r12-3", "read": '[data-item="r12-3"]'},
+        # Copperleaf's role is drafted, so in Jobs' one list it is its draft's card (2026-11-05).
+        {"hash": "jobs", "read": '[data-item="app-copperleaf-payments"]'},
     ], vp)
     card = got["after"][0]["text"]
     # Safari's engine leaves the space before a name link out of innerText, though it lays
@@ -429,15 +439,18 @@ def test_a_referral_led_screen_with_no_application_names_the_referrer(run, tmp_p
 
 def test_the_warm_route_on_a_job_opens_the_person_and_back_returns(run, tmp_path, vp):
     got = _go(run, tmp_path, [
-        {"hash": "jobs", "click": "Juno", "role": "link", "within": "[data-item=\"r12-2\"] .warm"},
+        # Beside the card's question, the warm route is a line in its details, from "Why"
+        # (2026-11-05).
+        {"hash": "jobs", "click": "Why it scored 79: Larkspur Retail, Supply Chain Data Analyst"},
+        {"click": "Juno", "role": "link", "within": "[data-item=\"r12-2\"] .warm-line"},
         {"eval": "history.back(), 0", "until": "location.hash !== '#contacts/larkspur_retail_castellan'"},
     ], vp)
-    assert got["after"][0]["hash"] == "#contacts/larkspur_retail_castellan"
-    assert got["after"][1]["hash"] == "#jobs"
+    assert got["after"][1]["hash"] == "#contacts/larkspur_retail_castellan"
+    assert got["after"][2]["hash"] == "#jobs"
 
 
 def test_links_are_the_model_s_own_so_spelling_differences_still_join(run, tmp_path, vp):
-    got = _go(run, tmp_path, [{"hash": "jobs", "more": "r12-2", "read": '[data-item="r12-2"]'}], vp)
+    got = _go(run, tmp_path, [{"hash": "jobs", "click": "Why it scored 79: Larkspur Retail, Supply Chain Data Analyst", "read": '[data-item="r12-2"]'}], vp)
     assert "Kit" in got["after"][0]["text"], "Kit at Larkspur Retail Ltd is linked from the Larkspur Retail role"
 
 
@@ -451,7 +464,12 @@ def test_changing_your_mind_keeps_the_reason_and_brings_things_back(run, tmp_pat
         # reason is the tap that does it (2026-11-03).
         {"click": "The pay", "exact": True, "within": "dialog"},
         {"click": "41 left out by the search", "exact": False},
+        # Left out by rule (2026-11-05): the rule's own rows open with See them.
+        {"click": "See the jobs left out as", "exact": False,
+         "within": ".f-rule:has-text('Needs a driving licence')"},
         {"click": "Bring back Transport Planning Analyst at Fernhill Freight"},
+        # A closed posting waits under the list, one tap away (2026-11-05).
+        {"click": "Show 1 closed"},
         {"click": "Set it aside", "exact": True},
     ], vp)
     d = [a for a in got["actions"] if a["action"] == "job.dismiss"]
@@ -463,10 +481,15 @@ def test_changing_your_mind_keeps_the_reason_and_brings_things_back(run, tmp_pat
 
 
 def test_an_unconfirmed_send_is_asked_as_a_question(run, tmp_path, vp):
+    # Asked on the quick answers card, one at a time (the UX review, 2026-11-05): here the
+    # only question, so it is the one showing.
+    m = _sample()
+    m["needs_you"] = [n for n in m["needs_you"] if n["id"] == "q-sent-fernhill_freight_halloway"]
+    q = '[data-q="q-sent-fernhill_freight_halloway"]'
     got = _go(run, tmp_path, [
-        {"hash": "todo", "read": '[data-item="q-sent-fernhill_freight_halloway"]', "eval": "[...document.querySelectorAll('[data-item=\"q-sent-fernhill_freight_halloway\"] .opts button')].map((b) => b.className)"},
+        {"hash": "todo", "read": q, "eval": "[...document.querySelectorAll('" + q + " .ask-choices button')].map((b) => b.className)"},
         {"click": "Yes, it went"},
-    ], vp)
+    ], vp, model=m)
     assert "Did your note to Wren go?" in got["after"][0]["text"]
     classes = got["after"][0]["eval"]
     assert len(classes) == 2 and len(set(classes)) == 1, "two answers of equal weight"
@@ -528,6 +551,6 @@ def test_the_brief_opens_its_items(run, tmp_path, vp):
     ], vp, clock="2026-10-25T07:30:00Z")
     assert got["after"][0]["eval"], "the Brief has its own page, with the next three"
     assert got["after"][1]["hash"] == "#contacts/larkspur_retail_castellan"
-    assert "messages/msg-wren" in got["after"][2]["hash"], got["after"][2]["hash"]
+    assert got["after"][2]["hash"] == "#contacts/fernhill_freight_halloway", got["after"][2]["hash"]   # Wren's card, her draft on it
     assert got["after"][3]["hash"].startswith("#interviews"), got["after"][3]["hash"]
     assert "Larkspur Retail" in got["after"][3]["text"]

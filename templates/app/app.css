@@ -184,17 +184,17 @@ bdi { unicode-bidi: isolate; }
 @media (hover: hover) { .side-list a:hover .count, .side-list a[aria-current="page"] .count { color: var(--ink); } }
 .side-label { margin-right: auto; }
 .count { font: 600 var(--t-sm) var(--font-data); color: var(--muted); }
-.side-foot { margin-top: 8px; padding-top: 8px; border-top: 1px solid var(--line); }
-/* Fold the menu to its icons: a quiet row at its top, under a rule like the one above Coming
-   up and Settings, the same height as a menu item. */
-.side-top { padding-bottom: 8px; border-bottom: 1px solid var(--line); margin-bottom: -12px; }
-.side-top .side-toggle { width: 100%; }
-.side-top.side-end { padding: 8px 0 0; margin: 12px 0 0; border-bottom: 0; border-top: 1px solid var(--line); }
+/* Settings last, under the one rule: 12px above the rule and 12px below it (the menu's own
+   gap is 20px), nothing after it (the maintainer, 2026-11-05: "why's the spacing here weird"). */
+.side .side-foot { margin-top: -8px; padding-top: 12px; border-top: 1px solid var(--line); }
+/* Fold the menu to its icons: an icon beside the page's title, only where the menu is. */
+.side-toggle.top-fold { display: none; }
 
 .side-toggle { display: flex; align-items: center; gap: 12px; min-height: var(--target); padding: 8px 12px; border: 0; border-radius: var(--r-sm); background: none; color: var(--muted); font: inherit; font-size: var(--t-sm); cursor: pointer; text-align: left; }
 @media (hover: hover) { .side-toggle:hover { background: var(--raised); color: var(--ink); } }
 .side-toggle:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }
 @media (min-width: 760px) {
+  .side-toggle.top-fold { display: inline-flex; flex: none; justify-content: center; min-height: 36px; padding: 8px; margin-left: 4px; }
   .nav-mini .shell { grid-template-columns: 56px minmax(0, 1fr); column-gap: 24px; }
   .nav-mini .side-list a, .nav-mini .side-toggle { justify-content: center; padding-inline: 8px; }
   .nav-mini .side .side-label { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
@@ -288,6 +288,34 @@ bdi { unicode-bidi: isolate; }
 .btn.filter[aria-pressed="true"] { background: var(--ink); color: var(--surface); border-color: var(--ink); }
 .btn.filter .n { font-family: var(--font-data); font-weight: 600; }
 .btn:disabled { opacity: 0.55; cursor: not-allowed; }
+/* A card's actions are one row of pills (DESIGN.md, "Buttons, links and taps"): one height,
+   radius and padding, the same gap. The one next step is the filled pill, semibold; every
+   other control in the row (a quiet or a link button, a link that acts) is the soft grey
+   pill at the regular weight, its edge 3:1 on the card; More is a soft pill too. Text
+   buttons beside pills read as clutter (the maintainer, 2026-11-05). */
+.btn.secondary { font-weight: 400; }
+:is(.card-actions, .wc-actions, .suggest-acts, .more-acts, .g-acts, .fix, .bp-foot, .sheet-actions) > :is(.btn, a):not(.icon-only),
+:is(.card-actions, .wc-actions, .suggest-acts, .g-acts) > details.more > .more-btn {
+  display: inline-flex; align-items: center; justify-content: center; gap: 8px; box-sizing: border-box;
+  min-height: 38px; margin: 0; padding: 8px 16px; border-radius: 999px; border: 1px solid var(--line-strong);
+  font-size: var(--t-sm); line-height: 1.2; text-decoration: none; text-align: center; cursor: pointer;
+}
+:is(.card-actions, .wc-actions, .suggest-acts, .more-acts, .g-acts, .fix, .bp-foot, .sheet-actions) > :is(.btn, a):not(.icon-only):not(.primary),
+:is(.card-actions, .wc-actions, .suggest-acts, .g-acts) > details.more > .more-btn {
+  background: var(--raised); color: var(--ink); font-weight: 400;
+}
+:is(.card-actions, .wc-actions, .suggest-acts, .more-acts, .g-acts, .fix, .bp-foot, .sheet-actions) > .btn.primary {
+  background: var(--accent); color: var(--accent-ink); border-color: var(--accent); font-weight: 600;
+}
+/* One filled pill a screen: each other card's next step is the soft pill, semibold. */
+.btn.secondary.next, :is(.card-actions, .wc-actions, .suggest-acts, .more-acts, .g-acts, .fix, .bp-foot, .sheet-actions) > .btn.next:not(.primary):not(.icon-only) { font-weight: 600; }
+@media (hover: hover) {
+  :is(.card-actions, .wc-actions, .suggest-acts, .more-acts, .g-acts, .fix, .bp-foot, .sheet-actions) > :is(.btn, a):not(.icon-only):not(.primary):hover,
+  :is(.card-actions, .wc-actions, .suggest-acts, .g-acts) > details.more > .more-btn:hover { background: var(--raised-hover); border-color: var(--line-strong); }
+  :is(.card-actions, .wc-actions, .suggest-acts, .more-acts, .g-acts, .fix, .bp-foot, .sheet-actions) > .btn.primary:hover { background: var(--accent-hover); border-color: var(--accent-hover); color: var(--accent-ink); }
+}
+/* More, wherever it is, is a soft pill. */
+.more-btn { background: var(--raised); border: 1px solid var(--line-strong); font-weight: 400; }
 .fbar, .seg { display: inline-flex; align-items: center; gap: 4px; min-height: 38px; font-weight: 600; font-size: var(--t-sm); }
 .filters { display: grid; gap: 12px; min-width: 0; }
 .fwrap { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
@@ -311,6 +339,19 @@ p.tone-bad, .note.tone-bad, .state.tone-bad { color: var(--st-failed); }
 /* What a refused tap needs, given in place: its label, its field and Send on one line. */
 .fix { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin-top: 8px; font-size: var(--t-sm); }
 .fix .fix-in { flex: 1 1 160px; min-width: 0; }
+.fix .fix-in[type="date"], .fix .fix-in[type="time"], .fix .fix-in[type="number"] { flex: 0 1 auto; width: auto; }
+.fix .fix-in[type="range"] { flex: 1 1 160px; accent-color: var(--accent); }
+.ask-scale-n { font-family: var(--font-data); font-weight: 600; min-width: 2ch; }
+/* Its words on a line of their own, the control and Send together under them. */
+.fix > label:first-child, .fix > span.small:first-child { flex-basis: 100%; }
+/* One question in its soft grey box: the words it is about quoted, the question, its control. */
+.ask-box { margin-top: 8px; padding: 12px; border-radius: var(--r); background: var(--sunk); }
+.ask-box > .fix { margin-top: 8px; }
+.ask-box > .fix:first-child { margin-top: 0; }
+.ask-about { margin: 0 0 8px; padding: 0 0 0 12px; font-size: var(--t-sm); color: var(--muted); font-style: normal; quotes: "\201C" "\201D"; }
+.ask-about::before { content: open-quote; }
+.ask-about::after { content: close-quote; }
+.ask-q { margin: 0; }
 .note { font-size: var(--t-sm); }
 .cost { font-size: var(--t-sm); color: var(--muted); display: inline-flex; align-items: center; gap: 4px; }
 .gauge { width: 14px; height: 12px; flex: none; }
@@ -353,10 +394,41 @@ details.more[open] { flex-basis: 100%; }
   font-weight: 600; font-size: var(--t-sm); color: var(--ink); list-style: none;
 }
 .more-btn::-webkit-details-marker { display: none; }
-.more-btn::after { content: ""; width: 7px; height: 7px; margin-left: 8px; border-right: 2px solid currentColor; border-bottom: 2px solid currentColor; transform: rotate(45deg) translateY(-2px); }
-details.more[open] > .more-btn::after { transform: rotate(-135deg) translateY(-1px); }
+/* Its chevron is the ::before, drawn after the word (order), so the ::after is free to carry
+   the full tap area on a phone, as every button's does. */
+.more-btn::before { content: ""; order: 1; width: 7px; height: 7px; margin-left: 8px; border-right: 2px solid currentColor; border-bottom: 2px solid currentColor; transform: rotate(45deg) translateY(-2px); }
+details.more[open] > .more-btn::before { transform: rotate(-135deg) translateY(-1px); }
 @media (hover: hover) { .more-btn:hover { background: var(--raised); } }
 .more-panel { display: grid; gap: 12px; padding: 12px 2px 4px; border-top: 1px solid var(--line); margin-top: 8px; }
+/* A Jobs card's More: its toggle stays in the actions row, its panel opens under the row as
+   labelled rows in one size and one tone, the label beside its words on a wide screen and
+   above them on a phone (the maintainer, 2026-11-04). */
+details.more.split[open] { flex-basis: auto; }
+.more-panel.m-rows { gap: 12px; margin-top: 4px; font-size: var(--t-sm); color: var(--ink); }
+.more-panel.m-rows * { font-size: inherit; }
+.m-row { display: grid; gap: 2px; min-width: 0; }
+.m-label { margin: 0; color: var(--muted); font-weight: 600; }
+.m-body { display: grid; gap: 4px; min-width: 0; }
+.m-body p, .m-body ol, .m-body ul { margin: 0; }
+.m-sub { color: var(--muted); }
+.m-rows .more-alerts { display: grid; gap: 4px; }
+.m-rows .alert-text { font-weight: 400; }
+.m-rows .more-acts { gap: 8px 12px; }
+.m-rows :is(.file-kind, .file-name) { font-weight: 400; color: inherit; }
+.m-rows details.send { border-top: 0; }
+.m-rows details.send > summary { padding: 0; }
+@media (min-width: 760px) and (pointer: fine) { .m-rows details.send > summary { min-height: 24px; } }
+/* The rarer actions under More are the soft grey pills of the card's own row. */
+.m-rows .more-acts .btn.secondary { background: var(--sunk); border-color: transparent; }
+@media (hover: hover) { .m-rows .more-acts .btn.secondary:hover { background: var(--raised); } }
+@media (min-width: 760px) { .m-row { grid-template-columns: 10rem minmax(0, 1fr); column-gap: 16px; align-items: baseline; } }
+
+/* Work said on the card that asked for it: one line, its mark (a spinner while Claude is on
+   it, a breathing dot while it waits), its words and its clock, Cancel at its end. */
+.work-inline { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 12px; font-size: var(--t-sm); color: var(--ink); }
+.work-inline .wi-text { margin: 0; flex: 1 1 16rem; min-width: 0; }
+.work-inline .wi-text > .spin, .work-inline .wi-text > .dot { display: inline-block; width: 12px; height: 12px; vertical-align: -1px; }
+.work-inline .wi-acts { display: inline-flex; align-items: center; gap: 8px; }
 
 /* ------------------------------------------------------------------ jobs */
 .card.job { grid-template-columns: minmax(0, 1fr); row-gap: 8px; align-items: start; }
@@ -364,7 +436,11 @@ details.more[open] > .more-btn::after { transform: rotate(-135deg) translateY(-1
 /* The top line stays one line at the usual sizes; at very large text the state and the bin
    drop below the title instead of pushing the card past the screen's edge. */
 .card.job .job-top { justify-content: flex-start; flex-wrap: wrap; align-items: baseline; }
-.card.job .job-top h3 { flex: 1 1 0; min-width: 8ch; overflow-wrap: anywhere; }
+.card.job .job-top h3 { flex: 1 1 0; min-width: 8ch; overflow-wrap: break-word; }
+.card.job .job-top h3, .card.app .job-top h3, .card.app-record .job-top h3 { text-wrap: pretty; }
+/* The bin reaches above and below the top line without making it taller, so a card with a
+   state pill keeps its facts as close under the title as one without. */
+@media (min-width: 760px) { :is(.card.job, .card.app, .card.app-record) .top-end .icon-only { margin-block: -8px; } }
 /* A job's number: a small badge, green for a strong fit, blue for a good one, grey below. */
 .score-pill { flex: none; min-width: 32px; padding: 2px 8px; border-radius: 999px; text-align: center; font: 600 var(--t-sm)/1.4 var(--font-data);
   font-variant-numeric: tabular-nums; background: var(--st-waiting-bg); color: var(--st-waiting); cursor: help; }
@@ -373,12 +449,22 @@ details.more[open] > .more-btn::after { transform: rotate(-135deg) translateY(-1
 .card.job .job-main { display: grid; gap: 4px; min-width: 0; }
 .card.job.st-dismissed, .card.job.st-applied { background: var(--sunk); box-shadow: none; }
 .facts { font-size: var(--t-sm); color: var(--muted); }
+.facts .co { color: var(--ink); }
 .facts .soon { color: var(--ink); font-weight: 600; }
 .warm { background: var(--st-running-bg); color: var(--st-running); border-radius: var(--r-sm); padding: 12px 12px; }
 .warm a { color: inherit; font-weight: 600; }
 .warm-k { font-weight: 600; }
 .notes { margin: 0; padding-left: 20px; color: var(--muted); }
 .applylink { font-weight: 600; display: inline-flex; align-items: center; min-height: 38px; }
+/* A suggestion's action, the time it takes and No thanks sit on one line, centred: its button
+   was pushed 8px below the others by a fix's own top margin (2026-11-04). */
+.suggest-acts > .fix { margin-top: 0; }
+/* On a Jobs card the suggestion is lighter than the card's own actions: smaller words, and a
+   soft white pill with no edge. */
+:is(.card.job, .card.app) .suggest { padding: 8px 12px; gap: 4px; }
+:is(.card.job, .card.app) .suggest-text { font-size: var(--t-sm); }
+:is(.card.job, .card.app) .suggest-acts { gap: 4px 12px; }
+:is(.card.job, .card.app) .suggest .btn.secondary { background: var(--surface); border-color: transparent; }
 .filtered { border: 1px solid var(--line); border-radius: var(--r); background: var(--surface); padding: 4px 16px 12px; }
 .wc-more summary { cursor: pointer; font-size: var(--t-sm); font-weight: 600; color: var(--muted); min-height: 36px; display: flex; align-items: center; }
 .filtered summary, .gone summary, details.send summary, .chart summary, .recent summary, .brief summary {
@@ -388,6 +474,11 @@ details.more[open] > .more-btn::after { transform: rotate(-135deg) translateY(-1
 .filtered-list { display: grid; gap: 4px; }
 .filtered-list li { display: grid; grid-template-columns: minmax(0, 1fr) auto auto; align-items: center; gap: 4px 12px; padding: 8px 0; border-top: 1px solid var(--line); }
 .filtered-list .state { grid-column: 1 / -1; }
+.f-rules { display: grid; gap: 0; }
+.f-rules > .f-rule { padding: 12px 0; border-top: 1px solid var(--line); }
+.f-rule .f-reason { font-weight: 600; margin-bottom: 2px; }
+.f-rule .card-actions { margin-top: 8px; }
+.f-rows { margin-top: 8px; }
 .f-count { font: 600 var(--t-sm) var(--font-data); color: var(--muted); }
 
 /* ------------------------------------------------------------------ drafts */
@@ -412,8 +503,6 @@ details.send { border-top: 1px solid var(--line); }
 .after-list { margin-top: 8px; }
 .stack.jobs > .card.job.st-dismissed, .stack.jobs > .card.job.st-applied { background: var(--sunk); }
 @media (hover: hover) { .stack.jobs > .card.job:hover, ul.people > li.person:hover { background: var(--bg); } }
-.stack.jobs .card-actions .btn:not(.primary):not(.icon-only):not(.link), .people .card-actions .btn:not(.primary):not(.icon-only):not(.link), .list-panel .card-actions .btn:not(.primary):not(.icon-only):not(.link) { background: var(--sunk); border-color: transparent; }
-@media (hover: hover) { .stack.jobs .card-actions .btn:not(.primary):not(.icon-only):not(.link):hover, .people .card-actions .btn:not(.primary):not(.icon-only):not(.link):hover { background: var(--raised); } }
 /* The words to send, with Copy in the bubble's top corner, as on a code block: the words
    wrap round it, so it never covers them and the bubble keeps its width. */
 .sendbox { display: flow-root; }
@@ -639,6 +728,10 @@ textarea { width: 100%; resize: vertical; line-height: 1.45; }
 .warm { background: none; color: var(--ink); padding: 0; font-size: var(--t-sm); }
 .warm a { color: var(--link); }
 .warm-k { font-weight: 600; color: var(--st-held); }
+/* On a Jobs card the warm route is the card's one soft grey box, as its suggestion is, its
+   name a quiet ink link: a rose line beside the boxes read as other advice (2026-11-05). */
+:is(.card.job, .card.app) .warm { background: var(--sunk); padding: 8px 12px; border-radius: var(--r-sm); }
+:is(.card.job, .card.app) .warm a, .m-rows .warm-line a { color: var(--ink); text-decoration-color: var(--line-strong); }
 /* A question on a card: the question, its reason quietly under it, its answers. */
 .question { display: grid; gap: 4px; padding: 12px; border-radius: var(--r-sm); background: var(--sunk); }
 .q-text { font-weight: 600; }
@@ -802,6 +895,38 @@ p.count.tone-warn { color: var(--st-overdue); }
 .changed[open] > summary::before { transform: rotate(90deg); }
 @media (hover: hover) { .changed > summary:hover { color: var(--ink); } }
 .changed[open] { display: grid; gap: 8px; }
+/* Contacts is one page (2026-11-04): the message drafted to someone sits on their card under
+   their name, open, and folds by a tap on its heading. */
+.pdraft { display: grid; gap: 8px; }
+.pdraft > summary { cursor: pointer; font-weight: 600; font-size: var(--t-sm); color: var(--muted); min-height: var(--target); display: flex; align-items: center; gap: 4px; list-style: none; }
+.pdraft > summary::-webkit-details-marker { display: none; }
+.pdraft > summary::before { content: "›"; display: inline-block; width: 12px; font-size: 1.125rem; line-height: 1; transition: transform 0.15s; }
+.pdraft[open] > summary::before { transform: rotate(90deg); }
+@media (hover: hover) { .pdraft > summary:hover { color: var(--ink); } }
+/* "They replied": a labelled box right under the person, its field the card's full width. */
+.reply-box { display: grid; gap: 8px; }
+.reply-label { font-weight: 600; }
+.reply-box textarea { width: 100%; }
+/* Where the reply being written for them stands: the spinner or a breathing dot, then words. */
+.going { display: flex; align-items: center; flex-wrap: wrap; gap: 4px; }
+.going .dot { width: 10px; height: 10px; }
+.going-word { font-weight: 600; }
+/* The pencil beside Copy in the bubble's corner; changed in place, the words are a field. */
+.sendbox > .btn.bubble-pen { float: right; margin: 4px 4px 0 0; }
+.sendbox > textarea.pen-text { display: block; width: 100%; font: inherit; color: var(--ink); border: 1px solid var(--line-strong); }
+.pen-tell { display: grid; gap: 8px; }
+/* A job's details, corrected in place: each field its label above it. */
+.job-pen .jp-field { display: grid; gap: 2px; font-size: var(--t-sm); }
+/* "Why 84" and the pencil keep the line of facts one line: words in its own type, the
+   pencil drawn inside the line's height and reaching its target past it. */
+.facts .info-toggle { font: inherit; font-weight: 600; }
+/* A document's words and its pencil keep together: a pencil alone on a line named nothing. */
+.checks .doc-part { white-space: nowrap; }
+@media (min-width: 760px) and (pointer: fine) {
+  .facts .info-toggle { display: inline; min-height: 0; padding: 0 2px; }
+  .facts .btn.icon-only, .checks .btn.icon-only { min-height: 0; padding: 2px 8px; margin-block: -4px; vertical-align: middle; }
+}
+.pen-tell .pen-ask { width: 100%; }
 .wave { display: grid; gap: 12px; }
 .wave-head { display: grid; gap: 4px; }
 .wave-group { display: grid; gap: 8px; }
@@ -908,6 +1033,13 @@ dialog.sheet form { display: grid; gap: 16px; }
    bottom 0 it was lifted out of its place over the last choice even when everything fitted,
    with empty space under Cancel (the maintainer's iPhone, 2026-11-04: Add something). */
 dialog.sheet .sheet-actions { position: sticky; bottom: -24px; z-index: 1; margin: 0 -24px -24px; padding: 12px 24px 24px; background: var(--surface); border-top: 1px solid var(--line); }
+/* Where the choices do not all fit, a soft fade over the foot's edge says there is more to
+   scroll to; scrolled to the end, the last choice stands whole above the foot (the
+   maintainer, 2026-11-05: a bin's fourth choice was cut in half by the foot's line). */
+dialog.sheet .sheet-actions::before { content: ""; position: absolute; left: 0; right: 0; bottom: 100%; height: 32px; pointer-events: none;
+  background: linear-gradient(to bottom, transparent, var(--surface)); opacity: 0; transition: opacity 0.15s; }
+dialog.sheet.more-below .sheet-actions::before { opacity: 1; }
+@media (prefers-reduced-motion: reduce) { dialog.sheet .sheet-actions::before { transition: none; } }
 .sheet-title { font-size: var(--t-xl); font-weight: 600; padding-right: 8px; }
 .sheet-intro { color: var(--ink); }
 .sheet-cost { color: var(--muted); font-size: var(--t-sm); }
@@ -985,7 +1117,14 @@ a.navlink, .applylink, .btn.link, .fold .btn.link, .bp-foot a { text-decoration-
      through its sides, so the line around it does not move (2026-11-03). */
   a.name-link { position: relative; }
   a.name-link::after { content: ""; position: absolute; inset: 0 -13px; }
+  /* A name heading a checklist row reads from its start when it wraps, never centred. */
+  .g-name a.name-link { text-align: start; }
   .card-actions .btn.link, .controls .btn.link { margin-block: 0; }
+  :is(.card-actions, .wc-actions, .suggest-acts, .more-acts, .g-acts, .fix, .bp-foot, .sheet-actions) > :is(.btn, a):not(.icon-only) {
+    display: inline-flex; min-height: calc(36px * var(--tz)); padding: 8px 16px; margin-block: 0; line-height: 1.2; position: relative; }
+  :is(.card-actions, .wc-actions, .suggest-acts, .more-acts, .g-acts, .fix, .bp-foot, .sheet-actions) > :is(.btn, a):not(.icon-only)::after { content: ""; position: absolute; inset: calc(-4px * var(--tz)) 0; }
+  :is(.card-actions, .wc-actions, .suggest-acts, .g-acts) > details.more > .more-btn { min-height: calc(36px * var(--tz)); position: relative; }
+  :is(.card-actions, .wc-actions, .suggest-acts, .g-acts) > details.more > .more-btn::after { content: ""; position: absolute; inset: calc(-4px * var(--tz)) 0; }
   a.back-link, a.bp-go { display: inline-flex; align-items: center; min-height: var(--target); min-width: var(--target); }
   a.bp-link { min-height: var(--target); }
   /* A Coming up title and the prep line under it are each a whole target of their own: an
@@ -1107,6 +1246,8 @@ dialog.work-sheet :is(select, input, textarea) { width: 100%; max-width: 100%; m
   border: 1px solid var(--line-strong); border-radius: 999px; font-weight: 600; font-size: var(--t-sm); }
 .band-more > summary::-webkit-details-marker { display: none; }
 .band-more[open] > summary { margin-bottom: 12px; }
+/* "Show N more" says what it still folds: once open it holds nothing back, so it goes. */
+.band-more:not(.soon-more)[open] > summary { display: none; }
 
 /* An opened setting reads as inside its row, a shade deeper, and each item in it is a block:
    its name and its state on one line, the state always at the right, the button under them.
@@ -1239,6 +1380,11 @@ body.has-fab .shell { padding-bottom: calc(var(--tabs-h) + env(safe-area-inset-b
   .card.job { row-gap: 4px; }
   .card.job { position: relative; }
   .card.job .job-top h3 { flex: 1 1 0; }
+  /* A job's bin in the corner and its state under the title, as a draft's: beside a state
+     pill the title had a third of the line (2026-11-04). */
+  .card.job .top-end .icon-only { position: absolute; top: 4px; right: 4px; }
+  .card.job .job-top:has(.top-end .icon-only) h3 { padding-right: 44px; }
+  .card.job .top-end:has(.state-word) { margin-left: 0; flex-basis: 100%; }
   /* A person's bin in the corner; their state stays under the name, where it reads. */
   .person { position: relative; }
   .person .top-end .icon-only { position: absolute; top: 4px; right: 4px; }
@@ -1378,7 +1524,7 @@ body.has-fab .shell { padding-bottom: calc(var(--tabs-h) + env(safe-area-inset-b
 .brief-page strong, .brief-page b { font-weight: 600; }
 .bp-n { font-size: 1.375rem; font-weight: 700; line-height: 1.15; font-variant-numeric: tabular-nums; }
 .bp-l { font-size: var(--t-sm); color: var(--muted); overflow-wrap: normal; word-break: normal; hyphens: none; }
-.bp-foot { display: flex; flex-wrap: wrap; align-items: baseline; gap: 4px 16px; margin-top: auto; font-size: var(--t-sm); }
+.bp-foot { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin-top: auto; padding-top: 8px; font-size: var(--t-sm); }
 .bp-iv { display: flex; flex-direction: column; align-items: flex-start; gap: 4px; padding: 12px 16px; background: var(--surface); border: 1px solid var(--line); border-radius: var(--r-sm); }
 .bp-iv p { margin: 0; }
 .bp-iv-when { font-size: var(--t-sm); font-weight: 600; letter-spacing: 0.04em; text-transform: uppercase; color: var(--st-failed); }

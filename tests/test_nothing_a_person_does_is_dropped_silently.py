@@ -51,7 +51,7 @@ def _sent_by_the_page() -> list:
 # ------------------------------------------------------------------ every control, with the store refusing
 
 
-@pytest.mark.parametrize("section", ["todo", "jobs", "drafts", "drafts-messages", "contacts", "interviews", "settings", "brief"])
+@pytest.mark.parametrize("section", ["todo", "jobs", "drafts", "contacts", "interviews", "settings", "brief"])
 def test_every_control_that_tries_to_save_says_so_when_it_cannot(run, pages, section):
     got = run("silent", html=pages["sample"], viewport=PHONE, clock=T0, sections=[section], _wait=900)
     assert got["tapped"] > 0

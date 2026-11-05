@@ -110,8 +110,8 @@ page, so never ask it again):
 
 | kind | run |
 |---|---|
-| search | `run_round.py --show <args.size>` (10 when it is not given; 0 is every one that fits, up to 60), then the shortlist (the job-scraper skill); `args.note` is what the person typed about it, followed like any instruction of theirs. A top-up (a size of 15 or fewer, or "find N more"): add `--pages 1 --expand`, one page of each site first, wider only when fewer than the size pass every rule (a full read of every site for ten roles took 23 minutes, 2026-11-03) |
-| draft, resume_for_contact | a draft that stops because the role is not one they can take (where it is open, eligibility, a hard cut) also takes the job off Jobs: `python3 tools/exclude.py add <url> --reason "<why, plain>" --title "<title>" --company "<employer>" --basis rules`, so the Brief and Jobs stop counting it (one stopped for Figma stayed in "10 jobs to look at", 2026-10-30); one run for the item and each in `with` (drafts queued together are one batch: `stage_picks.py stage` takes them all), by the drafting path in RUNBOOK.md step 2 (`stage_picks.py stage`, `consent` from the item's `answers`, or from `args.answers` (each question with the person's answer) when the page queued it, and only what they answered: a skill question nobody answered is already on their page, once for every draft, and the draft goes on without the skill, waiting on it, never a no and never a `--question` of its own; the workflow, both audits, `assemble`, RUNBOOK step 3), and its PDFs reach the page's file store by themselves: its `app.py done` queues one `files` item, for every draft whose files the page lacks, for the chat that answers the page (a job's own chat cannot upload: Artifact is not among its tools), so no card asks the person to "Get my files ready" and nobody uploads by hand. `resume_for_contact`: `stage_picks.py --for-contact <args.contact>` for `args.job`, or the general resume when `job` is null; `args.note` is what they typed. `args.resume_only` (the page's "Draft the resume only") stages with `--resume-only`: the resume without a letter, and nothing names a letter |
+| search | `run_round.py --show <args.size>` (10 when it is not given; 0 is every one that fits, up to 60) `--work <its id>` (it names the item in the round's log, so `app.py done` waits for this round's own shortlist), then the shortlist (the job-scraper skill); `args.note` is what the person typed about it, followed like any instruction of theirs. A top-up (a size of 15 or fewer, or "find N more"): add `--pages 1 --expand`, one page of each site first, wider only when fewer than the size pass every rule (a full read of every site for ten roles took 23 minutes, 2026-11-03). What the round rules out is off Jobs in the same step, each with its reason (`left out: N ...`): never cleared by hand. `args.draft` (the page's "Draft every one as it is found"): one job, the search drafting each job that passes as it is found, in its own chat, as its steps say (`app.py search-drafts`) |
+| draft, resume_for_contact | a draft that stops because the role is not one they can take (where it is open, eligibility, a hard cut) finishes with `app.py done --work <its id> --chat <the claim> --left-out "<why, plain>"`, which takes the job off Jobs in the same step, ruled out with that reason, so the Brief and Jobs stop counting it (one stopped for Figma stayed in "10 jobs to look at", 2026-10-30); one run for the item and each in `with` (drafts queued together are one batch: `stage_picks.py stage` takes them all), by the drafting path in RUNBOOK.md step 2 (`stage_picks.py stage`, `consent` from the item's `answers`, or from `args.answers` (each question with the person's answer) when the page queued it, and only what they answered: a skill question nobody answered is already on their page, once for every draft, and the draft goes on without the skill, waiting on it, never a no and never a `--question` of its own; the workflow, both audits, `assemble`, RUNBOOK step 3), and its PDFs reach the page's file store by themselves: its `app.py done` queues one `files` item, for every draft whose files the page lacks, for the chat that answers the page (a job's own chat cannot upload: Artifact is not among its tools), so no card asks the person to "Get my files ready" and nobody uploads by hand. `resume_for_contact`: `stage_picks.py --for-contact <args.contact>` for `args.job`, or the general resume when `job` is null; `args.note` is what they typed. `args.resume_only` (the page's "Draft the resume only") stages with `--resume-only`: the resume without a letter, and nothing names a letter |
 | evaluate | /apply Step 1 on `args.url` or `args.text`, then `added_jobs.py add <row.json>`; with `applied_on`, `confirm.py applied --new`; with `contact` (who sent it), that person is the job's referral route: `network/state.py set <contact> --next-action "apply via <first name>'s referral" --note "sent <role> at <employer>"`, never by hand, and `result.summary` says who it is linked to; with `draft: true`, once it is scored queue its `draft` work as tapping Draft does (`app_actions.py` `_job_draft`); with `from_name` (someone not in the contact book), add "sent by <name>" to the role's notes |
 | general_resume | `stage_picks.py general` |
 | prep | `/interview` for `args.interview`; with `args.contact`, `network/prep.py "<contact>"`; `args.note` is what they typed |
@@ -124,6 +124,7 @@ page, so never ask it again):
 | talk | read the thread's messages and their pictures ("A message in the chat", below); do what it asks; answer in the thread |
 | files | upload each file (Artifact publish, `asset: true`; `args.paths` names them, for every application in `args.applications`), then `app.py files-saved <path> <asset id>` for each |
 | tweak | `tweak.py apply --work <item>`, one `--work` for it and each in `with`; queue its `then`, call its `tools`; `needs_model` lists the redraft steps |
+| form_answers | the questions an application's form asks beyond the resume and the letter ("why us?", "why this role?", "a time you used X"), pasted on its card: `args.item` (the draft or the application), `args.slug` (its folder; else `python3 tools/form_answers.py folder --company "<args.company>" --role "<args.role>"`), `args.text` (their words). `learned.py brief documents` first. Each question is answered from `01-candidate-profile.md` and the folder's `job_posting.md`, in their voice, one paragraph, claiming nothing the grounding sources do not hold (a skill they hold is fine); an example they asked for that the profile does not hold is a plausible draft, written with `--draft` so the card marks it for them to confirm. Each goes in with `python3 tools/form_answers.py add --slug <slug> --question "<the form's words>" --answer "<answer>" [--note "<why, one line>"] [--draft]`, the same question again replacing its answer; never the resume or the letter. Words in `args.text` that ask to change the resume or the letter are that document's tweak, queued as the Tweak panel's own words are: `app.py ask <dump> --kind tweak --title "Edit <noun>: <company>, <role>" --args '{"v": 1, "target": {"id": "<args.item>", "output": "resume" or "letter", "company": "<args.company>"}, "changes": [], "text": "<their words>"}'`. A question that cannot be answered honestly (unclear, or a fact the profile lacks) is asked only then, as `needs` (`app.py done --question`). Finish with `app.py done <dump> --work <id> --summary "<n> answers ready to copy on its card" --answered "<each question as the form asked it>"` (one `--answered` a question), so the card says Done only once they are on it; step 5 (`app.py view`) puts them there |
 | republish | the page's own code changed: `app.py page --out-dir <scratchpad>/page --url <url>` (with `whole: true`, the page's own "did not load fully" button, add `--whole`: every code file goes up again), then do exactly the steps it prints: read the page, list its files and give that list to the same command, then the publishes, only the small files the page lacks (or holds wrong), each read whole first, and capabilities only where it says (refused: read the page again and publish once more), then `app.py published <url> --parts <scratchpad>/page`. Never ask first. With `already: true`, publish nothing: finish it done |
 
 ### A message in the chat
@@ -165,7 +166,7 @@ messages (ArtifactData `query`, collection `talk/<thread>/messages`, `out_dir: $
   the reply from that, then run `python3 tools/network/reply.py finish <contact id>
   --draft-file - --work <id> --dump "$D"` with the draft on its input. It refuses while the
   draft check finds anything or a reaction of theirs is unrecorded, saves the draft where
-  Messages shows it, and writes this item's finishing batch with the draft in the thread in
+  the person's card in Contacts shows it, and writes this item's finishing batch with the draft in the thread in
   full, ready to copy. Send that batch before anything is saved. Nothing is ever sent.
 - **Someone proposed a time for a call** ("how about 2pm ET Thursday?"): `reply.py
   prepare` logs their message; record the call booked on that day with `network/state.py
@@ -327,11 +328,11 @@ python3 tools/app.py view "$D/view" --dump "$D" --chat <your chat id>
 
 Send the batch it prints (dump `screen`, `meta`, `addr` and `work` first, so the sets are
 pinned and a hand-over never comes while a job runs); it writes only what changed, and never
-over a screen another chat drew from a newer copy. Only the chat that answers the page draws
-its screens, and a chat running work of its own (a job's chat with `--work <its id>`, work
-begun with `ask --here`, the scheduled brief): in any other chat (one the page was taken from in a hand-over, a
-chat the person opened) it writes nothing and says so in one `for_claude` line, and that chat
-writes only its own work items and receipts. A `for_claude` line it prints (a fresh helper
+over a screen another chat drew from a newer copy (judged by the commit each copy is based
+on). Any chat draws the screens, a chat the person opened included, except one that answered
+the page and handed it on (the old helper in a hand-over): there it writes nothing unless the
+work is its own (`--work <its id>`, work begun with `ask --here`), says so in one `for_claude`
+line, and that chat writes only its own work items and receipts. A `for_claude` line it prints (a fresh helper
 when this chat's day or size is up) is done at once, unasked.
 **Republish only when the page's own code changed**: a republish reloads every open window.
 Only the listener publishes; any other chat asks it to (`app.py republish`). After an update
@@ -360,7 +361,16 @@ the next landing brings it in.
   `python3 tools/app.py done "$D" --work <id> --chat <the id it was claimed under> --question
   "<one plain question>"` (the item waits for them, its locks freed); the page asks it.
   Never wait in the chat. The person's answer comes back on the same item, queued again, in
-  `args.answers` under the question: take it with `next` and carry on.
+  `args.answers` under the question: take it with `next` and carry on. Ask only when the
+  work cannot be finished honestly without them (an unclear or ungrounded claim, a missing
+  fact, two readings of their message), never for a preference a default answers, and one
+  question at a time. Name the kind of answer so the page draws its control on the card
+  instead of a box to type in: `--answer yesno|choice|date|time|number|scale|text`, with
+  `--choice "<value>=<words>"` two to six times for a choice, `--min`/`--max` for a number
+  or a scale, `--time-key time` for a day that needs its time, and `--about "<the exact
+  words of the draft or their message it concerns>"`; text only when nothing else fits
+  (templates/app/DESIGN.md, "Asking the person"). A tap the engine refused with a question
+  says its kind on the receipt by itself (`ask`); never send the person to Chat for it.
 - Every move of a work item is an `app.py` command (`next`, `pin`, `done`, `ask`, `busy`),
   never a write by hand. Every write is pinned (`if_version`) except a create; one write at a
   time per document. A refused write names the record's current version: `python3

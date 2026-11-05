@@ -170,7 +170,7 @@ PAGE_TOUR = (
     {"key": "todo", "tab": "todo", "title": "To do",
      "text": "What needs you, five at a time, most urgent first: a question, a follow-up "
              "that is due, an interview coming up. A card's filled button is its next step; "
-             "the bin puts it away."},
+             "the trash puts it away."},
     {"key": "jobs", "tab": "jobs", "title": "Jobs",
      "text": "Every role from found to applied. Found: scored out of 100 for how well it "
              "fits you; tap Draft this on one you like. Drafts: your resume and letter, "
@@ -200,29 +200,30 @@ PAGE_TOUR = (
 PAGE_FIRST = {
     # Plain sentences a first-time reader gets at once: "a job that's off ... the next search
     # learns" read as shorthand nobody could parse (the maintainer, 2026-10-30).
-    "search": "These are your first results, so the order may be a bit off. Tap the bin on any "
+    "search": "These are your first results, so the order may be a bit off. Tap the trash on any "
               "job that's wrong for you and say why, and the next search will do better.",
-    "apply": "Your first application. Tap Edit on the resume or the letter to change the "
-             "wording, and the next one will use your changes.",
-    "networking": "Your first messages, so some may be a bit off. Tap Edit to change how one "
-                  "reads, or bin someone you wouldn't contact. Claude remembers both.",
-    "reply": "If a reply doesn't sound like you, change it before you send it, then paste what "
-             "you sent in Chat so Claude learns how you write.",
-    "interview": "Your first interview prep. Tap Edit to change what it covers, and the next one "
-                 "will fit you better.",
+    "apply": "Your first application. Tap the pencil beside the resume or the letter to change "
+             "the wording, and the next one will use your changes.",
+    "networking": "Your first messages, so some may be a bit off. Tap the pencil to change how "
+                  "one reads, or trash someone you wouldn't contact. Claude remembers both.",
+    "reply": "If a reply doesn't sound like you, change it with the pencil before you send it: "
+             "Claude learns how you write from what you change.",
+    "interview": "Your first interview prep. Tap the pencil to change what it covers, and the "
+                 "next one will fit you better.",
     "prep": "Your first call prep. After the call, tell Claude in Chat how it went.",
     "brief": "Your first brief. Tap Edit the brief to get more or less of anything.",
-    "general": "You can change anything Claude makes: tap Edit on it, and Claude remembers for "
-               "next time.",
+    "general": "You can change anything Claude makes: tap the pencil on it, and Claude "
+               "remembers for next time.",
 }
 PAGE_TIPS = {
-    "rephrase": "Tap Edit on anything Claude writes to make it shorter, warmer or reworded. "
-                "Claude learns your style from your changes.",
+    "rephrase": "Tap the pencil on anything Claude writes to make it shorter, warmer or "
+                "reworded. Claude learns your style from your changes.",
     "tour": "For a short tour of the page, go to Settings, then Help, then Show me around.",
-    "reaction-sticks": "When you bin a job, Claude asks why. Your answer applies to every "
+    "reaction-sticks": "When you trash a job, Claude asks why. Your answer applies to every "
                        "future search until you change your mind.",
-    "tell-me": "When you hear back, tap I heard back on the application, or paste their message "
-               "under Got a message. Claude updates your records and reminds you to follow up.",
+    "tell-me": "When you hear back, tap I heard back on the application, or tap They replied on the "
+               "person in Contacts and paste what they sent. Claude updates your records and "
+               "reminds you to follow up.",
     "paste-link": "Paste any job link into Add a job on Jobs. Claude scores it and can write "
                   "the application.",
     "sent-words": "If you change a message before you send it, paste what you sent in Chat so "

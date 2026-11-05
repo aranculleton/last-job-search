@@ -164,7 +164,9 @@ def test_a_draft_that_needs_a_fix_says_so_on_its_card_with_its_state_by_the_titl
     card = got["after"][0]["text"]
     r = got["after"][0]["eval"]
     assert not r["folded"], "the failed check is on the card, not folded into More"
-    assert "the CV runs to a second page by two lines" in card and "Make it again" in card, card
+    # What Claude can do by itself is never a button (2026-11-05): the failed check is said on
+    # the card, and Claude makes it again once its question is answered.
+    assert "the CV runs to a second page by two lines" in card and "Make it again" not in card, card
     assert "Two answers about Quayside Foods" in card, "its question stays first"
     assert r["onRow"] or (r["atStart"] and r["gap"] <= 8), ("the state stays by the title, never pushed off to the right below it", r)
 
@@ -223,30 +225,33 @@ def test_to_do_opens_on_what_is_late_or_due_today_and_folds_the_setup(run, tmp_p
     got = _go(run, tmp_path, [{"hash": "todo", "eval": FIRST}], vp, clock=T)
     r = got["after"][0]["eval"]
     titles = [c["title"] for c in r["cards"]]
-    # The Fernhill Freight follow-up and the reply to Juno are drafted, so they share one card
-    # that opens Messages (2026-11-04).
-    for owed in ("Thank-you note after your Harbourline Bank first interview", "2 messages ready to send", "Send your CV to Tamsin"):
+    # The Fernhill Freight follow-up and the reply to Juno are drafted, so they are rows of the
+    # one card of messages to send, which opens Contacts at them (the UX review, 2026-11-05).
+    for owed in ("Thank-you note after your Harbourline Bank first interview", "Messages to send (7)", "Send your CV to Tamsin"):
         assert owed in titles, (owed, titles)
     bands = [c["band"] for c in r["cards"]]
     assert bands[0] == "Due or late", bands
     if "Needs your answer" in bands:
-        last_owed = max(titles.index(t) for t in titles if t.startswith(("Thank-you", "Follow up with", "Reply to", "Send your", "2 messages ready")))
+        last_owed = max(titles.index(t) for t in titles if t.startswith(("Thank-you", "Follow up with", "Reply to", "Send your", "Messages to send")))
         assert bands.index("Needs your answer") > last_owed, ("questions come after what is owed", r["cards"])
     assert r["youFolded"], "Finish your profile waits behind the fold while today's things show"
-    assert r["fold"].startswith("Show "), r
+    # Four cards today all show (one card an act and a person, 2026-11-05): the first fold is
+    # what is not due yet; more than five, and it is "Show N more".
+    assert r["fold"].startswith(("Show ", "Not due yet")), r
 
 
 # Found along the way, 2026-11-02. "Did your note to Wren go?" is answered once the note is
-# marked sent in Messages, never asked again.
+# marked sent (on her card in Contacts, its old Messages address kept), never asked again: one
+# question fewer on the quick answers card (2026-11-05).
 UNFOLD = "(() => { [...document.querySelectorAll('#main button')].filter((b) => /^Show \\d+ more/.test(b.textContent.trim())).forEach((b) => b.click()); return 1; })()"
-ASKED = "document.querySelector('#main').innerText.includes('Did your note to Wren go?')"
+ASKED = "(document.querySelector('#main [data-item=\"quick\"] .card-title') || {}).textContent || ''"
 
 
 def test_a_note_marked_sent_is_no_longer_asked_about(run, tmp_path, vp):
     got = _go(run, tmp_path, [{"hash": "todo", "eval": UNFOLD}, {"eval": ASKED},
                               {"hash": "messages", "eval": "(() => { document.querySelector('[data-k=\"sent:msg-wren-2\"]').click(); return 1; })()"},
                               {"hash": "todo", "eval": UNFOLD}, {"eval": ASKED}], vp, clock=T)
-    assert got["after"][1]["eval"] is True and got["after"][4]["eval"] is False, [a["eval"] for a in got["after"]]
+    assert got["after"][1]["eval"] == "4 quick answers" and got["after"][4]["eval"] == "3 quick answers", [a["eval"] for a in got["after"]]
 
 
 def test_a_message_ranks_first_in_its_group_and_a_text_box_asks_to_be_filled_in():

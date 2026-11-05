@@ -640,9 +640,32 @@ _TITLE_RX = tuple((langs, re.compile(r"(?<!\w)(?:" + pat + r")(?!\w)", re.I))
                   for langs, pat in _TITLE_WORDS)
 
 
+# A title written in two forms: "<English> // <French>", "<English> / <French>",
+# "<English> | <French>". Split only on these, never on a hyphen inside one title.
+_TITLE_FORMS = re.compile(r"\s*//\s*|\s+/\s+|\s+\|\s+")
+
+
+def title_parts(title: str) -> list[str]:
+    """A title's forms, where it is written twice ("Data Analyst // Analyste de données"),
+    else []: each form with letters in it, stripped."""
+    parts = [p.strip() for p in _TITLE_FORMS.split(title or "")]
+    parts = [p for p in parts if re.search(r"[^\W\d_]", p)]
+    return parts if len(parts) > 1 else []
+
+
 def title_language(title: str) -> str:
     """The language a job title is written in, where the person holds none of the languages
-    its words are, or "". English titles, and titles in a language held, are ""."""
+    its words are, or "". English titles, and titles in a language held, are "". A title
+    written in two forms, one of them in a language the person holds, is in that one: a
+    bilingual title is the employer's habit, not the job's language (the posting's own words
+    say whether the other is required). One was cut as French in Toronto, 2026-11-05."""
+    parts = title_parts(title)
+    if parts and any(not _title_language(p) for p in parts):
+        return ""
+    return _title_language(title)
+
+
+def _title_language(title: str) -> str:
     for langs, rx in _TITLE_RX:
         if rx.search(title or "") and not {x.lower() for x in langs} & _HELD:
             # Japanese kana beside Han characters is Japanese; Han alone is read as Chinese.
@@ -1857,6 +1880,11 @@ def ruling_refused(reason: str) -> bool:
         elif words.lower().endswith(CUTS["language"][0]):
             if not _language_refused(words[:-len(CUTS["language"][0])], quote):
                 return False
+        elif words.lower().startswith(CUTS["title_language"][0]):
+            # A title in two forms, one of them English, is no longer a title in another
+            # language: its ruling is released, and the posting's own words are read.
+            if len(quote) >= 120 or not title_parts(quote) or title_language(quote):
+                return False
         elif words.lower().startswith(CUTS["salary"][0]):
             # A pay cut stands while its quote still reads under the cut line. One made on a
             # band stated by the month, read as a year's, is released here: the posting is
@@ -1931,6 +1959,10 @@ def screen(job: dict) -> dict:
     # not hold (`title_language`), which setup never wrote and so never cut.
     title_lang = getattr(_S, "TITLE_LANGUAGE", None)
     head = (job.get("title") or "") + " " + text[:200]
+    # Written in two forms, one not in that language: the title is not the job's language.
+    forms = title_parts(job.get("title") or "")
+    if title_lang and forms and any(not title_lang[1].search(p) for p in forms):
+        title_lang = ("", re.compile(r"(?!x)x"))
     if title_lang and title_lang[1].search(head):
         cuts.append(f'{CUTS["title_language"][0]} {title_lang[0]}: '
                     f'"{(job.get("title") or head)[:120]}"')

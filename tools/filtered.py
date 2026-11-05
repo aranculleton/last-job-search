@@ -115,15 +115,61 @@ def write(round_dir: str, summary_dir: str, name: str) -> str | None:
     for e in found:
         counts[e["rule"]] = counts.get(e["rule"], 0) + 1
     path = path_for(summary_dir, name)
+    _save(path, name, counts, found)
+    return path
+
+
+# The stages a search's own cut writes (run_round.leave_out), after the round's stage files:
+# the rows its shortlist passed over for a ruling, and the rows already on the person's list
+# that fail the same rules now. Rewritten whole each time the cut is made, so a cut made
+# again (--recut) lists what it left out, once.
+CUT_STAGES = ("shortlist", "your list")
+
+
+def add(summary_dir: str, name: str, found: list[dict]) -> str | None:
+    """The cut's own entries put on the round's left-out list (documents/rounds/filtered/
+    <name>.json), in place of the ones an earlier cut of the round put there; the stage files'
+    entries are kept as they are. Its path, or None when there is nothing to keep."""
+    path = path_for(summary_dir, name)
+    try:
+        data = load(name, summary_dir)
+    except SystemExit:
+        data = {"round": name, "filtered": []}
+    old = [e for e in (data.get("filtered") or []) if isinstance(e, dict)]
+    have = [e for e in old if e.get("stage") not in CUT_STAGES]
+    if not found and len(have) == len(old) and not os.path.exists(path):
+        return None
+    keys = {norm(e.get("url")) or e.get("url") for e in have}
+    for e in found:
+        k = norm(e.get("url")) or e.get("url")
+        if k and k in keys:
+            continue
+        keys.add(k)
+        have.append(e)
+    counts: dict[str, int] = {}
+    for e in have:
+        rule = e.get("rule") or e.get("stage") or "other"
+        counts[rule] = counts.get(rule, 0) + 1
+    _save(path, name, counts, have)
+    return path
+
+
+def _save(path: str, name: str, counts: dict, found: list[dict]) -> None:
     os.makedirs(os.path.dirname(path), exist_ok=True)
     # One posting a line: a round can filter a thousand, and a line each keeps the file a
-    # third the size of an indented one and its changes readable.
-    head = json.dumps({"round": name, "counts": dict(sorted(counts.items(), key=lambda kv: -kv[1]))},
-                      ensure_ascii=False)
+    # third the size of an indented one and its changes readable. The first line holds the
+    # counts, by the stage's rule and by the person's rule in plain words (rules_view.kinds_of),
+    # so Your rules reads a month of searches by their first lines alone.
+    head = {"round": name, "counts": dict(sorted(counts.items(), key=lambda kv: -kv[1]))}
+    try:
+        import rules_view
+        head["kinds"] = dict(sorted(rules_view.kinds_of(found).items(), key=lambda kv: -kv[1]))
+    except Exception:  # noqa: BLE001  no profile to read the rules by: the counts alone
+        pass
+    head = json.dumps(head, ensure_ascii=False)
     with open(path, "w", encoding="utf-8", newline="\n") as fh:
         fh.write(head[:-1] + ', "filtered": [\n'
                  + ",\n".join(json.dumps(e, ensure_ascii=False) for e in found) + "\n]}\n")
-    return path
 
 
 def _summary_dir() -> str:
@@ -194,7 +240,9 @@ def back(name: str, picks, why: str = "", round_dir: str | None = None,
             exclude.lift(urls=[e["url"]] if e.get("url") else [], postings=[e],
                          why=why or "brought back by the person", today=today,
                          **({"path": seen_path} if seen_path else {}))
-        row = {k: e[k] for k in FIELDS if e.get(k)}
+        # Its score as well, where the search's own cut left it out: brought back without one,
+        # the page's Found list would leave it out again as unscored.
+        row = {k: e[k] for k in FIELDS + ("fit", "priority") if e.get(k)}
         row["brought_back"] = note
         rank = None
         for path in copies:

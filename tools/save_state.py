@@ -13,7 +13,10 @@ by file so the build noise the rule says never to commit stays out.
 `profile`, `networking`, `documents` and `handoff` take a plain `git add` (never forced, which would bring the
 caches under profile/tests/ with them); everything else is ignored by .gitignore on
 purpose, so it is forced in by path, one existing path at a time, and a file of theirs the
-repo holds that has gone from disk is staged as removed. Exit 0, or 1 when git refused.
+repo holds that has gone from disk is staged as removed. A file that goes away while this
+runs is skipped, never the end of the save. Exit 0; 3 (LEFT_OUT) when everything else is
+staged but a file still here could not be, named; 1 when git refused the save itself
+(another git command's lock, a full disk).
 
 `tools/land.py` runs this first, then commits, merges master, runs the landing check
 (`./tools/ci_local.sh --quick`) and pushes, all in the background (RUNBOOK.md, "4. Record
@@ -25,6 +28,7 @@ from __future__ import annotations
 import fnmatch
 import glob
 import os
+import re
 import subprocess
 import sys
 
@@ -168,6 +172,8 @@ def unsaved(root: str = ROOT) -> list[str]:
     what was taken away. [] when nothing waits."""
     plain, forced = paths(root)
     out: list[str] = plain_files(root, plain)
+    # A file gone since it was listed made git's dry run answer nothing for its whole batch.
+    forced = [p for p in forced if _there(root, p)]
     for i in range(0, len(forced), 200):
         out += _would_add(root, "-f", "--", *forced[i:i + 200])
     out += gone(root)
@@ -181,12 +187,18 @@ OLD_DAYS = 7
 def old_unsaved(root: str = ROOT, days: int = OLD_DAYS, now: float | None = None) -> list[str]:
     """The files unsaved in this checkout that were last written more than `days` days ago.
     A week: every landing and the daily brief save what is here, so a file still unsaved
-    after a week was held back for a reason, or is the person's own edit from long ago."""
-    import time
+    after a week was held back for a reason, or is the person's own edit from long ago.
+    Measured on the files' own clock (file_clock; `now` is a now on it): on Python's, moved
+    on 400 days, a note written that moment was "over a week old" (2026-11-05)."""
+    files = plain_files(root)
+    if not files:
+        return []
+    import file_clock
+    at = file_clock.now(root) if now is None else now
     out = []
-    for rel in plain_files(root):
+    for rel in files:
         try:
-            if (now or time.time()) - os.path.getmtime(os.path.join(root, rel)) > days * 86400:
+            if file_clock.age(os.path.join(root, rel), at) > days * 86400:
                 out.append(rel)
         except OSError:
             pass
@@ -241,16 +253,31 @@ def main(argv: list[str] | None = None, root: str = ROOT) -> int:
         print(f"save_state: {len(taken)} new or changed in {', '.join(plain) or 'no folder'}, "
               f"{len(forced)} forced, {len(removed)} removed; nothing staged (--list)")
         return 0
-    failed = []
+    failed: list[str] = []
+    went: list[str] = []
+    left: list[str] = []
+    left_words: list[str] = []
+
+    def take(args: tuple, batch: list[str]) -> None:
+        v, lo, words, whole = _add(root, args, batch)
+        went.extend(v)
+        if whole:
+            failed.extend(words)
+        else:
+            left.extend(lo)
+            left_words.extend(words)
+
     if plain:
-        r = _git(root, "add", "--", *plain)
-        if r.returncode != 0:
-            failed.append(r.stderr.strip())
+        take((), plain)
     # In batches, so a long list never runs into the system's limit on one command's length.
     for i in range(0, len(forced), 200):
-        r = _git(root, "add", "-f", "--", *forced[i:i + 200])
-        if r.returncode != 0:
-            failed.append(r.stderr.strip())
+        take(("-f",), forced[i:i + 200])
+    # A file gone when this started that is back now (a PDF being made again) is saved as it
+    # is, never staged as removed: the removal would have reached the commit.
+    back = [p for p in removed if _there(root, p)]
+    removed = [p for p in removed if p not in back]
+    for i in range(0, len(back), 200):
+        take(("-f",), back[i:i + 200])
     for i in range(0, len(removed), 200):
         r = _git(root, "rm", "--cached", "--quiet", "--", *removed[i:i + 200])
         if r.returncode != 0:
@@ -258,11 +285,96 @@ def main(argv: list[str] | None = None, root: str = ROOT) -> int:
     if failed:
         print("save_state: git refused: " + "; ".join(f for f in failed if f))
         return 1
+    if went:
+        print("save_state: %d file(s) went away while this ran and were left as they were (%s): "
+              "something was making them again; the next save takes them once they are back. "
+              "Nothing to tell the person" % (len(went), _some(went)))
     staged = _git(root, "diff", "--cached", "--name-only").stdout.split()
     print(f"save_state: staged; {len(staged)} file(s) now waiting to be committed")
+    if left:
+        words = "; ".join(ln.strip() for w in left_words for ln in w.splitlines() if ln.strip())
+        print(LEFT_OUT_LINE % (len(left), _some(left), words or "no words from git",
+                               _person_left_out(len(left))))
     if staged:
         print(LAND)
-    return 0
+    return LEFT_OUT if left else 0
+
+
+# A file can go away between being listed and being staged: an upgrade making the PDFs
+# again during a landing took one away for a moment, and the whole save stopped on "fatal:
+# unable to stat 'cv/<name>.pdf': No such file or directory; nothing was pushed" (a live
+# session, 2026-11-05). So a file gone by then is skipped, a refused batch is tried once more
+# without what has gone since, then file by file, and only a file still here that git will
+# not take is left out, named. Another git command's lock or a full disk is still the whole
+# save's trouble, said as before (exit 1), which tools/land.py waits on or tells.
+LEFT_OUT = 3
+WHOLE_SAVE = re.compile(r"index\.lock|no space left|out of diskspace|disk quota exceeded|"
+                        r"\bENOSPC\b", re.I)
+LEFT_OUT_LINE = ("save_state: left out %d file(s) git would not take (%s: %s); everything else "
+                 "is staged, and they stay on disk for the next save. Tell the person once: "
+                 "\"%s\"")
+
+
+def _person_left_out(n: int) -> str:
+    return ("One of your files could not be saved just now. It is still here, and the next "
+            "save tries it again." if n == 1 else
+            "%d of your files could not be saved just now. They are still here, and the next "
+            "save tries them again." % n)
+
+
+def _some(paths: list[str]) -> str:
+    return ", ".join(paths[:4]) + (" and %d more" % (len(paths) - 4) if len(paths) > 4 else "")
+
+
+def _in_folder(root: str, args: tuple, folder: str) -> list[str]:
+    """Each file adding `folder` would stage, its removals included, asked with --dry-run."""
+    got = _git(root, "-c", "core.quotePath=false", "add", "-n", *args, "--", folder).stdout
+    return [ln.split(" ", 1)[1][1:-1] for ln in got.splitlines()
+            if ln.startswith(("add '", "remove '")) and ln.endswith("'")]
+
+
+def _there(root: str, rel: str) -> bool:
+    return os.path.lexists(os.path.join(root, rel))
+
+
+def _add(root: str, args: tuple, batch: list[str]) -> tuple[list[str], list[str], list[str],
+                                                            bool]:
+    """git add <args> -- <batch>, a file going away meanwhile never stopping the rest.
+    (gone meanwhile, left out, git's words, whether it is the whole save's trouble)."""
+    went = [p for p in batch if not _there(root, p)]
+    todo = [p for p in batch if p not in went]
+    words: list[str] = []
+    for _attempt in (1, 2):
+        if not todo:
+            return went, [], [], False
+        r = _git(root, "add", *args, "--", *todo)
+        if r.returncode == 0:
+            return went, [], [], False
+        words = [r.stderr.strip()]
+        if WHOLE_SAVE.search(r.stderr + r.stdout):
+            return went, todo, words, True
+        gone_now = [p for p in todo if not _there(root, p)]
+        went += gone_now
+        todo = [p for p in todo if p not in gone_now]
+    left, words = [], []
+    # A folder (profile, documents) is tried file by file too: added as one item, one file
+    # git would not take left the whole folder unsaved, while the landing named one file.
+    one_by_one: list[str] = []
+    for p in todo:
+        inside = _in_folder(root, args, p) if os.path.isdir(os.path.join(root, p)) else []
+        one_by_one += inside or [p]
+    for p in dict.fromkeys(one_by_one):
+        r = _git(root, "add", *args, "--", p)
+        if r.returncode == 0:
+            continue
+        if WHOLE_SAVE.search(r.stderr + r.stdout):
+            return went, [p], [r.stderr.strip()], True
+        if _there(root, p):
+            left.append(p)
+            words.append(r.stderr.strip())
+        else:
+            went.append(p)
+    return went, left, words, False
 
 
 # What follows: one command lands it, in the background, so the chat that answers the page

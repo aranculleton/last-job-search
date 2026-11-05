@@ -328,7 +328,7 @@ def test_a_phone_can_act_on_the_reading_card_and_a_held_note_is_not_offered(run,
     got = run("script", html=html, viewport={"width": 375, "height": 812},
               clock="2026-10-25T09:00:00Z",
               steps=[{"hash": "todo"}, {"click": "I'll paste them instead"},
-                     {"hash": "drafts-messages",
+                     {"hash": "contacts",
                       "eval": "(document.querySelector('[data-k=\"held:msg-ash-1\"]') || {}).textContent || ''"}])
     acts = [a for a in got["steps"][1]["actions"] if a.get("action") == "setting.set"]
     assert acts and acts[0]["value"] == {"value": "paste"}

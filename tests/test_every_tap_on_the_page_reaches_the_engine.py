@@ -178,6 +178,8 @@ def test_bringing_back_a_posting_the_search_left_out(run, tmp_path):
     where = Search(str(tmp_path / "s"))
     got, rec = _round_trip(run, tmp_path, where, "back", [
         {"hash": "jobs", "click": "left out by the search"},
+        # Left out by rule (2026-11-05): a rule's own rows open with See them.
+        {"click": "See the jobs left out as", "exact": False},
         {"click": "Bring back", "exact": False},
     ])
     (a,) = [x for x in got["actions"] if x["action"] == "job.bring_back"]
@@ -188,7 +190,7 @@ def test_a_draft_marked_applied_and_a_note_marked_sent(run, tmp_path):
     where = Search(str(tmp_path / "s"))
     got, rec = _round_trip(run, tmp_path, where, "sent", [
         {"hash": "drafts", "click": "I have applied: Kestrel Mutual, Claims Forecasting Analyst"},
-        {"hash": "drafts-messages", "click": "I sent it: the note to"},
+        {"hash": "contacts", "click": "I sent it: the note to"},
     ])
     by = {x["action"]: x for x in got["actions"]}
     assert len(by["ready.applied"]["value"]["on"]) == 10, "the day it went"

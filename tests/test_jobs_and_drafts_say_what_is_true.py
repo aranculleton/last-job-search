@@ -91,7 +91,12 @@ def page(tmp_path_factory):
         _row(3, "Larkspur Retail", "Inventory Planner", url="https://jobs.example/larkspur/inv",
              bar="none", bar_reason="no stated range, and " + bar.UNLISTED),
         _row(4, "Fernhill Freight", "Logistics Analyst",
-             silent_application_note="APPLIED HERE ALREADY and never heard back"),
+             silent_application_note="APPLIED HERE ALREADY and never heard back",
+             outreach_pending_note="Applying is fine, this is not a warm route. A message is "
+                                   "already out and unanswered: Wren Halloway. Do not send another."),
+        # Its employer's own board no longer lists it: set aside by itself (the UX review).
+        _row(5, "Ottergate Foods", "Supply Analyst", url="https://ottergate.example/careers/5",
+             link_check="closed: no longer on the employer's own board, checked 2026-10-24 09:00 UTC"),
     ])
     tracker = os.path.join(st, "job_search_tracker.csv")
     with open(tracker, encoding="utf-8", newline="") as fh:
@@ -166,6 +171,60 @@ def test_the_bar_and_the_score_say_why_in_plain_words(page):
     assert not any("Halloway" in w for w in brindle["why"]), "a contact's first name only"
     fernhill = _job(m, "Fernhill Freight")
     assert any(n.startswith("You applied here before") for n in fernhill["notes"])
+
+
+def test_a_score_says_its_good_reasons_and_its_watch_outs_apart(page):
+    """"Why 100: Matches your skills ... Asks for a graduate degree, with no other way in":
+    a gap run on after the match read as a contradiction of the 100, and "with no other way
+    in" as a riddle (the maintainer, 2026-11-04)."""
+    _, m = page
+    reasons = _job(m, "Brindle Hart Logistics")["reasons"]
+    assert reasons["good"] == "Matches your skills: SQL, Python, forecasting."
+    assert reasons["watch"] == ("Asks for a graduate degree, and does not say experience can "
+                                "stand in for one.")
+    assert app_model.reasons_of(["-8 stated 5+ years against 4 held"]) == {
+        "good": "", "watch": "Asks for 5+ years; you have 4."}
+
+
+def test_a_cards_place_is_the_town_where_the_posting_adds_its_country(page):
+    """"Toronto, Ontario, Canada" took the card's line of facts onto a second line (the
+    maintainer, 2026-11-04); "Remote, UK" says how it is worked and stays whole."""
+    _, m = page
+    assert _job(m, "Brindle Hart Logistics")["place_short"] == "Manchester"
+    assert [app_model.short_place(p) for p in ("Toronto, Ontario, Canada", "Remote, UK",
+                                               "Toronto, ON (Hybrid)", "Manchester (hybrid)", "")] \
+        == ["Toronto", "Remote, UK", "Toronto (Hybrid)", "Manchester (hybrid)", ""]
+
+
+def test_the_note_about_an_unanswered_message_names_who_has_it(page):
+    """"Someone here has your message and has not replied" sat under a box saying someone
+    there had replied, and read as one person said two ways (the maintainer, 2026-11-04)."""
+    _, m = page
+    notes = _job(m, "Fernhill Freight")["notes"]
+    assert "Wren has your message and has not replied: applying is fine, a second message is not." in notes
+    assert not any("Halloway" in n or n.startswith("Someone here") for n in notes)
+
+
+def test_a_tool_asked_for_and_the_one_you_have_is_one_plain_sentence():
+    """"Asked for SAS, you have Python: shown as Python." (2026-11-04), said once: never
+    beside the card's own suggestion offering the same tool."""
+    job = {"near": [{"asked": "SAS", "have": "Python"}], "suggest": None}
+    assert app_model.near_words(job, "CV") == "It asks for SAS. You have Python, so your CV names Python."
+    offered = dict(job, suggest={"kind": "near", "text": "The posting asks for SAS; you have Python."})
+    assert app_model.near_words(offered, "CV") == ""
+
+
+def test_each_job_says_the_day_it_was_first_found(page):
+    """Jobs said when the last search ran, never when each job was found: searches run more
+    than once, and a role surfaced weeks ago may be one to put away (the maintainer,
+    2026-11-05). The day is the earliest any search saw the posting."""
+    _, m = page
+    brindle = _job(m, "Brindle Hart Logistics")
+    assert brindle["found_on"] == "2026-10-25" and brindle["found_days"] == 0
+    import datetime as dt
+    assert app_model.found_on({"first_seen": "2026-10-20"}, {"first_seen": "2026-10-12"}) == dt.date(2026, 10, 12)
+    assert app_model.found_on({}, None, dt.date(2026, 10, 3)) == dt.date(2026, 10, 3)
+    assert app_model.found_on({"added_on": "2026-10-30"}) == dt.date(2026, 10, 30)
 
 
 def test_the_pay_the_search_read_is_on_the_card(page):
@@ -296,6 +355,39 @@ class _Ctx:
                  "company": "Larkspur Retail", "next_action": "", "notes": ""}]
 
 
+def test_a_closed_posting_is_set_aside_by_itself_with_its_way_back(page):
+    """The UX review, 2026-11-05: a card asking to set a closed posting aside was one more
+    thing to do about nothing. It is set aside by itself, saying why, with Bring back under
+    Set aside (the search's own left-out rows, which Bring back marks lifted)."""
+    _, m = page
+    r = _job(m, "Ottergate Foods")
+    assert r and r["status"] == "dismissed" and r["apply"]["status"] == "closed", r
+    assert any("The posting has closed" in n for n in r["notes"]), r["notes"]
+    assert not r.get("alerts"), "nothing to do about it"
+    assert not app_model.to_look_at(r)
+
+
+def test_the_messages_to_send_are_counted_once_by_the_engine(page):
+    """Contacts counted every draft and To do its drafted rows and a wave card apart (the UX
+    review, 2026-11-05): one count, one a person, for both."""
+    _, m = page
+    got = m["to_send"]
+    assert got["ids"] == [x["id"] for x in m["messages"]]
+    assert got["n"] == len({x.get("contact") or "msg:" + x["id"] for x in m["messages"]})
+    two = app_model.to_send([{"id": "a", "contact": "c1"}, {"id": "b", "contact": "c1"}, {"id": "c", "contact": ""}])
+    assert two == {"n": 2, "ids": ["a", "b", "c"]}, "one a person, and one for a message with nobody on the list"
+def test_a_failed_check_is_said_once_with_one_full_stop_in_a_persons_words(tmp_path):
+    """"A sentence was changed after the checks read it.." reached a draft's card (the
+    maintainer, 2026-11-05): the verify step's line ends with its own full stop."""
+    checks = app_model._with_verify({"passed": True, "line": "Made"},
+                                    {"passed": False, "items": [{"said": app_model.VERIFY_WORDS["UNAUDITED"]}]})
+    assert checks["line"] == "It was changed after it was last checked."
+    item = {"id": "app-x", "company": "Kestrel Mutual", "role": "Analyst", "status": "drafted", "checks": checks,
+            "apply": {"status": "open", "kind": "employer", "url": "https://jobs.example/k"}, "near": []}
+    alerts, _ = app_alerts.for_ready(_Ctx(), item, {}, str(tmp_path))
+    assert alerts[0]["text"] == "It was changed after it was last checked.", alerts[0]["text"]
+
+
 def test_a_closed_posting_is_set_aside_for_its_reason_and_offers_no_one_to_ask():
     """Its "Set it aside" asked why again, from a list without "It has closed", and the card
     still said to ask someone about the role (audit 19, 8)."""
@@ -307,3 +399,29 @@ def test_a_closed_posting_is_set_aside_for_its_reason_and_offers_no_one_to_ask()
     assert suggest is None
     open_item = dict(item, apply={"status": "open"})
     assert app_alerts.for_job(_Ctx(), open_item)[1]["kind"] == "warm"
+
+
+def test_what_a_draft_needs_that_claude_can_do_is_queued_by_itself_once(tmp_path, monkeypatch):
+    """"Make it again" and "Get my files ready" were buttons on a draft's card for what Claude
+    can do with no one asking (the maintainer, 2026-11-05): the view queues the remake of a
+    draft whose check failed with its fix in hand, and the upload of PDFs the page lacks, once
+    each; a view run again queues nothing more."""
+    import importlib
+    app = importlib.import_module("app")
+    monkeypatch.setattr(app_model, "files_missing", lambda ctx=None: [
+        {"id": "app-y", "company": "Fernhill Freight", "files": ["Morgan_CV_Fernhill.pdf"], "paths": ["cv/Morgan_CV_Fernhill.pdf"]}])
+    act = {"type": "work", "kind": "draft", "label": "Make it again", "id": "draft~app-x",
+           "title": "Make it again: Kestrel Mutual", "args": {"application": "app-x", "redo": True}}
+    model = {"ready": [{"id": "app-x", "status": "drafted", "alerts": [{"kind": "checks", "action": act}]}]}
+    now = dt.datetime(2026, 11, 5, 9, tzinfo=dt.timezone.utc)
+    batches = app.self_fixes({"work": {}}, model, str(tmp_path / "a"), now)
+    made = {}
+    for b in batches:
+        for e in json.loads(open(b, encoding="utf-8").read()):
+            made[e["doc_id"]] = json.loads(open(e["file_path"], encoding="utf-8").read())
+    assert made["draft~app-x"]["kind"] == "draft" and made["draft~app-x"]["args"]["auto"] is True
+    files = [w for w in made.values() if w["kind"] == "files"]
+    assert files and files[0]["args"]["applications"] == ["app-y"], made
+    db = {"work": {wid: {"data": w, "version": 1} for wid, w in made.items()}}
+    db["work"]["files~app-y"]["data"]["status"] = "done"
+    assert app.self_fixes(db, model, str(tmp_path / "b"), now) == [], "once each, never again"

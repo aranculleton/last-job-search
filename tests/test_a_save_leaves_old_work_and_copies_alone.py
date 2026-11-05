@@ -7,7 +7,6 @@ import os
 import sys
 
 from tests import repo_files  # noqa: E402
-import time
 
 sys.path.insert(0, os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "tools"))
 
@@ -58,8 +57,10 @@ def test_a_branch_a_few_days_old_is_still_brought_in(copy, capsys):
 def test_unsaved_files_here_over_a_week_old_are_saved_and_named(copy, capsys):
     origin, chat, other = copy
     write(chat, "profile/stories.md", "An edit of the person's own\n")
-    old = time.time() - 19 * 86400
-    os.utime(os.path.join(str(chat), "profile", "stories.md"), (old, old))
+    # 19 days before it was written, on the files' own clock (never Python's: file_clock).
+    stories = os.path.join(str(chat), "profile", "stories.md")
+    old = os.path.getmtime(stories) - 19 * 86400
+    os.utime(stories, (old, old))
     code, out = _run(chat, "--message", "Stories", capsys=capsys)
     assert code == 0 and "profile/stories.md" in out and "Tell the person once" in out, out
     assert "An edit of the person's own" in git(origin, "show",
@@ -130,7 +131,7 @@ def test_spare_copies_are_tidied_after_a_while(tmp_path):
     d.mkdir()
     (d / "old").write_text("x")
     (d / "new").write_text("y")
-    long_ago = time.time() - 40 * 86400
+    long_ago = os.path.getmtime(d / "new") - 40 * 86400     # on the files' own clock
     os.utime(d / "old", (long_ago, long_ago))
     merge_state.tidy_spares(str(tmp_path))
     assert sorted(os.listdir(d)) == ["new"]
@@ -149,7 +150,7 @@ def test_a_save_clears_copies_older_versions_left_and_names_the_rest(copy, capsy
     _commit_days_ago(chat, "edited later", 0)
     write(chat, "profile/tests/test_c.py", "# beside\n")
     write(chat, "profile/tests/test_c.py.from-another-chat", "# a newer copy\n")
-    later = time.time() + 5
+    later = os.path.getmtime(os.path.join(str(chat), "profile/tests/test_c.py")) + 5
     os.utime(os.path.join(str(chat), "profile/tests/test_c.py.from-another-chat"), (later, later))
     write(chat, "documents/Orphan.md.from-another-chat", "nothing beside it\n")
     assert save_state.main([], root=str(chat)) == 0

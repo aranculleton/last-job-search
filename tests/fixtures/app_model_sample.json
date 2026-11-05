@@ -922,6 +922,7 @@
       }
     }
   ],
+  "to_send": {"n": 7, "ids": ["msg-juno-1", "msg-wren-2", "msg-ash-1", "msg-kit-1", "msg-rafe-1", "msg-noor-1", "msg-priya-thanks"]},
   "due": [
     {
       "id": "due-fernhill-nudge",
@@ -2824,5 +2825,6 @@
       },
       "rev": "1b117298106f"
     }
-  ]
+  ],
+  "refusal_asks": {"outcome.interview": {"key": "on", "label": "Which day is it?", "kind": "date", "type": "date", "time": "time"}, "person.call_booked": {"key": "on", "label": "Which day is the call?", "kind": "date", "type": "date", "time": "time"}, "job.applied": {"key": "on", "label": "When did you apply?", "kind": "date", "type": "date"}, "ready.applied": {"key": "on", "label": "When did you apply?", "kind": "date", "type": "date"}, "due.snooze": {"key": "until", "label": "Until which day?", "kind": "date", "type": "date"}, "brief.pause": {"key": "until", "label": "Until which day?", "kind": "date", "type": "date"}}
 }

@@ -182,6 +182,13 @@ JSON_FILES = {
     # record a skill. Its answer is dated and kept whole from the side that answered later, so
     # two chats that each took an answer keep the later one; the applications that asked are
     # every one either side named, the later day standing; it was first asked on the earlier.
+    # When each rule was set and in whose words (rules_view.note_set): each rule's record
+    # taken whole from the side that set it later, so two chats changing two rules keep both.
+    "documents/rules/set.json": {"whole": ("*",), "stamps": ("set_on",), "indent": 1},
+    # Rules the person kept when asked "Still right?", and the month the Brief's line was set
+    # aside: the later day of each stands.
+    "documents/rules/review.json": {"dated": {"kept/*": "later", "brief_dismissed": "later"},
+                                    "indent": 1},
     "documents/skill_answers.json": {
         "whole": ("skills/*/answer",), "stamps": ("at",),
         "lists": {"skills/*/for": {"key": ("company", "role"), "keep": True}},
@@ -240,6 +247,9 @@ JSON_FILES = {
     # An application's latest checks (verify_batch.py _record): the newer run stands whole.
     "documents/applications/*/verify.json": {"whole": ("",), "stamps": ("at",), "indent": 1,
                                              "ascii": True},
+    # The way a rerun of the drafts handed this application on (remake_drafts.py): the later
+    # run's record stands whole.
+    "documents/applications/*/remake.json": {"whole": ("",), "stamps": ("date",), "indent": 1},
     # The page as a reader of LinkedIn (place.PAGE_READS_FILE): the later check or read stands.
     "documents/network/page_reader.json": {"whole": ("",), "stamps": ("checked_at", "last_read_at"),
                                            "indent": 1, "ascii": True},
@@ -347,6 +357,8 @@ _PER_ROUND = ("named after the round that wrote it, once, and never written agai
 JSON_NAMES = {
     # run_round reads every round's summary to find a job set aside while a search ran; the
     # files themselves are wired as "documents/rounds/*.json" above.
+    "tools/app.py: *.json": "a page dump's screen documents, read only to tell whether the dump holds the page's screens (app.py no_screen), in the chat's scratch folder; never committed",
+    "tools/rules_view.py: *.json": "each search's left-out list, read only for how many each rule left out (rules_view.left_counts); merged as documents/rounds/filtered/*.json",
     "tools/run_round.py: *.json": "every round summary, read only, to hold a set-aside made during a search; written by write_summary, merged as documents/rounds/*.json",
     **dict.fromkeys(("00_portal_health.json", "01_dropped.json", "01_prefiltered.json",
                      "02_hydrated.json", "03_screened.json", "03_screened_all.json",
@@ -1351,10 +1363,11 @@ def merge(base: str, ours: str, theirs: str, path: str, later=None,
 #   other, under a [CONFIRM: ...] line, which the page asks as a To do card (and a chat with
 #   no page asks through the unconfirmed-facts upgrade), so the person decides which stays;
 # - a document of theirs (under documents/, cv/ or cover_letters/) both chats changed: the
-#   one committed later, with no copy anywhere. A resume or a letter is made again by the
+#   one committed later, never a copy beside it: a resume or a letter is made again by the
 #   app, and a copy beside it was left by the dozen (a report from a person's copy,
-#   2026-11-04). The person's own test (profile/tests/) is the same, but the other chat's
-#   version is kept in SPARE_DIR, out of their folders, which the app tidies;
+#   2026-11-04). The other chat's version is kept in SPARE_DIR, out of their folders, which
+#   the app tidies, as on every path here where one side is kept whole (the engine review,
+#   2026-11-05); the person's own test (profile/tests/) the same;
 # - anything else: this side's whole file, nothing of the other's merged into it, and the
 #   other side's whole file in the saved history (the merge's other parent) and in SPARE_DIR
 #   on this computer, never beside the person's files: a <file>.from-another-chat copy was
@@ -1478,6 +1491,11 @@ def _later_side(root: str, path: str) -> str:
     return "--theirs" if when("MERGE_HEAD") > when("HEAD") else "--ours"
 
 
+def _lost(stages: dict, keep: str) -> str:
+    """The blob of the side not kept ("--ours" kept: theirs, stage 3)."""
+    return stages["3" if keep == "--ours" else "2"]
+
+
 def _spare(root: str, path: str, blob: str) -> str:
     """Keep a blob of the losing side in SPARE_DIR; its path (relative)."""
     rel = f"{SPARE_DIR}/{path.replace('/', '__')}.{blob[:8]}"
@@ -1489,13 +1507,22 @@ def _spare(root: str, path: str, blob: str) -> str:
 
 
 def tidy_spares(root: str, now: float | None = None) -> None:
-    """Remove what SPARE_DIR holds past SPARE_DAYS. Never raises."""
-    import time
+    """Remove what SPARE_DIR holds past SPARE_DAYS, its age on the files' own clock
+    (file_clock; `now` is a now on it). Never raises."""
     base = os.path.join(root, SPARE_DIR)
     try:
-        for n in os.listdir(base):
+        names = os.listdir(base)
+        if not names:
+            return
+        try:
+            import file_clock
+            at = file_clock.now(base) if now is None else now
+        except ImportError:  # the driver alone, without the app's folder: Python's clock
+            import time
+            at = time.time() if now is None else now
+        for n in names:
             f = os.path.join(base, n)
-            if (now or time.time()) - os.path.getmtime(f) > SPARE_DAYS * 86400:
+            if at - os.path.getmtime(f) > SPARE_DAYS * 86400:
                 os.remove(f)
     except OSError:
         pass
@@ -1563,11 +1590,15 @@ def settle(root: str) -> tuple[list[str], list[str]]:
             # day apart stopped on every call prep the update rebuilt (its rehearsal).
             keep = _written(root, stages)
             _g(root, "checkout", keep, "--", p)
-            done.append(f"{p}: rebuilt by two chats; the later one is kept")
+            done.append(f"{p}: rebuilt by two chats; the later one is kept, and the other is "
+                        f"saved as {_spare(root, p, _lost(stages, keep))}")
         elif p.startswith(_DOCS) and not _written(root, stages):
+            # The later one, never a copy beside it; the other in the spare folder, out of
+            # their folders, as on every other path (the engine review, 2026-11-05).
             keep = _later_side(root, p)
             _g(root, "checkout", keep, "--", p)
-            done.append(f"{p}: changed by two chats; the later one is kept")
+            done.append(f"{p}: changed by two chats; the later one is kept, and the other is "
+                        f"saved as {_spare(root, p, _lost(stages, keep))}")
         elif p.startswith(_OWN_TESTS):
             keep = _later_side(root, p)
             lost = stages["3" if keep == "--ours" else "2"]
@@ -1577,7 +1608,7 @@ def settle(root: str) -> tuple[list[str], list[str]]:
         elif _same_upgrade(root, p):
             _g(root, "checkout", "--theirs", "--", p)
             done.append(f"{p}: the same improvement made by two chats; the other's copy "
-                        "is kept")
+                        f"is kept, and this one is saved as {_spare(root, p, stages['2'])}")
         else:
             try:
                 with open(full, encoding="utf-8", newline="") as fh:

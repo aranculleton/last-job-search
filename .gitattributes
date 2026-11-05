@@ -57,6 +57,8 @@ profile/asked.json merge=ljs-state text eol=lf
 profile/place.json merge=ljs-state text eol=lf
 profile/routines.json merge=ljs-state text eol=lf
 documents/upcoming.json merge=ljs-state text eol=lf
+documents/rules/set.json merge=ljs-state text eol=lf
+documents/rules/review.json merge=ljs-state text eol=lf
 documents/skill_answers.json merge=ljs-state text eol=lf
 profile/consistency_reviewed.json merge=ljs-state text eol=lf
 profile/tests/fixtures/score_baseline.json merge=ljs-state text eol=lf
@@ -69,6 +71,7 @@ documents/page_assets.json merge=ljs-state text eol=lf
 documents/network/page_reads_queue.json merge=ljs-state text eol=lf
 documents/network/page_reader.json merge=ljs-state text eol=lf
 documents/applications/*/verify.json merge=ljs-state text eol=lf
+documents/applications/*/remake.json merge=ljs-state text eol=lf
 documents/network/own_profile_review.json merge=ljs-state text eol=lf
 documents/network/.page_reads.json merge=ljs-state text eol=lf
 documents/network/.signed_in.json merge=ljs-state text eol=lf

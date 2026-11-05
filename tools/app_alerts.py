@@ -52,7 +52,9 @@ WORK_COST = {"search": 2, "draft": 3, "resume_for_contact": 3, "prep": 3, "netwo
              # The page's new code built and published by the listener: no drafting.
              "republish": 1,
              # A change to their own profile, and a fresh resume made from it.
-             "profile": 2}
+             "profile": 2,
+             # A form's own questions answered from the profile and the posting.
+             "form_answers": 2}
 
 SUGGEST_PER_DAY = 3
 PAUSE_AFTER = 3
@@ -262,7 +264,9 @@ def for_ready(ctx, item: dict, row: dict, folder: str) -> tuple[list, dict | Non
     checks = item["checks"]
     if not checks["passed"]:
         again = "Make it" if checks["line"].startswith("Not made yet") else "Make it again"
-        out.append(alert("checks", rid, checks["line"] + ".",
+        # One full stop: a line the verify step wrote ends with its own, and "read it.."
+        # reached the card (the maintainer, 2026-11-05).
+        out.append(alert("checks", rid, str(checks["line"]).rstrip(". ") + ".",
                          "Both documents are made and read back at the right length before "
                          "anything is sent.",
                          work("draft", again, f"{again}: {company}",
@@ -346,14 +350,17 @@ def for_message(ctx, item: dict) -> tuple[list, dict | None]:
         a["cost"] = cost(WORK_COST["network"])
         out.append(a)
     if item.get("limit") and item["chars"] > item["limit"]:
-        out.append(alert("too_long", mid, f"{item['chars']} characters: over the "
-                         f"{item['limit']} a {_CHANNEL.get(item['channel'], 'message')} "
-                         "allows.", "LinkedIn refuses a note over its limit; it cuts nothing.",
-                         work("tweak", "Shorten it", f"Shorten the note to {item['first_name']}",
-                              {"target": {"id": mid, "output": "message",
-                                          "contact": item["contact"], "rev": item["rev"]},
-                               "text": f"Under {item['limit']} characters."},
-                              f"tweak~{mid}~limit")))
+        a = alert("too_long", mid, f"{item['chars']} characters: over the "
+                  f"{item['limit']} a {_CHANNEL.get(item['channel'], 'message')} "
+                  "allows.", "LinkedIn refuses a note over its limit; it cuts nothing.",
+                  work("tweak", "Shorten it", f"Shorten the note to {item['first_name']}",
+                       {"target": {"id": mid, "output": "message",
+                                   "contact": item["contact"], "rev": item["rev"]},
+                        "text": f"Under {item['limit']} characters."},
+                       f"tweak~{mid}~limit"))
+        # Shortened by Claude by itself (app_model.message_fix): no Shorten it to press.
+        a["auto"] = bool(item.get("fix"))
+        out.append(a)
     return out, (_works_suggest(ctx, item) if item["kind"] == "first_note" else None)
 
 

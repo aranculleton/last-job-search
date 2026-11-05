@@ -113,6 +113,14 @@ ACTIONS = {
     "rule.lift": (("rule",), "exclude.py lift on the person's own rulings of that kind; or the "
                              "employer off do_not_target.json", "rule.restore"),
     "rule.restore": (("rule",), "the rulings back as they were", "rule.lift"),
+    "rule.drop": (("your_rule",), "a rule taken off from Your rules by its own writer: "
+                                  "BAR_DECLINED, BAR_EXCLUDED_OFF in search.py, or learned.py "
+                                  "retire", "rule.undrop"),
+    "rule.undrop": (("your_rule",), "the rule back as it was", "rule.drop"),
+    "rule.keep": (("your_rule",), "rules_view.keep_rule: Still right? answered yes, not asked "
+                                  "again for three months", ""),
+    "rules.seen": (("your_rules",), "rules_view.dismiss_brief: the Brief's line about old rules "
+                                    "set aside for the month", ""),
     "brief.move": (("schedule",), "routines.py move: the brief's days and time ({days, time} "
                                   "or {cron}) in profile/routines.json, and the one "
                                   "update_trigger call kept for a chat (routines.py calls)",
@@ -137,6 +145,8 @@ ACTIONS = {
     "job.keep": (("job",), "documents/rounds/kept/jobs.json: on the list past later searches",
                  "job.unkeep"),
     "job.unkeep": (("job",), "documents/rounds/kept/jobs.json: off it again", "job.keep"),
+    "job.edit": (("job",), "documents/rounds/kept/jobs.json: the posting's title, pay or place "
+                           "as the person corrected it, kept with the posting", "job.edit"),
     "person.call_booked": (("person", "message"), "state.py set --status call_booked, the "
                                                   "call's day as its next action",
                            "person.status"),
@@ -206,7 +216,7 @@ ACTIONS = {
                      "learned.py decide; the profile at its mark; an update's question "
                      "(profile_upgrades.py --no, or a chat to set it up); learned.py settle; "
                      "a skill's one answer (skill_answers.record), a yes queuing work/tweak~ "
-                     "for each resume drafted today without it",
+                     "for each unsent resume still without it",
                      "needs.unanswer"),
     "needs.unanswer": (("fact",), "the profile: the mark put back", "needs.answer"),
     "setup.answer": (("setup_step",), "profile/setup_answers.json, read by /setup",
@@ -269,22 +279,105 @@ ACTIONS = {
 
 class Refused(Exception):
     """The action cannot apply: its receipt says why, in plain words. `ask`, where what is
-    missing is one value the person can give ({key, label, type}: the action's value key,
-    the words over its field, "date" or "text"), goes on the receipt, and the page shows the
-    field beside the reason: a refusal that asked "Which day is it?" gave nowhere to say it,
-    and the same empty tap went again (the audit, 2026-11-03)."""
+    missing is one value the person can give (`ask()`: the action's value key, the words
+    over its control and the kind of answer), goes on the receipt, and the page draws the
+    control that fits beside the reason: a refusal that asked "Which day is it?" gave nowhere
+    to say it, and the same empty tap went again (the audit, 2026-11-03); and a day typed
+    into a text box, or "Say it in Chat", was a chat turn for one tap (the maintainer,
+    2026-11-05: "surely that one we could just have a date picker")."""
 
     def __init__(self, message: str = "", ask: dict | None = None):
         super().__init__(message)
         self.ask = ask
 
 
-def _ask_day(key: str, label: str = "Which day?") -> dict:
-    return {"key": key, "label": label, "type": "date"}
+# The kinds of answer the page has a control for (templates/app/DESIGN.md, "Asking the
+# person"): a date picker (with a time beside it where `time` names the value's time key), a
+# time, a few choices as one row of chips, a yes and a no, a number, a slider for a scale
+# (`min` to `max`), or a line of text where words are the answer. A refused tap and a
+# question Claude asks (app.py done --question --answer <kind>) name one; the page draws it.
+ANSWER_KINDS = ("date", "time", "choice", "yesno", "number", "scale", "text")
+
+
+def ask(key: str, label: str, kind: str = "text", choices=(), time: str = "",
+        lo=None, hi=None) -> dict:
+    """What a refusal or a question needs, as the page reads it: {key, label, kind, type,
+    choices, time, min, max}. `choices` are (value, words) pairs for "choice" and "yesno";
+    `type` repeats the kind as pages before 4.10 read it ("date" or "text")."""
+    if kind not in ANSWER_KINDS:
+        raise ValueError(f"an answer is one of {', '.join(ANSWER_KINDS)}, not {kind!r}")
+    if kind == "yesno" and not choices:
+        choices = (("yes", "Yes"), ("no", "No"))
+    out = {"key": key, "label": label, "kind": kind, "type": "date" if kind == "date" else "text"}
+    if choices:
+        out["choices"] = [{"value": str(v), "label": str(w)} for v, w in choices][:6]
+    if time:
+        out["time"] = time
+    if lo is not None:
+        out["min"] = lo
+    if hi is not None:
+        out["max"] = hi
+    if kind == "scale":
+        out.setdefault("min", 1)
+        out.setdefault("max", 5)
+    return out
+
+
+def _ask_day(key: str, label: str = "Which day?", time: str = "") -> dict:
+    return ask(key, label, "date", time=time)
 
 
 def _ask_text(key: str, label: str) -> dict:
-    return {"key": key, "label": label, "type": "text"}
+    return ask(key, label, "text")
+
+
+def clean_ask(given) -> dict | None:
+    """An `ask` as a receipt or a work item may carry it: only its known fields, in their
+    shapes, or None. A kind a page has no control for is a line of text."""
+    if not isinstance(given, dict) or not str(given.get("key") or "").strip():
+        return None
+    kind = str(given.get("kind") or given.get("type") or "text")
+    kind = kind if kind in ANSWER_KINDS else "text"
+    out = {"key": str(given["key"]).strip()[:40], "label": str(given.get("label") or "")[:120],
+           "kind": kind, "type": "date" if kind == "date" else "text"}
+    choices = [c for c in given.get("choices") or [] if isinstance(c, dict)
+               and str(c.get("value") or "").strip()][:6]
+    if choices:
+        out["choices"] = [{"value": str(c["value"])[:80],
+                           "label": str(c.get("label") or c["value"])[:60]} for c in choices]
+    if kind == "yesno" and not choices:
+        out["choices"] = [{"value": "yes", "label": "Yes"}, {"value": "no", "label": "No"}]
+    elif kind == "choice" and len(choices) < 2:
+        out["kind"] = "text"
+    if str(given.get("time") or "").strip():
+        out["time"] = str(given["time"]).strip()[:40]
+    for k in ("min", "max"):
+        try:
+            if given.get(k) is not None:
+                out[k] = float(given[k]) if "." in str(given[k]) else int(given[k])
+        except (TypeError, ValueError):
+            pass
+    if out["kind"] == "scale":
+        out.setdefault("min", 1)
+        out.setdefault("max", 5)
+        if out["max"] <= out["min"]:
+            out["max"] = out["min"] + 4
+    return out
+
+
+# A refusal from before receipts named their answer (4.9 and earlier) still gets its
+# control: the answer each action's refusal asks for when it asks a question, which the page
+# reads only for a refused receipt with no answer of its own whose reason is a question. The
+# maintainer's To do held "Which day is it? Give it as 28 Oct." with "Say it in Chat" under
+# it (2026-11-05).
+OLD_REFUSAL_ASKS = {
+    "outcome.interview": _ask_day("on", "Which day is it?", time="time"),
+    "person.call_booked": _ask_day("on", "Which day is the call?", time="time"),
+    "job.applied": _ask_day("on", "When did you apply?"),
+    "ready.applied": _ask_day("on", "When did you apply?"),
+    "due.snooze": _ask_day("until", "Until which day?"),
+    "brief.pause": _ask_day("until", "Until which day?"),
+}
 
 
 # ------------------------------------------------------------------ the item index
@@ -536,6 +629,7 @@ def _sent_row(target: dict):
 # (FUNCTIONS_SPEC 4.1). A bare ISO day is "on" wherever the action takes a day.
 BARE = {
     "job.dismiss": "why", "job.bring_back": "why", "job.applied": "on", "job.keep": "why",
+    "job.edit": "title",
     "ready.applied": "on", "msg.sent": "text", "msg.received": "text", "msg.skip": "why",
     "msg.unskip": "why", "person.stop": "why", "person.status": "status",
     "person.call_booked": "on", "setting.set": "value", "needs.answer": "value",
@@ -715,6 +809,30 @@ def _dismiss_rule(why: str, t: dict) -> str:
     return f"Not this posting: {what}. Their words: {why}"
 
 
+def _keep_left_out(t: dict, why: str, day) -> bool:
+    """A job the page left out by the search's own rules (app_model.left_out) before any ruling
+    was written for it, brought back: the person's word recorded where the page reads it, its
+    posting marked lifted in seen_jobs.json, so the rules never leave it out again. False when
+    the page does not leave it out."""
+    import app_model
+    import exclude
+    from lookup_score import norm
+    u = norm(str(t.get("url") or ""))
+    if not u or not any(norm(str(row.get("url") or "")) == u
+                        for _n, _k, row, _w in app_model.left_out(day)):
+        return False
+    path = person.state("job_scraper", "seen_jobs.json")
+    data = exclude.load_seen(path)
+    key = next((k for k, e in data["seen"].items()
+                if isinstance(e, dict) and norm(str(e.get("url") or k)) == u), u)
+    entry = data["seen"].setdefault(key, {})
+    entry.update({"url": entry.get("url") or t["url"], "title": entry.get("title") or
+                  t.get("title", ""), "company": entry.get("company") or t.get("company", ""),
+                  "status": "lifted", "lifted_date": day.isoformat(), "lifted_because": why})
+    exclude.save_seen(data, path)
+    return True
+
+
 def _job_bring_back(r: Run) -> dict:
     import exclude
     t = r.target
@@ -756,7 +874,7 @@ def _job_bring_back(r: Run) -> dict:
                 "undo": {"action": "job.dismiss", "target": new}, "target_after": new}
     lifted = exclude.lift(urls=[t["url"]], why=why, today=r.day.isoformat(),
                           path=person.state("job_scraper", "seen_jobs.json"))
-    if not lifted:
+    if not lifted and not _keep_left_out(t, why, r.day):
         raise Refused("It was not ruled out, so there is nothing to bring back.")
     try:
         import learned
@@ -936,6 +1054,47 @@ def _job_keep(r: Run, keep: bool = True) -> dict:
             "undo": {"action": "job.unkeep" if keep else "job.keep", "target": dict(t)}}
 
 
+JOB_FIELDS = ("title", "pay", "place")
+
+
+def _job_edit(r: Run) -> dict:
+    """A posting's title, pay or place as the person corrected it on its card: kept with the
+    posting in the kept list, so the list and every later search show it so. Code only; its
+    Undo puts back what was there (`restore`)."""
+    t = r.target
+    if not t.get("url"):
+        raise Refused("This posting has no link to keep your change by.")
+    v = r.value if isinstance(r.value, dict) else {}
+    got = app_model.kept_jobs()
+    before = got.get(t["url"])
+    rec = dict(before) if isinstance(before, dict) else {
+        "round": t.get("round"), "rank": t.get("rank"), "title": t.get("title", ""),
+        "company": t.get("company", ""), "kept_on": r.day.isoformat(),
+        "why": "you corrected its details"}
+    was = dict(rec.get("edit") or {}) if isinstance(rec.get("edit"), dict) else None
+    if "restore" in v:
+        back = v.get("restore")
+        if isinstance(back, dict) and back:
+            rec["edit"] = {k: str(back[k]) for k in JOB_FIELDS if back.get(k)}
+        else:
+            rec.pop("edit", None)
+    else:
+        change = {k: " ".join(str(v.get(k) or "").split())[:200] for k in JOB_FIELDS
+                  if str(v.get(k) or "").strip()}
+        if not change:
+            raise Refused("Nothing to change: give its title, its pay or its place.")
+        rec["edit"] = dict(was or {}, **change)
+    got[t["url"]] = rec
+    path = _kept_path()
+    os.makedirs(os.path.dirname(path), exist_ok=True)
+    with open(path, "w", encoding="utf-8", newline="\n") as fh:
+        json.dump(got, fh, indent=1, ensure_ascii=False, sort_keys=True)
+        fh.write("\n")
+    said = ", ".join(f"{k} {rec['edit'][k]}" for k in JOB_FIELDS if (rec.get("edit") or {}).get(k))
+    return {"note": f"Changed: {said}." if said else "Put back as the search found it.",
+            "undo": {"action": "job.edit", "target": dict(t), "value": {"restore": was}}}
+
+
 # ---- the tracker
 
 
@@ -1044,7 +1203,7 @@ def _stage_day(r: Run) -> str:
         return dt.date.fromisoformat(given[:10]).isoformat()
     except ValueError:
         raise Refused(f"{given} is not a day: give it as {r.day.isoformat()}.",
-                      ask=_ask_day("on", "Which day is it?")) from None
+                      ask=_ask_day("on", "Which day is it?", time="time")) from None
 
 
 def _stage_time(r: Run) -> tuple:
@@ -1070,7 +1229,7 @@ def _stage_time(r: Run) -> tuple:
     got = upcoming.call_time(said, home)
     if not got:
         raise Refused(f"The time \"{said}\" could not be read: write it like 14:30, 2pm, or "
-                      "10am ET.")
+                      "10am ET.", ask=ask("time", "What time is it?", "time"))
     if got.get("end") and not minutes:
         h1, m1 = (int(x) for x in got["time"].split(":"))
         h2, m2 = (int(x) for x in got["end"].split(":"))
@@ -1656,6 +1815,11 @@ def _decline_employer(company: str, why: str, day: str) -> str:
         return ""
     have[k] = f"turned down on the page, {day}: {why}"
     profile_set.set_line("search.py", "BAR_DECLINED", have)
+    try:
+        import rules_view
+        rules_view.note_set(f"rule~declined~{k}", why, day, name=" ".join(company.split()))
+    except Exception:  # noqa: BLE001  the day is kept in the setting's own words too
+        pass
     return k
 
 
@@ -1981,6 +2145,8 @@ def _search_set(r: Run) -> dict:
     on it queued (a search, an employer's board found)."""
     import tweak
     what = r.words("what")
+    if what == "languages":
+        return _languages_set(r)
     p = _SEARCH_ROWS.get(what)
     if not p:
         raise Refused("That is not a search setting the page can change.")
@@ -2006,7 +2172,7 @@ def _search_set(r: Run) -> dict:
         v = float(m.group(0).replace(",", "")) if m else None
     if what == "pay" and not isinstance(v, (int, float)):
         raise Refused("Give the lowest pay you would take, as one number.",
-                      ask=_ask_text("value", "The lowest pay you would take"))
+                      ask=ask("value", "The lowest pay you would take", "number"))
 
     def one(change) -> dict:
         work = {"kind": "tweak", "args": {"target": {"id": "jobs", "output": "jobs"},
@@ -2025,6 +2191,10 @@ def _search_set(r: Run) -> dict:
                                          "asked_at": app_model.stamp(r.at), "priority": 0,
                                          "status": "queued", "stage": 0,
                                          "stages": page_db.progress(item["kind"])["stages"]})
+        if what in ("places", "roles", "window", "pay"):
+            # The day it was set and their words, for Your rules (tools/rules_view.py).
+            import rules_view
+            rules_view.note_set(f"rule~{what}", r.words("said"), r.day.isoformat())
         return got
 
     if steps is not None:
@@ -2101,6 +2271,122 @@ def _rule_restore(r: Run) -> dict:
             e.pop("lifted_because", None)
     exclude.save_seen(data, path)
     return {"note": "Left out again.", "undo": None}
+
+
+# ---- Your rules (tools/rules_view.py): drop one, keep one as it is, the Brief's line set aside
+
+
+def _set_list(key: str, values: list) -> None:
+    import profile_set
+    profile_set.set_line("search.py", key, values)
+
+
+def _got_list(key: str) -> list:
+    import profile_set
+    got = profile_set.get("search.py", key)
+    return list(got) if isinstance(got, (list, tuple)) and got is not profile_set.MISSING else []
+
+
+def _rule_drop(r: Run) -> dict:
+    """A rule taken off from Your rules, through its own writer: an employer turned down by
+    name comes off BAR_DECLINED; a kind of employer ruled out is named in BAR_EXCLUDED_OFF
+    (its patterns are code no page writes); a learned rule is retired (learned.py, kept as
+    history). Each holds from the next read of the rules: Jobs at once, a search from the next."""
+    import rules_view
+    t = r.target
+    drop = t.get("drop") if isinstance(t.get("drop"), dict) else {}
+    kind = drop.get("kind")
+    if kind == "declined":
+        k = str(drop.get("key") or "")
+        if k not in run_round_declined():
+            raise Refused("That employer is not turned down any more.")
+        why = run_round_declined()[k]
+        _undecline(k)
+        undo = {"kind": "declined", "key": k, "why": why}
+        said = "Their roles are shown again from now on."
+    elif kind == "sector":
+        why = str(drop.get("why") or "")
+        off = _got_list("BAR_EXCLUDED_OFF")
+        if why in off:
+            raise Refused("That rule is off already.")
+        _set_list("BAR_EXCLUDED_OFF", off + [why])
+        undo = {"kind": "sector", "why": why}
+        said = "Those employers are shown again from now on."
+    elif kind == "learned":
+        import learned
+        try:
+            learned.retire(int(drop.get("n") or 0))
+        except SystemExit as e:
+            raise Refused(str(e).replace("learned: ", "")) from None
+        undo = {"kind": "learned", "n": int(drop["n"])}
+        said = "That rule no longer applies."
+    else:
+        raise Refused("That rule is changed with its pencil, not taken off.")
+    rules_view.drop_set(str(t.get("id") or ""))
+    return {"note": said, "undo": {"action": "rule.undrop", "target": dict(t), "value": undo}}
+
+
+def run_round_declined() -> dict:
+    import run_round
+    return run_round.declined_now()
+
+
+def _rule_undrop(r: Run) -> dict:
+    v = r.value
+    if v.get("kind") == "declined":
+        import profile_set
+        have = dict(run_round_declined())
+        have[str(v["key"])] = str(v.get("why") or "turned down on the page")
+        profile_set.set_line("search.py", "BAR_DECLINED", have)
+    elif v.get("kind") == "sector":
+        _set_list("BAR_EXCLUDED_OFF", [x for x in _got_list("BAR_EXCLUDED_OFF")
+                                       if x != v.get("why")])
+    elif v.get("kind") == "learned":
+        import learned
+        rows = learned.load()
+        n = int(v.get("n") or 0)
+        if 1 <= n <= len(rows):
+            rows[n - 1]["status"] = "active"
+            learned._save(rows)
+    return {"note": "Back as it was.", "undo": None}
+
+
+def _rule_keep(r: Run) -> dict:
+    """"Still right?" answered yes: kept as it is, and not asked again for three months."""
+    import rules_view
+    rules_view.keep_rule(str(r.target.get("id") or ""), r.day.isoformat())
+    return {"note": "Kept as it is.", "undo": None}
+
+
+def _rules_seen(r: Run) -> dict:
+    """The Brief's line about old rules set aside: not said again this month."""
+    import rules_view
+    rules_view.dismiss_brief(r.day.isoformat())
+    return {"note": "Not shown again this month.", "undo": None}
+
+
+def _languages_set(r: Run) -> dict:
+    """A language the person works in, added or taken off (search.py LANGUAGES_HELD): a job
+    needing it is left out, or no longer, from the next read of the rules."""
+    import rules_view
+    have = [str(x).lower() for x in _got_list("LANGUAGES_HELD")] or ["english"]
+    add, rem = r.words("add").lower(), r.words("remove").lower()
+    if not add and not rem:
+        raise Refused("Say which language to add or take off.",
+                      ask=ask("add", "A language you work in", "text"))
+    if add and not re.fullmatch(r"[a-z][a-z -]{1,30}", add):
+        raise Refused("Give the language by its name, in English.")
+    if add and add in have or rem and rem not in have:
+        return {"note": "It was like that already.", "undo": None}
+    if rem and len(have) == 1:
+        raise Refused("That is the only language you work in.")
+    new = have + [add] if add else [x for x in have if x != rem]
+    _set_list("LANGUAGES_HELD", new)
+    rules_view.note_set("rule~languages", r.words("said"), r.day.isoformat())
+    back = {"what": "languages", "remove": add} if add else {"what": "languages", "add": rem}
+    return {"note": (f"{add.capitalize()} added: a job needing it is no longer left out." if add
+                     else f"{rem.capitalize()} taken off."),
+            "undo": {"action": "search.set", "target": dict(r.target), "value": back}}
 
 
 # ---- the brief's schedule and a break (tools/routines.py: move, pause, resume)
@@ -2845,7 +3131,8 @@ def _fact_path(target: dict) -> str:
 def _skill_answer(r: Run, t: dict) -> dict:
     """Their answer to a skill postings asked about, for every application at once
     (tools/skill_answers.py), dated by the tap: an answer a chat took later stands over it.
-    A yes queues each resume drafted today without it, redone with it by itself."""
+    A yes queues each unsent resume still without it (waiting on it, or drafted today for a
+    posting that asked), redone with it by itself."""
     import skill_answers
     choice = r.words("value").lower()
     if choice not in skill_answers.ANSWERS:
@@ -2867,7 +3154,7 @@ def _skill_answer(r: Run, t: dict) -> dict:
             "stages": page_db.progress("tweak")["stages"], "stage": 0})
     return {"note": f"Noted: you can claim {skill}." + (
         f" Claude puts it on {'the resume' if len(due) == 1 else str(len(due)) + ' resumes'} "
-        "drafted today without it." if due else ""), "undo": None}
+        "still without it." if due else ""), "undo": None}
 
 
 def _needs_answer(r: Run) -> dict:
@@ -2879,7 +3166,9 @@ def _needs_answer(r: Run) -> dict:
             profile_upgrades.record_no(t["upgrade"], today=r.day)
             return {"note": profile_upgrades.NO_REPLY, "undo": None}
         if choice != "yes":
-            raise Refused("Yes or not now: which?")
+            raise Refused("Yes or not now: which?",
+                          ask=ask("value", "Set it up now?", "choice",
+                                  (("yes", "Yes"), ("no", "Not now"))))
         wid = "talk~upgrade~" + page_db.safe_id(t["upgrade"])
         if _on_its_way(r, wid):
             return {"note": "Already on its way.", "undo": None}
@@ -2896,13 +3185,18 @@ def _needs_answer(r: Run) -> dict:
         import learned
         choice = r.words("value")
         if choice not in ("later", "older", "both"):
-            raise Refused("The later one, both, or the earlier one: which?")
+            raise Refused("The later one, both, or the earlier one: which?",
+                          ask=ask("value", "Which to keep?", "choice",
+                                  (("later", "The later one"), ("both", "Both"),
+                                   ("older", "The earlier one"))))
         return {"note": learned.settle(choice, today=r.day.isoformat()), "undo": None}
     if t["kind"] == "offer":
         import learned
         choice = r.words("value")
         if choice not in ("keep", "switch"):
-            raise Refused("Keep yours, or try the new way: which?")
+            raise Refused("Keep yours, or try the new way: which?",
+                          ask=ask("value", "Which way?", "choice",
+                                  (("keep", "Keep yours"), ("switch", "Try the new way"))))
         learned.decide(int(t["n"]), choice, today=r.day.isoformat())
         return {"note": "Kept your way." if choice == "keep" else "Trying the new way.",
                 "undo": None}
@@ -3267,6 +3561,7 @@ HANDLERS = {
     "profile.pasted": _profile_pasted, "process.register": _process_register,
     "ready.sent_to_contact": _ready_sent_to_contact,
     "job.add": _job_add, "job.keep": _job_keep, "job.unkeep": lambda r: _job_keep(r, keep=False),
+    "job.edit": _job_edit,
     "person.call_booked": _call_booked, "referral.agreed": _referral_agreed,
     "referral.ended": _referral_ended, "due.snooze": _due_snooze,
     "msg.skip": _msg_skip, "msg.unskip": _msg_unskip, "person.stop": _person_stop,
@@ -3287,12 +3582,16 @@ HANDLERS = {
     "upcoming.add": _upcoming_add, "upcoming.remove": _upcoming_remove,
     "requests.unwithdrawn": _unwithdrawn, "search.set": _search_set,
     "search.unset": _search_unset, "rule.lift": _rule_lift, "rule.restore": _rule_restore,
+    "rule.drop": _rule_drop, "rule.undrop": _rule_undrop, "rule.keep": _rule_keep,
+    "rules.seen": _rules_seen,
     "brief.move": _brief_move, "brief.pause": _brief_pause, "brief.resume": _brief_resume,
     "brief.off": lambda r: _brief_switch(r, "off"), "brief.on": lambda r: _brief_switch(r, "on"),
 }
 assert set(HANDLERS) | {"undo"} == set(ACTIONS)
 # The two answers nothing on the page takes back, and why: said in a chat instead.
 NO_UNDO = {
+    "rule.keep": "a rule kept as it is changes nothing; the rule's own pencil or trash changes it",
+    "rules.seen": "the Brief's line set aside for the month; it comes back next month by itself",
     "outcome.undo": "it is itself the taking back of an outcome",
     "interview.unrework": "it is itself the taking back of an answer kept to work on",
     "process.register": "a hiring process registered is a tracker row and its folder that "
@@ -3329,8 +3628,8 @@ def _receipt(result: str, note: str, by: str, now: dt.datetime, aid: str, act: d
     if result == "ok":
         out["undo"] = undo
         out["guard"] = guard_after
-    elif ask and ask.get("key"):
-        out["ask"] = {k: str(ask.get(k) or "") for k in ("key", "label", "type")}
+    elif clean_ask(ask):
+        out["ask"] = clean_ask(ask)
     return out
 
 

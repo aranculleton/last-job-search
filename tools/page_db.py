@@ -604,6 +604,11 @@ STAGES = {
     # The page's own code changed: the listener alone builds it and publishes it
     # (tools/app_listen.py; `already` closes it with nothing published).
     "republish": [("build", "Building the new page", 20), ("publish", "Putting it up", 20)],
+    # An application form's own questions, pasted on its card ("Why us?", "An example of
+    # when you used X"): answered from the profile and the posting and kept with the
+    # application (tools/form_answers.py); never the resume or the letter.
+    "form_answers": [("read", "Reading the questions", 20), ("write", "Writing your answers", 60),
+                     ("check", "Checking every fact", 30), ("save", "Saving them with the application", 15)],
 }
 # Where each kind runs by default, where it can run, and whether it is a heavy job (a whole
 # session of its own) that counts against the cap.
@@ -626,6 +631,7 @@ WORK_KINDS = {
     "own_profile": {"to": "either", "can": ("cloud", "computer"), "heavy": False},
     "republish": {"to": "either", "can": ("cloud", "computer"), "heavy": False},
     "profile": {"to": "either", "can": ("cloud", "computer"), "heavy": False},
+    "form_answers": {"to": "either", "can": ("cloud", "computer"), "heavy": False},
 }
 assert set(STAGES) == set(WORK_KINDS)
 # Three big jobs at once on one computer (a search, a networking run and an interview prep, the
@@ -646,12 +652,80 @@ FINISHED = ("done", "failed", "stopped")
 LEASE_S = 30 * 60
 
 
+def work_times(db: dict, now: dt.datetime, days: int = 30, least: int = 3) -> dict:
+    """{kind: seconds} for each kind of work this copy has finished at least `least` times in
+    the last `days`: the median of finished_at minus claimed_at, one item at a time (a batch
+    of drafts is that many items). The page's gauge says it, falling back to the kind's
+    default stages where there is no history (templates/app/DESIGN.md, the gauge): "about 3
+    minutes" for work that takes this person's Claude twelve said nothing true (the
+    maintainer, 2026-11-05)."""
+    import app_model
+    now = now if now.tzinfo else now.replace(tzinfo=dt.timezone.utc)
+    by: dict = {}
+    for doc in (db.get("work") or {}).values():
+        w = doc.get("data") if isinstance(doc, dict) and "data" in doc else doc
+        if not isinstance(w, dict) or str(w.get("status") or "") != "done":
+            continue
+        start = app_model.parse_time(w.get("claimed_at"))
+        end = app_model.parse_time(w.get("finished_at"))
+        if not start or not end or (now - end).days > days:
+            continue
+        took = (end - start).total_seconds()
+        if 5 <= took <= 4 * 3600 and str(w.get("kind") or "") in STAGES:
+            by.setdefault(str(w["kind"]), []).append(took)
+    out = {}
+    for kind, xs in sorted(by.items()):
+        if len(xs) >= least:
+            xs.sort()
+            mid = len(xs) // 2
+            out[kind] = int(round(xs[mid] if len(xs) % 2 else (xs[mid - 1] + xs[mid]) / 2))
+    return out
+
+
 def progress(kind: str) -> dict:
     """The default stages of a kind of work, with their usual seconds."""
     if kind not in STAGES:
         raise KeyError(f"no kind of work {kind!r}; one of {', '.join(sorted(STAGES))}")
     stages = [{"key": k, "name": n, "est_s": s} for k, n, s in STAGES[kind]]
     return {"kind": kind, "stages": stages, "total_s": sum(s["est_s"] for s in stages)}
+
+
+# A search asked to draft what it finds (args.draft: the page's Find jobs, "Draft every one as
+# it is found") is one job: the search, then a draft of each job that passes every rule, each
+# claimed with it as it is found (search_drafts), so the drafting workflow writes them together
+# in the search's own chat while it goes on, and its card counts them, "2 of 5 drafted". "Find
+# N jobs and draft them all" took two searches and 13 chats run by hand (the maintainer,
+# 2026-11-05). Its stages end with this one; DRAFT_ALL_MAX is the most it drafts in one go.
+SEARCH_DRAFT_STAGE = ("draft", "Drafting each one", 900)
+DRAFT_ALL_MAX = 25
+DRAFTED = "drafted"
+
+
+def drafts_all(item: dict) -> bool:
+    """Whether this work is a search that drafts every job it finds."""
+    args = item.get("args") if isinstance(item.get("args"), dict) else {}
+    return str(item.get("kind") or "") == "search" and args.get("draft") is True
+
+
+def draft_total(item: dict) -> int:
+    """How many a search that drafts what it finds drafts: the number asked for (every one
+    that fits, 0, is DRAFT_ALL_MAX), never more than DRAFT_ALL_MAX."""
+    args = item.get("args") if isinstance(item.get("args"), dict) else {}
+    try:
+        n = int(args.get("size") or 10)
+    except (TypeError, ValueError):
+        n = 10
+    return DRAFT_ALL_MAX if n <= 0 else min(n, DRAFT_ALL_MAX)
+
+
+def item_stages(item: dict) -> list[dict]:
+    """A work item's stages, its kind's own, and a search's that drafts what it finds ending
+    with drafting each one."""
+    stages = progress(str(item.get("kind") or ""))["stages"]
+    if drafts_all(item):
+        k, n, s = SEARCH_DRAFT_STAGE
+        stages = stages + [{"key": k, "name": n, "est_s": s}]
+    return stages
 
 
 def can_take(item: dict, chat_kind: str) -> bool:
@@ -799,7 +873,9 @@ def next_item(db: dict, chat_kind: str, now: dt.datetime,
             continue
         got = {"work": wid, "version": work[wid]["version"], "kind": item["kind"],
                "title": item.get("title") or "", "locks": locks_for(item),
-               "stages": progress(item["kind"])["stages"]}
+               "stages": item_stages(item)}
+        if drafts_all(item):
+            got["draft_all"] = draft_total(item)
         if str(item.get("status") or "") in ACTIVE:
             got["again"] = int(item.get("attempt") or 1) + 1
         if item["kind"] == "tweak":
@@ -1035,8 +1111,9 @@ def round_progress(text: str) -> dict | None:
 
 def stage_index(kind: str, stage, given: list | None = None) -> int:
     """A stage named by its key (`app.py progress <kind>`) or its number, as a number."""
-    keys = [k for k, _, _ in STAGES.get(kind, [])]
-    n = len(given) if given else len(keys)
+    keys = [k for k, _, _ in STAGES.get(kind, [])] + (
+        [SEARCH_DRAFT_STAGE[0]] if kind == "search" else [])
+    n = len(given) if given else len(keys) - (1 if kind == "search" else 0)
     text = str(stage).strip()
     if text.isdigit():
         at = int(text)
@@ -1249,7 +1326,8 @@ def pin(db: dict, work_id: str, now: dt.datetime, out_dir: str, stage=None, line
     if line:
         fields["steps"] = (list(item.get("steps") or []) + [{"at": at, "text": line}])[-50:]
     if count and int(count.get("total") or 0) > 0:
-        fields["count"] = {"done": int(count.get("done") or 0), "total": int(count["total"])}
+        fields["count"] = {"done": int(count.get("done") or 0), "total": int(count["total"]),
+                           **({"word": str(count["word"])} if count.get("word") else {})}
     if left_s is not None:
         fields.update(left_s=max(0, int(left_s)), left_at=at)
     w = Writes(out_dir)
@@ -1267,7 +1345,10 @@ def pin(db: dict, work_id: str, now: dt.datetime, out_dir: str, stage=None, line
             stopped.append(mid)
             continue
         mf = {"status": "running", "lease_until": fields["lease_until"]}
-        for k in ("stage", "stage_at", "count", "left_s", "left_at"):
+        # Moved with it only where they are the same kind of work: a search's drafts (one job
+        # with it, search_drafts) keep their own stages, and its count is the search's alone.
+        for k in ("stage", "stage_at", "count", "left_s", "left_at") \
+                if m.get("kind") == item.get("kind") else ():
             if k in fields:
                 mf[k] = fields[k]
         w.add("update", "work", mid, mf, if_version=mdoc["version"])
@@ -1374,45 +1455,86 @@ LEAVES = ("done", "failed", "stopped", "needs_you")
 STOPPED_SAID = "Stopped, as you asked."
 
 
-# A file's time and a claim's are both this computer's clock, read a moment apart.
+# A file's age and a claim's, each on its own clock (file_clock), read a moment apart.
 SAVED_SLACK_S = 120
 
 
-def search_unsaved(item: dict) -> str:
+UNSAVED_SEARCH = ("the search's shortlist is not saved yet, so Jobs would show nothing new: "
+                  "wait for run_round.py to end (it saves the shortlist as it ends), then finish")
+_STAMP = re.compile(r"^(round|work): (\S+)\s*$", re.M)
+
+
+def search_run(work_id: str = "") -> str:
+    """The round this search's run is writing, by what its round.log says (run_round.py
+    round_stamp), or "": the one that names this work item, else the newest round run in
+    this copy. Read from the logs, never the files' times: a job chat is a fresh copy made
+    after the claim, where every saved round is newer than the claim."""
+    import person
+    runs = []
+    for log in glob.glob(os.path.join(glob.escape(person.state("rounds")), "*", "round.log")):
+        try:
+            with open(log, encoding="utf-8", errors="replace") as fh:
+                said = _STAMP.findall(fh.read())
+        except OSError:
+            continue
+        names = [v for k, v in said if k == "round"]
+        if not names:
+            continue
+        works = {v for k, v in said if k == "work"}
+        num = re.match(r"^r(\d+)", names[-1])
+        runs.append((bool(work_id) and safe_id(work_id) in {safe_id(w) for w in works},
+                     int(num.group(1)) if num else -1, names[-1]))
+    return max(runs)[2] if runs else ""
+
+
+def search_unsaved(item: dict, work_id: str = "") -> str:
     """Why a search may not be marked done yet, in plain words, or "": its shortlist is not
-    saved where Jobs reads it (documents/rounds, the newest round, written since the search
-    was taken on). A search marked done while run_round.py still ran in the background said
-    "Your shortlist of 60 ranked jobs is ready" over a Jobs that said "Nothing new"
-    (2026-11-04). No profile here (the app itself) checks nothing."""
+    saved where Jobs reads it (documents/rounds). A search marked done while run_round.py
+    still ran in the background said "Your shortlist of 60 ranked jobs is ready" over a Jobs
+    that said "Nothing new" (2026-11-04). Its own round decides (search_run): its shortlist
+    must be saved. Only where no round was run in this copy is the newest saved round's age
+    weighed against the claim's. No profile here (the app itself) checks nothing."""
     import app_model
     import person
     try:
+        run = search_run(work_id or str(item.get("id") or ""))
+        if run:
+            saved = os.path.isfile(person.state("documents", "rounds", run + ".json"))
+            return "" if saved else UNSAVED_SEARCH
         newest = app_model.newest_round()
     except person.NoProfile:
         return ""
     since = app_model.parse_time(item.get("claimed_at") or item.get("asked_at"))
+    # The round's age on the files' clock, the claim's on Python's, and only the two ages
+    # compared: a file's time against a claim's time mixed the two, and with Python's clock
+    # moved on a shortlist saved a minute ago read as saved before the search (2026-11-05).
     try:
-        written = os.path.getmtime(newest) if newest else None
+        import file_clock
+        saved_ago = file_clock.age(newest) if newest else None
     except OSError:
-        written = None
-    if written is None or (since is not None
-                           and written < since.timestamp() - SAVED_SLACK_S):
-        return ("the search's shortlist is not saved yet, so Jobs would show nothing new: "
-                "wait for run_round.py to end (it saves the shortlist as it ends), then finish")
+        saved_ago = None
+    claimed_ago = (dt.datetime.now(dt.timezone.utc) - since).total_seconds() if since else None
+    if saved_ago is None or (claimed_ago is not None
+                             and saved_ago > claimed_ago + SAVED_SLACK_S):
+        return UNSAVED_SEARCH
     return ""
 
 
 def finish(db: dict, work_id: str, now: dt.datetime, out_dir: str, summary: str = "",
            status: str = "done", error: str = "", links=(), reply: str = "", thread: str = "",
            chat_kind: str = "cloud", dump_dir: str = "", chat: str = "",
-           question: str = "") -> dict:
+           question: str = "", about: str = "", answer: dict | None = None,
+           answered=()) -> dict:
     """The batch that finishes one work item (the app skill, step 5): the item `done` (or
     `failed`, with `error` in plain words, or `stopped` after their Stop), its one-sentence
     summary and links, pinned to the version read; each of its locks the dump holds, deleted
     and pinned; and with `reply`, the chat's answer in the thread,
     `talk/<thread>/messages/<id>` (`thread` defaults to the item's own, for work from the
     page's chat). With `question` the item goes to the person instead (`needs_you`, the
-    question in `note`), its locks freed; their answer puts it back in the queue.
+    question in `note`), its locks freed; their answer puts it back in the queue. `about`
+    (the exact words it concerns) and `answer` ({kind, choices, min, max, time}: the kind of
+    answer it needs, tools/app_actions.py ANSWER_KINDS) go with it as `needs`, and the page
+    draws the control that fits on the card (templates/app/DESIGN.md, "Asking the person").
     {work, status, thread, message, locks, batches}. Raises ValueError, in plain words, for a
     summary that will not do or a reply with no thread; KeyError for an item not in the dump
     or already finished."""
@@ -1441,7 +1563,11 @@ def finish(db: dict, work_id: str, now: dt.datetime, out_dir: str, summary: str 
     problem = summary_problem(summary) if status == "done" or (
         status == "failed" and summary != error) else ""
     if not problem and status == "done" and str(item.get("kind") or "") == "search":
-        problem = search_unsaved(item)
+        problem = search_unsaved(item, work_id)
+        if not problem and drafts_all(item) and not _drafted(db, item.get("drafts") or [])[1]:
+            problem = ("its drafts are still being written: finish each one as it is made "
+                       "(app.py done --work <its id>), and the search finishes with the last, "
+                       "once app.py search-drafts --last has run")
     if problem:
         raise ValueError(problem)
     args = item.get("args") if isinstance(item.get("args"), dict) else {}
@@ -1451,12 +1577,29 @@ def finish(db: dict, work_id: str, now: dt.datetime, out_dir: str, summary: str 
         raise ValueError("which conversation is the answer for? Name its thread (--thread)")
     at = app_model.stamp(now)
     if status == "needs_you":
+        import app_actions
+        kind = clean = None
+        if answer:
+            clean = app_actions.clean_ask(dict(answer, key=answer.get("key") or "answer",
+                                               label=answer.get("label") or ""))
+            kind = clean["kind"] if clean else None
+        needs = {"question": question[:600], "about": " ".join(str(about or "").split())[:600],
+                 "work": work_id, "answer": clean or {"key": "answer", "label": "",
+                                                      "kind": "text", "type": "text"}}
         fields = {"status": status, "note": question[:600], "lease_until": None,
-                  "claimed_by": None, "asked_you_at": at}
+                  "claimed_by": None, "asked_you_at": at, "needs": needs,
+                  # The choices as pages before 4.10 read them: their words alone.
+                  "choices": [c["label"] for c in (clean or {}).get("choices") or []]
+                  if kind in ("choice", "yesno") else None}
     else:
         fields = {"status": status, "finished_at": at, "lease_until": None,
                   "result": {"summary": summary, "links": [dict(x) for x in links or ()]},
                   "error": error or None}
+        # A form's questions answered, as the form asked them: the card that asked says Done
+        # once each is on it, and "Finished: putting it on your page" until then.
+        said = [" ".join(str(q).split())[:300] for q in answered or () if str(q).strip()]
+        if said:
+            fields["result"]["questions"] = said
     w = Writes(out_dir)
     mid = ""
     if str(reply or "").strip():
@@ -1474,8 +1617,205 @@ def finish(db: dict, work_id: str, now: dt.datetime, out_dir: str, summary: str 
         _keep_dump(dump_dir, "work", work_id, dict(item, **fields), int(doc["version"] or 1) + 1)
         for lid in freed:
             _drop_from_dump(dump_dir, "locks", lid)
+    # A draft of a search that drafts what it finds: the search's card counts it, and the
+    # last one finishes the search once it has found all it will.
+    lead = _search_counted(db, item, work_id, status, now, w, dump_dir)
     return {"work": work_id, "status": status, "thread": thread or None, "message": mid or None,
-            "locks": freed, "batches": w.save("finish")}
+            "locks": freed, **({"search": lead} if lead else {}), "batches": w.save("finish")}
+
+
+def _drafted(db: dict, ids, also: dict | None = None) -> tuple[int, bool]:
+    """(how many of these drafts are done, whether every one has finished), `also` being the
+    statuses about to be written."""
+    work = db.get("work") or {}
+    also = also or {}
+    states = [also.get(i) or str(((work.get(safe_id(i)) or {}).get("data") or {}).get("status")
+                                 or "") for i in ids]
+    return sum(1 for s in states if s == "done"), all(s in FINISHED for s in states)
+
+
+def _search_counted(db: dict, item: dict, work_id: str, status: str, now: dt.datetime,
+                    w: "Writes", dump_dir: str = "") -> str:
+    """The search a finished draft was drafted for (`for_search`), updated: its count, "x of N
+    drafted", and once it has found all it will (`drafts_last`) and every draft has finished,
+    the search itself done, saying how many were drafted. Its id, or "" when there is none."""
+    import app_model
+    sid = str(item.get("for_search") or "")
+    sdoc = (db.get("work") or {}).get(safe_id(sid)) if sid else None
+    if sdoc is None or str(sdoc["data"].get("status") or "") in FINISHED:
+        return ""
+    s = dict(sdoc["data"])
+    ids = [str(x) for x in s.get("drafts") or []]
+    done, over = _drafted(db, ids, {work_id: status})
+    total = int((s.get("count") or {}).get("total") or len(ids) or 1)
+    at = app_model.stamp(now)
+    fields: dict = {"count": {"done": done, "total": total, "word": DRAFTED},
+                    "steps": (list(s.get("steps") or []) + [{"at": at, "text": f"{done} of {total} "
+                                                                         f"{DRAFTED}."}])[-50:]}
+    if s.get("drafts_last") and over:
+        fields.update(status="done", finished_at=at, lease_until=None, error=None,
+                      result={"summary": drafted_said(done, total, len(ids)), "links": []})
+        _free_locks(db, sid, w, dump_dir)
+    w.add("update", "work", sid, fields, if_version=sdoc["version"])
+    if dump_dir:
+        _keep_dump(dump_dir, "work", sid, dict(s, **fields), int(sdoc["version"] or 1) + 1)
+    return sid
+
+
+def drafted_said(done: int, total: int, tried: int) -> str:
+    """The one short sentence (SUMMARY_WORDS) a search that drafted what it found ends with."""
+    if total == 1:
+        return ("Found 1 job that passes every rule, and drafted it." if done else
+                "Found 1 job that passes every rule; its card says why it is not drafted.")
+    if done == total:
+        return f"Found {total} jobs that pass every rule, and drafted all {total}."
+    return (f"Found {total} jobs that pass every rule, and drafted {done}; the others say why."
+            if tried > done else f"Found {total} jobs that pass every rule, and drafted {done}.")
+
+
+def search_drafts(db: dict, work_id: str, rows: list[dict], now: dt.datetime, out_dir: str,
+                  chat: str = "", left: dict | None = None, last: bool = False,
+                  dump_dir: str = "", listed=None) -> dict:
+    """A search that drafts what it finds, given the jobs its Found list holds now that pass
+    every rule (`rows`, in its order: {round, rank, url, company, title}, the job card's own
+    draft args): a draft queued for each, up to the number asked for, claimed with the search
+    (`with`, `for_search`) so the search's own chat drafts them together and no other chat takes
+    one; a draft whose job has left the list since (`listed`, the links Jobs still holds, to
+    draft, drafted or applied for) stopped, saying why where `left` ({link: why}) has it, and the
+    next job taken; the search moved to drafting each one, its count "x of N drafted". With
+    `last`, the search has found all it will: N is what it found, and it finishes with its last
+    draft. A draft whose employer another job is writing for waits in the queue, still counted.
+    {work, queued, stopped, drafted, total, batches}. KeyError for an item not in the dump,
+    finished or another chat's; ValueError for a search that drafts nothing."""
+    import app_model
+    from lookup_score import norm
+    work = db.get("work") or {}
+    doc = work.get(safe_id(work_id))
+    if doc is None:
+        raise KeyError(f"no work {work_id!r} in the dump; read work again")
+    item = dict(doc["data"])
+    if str(item.get("status") or "") in FINISHED:
+        raise KeyError(f"work {work_id!r} has finished; write nothing more to it")
+    taken = not_its_claim(item, chat)
+    if taken:
+        raise KeyError(taken)
+    if not drafts_all(item):
+        raise ValueError("this search was not asked to draft what it finds")
+    if item.get("stop_asked"):
+        return {"work": work_id, "stop_asked": True, "queued": [], "stopped": [], "batches": []}
+    at = app_model.stamp(now)
+    until = app_model.stamp(now + dt.timedelta(seconds=LEASE_S))
+    w = Writes(out_dir)
+    left = {norm(str(k)) or str(k): v for k, v in (left or {}).items()}
+    have = [str(x) for x in item.get("drafts") or []]
+    stopped = []
+    listed = None if listed is None else {norm(str(u)) for u in listed} - {None, ""}
+    for wid in list(have):
+        d = (work.get(safe_id(wid)) or {}).get("data") or {}
+        url = norm(str((d.get("args") or {}).get("url") or ""))
+        if not url or str(d.get("status") or "") in FINISHED or listed is None or url in listed:
+            continue
+        # Its job has left Jobs since it was queued: it fails a rule now (an employer judged
+        # or turned down since), or the person set it aside. Drafting it is work for nothing.
+        why = " ".join(str(left.get(url) or "it is no longer on your Jobs list").split())
+        # One short sentence on the card: the reason itself, its rule's name left to the step.
+        words = (why if len(why.split()) <= SUMMARY_WORDS - 2 else why.split(": ")[-1])
+        words = words.rstrip(".").split()
+        said = "Not drafted: " + " ".join(words[:SUMMARY_WORDS - 3]) + (
+            "..." if len(words) > SUMMARY_WORDS - 3 else ".")
+        fields = {"status": "stopped", "finished_at": at, "lease_until": None,
+                  "result": {"summary": said, "links": []}, "error": None,
+                  "steps": (list(d.get("steps") or []) + [{"at": at, "text": f"Not drafted: "
+                                                                             f"{why}"}])[-50:]}
+        w.add("update", "work", wid, fields, if_version=work[safe_id(wid)]["version"])
+        _free_locks(db, wid, w, dump_dir)
+        if dump_dir:
+            _keep_dump(dump_dir, "work", wid, dict(d, **fields),
+                       int(work[safe_id(wid)]["version"] or 1) + 1)
+        have.remove(wid)
+        stopped.append(wid)
+    total = draft_total(item)
+    held = held_locks(db, now)
+    queued = []
+    for r in rows:
+        if len(have) >= total:
+            break
+        wid = safe_id(app_model.draft_work_id(r.get("url") or "", r.get("company"), r.get("title")))
+        if wid in have:
+            continue
+        old = work.get(wid)
+        if old is not None and str(old["data"].get("status") or "") not in FINISHED:
+            continue                    # already on its way, by another job: not this one's
+        noun = _noun()
+        mine = {"kind": "draft", "args": {k: r.get(k) for k in ("round", "rank", "url", "company",
+                                                                "title")}}
+        busy = [lk for lk in locks_for(mine) if lk in held and held[lk] != wid]
+        d = dict(mine, title=f"{noun[:1].upper() + noun[1:]} and letter: {r.get('company')}, "
+                             f"{r.get('title')}",
+                 to=str(item.get("to") or "cloud"), answers={}, asked_at=at,
+                 asked_from={"work": work_id}, priority=0, for_search=work_id, stage=0,
+                 stages=[{"name": s["name"], "est_s": s["est_s"]}
+                         for s in progress("draft")["stages"]])
+        if busy:
+            d["status"] = "queued"
+        else:
+            d.update(status="claimed", claimed_by=chat, claimed_at=at, lease_until=until,
+                     **{"with": work_id})
+            for lock in locks_for(mine):
+                lold = (db.get("locks") or {}).get(safe_id(lock))
+                w.add("set", "locks", lock, {"work": wid, "chat": chat, "since": at, "until": until},
+                      if_version=lold["version"] if lold else None)
+                held[lock] = wid
+        w.add("set", "work", wid, d, if_version=old["version"] if old else None)
+        if dump_dir:
+            _keep_dump(dump_dir, "work", wid, d, int(old["version"] or 1) + 1 if old else 1)
+        have.append(wid)
+        queued.append({"work": wid, **mine["args"], "waits": bool(busy)})
+    done, _ = _drafted(db, have)
+    n = len(have) if last else max(total, len(have))
+    stages = item_stages(item)
+    idx = [s["key"] for s in stages].index(SEARCH_DRAFT_STAGE[0])
+    line = (f"Found {len(have)} that pass every rule: drafting each one." if last else
+            f"Drafting {len(have)} found so far, as the search goes on.")
+    fields = {"status": "running", "lease_until": until, "drafts": have,
+              "stages": [{"name": s["name"], "est_s": s["est_s"]} for s in stages],
+              "count": {"done": done, "total": max(n, 1), "word": DRAFTED},
+              "steps": (list(item.get("steps") or []) + [{"at": at, "text": line}])[-50:]}
+    if item.get("stage") != idx:
+        fields.update(stage=idx, stage_at=at, left_s=None, left_at=None)
+    if last:
+        fields["drafts_last"] = True
+    over = last and (not have or _drafted(db, have)[1])
+    if over:
+        fields.update(status="done", finished_at=at, lease_until=None, error=None,
+                      result={"summary": drafted_said(done, len(have), len(have)) if have else
+                              "Found no job that passes every rule, so nothing was drafted.",
+                              "links": []})
+        _free_locks(db, work_id, w, dump_dir)
+    w.add("update", "work", work_id, fields, if_version=doc["version"])
+    if dump_dir:
+        _keep_dump(dump_dir, "work", work_id, dict(item, **fields), int(doc["version"] or 1) + 1)
+    return {"work": work_id, "queued": queued, "stopped": stopped, "drafted": done,
+            "total": fields["count"]["total"], "batches": w.save("drafts")}
+
+
+def _noun() -> str:
+    """What the person calls the document (person.json documents.noun), as _job_draft names
+    a draft."""
+    try:
+        import person
+        return str(person.get("documents.noun", "resume") or "resume")
+    except Exception:  # noqa: BLE001  no profile here: the app's word
+        return "resume"
+
+
+def _free_locks(db: dict, wid: str, w: "Writes", dump_dir: str = "") -> None:
+    """Each lock this item holds, deleted and pinned, as finishing it does."""
+    for lid, lock in sorted((db.get("locks") or {}).items()):
+        if str((lock.get("data") or {}).get("work") or "") == wid and not lock.get("old"):
+            w.add("delete", "locks", lid, if_version=lock["version"])
+            if dump_dir:
+                _drop_from_dump(dump_dir, "locks", lid)
 
 
 # Kinds the page runs one at a time (templates/app/app.js KIND_CAP_ONE).
@@ -1488,6 +1828,21 @@ def work_id(kind: str, now: dt.datetime) -> str:
     import string
     return f"{kind}~{now.strftime('%Y%m%dT%H%M')}-" + "".join(
         random.choice(string.ascii_lowercase + string.digits) for _ in range(4))
+
+
+def queued(kind: str, title: str, args: dict, now: dt.datetime) -> dict:
+    """A work item's fields, queued with no one asking, as `ask` writes one: the kind's own
+    stages, its usual place to run. What the drafts rerun queues for an application it
+    made again and that failed (tools/remake_drafts.py, through tools/app.py view)."""
+    import app_model
+    if kind not in WORK_KINDS:
+        raise ValueError(f"there is no kind of work {kind!r}")
+    return {"kind": kind, "title": " ".join(str(title or "").split())[:140],
+            "to": "cloud" if WORK_KINDS[kind]["to"] == "cloud" else "either",
+            "args": dict(args or {}), "asked_at": app_model.stamp(now),
+            "asked_from": {"tab": "chat"}, "priority": 0, "status": "queued",
+            "stages": progress(kind)["stages"], "stage": 0, "stage_at": None, "steps": [],
+            "claimed_by": None, "claimed_at": None, "stop_asked": False, "attempt": 1}
 
 
 def ask(db: dict, kind: str, title: str, now: dt.datetime, out_dir: str, args: dict | None = None,

@@ -54,17 +54,18 @@ def _mine(entry, item=ITEM):
 # ------------------------------------------------------------------ 1. one tap, one action
 
 
-# A checklist card whose rows each write an action and whose one button writes one for every
-# row: the busy week's "Did these notes go?". The audit found it on "N people haven't answered
-# two messages" and its Close, a card To do no longer has (the maintainer, 2026-11-04:
-# nothing to do is not a To do).
-SENT = "q-sent-fernhill_freight_halloway"
+# A checklist card whose rows each write an action and whose one button asks for every row:
+# the busy week's "Follow up with 3 people", each row with its Done (the UX review,
+# 2026-11-05). The audit found it on "N people haven't answered two messages" and its Close,
+# a card To do no longer has (the maintainer, 2026-11-04: nothing to do is not a To do), and
+# then on "Did these notes go?", which is the quick answers now.
+SENT = "due-nudge-copperleaf_pay_tamsin"
 
 
 # Two taps that land before the page has drawn again: the audit's real page took 1.2 s to draw
 # Contacts on a desktop and seconds on a phone, and the second tap of a double tap, or one
 # 400 ms later, landed on the same button.
-TWICE = ("(() => { const b = document.querySelector('[data-k=\"sgy:todo:%s\"]'); b.click(); b.click(); return true; })()")
+TWICE = ("(() => { const b = document.querySelector('[data-k=\"fgdone:todo:%s\"]'); b.click(); b.click(); return true; })()")
 
 
 def test_a_double_tap_writes_one_action(run, pages):
@@ -74,10 +75,10 @@ def test_a_double_tap_writes_one_action(run, pages):
 
 def test_a_held_enter_writes_one_action(run, pages):
     # The card focused, as j and k leave it, and Enter held: each repeat pressed its main
-    # button, "They all went" here, again (robustness audit 1: 7 + 7 actions).
-    s = _script(run, pages["busy"], [{"hash": "todo", "focus": '[data-card][data-item="grp:sent"]'}, {"hold": "Enter", "repeats": 4}])
-    items = [a.get("item") for a in s[-1]["actions"]]
-    assert SENT in items and len(items) == 2 and len(set(items)) == 2, s[-1]["actions"]
+    # button again (robustness audit 1: 7 + 7 actions), "Draft all 3" here: one each.
+    s = _script(run, pages["busy"], [{"hash": "todo", "focus": '[data-card][data-item="grp:follow:now"]'}, {"hold": "Enter", "repeats": 4}])
+    asked = [w["id"] for w in s[-1]["work"] if w.get("kind") == "follow_up"]
+    assert len(asked) == 3 and len(set(asked)) == 3, s[-1]["work"]
 
 
 def test_the_same_tap_in_a_second_window_is_the_same_action_and_one_undo_takes_back_every_copy(run, tmp_path):
@@ -164,9 +165,10 @@ def test_an_undo_in_another_window_takes_the_saved_line_off_this_one(run, tmp_pa
         {"hash": "todo", "tab": 0},
         {"hash": "todo", "tab": 1},
         {"tab": 0, "click": DONE},
-        # The other window takes it back from its list of recent changes.
-        {"tab": 1, "tap": "details.recent > summary"},
-        {"tab": 1, "click": "Undo", "within": "details.recent", "exact": True},
+        # The other window takes it back from what To do says was done today (it replaced
+        # Recent changes, the UX review, 2026-11-05).
+        {"tab": 1, "click": "Show Done today (1)", "exact": True},
+        {"tab": 1, "click": "Undo", "within": ".todo-done-list", "exact": True},
         {"tab": 0, "run": 1000, "eval": states},
     ], tabs=2)
     assert _mine(s[-1]) == []
@@ -260,10 +262,11 @@ def test_a_feed_that_keeps_failing_backs_off_and_is_never_shown_as_connected(run
 
 def test_hiding_a_card_with_storage_refused_hides_it_and_says_on_this_device(run, tmp_path):
     html = _page(tmp_path)
-    s = _script(run, html, [{"hash": "todo"}, {"click": "Hide for a week: Thank-you note after your Harbourline Bank"}], noStorage=True)
+    # The quick answers' bin hides the question showing; the next takes its place.
+    s = _script(run, html, [{"hash": "todo"}, {"click": "Hide for a week: Have you used Looker?"}], noStorage=True)
     assert any("on this device" in t for t in s[-1]["toasts"]), s[-1]["toasts"]
-    assert "11 things need you now" in s[0]["main"]
-    assert "10 things need you now" in s[-1]["main"], s[-1]["main"][:200]
+    assert "Have you used Looker?" in s[0]["main"] and "hidden this week" not in s[0]["main"], s[0]["main"][:400]
+    assert "1 hidden this week" in s[-1]["main"], s[-1]["main"][-400:]
 
 
 # ------------------------------------------------------------------ 15. a long name
@@ -277,6 +280,8 @@ def test_a_long_unbroken_name_never_pushes_the_page_sideways(run, tmp_path):
         if x.get("contact") == m["people"][0]["id"]:
             x["to"] = long
     html = _page(tmp_path, model=m)
+    # Contacts carries each message on its person's card (one page since 2026-11-04), its old
+    # address included.
     s = _script(run, html, [{"hash": "contacts"}, {"hash": "drafts-messages"}], viewport=PHONE)
     assert all(x["width"] <= PHONE["width"] for x in s), [x["width"] for x in s]
 

@@ -132,3 +132,51 @@ def test_a_round_given_a_folder_with_a_made_up_name_still_saves_as_r_and_a_numbe
     saved = sorted(os.listdir(os.path.join(state, "documents", "rounds")))
     assert "2026-11-04-app.json" not in saved and "r10.json" in saved, saved
     assert os.path.isdir(str(tmp_path / "scratch" / "r10"))
+
+
+def test_in_a_fresh_copy_a_search_is_done_only_once_its_own_round_is_saved(tmp_path):
+    """A job chat is a fresh copy made after the search was claimed, so every saved round's
+    file there is newer than the claim, and judging by the files' times let the search be
+    marked done while its round still ran. Its own round decides now: the round this work
+    item's run is writing (run_round.py names it, and the item, in round.log as it starts)
+    must have its shortlist saved."""
+    state, dump, env = _search(tmp_path)
+    rounds = os.path.join(state, "documents", "rounds")
+    for name in os.listdir(rounds):
+        os.utime(os.path.join(rounds, name), None)            # a fresh copy: written now
+    run = os.path.join(state, "rounds", "r10")
+    os.makedirs(run)
+    with open(os.path.join(run, "round.log"), "w", encoding="utf-8") as fh:
+        fh.write(f"round: r10\nwork: {WID}\n")
+    early = _done(dump, env)
+    assert early.returncode == 2, early.stdout + early.stderr
+    assert "not saved yet" in early.stderr
+    with open(os.path.join(rounds, "r10.json"), "w", encoding="utf-8") as fh:
+        json.dump([], fh)
+    later = _done(dump, env)
+    assert later.returncode == 0, later.stdout + later.stderr
+
+
+def test_a_round_names_itself_and_its_work_item_in_its_log(tmp_path, monkeypatch):
+    state = _round(tmp_path, monkeypatch, "--show", "10", "--work", WID)
+    with open(os.path.join(state, "rounds", "r10", "round.log"), encoding="utf-8") as fh:
+        log = fh.read().splitlines()
+    assert "round: r10" in log and f"work: {WID}" in log, log
+
+
+def test_an_out_named_like_a_saved_round_never_overwrites_it(tmp_path, monkeypatch, capsys):
+    """RUNBOOK.md and the job round's instructions said --out "$SCRATCH/r1": a name that looks
+    like a round's was kept as it was, so the round saved its shortlist over the person's own
+    r1. A name already saved takes the next one."""
+    state = app_state.small(str(tmp_path / "state"))
+    saved = os.path.join(state, "documents", "rounds", "r1.json")
+    before = json.dumps([{"title": "Pricing Analyst", "company": "Harrowgate Mills",
+                          "url": "https://jobs.example/harrowgate/pricing", "fit": 77}])
+    with open(saved, "w", encoding="utf-8") as fh:
+        fh.write(before)
+    scratch = str(tmp_path / "scratch" / "r1")
+    state = _round(tmp_path, monkeypatch, "--out", scratch, "--show", "10")
+    with open(saved, encoding="utf-8") as fh:
+        assert fh.read() == before, "the saved r1 was overwritten"
+    assert "r10.json" in os.listdir(os.path.join(state, "documents", "rounds"))
+    assert os.path.isdir(str(tmp_path / "scratch" / "r10"))

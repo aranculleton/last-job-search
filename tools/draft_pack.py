@@ -1096,14 +1096,40 @@ def research_lines(research: dict | None) -> str:
     """The research as the drafter sees it, each fact numbered F1.. in its order. The
     workflow writes the same lines (draft-applications.js), and the audit numbers facts
     the same way, so an F id means one thing everywhere."""
-    research = research or {}
+    research = research if isinstance(research, dict) else {}
+    facts = research.get("facts")
     out = []
-    for i, f in enumerate([f for f in research.get("facts") or [] if isinstance(f, dict)], 1):
-        caution = f" | caution: {f['caution']}" if f.get("caution") else ""
+    for i, f in enumerate([f for f in facts if isinstance(f, dict)]
+                          if isinstance(facts, list) else [], 1):
+        caution = fact_text(f.get("caution"))
+        caution = f" | caution: {caution}" if caution else ""
         unread = UNREAD if f.get("read") is False else ""
-        out.append(f"F{i}: {f.get('claim') or ''} | quote: \"{f.get('quote') or ''}\" | "
-                   f"{f.get('url') or ''}{caution}{unread}")
+        out.append(f"F{i}: {fact_text(f.get('claim'))} | quote: \"{fact_text(f.get('quote'))}\" | "
+                   f"{fact_text(f.get('url'))}{caution}{unread}")
     return "\n".join(out)
+
+
+def fact_text(v) -> str:
+    """One field of a research fact as its line shows it, the same in the workflow's copy
+    (draft-applications.js, factText): text as written, a list as its items joined by "; ",
+    a whole number as its digits, and anything else as nothing (a fraction is written in
+    other forms by the two languages, so it is left out by both). The two read a list or a
+    number apart ("caution": [] was " | caution: " there and nothing here, 1.0 was "1"
+    there and "1.0" here), so the hash the drafter copied never matched the audit's, and a
+    draft both audits had passed was held back (the maintainer, 2026-11-05)."""
+    if isinstance(v, str):
+        return v
+    if isinstance(v, (list, tuple)):
+        return "; ".join(x for x in (fact_text(y) for y in v) if x)
+    if isinstance(v, bool) or not isinstance(v, (int, float)):
+        return ""
+    if isinstance(v, float) and not v.is_integer():
+        return ""
+    return str(int(v)) if abs(v) <= SAFE_INTEGER else ""
+
+
+# The largest whole number a workflow script reads exactly (Number.MAX_SAFE_INTEGER).
+SAFE_INTEGER = 2 ** 53 - 1
 
 
 # A fact the research marked `"read": false`: a search result's summary, never read on the

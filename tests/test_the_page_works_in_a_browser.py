@@ -149,6 +149,16 @@ EMPTY = {"model": 1, "made_at": "2026-10-25T08:00:00Z", "rev": "0",
                     "repo": "morgan-example/job-search", "computer": True}}
 
 
+def _found3(m):
+    """The sample with the role at Copperleaf Pay a find: its draft taken off."""
+    m["ready"] = [a for a in m["ready"] if a["id"] != "app-copperleaf-payments"]
+    for r in m["jobs"]["rows"]:
+        if r["id"] == "r12-3":
+            r["draft"] = None
+            r["related"] = {k: v for k, v in (r.get("related") or {}).items() if k != "ready"}
+    return m
+
+
 @pytest.fixture(scope="module")
 def pages(tmp_path_factory):
     tmp = tmp_path_factory.mktemp("page")
@@ -202,6 +212,10 @@ def pages(tmp_path_factory):
     # so the page asks before one goes.
     held = _sample()
     held["interviews"] = [i for i in held["interviews"] if i["id"] != "int-copperleaf-payments"]
+    # The referral's role a find, not yet drafted: a drafted job is its draft's card in the one
+    # list (2026-11-05), and these scenarios draft and mark it from its own card.
+    found3 = _found3(_sample())
+    _found3(held)
     # A busy week (the maintainer, 2026-10-26): follow-ups to several people, two notes that
     # may have gone, the same warning on three messages, a question from an update, and
     # follow-ups hidden at employers turned down.
@@ -210,14 +224,22 @@ def pages(tmp_path_factory):
     # drafted again, so it is never a row of a "Draft all" (2026-11-02).
     ppl = [p for p in busy["people"] if p["status"] != "closed" and not any(m["contact"] == p["id"] for m in busy["messages"])][:3]
     nudge = next(d for d in busy["due"] if d["kind"] == "nudge")
-    busy["due"] = [d for d in busy["due"] if d["kind"] != "nudge"] + [
+    # Their other rows left out: one person with two rows is one card of their own (the UX
+    # review, 2026-11-05), never a row of this checklist.
+    mine = {p["id"] for p in ppl}
+    # Nor a referral in flight with one of them, which would make theirs a card of its own.
+    for r in busy["jobs"]["rows"]:
+        r["alerts"] = [a for a in r.get("alerts") or [] if a["kind"] != "referral_hold"]
+    busy["due"] = [d for d in busy["due"] if d["kind"] != "nudge" and d.get("contact") not in mine] + [
         dict(nudge, id="due-nudge-%s" % p["id"], contact=p["id"], item=None, title="Follow up with %s at %s" % (p["first_name"], p["employer"]),
              context="Analyst at %s" % p["employer"], work={"kind": "follow_up", "id": "follow_up~%s" % p["id"], "args": {"contact": p["id"]}},
              rev="bn%d" % i) for i, p in enumerate(ppl)] + [
-        # Like items are grouped by what they ask (2026-10-30): eight replies owed. And two
-        # people at their limit of two unanswered messages, as a list written before To do
-        # stopped listing them (2026-11-04): the page never shows them. Invented names.
-        *[dict(nudge, id="due-reply-%d" % i, kind="reply", action="work:reply", contact=ppl[i % 3]["id"], item=None,
+        # Like items are grouped by what they ask (2026-10-30): eight replies owed, to eight
+        # people the list does not hold (each one person is one card of their own, the UX
+        # review, 2026-11-05). And two people at their limit of two unanswered messages, as a
+        # list written before To do stopped listing them (2026-11-04): the page never shows
+        # them. Invented names.
+        *[dict(nudge, id="due-reply-%d" % i, kind="reply", action="work:reply", contact="busy-reply-%d" % i, item=None,
                title="Reply to %s" % name, context="", work={"kind": "reply", "id": "reply~r%d" % i, "args": {"contact": ppl[i % 3]["id"]}},
                rev="br%d" % i)
           for i, name in enumerate(("Ines", "Joel", "Kemi", "Lior", "Mara", "Noor", "Otto", "Pia"))],
@@ -245,7 +267,7 @@ def pages(tmp_path_factory):
     # A search just set up, nothing applied for yet: the one To do offers the tour to.
     fresh = _sample()
     fresh["done"] = dict(fresh["done"], applications=[])
-    return {"sample": _write(tmp, "sample", _sample()), "empty": _write(tmp, "empty", EMPTY), "nothing": _write(tmp, "nothing", nothing), "held": _write(tmp, "held", held),
+    return {"sample": _write(tmp, "sample", _sample()), "empty": _write(tmp, "empty", EMPTY), "nothing": _write(tmp, "nothing", nothing), "held": _write(tmp, "held", held), "found3": _write(tmp, "found3", found3),
             "big": _write(tmp, "big", big), "hostile": _write(tmp, "hostile", hostile),
             "crowd": _write(tmp, "crowd", crowd), "kinds": _write(tmp, "kinds", kinds), "busy": _write(tmp, "busy", busy),
             "fresh": _write(tmp, "fresh", fresh)}
@@ -268,7 +290,9 @@ def test_the_owner_sees_the_page_and_anyone_else_sees_only_a_private_notice(run,
     assert own["brand"] == "Morgan’s job search"
     # One card, one thing (4.3): today's To do cards that still need the person, the number
     # To do's own summary leads with.
-    assert own["title"] == "(11) Morgan’s job search", "four answers, the things due today or late, and the alerts, a card each"
+    # The cards due today or late, one each: the thank-you two days late, the messages to send,
+    # Tamsin's one card, and the quick answers (the four questions are one card).
+    assert own["title"] == "(4) Morgan’s job search", own["title"]
     assert own["conn"] == "live" and own["pulse"].startswith("Connected.")
     assert own["overflow"]["sw"] <= own["overflow"]["cw"]
     for fake in ({"owner": False}, {"noClaude": True}, {"caps": []}):
@@ -301,9 +325,9 @@ def test_without_a_store_the_page_says_it_is_read_only(run, pages):
 
 # ------------------------------------------------------------------ every section, full and empty
 
-# Drafts are a view of Jobs, the messages to send a view of Contacts, and the Brief greets the
-# person by name (4.3).
-LABELS = {"brief": "Good morning, Morgan", "todo": "To do", "jobs": "Jobs", "drafts": "Jobs", "drafts-messages": "Contacts",
+# Drafts are a view of Jobs, the messages to send are on each person's card in Contacts (one
+# page since 2026-11-04), and the Brief greets the person by name (4.3).
+LABELS = {"brief": "Good morning, Morgan", "todo": "To do", "jobs": "Jobs", "drafts": "Jobs",
           "contacts": "Contacts", "interviews": "Coming up", "progress": "Progress", "chat": "Chat", "settings": "Settings",
           "profile": "Your profile"}
 JARGON = re.compile(r"\b(?:repository|repo|branch|worktree|commit|pull request|PR|git|json|database|db|artifact|webhook|"
@@ -323,25 +347,30 @@ def test_every_section_full_shows_its_items_in_plain_words(run, pages):
         assert "—" not in got["text"] and "–" not in got["text"], sid
         heads = re.findall(r"^(?:To do here|Needs your answer|Due or late|Next 7 days|Later)$", got["text"], re.M)
         assert not OLD_NAMES.search(" ".join(heads)), sid
-    for sid, n in {"todo": 8, "jobs": 3, "drafts": 2, "drafts-messages": 2, "contacts": 4, "interviews": 2, "progress": 10}.items():
+    for sid, n in {"todo": 8, "jobs": 3, "drafts": 2, "contacts": 4, "interviews": 2, "progress": 10}.items():
         assert r[sid]["items"] >= n, (sid, r[sid]["items"])
     jobs = r["jobs"]["text"]
     # A job with no pay loses nothing and says nothing: "Pay not stated" stood on nearly every
     # card (the walk-through, 2026-11-03).
     assert "Pay not stated" not in jobs, "said on nearly every card, it said nothing"
     assert "£46,000 to £52,000" in jobs, "pay in the person's own money"
-    assert "Before you apply: Juno at Larkspur Retail replied last week" in jobs
-    assert "This posting has closed." in jobs and "41 left out by the search" in jobs
+    # A warm route is said one way, in the card's soft grey box, and beside the card's
+    # question it waits under More: never a rose "Before you apply:" line (2026-11-05).
+    assert "Before you apply:" not in jobs and "Juno at Larkspur Retail replied last week" not in jobs
+    # A posting that has closed waits under the list, one tap away (2026-11-05).
+    assert "1 closed: Show" in jobs and "This posting has closed." not in jobs and "41 left out by the search" in jobs
     assert "Tamsin has put your name forward at Copperleaf Pay" in jobs
     drafts = r["drafts"]["text"]
     assert "Two answers about Quayside Foods" in drafts, "a draft's question is on its card, ahead of its other notes"
     assert "Made for Tamsin, who asked for it." in drafts and "I sent it to Tamsin" in drafts
     assert "put your name forward here" not in drafts, "the referrer's own resume carries no hold"
-    # Drafts are a view of Jobs: its switch, Found, Drafts and Applied (4.3).
-    assert "Found" in drafts and "Applied" in drafts
-    msgs = r["drafts-messages"]["text"]
-    assert "First notes this week" in msgs and "3 notes ready. 3 sent this week of about 20." in msgs
-    assert "LinkedIn InMail" in msgs and "Subject:" in msgs and "Copy subject" in msgs
+    # Drafts are cards in Jobs' one list, in their jobs' places: its switch, To apply and
+    # Applied (2026-11-05: a drafted job stood in Found and again in Drafts).
+    assert "To apply" in drafts and "Applied" in drafts
+    # Each message on its person's card, and one short summary line (2026-11-04).
+    msgs = r["contacts"]["text"]
+    assert "7 to send · " in msgs and "sent this week" not in msgs, msgs[:400]
+    assert "LinkedIn InMail" in msgs and "Subject:" in msgs, msgs[:400]
     assert "Every application" in r["progress"]["text"] and "earlier, finished" in r["progress"]["text"]
     settings = r["settings"]["text"]
     assert "An update is waiting" in settings and "4.0.1" not in settings
@@ -372,12 +401,21 @@ def test_every_control_on_every_screen_does_something_and_nothing_throws(run, pa
     assert not r["unclickable"], r["unclickable"]
     assert not r["dead"], ("a tap that did nothing", r["dead"])
     assert not r["badLinks"], r["badLinks"]
+    # Every control is Claude-waking or code-only, and shows which (2026-11-05): on Jobs, a
+    # tap that queued work carried the gauge, and one carrying it queued work or opened the
+    # sheet that does.
+    if section in ("jobs", "drafts"):
+        untagged = [(k, w) for _, k, w, queued, sheet in r["tags"] if queued and w != "claude"]
+        idle = [(k, w) for _, k, w, queued, sheet in r["tags"] if w == "claude" and not queued and not sheet]
+        assert not untagged, ("queued Claude's work with no gauge", untagged)
+        assert not idle, ("carries the gauge and woke nothing", idle)
 
 
 def test_every_section_empty_says_what_will_appear_and_offers_one_step(run, pages):
     r = run("sections", html=pages["nothing"], viewport=PHONE)
     _clean(r)
-    expect = {"jobs": "No shortlist yet.", "drafts": "Nothing drafted yet.", "drafts-messages": "No messages to send.",
+    # Drafts is Jobs' one list opened at its drafts: empty, it is Jobs' own empty state.
+    expect = {"jobs": "No shortlist yet.", "drafts": "No shortlist yet.",
               "contacts": "Who could refer you?", "interviews": "Your interviews and calls show here", "progress": "Nothing counted yet."}
     for sid, title in expect.items():
         assert r[sid]["empty"] == [title], (sid, r[sid]["empty"])
@@ -411,14 +449,17 @@ def test_a_long_history_shows_every_live_thing_without_a_tap_and_folds_only_the_
     assert r["progressRows"] == 40, "40 live applications, all shown"
     assert any(f.startswith("20 earlier, finished") for f in r["progressFold"])
     assert r["progressSearch"] and r["contactSearch"]
-    assert r["contactDefault"] == 8 and not r["defaultChips"], \
-        "Contacts opens on the 8 who need the person, with no filter left on (4.3)"
+    # The crowd keeps the sample's seven messages, to people not in its book: each is a card of
+    # its own, first, as a message with nobody on the list is (2026-11-04).
+    msgs = len(_sample()["messages"])
+    assert r["contactDefault"] == 8 + msgs and not r["defaultChips"], \
+        "Contacts opens on the messages to send and the 8 who need the person, with no filter left on (4.3)"
     assert any(f.startswith("292 more people, nothing to do for them now") for f in r["contactFold"]), r["contactFold"]
     assert r["searched"] >= 1 and r["searchFocus"] == "search", "typing in the search box keeps its focus"
     # A search is not a filter: it never says the rest are "hidden by your filters" (2026-11-03).
     assert not any("hidden by your filters" in f for f in r["hidden"]), r["hidden"]
-    assert r["cleared"] == 8
-    assert r["unfolded"] == 8 + 50, "the fold opens fifty at a time beyond the ones who need you"
+    assert r["cleared"] == 8 + msgs
+    assert r["unfolded"] == 8 + msgs + 50, "the fold opens fifty at a time beyond the ones up front"
     assert r["overflow"]["sw"] <= r["overflow"]["cw"]
 
 
@@ -435,7 +476,8 @@ def test_a_newer_view_document_replaces_its_section_without_a_republish(run, pag
     r = run("view_overlay", html=pages["sample"])
     _clean(r)
     assert r["titles"] == ["Senior Research Analyst"]
-    assert r["lede"].startswith("1 to look at"), r["lede"]
+    # The one list counts the drafts to send beside the new view's one find (2026-11-05).
+    assert r["lede"].startswith("3 to send, 1 to look at"), r["lede"]
 
 
 # ------------------------------------------------------------------ To do, alerts and suggestions
@@ -443,7 +485,12 @@ def test_a_newer_view_document_replaces_its_section_without_a_republish(run, pag
 def test_to_do_groups_by_when_then_by_employer_in_the_order_things_are_done(run, pages):
     r = run("todo", html=pages["sample"])
     _clean(r)
-    assert r["first"] == "Phone screen with Larkspur Retail", "the soonest interview within 14 days is the first card"
+    # The soonest interview leads only when it is today or tomorrow, or has no prep yet (the UX
+    # review, 2026-11-05: one three days off with its prep ready took the screen's one filled
+    # button from a thank-you two days late): it waits in Next 7 days, and the late thank-you leads.
+    assert r["first"] == "Thank-you note after your Harbourline Bank first interview", r["first"]
+    week = next(b for b in r["bands"] if b["band"] == "Next 7 days")["groups"]
+    assert week[0]["titles"] == ["Phone screen with Larkspur Retail"], week
     # Five show first; a band split by the fold heads its rest again inside it (4.3). What is
     # late or due today comes before the questions (2026-11-02: a thank-you two days late
     # waited behind four small questions).
@@ -452,13 +499,14 @@ def test_to_do_groups_by_when_then_by_employer_in_the_order_things_are_done(run,
         for g in b["groups"]:
             assert g["employer"] is None or len(g["titles"]) >= 2, ("an employer heads only two or more", b["band"], g)
     answer = next(b for b in r["bands"] if b["band"] == "Needs your answer")["groups"]
-    assert answer[0]["employer"] == "Fernhill Freight" and len(answer[0]["titles"]) == 2, "one employer's two questions together"
+    # The small questions are one card, asked one at a time (the UX review, 2026-11-05).
+    assert [g["titles"] for g in answer] == [["4 quick answers"]], answer
     late = next(b for b in r["bands"] if b["band"] == "Due or late")["groups"]
     # The late things first: the follow-up and the thank-you, both two days late. The
-    # follow-up is on one card with the reply also drafted (2026-11-04: drafted messages are
-    # one card; tests/test_to_do_says_a_message_is_drafted_and_batches_them.py holds its rows).
+    # follow-up is a row of the one card of messages to send (the UX review, 2026-11-05;
+    # tests/test_to_do_says_a_message_is_drafted_and_batches_them.py holds its rows).
     assert sorted(g["titles"][0] for g in late[:2]) == [
-        "2 messages ready to send", "Thank-you note after your Harbourline Bank first interview"], "the late things first"
+        "Messages to send (7)", "Thank-you note after your Harbourline Bank first interview"], "the late things first"
     titles = [t for b in r["bands"] for g in b["groups"] for t in g["titles"]]
     assert "Prepare for the Larkspur Retail phone screen" not in titles, "the interview's own card is its prep, never a second card"
     assert "Thank-you note after your Harbourline Bank first interview" in titles
@@ -468,11 +516,12 @@ def test_to_do_groups_by_when_then_by_employer_in_the_order_things_are_done(run,
     # drafts it again (2026-11-02), and no card of its own offers to.
     assert "Reply to Juno at Larkspur Retail" not in r["dueButtons"], r["dueButtons"]
     assert all("Done" in b for b in r["dueButtons"].values()), "every due row can be marked done"
-    assert titles.count("3 first notes ready to send") == 1, "a wave of first notes is one card"
+    assert not [t for t in titles if "first notes ready to send" in t], "the week's first notes are rows of the messages card"
     assert r["chips"] == 0, "no kind chips on To do"
-    assert r["filled"] == 0 and r["answers"] >= 8, "a question never fills one of its answers"
+    assert r["filled"] == 0 and r["answers"] >= 2, "a question never fills one of its answers"
     assert r["jobsQuestion"] and "Have you used Looker?" in r["jobsQuestion"], "Jobs asks its question on the role's own card"
-    assert r["juno"]["state"] == "Replied: your turn" and "See the draft" in r["juno"]["buttons"], r["juno"]
+    # Her reply is on her card in Contacts (2026-11-04): Copy, then I sent it, never drafted again.
+    assert r["juno"]["state"] in ("Replied: your turn", "Overdue") and "I sent it" in r["juno"]["buttons"], r["juno"]
     assert "Draft a reply" not in r["juno"]["buttons"], r["juno"]
 
 
@@ -484,7 +533,9 @@ def test_an_alert_is_a_line_with_one_button_and_a_suggestion_can_be_declined_for
     assert r["cost"] == [], "a free fix says no cost on the card"
     assert r["fixed"]["action"] == "job.dismiss" and r["fixed"]["item"] == "r12-5"
     assert r["suggest"] and " ".join(r["suggest"][0].split()).startswith("Suggestion: The posting asks for Tableau")
-    assert r["checksFix"] == ["Make it again"], "a failed check is a To do card with its fix, while the draft asks its question"
+    # A failed check with a clear fix is made again by Claude by itself: To do offers no fix
+    # (the UX review, 2026-11-05).
+    assert r["checksFix"] == [], "no Make it again on To do"
     assert r["dismissed"]["action"] == "suggest.dismiss" and r["dismissed"]["value"] == {"kind": "near"}
     assert r["gone"] == 0 and any("not be suggested again" in t for t in r["toast"])
     assert r["back"] == 1, "No thanks can be undone"
@@ -515,12 +566,13 @@ def test_a_tap_is_saved_only_when_it_is_and_done_when_its_receipt_arrives(run, p
     doc = r["doc"]
     assert doc["item"] == "msg-juno-1" and doc["action"] == "msg.sent" and doc["rev_seen"] == "m1"
     assert doc["tab"] and doc["at"].endswith("Z")
-    # A message marked sent leaves Messages at once, its Undo in the toast and never a second
-    # one on a card left standing (the walk-through, 2026-11-03).
+    # A message marked sent leaves Juno's card at once, and she the list's top, its Undo in the
+    # toast and never a second one on a card left standing (the walk-through, 2026-11-03;
+    # Contacts is one page since 2026-11-04).
     assert r["saved"] is None, "the card left the list: nothing says Saved under the toast"
     assert "Marked as sent: Juno" in r["toast"] and "Undo" in r["toast"]
     assert r["focusAfter"]["inMain"] and r["focusAfter"]["tag"] != "BODY", ("the card gone, focus is on what took its place, never lost", r["focusAfter"])
-    assert r["done"].startswith("Done.") and r["moved"] == 3, "once done it moves to Sent or skipped: three of four cards left"
+    assert r["done"].startswith("Done.") and r["moved"] == r["movedBefore"] - 1, ("once done her card says so, and one draft fewer is shown", r["done"], r["moved"], r["movedBefore"])
     assert "Change back" in r["back"], "and where the chat left a way back, it can be changed back"
     # A refusal says the engine's own reason, once: "this changed since you saw it" only for a
     # stale one, never over a conflict that says something else (the audit, 2026-11-03).
@@ -541,7 +593,7 @@ def test_a_failed_save_says_so_at_once_and_never_says_saved(run, pages):
 
 
 def test_undo_stays_on_the_item_until_claude_has_done_it(run, pages):
-    r = run("undo", html=pages["sample"])
+    r = run("undo", html=pages["found3"])
     _clean(r)
     assert _base(r["before"]) == ["actions/act~r12-1~job.dismiss"]
     assert not r["marked"], "a role put in the bin leaves the list at once (2026-11-03)"
@@ -556,7 +608,7 @@ def test_undo_stays_on_the_item_until_claude_has_done_it(run, pages):
 
 
 def test_bulk_select_is_a_mode_and_marks_several_each_their_own_action(run, pages):
-    r = run("bulk", html=pages["sample"])
+    r = run("bulk", html=pages["found3"])
     _clean(r)
     assert r["boxesBefore"] == 0, "no checkboxes until Select is tapped"
     assert r["mixed"] is True, "select all shows a mixed state for a partial selection"
@@ -633,10 +685,10 @@ def test_two_windows_pressing_draft_at_once_make_one_job_and_one_ring(run, pages
     assert r["tabs"][0] != r["tabs"][1], "each window has its own id for its actions"
     assert all(s and "1 waiting" in s for s in r["seen"]), r["seen"]
     assert _base(r["actions"]) == ["actions/act~msg-juno-1~msg.sent"]
-    # Sent, it leaves Messages in every window at once and is listed under Sent or skipped
-    # (2026-11-03: a finished card leaves its list); the other window cannot tick it again.
+    # Sent, it leaves Juno's card in every window at once, her card saying it went (2026-11-03:
+    # a finished card leaves its list); the other window cannot tick it again.
     assert r["otherWindow"]["buttons"] == 0 and r["otherWindow"]["chip"] == [], "the other window cannot tick it again"
-    assert any(g.startswith("To Juno") and "sent" in g for g in r["otherWindow"]["gone"]), r["otherWindow"]
+    assert "Message sent" in r["otherWindow"]["card"], r["otherWindow"]
 
 
 def test_a_tap_rings_the_doorbell_inside_the_click_once_and_never_asks_send_this(run, pages):
@@ -706,6 +758,9 @@ def test_progress_moves_with_the_clock_slow_is_not_stalled_and_only_a_missed_che
     assert w["status"] == "queued" and w["attempt"] == 2 and w["stage"] == 0 and w["claimed_by"] is None
     assert len(r["rings"]) == 1 and r["rings"][0]["text"] == "[app] [work:search~1]"
     # Finished work says Done, with no bar beside it, and folds itself away a minute later.
+    # Done only once the result is on the page (the maintainer's inline standard, 2026-11-04):
+    # finished before that, it says what it waits for.
+    assert r["finished"]["status"] == "Finished: putting it on your page", r["finished"]
     assert r["done"]["status"] == "Done" and r["done"]["now"] is None, r["done"]
     assert r["folded"], "finished work joins the fold a minute after it was on screen"
 
@@ -800,19 +855,20 @@ def test_stop_says_what_is_kept(run, pages):
 
 # ------------------------------------------------------------------ files, copying, chat
 
-def test_both_files_download_in_one_tap_and_a_draft_with_none_asks_for_them(run, pages):
+def test_both_files_download_in_one_tap_and_a_draft_with_none_gets_them_by_itself(run, pages):
     r = run("downloads", html=pages["sample"])
     _clean(r)
     assert [s["filename"] for s in r["saves"]] == ["Morgan_Ellis_CV_Ellerwick.pdf", "Morgan_Ellis_Cover_Letter_Ellerwick.pdf"]
     assert all(s["blob"] and s["size"] > 100 for s in r["saves"])
     assert any("Saved." in n for n in r["note"])
-    # Said on the draft's own card, as its button, never in a line over the list and again
-    # under More (the walk-through, 2026-11-03). With a check to fix first, the fix is filled.
+    # What Claude can do by itself is never a button (the maintainer, 2026-11-05): no "Get my
+    # files ready" and no "Make it again"; the card says Claude makes it again, and once the
+    # upload the view queued is on its way, that Claude is putting the files on the page.
     assert r["filesLine"] == [], r["filesLine"]
-    assert "Get my files ready" in r["askButtons"], r["askButtons"]
-    assert not any(b.startswith(("Download", "Get both")) for b in r["askButtons"])
-    assert r["primary"] == ["Make it again"]
-    assert r["work"]["kind"] == "files" and r["work"]["args"]["files"] == ["Morgan_Ellis_CV_Quayside.pdf"]
+    assert not any(b.startswith(("Get my files ready", "Make it again", "Download", "Get both")) for b in r["askButtons"]), r["askButtons"]
+    assert r["primary"] == [], r["primary"]
+    assert any(t.endswith(": Claude makes it again next.") for t in r["fixLine"]), r["fixLine"]
+    assert any("Claude is putting your files on your page" in t for t in r["filesGoing"]), r["filesGoing"]
 
 
 def test_a_declined_save_says_so_and_keeps_the_button(run, pages):
@@ -926,7 +982,9 @@ def test_the_chat_opens_from_any_section_in_a_panel_with_the_same_thread(run, pa
     assert r["moved"]["dock"], "data arriving and another section leave it open"
     assert "Their careers page lists a Pricing Analyst role." in r["moved"]["msgs"]
     assert r["esc"] == {"dock": False, "fab": True, "focus": "chat-fab"}, r["esc"]
-    assert r["got"]["label"] == "Got a message? Paste it or a screenshot"
+    # One soft pill beside Find people since 2026-11-04 (the maintainer: the header was "quite
+    # cluttered"), where an underlined line was.
+    assert r["got"]["label"] == "Paste a message"
     assert r["got"]["dock"] and r["got"]["focus"] == "talk-text" and r["got"]["value"] == "Help me reply to this message: "
     assert r["got"]["back"] == "got-msg", "Escape gives focus back to what opened it"
     c = r["chat"]
@@ -1011,7 +1069,9 @@ def test_keyboard_alone_reaches_and_works_everything_and_the_shortcuts_can_be_sw
     assert r["backOn"] == "Not for me: Harbourline Bank, Pricing Analyst"
     assert r["help"] == "Keyboard shortcuts"
     assert r["afterGT"] == "To do" and r["afterGJ"] == "Jobs"
-    assert r["cardFocus"] == "r12-1", "j moves to the first card: the best match by its number (4.3)"
+    # j moves to the first card: in Jobs' one list, what needs your answer heads it, then the
+    # drafts, then the finds by fit (2026-11-05).
+    assert r["cardFocus"] == "c-fernhill-ops-applied", r["cardFocus"]
     assert r["moreClosed"], "Esc closes a card's More"
     assert r["typed"] == ["gj", "Chat"], "typing in a box is never a shortcut"
     assert r["offStays"] == "Settings" and r["stored"] == "off"
@@ -1225,7 +1285,9 @@ def test_every_screen_keeps_to_the_simplicity_budgets(run, pages, viewport, sche
             # 2026-10-26) is not one of its actions, as an answer is not, nor its "?" (the
             # maintainer, 2026-10-29: "just explainers or ?"), nor a person's name that opens them (the maintainer, 2026-10-29: "why cant i click
             # his name").
-            others = c["controls"] - c["answers"] - c.get("icons", 0) - c.get("names", 0)
+            # A checklist row's own next step and Done are the row's, as an item's own card's
+            # are (DESIGN.md, checklists): the card's budget is its own row of actions.
+            others = c["controls"] - c["answers"] - c.get("icons", 0) - c.get("names", 0) - c.get("rows", 0)
             if not c["alerts"]:
                 assert others <= BUDGET["card_controls"], (sid, c)
             assert c["filled"] <= 1, (sid, c)
@@ -1250,7 +1312,6 @@ def test_screenshots_for_a_person_to_judge(run, pages):
     if not SHOTS:
         pytest.skip("set LJS_SHOTS to a folder to write the screenshots")
     files = run("shots", html=pages["sample"], list=[
-        {"name": "phone-messages", "viewport": PHONE, "hash": "drafts-messages"},
         {"name": "phone-contacts", "viewport": PHONE, "hash": "contacts"},
         {"name": "phone-interviews", "viewport": PHONE, "hash": "interviews"},
         {"name": "phone-progress", "viewport": PHONE, "hash": "progress", "full": True},
@@ -1280,22 +1341,28 @@ def test_a_busy_week_is_a_few_checklists_not_a_card_each(run, pages):
     # the chip says how many are overdue ("25 late" read as 25 days), and a checklist of people
     # is that many things to do in To do's count.
     assert not any("Not now" in row["buttons"] for g in r["groups"].values() for row in g["rows"]), r["groups"]
-    assert all(g["chip"] == "" or g["chip"].endswith(" overdue") for g in r["groups"].values()), [g["chip"] for g in r["groups"].values()]
+    # Its first chip says how many are overdue, or, with none, how many are done.
+    assert all(g["chip"] == "" or g["chip"].endswith(" overdue") or re.fullmatch(r"\d+ of \d+ done", g["chip"]) for g in r["groups"].values()), [g["chip"] for g in r["groups"].values()]
     reply = r["groups"]["grp:work~reply:now"]
     n = int(re.match(r"Reply to (\d+) people$", reply["title"]).group(1))      # the sample's own, and eight
     assert n >= 8 and len(reply["rows"]) == 5, reply
     assert reply["fold"].startswith("%d more" % (n - 5)) and "Draft all %d" % n in reply["actions"], reply
     # Drafting them all takes each one's time, added up: "Draft all 25" said one draft's minutes.
     assert int(re.match(r"(\d+)", reply["cost"]).group(1)) >= n or reply["cost"].startswith("about"), reply["cost"]
-    assert int(re.match(r"(\d+)", r["sum"]).group(1)) >= len(follow["rows"]) + n, ("a checklist of people counts each person", r["sum"])
+    # A checklist is one card however many people are on it (DESIGN.md, counts: the UX review,
+    # 2026-11-05, counted 25 people as 25 and a calm screen read as an emergency).
+    assert int(re.match(r"(\d+)", r["sum"]).group(1)) < len(follow["rows"]) + n, ("a checklist is one card", r["sum"])
     # Nothing to do is not a To do (the maintainer, 2026-11-04): people at their limit of
     # unanswered messages are left alone, in Contacts, never a card or a row here.
     assert not [k for k in r["groups"] if k.startswith("grp:leave")], r["groups"]
     assert "No reply to 2 messages" not in r["text"] and "answered two messages" not in r["text"]
-    sent = r["groups"]["grp:sent"]
-    assert sent["title"].startswith("Did these notes go?") and len(sent["rows"]) == 2 and "They all went" in sent["actions"]
-    warn = [g for k, g in r["groups"].items() if k.startswith("grp:read_first")]
-    assert len(warn) == 1 and warn[0]["title"].startswith("3 messages to check before you send"), r["groups"]  # what the card is, its reason under it (2026-11-04)
+    # The two "Did your note go?" are among the quick answers, one at a time (the UX review,
+    # 2026-11-05), never a checklist of their own.
+    assert "grp:sent" not in r["groups"] and r["quick"]["title"].endswith("quick answers"), (r["groups"].keys(), r["quick"])
+    # The three to check before they go are rows of the one messages card, each saying so.
+    send = r["groups"]["grp:send"]
+    assert not [k for k in r["groups"] if k.startswith("grp:read_first")], r["groups"]
+    assert send["title"].startswith("Messages to send") and sum("Written before their profile was read" in w for w in send["who"]) == 3, send
     assert "4 follow-ups at employers you turned down not shown." in r["hidden"]
     assert "Nudge" not in r["text"], "a follow-up is called a follow-up"
     assert "Turn on the new reading pace?" not in r["text"], "questions from updates wait in Settings"

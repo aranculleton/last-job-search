@@ -247,25 +247,29 @@ def test_the_engine_puts_what_it_needs_on_a_refused_receipt(tmp_path):
     search.apply()
     r = search.receipt(later)
     assert r["result"] == "conflict" and r["note"] == "That day has not come yet."
-    assert r["ask"] == {"key": "on", "label": "Which day?", "type": "date"}
+    # The kind of answer it needs, as every ask names it (app_actions.clean_ask), and its
+    # older `type` for a page from before the kinds.
+    assert r["ask"] == {"key": "on", "label": "Which day?", "type": "date", "kind": "date"}
     w = search.receipt(word)
     assert w["ask"]["key"] == "on" and "2026-10-21" not in w["note"] and "2026-10-25" in w["note"], w
 
 
-def test_recent_changes_name_what_each_tap_was_about_and_why_one_was_not_done(run, tmp_path):
-    """Finding 23: "Interview booked · Not done", "Stopped · Saved" with no employer, person or reason."""
+def test_done_today_names_what_each_tap_was_about_and_a_refusal_is_its_own_card(run, tmp_path):
+    """Finding 23: "Interview booked · Not done", "Stopped · Saved" with no employer, person or
+    reason. "Recent changes" gave way to "Done today (N)" (the UX review, 2026-11-05): a tap not
+    done is never listed as done, its reason on its own To do card."""
     aid, seed = _refused("app-larkspur-supply", "outcome.interview", {"on": "2026-10-20", "stage": "Initial round"}, "conflict",
                          "That application is no longer in your tracker.", rev="ap1")
     seed["actions/act~larkspur_retail_castellan~person.stop~x1"] = {"item": "larkspur_retail_castellan", "action": "person.stop", "value": None,
                                                                     "at": _at(20), "rev_seen": "p-castellan", "tab": "another"}
     got = _go(run, tmp_path, [
-        {"hash": "todo", "eval": "(() => { const d = document.querySelector('details.recent'); if (d) d.open = true; return !!d; })()"},
-        {"read": "details.recent"},
+        {"hash": "todo", "click": "Show Done today (1)", "exact": True, "read": ".todo-done-list"},
+        {"read": '[data-item="refused:' + aid + '"]'},
     ], PHONE, seed=seed, fake=FAKE, clock=T)
-    text = got["after"][1]["text"]
-    assert "Larkspur Retail" in text and "That application is no longer in your tracker." in text
-    assert "Interview booked" not in text, "a refused row never says it was done"
-    assert "Stopped: Juno, Larkspur Retail" in text
+    done, refused = got["after"][0]["text"], got["after"][1]["text"]
+    assert "Stopped: Juno, Larkspur Retail" in done, done
+    assert "Larkspur Retail" not in done.replace("Juno, Larkspur Retail", ""), ("a refused tap is never listed as done", done)
+    assert "Larkspur Retail" in refused and "That application is no longer in your tracker." in refused, refused
 
 
 # ------------------------------------------------------------------ 6 to 13: work waiting, batches, answers

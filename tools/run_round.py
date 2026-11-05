@@ -442,7 +442,11 @@ def declined_now() -> dict:
         got = profile_set.get("search.py", "BAR_DECLINED")
     except Exception:  # noqa: BLE001  no profile, or no such setting: none
         return {}
-    return dict(got) if isinstance(got, dict) else {}
+    # Not set at all is profile_set.MISSING, itself a dict ({"missing": True}): read as the
+    # setting, it turned down an employer called Missing and named it in Your rules.
+    if got is profile_set.MISSING or not isinstance(got, dict):
+        return {}
+    return {str(k): str(v) for k, v in got.items() if isinstance(v, str)}
 
 
 def family(name: str) -> set:
@@ -460,7 +464,8 @@ def family(name: str) -> set:
                      if re.fullmatch(re.escape(base) + r"_round\d+\.json", n)}
 
 
-def already_had(name: str = "", today=None, tracker: str | None = None, own=()):
+def already_had(name: str = "", today=None, tracker: str | None = None, own=(),
+                listed: bool = True, drafts: bool = True):
     """A function from a ranked row to why the person already has it, or "": a role in their
     applications (drafted, applied or decided, the tracker), a draft saved for it
     (documents/applications), a job they added or kept, or one still on their Jobs list from
@@ -468,13 +473,19 @@ def already_had(name: str = "", today=None, tracker: str | None = None, own=()):
     link, or by the employer and the role, so another site's copy of it is the same job.
     A search asked for 20 brought back four of these (the maintainer, 2026-11-04). `name` is
     the round being cut, whose own rounds are never "earlier"; `own`, the links its last cut
-    kept, which a cut made again keeps whatever was done with them since."""
+    kept, which a cut made again keeps whatever was done with them since. `listed` False
+    leaves out the earlier searches' rows: the page's own list (page_rules) is read row by
+    row, and a row there is never a copy of itself; `drafts` False leaves out the drafts saved
+    with no tracker row yet, the job a chat is drafting now, whose row the tracker soon marks
+    drafted. The function's `links` are the links the person's own records hold, so a cut
+    lists a copy under another link, never the job."""
     import glob
     import throttle
     from company_key import key as company_key
     from lookup_score import norm
     by_url: dict = {}
     by_role: dict = {}
+    records = None
 
     def note(url, company, role, why):
         u = norm(str(url or ""))
@@ -496,7 +507,8 @@ def already_had(name: str = "", today=None, tracker: str | None = None, own=()):
                     f"{when})")
         src = str(r.get("source") or "")
         note(src if src.startswith("http") else "", r.get("company"), r.get("role"), why)
-    for p in glob.glob(person.state("documents", "applications", "*", "draft.json")):
+    for p in (glob.glob(person.state("documents", "applications", "*", "draft.json"))
+              if drafts else ()):
         try:
             got = _read_json(p)
         except Exception:  # noqa: BLE001  one unreadable draft reads as none
@@ -514,13 +526,16 @@ def already_had(name: str = "", today=None, tracker: str | None = None, own=()):
         for url, k in app_model.kept_jobs().items():
             k = k if isinstance(k, dict) else {}
             note(url, k.get("company"), k.get("title"), "already on your list: kept for later")
+        records = set(by_url)
         day = datetime.date.fromisoformat(today) if isinstance(today, str) else today
-        for rname, _rank, r in app_model.carried(day or datetime.date.today(),
-                                                 but=family(name)):
+        for rname, _rank, r in (app_model.carried(day or datetime.date.today(),
+                                                  but=family(name)) if listed else ()):
             note(r.get("url"), r.get("company"), r.get("title"),
                  f"already on your list, from search {rname}")
     except Exception:  # noqa: BLE001  no saved searches yet: nothing on the list
         pass
+    if records is None:
+        records = set(by_url)
     mine = {norm(str(u or "")) for u in own} - {None, ""}
 
     def check(row) -> str:
@@ -532,7 +547,62 @@ def already_had(name: str = "", today=None, tracker: str | None = None, own=()):
         k = company_key(str(row.get("company") or ""))
         return next((why for role, why in by_role.get(k, ())
                      if throttle._same_title(row.get("title"), role)), "")
+    check.links = records
     return check
+
+
+def hires_from_home(text: str) -> str:
+    """The sentence of a posting saying it hires from the person's own country, region or
+    city (text_screen's own reading of a home place), or "". A remote role anchored in the
+    one neighbouring country passes the location gate only when the employer explicitly
+    hires from home (prefilter.py, the neighbour), which its place cannot show and its body
+    can."""
+    import text_screen
+    for s in text_screen.sentences(text or ""):
+        if _HIRES.search(s) and text_screen._names_home(s):
+            return s[:220]
+    return ""
+
+
+_HIRES = re.compile(r"\b(?:remote|anywhere|based|located|locations?|resid\w*|hir\w*|work(?:ing)? "
+                    r"from|eligible|open to|candidates? (?:in|from)|country|countries)\b", re.I)
+
+
+def place_rule(row) -> str:
+    """Why a row's place is outside the person's places today, or "": the location gate's own
+    FAIL on the place it names (prefilter.location_verdict, read with today's profile, so a
+    row an older round kept is judged again), and a remote role anchored in the neighbouring
+    country whose posting, read here, never says it hires from home. Without its posting (a
+    saved shortlist keeps none) that second one is left as the gate left it, ranked down."""
+    import prefilter
+    place, title = str(row.get("location") or ""), str(row.get("title") or "")
+    verdict, why = prefilter.location_verdict(place, title)
+    if verdict == "FAIL":
+        return f"place: {why}"
+    nb = getattr(prefilter, "_NB", None) or {}
+    body = str(row.get("desc") or "")
+    if (verdict == "FLAG" and nb and body
+            and why == nb.get("remote_reason", "remote but anchored abroad")
+            and not hires_from_home(body)):
+        return (f"place: {why}, and the posting never says it hires from "
+                f"{prefilter._HOME or 'where you are'}")
+    return ""
+
+
+def judged_none(company) -> str:
+    """The bar's reason when a chat or the person judged this employer to clear none of pay,
+    prestige or signal (bar.py judge ... none), where the person's own profile states that bar,
+    or "". An employer nobody has judged is flagged, never cut: it is judged before drafting
+    (stage_picks), and once judged none it is cut here like any other hard rule."""
+    import bar
+    if not bar.applies():
+        return ""
+    j = bar.judgement(company)
+    if not j or j.get("verdict") != bar.NONE:
+        return ""
+    said = str(j.get("why") or "").strip().rstrip(".")
+    return ("candidate's bar: clears none of pay, prestige or signal"
+            + (f" ({said})" if said else ""))
 
 
 def unscored(row) -> bool:
@@ -543,7 +613,7 @@ def unscored(row) -> bool:
 
 
 def hard_rules(jobage, today, seen=None, keep_ruled_out=False, dump=None, name="",
-               tracker=None, own=()):
+               tracker=None, own=(), window=True, listed=True, drafts=True):
     """A function from a ranked row to the hard rule it fails now, or "": no score, the
     search window, the candidate's bar (tools/bar.py, its hard rules, with the posting read,
     and a recruitment or staffing agency by the person's own lists, tools/sector.py), the
@@ -551,9 +621,13 @@ def hard_rules(jobage, today, seen=None, keep_ruled_out=False, dump=None, name="
     credential...), a ruling or a hold made since the row was ranked
     (prefilter.already_ruled_out: seen_jobs.json, a referral in flight, do_not_target.json),
     and a job the person already has (already_had: applied, drafted, added, kept or on the
-    list). The shortlist is cut with it (write_summary), so a row failing one is passed over
-    and the next row taken: the one path every row a search brings back goes through, the
-    number asked for (--show) and a cut made again (--recut) alike. Made when the shortlist is
+    list), the person's places (place_rule: the location gate's FAIL, and a remote role in the
+    neighbouring country that never says it hires from home) and an employer judged to clear
+    none of the bar (judged_none). The shortlist is cut with it (write_summary), so a row failing
+    one is passed over and the next row taken: the one path every row a search brings back goes
+    through, the number asked for (--show) and a cut made again (--recut) alike, and the page's
+    Found list (page_rules, `window` and `listed` False: the page keeps its own window and reads
+    its own list row by row). Made when the shortlist is
     cut, so it reads every ruling as it stands then, a Set aside or an employer turned down
     while the round ran included (declined_now); the person's own rulings hold even with --no-seen-read, which only looks again
     at what a rule decided; and with `dump`, a page dump, the Set asides still waiting on the
@@ -571,7 +645,7 @@ def hard_rules(jobage, today, seen=None, keep_ruled_out=False, dump=None, name="
         mine = prefilter.already_ruled_out(seen, False, day, entries=theirs) if theirs else mine
     waiting, revs = page_set_asides(dump)
     declined = declined_now()
-    had = already_had(name, day, tracker, own)
+    had = already_had(name, day, tracker, own, listed=listed, drafts=drafts)
     from company_key import key as company_key
     from lookup_score import norm
 
@@ -587,24 +661,188 @@ def hard_rules(jobage, today, seen=None, keep_ruled_out=False, dump=None, name="
     def check(row) -> str:
         if unscored(row):
             return "no score: a job is never shown unscored"
-        age = prefilter.age_days(row, day)
+        age = prefilter.age_days(row, day) if window else None
         if age is not None and age > jobage:
             return f"age: {age} days old, past the {jobage}-day window"
         verdict, why = bar.verdict(row.get("company"), row.get("desc") or "")
         if verdict == bar.EXCLUDED:
             return f"candidate's bar: {why}"
+        if verdict == bar.NONE:
+            none = judged_none(row.get("company"))
+            if none:
+                return none
         k = company_key(str(row.get("company") or "")) if declined else ""
         if k and k in declined:
             return f"candidate's bar: {declined[k]}"
         if sector.is_agency(row.get("company")):
             return f"candidate's bar: {AGENCY_WHY}"
+        place = place_rule(row)
+        if place:
+            return place
         cuts = text_screen.screen(row).get("cuts") or []
         if cuts:
             return f"screen: {cuts[0]}"
         if (waiting or revs) and set_aside(row):
             return SET_ASIDE_ON_PAGE
         return ruled(row) or mine(row) or had(row) or ""
+    check.had = had
     return check
+
+
+def page_rules(today, seen=None, tracker=None):
+    """The one function deciding what reaches the page's Found list (app_model._jobs), the
+    shortlist's own (hard_rules) read row by row down the list the page builds: the jobs the
+    person added, the newest search, then the earlier ones it carries. `check(row)` is the hard
+    rule a row fails, or "", and a copy of a row already listed (by its link, or by the employer
+    and the role, the app's own matching) fails as "already on your list"; `note(row)` lists a
+    row the page shows whatever its rules say (one added, kept, brought back, drafted or
+    applied for), so a copy of it is caught too. The search window is the page's own
+    (app_model._jobs), and its rulings it reads itself. A "find 20 more" left 18 of 37 rows on
+    the page that its own drafting then refused: US-based, an employer failing the bar, a copy
+    of a role already drafted or applied for (the maintainer, 2026-11-05)."""
+    import throttle
+    from company_key import key as company_key
+    from lookup_score import norm
+    rules = hard_rules(_job_age_days(), today, seen=seen, tracker=tracker,
+                       window=False, listed=False, drafts=False)
+    by_url: dict = {}
+    by_role: dict = {}
+
+    def listed(row) -> str:
+        u = norm(str(row.get("url") or ""))
+        if u and u in by_url:
+            return by_url[u]
+        k = company_key(str(row.get("company") or ""))
+        return next((why for role, why in by_role.get(k, ())
+                     if throttle._same_title(row.get("title"), role)), "")
+
+    def note(row, where: str = "") -> None:
+        why = "already on your list" + (f", {where}" if where else "")
+        u = norm(str(row.get("url") or ""))
+        if u:
+            by_url.setdefault(u, why)
+        k = company_key(str(row.get("company") or ""))
+        if k and str(row.get("title") or "").strip():
+            by_role.setdefault(k, []).append((str(row.get("title")), why))
+
+    def check(row) -> str:
+        why = rules(row)
+        if why.startswith("already ") and norm(str(row.get("url") or "")) in rules.had.links:
+            # The job itself, under its own link: the page shows where it stands (drafted,
+            # applied), never a copy of it to leave out.
+            why = ""
+        return why or listed(row)
+    check.note = note
+    check.had = rules.had
+    return check
+
+
+def ruled_by(row, why: str, links=()) -> bool:
+    """Whether a reason a search leaves a row out for goes on its left-out list: a fact about
+    the posting or its employer that the person's own rules decide. Never a row with no score
+    or past the search window (decided again for free every round), a tap still waiting on
+    the page (the page applies it), nor the person's own job under its own link (`links`,
+    already_had's): only a copy of it."""
+    from lookup_score import norm
+    if not why or why.startswith(("no score", "age:", SET_ASIDE_ON_PAGE)):
+        return False
+    if why.startswith("already "):
+        u = norm(str(row.get("url") or ""))
+        return bool(u) and u not in set(links)
+    return True
+
+
+def rule_word(why: str) -> str:
+    """The few words a reason is grouped under on the page's left-out list."""
+    if why.startswith("already "):
+        return "already on your list or applied for"
+    if why.startswith("place:"):
+        return "location"
+    import filtered
+    return filtered.rule_of("shortlist", why)
+
+
+def record_left_out(rows, seen_path: str, today: str) -> list[dict]:
+    """Each row a search left out for a ruling, written as one in the same step
+    (exclude.add_many, basis rules: it lapses when the rule it rests on changes) with its
+    plain reason, so neither the page nor the Brief counts it and a later round passes it over
+    before fetching it. Never over a ruling already there, or a posting the person brought
+    back: theirs stands. Never a copy of a job they have ("already ..."): the page leaves a
+    copy out by the same rules on every read, and a ruling on the posting itself would set
+    aside the job a chat is drafting. `rows` carry their `skip_reason`. The rows written."""
+    import exclude
+    from lookup_score import norm
+    try:
+        data = exclude.load_seen(seen_path)
+    except (OSError, ValueError):
+        data = {"seen": {}}
+    taken = {norm(str(e.get("url") or k)) or k for k, e in (data.get("seen") or {}).items()
+             if isinstance(e, dict) and str(e.get("status") or "").lower() in ("excluded", "lifted")}
+    out, seen = [], set()
+    for r in rows or ():
+        u = norm(str(r.get("url") or ""))
+        why = str(r.get("skip_reason") or "").strip()
+        if not u or u in taken or u in seen or not why or why.startswith("already "):
+            continue
+        seen.add(u)
+        out.append({"url": r["url"], "reason": str(r["skip_reason"]).strip(),
+                    "title": str(r.get("title") or ""), "company": str(r.get("company") or ""),
+                    "location": str(r.get("location") or "")})
+    if out:
+        exclude.add_many(out, today, path=seen_path)
+    return out
+
+
+# A left-out row keeps what the page needs to list it and, brought back, to show it again
+# with its score (tools/filtered.py back).
+LEFT_FIELDS = ("title", "company", "location", "url", "portal", "date", "fit", "priority")
+
+
+def left_entries(rows, stage: str) -> list[dict]:
+    """The rows a search left out, as entries of its left-out list (tools/filtered.py)."""
+    out = []
+    for r in rows or ():
+        why = str(r.get("skip_reason") or "").strip()
+        e = {k: r.get(k) for k in LEFT_FIELDS if r.get(k) not in (None, "")}
+        e.update(stage=stage, rule=rule_word(why), reason=why[:240])
+        out.append(e)
+    return out
+
+
+def say_left(gone) -> None:
+    """The line a search says for the rows it took off the person's list."""
+    if gone:
+        print(f"left out: {len(gone)} that fail a rule, taken off your Jobs list with their "
+              "reasons (each on this search's left-out list, where Bring back undoes it): "
+              + "; ".join(f"{r.get('title') or '?'}, {r.get('company') or '?'} "
+                          f"({r['skip_reason']})" for r in gone[:5]))
+
+
+def leave_out(passed, summary_dir: str, name: str, seen_path: str, today: str,
+              links=(), page: bool = True, record: bool = True) -> list[dict]:
+    """A search's cut, taken off the page in the same step: the rows it passed over for a
+    ruling (`passed`, write_summary's report) and, with `page`, every row from an earlier
+    search still on the person's Jobs list that fails the same rules now (app_model.left_out,
+    the page's own answer), each recorded as a ruling with its plain reason (record_left_out)
+    and put on this search's left-out list, where Bring back undoes it (tools/filtered.py back).
+    The rows taken off."""
+    import filtered
+    mine = [r for r in passed or () if ruled_by(r, str(r.get("skip_reason") or ""), links)]
+    old = []
+    if page and os.path.abspath(summary_dir) == os.path.abspath(person.state(SUMMARY_DIR)):
+        try:
+            import app_model
+            day = datetime.date.fromisoformat(today)
+            old = [dict(r, skip_reason=why) for rname, _rank, r, why in app_model.left_out(day)
+                   if rname != name and ruled_by(r, why, links)]
+        except Exception as e:  # noqa: BLE001  the page's list unreadable: this round's own
+            print(f"warning: the jobs already on your list were not checked again ({e})",
+                  file=sys.stderr)
+    if record:
+        record_left_out(mine + old, seen_path, today)
+    filtered.add(summary_dir, name, left_entries(mine, "shortlist")
+                 + left_entries(old, "your list"))
+    return mine + old
 
 
 def write_summary(shortlist_path, out_dir, name, scraped_path=None, show=None, rules=None,
@@ -908,14 +1146,25 @@ def next_round(summary_dir: str) -> str:
 
 def name_round(out: str | None, summary_dir: str, chosen: bool) -> str:
     """Where the round's files go, its name chosen here. No --out: `rounds/<next>` beside
-    the person's files. An --out whose name is not a round's, for a round saved among the
-    person's own (`chosen`: no --summary-dir), keeps its folder and takes the next name."""
+    the person's files. An --out for a round saved among the person's own (`chosen` false:
+    no --summary-dir, not a widening) keeps its folder and takes the next name when its
+    name is not a round's, or is one whose shortlist is saved already: `--out
+    "$SCRATCH/r1"`, as the instructions once said, saved over the person's own r1."""
     if not out:
         return os.path.join(person.state("rounds"), next_round(summary_dir))
     out = round_dir(out)
-    if chosen or ROUND_NAME.match(os.path.basename(out)):
+    name = os.path.basename(out)
+    if chosen or (ROUND_NAME.match(name)
+                  and not os.path.isfile(os.path.join(summary_dir, name + ".json"))):
         return out
     return os.path.join(os.path.dirname(out), next_round(summary_dir))
+
+
+def round_stamp(name: str, work: str = "") -> str:
+    """The lines a round writes into its round.log as it starts: its name, and the page's
+    work item it is for. tools/page_db.py search_unsaved reads them, so a search is done
+    only once its own round's shortlist is saved, whatever the files' times say."""
+    return f"round: {name}\n" + (f"work: {work}\n" if str(work or "").strip() else "")
 
 
 def round_dir(out: str) -> str:
@@ -964,14 +1213,15 @@ def recut(a) -> int:
     scraped = os.path.join(a.out, SCRAPED, "kept.json")
     report: dict = {}
     seen = a.seen or person.state("job_scraper", "seen_jobs.json")
+    rules = hard_rules(a.jobage, a.today, seen, a.no_seen_read, dump=a.dump, name=name,
+                       tracker=a.tracker, own=links)
     path = write_summary(short, where, name,
                          scraped_path=scraped if os.path.isfile(scraped) else None,
-                         show=a.show, rules=hard_rules(a.jobage, a.today, seen, a.no_seen_read,
-                                                       dump=a.dump, name=name,
-                                                       tracker=a.tracker, own=links),
-                         report=report, links=links)
+                         show=a.show, rules=rules, report=report, links=links)
     for line in say_cut(report, a.show):
         print(line)
+    say_left(leave_out(report.get("passed_over"), where, name, seen, a.today,
+                       links=rules.had.links, record=not a.no_seen_write))
     if path:
         print(f"shortlist summary: {local_path.rel(path, ROOT)} ({report.get('found', 0)} "
               "rows) - commit this one")
@@ -1038,6 +1288,10 @@ def main():
     ap.add_argument("--expand", action="store_true",
                     help=f"re-run wider when the yield target is missed, up to "
                          f"{MAX_ROUNDS} rounds")
+    ap.add_argument("--work", default="",
+                    help="the page's work item this search is for (its id): named in "
+                         "round.log, so the page marks the search done only once this "
+                         "round's shortlist is saved")
     ap.add_argument("--round", type=int, default=1, help=argparse.SUPPRESS)
     ap.add_argument("--first-pages", dest="first_pages", type=int, default=None,
                     help=argparse.SUPPRESS)
@@ -1088,6 +1342,8 @@ def main():
     os.makedirs(a.out, exist_ok=True)
     f = lambda n: os.path.join(a.out, n)
     log = open(f("round.log"), "a", encoding="utf-8", errors="replace", newline="\n")
+    log.write(round_stamp(os.path.basename(os.path.abspath(a.out)), a.work))
+    log.flush()
     # One monotonic ceiling for the whole round. Every stage gets the
     # smaller of its own budget and what is left of this.
     started = time.monotonic()
@@ -1217,17 +1473,13 @@ def main():
     # Write the keeper, then drop the rest. Done before the expansion branch
     # below returns, so every exit path leaves the same small footprint.
     cut: dict = {}
+    seen_path = a.seen or person.state("job_scraper", "seen_jobs.json")
+    rules = hard_rules(a.jobage, a.today, seen_path, a.no_seen_read, dump=a.dump,
+                       name=os.path.basename(os.path.abspath(a.out)), tracker=a.tracker)
     summary = write_summary(f("06_shortlist.json"),
                             a.summary_dir or person.state(SUMMARY_DIR),
                             os.path.basename(os.path.abspath(a.out)), scraped_path=scraped,
-                            show=a.show,
-                            rules=hard_rules(a.jobage, a.today,
-                                             a.seen or person.state("job_scraper",
-                                                                    "seen_jobs.json"),
-                                             a.no_seen_read, dump=a.dump,
-                                             name=os.path.basename(os.path.abspath(a.out)),
-                                             tracker=a.tracker),
-                            report=cut)
+                            show=a.show, rules=rules, report=cut)
     # Counted on the list the person is shown, after the hard rules cut it: counted on the
     # ranked rows before the cut, 60 and more of them, a round met its target with rows the
     # cut then dropped, and never widened (the release review, 2026-11-03).
@@ -1253,6 +1505,11 @@ def main():
     if left_out:
         print(f"filtered out: {local_path.rel(left_out, ROOT)} (each with its reason; "
               "tools/filtered.py back brings one back)")
+    # What the cut ruled out, taken off the page in the same step: never left on Jobs as a
+    # fresh find for a chat to clear by hand (2026-11-05).
+    say_left(leave_out(cut.get("passed_over"), a.summary_dir or person.state(SUMMARY_DIR),
+                       os.path.basename(os.path.abspath(a.out)), seen_path, a.today,
+                       links=rules.had.links, record=not a.no_seen_write))
     # Read before the prune below deletes 00_scrape/, or a portal that went
     # quiet is never reported and the MISSED message blames the market.
     down = _portals_down(a.out)

@@ -91,7 +91,8 @@ def test_a_drafts_bin_says_why_it_is_not_going_out(run, tmp_path, pick, why, toa
 
 def test_a_messages_bin_sets_the_note_aside_first(run, tmp_path):
     got = _go(run, tmp_path, [
-        {"hash": "drafts-messages", "open": "wbin:msg-ash-1", "read": "dialog[open]"},
+        # The note is on Ash's card in Contacts (2026-11-04): its one trash, the person's.
+        {"hash": "contacts", "open": "pbin:copperleaf_pay_ash", "read": "dialog[open]"},
         {"click": "Not now: set this note aside", "exact": True, "within": "dialog", "wait": 300},
     ], PHONE, clock=T)
     assert "Not now: set this note aside" in got["after"][0]["text"]
@@ -121,7 +122,7 @@ def test_a_to_do_card_about_one_person_offers_their_choices_and_a_week_off(run, 
 def test_a_reply_never_offers_to_set_it_aside_which_the_engine_would_refuse(run, tmp_path):
     # state.py drop refuses anyone already written to, so "set aside" is for first notes only.
     got = _go(run, tmp_path, [
-        {"hash": "drafts-messages", "open": "mbin:msg-juno-1", "read": "dialog[open]"},
+        {"hash": "contacts", "open": "pbin:larkspur_retail_castellan", "read": "dialog[open]"},
     ], PHONE, clock=T)
     sheet = got["after"][0]["text"]
     assert "Not Juno?" in sheet and "set this note aside" not in sheet
