@@ -3590,7 +3590,7 @@ HANDLERS = {
 assert set(HANDLERS) | {"undo"} == set(ACTIONS)
 # The two answers nothing on the page takes back, and why: said in a chat instead.
 NO_UNDO = {
-    "rule.keep": "a rule kept as it is changes nothing; the rule's own pencil or bin changes it",
+    "rule.keep": "a rule kept as it is changes nothing; the rule's own pencil or trash changes it",
     "rules.seen": "the Brief's line set aside for the month; it comes back next month by itself",
     "outcome.undo": "it is itself the taking back of an outcome",
     "interview.unrework": "it is itself the taking back of an answer kept to work on",

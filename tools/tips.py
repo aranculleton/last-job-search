@@ -170,7 +170,7 @@ PAGE_TOUR = (
     {"key": "todo", "tab": "todo", "title": "To do",
      "text": "What needs you, five at a time, most urgent first: a question, a follow-up "
              "that is due, an interview coming up. A card's filled button is its next step; "
-             "the bin puts it away."},
+             "the trash puts it away."},
     {"key": "jobs", "tab": "jobs", "title": "Jobs",
      "text": "Every role from found to applied. Found: scored out of 100 for how well it "
              "fits you; tap Draft this on one you like. Drafts: your resume and letter, "
@@ -200,7 +200,7 @@ PAGE_TOUR = (
 PAGE_FIRST = {
     # Plain sentences a first-time reader gets at once: "a job that's off ... the next search
     # learns" read as shorthand nobody could parse (the maintainer, 2026-10-30).
-    "search": "These are your first results, so the order may be a bit off. Tap the bin on any "
+    "search": "These are your first results, so the order may be a bit off. Tap the trash on any "
               "job that's wrong for you and say why, and the next search will do better.",
     "apply": "Your first application. Tap the pencil beside the resume or the letter to change "
              "the wording, and the next one will use your changes.",
@@ -219,7 +219,7 @@ PAGE_TIPS = {
     "rephrase": "Tap the pencil on anything Claude writes to make it shorter, warmer or "
                 "reworded. Claude learns your style from your changes.",
     "tour": "For a short tour of the page, go to Settings, then Help, then Show me around.",
-    "reaction-sticks": "When you bin a job, Claude asks why. Your answer applies to every "
+    "reaction-sticks": "When you trash a job, Claude asks why. Your answer applies to every "
                        "future search until you change your mind.",
     "tell-me": "When you hear back, tap I heard back on the application, or tap They replied on the "
                "person in Contacts and paste what they sent. Claude updates your records and "

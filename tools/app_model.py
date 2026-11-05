@@ -4996,7 +4996,7 @@ def _schedule(ctx: Ctx, targets: dict) -> dict:
 def _rules(ctx: Ctx, targets: dict) -> dict:
     """Your rules (tools/rules_view.py your_rules): every rule that shapes the search and the
     messages, each one plain sentence with the day it was set, the person's words, what it
-    left out in the last 30 days, the pencil's setting and the bin's writer, and a quiet
+    left out in the last 30 days, the pencil's setting and the trash's writer, and a quiet
     "Still right?" where it is old and busy; `brief_line`, the Brief's one line about them,
     at most once a month. The person: "how easy is it to change the rules ... which might be
     permanent despite someone's preferences changing over time?" (2026-11-05)."""

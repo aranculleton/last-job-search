@@ -4510,7 +4510,7 @@
   const BRIEF_TIPS = [
     "Tap a person's name anywhere to see everything about them: what was said, what is owed, where they work.",
     "Paste a job link into Add a job on Jobs, and Claude scores it against your profile in a couple of minutes.",
-    "Not interested in someone or something? Tap the bin on its card to put it away.",
+    "Not interested in someone or something? Tap the trash on its card to put it away.",
     "Tap Read your prep to open an interview prep full screen.",
     "Got a message from someone? Paste it in Contacts, under Got a message, and Claude drafts the reply.",
     "Tap Edit the brief, above, to change what it covers or which days it comes.",
@@ -9335,7 +9335,7 @@
     // November audit).
     const body = (what, value) => (what === "pay" && pay.floor ? "A job whose stated pay tops out under " + money(pay.floor) + " is flagged as under what you would take." : value || "Not set");
     const plain = (what, name, value, items, full) => infoRow("search-" + what, name, few(value, items) || "Not set", foldBody([items && items.length > 1 ? chips(items, full) : h("p", {}, body(what, value)),
-      what === "avoid" ? h("p", {class: "small muted"}, "Say what to leave out under Something else. The bin on a job in Jobs leaves out ones like it too.") : null],
+      what === "avoid" ? h("p", {class: "small muted"}, "Say what to leave out under Something else. Trashing a job in Jobs leaves out ones like it too.") : null],
       ["roles", "places", "pay"].includes(what) ? change(what, name, value) : avoidChange(), stateLine(sid, "search:" + what)));
     // What to avoid is changed where the search is changed, in the person's own words; the
     // bin on a job teaches it too (2026-11-02: the row had no Change, only "use the bin").
@@ -9778,7 +9778,7 @@
   }
   const TOUR = [
     ["brief", "Brief", "Your day at a glance. Tap any line to go to it."],
-    ["todo", "To do", "What needs you, five at a time, most urgent first. A card's filled button is its next step; the bin puts it away."],
+    ["todo", "To do", "What needs you, five at a time, most urgent first. A card's filled button is its next step; the trash puts it away."],
     ["jobs", "Jobs", "Every role from found to applied: Found, each with a number out of 100 for how well it fits you (75 or more is a strong fit); Drafts, your resume and letter; Applied, each one tracked."],
     ["contacts", "Contacts", "Someone inside who puts your name forward beats applying cold. Claude finds who to write to and drafts the note; you send it yourself. Tap a name to see everything about them."],
     ["interviews", "Coming up", "Everything booked, by day: interviews, calls, tests and closing days, each ready to add to your calendar, and your prep for each interview."],

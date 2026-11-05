@@ -41,7 +41,7 @@ next?" in its first lines, and nothing asks for a decision a default could make.
   interview, `canSayReplied` and `theyRepliedBtn` for a person): To do offers what Coming up
   and Contacts offer for the same item, with the same names ("Read your prep" everywhere). An
   interview's card: its next step and Add to calendar; Practise with Claude, Update my prep and
-  a new day under More; they said no and I withdrew in its bin.
+  a new day under More; they said no and I withdrew in its trash.
   (one-card tests)
 - To do holds only what there is to do. Someone who has not answered the person's limit of
   messages is never a card there, nor counted. In Contacts they wait below the fold with the
@@ -59,7 +59,7 @@ next?" in its first lines, and nothing asks for a decision a default could make.
 - Every item is its own soft card: a 1px line, rounded corners, no shadow, 8px from the next.
   Only what floats (a sheet, a menu, a toast) has a shadow. Nothing has a line down its side.
   (design test)
-- A card reads top down: its top line (a kind or a score, the title, a state pill, the bin),
+- A card reads top down: its top line (a kind or a score, the title, a state pill, the trash),
   one line of facts, at most one block in a soft grey box (a question or a suggestion), then
   its actions: one row of pills (Buttons, below). (layout 7, 8, action-row test)
 - Jobs is one list of the jobs you might apply to, each once at its own stage, and Applied beside
@@ -101,7 +101,7 @@ next?" in its first lines, and nothing asks for a decision a default could make.
   first notes, to check) said one thing, and their counts disagreed with Contacts. (drafted
   messages tests)
 - Many of one small thing are one checklist card, a row an item: each row has its own next
-  step and Done beside its bin, the bin keeping the rest (They replied, Tomorrow, Next week,
+  step and Done beside its trash, the trash keeping the rest (They replied, Tomorrow, Next week,
   the person's choices), and the card's own actions keep to the card's anatomy above.
   (layout 8, one-card tests)
 - One "?" a card at most, after the last word of its line, and no more than three on a first
@@ -178,12 +178,15 @@ tests, `tests/test_contacts_is_one_page_with_each_persons_draft.py`)
 - The trash keeps one place for putting anyone or anything away: the person's choices, and
   for an unsent first note "set this note aside" as well.
 
-## The bin
+## The trash
 
-- One icon puts anything away: the bin, top right of every live card. Never an x.
+- The word is trash, never bin, in everything a person reads: its label, its tips and
+  its help. (the maintainer, 2026-11-05; the no-bin words test)
+
+- One icon puts anything away: the trash, top right of every live card. Never an x.
 - One possible answer: done at once, with Undo. Several: a short sheet of buttons, one a
   choice, the one tapped done at once (never a choice and then a second button), and Undo
-  putting every part back. (bin tests, design test)
+  putting every part back. (trash tests, design test)
 - The choices: a job (not this role, the pay, the place, my field, no more from the employer;
   posted too long ago only where it was, closed only where it has); a draft (the same); a
   message (set it aside, or the person's choices); a person (hide this for a week where it is
@@ -192,7 +195,7 @@ tests, `tests/test_contacts_is_one_page_with_each_persons_draft.py`)
   or an application (they said no, I withdrew, stopped waiting); a reminder in To do (hide it
   for a week, and "1 hidden this week: Show" at the end of To do brings it back, as "1 set
   aside: Show" does in Jobs). "I have applied" is under a job's More and on a draft's face,
-  never in the bin as well.
+  never in the trash as well.
 - A reason that changes something says so when it is given ("Set aside. Fewer jobs outside
   your field from now on.").
 - A card or a row the person has finished (binned, sent, answered, done, closed, no more
@@ -215,8 +218,8 @@ tests, `tests/test_contacts_is_one_page_with_each_persons_draft.py`)
 - Before any action goes on a card, in this order: is it needed at all (if not, it goes)? Can
   the app do it by itself (then it does, and says so)? Can it merge with another (one
   control)? Only then, where it lives: the card (the next step and at most two others), the
-  pencil, the bin's choices, or More (rare). A card's budget is one filled pill, two soft
-  pills, the pencil, the bin, and the gauge where Claude wakes; more means a step above was
+  pencil, the trash's choices, or More (rare). A card's budget is one filled pill, two soft
+  pills, the pencil, the trash, and the gauge where Claude wakes; more means a step above was
   skipped. Settings gets no new option for it: a default that suits nearly everyone is the
   setting. (the maintainer, 2026-11-05: "we also don't want to clutter the page with buttons
   and options and configurations by doing this, so be very smart about it"; action-row test)
@@ -230,7 +233,7 @@ tests, `tests/test_contacts_is_one_page_with_each_persons_draft.py`)
 - Every control that wakes Claude carries the gauge beside it: the same bars, size and place,
   with its minutes shown, and its "?" or a long press says it in one line ("About 3 minutes of
   Claude's time, from your Claude allowance"). A control that only runs code (marking sent, a
-  date, the bin, a word changed in place) has none, so what is free can be seen. The minutes
+  date, the trash, a word changed in place) has none, so what is free can be seen. The minutes
   are the engine's, from this copy's own finished work of that kind and size where it has any,
   and a button that starts several says the time for all of them. (the maintainer,
   2026-11-05: the gauge "is meant to deter someone from spending tokens unnecessarily")

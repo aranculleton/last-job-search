@@ -49,6 +49,7 @@ make sense to somebody whose repo just received it.
 
 ### Changed
 
+- **The bin is called the trash everywhere**: on every card, in the tips and in the page's help.
 - **One card for every message to send.** The drafted replies and follow-ups, the week's first
   notes and the ones to check first are one card in To do, "Messages to send (7)", a row a
   person opening their draft, with the same number Contacts shows in "7 to send".

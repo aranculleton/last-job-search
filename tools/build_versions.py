@@ -764,8 +764,9 @@ METHODS: dict[str, dict] = {
             (34, "2026-11-05", True, "Jobs is one list of the jobs you might apply to, each once at its own stage, with Applied beside it; a drafted job is its draft's card with the job's fit and reasons; one line of facts (the employer, the town, posted and found, the pay) ending with its details fold (Why, Details); More holds only the rare; every action a pill, the next step marked the same on every card; a pencil beside the resume's and the letter's own words opens the Tweak panel, and one on a job corrects its title, pay or place; a draft's remake and its files are queued by the view, never Make it again or Get my files ready; Questions on the form under More, its answers on the card; every control that wakes Claude carries the gauge; the header has no line about a search, and Add a job and your resume are soft pills beside Find jobs"),
             (35, "2026-11-05", True, "To do has one card an act and a person: every message to send on one card counted as Contacts counts it, a person's rows and their referral on one card, the small questions one at a time, Done on checklist rows with They replied in the bin, no fix buttons (Claude fixes a failing application by itself), a closed posting set aside by itself and a referral a note; an interview's actions are the same on To do and Coming up; headers are one line"),
             (36, "2026-11-05", False, "the Jobs count beside the menu is read aloud as jobs to apply, the list it counts"),
+            (37, "2026-11-05", True, "the word a person reads is trash, never bin, in the page's help and its tips"),
         ),
-        "fingerprint": "e6c1f15581a624a6",
+        "fingerprint": "5e35b87914f06682",
     },
     "upskill": {
         "by": "upgrade", "priority": 4, "applies": "upskill_plans", "time": "~10 min",
