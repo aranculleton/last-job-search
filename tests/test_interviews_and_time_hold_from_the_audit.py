@@ -476,3 +476,20 @@ def test_the_whole_prep_reaches_the_page_however_long_it_is():
     sec = next(s for s in got["sections"] if s["title"] == "About " + CO)
     assert len(sec["items"]) == 61 and sec["items"][-1]["text"].endswith("Word399.")
     assert any(i["text"] == "The very last line." for s in got["sections"] for i in s["items"])
+
+
+def test_a_brief_line_about_a_person_at_an_employer_opens_them_not_the_application(where):
+    """A person's copy (2026-11-05): "Follow up with Wren at Larkspur Retail" opened the
+    application in Jobs, since the line names the employer and not her full name. A first name
+    of someone there, said in the line, is who it is about: it opens her in Contacts."""
+    ctx = types.SimpleNamespace(tracker=[dict(_row(), company="Larkspur Retail")],
+                                contacts=[{"company": "Larkspur Retail", "contact_id": "larkspur_halloway",
+                                           "name": "Wren Halloway"},
+                                          {"company": "Fernhill Freight", "contact_id": "fernhill_vale",
+                                           "name": "Robin Vale"}])
+    assert app_model.brief_link(ctx, "Follow up with Wren at Larkspur Retail: drafted for you.") == \
+        {"item": "larkspur_halloway", "section": "people"}
+    # Someone else's first name, or nobody's, still opens the employer's application.
+    assert app_model.brief_link(ctx, "Robin wrote about Larkspur Retail")["item"] == \
+        app_model.tracker_ids(ctx.tracker)[0]
+    assert app_model.brief_link(ctx, "Larkspur Retail is live")["section"] == "applications"

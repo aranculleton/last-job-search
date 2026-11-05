@@ -29,6 +29,7 @@ import glob
 import json
 import os
 import re
+import shutil
 import sys
 
 _HERE = os.path.dirname(os.path.abspath(__file__))
@@ -1206,13 +1207,87 @@ def _merged(old: dict, new: dict) -> dict:
     return out
 
 
+# In a dump folder: the batches keep_landed took as landed before they were sent, in order,
+# each with the folder's copy of every record it moved on as it stood before (SENT_DIR). A
+# refused batch never landed, nor did any sent after it: `note_version` puts those records
+# back as they were, so the same command run again makes the save again. Taken as landed and
+# never put back, a refused save was dropped in silence: the view run again found its own
+# unsent screens already in the folder and wrote nothing (a person's copy, 2026-11-05).
+SENT = ".sent.json"
+SENT_DIR = ".sent"
+
+
+def _sent(dump_dir: str) -> list:
+    got = _read_json(os.path.join(dump_dir, SENT))
+    return got if isinstance(got, list) else []
+
+
+def _keep_sent(dump_dir: str, sent: list) -> None:
+    try:
+        with open(os.path.join(dump_dir, SENT), "w", encoding="utf-8", newline="\n") as fh:
+            json.dump(sent, fh, indent=1)
+    except OSError:
+        pass
+
+
+def _before(dump_dir: str, n: int, coll: str, doc_id: str, names) -> None:
+    """The folder's copy of one record as it stands before batch `n` moves it on, kept once
+    for that batch: its file as it is, or a mark that there was none."""
+    keep = os.path.join(dump_dir, SENT_DIR, str(n), coll, doc_id.replace("~", "@") + ".json")
+    if os.path.exists(keep):
+        return
+    os.makedirs(os.path.dirname(keep), exist_ok=True)
+    raw = next((_read_json(p) for p in names if os.path.isfile(p)), None)
+    with open(keep, "w", encoding="utf-8", newline="\n") as fh:
+        json.dump({"file": raw} if raw is not None else {"none": True}, fh, ensure_ascii=False)
+
+
+def put_back(dump_dir: str, ref: str) -> list[str]:
+    """A batch holding `ref` (`<stored collection>/<stored doc id>`) was refused: the folder's
+    copy of every record that batch, and every batch sent after it, moved on is put back as it
+    was, newest first, and those batches are no longer taken as landed. Returns the records
+    put back; [] when no batch in this folder held `ref`."""
+    sent = _sent(dump_dir)
+    at = next((i for i in range(len(sent) - 1, -1, -1)
+               if ref in (sent[i].get("records") or [])), None)
+    if at is None:
+        return []
+    back: list[str] = []
+    for got in reversed(sent[at:]):
+        n = str(got.get("n"))
+        for key in reversed(got.get("records") or []):
+            coll, _, doc_id = key.partition("/")
+            kept = _read_json(os.path.join(dump_dir, SENT_DIR, n, coll,
+                                           doc_id.replace("~", "@") + ".json"))
+            if not isinstance(kept, dict):
+                continue
+            where = os.path.join(dump_dir, coll)
+            names = [os.path.join(where, doc_id.replace("~", "@") + ".json"),
+                     os.path.join(where, doc_id + ".json")]
+            for p in dict.fromkeys(names):
+                if os.path.isfile(p):
+                    os.remove(p)
+            if not kept.get("none"):
+                os.makedirs(where, exist_ok=True)
+                with open(names[0], "w", encoding="utf-8", newline="\n") as fh:
+                    json.dump(kept.get("file"), fh, ensure_ascii=False, indent=1)
+                    fh.write("\n")
+            back.append(key)
+        shutil.rmtree(os.path.join(dump_dir, SENT_DIR, n), ignore_errors=True)
+    _keep_sent(dump_dir, sent[:at])
+    return list(dict.fromkeys(back))
+
+
 def keep_landed(dump_dir: str, batches, skip=()) -> None:
     """The dump as it will be once `batches` land, so the next command over the same folder
     pins to the versions they leave and sees what they made (a work item a tap queued, a
     claim already taken), with no second read. Collections in `skip` are left as read: a
     tap's claim takes the person's words off the page, and the dump keeps them for `apply`.
-    A refused batch means read again, into a new folder."""
+    A refused batch is put back by `note_version` (`put_back`), never left as landed."""
+    sent = _sent(dump_dir)
     for path in batches or ():
+        n = max([int(s.get("n") or 0) for s in sent] + [0]) + 1
+        records: list[str] = []
         for e in _read_json(path) or []:
             coll, doc_id = str(e.get("collection") or ""), str(e.get("doc_id") or "")
             if not coll or not doc_id or coll in skip or _LOGICAL.get(coll, coll) in skip:
@@ -1220,6 +1295,11 @@ def keep_landed(dump_dir: str, batches, skip=()) -> None:
             where = os.path.join(dump_dir, coll)
             names = [os.path.join(where, doc_id.replace("~", "@") + ".json"),
                      os.path.join(where, doc_id + ".json")]
+            try:
+                _before(dump_dir, n, coll, doc_id, names)
+                records.append(f"{coll}/{doc_id}")
+            except OSError:
+                pass
             if e.get("op") == "delete":
                 for p in dict.fromkeys(names):
                     if os.path.isfile(p):
@@ -1235,6 +1315,10 @@ def keep_landed(dump_dir: str, batches, skip=()) -> None:
                 old = next((unwrap(_read_json(p))[0] for p in names if os.path.isfile(p)), {})
                 body = _merged(old, body)
             _keep_dump(dump_dir, coll, doc_id, body, version)
+        if records:
+            sent.append({"n": n, "batch": os.path.abspath(path), "records": records})
+    if batches:
+        _keep_sent(dump_dir, sent)
 
 
 def note_version(dump_dir: str, ref: str, version: int) -> str:
@@ -1249,6 +1333,10 @@ def note_version(dump_dir: str, ref: str, version: int) -> str:
     logical = _LOGICAL.get(coll, coll)
     if logical == "meta":
         doc_id = _LOGICAL_DOC.get(("meta", doc_id), doc_id)
+    # The refused batch never landed, nor any sent after it: the folder's copy of what they
+    # moved on is put back first, so the command run again makes the whole save again,
+    # pinned to the store's number, rather than finding it already made and writing nothing.
+    put_back(dump_dir, "/".join(stored(logical, safe_id(doc_id).replace("@", "~"))))
     db = load(dump_dir)
     doc = (db.get(logical) or {}).get(safe_id(doc_id).replace("@", "~"))
     if doc is None:
@@ -1271,7 +1359,27 @@ def note_version(dump_dir: str, ref: str, version: int) -> str:
     if stamp is not None and stamp != int(version):
         remember_version(f"{store_coll}/{store_id}", stamp, int(version))
     _keep_dump(dump_dir, store_coll, store_id, dict(doc["data"]), int(version))
-    return f"{store_coll}/{store_id}"
+    key = f"{store_coll}/{store_id}"
+    tries = _read_json(os.path.join(dump_dir, REFUSED))
+    tries = tries if isinstance(tries, dict) else {}
+    tries[key] = int(tries.get(key) or 0) + 1
+    try:
+        with open(os.path.join(dump_dir, REFUSED), "w", encoding="utf-8", newline="\n") as fh:
+            json.dump(tries, fh, indent=1, sort_keys=True)
+    except OSError:
+        pass
+    return key
+
+
+# In a dump folder: how often the store refused a save of each record here (note_version).
+REFUSED = ".refused.json"
+
+
+def refusals(dump_dir: str, ref: str) -> int:
+    """How often a save of `ref` (`<stored collection>/<stored doc id>`) was refused in this
+    folder."""
+    got = _read_json(os.path.join(dump_dir, REFUSED))
+    return int(got.get(ref) or 0) if isinstance(got, dict) else 0
 
 
 def not_its_claim(item: dict, chat: str) -> str:

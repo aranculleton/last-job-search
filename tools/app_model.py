@@ -2517,7 +2517,7 @@ def _messages(ctx: Ctx, targets: dict) -> list:
                 "blocked": message_blocks(text, mtype, c, ctx.today),
                 # Where they live is not on record, so the person's rule about where people
                 # are cannot be checked: said on the card before a new message goes.
-                "where_unknown": kind != "reply" and not str(c.get("location") or "").strip(),
+                "where_unknown": kind != "reply" and not surface.where_they_live(c),
                 "open": open_target(c, channel),
                 "application": None,
                 "text": text, "chars": len(body), "limit": limit,
@@ -3104,13 +3104,21 @@ def _people(ctx: Ctx, targets: dict) -> list:
         seen_as[k] = seen_as.get(k, 0) + 1
     rows, full = [], {}
     counts = dict.fromkeys(GROUPS, 0)
+    # A row closed as the same person as another is never listed beside it: its messages are
+    # shown on the row kept (2026-11-05: one recruiter was two cards, one with no employer).
+    closed_as = state.duplicate_of(ctx.contacts)
+    theirs: dict = {}
+    for gone, kept in closed_as.items():
+        theirs.setdefault(kept, []).extend(ctx.by_contact.get(gone) or [])
     for c in ctx.contacts:
         cid = str(c.get("contact_id") or "").strip()
-        if not cid or cid in full:
+        if not cid or cid in full or cid in closed_as:
             continue
         status = ctx.live.get(cid) or str(c.get("status") or "")
         due = str(c.get("next_action_due") or "").strip()
         msgs = ctx.by_contact.get(cid) or []
+        if theirs.get(cid):
+            msgs = sorted(list(msgs) + theirs[cid], key=lambda m: str(m.get("date") or ""))
         last = max((str(m.get("date") or "")[:10] for m in msgs), default="") or None
         days = app_lists.ago(last, ctx.today)
         hold = surface.held(c, msgs, status, replying=status in schema.OWED_BY_US,
@@ -3176,13 +3184,16 @@ def _people(ctx: Ctx, targets: dict) -> list:
                 # Who they came through (the book's referred_by: a contact id or a name), so the
                 # page says "Came through Alex" on someone Alex passed them to (2026-10-30).
                 "came_through": _came_through(c.get("referred_by"), full) or None,
+                # A resume made for them when they asked for one: on their card, to get, and
+                # found by their name; never in place of the person's own (2026-11-05).
+                "resume_for_them": resume_made_for(cid),
                 "who": who_they_are(c, status),
                 "replied": full[cid]["replied"], "live": full[cid]["live"], "call": call,
                 "paste": _paste(cid, full[cid]["first_name"], None)
                 if (shown.get(cid) or {}).get("kind") == "first_note" else None,
                 # Where they live is not on record: the person's rule about where people are
                 # cannot be checked, which the page says before anything goes to them.
-                "where_unknown": not str(c.get("location") or "").strip(),
+                "where_unknown": not surface.where_they_live(c),
                 "asked_sent": asked.get(cid),
                 "is_process_stage": _is_process_stage(ctx, c, status),
                 # Their conversation, newest last, so their page shows what was said and a
@@ -4150,6 +4161,31 @@ def _help(ctx: Ctx, targets: dict) -> dict:
 # ------------------------------------------------------------------ your resume
 
 
+def resume_made_for(cid: str) -> dict | None:
+    """The resume made for a contact who asked for one (general_resume.py --for-contact keeps
+    documents/network/<id>/resume.json beside it): {name, path, made_on, asset, get}, or
+    None. Only while the file it names is there."""
+    try:
+        rec_path = person.state("documents", "network", cid, "resume.json")
+    except Exception:  # noqa: BLE001  no copy: nothing made
+        return None
+    if not os.path.isfile(rec_path):
+        return None
+    try:
+        with open(rec_path, encoding="utf-8") as fh:
+            rec = json.load(fh)
+    except (OSError, ValueError):
+        return None
+    rel_path = str((rec or {}).get("file") or "").replace("\\", "/") if isinstance(rec, dict) else ""
+    if not rel_path or not os.path.isfile(person.state(*rel_path.split("/"))):
+        return None
+    name = os.path.basename(rel_path)
+    return {"name": name, "path": rel_path, "made_on": rec.get("made_on") or None,
+            "asset": asset_for(rel_path),
+            "get": {"kind": "files", "id": "files~resume-" + cid,
+                    "args": {"paths": [rel_path], "resume": rel_path, "files": [name]}}}
+
+
 def _resume(ctx: Ctx, targets: dict) -> dict | None:
     """The general resume (documents/cv/, docpaths.current_resume): the one sent when nobody
     named a role, free to get, and whether the profile moved since it was made."""
@@ -5070,8 +5106,23 @@ def brief_link(ctx: Ctx, line: str) -> dict:
     ids = getattr(ctx, "tracker_ids", None)          # the build's own (Ctx), else worked out
     rows = sorted(zip(ctx.tracker, tracker_ids(ctx.tracker) if ids is None else ids),
                   key=lambda x: -len(str(x[0].get("company") or "")))
+    def someone_there(company) -> str:
+        """The contact at `company` the line names by first name ("Follow up with Wren at
+        <employer>"): a line about a person opens them in Contacts, never the employer's
+        application in Jobs (a person's copy, 2026-11-05)."""
+        from company_key import key as company_key
+        k = company_key(company)
+        for c in ctx.contacts:
+            first = str(c.get("name") or "").split()
+            if first and company_key(c.get("company")) == k and len(first[0]) > 1 \
+                    and named(first[0]):
+                return str(c.get("contact_id") or "")
+        return ""
     for row, rid in rows:
         if named(row.get("company")):
+            who = someone_there(row.get("company"))
+            if who:
+                return {"item": who, "section": "people"}
             return {"item": rid, "section": "applications" if _status(row) not in (
                 "drafted", "") else "ready"}
     for c in sorted(ctx.contacts, key=lambda c: -len(str(c.get("company") or ""))):

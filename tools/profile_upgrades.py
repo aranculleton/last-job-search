@@ -1071,10 +1071,12 @@ def _own_tests() -> str:
     root = os.path.dirname(prof)
     import sync_app
     why = []
+    # Read through own_tests_owed, which runs them again when the record is out of date: it
+    # was keyed on the tests' own tree alone, so a record made before an update still read
+    # "all pass" after it, and an update another chat took reached this copy with no record
+    # changed at all (a person's copy, 2026-11-05: five failed, and this said nothing).
+    sync_app.own_tests_owed(root, clean_too=True)
     rec = sync_app.own_tests_record(root)
-    if rec and rec.get("failures") and rec.get("tree") != sync_app.tests_tree(root):
-        sync_app.record_own_tests(root, sync_app.own_test_failures(root))
-        rec = sync_app.own_tests_record(root)
     changed = [f[0] for f in (rec or {}).get("failures") or [] if len(f) > 2 and not f[2]]
     if changed:
         why.append("%d of your own test(s) check what an update changed: %s"
@@ -1803,12 +1805,14 @@ REGISTRY: tuple[Upgrade, ...] = (
             "python3 tools/sync_app.py --own-test-risks lists the ones that read the app's code. "
             "For a test that checks behaviour an update changed: bring its expectation in line "
             "with the CHANGELOG entry that changed it, keeping everything it checks about the "
-            "person's own data; where the change looks wrong for them, leave the test and append "
-            "it to documents/app_bug_reports.md. For a test that reads the app's code as text: "
+            "person's own data; where the change looks wrong for them, bring it in line all the "
+            "same (a failing test holds every save back) and, in the maintainer's own repo, "
+            "report it the way its profile says. For a test that reads the app's code as text: "
             "rewrite it to run the code and check what it does, through the app's public names "
             "(a job board through tools/offline_boards.py), keeping every assertion's intent. "
-            "Never delete a test or weaken one to pass; a test of a part the update removed is "
-            "the sync's question to the person. Run python3 -m pytest profile/tests -q before "
+            "Never weaken a test to pass; one that uses a part the update removed is rewritten "
+            "through the app's public names, or retired, by Claude with nothing asked "
+            "(RUNBOOK.md, \"Your own tests fail after an update\"). Run python3 -m pytest profile/tests -q before "
             "committing", "edit", "~15 min", priority=2, conditional=True),
     Upgrade("message-texts", "2026-10-19",
             "your messages that got replies kept with their words, so drafts follow what "

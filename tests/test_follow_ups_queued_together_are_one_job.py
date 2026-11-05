@@ -120,3 +120,58 @@ def test_a_follow_up_code_cannot_write_is_written_here_and_passed_back(ring, mon
     assert ring.stored("work", "follow_up~" + bad)["data"]["status"] == "done"
     with open(path, encoding="utf-8") as fh:
         assert "following up on my note" in fh.read(), first
+
+
+def _lives(ring, cid, row="", read=""):
+    """Where `cid` lives: on their row, or only in what their profile showed when read."""
+    import csv
+    path = os.path.join(ring.state, "network_contacts.csv")
+    with open(path, encoding="utf-8", newline="") as fh:
+        rows = list(csv.DictReader(fh))
+    for r in rows:
+        if r["contact_id"] == cid:
+            r["location"] = row
+    with open(path, "w", encoding="utf-8", newline="") as fh:
+        w = csv.DictWriter(fh, fieldnames=list(rows[0].keys()))
+        w.writeheader()
+        w.writerows(rows)
+    if read:
+        p = os.path.join(ring.state, "documents", "network", cid, "reading.json")
+        os.makedirs(os.path.dirname(p), exist_ok=True)
+        with open(p, "w", encoding="utf-8") as fh:
+            json.dump({"name": cid, "location": read, "headline": "Head of Analytics"}, fh)
+
+
+def test_no_follow_up_is_drafted_for_someone_living_where_the_persons_rules_exclude(ring):
+    """A person's copy (2026-11-05): a follow-up was drafted to someone living in London,
+    though the person's own rule skips people there. Most rows carry no location: it is in
+    what their profile showed when it was read, and only first notes looked there. Now every
+    follow-up reads it too: code drafts none, one written by hand is not kept, and the item is
+    finished saying why, once. Someone with no location anywhere still gets their draft, with
+    the card's "Where they live is not on record" line. (The example person is in Manchester;
+    Canada is outside where they look.)"""
+    away, read_away, unknown = ring.ids[0], ring.ids[1], ring.ids[2]
+    _lives(ring, away, row="Toronto, Ontario, Canada")
+    _lives(ring, read_away, read="Toronto, Ontario, Canada")
+    _lives(ring, unknown)
+    d = ring.read("wake1")
+    assert all(land(ring, ring.wake(d)))
+    text = ("Hi there, following up on my note from September. How is the analytics team "
+            "set up these days?")
+    got = follow_ups(ring, d, "--written", "-",
+                     stdin=json.dumps([{"id": read_away, "text": text}]))
+    import fake_db
+    assert all(fake_db.apply(ring.db, b) for b in batches(got)), got
+    assert "refused" not in got, got
+    for cid in (away, read_away):
+        doc = ring.stored("work", "follow_up~" + cid)["data"]
+        assert doc["status"] == "done", (cid, doc)
+        assert doc["result"]["summary"].startswith("No follow-up for "), doc
+        assert "they are in Canada, outside where you are looking" in doc["result"]["summary"], doc
+        assert not os.path.isfile(os.path.join(ring.state, "documents", "network", cid, "draft.md")), cid
+    # Nowhere on record: drafted as before, and the card says to check where they live.
+    assert os.path.isfile(os.path.join(ring.state, "documents", "network", unknown, "draft.md"))
+    model = json.loads(ring.run("model", "--now", NOW))
+    card = next(m for m in model["messages"] if m["contact"] == unknown)
+    assert card["where_unknown"] is True, card
+    assert not any(m["contact"] in (away, read_away) for m in model["messages"]), model["messages"]

@@ -814,6 +814,22 @@ def to_write_here(got) -> list[str]:
                  or (i["draft"]["status"] == "write" and i["draft"]["who"] == "here"))]
 
 
+def held_by_rule(contact: dict, msgs, kind: str = "") -> str:
+    """Why the person's own surface rules stop a message to this contact, in plain words, or
+    "": surface.held, the one check every screen and the due list read. A reply to someone
+    who wrote last is held only by what stops a reply (a closed thread, an employer turned
+    down), as there."""
+    from network import state
+    import surface
+    msgs = list(msgs or ())
+    status = state.effective_status(contact, msgs)
+    got = surface.held(contact, msgs, status,
+                       replying=kind == "reply" or status in state.schema.OWED_BY_US)
+    if not got:
+        return ""
+    return got.get("said") or "their conversation is closed"
+
+
 def check(entries, contacts, threads, today: str, got=None) -> list[dict]:
     """The gate for drafts written by hand: [{"id", "ok", "findings", "warnings", ...}]."""
     from network import state
@@ -831,6 +847,18 @@ def check(entries, contacts, threads, today: str, got=None) -> list[dict]:
         if not text:
             out.append({"id": iid, "ok": False, "kind": kind, "text": "",
                         "findings": ["no text"], "warnings": []})
+            continue
+        # Held as the due list holds it: by what is owed (a reply to someone who wrote, or a
+        # follow-up), never by the kind a draft was checked as, which a held item has none of.
+        owed = "reply" if (it.get("kind") in ("reply", "resume") if it else kind == "reply") \
+            else "nudge"
+        stop = held_by_rule(c, index.get(iid, ()), owed) if c else None
+        if stop:
+            # The person's own rules stop anything going to them (where they live, their limit,
+            # an employer turned down): a draft written by hand is held as one written by code
+            # is, never kept on their card to send (a person's copy, 2026-11-05).
+            out.append({"id": iid, "ok": False, "kind": kind, "text": text, "held": stop,
+                        "findings": ["held: " + stop], "warnings": [], "item": it})
             continue
         try:
             findings, warnings = gate(text, kind, name=c.get("name") or "", title=c.get("title") or "",

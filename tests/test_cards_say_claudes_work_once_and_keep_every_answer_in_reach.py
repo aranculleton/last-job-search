@@ -225,3 +225,24 @@ def test_a_phone_has_no_bubble_size_toggle(run, tmp_path):
     got = _go(run, tmp_path, [{"hash": "todo", "eval": "(() => { const b = document.querySelector('[data-k=\"dock-size\"]'); return !!(b && b.getClientRects().length); })()"}],
               PHONE, clock=T)
     assert got["after"][0]["eval"] is False
+
+
+# A person's copy (2026-11-05): a change to the message to someone, finished, said so in a toast
+# whose "See it" opened Jobs. The toast now opens where its record lives (workPlace), as the
+# work list does: a person's work in Contacts, on them.
+TOASTED = r"""(() => ({hash: location.hash, toasts: [...document.querySelectorAll('[data-toast]')].map((t) => t.textContent).join(' | ')}))()"""
+
+
+def test_a_finished_change_to_a_persons_message_opens_contacts_from_its_toast(run, tmp_path):
+    running = dict(DONE["work/tweak~b"], status="running", finished_at=None, result=None,
+                   claimed_by="cloud-1", claimed_at="2026-10-25T08:50:00.000Z", stage_at="2026-10-25T08:50:00.000Z",
+                   lease_until="2026-10-25T09:30:00.000Z")
+    seed = dict(LISTEN, **{"work/tweak~b": running})
+    got = _go(run, tmp_path, [
+        {"hash": "jobs", "eval": TOASTED},
+        {"write": {"work/tweak~b": DONE["work/tweak~b"]}, "eval": TOASTED},
+        {"click": "See it", "within": "#toasts", "eval": TOASTED},
+    ], WIDE, seed=seed, clock=T)
+    before, toasted, opened = (x["eval"] for x in got["after"])
+    assert "Change the message to Juno: ready." in toasted["toasts"], toasted
+    assert opened["hash"].startswith("#contacts"), opened

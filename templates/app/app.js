@@ -115,7 +115,9 @@
   // This viewer's own choices on this device (a filter, a sort, which drafts they look at).
   const prefs = new Map();
   function pref(key, fallback) {
-    if (prefs.has(key)) return prefs.get(key);
+    // A choice taken off (set to null: Clear all, a chip's x) is no choice: the default, never
+    // a null read as a sort called "" that showed as a filter chip with no words (2026-11-05).
+    if (prefs.has(key)) { const v = prefs.get(key); return v === null || v === undefined ? fallback : v; }
     const raw = sget("local", "ljs:p:" + key);
     let v = fallback;
     if (raw !== null) { try { v = JSON.parse(raw); } catch (e) { v = fallback; } }
@@ -896,7 +898,11 @@
       const p = prev.get(id);
       if (!p) continue;
       if (p.status !== w.status && (w.status === "done" || w.status === "failed" || w.status === "needs_you")) {
-        const tab = WORK_HOME[txt(w.kind)];
+        // Its "See it" opens where its record lives (workPlace): a person's work in Contacts
+        // on that person, never Jobs. The toast took the kind's home alone, so a change to the
+        // message to someone ("tweak") opened Jobs (a person's copy, 2026-11-05).
+        const pl = workPlace(w);
+        const tab = pl.tab;
         // A chat answer is said as one ("Answer: “…”: ready." repeated itself), and a question
         // is answered from its one card, which the pill points to: a third "Answer it" in the
         // toast was one place too many (the audit, 2026-11-03).
@@ -907,7 +913,7 @@
           ids: [], bad: w.status === "failed", see: () => go(CARD_HOME[card.kind] || "contacts", {focus: true, item: txt(card.id)}), seeLabel: "See it"});
         else toast({text: (talk ? (w.status === "done" ? "Claude answered in Chat." : w.status === "failed" ? "Claude could not answer in Chat." : "Claude has a question about your message.") :
           workName(w) + (w.status === "done" ? ": ready." : w.status === "failed" ? ": did not finish." : ": Claude has a question.")), ids: [], bad: w.status === "failed",
-          see: w.status === "needs_you" ? null : w.status === "failed" ? openWork : tab ? () => go(tab, {focus: true}) : openWork, seeLabel: "See it"});
+          see: w.status === "needs_you" ? null : w.status === "failed" ? openWork : tab ? () => go(tab, {focus: !pl.item, item: pl.item || null}) : openWork, seeLabel: "See it"});
       }
       if (p.status !== w.status) {
         if (w.status === "done") announce(txt(w.title) + ": ready.");
@@ -2975,7 +2981,9 @@
       if (more.length) { items = items.concat(more); remoteIn = true; }
     }
     const groups = arr(o.chips).map((g) => Object.assign({}, g, {options: arr(g.options).filter((op) => items.some(op[2]) || arr(st.chips[g.key]).indexOf(op[0]) >= 0)}));
-    const searchable = !!o.search && items.length > SEARCH_OVER;
+    // A search box on the screen always searches: Contacts shows one from nine people, and
+    // under SEARCH_OVER a name typed there changed nothing (2026-11-05).
+    const searchable = !!o.search && (!!o.searchOnScreen || items.length > SEARCH_OVER);
     const q = searchable ? txt(st.q).trim().toLowerCase() : "";
     const onIn = (g) => arr(st.chips[g.key]).filter((v) => g.options.some((op) => op[0] === v));
     const passes = (it, except) => {
@@ -6361,9 +6369,14 @@
     if (!stopOnce) { stopOnce = stoppedPeople(); queueMicrotask(() => { stopOnce = null; }); }
     return stopOnce;
   }
+  // Every message to one person carries one id (msg-<contact>), so a tap on the last one was
+  // read against the next: "I sent it" on a check-in hid the reply drafted after it and said
+  // "Message sent" (2026-11-05). A tap counts only for the version it was made on.
   function msgStatus(m) {
     const e = effective(m.id, ["msg.sent", "msg.skip"]);
-    return e ? (e.doc.action === "msg.sent" ? "sent" : "skipped") : "to_send";
+    if (!e) return "to_send";
+    if (txt(e.doc.rev_seen) && txt(m.rev) && txt(e.doc.rev_seen) !== txt(m.rev)) return "to_send";
+    return e.doc.action === "msg.sent" ? "sent" : "skipped";
   }
   // A message already drafted is shown, never drafted again: "Draft the follow-up" queued new
   // work while the follow-up sat ready in Messages, and a person's page offered "Draft a reply"
@@ -6431,6 +6444,18 @@
   // Applications to send are cards in Jobs' one list, in their jobs' places: Drafts is that
   // list, opened at them (2026-11-05: a drafted job stood in Found and again in Drafts).
   function renderDrafts(where) { return renderJobs(where, true); }
+  // The resume made for someone who asked for one (model people[].resume_for_them), on their
+  // own card, never in place of the person's own (2026-11-05: one made for a recruiter only
+  // replaced "Your resume", and nothing said it was his). Get it, as any file on the page.
+  function resumeForThem(p, where) {
+    const r = obj(p.resume_for_them);
+    if (!txt(r.name)) return null;
+    const key = (where || "p") + "resfor:" + p.id;
+    const g = obj(r.get);
+    const get = txt(r.asset) ? btn("Get it", () => getFiles({id: "resfor-" + seg(p.id), company: ""}, [{name: r.name, path: r.path, asset: r.asset}]), {kind: "link", small: true, key})
+      : g.kind ? btn("Get it", () => requestWork([{id: txt(g.id), kind: txt(g.kind), title: "The " + noun() + " made for " + txt(p.first_name) + ", ready to download", args: obj(g.args), redo: true}]), {kind: "link", small: true, key}) : null;
+    return h("p", {class: "small", "data-resume-for": txt(p.id)}, cap1(noun()) + " made for " + txt(p.first_name) + (txt(r.made_on) ? ", " + fmtDay(r.made_on) : ""), get ? [" · ", get] : null);
+  }
   async function getFiles(a, files) {
     for (const f of files) await download(Object.assign({company: txt(a.company)}, f), "dl:" + a.id);
   }
@@ -6892,7 +6917,9 @@
         // Who they are, so a recruiter or the person who referred you is one tap away.
         {key: "who", label: "Who they are", options: [["recruiter", "Recruiters", (p) => txt(p.who) === "recruiter"], ["referrer", "Referrers", (p) => txt(p.who) === "referrer"],
           ["hiring", "Hiring managers and HR", (p) => txt(p.who) === "hiring"], ["peer", "People in your field", (p) => txt(p.who) === "peer"]]}],
-      search: (p) => [p.first_name, p.employer, p.title].join(" "), searchLabel: "Name, employer or job title",
+      // The page keeps first names only; a person's id carries the rest of their name as the
+      // book files it, so a surname finds them too, with nothing more on the page (2026-11-05).
+      search: (p) => [p.first_name, p.employer, p.title, txt(p.id).replace(/[_~.-]+/g, " "), txt(obj(p.resume_for_them).name).replace(/[_~.-]+/g, " ")].join(" "), searchLabel: "Name, employer or job title",
       render: (p) => (p.__msg ? msgCard(p.__msg) : personRow(p)), box: (kids) => h("ul", {class: "plain people"}, kids)};
     const f = items.length ? listFacets("contacts", lo) : null;
     const many = f && f.items.length > 8;   // search by name or employer as soon as the list is more than a glance
@@ -7564,6 +7591,7 @@
         // Who passed you to them (the book's referred_by), so a recruiter you reached through a
         // friend reads as that friend's introduction (2026-10-30).
         txt(p.came_through) ? h("p", {class: "small muted"}, "Came through " + txt(p.came_through)) : null,
+        resumeForThem(p),
         referralLine(p),
         going ? goingLine(p, going) : nextLine ? h("p", {class: "meta"}, nextLine,
           // The call's day is theirs to correct: the pencil beside it, as on a draft.
@@ -8925,11 +8953,16 @@
       return !q || !o.search || txt(o.search(it)).toLowerCase().indexOf(q) >= 0;
     };
     const sorts = arr(o.sorts);
-    const sortNow = sorts.length ? txt(pref(o.sortPref, sorts[0][0])) : "";
-    const active = [];
+    // A sort kept from an older page that this list no longer offers, or none, is the default,
+    // never a filter chip with no name (the maintainer, 2026-11-05: "clear all for what?").
+    const kept = sorts.length ? txt(pref(o.sortPref, sorts[0][0])) : "";
+    const sortNow = sorts.some((x) => x[0] === kept) ? kept : (sorts.length ? sorts[0][0] : "");
+    let active = [];
     for (const g of groups) for (const v of onIn(g)) active.push({key: g.key, v, label: g.options.find((op) => op[0] === v)[1]});
     if (txt(st.q).trim()) active.push({key: "q", v: st.q, label: "“" + clip(txt(st.q).trim(), 24) + "”"});
-    if (sorts.length && sortNow !== sorts[0][0]) active.push({key: "sort", v: sortNow, label: (sorts.find((s) => s[0] === sortNow) || [0, sortNow])[1]});
+    if (sorts.length && sortNow !== sorts[0][0]) active.push({key: "sort", v: sortNow, label: sorts.find((s) => s[0] === sortNow)[1]});
+    // Every chip on says what it is: one with no words is never shown, nor counted.
+    active = active.filter((a) => txt(a.label).replace(/[“”\s]/g, ""));
     return {st, items, groups, passes, sorts, sortNow, active, shown: items.filter((it) => passes(it)).length};
   }
   function setChip(key, gk, v, on) {
@@ -9787,6 +9820,7 @@
     const prep = obj(obj(p.call).prep);
     return h("div", {class: "d-stack d-person"},
       h("p", {}, stateWord(w, tone === "plain" ? null : tone), txt(p.came_through) ? h("span", {class: "muted"}, " · Came through " + txt(p.came_through)) : null),
+      resumeForThem(p, "d"),
       referralLine(p),
       asked ? h("p", {class: "d-next"}, h("strong", {}, "Asked for " + asked.what), personWhen(p) ? ", " + personWhen(p).day + "." : ".") :
       nextLine && !sent ? h("p", {class: "d-next"}, h("strong", {}, txt(p.hold) ? "" : "Next: "), nextLine.replace(/[.\s]+$/, "") + ".", link ? [" ", link] : null) : null,

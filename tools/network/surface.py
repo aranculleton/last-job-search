@@ -373,6 +373,31 @@ def outside_market(location) -> str:
     return got.title() if got else ""
 
 
+def where_they_live(contact) -> str:
+    """Where a contact lives, as the repo knows it: the location on their row, else the one
+    their profile showed when it was read (documents/network/<id>/reading.json). Most rows
+    carry none, since the connections file has no location and a first note is written from
+    the profile read: the place rule held first notes by what the read showed and never a
+    follow-up, so one was drafted to someone living in London for a person whose own rule
+    skips people there (a person's copy, 2026-11-05). "" when neither says."""
+    c = contact or {}
+    loc = " ".join(str(c.get("location") or "").split())
+    if loc:
+        return loc
+    cid = str(c.get("contact_id") or "").strip()
+    if not cid:
+        return ""
+    try:
+        import reading
+        p = reading.path(cid)
+        if not os.path.isfile(p):
+            return ""
+        got = reading.load(cid) or {}
+    except (ImportError, OSError, ValueError):
+        return ""
+    return " ".join(str(got.get("location") or "").split()) if isinstance(got, dict) else ""
+
+
 # Why nothing is offered to someone already in the book, said once, the same on every
 # screen and in the brief: what the person's surface rules say (the one check below).
 HELD_WORDS = {
@@ -414,7 +439,7 @@ def held(contact, msgs, status, replying=False, memo=None) -> dict | None:
         return {"why": "employer", "said": HELD_WORDS["employer"].format(company=company)}
     if replying or status in state.schema.OWED_BY_US:
         return None
-    loc = str(c.get("location") or "")
+    loc = where_they_live(c)
     if ("place", loc) not in memo:
         memo[("place", loc)] = outside_market(loc)
     place = memo[("place", loc)]
