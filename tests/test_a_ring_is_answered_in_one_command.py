@@ -518,7 +518,13 @@ def test_the_skill_reads_once_and_wakes_once():
         skill = " ".join(fh.read().split())
     one_to_three = skill[skill.index("## 1. Read, in one go"):skill.index("## 4.")]
     assert "python3 tools/app.py wake \"$D\" --chat <your chat id>" in one_to_three
-    for coll in app.WAKE_READS:
+    # What is read is printed by code (`app.py reads`, tools/page_reads.py): the small
+    # collections whole, the rest only what changed, the screens only when another chat drew
+    # the page (the maintainer, 2026-11-05). A whole read is every collection a wake reads.
+    import page_reads
+    assert "python3 tools/app.py reads \"$D\"" in one_to_three
+    assert set(page_reads.FULL_READS) == set(app.WAKE_READS)
+    for coll in page_reads.WHOLE + page_reads.KEPT:
         assert f"`{coll}`" in one_to_three, coll
     assert "already loaded on a wake" in one_to_three
     # What the reads saved is never shown in the chat: each later step re-reads all of it (a

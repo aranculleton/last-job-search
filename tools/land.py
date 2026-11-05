@@ -8,8 +8,20 @@ the foreground (2026-11-03). Now a chat starts this with Bash `run_in_background
 once a turn, after its answer is out, and makes only the GitHub calls it prints:
 
     python3 tools/land.py [--message "<what changed>"]
+    python3 tools/land.py --detach [--message "<what changed>"]
     python3 tools/land.py --after-merge
     python3 tools/land.py --waiting
+
+--detach (the chat that answers the page, once per batch of its work): the same landing in a
+process of its own, started from an ordinary foreground call that returns at once, so its end
+wakes no chat. A background command re-invokes the chat when it exits, and the app's hook
+held the turn again while a save still ran: each save cost the chat that answers the page a
+turn or two of its whole history (the maintainer, 2026-11-05). It marks the landing as asked
+for at once (WANTED_FILE, which the hook reads as a save in progress), opens the pull request
+and merges it itself through GitHub's REST interface (`gh api`) where this computer can,
+then moves the branch to master; it lands again once for work written while it ran, and a
+second --detach while one runs only asks it to. What it could not do on GitHub is kept
+(RESULT_FILE) and said once, in a line or two, by the next `app.py reads`.
 
 1. tools/save_state.py stages the person's files, and nothing of the app's is committed
    (tools/personal_paths.py is the line); a commit when anything is staged.
@@ -101,6 +113,13 @@ LOCK_WAITS = (0.5, 1, 2, 4)
 # the last landing pushed, which --after-merge looks for on master.
 LOCK_FILE = "ljs-landing.lock"
 PUSHED_FILE = "ljs-landed"
+# A detached landing asked for and not finished: the hook reads it as a save in progress, from
+# the moment it is asked for (a background landing took its lock a moment after the turn
+# ended, and the hook held the turn for "unsaved" work in that moment).
+WANTED_FILE = "ljs-landing.wanted"
+RESULT_FILE = "ljs-land-result.json"   # what a detached landing could not do, for a chat
+LOG_FILE = "ljs-landing.log"
+DETACHED_ROUNDS = 3
 LOCK_STALE_S = 30 * 60
 LOCK_STAMP = "%Y-%m-%dT%H:%M:%SZ"
 # The branches a chat or a scheduled run works on: a cloud chat's and a run's (claude/...),
@@ -720,7 +739,7 @@ def save_due(root: str = ROOT, chat: str = "", today: str = "") -> list[str]:
         top = _git(root, "rev-parse", "--show-toplevel").stdout.strip()
         if not top or os.path.realpath(top) != os.path.realpath(root) or _the_app(root) \
                 or not os.path.isfile(os.path.join(root, "profile", "person.json")) \
-                or landing(root):
+                or landing(root) or wanted(root):
             return []
         import save_state
         files = save_state.unsaved(root)
@@ -1136,6 +1155,8 @@ def _land(root: str, message: str, check, sleep) -> int:
     skipped = _skips(out)
     body = ("Checked here with ./tools/ci_local.sh --quick: green" +
             ("; skipped: " + ", ".join(skipped) if skipped else "") + ".")
+    READY.clear()
+    READY.update({"owner": owner, "repo": repo, "head": there, "title": title, "body": body})
     print("land: ready %s (%s commit(s) ahead of master)" % (there, ahead))
     print("land: next, each its own call, and nothing said to the person:")
     print('  1. create_pull_request: owner "%s", repo "%s", head "%s", base "master", '
@@ -1267,6 +1288,186 @@ def _level(root: str, name: str, sleep) -> None:
         _told(_trouble(r))
 
 
+READY: dict = {}            # what the last landing pushed, for its pull request
+
+
+def wanted(root: str = ROOT) -> bool:
+    """Is a detached landing asked for and not finished (its mark younger than
+    LOCK_STALE_S)?"""
+    d = git_dir(root)
+    p = os.path.join(d, WANTED_FILE) if d else ""
+    try:
+        return bool(p) and time.time() - os.path.getmtime(p) < LOCK_STALE_S
+    except OSError:
+        return False
+
+
+def _mark(root: str, name: str, text: str = "") -> str:
+    d = git_dir(root)
+    if not d:
+        return ""
+    p = os.path.join(d, name)
+    try:
+        with open(p, "w", encoding="utf-8", newline="\n") as fh:
+            fh.write(text or lock_text())
+    except OSError:
+        return ""
+    return p
+
+
+def _unmark(root: str, name: str) -> None:
+    d = git_dir(root)
+    if d:
+        try:
+            os.remove(os.path.join(d, name))
+        except OSError:
+            pass
+
+
+def detach(root: str = ROOT, message: str = "", popen=subprocess.Popen) -> int:
+    """Start the landing in a process of its own and return at once: one line, nothing to
+    wait for. A landing already running is only asked to land again once it ends."""
+    if _the_app(root):
+        print("land: this is the app itself, which lands through its own pull request and CI "
+              "(MAINTAINING.md); nothing was pushed")
+        return 2
+    _mark(root, WANTED_FILE, json.dumps({"message": message, "at": time.time()}) + "\n")
+    if landing(root):
+        print("land: saving in the background (one already running saves this too).")
+        return 0
+    d = git_dir(root)
+    log = os.path.join(d, LOG_FILE) if d else os.devnull
+    try:
+        out = open(log, "w", encoding="utf-8")
+    except OSError:
+        out = subprocess.DEVNULL
+    kw = {"start_new_session": True} if os.name == "posix" else \
+        {"creationflags": getattr(subprocess, "DETACHED_PROCESS", 0)
+         | getattr(subprocess, "CREATE_NEW_PROCESS_GROUP", 0)}
+    try:
+        popen([sys.executable, os.path.abspath(__file__), "--run-detached", "--message",
+               message], cwd=root, stdin=subprocess.DEVNULL, stdout=out, stderr=subprocess.STDOUT,
+              close_fds=True, **kw)
+    except OSError as e:
+        _unmark(root, WANTED_FILE)
+        print("land: the background save could not start (%s): run python3 tools/land.py in "
+              "the background instead" % e)
+        return 2
+    print("land: saving in the background; nothing to wait for or say.")
+    return 0
+
+
+def _gh_api(root: str, args: list[str], run=subprocess.run) -> tuple[int, dict | list | None, str]:
+    """gh api, its JSON answer: (exit code, the answer or None, what it said)."""
+    try:
+        r = run(["gh", "api", *args], cwd=root, capture_output=True, text=True,
+                encoding="utf-8", errors="replace", timeout=120, stdin=subprocess.DEVNULL)
+    except (OSError, subprocess.TimeoutExpired) as e:
+        return 1, None, str(e)
+    try:
+        got = json.loads(r.stdout) if (r.stdout or "").strip() else None
+    except ValueError:
+        got = None
+    return r.returncode, got, " ".join(((r.stderr or "") + " " + (r.stdout or "")).split())[:240]
+
+
+def finish_on_github(root: str, ready: dict, run=subprocess.run, which=None) -> tuple[bool, str]:
+    """Open the pull request for what the landing pushed and merge it, through GitHub's REST
+    interface (gh api), as the chat's own calls would. (True, "") when it is on master."""
+    import shutil as _shutil
+    if not (which or _shutil.which)("gh"):
+        return False, "gh is not on this computer"
+    o, r = ready["owner"], ready["repo"]
+    code, got, said = _gh_api(root, ["-X", "POST", f"repos/{o}/{r}/pulls", "-f",
+                                     f"title={ready['title']}", "-f", f"head={ready['head']}",
+                                     "-f", "base=master", "-f", f"body={ready['body']}"], run)
+    number = got.get("number") if isinstance(got, dict) else None
+    if not number:
+        # Opened already by an earlier landing of the same branch.
+        code, got, said2 = _gh_api(root, [f"repos/{o}/{r}/pulls?head={o}:{ready['head']}"
+                                          "&state=open"], run)
+        number = got[0].get("number") if isinstance(got, list) and got and             isinstance(got[0], dict) else None
+        if not number:
+            return False, "the pull request could not be opened: " + (said or said2)
+    code, got, said = _gh_api(root, ["-X", "PUT", f"repos/{o}/{r}/pulls/{number}/merge", "-f",
+                                     "merge_method=merge"], run)
+    if code != 0 or not (isinstance(got, dict) and got.get("merged")):
+        return False, f"pull request {number} could not be merged: {said}"
+    return True, str(number)
+
+
+def _keep_result(root: str, lines: list[str]) -> None:
+    d = git_dir(root)
+    if not d:
+        return
+    p = os.path.join(d, RESULT_FILE)
+    if not lines:
+        try:
+            os.remove(p)
+        except OSError:
+            pass
+        return
+    try:
+        with open(p, "w", encoding="utf-8", newline="\n") as fh:
+            json.dump({"at": time.time(), "lines": lines}, fh, indent=1)
+            fh.write("\n")
+    except OSError:
+        pass
+
+
+def github_waiting(root: str = ROOT) -> str:
+    """What the last detached landing could not do (the GitHub calls, or a line for the
+    person), said once, then forgotten: the next landing tries again by itself."""
+    d = git_dir(root)
+    p = os.path.join(d, RESULT_FILE) if d else ""
+    try:
+        with open(p, encoding="utf-8") as fh:
+            got = json.load(fh)
+        os.remove(p)
+    except (OSError, ValueError):
+        return ""
+    lines = [str(x) for x in (got.get("lines") if isinstance(got, dict) else None) or []]
+    if not lines:
+        return ""
+    return "land: the last save in the background left this to do, once:\n" + "\n".join(lines)
+
+
+def run_detached(root: str = ROOT, message: str = "", check=None, sleep=time.sleep,
+                 land_fn=None, finish=None) -> int:
+    """The detached landing itself: land, then the pull request and its merge on GitHub, then
+    the branch moved to master; again for work written while it ran, DETACHED_ROUNDS at most.
+    Everything it prints goes to its log; what a chat must still do goes to RESULT_FILE."""
+    land_fn = land_fn or land
+    finish = finish or finish_on_github
+    code = 0
+    for _ in range(DETACHED_ROUNDS):
+        _unmark(root, WANTED_FILE)
+        READY.clear()
+        buf = io.StringIO()
+        with contextlib.redirect_stdout(buf):
+            code = land_fn(root, message, check=check, sleep=sleep)
+        said = buf.getvalue()
+        sys.stdout.write(said)
+        keep = [ln for ln in said.splitlines()
+                if "tell the person" in ln.lower() or "Tell the person" in ln
+                or REFUSED_SAY in ln or DISK_FULL_SAY in ln]
+        if code == 0 and READY:
+            ok, why = finish(root, dict(READY))
+            if ok:
+                with contextlib.redirect_stdout(io.StringIO()):
+                    after_merge(root, sleep=sleep)
+            else:
+                at = said.find("land: next")
+                keep = keep + ["land: GitHub's part could not be done here (%s); make these "
+                               "calls:" % why] + \
+                    [ln for ln in said[at:].splitlines()[1:] if ln.strip()]
+        _keep_result(root, keep)
+        if not wanted(root) and "were written while this ran" not in said:
+            break
+    _unmark(root, WANTED_FILE)
+    return code
+
+
 def _utf8_stdio() -> None:
     try:
         import python_floor
@@ -1283,6 +1484,13 @@ def main(argv: list[str] | None = None, root: str = ROOT, check=None, sleep=time
         return 0
     if "--after-merge" in argv:
         return after_merge(root, sleep=sleep)
+    if "--detach" in argv or "--run-detached" in argv:
+        msg = ""
+        if "--message" in argv and argv.index("--message") + 1 < len(argv):
+            msg = argv[argv.index("--message") + 1]
+        if "--run-detached" in argv:
+            return run_detached(root, msg, check=check, sleep=sleep)
+        return detach(root, msg)
     if "--waiting" in argv:
         fetch_waiting(root)
         refs, left = _chat_branches(root)

@@ -500,9 +500,14 @@ def test_the_landing_check_runs_in_the_background_and_the_page_says_so():
     skill = _read(".claude/skills/app/SKILL.md")
     five = " ".join(skill[skill.index("## 5. Finish in one batch"):].split())
     assert "`busy: \"Saving your work\"` while the landing check below runs" in five
-    assert ("`python3 tools/land.py --message \"<what changed>\"` in the background (Bash, "
-            "`run_in_background`; it saves, commits, merges master and runs "
-            "`./tools/ci_local.sh --quick`)") in five
+    # The chat that answers the page saves once a batch, in a process of its own that wakes
+    # no chat when it ends (the maintainer, 2026-11-05: every save woke the chat for a turn
+    # of its own); a chat the person writes in still lands in the background.
+    assert ("`--end` starts `python3 tools/land.py --detach` (it saves, commits, merges master "
+            "and runs `./tools/ci_local.sh --quick`, then opens the pull request and merges it "
+            "itself) in a process of its own") in five
+    assert "never `run_in_background` one here" in five
+    assert "`python3 tools/land.py --message \"<what changed>\"` in the background" in five
     assert "python3 tools/app.py busy \"$D\" --done" in five
     # The answer first: the page is brought up to date before the landing starts.
     assert five.index("python3 tools/app.py view") < five.index("python3 tools/land.py")

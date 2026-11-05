@@ -33,6 +33,11 @@ make sense to somebody whose repo just received it.
 
 ### Fixed
 
+- **The page chat stays small all day.** Each tap is answered by a short-lived helper whose work is thrown away afterwards, so the chat that looks after your page grows by a line a tap instead of thousands.
+- **A fresh page chat once a day.** It starts at the day's first tap (or sooner only when it is nearly full), carrying a short note of what is in flight and what you asked last.
+- **A tap reads only what changed.** Claude reads your page's new taps and work, keeps the rest from its last look, and reads everything again once a day or when something looks out of step.
+- **Saving happens once a batch, quietly.** Your work is saved in the background once each batch of answers is on your page, and finishing a save no longer wakes the page chat or holds it up.
+- **What answering your page costs is kept.** Each tap's cost is noted, and `python3 tools/helper_usage.py day` says it as one number for the day.
 - **"Draft all" for your follow-ups is one quick job, not one per person.** Follow-ups asked for together are taken together and written in one go, so nine follow-ups take a handful of steps instead of dozens.
 - **"I sent it" is always taken in.** A tap made just as Claude's daily fresh start on your page happened sat waiting; it is now taken in on Claude's next look.
 - **Your page no longer sends you to another chat.** Where a tap cannot do something, the page now asks Claude, who does it right there, and nothing on it talks about chats.

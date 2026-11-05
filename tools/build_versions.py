@@ -903,6 +903,11 @@ KEEPS_NOTHING: dict[str, str] = {
     "tools/rules_view.py": "reads the rules and what each left out for the page on every run; the day a rule was set and a Still right? kept are the person's own records, never remade",
     "tools/upcoming.py": "derives Coming up from the records on every run; what the person adds is their own record (documents/upcoming.json), never remade",
     "tools/page_db.py": "reads and writes the page's database dumps; keeps nothing of its own",
+    "tools/page_reads.py": "what a wake reads from the page's database, and the copy of it this "
+                           "checkout keeps in its git folder, never committed; read afresh at "
+                           "every wake",
+    "tools/helper_usage.py": "a log of what answering the page cost, added to as it goes; "
+                             "nothing it made before is made again",
     "tools/app_actions.py": "writes the person's own answers through confirm, exclude, state.py, learned and settings; nothing it wrote is remade",
     "docs/images/*": "the README's pictures, from the test sample, each named after its own contents (tools/readme_pictures.py); never in a person's search",
     "tools/app_listen.py": "names the one chat that answers the page, in the page's own database and a record in the git folder that is never committed; read afresh at every start",

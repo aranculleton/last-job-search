@@ -1935,9 +1935,10 @@ LET_GO = ("I couldn't keep what you said (\"{said}\") as a rule this time. Say i
 # started for one big job, and never breaking a chat. Days by one clock, the person's
 # (person.today).
 
-SAVE_STEPS = ("this turn's work is not saved anywhere that outlives this chat ({what}). Start "
-              "python3 tools/land.py --message \"<what changed>\" in the background (Bash, "
-              "run_in_background), then end the turn; nothing to say about it.")
+SAVE_STEPS = ("this turn's work is not saved anywhere that outlives this chat ({what}). Run "
+              "python3 tools/land.py --detach --message \"<what changed>\" (an ordinary call: "
+              "it returns at once and saves in a process of its own), then end the turn; "
+              "nothing to say about it.")
 UPGRADE_STEPS = ("{n} improvement{s} to the person's search that the update check listed "
                  "{have} not been started today. Start them now, never asking first: one "
                  "background agent (model sonnet) that follows .claude/commands/upgrade.md, then "
@@ -1980,7 +1981,11 @@ def _undone(event: dict, items: list) -> list[str]:
         if ids and profile_upgrades.hold_once(chat, today):
             out.append(UPGRADE_STEPS.format(n=len(ids), s="s" if len(ids) != 1 else "",
                                             have="have" if len(ids) != 1 else "has"))
-        what = land.save_due(person.state(), chat, today.isoformat())
+        # A save this turn started, or one still running or asked for (land.wanted), is a
+        # save in progress: the hold fired while a save ran, and added a turn every time
+        # (the maintainer, 2026-11-05).
+        saving = any(_LANDING.search(t) for t in tools)
+        what = [] if saving else land.save_due(person.state(), chat, today.isoformat())
         if what:
             out.append(SAVE_STEPS.format(what=", ".join(what)))
     except Exception:  # noqa: BLE001  a hook must never break the chat it runs in
@@ -1989,6 +1994,9 @@ def _undone(event: dict, items: list) -> list[str]:
 
 
 _WORK_CHAT = re.compile(r"tools/app\.py start\b[^\n]*--work \S")
+# A landing this turn started: land.py itself, or the page update that ends a wake and starts
+# one (`app.py view ... --end`).
+_LANDING = re.compile(r"tools/land\.py(?![^\n]*--(?:after-merge|waiting))|tools/app\.py[\"']?\s+view\b[^\n]*--end\b")
 
 
 def _job_chat(event: dict) -> bool:

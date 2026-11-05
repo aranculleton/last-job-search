@@ -103,14 +103,17 @@ UPDATE_QUIET_S = 60 * 60
 # How long the page's renewal rule waited, by the clock alone, before 4.10.2: kept for the
 # check-in's own look (`role`), which asks the page again after a cloud chat seen this long ago.
 RENEW_S = 20 * 3600
-# A helper renews only near the real limit of what a chat can hold (the maintainer,
-# 2026-11-05). The rule before, a day by the clock or a history grown by 200,000 tokens, fired
-# within minutes of a new helper's start: its start-up alone (every page collection and the
-# big screen documents) grew it that far, so each new helper renewed at once and chats
-# multiplied, three live at once. This is the history's whole size, the last turn's input.
+# A helper is a fresh chat once a day (the maintainer, 2026-11-05, newest): at the first wake
+# or page update of a new day in the person's own zone, a quiet moment (after the morning
+# brief, or the day's first tap), carrying only a short hand-over; or sooner only when its
+# history nears the real limit of what a chat can hold. The rules before (a day by the clock
+# or a history grown by 200,000 tokens; then near the limit or a day with nothing to answer)
+# either renewed every new helper within minutes of its start or kept one for days. This is
+# the history's whole size, the last turn's input.
 RENEW_TOKENS = 700_000
-# ... or after a long gap with nothing asked of it: a day since it last answered.
-RENEW_IDLE_S = 24 * 3600
+# The hand-over a fresh helper starts with: a few lines, never the brief or a list of work.
+HANDOVER_ITEMS = 3
+HANDOVER_CHARS = 400
 # Never in its first hour on the page, and never while the hand-over to it is still open
 # (the helper it took over from not put away yet): a chat that took the page at 17:01
 # renewed at 17:19, and three chats were live (the maintainer's copy, 2026-11-05).
@@ -517,15 +520,12 @@ def renew_line(renew: dict) -> str:
     """What the listener does when its day is up: start its fresh helper, unasked, once this
     chat's own work is saved (a fresh helper started mid-brief took the page while the brief
     was still saving, the stranger audit, X-27)."""
-    return ("listen: renew: this chat's history is near the most a chat can hold (or it has "
-            "had nothing to answer for a day), and it has no small job of its own in hand. "
-            "Once this turn's work has "
-            "landed (python3 tools/land.py says ready, or there was nothing to save), start "
-            "its fresh helper, unasked and saying nothing to the person: create_session "
-            + json.dumps(renew, ensure_ascii=False) +
-            ". The new chat takes the page as it starts, and the work waiting with it; until "
-            "then this one still answers, and its next check-in finds the new one and stops "
-            "its watch.")
+    return ("listen: renew: a new day (or this chat's history is near the most a chat can "
+            "hold), and it has no small job of its own in hand. Once this turn's work is "
+            "saved (python3 tools/land.py --detach started, or nothing to save), start its "
+            "fresh helper, unasked and saying nothing to the person: "
+            "create_session " + json.dumps(renew, ensure_ascii=False) +
+            ". The new chat takes the page as it starts; until then this one still answers.")
 
 
 # What a chat that may not draw the page's screens says, once, and does instead.
@@ -655,7 +655,7 @@ def context_tokens() -> int:
 
 def history_tokens() -> int:
     """This chat's whole history as its last turn read it (its input, cached or not), from
-    the same file. 0 when there is none or it cannot be read: then only the idle gap renews."""
+    the same file. 0 when there is none or it cannot be read: then only a new day renews."""
     _first, last = _turns()
     return last or 0
 
@@ -744,15 +744,56 @@ def grown_tokens(chat: str, now: dt.datetime) -> int:
     return max(0, total - aside)
 
 
+def _zone() -> str:
+    try:
+        import person
+        return person.home_zone_named(person.directory()) or "UTC"
+    except Exception:  # noqa: BLE001  no profile: the clock's own day
+        return "UTC"
+
+
+def new_day(rec: dict, now: dt.datetime, zone: str = "") -> bool:
+    """Is it a later day, in the person's own zone, than the day this helper took the page?"""
+    import app_model
+    since = _time(rec.get("since"))
+    if since is None:
+        return False
+    zone = zone or _zone()
+    return app_model.local_day(now, zone) > app_model.local_day(since, zone)
+
+
+def handover(db: dict) -> str:
+    """The few lines a fresh helper starts with: what is in flight (a few titles) and what
+    the person asked last. Never a list of everything, and nothing but a work item's own
+    title, which the page wrote in plain words."""
+    import page_db
+    going, asked = [], []
+    for wid, doc in (db.get("work") or {}).items():
+        d = doc.get("data") or {}
+        title = " ".join(str(d.get("title") or d.get("kind") or wid).split())[:80]
+        if str(d.get("status") or "") not in page_db.FINISHED:
+            going.append((str(d.get("asked_at") or ""), title))
+        asked.append((str(d.get("asked_at") or ""), title))
+    lines = []
+    if going:
+        top = [t for _a, t in sorted(going)[:HANDOVER_ITEMS]]
+        more = len(going) - len(top)
+        lines.append("In flight: " + "; ".join(top) + (f"; and {more} more" if more > 0 else "")
+                     + ".")
+    if asked:
+        lines.append("Asked last: " + max(asked)[1] + ".")
+    return "\n".join(lines)[:HANDOVER_CHARS]
+
+
 def renewal(rec: dict, db: dict, chat: str, now: dt.datetime) -> dict | None:
-    """The create_session call for a fresh helper, or None. Only a cloud chat whose history
-    is near the limit (RENEW_TOKENS) or that has had nothing to answer for RENEW_IDLE_S, on
-    the page for RENEW_MIN_S at least, its own hand-over closed (the helper it took over from
-    put away), with no small work of its own in hand, and not asked for in the last
-    RENEW_RETRY_S. Work waiting in the queue moves with the page:
-    the new helper takes it. Waiting on it kept one helper answering for three days, against
-    a day, while a draft sat queued (engine audit, 2026-11-03); a big job runs in a chat of
-    its own, whichever chat claimed it."""
+    """The create_session call for a fresh helper, or None. Only a cloud chat on a later day
+    (the person's own) than the one it took the page on, or whose history is near the limit
+    (RENEW_TOKENS), on the page for RENEW_MIN_S at least, its own hand-over closed (the helper
+    it took over from put away), with no small work of its own in hand, and not asked for in
+    the last RENEW_RETRY_S. Work waiting in the queue moves with the page: the new helper
+    takes it. Waiting on it kept one helper answering for three days, against a day, while a
+    draft sat queued (engine audit, 2026-11-03); a big job runs in a chat of its own,
+    whichever chat claimed it. The prompt carries a short hand-over (`handover`)."""
     import page_db
     if not chat or rec.get("chat") != chat or chat_kind() != "cloud":
         return None
@@ -770,9 +811,7 @@ def renewal(rec: dict, db: dict, chat: str, now: dt.datetime) -> dict | None:
             return None                     # two chats already: never a third
     except Exception:  # noqa: BLE001  no record of what was put away: the rest decides
         pass
-    answered = _time(rec.get("answered_at")) or since
-    idle = (now - answered).total_seconds() >= RENEW_IDLE_S
-    if not idle and history_tokens() < RENEW_TOKENS:
+    if not new_day(rec, now) and history_tokens() < RENEW_TOKENS:
         return None
     work = db.get("work") or {}
     for doc in work.values():
@@ -796,12 +835,19 @@ def renewal(rec: dict, db: dict, chat: str, now: dt.datetime) -> dict | None:
         return None
     got["renewed_at"] = _stamp(now)
     _save_seen(got)
+    try:
+        import helper_usage
+        helper_usage.record("handover", chat, now, tokens=history_tokens())
+    except Exception:  # noqa: BLE001  the log never stops a hand-over
+        pass
     # The page's data tools carried over (create_session's extra_allowed_tools keeps only what
     # this chat has pre-approved: ArtifactData and ArtifactComments, never Artifact), so the
     # fresh helper never stops on a prompt to write the page's data while the person is away
     # (2026-11-03); its republishes declare no capabilities once the page has them (X-8). The
-    # prompt is the person's plain words, and the app's hook says what they mean (X-84).
-    return {"title": HELPER_CHAT_TITLE, "prompt": WAKE_PROMPT,
+    # prompt is the person's plain words, and the app's hook says what they mean (X-84); the
+    # hand-over follows them, a few lines.
+    note = handover(db)
+    return {"title": HELPER_CHAT_TITLE, "prompt": WAKE_PROMPT + (f"\n\n{note}" if note else ""),
             "source_url": f"https://github.com/{owner}/{name}",
             "extra_allowed_tools": ["ArtifactData", "ArtifactComments"]}
 

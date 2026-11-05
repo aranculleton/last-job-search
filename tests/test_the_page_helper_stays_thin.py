@@ -1,0 +1,335 @@
+"""The chat that answers the page stays thin: it reads only what changed, saves once a batch
+without waking itself, and keeps what each wake cost.
+
+The page's helper grew by hundreds of thousands of tokens a day: every tap read the whole
+database (a line in the chat for each of some hundreds of records), printed the same long
+text beside every batch, and every save woke the chat again, once when it ended and once more
+when the hook held the turn for work still saving (the maintainer, 2026-11-05). Each wake's
+work now runs in a short-lived subagent (the app skill, step 0); these pin what the code
+does for it: `app.py reads` asks for what changed since the last read and lays the rest from
+the copy this checkout keeps, a refused write makes the next read whole, a page another chat
+drew is read before it is drawn over, `land.py --detach` returns at once and the hook stays
+quiet while it runs, and `helper_usage` turns the session's own files into one number a day.
+The store here is the folder that keeps the real one's rules, with `where` answered the way
+ArtifactData's query answers it. Every person, employer, page and chat id is invented.
+"""
+from __future__ import annotations
+
+import datetime as dt
+import json
+import os
+import sys
+
+ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+sys.path[:0] = [os.path.join(ROOT, "tools"), os.path.join(ROOT, "tests")]
+
+import pytest  # noqa: E402
+
+import land  # noqa: E402
+import test_a_ring_is_answered_in_one_command as R  # noqa: E402
+import test_a_chat_lands_its_work_in_one_command as L  # noqa: E402
+from test_a_chat_lands_its_work_in_one_command import write  # noqa: E402
+
+LATER = "2026-10-25T18:01:00Z"
+
+
+@pytest.fixture
+def landing_copy(tmp_path, monkeypatch):
+    """The landing tests' throwaway copy with a bare origin (never a real one)."""
+    return L.copy.__wrapped__(tmp_path, monkeypatch)
+
+
+@pytest.fixture
+def ring(tmp_path, monkeypatch):
+    monkeypatch.setenv("LJS_PAGE_MIRROR", str(tmp_path / "mirror"))
+    r = R.Ring(tmp_path)
+    r.mirror = str(tmp_path / "mirror")
+    yield r
+    sys.path.remove(r.root)
+
+
+def query(r, out, q):
+    """The store answering one query: `where` with >= and not-in, as ArtifactData does."""
+    src = os.path.join(r.db, q["collection"])
+    if not os.path.isdir(src):
+        return
+    for f in os.listdir(src):
+        with open(os.path.join(src, f), encoding="utf-8") as fh:
+            doc = json.load(fh)
+        ok = True
+        for field, op, val in q["query"].get("where") or []:
+            v = doc["data"].get(field)
+            ok = ok and v is not None and (str(v) >= str(val) if op == ">=" else v not in val)
+        if ok:
+            os.makedirs(os.path.join(out, q["collection"]), exist_ok=True)
+            with open(os.path.join(out, q["collection"], f.replace("~", "@")), "w",
+                      encoding="utf-8") as fh:
+                json.dump(dict(doc["data"], _v=doc["version"]), fh)
+
+
+def read(r, name, *args, now=R.NOW):
+    """`app.py reads` and the queries it prints: (the folder, what reads printed)."""
+    out = os.path.join(r.root, name)
+    said = r.run("reads", out, "--now", now, *args, LJS_PAGE_MIRROR=r.mirror)
+    for line in said.splitlines()[1:]:
+        if line.startswith("{"):
+            query(r, out, json.loads(line))
+    return out, said
+
+
+def records(folder):
+    return sum(len([f for f in os.listdir(os.path.join(folder, c)) if f.endswith(".json")])
+               for c in os.listdir(folder) if os.path.isdir(os.path.join(folder, c))
+               and not c.startswith(".") and c not in ("wake", "view"))
+
+
+def view(r, d, now=R.NOW, *extra):
+    import fake_db
+    got = json.loads(r.run("view", os.path.join(d, "v"), "--dump", d, "--chat", R.CHAT, "--now",
+                           now, *extra, LJS_PAGE_MIRROR=r.mirror, ok=(0, 2)))
+    return got, all(fake_db.apply(r.db, b) for b in got["batches"])
+
+
+def wake(r, d, now=R.NOW):
+    return r.run("wake", d, "--chat", R.CHAT, "--kind", "cloud", "--on", "Opus 5.5", "--now", now,
+                 LJS_PAGE_MIRROR=r.mirror)
+
+
+def used_page(r):
+    """Two months of use: finished work, applied taps with their receipts."""
+    for n in range(60):
+        r.put("work", f"talk~old{n:02d}", {"kind": "talk", "status": "done", "title": "A question",
+                                           "asked_at": "2026-10-01T10:00:00Z",
+                                           "finished_at": "2026-10-01T10:05:00Z"})
+        r.put("actions", f"old{n:02d}", {"action": "job.keep", "item": "x",
+                                         "at": "2026-10-02T10:00:00Z"})
+        r.put("receipts", f"old{n:02d}", {"result": "ok", "applied_at": "2026-10-02T10:01:00Z"})
+
+
+# ------------------------------------------------------------------ 3. read only what changed
+
+def test_a_wake_reads_only_what_changed_and_the_rest_is_laid_from_the_last_read(ring):
+    used_page(ring)
+    first, said = read(ring, "r1")
+    assert "a whole read (nothing kept yet)" in said
+    whole = records(first)
+    assert whole > 180
+    wake(ring, first)
+    got, ok = view(ring, first)
+    assert ok, got
+    # A tap and a question since: the next read asks only for what changed.
+    ring.queue("talk~new", kind="talk", asked_at=LATER)
+    aid = ring.act("job.draft", "r9-3", value={"answers": {"already_applied": "no"}})
+    d, said = read(ring, "r2", now=LATER)
+    assert "what changed since" in said, said
+    assert records(d) < 20, records(d)              # some 190 records before; a handful now
+    said = wake(ring, d, now=LATER)
+    # The folder holds the whole database once laid: a finished item from weeks ago is there
+    # (a finished id asked for again is pinned to its version), and the one line says what
+    # needs doing, by id.
+    assert os.path.isfile(os.path.join(d, "work", "talk~old07".replace("~", "@") + ".json"))
+    line = next(ln for ln in said.splitlines() if ln.startswith("read: "))
+    assert "kept from the last read" in line and aid in line and "talk~new" in line, line
+    assert len(line) < 400
+
+
+def test_a_refused_write_makes_the_next_read_whole(ring):
+    first, _ = read(ring, "r1")
+    wake(ring, first)
+    view(ring, first)
+    d, said = read(ring, "r2", now=LATER)
+    assert "what changed since" in said
+    ring.run("version", d, "meta/listen", "7", LJS_PAGE_MIRROR=ring.mirror)
+    _, said = read(ring, "r3", now=LATER)
+    assert "a whole read (a write was refused)" in said
+    # And the first wake of a new day reads whole by itself.
+    d, _ = read(ring, "r4", now=LATER)
+    wake(ring, d, now=LATER)
+    _, said = read(ring, "r5", now="2026-10-26T07:00:00Z")
+    assert "a whole read (a new day)" in said
+
+
+def test_a_page_another_chat_drew_is_read_before_it_is_drawn_again(ring):
+    first, _ = read(ring, "r1")
+    wake(ring, first)
+    assert view(ring, first)[1]
+    # Another chat draws the page: the revision it leaves (meta/now) is not this copy's.
+    now_doc = os.path.join(ring.db, "meta", "now.json")
+    with open(now_doc, encoding="utf-8") as fh:
+        doc = json.load(fh)
+    doc["data"]["by"], doc["version"] = "session_EXAMPLEOTHER", doc["version"] + 1
+    with open(now_doc, "w", encoding="utf-8") as fh:
+        json.dump(doc, fh)
+    d, _ = read(ring, "r2", now=LATER)
+    wake(ring, d, now=LATER)
+    assert not os.path.isdir(os.path.join(d, "screen"))     # never laid from the old copy
+    got, _ = view(ring, d, LATER)
+    assert got["batches"] == [] and "another chat drew the page" in got["for_claude"][0]
+    for coll in ("screen", "addr"):
+        query(ring, d, {"collection": coll, "query": {"limit": 1000}})
+    got, ok = view(ring, d, LATER)
+    assert ok, got
+    # Drawn here again: the next read lays the screens and reads none of them.
+    d2, _ = read(ring, "r3", now="2026-10-25T18:02:00Z")
+    assert not os.path.isdir(os.path.join(d2, "screen"))
+    wake(ring, d2, now="2026-10-25T18:02:00Z")
+    assert os.path.isdir(os.path.join(d2, "screen"))
+
+
+def test_a_ring_that_names_a_revision_already_read_needs_no_read(ring):
+    assert "new since the last read" in ring.run("reads", "--rev", "4",
+                                                 LJS_PAGE_MIRROR=ring.mirror)
+    assert "nothing new" in ring.run("reads", "--rev", "4", LJS_PAGE_MIRROR=ring.mirror)
+    assert "nothing new" in ring.run("reads", "--rev", "3", LJS_PAGE_MIRROR=ring.mirror)
+    assert "new since" in ring.run("reads", "--rev", "5", LJS_PAGE_MIRROR=ring.mirror)
+
+
+# ------------------------------------------------------------------ 4. once a batch, said once
+
+def test_what_a_refusal_means_is_said_once_not_beside_every_batch(ring):
+    ring.act("ready.applied", R.KESTREL)
+    ring.queue("talk~1", kind="talk")
+    d = ring.read("wake1")
+    said = ring.wake(d)
+    assert all(R.land(ring, said))
+    said = ring.wake(d)
+    whys = [why for _, why in R.sends(said)]
+    assert len(whys) == 2, said
+    assert sum("python3 tools/app.py version" in w for w in whys) <= 1, whys
+    assert all(len(w) < 120 or "python3 tools/app.py version" in w for w in whys), whys
+
+
+def test_a_detached_save_returns_at_once_and_the_hook_waits_for_it(landing_copy, capsys):
+    _origin, chat, _other = landing_copy
+    write(chat, "profile/notes.md", "changed\n")
+    assert land.save_due(str(chat), "a chat", "2026-11-05")       # unsaved: held, as before
+    started = []
+    code = land.detach(str(chat), "Notes", popen=lambda *a, **k: started.append((a, k)))
+    out = capsys.readouterr().out
+    assert code == 0 and out.strip() == "land: saving in the background; nothing to wait for or say."
+    (args,), kw = started[0]
+    assert "--run-detached" in args and kw.get("start_new_session") is True
+    assert kw["stdin"] is not None and kw["stdout"] is not None    # nothing reaches the chat
+    # Asked for and not finished: the hook holds no turn for it.
+    assert land.wanted(str(chat))
+    assert land.save_due(str(chat), "a chat", "2026-11-05") == []
+
+
+def test_a_detached_save_opens_and_merges_its_pull_request_itself(landing_copy, capsys):
+    _origin, chat, _other = landing_copy
+    calls = []
+
+    class R_:
+        def __init__(self, code, out):
+            self.returncode, self.stdout, self.stderr = code, out, ""
+
+    def run(args, **kw):
+        calls.append(args)
+        if "POST" in args:
+            return R_(0, json.dumps({"number": 41}))
+        return R_(0, json.dumps({"merged": True}))
+    ok, number = land.finish_on_github(str(chat), {"owner": "someone", "repo": "my-job-search",
+                                                   "head": "claude/chat-1", "title": "Notes",
+                                                   "body": "green"}, run=run,
+                                       which=lambda name: "/usr/bin/gh")
+    assert ok and number == "41"
+    assert calls[0][:4] == ["gh", "api", "-X", "POST"] and "head=claude/chat-1" in calls[0]
+    assert calls[1][:5] == ["gh", "api", "-X", "PUT", "repos/someone/my-job-search/pulls/41/merge"]
+    # Where GitHub's part cannot be done here, the calls are kept and said once, by the next
+    # read, never again.
+    write(chat, "profile/notes.md", "changed\n")
+
+    def landed(root, message, check=None, sleep=None):
+        print("land: ready claude/chat-1 (1 commit(s) ahead of master)")
+        print("land: next, each its own call, and nothing said to the person:")
+        print('  1. create_pull_request: owner "someone"')
+        land.READY.update({"owner": "someone", "repo": "r", "head": "claude/chat-1",
+                           "title": "t", "body": "b"})
+        return 0
+    land.run_detached(str(chat), "Notes", land_fn=landed,
+                      finish=lambda root, ready: (False, "gh is not on this computer"))
+    said = land.github_waiting(str(chat))
+    assert "could not be done here (gh is not on this computer)" in said
+    assert "create_pull_request" in said
+    assert land.github_waiting(str(chat)) == ""
+    assert not land.wanted(str(chat))
+
+
+def test_the_hook_holds_no_turn_for_a_save_this_turn_started():
+    import learned
+    assert "--detach" in learned.SAVE_STEPS and "run_in_background" not in learned.SAVE_STEPS
+    for ran in ("python3 tools/land.py --detach --message Notes",
+                "python3 tools/land.py --message Notes",
+                'python3 tools/app.py view "$D/view" --dump "$D" --chat x --end --message y'):
+        assert learned._LANDING.search(ran), ran
+    for ran in ("python3 tools/land.py --after-merge", "python3 tools/app.py view x --dump y"):
+        assert not learned._LANDING.search(ran), ran
+
+
+def test_a_page_update_that_ends_a_batch_clears_saving_and_starts_no_save_outside_a_copy(ring):
+    import fake_db
+    first, _ = read(ring, "r1")
+    wake(ring, first)
+    view(ring, first)
+    ring.put("beats", R.CHAT.replace("~", "@"), {"chat": R.CHAT, "busy": "Saving your work",
+                                                  "seen_at": R.NOW})
+    d, _ = read(ring, "r2", now=LATER)
+    assert all(R.land(ring, wake(ring, d, now=LATER)))
+    got = json.loads(ring.run("view", os.path.join(d, "v"), "--dump", d, "--chat", R.CHAT,
+                              "--now", LATER, "--end", "--message", "Answered",
+                              LJS_PAGE_MIRROR=ring.mirror))
+    assert all(fake_db.apply(ring.db, b) for b in got["batches"])
+    assert ring.stored("beats", R.CHAT)["data"]["busy"] is None
+    assert "for_claude" not in got or not any("land" in x for x in got["for_claude"])
+
+
+# ------------------------------------------------------------------ 5. what a wake cost
+
+def _session(home, name, turns):
+    path = home / "projects" / "-home-user" / name
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text("\n".join(json.dumps({"type": "assistant", "message": {"usage": {
+        "input_tokens": 2, "cache_read_input_tokens": r, "cache_creation_input_tokens": w,
+        "output_tokens": o}}}) for r, w, o in turns) + "\n", encoding="utf-8")
+    return path
+
+
+def test_each_wake_keeps_what_it_cost_and_the_day_is_one_number(tmp_path, monkeypatch):
+    import helper_usage
+    import merge_state
+    home = tmp_path / "claude"
+    monkeypatch.setenv("CLAUDE_CONFIG_DIR", str(home))
+    monkeypatch.setenv("LJS_STATE", str(tmp_path / "state"))
+    listener = _session(home, "s1.jsonl", [(50_000, 2_000, 300), (60_000, 0, 200)])
+    _session(home, "s1/subagents/agent-1.jsonl", [(40_000, 10_000, 500), (52_000, 0, 900)])
+    os.utime(listener, (1, 1))           # the listener's own file is the only top-level one
+    now = dt.datetime(2026, 11, 5, 9, 0, tzinfo=dt.timezone.utc)
+    e = helper_usage.record("wake", "session_EXAMPLEHELPER", now)
+    assert e["listener"] == 60_002 and e["agent_in"] == 102_004 and e["agent_out"] == 1400
+    assert 0 < e["est_usd"] < 1
+    # A cost get_session gave is used as it is.
+    e2 = helper_usage.record("wake", "session_EXAMPLEHELPER", now + dt.timedelta(minutes=5),
+                             usage={"usage": {"total_cost_usd": 0.31}})
+    assert e2["est_usd"] == 0.31 and e2["cost_from"] == "get_session"
+    helper_usage.record("handover", "session_EXAMPLEHELPER", now + dt.timedelta(hours=1),
+                        tokens=650_000)
+    line = helper_usage.day_line("2026-11-05")
+    assert line.startswith("Answering your page cost about $") and "2 taps" in line, line
+    assert helper_usage.day_line("2026-11-04") == ""
+    with open(helper_usage.path(), encoding="utf-8") as fh:
+        kept = json.load(fh)
+    assert [x["kind"] for x in kept["entries"]] == ["wake", "wake", "handover"]
+    # Two chats adding entries on one day keep both, entry by entry.
+    rules = merge_state.json_rules("documents/helper_usage.json")
+    assert rules["lists"] == {"entries": ("at", "chat", "kind")}
+    with open(os.path.join(ROOT, ".gitattributes"), encoding="utf-8") as fh:
+        assert "documents/helper_usage.json merge=ljs-state" in fh.read()
+
+
+def test_the_apps_own_checkout_is_never_written_to(monkeypatch, tmp_path):
+    import helper_usage
+    import person
+    monkeypatch.delenv("LJS_STATE", raising=False)
+    monkeypatch.setattr(person, "state", lambda *p: os.path.join(str(tmp_path), *p))
+    helper_usage.record("wake", "session_EXAMPLEHELPER")
+    assert not os.path.exists(os.path.join(str(tmp_path), "documents"))
