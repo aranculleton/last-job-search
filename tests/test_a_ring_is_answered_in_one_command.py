@@ -172,6 +172,23 @@ def test_a_tap_and_the_work_it_queues_are_answered_in_one_wake(ring):
     assert not sends(again) and "nothing else is waiting for this chat" in again
 
 
+def test_a_chat_refused_a_new_chat_for_nesting_runs_big_jobs_as_background_agents(ring):
+    """At the eighth helper in a chain the platform refused it a new chat (2026-11-05): the
+    job's create_session said so, with no way on. Its line now says what to do, and once
+    `app.py nested` has kept it, a big job runs as a background agent instead."""
+    ring.act("job.draft", "r9-3", value={"answers": {"already_applied": "no"}})
+    said = ring.wake(ring.read("wake1"))
+    assert "python3 tools/app.py nested" in said and "background agents" in said
+    assert next_item(said)["run"] == "child session"
+    assert all(land(ring, said)), said
+    ring.queue("draft~second", kind="draft")
+    assert "keeps answering the page" in ring.run("nested", "--chat", CHAT)
+    said = ring.wake(ring.read("wake2"))
+    item = next_item(said)
+    assert item["work"] == "draft~second" and item["run"] == "background agent", said
+    assert "create_session" not in item
+
+
 def test_a_tap_that_changes_the_copy_is_applied_only_once_its_claim_is_accepted(ring):
     aid = ring.act("ready.applied", KESTREL)
     ring.queue("talk~1", kind="talk")

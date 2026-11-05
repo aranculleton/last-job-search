@@ -2848,6 +2848,38 @@ def _first_line(contact_id: str) -> str:
         return ""
 
 
+_TALKED: dict = {}
+
+
+def talked_with(contact_id: str) -> bool:
+    """Has anything passed between the person and them: a message either way in the log, or
+    a first contact on their row? Then a note to them is a follow-up or a reply, which rests
+    on the conversation, never on a profile read: a follow-up's draft opened on "WAITS ON A
+    READ: nothing was read about ..." though the person had already talked to them (the
+    maintainer's copy, 2026-11-05). Read from the log as it is now; False when it cannot be."""
+    cid = str(contact_id or "").strip()
+    if not cid:
+        return False
+    try:
+        import state
+        paths = (state.THREADS_CSV, state.CONTACTS_CSV)
+        key = tuple((p, os.stat(p).st_mtime_ns, os.stat(p).st_size) if os.path.exists(p)
+                    else (p, 0, 0) for p in paths)
+        got = _TALKED.get(key)
+        if got is None:
+            ids = {str(r.get("contact_id") or "").strip()
+                   for r in state.load_threads(state.THREADS_CSV)}
+            ids |= {str(c.get("contact_id") or "").strip()
+                    for c in state.load_contacts(state.CONTACTS_CSV)
+                    if str(c.get("first_contacted") or "").strip()}
+            got = ids - {""}
+            _TALKED.clear()
+            _TALKED[key] = got
+        return cid in got
+    except Exception:  # noqa: BLE001  no log to read: a first note, as before
+        return False
+
+
 def waits_on_read(contact_id: str) -> bool:
     """Does their waiting draft still open on the WAITS ON A READ line?"""
     return _first_line(contact_id).startswith(WAITS_ON_A_READ)
@@ -2904,10 +2936,12 @@ def draft_text(contact_id: str, note: str, name: str = "", card_only: bool = Fal
     nothing has been read about them, or the CARD ONLY line for a note the person chose to
     send from the card alone (`card_only`) or a recruiter's card that says enough. The file
     is the note alone: anything below a line of --- is notes for the person (note_body),
-    never checked, sent or logged as the note, and is not written here."""
+    never checked, sent or logged as the note, and is not written here. Only a first note
+    carries either line: to someone the person has already talked to (talked_with), it is a
+    follow-up or a reply, which rests on the conversation."""
     note = note_body(str(note or "").strip()).strip()
     got = load(contact_id)
-    if has_read(got):
+    if has_read(got) or talked_with(contact_id):
         return note + "\n"
     who = name or "them"
     if card_only or card_enough(got):

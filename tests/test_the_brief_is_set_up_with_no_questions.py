@@ -134,6 +134,45 @@ def test_the_brief_command_prints_the_move_for_a_brief_whose_chat_lost_the_files
     assert "the brief is set up" not in got.stdout
 
 
+def test_a_brief_firing_in_a_chat_that_handed_the_page_on_is_moved_never_set_up(tmp_path):
+    """`routines.py brief` said the brief was set up, never to make a second, while its task
+    still fired in the chat that had handed the page on, so the helper took it as moved (the
+    maintainer's copy, 2026-11-05). It reads where the task fires and, when that is not the
+    chat answering the page, prints the move there."""
+    tasks, _ = routines.listing(RAW)
+    page = "session_EXAMPLEHELPER"
+    got = routines.existing_brief(REG, tasks[:1], page=page, repo="example-owner/example-copy")
+    assert got["state"] == "elsewhere" and "has not moved" in got["say"], got
+    make, record, old = got["calls"]
+    assert make["tool"] == "create_trigger" and make["args"]["persistent_session_id"] == page
+    assert f"record --session {page}" in record["run"]
+    assert old["args"] == {"trigger_id": "trig_EXAMPLEA", "enabled": False}
+    assert "list_triggers" in got["then"]
+    # Already firing in the chat that answers the page: set up, nothing to move.
+    assert routines.existing_brief(REG, tasks[:1], page="session_EXAMPLEA")["state"] == \
+        "registered"
+    # The older ops chat relays to the phone and keeps its brief.
+    ops = dict(REG, setup="ops_relay", ops_session={"id": "session_EXAMPLEA"})
+    assert routines.existing_brief(ops, tasks[:1], page=page)["state"] == "registered"
+    # On the real path, with the chat that answers the page named.
+    profile, state = tmp_path / "profile", tmp_path / "state"
+    profile.mkdir()
+    state.mkdir()
+    (profile / "routines.json").write_text(json.dumps(REG), encoding="utf-8")
+    listing = tmp_path / "page.json"
+    listing.write_text(json.dumps({"data": RAW["data"][:1], "has_more": False}),
+                       encoding="utf-8")
+    env = dict(os.environ, LJS_PROFILE=str(profile), LJS_STATE=str(state),
+               CLAUDE_CODE_REMOTE="true")
+    out = subprocess.run([sys.executable, os.path.join(ROOT, "tools", "routines.py"), "brief",
+                          "--triggers", str(listing), "--page-chat", page],
+                         capture_output=True, text=True, encoding="utf-8", errors="replace",
+                         env=env)
+    assert out.returncode == 0 and out.stdout.startswith("elsewhere: "), out.stdout + out.stderr
+    assert "move 1: create_trigger" in out.stdout and page in out.stdout
+    assert "the brief is set up" not in out.stdout and "never create a second" not in out.stdout
+
+
 def test_a_registry_with_nothing_scheduled_yet_is_clean():
     assert routines.check({"setup": "chat_per_briefing", "timezone": "Europe/London",
                            "routines": []}) == []

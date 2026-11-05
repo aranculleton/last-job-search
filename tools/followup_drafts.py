@@ -863,7 +863,9 @@ def keep(pairs) -> list[str]:
     """Each (contact id, draft) the gate passed, put where the page's Messages shows it
     (documents/network/<id>/draft.md, the one draft waiting for them), by the code that
     passed it: the ids written. Never over the same words, and never over a first note still
-    marked as resting on a read or on their card alone, which is /network's to rewrite."""
+    marked as resting on a read or on their card alone, which is /network's to rewrite. A
+    marked draft to someone the person has already talked to is no first note but one left
+    from before the conversation: the follow-up takes its place (reading.talked_with)."""
     import reading
     import reply
     out = []
@@ -878,7 +880,8 @@ def keep(pairs) -> list[str]:
             raw = None
         except ValueError:                   # not an id a folder can have
             continue
-        if raw is not None and (reading.marked(cid) or reading.note_body(raw).strip() == text):
+        if raw is not None and ((reading.marked(cid) and not reading.talked_with(cid))
+                                or reading.note_body(raw).strip() == text):
             continue
         reply.save_draft(cid, text)
         out.append(cid)

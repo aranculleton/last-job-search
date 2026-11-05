@@ -738,6 +738,43 @@ def page_rules(today, seen=None, tracker=None):
     return check
 
 
+ANOTHER_ROLE = "another role at {} is already on your list"
+
+
+def _fit_and_priority(row) -> tuple[float, float]:
+    """A row's 0-100 fit (else its priority) and its priority, for which of two fits better."""
+    def num(x):
+        return float(x) if isinstance(x, (int, float)) and not isinstance(x, bool) else -1.0
+    fit = row.get("fit") if row.get("fit") is not None else row.get("priority")
+    return num(fit), num(row.get("priority"))
+
+
+def extra_roles(rows) -> dict[int, str]:
+    """{index: why} for each row that is a second open role at an employer among `rows`, the
+    roles on Jobs nobody has decided on, in list order: at each employer (company_key) the one
+    that fits best stays, its fit, then its priority, then its place in the list, and every
+    other is set aside as another role there already on the list. throttle.py keeps one
+    role per employer inside one search; this is the same limit over the whole list, where
+    three searches put three roles at one employer on it (the maintainer, 2026-11-05). The
+    page decides it on every read (app_model._jobs), so a role set aside comes back by itself
+    once the one kept is drafted, applied for or set aside."""
+    from company_key import key as company_key
+    best: dict[str, int] = {}
+    for i, r in enumerate(rows):
+        k = company_key(str(r.get("company") or ""))
+        if not k:
+            continue
+        if k not in best or _fit_and_priority(r) > _fit_and_priority(rows[best[k]]):
+            best[k] = i
+    out = {}
+    for i, r in enumerate(rows):
+        k = company_key(str(r.get("company") or ""))
+        if k and best[k] != i:
+            kept = rows[best[k]]
+            out[i] = ANOTHER_ROLE.format(str(kept.get("company") or r.get("company")).strip())
+    return out
+
+
 def ruled_by(row, why: str, links=()) -> bool:
     """Whether a reason a search leaves a row out for goes on its left-out list: a fact about
     the posting or its employer that the person's own rules decide. Never a row with no score
@@ -746,6 +783,10 @@ def ruled_by(row, why: str, links=()) -> bool:
     already_had's): only a copy of it."""
     from lookup_score import norm
     if not why or why.startswith(("no score", "age:", SET_ASIDE_ON_PAGE)):
+        return False
+    # A second role at an employer is decided again on every read of the list (extra_roles),
+    # and comes back once the one kept is decided: never a ruling, nor another search's list.
+    if why.startswith(ANOTHER_ROLE.split("{}")[0]) and why.endswith(ANOTHER_ROLE.split("{}")[1]):
         return False
     if why.startswith("already "):
         u = norm(str(row.get("url") or ""))

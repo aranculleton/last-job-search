@@ -378,6 +378,71 @@ NEED_SCREENS = ("view: another chat drew the page since this copy last did, so i
                 "run this again.")
 
 
+LATE = ("view: before this batch ends, read what came in while the work ran (taps and work "
+        "asked for since this wake's read), so a tap made meanwhile is applied now, never left "
+        "for the person's next message: ArtifactData query, each of these in one message, url "
+        "{url}, out_dir \"{dump}\" (the same folder; never list or open what they save), then "
+        "run this same command again: {queries}")
+
+
+def late_queries(dump: str, now: dt.datetime | None = None) -> list[dict]:
+    """The reads that end a batch of the page's work (`app.py view --end`): the taps,
+    receipts and work asked for since this folder's read, by the same cursor a wake reads by.
+    Seven "I sent it" taps made while the helper answered another question waited for the
+    person's next message: only a wake's start read taps (the maintainer's copy, 2026-11-05).
+    Asked once a folder, and again only after `late_handled(again=True)`; [] when the folder
+    was not read by `plan` or the reads were asked already."""
+    now = now or _now()
+    path = os.path.join(dump, PLAN)
+    p = _read(path)
+    if not isinstance(p, dict) or not p.get("assembled") or p.get("late_asked"):
+        return []
+    since = _time(p.get("late_from") or p.get("at")) or now
+    cursor = _stamp(since - dt.timedelta(seconds=CLOCK_SLACK_S))
+    queries = [
+        {"collection": "actions", "query": {"limit": LIMIT, "where": [["at", ">=", cursor]]}},
+        {"collection": "receipts",
+         "query": {"limit": LIMIT, "where": [["applied_at", ">=", cursor]]}},
+        {"collection": "work", "query": {"limit": LIMIT, "where": [["asked_at", ">=", cursor]]}},
+    ]
+    # The work this folder held already: the wake knew of it, so only what the late reads
+    # bring is named as come in meanwhile (app.py late_taps).
+    folder = os.path.join(dump, "work")
+    known = sorted(os.path.splitext(n)[0].replace("@", "~") for n in os.listdir(folder)
+                   if n.endswith(".json")) if os.path.isdir(folder) else []
+    p.update(late_asked=_stamp(now), late_cursor=cursor,
+             late_known=sorted(set(p.get("late_known") or []) | set(known)))
+    p.pop("late_done", None)
+    _write(path, p)
+    return queries
+
+
+def say_late(queries: list[dict], dump: str, url: str) -> str:
+    return LATE.format(url=url, dump=dump, queries=" ".join(
+        json.dumps(q, separators=(",", ":")) for q in queries))
+
+
+def late_read(dump: str) -> bool:
+    """Were the reads that end a batch asked for in this folder, and not handled yet?"""
+    p = _read(os.path.join(dump, PLAN))
+    return isinstance(p, dict) and bool(p.get("late_asked")) and not p.get("late_done")
+
+
+def late_handled(dump: str, again: bool = False) -> None:
+    """The late reads are applied. `again`: work came in with them, which this chat takes
+    before ending, so the next end of the batch reads once more, from when these were asked."""
+    path = os.path.join(dump, PLAN)
+    p = _read(path)
+    if not isinstance(p, dict):
+        return
+    if again:
+        p["late_from"] = p.get("late_asked")
+        p.pop("late_asked", None)
+    else:
+        p["late_done"] = True
+    _write(path, p)
+
+
 def needs(dump: str) -> list[str]:
     """The kept collections a page update must read into `dump` first: those assemble did
     not lay (another chat drew since) and the folder does not hold yet."""

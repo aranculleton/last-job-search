@@ -92,14 +92,6 @@
    "priority_exact": 73.276
   },
   {
-   "id": "4000000104",
-   "url": "https://www.linkedin.com/jobs/view/4000000104",
-   "fit": 98,
-   "opportunity": 43,
-   "priority": 73,
-   "priority_exact": 72.655
-  },
-  {
    "id": "gh-7001",
    "url": "https://boards.greenhouse.io/wrenfield/jobs/7001",
    "fit": 93,
@@ -122,6 +114,14 @@
    "opportunity": 50,
    "priority": 70,
    "priority_exact": 69.828
+  },
+  {
+   "id": "4000000104",
+   "url": "https://www.linkedin.com/jobs/view/4000000104",
+   "fit": 94,
+   "opportunity": 43,
+   "priority": 70,
+   "priority_exact": 69.69
   },
   {
    "id": "4000000123",
@@ -312,17 +312,6 @@
    "bar": "pay"
   },
   {
-   "id": "4000000104",
-   "url": "https://www.linkedin.com/jobs/view/4000000104",
-   "fit": 98,
-   "opportunity": 43,
-   "priority": 73,
-   "priority_exact": 72.655,
-   "bar": "none",
-   "warm_route_note": "DO NOT APPLY COLD. Juno Castellan (replied_needs_response): send the CV",
-   "throttle_override_note": "OVERRIDE: fit 98 against 72 for Senior Supply Chain Analyst, already applied at this employer. Surfaced because it clears the open application by 26 points."
-  },
-  {
    "id": "gh-7001",
    "url": "https://boards.greenhouse.io/wrenfield/jobs/7001",
    "fit": 93,
@@ -339,6 +328,17 @@
    "priority": 71,
    "priority_exact": 70.69,
    "bar": "pay"
+  },
+  {
+   "id": "4000000104",
+   "url": "https://www.linkedin.com/jobs/view/4000000104",
+   "fit": 94,
+   "opportunity": 43,
+   "priority": 70,
+   "priority_exact": 69.69,
+   "bar": "none",
+   "warm_route_note": "DO NOT APPLY COLD. Juno Castellan (replied_needs_response): send the CV",
+   "throttle_override_note": "OVERRIDE: fit 94 against 72 for Senior Supply Chain Analyst, already applied at this employer. Surfaced because it clears the open application by 22 points."
   },
   {
    "id": "4000000123",

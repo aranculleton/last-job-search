@@ -270,13 +270,30 @@ def cmd_view(a) -> int:
     today, now = app_model.clock(a.today, a.now)
     import page_reads
     planned = bool(a.dump) and os.path.isfile(os.path.join(a.dump, page_reads.PLAN))
+    end = bool(getattr(a, "end", False))
     if planned:
         page_reads.assemble(a.dump, now)
         need = page_reads.needs(a.dump)
-        if need:
-            print(_dump({"rev": None, "batches": [], "for_claude": [
-                page_reads.NEED_SCREENS.format(colls=" and ".join(need), dump=a.dump)]}), end="")
+        # The end of a wake's work reads what came in while it ran, so a tap made meanwhile
+        # is applied in this batch, never left for the person's next message.
+        late = page_reads.late_queries(a.dump, now) \
+            if end and answers_page(page_db.load(a.dump), a.chat) else []
+        if need or late:
+            print(_dump({"rev": None, "batches": [], "for_claude": (
+                [page_reads.NEED_SCREENS.format(colls=" and ".join(need), dump=a.dump)]
+                if need else []) + ([page_reads.say_late(
+                    late, a.dump, app_setup.page_record().get("url") or "<the page>")]
+                    if late else [])}), end="")
             return 2
+    late_batches: list = []
+    late_lines: list = []
+    if planned and end and page_reads.late_read(a.dump):
+        got = late_taps(a.dump, a.chat, now, os.path.join(a.out_dir, "late"))
+        if got.get("claim"):
+            print(_dump({"rev": None, "batches": got["batches"],
+                         "for_claude": got["lines"]}), end="")
+            return 2
+        late_batches, late_lines = got["batches"], got["lines"]
     db = page_db.load(a.dump) if a.dump else {}
     missing = no_screen(a.dump, db) if a.dump else ""
     if missing:
@@ -473,12 +490,109 @@ def cmd_view(a) -> int:
         # sent: the next wake pins to the versions they leave, with no screen read.
         page_db.keep_landed(a.dump, batches)
         page_reads.absorb(a.dump)
+    if late_lines:
+        lines = list(late_lines) + list(lines or [])
     if getattr(a, "end", False):
         lines = list(lines or []) + end_of_batch(a.chat, getattr(a, "message", "") or "", now)
+    # The taps that came in while the work ran go first: the screens are drawn with them.
+    batches = list(late_batches) + list(batches)
     print(_dump({"rev": model["rev"], "batches": batches,
                  **({"kept_newer": kept} if kept else {}),
                  **({"for_claude": lines} if lines else {})}), end="")
     return 0
+
+
+def answers_page(db: dict, chat: str) -> bool:
+    """Is this chat the one the page's record names as answering it?"""
+    import app_listen
+    rec, _ = app_listen.record(db)
+    mine = {c for c in (app_listen.this_chat(""), app_listen.this_chat(chat)) if c}
+    return bool(rec.get("chat")) and str(rec.get("chat")) in mine
+
+
+LATE_CLAIM = ("view: {n} tap{s} came in while the work ran, and applying {them} changes your "
+              "copy: send this claim, and once it is accepted run this same command again: it "
+              "applies them and brings the page up to date in one batch. Refused: as any "
+              "refused write (the app skill, \"Rules that hold everywhere\").")
+LATE_WORK = ("late: work was asked for while this ran ({ids}): once this batch is sent, take it "
+             "before ending: python3 tools/app.py wake \"{dump}\" --chat {chat} (the same "
+             "folder), do what it prints, then end with this same command again.")
+
+
+def late_taps(dump: str, chat: str, now, out_dir: str) -> dict:
+    """What the reads that end a batch found (page_reads.late_queries), after they were made
+    into `dump`: the taps made while the work ran, claimed and applied as a wake applies them
+    ({"claim": True, ...} when one changes the copy and its claim must be accepted first),
+    and one line naming work asked for meanwhile, which this chat takes before ending.
+    {"batches", "lines"}."""
+    import app_actions
+    import app_listen
+    import page_db
+    import page_reads
+    chat = app_listen.this_chat(chat)
+    db = page_db.load(dump)
+    todo = app_actions.pending(db, chat, now)
+    batches: list = []
+    lines: list[str] = []
+    if todo:
+        need = app_actions.to_claim(todo, chat, now)
+        changes = {aid for aid, act, _v in todo
+                   if str(act.get("action") or "") not in app_actions.DB_ONLY}
+        claim = app_actions.claim(dump, chat, now, os.path.join(out_dir, "taps"),
+                                  only=need)["batches"] if need else []
+        if changes & set(need):
+            n = len(todo)
+            return {"claim": True, "batches": claim, "lines": [LATE_CLAIM.format(
+                n=n, s="s" if n != 1 else "", them="them" if n != 1 else "it")]}
+        got = app_actions.apply_dir(dump, chat, now, os.path.join(out_dir, "apply"))
+        page_db.keep_landed(dump, got["batches"], skip=("actions",))
+        batches = _one_batch(list(claim) + list(got["batches"]), os.path.join(out_dir, "send"))
+        counts = [f"{len(got[k])} {w}" for k, w in (("ok", "applied"), ("stale", "changed since "
+                  "they saw it"), ("conflict", "could not be done"), ("again", "applied before"))
+                  if got.get(k)]
+        if counts:
+            lines.append("taps made while the work ran: " + ", ".join(counts) + " (in this "
+                         "batch; each receipt says it on the page)")
+        if got.get("fetch"):
+            lines.append("fetch: a tap made while the work ran names files the person added: "
+                         f"python3 tools/app.py apply \"{dump}\" --chat {chat} --assets "
+                         f"\"{dump}/assets\" once each is read there (Artifact read, path the "
+                         "asset id), as a wake's fetch line says.")
+    # Work asked for meanwhile, each named once: what this folder held before the late reads
+    # was known to the wake already, and an item this chat cannot take is never named twice.
+    plan = page_reads._read(os.path.join(dump, page_reads.PLAN)) or {}
+    known = set(plan.get("late_known") or []) | set(plan.get("late_seen") or [])
+    new = sorted(w for w, d in (page_db.load(dump).get("work") or {}).items()
+                 if w not in known and str((d.get("data") or {}).get("status") or "") == "queued"
+                 and not (d.get("data") or {}).get("stop_asked"))
+    if new:
+        lines.append(LATE_WORK.format(ids=", ".join(new[:6]) + (" ..." if len(new) > 6 else ""),
+                     dump=dump, chat=chat))
+        plan["late_seen"] = sorted(set(plan.get("late_seen") or []) | set(new))
+        page_reads._write(os.path.join(dump, page_reads.PLAN), plan)
+    page_reads.late_handled(dump, again=bool(new))
+    return {"batches": batches, "lines": lines}
+
+
+def _one_batch(paths: list, out_dir: str) -> list:
+    """`paths` as one batch the store takes whole, where it fits and writes no document
+    twice (a claim refused takes the receipts with it); else as they are."""
+    import page_db
+    entries: list = []
+    seen: set = set()
+    for p in paths:
+        with open(p, encoding="utf-8") as fh:
+            got = json.load(fh)
+        docs = {(e["collection"], e["doc_id"]) for e in got}
+        if docs & seen:
+            return list(paths)
+        seen |= docs
+        entries += got
+    if len(paths) < 2 or len(entries) > page_db.BATCH_MAX:
+        return list(paths)
+    w = page_db.Writes(out_dir)
+    w.entries = entries
+    return w.save("late")
 
 
 def end_of_batch(chat: str, message: str, now) -> list[str]:
@@ -1494,6 +1608,10 @@ def cmd_wake(a) -> int:
     _, now = app_model.clock(None, a.now)
     chat = app_listen.this_chat(a.chat)
     kind = a.kind or app_listen.chat_kind()
+    if app_listen.nested(chat):
+        # The platform refused this chat a new chat for nesting (`app.py nested`): its big
+        # jobs run as background agents, never a create_session that fails again.
+        a.no_sessions = True
     url = app_setup.page_record().get("url") or "<the page>"
     st = _wake_state(a.dump)
     run = int(st.get("runs") or 0) + 1
@@ -1733,7 +1851,8 @@ def cmd_wake(a) -> int:
             then.append(f"then: only once the work's claim is accepted, make the {call} call "
                         "in `next` below exactly as it is printed" + (
                             f" (first {chosen['first']})" if chosen.get("first") else "") +
-                        ", and never wait for it." + (
+                        ", and never wait for it." + (NESTED_JOB.format(chat=chat, dump=a.dump)
+                                                      if call == "create_session" else "") + (
                             " More is waiting: then run this again with the same folder (step "
                             "3 again): " + _again(a, chat) if more else ""))
         then.append("next: " + _dump(shown).rstrip("\n"))
@@ -1752,6 +1871,52 @@ def cmd_wake(a) -> int:
         if tidy_due:
             last.append(TIDY_SAID)
     _print_wake(head, notes, _send_as(sends, rd, a.dump), url, then=then + last)
+    return 0
+
+
+# A job's chat refused because this chat can start no more (chats nest only so deep): the
+# job is not lost. Its claim lapses and the next wake runs it as a background agent.
+NESTED_JOB = (" If the create_session is refused because this chat cannot start any more "
+              "chats: python3 tools/app.py nested \"{dump}\" --chat {chat}, send the batch it "
+              "prints, and say nothing: from then on big jobs run here as background agents, "
+              "and this one is taken again that way once its claim lapses.")
+
+
+def cmd_nested(a) -> int:
+    """The platform refused this chat a new chat or scheduled task because chats nest only so
+    deep (each helper started the next, one level deeper a day, 2026-11-05). Kept in this
+    checkout (its wakes run big jobs as background agents, its renewal waits for the brief's
+    run) and, with a read of the page, on the page's record, so the brief's next run in a
+    chat of its own starts the fresh helper (app_listen.view_renewal)."""
+    import app_listen
+    import app_model
+    import page_db
+    _, now = app_model.clock(None, a.now)
+    chat = app_listen.this_chat(a.chat)
+    if not chat:
+        print("app: give this chat's id: --chat <its id>", file=sys.stderr)
+        return 2
+    app_listen.mark_nested(chat, now)
+    out = ["nested: kept. This chat keeps answering the page; its big jobs run as background "
+           "agents from now on (wake does so by itself), and the brief's next run starts its "
+           "fresh helper. Say nothing about it to the person."]
+    batches: list = []
+    if a.dump:
+        db = page_db.load(a.dump)
+        rec, version = app_listen.record(db)
+        if rec.get("chat") == chat and version is not None:
+            w = page_db.Writes(a.out or os.path.join(a.dump, "nested"))
+            w.add("update", app_listen.DOC_COLLECTION, app_listen.DOC_ID,
+                  {"nested_at": app_model.stamp(now)}, if_version=version)
+            batches = w.save("nested")
+            page_db.keep_landed(a.dump, batches)
+    if batches:
+        import app_setup
+        url = app_setup.page_record().get("url") or "<the page>"
+        out.append(f"send, as one ArtifactData batch (url {url}, its entries as writes): "
+                   + " ".join(batches) + " (it tells the brief's run to start the fresh helper; "
+                   "refused: leave it, this chat's next check-in carries on as it is)")
+    print("\n".join(out))
     return 0
 
 
@@ -2429,6 +2594,13 @@ def main(argv=None) -> int:
                    help="this chat cannot start a chat of its own: a big job runs as a "
                         "background agent")
     p.add_argument("--now", default=None)
+    p = sub.add_parser("nested", help="this chat was refused a new chat or scheduled task "
+                                      "because chats nest only so deep: keep it, and tell the "
+                                      "brief's run to start the fresh helper")
+    p.add_argument("dump", nargs="?", default="", help="a read of the page, for its record")
+    p.add_argument("--chat", default="")
+    p.add_argument("--out", default="", help="where the batch goes (default <dump>/nested)")
+    p.add_argument("--now", default=None)
     p = sub.add_parser("republish", help="ask the listener to publish the page's new code")
     p.add_argument("out_dir")
     p.add_argument("--now", default=None)
@@ -2552,7 +2724,7 @@ def main(argv=None) -> int:
             "files-saved": cmd_files_saved, "propose": cmd_propose, "listen": cmd_listen,
             "republish": cmd_republish, "pinned": cmd_pinned, "told": cmd_told, "doorbells": cmd_doorbells, "done": cmd_done,
             "ask": cmd_ask, "wake": cmd_wake, "version": cmd_version, "reads": cmd_reads, "search-drafts": cmd_search_drafts,
-            "follow-ups": cmd_follow_ups,
+            "follow-ups": cmd_follow_ups, "nested": cmd_nested,
             "answer": cmd_answer}[a.cmd](a)
 
 

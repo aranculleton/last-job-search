@@ -99,7 +99,9 @@ def test_change_back_on_i_have_applied_holds_after_a_reload(run, tmp_path):
             "receipts/" + first: {"applied_at": "2026-10-25T08:01:00Z", "result": "ok", "note": "Marked as applied.", "undo": {"action": "ready.not_applied", "target": {}}},
             "actions/" + back: {"item": a["id"], "action": "undo", "undoes": first, "value": None, "at": "2026-10-25T08:05:00Z", "rev_seen": None, "tab": "t0"},
             "receipts/" + back: {"applied_at": "2026-10-25T08:06:00Z", "result": "ok", "note": "Changed back."}}
-    card = "(() => { const c = document.querySelector('#main [data-item=\"%s\"]'); return c ? c.innerText : ''; })()" % a["id"]
+    # A draft with a question for the person keeps "I have applied" under More: opened first.
+    card = ("(() => { const c = document.querySelector('#main [data-item=\"%s\"]'); if (!c) return '';"
+            " const m = c.querySelector('details.more:not([open]) > summary'); if (m) m.click(); return c.innerText; })()" % a["id"])
     s = _script(run, html, [{"hash": "drafts", "eval": card}], seed=seed)
     text = s[-1]["eval"]
     assert text, "the draft is still in Drafts, to send"

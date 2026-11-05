@@ -110,11 +110,16 @@ def test_code_drafts_reach_messages_and_never_write_over_the_one_waiting(clean):
         fh.write(TEXT + "\n")
     _run(["--pack", "--today", DAY])
     assert _waiting(WREN) == TEXT
-    # A first note still waiting on a read is /network's, never written over.
+    # A first note still waiting on a read is /network's, never written over; but Wren has
+    # been written to already, so one marked so is left from before the conversation, and
+    # the follow-up takes its place (the maintainer's copy, 2026-11-05: a follow-up's draft
+    # opened on WAITS ON A READ). The first-note case is pinned in
+    # test_pasted_profiles_and_unread_drafts.py.
     with open(reading.draft_path(WREN), "w", encoding="utf-8", newline="\n") as fh:
         fh.write(reading.WAITS_ON_A_READ + ": nothing was read.\n\nHi Wren, a note.\n")
-    assert followup_drafts.keep([(WREN, TEXT)]) == []
-    assert _waiting(WREN) == "Hi Wren, a note."
+    assert reading.talked_with(WREN)
+    assert followup_drafts.keep([(WREN, TEXT)]) == [WREN]
+    assert _waiting(WREN) == TEXT and not reading.marked(WREN)
 
 
 def test_the_brief_puts_each_follow_up_it_drafts_in_messages(clean, tmp_path, monkeypatch):

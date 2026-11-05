@@ -71,6 +71,8 @@ make sense to somebody whose repo just received it.
   and the same tidy puts older days in order from the download on file.
 - **Web addresses no longer fill the Brief's news**: each is a short link named by its site.
 - **Jobs has a search box beside Filter**, as Contacts does, once the list is long.
+- **No message in Chat goes unanswered.** One the quick answer cannot handle, fails on or never
+  answers goes to Claude, and one left unanswered when the page closed goes to Claude next time.
 - **A form's answers are one tap away**: the line saying they are ready has Show it, which
   opens them on the card, where it pointed "under More" and More held only the box to ask again.
 - **A downloaded resume is named for the person reading it**: your name, the document and the
@@ -177,6 +179,16 @@ make sense to somebody whose repo just received it.
 - **The app's own update check is quicker.** On the app maintainer's copy it re-checked the
   whole public app on every run, which took over two minutes; it now does that once a day, and
   again after an update.
+
+- A follow-up or a reply to someone you have already talked to no longer opens with "WAITS ON A READ"; that line is only ever on a first note.
+- Taps you make while Claude is busy answering something else (such as "I sent it") are applied as soon as that answer is done, not when you next write.
+- The page chat's fresh start each day no longer stops working after about a week: each new one is started by a one-time scheduled task rather than by the one before it, and where that cannot happen the old one keeps answering until the next brief starts a fresh one.
+- Claude no longer says your morning brief has moved to the page chat, or is already set up, until your list of scheduled tasks shows it running there; one still running in an older chat is moved.
+- A role you mark as applied leaves the To apply list straight away instead of waiting at the bottom of it.
+- Applied opens on what you applied to today or yesterday, shown as a filter with Clear all beside it so the whole list is one tap away.
+- A contact marked as in conversation, or with a call booked, when nothing from them is logged now shows what the messages say instead (waiting on their reply, or connected with no reply yet), so the page no longer asks you to answer a reply that was never sent. The contact check lists each one as something to fix.
+- One role per employer on Jobs, whichever search found it. The best fit stays; any other role there is set aside ("Another role at <employer> is already on your list") with Bring back, and a role you added, kept, drafted or applied for always stays.
+- Strong roles at one employer no longer all score 100. A live contact or an earlier interview there is counted before the top of the scale, so those roles keep their order.
 
 ## [4.10.1] - 2026-11-05
 

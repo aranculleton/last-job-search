@@ -228,12 +228,14 @@ def nudges_due(state: str, n: int = 9) -> list[str]:
 
 def many_jobs(state: str, n: int = 400) -> str:
     """The small state with a shortlist of `n` invented roles, every one scoring 60 or more,
-    so the page's jobs section is far bigger than one database document holds."""
+    so the page's jobs section is far bigger than one database document holds. Each at an
+    employer of its own: Jobs shows one open role per employer (2026-11-05)."""
     small(state)
     firms = [f"{a.title()} {b.title()}" for a in FIRM for b in KIND]
     _json(os.path.join(state, "documents", "rounds", "r9.json"), [
         {"priority": 90 - i % 30, "fit": 90 - i % 30, "title": f"Forecasting Analyst {i}",
-         "company": firms[i % len(firms)], "location": "Manchester (hybrid)",
+         "company": firms[i % len(firms)] + (f" {i // len(firms) + 1}" if i >= len(firms) else ""),
+         "location": "Manchester (hybrid)",
          "url": f"https://jobs.example/many/{i}", "portal": "linkedin",
          "fit_why": "Forecasting in Python and SQL, demand planning and stakeholder work, "
                     "all held in the profile."}

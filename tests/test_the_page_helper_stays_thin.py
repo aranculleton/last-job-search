@@ -18,6 +18,7 @@ from __future__ import annotations
 import datetime as dt
 import json
 import os
+import re
 import sys
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
@@ -266,6 +267,67 @@ def test_the_hook_holds_no_turn_for_a_save_this_turn_started():
         assert not learned._LANDING.search(ran), ran
 
 
+def end(ring, d, now, reads=True):
+    """`app.py view --end`, with the late reads it asks for made first (the store answering
+    them), as a wake's subagent ends its batch."""
+    run = lambda: json.loads(ring.run(  # noqa: E731
+        "view", os.path.join(d, "v"), "--dump", d, "--chat", R.CHAT, "--now", now, "--end",
+        "--message", "Answered", LJS_PAGE_MIRROR=ring.mirror, ok=(0, 2)))
+    got = run()
+    asked = [ln for ln in got.get("for_claude") or [] if "came in while the work ran" in ln]
+    if asked and reads:
+        assert got["batches"] == [] and len(asked) == 1, got
+        for q in re.findall(r"\{\"collection\".*?\]\]\}\}", asked[0]):
+            query(ring, d, json.loads(q))
+        got = run()
+    return got
+
+
+def test_taps_made_while_the_work_ran_are_applied_before_the_batch_ends(ring):
+    """Seven "I sent it" taps made while the helper answered another question waited for the
+    person's next message: only a wake's start read taps (the maintainer's copy, 2026-11-05).
+    The end of the batch reads what came in since the wake's read and applies it there."""
+    import fake_db
+    first, _ = read(ring, "r1")
+    wake(ring, first)
+    assert view(ring, first)[1]
+    before = ring.tracker()
+    d, _ = read(ring, "r2", now=LATER)
+    assert all(R.land(ring, wake(ring, d, now=LATER)))
+    # While the wake's work runs, the person taps: after its read.
+    aid = ring.act("ready.applied", R.KESTREL)
+    got = json.loads(ring.run("view", os.path.join(d, "v"), "--dump", d, "--chat", R.CHAT,
+                              "--now", LATER, "--end", LJS_PAGE_MIRROR=ring.mirror, ok=(2,)))
+    asked = got["for_claude"][0]
+    assert got["batches"] == [] and "came in while the work ran" in asked, got
+    assert '"collection":"actions"' in asked and '["at",">="' in asked
+    for q in re.findall(r"\{\"collection\".*?\]\]\}\}", asked):
+        query(ring, d, json.loads(q))
+    # The tap changes the copy: its claim first, then the same command applies it.
+    got = json.loads(ring.run("view", os.path.join(d, "v"), "--dump", d, "--chat", R.CHAT,
+                              "--now", LATER, "--end", LJS_PAGE_MIRROR=ring.mirror, ok=(2,)))
+    assert "1 tap came in while the work ran" in got["for_claude"][0], got
+    assert all(fake_db.apply(ring.db, b) for b in got["batches"])
+    assert ring.stored("actions", aid)["data"]["claimed_by"] == R.CHAT
+    got = json.loads(ring.run("view", os.path.join(d, "v"), "--dump", d, "--chat", R.CHAT,
+                              "--now", LATER, "--end", LJS_PAGE_MIRROR=ring.mirror))
+    assert any("1 applied" in ln for ln in got["for_claude"]), got
+    assert all(fake_db.apply(ring.db, b) for b in got["batches"])
+    assert ring.stored("receipts", aid)["data"]["result"] == "ok"
+    assert ring.tracker() != before
+    # Work asked for meanwhile is named once, for the helper to take before it ends.
+    d, _ = read(ring, "r3", now="2026-10-25T18:05:00Z")
+    assert all(R.land(ring, wake(ring, d, now="2026-10-25T18:05:00Z")))
+    ring.queue("talk~late", kind="talk", asked_at="2026-10-25T18:06:00Z")
+    got = end(ring, d, "2026-10-25T18:07:00Z")
+    said = [ln for ln in got.get("for_claude") or [] if ln.startswith("late: ")]
+    assert len(said) == 1 and "talk~late" in said[0] and "app.py wake" in said[0], got
+    assert all(fake_db.apply(ring.db, b) for b in got["batches"])
+    # Ended again with nothing new since: the item is not named a second time.
+    got = end(ring, d, "2026-10-25T18:08:00Z")
+    assert not [ln for ln in got.get("for_claude") or [] if ln.startswith("late: ")], got
+
+
 def test_a_page_update_that_ends_a_batch_clears_saving_and_starts_no_save_outside_a_copy(ring):
     import fake_db
     first, _ = read(ring, "r1")
@@ -275,9 +337,7 @@ def test_a_page_update_that_ends_a_batch_clears_saving_and_starts_no_save_outsid
                                                   "seen_at": R.NOW})
     d, _ = read(ring, "r2", now=LATER)
     assert all(R.land(ring, wake(ring, d, now=LATER)))
-    got = json.loads(ring.run("view", os.path.join(d, "v"), "--dump", d, "--chat", R.CHAT,
-                              "--now", LATER, "--end", "--message", "Answered",
-                              LJS_PAGE_MIRROR=ring.mirror))
+    got = end(ring, d, LATER)
     assert all(fake_db.apply(ring.db, b) for b in got["batches"])
     assert ring.stored("beats", R.CHAT)["data"]["busy"] is None
     assert "for_claude" not in got or not any("land" in x for x in got["for_claude"])

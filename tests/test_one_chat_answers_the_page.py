@@ -624,7 +624,13 @@ def test_a_helper_is_a_fresh_chat_once_a_day_with_a_short_hand_over(copy, tmp_pa
     # The first wake of the next day: a fresh helper, with a hand-over of a few lines.
     got = renews(dt.datetime(2026, 10, 31, 7, 0, tzinfo=dt.timezone.utc), "b")
     assert len(got) == 1, got
-    call = json.loads(got[0].split("create_session ", 1)[1].split("}. ", 1)[0] + "}")
+    task, call = renew_calls(got[0])
+    # Started by a one-time scheduled task, never as this chat's child: each helper started
+    # the next one a level deeper, and at the eighth could start nothing (2026-11-05).
+    assert task["create_new_session_on_fire"] is True and task["run_once_at"] > "2026-10-31T07:00"
+    assert task["prompt"].startswith(app_listen.WAKE_PROMPT)
+    assert app_listen.WAKE_COMMAND in task["prompt"] and "add_repo" in task["prompt"]
+    assert task["prompt"].endswith("Asked last: Is my resume ok?.")
     assert call["prompt"].startswith(app_listen.WAKE_PROMPT)
     note = call["prompt"][len(app_listen.WAKE_PROMPT):].strip()
     assert note == ("In flight: Resume and letter: Quillon Data, Analyst.\n"
@@ -645,6 +651,67 @@ def test_a_helper_is_a_fresh_chat_once_a_day_with_a_short_hand_over(copy, tmp_pa
                              dt.datetime(2026, 10, 31, 7, 1, tzinfo=dt.timezone.utc), listen=True,
                              helper=True)
     assert took["role"] == "listener" and not any("archive_session" in ln for ln in took["lines"])
+
+
+def renew_calls(line: str) -> tuple[dict, dict]:
+    """(the create_trigger call, the create_session one) a `listen: renew:` line names."""
+    dec = json.JSONDecoder()
+    at = line.index("create_trigger ") + len("create_trigger ")
+    task, end = dec.raw_decode(line, at)
+    at = line.index("create_session ", end) + len("create_session ")
+    return task, dec.raw_decode(line, at)[0]
+
+
+def test_a_helper_nested_too_deep_keeps_answering_and_the_brief_starts_the_fresh_one(
+        copy, tmp_path, monkeypatch):
+    """At the eighth helper in a chain the platform refused it a new chat or a scheduled task,
+    so its renewal, its job chats and the tidy-up's move of the brief failed (the maintainer's
+    copy, 2026-11-05). `app.py nested` keeps that: the helper keeps answering, never asks again
+    at each check-in, runs big jobs as background agents, and the brief's next run, in its own
+    chat, starts the fresh helper."""
+    import app_listen
+    monkeypatch.setattr(app_listen, "chat_kind", lambda: "cloud")
+    monkeypatch.setattr(app_listen, "_zone", lambda: "UTC")
+    monkeypatch.setattr(app_listen, "history_tokens", lambda: 0)
+    _on_github(monkeypatch)
+    rec = {"chat": "session_deep", "kind": "cloud", "helper": True,
+           "since": "2026-10-30T08:00:00Z", "answered_at": "2026-10-30T11:00:00Z"}
+    db = {"meta": {"listener": {"data": rec, "version": 3}}, "work": {}}
+    now = dt.datetime(2026, 10, 31, 7, 0, tzinfo=dt.timezone.utc)
+    line = app_listen.renew_line(app_listen.renewal(rec, db, "session_deep", now), now)
+    assert "python3 tools/app.py nested" in line and "the next brief run starts" in line
+    # Refused: the chat says so, with a read of the page, and its record carries it.
+    d = copy.dump("deep")
+    os.makedirs(os.path.join(d, "meta"), exist_ok=True)
+    with open(os.path.join(d, "meta", "listen.json"), "w", encoding="utf-8") as fh:
+        json.dump(dict(rec, _v=3), fh)
+    said = copy.run("nested", d, "--chat", "session_deep", "--now", "2026-10-31T07:05:00Z")
+    assert "keeps answering the page" in said
+    batch = next(w for w in said.split() if w.endswith(".json"))
+    with open(batch, encoding="utf-8") as fh:
+        writes = json.load(fh)
+    assert writes[0]["doc_id"] == "listen" and writes[0]["if_version"] == 3
+    with open(writes[0]["file_path"], encoding="utf-8") as fh:
+        assert json.load(fh)["nested_at"] == "2026-10-31T07:05:00Z"
+    # In this checkout: no renewal at a check-in, and big jobs as background agents.
+    app_listen.mark_nested("session_deep", now)
+    app_listen._save_seen({k: v for k, v in app_listen.seen().items() if k != "renewed_at"})
+    later = now + dt.timedelta(hours=3)
+    assert app_listen.renewal(rec, db, "session_deep", later) is None
+    assert app_listen.renewal(rec, db, "session_deep", later, scheduled=True) is not None
+    # The brief's run in a chat of its own starts the fresh helper for it.
+    app_listen._save_seen({k: v for k, v in app_listen.seen().items() if k != "renewed_at"})
+    marked = {"meta": {"listener": {"data": dict(rec, nested_at="2026-10-31T07:05:00Z"),
+                                    "version": 4}}, "work": {}}
+    monkeypatch.setattr(app_listen, "this_chat", lambda c="": "session_brief")
+    lines = app_listen.view_renewal(marked, "brief", later)
+    assert len(lines) == 1 and lines[0].startswith("listen: renew:"), lines
+    task, call = renew_calls(lines[0])
+    assert task["create_new_session_on_fire"] and call["source_url"].endswith("/my-job-search")
+    # Not without the mark, and not from a chat that is not the brief's run.
+    assert app_listen.view_renewal({"meta": {"listener": {"data": rec, "version": 3}},
+                                    "work": {}}, "brief", later) == []
+    assert app_listen.view_renewal(marked, "chat", later) == []
 
 
 def test_a_page_update_by_the_listener_brings_its_renewal(copy, tmp_path, monkeypatch):

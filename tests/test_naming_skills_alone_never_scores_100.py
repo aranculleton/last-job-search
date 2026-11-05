@@ -83,3 +83,38 @@ def test_a_live_contact_still_reaches_100(tmp_path, monkeypatch):
         assert fit.main() == 0
     got = {r["company"]: r["fit"] for r in json.loads(out.read_text())}
     assert got == {"Wexmoor Lending": 100, "Fernhill Freight": 97}
+
+
+def test_a_live_contact_keeps_the_order_of_three_roles_at_one_employer(tmp_path, monkeypatch):
+    """A lift counted after the top of the scale took every strong role at one employer to
+    100: three roles there, from three searches, all read 98 to 100 (the maintainer,
+    2026-11-05). Counted before it, the three keep their order and only the best reaches
+    100; a role at another employer, with no lift, scores as before."""
+    import throttle
+    # Each posting's own count, and what it scored before: the lift added to the tapered
+    # score and clamped, 97 + 12 and 92 + 12 both 100.
+    roles = [dict(STACKED, title="Senior Fraud Analyst"),                     # 104, was 100
+             dict(STACKED, title="Senior Risk Analyst",
+                  desc="Our team uses SQL, Python, Tableau dashboards and an ETL pipeline. "
+                       "You will run experiments."),                            # 94, was 100
+             dict(FEWER, title="Senior Data Analyst"),                           # 80, was 92
+             dict(FEWER, title="Senior Data Analyst", company="Fernhill Freight")]
+    src, out = tmp_path / "in.json", tmp_path / "out.json"
+    src.write_text(json.dumps(roles))
+    route = [{"name": "an invented contact", "status": "replied", "next_action": ""}]
+    monkeypatch.setattr(throttle, "warm_routes",
+                        lambda *a, **k: {"wexmoor lending": route} if not a and not k else {})
+    monkeypatch.setattr(sys, "argv", ["fit.py", str(src), "--out", str(out)])
+    with mock.patch.object(fit, "CORE", CORE):
+        assert fit.main() == 0
+    rows = json.loads(out.read_text())
+    got = sorted(((r["company"], r["title"], r["fit"]) for r in rows), key=lambda g: -g[2])
+    assert got == [
+        ("Wexmoor Lending", "Senior Fraud Analyst", 100),     # 104 + 12 = 116: 90 + 13, at 100
+        ("Wexmoor Lending", "Senior Risk Analyst", 98),       # 94 + 12 = 106: 90 + 8
+        ("Wexmoor Lending", "Senior Data Analyst", 91),       # 80 + 12 = 92: 90 + 1
+        ("Fernhill Freight", "Senior Data Analyst", 80)]      # no lift: as before
+    why = next(r["fit_why"] for r in rows if r["title"] == "Senior Risk Analyst")
+    assert why[-2].startswith("+12 live contact at this employer (an invented contact)")
+    assert why[-1] == ("top of the scale: 106 counted as 98 (above 90 a match counts half, "
+                       "and the posting alone stops at 98)")

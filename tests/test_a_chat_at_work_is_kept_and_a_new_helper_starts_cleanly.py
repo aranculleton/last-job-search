@@ -67,7 +67,7 @@ REG = {"setup": "chat_per_briefing", "timezone": "Europe/London", "routines": [
 
 
 def _tidy(copy, tmp_path, monkeypatch, *, listed="idle", told="idle", used="2026-11-01T08:00:00Z",
-          once=True, unmerged=(), github=(BRANCH,), stdin=False):
+          once=True, unmerged=(), github=(BRANCH,), stdin=False, reg=None):
     """tidy.py plan over trimmed listings, as the live run had them: sessions with their
     status alone, tasks with persistent_session_id and enabled alone. `stdin`: given in one
     JSON object on standard input, as the steps say, rather than as files."""
@@ -76,7 +76,7 @@ def _tidy(copy, tmp_path, monkeypatch, *, listed="idle", told="idle", used="2026
     monkeypatch.setattr(tidy, "_campaign_chats", lambda: set())
     monkeypatch.setattr(tidy, "unmerged", lambda: set(unmerged))
     monkeypatch.setattr(tidy, "on_github", lambda: set(github), raising=False)
-    monkeypatch.setattr(routines, "load", lambda *a, **k: json.loads(json.dumps(REG)))
+    monkeypatch.setattr(routines, "load", lambda *a, **k: json.loads(json.dumps(reg or REG)))
     sessions = {"data": [{"id": LIVE, "title": "Job search page", "status": "idle"},
                          {"id": DESK, "title": "Job search helper", "status": listed}]}
     tasks = [{"id": "trig_EXAMPLEBRIEF", "persistent_session_id": DESK, "enabled": True}]
@@ -168,6 +168,82 @@ def test_an_old_helper_at_rest_is_put_away_once_the_brief_has_moved(copy, tmp_pa
     assert f"archive {DESK}: Job search helper" in said, said
     assert f'"persistent_session_id": "{LIVE}"' in next(
         ln for ln in said.splitlines() if ln.startswith("brief 1:"))
+    # A refusal for nesting has a way on, never a dead end (the maintainer's copy, 2026-11-05).
+    assert "python3 tools/app.py nested" in next(
+        ln for ln in said.splitlines() if ln.startswith("nested:"))
+
+
+def test_a_helper_that_can_make_no_scheduled_task_leaves_the_brief_and_its_chat(
+        copy, tmp_path, monkeypatch):
+    """At the eighth helper in a chain the platform refused it a scheduled task, and the
+    tidy-up's move of the brief failed there (the maintainer's copy, 2026-11-05). Once the
+    refusal is kept (`app.py nested`), the brief stays where it is, its chat is kept for it,
+    and the fresh helper the brief's next run starts moves it."""
+    app_listen.mark_nested(LIVE, dt.datetime(2026, 11, 5, 9, 0, tzinfo=dt.timezone.utc))
+    said = _tidy(copy, tmp_path, monkeypatch, once=False)
+    assert not [ln for ln in said.splitlines() if ln.startswith(("brief ", "upkeep ", "check-in"))]
+    assert f"archive {DESK}" not in said, said
+    assert "the brief and the other tasks stay where they are" in said
+
+
+def test_the_brief_has_moved_only_when_the_task_listing_says_so(copy, tmp_path, monkeypatch):
+    """The page helper said it had checked that the brief moved to it when it had not (the
+    maintainer's copy, 2026-11-05): the registry already named the helper while the task still
+    fired in the old chat. The plan reads where the task fires from the listing it is given."""
+    moved_on_paper = json.loads(json.dumps(REG))
+    moved_on_paper["routines"][0]["chat"] = {"session_id": LIVE}
+    said = _tidy(copy, tmp_path, monkeypatch, once=False, reg=moved_on_paper)
+    move = next(ln for ln in said.splitlines() if ln.startswith("brief 1:"))
+    assert "create_trigger" in move and f'"persistent_session_id": "{LIVE}"' in move, said
+    assert "Never say the brief moved until a new list_triggers shows" in said
+    assert "fires in the chat that answers the page" not in said
+    # Once the listing shows the task firing here, it says so, and asks for no move.
+    monkeypatch.setattr(tidy, "_listener", lambda d: {"chat": LIVE, "kind": "cloud", "helper": True})
+    tasks = [{"id": "trig_EXAMPLEBRIEF", "persistent_session_id": LIVE, "enabled": True}]
+    sessions = {"data": [{"id": LIVE, "title": "Job search page", "status": "idle"}]}
+    buf = io.StringIO()
+    with contextlib.redirect_stdout(buf):
+        assert tidy.main(["plan", "--chat", LIVE, "--today", TODAY,
+                          "--sessions", _json(tmp_path, "s2.json", sessions),
+                          "--triggers", _json(tmp_path, "t2.json", {"data": tasks})]) == 0
+    said = buf.getvalue()
+    assert "brief: the task listing shows the brief fires in the chat that answers the page" \
+        in said, said
+    assert not [ln for ln in said.splitlines() if ln.startswith("brief 1:")]
+
+
+def test_a_brief_in_the_chat_that_handed_the_page_on_is_moved_never_nothing_to_tidy(
+        copy, tmp_path, monkeypatch):
+    """The page's record says which chat handed the page to the live helper. A brief still
+    firing there, under a title that is not a helper's, was left where it was and the plan
+    said "nothing to tidy" (the maintainer's copy, 2026-11-05)."""
+    old = "session_EXAMPLEOLDCHAT"
+    reg = json.loads(json.dumps(REG))
+    reg["routines"][0]["chat"] = {"session_id": old}
+    monkeypatch.setattr(tidy, "_listener", lambda d: {"chat": LIVE, "kind": "cloud",
+                                                      "helper": True, "handed_by": old})
+    monkeypatch.setattr(tidy, "_repo", lambda: REPO)
+    monkeypatch.setattr(tidy, "_campaign_chats", lambda: set())
+    monkeypatch.setattr(tidy, "unmerged", lambda: set())
+    monkeypatch.setattr(tidy, "on_github", lambda: set(), raising=False)
+    monkeypatch.setattr(routines, "load", lambda *a, **k: json.loads(json.dumps(reg)))
+    sessions = {"data": [{"id": LIVE, "title": "Job search page", "status": "idle"},
+                         {"id": old, "title": "Job search: morning brief", "status": "idle",
+                          "updated_at": "2026-11-05T11:00:00Z"}]}
+    tasks = [{"id": "trig_EXAMPLEBRIEF", "persistent_session_id": old, "enabled": True}]
+    detail = {"id": old, "title": "Job search: morning brief", "status": "idle",
+              "updated_at": "2026-11-05T11:00:00Z", "session_context": {
+                  "sources": [{"git_repository": {"url": f"https://github.com/{REPO}"}}]}}
+    buf = io.StringIO()
+    with contextlib.redirect_stdout(buf):
+        assert tidy.main(["plan", "--chat", LIVE, "--today", TODAY,
+                          "--sessions", _json(tmp_path, "s3.json", sessions),
+                          "--triggers", _json(tmp_path, "t3.json", {"data": tasks}),
+                          "--details", _json(tmp_path, "d3.json", detail)]) == 0
+    said = buf.getvalue()
+    move = next((ln for ln in said.splitlines() if ln.startswith("brief 1:")), "")
+    assert "create_trigger" in move and f'"persistent_session_id": "{LIVE}"' in move, said
+    assert "nothing to tidy" not in said
 
 
 # ------------------------------------------------------------------ 2. the refresh reads screen

@@ -412,7 +412,7 @@ def decide(db: dict, chat: str, out_dir: str, now: dt.datetime | None = None,
     if mine:
         renew = renewal(rec, db, chat, now)
         if renew:
-            lines.append(renew_line(renew))
+            lines.append(renew_line(renew, now))
         fresh = {"answered_at": at, "watching": True, **({"helper": True} if helper else {})}
         if (rec.get("helper") or helper) and chat.startswith("session_") and \
                 rec.get("title") != HELPER_CHAT_TITLE:
@@ -516,16 +516,84 @@ def _setting_up(chat: str) -> bool:
         return False
 
 
-def renew_line(renew: dict) -> str:
+# The fresh helper starts outside the chain of chats that answered the page. Each helper
+# started the next with create_session, one level deeper every day, and at the eighth the
+# helper could start neither a chat nor a scheduled task (the maintainer's copy, 2026-11-05):
+# its renewal, its job chats and the tidy-up's move of the brief all failed there. A one-time
+# scheduled task that starts a new chat (create_trigger, create_new_session_on_fire) is the
+# account's, not this chat's child. That such a chat starts nested at no depth is assumed,
+# not documented; the claude_surfaces registry (chat-push) records that such a chat has no
+# copy of the files, so its prompt gets one first (routines.COPY_LINE), and where it cannot,
+# it starts the helper as a chat of its own with the call a renewal always made.
+TASK_AHEAD_S = 5 * 60
+FRESH_FROM_TASK = ("A one-time scheduled task started this chat to look after the person's job "
+                   "search page as its fresh helper, outside the chat that looked after it "
+                   "before. {copy}Then run {command} there and do what it prints. If this chat "
+                   "cannot get the copy (no add_repo here), start the helper as a chat of its "
+                   "own instead, then end, saying nothing: create_session {call}")
+NESTED = ("python3 tools/app.py nested --chat <this chat's id> (with \"$D\" first where there "
+          "is a read of the page), send any batch it prints, keep answering the page as "
+          "before, and say nothing to the person: the next brief run starts the fresh helper")
+
+
+def fresh_task(renew: dict, now: dt.datetime) -> dict:
+    """The create_trigger call that starts the fresh helper from a one-time scheduled task,
+    a few minutes on (the account's own, not a chat this one starts), for the session call
+    `renew` (renewal): its prompt is the page's words, how to get the copy, and that call
+    where no copy can be had, then the short hand-over."""
+    import routines
+    repo = str(renew.get("source_url") or "").replace("https://github.com/", "")
+    owner, _, name = repo.partition("/")
+    note = str(renew.get("prompt") or "")[len(WAKE_PROMPT):].strip()
+    copy = routines.COPY_LINE.format(repo=repo, owner=owner, name=name) if name else ""
+    prompt = WAKE_PROMPT + "\n\n" + FRESH_FROM_TASK.format(
+        copy=copy, command=WAKE_COMMAND, call=json.dumps(renew, ensure_ascii=False)) + \
+        (f"\n\n{note}" if note else "")
+    return {"name": HELPER_CHAT_TITLE, "create_new_session_on_fire": True,
+            "run_once_at": _stamp(now + dt.timedelta(seconds=TASK_AHEAD_S)), "prompt": prompt,
+            "initiation": "own_initiative", "notifications": {}}
+
+
+def renew_line(renew: dict, now: dt.datetime | None = None) -> str:
     """What the listener does when its day is up: start its fresh helper, unasked, once this
     chat's own work is saved (a fresh helper started mid-brief took the page while the brief
-    was still saving, the stranger audit, X-27)."""
+    was still saving, the stranger audit, X-27), from a one-time scheduled task so chats
+    never nest deeper (fresh_task). Where this chat can start neither, it keeps answering and
+    the brief's next run starts it (NESTED): never a dead end."""
+    now = now or dt.datetime.now(dt.timezone.utc)
     return ("listen: renew: a new day (or this chat's history is near the most a chat can "
             "hold), and it has no small job of its own in hand. Once this turn's work is "
             "saved (python3 tools/land.py --detach started, or nothing to save), start its "
-            "fresh helper, unasked and saying nothing to the person: "
-            "create_session " + json.dumps(renew, ensure_ascii=False) +
-            ". The new chat takes the page as it starts; until then this one still answers.")
+            "fresh helper from outside this chat, unasked and saying nothing to the person: "
+            "create_trigger " + json.dumps(fresh_task(renew, now), ensure_ascii=False) +
+            " (a one-time scheduled task that starts a new chat; where run_once_at has passed, "
+            "a time two minutes from now). Only where create_trigger is not among this chat's "
+            "tools: create_session " + json.dumps(renew, ensure_ascii=False) +
+            ". If it is refused because this chat cannot start any more chats or scheduled "
+            "tasks: " + NESTED + ". The new chat takes the page as it starts; until then this "
+            "one still answers.")
+
+
+def mark_nested(chat: str, now: dt.datetime) -> None:
+    """Keep, in this checkout, that `chat` can start no more chats or scheduled tasks (the
+    platform refused one for nesting): its wakes run big jobs as background agents, and its
+    renewal waits for the brief's run. Never raises."""
+    if not chat:
+        return
+    try:
+        got = seen()
+        marks = got.get("nested") if isinstance(got.get("nested"), dict) else {}
+        marks[chat] = _stamp(now)
+        got["nested"] = marks
+        _save_seen(got)
+    except (OSError, ValueError):
+        pass
+
+
+def nested(chat: str) -> bool:
+    """Did the platform refuse `chat` a new chat or scheduled task for nesting (mark_nested)?"""
+    marks = seen().get("nested")
+    return bool(chat) and isinstance(marks, dict) and chat in marks
 
 
 # What a chat that may not draw the page's screens says, once, and does instead.
@@ -637,12 +705,22 @@ def view_renewal(db: dict, chat: str, now: dt.datetime) -> list[str]:
     and a page update takes none (the release review). Only with the work queue in the dump,
     so a job still running is never handed over; and the chat is this session's own id
     whatever `--chat` says (the brief passes a word, not an id)."""
+    scheduled = chat in SCHEDULED
     chat = this_chat("") or this_chat(chat)
     rec, _ = record(db)
-    if not chat or rec.get("chat") != chat or "work" not in db:
+    if not chat or "work" not in db:
         return []
-    renew = renewal(rec, db, chat, now)
-    return [renew_line(renew)] if renew else []
+    if rec.get("chat") != chat:
+        # The helper could start no fresh one (nested too deep: `app.py nested` said so on
+        # the page's record): the brief's own run, in a chat of its own, starts it.
+        if not (scheduled and rec.get("nested_at") and rec.get("helper")
+                and chat_kind() == "cloud" and not nested(chat)):
+            return []
+        renew = renewal(dict(rec, chat=chat, since=None), db, chat, now, scheduled=True,
+                        for_other=True)
+        return [renew_line(renew, now)] if renew else []
+    renew = renewal(rec, db, chat, now, scheduled=scheduled)
+    return [renew_line(renew, now)] if renew else []
 
 
 def context_tokens() -> int:
@@ -785,7 +863,8 @@ def handover(db: dict) -> str:
     return "\n".join(lines)[:HANDOVER_CHARS]
 
 
-def renewal(rec: dict, db: dict, chat: str, now: dt.datetime) -> dict | None:
+def renewal(rec: dict, db: dict, chat: str, now: dt.datetime, scheduled: bool = False,
+            for_other: bool = False) -> dict | None:
     """The create_session call for a fresh helper, or None. Only a cloud chat on a later day
     (the person's own) than the one it took the page on, or whose history is near the limit
     (RENEW_TOKENS), on the page for RENEW_MIN_S at least, its own hand-over closed (the helper
@@ -793,7 +872,12 @@ def renewal(rec: dict, db: dict, chat: str, now: dt.datetime) -> dict | None:
     the last RENEW_RETRY_S. Work waiting in the queue moves with the page: the new helper
     takes it. Waiting on it kept one helper answering for three days, against a day, while a
     draft sat queued (engine audit, 2026-11-03); a big job runs in a chat of its own,
-    whichever chat claimed it. The prompt carries a short hand-over (`handover`)."""
+    whichever chat claimed it. The prompt carries a short hand-over (`handover`).
+
+    A chat the platform refused a new chat or scheduled task for nesting (`nested`) asks
+    again only on the brief's own run (`scheduled`), once a day, never at every check-in;
+    `for_other`: the brief's run in a chat of its own, starting the fresh helper for a
+    helper that could not (view_renewal), past the gates that judge the helper's own day."""
     import page_db
     if not chat or rec.get("chat") != chat or chat_kind() != "cloud":
         return None
@@ -802,17 +886,20 @@ def renewal(rec: dict, db: dict, chat: str, now: dt.datetime) -> dict | None:
     # brief (the stranger audit, X-4).
     if not rec.get("helper"):
         return None
-    since = _time(rec.get("since"))
-    if since is None or (now - since).total_seconds() < RENEW_MIN_S:
+    if nested(chat) and not scheduled:
         return None
-    try:
-        import tidy
-        if tidy.retiring(rec, now):
-            return None                     # two chats already: never a third
-    except Exception:  # noqa: BLE001  no record of what was put away: the rest decides
-        pass
-    if not new_day(rec, now) and history_tokens() < RENEW_TOKENS:
-        return None
+    if not for_other:
+        since = _time(rec.get("since"))
+        if since is None or (now - since).total_seconds() < RENEW_MIN_S:
+            return None
+        try:
+            import tidy
+            if tidy.retiring(rec, now):
+                return None                     # two chats already: never a third
+        except Exception:  # noqa: BLE001  no record of what was put away: the rest decides
+            pass
+        if not new_day(rec, now) and history_tokens() < RENEW_TOKENS:
+            return None
     work = db.get("work") or {}
     for doc in work.values():
         d = doc["data"]
