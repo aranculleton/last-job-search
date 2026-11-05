@@ -20,6 +20,30 @@ make sense to somebody whose repo just received it.
 
 ## [Unreleased]
 
+## [4.10.1] - 2026-11-05
+
+### Fixed
+
+- **One helper chat, and two only while one hands over to the next.** The tidy-up kept the
+  helper a hand-over had replaced for good whenever the brief's scheduled task still ran in it
+  (the registry named no chat for the brief, so it was never moved), and a "(finishing up)" chat
+  stayed in the list. The brief now moves into the live helper and the old one is put away. The
+  chat you set up in answers the page first and carries the helper's name: once it has handed
+  the page on and you have not used it for an hour, it is put away too. A chat of yours that
+  never had that name is never touched.
+- **The README and the start guide say the pencil and the trash**, as the page does.
+- **The page never says "Connected" for a moment while it is still reconnecting.** A feed that
+  came back and failed again at once turned the header to "Connected" on every retry.
+
+### Changed
+
+- **Every screen is the whole width**, as the Brief is: it narrows only when the side menu shows
+  its names, Claude's work panel is open or the window is smaller.
+- **Icons only is its own section at the top of the side menu**, a row like the others under one
+  rule, as Settings is at the bottom.
+- **A long job title fills its line before it wraps**, in Firefox as well.
+- **The README's first picture is the Brief in light and dark**, the rest in light.
+
 ## [4.10.0] - 2026-11-05
 
 ### Added

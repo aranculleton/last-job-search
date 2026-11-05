@@ -170,10 +170,9 @@ bdi { unicode-bidi: isolate; }
   /* A screen's column sits in the middle of the space between the menu and Claude's work,
      never hard against the menu with a wide gap on its other side. */
   .main > .sec { margin-inline: auto; width: 100%; }
-  /* The foot keeps to the screen's column, its left edge under the cards': it started left of
-     them on Contacts and Jobs (the review, 2026-11-05). The Brief's column is the whole width. */
-  .foot { margin-inline: auto; width: 100%; max-width: clamp(760px, 62vw, 1240px); }
-  .shell:has(.main > .sec.brief-page) .foot, .shell:has(.main.split) .foot { max-width: none; margin-inline: 0; }
+  /* The foot keeps to the screen's column, its left edge under the cards' (the review,
+     2026-11-05): every column is the whole width now, so the foot is too. */
+  .foot { width: 100%; max-width: none; margin-inline: 0; }
   .main.split { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 32px; }
   .main.split .col { min-width: 0; }
 }
@@ -192,14 +191,15 @@ bdi { unicode-bidi: isolate; }
 /* Settings last, under the one rule: 12px above the rule and 12px below it (the menu's own
    gap is 20px), nothing after it (the maintainer, 2026-11-05: "why's the spacing here weird"). */
 .side .side-foot { margin-top: -8px; padding-top: 12px; border-top: 1px solid var(--line); }
-/* Fold the menu to its icons: an icon beside the page's title, only where the menu is. */
-.side-toggle.top-fold { display: none; }
+/* Icons only: its own section at the menu's top, a row like the others, under one rule with
+   the same 12px either side as Settings' (the maintainer, 2026-11-05). */
+.side .side-head { margin-bottom: -8px; padding-bottom: 12px; border-bottom: 1px solid var(--line); }
+.side-head .side-toggle { width: 100%; color: var(--ink); font-size: inherit; font-weight: 600; }
 
 .side-toggle { display: flex; align-items: center; gap: 12px; min-height: var(--target); padding: 8px 12px; border: 0; border-radius: var(--r-sm); background: none; color: var(--muted); font: inherit; font-size: var(--t-sm); cursor: pointer; text-align: left; }
 @media (hover: hover) { .side-toggle:hover { background: var(--raised); color: var(--ink); } }
 .side-toggle:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }
 @media (min-width: 760px) {
-  .side-toggle.top-fold { display: inline-flex; flex: none; justify-content: center; min-height: 36px; padding: 8px; margin-left: 4px; }
   .nav-mini .shell { grid-template-columns: 56px minmax(0, 1fr); column-gap: 24px; }
   .nav-mini .side-list a, .nav-mini .side-toggle { justify-content: center; padding-inline: 8px; }
   .nav-mini .side .side-label { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
@@ -209,10 +209,11 @@ bdi { unicode-bidi: isolate; }
 @media (min-width: 1280px) { .nav-mini .shell { grid-template-columns: 56px minmax(0, 1fr) 360px; } }
 
 /* ------------------------------------------------------------------ sections */
-.sec { display: grid; grid-template-columns: minmax(0, 1fr); gap: 20px; max-width: 760px; }
-/* A screen's column grows with a wide window rather than sitting narrow in the middle
-   (2026-10-30); card text keeps its own measure. */
-@media (min-width: 1280px) { .sec { max-width: clamp(760px, 62vw, 1240px); } }
+/* Every screen takes the whole width between the menu and Claude's work, as the Brief does: it
+   narrows only when the menu shows its names or the work panel is open (the maintainer,
+   2026-11-05: "can we have all the pages be full width like the brief"). Card text keeps its
+   own measure. */
+.sec { display: grid; grid-template-columns: minmax(0, 1fr); gap: 20px; max-width: none; }
 .sec-head { display: flex; flex-wrap: wrap; align-items: flex-end; justify-content: space-between; gap: 12px; padding-block: 8px 0; }
 
 .sec-head h2 { font-size: var(--t-xl); font-weight: 600; letter-spacing: -0.01em; outline: none; }
@@ -442,7 +443,9 @@ details.more.split[open] { flex-basis: auto; }
    drop below the title instead of pushing the card past the screen's edge. */
 .card.job .job-top { justify-content: flex-start; flex-wrap: wrap; align-items: baseline; }
 .card.job .job-top h3 { flex: 1 1 0; min-width: 8ch; overflow-wrap: break-word; }
-.card.job .job-top h3, .card.app .job-top h3, .card.app-record .job-top h3 { text-wrap: pretty; }
+/* A long title fills its line before it wraps: "pretty" evens out a two-line title in Chromium,
+   and Firefox, which has no "pretty", fell back to the headings' "balance" (0.67 of the line). */
+.card.job .job-top h3, .card.app .job-top h3, .card.app-record .job-top h3 { text-wrap: wrap; }
 /* The bin reaches above and below the top line without making it taller, so a card with a
    state pill keeps its facts as close under the title as one without. */
 @media (min-width: 760px) { :is(.card.job, .card.app, .card.app-record) .top-end .icon-only { margin-block: -8px; } }
@@ -1464,7 +1467,6 @@ body.has-fab .shell { padding-bottom: calc(var(--tabs-h) + env(safe-area-inset-b
   .shell.no-rail { grid-template-areas: "top top top" "side main main" "side foot foot"; }
   .shell.no-rail .rail { display: none; }
 }
-.sec.brief-page { max-width: none; }
 .brief-head { display: flex; align-items: flex-end; justify-content: space-between; gap: 12px 16px; flex-wrap: wrap; }
 .brief-hello .screen-title { font-size: 1.75rem; line-height: 1.2; letter-spacing: -0.01em; outline: none; }
 .brief-hello .sum-small { margin: 4px 0 0; }

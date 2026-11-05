@@ -31,7 +31,7 @@ TOASTS = "[...document.querySelectorAll('[data-toast]')].map((t) => t.textConten
 
 
 def test_the_side_menu_has_coming_up_with_the_places_and_settings_alone_at_its_foot(run, tmp_path):
-    side = ("(() => ({main: [...document.querySelectorAll('#side .side-list:not(.side-foot) .side-label')].map((e) => e.textContent), "
+    side = ("(() => ({main: [...document.querySelectorAll('#side .side-main .side-label')].map((e) => e.textContent), "
             "foot: [...document.querySelectorAll('#side .side-foot .side-label')].map((e) => e.textContent)}))()")
     tabs = "[...document.querySelectorAll('#tabs .tab-label')].map((e) => e.textContent)"
     wide = _go(run, tmp_path, [{"hash": "todo", "eval": side}], WIDE, clock=T)["after"][0]["eval"]

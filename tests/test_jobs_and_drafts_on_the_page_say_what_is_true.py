@@ -212,11 +212,18 @@ def test_a_long_title_fills_its_line_before_it_wraps(run, tmp_path):
     long = "Analyst/Consultant/Senior Consultant, Credit Risk and Data Analytics, Financial Engineering & Modelling"
     _row(m, "r12-4")["title"] = long
     next(a for a in m["ready"] if a["id"] == "app-ellerwick-insight")["role"] = long
-    got = _go(run, tmp_path, [{"hash": "jobs", "eval": """(() => { const h = document.querySelector('[data-item="app-ellerwick-insight"] h3');
+    line = """(() => { const h = document.querySelector('[data-item="app-ellerwick-insight"] h3');
       const r = document.createRange(); r.selectNodeContents(h); const rects = [...r.getClientRects()].filter((b) => b.width > 0);
       const top = Math.min(...rects.map((b) => b.top)); const first = rects.filter((b) => Math.abs(b.top - top) < 4);
-      return (Math.max(...first.map((b) => b.right)) - Math.min(...first.map((b) => b.left))) / h.clientWidth; })()"""}], WIDE, model=m, clock=T)
-    assert got["after"][0]["eval"] > 0.75, got["after"][0]["eval"]
+      return [new Set(rects.map((b) => Math.round(b.top / 4))).size,
+              (Math.max(...first.map((b) => b.right)) - Math.min(...first.map((b) => b.left))) / h.clientWidth]; })()"""
+    # Every screen is the whole width (4.10.1), so on a wide one the title fits on one line; a
+    # narrower window wraps it, and there it fills its first line before it wraps.
+    for vp, wraps in ((WIDE, False), ({"width": 900, "height": 900}, True)):
+        got = _go(run, tmp_path, [{"hash": "jobs", "eval": line}], vp, model=m, clock=T)
+        lines, filled = got["after"][0]["eval"]
+        assert (lines > 1) == wraps, (vp, lines)
+        assert lines == 1 or filled > 0.75, (vp, filled)
 
 
 def test_a_closed_posting_offers_only_setting_it_aside(run, tmp_path):
