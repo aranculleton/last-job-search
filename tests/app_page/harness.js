@@ -1679,14 +1679,17 @@ S.wake = async (a) => {
 // Reading LinkedIn in the desktop app: the page checks by itself when it opens there, and
 // says how to sign in when signed out (2026-10-29).
 S.reading = async (a) => {
-  const o = await open({html: a.html, hash: a.hash || "todo", seed: a.seed || {}, model: a.model, look: a.look, noStorage: !!a.noStorage, clock: a.clock, fake: {canSend: a.canSend || "no_session", mcp: {browser: {inApp: a.inApp !== false, signedIn: !!a.signedIn, askFirst: !!a.askFirst, signInLater: !!a.signInLater, signOutAfter: a.signOutAfter || 0, check: a.check || 0, declined: !!a.declined, slowSections: !!a.slowSections}}}});
+  const o = await open({html: a.html, hash: a.hash || "todo", seed: a.seed || {}, model: a.model, look: a.look, noStorage: !!a.noStorage, clock: a.clock, fake: {canSend: a.canSend || "no_session", mcp: {browser: {inApp: a.inApp !== false, signedIn: !!a.signedIn, askFirst: !!a.askFirst, signInLater: !!a.signInLater, signOutAfter: a.signOutAfter || 0, check: a.check || 0, declined: !!a.declined, slowSections: !!a.slowSections, closeOnProfile: !!a.closeOnProfile}}}});
   await o.page.waitForTimeout(2500);
   // Until the page has finished reading (each page that draws late adds a moment).
   await o.page.waitForFunction(() => { const s = window.LJS.state().reading; return !s.busy && s.panel !== "run" && s.panel !== "check-run"; }, null, {timeout: 30000}).catch(() => {});
   await turn(o.page, 8);
   const r = {browser: (await calls(o.page)).filter((c) => c.cap === "mcp" && c.server === "host:claude_browser").map((c) => ({tool: c.tool, input: c.input})), errors: o.errors};
   if (a.tap) {
-    // The person's own tap on the page (a button by its data-k), before anything else.
+    // The person's own tap on the page (a button by its data-k), before anything else; To do's
+    // fold opened first, as the person would to reach it.
+    await o.page.$$eval("details.band-more:not([open])", (ds) => ds.forEach((d) => { d.open = true; }));
+    await turn(o.page, 2);
     await o.page.click('[data-k="' + a.tap + '"]');
     await o.page.waitForTimeout(800);
     await turn(o.page, 8);

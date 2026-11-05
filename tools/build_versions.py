@@ -776,8 +776,9 @@ METHODS: dict[str, dict] = {
             (43, "2026-11-05", True, "what a late capability changes is drawn once it settles"),
             (44, "2026-11-05", False, "Icons only is its own section at the top of the side menu, a row like the others under one rule; every screen is the whole width; a feed back after failing counts as up only once it has stayed up a second, so the header never says Connected for a moment while it reconnects"),
             (45, "2026-11-05", True, "a card's More stays beside its other buttons when opened and opens under the row, on every card; its buttons are one row that wraps only when it must; and Something else, last under every live card's More, opens the Chat about that card, what you send from it going to Claude as work about that card"),
+            (46, "2026-11-05", True, "a LinkedIn read the page started by itself and that did not finish (Claude's browser closed, the page left) holds automatic reading until the next day, kept where every opening sees it, so a profile no longer opens in Claude's browser at each return to the page; a browser step that never answers gives up after a minute and a half"),
         ),
-        "fingerprint": "9c40396c2de0d1d3",
+        "fingerprint": "4012002242d26dea",
     },
     "upskill": {
         "by": "upgrade", "priority": 4, "applies": "upskill_plans", "time": "~10 min",

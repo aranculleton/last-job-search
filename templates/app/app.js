@@ -10463,6 +10463,7 @@
   }
   // `own`: the kept tab or nothing. A call on a tab that was closed fails rather than going to
   // whichever tab the person is on.
+  const BROWSER_CALL_MS = 90000;
   async function browserCall(cap, tool, want, own) {
     keptTab();
     S.reading.schemas = S.reading.schemas || {};
@@ -10487,8 +10488,12 @@
     // The first call waits on the app's own "allow" prompt and comes back retryable while it is
     // open ("connector access isn't confirmed for this artifact right now", seen live
     // 2026-10-29): one more try after the wait it names, then the error stands.
+    // A call that never comes back (Claude's browser closed under it) ends the run instead of
+    // turning "0 of 4" for good.
+    const call = (inp) => Promise.race([cap.callTool(BROWSER, tool, inp),
+      new Promise((ok, no) => setTimeout(() => no(Object.assign(new Error("Claude's browser did not answer"), {code: "timeout"})), BROWSER_CALL_MS))]);
     let got;
-    try { got = await cap.callTool(BROWSER, tool, input); }
+    try { got = await call(input); }
     catch (e) {
       const tabKey = Object.keys(input).find((k) => /tab/i.test(k));
       if (tabKey && !(e && e.retryable) && txt(obj(e).code) === "tool_error") {
@@ -10496,11 +10501,11 @@
         rememberTab(undefined);
         if (own) throw e;
         delete input[tabKey];
-        got = await cap.callTool(BROWSER, tool, input);
+        got = await call(input);
       } else {
         if (!(e && e.retryable)) throw e;
         await new Promise((ok) => setTimeout(ok, Math.min(Number(e.retryAfterMs) || 2000, 15000)));
-        got = await cap.callTool(BROWSER, tool, input);
+        got = await call(input);
       }
     }
     if (tabOf(got) !== undefined) rememberTab(tabOf(got));
@@ -10605,9 +10610,20 @@
         await openReading(true, true);
       }
       else if (readingOkHere()) { S.reading.ok = true; scheduleRender(); }
-      else await openReading(true);
+      else {
+        // Never LinkedIn loaded by itself again today after a look or a read that was cut short
+        // (Claude's browser closed, the page left): then the kept tab only, as it stands.
+        const rec = await autoReadsToday();
+        if (rec.running || rec.cut) await openReading(true, true);
+        else {
+          keepAutoReads(Object.assign({}, rec, {running: true, at: iso()}));
+          await openReading(true);
+          const failed = S.reading.ok !== true && S.reading.panel !== "sign_in" && S.reading.panel !== "check";
+          keepAutoReads(Object.assign({}, obj(S.autoReads), {running: false, cut: !!obj(S.autoReads).cut || failed}));
+        }
+      }
     }
-    maybeAutoRead();
+    await maybeAutoRead();
   }
   function waitingReads() { return arr(readingInfo().queue).filter((q) => !effective(txt(q.id), ["reading.done"])); }
   // Someone queued whose read was tried today, from any opening (their reading.done in the
@@ -10619,10 +10635,37 @@
   }
   // Each person queued is tried once a day by itself: a read refused (signed out, a page that
   // did not load) waits for tomorrow, for signing in, or for the person's own tap, never a loop.
-  function maybeAutoRead() {
+  async function maybeAutoRead() {
     if (!S.owner || S.reading.busy || S.reading.here !== true || readingState() !== "ready") return;
+    const rec = await autoReadsToday();
+    if (rec.running || rec.cut || S.reading.busy) return;
     const fresh = waitingReads().filter((q) => !S.reading.tried.has(txt(q.id)) && !readToday(q));
-    if (fresh.length) readProfiles(fresh, "reading").catch(() => {});
+    if (fresh.length) readProfiles(fresh, "reading", true).catch(() => {});
+  }
+  // What the page started by itself today, kept in the store so every opening knows (the
+  // Claude app may hand a page back with nothing in its own storage), and on this device too.
+  // The maintainer, 2026-11-05, over several versions: back on the pinned page, "Reading
+  // someone's profile, 0 of 4" and their LinkedIn opened in Claude's browser, every time.
+  // Closing Claude's browser, or leaving the page, stopped the read before it finished; only a
+  // finished read was remembered, so each opening started the same one again. Now a run that
+  // did not finish (`running` still set from an opening that went, or `cut`) holds everything
+  // automatic until tomorrow; Read them still reads at once. A read LinkedIn stopped (signed out,
+  // its check) is not cut short: its own panel says what to do, and it reads again after.
+  const AUTO_READS = "meta/reads";
+  const AUTO_READS_LOCAL = "ljs:auto-reads";
+  async function autoReadsToday() {
+    let rec = S.autoReads;
+    const db = S.caps.db;
+    if (!rec && db) { try { const d = await within(db.doc(AUTO_READS).get(), CAP_WAIT_MS); if (d && d !== "timeout" && d.exists) rec = d.data(); } catch (e) { /* none kept */ } }
+    if (!obj(rec).day) { try { rec = JSON.parse(sget("local", AUTO_READS_LOCAL) || "null"); } catch (e) { rec = null; } }
+    rec = obj(rec);
+    return txt(rec.day) === todayLocal() ? rec : {day: todayLocal(), running: false, cut: false};
+  }
+  function keepAutoReads(rec) {
+    S.autoReads = rec;
+    sset("local", AUTO_READS_LOCAL, JSON.stringify(rec));
+    const db = S.caps.db;
+    if (db) { try { db.doc(AUTO_READS).set(rec).catch(() => {}); } catch (e) { /* this device keeps it */ } }
   }
   // What LinkedIn showed, judged the way the networking code judges it (tools/network/reading.py
   // page_kind, the same words): one of its own security checks, its sign-in or join page, or
@@ -10678,7 +10721,7 @@
     recheckAt = now();
     await openReading(true, !(S.readingOpened || S.reading.sawOut));
     S.reading.tried.clear();
-    maybeAutoRead();
+    await maybeAutoRead();
   }
   function macKeys() { return /Mac|iPhone|iPad/i.test(navigator.platform || navigator.userAgent || ""); }
   // Profiles read and saved that Claude has not taken in yet: one tap wakes it once for all
@@ -10880,7 +10923,9 @@
   }
   // Read the profiles the engine asked for (linkedin.reading.queue) with the panel showing
   // which, "2 of 5". When it is done, one tap has Claude write every note from them.
-  async function readProfiles(queue, key) {
+  // `auto`: started by the page itself, kept in AUTO_READS (above); the person's own Read them
+  // is never held.
+  async function readProfiles(queue, key, auto) {
     const cap = await browserCap();
     // Never a tap that does nothing: where Claude has no browser here, the card says where it does.
     if (!cap || !(await inDesktop())) { S.reading.panel = "none"; S.reading.line = "This works in the Claude app on your computer, where Claude has a browser of its own."; scheduleRender(); return; }
@@ -10892,6 +10937,8 @@
     r.done = 0;
     r.read = 0;
     scheduleRender();
+    let cut = false;
+    if (auto) keepAutoReads(Object.assign({}, await autoReadsToday(), {running: true, at: iso()}));
     try {
       for (const q of queue) {
         r.tried.add(txt(q.id));
@@ -10901,13 +10948,16 @@
         if (!url) { r.done += 1; continue; }
         let got;
         try { got = await readOne(cap, url); }
-        catch (e) { readingRefused(e); break; }
+        catch (e) { readingRefused(e); cut = true; break; }
         if (got.kind !== "profile") { readingStopped(got.kind); break; }
         act([{item: txt(q.id), action: "reading.done", value: {text: got.text, mode: txt(q.mode) || "browser", url, pages: got.pages, tried: got.tried}, rev: txt(q.rev) || null}], "Read " + txt(q.first_name) + "'s profile");
         r.read += 1;
         r.done += 1;
       }
-    } finally { r.busy = false; }
+    } finally {
+      r.busy = false;
+      if (auto) keepAutoReads(Object.assign({}, obj(S.autoReads), {running: false, cut: !!obj(S.autoReads).cut || cut}));
+    }
     if (r.panel === "run") r.panel = r.read ? "done" : null;
     S.notes.set(key || "reading", {text: "Read " + plural(r.read, "profile", "profiles") + ".", tone: "ok", until: now() + 60000});
     scheduleRender();
