@@ -8,8 +8,8 @@ private page. It never sends anything for you.
 [![CI](https://github.com/aranculleton/last-job-search/actions/workflows/ci.yml/badge.svg)](https://github.com/aranculleton/last-job-search/actions/workflows/ci.yml)
 
 <p align="center">
-  <img src="docs/images/page-brief-light-dark-1689c131.png" width="720"
-       alt="The Brief, its left half in light and its right half in dark: today's most pressing thing, the next three things to do, who is waiting on you, the best new jobs, news with what to do with each item, and your numbers by week">
+  <img src="docs/images/page-brief-light-dark-9b48e246.png" width="720"
+       alt="The Brief, light on one side of a diagonal cut and dark on the other: today's most pressing thing, the next three things to do, who is waiting on you, the best new jobs, news with what to do with each item, and your numbers by week">
   <br>
   <sub><b>The Brief</b>: your day at a glance, in light or dark</sub>
 </p>

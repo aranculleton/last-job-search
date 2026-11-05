@@ -302,7 +302,7 @@ these lenses, and each real finding becomes a test the same way:
    `vX.Y.Z`, the output of `python3 tools/release.py notes` as the notes, **Publish**.
 3a. **When the page's look changed, remake the README's four pictures** from the example
    person, before the release pull request (4.9.0 shipped with 4.8's): `docs/images`
-   `page-brief-light-dark.png` (the Brief, its left half light and its right half dark, the
+   `page-brief-light-dark.png` (the Brief, light above a diagonal cut and dark below it, the
    same moment, 1600x1250), `page-contacts.png` (light, 1600x1000),
    `page-coming-up-phone.png` (780x1688) and `page-demo.gif` (the tour, 1600x1000, under
    700 KB). Take them at scale 2 (the phone at its own, 3), scale them to those sizes, and
