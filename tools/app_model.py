@@ -1447,6 +1447,9 @@ def _jobs(ctx: Ctx, targets: dict) -> dict:
                          "applying again.")
         if r.get("outreach_pending_note"):
             notes.append(_pending_words(_waiting_at(ctx, company)))
+        if r.get("referral_note"):
+            # Kept, never dropped, for a referral in progress here (throttle.employer_stops).
+            notes.append("Someone is referring you here: apply through them, never on your own.")
         jid = f"{rname}-{rank}"
         top, at_target = _pay_top(pay)
         # Counted to today: the posting's own date where the search read one, else its age
@@ -2430,6 +2433,12 @@ def _messages(ctx: Ctx, targets: dict) -> list:
         if surface.held(c, ctx.by_contact.get(cid) or [], live,
                         replying=live == "replied_needs_response",
                         memo=ctx._got.setdefault("held_memo", {})):
+            continue
+        # A draft written before their newest message answers an older one (times offered
+        # that have passed, a request it never saw): never offered, and their message is
+        # owed a reply drafted afresh (2026-11-05).
+        from network import state as _st
+        if _st.draft_predates(cid, ctx.by_contact.get(cid) or []):
             continue
         channel = _channel(c, kind)
         hold = None

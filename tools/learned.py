@@ -91,6 +91,29 @@ AREAS = ("voice", "messages", "questions", "people", "targets", "jobs", "documen
          "search", "interview", "other")
 # "targets" is which employers to pick and pursue; a rule about them went under "messages"
 # for want of it (2026-10-20).
+# Other words for an area, read the same way by `record` and `brief`: "networking" (the word
+# the tips and the skills use for messages to people) was refused by record while brief took
+# it and listed only the "other" rules (2026-11-05).
+AREA_ALIASES = {
+    "networking": "messages", "network": "messages", "outreach": "messages",
+    "message": "messages", "notes": "messages", "replies": "messages", "reply": "messages",
+    "tone": "voice", "writing": "voice", "style": "voice",
+    "document": "documents", "resume": "documents", "resumes": "documents",
+    "cv": "documents", "letter": "documents", "letters": "documents",
+    "question": "questions", "person": "people", "contacts": "people",
+    "target": "targets", "employers": "targets", "companies": "targets",
+    "job": "jobs", "roles": "jobs", "interviews": "interview",
+}
+
+
+def area_of(word) -> str:
+    """The area a word names, an alias read as its area (AREA_ALIASES), or SystemExit with
+    the areas there are. One answer for `record` and `brief`."""
+    w = re.sub(r"[\s-]+", "_", str(word or "").strip().lower())
+    w = AREA_ALIASES.get(w, w)
+    if w not in AREAS:
+        raise SystemExit(f"learned: area {word!r}; one of {', '.join(AREAS)}")
+    return w
 
 
 def _path() -> str | None:
@@ -267,8 +290,7 @@ def record(area: str, said: str, rule: str, applied_to=(), never_say=(),
     clears no reaction waiting in the chat. `length` is how long they asked a kind of
     message to run, as "<kind>[:<reader>]=<words>" ("inmail=170", "inmail:peer=160"): the
     length checks read it (`length()`), never the words of the rule."""
-    if area not in AREAS:
-        raise SystemExit(f"learned: area {area!r}; one of {', '.join(AREAS)}")
+    area = area_of(area)
     if not str(said or "").strip() or not str(rule or "").strip():
         raise SystemExit("learned: record needs what they said and the rule it gives")
     applied_to = [str(a) for a in applied_to if str(a).strip()]
@@ -669,10 +691,31 @@ def _changes(draft: str, sent: str, most: int = 3) -> list[tuple[str, str]]:
     return out[:most]
 
 
+# How alike the words sent and the draft must be (difflib's ratio over their words, 0 to 1)
+# for the difference to be the person's edit. Below it, what went is another message, not
+# the draft changed: a message written apart from an out-of-date draft was read as an edit
+# of it, and a rule was recorded from the difference (2026-11-05). A sentence rewritten in a
+# two-sentence note keeps about 0.6; a different message to the same person, under 0.2.
+EDIT_ALIKE = 0.5
+
+
+def alike(draft: str, sent: str) -> float:
+    """How much of the draft's words, in order, the sent words keep: difflib's ratio."""
+    import difflib
+    a = [w.lower() for w in str(draft or "").split()]
+    b = [w.lower() for w in str(sent or "").split()]
+    if not a or not b:
+        return 0.0
+    return difflib.SequenceMatcher(None, a, b, autojunk=False).ratio()
+
+
 def record_edit(draft: str, sent: str, where: str = "", today: str | None = None) -> dict | None:
     """The person changed a draft before sending it: that edit is a reaction, recorded by
-    itself, with both texts. None when nothing changed beyond spacing."""
+    itself, with both texts. None when nothing changed beyond spacing, and None when what
+    went is plainly not the draft (`alike` under EDIT_ALIKE): another message, not an edit."""
     if " ".join(str(draft or "").split()) == " ".join(str(sent or "").split()):
+        return None
+    if alike(draft, sent) < EDIT_ALIKE:
         return None
     parts = []
     for old, new in _changes(draft, sent):
@@ -1084,6 +1127,7 @@ def brief(area: str | None = None, channel: str | None = None, reader: str | Non
     person approved come first (`approved_examples`), for this channel and reader where
     there are some: rules drawn from them were followed, and the messages themselves were
     never put in front of the drafter (2026-10-21)."""
+    area = area_of(area) if area else None
     over = superseded()
     rows = [r for r in entries(area) if _key(r) not in over]
     if area is not None:
@@ -2345,8 +2389,9 @@ def main(argv=None) -> int:
                   f"\"{' '.join(str(x.get('text') or '').split())[:100]}\" (said: \"{x.get('said')}\")")
     elif a.cmd == "list":
         over = superseded()
+        want = area_of(a.area) if a.area else ""
         for i, row in enumerate(load(), 1):
-            if a.area and row.get("area") != a.area:
+            if want and row.get("area") != want:
                 continue
             later = over.get(_key(row))
             status = (f"overruled by {later.get('date')}" if later

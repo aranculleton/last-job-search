@@ -578,7 +578,7 @@ def already_ruled_out(seen_path: str, keep_ruled_out: bool = False,
     """
     try:
         import throttle
-        from throttle import ruled_out, ruled_pair
+        from throttle import ruled_out, ruled_pair, employer_stops
         from throttle import load_do_not_target, referral_holds
         from company_key import key as company_key
         from lookup_score import norm
@@ -590,11 +590,11 @@ def already_ruled_out(seen_path: str, keep_ruled_out: bool = False,
     elif entries is None:
         entries = _seen_entries(seen_path)
     urls, pairs = _ruled_on(ruled_out, entries, today) if entries else ({}, {})
-    # The employer-level holds the throttle applies live: a referral in flight,
-    # and an employer recorded as having no relevant presence until its review
-    # date. ruled_out() no longer reads their old copies in seen_jobs.json,
-    # because those outlived the hold; checked live here, they still cost
-    # hydrate nothing, and they lift the day the hold does.
+    # The employer-level state the throttle reads live: a referral in flight, and an
+    # employer recorded as having no relevant presence until its review date. What drops
+    # a posting for its employer is the throttle's own rule (`throttle.employer_stops`),
+    # so the two never disagree: a referral in progress keeps its employer's roles. Old
+    # copies in seen_jobs.json are not read (ruled_out), because they outlived the hold.
     try:
         if contacts or threads:
             book = contacts or throttle.CONTACTS
@@ -606,12 +606,12 @@ def already_ruled_out(seen_path: str, keep_ruled_out: bool = False,
         day = (today or _dt.date.today()).isoformat()
         # The paths only when they were given, so a caller (or a test) that stands in its
         # own reader with the file already bound still reads that one.
-        live = {**holds, **(load_do_not_target(do_not_target, today=day) if do_not_target
-                            else load_do_not_target(today=day))}
+        blocked = (load_do_not_target(do_not_target, today=day) if do_not_target
+                   else load_do_not_target(today=day))
     except csv_store.Conflicted:
         raise                            # refused, never read as contacts: say which file
     except Exception:                    # no contact book or do_not_target yet
-        live = {}
+        holds, blocked = {}, {}
     # And the candidate's bar where the employer's name alone decides it (an
     # excluded sector, an employer declined by name, a named public agency). The
     # throttle applied it after hydrate, a fetch per posting per round for a
@@ -624,8 +624,9 @@ def already_ruled_out(seen_path: str, keep_ruled_out: bool = False,
 
     def check(job) -> str:
         k = company_key(job.get("company"))
-        if k and k in live:
-            return live[k]
+        stop = employer_stops(k, blocked, holds)
+        if stop:
+            return stop
         why = excluded_by_name(job.get("company"))
         if why:
             return f"candidate's bar: {why}"

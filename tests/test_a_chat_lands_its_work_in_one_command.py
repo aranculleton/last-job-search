@@ -107,6 +107,25 @@ def test_the_work_is_saved_merged_with_master_checked_and_pushed(copy, capsys):
     assert git(origin, "rev-parse", "master").stdout == git(other, "rev-parse", "HEAD").stdout
 
 
+def test_with_no_github_tools_the_way_on_is_plain_rest_calls_a_cloud_chat_allows(copy, capsys):
+    """`gh pr create --fill` and `gh pr merge` are refused in a cloud chat; only GitHub's
+    REST calls through `gh api` went through (2026-11-05). The fallback names those, with
+    the real owner and repo from origin."""
+    _origin, chat, _other = copy
+    write(chat, "profile/notes.md", "second\n")
+    code, out = _run(chat, "--message", "Notes: second", capsys=capsys)
+    assert code == 0, out
+    owner, repo = land._slug(str(chat))
+    assert "gh pr create" not in out and "gh pr merge" not in out, out
+    assert (f"gh api -X POST repos/{owner}/{repo}/pulls -f title='Notes: second' "
+            "-f head=claude/chat-1 -f base=master -f body=") in out, out
+    assert f"gh api -X PUT repos/{owner}/{repo}/pulls/<the number it gave>/merge " \
+           "-f merge_method=merge" in out
+    assert land.rest_create("someone", "their-search", "claude/x", "A title", "b") == (
+        "gh api -X POST repos/someone/their-search/pulls -f title='A title' -f head=claude/x "
+        "-f base=master -f body=b")
+
+
 def test_the_pull_request_names_what_the_check_skipped(copy, capsys):
     _origin, chat, _other = copy
     write(chat, "profile/notes.md", "second\n")

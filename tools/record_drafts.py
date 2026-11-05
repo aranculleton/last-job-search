@@ -177,6 +177,7 @@ def _row_for(draft: dict, meta: dict, today: str, round_name: str,
         # where the next reader looks for why it was made.
         (meta.get("throttle_override_note") or ""),
         (meta.get("warm_route_note") or ""),
+        (meta.get("referral_note") or ""),
         (meta.get("outreach_pending_note") or ""),
         (f"Req {str(draft['req_id']).strip()}." if str(draft.get("req_id") or "").strip() else ""),
         # The link as checked when it was staged (tools/apply_link.py): the employer's own

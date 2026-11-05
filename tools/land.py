@@ -1145,9 +1145,23 @@ def _land(root: str, message: str, check, sleep) -> int:
           'unsubscribe_pr_activity for it where this chat has that tool' % (owner, repo))
     print("  3. python3 tools/land.py --after-merge")
     print("  " + MERGE_REFUSED)
-    print("  No GitHub tools in this chat (a computer of your own): gh pr create --base master "
-          "--fill, then gh pr merge <number> --merge, each on its own line, then 3.")
+    # Plain REST calls: `gh pr create` and `gh pr merge` are refused in a cloud chat, and
+    # these went through (2026-11-05).
+    print("  No GitHub tools in this chat: each on its own line, then 3:")
+    print("    " + rest_create(owner, repo, there, title, body))
+    print("    " + rest_merge(owner, repo))
     return 0
+
+
+def rest_create(owner: str, repo: str, head: str, title: str, body: str) -> str:
+    """The pull request opened by GitHub's REST interface through gh, with the real owner and
+    repo: the one form a cloud chat lets through when it has no GitHub tools."""
+    return "gh api -X POST repos/%s/%s/pulls -f title=%s -f head=%s -f base=master -f body=%s" % (
+        owner, repo, shlex.quote(title), shlex.quote(head), shlex.quote(body))
+
+
+def rest_merge(owner: str, repo: str, number: str = "<the number it gave>") -> str:
+    return "gh api -X PUT repos/%s/%s/pulls/%s/merge -f merge_method=merge" % (owner, repo, number)
 
 
 # Two chats landing at once: each merges master here, with the row-by-row driver, but

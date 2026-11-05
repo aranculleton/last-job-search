@@ -374,8 +374,9 @@ METHODS: dict[str, dict] = {
             (73, "2026-11-05", False, "a computer with no LaTeX leaves unsent applications as they are and tries again later, and a compile that fails puts the earlier PDF back; a skill whose reworded bullet the model audit removed or refused stays on the skills line with a note, never demanded again; a yes reaches every unsent resume waiting on it, whatever day it was drafted; the run book's round needs no folder named; documents render and are checked as before, so nothing made before needs making again"),
             (74, "2026-11-05", False, "a form's own questions (why us, why this role, a time you used a tool) are answered from your profile and the posting and kept with the application in its screening_answers.md (tools/form_answers.py), an example you asked for marked as a draft for you to confirm; the resume and the letter are never changed by it"),
             (75, "2026-11-05", False, "the page's colour pairs (templates/app/palettes.py) hold a soft button's edge in a card's suggestion box; no document is made differently"),
+            (76, "2026-11-05", False, "a role kept for a referral in progress carries its note (referral_note) into the picks and the tracker row; documents are made as before"),
         ),
-        "fingerprint": "45cd506560bcfbbb",
+        "fingerprint": "3c207c6a51a67350",
     },
     "interview": {
         "by": "upgrade", "priority": 2, "applies": "live_interviews", "time": "~15 min",
@@ -557,8 +558,9 @@ METHODS: dict[str, dict] = {
             (75, "2026-11-05", False, "the app skill and /reply say a draft is shown on the person's card in Contacts, and followup_drafts prints where; nothing made before changes"),
             (76, "2026-11-05", False, "a message in LinkedIn's download is matched to one already logged whatever its quote marks or dashes (curly or straight), so it is not logged again; copies an older import wrote are taken out by the export-repeats profile upgrade, statuses set again from the log"),
             (77, "2026-11-05", False, "a message the download shows was sent earlier in a day goes before a reply already logged that day, and the tidy puts a day an older import misordered in the order sent, so nobody reads as owed a reply they answered; a check that passed is said as the documents and their length alone"),
+            (78, "2026-11-05", False, "a contact closed or cleared by hand parks their draft as the page's stop does; a draft written before their newest message is set aside and never offered; a thank-you to a kind close sets no follow-up; a pasted conversation logs only their messages; the person's own address never reads as a request; a message plainly not the draft teaches no edit"),
         ),
-        "fingerprint": "02c79cc7bb4da71c",
+        "fingerprint": "02c3e5232631e5cb",
     },
     "network-notes": {
         "by": "network", "priority": 2, "applies": "queued_notes", "time": "~10 min",
@@ -614,8 +616,9 @@ METHODS: dict[str, dict] = {
             (38, "2026-11-03", False, "the person's own time zone and a place's are read the one way the whole app reads them (tools/person.py), from their own words, never from when their brief is scheduled; notes are written as before"),
             (39, "2026-11-05", False, "a profile read queued before midnight and made after it is kept, not refused as off today's list; notes are written as before"),
             (40, "2026-11-05", False, "reading.py linkedin-check says whether today's look at LinkedIn's sign-in is passed, signed-out or due, on the person's own day, and signin --page opens nothing once the day has passed; notes are written as before"),
+            (41, "2026-11-05", False, "a note written keeps beside it what of the person's messages it answers, so one they send later sets it aside; notes are written as before"),
         ),
-        "fingerprint": "e9e54bba53bd5078",
+        "fingerprint": "608f450fa1bb3fa6",
     },
     "screening": {
         "by": "round", "priority": 2,
@@ -669,8 +672,9 @@ METHODS: dict[str, dict] = {
             (37, "2026-11-03", False, "a posting that only names the person's skills no longer scores 100: above 90 a point counts half and the posting alone stops at 98, so the top of a ranking tells rows apart; a live contact or an earlier interview still reaches 100; scores of 90 or under are unchanged; a years bar stated per degree is read for the degree held; an employer that clears none of the bar waits on the person before drafting; the pay answer on the form moves with the posting's own range; the search window is any whole number of days the person sets, not only 7, 14 or 30; a role applied to that went quiet is never surfaced again; a public body counts as paid only when the bottom of its stated range reaches the target, and gets no lift from an employer tier; a posting the person cleared stays cleared under every copy of it; a reply recorded as parked or no way in is not a warm route; a skill held under another name is never a near match; a bar of pay, prestige or signal applies only where the person's own profile states one (an employer tier or a frontier list), never because a chat judged an employer, and with none no employer is judged or ruled out for it; every language the person does not hold is a cut, in English or the posting's own words, and a title in one; pay, years, terms and degrees are read in German, French, Spanish, Portuguese, Italian, Dutch, Polish and Swedish; pay by the month is read as twelve months, and a pay ruling made on a monthly band is released by itself"),
             (38, "2026-11-04", False, "the staffing-agency test is one named reading of the person's agency lists; screening is as before"),
             (39, "2026-11-05", False, "a job title written in two languages (\"Data Analyst // Analyste de données\") is in the one you work in: the title gate and the screen no longer cut it as the other, and whether that language is required is read from the posting; a ruling made on such a title is released by itself, and the title gate's drops are decided again on every round, so nothing needs redoing; a kind of employer you ruled out can be turned back on from Your rules (search.py BAR_EXCLUDED_OFF)"),
+            (40, "2026-11-05", False, "a referral in progress keeps its employer's roles in the filter before scoring as in the throttle, one rule for both (throttle.employer_stops), each carrying a note never to apply cold; a skip for it was never kept, so nothing needs redoing"),
         ),
-        "fingerprint": "b74f7499fef0d9d9",
+        "fingerprint": "77d0a5aa9df07e32",
     },
     "routines": {
         "by": "you", "priority": 3, "applies": "routines",

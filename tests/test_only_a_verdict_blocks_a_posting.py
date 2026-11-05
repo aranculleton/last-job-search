@@ -5,7 +5,8 @@ It treated as permanent every skip the throttle writes back, though the throttle
 derives each of them afresh every run from live state:
 
 - a referral hold kept blocking every posting it had touched after the referral had
-  converted or lapsed (in one repo, 59 postings at one employer for a month);
+  converted or lapsed (in one repo, 59 postings at one employer for a month); a live one
+  now keeps the posting, with its note, everywhere;
 - a do-not-target entry stopped suppressing at its review date, and its skips did not;
 - older rounds' queue decisions ("not scored this round", "never read by a model")
   blocked postings nobody had judged;
@@ -48,23 +49,26 @@ def test_a_lapsed_referral_hold_no_longer_blocks():
     assert not _blocks(_seen(reason))
 
 
-def test_a_live_referral_hold_still_skips_through_the_throttle():
+def test_a_live_referral_hold_keeps_the_posting_with_its_note_through_the_throttle():
+    """A referral in progress keeps the role the referral can carry (throttle.employer_stops;
+    tests/test_a_referral_in_progress_keeps_the_job_everywhere.py), said never to go cold."""
     row = {"title": "Planner", "company": "Acme", "url": URL % 1, "priority": 80}
     hold = {"acme": "referral in progress: Sam Reed has put the candidate's name forward here."}
     kept, skipped = throttle.throttle([row], {}, {}, {}, "2026-10-15", holds=hold)
-    assert not kept and skipped[0]["skip_reason"].startswith("referral in progress")
+    assert not skipped and kept[0]["referral_note"].startswith("referral in progress")
 
 
-def test_the_prefilter_applies_a_live_hold_before_hydrate(tmp_path, monkeypatch):
+def test_the_prefilter_reads_the_live_hold_by_the_throttles_rule(tmp_path, monkeypatch):
     seen = tmp_path / "seen.json"
     seen.write_text('{"seen": {}}', encoding="utf-8")
     monkeypatch.setattr(throttle, "referral_holds",
                         lambda *a, **k: {"acme": "referral in progress: Sam Reed"})
-    monkeypatch.setattr(throttle, "load_do_not_target", lambda *a, **k: {})
+    monkeypatch.setattr(throttle, "load_do_not_target",
+                        lambda *a, **k: {"other": "do not target: a sales office only"})
     check = prefilter.already_ruled_out(str(seen))
-    assert check({"company": "Acme Ltd", "title": "Planner", "url": URL % 9}).startswith(
-        "referral in progress")
-    assert check({"company": "Other Co", "title": "Planner", "url": URL % 9}) == ""
+    assert check({"company": "Acme Ltd", "title": "Planner", "url": URL % 9}) == ""
+    assert check({"company": "Other Co", "title": "Planner", "url": URL % 9}).startswith(
+        "do not target")
 
 
 def test_an_expired_do_not_target_skip_no_longer_blocks():

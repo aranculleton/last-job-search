@@ -2757,6 +2757,24 @@ def followed_up(contacts, threads, contact_id, today, text="", date=None, channe
         contact["next_action"] = then
     if done or answered or str(contact.get("status") or "") in waiting:
         put_next(contact, threads_for(threads, cid), due=due)
+    # A thank-you to a message that closed the conversation kindly ("I'll keep you in mind")
+    # is the end of it for now: no follow-up is set, and nothing is chased unless they write
+    # (2026-11-05: "Follow up if no reply" was set, due the same day). A date still ahead
+    # (a call booked) is left as it is.
+    close = ""
+    if scenario == "reply" and not resume and they_last and not (old_due and old_due > day.isoformat()):
+        try:
+            import reply as _reply
+            close = _reply.closing_exchange(said[-1].get("full_text") or said[-1].get("summary"),
+                                            body, _scenario(said[-1]))
+        except ImportError:
+            close = ""
+    if close:
+        why = (f"they said \"{close}\"" if close != "their no" else "they said no")
+        put_next(contact, threads_for(threads, cid),
+                 f"Nothing owed ({day.isoformat()}): {why} and you thanked them. No follow-up "
+                 "unless they write.", "")
+        note = "; ".join(x for x in (note, "a kind close: no follow-up is set") if x)
     _drop_draft(cid)
     return {"row": row, "said": note}
 
@@ -2851,6 +2869,11 @@ def received(contacts, threads, contact_id, today, text="", date=None, channel="
     owed_since = str(contact.get("next_action_due") or "").strip()
     if not machine and owed_since and owed_since < day.isoformat():
         put_next(contact, threads_for(threads, cid), due=day.isoformat())
+    # A draft waiting for them was written before this message: it is set aside, never
+    # offered as the reply to it (2026-11-05: a draft answered their older message).
+    if not machine and set_aside_older_draft(cid, threads_for(threads, cid), row):
+        said = "; ".join(x for x in (said, "the draft written before this message is set "
+                                           "aside: draft the reply to it again") if x)
     return {"row": row, "said": said}
 
 
@@ -2905,6 +2928,143 @@ def _cli_received(argv) -> int:
     _interview_times((already_contacted(contacts, contact_id=a.contact_id) or {}).get("company"),
                      contacts, threads, a.today)
     return 0
+
+
+# A drafted note nobody will send, kept beside its folder's draft.md, never deleted: the page
+# lists only draft.md. The page's own stop (app_actions) and `state.py set` park the same way.
+PARKED = "draft.not-needed.md"
+# What the row said when `set` parked the draft, so a set that puts the row back exactly as
+# it was (the page's undo) brings the draft back with it, and a later change does not.
+PARKED_WAS = "draft.not-needed.json"
+# A draft written before their newest message: it answers a message that is no longer their
+# last, so it is set aside, kept, and the reply is drafted again by the normal path.
+OLDER = "draft.older.md"
+
+
+def _draft_folder(contact_id: str) -> str | None:
+    try:
+        import reading
+        return os.path.dirname(reading.draft_path(contact_id))
+    except (ImportError, ValueError):
+        return None
+
+
+def park_draft(contact_id: str, was: dict | None = None, as_name: str = PARKED) -> bool:
+    """Move documents/network/<id>/draft.md aside (`as_name`, PARKED by default), kept and
+    never deleted. `was` is what the row said before ({"status", "next_action"}), kept so
+    `unpark_draft` can tell the row put back. False when there was no draft."""
+    folder = _draft_folder(contact_id)
+    if not folder:
+        return False
+    src = os.path.join(folder, "draft.md")
+    if not os.path.isfile(src):
+        return False
+    os.replace(src, os.path.join(folder, as_name))
+    keep = os.path.join(folder, PARKED_WAS)
+    if as_name == PARKED and was is not None:
+        with open(keep, "w", encoding="utf-8", newline="\n") as fh:
+            json.dump({k: " ".join(str(was.get(k) or "").split())
+                       for k in ("status", "next_action")}, fh)
+    elif as_name == PARKED and os.path.exists(keep):
+        os.remove(keep)
+    return True
+
+
+def unpark_draft(contact_id: str, now: dict | None = None) -> bool:
+    """Put a parked draft back as draft.md, where there is no draft.md already. With `now`
+    (the row as it stands), only when it was parked by `set` from exactly that row: the
+    page's undo brings it back, a new next action written later does not."""
+    folder = _draft_folder(contact_id)
+    if not folder:
+        return False
+    src, dst = os.path.join(folder, PARKED), os.path.join(folder, "draft.md")
+    keep = os.path.join(folder, PARKED_WAS)
+    if not os.path.isfile(src) or os.path.exists(dst):
+        return False
+    if now is not None:
+        try:
+            with open(keep, encoding="utf-8") as fh:
+                was = json.load(fh)
+        except (OSError, ValueError):
+            return False
+        if any(" ".join(str(now.get(k) or "").split()) != str(was.get(k) or "")
+               for k in ("status", "next_action")):
+            return False
+    os.replace(src, dst)
+    if os.path.exists(keep):
+        os.remove(keep)
+    return True
+
+
+# What a draft knew of their messages when it was written, kept beside it: the day of their
+# newest message then, and how many of theirs carried that day. A message newer than that,
+# or another on that day, is one the draft never saw, however late the log heard of it (a
+# LinkedIn download brings a message days after it came).
+ANSWERS = "draft.answers.json"
+
+
+def _their_newest(msgs) -> tuple:
+    """(the day of their newest message, how many of theirs that day) or ("", 0)."""
+    days = [as_date(r.get("date")) for r in msgs or () if said_something(r)]
+    days = [d for d in days if d]
+    if not days:
+        return "", 0
+    top = max(days)
+    return top.isoformat(), days.count(top)
+
+
+def note_draft_answers(contact_id: str, msgs=None, threads_path: str | None = None) -> None:
+    """Keep beside draft.md what of theirs it answers (ANSWERS). Every writer of a draft
+    calls it: `reply.save_draft` and `reading.write_draft`. `msgs` are their message rows,
+    read from the log when not given."""
+    folder = _draft_folder(contact_id)
+    if not folder or not os.path.isdir(folder):
+        return
+    if msgs is None:
+        path = threads_path or THREADS_CSV
+        msgs = threads_for(load_threads(path), contact_id) if os.path.exists(path) else []
+    day, n = _their_newest(msgs)
+    with open(os.path.join(folder, ANSWERS), "w", encoding="utf-8", newline="\n") as fh:
+        json.dump({"newest": day, "on_newest": n}, fh)
+
+
+def draft_predates(contact_id: str, msgs) -> bool:
+    """Was this contact's waiting draft written before their newest message? Then it answers
+    an older message (times offered that have passed, a request it never saw) and is never
+    offered: their message is owed a reply drafted afresh. Read from what the draft knew when
+    it was written (ANSWERS); a draft with no such record is not judged here. `msgs` are their
+    message rows."""
+    folder = _draft_folder(contact_id)
+    try:
+        with open(os.path.join(folder, ANSWERS), encoding="utf-8") as fh:
+            knew = json.load(fh)
+    except (OSError, ValueError, TypeError):
+        return False
+    day, n = _their_newest(msgs)
+    if not day:
+        return False
+    then = str((knew or {}).get("newest") or "")
+    try:
+        seen = int((knew or {}).get("on_newest") or 0)
+    except (TypeError, ValueError):
+        seen = 0
+    return day > then or (day == then and n > seen)
+
+
+def set_aside_older_draft(contact_id: str, msgs, row) -> bool:
+    """Their message `row` was just logged: where it is their newest word on the thread, a
+    waiting draft was written before it, so it is set aside (OLDER, kept) and the reply is
+    drafted again. One that only fills an older gap in the log leaves the draft alone."""
+    if not said_something(row):
+        return False
+    folder = _draft_folder(contact_id)
+    if folder and os.path.exists(os.path.join(folder, ANSWERS)):
+        # The draft says what it knew: set aside only for a message it never saw.
+        stale = draft_predates(contact_id, msgs)
+    else:
+        day, newest = str(as_date(row.get("date")) or ""), _their_newest(msgs)[0]
+        stale = bool(day) and day >= newest
+    return stale and park_draft(contact_id, as_name=OLDER)
 
 
 def _drop_draft(contact_id: str) -> bool:
@@ -3719,6 +3879,25 @@ def advance_past_calls(today, path=None) -> list[str]:
     return moved
 
 
+def _draft_follows_row(row, status, next_action, was) -> list[str]:
+    """The waiting draft follows what `set` did to the row, as the page's own stop does: a
+    thread closed, set aside or gone cold, or a next action cleared, leaves nothing to send,
+    so the draft is parked (kept); the row put back exactly as it was brings it back. A
+    draft closed by hand stayed on the page (2026-11-05)."""
+    cid = str(row.get("contact_id") or "").strip()
+    if not cid or (status is None and next_action is None):
+        return []
+    now = {"status": row.get("status") or "", "next_action": row.get("next_action") or ""}
+    if str(now["status"]).strip() in CLOSED or (next_action is not None
+                                                and not now["next_action"].strip()):
+        if park_draft(cid, was=was):
+            return ["the unsent draft is set aside (kept): nothing is owed to them now"]
+        return []
+    if unpark_draft(cid, now=now):
+        return ["the draft set aside when this was cleared is back"]
+    return []
+
+
 def _cli_set(argv) -> int:
     ap = argparse.ArgumentParser(prog="state.py set",
                                  description="Change one contact's status, next action, its "
@@ -3734,6 +3913,8 @@ def _cli_set(argv) -> int:
     a = ap.parse_args(argv)
     contacts = load_contacts(a.contacts)
     threads = load_threads(a.threads) if os.path.exists(a.threads) else []
+    before = {id(c): {"status": c.get("status") or "", "next_action": c.get("next_action") or ""}
+              for c in contacts}
     try:
         row, said = set_contact(contacts, threads, a.contact, a.status, a.next_action, a.due,
                                 a.note, a.today)
@@ -3741,6 +3922,7 @@ def _cli_set(argv) -> int:
         print(f"set: {e}")
         return 1
     save_contacts(contacts, a.contacts)
+    said += _draft_follows_row(row, a.status, a.next_action, before.get(id(row)))
     print(f"{row.get('contact_id')} ({row.get('name')}, {row.get('company')}): "
           + "; ".join(said))
     _interview_times(row.get("company"), contacts, threads, a.today)

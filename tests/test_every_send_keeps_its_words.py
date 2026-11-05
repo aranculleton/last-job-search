@@ -122,6 +122,34 @@ def test_an_edit_before_sending_is_recorded_as_their_preference(here, capsys):
     assert e and e[0]["sent"] == NOTE
 
 
+def test_a_message_that_is_plainly_not_the_draft_teaches_no_edit(here, capsys):
+    """A message written apart from an out-of-date draft the person never used was read as
+    an edit of it, and a rule was recorded from the difference (2026-11-05). Only a sent
+    text that is plainly the draft changed is an edit."""
+    contacts = here / "c.csv"
+    threads = here / "t.csv"
+    state.save_contacts([dict(_c("ana_rook", first_contacted="2026-10-10"),
+                              status="replied_needs_response")], str(contacts))
+    state.save_threads([
+        {"contact_id": "ana_rook", "date": "2026-10-10", "direction": "out",
+         "channel": "message", "scenario": "first_note", "summary": "first note",
+         "full_text": "Hi Ana, I'm a data analyst in Leeds."},
+        {"contact_id": "ana_rook", "date": "2026-10-18", "direction": "in",
+         "channel": "message", "scenario": "", "summary": "They replied",
+         "full_text": "Hi, happy to chat. Could you send your resume?"}], str(threads))
+    reading.write_draft("ana_rook", "Hi Ana, thanks for the note. I would be glad to talk on "
+                        "Tuesday at 2pm or Wednesday at 10am, whichever suits.", "Ana Rook")
+    sent_file = here / "sent.txt"
+    sent_file.write_text("Thanks so much!", encoding="utf-8")
+    rc = state.main(["message", "ana_rook", "--text-file", str(sent_file), "--contacts",
+                     str(contacts), "--threads", str(threads), "--today", TODAY.isoformat()])
+    assert rc == 0
+    assert "learned from the edit" not in capsys.readouterr().out
+    assert not [r for r in learned.load() if r.get("kind") == "edit"]
+    assert learned.alike("Hi Ana, I am a data analyst in Leeds. I would love to hear how "
+                         "your team works.", NOTE) >= learned.EDIT_ALIKE
+
+
 def test_a_refused_send_records_no_edit_and_the_retry_records_it_once(here):
     contacts, threads = here / "c.csv", here / "t.csv"
     state.save_contacts([_c("ana_rook")], str(contacts))

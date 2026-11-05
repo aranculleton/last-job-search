@@ -240,6 +240,32 @@ def extract_email(text) -> str:
     return "%s@%s.%s" % (local, domain.strip("."), m.group(3).lower())
 
 
+def _own_addresses() -> set:
+    """The person's own email address (person.json identity.email), lower case, or none."""
+    try:
+        own = str(person.get("identity.email", "") or "").strip().lower()
+    except Exception:  # noqa: BLE001  the app itself, or a profile not set up
+        own = ""
+    return {own} if "@" in own else set()
+
+
+def without_own_address(text) -> str:
+    """Their message with the person's own address taken out, longhand forms too: it is in
+    a pasted thread or a quoted signature of theirs, never an address they gave. Read as
+    theirs, a thread pasted whole was a request for the resume at 0.97 (2026-11-05)."""
+    out, own = str(text or ""), _own_addresses()
+    if not own:
+        return out
+    out = _EMAIL.sub(lambda m: " " if m.group(0).rstrip(_TRAILING).lower() in own
+                     else m.group(0), out)
+    for _ in range(3):
+        m = _OBFUSCATED.search(out)
+        if not m or extract_email(m.group(0)).lower() not in own:
+            break
+        out = out[:m.start()] + " " + out[m.end():]
+    return out
+
+
 def _is_scheduler(host: str, path: str) -> bool:
     segment = path.strip("/").split("/")[0].lower() if path.strip("/") else ""
     if not segment:
@@ -1170,13 +1196,13 @@ def classify(inbound_text, thread_history=(), today=None) -> dict:
     _one_contact(rows, "classify")
     history = [r for r in _ordered(rows) if _direction(r)]
     inbound_rows = [r for r in history if _inbound(r)]
-    text = str(inbound_text or "").strip()
+    text = without_own_address(inbound_text).strip()
     # Their last message is the one to read only while it is still the last
     # word. Once we have answered it, an empty paste is a quiet thread: reading
     # the old message again re-drafted a CV already sent, or a second nudge.
     we_spoke_last = bool(history) and not _they_spoke_last(history)
     if not text and inbound_rows and not we_spoke_last:
-        text = _row_text(inbound_rows[-1]).strip()
+        text = without_own_address(_row_text(inbound_rows[-1])).strip()
 
     ctx = {
         "email": extract_email(text),
@@ -1693,6 +1719,147 @@ def needs_no_answer(text, scenario="") -> str:
     return m.group(0) if m else ""
 
 
+# Their words that close a conversation kindly for now: they will keep the person in mind,
+# or wish them luck. Not a promise to come back ("I'll get back to you"), which a later
+# follow-up may fairly ask after.
+_KEEP_IN_MIND = re.compile(
+    r"\bkeep (?:you|your (?:details|profile|name|cv|r[ée]sum[ée]))\b[^.!?\n]{0,30}?"
+    r"\b(?:in mind|on file|on (?:my|our) radar)\b"
+    r"|\b(?:have|has) your (?:details|profile|name|cv|r[ée]sum[ée]) on file\b"
+    r"|\b(?:best of|good) luck\b|\ball the best\b|\bwish(?:ing)? you (?:the best|luck|well)\b",
+    re.I)
+# Our answer that only thanks them: nothing asked, nothing offered, nothing sent.
+_THANKS = re.compile(r"\b(?:thanks?|thank you|cheers|much appreciated|appreciate (?:it|that))\b",
+                     re.I)
+_ASKS_OR_OFFERS = re.compile(
+    r"\?|\b(?:let me know|would you|could you|can you|are you|do you|happy to|keen to|"
+    r"(?:i'?d|i would|would) love to|any chance|available|attached|attaching|here(?:'s| is) my)\b",
+    re.I)
+CLOSE_WORDS = 60
+
+
+def closing_exchange(theirs, ours, scenario="") -> str:
+    """The words that end a conversation kindly for now, or "": their message asks nothing
+    and owes nothing, and either keeps the person in mind ("I'll keep you in mind", "good
+    luck") or says no, and ours only thanks them. Nothing is chased after it: a follow-up to
+    "Thanks so much!" asks after a door they closed kindly (2026-11-05: one was set, due the
+    same day). A message of theirs later is owed a reply as any other."""
+    t, o = str(theirs or ""), " ".join(str(ours or "").split())
+    if not t or not o or len(o.split()) > CLOSE_WORDS or not _THANKS.search(o) \
+            or _ASKS_OR_OFFERS.search(o):
+        return ""
+    scen = str(scenario or "")
+    sc = SCENARIOS.get(scen)
+    if "?" in t or (sc is not None and sc.owes_action):
+        return ""
+    m = _KEEP_IN_MIND.search(t)
+    if m:
+        return m.group(0)
+    if scen in ("rejection", "mismatch") or (not scen and _hits(t, REJECTION)):
+        return "their no"
+    return ""
+
+
+# A LinkedIn conversation copied whole: each block opens on who wrote it and when ("Juno
+# Castellan  10:42 AM", "Juno Castellan sent the following message at 10:42 AM", "Juno
+# Castellan · 10:42 AM"), under a line for the day ("Today", "Monday", "Oct 24", "24 October
+# 2026"), with "View Juno's profile" lines between. Logged whole, the person's own words were
+# two rows of theirs on one day (2026-11-05).
+_CLOCK = r"\d{1,2}[:.]\d{2}\s*(?:[ap]\.?\s?m\.?)?"
+_SPEAKER = re.compile(r"^(?P<name>[^\W\d_][\w'’.-]*(?:[ \t]+[^\W\d_][\w'’.-]*){0,4}?)"
+                      r"[ \t]*(?:[·•|-][ \t]*|[ \t]+sent the following messages?"
+                      r"(?:[ \t]+at)?[ \t]+|[ \t]+)(?P<time>" + _CLOCK + r")[ \t]*$", re.I)
+_VIEW = re.compile(r"^view\b.{1,80}\bprofile$|^(?:seen|sent|delivered|read)\b.{0,30}$", re.I)
+_WEEKDAYS = ("monday", "tuesday", "wednesday", "thursday", "friday", "saturday", "sunday")
+_MONTHS = r"(?:jan|feb|mar|apr|may|jun|jul|aug|sep|sept|oct|nov|dec)[a-z]*\.?"
+_DAY_LINE = re.compile(
+    r"^(?:(?P<rel>today|yesterday)|(?P<wd>mon|tue|tues|wed|thu|thur|thurs|fri|sat|sun)[a-z]*"
+    r"|(?P<m1>" + _MONTHS + r")[ \t]+(?P<d1>\d{1,2})(?:,?[ \t]+(?P<y1>\d{4}))?"
+    r"|(?P<d2>\d{1,2})[ \t]+(?P<m2>" + _MONTHS + r")(?:,?[ \t]+(?P<y2>\d{4}))?"
+    r"|(?P<iso>\d{4}-\d{2}-\d{2}))$", re.I)
+
+
+def _day_line(line: str, today):
+    """The day a line of a pasted conversation names on its own, or None."""
+    import datetime
+    m = _DAY_LINE.match(" ".join(line.split()))
+    if not m:
+        return None
+    if m.group("rel"):
+        return today - datetime.timedelta(days=0 if m.group("rel").lower() == "today" else 1)
+    if m.group("wd"):
+        want = next(i for i, w in enumerate(_WEEKDAYS) if w.startswith(m.group("wd").lower()[:3]))
+        back = (today.weekday() - want) % 7 or 7
+        return today - datetime.timedelta(days=back)
+    if m.group("iso"):
+        return state.as_date(m.group("iso"))
+    mon, d, y = ((m.group("m1"), m.group("d1"), m.group("y1")) if m.group("m1")
+                 else (m.group("m2"), m.group("d2"), m.group("y2")))
+    try:
+        month = datetime.datetime.strptime(mon[:3].title(), "%b").month
+        got = datetime.date(int(y) if y else today.year, month, int(d))
+    except ValueError:
+        return None
+    if not y and got > today:
+        got = got.replace(year=got.year - 1)
+    return got
+
+
+def _own_names() -> tuple:
+    """(the person's first name, their full name), lower case, from person.json."""
+    try:
+        first = str(person.get("identity.first", "") or "")
+        full = str(person.get("identity.name", "") or "")
+    except Exception:  # noqa: BLE001
+        first, full = "", ""
+    first = first or (full.split() or [""])[0]
+    return first.strip().lower(), " ".join(full.split()).lower()
+
+
+def pasted_thread(text, their_name, today) -> list[dict] | None:
+    """A LinkedIn conversation pasted whole, as its messages: [{"who": "them" or "me",
+    "date", "text"}], oldest first, each block under its sender's line and dated by the day
+    line above it (`today` where none is). Whose a block is comes from the name on its line:
+    the person's own (person.json) or the contact's. None when the paste is one message, with
+    no sender lines in it."""
+    own_first, own_full = _own_names()
+    them = " ".join(str(their_name or "").split()).lower()
+    them_first = (them.split() or [""])[0]
+    if not them_first:
+        return None
+    day, who, buf, out = today, None, [], []
+
+    def flush():
+        words = "\n".join(buf).strip()
+        if who and words:
+            out.append({"who": who, "date": day, "text": words})
+        buf.clear()
+
+    for line in str(text or "").splitlines():
+        s = line.strip()
+        m = _SPEAKER.match(s)
+        name = " ".join(m.group("name").split()).lower() if m else ""
+        sender = None
+        if name and (name == them or name.split()[0] == them_first):
+            sender = "them"
+        elif name and (name == own_full or name.split()[0] == own_first):
+            sender = "me"
+        if sender:
+            flush()
+            who = sender
+            continue
+        d = _day_line(s, today) if s and len(s) <= 24 else None
+        if d is not None:
+            flush()
+            day = d
+            continue
+        if _VIEW.match(s) or s.lower() in (them, own_full):
+            continue
+        buf.append(line)
+    flush()
+    return out if out else None
+
+
 def prepare(argv) -> int:
     import argparse
     import datetime
@@ -1741,6 +1908,21 @@ def prepare(argv) -> int:
     print(f"contact: {_who_line(c)} ({cid}), found by {found['how']}"
           + (f"; writes as a {reader.replace('_', '-')}" if reader else ""))
     body = state._paragraphs(text)
+    # A conversation pasted whole: only their messages, each on its own day; the person's own
+    # words are never logged as theirs (2026-11-05).
+    pasted = pasted_thread(text, c.get("name"), day) if body else None
+    if pasted is not None:
+        mine = [i for i, m in enumerate(pasted) if m["who"] == "me"]
+        theirs_p = [m for m in pasted if m["who"] == "them"]
+        if not theirs_p:
+            print(f"prepare: the conversation pasted holds no message from {_first(c)}, only "
+                  "yours, so nothing was logged.")
+            return 2
+        tail = [m for m in pasted[(mine[-1] + 1 if mine else 0):] if m["who"] == "them"]
+        body = "\n\n".join(m["text"] for m in tail) or theirs_p[-1]["text"]
+        day = (tail or theirs_p)[-1]["date"]
+        print(f"pasted: a conversation of {len(pasted)} message(s); {len(theirs_p)} from "
+              f"{_first(c)} read as theirs" + (f", {len(mine)} of yours left out" if mine else ""))
     if not body:
         # The page's Reply, or "draft my reply to Juno": their newest message, already logged.
         if not theirs or not _they_spoke_last(before):
@@ -1752,7 +1934,35 @@ def prepare(argv) -> int:
         day = state.as_date(theirs[-1].get("date")) or day
     read = classify(body, before, day)
     scen = re.sub(r"[\s-]+", "_", a.scenario.strip().lower()) or read["scenario"]
-    logged = bool(text.strip())
+    logged = bool(text.strip()) and pasted is None
+    if pasted is not None:
+        added = 0
+        for m in theirs_p:
+            last = m is theirs_p[-1]
+            try:
+                got = state.received(contacts, threads, cid, a.today, text=m["text"],
+                                     date=m["date"].isoformat(), channel=a.channel,
+                                     scenario=scen if last else "", subject=a.subject)
+            except ValueError as e:
+                if not str(e).startswith("already logged"):
+                    print(f"prepare: not recorded: {e}")
+                    return 1
+                continue
+            added += 1
+            print(f"received: {got['row']['summary']} on {got['row']['date']}, read as "
+                  f"{got['row']['scenario'] or '?'}")
+            if got["said"]:
+                print(f"  {got['said']}")
+        if added:
+            state.save_threads(threads, a.threads)
+            state.save_contacts(contacts, a.contacts)
+            state._interview_times(c.get("company"), contacts, threads, a.today)
+        else:
+            print("received: every message of theirs in it is logged already; nothing logged "
+                  "twice")
+        if mine and mine[-1] > max(i for i, m in enumerate(pasted) if m["who"] == "them"):
+            print("  your own message is the last in it: if it went, log it with python3 "
+                  f"tools/network/state.py message {cid} --text-file <it>")
     # Their newest message carrying these words is this one, logged already (by another chat,
     # the page, or the LinkedIn download): never a second row for it.
     if logged and theirs and state._same_words_sent(theirs[-1].get("full_text"), body):
@@ -1839,15 +2049,21 @@ def _first(c) -> str:
         return (str(c.get("name") or "").split() or ["them"])[0]
 
 
-def save_draft(contact_id: str, text: str) -> str:
+def save_draft(contact_id: str, text: str, msgs=None) -> str:
     """The reply, saved where the page's Messages shows it with Copy and "I sent it"
     (documents/network/<id>/draft.md), as it stands: a reply rests on their message, never
-    on a profile read, so it carries no marker. Logged only once they say it went."""
+    on a profile read, so it carries no marker. Logged only once they say it went. Beside it,
+    what of theirs it answers (`state.note_draft_answers`, from `msgs`, their message rows,
+    or the log): a message of theirs it never saw sets it aside."""
     import reading
     path = reading.draft_path(contact_id)
     os.makedirs(os.path.dirname(path), exist_ok=True)
     with open(path, "w", encoding="utf-8", newline="\n") as fh:
         fh.write(str(text).strip() + "\n")
+    try:
+        state.note_draft_answers(contact_id, msgs)
+    except Exception:  # noqa: BLE001  the draft stands without it
+        pass
     return path
 
 
@@ -1924,7 +2140,7 @@ def finish(argv) -> int:
     if got["warnings"]:
         print("  Rewrite what a warning is right about before it is shown; a soft close is "
               "allowed in a reply.")
-    path = save_draft(cid, draft)
+    path = save_draft(cid, draft, state.threads_for(threads, cid))
     import local_path
     print(f"saved: {local_path.rel(path, person.state())}, shown in the page's Messages with "
           "Copy and \"I sent it\". Nothing is sent; it is logged only once they say it went.")
@@ -1935,8 +2151,10 @@ def finish(argv) -> int:
     except Exception:  # noqa: BLE001  counting must never stop a reply
         said = ""
     if said:
-        extra.append(said)
-        print(f"what worked: {said}")
+        # For Claude, never for the person: the counts ("35 of 627 answered") reached the
+        # reply on the page while they were part of the answer (2026-11-05). Said here, marked
+        # as Claude's, and never added to what the page shows.
+        print(f"what worked (for you, not for the reply): {said}")
     try:
         import tips
         tip = ""

@@ -2936,6 +2936,12 @@ def write_draft(contact_id: str, note: str, name: str = "", card_only: bool = Fa
         parts.adopt(contact_id, str(note))
     except Exception:  # noqa: BLE001
         pass
+    try:
+        # What of theirs it answers, so a message of theirs it never saw sets it aside.
+        import state
+        state.note_draft_answers(contact_id)
+    except Exception:  # noqa: BLE001  the draft stands without it
+        pass
     return p
 
 

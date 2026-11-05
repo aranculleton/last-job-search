@@ -657,3 +657,5 @@ Bramblecote Staffing        # invented: an agency, the same test
 Brightwater Freight     # invented employer, tests/test_a_rerun_records_only_what_passed.py
 Saltmere Logistics          # invented: an employer in tests/test_left_out_jobs_are_read_by_rule_and_rules_can_change.py
 Junior Analyst              # a job title, the same test
+Ottilie Ferrand         # invented, tests/test_a_referral_in_progress_keeps_the_job_everywhere.py
+View Juno’s             # LinkedIn's own line over a pasted conversation, tests/test_a_reply_takes_two_commands.py

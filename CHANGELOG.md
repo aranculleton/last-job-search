@@ -77,6 +77,25 @@ make sense to somebody whose repo just received it.
 - **An old chat that will not close yet is tried again, never handed to you.** Archiving the
   helper a hand-over replaced was refused while it was still finishing, and the page chat said
   "you can archive it yourself"; it now says nothing and tries again at that check-in.
+- **Closing someone in a chat now takes their draft off your page**, as the bin on the page
+  does: closed, gone quiet, set aside or nothing left to do, the note is kept but no longer
+  offered, and putting them back brings it back.
+- **A draft written before their newest message is no longer offered as the reply.** When they
+  write again, even in a message your LinkedIn download brings days later, the old draft is set
+  aside and Claude drafts the reply to what they actually said.
+- **Thanking someone who said they'll keep you in mind no longer sets a follow-up.** A kind
+  close and your thanks end it for now; if they write again, a reply is owed as usual.
+- **A whole LinkedIn conversation pasted into a chat now logs only their messages, each on its
+  own day.** Your own messages in it are left out, and your own email address in it is never
+  read as them asking for your resume.
+- **A message you wrote fresh is no longer read as an edit of an old draft.** Only words that
+  are plainly the draft changed teach Claude how you like to write.
+- **Claude's own notes on what worked no longer appear in a reply on your page.**
+- **"networking" now works everywhere a kind of rule is named**, the same as "messages".
+- **Saving your work from a cloud chat with no GitHub tools now uses steps that chat allows.**
+- **A job at an employer where someone is referring you now stays on your list everywhere.**
+  The first sift of a search dropped it while the later one kept it; now both follow one rule,
+  and the job says to apply through the person referring you, never on your own.
 
 - **Moving your brief or setting it up no longer fails in some organizations.** The steps
   Claude follows to set up or move a scheduled task named an empty list of connected accounts,

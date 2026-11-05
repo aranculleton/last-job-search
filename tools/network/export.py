@@ -1675,6 +1675,22 @@ def apply_history(threads, plan, contacts=None) -> int:
             threads.append(row)
         else:
             threads.insert(at, row)
+    # A message of theirs newer than a draft waiting for them: the draft answers an older
+    # one, so it is set aside, kept (state.set_aside_older_draft). A "please send your
+    # resume" came in from the download and the draft still answered the message before
+    # it (2026-11-05).
+    st = _state()
+    newest: dict = {}
+    for r in plan["add"]:
+        cid = str(r.get("contact_id") or "").strip()
+        if cid and st.said_something(r) and str(r.get("date") or "") >= \
+                str((newest.get(cid) or {}).get("date") or ""):
+            newest[cid] = r
+    for cid, r in newest.items():
+        try:
+            st.set_aside_older_draft(cid, st.threads_for(threads, cid), r)
+        except OSError:
+            pass
     if contacts is not None:
         settle(contacts, threads, {r["contact_id"] for r in plan["add"]}
                | {str(r.get("contact_id") or "") for r, _ in plan["fill"]}
