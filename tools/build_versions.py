@@ -803,7 +803,7 @@ METHODS: dict[str, dict] = {
             (56, "2026-11-05", True, "a downloaded resume or letter is named your name, the document and the employer, never the role run together; Chat's Latest sits above its box on a phone; Not confirmed yet is a small pill; on a phone Jobs' search has its own row; the pencil's box takes the cursor"),
             (57, "2026-11-05", True, "a form's answers ready to copy are opened by the line that says so, Show it, where it said under More"),
         ),
-        "fingerprint": "5d6893000b3fd1fc",
+        "fingerprint": "18d08cb0091d5e97",
     },
     "upskill": {
         "by": "upgrade", "priority": 4, "applies": "upskill_plans", "time": "~10 min",

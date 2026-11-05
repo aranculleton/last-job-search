@@ -1876,5 +1876,5 @@ ul.bp-news { max-width: 80ch; }
 /* "Not confirmed yet" is a small pill, never a bar the width of its row (the review, 2026-11-05). */
 .up-main > .state-word, .bp-up-row .up-main > .state-word { justify-self: start; }
 /* On a phone the search takes its own row under the switch, which it squeezed unreadable. */
-@media (max-width: 759px) { .controls:has(> .searchf) { flex-wrap: wrap; } .controls > .searchf { order: 9; flex-basis: 100%; } }
+@media (max-width: 759px) { .controls:has(> .segctl):has(> .searchf) { flex-wrap: wrap; } .controls:has(> .segctl) > .searchf { order: 9; flex-basis: 100%; } }
 .talk-earlier-msgs { list-style: none; text-align: center; }

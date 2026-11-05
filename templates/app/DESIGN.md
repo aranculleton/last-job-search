@@ -73,6 +73,9 @@ next?" in its first lines, and nothing asks for a decision a default could make.
   its progress, and a find offers Draft this; drafts first, then finds by fit; the tab, the
   summary, the menu and the Brief count the same two things, drafts to send and jobs to look at.
   A posting that has closed waits under the list ("1 closed: Show"). (jobs page tests)
+- On a phone, Jobs' search takes its own row under the To apply / Applied switch once the list
+  is long: beside it the switch was squeezed unreadable (the review, 2026-11-05). Every other
+  control row stays one row.
 - Jobs' header is the same on both tabs: its title, its one short line and when it searched, with
   Find jobs and then "Add a job" and your resume as soft pills beside it, as Contacts'. What
   Claude is doing is the header's work pill and each card's own line, never a line here.
