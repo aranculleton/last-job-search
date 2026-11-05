@@ -1,19 +1,19 @@
 {
  "model": 1,
  "made_at": "2026-10-25T18:00:00Z",
- "rev": "d9193745a24d",
+ "rev": "c88e300406ae",
  "app": {
-  "version": "4.9.1",
+  "version": "4.10.0",
   "url": null,
   "update_waiting": null,
   "news": [
-   "A new helper chat gives your page's link straight away.",
-   "With a page, a brief in a chat is short.",
-   "A LinkedIn download fills in what your contacts lack."
+   "A calmer page that does more by itself.",
+   "Questions on the form.",
+   "Jobs is one list."
   ],
   "privacy": "Only you can open this page unless you share it. It holds first names, employers, your drafts and your setup answers, so keep it unshared.",
   "repo": "https://github.com/aranculleton/last-job-search",
-  "page": 40,
+  "page": 43,
   "not_saved": 0
  },
  "person": {
@@ -48,7 +48,7 @@
  ],
  "jobs": {
   "round": "r9",
-  "made_at": "2026-11-05T05:49:27Z",
+  "made_at": "2026-11-05T07:36:14Z",
   "met": false,
   "summary": "3 roles from the last search to look at, 1 of them scoring 75 or more. 3 left out, each with its reason.",
   "rows": [
@@ -966,7 +966,7 @@
    "when": "2026-10-28",
    "prep": {
     "path": "documents/applications/thornbury_bank_risk_analyst_thornbury/interview_prep.md",
-    "updated": "2026-11-05T05:49:27Z"
+    "updated": "2026-11-05T07:36:14Z"
    },
    "questions": 2,
    "all_day": true,
@@ -1456,11 +1456,23 @@
   ]
  },
  "updates": {
-  "version": "4.9.1",
-  "newest": "4.9.1",
+  "version": "4.10.0",
+  "newest": "4.10.0",
   "mode": "auto",
   "waiting": null,
   "changed": [
+   {
+    "version": "4.10.0",
+    "date": "2026-11-05",
+    "lines": [
+     "A calmer page that does more by itself.",
+     "Questions on the form.",
+     "Jobs is one list.",
+     "Claude fixes a draft and puts its files on your page by itself.",
+     "The pencil.",
+     "What costs Claude's time shows."
+    ]
+   },
    {
     "version": "4.9.1",
     "date": "2026-11-04",
@@ -1472,24 +1484,12 @@
      "Your LinkedIn download has one button.",
      "A saved tap says what happens next and where to see it."
     ]
-   },
-   {
-    "version": "4.9.0",
-    "date": "2026-11-04",
-    "lines": [
-     "Every finding of two full audits is fixed in this release.",
-     "Your page goes up in small pieces any chat can manage.",
-     "If your page was never made, the next chat makes it.",
-     "Your morning brief stays in your own chat and sends its headline to your phone.",
-     "Improvements start by themselves.",
-     "Work from a chat that could not save is brought in by the next save."
-    ]
    }
   ],
   "done": [],
   "pending": [],
   "changelog": "https://github.com/aranculleton/last-job-search/blob/master/CHANGELOG.md",
-  "since": true
+  "since": false
  },
  "applications": [
   {
