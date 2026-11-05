@@ -61,14 +61,18 @@ def test_two_chats_drafting_at_once_put_one_question_to_the_person_and_neither_s
     (asked,) = skill_answers.open_questions()
     assert asked["skill"] == "Looker"
     assert {x["company"] for x in asked["for"]} == {"Kestrel Mutual", "Wrenfield Insurance"}
-    # Put to them once on their page, for both applications, with two answers of one weight.
+    # Put to them once on their page, for both applications, with three answers of one
+    # weight: yes for the profile, just for these roles, no (2026-11-05).
     targets: dict = {}
     (card,) = app_model._skill_questions(None, targets)
     assert card["id"] == "q-skill-looker" and card["kind"] == "consent"
     assert card["title"].count("?") == 1 and "?" not in card["body"]
     assert "Kestrel Mutual and Wrenfield Insurance ask for it" in card["body"]
-    assert [o["value"] for o in card["options"]] == ["yes", "no"]
-    assert targets[card["id"]] == {"kind": "skill_ask", "skill": "Looker", "rev": card["rev"]}
+    assert [o["value"] for o in card["options"]] == ["yes", "role", "no"]
+    assert [o["label"] for o in card["options"]] == ["Yes, add it to my profile", "Just for these roles", "No"]
+    assert targets[card["id"]] == {"kind": "skill_ask", "skill": "Looker", "rev": card["rev"],
+                                   "roles": [{"company": "Kestrel Mutual", "role": "Operations Analyst"},
+                                             {"company": "Wrenfield Insurance", "role": "Operations Analyst"}]}
     # Assembled while nobody has answered: kept on the draft as waiting, never as declined.
     (tmp_path / "chat_a" / f"audit_{a['slug']}.json").write_text(
         json.dumps({"verdict": "pass", "draft": DRAFT, "changes": [], "residual_risks": []}),
@@ -277,3 +281,63 @@ def test_ive_used_it_too_on_the_panel_puts_it_on_the_resume_and_answers_it_for_e
     assert got["status"] == "done", got
     assert t.draft()["consented_skills"] == ["Tableau"]
     assert _answers(t)["skills"]["tableau"]["answer"]["said"] == "yes"
+
+
+# ------------------------------------------------------------------ just for this role
+
+
+def test_just_for_this_role_puts_it_on_that_roles_resume_only_and_never_the_profile(t):
+    """Three answers (the maintainer, 2026-11-05): a skill claimed for one role is never added
+    to the profile, nor to any other role, by itself. "Just for this role" puts it on that
+    role's resume through the draft's own yes, and the question says what each answer does."""
+    _asked_today(t, waiting_skills=["Looker"])
+    card = t.item("q-skill-looker")
+    assert [(o["label"], o["value"]) for o in card["options"]] == [
+        ("Yes, add it to my profile", "yes"), ("Just for this role", "role"), ("No", "no")]
+    assert "Yes adds it to your profile" in card["body"]
+    assert "Just for this role puts it on this role's resume only, never your profile" in card["body"]
+    assert "No keeps it off them all" in card["body"]
+    aid = t.act("needs.answer", "q-skill-looker", "role")
+    got = t.apply()
+    assert got["ok"] == [aid], got
+    note = t.receipt(aid)["note"]
+    assert "Looker goes on your resume for Kestrel Mutual only, never on your profile" in note, note
+    wid = skill_answers.work_id(KESTREL, "Looker")
+    with open(page_db.body_path(os.path.join(t.dump, "out"), "work", wid), encoding="utf-8") as fh:
+        work = json.load(fh)
+    assert work["args"]["changes"] == [{"p": "yes", "v": {"skill": "Looker", "scope": "role"}}]
+    done = t.tweak("apply", "resume", KESTREL, work["args"]["changes"])
+    assert done["status"] == "done", done
+    assert t.draft()["consented_skills"] == ["Looker"]
+    rec = _answers(t)["skills"]["looker"]
+    # No answer for every application, and nothing written into the profile.
+    assert "answer" not in rec, rec
+    assert [(x["company"], x["role"]) for x in rec["roles"]] == [("Kestrel Mutual", "Claims Forecasting Analyst")]
+    with open(os.path.join(t.profile, "01-candidate-profile.md"), encoding="utf-8") as fh:
+        assert "Looker" not in fh.read()
+    said = json.loads(_py(t, "import skill_answers as s; print(json.dumps([s.answer('Looker'),"
+                             " s.answer('Looker', None, 'Kestrel Mutual', 'Claims Forecasting Analyst'),"
+                             " s.answer('Looker', None, 'Wrenfield Insurance', 'Analyst')]))"))
+    assert said == ["", "yes", ""], said
+    # Answered for that role: asked no more there.
+    assert not [n for n in t.model()["needs_you"] if n["id"] == "q-skill-looker"]
+    # Another role asking is asked again, for itself alone.
+    _py(t, "import skill_answers as s; s.ask('Looker', 'Wrenfield Insurance', 'Analyst', day='2026-10-25')")
+    again = t.item("q-skill-looker")
+    assert "Wrenfield Insurance asks for it" in again["body"] and "Kestrel" not in again["body"]
+
+
+def test_a_yes_for_every_application_given_later_stands_over_one_role(tmp_path):
+    skill_answers.ask("Looker", "Kestrel Mutual", "Analyst", day="2026-11-04")
+    assert skill_answers.record_role("Looker", [{"company": "Kestrel Mutual", "role": "Analyst"}], at=_at(10))
+    assert skill_answers.answer("Looker", None, "Kestrel Mutual", "Analyst") == "yes"
+    assert skill_answers.open_questions() == []
+    # A no for every application, given after it, wins for that role too.
+    assert skill_answers.record("Looker", "no", at=_at(12), profile=False)
+    assert skill_answers.answer("Looker", None, "Kestrel Mutual", "Analyst") == "no"
+    # And a role answered after the no is that role's yes again.
+    assert skill_answers.record_role("Looker", [{"company": "Kestrel Mutual", "role": "Analyst"}], at=_at(13))
+    assert skill_answers.answer("Looker", None, "Kestrel Mutual", "Analyst") == "yes"
+    assert skill_answers.answer("Looker") == "no"
+    with pytest.raises(ValueError):
+        skill_answers.record_role("Looker", [])

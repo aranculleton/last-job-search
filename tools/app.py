@@ -222,6 +222,24 @@ def self_fixes(db: dict | None, model: dict, out_dir: str, now, dump_dir: str = 
             w.add("set", "work", wid, page_db.queued("draft", act.get("title") or "",
                                                      dict(act.get("args") or {}, auto=True), now),
                   if_version=None)
+    # A prep made for an earlier plan of rounds is updated by itself once the plan changes,
+    # never waiting for an "Update it" tap (the maintainer, 2026-11-05): once a change, under
+    # the prep's own work id, so the card shows it going. Work on its way, or one finished or
+    # stopped since the plan changed, is left as it is.
+    for iv in model.get("interviews") or []:
+        prep = iv.get("prep") or {}
+        if not prep.get("stale") or iv.get("past") or not iv.get("id"):
+            continue
+        wid = page_db.safe_id("prep~" + str(iv["id"]))
+        have = work.get(wid) or {}
+        d = have.get("data") or {}
+        if d and (str(d.get("status") or "queued") not in page_db.FINISHED
+                  or str(d.get("finished_at") or d.get("asked_at") or "") >= str(prep.get("stale_since") or "")):
+            continue
+        w.add("set", "work", wid, page_db.queued(
+            "prep", f"Interview prep: {iv.get('company') or ''}, {iv.get('role') or ''}",
+            {"interview": iv["id"], "note": None, "auto": True}, now),
+            if_version=have.get("version") if have else None)
     out = w.save("self") if w.entries else []
     ever = set()
     for d in work.values():

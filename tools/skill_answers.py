@@ -18,6 +18,12 @@ carry on. So:
 - **The later explicit answer wins**, between two chats as within one: each answer is dated
   (`answer.at`), and tools/merge_state.py keeps the later of two. A no the person gave stays a
   no until they say otherwise.
+- **Three answers: yes, just for this role, no.** A yes is theirs for every application and is
+  written into their profile; "just for this role" (`ROLE`) is a yes for the roles it names
+  only (`roles` on the record), used on those roles' resumes and bullets and never added to
+  the profile or to any other role, so a posting from another role asks again (the
+  maintainer, 2026-11-05: a skill claimed for one role should not be added to the profile
+  by itself). Between the two kinds, as between two answers, the later one wins.
 - **A yes redoes every unsent resume waiting on it**, whatever its day, and every one drafted
   that day for a posting naming the skill (`redo_due`):
   a yes on the page queues each as a tweak (app_actions), and a chat that takes a yes, or that
@@ -40,6 +46,8 @@ import person  # noqa: E402
 
 FILE = "skill_answers.json"
 ANSWERS = ("yes", "no")
+# "Just for this role": a yes for the roles the record names, never the profile's.
+ROLE = "role"
 
 
 def path() -> str:
@@ -116,10 +124,24 @@ def _profile_yes(skill: str) -> bool:
                for ln in text.split(stage_picks.YES_HEADING, 1)[1].splitlines())
 
 
-def answer(skill, data: dict | None = None) -> str:
-    """"yes", "no", or "" while nobody has answered."""
+def _scoped(rec: dict, company, role) -> dict | None:
+    """The "just for this role" yes the record holds for this role, if any."""
+    want = (key(company), key(role))
+    return next((x for x in rec.get("roles") or [] if isinstance(x, dict)
+                 and (key(x.get("company")), key(x.get("role"))) == want), None)
+
+
+def answer(skill, data: dict | None = None, company: str = "", role: str = "") -> str:
+    """"yes", "no", or "" while nobody has answered. With a role (`company`, `role`), a "just
+    for this role" yes counts for that role alone, unless a yes or no for every application
+    was given after it."""
     rec = ((data or load())["skills"]).get(key(skill)) or {}
-    said = str((rec.get("answer") or {}).get("said") or "")
+    given = rec.get("answer") if isinstance(rec.get("answer"), dict) else {}
+    said = str(given.get("said") or "")
+    if str(company or "").strip():
+        mine = _scoped(rec, company, role)
+        if mine and not (said in ANSWERS and str(given.get("at") or "") > str(mine.get("at") or "")):
+            return "yes"
     if said in ANSWERS:
         return said
     return "yes" if _profile_yes(skill) else ""
@@ -135,7 +157,7 @@ def ask(skill, company: str = "", role: str = "", day=None, at=None) -> str:
     rec = data["skills"].setdefault(key(skill), {})
     rec.setdefault("skill", skill)
     rec.setdefault("asked", _now(at))
-    said = answer(skill, data)
+    said = answer(skill, data, company, role)
     entry = {"company": str(company or "").strip(), "role": str(role or "").strip(),
              "day": day_of(day)}
     have = rec.setdefault("for", [])
@@ -180,15 +202,51 @@ def record(skill, said: str, by: str = "chat", at=None, company: str = "", role:
     return True
 
 
+def record_role(skill, roles, by: str = "chat", at=None) -> bool:
+    """"Just for this role": the person can claim the skill for these roles ({company, role}
+    each) and no other. Kept on the skill's one record (`roles`), never written into the
+    profile; True when it stands (a yes or no for every application given after it leaves it
+    as it is)."""
+    skill = named(skill)
+    if not key(skill):
+        raise ValueError("which skill: none was named")
+    roles = [{"company": str(x.get("company") or "").strip(), "role": str(x.get("role") or "").strip()}
+             for x in roles or () if isinstance(x, dict) and str(x.get("company") or "").strip()]
+    if not roles:
+        raise ValueError("which role: none was named")
+    data = load()
+    rec = data["skills"].setdefault(key(skill), {})
+    rec.setdefault("skill", skill)
+    rec.setdefault("asked", _now(at))
+    when = _now(at)
+    given = rec.get("answer") if isinstance(rec.get("answer"), dict) else {}
+    if given.get("at") and str(given["at"]) > when:
+        return False
+    have = rec.setdefault("roles", [])
+    for x in roles:
+        same = _scoped(rec, x["company"], x["role"])
+        if same is None:
+            have.append(dict(x, at=when, by=by))
+        elif str(same.get("at") or "") < when:
+            same.update(at=when, by=by)
+    _save(data)
+    return True
+
+
 def open_questions(data: dict | None = None) -> list[dict]:
-    """The skills nobody has answered yet, oldest first: {key, skill, asked, for}."""
+    """The skills nobody has answered yet, oldest first: {key, skill, asked, for}, `for` the
+    roles still waiting on an answer (one answered "just for this role" is not)."""
     data = data or load()
     out = []
     for k, rec in sorted(data["skills"].items(), key=lambda kv: str(kv[1].get("asked") or "")):
         if not isinstance(rec, dict) or answer(rec.get("skill") or k, data):
             continue
+        fors = [x for x in rec.get("for") or [] if isinstance(x, dict)]
+        waiting = [x for x in fors if not _scoped(rec, x.get("company"), x.get("role"))]
+        if rec.get("roles") and not waiting:
+            continue
         out.append({"key": k, "skill": str(rec.get("skill") or k), "asked": rec.get("asked"),
-                    "for": [x for x in rec.get("for") or [] if isinstance(x, dict)]})
+                    "for": waiting})
     return out
 
 
@@ -232,8 +290,10 @@ def redo_due(skill=None, today=None, ready: list | None = None, queued=()) -> li
     got the yes (the engine review, 2026-11-05)."""
     data = load()
     day = day_of(today)
+    # A yes for every application, or one "just for" some roles: those roles' drafts only.
     yes = {k: rec for k, rec in data["skills"].items() if isinstance(rec, dict)
-           and (skill is None or k == key(skill)) and answer(rec.get("skill") or k, data) == "yes"}
+           and (skill is None or k == key(skill))
+           and (answer(rec.get("skill") or k, data) == "yes" or rec.get("roles"))}
     if not yes:
         return []
     asked = {k: [x for x in rec.get("for") or [] if isinstance(x, dict) and x.get("day") == day]
@@ -247,6 +307,9 @@ def redo_due(skill=None, today=None, ready: list | None = None, queued=()) -> li
             continue
         d = None
         for k, entries in asked.items():
+            said = yes[k].get("skill") or k
+            if answer(said, data, item.get("company"), item.get("role")) != "yes":
+                continue
             today_asked = any(key(x.get("company")) == key(item.get("company"))
                               and key(x.get("role")) == key(item.get("role")) for x in entries)
             if d is None:
@@ -264,15 +327,17 @@ def redo_due(skill=None, today=None, ready: list | None = None, queued=()) -> li
                             + list(d.get("declined_skills") or []) if key(s) == k),
                            yes[k].get("skill") or k)
             out.append({"id": item["id"], "slug": item["slug"], "company": item.get("company"),
-                        "role": item.get("role"), "skill": spelled, "work": wid})
+                        "role": item.get("role"), "skill": spelled, "work": wid,
+                        **({"scope": ROLE} if answer(said, data) != "yes" else {})})
     return out
 
 
 def tweak_work(due: dict) -> dict:
-    """The tweak work item that redoes one draft with its yes (tools/tweak.py, change "yes")."""
+    """The tweak work item that redoes one draft with its yes (tools/tweak.py, change "yes"); a
+    yes "just for this role" says so, so the tweak never records it for every application."""
+    v = {"skill": due["skill"], **({"scope": ROLE} if due.get("scope") == ROLE else {})}
     return {"args": {"v": 1, "target": {"id": due["id"], "output": "resume"},
-                     "changes": [{"p": "yes", "v": {"skill": due["skill"]}}], "text": None,
-                     "keep": None}}
+                     "changes": [{"p": "yes", "v": v}], "text": None, "keep": None}}
 
 
 def redo_line(due: list[dict]) -> str:
@@ -308,6 +373,10 @@ def main(argv=None) -> int:
         data = load()
         for k, rec in sorted(data["skills"].items()):
             said = answer(rec.get("skill") or k, data) or "not answered yet"
+            only = ", ".join(sorted({f"{x.get('company')} ({x.get('role')})" for x in rec.get("roles") or []
+                                     if isinstance(x, dict)}))
+            if only and said != "yes":
+                said = f"yes just for {only}" + ("" if said == "not answered yet" else f"; {said} for the rest")
             who = ", ".join(sorted({str(x.get("company")) for x in rec.get("for") or []
                                     if isinstance(x, dict) and x.get("company")}))
             print(f"{rec.get('skill') or k}: {said}" + (f" (asked by {who})" if who else ""))

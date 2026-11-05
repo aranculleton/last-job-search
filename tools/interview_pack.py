@@ -1110,12 +1110,14 @@ def _round_key(label) -> str:
 
 
 def _with_stage(text, stage, date="", with_="", time="", zone="", minutes=0, due=False,
-                offered=(), reply_by="", place="") -> str:
+                offered=(), reply_by="", place="", tentative=None) -> str:
     """outcome.md's text with this stage booked on its checklist: `- [ ] <stage> (scheduled
     <date> [<HH:MM> [<zone>]], with <who>)`, the line the brief, /outcome, every pack and the
     page read. `zone` is one an invite gives beside the time (EST), when not the person's.
     With no day and `offered` days, the invitation's choice: `(offered <day>, <day>; reply by
-    <day>, with <who>)`, until the day chosen is booked over it."""
+    <day>, with <who>)`, until the day chosen is booked over it. `tentative`: asked for and not
+    confirmed by them yet, written ", not confirmed yet" before who it is with; None keeps what
+    the line said (a time added to it), False clears it (confirmed)."""
     # [ \t], never \s: in a multi-line match \s ate the newline and the blank line after a
     # rebooked stage, so booking it twice ran the next heading into it.
     same = re.compile(r"^- \[ \] %s(?:[ \t]*\(.*\))?[ \t]*$" % re.escape(stage), re.M | re.I)
@@ -1142,6 +1144,9 @@ def _with_stage(text, stage, date="", with_="", time="", zone="", minutes=0, due
             minutes = was[0].get("minutes") or 0
             due = was[0].get("kind") == "test" and not what_works.clock(time)
             place = place or was[0].get("place") or ""
+    if tentative is None and hits:
+        was = what_works.outcome_stages("## Interview stages reached\n" + hits[0].group(0))
+        tentative = bool(was and was[0].get("tentative"))
     place = " ".join(re.sub(r"[,()]", " ", _text(place)).split())[:60]
     given = _text(zone)
     zone = zone_name(zone)
@@ -1154,9 +1159,10 @@ def _with_stage(text, stage, date="", with_="", time="", zone="", minutes=0, due
     length = ", %d min" % int(minutes) if minutes and not due else ""
     days = sorted({d for d in (offered or ()) if re.fullmatch(r"\d{4}-\d{2}-\d{2}", _text(d))})
     if _text(date):
-        line = "- [ ] %s (%s %s%s%s%s)" % (stage, "due" if due else "scheduled", when, length,
-                                           ", on %s" % place if place and not due else "",
-                                           ", with %s" % with_ if _text(with_) else "")
+        line = "- [ ] %s (%s %s%s%s%s%s)" % (stage, "due" if due else "scheduled", when, length,
+                                             ", on %s" % place if place and not due else "",
+                                             ", not confirmed yet" if tentative else "",
+                                             ", with %s" % with_ if _text(with_) else "")
     elif days:
         line = "- [ ] %s (offered %s%s%s)" % (
             stage, ", ".join(days),
@@ -1205,7 +1211,8 @@ def tick_stage(path, stage) -> bool:
 
 
 def record_stage(folder, company, role, stage, date, with_="", today=None, time="",
-                 zone="", minutes=0, due=False, offered=(), reply_by="", place="") -> str:
+                 zone="", minutes=0, due=False, offered=(), reply_by="", place="",
+                 tentative=None) -> str:
     """Book a stage given to `pack --write` in the process's outcome.md, the record the
     brief reminds from and every later pack reads: given there with a date, it was used
     for that one pack and recorded nowhere (interview audit, 2026-10-25). An outcome.md not
@@ -1218,7 +1225,7 @@ def record_stage(folder, company, role, stage, date, with_="", today=None, time=
                 % (company, role, _text(today) or dt.date.today().isoformat(), stage,
                    "for " + date if _text(date) else "with the day still to choose"))
     text = _with_stage(text, stage, date, with_, time, zone, minutes, due, offered, reply_by,
-                       place)
+                       place, tentative)
     os.makedirs(folder, exist_ok=True)
     with open(out, "w", encoding="utf-8", newline="\n") as fh:
         fh.write(text)
@@ -4291,6 +4298,28 @@ def write_motive(question, answer, use_for=(), suits=(), not_for=(), path=None) 
     with open(path, "w", encoding="utf-8", newline="\n") as fh:
         fh.write("\n".join(lines).rstrip() + "\n")
     return path
+
+
+def keep_built_for(folder, label) -> bool:
+    """The living prep is for `label` as well, under its own name: a round moved to another
+    day is the same plan of rounds, so its prep stays current (the maintainer, 2026-11-05: a
+    new day alone said "Prep is for an earlier plan of rounds"). The prep keeps its own time,
+    so it reads as updated when it was, not now. True when the mark changed."""
+    path = os.path.join(folder, LIVING)
+    text = _read(path)
+    m = _STAGES_MARK.search(text)
+    label = _text(label)
+    if not m or not label:
+        return False
+    have = [s for s in m.group(1).split("; ") if s]
+    if any(_same_round(s, label) for s in have):
+        return False
+    st = os.stat(path)
+    text = text[:m.start()] + "<!-- stages: %s -->" % "; ".join(have + [label]) + text[m.end():]
+    with open(path, "w", encoding="utf-8", newline="\n") as fh:
+        fh.write(text)
+    os.utime(path, ns=(st.st_atime_ns, st.st_mtime_ns))
+    return True
 
 
 def stages_mark(ctx) -> str:

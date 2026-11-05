@@ -98,6 +98,10 @@ next?" in its first lines, and nothing asks for a decision a default could make.
   once its result is on the card. (form questions tests)
 - A state is a small tinted pill in words a person uses, never a code word: ok green, info
   blue, warn amber, bad red, held violet, waiting grey. (status audit, colour tests)
+- A booked round or call asked for and not confirmed by them yet says "Not confirmed yet",
+  a grey pill on its row in Coming up and on the Brief; the box of the same words is there
+  wherever its day is given, and booked again without it, it is confirmed. Why: a day only
+  asked for read as fixed (the maintainer, 2026-11-05). (not-confirmed tests)
 - Every message drafted and waiting is one card, "Messages to send (N)": the drafted
   replies and follow-ups, the week's first notes and the ones to check first together, a row a
   person, each opening their draft in Contacts, and one button opening Contacts. A row Claude
@@ -203,8 +207,14 @@ tests, `tests/test_contacts_is_one_page_with_each_persons_draft.py`)
   more, in touch another way); an interview
   or an application (they said no, I withdrew, stopped waiting); a reminder in To do (hide it
   for a week, and "1 hidden this week: Show" at the end of To do brings it back, as "1 set
-  aside: Show" does in Jobs). "I have applied" is under a job's More and on a draft's face,
+  aside: Show" does in Jobs); a booked call on Coming up (the call is off, one answer, its
+  row gone at once). "I have applied" is under a job's More and on a draft's face,
   never in the trash as well.
+- A trash sheet whose card has a box (a person, a message, a job, a draft, an interview) ends
+  with **Something else**: the sheet closes and that card's box opens under it, its field
+  focused, as Something else under More does; a person's trash in To do opens their box on
+  their card in Contacts. Why: none of the reasons fitted what was going on, and there was no
+  way to say it in words (the maintainer, 2026-11-05). (trash something-else test)
 - Tomorrow and Next week put a dated row off to that day in the engine: put off is never done.
   It leaves To do with "1 put off: Show" at its end, never under Done today nor in "x of N
   done", and its person's card in Contacts says "Put off until <day>" with nothing owed on its
@@ -301,6 +311,11 @@ tests, `tests/test_contacts_is_one_page_with_each_persons_draft.py`)
   Work waiting its turn behind the big jobs stays "In line" however long it waits, and drafts
   written together show their batch's progress and one Stop. The chat's line under a message
   is the same words as its card. (what-reaches-Claude tests)
+- A tap's write has the Chat's own limit, 20 seconds: past a few seconds its card says
+  "Saving…", and one not saved is undone on its card at once, said in its toast while it is
+  up and then on its card, in words that name what to tap ("Not saved. Tap I sent it again.")
+  with Try again. Why: a store that never answered left "I sent it" gone from its card with
+  nothing said (the maintainer, 2026-11-05). (send-tap test)
 - A tap is "Saved" once written and "Done" once Claude's receipt says so. Saved says what it
   waits for and where it shows: "Claude makes the change next, and this line says Done when it
   has", what it waits behind ("after “Reply to Juno”", light work running in the chat that

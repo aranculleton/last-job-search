@@ -1508,8 +1508,13 @@ def _claim(d: dict, v) -> str:
             d[field] = rest
         else:
             d.pop(field, None)
-    skill_answers.record(skill, "yes", by="page", company=d.get("company") or "",
-                         role=d.get("role") or "")
+    if isinstance(v, dict) and v.get("scope") == skill_answers.ROLE:
+        # "Just for this role": this draft's own yes, never the profile's or another role's.
+        skill_answers.record_role(skill, [{"company": d.get("company") or "",
+                                           "role": d.get("role") or ""}], by="page")
+    else:
+        skill_answers.record(skill, "yes", by="page", company=d.get("company") or "",
+                             role=d.get("role") or "")
     return f"{skill} on your skills line"
 
 

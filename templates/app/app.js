@@ -1058,6 +1058,8 @@
   // A finished tap's line is kept for two days: "Done. Change back" still sat on an Applied
   // card two weeks later (journeys audit 24).
   const DONE_LINE_MS = 2 * DAY;
+  // A tap not saved, said with the button to tap again where the card has one by that name.
+  const FAILED_AGAIN = {"msg.sent": "I sent it"};
   function stateLine(item, key) {
     const t0 = lastTouch(item);
     if (!t0) return null;
@@ -1066,7 +1068,9 @@
     // Saving takes a moment and its toast follows at once: nothing to say on the item meanwhile.
     // A failure likewise: said in its toast while it is up, on its row after (the 3 November
     // audit: "Not saved. Try again" twice at once).
-    if (t.state === "saving" || ((t.state === "saved" || t.state === "failed") && toastCarries(t.id))) return null;
+    // A write still going after a few seconds says "Saving…" (SAVING_QUIET_MS), so a store that
+    // never answers is never silence.
+    if ((t.state === "saving" && now() - (tms(t.doc.at) || now()) < SAVING_QUIET_MS) || ((t.state === "saved" || t.state === "failed") && toastCarries(t.id))) return null;
     const r = S.receipts.get(t.id);
     if (t.state === "applied" && r && now() - (tms(r.applied_at) || now()) > DONE_LINE_MS) return null;
     // Saved and waiting past the late limit: said, with when it goes ("Saved. Claude will
@@ -1081,7 +1085,7 @@
       // something (the maintainer, 2026-11-04).
       applied: t.doc.action === "undo" ? "Changed back." : r && r.nothing_new ? "Done. Nothing new in that download." : "Done.",
       refused: refusedWords(r),
-      failed: "Not saved.",
+      failed: FAILED_AGAIN[txt(t.doc.action)] ? "Not saved. Tap " + FAILED_AGAIN[txt(t.doc.action)] + " again." : "Not saved.",
       unsaved: "Not saved: this page cannot keep answers here. Open it in the Claude app.",
     }[t.state];
     if (!words) return null;
@@ -1197,15 +1201,19 @@
     if (shown) input.addEventListener("input", () => { shown.textContent = input.value; });
     const tid = fid + "-t";
     const time = kind === "date" && txt(a.time) ? h("input", {id: tid, type: "time", class: "fix-in fix-time", "data-k": "fix-time:" + key, "aria-label": "Time, if you know it"}) : null;
+    // A tick beside the day where the asker gives one (`a.tick`: its label; `a.ticked`: set).
+    const kid = fid + "-k";
+    const tick = kind === "date" && txt(a.tick) ? h("input", {id: kid, type: "checkbox", "data-k": "fix-tick:" + key, checked: !!a.ticked}) : null;
     return h("form", Object.assign({class: "fix", onsubmit: (e) => {
       e.preventDefault();
       const v = txt(input.value).trim();
       if (!v) { input.focus(); return; }
       const tv = time ? txt(time.value).trim() : "";
       const words = kind === "date" ? (fmtDay(v) || v) + (tv ? " at " + tv : "") : v;
-      send({value: v, time: tv, words});
+      send(Object.assign({value: v, time: tv, words}, tick ? {tick: !!tick.checked} : {}));
     }}, o.form || {}), h("label", {for: fid, class: "small"}, label || "Your answer"), input, shown,
       time ? [h("span", {class: "small muted", "aria-hidden": "true"}, "at"), time] : null,
+      tick ? h("span", {class: "choice tick"}, tick, h("label", {for: kid, class: "small"}, txt(a.tick))) : null,
       h("button", {type: "submit", class: "btn primary small", "data-k": "fix-go:" + key}, "Send"));
   }
   // The thing a tap was about, by name, from whichever list holds it.
@@ -1328,6 +1336,12 @@
   // that never answered left "Saving…" for ever (robustness audit 9).
   const CAP_WAIT_MS = 10000;
   function capReady(name) { return within(CAP[name], CAP_WAIT_MS); }
+  // How long one tap's write may take before it is said not saved, as the Chat's own send:
+  // a store that took "I sent it" and never answered left the message gone from its card with
+  // no word that it was not kept (the maintainer, 2026-11-05).
+  const ACT_WRITE_MS = 20000;
+  // A write still going after this long says "Saving…" on its card, so nothing is silent.
+  const SAVING_QUIET_MS = 3000;
   async function act(list, label, more) {
     if (readOnlyTap()) return [];
     noteFocus();
@@ -1371,9 +1385,18 @@
       scheduleRender();
       return recs;
     }
+    setTimeout(scheduleRender, SAVING_QUIET_MS + 50);
     await Promise.all(recs.map(async (r) => {
       try {
-        await db.doc("actions/" + r.id).set(Object.assign({}, r.doc, {_v: nextV(S.actions.get(r.id))}));
+        const write = db.doc("actions/" + r.id).set(Object.assign({}, r.doc, {_v: nextV(S.actions.get(r.id))}));
+        if (await within(write, ACT_WRITE_MS) === "timeout") {
+          r.state = "failed";
+          r.code = "timeout";
+          // Landing after the page said it was not saved: taken off again, so a tap the person
+          // is asked to make again is never applied twice.
+          Promise.resolve(write).then(() => { if (r.state === "failed") db.doc("actions/" + r.id).delete().catch(() => {}); }, () => {});
+          return;
+        }
         if (r.state === "saving") r.state = "saved";
         // Undone while it was being written: the write that landed after the delete goes too.
         else if (r.state === "undone") await db.doc("actions/" + r.id).delete().catch(() => {});
@@ -2095,11 +2118,14 @@
     // asked for a reason and then a second tap on "Done" took two taps to put one thing away
     // (the walk-through, 2026-11-03). Cancel is the only other button.
     const choices = arr(o.choices).filter(Boolean);
+    // A choice whose work is on the page behind the sheet (Something else opening a card's
+    // box) runs once the sheet has closed, so its focus is not handed back to the opener.
+    let afterClose = null;
     const submit = choices.length ? null : h("button", {type: "submit", class: "btn primary", "data-k": "sheet-go"}, o.submit || "Start");
     dlg._submit = submit;
     const cancel = h("button", {type: "button", class: "btn quiet", "data-k": "sheet-cancel", onclick: () => close()}, o.cancel || "Cancel");
     const choiceRow = choices.length ? h("div", {class: "sheet-choices", role: "group", "aria-labelledby": "sheet-title"}, choices.map((c, i) =>
-      h("button", {type: "button", class: "btn secondary choice-btn", "data-k": "sheet-choice:" + (c.key || i), onclick: () => { const keep = c.run(); if (keep !== true) close(); }}, c.label))) : null;
+      h("button", {type: "button", class: "btn secondary choice-btn", "data-k": "sheet-choice:" + (c.key || i), onclick: () => { if (c.after) afterClose = c.after; const keep = c.run ? c.run() : undefined; if (keep !== true) close(); }}, c.label))) : null;
     add(form, [h("h2", {id: "sheet-title", class: "sheet-title"}, o.title), o.lead || null, o.intro ? h("p", {class: "sheet-intro"}, o.intro) : null,
       o.cost ? h("p", {class: "sheet-cost"}, costNode(o.cost)) : null, errBox, fields.map((f) => f.el), (syncShown(), null), choiceRow, o.note ? h("p", {class: "hint"}, o.note) : null, o.after || null, h("div", {class: "sheet-actions"}, submit, cancel)]);
     dlg.appendChild(form);
@@ -2109,6 +2135,7 @@
     const fromItem = opener && opener.closest ? (opener.closest("[data-item]") || {getAttribute: () => null}).getAttribute("data-item") : null;
     dlg.addEventListener("close", () => {
       dlg.remove();
+      if (afterClose) { const f = afterClose; afterClose = null; f(); return; }
       if (opener && opener.isConnected && opener.focus) { opener.focus(); return; }
       let c = null;
       try { c = fromItem ? $("main").querySelector('[data-item="' + (window.CSS && CSS.escape ? CSS.escape(fromItem) : fromItem) + '"]') : null; } catch (e) { c = null; }
@@ -2193,6 +2220,11 @@
       const inp = h("input", {type: "time", id, value: f.value || "", step: "60", "aria-describedby": id + "-e"});
       el = h("div", {class: "field"}, h("label", {for: id}, f.label), f.hint ? h("p", {class: "hint"}, f.hint) : null, err, inp);
       read = () => inp.value || null;
+    } else if (f.type === "tick") {
+      // One checkbox, reached through its whole row, its label: true or false.
+      const inp = h("input", {type: "checkbox", id, checked: !!f.value});
+      el = h("div", {class: "field choice tick"}, inp, h("label", {for: id}, f.label));
+      read = () => !!inp.checked;
     } else if (f.type === "checks") {
       const opts = arr(f.options).map((op, i) => {
         const oid = id + "-" + i;
@@ -3531,7 +3563,7 @@
       return h("li", {class: "g-row", "data-item": d ? d.id : m.id},
         h("div", {class: "g-main"}, h("p", {class: "g-name"}, cid ? personName(cid, name, "send:" + m.id) : h("bdi", {}, name),
           fs === "going" ? [" ", chip("Claude is fixing it", "info")] : flag || fs === "failed" ? [" ", chip("Check first", "warn")] : null),
-          why ? h("p", {class: "muted small"}, why) : null, d ? stateLine(d.id, "send:" + where + ":" + d.id) : null),
+          why ? h("p", {class: "muted small"}, why) : null, stateLine(m.id, "send:" + where + ":msg:" + m.id) || (d ? stateLine(d.id, "send:" + where + ":" + d.id) : null)),
         h("div", {class: "g-acts"}, seeDraftBtn(m, "send:" + where + ":" + m.id, "secondary"),
           cid ? btn("", () => askRemovePerson(cid, txt(p ? p.first_name : m.first_name), txt(p ? p.employer : m.employer), null, Object.assign({skip, replied: p && canSayReplied(p) ? () => logReply(p) : null}, d ? {later: laterChoices(d), hide: () => hideTodo("due:" + d.id, txt(d.title))} : {})),
             {kind: "quiet icon-only", small: true, icon: "bin", key: "sendbin:" + where + ":" + m.id, aria: "Not " + name + "?"}) : null));
@@ -3985,7 +4017,7 @@
     const what = lc1(txt(iv.next_stage) || "interview");
     const read = (kind) => btn("Read your prep", () => openDetail("interview", iv.id), {kind, small: true, key: "read:" + k, aria: "Read your prep for your " + what + " with " + txt(iv.company)});
     const prepBtn = (kind) => btn(has ? "Update my prep" : "Prepare me", () => askPrep(iv), {kind, small: true, key: "prep:" + k, aria: (has ? "Update my prep for " : "Prepare me for ") + txt(iv.company)});
-    const bin = IV_OVER[txt(iv.status)] ? null : btn("", () => askEndApplication(iv, "the " + what + " with " + txt(iv.company), gone ? null : () => askMoved(iv)),
+    const bin = IV_OVER[txt(iv.status)] ? null : btn("", () => askEndApplication(iv, "the " + what + " with " + txt(iv.company), gone ? null : () => askMoved(iv), ["interview", iv.id]),
       {kind: "quiet icon-only", small: true, icon: "bin", key: "ivbin:" + k, aria: "Not going ahead: " + txt(iv.company)});
     if (bin) bin.setAttribute("data-bin", "1");
     if (gone) {
@@ -4028,7 +4060,7 @@
       return;
     }
     if (op.work) { requestWork([Object.assign({id: txt(obj(op.work).kind) + "~" + seg(n.id)}, obj(op.work))]); return; }
-    const value = op.value === undefined ? (/\.answer$/.test(txt(op.action)) ? txt(op.label) : null) : op.value;
+    const value = needValue(op);
     const another = txt(op.action) === "msg.sent" ? {seeLabel: "Another day?", see: () => {
       const last = effective(n.id, ["msg.sent"]);
       sheet({title: "When did it go?", intro: txt(n.title).replace(/^Did your note to /, "Your note to ").replace(/ go\?$/, "."), submit: "Save",
@@ -4036,6 +4068,18 @@
         onSubmit: (v) => { if (last) undo([last.id]); act([{item: n.id, action: "msg.sent", value: Object.assign({}, obj(op.value), {on: v.on || todayIso()}), rev: n.rev}], "It went on " + fmtDay(v.on || todayIso()) + ": " + txt(n.title)); }});
     }} : undefined;
     act([{item: txt(op.item) || n.id, action: txt(op.action), value, rev: op.item ? revOf(txt(op.item)) || n.rev : n.rev}], "Answered: " + txt(op.label), another);
+  }
+  // What an answer sends: its value, else, for an answer, its own words.
+  function needValue(op) {
+    op = obj(op);
+    return op.value === undefined ? (/\.answer$/.test(txt(op.action)) ? txt(op.label) : null) : op.value;
+  }
+  // The answer given is the one ticked, by its action and its value: a skill's Yes and No are
+  // one action each, so comparing the action alone ticked both at once (the maintainer,
+  // 2026-11-05).
+  function opChosen(chosen, op) {
+    if (!chosen || chosen.doc.action !== txt(obj(op).action)) return false;
+    return JSON.stringify(chosen.doc.value === undefined ? null : chosen.doc.value) === JSON.stringify(needValue(op));
   }
   function needCard(n, ctx) {
     ctx = ctx || {};
@@ -4050,7 +4094,7 @@
       hints.length ? h("ul", {class: "hints"}, hints) : null,
       h("div", {class: "opts", role: "group", "aria-labelledby": hid},
         arr(n.options).map((op, i) => btn(txt(op.label), () => answer(op),
-          {kind: "answer", small: true, key: "need:" + (ctx.where || "") + ":" + n.id + ":" + i, pressed: chosen ? chosen.doc.action === op.action : false}))),
+          {kind: "answer", small: true, key: "need:" + (ctx.where || "") + ":" + n.id + ":" + i, pressed: opChosen(chosen, op)}))),
       stateLine(n.id, "need:" + (ctx.where || "") + ":" + n.id));
   }
   function dueSpec(d) {
@@ -4374,7 +4418,7 @@
       n.body ? h("p", {class: "body"}, txt(n.body)) : null,
       h("div", {class: "card-actions"}, go,
         arr(n.options).map((op, i) => btn(txt(op.label), () => act([{item: n.id, action: txt(op.action), value: op.value === undefined ? null : op.value, rev: n.rev}], txt(op.label) + ": " + txt(n.title)),
-          {kind: !go && i === 0 ? "primary" : "answer", small: true, key: "need:" + (ctx.where || "") + ":" + n.id + ":" + i, pressed: chosen ? chosen.doc.action === op.action : false})),
+          {kind: !go && i === 0 ? "primary" : "answer", small: true, key: "need:" + (ctx.where || "") + ":" + n.id + ":" + i, pressed: opChosen(chosen, op)})),
         more("setup:" + n.id, txt(n.title), detail)),
       noteFor("browser:" + n.id), stateLine(n.id, "need:" + (ctx.where || "") + ":" + n.id));
   }
@@ -5883,7 +5927,8 @@
         extra.letGo ? {label: "Let it go: they have not replied", key: "letgo", run: () => extra.letGo()} : null,
         {label: "Don't contact " + who, key: "person", run: () => stop("person")},
         employer ? {label: "Not interested in " + employer + " any more", key: "employer", run: () => stop("employer")} : null,
-        {label: "Already in touch another way", key: "other", run: () => stop("other")}]});
+        {label: "Already in touch another way", key: "other", run: () => stop("other")},
+        elseChoice(extra.talk ? extra.talk[0] : "person", extra.talk ? extra.talk[1] : cid)]});
   }
   // A person's name that opens everything about them: the thread, what is owed, where they
   // work (the maintainer, 2026-10-29: "i forgot who this guy is, why cant i click his name").
@@ -5916,17 +5961,18 @@
     // 2026-10-29: "does this just block the company?").
     sheet({title: "Not sending this one?", intro: txt(a.role) + " at " + co + ". Your files are kept either way.",
       choices: binReasons(co, Object.keys(obj(a.apply)).length ? a.apply : obj(j).apply, obj(j).posted_days).map(([w, label]) => ({label, key: "why-" + w,
-        run: () => act([{item: a.id, action: "ready.not_applying", value: {why: w === "role" ? "not this role" : w}, rev: a.rev}], w === "employer" ? "No more roles from " + co : "Not applying: " + co)}))});
+        run: () => act([{item: a.id, action: "ready.not_applying", value: {why: w === "role" ? "not this role" : w}, rev: a.rev}], w === "employer" ? "No more roles from " + co : "Not applying: " + co)})).concat([elseChoice("application", a.id)])});
   }
   // The bin on an application or an interview: it is over, said the way the tracker records
   // it (the same outcomes as "I heard back").
-  function askEndApplication(item, what, moved) {
+  function askEndApplication(item, what, moved, talk) {
     const end = (w) => act([{item: txt(item.id), action: "outcome." + w, value: {on: todayIso()}, rev: item.rev}], (ACTION_WORDS["outcome." + w] || "Saved") + ": " + txt(item.company));
     // An interview moved or called off is not the end of the process: its own choice, which
     // asks the new day, if there is one (the audit, 2026-11-03).
     sheet({title: moved ? "What happened to " + what + "?" : "Is " + what + " over?", intro: moved ? "Moved keeps the process going. The others move it to Closed in Applied, and nothing more is chased there." : "It moves to Closed in Applied, and nothing more is chased there.",
       choices: (moved ? [{label: "It was moved or cancelled", key: "moved", run: () => { setTimeout(moved, 0); }}] : []).concat([{label: "They said no", key: "rejected", run: () => end("rejected")}, {label: "I withdrew", key: "withdrawn", run: () => end("withdrawn")},
-        {label: "No reply, and I have stopped waiting", key: "no_response", run: () => end("no_response")}])});
+        {label: "No reply, and I have stopped waiting", key: "no_response", run: () => end("no_response")},
+        talk ? elseChoice(talk[0], talk[1]) : null])});
   }
   // An interview's own application, by the ids the engine gives them, never by the employer's
   // name: with two roles at one employer, I heard back recorded against the other one (the
@@ -5946,7 +5992,7 @@
   }
   function askMoved(iv) {
     const app = ivApplication(iv);
-    heardBack(app, {stage: cap1(txt(iv.next_stage) || "Interview"), with: txt(iv.with), moved: true});
+    heardBack(app, {stage: cap1(txt(iv.next_stage) || "Interview"), with: txt(iv.with), moved: true, tentative: !!iv.tentative});
   }
   function askRemoveJob(r) {
     const co = txt(r.company);
@@ -5954,7 +6000,7 @@
       choices: binReasons(co, r.apply, r.posted_days).map(([w, label]) => ({label, key: "why-" + w, run: () => {
         const value = w === "employer" ? {why: "employer", scope: "employer"} : w === "role" ? {why: "not this role"} : {why: w};
         act([{item: r.id, action: "job.dismiss", value, rev: r.rev}], w === "employer" ? "No more roles from " + co : asideWords(w, co));
-      }}))});
+      }})).concat([elseChoice("job", r.id)])});
   }
   // What a reason in the job bin changes, said as it is set aside: pay, place and field teach
   // the next ranking (tools/app_actions.py _dismiss_rule), and a toast that said only
@@ -6532,7 +6578,7 @@
         h("div", {class: "job-top"}, h("h3", {id: hid}, toWho(m)),
           h("span", {class: "top-end"}, d.blocked ? stateWord("Breaks your rules", "bad") : m.due && dayDiff(m.due) !== null && dayDiff(m.due) < 0 ? stateWord("Overdue", "warn") : null,
             txt(m.contact) && !txt(m.application) ? btn("", () => askRemovePerson(txt(m.contact), txt(m.first_name), txt(m.employer), revOf(txt(m.contact)),
-              txt(m.kind) === "first_note" ? {skip: () => act([{item: m.id, action: "msg.skip", rev: m.rev}], "Set aside: the note to " + txt(m.first_name))} : {}),
+              Object.assign({talk: ["message", m.id]}, txt(m.kind) === "first_note" ? {skip: () => act([{item: m.id, action: "msg.skip", rev: m.rev}], "Set aside: the note to " + txt(m.first_name))} : {})),
             {kind: "quiet icon-only", small: true, icon: "bin", key: "mbin:" + m.id, aria: "Trash it: not now, or not " + txt(m.first_name) + "?"}) : null)),
         m.why ? h("p", {class: "meta"}, txt(m.why) + ".") : null,
         d.box, d.notes,
@@ -6883,6 +6929,27 @@
       if (S.cardAsk.has(th)) S.focusAfter = {key: "ct-text:" + th};
       scheduleRender();
     }, {small: true, key: "else:" + key, aria: "Something else about " + label, pressed: S.cardAsk.has(th)});
+  }
+  // The last choice of a trash sheet whose card has a box: none of the reasons fits, so the
+  // sheet closes and that card's box opens under it, to say in words what is going on (the
+  // maintainer, 2026-11-05: the person's trash offered Don't contact, In touch another way
+  // and Cancel, and nothing for anything else). It only opens the box, so it carries no
+  // gauge: the box's Ask Claude does.
+  function elseChoice(kind, id) {
+    return {label: "Something else", key: "else", after: () => openCardAsk(kind, id)};
+  }
+  // Opens a card's box where the card is: here when this screen draws it (a job in Jobs, an
+  // interview in To do), else on the card's own place (a person's box is in Contacts).
+  function openCardAsk(kind, id) {
+    const th = cardThread(kind, id);
+    const key = "ct-text:" + th;
+    S.cardAsk.add(th);
+    sset("local", "ljs:ct-hide:" + th, null);
+    S.focusAfter = {key};
+    render();
+    if (refocus(document, key) || !CARD_HOME[kind]) return;
+    go(CARD_HOME[kind], {focus: false, item: txt(id)});
+    refocus(document, key);
   }
   // Where a card's answer is seen: its kind's own place.
   const CARD_HOME = {person: "contacts", message: "contacts", job: "jobs", application: "jobs", interview: "interviews", place: "contacts"};
@@ -7246,6 +7313,20 @@
   // Calendar or any other app (a page may not save an .ics itself, so the file is a zip
   // holding one), or the details copied.
   const UP_WORDS = {interview: "Interview", test: "Due", call: "Call", deadline: "Closes", event: "Added by you"};
+  // A booked thing asked for and not confirmed by them yet, said one way everywhere.
+  const NOT_CONFIRMED = "Not confirmed yet";
+  // The page's own latest tap on a call's person, while it stands: one that takes them out of
+  // a booked call (called off, closed, let go) takes the call off Coming up at once.
+  const CALL_TURNS = ["person.status", "person.stop", "person.call_booked", "undo"];
+  function callGone(u) {
+    const g = obj(u.go);
+    if (txt(g.to) !== "contacts" || !txt(g.item)) return false;
+    const e = effective(txt(g.item), CALL_TURNS);
+    // Applied and already in the list the page holds: the list speaks for itself.
+    if (!e || (e.state === "applied" && txt(e.doc.at) < txt(M().made_at))) return false;
+    const a = txt(e.doc.action);
+    return a === "person.stop" || (a === "person.status" && txt(obj(e.doc.value).status) !== "call_booked");
+  }
   function upcomingItems() {
     // An interview ended on this page leaves at once, with every row of it.
     const ended = new Set(allInterviews().filter(ivEnd).map((i) => txt(i.id)));
@@ -7255,6 +7336,9 @@
       // The last word on one the person added: a removal hides it, Change back shows it again.
       const last = u.own ? effective(txt(u.id), ["upcoming.remove", "upcoming.add", "undo"]) : null;
       if (last && txt(last.doc.action) === "upcoming.remove") return false;
+      // A booked call called off, or its person put away, here: off at once, from this page's
+      // own taps, never only once the page is drawn again (the maintainer, 2026-11-05).
+      if (u.kind === "call" && callGone(u)) return false;
       // Over once it has ended, never at midnight: an interview at six sat in Coming up and
       // on the Brief as today's all evening (the audit, 2026-11-03).
       const ends = tms(u.end) !== null ? tms(u.end) : tms(u.start) !== null ? tms(u.start) + 3600000 : null;
@@ -7348,10 +7432,10 @@
   function upDayForm(u) {
     const tg = S.upEdit === u.id ? upTimeTarget(u) : null;
     if (!tg) return null;
-    return answerControl({kind: "date", key: "on", time: "time", label: "The new day"}, "up-day:" + u.id, (got) => {
+    return answerControl({kind: "date", key: "on", time: "time", label: "The new day", tick: NOT_CONFIRMED, ticked: !!u.tentative}, "up-day:" + u.id, (got) => {
       S.upEdit = null;
       upTimed.add(u.id);
-      act([{item: tg.item, action: tg.action, value: Object.assign({}, tg.value, {on: got.value}, got.time ? {time: got.time} : {}), rev: tg.rev}],
+      act([{item: tg.item, action: tg.action, value: Object.assign({}, tg.value, {on: got.value}, got.tick || u.tentative ? {tentative: !!got.tick} : {}, got.time ? {time: got.time} : {}), rev: tg.rev}],
         "Moved: " + txt(u.title) + " to " + got.words);
     });
   }
@@ -7409,14 +7493,24 @@
     const rm = u.own && !brief && !u.pending ? btn("", () => act([{item: txt(u.id), action: "upcoming.remove", rev: txt(u.rev)}], "Taken off: " + txt(u.title)),
       {kind: "quiet icon-only", small: true, icon: "bin", key: "up-rm:" + u.id, aria: "Take off: " + txt(u.title)}) : null;
     const prep = upPrep(u, prepped || new Set());
+    // Asked for and not confirmed by them yet: said on its row, here and on the Brief.
+    const maybe = u.tentative ? stateWord(NOT_CONFIRMED, null) : null;
     if (brief) return h("li", {class: "bp-up-row"},
-      h("span", {class: "up-main"}, h("span", {class: "up-when"}, [upDayLabel(u.day), upWhen(u)].filter(Boolean).join(" · ")), h("span", {class: "up-title"}, upGo(u)), prep), add);
+      h("span", {class: "up-main"}, h("span", {class: "up-when"}, [upDayLabel(u.day), upWhen(u)].filter(Boolean).join(" · ")), h("span", {class: "up-title"}, upGo(u)), maybe, prep), add);
     const sub = [UP_WORDS[txt(u.kind)] || "", txt(u.note), txt(u.place)].filter(Boolean).join(" · ");
     return h("li", {class: "up-row", "data-item": u.id, "data-card": "1", tabindex: "-1"},
       h("span", {class: "up-when"}, upWhen(u) || (u.own || u.pending ? "" : addTimeBtn(u))),
-      h("span", {class: "up-main"}, h("span", {class: "up-title"}, upGo(u)), sub ? h("span", {class: "up-note small muted"}, sub) : null, prep,
+      h("span", {class: "up-main"}, h("span", {class: "up-title"}, upGo(u)), maybe, sub ? h("span", {class: "up-note small muted"}, sub) : null, prep,
         upTimeForm(u), upDayForm(u), upTimed.has(u.id) ? stateLine(txt(obj(upTimeTarget(u)).item), "up:" + u.id) : null),
-      h("span", {class: "up-acts"}, upDayBtn(u), add, rm));
+      h("span", {class: "up-acts"}, upDayBtn(u), add, rm || callOff(u)));
+  }
+  // A booked call called off: the trash on its row, one answer, done at once with Undo. The
+  // person stays in the conversation; the row leaves Coming up at once (upcomingItems).
+  function callOff(u) {
+    const p = u.kind === "call" && txt(obj(u.go).to) === "contacts" ? personById(txt(obj(u.go).item)) : null;
+    if (!p || u.pending) return null;
+    return btn("", () => act([{item: p.id, action: "person.status", value: {status: "in_conversation", why: "the call was called off, said on the page"}, rev: p.rev}], "The call with " + txt(p.first_name) + " is off"),
+      {kind: "quiet icon-only", small: true, icon: "bin", key: "up-off:" + u.id, aria: "The call is off: " + txt(u.title)});
   }
   // The first week open; past that, folded behind one button once the list is long.
   const UP_OPEN = 8;
@@ -8691,7 +8785,10 @@
   // A to-do about one job or one draft is asked on that card, which moves to the top of its
   // list, instead of in a box of its own above the list.
   function needsAbout(company, role) {
-    return needsItems().filter((n) => txt(n.kind) !== "setup" && !settledAction(n.id) && txt(obj(n.about).company) === txt(company) &&
+    // Answered here, it leaves the card at once, its Undo in the toast, as To do's does: kept
+    // until Claude had applied it, a No stayed on the job's card under "Answered: No" (the
+    // maintainer, 2026-11-05). A refused answer is not standing, so the question comes back.
+    return needsItems().filter((n) => txt(n.kind) !== "setup" && !effective(n.id) && txt(obj(n.about).company) === txt(company) &&
       (!txt(obj(n.about).role) || !role || txt(obj(n.about).role) === txt(role)));
   }
   // A question about a job is asked on that job's one card, whichever kind it is: "Did you
@@ -8722,7 +8819,7 @@
       n.body ? h("p", {class: "q-why"}, txt(n.body)) : null,
       h("div", {class: "opts", role: "group", "aria-labelledby": qid},
         arr(n.options).map((op, i) => btn(txt(op.label), () => answerNeed(n, op),
-          {kind: "answer", small: true, key: "q:" + (ctx.where || "") + ":" + n.id + ":" + i, pressed: chosen ? chosen.doc.action === op.action : false}))),
+          {kind: "answer", small: true, key: "q:" + (ctx.where || "") + ":" + n.id + ":" + i, pressed: opChosen(chosen, op)}))),
       stateLine(n.id, "q:" + (ctx.where || "") + ":" + n.id));
   }
 
@@ -8869,9 +8966,10 @@
     const name = txt(p.first_name);
     sheet({title: "A call with " + name, intro: "The day you agreed. Claude can prepare you for it.",
       fields: [{id: "on", type: "date", label: "The day", required: true, value: p.call && (p.call.day || p.call.on) ? txt(p.call.day || p.call.on) : ""},
-        {id: "time", type: "text", label: "The time", hint: zoneHint(), max: 20, value: p.call && p.call.time ? txt(p.call.time) : ""}],
+        {id: "time", type: "text", label: "The time", hint: zoneHint(), max: 20, value: p.call && p.call.time ? txt(p.call.time) : ""},
+        {id: "tentative", type: "tick", label: NOT_CONFIRMED, value: !!obj(p.call).tentative}],
       submit: "Save the call", validate: (v) => (timeOk(v.time) ? null : TIME_HELP),
-      onSubmit: (v) => act([{item: p.id, action: "person.call_booked", value: Object.assign({on: v.on}, txt(v.time) ? {time: txt(v.time), zone: zone() || null} : {}), rev: p.rev}], "Call booked with " + name)});
+      onSubmit: (v) => act([{item: p.id, action: "person.call_booked", value: Object.assign({on: v.on}, v.tentative || obj(p.call).tentative ? {tentative: !!v.tentative} : {}, txt(v.time) ? {time: txt(v.time), zone: zone() || null} : {}), rev: p.rev}], "Call booked with " + name)});
   }
   function askCallPrep(p) {
     const name = txt(p.first_name);
@@ -8982,6 +9080,10 @@
           // 2pm Toronto, and a zone typed with it ("10am ET") is read as written (the audit).
           if (t) { val.time = t; val.zone = zone() || null; }
           if (w) val.with = w;
+          // Asked for and not confirmed by them yet: sent when ticked, or unticked over a day that
+          // was not confirmed (confirmed now); otherwise the record keeps what it said.
+          const maybe = !!stageField.querySelector("#hb-tentative").checked;
+          if (maybe || (pre && pre.tentative)) val.tentative = maybe;
           if (pre && pre.moved) val.moved = true;
         }
         act([{item: a.id, action: "outcome." + v.kind, value: val, rev: a.rev}], (ACTION_WORDS["outcome." + v.kind] || "Saved") + ": " + txt(a.company));
@@ -8990,7 +9092,8 @@
       h("div", {class: "field"}, h("label", {for: "hb-stage"}, "Which stage"), h("input", {type: "text", id: "hb-stage", maxlength: 80, placeholder: "Phone screen"})),
       h("div", {class: "field"}, h("label", {for: "hb-day"}, "The day"), h("input", {type: "date", id: "hb-day"})),
       h("div", {class: "field"}, h("label", {for: "hb-time"}, "The time", h("span", {class: "optional"}, " (if you like)")), h("p", {class: "hint"}, zoneHint()), h("input", {type: "text", id: "hb-time", maxlength: 20, placeholder: "13:00 or 1pm ET"})),
-      h("div", {class: "field"}, h("label", {for: "hb-with"}, "With whom", h("span", {class: "optional"}, " (if you like)")), h("input", {type: "text", id: "hb-with", maxlength: 80})));
+      h("div", {class: "field"}, h("label", {for: "hb-with"}, "With whom", h("span", {class: "optional"}, " (if you like)")), h("input", {type: "text", id: "hb-with", maxlength: 80})),
+      h("div", {class: "field choice tick"}, h("input", {type: "checkbox", id: "hb-tentative"}), h("label", {for: "hb-tentative"}, NOT_CONFIRMED)));
     if (pre && dlg) {
       const r = dlg.querySelector('input[type=radio][value="interview"]');
       if (r) r.checked = true;
@@ -8998,6 +9101,7 @@
       whenShown(dlg, false);
       const fill = (id, v) => { const el = stageField.querySelector("#" + id); if (el && v) el.value = v; };
       fill("hb-stage", txt(pre.stage)); fill("hb-day", txt(pre.day)); fill("hb-time", txt(pre.time)); fill("hb-with", txt(pre.with));
+      stageField.querySelector("#hb-tentative").checked = !!pre.tentative;
     }
     return dlg;
   }

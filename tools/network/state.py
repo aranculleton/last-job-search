@@ -902,6 +902,32 @@ REQUEST_WITHDRAW_DAYS = 21
 OLD_OWED_DAYS = _THROTTLE_SILENCE_DAYS
 
 
+# A resume they asked for, with nothing from them since, is closed by itself this long after
+# the ask (the maintainer, 2026-11-05: old requests stayed owed until closed by hand). Two
+# months: longer than an ordinary hiring round takes to fill a role (a month to six weeks),
+# so the role they had in mind has gone, and past the 45 days after which any other thread
+# with nothing done is set aside, so a request someone dated to send later has had two more
+# weeks than any other. A date the person put on it still ahead keeps it; a word from them
+# since opens it again.
+RESUME_ASK_LAPSE_DAYS = 60
+
+
+def resume_ask_lapsed(asked, msgs, today, due=None):
+    """The day their request for a resume closed by itself (`asked` more than
+    RESUME_ASK_LAPSE_DAYS ago, nothing from them since, no date of the person's own still
+    ahead), or None while it stands."""
+    asked, today, due = as_date(asked), as_date(today), as_date(due)
+    if asked is None or today is None or (due is not None and due > today):
+        return None
+    lapse = asked + datetime.timedelta(days=RESUME_ASK_LAPSE_DAYS + 1)
+    if today < lapse:
+        return None
+    since = [as_date(r.get("date")) for r in msgs or () if said_something(r)]
+    if any(d is not None and d > asked for d in since):
+        return None
+    return lapse
+
+
 def owed_too_long(since, today) -> bool:
     """Owed since `since` for more than OLD_OWED_DAYS: a thread that has ended."""
     since, today = as_date(since), as_date(today)
@@ -1680,6 +1706,31 @@ def _trailing_outbound(msgs) -> int:
     return n
 
 
+# Our messages that answer them: a reply to what they wrote, or the resume they asked for.
+ANSWER_SCENARIOS = frozenset({"reply", "send_resume"})
+
+
+def _chases(msgs) -> int:
+    """Our messages since they last wrote, as they count toward the person's limit of
+    unanswered messages: every message that chases them, and our answer to their last
+    message once, however many messages it took (a reply, then a new day for the call they
+    offered, then the resume they asked for, are one answer). The reschedule sent to someone
+    who had offered the day was counted as a second unanswered message, and they were marked
+    "no more follow-ups" (the maintainer, 2026-11-05)."""
+    chased, answered = 0, False
+    for row in reversed(msgs):
+        if is_acceptance(row) or is_bare_request(row) or is_withdrawal(row) \
+                or is_auto_reply(row) or (is_call(row) and not call_held(row)):
+            continue
+        if _direction(row) != "out" or call_held(row):
+            break
+        if str(row.get("scenario") or "").strip().lower() in ANSWER_SCENARIOS:
+            answered = True
+        else:
+            chased += 1
+    return chased + int(answered)
+
+
 # A next_action that opens by saying nothing is owed. Anchored to the start, the
 # way the rows are written, so "no action until they reply" in the middle of a
 # longer instruction is not read as one.
@@ -1726,6 +1777,14 @@ def no_reply(contacts, threads, who, why, today, look_again=None) -> tuple[dict,
     why = " ".join(str(why or "").split()).rstrip(".")
     if not why:
         raise ValueError("say why no answer is needed, in their words or yours (--why)")
+    # Dated no earlier than the message it answers: their message logged on the person's own
+    # day, ahead of this computer's clock (an evening in Toronto is the next day in UTC), read
+    # as written after the mark, so the first "no answer owed" did not take and they stayed
+    # owed until it was run again (the maintainer, 2026-11-05).
+    newest = max((as_date(r.get("date")) for r in msgs if said_something(r) and as_date(r.get("date"))),
+                 default=None)
+    if newest is not None and newest > day:
+        day = newest
     back = _need_date(look_again, "look again") if look_again else follow_up_on(day)
     put_next(row, msgs, f"Nothing owed ({day.isoformat()}). {why[:1].upper() + why[1:]}. "
                         f"Look again on {back.isoformat()}.", back.isoformat())
@@ -1983,7 +2042,8 @@ def follow_up_due(contact, msgs) -> tuple:
     real = [r for r in msgs if not is_auto_reply(r)]
     sent = (as_date(real[-1].get("date")) if real
             else as_date((contact or {}).get("first_contacted")))
-    nudges = max(_trailing_outbound(msgs) - 1, 0)
+    # Counted from what chases them (_chases): a message answering them is no follow-up.
+    nudges = max(_chases(msgs) - 1, 0)
     if sent is None or nudges >= schema.MAX_NUDGES:
         return sent, None, nudges
     due_on = follow_up_on(sent)
@@ -2071,7 +2131,7 @@ def at_limit(contact, msgs, status=None) -> bool:
     status = effective_status(contact or {}, msgs) if status is None else status
     if status not in _LIMIT_STATUSES:
         return False
-    return (_trailing_outbound(msgs) >= schema.MAX_UNANSWERED
+    return (_chases(msgs) >= schema.MAX_UNANSWERED
             or bool(STOP_LINE.match(str((contact or {}).get("next_action") or ""))))
 
 
@@ -2609,7 +2669,7 @@ FOLLOW_UP_KINDS = ("nudge", "message")
 
 
 def followed_up(contacts, threads, contact_id, today, text="", date=None, channel="",
-                subject="", kind="message", attached="", also=False) -> dict:
+                subject="", kind="message", attached="", also=False, answers=False) -> dict:
     """Record a later message to someone already written to: a nudge after silence
     (`kind="nudge"`), or any other message in the thread (`kind="message"`: a reply to them,
     a thank-you, the first words after they accepted a request that carried none). The
@@ -2627,6 +2687,9 @@ def followed_up(contacts, threads, contact_id, today, text="", date=None, channe
     one message each logged a reply in their own words, and the second was relabelled a
     chase (2026-10-24, twice). A resume going with it is its own step and is let through.
     Both lists change in place; the caller saves them.
+
+    `answers`: it was written as an answer to them (a reply drafted to their message), so in
+    a conversation they take part in it is logged as one, never as a chase.
 
     `attached` is a file that went with it (`resolve_attachment`). A resume sent while one
     they asked for is owed is logged as `send_resume`, the scenario /reply reads as
@@ -2683,6 +2746,12 @@ def followed_up(contacts, threads, contact_id, today, text="", date=None, channe
         scenario = "reply"
     elif not spoke:
         scenario = "first_message"       # after a request that said nothing
+    elif answers and kind == "message" and _live(rows):
+        # Written as an answer to them (the page's reply drafted to their message, `--answers`),
+        # in a conversation they take part in: a new day for the call they offered, a day
+        # confirmed. Never a chase, and never counted toward the limit of unanswered messages
+        # (the maintainer, 2026-11-05).
+        scenario = "reply"
     else:
         # A second message with no reply between is a chase, whatever the command: the
         # nudge count (owed, what_works) reads it as one.
@@ -2700,7 +2769,7 @@ def followed_up(contacts, threads, contact_id, today, text="", date=None, channe
             chan = "message"             # once connected, a message, never another request
     note = ""
     if scenario == "nudge":
-        before = max(_trailing_outbound(rows), 1) - 1
+        before = max(_chases(rows), 1) - 1
         if before >= schema.MAX_NUDGES:
             note = (f"that is nudge {before + 1} to {name}; the rule is {schema.MAX_NUDGES}. "
                     "Logged because it went; nothing more goes until they reply")
@@ -2777,6 +2846,17 @@ def followed_up(contacts, threads, contact_id, today, text="", date=None, channe
         note = "; ".join(x for x in (note, "a kind close: no follow-up is set") if x)
     _drop_draft(cid)
     return {"row": row, "said": note}
+
+
+def _live(rows) -> bool:
+    """A conversation they take part in: our messages since they last wrote began by
+    answering them."""
+    ordered = _ordered(rows)
+    last_word = max((i for i, r in enumerate(ordered) if said_something(r)), default=-1)
+    if last_word < 0:
+        return False
+    after = [r for r in ordered[last_word + 1:] if _is_message_out(r) and not is_request(r)]
+    return bool(after) and str(after[0].get("scenario") or "").strip().lower() in ANSWER_SCENARIOS
 
 
 RECEIVED_CHANNELS = ("message", "inmail", "email", "connection", "intro")
@@ -3553,6 +3633,9 @@ def _cli_followed_up(argv, kind) -> int:
     ap.add_argument("--also", action="store_true",
                     help="it went as well as the message already logged to them that day: "
                          "two different messages, both sent")
+    ap.add_argument("--answers", action="store_true",
+                    help="written as an answer to them (a new day for a call they offered): "
+                         "never counted as a follow-up")
     ap.add_argument("--contacts", default=CONTACTS_CSV)
     ap.add_argument("--threads", default=THREADS_CSV)
     ap.add_argument("--today", default=datetime.date.today().isoformat())
@@ -3602,7 +3685,8 @@ def _cli_followed_up(argv, kind) -> int:
         try:
             got = followed_up(contacts, threads, cid, a.today, text=text, date=a.date or None,
                               channel=a.channel, subject=a.subject, kind=kind,
-                              attached=a.attached, also=a.also)
+                              attached=a.attached, also=a.also,
+                              answers=bool(getattr(a, "answers", False)))
         except ValueError as e:
             print(f"  not recorded: {cid}: {e}")
             continue

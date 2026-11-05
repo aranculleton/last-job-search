@@ -30,6 +30,14 @@ make sense to somebody whose repo just received it.
   you are, with Claude's answer shown there.
 - **The resume a message sends is on its card.** A draft that says "resume attached" or
   "here's my resume" shows the file under it, ready to save and attach.
+- **Something else in the trash.** Putting away a person, a job, a draft or an interview now
+  ends with "Something else", which opens that card's box so you can say what is going on.
+- **"Just for this role" for a skill.** A question about a skill your profile lacks now has
+  three answers: add it to your profile, use it for this role's resume only, or no.
+- **Not confirmed yet.** An interview or call you asked for but they have not confirmed can be
+  marked so when you give its day, and Coming up and the Brief say "Not confirmed yet".
+- **Old resume requests close by themselves.** Someone who asked for your resume over two
+  months ago and has said nothing since leaves your list on their own; the brief says so once.
 
 ### Fixed
 
@@ -38,6 +46,17 @@ make sense to somebody whose repo just received it.
 - **A tap reads only what changed.** Claude reads your page's new taps and work, keeps the rest from its last look, and reads everything again once a day or when something looks out of step.
 - **Saving happens once a batch, quietly.** Your work is saved in the background once each batch of answers is on your page, and finishing a save no longer wakes the page chat or holds it up.
 - **What answering your page costs is kept.** Each tap's cost is noted, and `python3 tools/helper_usage.py day` says it as one number for the day.
+- Answering a skill question on a job card takes it off the card at once, and only the
+  answer you gave is ticked.
+- A new day for the same interview no longer says your prep is out of date, and when the
+  rounds really change, your prep is updated by itself.
+- A call you call off leaves Coming up at once.
+- Moving a call they offered no longer counts as chasing them, so they are not marked "no
+  more follow-ups".
+- Saying someone needs no answer takes the first time, even when their message came in late
+  in your evening.
+- If "I sent it" cannot be saved, the message comes back on its card saying "Not saved. Tap
+  I sent it again.", instead of disappearing.
 - **"Draft all" for your follow-ups is one quick job, not one per person.** Follow-ups asked for together are taken together and written in one go, so nine follow-ups take a handful of steps instead of dozens.
 - **"I sent it" is always taken in.** A tap made just as Claude's daily fresh start on your page happened sat waiting; it is now taken in on Claude's next look.
 - **Your page no longer sends you to another chat.** Where a tap cannot do something, the page now asks Claude, who does it right there, and nothing on it talks about chats.

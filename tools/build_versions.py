@@ -375,8 +375,9 @@ METHODS: dict[str, dict] = {
             (74, "2026-11-05", False, "a form's own questions (why us, why this role, a time you used a tool) are answered from your profile and the posting and kept with the application in its screening_answers.md (tools/form_answers.py), an example you asked for marked as a draft for you to confirm; the resume and the letter are never changed by it"),
             (75, "2026-11-05", False, "the page's colour pairs (templates/app/palettes.py) hold a soft button's edge in a card's suggestion box; no document is made differently"),
             (76, "2026-11-05", False, "a role kept for a referral in progress carries its note (referral_note) into the picks and the tracker row; documents are made as before"),
+            (77, "2026-11-05", False, "a skill question has a third answer, just for this role: the skill goes on that role's resume and bullets through the draft's own yes, never into the profile or onto another role, which a later posting asks again; a yes and a no work as before, so nothing made before needs making again"),
         ),
-        "fingerprint": "3c207c6a51a67350",
+        "fingerprint": "3c309d21111f59dd",
     },
     "interview": {
         "by": "upgrade", "priority": 2, "applies": "live_interviews", "time": "~15 min",
@@ -416,8 +417,9 @@ METHODS: dict[str, dict] = {
             (26, "2026-10-30", True, "a prep the page asks for after a booked stage's day has gone is for what comes next, never the stage already held, and the pack says which stage it is for in its first line"),
             (27, "2026-11-02", False, "a stage is booked with its kind (due by a day, or a meeting), its length and its time zone's own name (interview_pack.py book --due --minutes, --zone America/Toronto), so Coming up reads them rather than guessing from English words; packs are built as before; a time given on rebooking makes a test a meeting, and a zone it cannot place gives no time"),
             (28, "2026-11-03", True, "a stage booked with no day yet says so in its notes instead of an empty date; the prep reads in plain words for the minutes before a call: one screen with what they are checking, three to five things to say and two or three questions to ask, the one or two things not to say that matter (the rest kept under the gaps), every source said as what it is to you (never a file, a path or a command), contacts' states in words, what you sent named as your resume and cover letter, notes never repeated under Likely questions, \"Draft\" only above an answer that is one, and what Claude still has to look up or ask said plainly; the whole prep reaches the page, never cut; a stage keeps the zone its time was given in, its length and where it is, an invitation that offers several days keeps them and the day to answer by until one is chosen, a round moved under another name is moved rather than booked twice, the next round is the earliest by its day, a test is ticked when done, and a thank-you sent some other way is marked as sent; the outcome keeps one status once resolved, and a pack's stock answers follow the place and the band each employer heard; a manager's leadership answer leads with the team they ran; a pack asked for in a chat is given in the chat in full as well as on the page"),
+            (29, "2026-11-05", False, "a booked round can be not confirmed yet, written on its line and cleared when booked again without it; a new day for the same round keeps its prep current, and a prep for an earlier plan of rounds is updated by itself; nothing made before needs making again"),
         ),
-        "fingerprint": "cb58a4aadbdc7b33",
+        "fingerprint": "a1f8d18b6e5e6332",
     },
     "research": {
         "by": "upgrade", "priority": 3, "applies": "live_applications", "time": "~5 min each",
@@ -559,8 +561,9 @@ METHODS: dict[str, dict] = {
             (76, "2026-11-05", False, "a message in LinkedIn's download is matched to one already logged whatever its quote marks or dashes (curly or straight), so it is not logged again; copies an older import wrote are taken out by the export-repeats profile upgrade, statuses set again from the log"),
             (77, "2026-11-05", False, "a message the download shows was sent earlier in a day goes before a reply already logged that day, and the tidy puts a day an older import misordered in the order sent, so nobody reads as owed a reply they answered; a check that passed is said as the documents and their length alone"),
             (78, "2026-11-05", False, "a contact closed or cleared by hand parks their draft as the page's stop does; a draft written before their newest message is set aside and never offered; a thank-you to a kind close sets no follow-up; a pasted conversation logs only their messages; the person's own address never reads as a request; a message plainly not the draft teaches no edit"),
+            (79, "2026-11-05", False, "several messages answering one of theirs count once toward the limit of unanswered messages, and a reply drafted to their message is logged as an answer, never a chase; a booked call can be not confirmed yet; a resume asked for over 60 days ago with nothing from them since closes by itself and the brief says so once; a no answer owed mark is dated no earlier than the message it answers; dates and lines are read again on the next run, so nothing needs redoing"),
         ),
-        "fingerprint": "02c3e5232631e5cb",
+        "fingerprint": "8a9421cb78794da1",
     },
     "network-notes": {
         "by": "network", "priority": 2, "applies": "queued_notes", "time": "~10 min",
@@ -795,8 +798,9 @@ METHODS: dict[str, dict] = {
             (51, "2026-11-05", True, "every visit opens the whole list, never a filter left on; Contacts sorts who is waiting on you first, with a Sort by beside it; the filters on Contacts and Jobs are the few that matter; the pencil box has Cancel"),
             (52, "2026-11-05", True, "the page rings a fresh thread once another chat answers it, so a new page chat hears every tap"),
             (53, "2026-11-05", True, "several drafted at once read as one line with one Cancel all and a word a row; finished answers group in Claude's work, folded ones too; a message sent while Claude answers the last goes to Claude; a chat message that does not save says so"),
+            (54, "2026-11-05", True, "every trash sheet whose card has a box ends with Something else, opening that box; a skill question answered on a job card leaves it at once with only its answer ticked, and has a third answer, just for this role; Coming up and the Brief say Not confirmed yet, with its box wherever a day is given, and a call called off leaves Coming up at once; an I sent it the store never answers says Saving, then Not saved. Tap I sent it again., with the message back on its card"),
         ),
-        "fingerprint": "32bc1353e4bcb94d",
+        "fingerprint": "adbd7fd6f32bc80f",
     },
     "upskill": {
         "by": "upgrade", "priority": 4, "applies": "upskill_plans", "time": "~10 min",

@@ -342,6 +342,11 @@ def _item(kind, iid, title, day, time_="", zone="", end_time="", with_="", where
             "uid": uid or iid}
 
 
+def call_tentative(text) -> bool:
+    """A booked call asked for and not confirmed by them yet, as its line says it."""
+    return bool(re.search(r"\bnot confirmed\b", str(text or ""), re.I))
+
+
 def label(text) -> str:
     """A stage's name as a title starts: "initial round" is "Initial round"."""
     t = " ".join(str(text or "").split())
@@ -462,6 +467,8 @@ def build(ctx, page_url: str = "") -> list[dict]:
                          note=(f"{role}" + (f", with {who}" if who else "")) or None,
                          minutes=int(s.get("minutes") or 0) or (30 if _SHORT.search(label_) else 60),
                          home=home, uid=f"up-{rid}-stage-{n_}")
+            # Asked for and not confirmed by them yet: Coming up and the Brief say so.
+            item["tentative"] = bool(s.get("tentative"))
             if ahead(item["day"], item):
                 out.append(item)
                 seen_days.setdefault((ckey(company), day), set()).add(time_)
@@ -484,6 +491,7 @@ def build(ctx, page_url: str = "") -> list[dict]:
                      when.get("time") or "", when.get("zone") or "", when.get("end") or "",
                      with_=company, where=place(said), go={"to": "contacts", "item": cid},
                      minutes=30, home=home, uid=f"up-call-{_slug(cid)}")
+        item["tentative"] = call_tentative(said)
         if ahead(item["day"], item):
             out.append(item)
     for e in added():
@@ -499,7 +507,8 @@ def build(ctx, page_url: str = "") -> list[dict]:
     out.sort(key=lambda i: (i["day"], i["start"] or "", i["title"].lower()))
     for i in out:
         i["cal"] = links(i, page_url, today)
-        i["rev"] = app_model.rev_of(i["id"], i["day"], i["start"], i["end"], i["title"], i["note"])
+        i["rev"] = app_model.rev_of(i["id"], i["day"], i["start"], i["end"], i["title"], i["note"],
+                                    i.get("tentative"))
     return out
 
 

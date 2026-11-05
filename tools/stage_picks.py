@@ -1058,7 +1058,7 @@ def assemble(round_dir: str, only=()) -> tuple[list[dict], list[str], list[str]]
         # is kept on the draft as waiting, never as a no.
         yes, no, open_ = list(p.get("skills_yes") or []), list(p.get("skills_no") or []), []
         for n in waits_on(p):
-            said = skill_answers.answer(n, shared)
+            said = skill_answers.answer(n, shared, p.get("company") or "", p.get("role") or "")
             (yes if said == "yes" else no if said == "no" else open_).append(n)
         if yes:
             d["consented_skills"] = yes

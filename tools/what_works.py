@@ -597,6 +597,7 @@ _STAGE_WHEN = re.compile(r"\((?:(?P<sched>scheduled\s+)|(?P<due>due\s+))?(?P<dat
                          r"(?:[ap]\.?m\.?)?)(?:\s*(?-i:(?P<zone>[A-Z]{2,5}\b|[A-Z][A-Za-z_]+(?:/[A-Za-z0-9_+-]+)+)))?(?=\s*[,)]))?"
                          r"(?:\s*,\s*(?P<minutes>\d{1,3})\s*min\w*)?"
                          r"(?:\s*,\s*on\s+(?P<place>[^,)]+?))?"
+                         r"(?:\s*,\s*(?P<tentative>not confirmed(?: yet)?))?"
                          r"(?:\s*,\s*with\s+(?P<with>[^)]*))?\)", re.I)
 
 
@@ -660,7 +661,7 @@ def _heading_stages(text: str, today: str) -> list[dict]:
 def outcome_stages(text: str, today: str = "") -> list[dict]:
     """Each stage line under "Interview stages reached" in an outcome.md.
 
-    {label, step, done, date, scheduled, with, time, zone}: `done` is the box ticked,
+    {label, step, done, date, scheduled, with, time, zone, tentative}: `done` is the box ticked,
     `scheduled` a stage booked and not yet held, `with` who it is with, `time` its hour
     where the line gives one (HH:MM, `clock`) and `zone` the zone written beside it. An outcome.md
     written by hand, with a dated heading per round and no checklist, is read from its
@@ -687,7 +688,7 @@ def outcome_stages(text: str, today: str = "") -> list[dict]:
                         "done": hit.group(1).lower() == "x", "date": "", "scheduled": True,
                         "kind": "", "minutes": 0,
                         "with": " ".join((offer.group("with") or "").split()), "time": "",
-                        "zone": "", "place": "",
+                        "zone": "", "place": "", "tentative": False,
                         "offered": re.findall(r"\d{4}-\d{2}-\d{2}", offer.group("days")),
                         "reply_by": offer.group("reply") or ""})
             continue
@@ -702,7 +703,9 @@ def outcome_stages(text: str, today: str = "") -> list[dict]:
                     "with": " ".join((when.group("with") or "").split()) if when else "",
                     "time": clock(when.group("time")) if when else "",
                     "zone": (when.group("zone") or "") if when else "",
-                    "place": " ".join((when.group("place") or "").split()) if when else ""})
+                    "place": " ".join((when.group("place") or "").split()) if when else "",
+                    # Asked for, and not confirmed by them yet (2026-11-05): "not confirmed yet".
+                    "tentative": bool(when and when.group("tentative"))})
     return out or _heading_stages(whole, today or dt.date.today().isoformat())
 
 

@@ -196,8 +196,11 @@ JSON_FILES = {
                                     "indent": 1},
     "documents/skill_answers.json": {
         "whole": ("skills/*/answer",), "stamps": ("at",),
-        "lists": {"skills/*/for": {"key": ("company", "role"), "keep": True}},
-        "dated": {"skills/*/asked": "earlier", "skills/*/for/#/day": "later"},
+        # A yes "just for this role" (skill_answers.record_role): every role either side named.
+        "lists": {"skills/*/for": {"key": ("company", "role"), "keep": True},
+                  "skills/*/roles": {"key": ("company", "role"), "keep": True}},
+        "dated": {"skills/*/asked": "earlier", "skills/*/for/#/day": "later",
+                  "skills/*/roles/#/at": "later"},
         "indent": 1, "sort": "all"},
     # The findings the person read and kept (profile_consistency.keep): only ever added to.
     "profile/consistency_reviewed.json": {

@@ -1588,7 +1588,8 @@ def nudge_due(threads, today, new_development="") -> dict:
     if _they_spoke_last(rows):
         return dict(base, reason="they answered; a reply is owed, not a nudge")
 
-    nudges = _trailing_outbound(rows) - 1
+    # What chases them, never a message answering them (state._chases).
+    nudges = state._chases(rows) - 1
     # The last row is an acceptance when that is the last thing that happened,
     # and its date is the one the networking skill counts from: "from the
     # acceptance, not from the send". An automatic reply is not: the clock runs

@@ -1291,15 +1291,26 @@ def _outcome(r: Run, status: str) -> dict:
                     f", offered {', '.join(offered)}" + (f", reply by {reply_by}" if reply_by else "")
                     if offered else ", the day still to choose") + \
                 (f", with {who}" if who and not day else "")
+            # Asked for and not confirmed by them yet: ticked or not when the day is given;
+            # not said at all (a time added on its row), the line keeps what it said.
+            tentative = None if "tentative" not in r.value else bool(r.value.get("tentative"))
+            # The same round on a new day is the same plan of rounds: its prep stays current
+            # (a new day alone made it "for an earlier plan of rounds", 2026-11-05).
+            same_plan = day and any(x["label"].lower() == stage.lower() for x in
+                                    what_works.outcome_stages(before["md"] or "")) and \
+                not _prep_stale_now(folder, before["md"] or "", stage)
             changed = confirm.record_outcome(row, "interview", r.day,
                                              note=f"{stage} booked{when}",
                                              source="page", now=r.local)
             interview_pack.record_stage(folder, company, role, stage, day, who,
                                         today=r.day.isoformat(), time=clock, zone=zone,
                                         minutes=minutes, offered=offered, reply_by=reply_by,
-                                        place=r.words("place")[:60])
+                                        place=r.words("place")[:60], tentative=tentative)
+            if same_plan:
+                interview_pack.keep_built_for(folder, stage)
             said = (f"Booked: {stage} with {company} on {day}"
                     + (f" at {clock} {app_model.zone_words(zone)} time." if clock else ".")
+                    + (" Not confirmed yet." if tentative else "")
                     if day else
                     f"Saved: {stage} with {company}, offered on {len(offered)} days. Choose "
                     "yours on the interview's card, then tell them." if offered else
@@ -1330,6 +1341,16 @@ def _outcome(r: Run, status: str) -> dict:
         csv_store.header(path) + list(throttle.CONFIRM_COLUMNS))))
     return {"note": said, "undo": {"action": "outcome.undo", "target": dict(r.target),
                                    "value": before}}
+
+
+def _prep_stale_now(folder: str, md: str, stage: str) -> bool:
+    """Was the prep already for an earlier plan before this booking? Only then does a new day
+    for the same round leave it so."""
+    import interview_pack
+    text = app_model.read_text(os.path.join(folder, interview_pack.LIVING))
+    if not text:
+        return False
+    return app_model._prep_stale(folder, text, {"label": stage})
 
 
 def _rework(r: Run) -> dict:
@@ -1536,6 +1557,9 @@ def _msg_sent(r: Run) -> dict:
             else:
                 argv = ["nudge" if kind == "follow_up" else "message", cid, "--text-file", path,
                         "--date", day, "--today", r.day.isoformat()]
+                if kind == "reply":
+                    # Drafted as the answer to their message: never logged as a chase.
+                    argv.append("--answers")
                 if channel in ("email", "inmail"):
                     argv += ["--channel", channel]
             if subject:
@@ -1939,9 +1963,13 @@ def _call_booked(r: Run) -> dict:
     at = (f" at {clock}" + (f" {app_model.zone_words(zone)} time" if zone and zone != home
                              else "")) if clock else ""
     cid = r.target.get("contact") or ""
-    before = _set_contact(r, "call_booked", f"Call on {day}{at}: prepare for it", day,
-                          f"call booked for {day}{at}, said on the page")
-    return {"note": f"Call with {_first(cid)} on {day}{at}. Prepare for it from their row.",
+    # Asked for and not confirmed by them yet: said in the call's own line, which every reader
+    # of the call reads (upcoming.call_tentative), and cleared when booked again without it.
+    maybe = ", not confirmed yet" if r.value.get("tentative") else ""
+    before = _set_contact(r, "call_booked", f"Call on {day}{at}{maybe}: prepare for it", day,
+                          f"call booked for {day}{at}{maybe}, said on the page")
+    return {"note": f"Call with {_first(cid)} on {day}{at}"
+                    + (", not confirmed yet" if maybe else "") + ". Prepare for it from their row.",
             "undo": {"action": "person.status", "target": {"kind": "person", "contact": cid},
                      "value": before}}
 
@@ -3137,14 +3165,23 @@ def _skill_answer(r: Run, t: dict) -> dict:
     posting that asked), redone with it by itself."""
     import skill_answers
     choice = r.words("value").lower()
-    if choice not in skill_answers.ANSWERS:
-        raise Refused("Yes or no: which?")
+    if choice not in skill_answers.ANSWERS + (skill_answers.ROLE,):
+        raise Refused("Yes, just for this role, or no: which?")
     skill = str(t.get("skill") or "")
-    if not skill_answers.record(skill, choice, by="page", at=r.at):
+    # "Just for this role": a yes for the roles the question was asked for, never the
+    # profile's (the maintainer, 2026-11-05).
+    roles = [x for x in t.get("roles") or [] if isinstance(x, dict) and x.get("company")]
+    if choice == skill_answers.ROLE and not roles:
+        raise Refused("Which role: the question names none, so say yes or no.")
+    stands = (skill_answers.record_role(skill, roles, by="page", at=r.at)
+              if choice == skill_answers.ROLE
+              else skill_answers.record(skill, choice, by="page", at=r.at))
+    if not stands:
         return {"note": f"You answered {skill} since, so that answer stands.",
                 "undo": None}
     if choice == "no":
         return {"note": f"Noted: {skill} stays off your resumes.", "undo": None}
+    where = " and ".join(dict.fromkeys(str(x["company"]) for x in roles))
     due = skill_answers.redo_due(skill, today=r.day)
     for d in due:
         if _on_its_way(r, d["work"]):
@@ -3154,7 +3191,9 @@ def _skill_answer(r: Run, t: dict) -> dict:
             "to": "either", "args": skill_answers.tweak_work(d)["args"],
             "asked_at": app_model.stamp(r.at), "priority": 0, "status": "queued",
             "stages": page_db.progress("tweak")["stages"], "stage": 0})
-    return {"note": f"Noted: you can claim {skill}." + (
+    first = (f"Noted: {skill} goes on your resume for {where} only, never on your profile."
+             if choice == skill_answers.ROLE else f"Noted: you can claim {skill}.")
+    return {"note": first + (
         f" Claude puts it on {'the resume' if len(due) == 1 else str(len(due)) + ' resumes'} "
         "still without it." if due else ""), "undo": None}
 
