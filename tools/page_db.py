@@ -1453,15 +1453,48 @@ STOPPED_SAID = "Stopped, as you asked."
 SAVED_SLACK_S = 120
 
 
-def search_unsaved(item: dict) -> str:
+UNSAVED_SEARCH = ("the search's shortlist is not saved yet, so Jobs would show nothing new: "
+                  "wait for run_round.py to end (it saves the shortlist as it ends), then finish")
+_STAMP = re.compile(r"^(round|work): (\S+)\s*$", re.M)
+
+
+def search_run(work_id: str = "") -> str:
+    """The round this search's run is writing, by what its round.log says (run_round.py
+    round_stamp), or "": the one that names this work item, else the newest round run in
+    this copy. Read from the logs, never the files' times: a job chat is a fresh copy made
+    after the claim, where every saved round is newer than the claim."""
+    import person
+    runs = []
+    for log in glob.glob(os.path.join(glob.escape(person.state("rounds")), "*", "round.log")):
+        try:
+            with open(log, encoding="utf-8", errors="replace") as fh:
+                said = _STAMP.findall(fh.read())
+        except OSError:
+            continue
+        names = [v for k, v in said if k == "round"]
+        if not names:
+            continue
+        works = {v for k, v in said if k == "work"}
+        num = re.match(r"^r(\d+)", names[-1])
+        runs.append((bool(work_id) and safe_id(work_id) in {safe_id(w) for w in works},
+                     int(num.group(1)) if num else -1, names[-1]))
+    return max(runs)[2] if runs else ""
+
+
+def search_unsaved(item: dict, work_id: str = "") -> str:
     """Why a search may not be marked done yet, in plain words, or "": its shortlist is not
-    saved where Jobs reads it (documents/rounds, the newest round, written since the search
-    was taken on). A search marked done while run_round.py still ran in the background said
-    "Your shortlist of 60 ranked jobs is ready" over a Jobs that said "Nothing new"
-    (2026-11-04). No profile here (the app itself) checks nothing."""
+    saved where Jobs reads it (documents/rounds). A search marked done while run_round.py
+    still ran in the background said "Your shortlist of 60 ranked jobs is ready" over a Jobs
+    that said "Nothing new" (2026-11-04). Its own round decides (search_run): its shortlist
+    must be saved. Only where no round was run in this copy is the newest saved round's age
+    weighed against the claim's. No profile here (the app itself) checks nothing."""
     import app_model
     import person
     try:
+        run = search_run(work_id or str(item.get("id") or ""))
+        if run:
+            saved = os.path.isfile(person.state("documents", "rounds", run + ".json"))
+            return "" if saved else UNSAVED_SEARCH
         newest = app_model.newest_round()
     except person.NoProfile:
         return ""
@@ -1477,8 +1510,7 @@ def search_unsaved(item: dict) -> str:
     claimed_ago = (dt.datetime.now(dt.timezone.utc) - since).total_seconds() if since else None
     if saved_ago is None or (claimed_ago is not None
                              and saved_ago > claimed_ago + SAVED_SLACK_S):
-        return ("the search's shortlist is not saved yet, so Jobs would show nothing new: "
-                "wait for run_round.py to end (it saves the shortlist as it ends), then finish")
+        return UNSAVED_SEARCH
     return ""
 
 
@@ -1524,7 +1556,7 @@ def finish(db: dict, work_id: str, now: dt.datetime, out_dir: str, summary: str 
     problem = summary_problem(summary) if status == "done" or (
         status == "failed" and summary != error) else ""
     if not problem and status == "done" and str(item.get("kind") or "") == "search":
-        problem = search_unsaved(item)
+        problem = search_unsaved(item, work_id)
         if not problem and drafts_all(item) and not _drafted(db, item.get("drafts") or [])[1]:
             problem = ("its drafts are still being written: finish each one as it is made "
                        "(app.py done --work <its id>), and the search finishes with the last, "

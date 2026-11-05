@@ -326,6 +326,13 @@ def _some(paths: list[str]) -> str:
     return ", ".join(paths[:4]) + (" and %d more" % (len(paths) - 4) if len(paths) > 4 else "")
 
 
+def _in_folder(root: str, args: tuple, folder: str) -> list[str]:
+    """Each file adding `folder` would stage, its removals included, asked with --dry-run."""
+    got = _git(root, "-c", "core.quotePath=false", "add", "-n", *args, "--", folder).stdout
+    return [ln.split(" ", 1)[1][1:-1] for ln in got.splitlines()
+            if ln.startswith(("add '", "remove '")) and ln.endswith("'")]
+
+
 def _there(root: str, rel: str) -> bool:
     return os.path.lexists(os.path.join(root, rel))
 
@@ -350,7 +357,13 @@ def _add(root: str, args: tuple, batch: list[str]) -> tuple[list[str], list[str]
         went += gone_now
         todo = [p for p in todo if p not in gone_now]
     left, words = [], []
+    # A folder (profile, documents) is tried file by file too: added as one item, one file
+    # git would not take left the whole folder unsaved, while the landing named one file.
+    one_by_one: list[str] = []
     for p in todo:
+        inside = _in_folder(root, args, p) if os.path.isdir(os.path.join(root, p)) else []
+        one_by_one += inside or [p]
+    for p in dict.fromkeys(one_by_one):
         r = _git(root, "add", *args, "--", p)
         if r.returncode == 0:
             continue

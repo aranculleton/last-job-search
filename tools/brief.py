@@ -1408,12 +1408,47 @@ def push_line(b: dict) -> str:
 def push_wanted() -> bool:
     """Did the person choose a phone notification for their brief? Off unless they did
     (person.json `brief_push`, Settings' "Phone notification"; the maintainer, 2026-11-04:
-    "make it off by default but maybe part of the setup")."""
+    "make it off by default but maybe part of the setup"). A copy that never answered and
+    whose brief already sent one (pushed_before) keeps it: it stopped the day such a copy
+    took the update otherwise (the engine review, 2026-11-05)."""
     try:
         import person
-        return str(person.get("brief_push", "off") or "off").strip().lower() == "on"
+        said = person.get("brief_push", None)
     except Exception:  # noqa: BLE001  no profile: nobody chose one
         return False
+    if said is None:
+        return pushed_before()
+    return str(said or "off").strip().lower() == "on"
+
+
+def pushed_before() -> bool:
+    """A day's record says the brief's own run sent the person a push (pushed): what a brief
+    did every morning before the notification became a choice."""
+    try:
+        folder = person.state(*BRIEFS)
+        names = sorted(n for n in os.listdir(folder) if n.endswith(".md"))
+    except Exception:  # noqa: BLE001  no records, or no profile
+        return False
+    for n in reversed(names):
+        try:
+            with open(os.path.join(folder, n), encoding="utf-8", errors="replace") as fh:
+                if "<!-- push: sent;" in fh.read():
+                    return True
+        except OSError:
+            continue
+    return False
+
+
+def keep_push() -> str:
+    """Write the push the brief already sent into person.json as their setting ("on"), so
+    Settings shows what happens (the brief-push-kept upgrade); nothing where they answered."""
+    import person
+    if person.get("brief_push", None) is not None:
+        return "brief: the phone notification is set already; nothing changed"
+    if not pushed_before():
+        return "brief: the brief has sent no phone notification; nothing changed"
+    person.put(["brief_push"], "on")
+    return "brief: the phone notification the brief already sent stays on"
 
 
 def push_due(b: dict) -> bool:
@@ -2056,6 +2091,9 @@ def main(argv=None) -> int:
         return watch_main(argv[1:])
     if argv[:1] == ["pushed"]:
         print(pushed(" ".join(argv[1:])))
+        return 0
+    if argv[:1] == ["keep-push"]:
+        print(keep_push())
         return 0
     ap = argparse.ArgumentParser(description=__doc__.split("\n")[0])
     ap.add_argument("--write", action="store_true", help="do the day's upkeep and write the records")

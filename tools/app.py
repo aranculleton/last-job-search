@@ -211,27 +211,43 @@ def cmd_view(a) -> int:
         print(_dump({"rev": None, "batches": [], "for_claude": [missing]}), end="")
         return 2
     import app_listen
-    # Only the chat that answers the page draws its screens (and a job's own chat, which no
-    # chat can tell): two helpers in a hand-over rewrote whole screens over each other, and
-    # every update bounced (the maintainer, 4 November).
+    # Any chat draws the page's screens but an old helper that handed the page on: two
+    # helpers in a hand-over rewrote whole screens over each other, and every update bounced
+    # (the maintainer, 4 November), and only the listener drawing them left the page stale
+    # after "I applied" in the person's own chat (the engine review, 2026-11-05).
     draws, said = app_listen.draws_screens(db, a.chat, getattr(a, "work", "") or "", now)
     if not draws:
         print(_dump({"rev": None, "batches": [], "for_claude": [said]}), end="")
         return 0
     base = copy_basis()
+    base_sha = copy_basis_sha()
     me = {c for c in (app_listen.this_chat(""), app_listen.this_chat(a.chat)) if c}
     by = app_listen.this_chat("") or a.chat
+    ahead_of_us: dict = {}
 
     def newer(old) -> bool:
         """Is the page's copy drawn by another chat from a newer copy than this one? Never
-        written over: a copy behind another's would put back what that one moved on."""
+        written over: a copy behind another's would put back what that one moved on. Judged
+        by its commit where this copy knows it (theirs is newer when it is not in this copy's
+        history), and by the time only where it does not: by the time alone, a job chat's
+        commit not landed yet, or a computer with a fast clock, kept the listener from ever
+        writing its screens again."""
         d = (old or {}).get("data") if isinstance(old, dict) else None
-        if not base or not isinstance(d, dict):
+        if not isinstance(d, dict) or str(d.get("by") or "") in me:
             return False
+        theirs_sha = str(d.get("base_sha") or "")
+        if theirs_sha and base_sha:
+            if theirs_sha not in ahead_of_us:
+                # In this copy's whole history, its own commits not landed yet included.
+                ahead_of_us[theirs_sha] = commit_ahead(
+                    theirs_sha, os.environ.get("LJS_BASIS_SHA") or "HEAD")
+            if ahead_of_us[theirs_sha] is not None:
+                return ahead_of_us[theirs_sha]
         theirs = str(d.get("base") or "")
-        return bool(theirs) and theirs > base and str(d.get("by") or "") not in me
+        return bool(base) and bool(theirs) and theirs > base
     kept: list = []
-    stamp = {"by": by, **({"base": base} if base else {})}
+    stamp = {"by": by, **({"base": base} if base else {}),
+             **({"base_sha": base_sha} if base_sha else {})}
     # The suggestions already on the page keep their day, so no more than three new ones
     # reach it a day.
     full: dict = {}
@@ -243,7 +259,7 @@ def cmd_view(a) -> int:
     # one card had changed (2026-11-03). The page takes each document newer than its own copy,
     # so one left as it was still shows; a section in parts is kept or rewritten whole, so
     # its parts never mix two revs.
-    volatile = ("rev", "made_at", page_db.VERSION_FIELD, "by", "base")
+    volatile = ("rev", "made_at", page_db.VERSION_FIELD, "by", "base", "base_sha")
 
     def unchanged(doc_id, doc):
         old = (views.get(doc_id) or {}).get("data")
@@ -350,7 +366,7 @@ def cmd_view(a) -> int:
         except Exception:  # noqa: BLE001  nothing remade to read: nothing to queue
             pass
     lines = app_listen.view_renewal(db, a.chat, now)
-    # A yes the person gave, in another chat or on the page, that a resume drafted today still
+    # A yes the person gave, in another chat or on the page, that an unsent resume still
     # leaves off: this chat redoes it, unasked (tools/skill_answers.py). Work already on its way
     # for it is left to run.
     try:
@@ -390,6 +406,45 @@ def copy_basis() -> str:
     if not secs:
         return ""
     return dt.datetime.fromtimestamp(secs, dt.timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
+
+
+def _git_out(*args: str) -> tuple[int, str]:
+    import subprocess
+    try:
+        r = subprocess.run(["git", "-C", person.state(), *args], capture_output=True, text=True,
+                           encoding="utf-8", errors="replace", timeout=10,
+                           stdin=subprocess.DEVNULL)
+        return r.returncode, r.stdout.strip()
+    except (OSError, subprocess.TimeoutExpired):
+        return 1, ""
+
+
+def copy_basis_sha() -> str:
+    """The commit this copy is based on, which each screen carries as `base_sha`: the newest
+    of this copy's commits that master has (so a commit not landed yet, which no other chat
+    can know, never hides it), else this copy's newest. "" where it cannot be told (the app
+    itself, no git). LJS_BASIS_SHA is for tests."""
+    given = os.environ.get("LJS_BASIS_SHA")
+    if given is not None:
+        return given
+    if not os.path.isfile(os.path.join(person.ROOT, "profile", "person.json")):
+        return ""
+    code, out = _git_out("merge-base", "HEAD", "origin/master")
+    if code != 0 or not out:
+        code, out = _git_out("rev-parse", "HEAD")
+    return out if code == 0 else ""
+
+
+def commit_ahead(theirs: str, ours: str) -> bool | None:
+    """Whether commit `theirs` is ahead of this copy's `ours`: True when this copy knows it
+    and it is not in ours's history, False when it is, None when this copy has never seen it
+    (the caller then goes by the time)."""
+    if _git_out("cat-file", "-e", theirs + "^{commit}")[0] != 0:
+        return None
+    code, _out = _git_out("merge-base", "--is-ancestor", theirs, ours)
+    if code not in (0, 1):
+        return None
+    return code == 1
 
 
 def cmd_page(a) -> int:
@@ -1714,8 +1769,9 @@ def cmd_done(a) -> int:
         import person
         exclude.add(str(args["url"]), left, title=str(args.get("title") or ""),
                     company=str(args.get("company") or ""), basis="rules",
-                    today=now.date().isoformat(), path=person.state("job_scraper",
-                                                                    "seen_jobs.json"))
+                    # The person's own day, never the computer's UTC date.
+                    today=person.today(now).isoformat(),
+                    path=person.state("job_scraper", "seen_jobs.json"))
         a.stopped, a.summary = True, a.summary or f"Not drafted: {left.rstrip('.')}."
     try:
         got = page_db.finish(db, a.work, now, a.out or os.path.join(a.dump, "out"),

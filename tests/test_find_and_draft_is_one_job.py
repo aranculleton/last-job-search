@@ -236,6 +236,35 @@ def test_a_draft_that_stops_on_a_hard_rule_takes_its_job_off_jobs(tmp_path, monk
     assert w[SID]["count"] == {"done": 0, "total": 5, "word": "drafted"}
 
 
+def test_a_job_left_out_is_dated_by_the_persons_own_day(tmp_path, monkeypatch, page):
+    """--left-out dated its ruling with the computer's UTC date: for a person ahead of UTC it
+    was ruled out "yesterday" late in their evening. The person's own day dates it."""
+    import person
+    prof = tmp_path / "profile"
+    shutil.copytree(os.path.join(ROOT, "profile.example"), prof,
+                    ignore=shutil.ignore_patterns("state"))
+    pj = prof / "person.json"
+    data = json.loads(pj.read_text(encoding="utf-8"))
+    data["time_zone"] = "Pacific/Auckland"                 # 21:00 UTC is the next morning
+    pj.write_text(json.dumps(data, indent=2), encoding="utf-8")
+    monkeypatch.setenv(person.ENV, str(prof))
+    person._modules.clear()
+    person._data.clear()
+    st, dump = page
+    _round(tmp_path, monkeypatch, st, sorted(PASS, key=lambda r: -r["priority"]))
+    _app("search-drafts", dump, "--work", SID, "--chat", CHAT, "--last", "--today", TODAY,
+         "--now", NOW)
+    wid = next(k for k, w in _work(dump).items() if w.get("args", {}).get("company")
+               == "Netherby Grocers")
+    _app("done", dump, "--work", wid, "--chat", CHAT, "--left-out",
+         "the posting says the role is only open in Dublin", "--now", NOW)
+    seen = exclude.load_seen(str(st / "job_scraper" / "seen_jobs.json"))["seen"]
+    [entry] = [e for e in seen.values() if e.get("company") == "Netherby Grocers"]
+    assert entry["excluded_date"] == "2026-11-06", entry
+    person._modules.clear()
+    person._data.clear()
+
+
 def test_the_search_s_own_chat_is_told_to_draft_what_it_finds(page):
     """The steps a search's chat is given (app.py job_steps, for its child chat and for
     next --job-chat) say to queue the drafts as each shortlist lands and draft them together."""

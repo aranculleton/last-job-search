@@ -18,12 +18,13 @@ carry on. So:
 - **The later explicit answer wins**, between two chats as within one: each answer is dated
   (`answer.at`), and tools/merge_state.py keeps the later of two. A no the person gave stays a
   no until they say otherwise.
-- **A yes redoes every resume drafted that day** for a posting naming the skill (`redo_due`):
+- **A yes redoes every unsent resume waiting on it**, whatever its day, and every one drafted
+  that day for a posting naming the skill (`redo_due`):
   a yes on the page queues each as a tweak (app_actions), and a chat that takes a yes, or that
   finds one another chat took, runs `redo` (stage_picks.py consent and app.py view print it).
 
     python3 tools/skill_answers.py show
-    python3 tools/skill_answers.py redo [--skill S]   today's resumes, redone with each yes
+    python3 tools/skill_answers.py redo [--skill S]   the resumes waiting on a yes, redone with it
 """
 from __future__ import annotations
 
@@ -222,18 +223,21 @@ def _redone(slug: str, k: str) -> bool:
 
 
 def redo_due(skill=None, today=None, ready: list | None = None, queued=()) -> list[dict]:
-    """The resumes drafted `today` (person.today()) for a posting that asked about a skill the
-    person has said yes to, still unsent and still without it: {id, slug, company, role, skill},
-    the skill as that draft's posting spelled it. `ready` is the page's own list of drafts when
-    the caller has built it; `queued` the work ids already on their way."""
+    """The unsent resumes still without a skill the person has said yes to: each whose draft
+    is waiting on it (`waiting_skills`), whatever day it was drafted, and each drafted `today`
+    (person.today()) for a posting that asked about it. {id, slug, company, role, skill}, the
+    skill as that draft's posting spelled it. `ready` is the page's own list of drafts when
+    the caller has built it; `queued` the work ids already on their way. Only that day's
+    drafts were redone once, so one staged the night before, waiting on the answer, never
+    got the yes (the engine review, 2026-11-05)."""
     data = load()
     day = day_of(today)
     yes = {k: rec for k, rec in data["skills"].items() if isinstance(rec, dict)
            and (skill is None or k == key(skill)) and answer(rec.get("skill") or k, data) == "yes"}
+    if not yes:
+        return []
     asked = {k: [x for x in rec.get("for") or [] if isinstance(x, dict) and x.get("day") == day]
              for k, rec in yes.items()}
-    if not any(asked.values()):
-        return []
     if ready is None:
         import app_model
         ready = app_model.build(only={"ready"})[0].get("ready") or []
@@ -241,11 +245,15 @@ def redo_due(skill=None, today=None, ready: list | None = None, queued=()) -> li
     for item in ready:
         if item.get("status") != "drafted" or not item.get("slug"):
             continue
+        d = None
         for k, entries in asked.items():
-            if not any(key(x.get("company")) == key(item.get("company"))
-                       and key(x.get("role")) == key(item.get("role")) for x in entries):
+            today_asked = any(key(x.get("company")) == key(item.get("company"))
+                              and key(x.get("role")) == key(item.get("role")) for x in entries)
+            if d is None:
+                d = _draft(item["slug"])
+            waiting = any(key(s) == k for s in (d or {}).get("waiting_skills") or [])
+            if not (today_asked or waiting):
                 continue
-            d = _draft(item["slug"])
             if not d or any(key(s) == k for s in d.get("consented_skills") or []) \
                     or _redone(item["slug"], k):
                 continue
@@ -268,11 +276,11 @@ def tweak_work(due: dict) -> dict:
 
 
 def redo_line(due: list[dict]) -> str:
-    """What a chat is told to do at once when a yes leaves today's resumes without it."""
+    """What a chat is told to do at once when a yes leaves resumes without it."""
     if not due:
         return ""
     names = sorted({f"{d['company']} ({d['skill']})" for d in due})
-    return ("The person said yes to a skill that resumes drafted today leave off: "
+    return ("The person said yes to a skill that unsent resumes still leave off: "
             + ", ".join(names) + ". Redo them with it now, unasked: python3 tools/skill_answers.py "
             "redo, then bring the page up to date.")
 
@@ -292,7 +300,7 @@ def main(argv=None) -> int:
     ap = argparse.ArgumentParser(prog="skill_answers.py", description=__doc__.split("\n\n")[0])
     sub = ap.add_subparsers(dest="cmd", required=True)
     sub.add_parser("show", help="every skill asked about, and the answer")
-    r = sub.add_parser("redo", help="today's resumes without a skill the person said yes to")
+    r = sub.add_parser("redo", help="the resumes still without a skill the person said yes to")
     r.add_argument("--skill", default=None)
     r.add_argument("--today", default=None, help="YYYY-MM-DD (else the person's own day)")
     a = ap.parse_args(argv)
@@ -306,7 +314,7 @@ def main(argv=None) -> int:
         return 0
     done = redo(a.skill, a.today)
     if not done:
-        print("Nothing to redo: every resume drafted today has each skill you said yes to.")
+        print("Nothing to redo: every unsent resume has each skill you said yes to.")
         return 0
     bad = 0
     for d in done:

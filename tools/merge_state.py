@@ -1363,10 +1363,11 @@ def merge(base: str, ours: str, theirs: str, path: str, later=None,
 #   other, under a [CONFIRM: ...] line, which the page asks as a To do card (and a chat with
 #   no page asks through the unconfirmed-facts upgrade), so the person decides which stays;
 # - a document of theirs (under documents/, cv/ or cover_letters/) both chats changed: the
-#   one committed later, with no copy anywhere. A resume or a letter is made again by the
+#   one committed later, never a copy beside it: a resume or a letter is made again by the
 #   app, and a copy beside it was left by the dozen (a report from a person's copy,
-#   2026-11-04). The person's own test (profile/tests/) is the same, but the other chat's
-#   version is kept in SPARE_DIR, out of their folders, which the app tidies;
+#   2026-11-04). The other chat's version is kept in SPARE_DIR, out of their folders, which
+#   the app tidies, as on every path here where one side is kept whole (the engine review,
+#   2026-11-05); the person's own test (profile/tests/) the same;
 # - anything else: this side's whole file, nothing of the other's merged into it, and the
 #   other side's whole file in the saved history (the merge's other parent) and in SPARE_DIR
 #   on this computer, never beside the person's files: a <file>.from-another-chat copy was
@@ -1490,6 +1491,11 @@ def _later_side(root: str, path: str) -> str:
     return "--theirs" if when("MERGE_HEAD") > when("HEAD") else "--ours"
 
 
+def _lost(stages: dict, keep: str) -> str:
+    """The blob of the side not kept ("--ours" kept: theirs, stage 3)."""
+    return stages["3" if keep == "--ours" else "2"]
+
+
 def _spare(root: str, path: str, blob: str) -> str:
     """Keep a blob of the losing side in SPARE_DIR; its path (relative)."""
     rel = f"{SPARE_DIR}/{path.replace('/', '__')}.{blob[:8]}"
@@ -1584,11 +1590,15 @@ def settle(root: str) -> tuple[list[str], list[str]]:
             # day apart stopped on every call prep the update rebuilt (its rehearsal).
             keep = _written(root, stages)
             _g(root, "checkout", keep, "--", p)
-            done.append(f"{p}: rebuilt by two chats; the later one is kept")
+            done.append(f"{p}: rebuilt by two chats; the later one is kept, and the other is "
+                        f"saved as {_spare(root, p, _lost(stages, keep))}")
         elif p.startswith(_DOCS) and not _written(root, stages):
+            # The later one, never a copy beside it; the other in the spare folder, out of
+            # their folders, as on every other path (the engine review, 2026-11-05).
             keep = _later_side(root, p)
             _g(root, "checkout", keep, "--", p)
-            done.append(f"{p}: changed by two chats; the later one is kept")
+            done.append(f"{p}: changed by two chats; the later one is kept, and the other is "
+                        f"saved as {_spare(root, p, _lost(stages, keep))}")
         elif p.startswith(_OWN_TESTS):
             keep = _later_side(root, p)
             lost = stages["3" if keep == "--ours" else "2"]
@@ -1598,7 +1608,7 @@ def settle(root: str) -> tuple[list[str], list[str]]:
         elif _same_upgrade(root, p):
             _g(root, "checkout", "--theirs", "--", p)
             done.append(f"{p}: the same improvement made by two chats; the other's copy "
-                        "is kept")
+                        f"is kept, and this one is saved as {_spare(root, p, stages['2'])}")
         else:
             try:
                 with open(full, encoding="utf-8", newline="") as fh:

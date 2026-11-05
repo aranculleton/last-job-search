@@ -154,8 +154,18 @@ def _tool(*args) -> tuple[int, str]:
     return p.returncode, (p.stdout or "") + (p.stderr or "")
 
 
+def has_latex() -> bool:
+    """A LaTeX engine on this computer, as tools/app_setup.py asks."""
+    import shutil
+    return bool(shutil.which("lualatex") or shutil.which("xelatex"))
+
+
 def render(draft_path: str) -> tuple[int, str]:
-    """The application made again from its kept draft.json, as the person's own remake is."""
+    """The application made again from its kept draft.json, as the person's own remake is.
+    3 on a computer with no LaTeX: nothing could be made, which is neither a pass nor a
+    finding to hand on, so it is tried again on the next run (on a computer that has it)."""
+    if not has_latex():
+        return 3, "no LaTeX on this computer"
     return _tool(os.path.join(ROOT, "tools", "fit_to_page.py"), draft_path)
 
 
@@ -300,20 +310,21 @@ def run(today: str | None = None) -> dict:
     for a in due(apps):
         name = f"{a['row'].get('company')} | {a['row'].get('role')}"
         rc, _said = render(a["draft"])
+        if rc != 3:
+            out["made"].append(name)
         if rc == 0:
             rc, _said = check(a["draft"])
-        out["made"].append(name)
+        if rc == 3:
+            # A check that could not run (or no LaTeX to make it with) is not a pass, nor a
+            # fault to hand on: tried again on the next run, where it can.
+            out["unchecked"].append(name)
+            continue
         if rc == 0:
             out["passed"].append(name)
             try:
                 os.remove(os.path.join(a["folder"], REMAKE))
             except OSError:
                 pass
-            continue
-        if rc == 3:
-            # A check that could not run is not a pass, nor a fault to hand on: tried again
-            # on the next run, where it can.
-            out["unchecked"].append(name)
             continue
         way = way_forward(_loaded(a["draft"]), a["folder"])
         record = {"version": version, "date": today or dt.date.today().isoformat(), **way}

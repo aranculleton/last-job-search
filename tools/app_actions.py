@@ -214,7 +214,7 @@ ACTIONS = {
                      "learned.py decide; the profile at its mark; an update's question "
                      "(profile_upgrades.py --no, or a chat to set it up); learned.py settle; "
                      "a skill's one answer (skill_answers.record), a yes queuing work/tweak~ "
-                     "for each resume drafted today without it",
+                     "for each unsent resume still without it",
                      "needs.unanswer"),
     "needs.unanswer": (("fact",), "the profile: the mark put back", "needs.answer"),
     "setup.answer": (("setup_step",), "profile/setup_answers.json, read by /setup",
@@ -3087,7 +3087,8 @@ def _fact_path(target: dict) -> str:
 def _skill_answer(r: Run, t: dict) -> dict:
     """Their answer to a skill postings asked about, for every application at once
     (tools/skill_answers.py), dated by the tap: an answer a chat took later stands over it.
-    A yes queues each resume drafted today without it, redone with it by itself."""
+    A yes queues each unsent resume still without it (waiting on it, or drafted today for a
+    posting that asked), redone with it by itself."""
     import skill_answers
     choice = r.words("value").lower()
     if choice not in skill_answers.ANSWERS:
@@ -3109,7 +3110,7 @@ def _skill_answer(r: Run, t: dict) -> dict:
             "stages": page_db.progress("tweak")["stages"], "stage": 0})
     return {"note": f"Noted: you can claim {skill}." + (
         f" Claude puts it on {'the resume' if len(due) == 1 else str(len(due)) + ' resumes'} "
-        "drafted today without it." if due else ""), "undo": None}
+        "still without it." if due else ""), "undo": None}
 
 
 def _needs_answer(r: Run) -> dict:

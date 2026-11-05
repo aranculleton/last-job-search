@@ -11,7 +11,8 @@ rank, stop at the shortlist, draft nothing until the candidate picks. `_common.m
    (`python3 tools/sync_app.py --if-stale --on "<the model this run is on>"`, then `/upgrade 20`): a job board an upgrade
    builds is searched this round.
 
-   Run: `python3 tools/run_round.py --out "$SCRATCH/rN" --jobage 7 --expand`. Never read or
+   Run: `python3 tools/run_round.py --jobage 7 --expand` (no `--out`: the round names itself
+   and prints its folder, `round: rN, its files in rounds/rN`). Never read or
    ask for the person's email: this round, and its message, is their job alert.
    Read the exit code: 0 met the yield target, 2 missed it (report what the MISSED message
    says), 1 a stage broke (diagnose it and say so; never paper over it). A portal the
@@ -25,8 +26,8 @@ rank, stop at the shortlist, draft nothing until the candidate picks. `_common.m
    not failed the bar. Then rule out each row failing the candidate's own bar (`tools/bar.py`,
    and the target sectors and exclusions in `profile/CLAUDE.md`) with `python3
    tools/exclude.py add <url> --title "<title>" --company "<company>" --reason "candidate's
-   bar: <why>"`, and cut the round again: `python3 tools/run_round.py --out "$SCRATCH/rN"
-   --recut`. It refills the shortlist from the next
+   bar: <why>"`, and cut the round again: `python3 tools/run_round.py --out <the folder it
+   printed> --recut`. It refills the shortlist from the next
    rows that pass every rule, and says how many it found when the round ran out; never drop
    a row from the shortlist by hand. The round has already cut the rest (a live process or a
    referral hold, a role already drafted or applied to, anything older than `--jobage`, a

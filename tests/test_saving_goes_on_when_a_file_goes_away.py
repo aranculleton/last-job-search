@@ -100,6 +100,35 @@ def test_a_file_git_will_not_take_is_named_and_the_rest_still_lands(copy, capsys
     assert "One of your files could not be saved just now" in said[0]
 
 
+def test_one_file_git_will_not_take_in_a_folder_leaves_only_that_file(copy, capsys,
+                                                                      monkeypatch):
+    """The person's folders are added whole (profile, documents). When git refused one file
+    in one, the file-by-file try added the folder as one item again, so the whole folder
+    stayed unsaved while the landing said one file was left out. A folder is now tried
+    file by file, and only the file git will not take is left."""
+    origin, chat, _other = copy
+    _pdfs(chat)
+    unreadable = "profile/unreadable_note.md"
+    write(chat, unreadable, "a note git will not read\n")
+    write(chat, "profile/kept_note.md", "a note written beside it\n")
+    real = save_state._git
+
+    def refusing(root, *args):
+        # As git does: adding the file, or any folder it is in, stops on it.
+        if args[:1] == ("add",) and any(a == unreadable or unreadable.startswith(a + "/")
+                                        for a in args):
+            return subprocess.CompletedProcess(args, 128, "", "error: open(\"%s\"): Permission "
+                                               "denied\nfatal: adding files failed\n" % unreadable)
+        return real(root, *args)
+    monkeypatch.setattr(save_state, "_git", refusing)
+    code, out = _run(chat, "--message", "Notes", capsys=capsys)
+    assert code == 0 and "land: ready claude/chat-1" in out, out
+    pushed = _pushed(origin)
+    assert "profile/kept_note.md" in pushed and unreadable not in pushed, pushed
+    said = [ln for ln in out.splitlines() if ln.startswith("land: left out 1 file(s) git")]
+    assert len(said) == 1 and unreadable in said[0] and "(profile:" not in said[0], out
+
+
 def _landed_and_merged(chat, other, capsys):
     write(chat, "profile/notes.md", "second\n")
     assert _run(chat, capsys=capsys)[0] == 0

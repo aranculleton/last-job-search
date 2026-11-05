@@ -1146,14 +1146,25 @@ def next_round(summary_dir: str) -> str:
 
 def name_round(out: str | None, summary_dir: str, chosen: bool) -> str:
     """Where the round's files go, its name chosen here. No --out: `rounds/<next>` beside
-    the person's files. An --out whose name is not a round's, for a round saved among the
-    person's own (`chosen`: no --summary-dir), keeps its folder and takes the next name."""
+    the person's files. An --out for a round saved among the person's own (`chosen` false:
+    no --summary-dir, not a widening) keeps its folder and takes the next name when its
+    name is not a round's, or is one whose shortlist is saved already: `--out
+    "$SCRATCH/r1"`, as the instructions once said, saved over the person's own r1."""
     if not out:
         return os.path.join(person.state("rounds"), next_round(summary_dir))
     out = round_dir(out)
-    if chosen or ROUND_NAME.match(os.path.basename(out)):
+    name = os.path.basename(out)
+    if chosen or (ROUND_NAME.match(name)
+                  and not os.path.isfile(os.path.join(summary_dir, name + ".json"))):
         return out
     return os.path.join(os.path.dirname(out), next_round(summary_dir))
+
+
+def round_stamp(name: str, work: str = "") -> str:
+    """The lines a round writes into its round.log as it starts: its name, and the page's
+    work item it is for. tools/page_db.py search_unsaved reads them, so a search is done
+    only once its own round's shortlist is saved, whatever the files' times say."""
+    return f"round: {name}\n" + (f"work: {work}\n" if str(work or "").strip() else "")
 
 
 def round_dir(out: str) -> str:
@@ -1277,6 +1288,10 @@ def main():
     ap.add_argument("--expand", action="store_true",
                     help=f"re-run wider when the yield target is missed, up to "
                          f"{MAX_ROUNDS} rounds")
+    ap.add_argument("--work", default="",
+                    help="the page's work item this search is for (its id): named in "
+                         "round.log, so the page marks the search done only once this "
+                         "round's shortlist is saved")
     ap.add_argument("--round", type=int, default=1, help=argparse.SUPPRESS)
     ap.add_argument("--first-pages", dest="first_pages", type=int, default=None,
                     help=argparse.SUPPRESS)
@@ -1327,6 +1342,8 @@ def main():
     os.makedirs(a.out, exist_ok=True)
     f = lambda n: os.path.join(a.out, n)
     log = open(f("round.log"), "a", encoding="utf-8", errors="replace", newline="\n")
+    log.write(round_stamp(os.path.basename(os.path.abspath(a.out)), a.work))
+    log.flush()
     # One monotonic ceiling for the whole round. Every stage gets the
     # smaller of its own budget and what is left of this.
     started = time.monotonic()

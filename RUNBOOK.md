@@ -178,13 +178,15 @@ account uses. Its progress prints a line a portal a minute, to the screen and `r
 ## 1. Find jobs
 
 ```bash
-python3 tools/run_round.py --out "$SCRATCH/r1" --jobage 7
+python3 tools/run_round.py --jobage 7
 ```
 
-**Point `--out` at the scratchpad, not the repo.** A round is about 55MB of raw scraped
-posting text across ten stage files. It is scratch, not a deliverable, and it is thick
-with third-party content. `.gitignore` is guard-enforced and is not edited, so where the
-round lands is decided by where you point `--out`.
+**Leave `--out` off.** The round names itself, `r` and the next number, and prints its
+folder (`round: r12, its files in rounds/r12`), which is the folder `--recut` and a
+progress pin name. `rounds/` is never saved: a round is about 55MB of raw scraped posting
+text across ten stage files, scratch and thick with third-party content. An `--out` named
+like a round already saved takes the next name instead, so a saved shortlist is never
+written over.
 
 The round handles the keeping and the deleting itself. It writes the top 60 of the
 shortlist, without the posting bodies, to `documents/rounds/<round>.json` at about 30KB,
@@ -226,8 +228,8 @@ portals, the first run must have kept its stage files (`--keep-intermediates`), 
 normal round deletes `00_scrape/`:
 
 ```bash
-python3 tools/run_round.py --out "$SCRATCH/r1" --keep-intermediates
-python3 tools/run_round.py --out "$SCRATCH/r1b" --from-scraped "$SCRATCH/r1/00_scrape/kept.json"
+python3 tools/run_round.py --keep-intermediates
+python3 tools/run_round.py --from-scraped rounds/<the round it printed>/00_scrape/kept.json
 ```
 
 ### When the round misses
@@ -303,8 +305,8 @@ later explicit answer wins, and a no they gave stays a no. **A question nobody h
 never a no**: `stage` puts it on their page once, for every application that asks it, and
 the pick is drafted without the skill meanwhile, waiting on it (`skills_waiting`). Never
 answer for them, and never record a no they did not give, whoever is or is not there to
-ask. When they say yes, every resume drafted that day for a posting naming it is redone with
-it: a yes on the page queues each by itself, and a line `consent` or `app.py view` prints
+ask. When they say yes, every unsent resume waiting on it, whatever day it was drafted, and
+every one drafted that day for a posting naming it, is redone with it: a yes on the page queues each by itself, and a line `consent` or `app.py view` prints
 (`python3 tools/skill_answers.py redo`) is done at once, unasked. `/apply` Steps 1c and 2
 have the rest: a skill the question missed, what a yes puts on the page, and a general yes
 written into the profile in the same turn. `stage` **never reuses

@@ -65,15 +65,32 @@ class TheCompileStepRefusesToGuess(unittest.TestCase):
         with self.assertRaises(F.CompileFailed):
             self._run(engine_writes_pdf=False)
 
-    def test_the_stale_pdf_is_removed_before_the_run(self):
-        """The exact shape of the bug: a previous PDF surviving a failed run."""
+    def test_the_stale_pdf_is_out_of_the_way_during_the_run(self):
+        """The exact shape of the bug: a previous PDF read as a failed run's result. It is
+        moved aside while LaTeX runs, so its absence afterwards is the failure, and the run
+        raises; then it is put back, because deleting it lost the only PDF a computer with
+        no LaTeX had (the earlier one goes only once a new one is made)."""
         with open(self.pdf, "wb") as fh:
             fh.write(b"%PDF-1.4\n% last application's resume\n")
-        with self.assertRaises(F.CompileFailed):
-            self._run(engine_writes_pdf=False)
-        self.assertFalse(os.path.exists(self.pdf),
-                         "the previous PDF survived a failed compile, which is "
-                         "how the wrong document gets attached")
+        seen = []
+
+        def fake(cmd, cwd=None, capture_output=False, **kw):
+            seen.append(os.path.exists(self.pdf))
+            return _Result(0, b"")
+        with mock.patch.object(F.subprocess, "run", side_effect=fake):
+            with self.assertRaises(F.CompileFailed):
+                F._compile("lualatex", "x.tex", self.tmp.name, self.pdf)
+        self.assertEqual([False], seen, "LaTeX ran with the previous PDF in place")
+        with open(self.pdf, "rb") as fh:
+            self.assertIn(b"last application's resume", fh.read())
+
+    def test_a_new_pdf_replaces_the_earlier_one(self):
+        with open(self.pdf, "wb") as fh:
+            fh.write(b"%PDF-1.4\n% last application's resume\n")
+        self.assertEqual(1, self._run(engine_writes_pdf=True))
+        with open(self.pdf, "rb") as fh:
+            self.assertNotIn(b"last application's resume", fh.read())
+        self.assertEqual(["out.pdf"], os.listdir(self.tmp.name))
 
     def test_the_error_carries_the_latex_error_line(self):
         log = b"This is LuaTeX\n! Undefined control sequence.\nl.42 \\nosuch\n"

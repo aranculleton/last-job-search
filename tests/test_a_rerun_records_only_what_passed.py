@@ -246,3 +246,42 @@ def test_a_letter_that_copies_the_posting_is_recorded_as_failing(state):
     assert "LETTERS" in verify_batch._batch_flags(d["abbr"], d, False)
     clean = _kept("Wexmoor Lending")
     assert "LETTERS" not in verify_batch._batch_flags(clean["abbr"], clean, False)
+
+
+def test_a_computer_with_no_latex_keeps_every_pdf_and_tries_again_later(state, tmp_path,
+                                                                         monkeypatch):
+    """A computer with no LaTeX cannot make the documents again. The rerun used to run the
+    real render anyway: fit_to_page deleted each resume's PDF before a compile that could
+    not start, the failure was handed on as a To do, and every unsent PDF was gone. No
+    engine is now a check that could not run (tried again next run), and nothing is lost."""
+    bare = tmp_path / "bin"
+    bare.mkdir()
+    monkeypatch.setenv("PATH", str(bare))         # no lualatex, no xelatex
+    pdfs = {}
+    for company, a in _apps().items():
+        pdf = docpaths.resume_pdf(M._kept(a["draft"])["abbr"])
+        os.makedirs(os.path.dirname(pdf), exist_ok=True)
+        with open(pdf, "wb") as fh:
+            fh.write(b"%PDF-1.4 the resume as it was\n")
+        pdfs[company] = pdf
+    got = M.run(TODAY)
+    assert not got["todo"] and not got["redraft"] and not got["recorded"], got
+    assert len(got["unchecked"]) == 4
+    assert all(os.path.isfile(p) for p in pdfs.values()), "a PDF was deleted"
+    assert not [a for a in _apps().values() if os.path.isfile(os.path.join(a["folder"], M.REMAKE))]
+    assert U.by_id("method-drafts").pending()            # tried again on the next run
+
+
+def test_a_compile_that_makes_nothing_leaves_the_earlier_pdf_in_place(tmp_path):
+    """_compile deleted the old PDF before running LaTeX, so a compile that could not start
+    (or failed) left no document at all. It is now set aside and put back on any failure,
+    and only a new PDF replaces it."""
+    import fit_to_page
+    (tmp_path / "r.tex").write_text("\\documentclass{article}\\begin{document}x\\end{document}",
+                                    encoding="utf-8")
+    pdf = tmp_path / "r.pdf"
+    pdf.write_bytes(b"%PDF-1.4 the earlier one\n")
+    with pytest.raises(fit_to_page.CompileFailed):
+        fit_to_page._compile("no-such-latex-engine", "r.tex", str(tmp_path), str(pdf))
+    assert pdf.read_bytes() == b"%PDF-1.4 the earlier one\n"
+    assert sorted(p.name for p in tmp_path.iterdir()) == ["r.pdf", "r.tex"]

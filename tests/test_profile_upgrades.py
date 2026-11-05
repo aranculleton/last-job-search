@@ -163,6 +163,32 @@ def test_a_brief_nobody_asked_about_its_phone_notification_asks_once(profile):
     assert brief.push_due({"waiting": True}) is True
 
 
+def test_a_brief_that_already_sent_a_push_keeps_sending_it(profile):
+    """A copy whose brief pushed every morning before the notification became a choice
+    (2026-11-04) has no brief_push, so the day it took the update its push stopped. Its own
+    day records say a push was sent: it keeps it, written on for it with nobody asked, and
+    only a copy whose brief never sent one is asked."""
+    import brief
+    _drop_key(profile, "brief_push")
+    day = brief.brief_path("2026-11-03")
+    os.makedirs(os.path.dirname(day), exist_ok=True)
+    with open(day, "w", encoding="utf-8") as fh:
+        fh.write("# Brief\n\nOne thing is due today.\n\n<!-- push: sent; chat: session_x -->\n")
+    assert brief.push_wanted() is True
+    assert brief.push_due({"lead": "One thing is due today."}) is True
+    assert U.by_id("brief-push").pending() == ""            # never asked
+    kept = U.by_id("brief-push-kept")
+    assert kept.needs == "nobody" and kept.pending()
+    assert brief.main(["keep-push"]) == 0
+    person._data.clear()
+    assert person.get("brief_push") == "on" and kept.pending() == ""
+    # A push tried and not sent is no push the person had: asked, as a new copy is.
+    _drop_key(profile, "brief_push")
+    with open(day, "w", encoding="utf-8") as fh:
+        fh.write("# Brief\n\n<!-- push: not sent; chat: session_x -->\n")
+    assert brief.push_wanted() is False and U.by_id("brief-push").pending()
+
+
 def test_rulings_on_a_bar_the_profile_never_set_are_lifted(profile):
     """X-18: the job round had every chat rule postings out as failing "the candidate's bar",
     one person's words, in profiles that state no bar at all."""

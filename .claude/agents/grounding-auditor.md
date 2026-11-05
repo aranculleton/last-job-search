@@ -67,7 +67,10 @@ the move was complete.
    (`tools/bullet_rewording.py`), and code fails a resume that leaves such a skill on the
    skills line alone while a bullet could take it. Yours is the judgment left: whether that
    work plausibly involved the skill. Keep it only then; otherwise remove it, and the
-   profile's own bullet prints.
+   profile's own bullet prints. A rewording you remove is recorded on the draft
+   (`rewordings_refused`), so code never asks for it again; a held skill you judge no bullet
+   on this resume plausibly used, with no rewording written, goes in your verdict's
+   `refused_rewordings` by name, the same way.
 
 ## Audit a fixed version
 

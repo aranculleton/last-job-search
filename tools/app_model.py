@@ -812,7 +812,7 @@ def _skill_questions(ctx: Ctx, targets: dict) -> list:
                           "profile doesn't list it. " if who else "A posting asks for it, and "
                           "your profile doesn't list it. ")
                          + "Resumes leave it off until you say. A yes puts it on the ones "
-                           "drafted today and on every one after; a no keeps it off them all."),
+                           "waiting on it and on every one after; a no keeps it off them all."),
                 "options": [{"label": "Yes", "action": "needs.answer", "value": "yes"},
                             {"label": "No", "action": "needs.answer", "value": "no"}],
                 "about": {"company": names[0]} if len(names) == 1 else {},

@@ -87,6 +87,10 @@ sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import person  # noqa: E402
 
 FIELD = "bullet_rewordings"
+# The skills whose rewording the model auditor removed, or refused by name, for this draft:
+# it judged that no bullet here is work that plausibly used them. Kept on the draft itself
+# (written by draft_audit.write_verdict), so every later code audit of it agrees.
+REFUSED = "rewordings_refused"
 # "At most a few bullets": enough to put a yes beside the work that used it, never a
 # resume rewritten around the posting.
 MAX_REWORDINGS = 3
@@ -563,8 +567,23 @@ def usable(a: dict) -> tuple[dict, list[str]]:
     return use, why
 
 
+def refused_by_audit(before, after, named=(), kept=()) -> list[str]:
+    """The skills the model auditor took out of this draft's rewordings: each a rewording
+    in `before` (the drafter's) named that no rewording in `after` (its corrected copy)
+    names, with those it refused by name (`named`) and any already recorded (`kept`)."""
+    def skills(rewordings):
+        out = []
+        for r in rewordings if isinstance(rewordings, list) else ():
+            if isinstance(r, dict):
+                out += skill_names([r.get("skill")] if r.get("skill") else [])
+        return out
+    left = {s.casefold() for s in skills(after)}
+    gone = [s for s in skills(before) if s.casefold() not in left]
+    return clean_names(list(kept or ()) + gone + skill_names(named or ()))
+
+
 def unplaced(posting: str, bullets, rewordings=None, yes=(), no=(),
-             company: str = "") -> tuple[list[dict], list[str]]:
+             company: str = "", refused=()) -> tuple[list[dict], list[str]]:
     """(problems, notes) for each skill the person said yes to, or holds and the posting
     names (held_named), that no bullet on this resume names, `bullets` being the ids the
     page prints (read with this draft's rewordings the guard accepts).
@@ -575,8 +594,15 @@ def unplaced(posting: str, bullets, rewordings=None, yes=(), no=(),
     (the maintainer, 2026-11-04). A note, never a failure, where nothing can take it: no
     bullet on the page is work the profile ties it to, or the rewordings are spent on
     bullets that are not. Forcing it into unrelated work would be the claim the guard
-    exists to refuse, so there it stays on the skills line, and the note says why."""
+    exists to refuse, so there it stays on the skills line, and the note says why.
+
+    A note too for a skill in `refused` (REFUSED on the draft): the model auditor removed
+    its rewording, or refused it, for this draft, as work that did not plausibly use it.
+    Demanding it again failed the corrected draft for ever: the drafter put it back, and the
+    auditor took it out."""
     ids = [str(b).strip() for b in bullets or () if str(b).strip()]
+    refused = {x.casefold() for x in skill_names(refused if isinstance(refused, (list, tuple))
+                                                  else ())}
     nos = {x.casefold() for x in clean_names(no)}
     skills = [s for s in clean_names(skill_names(yes) + held_named(posting, company))
               if s.casefold() not in nos]
@@ -595,7 +621,10 @@ def unplaced(posting: str, bullets, rewordings=None, yes=(), no=(),
             continue
         takers = [b for b in ids if not named(s, original(b) or "") and related(s, b)]
         open_ = [b for b in takers if room or b in reworded]
-        if open_:
+        if s.casefold() in refused:
+            notes.append(f"{s} stays on the skills line: the model audit judged that no bullet "
+                         "on this resume is work that plausibly used it")
+        elif open_:
             out.append(_problem("", "skill-not-in-work", s,
                                 f"the posting names {s}, which the person holds or said yes "
                                 "to, and no bullet on this resume names it, so it sits on the "

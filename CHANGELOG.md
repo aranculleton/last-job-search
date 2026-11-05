@@ -345,6 +345,34 @@ make sense to somebody whose repo just received it.
   you have set aside, and any employer you said "No more roles from", again just before it
   makes your list, including taps on your page Claude has not taken in yet, and fills each
   place with the next best job, so you get the number you asked for.
+- **A computer without the document maker no longer loses your unsent resumes.** Making your
+  applications again on a computer that cannot make PDFs used to delete each resume's PDF and
+  give you a To do for every one. They are now left as they are and made again on the next
+  run that can, and a resume that fails to make keeps the one you had.
+- **A skill Claude judged did not fit your work stops being asked for.** When the final check
+  took a skill out of a bullet because that work did not really use it, the first check
+  asked for it back, so the application never finished. It now stays on your skills line,
+  and the application goes on.
+- **A yes to a skill reaches every resume waiting on it.** Only resumes drafted that day got
+  it, so one drafted the night before, waiting on your answer, never did.
+- **Your page stays up to date from any chat.** Saying "I applied to ..." in a chat of your
+  own now updates your page there, as it says it does. Only an old helper that has handed
+  your page on to a new one leaves it alone, and no chat draws your page over a newer copy
+  of it.
+- **Saving keeps your own changes and tells you what you need to know.** A change you made
+  to an application in one chat is kept when another chat changed it too, and you are told
+  once which copy you have. Two chats' changes to different lines of one note are both kept,
+  and where they truly clash, the other copy is kept aside for you. Work an earlier chat
+  never saved, and that your search does not have, is mentioned to you once, in any chat,
+  never again in each new one. One file that cannot be saved no longer holds back the rest of
+  its folder.
+- **A search is finished only once its own list is saved,** even in a chat started after it,
+  and a search never saves over an earlier one's list.
+- **Your brief's phone notification keeps coming if it already did.** It became a setting on
+  4 November, off unless you choose it, so a brief that had been sending one stopped the day
+  it took the update. One that sent it before keeps it, and Settings shows it on. Profile
+  upgrade: brief-push-kept.
+- **A job left out of a draft is dated by your own day,** not the computer's.
 
 ## [4.9.1] - 2026-11-04
 

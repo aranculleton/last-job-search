@@ -418,20 +418,36 @@ def _learned_choices() -> str:
 
 def _brief_push() -> str:
     """A brief whose own run would send the phone notification, and nobody asked whether they
-    want one: off until they say (brief.push_wanted), and asked once, as the setup sheet asks."""
+    want one: off until they say (brief.push_wanted), and asked once, as the setup sheet asks.
+    Never asked where the brief already sent one: that copy keeps it (brief-push-kept)."""
     try:
+        import brief
         import person
         import routines
         reg = routines.load()
         if routines._brief(reg) is None or routines.brief_pushes_itself(reg):
             return ""
-        if person.get("brief_push", None) is not None:
+        if person.get("brief_push", None) is not None or brief.pushed_before():
             return ""
     except Exception:  # noqa: BLE001  no profile or no brief: nothing to ask
         return ""
     return ("your brief can send a notification to your phone each morning, and nobody has "
             "asked whether you want one (profile/person.json has no brief_push), so it sends "
             "none")
+
+
+def _brief_push_kept() -> str:
+    """A brief that already sent a phone notification each morning, in a copy that never
+    answered whether it wants one: it keeps it (brief.push_wanted), and the setting says so."""
+    try:
+        import brief
+        import person
+        if person.get("brief_push", None) is not None or not brief.pushed_before():
+            return ""
+    except Exception:  # noqa: BLE001  no profile: nothing to keep
+        return ""
+    return ("your brief has been sending a notification to your phone each morning, and "
+            "profile/person.json has no brief_push, so Settings shows it off")
 
 
 def _linkedin_plan() -> str:
@@ -1921,6 +1937,12 @@ REGISTRY: tuple[Upgrade, ...] = (
             ask="Do you want a notification on your phone each morning when your brief is ready?",
             why_ask="It is off unless you say, and your brief still comes on your page and in "
                     "its chat either way."),
+    Upgrade("brief-push-kept", "2026-11-05",
+            "the phone notification your brief already sent each morning keeps coming, and "
+            "Settings shows it on",
+            _brief_push_kept, "python3 tools/brief.py keep-push", "instant",
+            command=("python3", "tools/brief.py", "keep-push"),
+            paths=("profile/person.json",), conditional=True, priority=2),
     Upgrade("letter-language", "2026-10-14",
             "letters that greet, date and number pages in your document language, spelled as you spell",
             _letter_language, "/setup --section documents", "question", "~2 min",

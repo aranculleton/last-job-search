@@ -729,7 +729,8 @@ def rule_findings(d: dict, pick: dict, posting: str, corpus: dict | None = None,
         except Exception:  # noqa: BLE001 - no page to read: nothing to say about it
             on_page = []
         missing, why = bullet_rewording.unplaced(posting, on_page, d.get(bullet_rewording.FIELD),
-                                                 yes_here, no_here, company)
+                                                 yes_here, no_here, company,
+                                                 refused=d.get(bullet_rewording.REFUSED) or ())
         # Filed under the resume's bullets, not bullet_rewordings: a rewording already there
         # is not refused by it, and keeps its question for the model auditor.
         for p in missing:
@@ -1245,6 +1246,16 @@ def write_verdict(round_dir: str, slug: str, verdict: dict) -> str:
         verdict = dict(verdict, draft={**{k: v for k, v in d.items()
                                           if k not in ("pack_hash", "research_hash")},
                                        **verdict["draft"]})
+        # A rewording it took out, or refused by name, is its ruling that the work did not
+        # plausibly use the skill: kept on the corrected draft, so the code audit never
+        # demands it back (tools/bullet_rewording.py unplaced).
+        import bullet_rewording
+        corrected = verdict["draft"]
+        refused = bullet_rewording.refused_by_audit(
+            d.get(bullet_rewording.FIELD), corrected.get(bullet_rewording.FIELD),
+            verdict.get("refused_rewordings"), corrected.get(bullet_rewording.REFUSED))
+        if refused:
+            verdict["draft"] = dict(corrected, **{bullet_rewording.REFUSED: refused})
     if str(verdict.get("audited_md5") or "") != md5(d):
         raise SystemExit("verdict: audited_md5 is not the md5 of the draft as it stands "
                          f"({md5(d)}): the draft changed, so print the packet again and audit "
@@ -1764,7 +1775,8 @@ def packet(round_dir: str, slug: str) -> str:
               "with every change>, \"changes\": [{\"field\", "
               "\"before\", \"after\", \"reason\"}], \"residual_risks\": [what an interviewer "
               "could still probe], \"rulings\": [{\"sentence\", \"flag\", \"ruling\": "
-              "\"supported\" | \"fixed\" | \"removed\", \"why\"}], \"audited_md5\": "
+              "\"supported\" | \"fixed\" | \"removed\", \"why\"}], \"refused_rewordings\": "
+              "[a held skill no bullet here plausibly used, by name; optional], \"audited_md5\": "
               f"\"{md5(base)}\", \"rules_hash\": \"{mech['rules_hash']}\"}}. A sentence you keep "
               "under a flag needs a \"supported\" ruling with that sentence and flag; a flag "
               "about the whole draft (profile-changed, no-pack, no-research-hash) is ruled with "

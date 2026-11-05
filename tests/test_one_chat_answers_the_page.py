@@ -693,11 +693,13 @@ def test_a_helper_that_rereads_a_lot_hands_over_within_the_day(copy, tmp_path, m
                 if ln.startswith("listen: renew:")]
 
 
-def _view(copy, chat, *extra, base=None, now=NOW):
+def _view(copy, chat, *extra, base=None, now=NOW, sha=None):
     """`app.py view` over a fresh read of the page, as one chat: (its answer, every write it
     would send as {(collection, doc id): body})."""
     out = os.path.join(copy.root, f"view-{chat}-{len(os.listdir(copy.root))}")
     env = {"LJS_BASIS": base} if base is not None else {}
+    if sha is not None:
+        env["LJS_BASIS_SHA"] = sha
     got = json.loads(copy.run("view", out, "--dump", copy.dump(), "--chat", chat, "--now", now,
                               *extra, **env))
     writes = {}
@@ -719,10 +721,10 @@ def _apply_all(copy, got):
 
 def test_only_the_chat_that_answers_the_page_draws_its_screens(copy):
     """During a hand-over the old helper and the new one both rewrote whole screens, and each
-    page update bounced off the other's (the maintainer, 4 November). Only the chat that
-    answers the page draws them now, and a job's own chat for its job; any other chat, the old
-    helper above all, writes nothing to them and says so in one line. No chat writes a screen
-    over one another chat drew from a newer copy than its own."""
+    page update bounced off the other's (the maintainer, 4 November). The old helper, once it
+    has handed the page on, writes nothing to them and says so in one line; every other chat
+    draws them. No chat writes a screen over one another chat drew from a newer copy than its
+    own."""
     import app_listen
     copy.page()
     assert copy.send(copy.run("listen", copy.dump(), "--chat", "session_OLDHELPER", "--helper"))
@@ -752,12 +754,14 @@ def test_only_the_chat_that_answers_the_page_draws_its_screens(copy):
     assert now_doc["by"] == "session_NEWHELPER" and now_doc["base"] == "2026-10-25T17:00:00Z"
     assert all(b.get("by") == "session_NEWHELPER" for (c, d), b in writes.items()
                if c == "screen" and not d.startswith("part~") and b)
-    # A job's own chat draws the page for its job, once it is done; with no job, nothing.
+    # A job's own chat draws the page for its job, once it is done; with no job it draws it
+    # too, as any chat does but the old helper (the engine review, 2026-11-05: "I applied" in
+    # the person's own chat left the page stale).
     copy.queue("draft~kestrel")
     got, _w = _view(copy, "session_JOB", "--work", "draft~kestrel", base="2026-10-25T18:00:00Z",
                     now="2026-10-26T09:00:00Z")
     assert got["batches"] and "for_claude" not in got
-    assert _view(copy, "session_JOB", now="2026-10-26T09:00:00Z")[0]["batches"] == []
+    assert _view(copy, "session_JOB", now="2026-10-26T09:00:00Z")[0]["batches"]
     # The scheduled brief's own update (it passes the word) draws the day's news, wherever it
     # runs.
     assert _view(copy, "brief", now="2026-10-26T09:00:00Z")[0]["batches"]
@@ -835,3 +839,66 @@ def test_a_wrong_number_stored_in_the_listener_record_is_healed_not_bounced(copy
     # The wake says the same when a batch is refused.
     import app
     assert "python3 tools/app.py version" in app.REFUSED
+
+
+def test_any_chat_draws_the_screens_but_the_old_helper_after_a_hand_over(copy):
+    """Only the listener drew the page's screens, so "I applied to <employer>" said in the
+    person's own chat left the page stale while the chat said it was up to date. Any chat
+    draws them again; only a chat that answered the page and handed it on (the old helper in
+    a hand-over, the case the rule was made for) writes nothing to them."""
+    import app_listen
+    copy.page()
+    assert copy.send(copy.run("listen", copy.dump(), "--chat", "session_LISTENER", "--helper"))
+    got, _w = _view(copy, "session_PERSONS_OWN")
+    assert got["batches"] and app_listen.VIEW_LEFT not in (got.get("for_claude") or []), got
+    assert copy.send(copy.run("listen", copy.dump(), "--chat", "session_LISTENER", "--hand",
+                              "session_NEWHELPER"))
+    got, writes = _view(copy, "session_LISTENER")
+    assert got["batches"] == [] and writes == {}
+    assert got["for_claude"] == [app_listen.VIEW_LEFT]
+    assert _view(copy, "session_PERSONS_OWN")[0]["batches"]
+
+
+def _repo(path):
+    """A git copy with two commits: (the older's sha, the newer's)."""
+    def g(*args):
+        return subprocess.run(["git", "-C", path, "-c", "user.name=t",
+                               "-c", "user.email=t" + "@example.com", *args],
+                              capture_output=True, text=True, check=True).stdout.strip()
+    g("init", "-q")
+    with open(os.path.join(path, "a.txt"), "w", encoding="utf-8") as fh:
+        fh.write("one\n")
+    g("add", "a.txt")
+    g("commit", "-q", "-m", "one")
+    older = g("rev-parse", "HEAD")
+    with open(os.path.join(path, "a.txt"), "a", encoding="utf-8") as fh:
+        fh.write("two\n")
+    g("commit", "-q", "-am", "two")
+    return older, g("rev-parse", "HEAD")
+
+
+def test_a_newer_copy_is_judged_by_its_commit_not_its_clock(copy):
+    """Screens a chat drew carry the commit its copy was based on. A computer with a fast
+    clock (or a job chat's commit not landed yet) stamped a later time, and the listener,
+    whose copy holds that very commit, never wrote its screens again. A commit known here
+    and in this copy's history is not newer, whatever the time says; one known here and not
+    in it is; one never seen here falls back to the time."""
+    copy.page()
+    older, newer_sha = _repo(copy.state)
+    copy.queue("draft~kestrel")
+    got, _w = _view(copy, "session_JOB", "--work", "draft~kestrel",
+                    base="2099-01-01T00:00:00Z", sha=older)
+    assert got["batches"] and _apply_all(copy, got)
+    got, writes = _view(copy, "session_LISTENER", base="2026-10-25T17:00:00Z", sha=newer_sha,
+                        now="2026-10-26T09:00:00Z")
+    assert not got.get("kept_newer") and ("meta", "now") in writes, got.get("kept_newer")
+    assert writes[("meta", "now")].get("base_sha") == newer_sha
+    assert _apply_all(copy, got)
+    # A copy behind one whose commit it has never reached keeps that one's screens.
+    got, writes = _view(copy, "session_JOB", "--work", "draft~kestrel",
+                        base="2099-01-01T00:00:00Z", sha=older, now="2026-10-27T09:00:00Z")
+    assert ("meta", "now") not in writes and not [d for (c, d) in writes if c == "screen"]
+    # A commit never seen here: the time decides, as before.
+    got, writes = _view(copy, "session_JOB", "--work", "draft~kestrel",
+                        base="2026-10-25T16:00:00Z", sha="0" * 40, now="2026-10-28T09:00:00Z")
+    assert ("meta", "now") not in writes and not [d for (c, d) in writes if c == "screen"]

@@ -358,9 +358,10 @@ def decide(db: dict, chat: str, out_dir: str, now: dt.datetime | None = None,
                               "to hand over"]}
         new = {"chat": hand_to, "title": HELPER_CHAT_TITLE, "kind": "cloud", "helper": True,
                "since": at, "answered_at": None, "took_from": chat,
-               "took_from_helper": bool(rec.get("helper"))}
+               "took_from_helper": bool(rec.get("helper")), "handed_by": chat}
         w.add("set", DOC_COLLECTION, DOC_ID, new, if_version=version)
         _remember(new, now, confirmed=False)
+        handed_here(chat, now)
         return {"role": "other", "record": new, "batches": w.save("listen"),
                 "lines": ["listen: the page is handed to the helper chat. Send the batch "
                           "below, then stop this chat's watch: ArtifactComments, action "
@@ -541,15 +542,16 @@ def draws_screens(db: dict, chat: str, work: str = "",
                   now: dt.datetime | None = None) -> tuple[bool, str]:
     """Whether this chat writes the page's screens (`app.py view`), and what it says when not.
 
-    Only the chat that answers the page draws them, with two exceptions that keep a page from
-    going stale: a chat doing work of its own for the person (`work`, the job it was started
-    for, or work it began with `ask --here`, still going or finished within OWN_JOB_S), which
-    a job chat reports to the chat that started it, but no other chat hears of it), and
-    any chat while nobody answers the page (the first publish). Small work an old helper took
-    as the listener is not its own in this sense: it hands the page on with it. Every other
-    chat, an old helper after a hand-over above all, writes only its own work items and
-    receipts: during a hand-over the old and new helper both rewrote whole screens, and each
-    update bounced off the other's (the maintainer, 4 November)."""
+    Any chat draws them: "I applied to <employer>" said in the person's own chat left the
+    page stale while that chat said it was up to date, when only the listener drew them (the
+    engine review, 2026-11-05). The one exception is a chat that answered the page and has
+    handed it on (handed_on: the old helper in a hand-over), which writes only its own work
+    items and receipts: during a hand-over the old and new helper both rewrote whole screens,
+    and each update bounced off the other's (the maintainer, 4 November). Even it draws for
+    work of its own for the person (`work`, the job it was started for, or work it began
+    with `ask --here`, still going or finished within OWN_JOB_S); small work it took as the
+    listener is not its own in this sense: it hands the page on with it. Whatever chat
+    draws, a screen another chat drew from a newer copy is never written over (app.py view)."""
     import page_db
     now = now or dt.datetime.now(dt.timezone.utc)
     rec, _version = record(db)
@@ -563,6 +565,8 @@ def draws_screens(db: dict, chat: str, work: str = "",
     took = seen().get("listener") or {}
     if str(took.get("chat") or "") in mine and str(took.get("since") or "") > \
             str(rec.get("since") or ""):
+        return True, ""
+    if not handed_on(rec, mine):
         return True, ""
     jobs = db.get("work") or {}
     own = [w for w in (work, _job_chat()) if w]
@@ -578,6 +582,37 @@ def draws_screens(db: dict, chat: str, work: str = "",
         if done is not None and (now - done).total_seconds() < OWN_JOB_S:
             return True, ""
     return False, VIEW_LEFT
+
+
+def handed_on(rec: dict, mine: set) -> bool:
+    """This chat answered the page and handed it on, and another answers it now: the page's
+    record names another chat and says this one handed it over (`handed_by`; before it was
+    kept, `took_from` an app-started helper), or this checkout's own record says so
+    (handed_here). A chat the page was only taken from, the person's own chat gone quiet
+    above all, is not: it draws the screens like any other."""
+    if not mine or str(rec.get("chat") or "") in mine:
+        return False
+    if str(rec.get("handed_by") or "") in mine:
+        return True
+    if str(rec.get("took_from") or "") in mine and rec.get("took_from_helper") \
+            and "handed_by" not in rec:
+        return True
+    return any(c in (seen().get("handed_on") or {}) for c in mine)
+
+
+def handed_here(chat: str, now: dt.datetime) -> None:
+    """Keep, in this checkout, that this chat handed the page on (handed_on reads it once
+    another chat answers). Never raises."""
+    if not chat:
+        return
+    try:
+        got = seen()
+        handed = got.get("handed_on") if isinstance(got.get("handed_on"), dict) else {}
+        handed[chat] = _stamp(now)
+        got["handed_on"] = handed
+        _save_seen(got)
+    except (OSError, ValueError):
+        pass
 
 
 def _job_chat() -> str:
