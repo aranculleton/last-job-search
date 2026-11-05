@@ -148,6 +148,9 @@ RUNNING = {"kind": "reply", "title": "Reply to Juno", "to": "cloud", "args": {},
 QUEUED = {"kind": "follow_up", "title": "Follow up with Wren", "to": "cloud", "args": {}, "asked_at": "2026-10-25T08:58:00.000Z", "status": "queued",
           "stages": [{"name": "Writing", "est_s": 120}], "stage": 0, "steps": [], "attempt": 1}
 TAP = {"action": "export.take", "item": "2026-10", "value": {"assets": []}, "at": "2026-10-25T08:59:00.000Z", "rev": None}
+# What one measured px is in the viewport's px: 1 in Chrome's and Firefox's engines, which
+# measure after the body's zoom, and the zoom itself in Safari's, which measures before it.
+DRAWN = "const k = document.documentElement.getBoundingClientRect().width / (document.body.getBoundingClientRect().width || 1);"
 HEARD = {"chats/cloud-1": {"kind": "cloud", "seen_at": "2026-10-25T08:58:30.000Z", "watching": True},
          "meta/listener": {"chat": "cloud-1", "kind": "cloud", "answered_at": "2026-10-25T08:56:00.000Z", "since": "2026-10-24T08:00:00.000Z"}}
 LINE = "(document.querySelector('[data-k=\"det:info:linkedin-download\"] .state') || {}).textContent || ''"
@@ -245,9 +248,14 @@ def test_the_pill_opens_and_closes_claudes_work_on_every_screen(run, tmp_path):
     a sheet across the whole page there (the maintainer, 2026-11-04: "just having this
     persistent every page but when u press it, opens or closes the side panel"). The pill opens
     and closes one panel on every screen, Hide closes it, and the choice is remembered."""
+    # In the page's drawn px in every engine: Safari's measures a box inside the zoomed body
+    # before the zoom (1584 for a rail drawn at 1440 under 0.9, Safari 4.10), Chrome's and
+    # Firefox's after it (app.js drawnPerPx). The body spans the viewport, so the viewport
+    # over the body's measured width puts any of them in the viewport's px.
     rail = ("(() => { const hd = document.getElementById('h-work-rail'); const pill = document.getElementById('pill');"
+            f" {DRAWN}"
             " const r = hd && hd.getClientRects().length ? document.getElementById('rail').getBoundingClientRect() : null;"
-            " return [r ? Math.round(r.right) : null, innerWidth, pill ? pill.getAttribute('aria-expanded') : null]; })()")
+            " return [r ? Math.round(r.right * k) : null, innerWidth, pill ? pill.getAttribute('aria-expanded') : null]; })()")
     seed = dict(HEARD, **{"work/reply~1": RUNNING, "work/follow_up~2": QUEUED})
     d = tmp_path / "wide"
     d.mkdir()
@@ -263,8 +271,11 @@ def test_the_pill_opens_and_closes_claudes_work_on_every_screen(run, tmp_path):
 
 
 def test_narrower_claudes_work_opens_on_the_right_and_on_a_phone_from_the_bottom(run, tmp_path):
+    # Measured in the viewport's px in every engine (DRAWN): Safari gave [1137.78, 0, 360,
+    # 853.33, 1024, 768], a sheet at the right edge measured before the body's 0.9 zoom.
     box = ("(() => { const d = document.querySelector('dialog.work-sheet[open]'); if (!d) return null;"
-           " const r = d.getBoundingClientRect(); return [r.right, r.top, r.width, r.bottom, innerWidth, innerHeight]; })()")
+           f" {DRAWN}"
+           " const r = d.getBoundingClientRect(); return [r.right * k, r.top * k, r.width * k, r.bottom * k, innerWidth, innerHeight]; })()")
     seed = dict(HEARD, **{"work/reply~1": RUNNING, "work/follow_up~2": QUEUED})
     for vp, side in (({"width": 1024, "height": 768}, True), (PHONE, False)):
         d = tmp_path / ("side" if side else "phone")

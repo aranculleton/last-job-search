@@ -646,6 +646,36 @@ FINISHED = ("done", "failed", "stopped")
 LEASE_S = 30 * 60
 
 
+def work_times(db: dict, now: dt.datetime, days: int = 30, least: int = 3) -> dict:
+    """{kind: seconds} for each kind of work this copy has finished at least `least` times in
+    the last `days`: the median of finished_at minus claimed_at, one item at a time (a batch
+    of drafts is that many items). The page's gauge says it, falling back to the kind's
+    default stages where there is no history (templates/app/DESIGN.md, the gauge): "about 3
+    minutes" for work that takes this person's Claude twelve said nothing true (the
+    maintainer, 2026-11-05)."""
+    import app_model
+    now = now if now.tzinfo else now.replace(tzinfo=dt.timezone.utc)
+    by: dict = {}
+    for doc in (db.get("work") or {}).values():
+        w = doc.get("data") if isinstance(doc, dict) and "data" in doc else doc
+        if not isinstance(w, dict) or str(w.get("status") or "") != "done":
+            continue
+        start = app_model.parse_time(w.get("claimed_at"))
+        end = app_model.parse_time(w.get("finished_at"))
+        if not start or not end or (now - end).days > days:
+            continue
+        took = (end - start).total_seconds()
+        if 5 <= took <= 4 * 3600 and str(w.get("kind") or "") in STAGES:
+            by.setdefault(str(w["kind"]), []).append(took)
+    out = {}
+    for kind, xs in sorted(by.items()):
+        if len(xs) >= least:
+            xs.sort()
+            mid = len(xs) // 2
+            out[kind] = int(round(xs[mid] if len(xs) % 2 else (xs[mid - 1] + xs[mid]) / 2))
+    return out
+
+
 def progress(kind: str) -> dict:
     """The default stages of a kind of work, with their usual seconds."""
     if kind not in STAGES:

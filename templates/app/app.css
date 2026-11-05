@@ -294,25 +294,25 @@ bdi { unicode-bidi: isolate; }
    pill at the regular weight, its edge 3:1 on the card; More is a soft pill too. Text
    buttons beside pills read as clutter (the maintainer, 2026-11-05). */
 .btn.secondary { font-weight: 400; }
-:is(.card-actions, .wc-actions, .suggest-acts, .more-acts, .g-acts, .fix, .bp-foot) > :is(.btn, a):not(.icon-only),
+:is(.card-actions, .wc-actions, .suggest-acts, .more-acts, .g-acts, .fix, .bp-foot, .sheet-actions) > :is(.btn, a):not(.icon-only),
 :is(.card-actions, .wc-actions, .suggest-acts, .g-acts) > details.more > .more-btn {
   display: inline-flex; align-items: center; justify-content: center; gap: 8px; box-sizing: border-box;
   min-height: 38px; margin: 0; padding: 8px 16px; border-radius: 999px; border: 1px solid var(--line-strong);
   font-size: var(--t-sm); line-height: 1.2; text-decoration: none; text-align: center; cursor: pointer;
 }
-:is(.card-actions, .wc-actions, .suggest-acts, .more-acts, .g-acts, .fix, .bp-foot) > :is(.btn, a):not(.icon-only):not(.primary),
+:is(.card-actions, .wc-actions, .suggest-acts, .more-acts, .g-acts, .fix, .bp-foot, .sheet-actions) > :is(.btn, a):not(.icon-only):not(.primary),
 :is(.card-actions, .wc-actions, .suggest-acts, .g-acts) > details.more > .more-btn {
   background: var(--raised); color: var(--ink); font-weight: 400;
 }
-:is(.card-actions, .wc-actions, .suggest-acts, .more-acts, .g-acts, .fix, .bp-foot) > .btn.primary {
+:is(.card-actions, .wc-actions, .suggest-acts, .more-acts, .g-acts, .fix, .bp-foot, .sheet-actions) > .btn.primary {
   background: var(--accent); color: var(--accent-ink); border-color: var(--accent); font-weight: 600;
 }
 /* One filled pill a screen: each other card's next step is the soft pill, semibold. */
-.btn.secondary.next, :is(.card-actions, .wc-actions, .suggest-acts, .more-acts, .g-acts, .fix, .bp-foot) > .btn.next:not(.primary):not(.icon-only) { font-weight: 600; }
+.btn.secondary.next, :is(.card-actions, .wc-actions, .suggest-acts, .more-acts, .g-acts, .fix, .bp-foot, .sheet-actions) > .btn.next:not(.primary):not(.icon-only) { font-weight: 600; }
 @media (hover: hover) {
-  :is(.card-actions, .wc-actions, .suggest-acts, .more-acts, .g-acts, .fix, .bp-foot) > :is(.btn, a):not(.icon-only):not(.primary):hover,
+  :is(.card-actions, .wc-actions, .suggest-acts, .more-acts, .g-acts, .fix, .bp-foot, .sheet-actions) > :is(.btn, a):not(.icon-only):not(.primary):hover,
   :is(.card-actions, .wc-actions, .suggest-acts, .g-acts) > details.more > .more-btn:hover { background: var(--raised-hover); border-color: var(--line-strong); }
-  :is(.card-actions, .wc-actions, .suggest-acts, .more-acts, .g-acts, .fix, .bp-foot) > .btn.primary:hover { background: var(--accent-hover); border-color: var(--accent-hover); color: var(--accent-ink); }
+  :is(.card-actions, .wc-actions, .suggest-acts, .more-acts, .g-acts, .fix, .bp-foot, .sheet-actions) > .btn.primary:hover { background: var(--accent-hover); border-color: var(--accent-hover); color: var(--accent-ink); }
 }
 /* More, wherever it is, is a soft pill. */
 .more-btn { background: var(--raised); border: 1px solid var(--line-strong); font-weight: 400; }
@@ -965,6 +965,13 @@ dialog.sheet form { display: grid; gap: 16px; }
    bottom 0 it was lifted out of its place over the last choice even when everything fitted,
    with empty space under Cancel (the maintainer's iPhone, 2026-11-04: Add something). */
 dialog.sheet .sheet-actions { position: sticky; bottom: -24px; z-index: 1; margin: 0 -24px -24px; padding: 12px 24px 24px; background: var(--surface); border-top: 1px solid var(--line); }
+/* Where the choices do not all fit, a soft fade over the foot's edge says there is more to
+   scroll to; scrolled to the end, the last choice stands whole above the foot (the
+   maintainer, 2026-11-05: a bin's fourth choice was cut in half by the foot's line). */
+dialog.sheet .sheet-actions::before { content: ""; position: absolute; left: 0; right: 0; bottom: 100%; height: 32px; pointer-events: none;
+  background: linear-gradient(to bottom, transparent, var(--surface)); opacity: 0; transition: opacity 0.15s; }
+dialog.sheet.more-below .sheet-actions::before { opacity: 1; }
+@media (prefers-reduced-motion: reduce) { dialog.sheet .sheet-actions::before { transition: none; } }
 .sheet-title { font-size: var(--t-xl); font-weight: 600; padding-right: 8px; }
 .sheet-intro { color: var(--ink); }
 .sheet-cost { color: var(--muted); font-size: var(--t-sm); }
@@ -1043,9 +1050,9 @@ a.navlink, .applylink, .btn.link, .fold .btn.link, .bp-foot a { text-decoration-
   a.name-link { position: relative; }
   a.name-link::after { content: ""; position: absolute; inset: 0 -13px; }
   .card-actions .btn.link, .controls .btn.link { margin-block: 0; }
-  :is(.card-actions, .wc-actions, .suggest-acts, .more-acts, .g-acts, .fix, .bp-foot) > :is(.btn, a):not(.icon-only) {
+  :is(.card-actions, .wc-actions, .suggest-acts, .more-acts, .g-acts, .fix, .bp-foot, .sheet-actions) > :is(.btn, a):not(.icon-only) {
     display: inline-flex; min-height: calc(36px * var(--tz)); padding: 8px 16px; margin-block: 0; line-height: 1.2; position: relative; }
-  :is(.card-actions, .wc-actions, .suggest-acts, .more-acts, .g-acts, .fix, .bp-foot) > :is(.btn, a):not(.icon-only)::after { content: ""; position: absolute; inset: calc(-4px * var(--tz)) 0; }
+  :is(.card-actions, .wc-actions, .suggest-acts, .more-acts, .g-acts, .fix, .bp-foot, .sheet-actions) > :is(.btn, a):not(.icon-only)::after { content: ""; position: absolute; inset: calc(-4px * var(--tz)) 0; }
   :is(.card-actions, .wc-actions, .suggest-acts, .g-acts) > details.more > .more-btn { min-height: calc(36px * var(--tz)); }
   a.back-link, a.bp-go { display: inline-flex; align-items: center; min-height: var(--target); min-width: var(--target); }
   a.bp-link { min-height: var(--target); }

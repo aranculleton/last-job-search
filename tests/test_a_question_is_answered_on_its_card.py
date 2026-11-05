@@ -214,6 +214,23 @@ def test_add_the_time_on_a_coming_up_row_is_a_time_picker_that_books_it(run, tmp
     assert "Time added" in got["after"][2]["eval"] and "10:30" in got["after"][2]["eval"], got["after"][2]["eval"]
 
 
+def test_a_booked_interview_is_moved_from_its_coming_up_row_with_its_pencil(run, tmp_path, vp):
+    """To do could move an interview and Coming up could not (the UX review, 2026-11-05)."""
+    row = "up-app-larkspur-supply-phone-screen-2026-10-28"
+    within = '[data-item="' + row + '"]'
+    got = _go(run, tmp_path, [
+        {"hash": "interviews", "click": "Change the day: Phone screen: Larkspur Retail", "exact": True,
+         "eval": "!!document.querySelector('" + within + " input[type=date]')"},
+        {"eval": "(() => { const c = document.querySelector('" + within + "'); const set = (el, v) => { el.value = v; el.dispatchEvent(new Event('input', {bubbles: true})); };"
+                 " set(c.querySelector('input[type=date]'), '2026-10-30'); set(c.querySelector('input[type=time]'), '15:00'); return true; })()"},
+        {"click": "Send", "exact": True, "within": within},
+    ], vp, seed=HEARD, clock=T)
+    assert got["after"][0]["eval"], "the pencil opens the day and time in place"
+    sent = [a for a in got["actions"] if a["action"] == "outcome.interview"][-1]
+    assert sent["item"] == "int-larkspur-supply" and sent["value"]["on"] == "2026-10-30" and sent["value"]["time"] == "15:00" \
+        and sent["value"]["stage"] == "Phone screen", sent
+
+
 def test_finished_work_says_it_is_being_put_on_the_page_until_the_page_has_it(run, tmp_path):
     """DESIGN.md, "Moving parts" (2): "Done" only once the result is on the page; finished a
     minute ago with the page's model made before it, it says so instead, with no reload."""

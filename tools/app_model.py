@@ -4836,7 +4836,8 @@ EMPTY = {
 
 
 def build(today: dt.date | None = None, now: dt.datetime | None = None,
-          only=None, shown: dict | None = None, full: dict | None = None) -> tuple[dict, dict]:
+          only=None, shown: dict | None = None, full: dict | None = None,
+          work_time: dict | None = None) -> tuple[dict, dict]:
     """(the model, what each item id stands for in the repo). `only` builds just those
     sections, for an applier that needs one item's rev and not the whole page. `shown` is
     {suggestion id: the day it first showed} from the page's database, so at most three new
@@ -4886,6 +4887,10 @@ def build(today: dt.date | None = None, now: dt.datetime | None = None,
         # the page draws that control under it, never "Say it in Chat" (2026-11-05).
         import app_actions
         model["refusal_asks"] = app_actions.OLD_REFUSAL_ASKS
+        # How long each kind of work takes this copy's Claude, from its own finished work
+        # (page_db.work_times, read from the page's database by `app.py view`): the gauge's
+        # minutes, the app's defaults only where there is no history yet.
+        model["work_time"] = dict(work_time or {})
         # Whether the page offers to pin itself now (app_listen.pin_due: never once pinned,
         # and a Not now is asked again a month later, three times at most).
         try:

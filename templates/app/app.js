@@ -612,7 +612,9 @@
   // Said as a gauge of three bars, with these words on hover and to a screen reader: "a lot
   // of Claude" meant nothing to anyone but the maintainer (2026-10-26).
   const COST_WORDS = ["Free", "Uses a little of your Claude allowance", "Uses some of your Claude allowance", "Uses a lot of your Claude allowance"];
-  const stageSeconds = (kind) => (STAGES[kind] || STAGES.default).reduce((a, x) => a + x[1], 0);
+  // The time a kind of work takes: this copy's own, from its finished work (the engine's
+  // model.work_time, a median), else the kind's default stages (DESIGN.md, the gauge).
+  const stageSeconds = (kind) => Number(obj(M().work_time)[kind]) > 0 ? Number(obj(M().work_time)[kind]) : (STAGES[kind] || STAGES.default).reduce((a, x) => a + x[1], 0);
   function aboutTime(sec) {
     if (sec < 45) return "about 30 seconds";
     if (sec < 100) return "about a minute";
@@ -628,6 +630,26 @@
     st = Math.max(0, Math.min(3, Number(st) || 0));
     return svg("svg", {viewBox: "0 0 14 12", class: "gauge", "aria-hidden": "true", focusable: "false"},
       [0, 1, 2].map((i) => svg("rect", {x: String(i * 5), y: String(8 - i * 4), width: "3.5", height: String(4 + i * 4), rx: "1", class: i < st ? "on" : "off"})));
+  }
+  // The gauge beside every control that wakes Claude, drawn the one way (DESIGN.md, the
+  // gauge): a button made with `wakes: <kind>` (and `times` for a batch) gets it after the
+  // render, so each screen's helper only says which kind of work its button starts. A control
+  // that only runs code has none, so what is free can be seen.
+  function wakeGauge(kind, times) {
+    const k = txt(kind);
+    if (!k || !STAGES[k]) return null;
+    return costEl({state: WORK_COST[k] === undefined ? 1 : WORK_COST[k]}, k, null, times);
+  }
+  function gaugeWakers() {
+    for (const root of [$("main"), $("rail")]) {
+      if (!root) continue;
+      for (const b of root.querySelectorAll("[data-wakes]")) {
+        const next = b.nextElementSibling;
+        if (next && next.classList.contains("cost")) continue;
+        const g = wakeGauge(b.dataset.wakes, Number(b.dataset.times) || 1);
+        if (g) { g.setAttribute("data-gauge", b.dataset.wakes); b.insertAdjacentElement("afterend", g); }
+      }
+    }
   }
   // A sheet's cost line, with the gauge its words name in front of it.
   // Said as the gauge and the time, like every other cost: its words on hover and read aloud.
@@ -654,7 +676,8 @@
     if (!(st > 0)) return h("span", {class: "cost", id}, costText(cost, kind));
     const sec = STAGES[txt(kind)] ? stageSeconds(txt(kind)) * Math.max(1, Number(times) || 1) : 0;
     const time = sec ? (sec < 100 ? "1 min" : sec >= 5400 ? "about " + Math.round(sec / 3600) + " h" : Math.round(sec / 60) + " min") : "";
-    const words = (COST_WORDS[st] || COST_WORDS[2]) + (sec ? ", " + aboutTime(sec) : "");
+    // Its one line, on hover, a long press and to a screen reader (DESIGN.md, the gauge).
+    const words = sec ? cap1(aboutTime(sec)) + " of Claude's time, from your Claude allowance" : (COST_WORDS[st] || COST_WORDS[2]);
     // With no time to give, its amount in a word beside the gauge: a bare row of bars meant
     // nothing to anyone who cannot hover (2026-11-03).
     return h("span", {class: "cost has-tip", id, "data-tip": words, tabindex: "0"}, gauge(st), h("span", {"aria-hidden": "true"}, time || ["", "a little", "some", "a lot"][st] + " of your allowance"), h("span", {class: "sr-only"}, words));
@@ -1901,12 +1924,19 @@
   }
   // Asked again in the last minute: a second Try again is the same tap.
   const justAsked = (w) => !!w && txt(w.status) === "queued" && now() - (tms(w.asked_at) || 0) < 60000;
+  const retriedAt = new Map();
   function retryWork(id) {
     const w = workDoc(id);
     if (!w) return;
     // A double tap, or a tap while the last is still being written, is that tap (robustness
     // audit 2); a second Try again is the same tap.
     if (workWriting.has(id) || justAsked(w)) return;
+    // Firefox finishes the first tap's write between the two clicks of a double tap, before
+    // the store's copy reaches the page: the second then read the old record and wrote again
+    // (Firefox, 4.10: two updates to one work item). A Try again within a few seconds of the
+    // last one is that tap.
+    if (now() - (retriedAt.get(id) || 0) < 3000) return;
+    retriedAt.set(id, now());
     const t0 = now();
     // A batch is tried again whole: the drafts written with it (their `with`) go back too, so
     // none is left claimed by a chat that stopped (the audit, 2026-11-03). One waiting on the
@@ -2059,6 +2089,12 @@
     });
     document.body.appendChild(dlg);
     try { dlg.showModal(); } catch (e) { dlg.setAttribute("open", ""); }
+    // More below the fold of a sheet that scrolls: its fade says so (CSS, .more-below).
+    const below = () => dlg.classList.toggle("more-below", dlg.scrollTop + dlg.clientHeight < dlg.scrollHeight - 2);
+    below();
+    dlg.addEventListener("scroll", below, {passive: true});
+    window.addEventListener("resize", below, {passive: true});
+    dlg.addEventListener("close", () => window.removeEventListener("resize", below));
     const first = dlg.querySelector("input, select, textarea, button");
     if (first) first.focus();
     return dlg;
@@ -2456,7 +2492,7 @@
   function btn(label, onclick, o) {
     o = o || {};
     return h("button", {type: "button", class: "btn " + (o.kind || "secondary") + (o.small ? " small" : ""), "data-k": o.key || null,
-      disabled: o.disabled || null, "data-bin": o.icon === "bin" ? "1" : null, "aria-pressed": o.pressed === undefined ? null : String(!!o.pressed),
+      disabled: o.disabled || null, "data-bin": o.icon === "bin" ? "1" : null, "data-wakes": o.wakes || null, "data-times": o.wakes && o.times > 1 ? String(o.times) : null, "aria-pressed": o.pressed === undefined ? null : String(!!o.pressed),
       "aria-label": o.aria || null, "aria-describedby": o.describedby || null, "data-primary": o.kind === "primary" ? "1" : null,
       // The one next step on the screen while it is open (the box a person just opened).
       "data-lead": o.lead ? "1" : null,
@@ -3917,7 +3953,7 @@
         busy ? btn("See its progress", openWork, {small: true, key: "duesee:" + (ctx.where || "") + ":" + d.id}) :
           draft ? seeDraftBtn(draft, "duedraft:" + (ctx.where || "") + ":" + d.id) :
           asked && asked.ask.doc ? askBtn(asked.p, asked.ask, "dueask:" + (ctx.where || "") + ":" + d.id) :
-          hasWork ? btn(dueLabel(d, kind), () => askDue(d), {kind: "primary", small: true, key: "duework:" + (ctx.where || "") + ":" + d.id, aria: dueLabel(d, kind) + ": " + txt(d.title)}) : null,
+          hasWork ? btn(dueLabel(d, kind), () => askDue(d), {kind: "primary", small: true, key: "duework:" + (ctx.where || "") + ":" + d.id, aria: dueLabel(d, kind) + ": " + txt(d.title), wakes: kind}) : null,
         doneBtn, ctx.where === "todo" ? tabLink(dueTab(d), dueTab(d) === "contacts" ? (dueContact(d) || null) : (txt(d.item) || null)) : null,
         asked && asked.ask.doc && hasWork ? more("due:" + (ctx.where || "") + ":" + d.id, title, [h("div", {class: "more-acts"},
           btn(dueLabel(d, kind), () => askDue(d), {kind: "quiet", small: true, key: "duework:" + (ctx.where || "") + ":" + d.id, aria: dueLabel(d, kind) + ": " + txt(d.title)}))]) : null),
@@ -6098,6 +6134,24 @@
     if (!upTimeTarget(u)) return "";
     return btn("Add the time", () => { S.upTime = u.id; scheduleRender(); }, {kind: "link", small: true, key: "up-time:" + u.id, aria: "Add the time: " + txt(u.title)});
   }
+  // A booked interview or call moved: the pencil on its row opens the day and time in place
+  // (DESIGN.md, the pencil), sent as the same booking on its new day. To do could move an
+  // interview and Coming up could not (the UX review, 2026-11-05).
+  function upDayBtn(u) {
+    if (u.pending || u.own || !u.day || !upTimeTarget(u)) return null;
+    return btn("", () => { S.upEdit = S.upEdit === u.id ? null : u.id; S.upTime = null; scheduleRender(); },
+      {kind: "quiet icon-only", small: true, icon: "tweak", key: "up-day:" + u.id, aria: "Change the day: " + txt(u.title)});
+  }
+  function upDayForm(u) {
+    const tg = S.upEdit === u.id ? upTimeTarget(u) : null;
+    if (!tg) return null;
+    return answerControl({kind: "date", key: "on", time: "time", label: "The new day"}, "up-day:" + u.id, (got) => {
+      S.upEdit = null;
+      upTimed.add(u.id);
+      act([{item: tg.item, action: tg.action, value: Object.assign({}, tg.value, {on: got.value}, got.time ? {time: got.time} : {}), rev: tg.rev}],
+        "Moved: " + txt(u.title) + " to " + got.words);
+    });
+  }
   function upTimeForm(u) {
     const tg = S.upTime === u.id ? upTimeTarget(u) : null;
     if (!tg) return null;
@@ -6158,8 +6212,8 @@
     return h("li", {class: "up-row", "data-item": u.id, "data-card": "1", tabindex: "-1"},
       h("span", {class: "up-when"}, upWhen(u) || (u.own || u.pending ? "" : addTimeBtn(u))),
       h("span", {class: "up-main"}, h("span", {class: "up-title"}, upGo(u)), sub ? h("span", {class: "up-note small muted"}, sub) : null, prep,
-        upTimeForm(u), upTimed.has(u.id) ? stateLine(txt(obj(upTimeTarget(u)).item), "up:" + u.id) : null),
-      h("span", {class: "up-acts"}, add, rm));
+        upTimeForm(u), upDayForm(u), upTimed.has(u.id) ? stateLine(txt(obj(upTimeTarget(u)).item), "up:" + u.id) : null),
+      h("span", {class: "up-acts"}, upDayBtn(u), add, rm));
   }
   // The first week open; past that, folded behind one button once the list is long.
   const UP_OPEN = 8;
@@ -10056,7 +10110,7 @@
     const acts = h("div", {class: "wc-actions"});
     // Work nobody has started yet is called off in one plain tap, first on its row.
     // Not sent: the one next step, though any tap on the page sends it too.
-    if (unsent) put(acts, btn("Send to Claude", () => sendNow([id]), {kind: "primary", small: true, key: "send:" + id, aria: "Send to Claude: " + txt(w.title)}));
+    if (unsent) put(acts, btn("Send to Claude", () => sendNow([id]), {kind: "primary", small: true, key: "send:" + id, aria: "Send to Claude: " + txt(w.title), wakes: txt(w.kind)}));
     if (st === "queued" && !p.stopping) put(acts, btn("Don't do it", () => stopWork(id), {kind: "secondary", small: true, key: "stop:" + id, aria: "Don't do it: " + txt(w.title)}));
     if (stopBtn) put(acts, stopBtn);
     // Nothing has picked it up: the page asks its helper chat again; only once that cannot
@@ -10064,7 +10118,7 @@
     const canWake = canRing();
     const tries = Number(w.attempt) || 1;
     if ((st === "failed" || (st === "stopped" && !w.stop_asked) || (slow && ACTIVE.has(st) && !limitHit() && !lead)) && tries < 3) {
-      put(acts, btn("Try again", () => retryWork(id), {kind: "secondary", small: true, key: "retry:" + id, aria: "Try again: " + txt(w.title)}));
+      put(acts, btn("Try again", () => retryWork(id), {kind: "secondary", small: true, key: "retry:" + id, aria: "Try again: " + txt(w.title), wakes: txt(w.kind)}));
     }
     // No "Ask Claude again": a ring that went unanswered goes again with the person's next
     // tap by itself (catchUp), so the only thing left to offer is a chat started afresh.
@@ -12080,7 +12134,7 @@
     // An open Tweak panel holds the rail on wide screens until it closes.
     guarded(() => { if (rail) { if (isWide) { if (!S.tweak) patch(rail, railEmpty || !railNode ? [] : [railNode], (probe) => demotePrimaries([probe], !!$("main").querySelector(".btn.primary")), true); } else if (rail.childNodes.length) rail.replaceChildren(); } });
     guarded(() => { if (workDlg) { const body = workDlg.querySelector(".work-body"); if (body) patch(body, [workPanel("sheet")]); } });
-    for (const part of [renderFoot, renderBrowserPanel, renderDock, tidyDownload, demotePrimaries, nameByItem, renderToasts, fitBrief]) guarded(part);
+    for (const part of [renderFoot, renderBrowserPanel, renderDock, tidyDownload, demotePrimaries, nameByItem, gaugeWakers, renderToasts, fitBrief]) guarded(part);
     const n = guarded(todoBadge, () => 0);
     const base = $("brand") ? $("brand").textContent : document.title;
     document.title = (n ? "(" + n + ") " : "") + base;

@@ -22,6 +22,15 @@ make sense to somebody whose repo just received it.
 
 ### Changed
 
+- **A bin's last choice is never cut in half.** Where its choices fit, they all show above
+  Cancel; where they do not, the list scrolls with a soft fade saying there is more, and its
+  last choice comes fully clear of the foot. Cancel is a rounded button like the rest.
+- **The gauge says what Claude will take, from your own work.** A button that wakes Claude has
+  the small bars and minutes beside it, worked out from how long that kind of work has taken
+  you lately; a button that costs nothing (Done, a date, the bin) has none.
+- **Move an interview or a call from Coming up.** The pencil on its row opens the new day and
+  time in place.
+- **Try again tapped twice in Firefox asks once.**
 - **A question is answered on its card, not in Chat.** When Claude could not book something
   because it needs a day, the card now has a date picker (with the time beside it for an
   interview or a call); a choice is a row of buttons, a yes or no is one tap, a number has a

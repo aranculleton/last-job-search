@@ -226,7 +226,7 @@ def test_every_section_shows_the_engines_items_in_plain_words(run, built):
     assert "Brindle Hart Logistics · Manchester (hybrid)\n" in t["jobs"], "hybrid is said once"
     assert "Juno at Larkspur Retail replied to you on 12 Sep" in t["jobs"] and "Write to Juno" in t["jobs"]
     assert "Pay not stated" not in t["jobs"] + t["drafts"], "said on nearly every card, it said nothing"
-    assert "Uses some of your Claude allowance, about" in t["jobs"], "a suggestion's cost is the amount and its real time"
+    assert "of Claude's time, from your Claude allowance" in t["jobs"], "a suggestion's cost is its real time, from the allowance (DESIGN.md, the gauge)"
     # The check that passed says what it checked (2026-11-03: "✓ Checked" said nothing of what);
     # where no PDF reader is installed (the browser job on GitHub) it says the count was not read.
     import pdftext

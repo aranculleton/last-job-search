@@ -205,7 +205,8 @@ def cmd_view(a) -> int:
     # The suggestions already on the page keep their day, so no more than three new ones
     # reach it a day.
     full: dict = {}
-    model, _ = _build(today, now, shown=app_alerts.shown_in(db.get("view") or {}), full=full)
+    model, _ = _build(today, now, shown=app_alerts.shown_in(db.get("view") or {}), full=full,
+                      work_time=page_db.work_times(db, now) if db else None)
     w = page_db.Writes(a.out_dir)
     views = (db.get("view") or {}) if db else {}
     # Only what changed is written: every update rewrote all 37 documents, about 1.5 MB, when
