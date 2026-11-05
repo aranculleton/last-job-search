@@ -56,6 +56,15 @@ make sense to somebody whose repo just received it.
 
 ### Fixed
 
+- **Your own checks are put right first after an update.** When an update leaves some of your own checks failing, Claude puts them right before taking any other work, so finished work is never held back unsaved.
+- **No follow-up to someone living where you skip people.** Where someone lives is read from their profile too, so your place rule holds every follow-up, not only first notes.
+- **A person's finished work opens Contacts.** Its pop-up and a Brief line naming someone open that person, never Jobs.
+- **Clear all clears.** Taking a sort off no longer leaves a filter with no name on Jobs.
+- **Search Contacts by surname.** The search box in Contacts now searches, and a surname finds the person.
+- **A resume made for someone is theirs.** It shows on their card to get, is found by their name, and never replaces your own resume.
+- **One person, one card.** Someone closed as the same person as another is no longer listed beside them; their messages show on the card you keep, and that card takes the employer and title it was missing.
+- **Your LinkedIn download finds people already in your contacts.** Someone you know by first name, or whose message is already logged, is matched instead of added twice, and their missing employer, title and address are filled in.
+- **A save your page turned down is made again.** When your page changed while Claude was saving, the save is made again on top of it, never dropped.
 - **The page chat stays small all day.** Each tap is answered by a short-lived helper whose work is thrown away afterwards, so the chat that looks after your page grows by a line a tap instead of thousands.
 - **A fresh page chat once a day.** It starts at the day's first tap (or sooner only when it is nearly full), carrying a short note of what is in flight and what you asked last.
 - **A tap reads only what changed.** Claude reads your page's new taps and work, keeps the rest from its last look, and reads everything again once a day or when something looks out of step.
@@ -223,6 +232,7 @@ make sense to somebody whose repo just received it.
 - "Also at" on a person's card no longer lists their own message.
 - The box under a card stays visible when the pointer is over the card.
 - A work line on a card names its task ("Answers for the form · waking Claude").
+- "I sent it" on one message to someone no longer marks the next message to them as sent.
 
 ## [4.10.1] - 2026-11-05
 

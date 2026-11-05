@@ -375,6 +375,41 @@ def failing(out: str) -> list[str]:
     return (keep[:80] + tail) if keep else lines[-12:]
 
 
+# What a landing says when only the person's own tests stop it, after an update changed what
+# they check (ci_local.sh prints the own-tests report only then).
+OWN_TESTS_HEAD = ("land: not saved to master yet: only the person's own tests fail, after an "
+                  "update changed what they check")
+OWN_TESTS_DO = ("land: Claude, do this now, before any other work: bring their own tests in "
+                "line as python3 tools/sync_app.py --own-tests says (RUNBOOK.md, \"Your own tests "
+                "fail after an update\"), run it again until it says they pass, commit them, and "
+                "land again: the finished work is kept and lands with them. Nothing to ask the "
+                "person. Every command that starts work says this first until they pass.")
+_OWN_CHECK = re.compile(r"^\s+(?:pytest \(profile/tests, on this person\)|\S.*, profile/tests)"
+                        r"\s+FAIL\s*$")
+_FAILED = re.compile(r"^\s*FAILED (profile/tests/\S+?)(?: - (.*))?$", re.M)
+
+
+def own_tests_only(out: str) -> list | None:
+    """[(test, message)] when the check failed only on the person's own tests (profile/tests)
+    and an update is what they fail on (the check's own-tests report says so); else None."""
+    fails = [ln for ln in out.splitlines() if ln.rstrip().endswith("FAIL")]
+    if not fails or not all(_OWN_CHECK.match(ln) for ln in fails):
+        return None
+    if "their own tests," not in out or "now fail after this update" not in out:
+        return None
+    return [(m.group(1), (m.group(2) or "").strip()) for m in _FAILED.finditer(out)]
+
+
+def _record_own(root: str, failures) -> None:
+    """The person's own tests as this landing's check found them, kept where every command
+    that starts work reads them (sync_app.own_tests_step)."""
+    try:
+        import sync_app
+        sync_app.record_own_tests(root, failures)
+    except Exception:  # noqa: BLE001  the landing's own lines still say it
+        pass
+
+
 def _skips(out: str) -> list[str]:
     return [m.group(1).strip() for m in re.finditer(r"^\s+(.+?)\s+SKIP\s+\(", out, re.M)]
 
@@ -1134,10 +1169,23 @@ def _land(root: str, message: str, check, sleep) -> int:
                        errors="replace")
     out = c.stdout + c.stderr
     if c.returncode != 0:
+        own = own_tests_only(out)
+        if own is not None:
+            # Only the person's own tests, which an update changed what they check: said as
+            # that, with the step, never as a generic failure (a person's copy, 2026-11-05:
+            # two finished jobs could not be saved and nothing said why). The work is kept.
+            _record_own(root, own or [("profile/tests", "")])
+            _wait_on_branch(root, OWN_TESTS_HEAD, sleep)
+            print(OWN_TESTS_DO)
+            for ln in failing(out):
+                print(ln)
+            return 1
         _wait_on_branch(root, "land: not green", sleep)
         for ln in failing(out):
             print(ln)
         return 1
+    if re.search(r"^\s+pytest \(profile/tests, on this person\)\s+PASS", out, re.M):
+        _record_own(root, [])             # they pass now: no command says the step again
 
     name, why = _own_branch(root)
     if not name:

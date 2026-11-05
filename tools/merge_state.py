@@ -298,6 +298,9 @@ JSON_FILES = {
     # Why this person was given an InMail rather than a note, and the other message kept
     # beside it (inmail_pick.py): a snapshot of one decision, the newer whole.
     "documents/network/*/inmail.json": {"whole": ("",), "indent": 1},
+    # The resume made for this contact (general_resume.py --for-contact): which file, when,
+    # and where the page gets it. A snapshot, the newer whole.
+    "documents/network/*/resume.json": {"whole": ("",), "indent": 1},
     # ---- one application or interview process
     # The person's answer to a campaign chat (interview_pack.record_campaign), and what the
     # last build wrote into the living prep document (its built record): snapshots.
@@ -372,6 +375,8 @@ _HASHED = ("a snapshot named by the hash of what it holds: two chats that write 
 _PER_ROUND = ("named after the round that wrote it, once, and never written again; a round "
               "is run by one chat")
 JSON_NAMES = {
+    ".sent.json": "each view batch's records as they stood before it was sent, in the view's own folder, so a refused save can be put back and made again (page_db.keep_landed); never committed",
+    ".refused.json": "the record a page save was refused for, in the view's own folder, read once by the next run; never committed",
     # run_round reads every round's summary to find a job set aside while a search ran; the
     # files themselves are wired as "documents/rounds/*.json" above.
     "tools/app.py: *.json": "a page dump's screen documents, read only to tell whether the dump holds the page's screens (app.py no_screen), in the chat's scratch folder; never committed",

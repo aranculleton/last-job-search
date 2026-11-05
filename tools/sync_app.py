@@ -1091,6 +1091,7 @@ def pull_master() -> int:
     # merge_state.settle), never left for a chat to do by hand: two chats that took the same
     # update a day apart stopped here on every call prep both had rebuilt (the 4.9.0
     # rehearsal). Only a clash in an app file still stops.
+    app_before = app_tree(ROOT)
     try:
         import land
         merged, _lines = land.merge_in(ROOT, "origin/master")
@@ -1103,6 +1104,11 @@ def pull_master() -> int:
               "branch: run `git merge origin/master` and settle it (RUNBOOK.md, \"Landing on master\", says how).")
         return 1
     print("sync_app: brought in master (what other chats merged).")
+    if app_before and app_tree(ROOT) != app_before:
+        # Another chat's sync brought the update to master: the person's own tests are checked
+        # against it here too, never only in the chat that took it (a person's copy, 2026-11-05:
+        # five failed after an update another run took, and nothing here said so).
+        own_tests()
     return 0
 
 
@@ -1343,6 +1349,7 @@ def _main(argv: list[str]) -> int:
         return 1
     if a.own_tests:
         failures = own_test_failures()
+        record_own_tests(ROOT, failures)
         text = own_tests_report(failures or [])
         print(text or ("Your own tests pass on this tree." if failures == [] else
                        "Your own tests could not be run."))
@@ -1701,6 +1708,18 @@ def tests_tree(root: str) -> str:
     return _git_out(root, "rev-parse", "HEAD:profile/tests")
 
 
+def app_tree(root: str) -> str:
+    """The committed tree of the app's code (tools/), which the person's tests check: a record
+    made on another is out of date, whatever their tests' own tree says."""
+    return _git_out(root, "rev-parse", "HEAD:tools")
+
+
+def _tests_edited(root: str) -> bool:
+    """profile/tests changed in the folder since the last commit (a test being brought in
+    line, not committed yet)."""
+    return bool(_git_out(root, "status", "--porcelain", "--", "profile/tests"))
+
+
 def record_own_tests(root: str, failures) -> None:
     """What the last run of the person's own tests found, for the own-tests upgrade: each
     failing test, its message, and the removed part of the app it names, if any."""
@@ -1712,10 +1731,10 @@ def record_own_tests(root: str, failures) -> None:
         # the last run found stands, stamped with this tree so the upgrade's check does
         # not run the whole suite again every time it looks.
         got = own_tests_record(root) or {}
-        out = {"tree": tests_tree(root), "failures": got.get("failures") or [],
-               "could_not_run": True}
+        out = {"tree": tests_tree(root), "app": app_tree(root),
+               "failures": got.get("failures") or [], "could_not_run": True}
     else:
-        out = {"tree": tests_tree(root),
+        out = {"tree": tests_tree(root), "app": app_tree(root),
                "failures": [[n, (m or "")[:300], _gone(root, m)] for n, m in failures]}
     try:
         with open(os.path.join(os.path.dirname(mark), OWN_TESTS_RECORD), "w",
@@ -1735,6 +1754,52 @@ def own_tests_record(root: str) -> dict | None:
     except (OSError, ValueError):
         return None
     return got if isinstance(got, dict) else None
+
+
+def own_tests_owed(root: str | None = None, clean_too: bool = False) -> list[str]:
+    """The person's own tests an update left failing and nobody has brought in line yet, by
+    name, from the record the last run left in the git folder ([] when none, or no record).
+    Run again only when the record says some failed and something they check has changed
+    since (their tests, edited or committed, or the app's code), so a test brought in line
+    leaves the list without being said again. `clean_too`: a record that says they all pass,
+    made on other app code, is checked again as well (the upgrade's look after a sync)."""
+    root = root or ROOT
+    rec = own_tests_record(root)
+    if not rec:
+        return []
+    if not rec.get("failures"):
+        if not (clean_too and rec.get("app") and rec["app"] != app_tree(root)):
+            return []
+    if rec.get("tree") != tests_tree(root) or rec.get("app", app_tree(root)) != app_tree(root) \
+            or _tests_edited(root):
+        failures = own_test_failures(root)
+        record_own_tests(root, failures)
+        rec = own_tests_record(root) or {}
+    return [str(f[0]) for f in rec.get("failures") or [] if f]
+
+
+# Said first by every command that starts work (app.py start, wake and view, the brief's run)
+# while it holds, until they pass: a page helper took two jobs after an update had left five
+# of the person's own tests failing, and neither could be saved, since every landing runs them
+# (a person's copy, 2026-11-05). For Claude; the person hears OWN_CHECKS_SAID at most.
+OWN_TESTS_STEP = ("Claude, first, before any other work: {n} of the person's own tests fail "
+                  "after an update ({names}), and nothing can be saved until they pass, since "
+                  "every save runs them. Bring them in line now: python3 tools/sync_app.py "
+                  "--own-tests says which and how (RUNBOOK.md, \"Your own tests fail after an "
+                  "update\"); run it again until it says they pass, commit them, then take the "
+                  "work. Nothing to ask the person; tell them at most: \"{said}\"")
+
+
+def own_tests_step(root: str | None = None) -> str:
+    """OWN_TESTS_STEP while the person's own tests an update broke still fail, else ""."""
+    try:
+        names = own_tests_owed(root)
+    except Exception:  # noqa: BLE001  never in the way of the work it comes before
+        return ""
+    if not names:
+        return ""
+    return OWN_TESTS_STEP.format(n=len(names), names="; ".join(names[:4]) + (
+        f"; and {len(names) - 4} more" if len(names) > 4 else ""), said=OWN_CHECKS_SAID)
 
 
 def own_tests(root: str | None = None) -> None:

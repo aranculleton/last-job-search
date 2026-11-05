@@ -34,6 +34,7 @@ import collections
 import copy
 import json
 import os
+import re
 import shutil
 import subprocess
 import sys
@@ -213,10 +214,48 @@ def _short_skip() -> set:
     return {heads.get("education", "Education"), heads.get("certifications", "Certifications")}
 
 
-def keep_paths() -> tuple[str, str]:
+def keep_paths(for_contact: str = "") -> tuple[str, str]:
+    """Where it is kept: documents/cv/ for the person's own, or, made for a contact who asked
+    for one, their own folder (documents/network/<id>/), named for them, so it never takes
+    the place of the person's own (a person's copy, 2026-11-05: one made for a recruiter
+    replaced "Your resume", and nothing on his card said it had been made for him)."""
+    if for_contact:
+        stem = docpaths.resume_stem(for_contact_word(for_contact))
+        folder = person.state("documents", "network", for_contact)
+        return os.path.join(folder, stem + ".pdf"), os.path.join(folder, stem + ".txt")
     stem = docpaths.resume_stem(KEEP_SUFFIX)
     folder = person.state(*docpaths.GENERAL_DIR)
     return os.path.join(folder, stem + ".pdf"), os.path.join(folder, stem + ".txt")
+
+
+FOR_CONTACT_RECORD = "resume.json"     # in documents/network/<id>/: the resume made for them
+
+
+def for_contact_word(contact_id: str) -> str:
+    """"For_<First>" from the contact's name in the book, else from their id."""
+    name = ""
+    try:
+        import state
+        row = next((c for c in state.load_contacts()
+                    if str(c.get("contact_id") or "").strip() == contact_id), {})
+        name = state.person_name(row.get("name")) or str(row.get("name") or "")
+    except Exception:  # noqa: BLE001  no book here: the id says enough
+        name = ""
+    first = re.sub(r"[^A-Za-z0-9]", "", (name.split() or [contact_id.split("_")[-1]])[0].title())
+    return "For_" + (first or "Contact")
+
+
+def keep_for_contact(contact_id: str, pdf: str, today: str = "") -> str:
+    """Record on the contact who asked that this resume was made for them: their card shows
+    it, and it is found by their name. Returns the record's path."""
+    import datetime as dt
+    path = person.state("documents", "network", contact_id, FOR_CONTACT_RECORD)
+    os.makedirs(os.path.dirname(path), exist_ok=True)
+    with open(path, "w", encoding="utf-8", newline="\n") as fh:
+        json.dump({"for": contact_id, "file": local_path.rel(pdf, person.state()).replace(os.sep, "/"),
+                   "made_on": today or dt.date.today().isoformat(), "job": None}, fh, indent=1)
+        fh.write("\n")
+    return path
 
 
 def _verify(drafts_path: str) -> tuple[int, str]:
@@ -236,7 +275,7 @@ def _verify(drafts_path: str) -> tuple[int, str]:
 
 
 def make(out_dir: str, role: str = "", style: str = "", summary: str = "",
-         keep: bool = True, check: bool = True) -> dict:
+         keep: bool = True, check: bool = True, for_contact: str = "") -> dict:
     """Draft, render and fit it, check it, and keep it. Returns what happened:
     {"draft", "drafts", "pages", "lines", "verify", "verify_out", "pdf", "txt", "kept"}."""
     import fit_to_page as F
@@ -256,12 +295,14 @@ def make(out_dir: str, role: str = "", style: str = "", summary: str = "",
     if check:
         got["verify"], got["verify_out"] = _verify(drafts)
     if keep and (not check or got["verify"] == 0) and 1 <= pages <= F.PAGES:
-        pdf, txt = keep_paths()
+        pdf, txt = keep_paths(for_contact)
         os.makedirs(os.path.dirname(pdf), exist_ok=True)
         shutil.copyfile(got["pdf"], pdf)
         with open(txt, "w", encoding="utf-8", newline="\n") as fh:
             fh.write(plain_text(a))
         got.update(pdf=pdf, txt=txt, kept=True)
+        if for_contact:
+            keep_for_contact(for_contact, pdf)
     return got
 
 
@@ -275,6 +316,9 @@ def main(argv=None) -> int:
                                                 "doc_style.py --list)")
     ap.add_argument("--summary-file", default="",
                     help="the summary Claude wrote for it, else the profile's own")
+    ap.add_argument("--for-contact", default="", metavar="CONTACT_ID",
+                    help="made for this contact, who asked for one: kept in their folder, named "
+                         "for them, never in place of your own")
     ap.add_argument("--no-keep", action="store_true",
                     help="render and check it, but keep nothing in documents/cv/")
     a = ap.parse_args(argv)
@@ -283,7 +327,10 @@ def main(argv=None) -> int:
         with open(a.summary_file, encoding="utf-8") as fh:
             summary = fh.read().strip()
     try:
-        got = make(a.out_dir, a.role, a.style, summary, keep=not a.no_keep)
+        if a.for_contact and not re.match(r"^[\w.-]+$", a.for_contact):
+            raise ValueError(f"not a contact id: {a.for_contact!r}")
+        got = make(a.out_dir, a.role, a.style, summary, keep=not a.no_keep,
+                   for_contact=a.for_contact)
     except Exception as exc:  # the compile, a missing profile file: said in one line
         print(f"general: not made: {exc}", file=sys.stderr)
         return 1

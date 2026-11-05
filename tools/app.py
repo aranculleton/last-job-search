@@ -502,6 +502,9 @@ def cmd_view(a) -> int:
         page_reads.absorb(a.dump)
     if late_lines:
         lines = list(late_lines) + list(lines or [])
+    first = own_tests_first()
+    if first:
+        lines = [first] + list(lines or [])
     if getattr(a, "end", False):
         lines = list(lines or []) + end_of_batch(a.chat, getattr(a, "message", "") or "", now)
     # The taps that came in while the work ran go first: the screens are drawn with them.
@@ -1294,8 +1297,24 @@ def cmd_start(a) -> int:
                                   work=a.work or "", data_current=data_current(a.dump))
     lines = app_listen.shape(code, lines, chat=app_listen.this_chat(a.chat), listen=a.listen,
                              helper=a.helper, on=a.on or "", work=a.work or "")
+    step = own_tests_first() if code == 0 else ""
+    if step:
+        lines = lines[:1] + [step] + lines[1:]
     print("\n".join(lines))
     return code
+
+
+def own_tests_first() -> str:
+    """The step that brings the person's own tests in line after an update, while they still
+    fail (sync_app.own_tests_step), for every command that starts work to say first; "" in
+    the app itself, and whenever there is nothing to bring in line."""
+    try:
+        import sync_app
+        if sync_app.is_the_app():
+            return ""
+        return sync_app.own_tests_step()
+    except Exception:  # noqa: BLE001  an older or half-made copy: the work goes on
+        return ""
 
 
 def data_current(dump: str) -> bool:
@@ -1858,6 +1877,9 @@ def cmd_wake(a) -> int:
         except Exception:  # noqa: BLE001  no profile yet, or no registry
             pass
 
+    first = own_tests_first()
+    if first:
+        head = [first] + list(head)
     db = page_db.load(a.dump)
     away = running_elsewhere(db, chat)
     if away:
@@ -2322,6 +2344,18 @@ def cmd_search_drafts(a) -> int:
 
 FOLLOW_UP_DONE = "Your follow-up to {first} is ready to send."
 FOLLOW_UP_NONE = "No follow-up is owed to {first} now."
+# The person's own rules stop it (where they live, their limit, an employer turned down):
+# said once, with the reason, on the finished item (a person's copy, 2026-11-05).
+FOLLOW_UP_HELD = "No follow-up for {first}: {why}."
+
+
+def _held_why(why: str) -> str:
+    why = " ".join(str(why or "").split()).rstrip(".")
+    for lead in ("Nothing to send: ", "held: "):
+        if why.startswith(lead):
+            why = why[len(lead):]
+    first, _, rest = why.partition(" ")
+    return (first.lower() + " " + rest).strip() if first in ("No", "Your", "Their") else why
 FOLLOW_UP_ASK = "What should the follow-up to {first} say? I could not write one: {why}."
 
 
@@ -2361,12 +2395,14 @@ def follow_ups(dump: str, chat: str, now, today: str, out_dir: str,
         names = {str(c.get("contact_id") or "").strip(): str(c.get("name") or "")
                  for c in contacts}
         passed: dict = {}
+        stopped: dict = {}
         if written:
             checked = followup_drafts.check(written, contacts, threads, today, got)
             followup_drafts.keep_checked(checked, contacts)
             passed = {c["id"]: c for c in checked if c["ok"]}
             out["refused"] = [{"id": c["id"], "findings": c["findings"]}
-                              for c in checked if not c["ok"]]
+                              for c in checked if not c["ok"] and not c.get("held")]
+            stopped.update({c["id"]: c["held"] for c in checked if c.get("held")})
         finishes: list[dict] = []
         keep = []
         for _at, wid in held:
@@ -2381,7 +2417,12 @@ def follow_ups(dump: str, chat: str, now, today: str, out_dir: str,
             due = by_contact.get(cid)
             d = (due or {}).get("draft") or {}
             answered = item.get("answers") or args.get("answers")
-            if cid in passed:
+            rule = (due or {}).get("rule") or {}
+            stop = stopped.get(cid) or (rule.get("said") or "" if (due or {}).get("held") else "")
+            if stop and cid not in passed:
+                finishes.append({"work": wid, "summary": FOLLOW_UP_HELD.format(
+                    first=first, why=_held_why(stop))})
+            elif cid in passed:
                 finishes.append({"work": wid, "summary": FOLLOW_UP_DONE.format(first=first)})
             elif due is None or d.get("status") == "none":
                 finishes.append({"work": wid, "summary": FOLLOW_UP_NONE.format(first=first)})
@@ -2511,9 +2552,23 @@ def cmd_version(a) -> int:
         page_reads.want_full()
     except Exception:  # noqa: BLE001  nothing kept to read wholly
         pass
-    print(f"app: {kept} is at version {a.version} in this folder; run the refused command "
-          "again, once")
+    if page_db.refusals(a.dump, kept) > 1:
+        # The page changed it again while this was saved: never dropped, never a loop.
+        print(VERSION_AGAIN.format(record=kept, dump=a.dump))
+        return 3
+    print(f"app: {kept} is at version {a.version} in this folder, and what the refused batch "
+          "would have saved is back in it to be saved again: run the refused command again, "
+          "once, and send what it prints")
     return 0
+
+
+VERSION_AGAIN = ("app: the page refused this save of {record} again: it changed again while it "
+                 "was being saved. Nothing is lost: the save is still waiting in \"{dump}\". "
+                 "Read the page again into a new folder (a whole read, which this asked for) and "
+                 "run the same command there: it makes the save again from that read. Tell the "
+                 "person only if it is refused there too, in these words: \"Something on your "
+                 "page kept changing while I saved it. Your work is safe here and goes on your "
+                 "page with the next update.\"")
 
 
 def cmd_reads(a) -> int:

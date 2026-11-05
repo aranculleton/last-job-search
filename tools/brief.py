@@ -679,6 +679,15 @@ def start(argv: list[str], model: str) -> int:
         fh.write("date: %s\nexit: %d\nearlier: %s\nsetup: %s\n---\n%s%s"
                  % (today.isoformat(), r.returncode, branches, setup, r.stdout or "",
                     r.stderr or ""))
+    # What the update check printed goes to the log, never to the run: the step that brings
+    # the person's own tests in line after an update is said here first, before any work,
+    # while they still fail (a person's copy, 2026-11-05).
+    step = subprocess.run([py, "-c", "import sys; sys.path.insert(0, %r); import app; "
+                           "print(app.own_tests_first())" % _HERE], cwd=ROOT, text=True,
+                          capture_output=True, encoding="utf-8", errors="replace")
+    if step.returncode == 0 and step.stdout.strip():
+        sys.stdout.write(step.stdout.strip() + "\n\n")
+        sys.stdout.flush()
     url = page_url()
     if url and "--page-applied" not in argv and not setup_waiting():
         sys.stdout.write(page_first(url, argv))

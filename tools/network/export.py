@@ -821,7 +821,7 @@ def take(srcs, contacts_path: str | None = None, threads_path: str | None = None
     counts.update({t["kind"]: len(t["rows"]) for t in tables if t.get("found")})
     save_record({"counts": counts, "changed": changed})
     j = plan["joined"]
-    people = j["profile address"] + j["name"]
+    people = sum(j.values())
     wrote = [u for u in plan["unmatched"] if u["sent"]]
     lines.append(f"Imported {n} message row{'s' if n != 1 else ''} into the message log, for "
                  f"{people} {'person' if people == 1 else 'people'} in the contact book. "
@@ -1062,6 +1062,66 @@ def match_contact(contacts, name, url, index=None) -> tuple:
     if len(same) == 1:
         return same[0], "name"
     return None, ("ambiguous" if same else "")
+
+
+def match_more(contacts, threads, name, url, said=(), employer: str = "") -> tuple:
+    """When neither the profile address nor the whole name finds anyone (`match_contact`),
+    two more ways to the record already in the book, before anyone is listed as new:
+
+    - a message the export holds for them (a day either side, the same words) already
+      logged under one record: (that row, "logged message");
+    - their full name against a record that has their first name only and carries the
+      surname in its id or notes, at the same employer or none: (that row, "first name").
+
+    One person came in as a second record (a recruiter kept as his first name only, with no
+    employer and an id with his surname, and the export's full name, firm and a profile
+    address in another form), and his old messages were copied into it (2026-11-05).
+    (None, "") when neither finds exactly one."""
+    st = _state()
+    words = [(d, _norm(t)) for d, t in said or () if d and len(_norm(t)) >= 20]
+    if words:
+        hits = set()
+        for r in threads or ():
+            text = r.get("full_text")
+            if not text:
+                continue
+            when = st.as_date(r.get("date"))
+            for d, w in words:
+                if when and _near(when, d, MESSAGE_SLACK_DAYS) and same_text(text, w):
+                    hits.add(str(r.get("contact_id") or "").strip())
+                    break
+        by = {str(c.get("contact_id") or "").strip(): c for c in contacts}
+        hits = {h for h in hits if h in by}
+        if len(hits) == 1:
+            return by[hits.pop()], "logged message"
+    parts = st.person_name(name).split()
+    if len(parts) < 2:
+        return None, ""
+    first, last = st._slug(parts[0]), st._slug(parts[-1])
+    key = st.company_key(employer) if employer else ""
+    found = []
+    for c in contacts:
+        mine = st.person_name(c.get("name")).split()
+        if len(mine) != 1 or st._slug(mine[0]) != first:
+            continue
+        ck = str(c.get("company_key") or "").strip() or (
+            st.company_key(c.get("company")) if str(c.get("company") or "").strip() else "")
+        if ck and ck != key:
+            continue
+        theirs = profile_handle_of(c)
+        if theirs and st.profile_handle(url) and theirs != st.profile_handle(url):
+            continue
+        id_words = set(re.split(r"[_.\-]+", str(c.get("contact_id") or "").lower()))
+        notes = st._slug(" ".join(str(c.get(k) or "") for k in ("notes", "route_detail")))
+        if last in id_words or (last and re.search(r"(?:^|_)%s(?:_|$)" % re.escape(last), notes)):
+            found.append(c)
+    if len(found) == 1:
+        return found[0], "first name"
+    return None, ""
+
+
+def profile_handle_of(c) -> str:
+    return _state().profile_handle(c.get("linkedin_url"))
 
 
 # ---------------------------------------------------------------- the history
@@ -1347,13 +1407,33 @@ def plan_history(contacts, threads, src=None, mine=None) -> dict:
         by_cid.setdefault(str(r.get("contact_id") or "").strip(), []).append(r)
     index = contact_index(contacts)
     joined_ids: dict = {}
+    # The employer and title Connections.csv gives each person, by profile address and name:
+    # what a record matched by `match_more` lacks, and what tells a same-name stranger apart.
+    their_firm: dict = {}
+    for r in conns["rows"] if conns["usable"] else ():
+        nm = " ".join(x for x in (r.get("First Name"), r.get("Last Name")) if x).strip()
+        got = ((r.get("Company") or "").strip(), (r.get("Position") or "").strip())
+        for k in (st.profile_handle(r.get("URL")), name_key(nm)):
+            if k:
+                their_firm.setdefault(k, got)
+    more_seen: set = set()
 
     def logged(row):
         log.append(row)
         by_cid.setdefault(str(row.get("contact_id") or "").strip(), []).append(row)
 
-    def join(name, url):
+    def join(name, url, said=()):
         c, how = match_contact(contacts, name, url, index)
+        if c is None and how != "ambiguous":
+            firm, title = their_firm.get(st.profile_handle(url)) or their_firm.get(
+                name_key(name)) or ("", "")
+            c, how = match_more(contacts, log, name, url, said, firm)
+            if c is not None and id(c) not in more_seen:
+                # Matched another way: what the record lacks is taken from the export, its
+                # profile address first, so the next import finds them by it.
+                more_seen.add(id(c))
+                nm = name if len(st.person_name(c.get("name")).split()) < 2 else ""
+                out["who"].append((c, firm, title, nm, url))
         if c is not None:
             cid = str(c.get("contact_id") or "").strip()
             if cid not in joined_ids:
@@ -1481,9 +1561,9 @@ def plan_history(contacts, threads, src=None, mine=None) -> dict:
                 out["groups"] += 1 if len(people) > 1 else 0
                 continue
             name, url = next(iter(people.values()))
-            contact = join(name, url)
             dated = sorted(((day(r.get("DATE")), r, d) for r, d in parsed),
                            key=lambda x: (x[0] or datetime.date.min, clock(x[1].get("DATE"))))
+            contact = join(name, url, [(w, _clean(r.get("CONTENT"))) for w, r, _d in dated])
             if contact is None:
                 sent = sum(1 for _, _, d in dated if d == "out")
                 last = dated[-1] if dated else (None, {}, "")
@@ -1615,8 +1695,9 @@ def plan_history(contacts, threads, src=None, mine=None) -> dict:
                | {r.get("contact_id") for r, _ in out["fill"] + out["redate"]})
     for cid in touched:
         how = joined_ids.get(cid)
-        if how in out["joined"]:
-            out["joined"][how] += 1
+        if how in out["joined"] or how in ("logged message", "first name"):
+            # The two ways match_more finds someone are counted only where used.
+            out["joined"][how] = out["joined"].get(how, 0) + 1
     # One person, one line: their messages in two conversations (a message, then a reply in
     # a new one) were two lines and counted as two people (2026-11-03).
     merged: dict = {}
@@ -1707,9 +1788,15 @@ def fill_who(who) -> list:
     out = []
     for c, co, ti, *rest in who:
         nm = rest[0] if rest else ""
+        url = rest[1] if len(rest) > 1 else ""
         got = []
-        for field, value in (("name", nm), ("company", co), ("title", ti)):
-            if value and not str(c.get(field) or "").strip():
+        had = st.person_name(c.get("name")).split()
+        for field, value in (("name", nm), ("company", co), ("title", ti),
+                             ("linkedin_url", url if st.profile_handle(url) else "")):
+            # A first name alone gives way to the whole name that starts with it.
+            whole = (field == "name" and value and len(had) == 1
+                     and st._slug(value.split()[0]) == st._slug(had[0]))
+            if value and (whole or not str(c.get(field) or "").strip()):
                 c[field] = value
                 got.append(field)
         if "company" in got and not str(c.get("company_key") or "").strip():
@@ -1719,7 +1806,8 @@ def fill_who(who) -> list:
     return out
 
 
-FILL_WORDS = {"name": "name", "company": "employer", "title": "title"}
+FILL_WORDS = {"name": "name", "company": "employer", "title": "title",
+              "linkedin_url": "LinkedIn address"}
 
 
 def filled_line(filled) -> str:
@@ -2016,7 +2104,7 @@ def _cli_history(a) -> int:
         if "is not in it" in line or "column" in line or "header" in line:
             print("  " + line)
     j = plan["joined"]
-    people = j["profile address"] + j["name"]
+    people = sum(j.values())
     print(f"  {len(plan['add'])} message row{'s' if len(plan['add']) != 1 else ''} to add and "
           f"{len(plan['fill'])} already logged given their words, for {people} "
           f"{'person' if people == 1 else 'people'} in your contact book "

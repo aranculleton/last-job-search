@@ -761,6 +761,73 @@ def possible_match(contacts, name, company, linkedin_url=None) -> dict | None:
     return None
 
 
+# A row closed as the same person as another: its outcome or notes name the row kept
+# ("duplicate of <id>", "the same person as <id>"), which `same_person` writes. Never a row
+# whose notes say it is *not* the same person.
+_DUPLICATE_OF = re.compile(r"(?<!not )(?<!not the )\b(?:duplicate of|(?:the )?same (?:person|one) as)\s+"
+                           r"([a-z0-9][\w.-]*)", re.I)
+# What a kept row takes from its closed duplicate where it has none (`carry_over`).
+CARRIED = ("company", "company_key", "title", "linkedin_url", "location", "email")
+
+
+def duplicate_of(contacts) -> dict:
+    """{closed id: kept id} for every row closed (or dropped) as the same person as another
+    row still in the book. The page lists the kept row only, with both threads (2026-11-05:
+    a recruiter showed as two cards, one with no employer, the other closed as his
+    duplicate)."""
+    ids = {str(c.get("contact_id") or "").strip() for c in contacts or ()}
+    out = {}
+    for c in contacts or ():
+        cid = str(c.get("contact_id") or "").strip()
+        if str(c.get("status") or "").strip() not in schema.TERMINAL:
+            continue
+        for k in ("outcome", "notes"):
+            m = _DUPLICATE_OF.search(str(c.get(k) or ""))
+            if m and m.group(1).strip(".") in ids and m.group(1).strip(".") != cid:
+                out[cid] = m.group(1).strip(".")
+                break
+    # A chain (a closed as b, b closed as c) ends at the row still open.
+    for cid in list(out):
+        seen = {cid}
+        while out[cid] in out and out[cid] not in seen:
+            seen.add(out[cid])
+            out[cid] = out[out[cid]]
+    return out
+
+
+def carry_over(kept: dict, closed: dict) -> list[str]:
+    """Fill each of CARRIED the kept row lacks from the row closed as the same person, with a
+    note naming where it came from. Returns the fields filled. The kept row had lost the
+    employer the duplicate held, so its card showed no firm and could not be searched by it
+    (2026-11-05)."""
+    filled = []
+    for k in CARRIED:
+        if not str(kept.get(k) or "").strip() and str(closed.get(k) or "").strip():
+            kept[k] = closed[k]
+            filled.append(k)
+    if filled:
+        note = "%s from %s (the same person)" % (", ".join(filled), closed.get("contact_id"))
+        kept["notes"] = "; ".join(x for x in (str(kept.get("notes") or "").strip(), note) if x)
+    return filled
+
+
+def same_person(contacts, closed_id: str, kept_id: str) -> dict:
+    """Close `closed_id` as the same person as `kept_id`: its status closed, its outcome
+    naming the kept row, and every field the kept row lacks carried over (carry_over). The
+    message log is left as it is: each row keeps its own, and the page shows both on the
+    kept card. {"closed", "kept", "filled"}; ValueError for an unknown id or the same one."""
+    by = {str(c.get("contact_id") or "").strip(): c for c in contacts}
+    if closed_id == kept_id or closed_id not in by or kept_id not in by:
+        raise ValueError("name two different contacts in the book: the one to close, then the "
+                         "one to keep")
+    closed, kept = by[closed_id], by[kept_id]
+    filled = carry_over(kept, closed)
+    closed["status"] = "closed"
+    closed["outcome"] = "duplicate of " + kept_id
+    put_next(closed, [], action="", due="")
+    return {"closed": closed_id, "kept": kept_id, "filled": filled}
+
+
 def duplicate_line(found, this_id="") -> str:
     """What `possible_duplicates` or `possible_match` found, said plainly, with what to do.
 
@@ -772,7 +839,7 @@ def duplicate_line(found, this_id="") -> str:
     others = [(n, i) for n, i in zip(names, ids) if i and i != this_id] or [("", this_id)]
     who = ", ".join("%s (%s)" % (n, i) if n else i for n, i in others)
     return ("may be the same person as %s: %s. Never merged. If it is one person, close the "
-            "newer row (state.py set <its id> --status closed --note \"the same person\") "
+            "newer row (state.py same-person <its id> <the one kept>) "
             "and keep the one that holds the messages; if not, write "
             "\"not the same person as %s\" in this row's notes."
             % (who, found.get("reason", ""), others[0][1]))
@@ -1740,6 +1807,35 @@ def reconcile(contacts, threads, tracker=None) -> list[dict]:
             if n > 1:
                 flag(cid, _name_of(contacts, cid), "", "", "duplicate_message",
                      "%d identical rows for %s on %s" % (n, sig[1] or "a message", sig[0]))
+
+    # One message logged under two rows (the same day and the same words): one person in
+    # two rows, as an import that missed the row already there makes them (2026-11-05).
+    said: dict = {}
+    for row in threads:
+        cid = str(row.get("contact_id") or "").strip()
+        words = " ".join(str(row.get("full_text") or "").split()).lower()
+        if cid and words and len(words) >= 20:
+            said.setdefault((str(row.get("date") or "")[:10], words), set()).add(cid)
+    closed_as = duplicate_of(contacts)
+    told = set()
+    for (day, _w), cids in said.items():
+        live = sorted(c for c in cids if c not in closed_as)
+        if len(live) > 1 and tuple(live) not in told:
+            told.add(tuple(live))
+            flag(live[-1], _name_of(contacts, live[-1]), "", "", "shared_message",
+                 "the same message on %s is logged under %s: one person in two rows? Keep the "
+                 "one with the employer and close the other (state.py same-person <its id> "
+                 "<the one kept>)" % (day, " and ".join(live)))
+    # A kept row lacking what the row closed as its duplicate holds (an employer, a title).
+    by = {str(c.get("contact_id") or "").strip(): c for c in contacts}
+    for closed, kept in closed_as.items():
+        lacks = [k for k in CARRIED if k != "company_key"
+                 and not str(by[kept].get(k) or "").strip() and str(by[closed].get(k) or "").strip()]
+        if lacks:
+            flag(kept, by[kept].get("name", ""), "", "", "duplicate_holds_more",
+                 "%s, closed as the same person, holds what this row lacks (%s): python3 "
+                 "tools/network/state.py same-person %s %s carries it over"
+                 % (closed, ", ".join(lacks), closed, kept))
 
     # Two rows that may be one person, from a nickname, an initial or a typo: the
     # warning `already_contacted` cannot give, raised on the newer row. Never merged.
@@ -5236,6 +5332,24 @@ def _cli_follow_ups(argv) -> int:
     return 0
 
 
+def _cli_same_person(argv) -> int:
+    """state.py same-person <the row to close> <the row to keep>"""
+    if len(argv) != 2:
+        print("usage: state.py same-person <the row to close> <the row to keep>", file=sys.stderr)
+        return 2
+    contacts = load_contacts()
+    try:
+        got = same_person(contacts, argv[0].strip(), argv[1].strip())
+    except ValueError as e:
+        print(f"same-person: {e}", file=sys.stderr)
+        return 2
+    save_contacts(contacts)
+    print(f"same-person: {got['closed']} closed as the same person as {got['kept']}"
+          + (f"; carried over: {', '.join(got['filled'])}" if got["filled"] else "")
+          + ". Each keeps its own messages; the page shows both on the one kept.")
+    return 0
+
+
 def main(argv=None) -> int:
     argv = sys.argv[1:] if argv is None else list(argv)
     if argv[:1] == ["withdraw"]:
@@ -5266,6 +5380,8 @@ def main(argv=None) -> int:
         return _cli_inmail_credits(argv[1:])
     if argv[:1] == ["set"]:
         return _cli_set(argv[1:])
+    if argv[:1] == ["same-person"]:
+        return _cli_same_person(argv[1:])
     if argv[:1] == ["advance-calls"]:
         moved = advance_past_calls(datetime.date.fromisoformat(argv[1]) if argv[1:]
                                    else datetime.date.today())
