@@ -1338,7 +1338,7 @@ def detach(root: str = ROOT, message: str = "", popen=subprocess.Popen) -> int:
     d = git_dir(root)
     log = os.path.join(d, LOG_FILE) if d else os.devnull
     try:
-        out = open(log, "w", encoding="utf-8")
+        out = open(log, "w", encoding="utf-8", newline="\n")
     except OSError:
         out = subprocess.DEVNULL
     kw = {"start_new_session": True} if os.name == "posix" else \

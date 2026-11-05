@@ -84,7 +84,7 @@ ALLOWED_ORGANIZATIONS = {
 # not listed here fails tests/test_an_invented_name_is_not_a_leak.py, so a name is added
 # on purpose, as tools/name_guard_allow.txt is.
 INVENTED_FIRST_NAMES = frozenset({
-    "Ash", "Kit", "Marisol", "Rafe",  # the page's sample (tests/fixtures/app_model_sample.json)
+    "Ash", "Kit", "Marisol", "Rafe", "Odo",  # the page's sample (tests/fixtures/app_model_sample.json)
     "Ana", "Bea", "Bo", "Bob", "Corwin", "Cy", "Dev", "Halloway", "Idris", "Ivo", "Jane", "Jean", "Juno",
     "Morgan", "Pell", "Quillon", "Quinn", "Raj", "Rhian", "Riley", "Robin", "Rosa", "Rosalind",
     "Sally", "Sasha", "Shirin", "Tamsin", "Taylor", "Thad", "Wren", "Wrenfield", "Xiu",
