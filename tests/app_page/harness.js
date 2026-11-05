@@ -1014,6 +1014,12 @@ S.progress = async (a) => {
   // Done.
   store.chat("work/search~1", {status: "done", finished_at: new Date().toISOString(), result: {summary: "6 roles worth a look", links: []}}, undefined, "update");
   await turn(page, 6);
+  // Finished, its result not on the page yet: said, never Done over the old list (DESIGN.md,
+  // "Moving parts"); Done once the chat's new jobs arrive.
+  r.finished = await bar(page, "search~1");
+  const jobs = await page.evaluate(() => window.LJS.state().model.jobs);
+  store.chat("view/jobs", {made_at: new Date(Date.now() + 1000).toISOString(), data: jobs});
+  await turn(page, 6);
   r.done = await bar(page, "search~1");
   // A minute after it was first on screen, finished work joins "N finished", with nothing to
   // press. Waited for, with a time limit.
@@ -2032,7 +2038,7 @@ S.chat_dock = async (a) => {
   const r = {fab: await vis("#chat-fab"), fabName: await page.getAttribute("#chat-fab", "aria-label"), dockBefore: await vis("#chat-dock")};
   if (a.viewport && a.viewport.width < 760) {
     await goto(page, "contacts");
-    await page.getByRole("button", {name: /^Got a message\?/}).first().click();
+    await page.getByRole("button", {name: /^Paste a message/}).first().click();
     await turn(page, 6);
     r.phone = {hash: await page.evaluate(() => location.hash), dock: await vis("#chat-dock"), focus: await focusK(), value: await page.inputValue("#main #talk-text")};
     r.errors = o.errors;
@@ -2066,7 +2072,7 @@ S.chat_dock = async (a) => {
   await turn(page, 4);
   r.esc = {dock: await vis("#chat-dock"), fab: await vis("#chat-fab"), focus: await focusK()};
   // Someone wrote to them: one line on Contacts opens the chat ready for it.
-  const got = page.getByRole("button", {name: /^Got a message\?/}).first();
+  const got = page.getByRole("button", {name: /^Paste a message/}).first();
   r.got = {label: (await got.innerText()).trim()};
   await got.click();
   await turn(page, 6);

@@ -275,14 +275,15 @@ def test_a_first_note_is_copied_exactly_opened_and_logged_with_the_words_that_we
     a = _one(got, "msg.sent")
     assert a["item"] == "msg-ash-1" and a["value"]["text"] == note["text"] and a["value"]["on"]
     _rev_is_the_items(m, a)
-    # Changed before sending: the words that went are logged, and the count turns red over the limit.
+    # Changed before sending: the words that went are logged, and the count turns red over the
+    # limit. Changed in place under the pencil since 2026-11-04 (the maintainer: "the pencil when
+    # we need a slight edit"), where "I changed it first" was under More.
     got = _go(run, tmp_path, [
-        {"hash": "contacts", "more": "copperleaf_pay_ash"},
-        {"open": "changed-sum:msg-ash-1"},
-        {"eval": "(() => { const t = document.querySelector('#chg-msg-ash-1'); t.value = " + json.dumps(edited) + "; t.dispatchEvent(new Event('input', {bubbles: true})); return document.querySelector('#chg-msg-ash-1-n').className; })()"},
-        {"click": "I sent these words"},
+        {"hash": "contacts", "open": "pen:msg-ash-1"},
+        {"eval": "(() => { const t = document.querySelector('[data-k=\"pentext:msg-ash-1\"]'); t.value = " + json.dumps(edited) + "; t.dispatchEvent(new Event('input', {bubbles: true})); return document.querySelector('#cnt-msg-ash-1').className; })()"},
+        {"click": "I sent it: the note to Ash"},
     ], vp)
-    assert "tone-bad" in got["after"][2]["eval"], "the count turns red over the limit, and nothing is cut"
+    assert "tone-bad" in got["after"][1]["eval"], "the count turns red over the limit, and nothing is cut"
     a = _one(got, "msg.sent")
     assert a["item"] == "msg-ash-1" and a["value"]["text"] == edited.strip()
 

@@ -756,8 +756,9 @@ METHODS: dict[str, dict] = {
             (29, "2026-11-05", True, "Contacts round two: a draft that breaks the person's rules is fixed by Claude by itself, queued by the engine with no tap, its line on the card (Claude is fixing it), and offered as ready only once it passes; no Fix it button; the pencil sits beside Copy, the words changed in place (what is copied and logged as sent) or Claude asked to change them (Shorter, Warmer, More formal, or in their words); what wakes Claude carries its cost; More holds only what is rare; when you first wrote is on their page; the header is one short line with Paste a message beside Find people"),
             (30, "2026-11-05", True, "a message being changed with the pencil says so on its card until the new words are there; a control that wakes Claude names its kind so its gauge is drawn"),
             (31, "2026-11-05", True, "To do counts cards, a checklist one with its own x of N done; it says how far today has gone and when all is done; Done today replaces Recent changes; a row is put off to tomorrow or next week in the engine from its bin; help that asks nothing today is one line at the end, and a computer-only card is not shown on a phone"),
+            (32, "2026-11-05", False, "More is a full tap target on a phone; work finished says Done once a section the chat wrote after it is on the page, Finished: putting it on your page until then; the words changed under the pencil are sent trimmed"),
         ),
-        "fingerprint": "e68a59a942e9aadd",
+        "fingerprint": "976b2c7b54f4b6ad",
     },
     "upskill": {
         "by": "upgrade", "priority": 4, "applies": "upskill_plans", "time": "~10 min",

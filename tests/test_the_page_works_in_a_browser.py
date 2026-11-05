@@ -447,7 +447,12 @@ def test_a_newer_view_document_replaces_its_section_without_a_republish(run, pag
 def test_to_do_groups_by_when_then_by_employer_in_the_order_things_are_done(run, pages):
     r = run("todo", html=pages["sample"])
     _clean(r)
-    assert r["first"] == "Phone screen with Larkspur Retail", "the soonest interview within 14 days is the first card"
+    # The soonest interview leads only when it is today or tomorrow, or has no prep yet (the UX
+    # review, 2026-11-05: one three days off with its prep ready took the screen's one filled
+    # button from a thank-you two days late): it waits in Next 7 days, and the late thank-you leads.
+    assert r["first"] == "Thank-you note after your Harbourline Bank first interview", r["first"]
+    week = next(b for b in r["bands"] if b["band"] == "Next 7 days")["groups"]
+    assert week[0]["titles"] == ["Phone screen with Larkspur Retail"], week
     # Five show first; a band split by the fold heads its rest again inside it (4.3). What is
     # late or due today comes before the questions (2026-11-02: a thank-you two days late
     # waited behind four small questions).
@@ -712,6 +717,9 @@ def test_progress_moves_with_the_clock_slow_is_not_stalled_and_only_a_missed_che
     assert w["status"] == "queued" and w["attempt"] == 2 and w["stage"] == 0 and w["claimed_by"] is None
     assert len(r["rings"]) == 1 and r["rings"][0]["text"] == "[app] [work:search~1]"
     # Finished work says Done, with no bar beside it, and folds itself away a minute later.
+    # Done only once the result is on the page (the maintainer's inline standard, 2026-11-04):
+    # finished before that, it says what it waits for.
+    assert r["finished"]["status"] == "Finished: putting it on your page", r["finished"]
     assert r["done"]["status"] == "Done" and r["done"]["now"] is None, r["done"]
     assert r["folded"], "finished work joins the fold a minute after it was on screen"
 
@@ -932,7 +940,9 @@ def test_the_chat_opens_from_any_section_in_a_panel_with_the_same_thread(run, pa
     assert r["moved"]["dock"], "data arriving and another section leave it open"
     assert "Their careers page lists a Pricing Analyst role." in r["moved"]["msgs"]
     assert r["esc"] == {"dock": False, "fab": True, "focus": "chat-fab"}, r["esc"]
-    assert r["got"]["label"] == "Got a message? Paste it or a screenshot"
+    # One soft pill beside Find people since 2026-11-04 (the maintainer: the header was "quite
+    # cluttered"), where an underlined line was.
+    assert r["got"]["label"] == "Paste a message"
     assert r["got"]["dock"] and r["got"]["focus"] == "talk-text" and r["got"]["value"] == "Help me reply to this message: "
     assert r["got"]["back"] == "got-msg", "Escape gives focus back to what opened it"
     c = r["chat"]

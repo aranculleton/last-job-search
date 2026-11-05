@@ -156,7 +156,9 @@ def test_contacts_says_what_to_do_once_and_agrees_with_to_do(run, page, vp, sche
     # The summary counts what To do lists, and the fold never says nothing is owed when it is.
     group = todo.split("Follow up with 2 people", 1)[1].split("Draft all", 1)[0]
     assert "Wren at Fernhill Freight" in group and "Rhian at Northwind Analytics" in group, todo
-    assert "2 follow-ups you could send" in contacts, contacts.split("\n")[2]
+    # The header is one short line since 2026-11-04 (the maintainer: "quite cluttered"): the
+    # follow-ups are counted by their cards, the same two To do lists.
+    assert contacts.count("Draft the follow-up") == 2 and "follow-ups you could send" not in contacts, contacts.split("\n")[2]
     assert "nothing owed to them now" not in contacts
     # The run's first notes are one card in To do.
     assert "first notes ready to send" in todo

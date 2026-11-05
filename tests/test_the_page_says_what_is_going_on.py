@@ -86,7 +86,6 @@ def test_a_search_going_takes_find_jobs_off_jobs_and_says_it_is_searching(run, t
 
 @pytest.mark.parametrize("screen,kind,title", [
     ("interviews", "prep", "Prep for the second interview"),
-    ("contacts", "reply", "A reply to Juno"),
     ("jobs", "draft", "Drafts for 2 roles"),
 ])
 def test_each_screen_says_when_claude_is_working_on_it(run, tmp_path, screen, kind, title):
@@ -97,6 +96,18 @@ def test_each_screen_says_when_claude_is_working_on_it(run, tmp_path, screen, ki
     assert here["eval"] == 1 and "Claude is on it: " + title + "." in here["text"], here["text"][:400]
     assert "See how it is going" in here["text"]
     assert elsewhere["eval"] == 0, "the line is on the screen whose work it is, nowhere else"
+
+
+def test_contacts_says_claude_is_working_on_a_reply_on_that_persons_card(run, tmp_path):
+    """Contacts has no line of its own for Claude's work since 2026-11-04 (the maintainer: the
+    header's work pill and each card's own line already say it): the reply to Juno says so on
+    Juno's card, and nowhere else on the screen."""
+    work = dict(_work("reply", "A reply to Juno"), args={"contact": "larkspur_retail_castellan"})
+    line = "(document.querySelector('#main [data-item=\"larkspur_retail_castellan\"] .going') || {}).textContent || ''"
+    got = _go(run, tmp_path, [{"hash": "contacts", "eval": "[document.querySelectorAll('#main .running-here').length, " + line + "]"}],
+              PHONE, seed={"work/reply~1": work}, clock=T)
+    lines, said = got["after"][0]["eval"]
+    assert lines == 0 and said.strip().startswith("Claude is on it"), (lines, said)
 
 
 def test_two_things_running_on_one_screen_are_counted_and_finished_work_is_not(run, tmp_path):
@@ -158,11 +169,17 @@ def test_contacts_counts_only_who_needs_the_person_and_the_follow_ups_apart(run,
         for i, n in enumerate(["Ilse", "Bram", "Corin", "Dace"])
     ] + [{"id": "p-wait", "first_name": "Esk", "employer": "Tidewell Logistics", "status": "awaiting_reply",
           "group": "waiting", "last": "2026-10-20", "due": "2026-11-20", "rev": "rw"}]
-    got = _go(run, tmp_path, [{"hash": "contacts", "read": "#main .sec-head"}], PHONE, model=copy.deepcopy(model), clock=T)
+    # Nothing drafted, so the header is about people alone (the sample's drafts are to others).
+    model["messages"] = []
+    shown = "[...document.querySelectorAll('#main ul.people > li[data-item]')].map((l) => l.dataset.item)"
+    got = _go(run, tmp_path, [{"hash": "contacts", "read": "#main .sec-head"}, {"eval": shown}], PHONE, model=copy.deepcopy(model), clock=T)
     head = got["after"][0]["text"]
     assert "Nobody is waiting on you." in head, head
-    assert "4 follow-ups you could send." in head, head
     assert "need you" not in head, head
+    # The header is one short line since 2026-11-04 (the maintainer: "quite cluttered"): the
+    # four follow-ups are their own cards up front, never counted as people who need you; the
+    # one waiting is below the fold.
+    assert got["after"][1]["eval"] == ["p-0", "p-1", "p-2", "p-3"], got["after"][1]["eval"]
 
 
 def _q(item):

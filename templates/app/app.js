@@ -3726,7 +3726,10 @@
   // card that still shows the old state (DESIGN.md, "Moving parts"). The next model says Done.
   function notOnPageYet(w) {
     const fin = tms(obj(w).finished_at);
-    const made = tms(M().made_at);
+    // The page's data is as new as its newest part: a section a chat wrote live after the work
+    // finished carries its result, so Done is said then, not three minutes on.
+    let made = tms(M().made_at);
+    for (const v of S.views.values()) { const t = tms(obj(v).made_at); if (t !== null && (made === null || t > made)) made = t; }
     return fin !== null && made !== null && fin > made && now() - fin < 3 * 60000;
   }
   // A question work raised (status needs_you, the question in `note`): answered here, kept in
@@ -5583,7 +5586,7 @@
     penBtn.classList.add("bubble-pen");
     const sentNow = (text) => act([{item: m.id, action: "msg.sent", value: msgSentValue(m, text), rev: m.rev}], "Marked as sent: " + name);
     // Copy first, filled, then I sent it is: the order the work is done in.
-    const sentBtn = ready ? btn("I sent it", () => { const t = txt(draftGet(penKey)); draftSet(penKey, null); S.penOpen.delete(m.id); sentNow(t || parts.body); },
+    const sentBtn = ready ? btn("I sent it", () => { const t = txt(draftGet(penKey)).trim(); draftSet(penKey, null); S.penOpen.delete(m.id); sentNow(t || parts.body); },
       {kind: copied ? "primary" : "secondary", small: true, key: "sent:" + m.id, aria: "I sent it: the " + what + " to " + name}) : null;
     const sid = "msgs-" + seg(m.id);
     const heading = (DRAFT_WORD[txt(m.type)] || DRAFT_WORD[txt(m.kind)] || "Your message") + (CHANNEL[txt(m.channel)] ? " · " + CHANNEL[txt(m.channel)] : "");

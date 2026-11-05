@@ -394,8 +394,10 @@ details.more[open] { flex-basis: 100%; }
   font-weight: 600; font-size: var(--t-sm); color: var(--ink); list-style: none;
 }
 .more-btn::-webkit-details-marker { display: none; }
-.more-btn::after { content: ""; width: 7px; height: 7px; margin-left: 8px; border-right: 2px solid currentColor; border-bottom: 2px solid currentColor; transform: rotate(45deg) translateY(-2px); }
-details.more[open] > .more-btn::after { transform: rotate(-135deg) translateY(-1px); }
+/* Its chevron is the ::before, drawn after the word (order), so the ::after is free to carry
+   the full tap area on a phone, as every button's does. */
+.more-btn::before { content: ""; order: 1; width: 7px; height: 7px; margin-left: 8px; border-right: 2px solid currentColor; border-bottom: 2px solid currentColor; transform: rotate(45deg) translateY(-2px); }
+details.more[open] > .more-btn::before { transform: rotate(-135deg) translateY(-1px); }
 @media (hover: hover) { .more-btn:hover { background: var(--raised); } }
 .more-panel { display: grid; gap: 12px; padding: 12px 2px 4px; border-top: 1px solid var(--line); margin-top: 8px; }
 
@@ -1056,7 +1058,8 @@ a.navlink, .applylink, .btn.link, .fold .btn.link, .bp-foot a { text-decoration-
   :is(.card-actions, .wc-actions, .suggest-acts, .more-acts, .g-acts, .fix, .bp-foot, .sheet-actions) > :is(.btn, a):not(.icon-only) {
     display: inline-flex; min-height: calc(36px * var(--tz)); padding: 8px 16px; margin-block: 0; line-height: 1.2; position: relative; }
   :is(.card-actions, .wc-actions, .suggest-acts, .more-acts, .g-acts, .fix, .bp-foot, .sheet-actions) > :is(.btn, a):not(.icon-only)::after { content: ""; position: absolute; inset: calc(-4px * var(--tz)) 0; }
-  :is(.card-actions, .wc-actions, .suggest-acts, .g-acts) > details.more > .more-btn { min-height: calc(36px * var(--tz)); }
+  :is(.card-actions, .wc-actions, .suggest-acts, .g-acts) > details.more > .more-btn { min-height: calc(36px * var(--tz)); position: relative; }
+  :is(.card-actions, .wc-actions, .suggest-acts, .g-acts) > details.more > .more-btn::after { content: ""; position: absolute; inset: calc(-4px * var(--tz)) 0; }
   a.back-link, a.bp-go { display: inline-flex; align-items: center; min-height: var(--target); min-width: var(--target); }
   a.bp-link { min-height: var(--target); }
   /* A Coming up title and the prep line under it are each a whole target of their own: an
