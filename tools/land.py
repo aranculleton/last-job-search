@@ -46,9 +46,11 @@ connection to Claude lapsed: the steps to connect it again), and a full disk.
 
 --after-merge: git fetch origin master; when the commit this landing pushed is on master
 now, the branch is reset to master (git checkout -B <branch> origin/master), so the next
-piece of work starts current, with no stash and no checkout of master. A page update that
-took master since (app_setup.take_master) adds only a merge commit, which is no reason to
-say "not merged"; newer work of the chat's own is kept, with master merged into it.
+piece of work starts current, with no stash and no checkout of master, and its copy on
+GitHub is moved up to master with it (a fast-forward push), so nothing reads as unpushed. A
+page update that took master since (app_setup.take_master) adds only a merge commit, which
+is no reason to say "not merged"; newer work of the chat's own is kept, with master merged
+into it, and merges that hold nothing master lacks are no newer work.
 
 While it runs it holds a lock in the checkout's git folder, and a page update takes no
 master meanwhile (app_setup.take_master); a git command refused because another one holds
@@ -366,11 +368,16 @@ def _stage(root: str) -> tuple[bool, str]:
         buf = io.StringIO()
         with contextlib.redirect_stdout(buf):
             code = save_state.main([], root=root)
-        if code == 0 or wait is None or DISK_FULL.search(buf.getvalue()) \
-                or not INDEX_LOCK.search(buf.getvalue()):
+        if code in (0, save_state.LEFT_OUT) or wait is None \
+                or DISK_FULL.search(buf.getvalue()) or not INDEX_LOCK.search(buf.getvalue()):
             break
         time.sleep(wait)
-    if code != 0:
+    if code == save_state.LEFT_OUT:
+        # Everything else is staged: the save goes on, and what git would not take is named.
+        for ln in buf.getvalue().splitlines():
+            if ln.startswith("save_state: left out"):
+                print("land: " + ln[len("save_state: "):])
+    elif code != 0:
         if DISK_FULL.search(buf.getvalue()):
             return False, "the disk here is full"
         if INDEX_LOCK.search(buf.getvalue()):
@@ -1108,10 +1115,15 @@ def _after_merge(root: str, sleep) -> int:
             return 2
         for ln in said:
             print("land: " + ln)
-        _forget_pushed(root)
-        print("land: landed; %s holds newer work of its own, with master merged in, for the "
-              "next landing" % (name or "this chat"))
-        return 0
+        # "Newer work" that, master merged in, holds nothing master lacks (merges that
+        # _clean_merges could not tell clean, as on a git before 2.38): no work of its own,
+        # so it starts from master like any other, and is never left commits ahead of GitHub.
+        if _git(root, "rev-parse", "HEAD^{tree}").stdout.strip() != \
+                _git(root, "rev-parse", "origin/master^{tree}").stdout.strip():
+            _forget_pushed(root)
+            print("land: landed; %s holds newer work of its own, with master merged in, for the "
+                  "next landing" % (name or "this chat"))
+            return 0
     if name:
         r = _git(root, "checkout", "-q", "--no-track", "-B", name, "origin/master")
     else:
@@ -1121,8 +1133,27 @@ def _after_merge(root: str, sleep) -> int:
               % _said(r))
         return 2
     _forget_pushed(root)
+    if name:
+        _level(root, name, sleep)
     print("land: landed; %s starts from master now" % (name or "this chat"))
     return 0
+
+
+def _level(root: str, name: str, sleep) -> None:
+    """GitHub's copy of this branch moved up to master with it, a plain fast-forward (its
+    work is on master, so master holds the copy's commit). Left at the commit the landing
+    pushed, the branch stood one merge commit (master's own) ahead of its copy on GitHub, and
+    a check for unpushed work held the chat for it until it was pushed by hand (a live
+    session, 2026-11-05). Never forced; where it cannot be moved, one line says so."""
+    there = _remote_name(name)
+    if _git(root, "rev-parse", "-q", "--verify", "refs/remotes/origin/" + there).stdout.strip() \
+            == _git(root, "rev-parse", "HEAD").stdout.strip():
+        return
+    _where, r = _push(root, name, sleep)
+    if r.returncode != 0:
+        print("land: GitHub's copy of %s stays where the landing pushed it (%s); nothing is "
+              "lost, and the next landing moves it" % (there, _said(r)))
+        _told(_trouble(r))
 
 
 def _utf8_stdio() -> None:

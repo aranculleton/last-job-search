@@ -98,6 +98,13 @@ make sense to somebody whose repo just received it.
   same setting or note, this chat's version is kept, the other is kept in your saved history,
   and nothing is put beside your files; a save clears the copies older versions left beside
   notes and settings too, except one you are still being asked about.
+- **Saving no longer stops when a file disappears for a moment.** If something is making a
+  resume's PDF again while your work is being saved, that one file is skipped and saved next
+  time, and everything else is saved as usual. Only if a file that is still there could not
+  be saved does Claude tell you, once.
+- **After your work is saved, nothing is left looking unsaved.** The copy of your work on
+  GitHub is brought level with the one in the chat, so Claude no longer stops to push it
+  again by hand.
 - **A recruiter at a recruitment agency is no longer hidden from Messages.** They were
   held as "an employer you turned down" because of the agency they work for, even when they
   had asked for your resume. Your bar now judges only where you would work; an employer you

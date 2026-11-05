@@ -251,6 +251,15 @@ these lenses, and each real finding becomes a test the same way:
   `test_an_update_reaches_every_stranger.py`,
   `test_a_strangers_brief_reaches_them_and_mends_itself.py`,
   `test_a_page_owed_is_published_in_the_chat.py`.
+- **The tired person**: every screen the version changed, read as someone exhausted, on a
+  phone, late at night, with dozens of things owed, by a reviewer who did not build it (a
+  fresh agent given the screen and DESIGN.md, not the builder's conclusions), and every
+  finding fixed or named. Three questions for every control: is it the one obvious next
+  step; could the app do it by itself (a fix with a clear default, such as a note too long
+  for LinkedIn or a letter to make again, is done by Claude the moment a check finds it, and
+  the card says so: a button for it is a bug, the maintainer, 2026-11-05: "if there is
+  clearly a recommended option ... we just do it autonomously"); and is a light change one
+  pencil away, in place, rather than under More.
 - **Real scale**: the states the tests build at the size of a real search (hundreds of people,
   over a hundred owed, dozens of applications), never the three-row sample alone.
 - **Two chats at once**: the same file changed by both, a landing during a page update.
