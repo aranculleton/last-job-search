@@ -662,7 +662,9 @@ def test_draft_this_drafts_at_once_says_what_it_costs_and_rings_with_no_words(ru
     rings = [c for c in r["calls"] if c["cap"] == "comments"]
     assert len(rings) == 1 and rings[0]["text"] == "[app] [work:draft~r12-1]"
     assert r["doorbell"]["ids"] == ["draft~r12-1"] and r["doorbell"]["thread"]
-    assert r["chip"] == "Drafting", "a role being drafted stays in place, marked"
+    # It stays in place, its line saying where its draft stands in Claude's work words, with
+    # Cancel: a "Drafting" pill over work still waiting had none (the review, 2026-11-05).
+    assert r["chip"] is None and r["line"] and "Cancel" in r["line"] and "Claude is on it" not in r["line"], (r["chip"], r["line"])
     assert "1 waiting" in r["pill"], "work just asked for is a pill in the header, waiting until a chat takes it"
 
 

@@ -317,6 +317,46 @@ make sense to somebody whose repo just received it.
 
 ### Fixed
 
+- **A job being drafted says how its draft is going.** After Draft this, its card says
+  Waiting for Claude, In line or Claude is on it, with Cancel, and "Finished: putting it on
+  your page" until the draft is there, never "Draft ready" over nothing. It still counts in
+  To apply while it is being drafted.
+- **A question about a job is asked on that job's card**, never as a card of its own above it,
+  and Draft this waits for your answer. Jobs' summary counts every open question.
+- **The Brief counts drafts ready to apply apart from ones still being made** ("1 draft ready
+  to apply, 1 being made"), and a draft whose files are not made yet no longer offers Apply.
+- **A draft with a question and a check Claude can fix** is still made again by Claude, and
+  the question still asks.
+- **A change to your CV or letter says when it starts** (now, or next after what is ahead of
+  it), its card's line has Cancel, and Apply is not the highlighted step while the change is
+  pending.
+- **Who needs you means one thing.** Contacts' "N need you" and To do's "N more people who need
+  you are in Contacts" count the same people: anyone with a reply, a thank-you or a call yours
+  to do. The follow-ups To do leaves off are said apart, and To do's count is read aloud as the
+  things for today.
+- **A reply that is late says Overdue in Contacts too**, as in To do, and while Claude drafts
+  it the card says so, never "Replied: your turn".
+- **Putting something off is not doing it.** Tomorrow or Next week from a card's trash takes it
+  off To do with "1 put off: Show" at the end, never under Done today, and Contacts says that
+  person is put off until that day, with nothing due on their card.
+- **Many follow-ups on applications, and interviews with no word since your last update, are one
+  card each**, a row an employer with its Draft and Done, instead of a card each.
+- **A checklist row's Draft shows its cost**, and once tapped the row says how it is going, with
+  Cancel.
+- **Buttons that use Claude all show their cost**: Shorter, Warmer, More formal, Pin it and
+  Make one for your CV. "I sent it" shows none, as it uses none.
+- **Cards keep to one highlighted button and two others.** A suggestion's buttons count among
+  them, so the rest wait under More; each pencil stands beside the word for its document ("CV ✎
+  letter ✎"), and an interview's new day is under More.
+- **No underlined text as a button.** Not now beside Pin it and Add your LinkedIn download are
+  buttons; an interview's card in To do opens Coming up from its title.
+- **Your rules say where you search plainly**: the towns, and remote work anywhere in your
+  country, never the country as one more town. Every kind of job the search leaves out has its
+  rule, so the numbers add up to what Jobs says.
+- **Small fixes on a phone and a laptop.** Each switch in Settings is a full-size tap across its
+  whole row; Contacts with only a few people has no empty band under its header; the soft
+  button in a job's suggestion keeps its edge in the dark look; and on a laptop the "Private to
+  you" line starts where the cards do.
 - **A skill question you have not answered is never taken as a no.** When a posting asks for
   a skill your profile does not list, Claude asks you once, on your page, for every
   application that asks for it, and keeps your one answer for all of them. Two chats drafting

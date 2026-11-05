@@ -41,6 +41,23 @@ def test_every_pair_in_both_looks_reaches_its_ratio():
     assert set(palettes.PALETTES) == {"light", "dark"}, "light and dark only: no theme to pick"
 
 
+def test_a_soft_pills_edge_in_a_suggestion_box_reaches_3_to_1_on_the_box():
+    """"Write to Juno" in a job's warm-route box had no edge (border-color transparent), 1.19:1
+    against the box in the dark look (the review, 2026-11-05): its edge is a token that reaches
+    3:1 on the box's tint in both looks, and that pair is one the check holds."""
+    with open(CSS, encoding="utf-8") as fh:
+        css = fh.read()
+    rule = re.search(r"\.card\.app\) \.suggest \.btn\.secondary \{([^}]*)\}", css)
+    assert rule, "the soft pill in a card's suggestion box has its own rule"
+    edge = re.search(r"border-color:\s*var\(--([a-z-]+)\)", rule.group(1))
+    assert edge, rule.group(1)
+    box = re.search(r"^\.suggest \{[^}]*background:\s*var\(--([a-z-]+)\)", css, re.M)
+    assert box, "the suggestion box has its tint"
+    for look, pal in palettes.PALETTES.items():
+        assert palettes.ratio(pal[edge.group(1)][0], pal[box.group(1)][0]) >= 3.0, (look, edge.group(1), box.group(1))
+    assert (edge.group(1), box.group(1), 3.0) in [(f, b, n) for f, b, n, _w in palettes.pairs()]
+
+
 def test_the_ratios_are_computed_by_the_wcag_formula():
     assert round(palettes.ratio("#000000", "#ffffff"), 2) == 21.0
     assert round(palettes.ratio("#777777", "#ffffff"), 2) == 4.48

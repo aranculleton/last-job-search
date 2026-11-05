@@ -142,11 +142,20 @@ def test_the_due_list_keeps_every_application_row_at_any_size(tmp_path, monkeypa
     assert any("step" in d for d in whole["due"]) and not any("step" in d for d in cut["due"]), "the people are what is cut"
     # The people cut are counted, each once, in the one row that says what is not shown (the
     # re-audit of 4 November: at 716 people To do listed 93 and said nothing of the rest).
+    # Who needs you, as Contacts counts them (app_model.NEEDS_YOU), and the follow-ups said
+    # apart, each once, less anyone whose message is on To do's "Messages to send" card (the
+    # review, 2026-11-05: it counted every row it left off, beside Contacts' own count).
     people = {targets[d["id"]].get("contact") or d["id"] for d in whole["due"] if "step" in d}
+    groups = {p["id"]: p["group"] for p in cut["people"]}
+    sent = {x["contact"] for x in cut["messages"] if x["id"] in cut["to_send"]["ids"]}
     hidden = [d for d in cut["due"] if d.get("kind") == "hidden"]
-    n = len(people)
-    said = f"{n} more {'person who needs' if n == 1 else 'people who need'} you {'is' if n == 1 else 'are'} in Contacts"
-    assert len(hidden) == 1 and hidden[0]["title"].endswith(said), hidden
+    n = len({c for c in people if groups.get(c) == "now"} - sent)
+    f = len({c for c in people if groups.get(c) == "follow"} - sent)
+    assert n or f, "the invented search owes someone something"
+    said = f"{n} more {'person who needs' if n == 1 else 'people who need'} you {'is' if n == 1 else 'are'} in Contacts" if n else ""
+    ups = (f"{f} {'follow-up' if f == 1 else 'follow-ups'} you could send {'is' if f == 1 else 'are'} there too" if n else
+           f"{f} more {'follow-up' if f == 1 else 'follow-ups'} you could send {'is' if f == 1 else 'are'} in Contacts") if f else ""
+    assert len(hidden) == 1 and hidden[0]["title"].endswith(". ".join(x for x in (said, ups) if x)), (hidden, n, f)
     assert not [d for d in whole["due"] if d.get("kind") == "hidden" and "in Contacts" in d["title"]]
 
 

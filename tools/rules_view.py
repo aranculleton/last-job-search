@@ -290,8 +290,14 @@ def recent(today: dt.date, days: int = WINDOW_DAYS) -> dict:
         day = day or today
         kinds = head.get("kinds")
         if not isinstance(kinds, dict):
-            kinds = {}
-            for rule, n in (head.get("counts") or {}).items():
+            # A list written before its first line counted kinds: its rows read as Jobs reads
+            # them (kind_of), so Your rules names a cut as Jobs does; its rules' names only where
+            # it holds no rows. "Other reasons" stood in Your rules for Jobs' "Needs a
+            # qualification you do not hold" (the review, 2026-11-05).
+            whole = _json(p, {})
+            rows = whole.get("filtered") if isinstance(whole, dict) else None
+            kinds = kinds_of(rows) if isinstance(rows, list) and rows else {}
+            for rule, n in ({} if kinds else (head.get("counts") or {})).items():
                 k = _RULE_KIND.get(str(rule), "other")
                 kinds[k] = kinds.get(k, 0) + int(n or 0)
         for k, n in kinds.items():
@@ -431,9 +437,8 @@ def your_rules(today: dt.date, seen: dict | None = None, learned_rows=None) -> l
     rows = []
     places = list(_search("SCRAPE_LOCATIONS", []) or [])
     if places:
-        towns = list(dict.fromkeys(str(x).split(",")[0].strip() for x in places))
-        rows.append(_row("rule~places", "place", f"You search in {_listed(towns)}; an on-site "
-                         "role anywhere else is left out", n("place"), rec, edit={"what": "places"}))
+        rows.append(_row("rule~places", "place", _where_sentence(places, _search("SCRAPE_REMOTE_LOCATIONS", []) or []),
+                         n("place"), rec, edit={"what": "places"}))
     titles = list(_search("SCRAPE_QUERIES", []) or [])
     if titles:
         rows.append(_row("rule~roles", "field", f"You search for {_listed(titles)}; a title "
@@ -495,10 +500,56 @@ def your_rules(today: dt.date, seen: dict | None = None, learned_rows=None) -> l
         rows.append(_row(f"rule~learned~{i}", "learned", said, None, rec,
                          drop={"kind": "learned", "n": i}, words=str(e.get("said") or ""),
                          set_on=str(e.get("date") or e.get("on") or "")[:10]))
+    # Every kind of cut that left a job out has its row, so Your rules adds up to what Jobs
+    # says was left out: the qualification cut had none, and Your rules summed fewer than Jobs
+    # (the review, 2026-11-05).
+    have = {r["kind"] for r in rows}
+    for k, got in sorted(lately.items()):
+        if k.startswith("language:") or k in have or k not in ALSO or not got.get("n"):
+            continue
+        rows.append(_row(f"rule~{k}", k, ALSO[k], got["n"], rec, name=KINDS[k][0]))
+        have.add(k)
     kept = review_record().get("kept") or {}
     for r in rows:
         r["still_right"] = still_right(r, today, kept.get(r["id"]))
     return rows
+
+
+# The cuts with no setting of their own, each said as a rule where it left a job out lately.
+ALSO = {
+    "credential": "A job that needs a qualification you do not hold is left out",
+    "eligibility": "A job that needs a status or a place to live you do not have is left out",
+    "public": "A public body's job is left out",
+    "internal": "A job open to the employer's own staff only is left out",
+    "research": "Research-grade work is left out",
+    "copy": "A job you already applied for, or a copy of one, is left out",
+    "ruled": "A job left out before stays left out",
+    "throttle": "Once you have applied enough at one employer, more of its jobs are left out",
+    "referral": "Where someone is putting your name forward, that employer's other jobs wait",
+    "closed": "A posting that is no longer open is left out",
+    "declined": "Jobs at employers you turned down are left out",
+    "other": "A job left out for another reason, each said on its row",
+}
+# Names said with "the" before them ("remote anywhere in the United Kingdom").
+_THE = re.compile(r"^(United |Netherlands$|Philippines$|Czech Republic$|Bahamas$|Gambia$)")
+
+
+def _where_sentence(places, remote) -> str:
+    """Where the person searches, in one sentence: the towns by name, and a search of a whole
+    country as remote work anywhere in it, never as one more town ("You search in Manchester,
+    Salford, Stockport and United Kingdom", the review, 2026-11-05)."""
+    wide = [str(x).strip() for x in places if str(x).strip() and "," not in str(x)]
+    wide += [str(x).strip() for x in remote if str(x).strip() and "," not in str(x)]
+    wide = list(dict.fromkeys(wide))
+    towns = list(dict.fromkeys(str(x).split(",")[0].strip() for x in places
+                               if "," in str(x) and str(x).split(",")[0].strip()))
+    areas = [("the " if _THE.match(w) else "") + w for w in wide]
+    if towns and areas:
+        return (f"You search in {_listed(towns)}, and for remote work anywhere in {_listed(areas)}; "
+                "an on-site role anywhere else is left out")
+    if areas:
+        return f"You search for remote work anywhere in {_listed(areas)}; an on-site role is left out"
+    return f"You search in {_listed(towns)}; an on-site role anywhere else is left out"
 
 
 def still_right(row: dict, today: dt.date, kept_on: str | None = None) -> bool:

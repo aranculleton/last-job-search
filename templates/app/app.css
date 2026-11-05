@@ -119,6 +119,7 @@ bdi { unicode-bidi: isolate; }
 .rail { display: none; grid-area: rail; }
 .foot { grid-area: foot; padding-block: 32px 8px; color: var(--muted); font-size: var(--t-sm); max-width: 70ch; display: grid; gap: 8px; }
 .foot-line .btn.link { font-size: inherit; }
+.foot > * { max-width: 70ch; }
 
 .tabs {
   position: fixed; left: 0; right: 0; bottom: 0; z-index: 20;
@@ -169,6 +170,10 @@ bdi { unicode-bidi: isolate; }
   /* A screen's column sits in the middle of the space between the menu and Claude's work,
      never hard against the menu with a wide gap on its other side. */
   .main > .sec { margin-inline: auto; width: 100%; }
+  /* The foot keeps to the screen's column, its left edge under the cards': it started left of
+     them on Contacts and Jobs (the review, 2026-11-05). The Brief's column is the whole width. */
+  .foot { margin-inline: auto; width: 100%; max-width: clamp(760px, 62vw, 1240px); }
+  .shell:has(.main > .sec.brief-page) .foot, .shell:has(.main.split) .foot { max-width: none; margin-inline: 0; }
   .main.split { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 32px; }
   .main.split .col { min-width: 0; }
 }
@@ -460,11 +465,12 @@ details.more.split[open] { flex-basis: auto; }
    was pushed 8px below the others by a fix's own top margin (2026-11-04). */
 .suggest-acts > .fix { margin-top: 0; }
 /* On a Jobs card the suggestion is lighter than the card's own actions: smaller words, and a
-   soft white pill with no edge. */
+   soft white pill whose edge is the box's own muted ink, 3:1 on its tint in both looks: with no
+   edge, "Write to Juno" read 1.19:1 against the box in the dark look (the review, 2026-11-05). */
 :is(.card.job, .card.app) .suggest { padding: 8px 12px; gap: 4px; }
 :is(.card.job, .card.app) .suggest-text { font-size: var(--t-sm); }
 :is(.card.job, .card.app) .suggest-acts { gap: 4px 12px; }
-:is(.card.job, .card.app) .suggest .btn.secondary { background: var(--surface); border-color: transparent; }
+:is(.card.job, .card.app) .suggest .btn.secondary { background: var(--surface); border-color: var(--muted); }
 .filtered { border: 1px solid var(--line); border-radius: var(--r); background: var(--surface); padding: 4px 16px 12px; }
 .wc-more summary { cursor: pointer; font-size: var(--t-sm); font-weight: 600; color: var(--muted); min-height: 36px; display: flex; align-items: center; }
 .filtered summary, .gone summary, details.send summary, .chart summary, .recent summary, .brief summary {
@@ -834,6 +840,13 @@ dialog.work-sheet { position: fixed; inset: auto 0 0 0; margin: 0; width: 100%; 
 .set-go { color: var(--muted); font-size: 1.125rem; }
 .look-row .segctl { flex: 0 1 auto; }
 .look-row .seg-opt { padding: 8px 12px; font-size: 0.875rem; }
+/* A card's title that opens it elsewhere (an interview in To do opens in Coming up): the card's
+   own tap, drawn as its title, underlined only under a pointer. */
+.title-link { color: inherit; text-decoration: none; position: relative; display: inline-block; }
+/* Its tap reaches a full target above and below its one line (the target probe reads it). */
+.title-link::after { content: ""; position: absolute; inset: -16px 0; }
+@media (hover: hover) { .title-link:hover { text-decoration: underline; } }
+.toggle-label { display: flex; align-items: center; justify-content: space-between; gap: 12px; flex: 1 1 100%; min-width: 0; min-height: var(--target); cursor: pointer; }
 .toggle-row input[type="checkbox"] { width: 24px; height: 24px; accent-color: var(--mark); margin: 0; flex: none; }
 
 /* Chat: the box pinned at the bottom (4.9) */

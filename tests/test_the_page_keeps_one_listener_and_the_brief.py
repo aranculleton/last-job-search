@@ -455,7 +455,11 @@ def test_every_count_of_jobs_to_look_at_agrees_and_leaves_out_a_closed_one(run, 
     send = int((re.search(r"(\d+) to send", jobs_line) or [0, 0])[1])
     look = int((re.search(r"(\d+) to look at", jobs_line) or [0, 0])[1])
     assert a["nav"] == send + look and a["brief"] == look, (a, jobs_line)
-    assert (not send) or ("%d draft" % send) in panel, panel
+    # The drafts ready and the ones still being made, said apart, add up to the summary's "to
+    # send" (the review, 2026-11-05: "2 drafts ready to apply" beside "2 to send, 1 still to make").
+    ready = int((re.search(r"(\d+) drafts? ready to apply", panel) or [0, 0])[1])
+    making = int((re.search(r"(\d+) (?:drafts? )?being made", panel) or [0, 0])[1])
+    assert (not send) or ready + making == send, (panel, jobs_line)
     assert (not todo_line) or todo_line.startswith("%d new" % look), todo_line
     assert "Analytics Consultant" not in panel, panel      # its posting has closed
 

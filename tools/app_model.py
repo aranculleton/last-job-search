@@ -3086,8 +3086,18 @@ def _people(ctx: Ctx, targets: dict) -> list:
     whole = first + sorted((x for x in full.values() if x["id"] not in seen),
                            key=lambda x: (x["last"] or "", x["id"]), reverse=True)
     replies = sum(1 for r in rows if r[8]["group"] == "now" and (r[8]["owed"] or {}).get("reply"))
+    need = {r[1] for r in rows if r[8]["group"] in NEEDS_YOU}
+    could = {r[1] for r in rows if r[8]["group"] == "follow"}
+    # To do's row for who needs the person and is not on its list (neither a row of its own nor
+    # a message on its "Messages to send" card), and the follow-ups it left off, said apart.
+    dh = ctx._got.get("due_hidden")
+    if dh is not None:
+        kept = [d for d in dh["rows"] if d.get("kind") != "hidden"]
+        off = dh["listed"] | set(shown)
+        row = _hidden_row(dh["ruled"], len(need - off), len(could - off))
+        dh["rows"][:] = kept + ([row] if row else [])
     ctx._got["people_count"] = {"shown": len(out), "all": len(full), "live": len(live_rows),
-                                "rest": len(full) - len(out), "need": counts["now"],
+                                "rest": len(full) - len(out), "need": len(need),
                                 "replies": replies, "follow": counts["follow"],
                                 "leave": counts["leave"], "waiting": counts["waiting"],
                                 "held": counts["held"],
@@ -3354,27 +3364,53 @@ def _due(ctx: Ctx, targets: dict) -> list:
     # 4 November).
     def _who(d: dict) -> str:
         return (targets.get(d["id"]) or {}).get("contact") or d["id"]
-    more = len({_who(d) for d in cut} - {_who(d) for d in shown
-                                         if halves.get(d["id"]) == "contact"})
-    if ruled or more:
-        # Said once, quietly, so a shorter list is never a mystery: who the person's own rules
-        # keep off it, by why, and how many more are in Contacts. One row.
-        hidden = sum(ruled.values())
-        words = {"employer": "at employers you turned down", "place": "outside where you look",
-                 "request": "whose connection request nobody accepted", "closed": "closed"}
-        parts = [f"{n} {'person' if n == 1 else 'people'} {words.get(w, w)}"
-                 for w, n in sorted(ruled.items(), key=lambda x: -x[1])]
-        said = [", ".join(parts) + " not shown"] if parts else []
-        if more:
-            said.append(f"{more} more {'person who needs' if more == 1 else 'people who need'} "
-                        f"you {'is' if more == 1 else 'are'} in Contacts")
-        out.append({"id": "due-hidden", "kind": "hidden", "sub": "hidden",
-                    "title": ". ".join(said), "context": "", "due": None,
-                    "company": "", "overdue_days": 0, "action": None, "item": None,
-                    "work": None, "done": None, "snooze": None,
-                    "rev": rev_of("due-hidden", hidden, more) if more else
-                    rev_of("due-hidden", hidden)})
+    listed = {_who(d) for d in shown if halves.get(d["id"]) == "contact"}
+    hidden_row = _hidden_row(ruled, len({_who(d) for d in cut} - listed))
+    if hidden_row:
+        out.append(hidden_row)
+    # Who needs the person is where each stands (standing), worked out with the people: the
+    # row is said again there, counting those To do does not list, so To do's "N more people
+    # who need you are in Contacts" and Contacts' "N need you" mean one thing, and a follow-up
+    # you could send is said apart (the review, 2026-11-05: 1284 beside 1279, the follow-ups
+    # counted in one and not the other).
+    ctx._got["due_hidden"] = {"rows": out, "ruled": dict(ruled), "listed": listed}
     return out
+
+
+# Who needs the person, on every screen that says it: someone whose reply, thank-you or call is
+# theirs to do (standing's "now"). A follow-up they could send is said apart, as "Follow-up you
+# could send" (the maintainer, 2026-11-04: the follow-ups are never counted as people who need
+# you). Contacts' "N need you", its Needs you filter and To do's "N more people who need you are
+# in Contacts" all count this one group.
+NEEDS_YOU = ("now",)
+
+
+def _hidden_row(ruled: dict, more: int, follow: int = 0) -> dict | None:
+    """The one quiet row under To do's list, so a shorter list is never a mystery: who the
+    person's own rules keep off it, by why, how many more people who need the person are in
+    Contacts, and how many follow-ups they could send are there too; None when there is none."""
+    if not ruled and not more and not follow:
+        return None
+    hidden = sum(ruled.values())
+    words = {"employer": "at employers you turned down", "place": "outside where you look",
+             "request": "whose connection request nobody accepted", "closed": "closed"}
+    parts = [f"{n} {'person' if n == 1 else 'people'} {words.get(w, w)}"
+             for w, n in sorted(ruled.items(), key=lambda x: -x[1])]
+    said = [", ".join(parts) + " not shown"] if parts else []
+    if more:
+        said.append(f"{more} more {'person who needs' if more == 1 else 'people who need'} "
+                    f"you {'is' if more == 1 else 'are'} in Contacts")
+    if follow:
+        said.append(f"{follow} {'follow-up' if follow == 1 else 'follow-ups'} you could send "
+                    f"{'is' if follow == 1 else 'are'} there too" if more else
+                    f"{follow} more {'follow-up' if follow == 1 else 'follow-ups'} you could send "
+                    f"{'is' if follow == 1 else 'are'} in Contacts")
+    return {"id": "due-hidden", "kind": "hidden", "sub": "hidden",
+            "title": ". ".join(said), "context": "", "due": None,
+            "company": "", "overdue_days": 0, "action": None, "item": None,
+            "work": None, "done": None, "snooze": None,
+            "rev": rev_of("due-hidden", hidden, more, follow) if follow else
+            rev_of("due-hidden", hidden, more) if more else rev_of("due-hidden", hidden)}
 
 
 # ------------------------------------------------------------------ interviews and done

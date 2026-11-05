@@ -427,7 +427,9 @@ def test_the_pencil_changes_the_words_in_place_or_asks_claude(run, page, model):
         {"click": "Shorter: ask Claude to change the message to Rafe", "read": _card(rafe)},
     ])
     assert not got["errors"], got["errors"]
-    assert got["after"][0]["count"] == 1, "what wakes Claude carries its cost"
+    # Each control that wakes Claude carries its own gauge: Shorter, Warmer, More formal and Ask
+    # Claude (DESIGN.md: "the chips"; the review, 2026-11-05: the chips drew none).
+    assert got["after"][0]["count"] == 4, "what wakes Claude carries its cost"
     w = [x for x in got["after"][1]["work"] if x.get("kind") == "tweak" and not x["args"].get("auto")]
     assert w and w[0]["args"]["text"] == "Make it shorter." and w[0]["args"]["target"]["contact"] == rafe, w
     assert "Make it shorter" in got["after"][1]["text"] and "Cancel" in got["after"][1]["text"], got["after"][1]["text"]
