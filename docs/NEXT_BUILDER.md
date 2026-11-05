@@ -89,6 +89,11 @@ release. What cost time:
   tests/test_a_faster_round_finds_and_scores_the_same.py::test_a_paced_boards_requests_stay_its_crawl_delay_apart
   once on the 4.10.1 branch: one gap of 0.0888 s against a floor of 0.09 for a 0.1 s crawl delay,
   Windows' coarse timer. Look at whether the pacing measures with the same clock it sleeps by.
+  Part 3 on the released 4.10.1 commit failed a speed limit, timed alone:
+  tests/test_brief.py::test_a_large_state_is_gathered_in_under_two_seconds_and_stays_short[True]
+  (3.45 s against 2, 1.42 s of it any run takes); it passed on 4.10.0's. Windows' runners time
+  slowly and unevenly; look at whether its limits should be measured against that machine's own
+  baseline, as the "any run takes" part already is.
 - **The newest Python** (3.14, in suite everywhere) failed
   tests/test_a_judgement_is_kept_whole_and_read_for_its_own_employer.py::test_judgements_made_at_once_are_all_kept
   once on the released commit with BrokenPipeError, from its pool of 12 processes; the six other
