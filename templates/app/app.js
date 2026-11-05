@@ -4153,6 +4153,25 @@
     const showGone = openState.get("grp-gone:" + hid) === true;
     const left = ds.filter((d) => showGone || gone.indexOf(d) < 0);
     const late = ds.filter((d) => gone.indexOf(d) < 0 && Number(d.overdue_days) > 0).length;
+    // Several drafted at once: one line at the top says where they all stand, with one Cancel,
+    // and each row a word ("In line", "Writing", "Done"): nine rows each saying "Saved. Sent to
+    // Claude, which is open now: it starts in a moment" with its own Cancel was not clear at a
+    // glance (the maintainer, 2026-11-05).
+    const working = left.map((d) => (busy(d) ? dueWorkEntry(d, kind) : null)).filter(Boolean);
+    const compact = working.length >= 2;
+    const rowWord = (w) => {
+      const st = txt(w.status) || "queued";
+      return st === "running" || st === "claimed" ? h("p", {class: "g-state"}, h("span", {class: "spin", "aria-hidden": "true"}), " Writing")
+        : st === "needs_you" ? h("p", {class: "g-state tone-warn"}, "Has a question")
+        : h("p", {class: "g-state muted"}, h("span", {class: "dot is-waiting", "aria-hidden": "true"}), " In line");
+    };
+    const summary = compact ? (() => {
+      const run = working.filter(([, w]) => ["running", "claimed"].includes(txt(w.status))).length;
+      const doneN = ds.filter((d) => { const w = kind ? dueWork(d, kind) : null; return w && txt(w.status) === "done"; }).length;
+      const words2 = ["Drafting " + (working.length + doneN), doneN ? doneN + " written" : "", run ? run + " being written" : "", working.length - run ? (working.length - run) + " in line" : ""].filter(Boolean);
+      return h("div", {class: "g-summary", role: "status"}, h("p", {}, run ? h("span", {class: "spin", "aria-hidden": "true"}) : h("span", {class: "dot is-waiting", "aria-hidden": "true"}), " " + words2[0] + ": " + words2.slice(1).join(", ")),
+        h("div", {class: "card-actions"}, btn("Cancel all", () => working.forEach(([id]) => stopWork(id)), {kind: "secondary", small: true, key: "fg-stop:" + where + ":" + g + ":" + band, aria: "Cancel all " + working.length})));
+    })() : null;
     const row = (d) => {
       const marked = !!effective(d.id, ["due.done", "due.snooze"]);
       const title = txt(d.title);
@@ -4169,7 +4188,7 @@
       return h("li", {class: "g-row" + (marked ? " is-marked" : ""), "data-item": d.id},
         h("div", {class: "g-main"}, h("p", {class: "g-name"}, cid ? personName(cid, name, "fg:" + d.id) : name),
           dueWho(d) ? h("p", {class: "muted small"}, cap1(dueWho(d))) : null, stateLine(d.id, "due:" + where + ":" + d.id),
-          we ? workInline(we[0], we[1], {key: "fgw:" + where + ":" + d.id}) : null),
+          we ? (compact ? rowWord(we[1]) : workInline(we[0], we[1], {key: "fgw:" + where + ":" + d.id})) : null),
         h("div", {class: "g-acts"}, busy(d) ? null :
           draft ? seeDraftBtn(draft, "fgdraft:" + where + ":" + d.id, "secondary") :
           // What wakes Claude carries the gauge beside it (DESIGN.md, Buttons): the row's Draft
@@ -4196,6 +4215,7 @@
         h("span", {class: "chip tone-plain", "data-k": "grp-done:" + hid}, gone.length + " of " + ds.length + " done"))),
       h("p", {class: "card-title", id: hid}, ds.length > gone.length ? words.title(ds.length - gone.length) : plural(gone.length, "thing", "things") + " done"),
       words.sub && ds.length > gone.length ? h("p", {class: "small muted"}, words.sub) : null,
+      summary,
       left.length ? groupRows("fg:" + where + ":" + g + ":" + band, left.map(row)) : null,
       gone.length && !showGone ? h("p", {class: "fold"}, ds.length > gone.length ? h("span", {}, gone.length + " done: ") : null,
         btn(ds.length > gone.length ? "Show" : "Show them", () => { openState.set("grp-gone:" + hid, true); scheduleRender(); }, {kind: "link", key: "grpgone:" + hid})) : null,
@@ -11625,15 +11645,19 @@
   // displaying it in this list rather than scrolling through like 50 items").
   const RUN_MIN = 4;
   const BATCH_WORDS = {follow_up: ["follow-up", "follow-ups"], reply: ["reply", "replies"], draft: ["application", "applications"],
-    network: ["search for people", "searches for people"], prep: ["prep", "preps"], files: ["set of files", "sets of files"], evaluate: ["job to score", "jobs to score"]};
+    network: ["search for people", "searches for people"], prep: ["prep", "preps"], files: ["set of files", "sets of files"], evaluate: ["job to score", "jobs to score"],
+    talk: ["answer", "answers"]};
   function workRuns(items) {
     const by = new Map();
     for (const [id, w] of items) {
       const st = txt(w.status) || "queued";
-      if ((st !== "queued" && st !== "done") || txt(w.kind) === "update" || txt(w.kind) === "talk") continue;
+      // Finished answers group too, as "5 answers done" (the maintainer, 2026-11-05: "we already
+      // bulk some running tasks, why arent these ones grouped too?"); one waiting is a chat's.
+      if ((st !== "queued" && st !== "done") || txt(w.kind) === "update" || (txt(w.kind) === "talk" && st !== "done")) continue;
       if (st === "queued" && workSay(id, w).picked) continue;
-      if (st === "done" && workFolded(id, w)) continue;
-      const key = st + ":" + txt(w.kind);
+      // Finished and folded away is grouped too, under "N finished": fifty-two answers listed one
+      // card each when it was opened (the maintainer, 2026-11-05).
+      const key = (st === "done" && workFolded(id, w) ? "old" : st) + ":" + txt(w.kind);
       if (!by.has(key)) by.set(key, []);
       by.get(key).push([id, w]);
     }
@@ -11644,8 +11668,9 @@
       // In the order they were asked for, the order they are done in.
       list.sort((a, b) => txt(a[1].asked_at).localeCompare(txt(b[1].asked_at)));
       for (const [id] of list) members.add(id);
-      const st = key.split(":")[0];
-      cards.push(["run~" + key, {kind: txt(list[0][1].kind), status: st, run: list,
+      const old = key.split(":")[0] === "old";
+      const st = old ? "done" : key.split(":")[0];
+      cards.push(["run~" + key, {kind: txt(list[0][1].kind), status: st, run: list, folded: old,
         asked_at: list.map(([, w]) => txt(w.asked_at)).sort()[0] || "",
         finished_at: st === "done" ? new Date(Math.max(...list.map(([, w]) => finishedAt(w)))).toISOString() : undefined}]);
     }
@@ -11659,7 +11684,7 @@
     const open = openState.get("det:run:" + gid) === true;
     // Seen here as one card: each folds away a minute on, as a finished card does.
     if (done) for (const [id] of list) if (!workSeenAt.has(id)) workSeenAt.set(id, now());
-    const names = list.map(([, w]) => workName(w).replace(/^(Follow up with|Reply to|Draft:?|Prepare for)\s+/i, "")).filter(Boolean);
+    const names = list.map(([, w]) => workName(w).replace(/^(Follow up with|Reply to|Draft:?|Prepare for)\s+/i, "").replace(/^(Answer:\s*)?[“"]?(About\s+)?/i, "").replace(/:.*$|[”"…]+$/g, "")).filter(Boolean);
     const shown = names.slice(0, 3).join(", ") + (names.length > 3 ? " and " + (names.length - 3) + " more" : "");
     const notes = done ? list.filter(([, w]) => { const c = txt(obj(w.args).contact); return c && messageItems().some((m) => txt(m.contact) === c && msgLive(m)); }).length : 0;
     const hid = "wrun-" + seg(gid);
@@ -11710,7 +11735,7 @@
       helperStartingCard(),
       tapCards(),
       listView("work", {items, name: "work", live: ([, w]) => ACTIVE.has(txt(w.status) || "queued"),
-        fold: ([id, w]) => (w.run ? false : workFolded(id, w)),
+        fold: ([id, w]) => (w.run ? !!w.folded : workFolded(id, w)),
         foldLabel: (k) => k + " finished",
         sort: (a, b) => ((WORK_ORDER[a[1].status] === undefined ? 3 : WORK_ORDER[a[1].status]) - (WORK_ORDER[b[1].status] === undefined ? 3 : WORK_ORDER[b[1].status])) ||
           (TERMINAL.has(a[1].status) ? finishedAt(b[1]) - finishedAt(a[1]) : txt(a[1].asked_at).localeCompare(txt(b[1].asked_at))),
@@ -12139,6 +12164,10 @@
     if (!S.quick.mode && capsSettled.sample && !S.caps.sample) { handOff(text, true); return; }
     if (!S.quick.mode && pastedSomething(text)) { handOff(text, true); readPasted(text); return; }
     if (!S.quick.mode && asksForWork(text)) { handOff(text, true); return; }
+    // Claude is answering this conversation, or just has: what follows is part of it and goes
+    // to Claude too, never to the quick answer (the maintainer, 2026-11-05: a pasted thread,
+    // then "lets make it go somewhere", and the second made no work and was seen by chance).
+    if (!S.quick.mode && talkGoing()) { handOff(text, true); return; }
     askQuick(text);
   }
   // A request for work goes to Claude in the Send tap itself: the quick helper can only hand
@@ -12149,11 +12178,22 @@
   // "Draft looks good", "Search results look thin, why?", "Book club tonight" are remarks:
   // the verb must have something to act on after it (the release review, 2026-11-03), and a
   // question goes to the quick answer unless it is a request ("can you find ...?").
-  const WORK_LEAD = "(?:(?:also|please|pls|plz|now|ok|okay|and|then|just|so|right|i want you to|i need you to|i'd like you to|id like you to|go ahead and)[\\s,]+)*";
+  const WORK_LEAD = "(?:(?:also|please|pls|plz|now|ok|okay|and|then|just|so|right|lets|let's|let us|i want you to|i need you to|i'd like you to|id like you to|go ahead and)[\\s,]+)*";
   const WORK_ASK = "(?:can you|could you|would you|will you|can u|could u)[\\s,]+";
   const WORK_VERB = "(?:find|search|look for|look up|scratch|scrap|scrape|delete|remove|clear|bin|ditch|drop|draft|redraft|write|rewrite|redo|apply|tailor|prep|prepare|update|change|edit|fix|add|make|build|send|message|reply|follow up|chase|network|connect|book|cancel|reschedule|move|run|start|stop|set up|tidy|research|get)";
   const WORK_OBJ = "\\s+(?:me|us|him|her|them|it|this|that|these|those|the|a|an|my|our|his|their|some|more|all|every|each|any|another|new|other|\\d+|ten|five|three|two|to|for|with|on|at|in|up|out|back|off|jobs?|roles?|people|contacts?|interviews?|drafts?|messages?|replies|notes?|resumes?|cvs?|letters?)\\b";
   const ASKS_FOR_WORK = new RegExp("^" + WORK_LEAD + "(" + WORK_ASK + ")?" + WORK_VERB + WORK_OBJ, "i");
+  function talkGoing() {
+    for (const to of TALK_TO) {
+      if (to === "quick") continue;
+      const th = currentThread(to);
+      for (const m of (S.msgs.get(th) || []).slice(-6)) {
+        const w = m.work ? workDoc(txt(m.work)) : null;
+        if (w && (ACTIVE.has(txt(w.status) || "queued") || now() - finishedAt(w) < 10 * 60000)) return true;
+      }
+    }
+    return false;
+  }
   function asksForWork(text) {
     const t = txt(text).trim();
     if (!t || t.length > 600) return false;
@@ -12208,7 +12248,9 @@
         // adding it again showed the message twice (the maintainer, 2026-10-29).
         const have = S.msgs.get(th) || [];
         if (!have.some((x) => x.id === mid)) S.msgs.set(th, have.concat([Object.assign({id: mid}, msg)]));
-        await Promise.all(writes);
+        // A save that never comes back is a save that failed: the message showed here and
+        // reached nobody (the maintainer, 2026-11-05). Said "Not sent", its words back in the box.
+        if (await within(Promise.all(writes), 20000) === "timeout") throw new Error("not saved");
         S.lastSent = {text, at: now()};
         // A title cut at a word, never mid-word ("…find 10 m…", the audit).
         const made = await createWork(db, {id: wid, kind: "talk", to, title: "Answer: “" + clipWords(said, 50) + "”", args: {thread: th, message: mid}, slot: false});

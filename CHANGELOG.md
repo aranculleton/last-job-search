@@ -44,6 +44,10 @@ make sense to somebody whose repo just received it.
   and the same tidy puts older days in order from the download on file.
 - **Web addresses no longer fill the Brief's news**: each is a short link named by its site.
 - **Jobs has a search box beside Filter**, as Contacts does, once the list is long.
+- **Several things at once read at a glance.** Drafting a batch shows one line on its card
+  ("Drafting 9: 1 being written, 8 in line") with one Cancel all, and each person a word; finished
+  answers are one card in Claude's work. A message sent while Claude is answering the last one
+  goes to Claude too, and one that does not save says "Not sent" instead of seeming to go.
 - **Contacts and Jobs open on the whole list, sorted, never left filtered.** Contacts puts who
   is waiting on you first, then the other messages ready to send, then everyone else, with a
   separate Sort by; the filters on both are the few that help (what to show, work style, when

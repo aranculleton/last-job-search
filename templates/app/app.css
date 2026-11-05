@@ -1867,3 +1867,7 @@ ul.bp-news { max-width: 80ch; }
 .ct-box .ct-text { width: 100%; resize: vertical; }
 /* The document a drafted message sends with it, under the draft, ready to save and attach. */
 .sends-line { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin-top: 8px; }
+/* Several drafted at once: one line for all of them, and a word on each row. */
+.g-summary { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 8px; padding: 8px 12px; border-radius: var(--r); background: var(--sunk); }
+.g-summary p { margin: 0; font-weight: 600; }
+.g-state { margin: 2px 0 0; font-size: var(--t-sm); display: flex; align-items: center; gap: 4px; }

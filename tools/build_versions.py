@@ -794,8 +794,9 @@ METHODS: dict[str, dict] = {
             (50, "2026-11-05", True, "a draft's pencil opens a box asking what to change, room for a pasted message, its quick choices filling it and one Ask Claude (Cmd or Ctrl+Enter) with one gauge; Edit the words yourself makes the words the field"),
             (51, "2026-11-05", True, "every visit opens the whole list, never a filter left on; Contacts sorts who is waiting on you first, with a Sort by beside it; the filters on Contacts and Jobs are the few that matter; the pencil box has Cancel"),
             (52, "2026-11-05", True, "the page rings a fresh thread once another chat answers it, so a new page chat hears every tap"),
+            (53, "2026-11-05", True, "several drafted at once read as one line with one Cancel all and a word a row; finished answers group in Claude's work, folded ones too; a message sent while Claude answers the last goes to Claude; a chat message that does not save says so"),
         ),
-        "fingerprint": "53fde74288021b89",
+        "fingerprint": "32bc1353e4bcb94d",
     },
     "upskill": {
         "by": "upgrade", "priority": 4, "applies": "upskill_plans", "time": "~10 min",
