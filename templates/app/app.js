@@ -13088,8 +13088,13 @@
       if (!liveTimerR) liveTimerR = setTimeout(() => { liveTimerR = null; liveRender(); }, 1000);
       return;
     }
-    if (drawMs > 50 && performance.now() - drawnAt < 2 * drawMs) {
-      if (!liveTimerB) liveTimerB = requestAnimationFrame(() => { liveTimerB = null; scheduleRender(); });
+    // The window a burst is folded in is twice a draw, and never under 300 ms: writes from one
+    // chat land a little apart, and a window of two 80 ms draws let five of ten draw on their
+    // own (2026-11-05). The rest of the burst is drawn once, at the window's end.
+    const gap = Math.max(2 * drawMs, 300);
+    const since = performance.now() - drawnAt;
+    if (drawMs > 50 && since < gap) {
+      if (!liveTimerB) liveTimerB = setTimeout(() => { liveTimerB = null; scheduleRender(); }, Math.max(16, gap - since));
       return;
     }
     scheduleRender();

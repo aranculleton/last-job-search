@@ -769,8 +769,9 @@ METHODS: dict[str, dict] = {
             (38, "2026-11-05", False, "one way to answer a quick question, with Another day? after It went"),
             (39, "2026-11-05", True, "a job being drafted says how its draft is going with Cancel and stays in To apply; a job's question is on its own card; the Brief counts drafts being made apart; put off is not done; who needs you is one count; follow-ups on applications are one card; every control that wakes Claude shows its gauge and every card keeps to its budget; switches are whole-row taps; the foot keeps to the column"),
             (40, "2026-11-05", True, "a job you added shows at the top of Jobs while Claude scores it, with its work line and Cancel"),
+            (41, "2026-11-05", True, "a burst of live writes is drawn once at the end of a window of at least 300 ms, not once a write"),
         ),
-        "fingerprint": "0c79255a5c838125",
+        "fingerprint": "6b7777923cd473b9",
     },
     "upskill": {
         "by": "upgrade", "priority": 4, "applies": "upskill_plans", "time": "~10 min",
