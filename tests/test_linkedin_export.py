@@ -329,3 +329,69 @@ def test_a_name_alone_never_gives_a_record_a_strangers_employer(tmp_path):
     plan = E.plan_history(book, asked, str(tmp_path), mine=mine)
     E.apply_history(asked, plan, book)
     assert (book[0]["company"], book[0]["title"]) == ("Brackenhollow Foods", "Field Title")
+
+
+# ------------------------------------------------------------ typographic marks
+
+def _juno_says(tmp_path, text):
+    """Juno's one message in LinkedIn's download, with the export's own punctuation."""
+    import csv as _csv
+    src = tmp_path / "export_marks"
+    src.mkdir()
+    with open(src / "messages.csv", "w", encoding="utf-8", newline="") as fh:
+        w = _csv.writer(fh)
+        w.writerow(["CONVERSATION ID", "FROM", "SENDER PROFILE URL", "TO", "RECIPIENT PROFILE URLS", "DATE", "CONTENT", "ATTACHMENTS"])
+        w.writerow(["c7", "Juno Castellan", "https://www.linkedin.com/in/example-juno-castellan", "Morgan Ellis",
+                    "https://www.linkedin.com/in/morgan-ellis-example", "2026-10-05 10:00:00 UTC", text, ""])
+    return src
+
+
+def test_a_message_logged_with_plain_quotes_is_not_added_again_with_curly_ones(tmp_path):
+    """The download wrote "I’ll" where the app had logged "I'll": read as two messages, the old
+    one was added again after the person's answer to it, so they read as owed a reply and a
+    second one was drafted (2026-11-05)."""
+    contacts, threads, _c, _t = _book(tmp_path)
+    threads.append({"contact_id": "larkspur_retail_castellan", "date": "2026-10-05", "direction": "in",
+                    "channel": "message", "scenario": "resume_request", "summary": "Asked for the resume.",
+                    "full_text": "Thanks Morgan, I'll pass it on. Feel free to share your resume — it helps.", "subject": ""})
+    src = _juno_says(tmp_path, "Thanks Morgan, I’ll pass it on. Feel free to share your resume – it helps.")
+    plan = E.plan_history(contacts, threads, str(src))
+    assert plan["add"] == [], plan["add"]
+
+
+def test_a_tidy_takes_out_what_an_older_import_logged_twice_and_keeps_a_resume_sent(tmp_path):
+    """Copies an older import wrote are taken out by themselves (`export.py tidy`, the
+    export-repeats upgrade), the person's status set again from their log, and a resume the
+    export's copy alone says went with the message stays recorded on the row that is kept."""
+    contacts, threads, c, t = _book(tmp_path)
+    cid = "larkspur_retail_castellan"
+    threads[:] = [r for r in threads if r["contact_id"] != cid]
+    ask = "Happy to help. I'll keep you in mind, so feel free to share your resume."
+    threads += [
+        {"contact_id": cid, "date": "2026-10-04", "direction": "out", "channel": "message", "scenario": "",
+         "summary": "Note sent", "full_text": "Hi Juno, hope you're well.", "subject": ""},
+        {"contact_id": cid, "date": "2026-10-05", "direction": "in", "channel": "message", "scenario": "resume_request",
+         "summary": "Asked for the resume.", "full_text": ask, "subject": ""},
+        {"contact_id": cid, "date": "2026-10-05", "direction": "out", "channel": "message", "scenario": "reply",
+         "summary": "Reply sent (message)", "full_text": "Thanks Juno, resume attached.", "subject": ""},
+        {"contact_id": cid, "date": "2026-10-05", "direction": "out", "channel": "message", "scenario": "",
+         "summary": "Message sent, from LinkedIn's export; a resume attached: Thanks Juno, resume attached.",
+         "full_text": "Thanks Juno, resume attached.", "subject": ""},
+        {"contact_id": cid, "date": "2026-10-05", "direction": "in", "channel": "message", "scenario": "",
+         "summary": "Message received, from LinkedIn's export: Happy to help.", "full_text": ask.replace("'", "’"), "subject": ""},
+    ]
+    for p in contacts:
+        if p["contact_id"] == cid:
+            p["status"] = "replied_needs_response"
+    state.save_threads(threads, t)
+    state.save_contacts(contacts, c)
+    assert E.tidy(c, t, dry=True)["removed"] == 2
+    got = E.tidy(c, t)
+    assert got["removed"] == 2 and got["settled"] and got["settled"][0][0] == cid, got
+    rows = [r for r in state.load_threads(t) if r["contact_id"] == cid]
+    assert len(rows) == 3 and rows[-1]["direction"] == "out", rows
+    assert "a resume attached" in rows[-1]["summary"], rows[-1]
+    status = next(p["status"] for p in state.load_contacts(c) if p["contact_id"] == cid)
+    assert status != "replied_needs_response", status
+    # Run again, it finds nothing.
+    assert E.tidy(c, t)["removed"] == 0

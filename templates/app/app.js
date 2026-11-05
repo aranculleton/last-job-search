@@ -197,6 +197,10 @@
   const S = {
     model: readModel(),
     m: null,
+    // A card's own questions (Something else): its thread's id while its box is open, and the
+    // threads themselves, kept apart from the Chat's (cardTalk).
+    cardAsk: new Set(),
+    cardThreads: new Map(),
     views: new Map(),
     caps: {},
     owner: null,
@@ -821,7 +825,14 @@
     // Records only chats write live under 4.3's own names (tools/page_db.py STORE), so none
     // needs the version of a record made before every write carried one (_v).
     sub("chats", db.collection("beats"), (snap) => { S.chats = docsOf(snap); });
-    sub("talk", db.collection("talk"), (snap) => { S.threads = docsOf(snap); followThreads(); });
+    // A card's own questions (Something else) are threads of their own, kept apart from the
+    // Chat's so they never show there: talk/<card thread> carries `card` (cardTalk).
+    sub("talk", db.collection("talk"), (snap) => {
+      const all = [...docsOf(snap)];
+      S.threads = new Map(all.filter(([, t]) => !obj(t).card));
+      S.cardThreads = new Map(all.filter(([, t]) => !!obj(t).card));
+      followThreads();
+    });
     sub("meta", db.doc("meta/now"), (d) => { S.meta = d && d.exists ? d.data() : null; });
     // The last ring, read before any tap so the next one can reply in its thread at once.
     sub("bell", db.doc("meta/doorbell"), (d) => { S.bell = d && d.exists ? d.data() : null; });
@@ -857,6 +868,9 @@
     const ids = new Set();
     for (const to of TALK_TO) ids.add(currentThread(to));
     if (S.viewConv) for (const [id, t] of S.threads) if (convOf(id, t) === S.viewConv) ids.add(id);
+    // The cards' own questions, the newest few of the last fortnight, so an answer reaches its
+    // card while the page is open.
+    for (const th of recentCardThreads()) ids.add(th);
     // At most 64 live subscriptions a view (db.d.ts): conversations no longer shown are let go,
     // so a long search never reaches the cap (contract audit, 2026-10-29).
     for (const key of [...unsubs.keys()]) if (key.startsWith("msgs:") && !ids.has(key.slice(5))) unsub(key);
@@ -880,8 +894,12 @@
         // A chat answer is said as one ("Answer: “…”: ready." repeated itself), and a question
         // is answered from its one card, which the pill points to: a third "Answer it" in the
         // toast was one place too many (the audit, 2026-11-03).
+        const card = txt(w.kind) === "talk" ? obj(obj(w.args).about) : {};
         const talk = txt(w.kind) === "talk";
-        toast({text: (talk ? (w.status === "done" ? "Claude answered in Chat." : w.status === "failed" ? "Claude could not answer in Chat." : "Claude has a question about your message.") :
+        // A card's own question is answered under that card, and its toast points there.
+        if (card.kind && card.id) toast({text: w.status === "done" ? "Claude answered under " + txt(card.label || "the card") + "." : w.status === "failed" ? "Claude could not answer that." : "Claude has a question about that.",
+          ids: [], bad: w.status === "failed", see: () => go(CARD_HOME[card.kind] || "contacts", {focus: true, item: txt(card.id)}), seeLabel: "See it"});
+        else toast({text: (talk ? (w.status === "done" ? "Claude answered in Chat." : w.status === "failed" ? "Claude could not answer in Chat." : "Claude has a question about your message.") :
           workName(w) + (w.status === "done" ? ": ready." : w.status === "failed" ? ": did not finish." : ": Claude has a question.")), ids: [], bad: w.status === "failed",
           see: w.status === "needs_you" ? null : w.status === "failed" ? openWork : tab ? () => go(tab, {focus: true}) : openWork, seeLabel: "See it"});
       }
@@ -3931,7 +3949,8 @@
       // The same actions as its card in Coming up (ivActs), and its bin the same choices.
       // A new day waits under More, alone or not (DESIGN.md: an interview's card): "New day" on
       // the face beside Prepare me and Add to calendar (the review, 2026-11-05).
-      h("div", {class: "card-actions"}, acts.main, more("soon:" + k, txt(iv.company), [h("div", {class: "more-acts"}, acts.more), acts.tweak], true)));
+      h("div", {class: "card-actions"}, acts.main, more("soon:" + k, txt(iv.company), [h("div", {class: "more-acts"}, acts.more), acts.tweak], true)),
+      cardTalk("interview", iv.id, "the interview with " + txt(iv.company)));
   }
   // An interview's actions, defined once for every card that shows it (its card in Coming up,
   // its card in To do), with the same names everywhere (the UX review, 2026-11-05: To do
@@ -4221,6 +4240,9 @@
   // was made before the finish): "Finished: putting it on your page", never "Done" over a
   // card that still shows the old state (DESIGN.md, "Moving parts"). The next model says Done.
   function notOnPageYet(w) {
+    // An answer is its own result, written with the finish: never "putting it on your page"
+    // (the maintainer, 2026-11-05, a squashed work card saying so over an answer shown under it).
+    if (txt(obj(w).kind) === "talk") return false;
     const fin = tms(obj(w).finished_at);
     // The page's data is as new as its newest part: a section a chat wrote live after the work
     // finished carries its result, so Done is said then, not three minutes on.
@@ -5789,6 +5811,7 @@
         pending ? null : h("div", {class: "card-actions"}, primary,
           st === "applied" || facePills([face, warmBox, draftLine]) + (primary ? 1 : 0) >= FACE_PILLS ? null : applyLink(r.apply, "apply:" + r.id, null, true), m.toggle),
         pending ? null : m.panel,
+        pending ? null : cardTalk("job", r.id, about),
         why, stateLine(r.id, "job:" + r.id)));
   }
   // The bin on a job: why it goes, asked once, so the right thing happens (the maintainer,
@@ -6292,6 +6315,7 @@
         // a recruiter's call there is no cold application (2026-11-05).
         h("div", {class: "card-actions"}, kept, m.toggle),
         m.panel,
+        live ? cardTalk("application", a.id, about) : null,
         stateLine(a.id, "ready:" + a.id)));
   }
   // The message drafted to someone, on their card under their name: open, and folded by a tap
@@ -6313,6 +6337,25 @@
     const tries = all.length;
     if (!cur && tries < (fix.must ? 2 : 1)) return "going";
     return fix.must ? "failed" : null;
+  }
+  // The document a message's words send with it (the engine's `sends`): the resume made for
+  // them where there is one, else the current one, saved in a tap to attach; where it is not
+  // on the page yet, the way to it (the maintainer, 2026-11-05: "it would be great if the
+  // actual document was linked there").
+  function sendsLine(m) {
+    if (txt(m.sends) !== "resume") return null;
+    const made = readyItems().find((a) => readyLive(a) && txt(obj(a.for_contact).id || a.for_contact) === txt(m.contact));
+    const theirs = made ? arr(made.files).find((f) => f.kind === "resume" && f.asset) : null;
+    const cur = obj(obj(M().resume).file);
+    const f = theirs || (cur.asset ? {kind: "resume", name: txt(cur.name), asset: cur.asset} : null);
+    const key = "dl:sends:" + m.id;
+    const who = txt(m.first_name);
+    return h("div", {class: "sends-line"},
+      h("span", {class: "small muted"}, "Goes with it: "),
+      f ? btn((made ? "The " + noun() + " for " + who : "Your " + noun()) + " (" + (txt(f.name).split(".").pop() || "pdf").toUpperCase() + ")", () => download(f, key),
+        {kind: "secondary", small: true, key, aria: "Save " + (made ? "the " + noun() + " for " + who : "your " + noun()) + " to attach to the message to " + who})
+        : btn("Your " + noun(), () => go("drafts", {focus: true, drafts: "apps", item: made ? made.id : txt(obj(M().resume).id) || "resume-general"}), {kind: "secondary", small: true, key, aria: "Your " + noun() + ", to attach to the message to " + who}),
+      noteFor(key));
   }
   function draftParts(m, o) {
     o = o || {};
@@ -6371,6 +6414,7 @@
           btn("Ask Claude", () => askClaude(askField.value), {kind: "secondary", small: true, key: "pengo:" + m.id, aria: "Ask Claude to change the " + what + " to " + name, wakes: true}),
           costEl({state: WORK_COST.tweak === undefined ? 1 : WORK_COST.tweak}, "tweak", "cost-pen-" + seg(m.id)))) : null,
       held ? h("p", {class: "small hint-line msg-check msg-held", "data-k": "held:" + m.id}, "Not ready to send: " + lc1(held) + ".") : null,
+      sendsLine(m),
       h("span", {id: "cnt-" + seg(m.id), class: "cnt-wrap"}, charCount(m, body)),
       // Where they live is not on record, so the person's own rule about where people are cannot
       // be checked (2026-11-03): a fact of the card, never a fix.
@@ -6412,6 +6456,7 @@
         m.why ? h("p", {class: "meta"}, txt(m.why) + ".") : null,
         d.box, d.notes,
         h("div", {class: "card-actions"}, d.act, more("msg:" + m.id, "the message to " + txt(m.first_name), [h("div", {class: "more-acts"}, d.extra, elseBtn("message", m.id, "the message to " + txt(m.first_name), "msg:" + m.id)), relatedLinks(m.employer, m.id, m)], true)),
+        cardTalk("message", m.id, "the message to " + txt(m.first_name)),
         d.line));
   }
 
@@ -6534,8 +6579,12 @@
       // is doing is the header's work pill and each card's own line, never a third line here.
       screenHead("contacts", "Contacts", sum, null, where, h("div", {class: "head-tools"},
         runBtn("network", "Find people", () => askFindPeople(), {small: true, key: "head-find-people", icon: "k-search"}),
-        btn("Paste a message", (e) => openDock({opener: e.currentTarget, text: "Help me reply to this message: "}), {small: true, key: "got-msg" + (where ? ":" + where : ""),
-          aria: picsOn() ? "Paste a message or a screenshot someone sent you" : "Paste a message someone sent you"})), {quiet: true}));
+        btn("Paste a message", () => openPlace("paste"), {small: true, key: "got-msg" + (where ? ":" + where : ""),
+          aria: "Paste a message someone sent you"})), {quiet: true}),
+      // Its box and Claude's answer right under the header, never in the Chat; a screenshot
+      // still goes in the Chat, which reads pictures.
+      placeTalk("paste", {hint: picsOn() ? h("p", {class: "small muted"}, "A screenshot? ", h("a", {href: "#chat", "data-k": "paste-shot",
+        onclick: (e) => { e.preventDefault(); openDock({opener: e.currentTarget, text: "Help me reply to this message: "}); }}, "Add it in Chat"), ", which reads pictures.") : null}));
     if (!items.length) {
       put(wrap, empty("Who could refer you?", "Someone inside who refers you beats applying cold. Find people looks at the employers you want."));
       return wrap;
@@ -6728,12 +6777,157 @@
     const wrote = typeof p.wrote === "boolean" ? p.wrote : st !== "not_contacted";
     return !personGotHere(p) && !personClosedHere(p) && (personSentHere(p) || ["waiting", "talking", "follow", "leave"].includes(personGroup(p))) && wrote && st !== "replied_needs_response";
   }
-  // Anything else to tell Claude about a card, in words: the last thing under its More, opening
-  // the Chat with what it is about, its words going to Claude as work about that card (the
-  // maintainer, 2026-11-05: "there should be a 'something else' button if i need to feed back").
-  // It only opens the box, so it carries no gauge; sending is what wakes Claude.
+  // Anything else to ask or tell Claude about a card, in words: the last thing under its More.
+  // It opens a box under that card, its words go to Claude as work about that card, and the
+  // answer shows under the card, never in the Chat (the maintainer, 2026-11-05: "it opens a
+  // text box UNDER THAT PARTICULAR THING ... and then the response shows underneath ... the
+  // chat is being clogged up with everything"). It only opens the box, so it carries no gauge;
+  // the box's Ask Claude does.
   function elseBtn(kind, id, label, key) {
-    return btn("Something else", (e) => openDock({opener: e.currentTarget, about: {kind, id: txt(id), label}}), {small: true, key: "else:" + key, aria: "Something else about " + label});
+    const th = cardThread(kind, id);
+    return btn("Something else", () => {
+      if (S.cardAsk.has(th)) S.cardAsk.delete(th); else S.cardAsk.add(th);
+      sset("local", "ljs:ct-hide:" + th, null);
+      if (S.cardAsk.has(th)) S.focusAfter = {key: "ct-text:" + th};
+      scheduleRender();
+    }, {small: true, key: "else:" + key, aria: "Something else about " + label, pressed: S.cardAsk.has(th)});
+  }
+  // Where a card's answer is seen: its kind's own place.
+  const CARD_HOME = {person: "contacts", message: "contacts", job: "jobs", application: "jobs", interview: "interviews", place: "contacts"};
+  // Asks that belong to a place rather than a card, each answered where it was asked, never in
+  // the Chat (the maintainer, 2026-11-05: "there are quite a few places in the app which
+  // unecessarily go to chat and could be done inline"): [screen, what it is about, the box's
+  // question]. Setting up, a practice interview, screenshots and how-to questions stay in the
+  // Chat: those are conversations, or need pictures.
+  const PLACES = {
+    paste: ["contacts", "a message someone sent you", "Paste what they sent, who it is from, and what you want to say back"],
+    interview: ["interviews", "an interview", "Which interview? Who it is with, when, and the role"],
+    wrong: ["settings", "something on this page", "What looks wrong, and where?"],
+    rules: ["settings", "your rules", ""],
+    chats: ["settings", "your old chats", ""]};
+  function placeTalk(id, o) {
+    const pl = PLACES[id];
+    return cardTalk("place", id, pl[1], Object.assign({prompt: pl[2], rows: id === "paste" ? 5 : 2, max: id === "paste" ? 20000 : 4000}, o || {}));
+  }
+  // Opens a place's box (going there first), its words begun where given.
+  function openPlace(id, text) {
+    const pl = PLACES[id];
+    const th = cardThread("place", id);
+    S.cardAsk.add(th);
+    sset("local", "ljs:ct-hide:" + th, null);
+    if (text && !draftGet("ct:" + th)) draftSet("ct:" + th, text);
+    if (S.section !== pl[0]) go(pl[0], {focus: false});
+    S.focusAfter = {key: "ct-text:" + th};
+    scheduleRender();
+  }
+  // A place's ask with its words fixed (Tidy these up, Bring them back): sent at once, its
+  // answer under the place.
+  function askPlace(id, text) {
+    const pl = PLACES[id];
+    const th = cardThread("place", id);
+    sset("local", "ljs:ct-hide:" + th, null);
+    return askCard({kind: "place", id, label: pl[1]}, text, th);
+  }
+  function cardThread(kind, id) { return "card-" + seg(txt(kind) + "-" + txt(id)).slice(0, 120); }
+  function recentCardThreads() {
+    const since = now() - 14 * DAY;
+    return [...S.cardThreads.entries()]
+      .filter(([, t]) => (tms(t.last_at || t.created_at) || 0) > since)
+      .sort((a, b) => txt(b[1].last_at || b[1].created_at).localeCompare(txt(a[1].last_at || a[1].created_at)))
+      .slice(0, 12).map(([id]) => id);
+  }
+  // What was asked under a card and Claude's answers, the newest three, each answer under its
+  // question, the one still going as its work line (Saved, In line, Claude is on it, Cancel), and
+  // the box while it is open. A finished exchange stays two days, then folds away by itself;
+  // Hide puts it away sooner, and the next question brings it back.
+  function cardTalk(kind, id, label, o) {
+    o = o || {};
+    const th = cardThread(kind, id);
+    const open = S.cardAsk.has(th);
+    const msgs = (S.msgs.get(th) || []).slice().sort((a, b) => txt(a.at).localeCompare(txt(b.at)));
+    const asks = [];
+    for (const m of msgs) {
+      if (m.from === "you") asks.push({q: m, a: []});
+      else if (asks.length && m.from !== "note") asks[asks.length - 1].a.push(m);
+    }
+    const last = asks[asks.length - 1];
+    const lastWork = last ? workDoc(txt(last.q.work)) : null;
+    const going = !!lastWork && ACTIVE.has(txt(lastWork.status) || "queued") && !last.a.length;
+    const lastAt = last ? txt((last.a[last.a.length - 1] || last.q).at) : "";
+    const hidden = last && sget("local", "ljs:ct-hide:" + th) === txt(last.q.id);
+    const fresh = !!last && !hidden && (going || (tms(lastAt) || 0) > now() - 2 * DAY);
+    if (!open && !fresh) return null;
+    const shown = open || fresh ? asks.slice(-3) : [];
+    const box = open ? cardBox(kind, id, label, th, o) : null;
+    return h("div", {class: "card-talk", "data-k": "ct:" + th, "aria-label": "Asked Claude about " + label, role: "group"},
+      shown.map((x) => {
+        const w = workDoc(txt(x.q.work));
+        const answered = x.a.filter((m) => txt(m.text));
+        return h("div", {class: "ct-pair"},
+          h("p", {class: "ct-q"}, h("span", {class: "ct-who"}, "You asked"), " ", txt(x.q.text).replace(/^about [^:]{1,80}:\s*/i, "")),
+          answered.length ? answered.map((m) => h("p", {class: "ct-a"}, h("span", {class: "ct-who"}, "Claude"), " ", txt(m.text)))
+            : w ? workInline(txt(x.q.work), w, {key: "ct:" + th, done: () => null}) : null);
+      }),
+      box,
+      !open && last && !going ? h("div", {class: "card-actions"},
+        btn("Ask more", () => { S.cardAsk.add(th); S.focusAfter = {key: "ct-text:" + th}; scheduleRender(); }, {kind: "secondary", small: true, key: "ct-more:" + th, aria: "Ask Claude more about " + label}),
+        btn("Hide", () => { sset("local", "ljs:ct-hide:" + th, txt(last.q.id)); scheduleRender(); }, {kind: "secondary", small: true, key: "ct-hide:" + th, aria: "Hide what Claude said about " + label})) : null);
+  }
+  function cardBox(kind, id, label, th, o) {
+    o = o || {};
+    const fid = "ct-f-" + seg(th);
+    const field = h("textarea", {id: fid, class: "ct-text", rows: o.rows || 2, maxlength: o.max || 4000, "data-k": "ct-text:" + th, placeholder: o.placeholder || "Ask Claude or tell it something about this",
+      oninput: (e) => draftSet("ct:" + th, e.currentTarget.value)});
+    field.value = draftGet("ct:" + th) || "";
+    const send = (e) => {
+      const text = txt(field.value).trim();
+      if (!text) { field.focus(); return; }
+      askCard({kind, id: txt(id), label}, text, th).then((ok) => { if (ok) { draftSet("ct:" + th, null); S.cardAsk.delete(th); scheduleRender(); } });
+    };
+    field.addEventListener("keydown", (e) => { if (e.key === "Enter" && (e.metaKey || e.ctrlKey)) { e.preventDefault(); send(); } });
+    return h("div", {class: "ct-box"},
+      h("label", {class: "small ct-label", for: fid}, o.prompt || "Anything else about " + label + "?"),
+      o.hint || null,
+      field,
+      // The box's own row, as They replied's: its one filled step while it is open, and Cancel.
+      h("div", {class: "card-actions"}, btn("Ask Claude", send, {kind: "primary", small: true, key: "ct-go:" + th, wakes: "talk", lead: true, aria: "Ask Claude about " + label}),
+        btn("Cancel", () => { S.cardAsk.delete(th); scheduleRender(); }, {kind: "secondary", small: true, key: "ct-x:" + th, aria: "Cancel the question about " + label})));
+  }
+  // The question is written to the card's own thread and its work, and only then rung, while the
+  // tap still counts, as the Chat's own messages are (handOff). Claude answers in that thread
+  // (`app.py done --reply-file`), and the answer shows under the card.
+  async function askCard(about, text, th) {
+    const t0 = now();
+    const db = await CAP.db;
+    if (!db) { shout("This page cannot reach Claude here. Open it in the Claude app."); return false; }
+    const to = whereTo();
+    const mid = "m" + stamp() + rand4();
+    const wid = "talk~" + seg(th) + "~" + mid;
+    const msgRef = db.doc("talk/" + th + "/messages/" + mid);
+    const at = iso();
+    try {
+      const doc = Object.assign({}, obj(S.cardThreads.get(th)), {to, card: about, title: "About " + about.label, last_at: at, _v: 1});
+      if (!doc.created_at) doc.created_at = at;
+      S.cardThreads.set(th, doc);
+      await db.doc("talk/" + th).set(doc);
+      const msg = {from: "you", text, at, work: wid, _v: 1};
+      await msgRef.set(msg);
+      S.msgs.set(th, (S.msgs.get(th) || []).filter((x) => x.id !== mid).concat([Object.assign({id: mid}, msg)]));
+      const made = await createWork(db, {id: wid, kind: "talk", to, title: "About " + about.label + ": “" + clipWords(text, 50) + "”",
+        args: {thread: th, message: mid, about: {kind: about.kind, id: about.id, label: about.label}}, slot: false});
+      if (!made.ok) throw new Error("work");
+    } catch (e) {
+      msgRef.delete().catch(() => {});
+      S.msgs.set(th, (S.msgs.get(th) || []).filter((x) => x.id !== mid));
+      shout("Not sent. Try again.");
+      return false;
+    }
+    followThreads();
+    announce("Sent to Claude. The answer shows here.");
+    const reach = to === "cloud" || computerListening();
+    ringNote([wid], reach ? await toClaude([wid], "work", t0, false) : canRing() ? "later" : "none");
+    scheduleRender();
+    return true;
   }
   function theyRepliedBtn(p, key, open, kind) {
     return btn("They replied", open, {kind: kind || "secondary", small: true, key, aria: "They replied: paste what " + txt(p.first_name) + " sent"});
@@ -6943,6 +7137,7 @@
         // The gauge only beside what wakes Claude: a draft's own act (I sent it, Copy) is the
         // page's alone, and carried a follow-up's two minutes (the review, 2026-11-05).
         h("div", {class: "card-actions"}, owed, owedCost(p, d ? null : owed, going || box), d ? null : theyReplied, more("person:" + p.id, whoAt(name, p.employer), extra)),
+        cardTalk("person", p.id, whoAt(name, p.employer)),
         noteFor("reply:" + p.id), due ? stateLine(due.id, "pdue:" + p.id) : null, d ? d.line : done1 ? stateLine(done1.id, "msg:" + done1.id) : null,
         going ? null : stateLine(p.id, "person:" + p.id)));
   }
@@ -7289,7 +7484,8 @@
     const heard = items.filter((i) => past(i) && !ivEnd(i) && (daysSince(i.when) === null || daysSince(i.when) <= 14)).length;
     const tools = none ? null : h("div", {class: "head-tools"}, btn("Add something", () => askAddSomething(), {small: true, key: "up-add"}),
       heard && up.length && items.length ? btn(plural(heard, "to hear back from", "to hear back from"), () => { setPref("up:view", "interviews"); render(); }, {small: true, key: "up-heard", aria: "See the interviews you are waiting to hear back from"}) : null);
-    const wrap = h("section", {class: "sec", "aria-labelledby": "h-interviews" + (where ? "-" + where : "")}, screenHead("interviews", "Coming up", small ? [sum, " ", small] : sum, null, where, tools, {quiet: true}));
+    const wrap = h("section", {class: "sec", "aria-labelledby": "h-interviews" + (where ? "-" + where : "")}, screenHead("interviews", "Coming up", small ? [sum, " ", small] : sum, null, where, tools, {quiet: true}),
+      where ? null : placeTalk("interview"));
     if (none) {
       put(wrap, empty("Your interviews and calls show here", "Interviews, calls, tests and closing days, by day, each a tap from your calendar.",
         btn("Add something", () => askAddSomething(), {kind: "secondary", small: true, key: "iv-empty-chat"})));
@@ -7365,6 +7561,7 @@
       gone ? h("div", {class: "card-actions"}, acts.main) : h("div", {class: "card-actions"}, acts.main,
         more("iv:" + iv.id, txt(iv.company), [has ? h("p", {class: "small muted"}, "Prep updated " + ago(prep.updated) + ".") : null, relatedLinks(iv.company, iv.id, iv),
           h("div", {class: "more-acts"}, acts.more), acts.tweak])),
+      gone ? null : cardTalk("interview", iv.id, "the interview with " + txt(iv.company)),
       stateLine(iv.id, "iv:" + iv.id));
   }
 
@@ -8644,7 +8841,7 @@
   // anything else (a referral's recruiter call, say), the chat registers it.
   function haveInterview(pre) {
     const live = applicationItems().filter(appLive);
-    if (!live.length) { startChat("I have an interview: "); return; }
+    if (!live.length) { openPlace("interview"); return; }
     // Those already interviewing first, the rest in a list to pick from: 67 buttons in a sheet
     // 5,000 pixels tall was no way to choose (the audit, 2026-11-03).
     const word = (a) => txt(a.role) + " at " + txt(a.company);
@@ -8657,7 +8854,7 @@
         : {id: "a", type: "radio", label: "Which is it for?", required: true, error: "Choose one.",
           options: ivs.concat(rest).concat([["other", "Something else"]])}],
       onSubmit: (v) => {
-        if (v.a === "other") { setTimeout(() => startChat("I have an interview: "), 0); return; }
+        if (v.a === "other") { setTimeout(() => openPlace("interview"), 0); return; }
         const a = live.find((x) => txt(x.id) === v.a);
         if (a) setTimeout(() => heardBack(a, pre || {}), 0);
       }});
@@ -9409,7 +9606,8 @@
     const n = Number(t.count) || 0;
     if (!n) return null;
     return h("li", {class: "task where-tidied"}, h("p", {class: "small muted"}, "Claude tidied away " + plural(n, "old chat", "old chats") + " it no longer used" + (t.on ? ", last on " + fmtDay(txt(t.on)) : "") + (n === 1 ? ". Nothing in it was lost." : ". Nothing in them was lost.")),
-      btn(n === 1 ? "Bring it back" : "Bring them back", () => { handOff(n === 1 ? "Bring back the old chat you tidied away." : "Bring back the old chats you tidied away.", true); toast({text: n === 1 ? "Asked. It comes back in your list of chats; the answer is in Chat." : "Asked. They come back in your list of chats; the answer is in Chat.", ids: []}); }, {small: true, kind: "quiet", key: "where-untidy"}));
+      btn(n === 1 ? "Bring it back" : "Bring them back", () => { askPlace("chats", n === 1 ? "Bring back the old chat you tidied away." : "Bring back the old chats you tidied away."); }, {small: true, kind: "quiet", key: "where-untidy"}),
+      placeTalk("chats"));
   }
   // The brief is not a place Claude works: it is set from its bell and in Your brief above.
   // The helper's own state: the computer's row shows only once it is ready, so "2 of 2 ready"
@@ -9514,8 +9712,8 @@
     // later one replaced, each offered to you before it goes (the maintainer, 2026-10-30).
     const intro = foldBody(
       h("p", {class: "small muted"}, "Everything you have told Claude about how you like things. Each one shapes what it writes and finds, so if one is wrong, it is usually better to say in Chat what you want instead; Remove is still here."),
-      btn("Tidy these up", () => { handOff("Tidy what I have taught you: find rules the app now does by itself, rules that say the same thing, and rules a later one replaced, and show me each before anything goes.", true); toast({text: "Asked. Claude shows you what it would tidy before anything goes.", ids: []}); },
-        {small: true, kind: "secondary", key: "learned-tidy"}), null, {class: "learned-intro"});
+      [btn("Tidy these up", () => { askPlace("rules", "Tidy what I have taught you: find rules the app now does by itself, rules that say the same thing, and rules a later one replaced, and show me each before anything goes."); },
+        {small: true, kind: "secondary", key: "learned-tidy", wakes: "talk"})], placeTalk("rules"), {class: "learned-intro"});
     // The newest five, then the rest one tap below, with a search: all 173 at once were a wall
     // 32,700px tall on a phone (the 3 November audit). Each is said to the person ("say").
     const lo = {items, name: "what you have taught it", one: "rule", many: "rules", fold: (x) => !!x.retired, foldLabel: (k) => plural(k, "earlier rule", "earlier rules"),
@@ -9551,7 +9749,7 @@
     const url = APP_ISSUES + "?title=" + encodeURIComponent("From the page: something looks wrong, or a suggestion (version " + version + ")") +
       "&body=" + encodeURIComponent("Page version: " + version + "\nScreen: " + where + fault + "\n\nWhat happened, or what would be better (this page is public: no names, please):\n");
     sheet({title: "Something looks wrong?", intro: "Tell Claude, and it is looked into and worked round for you. Or tell the app's makers, so it is fixed for everyone.",
-      choices: [{label: "Tell Claude", key: "claude", run: () => { setTimeout(() => openDock({text: "Something on my job search page looks wrong. Page version " + version + ", on " + where + ". What I saw: "}), 0); }}],
+      choices: [{label: "Tell Claude", key: "claude", run: () => { setTimeout(() => openPlace("wrong", "On " + where + " (page version " + version + "): "), 0); }}],
       after: h("p", {}, h("a", {href: url, target: "_blank", rel: "noopener noreferrer", "data-k": "report-makers"}, "Tell the app's makers", h("span", {class: "sr-only"}, " (opens a public page in a new tab: leave out names)")),
         h("span", {class: "hint block"}, "A public page: it carries this page's version and nothing of yours. Leave out names.")),
       cancel: "Not now"});
@@ -11253,10 +11451,12 @@
       // person's message (the maintainer, 2026-11-04).
       const who = w.kind === "follow_up" || w.kind === "reply" ? txt(obj(w.args).contact) : "";
       const note = who ? messageItems().find((m) => txt(m.contact) === who && msgLive(m)) : null;
-      const goTo = note || who ? "contacts" : WORK_HOME[w.kind];
+      // A card's own question opens that card, where its answer is (cardTalk), never Chat.
+      const card = w.kind === "talk" ? obj(obj(w.args).about) : {};
+      const goTo = note || who ? "contacts" : card.kind ? CARD_HOME[card.kind] : WORK_HOME[w.kind];
       // Its bin puts it with the finished ones now, rather than in a minute (2026-10-30).
       // Its way there is a pill in the row, never underlined text (DESIGN.md, Buttons).
-      const there = goTo ? tabLink(goTo, note ? note.id : who || null) : null;
+      const there = goTo ? tabLink(goTo, note ? note.id : who || txt(card.id) || null) : null;
       if (there) there.addEventListener("click", () => workSeenAt.set(id, 0));
       put(cardEl, h("div", {class: "wc-actions"}, there,
         btn("", () => { workSeenAt.set(id, 0); scheduleRender(); }, {kind: "quiet icon-only", small: true, icon: "bin", key: "wput:" + id, aria: "Put away: " + txt(w.title)})));
@@ -11862,14 +12062,7 @@
     S.viewConv = null;
     // A picture always goes to a chat: only a chat can read it (and the reply, the job or the
     // call it is about needs one anyway). Sent inside this click, so the ring can go.
-    // Written from a card's Something else, and still about it: straight to Claude as work about
-    // that card, never a quick answer that cannot change a record.
-    // Its lead alone ("About Rafe at Kestrel Foods:") is nothing said yet: the box waits for more.
-    if (!S.quick.mode && S.talkAbout && text === S.talkAbout.lead && !withPics) { talkInput.focus(); return; }
-    const about = !S.quick.mode && S.talkAbout && text.startsWith(S.talkAbout.lead) && text.length > S.talkAbout.lead.length ? S.talkAbout : null;
-    if (about) S.talkAbout = null;
-    if (withPics) { handOff(text, true, pics.splice(0), about); renderPics(); return; }
-    if (about) { handOff(text, true, null, about); return; }
+    if (withPics) { handOff(text, true, pics.splice(0)); renderPics(); return; }
     if (!S.quick.mode && capsSettled.sample && !S.caps.sample) { handOff(text, true); return; }
     if (!S.quick.mode && pastedSomething(text)) { handOff(text, true); readPasted(text); return; }
     if (!S.quick.mode && asksForWork(text)) { handOff(text, true); return; }
@@ -11900,9 +12093,7 @@
   // The person's words are written to their thread and its work first, and only then rung,
   // while the tap still counts (toClaude): a ring before the writes woke a chat that read the
   // page 1.9 s too early and found nothing (the audit, 2026-11-03). Returns the work's id.
-  // `about`: the card it was written from (Something else under its More), so Claude reads the
-  // words as about that one person, job or interview.
-  function handOff(text, inClick, sent, about) {
+  function handOff(text, inClick, sent) {
     const shots = arr(sent);
     const to = whereTo();
     const th = currentThread(to);
@@ -11947,7 +12138,7 @@
         await Promise.all(writes);
         S.lastSent = {text, at: now()};
         // A title cut at a word, never mid-word ("…find 10 m…", the audit).
-        const made = await createWork(db, {id: wid, kind: "talk", to, title: "Answer: “" + clipWords(said, 50) + "”", args: Object.assign({thread: th, message: mid}, about ? {about: {kind: about.kind, id: about.id}} : {}), slot: false});
+        const made = await createWork(db, {id: wid, kind: "talk", to, title: "Answer: “" + clipWords(said, 50) + "”", args: {thread: th, message: mid}, slot: false});
         if (!made.ok) throw new Error("work");
       } catch (e) {
         // Nothing half sent: a message kept without its work waited for an answer that
@@ -12391,12 +12582,9 @@
     try { const n = talkInput.value.length; talkInput.setSelectionRange(n, n); } catch (e) { /* not a text field */ }
   }
   // o.opener: what focus goes back to on Close; o.text: words to start the message with.
-  // o.about: the card it is opened from ({kind, id, label}); what is sent starting with its lead
-  // goes to Claude as work about that card (sendChat).
   function openDock(o) {
     o = o || {};
     if (S.owner !== true) return;
-    if (o.about) { const lead = "About " + txt(o.about.label) + ":"; S.talkAbout = {kind: txt(o.about.kind), id: txt(o.about.id), lead}; o = Object.assign({}, o, {text: lead + " "}); }
     if (!dockEl) buildDock();
     if (chatShown()) { focusTalk(o.text); return; }
     // A phone has the Chat tab: the panel there was a second chat window over the first.
@@ -12511,7 +12699,7 @@
     put(wrap, settingsGroup("Help", [actionRow("Show me around", () => showTour(0), "help-tour"),
       // The chat bubble, where the person is, rather than taking them away to Chat (2026-10-30).
       actionRow("Ask Claude how something works", () => openDock({text: "How does "}), "help-how"),
-      actionRow("Something looks wrong", () => reportWrong(txt(obj(M().app).version || u.version)), "help-wrong")].concat(pick(["tips"]).map(settingRow))));
+      actionRow("Something looks wrong", () => reportWrong(txt(obj(M().app).version || u.version)), "help-wrong"), placeTalk("wrong")].concat(pick(["tips"]).map(settingRow))));
     put(wrap, settingsGroup("Your data", [infoRow("privacy", "Where your data lives", null, h("p", {}, privacyText())),
       infoRow("device-link", "Open on another device", null, anotherDeviceBody()),
       infoRow("news", "What's new", waiting ? null : "Up to date", updatesBody()),
@@ -13311,6 +13499,8 @@
     document.title = (n ? "(" + n + ") " : "") + base;
     const fa = S.focusAfter;
     S.focusAfter = null;
+    // A box just opened (a card's Something else, a place's ask): its field takes the focus.
+    if (fa && fa.key && refocus(document, fa.key)) return;
     if (fk && refocus(document, fk)) return;
     if (fa && fa.item) {
       const root = $("main");

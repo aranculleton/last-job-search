@@ -22,12 +22,24 @@ make sense to somebody whose repo just received it.
 
 ### Added
 
-- **Something else, on every card.** The last thing under a card's More opens the Chat with
-  "About <the person, job or interview>:" begun, so you can tell Claude anything the buttons do
-  not cover; what you send goes to Claude as work about that card.
+- **Something else, on every card, answered under that card.** The last thing under a card's
+  More opens a box right under it, so you can ask or tell Claude anything the buttons do not
+  cover; Claude's answer shows under the same card, and none of it goes into the Chat.
+- **Fewer trips to the Chat.** Paste a message, an interview not on your list, telling Claude
+  something looks wrong, tidying your rules and bringing back old chats each open a box where
+  you are, with Claude's answer shown there.
+- **The resume a message sends is on its card.** A draft that says "resume attached" or
+  "here's my resume" shows the file under it, ready to save and attach.
 
 ### Fixed
 
+- **Someone you had already answered no longer shows as waiting on you.** Bringing in your
+  LinkedIn download added some messages a second time when only their apostrophes differed
+  (curly against straight), so an old message could land after your reply and a new reply was
+  drafted. It now matches them, and copies already logged are taken out by themselves, any
+  note that a resume went with the message kept. Profile upgrade: export-repeats.
+- **Claude's answers no longer say "Finished: putting it on your page"**, which squashed the
+  work card's title on a narrow screen; a long state now wraps inside its own label.
 - **Claude's browser no longer opens a LinkedIn profile every time you come back to the page.**
   Each opening started reading whoever was waiting, and when you closed Claude's browser (or
   left the page) the read stopped unfinished, was never remembered, and started again at the

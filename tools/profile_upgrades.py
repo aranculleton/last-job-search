@@ -906,6 +906,15 @@ def _dropped_rows() -> str:
             "them" % n) if n else ""
 
 
+def _export_repeats() -> str:
+    """Messages an older import of LinkedIn's download logged a second time, its quote marks
+    curly where the app's were straight: an old message added after the person's answer made
+    someone already answered read as owed a reply, and a second reply was drafted (2026-11-05)."""
+    found = _probe("import export; print(len(export.logged_twice(export._state().load_threads())))")
+    n = int(found) if found.isdigit() else 0
+    return ("%d message(s) from your LinkedIn download logged twice" % n) if n else ""
+
+
 def _follow_up_dates() -> str:
     """Contacts waiting on a reply with no follow-up date on their row: the brief reads the
     date from the row, so a thread imported from LinkedIn's download, or logged before the
@@ -1845,6 +1854,12 @@ REGISTRY: tuple[Upgrade, ...] = (
             "where it is", "edit", "~5 min", priority=2, conditional=True),
             # Done by Claude alone: folding notes in loses nothing and asks nothing of the
             # person (the maintainer, 2026-10-28: "make these types of decisions for them")
+    Upgrade("export-repeats", "2026-11-05",
+            "messages your LinkedIn download logged a second time taken out, so nobody you have "
+            "already answered reads as waiting on you",
+            _export_repeats, "python3 tools/network/export.py tidy", "instant",
+            command=("python3", "tools/network/export.py", "tidy"),
+            paths=("network_threads.csv", "network_contacts.csv"), priority=2),
     Upgrade("dropped-rows", "2026-10-19",
             "people you set aside before writing, kept apart from real dead ends and easy to "
             "reopen",

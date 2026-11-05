@@ -473,24 +473,80 @@ def test_more_opens_under_its_row_and_its_buttons_are_one_row(run, page, model, 
         assert len({b[1] for b in opened["rows"][0]}) == 1, opened["rows"]
 
 
-def test_something_else_opens_the_chat_about_the_card_and_sends_it_as_work(run, page, model):
+def test_something_else_asks_under_the_card_and_the_answer_shows_there_never_in_chat(run, page, model):
     """The maintainer, 2026-11-05: "there should be a 'something else' button if i need to feed
-    back right that opens a text box". It opens the Chat begun with what the card is about, and
-    what is sent from it goes to Claude as work about that card, never a quick answer."""
+    back", then: "it opens a text box UNDER THAT PARTICULAR THING IM QUERYING, which gets sent to
+    claude ... (separate from the chat ...) and then the response shows underneath ... the chat is
+    being clogged up with everything". The question goes to Claude as work about that card, in
+    the card's own thread, and Claude's answer shows under the card; the Chat shows neither."""
     rafe = "kestrel_foods_thorne"
     p = next(x for x in model["people"] if x["id"] == rafe)
-    lead = "About %s at %s:" % (p["first_name"], p["employer"])
+    th = "card-person-" + rafe
+    card = _card(rafe)
     got = run("engine", html=page, viewport=WIDE, clock=CLOCK, seed=fixed(model), steps=[
         {"hash": "contacts", "more": rafe, "click": "Something else about " + p["first_name"],
-         "eval": "document.querySelector('#talk-text').value"},
-        # Send with only its lead in the box sends nothing.
-        {"open": "talk-send", "store": "talk/"},
-        {"type": lead + " he has moved to the risk team, so the note should say so."},
-        {"open": "talk-send"},
+         "eval": "(() => { const b = document.querySelector('%s .ct-box textarea'); return {box: !!b, focused: document.activeElement === b}; })()" % card},
+        # The box is filled, then sent (a step taps before it fills).
+        {"fillMain": {"Anything else about": "He moved to the risk team. Is my note still right?"}},
+        {"click": "Ask Claude about " + p["first_name"], "read": card, "store": "talk/"},
+        # Claude answers in the card's own thread, as `app.py done --reply-file` writes it.
+        {"write": {"talk/%s/messages/m-answer" % th: {"from": "claude", "text": "Yes. Say risk team in the second line.", "at": "2026-10-25T18:31:00Z", "_v": 1}},
+         "read": card},
+        {"hash": "chat", "read": "#main"},
     ])
     assert not got["errors"], got["errors"]
-    assert got["after"][0]["eval"] == lead + " ", got["after"][0]["eval"]
+    assert got["after"][0]["eval"]["box"], got["after"][0]["eval"]
     talk = [w for w in got["work"] if w.get("kind") == "talk"]
-    assert got["after"][1]["store"] == [], got["after"][1]["store"]
     assert len(talk) == 1, got["work"]
-    assert talk[0]["args"].get("about") == {"kind": "person", "id": rafe}, talk[0]
+    assert talk[0]["args"]["thread"] == th and talk[0]["args"]["about"]["kind"] == "person" and talk[0]["args"]["about"]["id"] == rafe, talk[0]
+    threads = [x for x in got["after"][2]["store"] if x["path"].count("/") == 1]
+    assert [x["path"] for x in threads] == ["talk/" + th] and threads[0]["card"]["id"] == rafe, threads
+    asked = got["after"][2]["text"]
+    assert "He moved to the risk team" in asked and "Something else" in asked, asked
+    answered = got["after"][3]["text"]
+    assert "Yes. Say risk team in the second line." in answered, answered
+    chat = got["after"][4]["text"]
+    assert "risk team" not in chat, chat[:800]
+
+
+def test_a_draft_that_sends_the_resume_carries_the_document(run, model, tmp_path):
+    """The maintainer, 2026-11-05: "it would be great if the actual document was linked there".
+    A draft whose words send the resume ("CV attached") shows the file under it, ready to save
+    and attach; one that only offers it does not."""
+    import copy
+    import app_model
+    from test_the_page_works_in_a_browser import _write
+    rafe = "kestrel_foods_thorne"
+    assert app_model.sends_of("Thanks Rafe, CV attached.") == "resume"
+    assert app_model.sends_of("Here's my resume as promised.") == "resume"
+    assert app_model.sends_of("Happy to send my resume if that is useful.") is None
+    m2 = copy.deepcopy(model)
+    msg = next(x for x in m2["messages"] if x["contact"] == rafe)
+    msg["text"] = msg["body"] = "Thanks Rafe, CV attached. Happy to talk whenever suits."
+    msg["sends"] = "resume"
+    other = next(x for x in m2["messages"] if x["contact"] != rafe and x.get("contact"))
+    html = _write(tmp_path, "sends", m2)
+    got = run("engine", html=html, viewport=WIDE, clock=CLOCK, seed=fixed(m2), steps=[
+        {"hash": "contacts", "read": _card(rafe),
+         "eval": "[...document.querySelectorAll('%s .sends-line button')].map((b) => b.textContent.trim())" % _card(rafe)},
+        {"hash": "contacts", "count": _card(other["contact"]) + " .sends-line"},
+    ])
+    assert not got["errors"], got["errors"]
+    assert "Goes with it" in got["after"][0]["text"], got["after"][0]["text"]
+    (label,) = got["after"][0]["eval"]
+    assert label.startswith("Your "), label
+    assert got["after"][1]["count"] == 0
+
+
+def test_an_answer_is_done_never_putting_it_on_your_page(run, page, model):
+    """An answer is its own result: its work card said "Finished: putting it on your page" for
+    three minutes, a long pill that squeezed its title to a word a line (the maintainer,
+    2026-11-05)."""
+    seed = dict(fixed(model), **{"work/talk~x": {"kind": "talk", "title": "Answer: “About Rafe at Kestrel Foods: did we apply?”", "status": "done",
+                                                 "to": "cloud", "asked_at": "2026-10-25T18:20:00Z", "finished_at": "2026-10-25T18:29:00Z",
+                                                 "result": {"summary": "Yes, you applied through his link."}, "args": {}, "_v": 2}})
+    got = run("engine", html=page, viewport=WIDE, clock=CLOCK, seed=seed, steps=[
+        {"hash": "contacts", "eval": "[...document.querySelectorAll('[data-work=\"talk~x\"] .state-word')].map((e) => e.textContent.trim())"}])
+    assert not got["errors"], got["errors"]
+    words = got["after"][0]["eval"]
+    assert words and not any("putting it on your page" in w for w in words), words

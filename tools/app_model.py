@@ -2387,6 +2387,20 @@ def draft_limit(contact: dict, status: str, text: str = "") -> tuple[str, str, i
     return mtype, COMPOSE_KIND.get(mtype, "reply"), _limit(channel, kind)
 
 
+# A message whose words send the resume ("resume attached", "here's my resume", "my CV as
+# promised"): its card carries the document, ready to attach, so nobody hunts for the file
+# (the maintainer, 2026-11-05: "it would be great if the actual document was linked there").
+_SENDS_RESUME = re.compile(
+    r"\b(?:resume|r[ée]sum[ée]|cv)\b(?:\s+is)?\s+(?:attached|enclosed|as promised)"
+    r"|\bhere(?:'|\u2019)?s\s+(?:my|the)\s+(?:resume|r[ée]sum[ée]|cv)\b"
+    r"|\b(?:attached|attaching|enclosed)\s+(?:is\s+)?(?:my|the)\s+(?:resume|r[ée]sum[ée]|cv)\b", re.I)
+
+
+def sends_of(text) -> str | None:
+    """"resume" where a message's words send the resume with it, else None."""
+    return "resume" if _SENDS_RESUME.search(str(text or "")) else None
+
+
 def _messages(ctx: Ctx, targets: dict) -> list:
     files = sorted(glob.glob(person.state("documents", "network", "*", "draft.md")))
     ctx._got["message_by_contact"] = {}
@@ -2453,6 +2467,7 @@ def _messages(ctx: Ctx, targets: dict) -> list:
         item["tweaks_done"] = _tweaks_done(os.path.dirname(f), f)
         item["paste"] = _paste(cid, item["first_name"], raw) if kind == "first_note" else None
         item["fix"] = message_fix(item)
+        item["sends"] = sends_of(body)
         _card(ctx, targets, item, "for_message")
         out.append(item)
         targets[mid] = {"kind": "message", "contact": cid, "text": body, "subject": subject,

@@ -1091,8 +1091,16 @@ def _preview(text, most: int = 60) -> str:
     return one if len(one) <= most else one[:most - 3].rstrip() + "..."
 
 
+# Typographic marks read as their plain forms: LinkedIn's export wrote "I’ll" where the app
+# had logged "I'll", the two read as different words, and a reply already logged was added
+# again after the person's answer to it, so they read as owed one (2026-11-05).
+_MARKS = str.maketrans({"\u2018": "'", "\u2019": "'", "\u201a": "'", "\u201b": "'", "\u2032": "'",
+                        "\u201c": '"', "\u201d": '"', "\u201e": '"', "\u201f": '"', "\u2033": '"',
+                        "\u2013": "-", "\u2014": "-", "\u2212": "-", "\u2026": "..."})
+
+
 def _norm(text) -> str:
-    return " ".join(str(text or "").split()).lower()
+    return " ".join(str(text or "").translate(_MARKS).split()).lower()
 
 
 def same_text(a, b) -> bool:
@@ -1189,6 +1197,71 @@ def _who(name, url) -> str:
 
 def _near(a, b, days) -> bool:
     return a is not None and b is not None and abs((a - b).days) <= days
+
+
+def logged_twice(threads) -> list:
+    return [r for r, _ in _twice(threads)]
+
+
+_SENT_WITH = re.compile(r"\b(?:a resume|an attachment) attached(?: \([^)]*\))?", re.I)
+
+
+def _twice(threads) -> list:
+    """Rows LinkedIn's export added that repeat a message the app had already logged: the same
+    person, the same way, a day either side, the same words once typographic marks read alike
+    (`_norm`). Rows that are both the export's are two messages it listed, and stay."""
+    st = _state()
+    note = EXPORT_NOTE.lower()
+    by: dict = {}
+    for r in threads:
+        by.setdefault(str(r.get("contact_id") or "").strip(), []).append(r)
+    out = []
+
+    def kind(r):
+        return (st._direction(r), bool(st.is_request(r)), bool(st.is_acceptance(r)),
+                bool(st.is_withdrawal(r)), bool(st.is_call(r)))
+
+    for rows in by.values():
+        own = [o for o in rows if note not in str(o.get("summary") or "").lower()]
+        # Each row the app logged stands for one message: a message sent twice in a day, logged
+        # once and listed twice by the export, keeps its second.
+        used: set = set()
+        for r in rows:
+            if note not in str(r.get("summary") or "").lower() or not str(r.get("full_text") or "").strip():
+                continue
+            when = st.as_date(r.get("date"))
+            match = next((o for o in own if id(o) not in used and kind(o) == kind(r)
+                          and _near(st.as_date(o.get("date")), when, MESSAGE_SLACK_DAYS)
+                          and same_text(o.get("full_text"), r.get("full_text"))), None)
+            if match is not None:
+                used.add(id(match))
+                out.append((r, match))
+    return out
+
+
+def tidy(contacts_path: str | None = None, threads_path: str | None = None, dry: bool = False) -> dict:
+    """Each message the export logged twice taken out, and the statuses of the people it touched
+    set again from their log (`settle`). {"removed": n, "settled": [(id, old, new)]}."""
+    st = _state()
+    cp, tp = contacts_path or st.CONTACTS_CSV, threads_path or st.THREADS_CSV
+    threads = st.load_threads(tp)
+    pairs = _twice(threads)
+    twice = [r for r, _ in pairs]
+    if dry or not twice:
+        return {"removed": len(twice), "settled": []}
+    # What only the export's copy says went with the message (a resume attached) is kept on the
+    # row that stays: a resume sent is never forgotten by a tidy.
+    for r, kept in pairs:
+        said = _SENT_WITH.search(str(r.get("summary") or ""))
+        if said and not _SENT_WITH.search(str(kept.get("summary") or "")):
+            kept["summary"] = (str(kept.get("summary") or "").rstrip() + "; " + said.group(0)).lstrip("; ")
+    gone = {id(r) for r in twice}
+    kept = [r for r in threads if id(r) not in gone]
+    contacts = st.load_contacts(cp)
+    settled = settle(contacts, kept, {str(r.get("contact_id") or "").strip() for r in twice})
+    st.save_threads(kept, tp)
+    st.save_contacts(contacts, cp)
+    return {"removed": len(twice), "settled": settled}
 
 
 def plan_history(contacts, threads, src=None, mine=None) -> dict:
@@ -1986,10 +2059,25 @@ def main(argv=None) -> int:
             p.add_argument("who", nargs="*")
             p.add_argument("--oldest", type=int, default=0)
             p.add_argument("--reason", default="")
+    td = sub.add_parser("tidy", help="messages the export logged twice taken out, and the "
+                                     "statuses they changed set again")
+    td.add_argument("--contacts", default=st.CONTACTS_CSV)
+    td.add_argument("--threads", default=st.THREADS_CSV)
+    td.add_argument("--dry", action="store_true")
     a = ap.parse_args(argv)
     return {"take": _cli_take, "files": _cli_files, "save": _cli_save, "history": _cli_history,
             "pending": _cli_pending, "withdrawn": _cli_withdrawn, "due": _cli_due,
-            "status": _cli_status, "requested": _cli_requested}[a.cmd](a)
+            "status": _cli_status, "requested": _cli_requested, "tidy": _cli_tidy}[a.cmd](a)
+
+
+def _cli_tidy(a) -> int:
+    got = tidy(a.contacts, a.threads, a.dry)
+    n = got["removed"]
+    print(f"tidy: {n} message{'s' if n != 1 else ''} your LinkedIn download had logged twice"
+          + (" (nothing changed)" if a.dry else " taken out") + (
+          f"; {len(got['settled'])} contact{'s' if len(got['settled']) != 1 else ''} "
+          "set again from their messages" if got["settled"] else ""))
+    return 0
 
 
 def _cli_status(a) -> int:

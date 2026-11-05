@@ -961,8 +961,9 @@ def test_the_chat_opens_from_any_section_in_a_panel_with_the_same_thread(run, pa
         # One way into the chat on a phone, its tab: no floating button and no panel over it
         # (the maintainer, 2026-10-28).
         assert not r["fab"] and not r["dockBefore"]
-        assert r["phone"]["hash"] == "#chat" and not r["phone"]["dock"]
-        assert r["phone"]["value"] == "Help me reply to this message: " and r["phone"]["focus"] == "talk-text"
+        # Paste a message opens its box under Contacts' header, never the Chat (2026-11-05).
+        assert r["phone"]["hash"].startswith("#contacts") and not r["phone"]["dock"]
+        assert r["phone"]["box"] and r["phone"]["focus"] == "ct-text:card-place-paste", r["phone"]
         return
     assert r["fab"] and r["fabName"] == "Chat with Claude" and not r["dockBefore"]
     o = r["open"]
@@ -987,12 +988,13 @@ def test_the_chat_opens_from_any_section_in_a_panel_with_the_same_thread(run, pa
     # One soft pill beside Find people since 2026-11-04 (the maintainer: the header was "quite
     # cluttered"), where an underlined line was.
     assert r["got"]["label"] == "Paste a message"
-    assert r["got"]["dock"] and r["got"]["focus"] == "talk-text" and r["got"]["value"] == "Help me reply to this message: "
-    assert r["got"]["back"] == "got-msg", "Escape gives focus back to what opened it"
+    # Its box under Contacts' header, never the Chat (the maintainer, 2026-11-05: "quite a few
+    # places in the app which unecessarily go to chat and could be done inline").
+    assert r["got"]["box"] and not r["got"]["dock"] and r["got"]["focus"] == "ct-text:card-place-paste", r["got"]
     c = r["chat"]
     assert c["hash"] == "#chat" and not c["dock"] and not c["fab"], c
     assert c["msgs"][:2] == o["msgs"][:2] and "Their careers page lists a Pricing Analyst role." in c["msgs"], "the same thread"
-    assert c["focus"] == "talk-text" and c["value"] == "Help me reply to this message: ", "the same box and its words"
+    assert c["focus"] == "talk-text" and c["value"] == "", "the same box, nothing put in it from Contacts"
 
 
 # The one-pixel PNG the harness pastes (tests/app_page/harness.js, PNG).
