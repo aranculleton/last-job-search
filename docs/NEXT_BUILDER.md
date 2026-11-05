@@ -1,6 +1,7 @@
 # Notes for the next builder
 
-Written at the release of 4.10.0 (2026-11-05) for the chat that builds the next version. Read
+Written at the release of 4.10.0 and brought up to date at 4.10.1 (2026-11-05), for the chat
+that builds the next version. Read
 MAINTAINING.md first; this is background, never a list of work: a builder starts only from the
 maintainer's notes (MAINTAINING.md, "How a builder works").
 
@@ -39,6 +40,14 @@ What 4.10.0 left is said below so a note that says "carry on" can be done withou
   one file is refused.
 - **Your rules** in Settings and the left-out list read by the rule that cut each row
   (tools/rules_view.py); "Still right?" only on old busy rules, at most one Brief line a month.
+- **One helper chat, two only during a hand-over** (4.10.1): the brief's task says where it runs,
+  not the registry, so a brief left in the helper a hand-over replaced moves into the live one and
+  that helper goes; the chat the person set up in carries the helper's name and goes too, once it
+  has handed the page on and has not been used for an hour (tidy.py `person_started`,
+  STARTED_QUIET_S); a chat of theirs without that name is never listed.
+- **Every screen is the whole width** (4.10.1), narrowing only for the menu's names, the work
+  panel or the window; **Icons only** is the side menu's first section, under one rule.
+- **The README opens on the Brief in light and dark**, cut on a diagonal (MAINTAINING.md 3a).
 - **The release lenses** gained the tired person (MAINTAINING.md "Releasing"): a reviewer who did not
   build a screen reads it; a button for what the app could do itself is a bug.
 
@@ -61,12 +70,11 @@ release. What cost time:
 
 ## Not tested, or left
 
-- **Firefox**: on master after 170, two layout tests failed only in Firefox's engine:
-  tests/test_the_page_keeps_its_layout_promises.py::test_16_a_jobs_cards_facts_are_one_line_on_a_wide_screen
-  (a job card's facts wrap to two or three lines) and
-  tests/test_jobs_and_drafts_on_the_page_say_what_is_true.py::test_a_long_title_fills_its_line_before_it_wraps
-  (0.67 of the line). Chromium and Safari pass. Both still failed on the released commit, so
-  the page fixes did not change them. Firefox is not installed in a cloud chat.
+- **Firefox**: tests/test_the_page_keeps_its_layout_promises.py::test_16_a_jobs_cards_facts_are_one_line_on_a_wide_screen
+  still fails only in Firefox's engine: a job card's facts wrap to two lines (three before the
+  screens went full width in 4.10.1). Chromium and Safari pass. The long-title test passes since
+  4.10.1: Firefox has no `text-wrap: pretty` and fell back to the headings' `balance`, so job
+  titles now use `wrap`. Firefox is not installed in a cloud chat.
 - **Everywhere's page variants** (German, far time zones, Mac and Windows type with French) failed
   tests/test_the_page_is_quick_and_its_settings_say_true_things.py::test_ten_documents_a_chat_writes_at_once_draw_the_page_a_few_times_not_ten
   during the build (four or five long tasks against three) and passed on the released commit, after
@@ -77,6 +85,15 @@ release. What cost time:
   (the first chat's tap came back conflict and the second's ok, where the test expects the other
   order). It passed on the released commit; if it fails again, look at whether it pins an order two
   chats at once cannot promise.
+- **Windows** (person, part 1) failed
+  tests/test_a_faster_round_finds_and_scores_the_same.py::test_a_paced_boards_requests_stay_its_crawl_delay_apart
+  once on the 4.10.1 branch: one gap of 0.0888 s against a floor of 0.09 for a 0.1 s crawl delay,
+  Windows' coarse timer. Look at whether the pacing measures with the same clock it sleeps by.
+  Part 3 on the released 4.10.1 commit failed a speed limit, timed alone:
+  tests/test_brief.py::test_a_large_state_is_gathered_in_under_two_seconds_and_stays_short[True]
+  (3.45 s against 2, 1.42 s of it any run takes); it passed on 4.10.0's. Windows' runners time
+  slowly and unevenly; look at whether its limits should be measured against that machine's own
+  baseline, as the "any run takes" part already is.
 - **The newest Python** (3.14, in suite everywhere) failed
   tests/test_a_judgement_is_kept_whole_and_read_for_its_own_employer.py::test_judgements_made_at_once_are_all_kept
   once on the released commit with BrokenPipeError, from its pool of 12 processes; the six other
@@ -93,4 +110,8 @@ release. What cost time:
   it stays a button on the prep's own page.
 - **The floating Chat button** stays on wide screens: it opens the chat beside the current screen,
   which the menu's Chat does not.
+- **Hand-overs came twice in an hour** on 5 November: a helper renews once its history has grown
+  by RENEW_TOKENS (200,000, app_listen.renewal), and a new helper that took an update and did a
+  morning's work grew that much in 40 minutes. Look at whether a helper that took the page less
+  than an hour ago should wait, or count growth from after its first check-in.
 - A pencil for a contact's name or employer was not built: the engine has no action to correct them.
