@@ -775,8 +775,9 @@ METHODS: dict[str, dict] = {
             (42, "2026-11-05", True, "away from the desktop app the page is not drawn again a second and a half after opening unless that changed what it says; a Tweak panel opened on a wide screen shows at once, without waiting for the next redraw"),
             (43, "2026-11-05", True, "what a late capability changes is drawn once it settles"),
             (44, "2026-11-05", False, "Icons only is its own section at the top of the side menu, a row like the others under one rule; every screen is the whole width; a feed back after failing counts as up only once it has stayed up a second, so the header never says Connected for a moment while it reconnects"),
+            (45, "2026-11-05", True, "a card's More stays beside its other buttons when opened and opens under the row, on every card; its buttons are one row that wraps only when it must; and Something else, last under every live card's More, opens the Chat about that card, what you send from it going to Claude as work about that card"),
         ),
-        "fingerprint": "204fab84f04f7c81",
+        "fingerprint": "9c40396c2de0d1d3",
     },
     "upskill": {
         "by": "upgrade", "priority": 4, "applies": "upskill_plans", "time": "~10 min",

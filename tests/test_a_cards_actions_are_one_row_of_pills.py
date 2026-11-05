@@ -49,9 +49,13 @@ PROBE = r"""(() => {
     if (hs.length > 1 && Math.max(...hs) - Math.min(...hs) > 1) bad.push([where, 'heights ' + hs.join('/'), look.map(name).join(' | ')]);
     const before = ctrls.filter((c) => !c.matches('details.more')).length;
     if (before > 3) bad.push([where, before + ' before More', ctrls.map(name).join(' | ')]);
-    // More is for what is rare: five at most (DESIGN.md, "Buttons, links and taps").
+    // More is for what is rare: five at most (DESIGN.md, "Buttons, links and taps"), its panel
+    // under the row (named by its toggle) or, where it is not split, inside it; Something else,
+    // the way to tell Claude anything else, is not counted.
     for (const m of [...r.querySelectorAll(':scope > details.more')]) {
-      const inside = [...m.querySelectorAll('.more-panel button, .more-panel a')].length;
+      const s = m.querySelector(':scope > summary');
+      const panel = (s && s.getAttribute('aria-controls') && document.getElementById(s.getAttribute('aria-controls'))) || m.querySelector('.more-panel');
+      const inside = panel ? [...panel.querySelectorAll('.more-acts > :is(button, .btn, a)')].filter((b) => !(b.dataset.k || '').startsWith('else:')).length : 0;
       if (inside > 5) bad.push([where, inside + ' under More', '']);
     }
   }

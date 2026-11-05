@@ -20,7 +20,18 @@ make sense to somebody whose repo just received it.
 
 ## [Unreleased]
 
+### Added
+
+- **Something else, on every card.** The last thing under a card's More opens the Chat with
+  "About <the person, job or interview>:" begun, so you can tell Claude anything the buttons do
+  not cover; what you send goes to Claude as work about that card.
+
 ### Fixed
+
+- **More stays beside the card's other buttons when you open it.** Opened, it jumped below "I
+  sent it" and took the whole width; now it stays where it was and its choices open under the
+  row, on every card. Its buttons are one row that wraps only when the screen is too narrow,
+  never a line each.
 
 - **The helper a hand-over replaced goes the same day.** The new helper's first tidy-up kept it
   while it was still finishing, and nothing rang the new helper again before the next morning, so

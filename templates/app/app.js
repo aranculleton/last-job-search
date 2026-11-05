@@ -2488,15 +2488,34 @@
   }
   // A card's "More": its secondary actions and detail, out of the way until asked for.
   // `keep`: a rare action stays under More even alone, so the card keeps to its budget.
+  // More's buttons are one row of pills, wrapping only at the panel's width: a row a kind put
+  // "Open their profile" alone on a line above three that fitted beside it (the maintainer,
+  // 2026-11-05: "those buttons could for sure be one line"). What is not a button in those rows
+  // (a note, an alert) follows the row, in order.
+  function oneRow(parts) {
+    const rows = parts.filter((x) => x && x.nodeType === 1 && x.classList.contains("more-acts") && !x.classList.contains("tweak-entry"));
+    if (!rows.length) return parts;
+    const pills = [], rest = [];
+    for (const r of rows) for (const c of [...r.children]) (c.matches("button, .btn, a") ? pills : rest).push(c);
+    const out = [];
+    let placed = false;
+    for (const x of parts) {
+      if (!rows.includes(x)) { out.push(x); continue; }
+      if (!placed) { if (pills.length) out.push(h("div", {class: "more-acts"}, pills)); out.push(...rest); placed = true; }
+    }
+    return out;
+  }
+  const isElse = (b) => (txt(b.getAttribute("data-k")) || "").startsWith("else:");
   function more(key, about, kids, keep) {
-    const parts = arr(kids).filter((x) => x && !(keep && x.nodeType === 1 && x.classList.contains("more-acts") && !x.children.length));
+    const parts = oneRow(arr(kids).flat().filter((x) => x && !(x.nodeType === 1 && x.classList.contains("more-acts") && !x.children.length)));
     if (!parts.length) return null;
     // One button alone behind More is just shown (the maintainer, 2026-10-29: "did this
     // really need a More for the second button?").
     if (!keep && parts.length === 1 && parts[0].nodeType === 1) {
       const only = parts[0];
       const inner = only.classList && only.classList.contains("more-acts") ? [...only.children] : [only];
-      if (inner.length === 1 && /^(BUTTON|A)$/.test(inner[0].tagName)) { inner[0].setAttribute("data-more", "1"); return inner[0]; }
+      // Something else is never lifted onto the face: it is the way out at the end of More.
+      if (inner.length === 1 && /^(BUTTON|A)$/.test(inner[0].tagName) && !isElse(inner[0])) { inner[0].setAttribute("data-more", "1"); return inner[0]; }
     }
     return det("more:" + key, false, {class: "more"}, h("summary", {class: "more-btn", "data-k": "more-sum:" + key}, "More", h("span", {class: "sr-only"}, ": " + about)),
       h("div", {class: "more-panel"}, parts));
@@ -2525,12 +2544,12 @@
   // `keep`: a rare action stays under More even alone, so a card's row keeps to its budget of
   // pills (the maintainer, 2026-11-05: one filled, two soft at most).
   function moreSplit(key, about, kids, keep) {
-    const parts = arr(kids).flat().filter((x) => x && !(x.nodeType === 1 && x.classList.contains("more-acts") && !x.children.length));
+    const parts = oneRow(arr(kids).flat().filter((x) => x && !(x.nodeType === 1 && x.classList.contains("more-acts") && !x.children.length)));
     if (!parts.length) return {toggle: null, panel: null};
     if (!keep && parts.length === 1 && parts[0].nodeType === 1) {
       const only = parts[0];
       const inner = only.classList && only.classList.contains("more-acts") ? [...only.children] : [only];
-      if (inner.length === 1 && /^(BUTTON|A)$/.test(inner[0].tagName)) { inner[0].setAttribute("data-more", "1"); return {toggle: inner[0], panel: null}; }
+      if (inner.length === 1 && /^(BUTTON|A)$/.test(inner[0].tagName) && !isElse(inner[0])) { inner[0].setAttribute("data-more", "1"); return {toggle: inner[0], panel: null}; }
     }
     const k = "det:more:" + key;
     const pid = "mp-" + seg(key);
@@ -2744,7 +2763,27 @@
     if (a["data-item"] && !a["data-k"]) a["data-k"] = "card:" + a["data-item"];
     const el = h(tag, a);
     for (let i = 2; i < arguments.length; i++) add(el, arguments[i]);
+    for (const d of el.querySelectorAll(":is(.card-actions, .wc-actions, .suggest-acts, .g-acts) > details.more:not(.split)")) splitOpen(d);
     return el;
+  }
+  // A card's More opened inside its row took the row's whole width and dropped below the button
+  // beside it (the maintainer, 2026-11-05: "the more dropdown was next to i sent it, but when u
+  // press it, it goes below it"). On every card, as on Jobs' since 4.10 (moreSplit), its toggle
+  // stays in the row and its panel opens under the row.
+  function splitOpen(d) {
+    const panel = d.querySelector(":scope > .more-panel");
+    const sum = d.querySelector(":scope > summary");
+    const row = d.parentElement;
+    if (!panel || !sum || !row) return;
+    const pid = "mp-" + seg(txt(d.dataset.k).replace(/^det:more:/, ""));
+    panel.id = pid;
+    panel.hidden = !d.open;
+    sum.setAttribute("aria-controls", pid);
+    // Shown with the tap itself, not a task later: the toggle event follows the click.
+    sum.addEventListener("click", () => { panel.hidden = !!d.open; });
+    d.addEventListener("toggle", () => { panel.hidden = !d.open; });
+    d.classList.add("split");
+    row.after(panel);
   }
 
   // ------------------------------------------------------------------ lists: live always shown, finished history folded
@@ -3926,7 +3965,8 @@
     main.push(calButton(iv, o.calKey || "ivcal:" + k));
     const moreActs = [!busy && has && !offer && !offered.length ? btn("Practise with Claude", () => startMock(iv), {kind: "secondary", small: true, key: "mock:" + k, aria: "Practise with Claude for " + txt(iv.company)}) : null,
       has && !busy ? prepBtn("secondary") : null,
-      offered.length || offer ? null : btn(dayOf(iv.when) && !timeOf(iv.when) ? "Add the time" : "New day", () => askMoved(iv), {kind: "secondary", small: true, key: "ivmoved:" + k, aria: "A new day or time: " + txt(iv.company)})];
+      offered.length || offer ? null : btn(dayOf(iv.when) && !timeOf(iv.when) ? "Add the time" : "New day", () => askMoved(iv), {kind: "secondary", small: true, key: "ivmoved:" + k, aria: "A new day or time: " + txt(iv.company)}),
+      elseBtn("interview", iv.id, "the interview with " + txt(iv.company), "iv:" + k)];
     return {main: main.filter(Boolean).slice(0, 2), more: moreActs.filter(Boolean), bin,
       // Its prep changed in words, under More, where the prep is.
       tweak: has && !busy ? tweakSlot("prep", iv, "Edit the prep") : null};
@@ -5712,6 +5752,7 @@
         live && !closed && !peopleAt(r).length ? runBtn("network", "Find people at " + txt(r.company), () => findPeople(r.company), {small: true, wakes: "network", key: "find:" + r.id, one: true}) : null,
         // Where a referral has already led to a recruiter's call, there is no cold application.
         live && !closed && st !== "ready" && !referredProcess(r) ? btn("I have applied", markApplied, {small: true, key: "applied:" + r.id, aria: "I have applied: " + about}) : null,
+        live && !closed ? elseBtn("job", r.id, about, "job:" + r.id) : null,
         st === "applied" ? btn("Not applied after all", () => act([{item: r.id, action: "job.not_applied", rev: r.rev}], "Marked as not applied: " + txt(r.company)), {small: true, key: "notapplied:" + r.id}) : null),
     ];
     const word = iv ? ["Interview " + fmtDay(iv.when), "info"] : nudge ? ["Follow-up due", "warn"] : st === "applied" || draftLine ? [null, null] : JOB_STATUS[st] || [null, null];
@@ -6159,7 +6200,8 @@
       // Asked for again only by the person, once Claude's own try is over.
       live && checkAlert && fixWork && TERMINAL.has(txt(fixWork.status)) ? btn(txt(fixAc.label) || "Make it again", () => runAction(fixAc, a.id), {small: true, key: "fixagain:" + a.id, wakes: "draft"}) : null,
       live && (checkAlert || asks.length) && !(sameJob(a) && referredProcess(sameJob(a))) ? btn("I have applied", markApplied, {small: true, key: "rapplied2:" + a.id, aria: "I have applied: " + about}) : null,
-      st === "applied" ? btn("Not applied after all", () => act([{item: a.id, action: "ready.not_applied", rev: a.rev}], "Marked as not applied: " + txt(a.company)), {small: true, key: "rnot:" + a.id}) : null].filter(Boolean);
+      st === "applied" ? btn("Not applied after all", () => act([{item: a.id, action: "ready.not_applied", rev: a.rev}], "Marked as not applied: " + txt(a.company)), {small: true, key: "rnot:" + a.id}) : null,
+      live ? elseBtn("application", a.id, about, "app:" + a.id) : null].filter(Boolean);
     const tw = null;
     const entry = null;
     // The job it is for, where Jobs has it: its fit, when it was posted and found, and why it
@@ -6369,7 +6411,7 @@
             {kind: "quiet icon-only", small: true, icon: "bin", key: "mbin:" + m.id, aria: "Trash it: not now, or not " + txt(m.first_name) + "?"}) : null)),
         m.why ? h("p", {class: "meta"}, txt(m.why) + ".") : null,
         d.box, d.notes,
-        h("div", {class: "card-actions"}, d.act, more("msg:" + m.id, "the message to " + txt(m.first_name), d.extra.concat([relatedLinks(m.employer, m.id, m)]))),
+        h("div", {class: "card-actions"}, d.act, more("msg:" + m.id, "the message to " + txt(m.first_name), [h("div", {class: "more-acts"}, d.extra, elseBtn("message", m.id, "the message to " + txt(m.first_name), "msg:" + m.id)), relatedLinks(m.employer, m.id, m)], true)),
         d.line));
   }
 
@@ -6686,6 +6728,13 @@
     const wrote = typeof p.wrote === "boolean" ? p.wrote : st !== "not_contacted";
     return !personGotHere(p) && !personClosedHere(p) && (personSentHere(p) || ["waiting", "talking", "follow", "leave"].includes(personGroup(p))) && wrote && st !== "replied_needs_response";
   }
+  // Anything else to tell Claude about a card, in words: the last thing under its More, opening
+  // the Chat with what it is about, its words going to Claude as work about that card (the
+  // maintainer, 2026-11-05: "there should be a 'something else' button if i need to feed back").
+  // It only opens the box, so it carries no gauge; sending is what wakes Claude.
+  function elseBtn(kind, id, label, key) {
+    return btn("Something else", (e) => openDock({opener: e.currentTarget, about: {kind, id: txt(id), label}}), {small: true, key: "else:" + key, aria: "Something else about " + label});
+  }
   function theyRepliedBtn(p, key, open, kind) {
     return btn("They replied", open, {kind: kind || "secondary", small: true, key, aria: "They replied: paste what " + txt(p.first_name) + " sent"});
   }
@@ -6849,8 +6898,8 @@
     const skip = draft && txt(draft.kind) === "first_note" ? () => act([{item: draft.id, action: "msg.skip", rev: draft.rev}], "Set aside: the note to " + name) : null;
     // Rare, so under More: the message's own (edit or rewrite, their profile link, words changed
     // before sending, why them), then the person's (a call, a job they sent, a referral).
-    const extra = [d && theyReplied ? h("div", {class: "more-acts"}, theyReplied) : null, d ? h("div", {class: "more-acts"}, d.extra) : null, h("div", {class: "more-acts"}, personActions(p, p.id, false)), relatedLinks(p.employer, p.id, p),
-      ];
+    const extra = [d && theyReplied ? h("div", {class: "more-acts"}, theyReplied) : null, d ? h("div", {class: "more-acts"}, d.extra) : null,
+      h("div", {class: "more-acts"}, personActions(p, p.id, false), closedHere || g === "done" ? null : elseBtn("person", p.id, whoAt(name, p.employer), "person:" + p.id)), relatedLinks(p.employer, p.id, p)];
     const step = stepWords(p.next);
     const ex = exchangeWords(p);
     // With the message on the card, the line says only the latest exchange: the draft's
@@ -11763,7 +11812,14 @@
     S.viewConv = null;
     // A picture always goes to a chat: only a chat can read it (and the reply, the job or the
     // call it is about needs one anyway). Sent inside this click, so the ring can go.
-    if (withPics) { handOff(text, true, pics.splice(0)); renderPics(); return; }
+    // Written from a card's Something else, and still about it: straight to Claude as work about
+    // that card, never a quick answer that cannot change a record.
+    // Its lead alone ("About Rafe at Kestrel Foods:") is nothing said yet: the box waits for more.
+    if (!S.quick.mode && S.talkAbout && text === S.talkAbout.lead && !withPics) { talkInput.focus(); return; }
+    const about = !S.quick.mode && S.talkAbout && text.startsWith(S.talkAbout.lead) && text.length > S.talkAbout.lead.length ? S.talkAbout : null;
+    if (about) S.talkAbout = null;
+    if (withPics) { handOff(text, true, pics.splice(0), about); renderPics(); return; }
+    if (about) { handOff(text, true, null, about); return; }
     if (!S.quick.mode && capsSettled.sample && !S.caps.sample) { handOff(text, true); return; }
     if (!S.quick.mode && pastedSomething(text)) { handOff(text, true); readPasted(text); return; }
     if (!S.quick.mode && asksForWork(text)) { handOff(text, true); return; }
@@ -11794,7 +11850,9 @@
   // The person's words are written to their thread and its work first, and only then rung,
   // while the tap still counts (toClaude): a ring before the writes woke a chat that read the
   // page 1.9 s too early and found nothing (the audit, 2026-11-03). Returns the work's id.
-  function handOff(text, inClick, sent) {
+  // `about`: the card it was written from (Something else under its More), so Claude reads the
+  // words as about that one person, job or interview.
+  function handOff(text, inClick, sent, about) {
     const shots = arr(sent);
     const to = whereTo();
     const th = currentThread(to);
@@ -11839,7 +11897,7 @@
         await Promise.all(writes);
         S.lastSent = {text, at: now()};
         // A title cut at a word, never mid-word ("…find 10 m…", the audit).
-        const made = await createWork(db, {id: wid, kind: "talk", to, title: "Answer: “" + clipWords(said, 50) + "”", args: {thread: th, message: mid}, slot: false});
+        const made = await createWork(db, {id: wid, kind: "talk", to, title: "Answer: “" + clipWords(said, 50) + "”", args: Object.assign({thread: th, message: mid}, about ? {about: {kind: about.kind, id: about.id}} : {}), slot: false});
         if (!made.ok) throw new Error("work");
       } catch (e) {
         // Nothing half sent: a message kept without its work waited for an answer that
@@ -12283,9 +12341,12 @@
     try { const n = talkInput.value.length; talkInput.setSelectionRange(n, n); } catch (e) { /* not a text field */ }
   }
   // o.opener: what focus goes back to on Close; o.text: words to start the message with.
+  // o.about: the card it is opened from ({kind, id, label}); what is sent starting with its lead
+  // goes to Claude as work about that card (sendChat).
   function openDock(o) {
     o = o || {};
     if (S.owner !== true) return;
+    if (o.about) { const lead = "About " + txt(o.about.label) + ":"; S.talkAbout = {kind: txt(o.about.kind), id: txt(o.about.id), lead}; o = Object.assign({}, o, {text: lead + " "}); }
     if (!dockEl) buildDock();
     if (chatShown()) { focusTalk(o.text); return; }
     // A phone has the Chat tab: the panel there was a second chat window over the first.

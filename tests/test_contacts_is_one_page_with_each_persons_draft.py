@@ -91,7 +91,7 @@ def test_contacts_is_one_page_and_each_card_carries_its_draft(run, page, model, 
         {"hash": "contacts", "read": _card(rafe),
          "eval": "(() => { const c = document.querySelector('%s'); const d = c.querySelector('details.pdraft');"
                  " return {open: !!(d && d.open), face: [...c.querySelectorAll('.card-actions > .btn, .card-actions > a')].map((b) => b.textContent.trim()),"
-                 " more: [...c.querySelectorAll('details.more .more-panel button, details.more .more-panel a')].map((b) => b.textContent.trim()),"
+                 " more: [...c.querySelectorAll('.more-panel:not(.info-panel) button, .more-panel:not(.info-panel) a')].map((b) => b.textContent.trim()),"
                  " first: document.querySelector('#main ul.people > li').dataset.item, pen: !!c.querySelector('.sendbox [data-k=\"pen:msg-kestrel_foods_thorne\"]'),"
                  " tabs: !!document.querySelector('[data-k^=\"contsw\"]') }; })()" % _card(rafe)},
         {"hash": "drafts-messages/msg-" + rafe, "until": "location.hash === '#contacts/%s'" % rafe},
@@ -433,3 +433,64 @@ def test_the_pencil_changes_the_words_in_place_or_asks_claude(run, page, model):
     w = [x for x in got["after"][1]["work"] if x.get("kind") == "tweak" and not x["args"].get("auto")]
     assert w and w[0]["args"]["text"] == "Make it shorter." and w[0]["args"]["target"]["contact"] == rafe, w
     assert "Make it shorter" in got["after"][1]["text"] and "Cancel" in got["after"][1]["text"], got["after"][1]["text"]
+
+
+# ------------------------------------------------------------------ More on a card
+
+MORE = r"""(() => {
+  const c = document.querySelector('%s');
+  const row = c.querySelector('.card-actions');
+  const sum = row.querySelector(':scope > details.more > summary');
+  const first = row.querySelector(':scope > .btn, :scope > a');
+  const panel = sum && document.getElementById(sum.getAttribute('aria-controls'));
+  const top = (e) => Math.round(e.getBoundingClientRect().top);
+  return {sum: !!sum, sameLine: !!(sum && first) && Math.abs(top(sum) - top(first)) <= 2, first: first ? first.textContent.trim() : '',
+    after: !!panel && row.nextElementSibling === panel, shown: !!panel && !panel.hidden && panel.getClientRects().length > 0,
+    rows: panel ? [...panel.querySelectorAll(':scope > .more-acts')].map((r) => [...r.children].filter((b) => b.matches('button, .btn, a')).map((b) => [b.textContent.trim(), top(b)])) : []};
+})()"""
+
+
+@pytest.mark.parametrize("vp", [PHONE, WIDE], ids=["phone", "wide"])
+def test_more_opens_under_its_row_and_its_buttons_are_one_row(run, page, model, vp):
+    """The maintainer, 2026-11-05: "the more dropdown was next to i sent it, but when u press it,
+    it goes below it", and "those buttons could for sure be one line". Opened, More stays beside
+    I sent it and its panel opens under the row; its buttons are one row, wrapping only at the
+    panel's width, with Something else last."""
+    rafe = "kestrel_foods_thorne"
+    got = run("engine", html=page, viewport=vp, clock=CLOCK, seed=fixed(model), steps=[
+        {"hash": "contacts", "eval": MORE % _card(rafe)},
+        {"more": rafe, "eval": MORE % _card(rafe)},
+    ])
+    assert not got["errors"], got["errors"]
+    shut, opened = got["after"][0]["eval"], got["after"][1]["eval"]
+    assert shut["sum"] and shut["sameLine"] and not shut["shown"], shut
+    assert opened["first"] == "I sent it" and opened["sameLine"], opened
+    assert opened["after"] and opened["shown"], opened
+    assert len(opened["rows"]) == 1, opened["rows"]
+    labels = [b[0] for b in opened["rows"][0]]
+    assert labels[-1] == "Something else", labels
+    if vp is WIDE:
+        assert len({b[1] for b in opened["rows"][0]}) == 1, opened["rows"]
+
+
+def test_something_else_opens_the_chat_about_the_card_and_sends_it_as_work(run, page, model):
+    """The maintainer, 2026-11-05: "there should be a 'something else' button if i need to feed
+    back right that opens a text box". It opens the Chat begun with what the card is about, and
+    what is sent from it goes to Claude as work about that card, never a quick answer."""
+    rafe = "kestrel_foods_thorne"
+    p = next(x for x in model["people"] if x["id"] == rafe)
+    lead = "About %s at %s:" % (p["first_name"], p["employer"])
+    got = run("engine", html=page, viewport=WIDE, clock=CLOCK, seed=fixed(model), steps=[
+        {"hash": "contacts", "more": rafe, "click": "Something else about " + p["first_name"],
+         "eval": "document.querySelector('#talk-text').value"},
+        # Send with only its lead in the box sends nothing.
+        {"open": "talk-send", "store": "talk/"},
+        {"type": lead + " he has moved to the risk team, so the note should say so."},
+        {"open": "talk-send"},
+    ])
+    assert not got["errors"], got["errors"]
+    assert got["after"][0]["eval"] == lead + " ", got["after"][0]["eval"]
+    talk = [w for w in got["work"] if w.get("kind") == "talk"]
+    assert got["after"][1]["store"] == [], got["after"][1]["store"]
+    assert len(talk) == 1, got["work"]
+    assert talk[0]["args"].get("about") == {"kind": "person", "id": rafe}, talk[0]
