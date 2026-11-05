@@ -5502,6 +5502,14 @@
     }
     const wrap = h("section", {class: "sec", "aria-labelledby": "h-jobs" + (where ? "-" + where : "")},
       screenHead("jobs", "Jobs", sum, small, where, jobsHeadTools(rows), {quiet: true}));
+    // A job the person added is being scored: its own card at the top, with the work line
+    // every card uses (and Cancel), since the header carries no "Claude is on it" line
+    // (2026-11-05); it becomes the job's own card once scored.
+    if (tab === "new") for (const [id, w] of allWork()) {
+      if (txt(w.kind) !== "evaluate" || !ACTIVE.has(txt(w.status) || "queued")) continue;
+      put(wrap, h("div", {class: "card job adding", "data-item": id},
+        h("p", {class: "card-title"}, txt(w.title) || "Scoring the job you added"), workInline(id, w, {key: "add"})));
+    }
     if (!rows.length) {
       put(wrap, empty("No shortlist yet.", "Claude searches your job sites, scores every posting and lists the best here.",
         h("div", {class: "card-actions"}, runBtn("search", "Find jobs", askSearch, {kind: "primary", small: true, key: "find-jobs-empty"}))));
