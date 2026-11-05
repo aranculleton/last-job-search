@@ -126,7 +126,7 @@ def test_a_double_tap_on_stop_is_one_write(run, tmp_path):
     seed = _failed_work()
     seed["work/draft~harbourline"].update(status="running", claimed_by="cloud-1", claimed_at=T0, stage_at=T0)
     html = _page(tmp_path)
-    s = _script(run, html, [{"hash": "work"}, {"dblclick": "Stop: Drafting for Harbourline Bank"}], seed=seed)
+    s = _script(run, html, [{"hash": "work"}, {"dblclick": "Stop Claude's work on Drafting for Harbourline Bank"}], seed=seed)
     writes = [c for c in s[-1]["calls"] if c["cap"] == "db" and c["path"] == "work/draft~harbourline"]
     assert len(writes) == 1, writes
     assert s[-1]["work"][0]["stop_asked"] is True

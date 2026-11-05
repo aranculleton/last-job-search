@@ -424,7 +424,7 @@ def test_an_alerts_own_action_carries_the_items_rev(run, built):
     assert pell is not None
     # The job's own suggestion, on its card: the drafts above it in the one list carry theirs.
     job = next(r for r in model["jobs"]["rows"] if r.get("suggest"))
-    got = _go(run, built, "rich", steps=[{"hash": "jobs", "click": "No thanks", "within": '[data-item="%s"]' % job["id"]}])
+    got = _go(run, built, "rich", steps=[{"hash": "jobs", "click": "Dismiss this suggestion", "within": '[data-item="%s"]' % job["id"]}])
     (a,) = [x for x in got["actions"] if x["action"] == "suggest.dismiss"]
     assert a["item"] == job["suggest"]["id"] and a["rev_seen"] == job["suggest"]["rev"]
 

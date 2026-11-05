@@ -256,14 +256,16 @@ def _bin(choice):
             {"ready": _q("q-sent-fernhill_freight_halloway")[1:], "eval": rows}]
 
 
-def test_the_bin_for_an_employer_keeps_the_rows_of_people_already_in_conversation(run, tmp_path):
-    # The chat closes only the people there nobody has written to yet (app_actions), so the
-    # page hides only theirs: a colleague already written to keeps their rows.
+def test_the_bin_for_an_employer_takes_away_every_row_there(run, tmp_path):
+    # "No more from" an employer takes everyone there out of To do, a colleague already written
+    # to as well; their thread stays in Contacts (the maintainer, 2026-11-05: "i trashed aviva
+    # and said no more from that one" while a reply owed there was still in Next). Before, the
+    # page hid only the people nobody had written to yet.
     got = _go(run, tmp_path, _bin("Not interested in Fernhill Freight any more"), PHONE, model=_fernhill(), clock=T)
     # The reply owed to Wren is the same draft as her follow-up: one row for her on the messages
     # card (one row a person, 2026-11-05), under the follow-up's id.
     assert got["after"][0]["eval"] == [True, True, True, True, False], got["after"][0]["eval"]
-    assert got["after"][3]["eval"] == [False, False, False, True, False], got["after"][3]["eval"]
+    assert got["after"][3]["eval"] == [False, False, False, False, False], got["after"][3]["eval"]
 
 
 def test_in_touch_another_way_drops_the_note_and_keeps_a_reply_they_are_owed(run, tmp_path):

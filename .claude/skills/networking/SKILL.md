@@ -628,7 +628,14 @@ question about their current work. `compose.round_alike(drafts)` finds a subject
 paragraph order or a close two messages share, and `reading.py batch` (exit 11) and
 `reading.py draft` run it.
 Credits are scarce; reserve them for tier 1 at top-priority companies, or people
-unreachable otherwise. A free LinkedIn account has none: InMail there goes only to an
+unreachable otherwise. **A discovery run decides this in code** (2026-11-05):
+`tools/network/inmail_pick.py` `choose()` picks a recruiter or hiring leader at a target
+employer whom a request would reach badly, at most `PER_RUN` (2) a run and never past the
+credits left less `RESERVE` (1); `/network` step 8 runs it, and `inmail_pick.py use` saves
+the InMail with the connection note kept beside it, so the page switches between them. Once
+a week, on a plan with credits, the page asks for the balance LinkedIn shows
+(`claude_surfaces.py steps linkedin-inmail-credits`); credits carry over (up to 15 on Premium
+Career) and expire after 90 days, so that number beats the count from the log. A free LinkedIn account has none: InMail there goes only to an
 Open Profile (their profile shows a Message button), and everything else is a connection
 request. **The Message button looks the same for an Open Profile and for an InMail that
 spends a credit**: which one shows only in their message window

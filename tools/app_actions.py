@@ -23,6 +23,10 @@ a copy of its rules:
     msg.unsent         state.py unsend                          undone by msg.sent
     msg.skip           state.py drop                            undone by msg.unskip
     msg.unskip         state.py reopen                          undone by msg.skip
+    msg.channel        inmail_pick.switch: the draft between    undone by msg.channel
+                       the InMail and the connection note
+    inmail.credits     state.py inmail-credits <n>, or "later"  not undone: the next
+                       (asked again in a week)                  answer replaces it
     person.stop        state.py set --status closed             undone by person.status
     person.status      state.py set (status, next action, due)  undone by person.status
     consent.yes / .no  the answer on its work item (db only)    undone by the other one
@@ -207,6 +211,12 @@ ACTIONS = {
                        "msg.received"),
     "msg.skip": (("message", "person"), "state.py drop", "msg.unskip"),
     "msg.unskip": (("message", "person"), "state.py reopen", "msg.skip"),
+    "msg.channel": (("message",), "inmail_pick.switch: their draft between the InMail and the "
+                                  "connection note kept beside it, the channel with it (a "
+                                  "credit freed, or spent while one is left)", "msg.channel"),
+    "inmail.credits": (("inmail_ask",), "state.py inmail-credits <n>: the InMail balance "
+                                        "LinkedIn shows; \"later\" asks again in a week",
+                       ""),
     "person.stop": (("person", "message"), "state.py set --status closed", "person.status"),
     "person.status": (("person", "message"), "state.py set", "person.status"),
     "consent.yes": (("work",), "the work item's answers (db only)", "consent.no"),
@@ -642,6 +652,7 @@ BARE = {
     "referral.ended": "why", "due.snooze": "until", "reading.done": "text",
     "brief.pause": "until", "tip.seen": "area", "upcoming.add": "title", "pin.answer": "answer", "job.add": "text", "brief.move": "time",
     "interview.rework": "question", "profile.pasted": "text", "ready.sent_to_contact": "text",
+    "msg.channel": "to", "inmail.credits": "value",
 }
 DATED = {"job.applied", "ready.applied", "msg.sent", "msg.received", "outcome.interview",
          "outcome.rejected", "outcome.offer", "outcome.withdrawn", "outcome.no_response",
@@ -1810,6 +1821,50 @@ def _msg_unskip(r: Run) -> dict:
         raise Refused(_said(out))
     return {"note": f"{_first(cid)} is back among the people to write to.",
             "undo": {"action": "msg.skip", "target": {"kind": "message", "contact": cid}}}
+
+
+def _msg_channel(r: Run) -> dict:
+    """Their draft switched between the InMail and the connection note kept beside it
+    (tools/network/inmail_pick.py): a credit freed, or spent while one is left."""
+    import inmail_pick
+    cid = r.target.get("contact") or ""
+    to = r.words("to") or ("connection" if r.target.get("channel") == "inmail" else "inmail")
+    left = None
+    if to == "inmail":
+        st = _state()
+        contacts, threads = st.load_contacts(), st.load_threads()
+        b = st.platform_budget(contacts, threads, r.day.isoformat())
+        left = b["inmails_left"] - b["queued_unsent"]["inmail"]
+    try:
+        said = inmail_pick.switch(cid, to, left)
+    except ValueError as e:
+        raise Refused(str(e)) from None
+    back = "connection" if to == "inmail" else "inmail"
+    return {"note": said, "undo": {"action": "msg.channel", "target": dict(r.target),
+                                   "value": {"to": back}}}
+
+
+def _inmail_credits(r: Run) -> dict:
+    """The InMail balance LinkedIn shows, kept as `state.py inmail-credits <n>` keeps it; or
+    "later", and the question comes back in a week."""
+    import inmail_pick
+    raw = r.value.get("value")
+    if str(raw or "").strip().lower() in ("later", "not this week"):
+        inmail_pick.skip_week(r.day)
+        return {"note": "Asked again next week.", "undo": None}
+    try:
+        n = int(float(str(raw).strip()))
+    except (TypeError, ValueError):
+        raise Refused("Say it as a number: the InMails LinkedIn shows you have left.",
+                      ask=ask("value", "InMails left", "number")) from None
+    if n < 0:
+        raise Refused("A number of InMails is 0 or more.",
+                      ask=ask("value", "InMails left", "number"))
+    code, out = _cli(_state(), ["inmail-credits", str(n), "--today", r.day.isoformat()])
+    if code:
+        raise Refused(_said(out))
+    return {"note": f"Kept: {n} InMail{'s' if n != 1 else ''} left. Claude spends them only on "
+                    "people worth one, and keeps one back.", "undo": None}
 
 
 def _set_contact(r: Run, status: str, action: str, due: str, note: str) -> dict:
@@ -3606,6 +3661,7 @@ HANDLERS = {
     "person.call_booked": _call_booked, "referral.agreed": _referral_agreed,
     "referral.ended": _referral_ended, "due.snooze": _due_snooze,
     "msg.skip": _msg_skip, "msg.unskip": _msg_unskip, "person.stop": _person_stop,
+    "msg.channel": _msg_channel, "inmail.credits": _inmail_credits,
     "person.status": _person_status,
     "consent.yes": lambda r: _consent(r, "yes"), "consent.no": lambda r: _consent(r, "no"),
     "setting.set": _setting_set, "needs.answer": _needs_answer,
@@ -3643,6 +3699,7 @@ NO_UNDO = {
                    "chat's, with the person",
     "reader.checked": "a check is a check: the next one says what is true then",
     "reading.done": "a reading is kept as read; a later one replaces it",
+    "inmail.credits": "a balance is what LinkedIn showed that day; the next answer replaces it",
     "tip.seen": "a tip seen is seen: nothing about the search changed",
     "setup.done": "it only checks again what the person did outside the page",
     "setup.carry_on": "it writes nothing: it only asks a chat to carry setup on",
@@ -3655,6 +3712,28 @@ NO_UNDO = {
 # Actions that change only the page's own list, so the repo is not read again after them.
 DB_ONLY = {"job.add", "job.draft", "consent.yes", "consent.no", "work.stop", "work.resume",
            "app.update_now", "setup.make_copy", "tweak.undo"}
+# Marks: taps that need no judgement and leave nothing for Claude to do after them (a role
+# applied for or not, a message sent or set aside, a reminder done or put off, a job set aside
+# or brought back, a rule kept, a tip seen). The page shows each at once from the tap itself,
+# so none rings Claude, and none counts as the page waiting on an answer
+# (app_listen.waiting_since): each is applied by the engine, in one batch, the next time any
+# chat works on the search (a wake, `app.py view`, the brief), before anything is read. A
+# small tap started a whole helper that read the whole page, two to four minutes for
+# "applied" (the maintainer's copy, 2026-11-05). Everything else (setup answers, a booked
+# interview, a download to read, a tap that queues work or needs a chat's own call) still
+# rings. The page reads this list from the model (app_listen.model_part, `marks`).
+MARKS = frozenset({
+    "job.dismiss", "job.bring_back", "job.applied", "job.not_applied", "job.keep", "job.unkeep",
+    "ready.applied", "ready.not_applied", "ready.not_applying", "ready.reopen",
+    "ready.sent_to_contact", "msg.sent", "msg.unsent", "msg.skip", "msg.unskip",
+    "person.stop", "person.status", "due.done", "due.undo", "due.snooze",
+    "suggest.dismiss", "suggest.undismiss", "hint.seen", "tip.seen", "pin.answer",
+    "rule.keep", "rules.seen", "learned.retire", "learned.unretire",
+    "upcoming.add", "upcoming.remove", "requests.withdrawn", "requests.unwithdrawn",
+    "export.requested", "export.unrequested", "reader.checked", "referral.agreed",
+    "referral.ended", "outcome.rejected", "outcome.withdrawn", "outcome.no_response",
+    "outcome.offer", "outcome.undo"})
+assert MARKS <= set(HANDLERS) and not MARKS & DB_ONLY
 # What may be applied on the app itself or a public copy: nothing that writes about the
 # person. The rest waits, unreceipted, for their private copy.
 PUBLIC_SAFE = {"setup.make_copy", "work.stop", "work.resume"}
@@ -3940,10 +4019,11 @@ def _kept_ledger_add(aid: str, act: dict, receipt: dict) -> None:
 
 
 def apply_dir(dump_dir: str, chat: str = "chat", now: dt.datetime | None = None,
-              out_dir: str | None = None, assets_dir: str | None = None) -> dict:
-    """Apply every pending action in a dump; the receipts (and any work items) to write back.
-    An action naming page assets not fetched into `assets_dir` gets no receipt: `fetch`
-    lists them, to fetch and apply again."""
+              out_dir: str | None = None, assets_dir: str | None = None,
+              only=None) -> dict:
+    """Apply every pending action in a dump (or those in `only`); the receipts (and any work
+    items) to write back. An action naming page assets not fetched into `assets_dir` gets no
+    receipt: `fetch` lists them, to fetch and apply again."""
     now = now or dt.datetime.now(dt.timezone.utc)
     ASSETS_DIR[0] = assets_dir
     out_dir = out_dir or os.path.join(dump_dir, "out")
@@ -3973,6 +4053,8 @@ def apply_dir(dump_dir: str, chat: str = "chat", now: dt.datetime | None = None,
     summary: dict = {"ok": [], "stale": [], "conflict": [], "again": []}
     done: dict = {}
     todo = pending(db, chat, now)
+    if only is not None:
+        todo = [t for t in todo if t[0] in set(only)]
     for aid, act, _version in todo:
         name, item = str(act.get("action") or ""), _item_id(str(act.get("item") or ""))
         if aid not in ledger and name in ACTIONS and name != "undo" \

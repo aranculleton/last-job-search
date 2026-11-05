@@ -58,8 +58,9 @@ view "$D/view" --dump "$D" --chat <your chat id> --end --message "<what changed>
 batch sent (it starts the save in a process of its own and keeps what the wake cost). It
 first asks for a short read of what came in while you worked (into the same `$D`, then the
 same command again), applies the taps made meanwhile in that batch (one that changes the copy
-is claimed first: send the claim, then the same command again), and names work asked for
-meanwhile in a `late:` line: take it with the `wake` it prints before ending. Then
+is claimed first: send the claim, then the same command again), and names the work waiting
+that this chat takes in a `late:` line: take it with the `wake` it prints before ending (the
+line comes back at every end until it is taken). Then
 answer in one line: what the page now shows, never a path or a command; or `agent: <the
 Agent call>` for a big job that needs one (`wake --no-sessions`).
 
@@ -397,8 +398,10 @@ pinned and a hand-over never comes while a job runs). With `--end`, in the chat 
 the page, it first prints the reads of what came in since the wake's read (taps, receipts,
 work asked for): make them into the same folder and run it again, so taps made while the work
 ran are applied in this batch, never left for the person's next message (seven "I sent it"
-taps waited so, 2026-11-05). It writes only what changed, and never
-over a screen another chat drew from a newer copy (judged by the commit each copy is based
+taps waited so, 2026-11-05). Any `view`, in any chat, first keeps the person's marks
+(applied, I sent it, set aside, put off: taps that ring nobody, `app_actions.MARKS`): where it
+prints their claim, send it and run the same command again. It writes only what changed, and
+never over a screen another chat drew from a newer copy (judged by the commit each copy is based
 on). Any chat draws the screens, a chat the person opened included, except one that answered
 the page and handed it on (the old helper in a hand-over): there it writes nothing unless the
 work is its own (`--work <its id>`, work begun with `ask --here`), says so in one `for_claude`

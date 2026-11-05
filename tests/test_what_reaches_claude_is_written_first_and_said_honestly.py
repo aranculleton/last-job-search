@@ -76,7 +76,10 @@ def test_a_question_handed_on_after_the_tap_is_spent_is_saved_said_once_and_sent
     assert first["rings"] == [], "the tap was spent: nothing rang, and nothing pretends it did"
     text = first["text"]
     assert "Saved. It starts next time" not in text
-    assert text.index("Is there anything new") < text.index("This needs Claude itself"), "the note follows the message"
+    # The hand-off line is one short state since 2026-11-05, and a line saying it is not sent
+    # yet never opens "Sent to Claude" (it read "Sent to Claude · Not sent to Claude yet").
+    assert "Sent to Claude · Not sent" not in text, text
+    assert text.index("Is there anything new") < text.index("Not sent to Claude yet"), "the note follows the message"
     assert "Not sent to Claude yet: it goes with your next tap here." in text
     assert first["count"] == 1, "one button says it, once"
     after = got["after"][2]
@@ -201,7 +204,7 @@ def test_stop_while_a_paste_is_read_stops_it_and_no_offer_follows(run, tmp_path)
     got = _go(run, tmp_path, [
         {"hash": "chat", "eval": _type_js(INVITE)},
         {"click": "Send", "exact": True, "wait": 300, "attr": ["[data-k=talk-stop]", "hidden"]},
-        {"click": "Stop", "exact": True, "wait": 300, "read": "#main", "attr": ["[data-k=talk-stop]", "hidden"], "store": "talk/"},
+        {"click": "Stop Claude's work on this answer", "exact": True, "wait": 300, "read": "#main", "attr": ["[data-k=talk-stop]", "hidden"], "store": "talk/"},
     ], PHONE, fake=dict(FAKE, sample={"hang": True}), clock=T)
     assert got["after"][1]["attr"] is None, "Stop shows while it reads"
     assert got["after"][2]["attr"] is not None and "Book this interview" not in got["after"][2]["text"]
@@ -338,7 +341,8 @@ def test_work_waiting_its_turn_stays_in_line_and_a_batch_speaks_with_its_first_i
         assert "No answer" not in t and "not picked this up" not in t
     assert "May have stopped" not in b["text"] and "Drafted in one go with Harbourline Bank" in b["text"] and "Writing the CV" in b["text"]
     assert b["count"] == 1, "only its title's own toggle: no Stop and no Try again of its own"
-    assert a["attr"] == "Stop: Draft: Harbourline Bank and the 2 drafts written with it"
+    # "Stop Claude" everywhere (the maintainer, 2026-11-05).
+    assert a["attr"] == "Stop Claude's work on Draft: Harbourline Bank and the 2 drafts written with it"
     assert todo["count"] == 0 and todo["attr"] == "live", "jobs running are Claude being there"
     assert "In line" in e2["text"] and "Starting" not in e2["text"]
 
@@ -444,7 +448,8 @@ def test_a_yes_or_no_question_is_answered_in_one_tap_and_goes_back_as_its_own_jo
     item = next(x for x in got["after"][1]["work"] if x["id"] == "draft~q")
     assert item["status"] == "queued" and item["with"] is None and list(item["args"]["answers"].values()) == ["Yes"]
     assert [r["text"] for r in got["after"][1]["rings"]] == ["[app] [work:draft~q]"]
-    assert "Sent to Claude" in got["after"][2]["text"]
+    # One short state (the maintainer, 2026-11-05): "Waking Claude", or about to start.
+    assert "Waking Claude" in got["after"][2]["text"] or "Starting in a moment" in got["after"][2]["text"], got["after"][2]["text"]
 
 
 # ------------------------------------------------------------------ 14, 15, 17: the chat's own lines

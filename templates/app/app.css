@@ -117,9 +117,12 @@ bdi { unicode-bidi: isolate; }
 .main { grid-area: main; min-width: 0; outline: none; padding-top: 8px; }
 .side { display: none; grid-area: side; }
 .rail { display: none; grid-area: rail; }
-.foot { grid-area: foot; padding-block: 32px 8px; color: var(--muted); font-size: var(--t-sm); max-width: 70ch; display: grid; gap: 8px; }
+.foot { grid-area: foot; padding-block: 24px 8px; color: var(--muted); font-size: var(--t-sm); max-width: 70ch; display: grid; gap: 8px; }
 .foot-line .btn.link { font-size: inherit; }
-.foot > * { max-width: 70ch; }
+/* The privacy line and, opened, its words in one paragraph across the column: never a narrow
+   block in a wide strip (the maintainer, 2026-11-05). */
+.foot > * { max-width: none; }
+@media (min-width: 760px) { .foot { max-width: none; } }
 
 .tabs {
   position: fixed; left: 0; right: 0; bottom: 0; z-index: 20;
@@ -320,6 +323,12 @@ bdi { unicode-bidi: isolate; }
   :is(.card-actions, .wc-actions, .suggest-acts, .g-acts) > details.more > .more-btn:hover { background: var(--raised-hover); border-color: var(--line-strong); }
   :is(.card-actions, .wc-actions, .suggest-acts, .more-acts, .g-acts, .fix, .bp-foot, .sheet-actions) > .btn.primary:hover { background: var(--accent-hover); border-color: var(--accent-hover); color: var(--accent-ink); }
 }
+/* Stop Claude: a quiet pill, faintly red, so it reads as stopping Claude's work and never as
+   putting the job or the message away (the maintainer, 2026-11-05). */
+.btn.stop-claude, :is(.card-actions, .wc-actions, .suggest-acts, .more-acts, .g-acts, .fix, .bp-foot, .sheet-actions) > .btn.stop-claude:not(.icon-only) {
+  color: var(--st-failed); background: var(--st-failed-bg); border: 1px solid var(--st-failed-bg); border-radius: 999px; text-decoration: none; }
+.btn.stop-claude { padding: 2px 8px; }
+@media (hover: hover) { .btn.stop-claude:hover, :is(.card-actions, .wc-actions) > .btn.stop-claude:not(.icon-only):hover { border-color: var(--st-failed); background: var(--st-failed-bg); } }
 /* More, wherever it is, is a soft pill. */
 .more-btn { background: var(--raised); border: 1px solid var(--line-strong); font-weight: 400; }
 .fbar, .seg { display: inline-flex; align-items: center; gap: 4px; min-height: 38px; font-weight: 600; font-size: var(--t-sm); }
@@ -1103,7 +1112,6 @@ kbd { font: 600 var(--t-sm) var(--font-data); background: var(--raised); color: 
 
 .private { max-width: 520px; margin: 18vh auto 0; padding: 32px; background: var(--surface); border: 1px solid var(--line); border-radius: var(--r); display: grid; gap: 12px; }
 .private h1 { font-size: var(--t-xl); }
-.foot-text { max-width: 70ch; }
 .navlink { font-weight: 600; }
 /* A link that is a control (See the posting, Open in Jobs, Show them, Got it) wears a quiet
    grey underline; the rose is for links inside sentences and for hover (2026-10-29: the red
@@ -1340,6 +1348,12 @@ body.has-fab .shell { padding-bottom: calc(var(--tabs-h) + env(safe-area-inset-b
   background: var(--surface); color: var(--ink); border: 1px solid var(--line-strong); border-radius: var(--r); box-shadow: var(--shadow);
 }
 .dock-top { display: flex; align-items: center; gap: 8px; padding: 8px 8px 8px 16px; border-bottom: 1px solid var(--line); flex: none; }
+/* The larger bubble: about twice as wide, capped so the page behind still shows, and most of
+   the window's height. A phone's bubble is the screen already, so there is no toggle. */
+@media (min-width: 760px) {
+  .chat-dock.is-big { width: min(840px, calc(100vw - 280px)); height: calc(100dvh - var(--top-h) - env(safe-area-inset-top, 0px) - env(safe-area-inset-bottom, 0px) - 32px - var(--dock-lift, 0px)); }
+}
+@media (max-width: 759px) { .dock-size { display: none; } }
 .dock-title { margin: 0 auto 0 0; font-size: var(--t-lg); font-weight: 600; outline: none; }
 .dock-body { flex: 1 1 auto; min-height: 0; overflow-y: auto; overscroll-behavior: contain; padding: 0 16px; }
 .chat-dock .talk-body { display: flex; flex-direction: column; gap: 12px; min-height: 100%; padding-top: 12px; }
@@ -1351,6 +1365,16 @@ body.has-fab .shell { padding-bottom: calc(var(--tabs-h) + env(safe-area-inset-b
 @media (min-width: 760px) {
   body.has-fab .shell { padding-bottom: calc(env(safe-area-inset-bottom, 0px) + 44px + 44px); }
 }
+/* A laptop's Brief ends at the window's foot: the privacy line keeps clear of the Chat button
+   at its side rather than above it, and the page under it is not grown for the button. */
+@media (min-width: 960px) {
+  body.has-fab .shell.on-brief { padding-bottom: env(safe-area-inset-bottom, 0px); }
+  .shell.on-brief .foot:empty { display: none; }
+}
+.bp-bottom { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 24px; min-height: 64px; padding-right: calc(4 * var(--target)); /* clear of the Chat button */
+  color: var(--muted); font-size: var(--t-sm); }
+.bp-bottom .foot-line { margin: 0; }
+.bp-bottom .bp-tip { flex: 1 1 320px; }
 @media (max-width: 759px) {
   .chat-fab { bottom: calc(var(--tabs-h) + env(safe-area-inset-bottom, 0px) + 12px + var(--dock-lift, 0px)); }
   .chat-dock {
@@ -1475,7 +1499,67 @@ body.has-fab .shell { padding-bottom: calc(var(--tabs-h) + env(safe-area-inset-b
 .brief-hello .sum-small { margin: 4px 0 0; }
 .brief-grid { display: grid; grid-template-columns: minmax(0, 1fr); gap: 12px; }
 @media (min-width: 760px) { .brief-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
-@media (min-width: 1100px) { .brief-grid { grid-template-columns: repeat(12, minmax(0, 1fr)); } }
+/* A laptop's Brief is one screen, two rows of panels sharing the window's height (fitBrief
+   sets the grid's height; the maintainer, 2026-11-05: "the brief should fit the window"). */
+@media (min-width: 960px) {
+  .brief-grid { grid-template-columns: repeat(12, minmax(0, 1fr)); gap: 8px; }
+  .brief-grid.is-filled { grid-auto-rows: minmax(max-content, 1fr); }
+  .brief-grid .bpanel { padding: 12px 16px; gap: 8px; max-height: none; }
+  .brief-grid .bp-body { gap: 8px; }
+  .bpanel.bp-upcoming { container-type: inline-size; }
+  .brief-page .bp-tip { padding: 8px 16px; }
+}
+/* A short laptop window (720 or less) draws the Brief closer: the greeting smaller, its panels'
+   numbers four across in a narrow panel, the foot's pills a little lower, so two rows fit. */
+@media (min-width: 960px) and (max-height: 760px) {
+  .brief-page { gap: 8px; }
+  .brief-hello .screen-title { font-size: 1.375rem; }
+  .brief-grid .bp-iv { padding: 8px 12px; gap: 2px; }
+  .brief-grid .bp-iv .btn { margin-top: 2px; }
+  .brief-grid .bp-stat { padding: 4px 8px; }
+  .brief-grid .bp-n { font-size: 1.125rem; }
+  .brief-grid .bp-spark { height: 32px; }
+  .brief-grid .bp-foot { padding-top: 0; }
+  .brief-grid .bp-list, .brief-grid .bp-lead-list, .brief-grid ul.bp-news { gap: 4px; }
+}
+.bp-head-numbers { display: none; }
+@media (min-width: 960px) and (max-height: 660px) {
+  .bp-head-numbers { display: block; }
+  .brief-grid > .bp-numbers { display: none; }
+  .brief-grid > .bpanel.w12-s3 { grid-column: span 3; }
+  .brief-grid > .bpanel.w12-s4 { grid-column: span 4; }
+  .brief-grid > .bpanel.w12-s5 { grid-column: span 5; }
+  .brief-grid > .bpanel.w12-s6 { grid-column: span 6; }
+  .brief-grid > .bpanel.w12-s8 { grid-column: span 8; }
+  .brief-grid > .bpanel.w12-s12 { grid-column: span 12; }
+  .brief-grid .bp-iv .btn { margin-top: 0; }
+  .brief-grid .bp-foot > :is(.btn, a):not(.icon-only) { padding-inline: 8px; }
+  /* The greeting, its day and the numbers on one line. */
+  .brief-hello { display: flex; align-items: baseline; flex-wrap: wrap; gap: 0 12px; }
+  .brief-hello .summary { display: flex; flex-wrap: wrap; gap: 0 12px; }
+  .brief-hello .sum-small { margin: 0; }
+  .brief-head { align-items: center; flex-wrap: nowrap; }
+  .brief-head .head-tools { flex-wrap: nowrap; }
+  .brief-head .head-tools .btn { padding-inline: 8px; }
+  .brief-head .head-tools .btn > span:not(.sr-only) { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
+  /* The tip on one line beside the privacy line, its whole text a tap on it away (title). */
+  .bp-bottom { flex-wrap: nowrap; min-height: 56px; }
+  .bp-bottom .foot-line { flex: none; }
+  .bp-bottom .bp-tip { flex: 1 1 0; min-width: 0; flex-wrap: nowrap; padding-block: 4px; }
+  .bp-bottom .bp-tip-t { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; flex: 1 1 auto; }
+  .bp-bottom .bp-tip .btn { white-space: nowrap; flex: none; }
+  .bp-bottom .foot-line.open { flex: 1 1 auto; }
+  .bp-bottom:has(.foot-line.open) .bp-tip { display: none; }
+}
+/* A narrow Coming up shows this week's seven days; the list and "All coming up" hold the rest. */
+@container (max-width: 420px) {
+  .bp-week { grid-template-columns: repeat(7, minmax(0, 1fr)); }
+  .bp-week > :nth-child(n+8) { display: none; }
+}
+@container (max-width: 320px) {
+  .bp-week { grid-template-columns: repeat(5, minmax(0, 1fr)); }
+  .bp-week > :nth-child(n+6) { display: none; }
+}
 .bpanel { --pc: var(--accent); --pcbg: var(--accent-soft); background: var(--surface); border: 1px solid var(--line); border-radius: var(--r); padding: 16px; display: flex; flex-direction: column; gap: 12px; min-width: 0; box-shadow: var(--shadow); }
 .bp-today { --pc: var(--mark); --pcbg: var(--accent-soft); background: linear-gradient(135deg, var(--accent-soft), var(--surface) 70%); }
 .bp-next { --pc: var(--st-held); --pcbg: var(--st-held-bg); }
@@ -1548,7 +1632,6 @@ body.has-fab .shell { padding-bottom: calc(var(--tabs-h) + env(safe-area-inset-b
 .bp-iv-when { font-size: var(--t-sm); font-weight: 600; letter-spacing: 0.04em; text-transform: uppercase; color: var(--st-failed); }
 .bp-iv-what { font-weight: 600; font-size: 1rem; }
 .bp-iv .btn { margin-top: 4px; }
-@media (min-width: 1100px) { .bp-today .bp-body { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1.2fr); align-items: start; } .bp-today .bp-body > :only-child { grid-column: 1 / -1; } }
 /* The top row, Today and Coming up, is as tall as what they hold: never cut. */
 @media (min-width: 760px) { .bpanel.bp-today, .bpanel.bp-upcoming, .bpanel.bp-news { max-height: none; } }
 /* A news point: what happened, what to do with it, where it is from. Never cut by the panel's
@@ -1802,11 +1885,11 @@ ul.bp-news { max-width: 80ch; }
 .bp-steps > .bp-step-iv .bp-at { display: block; }
 /* Each row of the Brief filled, whichever panels a person has (fillRows): twelve columns
    on a laptop, two on a tablet, one on a phone. */
-@media (min-width: 760px) and (max-width: 1099px) {
+@media (min-width: 760px) and (max-width: 959px) {
   .brief-grid > .c2-s1 { grid-column: span 1; }
   .brief-grid > .c2-s2 { grid-column: span 2; }
 }
-@media (min-width: 1100px) {
+@media (min-width: 960px) {
   .brief-grid > .c12-s1 { grid-column: span 1; }
   .brief-grid > .c12-s2 { grid-column: span 2; }
   .brief-grid > .c12-s3 { grid-column: span 3; }
@@ -1858,8 +1941,29 @@ ul.bp-news { max-width: 80ch; }
    Something else opens a box under the card it is about; the question and Claude's answer stay
    under that card, never in the Chat (the maintainer, 2026-11-05). One soft grey block, as a
    card's question box is. */
-.card-talk { display: grid; gap: 8px; margin-top: 8px; padding: 12px; border-radius: var(--r); background: var(--sunk); }
+/* Its own hairline as well as its fill: a hovered card takes the page's colour, which in the
+   dark look is the box's own, and the box vanished into it (the maintainer, 2026-11-05). */
+.card-talk { display: grid; gap: 8px; margin-top: 8px; padding: 12px; border-radius: var(--r); background: var(--sunk); border: 1px solid var(--line); }
 .ct-pair { display: grid; gap: 4px; }
+.ct-early { justify-self: start; }
+.ct-earlier { display: grid; gap: 12px; max-height: 320px; overflow-y: auto; overscroll-behavior: contain; padding-bottom: 8px; border-bottom: 1px solid var(--line); }
+.ct-folded { margin: 8px 0 0; }
+/* A finished piece of work: one compact row, the whole of it a way to its record, the time at
+   its end, its trash shown on hover or focus (the maintainer, 2026-11-05). */
+.work-card.wc-done { padding: 8px 12px; }
+.wc-row { display: flex; align-items: center; gap: 8px; min-width: 0; }
+.wc-open { flex: 1; min-width: 0; display: grid; gap: 2px; color: inherit; text-decoration: none; border-radius: var(--r-sm); }
+.wc-open .wc-title { font-weight: 600; font-size: var(--t-sm); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.wc-open .wc-sum { font-size: var(--t-sm); color: var(--muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.wc-when { flex: none; }
+@media (hover: hover) { .wc-done .wc-row > .icon-only { opacity: 0; } .wc-done:hover .wc-row > .icon-only, .wc-done .wc-row > .icon-only:focus-visible, .wc-done:focus-within .wc-row > .icon-only { opacity: 1; } }
+/* Words clipped to a few lines, their line breaks kept, opened in place by Show all. */
+.clip-text { margin: 0; white-space: pre-wrap; overflow-wrap: anywhere; }
+.clip-text.is-clipped { display: -webkit-box; -webkit-box-orient: vertical; overflow: hidden; }
+.clip-text.clip-2 { -webkit-line-clamp: 2; }
+.clip-text.clip-1 { -webkit-line-clamp: 1; }
+.clip-text.clip-4 { -webkit-line-clamp: 4; }
+.clip-wrap { display: grid; gap: 2px; justify-items: start; }
 .ct-q, .ct-a { margin: 0; white-space: pre-wrap; overflow-wrap: anywhere; }
 .ct-q { color: var(--muted); font-size: var(--t-sm); }
 .ct-who { font-weight: 600; color: var(--ink); font-size: var(--t-sm); }

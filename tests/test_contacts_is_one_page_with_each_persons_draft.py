@@ -277,30 +277,31 @@ def test_the_reply_line_says_each_state_and_can_be_called_off(run, page, model):
     got = run("engine", html=page, viewport=PHONE, clock=CLOCK, steps=[
         {"hash": "contacts", "click": "They replied: paste what Corwin sent"},
         {"fillMain": {"Paste what Corwin sent": said}, "then": "Draft my reply to Corwin", "eval": LINE},
-        {"click": "Cancel the reply to Corwin", "eval": "[%s, %s]" % (LINE, BOX)},
+        {"click": "Stop Claude's work on the message to Corwin", "eval": "[%s, %s]" % (LINE, BOX)},
     ])
     assert not got["errors"], got["errors"]
     first = got["after"][1]["eval"]
-    assert first.startswith(("Waiting for Claude · Saved", "Next · Saved")) and "Cancel" in first, first
+    # Its one call-off is "Stop Claude" (the maintainer, 2026-11-05).
+    assert first.startswith(("Waiting for Claude · Saved", "Next · Saved")) and "Stop Claude" in first, first
     line, box = got["after"][2]["eval"]
     assert line == "" and box == ["Paste what Corwin sent", said], (line, box)
     assert not [a for a in got["actions"] if a["action"] == "msg.received"], "called off before Claude had it"
     # Waiting its turn: Cancel stops it at once.
     got = run("engine", html=page, viewport=PHONE, clock=CLOCK, seed={"work/reply~" + CORWIN: _reply_work("queued", stage=0)}, steps=[
         {"hash": "contacts", "eval": LINE},
-        {"click": "Cancel the reply to Corwin", "eval": "[%s, %s]" % (LINE, BOX)},
+        {"click": "Stop Claude's work on the message to Corwin", "eval": "[%s, %s]" % (LINE, BOX)},
     ])
     assert not got["errors"], got["errors"]
-    assert got["after"][0]["eval"].startswith("Waiting for Claude") and "Cancel" in got["after"][0]["eval"], got["after"][0]["eval"]
+    assert got["after"][0]["eval"].startswith("Waiting for Claude") and "Stop Claude" in got["after"][0]["eval"], got["after"][0]["eval"]
     line, box = got["after"][1]["eval"]
-    assert line.startswith("Stopped · Nothing was drafted") and "Cancel" not in line, line
+    assert line.startswith("Stopped · Nothing was drafted") and "Stop Claude" not in line, line
     assert box and box[0].startswith("Paste what Corwin sent"), box
     assert next(w for w in got["after"][-1]["work"] if w["id"] == "reply~" + CORWIN)["status"] == "stopped"
     # Running: Stopping after this step, then Stopped once its chat stops it.
     running = _reply_work("running", claimed_by="cloud-1", claimed_at="2026-10-25T18:29:30Z", lease_until="2026-10-25T20:00:00Z")
     got = run("engine", html=page, viewport=PHONE, clock=CLOCK, seed={"work/reply~" + CORWIN: running}, steps=[
         {"hash": "contacts", "eval": LINE},
-        {"click": "Cancel the reply to Corwin", "eval": LINE},
+        {"click": "Stop Claude's work on the message to Corwin", "eval": LINE},
         {"write": {"work/reply~" + CORWIN: dict(running, stop_asked=True, status="stopped", finished_at="2026-10-25T18:30:30Z")}, "eval": LINE},
     ])
     assert not got["errors"], got["errors"]
@@ -436,7 +437,8 @@ def test_the_pencil_changes_the_words_in_place_or_asks_claude(run, page, model):
     assert got["after"][0]["count"] == 1, "one gauge, beside Ask Claude"
     w = [x for x in got["after"][2]["work"] if x.get("kind") == "tweak" and not x["args"].get("auto")]
     assert w and w[0]["args"]["text"] == "Make it shorter." and w[0]["args"]["target"]["contact"] == rafe, w
-    assert "Make it shorter" in got["after"][2]["text"] and "Cancel" in got["after"][2]["text"], got["after"][2]["text"]
+    # Said once, under the draft, with Stop Claude (the maintainer, 2026-11-05).
+    assert "Make it shorter" in got["after"][2]["text"] and "Stop Claude" in got["after"][2]["text"], got["after"][2]["text"]
 
 
 # ------------------------------------------------------------------ More on a card
@@ -550,7 +552,10 @@ def test_an_answer_is_done_never_putting_it_on_your_page(run, page, model):
                                                  "to": "cloud", "asked_at": "2026-10-25T18:20:00Z", "finished_at": "2026-10-25T18:29:00Z",
                                                  "result": {"summary": "Yes, you applied through his link."}, "args": {}, "_v": 2}})
     got = run("engine", html=page, viewport=WIDE, clock=CLOCK, seed=seed, steps=[
-        {"hash": "contacts", "eval": "[...document.querySelectorAll('[data-work=\"talk~x\"] .state-word')].map((e) => e.textContent.trim())"}])
+        {"hash": "contacts", "eval": "[...document.querySelectorAll('[data-work=\"talk~x\"]')].map((e) => e.textContent.trim())"}])
     assert not got["errors"], got["errors"]
+    # A finished item is a compact row with no state chip since 2026-11-05 (the maintainer:
+    # the work list was cluttered); the row itself must still never say it is being put on
+    # the page.
     words = got["after"][0]["eval"]
-    assert words and not any("putting it on your page" in w for w in words), words
+    assert words and not any(w in t.lower() for t in words for w in ("putting it on your page", "putting on page")), words
