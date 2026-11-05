@@ -539,6 +539,13 @@ def plan(chats: list[dict], triggers: list[dict], info: dict, reg: dict, listene
     # The chat the page was taken from is put away only where the app started it: one the
     # person writes in, whatever its title, is theirs (the stranger audit, X-4).
     known = ({listener.get("took_from") or ""} - {""}) if listener.get("took_from_helper") else set()
+    # Every chat the page's record says answered it as a helper (app_listen.helpers_after):
+    # a helper is what it did, never how it was started or what it is called. One the person
+    # started from the page ("Look after my job search page from now on.") keeps the name the
+    # app gave its first message, and the tidy-up said "nothing to tidy" for it, a third
+    # helper beside the live one (the maintainer's copy, 2026-11-05).
+    helped = (({str(x) for x in listener.get("helpers") or () if x} | known)
+              - {listener.get("chat") or ""})
     # Every task that is on, by the chat it fires into (a one-time reminder as much as the
     # brief): a chat a live task fires into is never archived, only one whose every such task
     # this same plan moves away (the maintainer's live run, 2026-11-05: two one-time tasks
@@ -573,8 +580,9 @@ def plan(chats: list[dict], triggers: list[dict], info: dict, reg: dict, listene
     theirs = str(listener.get("took_from") or "") if listener.get("took_from_helper") is False else ""
     started = {s.get("id") for s in chats if person_started(s)}
     started_helpers = {sid for sid in started if HELPER_NAME.match(titles.get(sid, "").strip())}
+    started_helpers |= started & helped
     mine_only = started - started_helpers             # theirs, never a helper: never listed
-    old_helpers = ({sid for sid, t in titles.items() if HELPER_NAME.match(t.strip())} | known) \
+    old_helpers = ({sid for sid, t in titles.items() if HELPER_NAME.match(t.strip())} | helped) \
         - live_ids - mine_only - {theirs, ""}
 
     # The chat that handed the page to the live helper, by the page's own record: a brief
@@ -583,13 +591,13 @@ def plan(chats: list[dict], triggers: list[dict], info: dict, reg: dict, listene
 
     def retired(sid: str) -> bool:
         return bool(sid) and sid != helper and (
-            sid not in listed_ids or sid in known or sid in old_helpers or sid in handed
+            sid not in listed_ids or sid in helped or sid in old_helpers or sid in handed
             or bool(re.search(r"\bhelper\b", titles.get(sid, ""), re.I)))
 
     def old_helper(sid: str) -> bool:
         """One of the app's helpers the page no longer uses, this chat included."""
         return bool(sid) and sid != helper and sid not in mine_only and sid != theirs and (
-            sid in known or bool(HELPER_NAME.match(titles.get(sid, "").strip())))
+            sid in helped or bool(HELPER_NAME.match(titles.get(sid, "").strip())))
 
     # Where the brief runs is where its task fires: a registry that names no chat, or the ops
     # chat, while the task wakes an old helper (the maintainer's live run, 2026-11-05: a brief
@@ -701,7 +709,7 @@ def plan(chats: list[dict], triggers: list[dict], info: dict, reg: dict, listene
             out["keep"].append({"id": sid, "title": title, "why": why})
         if sid in done_before:
             continue
-        if not (APP_TITLE.match(title) or sid in known) or sid == theirs or sid in mine_only:
+        if not (APP_TITLE.match(title) or sid in helped) or sid == theirs or sid in mine_only:
             continue                                  # the person's own chat: never listed
         if sid in live_ids:
             keep("it answers the page" if sid == listener.get("chat") else "it is this chat")
@@ -715,7 +723,7 @@ def plan(chats: list[dict], triggers: list[dict], info: dict, reg: dict, listene
         if sid in campaigns:
             keep("a live process has its own chat here")
             continue
-        if sid in old_helpers and sid not in known and _after(s.get("created_at"),
+        if sid in old_helpers and sid not in helped and _after(s.get("created_at"),
                                                                listener.get("since")):
             # Started since the live helper took the page: a fresh one its renewal asked for,
             # which may yet take it. Every helper from before was started earlier.
@@ -780,7 +788,7 @@ def plan(chats: list[dict], triggers: list[dict], info: dict, reg: dict, listene
             continue
         why = ("the brief moved into the chat that answers the page" if sid == adopt else
                "the shortlist moved into the chat that answers the page" if sid in moved_from else
-               "a helper the page no longer uses" if sid in old_helpers or sid in known
+               "a helper the page no longer uses" if sid in old_helpers or sid in helped
                or re.search(r"helper", title, re.I)
                else "a chat for one run or one job, finished")
         out["archive"].append({"id": sid, "title": title, "why": why})

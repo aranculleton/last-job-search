@@ -294,6 +294,16 @@ def cmd_view(a) -> int:
                          "for_claude": got["lines"]}), end="")
             return 2
         late_batches, late_lines = got["batches"], got["lines"]
+    elif a.dump:
+        # Marks first, in any chat that draws the page: they ring nobody, so whichever chat
+        # works on the search next keeps them, before the page is drawn from the copy.
+        got = marks_first(a.dump, app_listen_chat(a.chat), now, os.path.join(a.out_dir, "marks"),
+                          work=getattr(a, "work", "") or "")
+        if got.get("claim"):
+            print(_dump({"rev": None, "batches": got["batches"],
+                         "for_claude": got["lines"]}), end="")
+            return 2
+        late_batches, late_lines = got.get("batches") or [], got.get("lines") or []
     db = page_db.load(a.dump) if a.dump else {}
     missing = no_screen(a.dump, db) if a.dump else ""
     if missing:
@@ -502,6 +512,12 @@ def cmd_view(a) -> int:
     return 0
 
 
+def app_listen_chat(chat: str) -> str:
+    """This chat's id, given or from the session (app_listen.this_chat)."""
+    import app_listen
+    return app_listen.this_chat(chat)
+
+
 def answers_page(db: dict, chat: str) -> bool:
     """Is this chat the one the page's record names as answering it?"""
     import app_listen
@@ -514,64 +530,129 @@ LATE_CLAIM = ("view: {n} tap{s} came in while the work ran, and applying {them} 
               "copy: send this claim, and once it is accepted run this same command again: it "
               "applies them and brings the page up to date in one batch. Refused: as any "
               "refused write (the app skill, \"Rules that hold everywhere\").")
-LATE_WORK = ("late: work was asked for while this ran ({ids}): once this batch is sent, take it "
-             "before ending: python3 tools/app.py wake \"{dump}\" --chat {chat} (the same "
-             "folder), do what it prints, then end with this same command again.")
+LATE_WORK = ("late: work is waiting that this chat takes before it ends ({ids}): once this "
+             "batch is sent, take it: python3 tools/app.py wake \"{dump}\" --chat {chat} (the "
+             "same folder), do what it prints, then end with this same command again. It is "
+             "named at every end until it is taken.")
+
+
+MARKS_CLAIM = ("view: {n} mark{s} the person made on the page (applied, sent, set aside and "
+               "the like) {are} kept first, before the page is drawn, and keeping {them} changes "
+               "your copy: send this claim, and once it is accepted run this same command again: "
+               "it applies {them} and brings the page up to date in one batch. Refused: as any "
+               "refused write (the app skill, \"Rules that hold everywhere\").")
+
+
+def taps_now(dump: str, chat: str, now, out_dir: str, only=None, said: str = "taps made while "
+             "the work ran", claim_line: str = LATE_CLAIM) -> dict:
+    """The pending taps in `dump` (or those in `only`), claimed and applied as a wake applies
+    them: {"claim": True, "batches", "lines"} when one changes the copy and its claim must be
+    accepted first (the same command is run again once it is), else {"batches", "lines"}
+    with the receipts in one batch where they fit."""
+    import app_actions
+    import page_db
+    db = page_db.load(dump)
+    todo = app_actions.pending(db, chat, now)
+    if only is not None:
+        todo = [t for t in todo if t[0] in set(only)]
+    batches: list = []
+    lines: list[str] = []
+    if not todo:
+        return {"batches": batches, "lines": lines}
+    need = app_actions.to_claim(todo, chat, now)
+    changes = {aid for aid, act, _v in todo
+               if str(act.get("action") or "") not in app_actions.DB_ONLY}
+    claim = app_actions.claim(dump, chat, now, os.path.join(out_dir, "taps"),
+                              only=need)["batches"] if need else []
+    if changes & set(need):
+        n = len(todo)
+        return {"claim": True, "batches": claim, "lines": [claim_line.format(
+            n=n, s="s" if n != 1 else "", them="them" if n != 1 else "it",
+            are="are" if n != 1 else "is")]}
+    got = app_actions.apply_dir(dump, chat, now, os.path.join(out_dir, "apply"),
+                                only=[t[0] for t in todo])
+    page_db.keep_landed(dump, got["batches"], skip=("actions",))
+    batches = _one_batch(list(claim) + list(got["batches"]), os.path.join(out_dir, "send"))
+    counts = [f"{len(got[k])} {w}" for k, w in (("ok", "applied"), ("stale", "changed since "
+              "they saw it"), ("conflict", "could not be done"), ("again", "applied before"))
+              if got.get(k)]
+    if counts:
+        lines.append(said + ": " + ", ".join(counts) + " (in this batch; each receipt says it "
+                     "on the page)")
+    if got.get("fetch"):
+        lines.append("fetch: a tap made while the work ran names files the person added: "
+                     f"python3 tools/app.py apply \"{dump}\" --chat {chat} --assets "
+                     f"\"{dump}/assets\" once each is read there (Artifact read, path the "
+                     "asset id), as a wake's fetch line says.")
+    return {"batches": batches, "lines": lines}
+
+
+def marks_first(dump: str, chat: str, now, out_dir: str, work: str = "") -> dict:
+    """The marks waiting in `dump` (app_actions.MARKS), kept before the page is drawn by any
+    chat that draws it: a mark rings nobody, so the next chat that works on the search keeps
+    it (taps_now). {} when there is none, or this chat may not keep them."""
+    import app_actions
+    import app_listen
+    import page_db
+    if not chat or not os.path.isdir(os.path.join(dump, "actions")):
+        return {}
+    db = page_db.load(dump)
+    marks = [aid for aid, act, _v in app_actions.pending(db, chat, now)
+             if str(act.get("action") or "") in app_actions.MARKS]
+    if not marks or not app_listen.draws_screens(db, chat, work, now)[0]:
+        return {}
+    return taps_now(dump, chat, now, out_dir, only=marks, said="marks kept first",
+                    claim_line=MARKS_CLAIM)
 
 
 def late_taps(dump: str, chat: str, now, out_dir: str) -> dict:
     """What the reads that end a batch found (page_reads.late_queries), after they were made
     into `dump`: the taps made while the work ran, claimed and applied as a wake applies them
     ({"claim": True, ...} when one changes the copy and its claim must be accepted first),
-    and one line naming work asked for meanwhile, which this chat takes before ending.
-    {"batches", "lines"}."""
-    import app_actions
+    and one line naming the work this chat takes before ending. {"batches", "lines"}."""
     import app_listen
-    import page_db
     import page_reads
     chat = app_listen.this_chat(chat)
-    db = page_db.load(dump)
-    todo = app_actions.pending(db, chat, now)
-    batches: list = []
-    lines: list[str] = []
-    if todo:
-        need = app_actions.to_claim(todo, chat, now)
-        changes = {aid for aid, act, _v in todo
-                   if str(act.get("action") or "") not in app_actions.DB_ONLY}
-        claim = app_actions.claim(dump, chat, now, os.path.join(out_dir, "taps"),
-                                  only=need)["batches"] if need else []
-        if changes & set(need):
-            n = len(todo)
-            return {"claim": True, "batches": claim, "lines": [LATE_CLAIM.format(
-                n=n, s="s" if n != 1 else "", them="them" if n != 1 else "it")]}
-        got = app_actions.apply_dir(dump, chat, now, os.path.join(out_dir, "apply"))
-        page_db.keep_landed(dump, got["batches"], skip=("actions",))
-        batches = _one_batch(list(claim) + list(got["batches"]), os.path.join(out_dir, "send"))
-        counts = [f"{len(got[k])} {w}" for k, w in (("ok", "applied"), ("stale", "changed since "
-                  "they saw it"), ("conflict", "could not be done"), ("again", "applied before"))
-                  if got.get(k)]
-        if counts:
-            lines.append("taps made while the work ran: " + ", ".join(counts) + " (in this "
-                         "batch; each receipt says it on the page)")
-        if got.get("fetch"):
-            lines.append("fetch: a tap made while the work ran names files the person added: "
-                         f"python3 tools/app.py apply \"{dump}\" --chat {chat} --assets "
-                         f"\"{dump}/assets\" once each is read there (Artifact read, path the "
-                         "asset id), as a wake's fetch line says.")
-    # Work asked for meanwhile, each named once: what this folder held before the late reads
-    # was known to the wake already, and an item this chat cannot take is never named twice.
-    plan = page_reads._read(os.path.join(dump, page_reads.PLAN)) or {}
-    known = set(plan.get("late_known") or []) | set(plan.get("late_seen") or [])
-    new = sorted(w for w, d in (page_db.load(dump).get("work") or {}).items()
-                 if w not in known and str((d.get("data") or {}).get("status") or "") == "queued"
-                 and not (d.get("data") or {}).get("stop_asked"))
+    got = taps_now(dump, chat, now, out_dir)
+    if got.get("claim"):
+        return got
+    batches, lines = got["batches"], got["lines"]
+    # Work waiting that this chat would take next (the same choice a wake makes, so never an
+    # item it cannot take: another chat's kind, past the heavy-job cap, or locked), named at
+    # every end until it is taken. Named once, two follow-ups asked for while a pass ran sat
+    # "starts in a moment" after it ended, until a pass was started by hand (the maintainer's
+    # copy, 2026-11-05).
+    new = waiting_for(dump, chat, now)
     if new:
         lines.append(LATE_WORK.format(ids=", ".join(new[:6]) + (" ..." if len(new) > 6 else ""),
                      dump=dump, chat=chat))
-        plan["late_seen"] = sorted(set(plan.get("late_seen") or []) | set(new))
-        page_reads._write(os.path.join(dump, page_reads.PLAN), plan)
     page_reads.late_handled(dump, again=bool(new))
     return {"batches": batches, "lines": lines}
+
+
+def waiting_for(dump: str, chat: str, now) -> list[str]:
+    """The queued work this chat takes, in the order a wake takes it (choose, nothing
+    claimed): each item and those it is taken with, a few at most. [] when there is none."""
+    import app_listen
+    import page_db
+    db = page_db.load(dump)
+    rec, _ = app_listen.record(db)
+    kind = str(rec.get("kind") or "") if str(rec.get("chat") or "") == chat else ""
+    work = {k: dict(v) for k, v in (db.get("work") or {}).items()}
+    db = dict(db, work=work)
+    out: list[str] = []
+    while len(out) < 7:
+        got = choose(db, chat, kind or app_listen.chat_kind(), now,
+                     no_sessions=app_listen.nested(chat))
+        if not got:
+            break
+        ids = [got["work"]] + [str(w.get("work") or "") for w in got.get("with") or []]
+        out += ids
+        for wid in ids:
+            # As taken, so the next choice is the one after it.
+            if wid in work:
+                work[wid] = dict(work[wid], data=dict(work[wid]["data"], status="taken"))
+    return out
 
 
 def _one_batch(paths: list, out_dir: str) -> list:

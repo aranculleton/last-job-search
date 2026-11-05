@@ -1,7 +1,7 @@
 {
  "model": 1,
  "made_at": "2026-10-25T18:00:00Z",
- "rev": "f34fc5bf0d55",
+ "rev": "2ffc72089cd0",
  "app": {
   "version": "4.10.1",
   "url": null,
@@ -13,7 +13,7 @@
   ],
   "privacy": "Only you can open this page unless you share it. It holds first names, employers, your drafts and your setup answers, so keep it unshared.",
   "repo": "https://github.com/aranculleton/last-job-search",
-  "page": 55,
+  "page": 62,
   "not_saved": 0
  },
  "person": {
@@ -44,11 +44,39 @@
     "role": "Inventory Analyst"
    },
    "rev": "c5f6aea812d3"
+  },
+  {
+   "id": "q-inmail-credits",
+   "kind": "question",
+   "title": "How many InMails does LinkedIn show you have left?",
+   "body": "Claude spends them only on people worth one, and keeps one back.",
+   "options": [
+    {
+     "label": "InMails left",
+     "action": "inmail.credits",
+     "input": "number"
+    },
+    {
+     "label": "Not this week",
+     "action": "inmail.credits",
+     "value": "later"
+    }
+   ],
+   "steps": {
+    "label": "Where do I find it?",
+    "lines": [
+     "On LinkedIn, select the Me icon at the top.",
+     "Choose Access My Premium (in the phone app, Premium features).",
+     "Under InMail, read the number beside InMail credits available."
+    ]
+   },
+   "about": {},
+   "rev": "6ecb28db4269"
   }
  ],
  "jobs": {
   "round": "r9",
-  "made_at": "2026-11-05T19:44:50Z",
+  "made_at": "2026-11-05T22:03:10Z",
   "met": false,
   "summary": "3 roles from the last search to look at, 1 of them scoring 75 or more. 3 left out, each with its reason.",
   "rows": [
@@ -651,6 +679,7 @@
    "paste": null,
    "fix": null,
    "sends": null,
+   "inmail": null,
    "alerts": [],
    "suggest": null,
    "related": {
@@ -967,7 +996,7 @@
    "when": "2026-10-28",
    "prep": {
     "path": "documents/applications/thornbury_bank_risk_analyst_thornbury/interview_prep.md",
-    "updated": "2026-11-05T19:44:50Z"
+    "updated": "2026-11-05T22:03:10Z"
    },
    "questions": 2,
    "all_day": true,
@@ -1877,6 +1906,51 @@
   "answered": "answered_at",
   "quiet_after_s": 600,
   "helper": "Job search helper",
+  "marks": [
+   "due.done",
+   "due.snooze",
+   "due.undo",
+   "export.requested",
+   "export.unrequested",
+   "hint.seen",
+   "job.applied",
+   "job.bring_back",
+   "job.dismiss",
+   "job.keep",
+   "job.not_applied",
+   "job.unkeep",
+   "learned.retire",
+   "learned.unretire",
+   "msg.sent",
+   "msg.skip",
+   "msg.unsent",
+   "msg.unskip",
+   "outcome.no_response",
+   "outcome.offer",
+   "outcome.rejected",
+   "outcome.undo",
+   "outcome.withdrawn",
+   "person.status",
+   "person.stop",
+   "pin.answer",
+   "reader.checked",
+   "ready.applied",
+   "ready.not_applied",
+   "ready.not_applying",
+   "ready.reopen",
+   "ready.sent_to_contact",
+   "referral.agreed",
+   "referral.ended",
+   "requests.unwithdrawn",
+   "requests.withdrawn",
+   "rule.keep",
+   "rules.seen",
+   "suggest.dismiss",
+   "suggest.undismiss",
+   "tip.seen",
+   "upcoming.add",
+   "upcoming.remove"
+  ],
   "wake": {
    "label": "Wake Claude",
    "url": "https://claude.ai/code?prompt=Look%20after%20my%20job%20search%20page%20from%20now%20on.&repositories=aranculleton%2Flast-job-search",

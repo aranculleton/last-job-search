@@ -526,3 +526,48 @@ def test_a_new_helper_tidies_what_earlier_hand_overs_left_without_their_check_in
     assert {c["id"] for c in got["archive"]} == {first, second}
     assert got["brief"][0]["args"]["persistent_session_id"] == LIVE
     assert "another chat answers the page, do nothing else" in tidy.RECHECK
+
+
+def test_a_helper_the_person_started_from_the_page_goes_whatever_it_is_called(copy, monkeypatch):
+    """The daily tidy-up said "nothing to tidy" for a finished old page helper the person had
+    started from the page's own link (the maintainer's copy, 2026-11-05): its title was the one
+    the app gave its first message, and a chat the person starts was read as theirs. The page's
+    record keeps every chat that answered it as a helper, and the tidy-up knows a helper by
+    that, however it was started and whatever it is called: the finished old ones go, the live
+    one stays, and a chat of theirs that never answered the page is never listed."""
+    monkeypatch.setattr(app_listen, "chat_kind", lambda: "cloud")
+    first, second = "session_EXAMPLESTARTEDHELPER", "session_EXAMPLESECONDOLDHELPER"
+    # The person's chat from the page's link answered as a helper, then two hand-overs.
+    rec = {"chat": first, "title": "Job search page", "kind": "cloud", "helper": True,
+           "since": "2026-11-03T08:00:00Z", "answered_at": "2026-11-03T09:00:00Z"}
+    db = {"meta": {"listener": {"data": rec, "version": 3}}, "work": {}}
+    took = app_listen.decide(db, second, str(copy.root) + "/a", NOW, listen=True, helper=True)
+    db = {"meta": {"listener": {"data": took["record"], "version": 4}}, "work": {}}
+    handed = app_listen.decide(db, second, str(copy.root) + "/b", NOW, hand_to=LIVE)
+    listener = handed["record"]
+    assert listener["chat"] == LIVE and listener["helpers"] == [first, second]
+    asked = dict(_chat(first, "Look after my job search page", updated="2026-11-04T08:00:00Z"),
+                 origin="desktop_app")
+    old = dict(_chat(second, "Look after my job search page", updated="2026-11-04T09:00:00Z"),
+               origin="desktop_app")
+    mine = dict(_chat(OWN, "Rewrite my summary", updated="2026-11-01T08:00:00Z"),
+                origin="desktop_app")
+    live = dict(_chat(LIVE, "Job search page"), origin="claude_code_mcp_seed")
+    chats = [asked, old, mine, live]
+    info = {c["id"]: dict(_detail(c["id"], c["title"]), status="idle") for c in chats}
+    got = tidy.plan(chats, [], info, {}, listener, LIVE, REPO, TODAY, set(), set(), set(),
+                    now=NOW)
+    assert got["ask"] == []
+    assert {c["id"]: c["why"] for c in got["archive"]} == {
+        first: "a helper the page no longer uses", second: "a helper the page no longer uses"}
+    assert {c["id"]: c["why"] for c in got["keep"]} == {LIVE: "it answers the page"}
+    # From the record alone, before this release kept a list: the one it took the page from.
+    got = tidy.plan(chats, [], info, {}, {"chat": LIVE, "helper": True, "took_from": second,
+                                          "took_from_helper": True, "since": "2026-11-04T10:00:00Z"},
+                    LIVE, REPO, TODAY, set(), set(), set(), now=NOW)
+    assert [c["id"] for c in got["archive"]] == [second]
+    # Used in the last hour, it is kept until they have left it.
+    soon = dict(old, updated_at="2026-11-05T08:40:00Z")
+    got = tidy.plan([asked, soon, mine, live], [], info, {}, listener, LIVE, REPO, TODAY, set(),
+                    set(), set(), now=NOW)
+    assert {c["id"]: c["why"] for c in got["keep"]}[second] == "they used it in the last hour"

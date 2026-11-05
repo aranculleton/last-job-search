@@ -774,6 +774,7 @@ def _needs_you(ctx: Ctx, targets: dict) -> list:
         ctx._got["sent_questions"] = sent
         out += sent
         out += _own_profile_card(ctx, targets)
+        out += _inmail_ask(ctx, targets)
         out += _tweak_offers(ctx, targets)
         out += _remade_cards(ctx, targets)
     except person.NoProfile:
@@ -855,6 +856,32 @@ def _own_profile_card(ctx: Ctx, targets: dict) -> list:
             "about": {}, "rev": rev_of(qid, kind, reasons)}
     targets[qid] = {"kind": "upgrade_ask", "upgrade": own_profile.UID,
                     "ask": item["title"], "rev": item["rev"]}
+    return [item]
+
+
+def _inmail_ask(ctx: Ctx, targets: dict) -> list:
+    """Once a week on a plan with InMail credits: how many LinkedIn shows are left, a number
+    kept as `state.py inmail-credits` keeps it, so the people a run picks for an InMail
+    (tools/network/inmail_pick.py) are picked against the real balance. Not when it was
+    answered, or put off, in the last week (the maintainer, 2026-11-05)."""
+    try:
+        import claude_surfaces
+        import inmail_pick
+        if not inmail_pick.ask_due(ctx.today):
+            return []
+        lines = [re.sub(r"^\s*\d+[.)]\s*", "", x) for x in
+                 claude_surfaces.steps(inmail_pick.ASK_STEPS) if re.match(r"^\s*\d+[.)]", x)]
+    except Exception:  # noqa: BLE001  no plan or no registry: nothing asked
+        return []
+    qid = inmail_pick.ASK_ID
+    last = inmail_pick.last_asked(ctx.today)
+    item = {"id": qid, "kind": "question", "title": inmail_pick.ASK_TITLE,
+            "body": "Claude spends them only on people worth one, and keeps one back.",
+            "options": [{"label": "InMails left", "action": "inmail.credits", "input": "number"},
+                        {"label": "Not this week", "action": "inmail.credits", "value": "later"}],
+            "steps": {"label": "Where do I find it?", "lines": lines},
+            "about": {}, "rev": rev_of(qid, last.isoformat() if last else "never")}
+    targets[qid] = {"kind": "inmail_ask", "rev": item["rev"]}
     return [item]
 
 
@@ -2513,6 +2540,7 @@ def _messages(ctx: Ctx, targets: dict) -> list:
         item["paste"] = _paste(cid, item["first_name"], raw) if kind == "first_note" else None
         item["fix"] = message_fix(item)
         item["sends"] = sends_of(body)
+        item["inmail"] = _inmail_card(ctx, cid, channel) if kind == "first_note" else None
         _card(ctx, targets, item, "for_message")
         out.append(item)
         targets[mid] = {"kind": "message", "contact": cid, "text": body, "subject": subject,
@@ -2527,6 +2555,35 @@ def _messages(ctx: Ctx, targets: dict) -> list:
                             m["first_name"].lower()))
     ctx._got["message_by_contact"] = {m["contact"]: m for m in out if m.get("contact")}
     return out
+
+
+def _inmail_card(ctx: Ctx, cid: str, channel: str) -> dict | None:
+    """What a first note's card says of InMail (tools/network/inmail_pick.py): why the run
+    chose one ("InMail (suggested): a recruiter at a target employer, and a request would
+    wait"), the credit it spends ("uses 1 of your 4 InMails"), and the one switch to the
+    other message kept beside it: a connection note instead, or back to the InMail while a
+    credit is left."""
+    try:
+        import inmail_pick
+        from network import state as net_state
+        b = ctx._once("inmail_budget", lambda: net_state.platform_budget(
+            ctx.contacts, ctx.threads, ctx.today, index=ctx.by_contact))
+    except Exception:  # noqa: BLE001  no budget to read: the card says nothing of InMail
+        return None
+    rec = inmail_pick.load(cid)
+    left = int(b.get("inmails_left") or 0)
+    if channel == "inmail":
+        out = {"line": inmail_pick.card_line(rec["why"]) if rec.get("why") else None,
+               "credit": inmail_pick.credit_line(left), "switch": None}
+        if inmail_pick.can_switch(cid, "inmail") == "connection":
+            out["switch"] = {"to": "connection", "label": "Write a connection note instead"}
+        return out
+    spare = left - int((b.get("queued_unsent") or {}).get("inmail") or 0)
+    if inmail_pick.can_switch(cid, "connection") == "inmail" and spare >= 1 \
+            and inmail_pick.plan_has_credits():
+        return {"line": None, "credit": inmail_pick.credit_line(left),
+                "switch": {"to": "inmail", "label": "Send an InMail instead"}}
+    return None
 
 
 def _app_followups(ctx: Ctx, targets: dict) -> list:

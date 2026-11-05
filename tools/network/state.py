@@ -5009,11 +5009,18 @@ def connection_requests(contacts, threads, index=None) -> set:
 # ("InMail message credits and renewal process", linkedin.com/help/linkedin/answer/a541643;
 # the Sales Navigator page, answer/57013, says the same of its credits). The same page says
 # a new allotment comes "every month, on the first day of your billing cycle", which need
-# not be the first of the calendar month. Whether unused Premium credits carry into the
-# next month could NOT be confirmed (third-party guides disagree), and a message to an Open
-# Profile spends no credit at all, which the log cannot see. So the count from the log is
-# a floor: after five InMails it said "0 of 5 left" while LinkedIn showed 3. The balance
-# LinkedIn shows, kept with `state.py inmail-credits <n>`, wins until the month turns.
+# not be the first of the calendar month. Unused credits DO carry over: LinkedIn's help page
+# "InMail message credits and renewal process" (linkedin.com/help/linkedin/answer/a543695,
+# read through a web search on 2026-11-05) gives Premium Career 5 credits a month and lets
+# it hold up to 15, and its FAQ says credits expire after 90 days and that a credit comes
+# back when the recipient answers. A message to an Open Profile spends no credit at all,
+# which the log cannot see. So the count from the log (5 less this month's sends) is a
+# floor, never the balance: after five InMails it said "0 of 5 left" while LinkedIn showed
+# 3, and carried credits are invisible to it. The balance LinkedIn shows, kept with
+# `state.py inmail-credits <n>`, wins until the month turns, and the page asks for it once
+# a week on a plan with credits (tools/network/inmail_pick.py, `weekly_ask`), so a carried
+# balance is never lost for long. The counting is left as it is: both numbers stay floors
+# with carry-over, since a renewal only adds credits.
 INMAIL_REFUND_DAYS = 90
 INMAIL_FILE = ("documents", "network", ".inmail_credits.json")
 _LINKEDIN_CHANNELS = frozenset({"inmail", "open_profile", "connection", "message", ""})

@@ -612,6 +612,27 @@
       "ui_sensitive": true
     },
     {
+      "id": "linkedin-inmail-credits",
+      "claim": "A LinkedIn Premium member sees how many InMail credits they have on their My Premium page, reached from the Me icon at the top of LinkedIn and then Access My Premium (Premium features in the phone app), in its InMail part. Premium Career gets 5 credits a month, on the first day of the billing cycle, and can hold up to 15; credits expire after 90 days, and one comes back when the person written to answers. Checked through a web search of LinkedIn's own help pages: a session never fetches linkedin.com.",
+      "goal": "see how many InMails you have left",
+      "how": "on LinkedIn, the Me icon at the top, then Access My Premium (Premium features in the phone app), then the InMail part of that page",
+      "steps": [
+        "On LinkedIn, select the Me icon at the top.",
+        "Choose Access My Premium (in the phone app, Premium features).",
+        "Under InMail, read the number beside InMail credits available."
+      ],
+      "official_page": "https://www.linkedin.com/help/linkedin/answer/a543685",
+      "sources": [
+        {"url": "https://www.linkedin.com/help/linkedin/answer/a543685", "quote": "View Your Total Available InMail Message Credits", "fetch": false, "why_not_fetched": "a session never fetches linkedin.com, and its robots.txt disallows crawlers it does not name; read through a web search, which summarised the page as the Me icon, then Access My Premium, then the InMail section"},
+        {"url": "https://www.linkedin.com/help/linkedin/answer/a543695", "quote": "New allotment arrives every month, on the first day of your billing cycle.", "fetch": false, "why_not_fetched": "a session never fetches linkedin.com, and its robots.txt disallows crawlers it does not name; read through a web search, which gave Premium Career 5 credits a month, holding up to 15"},
+        {"url": "https://www.linkedin.com/help/linkedin/answer/a554514", "quote": "you will receive InMail message credit back if a recipient accepts your InMail", "fetch": false, "why_not_fetched": "a session never fetches linkedin.com, and its robots.txt disallows crawlers it does not name; read through a web search, which also gave credits expiring after 90 days"}
+      ],
+      "status": "documented",
+      "verified_on": "2026-11-05",
+      "verified_against": "LinkedIn's help pages a543685, a543695 and a554514 as a web search summarised them on 2026-11-05 (not fetched, so the quotes are the summary's words, not the pages'); the phone app's Premium features label is the maintainer's, not the help page's",
+      "ui_sensitive": true
+    },
+    {
       "id": "browser-pane-show",
       "claim": "In the desktop app a hidden Browser pane comes back from the Browser button in the session's title bar, or Cmd+Shift+B on a Mac and Ctrl+Shift+B on Windows. Hiding the pane does not close the browser: it keeps its own profile and its sign-ins across the app's chats (Anthropic's built-in-browser skill; the docs page says only that cookies can be kept after quitting).",
       "goal": "bring the browser back into view",

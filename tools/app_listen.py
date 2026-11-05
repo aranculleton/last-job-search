@@ -290,6 +290,10 @@ def waiting_since(db: dict, now: dt.datetime | None = None) -> dt.datetime | Non
     now = dt.datetime.now(dt.timezone.utc) if now is None else now
     for aid, doc in (db.get("actions") or {}).items():
         d = doc["data"]
+        if str(d.get("action") or "") in _marks():
+            # A mark waits for no chat: the next one to work on the search applies it. Counted,
+            # it made a listener that was there look gone, and a fresh helper took the page.
+            continue
         until = _time(d.get("claimed_until"))
         # A claim that ran out is no claim: the chat that made it stopped, and the tap still
         # waits (it never counted, so a listener that had gone was never judged gone).
@@ -297,6 +301,30 @@ def waiting_since(db: dict, now: dt.datetime | None = None) -> dt.datetime | Non
             times.append(_time(d.get("at")))
     times = [t for t in times if t is not None]
     return min(times) if times else None
+
+
+# How many earlier helpers the page's record keeps by id, for the tidy-up.
+HELPERS_KEPT = 8
+
+
+def helpers_after(rec: dict) -> list[str]:
+    """The page's registry of the chats that answered it as its helper, as a new record keeps
+    it: the earlier list, and the chat in `rec` where it was a helper, newest last. The tidy-up
+    knows a helper by this, however it was started and whatever it is called (tidy.plan)."""
+    have = [str(x) for x in rec.get("helpers") or () if str(x or "").strip()]
+    old = str(rec.get("chat") or "")
+    if rec.get("helper") and old and old not in have:
+        have.append(old)
+    return have[-HELPERS_KEPT:]
+
+
+def _marks() -> frozenset:
+    """The taps that ring nobody (app_actions.MARKS)."""
+    try:
+        import app_actions
+        return app_actions.MARKS
+    except Exception:  # noqa: BLE001  never a reason the page is not answered
+        return frozenset()
 
 
 def lapsed(rec: dict, db: dict, now: dt.datetime) -> bool:
@@ -366,7 +394,8 @@ def decide(db: dict, chat: str, out_dir: str, now: dt.datetime | None = None,
                               "to hand over"]}
         new = {"chat": hand_to, "title": HELPER_CHAT_TITLE, "kind": "cloud", "helper": True,
                "since": at, "answered_at": None, "took_from": chat,
-               "took_from_helper": bool(rec.get("helper")), "handed_by": chat}
+               "took_from_helper": bool(rec.get("helper")), "handed_by": chat,
+               "helpers": helpers_after(rec)}
         w.add("set", DOC_COLLECTION, DOC_ID, new, if_version=version)
         _remember(new, now, confirmed=False)
         handed_here(chat, now)
@@ -437,7 +466,8 @@ def decide(db: dict, chat: str, out_dir: str, now: dt.datetime | None = None,
                "watching": True, "took_from": rec.get("chat") or None,
                # Whether the chat it took from was one the app started: the tidy-up only ever
                # puts away such a chat, never one the person writes in (X-4).
-               "took_from_helper": bool(rec.get("helper"))}
+               "took_from_helper": bool(rec.get("helper")),
+               "helpers": helpers_after(rec)}
         w.add("set", DOC_COLLECTION, DOC_ID, new, if_version=version)
         lines.append("listen: this chat answers the page now. Send the batch below. "
                      + CHECK_IN_REFUSED)
@@ -1056,10 +1086,10 @@ def wake_url(repo: str = "") -> str:
 def model_part(repo: str = "") -> dict:
     """What the page needs to show "Claude isn't listening": where the listener's record is
     (the page reads it live: `answered_at` is when it last answered), how long something may
-    wait before nobody is answering, and the link that opens a chat which becomes the
-    listener. No time is embedded, so the model's rev holds while nothing changed."""
+    wait before nobody is answering, the taps that ring nobody and never count as waiting
+    (`marks`), and the link that opens a chat which becomes the listener. No time is embedded, so the model's rev holds while nothing changed."""
     return {"doc": f"{DOC_COLLECTION}/{DOC_ID}", "answered": "answered_at",
-            "quiet_after_s": LAPSE_S, "helper": HELPER_TITLE,
+            "quiet_after_s": LAPSE_S, "helper": HELPER_TITLE, "marks": sorted(_marks()),
             "wake": {"label": "Wake Claude", "url": wake_url(repo), "prompt": WAKE_PROMPT}}
 
 

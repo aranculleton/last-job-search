@@ -58,6 +58,22 @@ next?" in its first lines, and nothing asks for a decision a default could make.
   as a panel on the right, and on a phone as a sheet from the bottom. (pill tests)
 - In Claude's work, four or more of one kind waiting, or finished, are one card with their
   count and the first few names; Show lists them. Nobody scrolls past fifty cards. (run test)
+- Claude's work says its count once, in the header's pill: no line under its title repeats
+  it, and "Nothing is sent." is not said over the cards. Each running or waiting card has its
+  title, one short state with its clock ("Waking Claude · 1m 4s", never a chip and a line
+  both saying it), its bar, and Stop Claude. A finished one is a compact row under
+  "finished": its title and one-line result, the time small at its end, the whole row opening
+  where its record lives (a person's work in Contacts on that person, a job's in Jobs, a
+  draft's in its draft), its trash shown on hover or focus; no Done chip, no Open button.
+  (the maintainer, 2026-11-05; Stop Claude tests, compact row test)
+- **A laptop's Brief is one screen.** From 960px wide the Brief's panels are two rows (Today,
+  Coming up and Next; Waiting on you, Jobs, News and the numbers) that share the window's
+  height, with the privacy line and the tip on one last row beside the Chat button, so the
+  page does not scroll at 1000 by 560, 1280 by 720 or 1440 by 900. Each list shows as many as
+  its room holds and gives way below to one, its panel's own "All ..." opening the rest; News,
+  with no screen of its own, says "2 more" and opens them in place. On a short window (660px
+  or less) the numbers are one line under the greeting, opening Progress with its chart. A
+  phone scrolls. (the maintainer, 2026-11-05; fit tests)
 
 ## Cards and lists
 
@@ -250,6 +266,14 @@ tests, `tests/test_contacts_is_one_page_with_each_persons_draft.py`)
   skipped. Settings gets no new option for it: a default that suits nearly everyone is the
   setting. (the maintainer, 2026-11-05: "we also don't want to clutter the page with buttons
   and options and configurations by doing this, so be very smart about it"; action-row test)
+- **Stop Claude** is the one control that calls off Claude's work, wherever it shows: a card in
+  Claude's work, a card's own work line, a reply or a change being written, a card's question,
+  a group's line, the Chat's quick answer. A quiet pill, faintly red, labelled "Stop Claude"
+  ("Stop Claude's work on <what>" to a screen reader), so it never reads as putting the job or
+  the message away. A Cancel that only closes a box before anything is sent stays Cancel.
+  (the maintainer, 2026-11-05: "Don't do it" and "Cancel" were ambiguous; Stop Claude test)
+- A suggestion's way to say no is **Dismiss** ("Dismiss this suggestion"), never "No thanks",
+  which read as calling something off. (the maintainer, 2026-11-05)
 - Underlined text is only a link inside a sentence ("3 more: Show them", a name in a line),
   never a control in a row of actions. Rose is for links inside a sentence. (action-row test)
 - More holds only what is genuinely rare for that card: five at most, a short list grouped by
@@ -269,7 +293,16 @@ tests, `tests/test_contacts_is_one_page_with_each_persons_draft.py`)
   work line between (Saved, In line, Claude is on it, Cancel); a finished exchange stays two days
   with Ask more and Hide, then folds away. It is the way to ask or tell Claude anything the
   card's buttons do not cover, so it is not counted in More's five and carries no gauge: the
-  box's Ask Claude does. Why: everything opening the Chat clogged it with tasks, and an answer
+  box's Ask Claude does. Under the answer, the one or two next steps it made, read from the
+  records and never from its words (a draft it wrote or changed, with that draft's own Copy
+  and I sent it, which says "Sent" once sent), none for an answer that only explained; the
+  names of the card's people in the answer open them. A long exchange shows its latest,
+  "Earlier (N)" opening the rest in place in a box that scrolls inside itself; a long answer
+  is clipped with Show all, a day-old one to its first line; a hidden or folded exchange
+  leaves "Claude answered 5 Nov · Show". The box keeps its own hairline, so it stays apart
+  from a hovered card. A change asked with the pencil is one block under the draft: "You
+  asked" and the words, two lines with Show all, then its state and Stop Claude; "New
+  version" only once the new words are on the card. Why: everything opening the Chat clogged it with tasks, and an answer
   belongs where its question was asked (the maintainer, 2026-11-05: "it opens a text box UNDER
   THAT PARTICULAR THING IM QUERYING ... and then the response shows underneath"; More test)
 - The same box serves an ask that belongs to a place rather than a card (`PLACES`): Paste a

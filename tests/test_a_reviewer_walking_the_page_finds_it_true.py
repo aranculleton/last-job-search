@@ -70,11 +70,12 @@ def test_a_job_being_drafted_says_where_its_draft_stands_with_cancel_and_stays_c
     ], PHONE, model=m)
     before = got["after"][0]["text"]
     queued, tab, summary, going, finished, tab2 = (got["after"][i]["text"] for i in range(1, 7))
-    assert "Cancel" in queued and "Drafting" not in queued, queued
-    assert any(w in queued for w in ("Waiting for Claude", "In line", "Next", "Sent", "Waking Claude")), queued
+    # "Stop Claude" wherever Claude's work is called off (the maintainer, 2026-11-05).
+    assert "Stop Claude" in queued and "Drafting" not in queued, queued
+    assert any(w.lower() in queued.lower() for w in ("Waiting for Claude", "In line", "Next", "Sent", "Waking Claude")), queued
     assert tab == before and tab2 == before, (before, tab, tab2)
     assert "3 to send, 2 still to make" in summary, summary
-    assert "Claude is on it" in going and "Cancel" in going, going
+    assert ("Claude is on it" in going or "Draft" in going) and "Stop Claude" in going, going
     assert "Finished: putting it on your page" in finished, finished
     assert "Draft ready" not in finished and "See the draft" not in finished, finished
 
@@ -176,7 +177,7 @@ def test_a_checklist_rows_draft_carries_the_gauge_and_then_its_work_line(run, tm
     assert "Draft" in got["after"][0]["text"], got["after"][0]["text"]
     assert got["after"][0]["count"] == 1, "the row's Draft carries the gauge"
     after = got["after"][1]["text"]
-    assert "Cancel" in after and "See it" not in after, after
+    assert "Stop Claude" in after and "See it" not in after, after   # Stop Claude (2026-11-05)
 
 
 # ------------------------------------------------------------------ 4: many of one kind, one card
@@ -216,9 +217,10 @@ def test_follow_ups_on_applications_and_no_word_since_an_update_are_one_card_eac
     assert "No word since your last update: 4 employers" in titles, titles
     rows = got["after"][0]["count"]
     assert rows == 0, "no card of its own for any of them"
-    # Juno's reply, Wren's follow-up and the quick answers, one card each, and the two
-    # checklists, one each: never a thing a row.
-    assert got["after"][1]["text"].startswith("5 things today"), got["after"][1]["text"]
+    # Juno's reply, Wren's follow-up and the quick answers, one card each, the two
+    # checklists, one each, and the week's InMail balance question (a Premium example, since
+    # 2026-11-05): never a thing a row.
+    assert got["after"][1]["text"].startswith("6 things today"), got["after"][1]["text"]
 
 
 # ------------------------------------------------------------------ 5: who needs you, one meaning
@@ -312,7 +314,8 @@ def test_a_change_to_the_cv_says_when_it_starts_has_cancel_and_holds_apply(run, 
     sheet = got["after"][1]["text"]
     assert "starts now" not in sheet and "after “Reply to Juno”" in sheet, sheet
     after = got["after"][2]
-    assert "Claude changes this next" in after["text"] and "Cancel" in after["text"], after["text"]
+    # Its task in a few words, then Stop Claude (the maintainer, 2026-11-05).
+    assert "Changing it next" in after["text"] and "Stop Claude" in after["text"], after["text"]
     assert after["count"] == 0, "Apply is not the filled next step over a CV about to change"
 
 

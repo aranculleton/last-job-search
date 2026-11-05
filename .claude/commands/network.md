@@ -455,6 +455,20 @@ LinkedIn is never fetched from a session.
    credits (`reading.py message-check` on what the person pastes or says their message window
    showed; no chat opens it), and one that needs a credit only while the credits left cover it.
 
+8. **Who gets an InMail instead: decided in code, never asked.** With the notes saved, run
+   `python3 tools/network/inmail_pick.py pick <this run's ids>`. On a plan with InMail credits
+   it picks, by itself, the people worth one (`inmail_pick.choose()`): a recruiter or a hiring
+   leader at a target employer whom a request would reach badly (no Connect on their page,
+   nothing connecting them to the person, or a request that has waited three weeks), at most
+   two a run, and never past the credits left less one kept back. On a free plan it picks
+   nobody. For each one it names: their message window is checked (as above), then write the
+   InMail (`compose.inmail()`, a first line `Subject: ...`) and save it with `python3
+   tools/network/inmail_pick.py use <id> -`. That keeps the connection note beside it, so the
+   draft card can say why ("InMail (suggested): a recruiter at a target employer, and a request
+   would wait"), what it spends ("uses 1 of your 4 InMails"), and switch that person to the
+   note and back with one control, with no chat. An InMail the person asks for in words is
+   drafted as before.
+
 ## Present
 
 **People and their messages in one reply.** Finding someone and drafting the note

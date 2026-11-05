@@ -538,7 +538,7 @@ def test_an_alert_is_a_line_with_one_button_and_a_suggestion_can_be_declined_for
     assert r["checksFix"] == [], "no Make it again on To do"
     assert r["dismissed"]["action"] == "suggest.dismiss" and r["dismissed"]["value"] == {"kind": "near"}
     assert r["gone"] == 0 and any("not be suggested again" in t for t in r["toast"])
-    assert r["back"] == 1, "No thanks can be undone"
+    assert r["back"] == 1, "Dismiss can be undone"
     assert r["offSuggest"] == 0 and r["offAlerts"] >= 1, "Suggestions off hides suggestions, never alerts"
 
 
@@ -667,7 +667,8 @@ def test_draft_this_drafts_at_once_says_what_it_costs_and_rings_with_no_words(ru
     assert r["doorbell"]["ids"] == ["draft~r12-1"] and r["doorbell"]["thread"]
     # It stays in place, its line saying where its draft stands in Claude's work words, with
     # Cancel: a "Drafting" pill over work still waiting had none (the review, 2026-11-05).
-    assert r["chip"] is None and r["line"] and "Cancel" in r["line"] and "Claude is on it" not in r["line"], (r["chip"], r["line"])
+    # Its call-off is "Stop Claude" (the maintainer, 2026-11-05), once.
+    assert r["chip"] is None and r["line"] and "Stop Claude" in r["line"] and "Claude is on it" not in r["line"], (r["chip"], r["line"])
     assert "1 waiting" in r["pill"], "work just asked for is a pill in the header, waiting until a chat takes it"
 
 
@@ -752,21 +753,25 @@ def test_progress_moves_with_the_clock_slow_is_not_stalled_and_only_a_missed_che
     assert ov["warn"] == [], "slower than usual is no warning"
     assert "so far" in ov["time"] and "longer" not in ov["time"] + ov["text"], ov["time"]
     assert "left" not in ov["time"] and "left" not in ov["text"], "no time left once it has run past it"
-    assert "Try again" not in ov["buttons"] and "Stop" in ov["buttons"]
+    # One name for calling off Claude's work (the maintainer, 2026-11-05: "Stop Claude").
+    assert "Try again" not in ov["buttons"] and "Stop Claude" in ov["buttons"]
     assert not any("usage limit" in b for b in r["overBanner"]), "slow is never the plan's limit"
     assert all("minutes left" not in s and "longer" not in s for s in r["overSum"])
     st = r["stalled"]
     assert st["status"] == "May have stopped"
     assert any("may have stopped" in w for w in st["warn"])
-    assert "Try again" in st["buttons"] and "Stop" in st["buttons"]
+    assert "Try again" in st["buttons"] and "Stop Claude" in st["buttons"]
     w = r["retried"]
     assert w["status"] == "queued" and w["attempt"] == 2 and w["stage"] == 0 and w["claimed_by"] is None
     assert len(r["rings"]) == 1 and r["rings"][0]["text"] == "[app] [work:search~1]"
     # Finished work says Done, with no bar beside it, and folds itself away a minute later.
     # Done only once the result is on the page (the maintainer's inline standard, 2026-11-04):
     # finished before that, it says what it waits for.
-    assert r["finished"]["status"] == "Finished: putting it on your page", r["finished"]
-    assert r["done"]["status"] == "Done" and r["done"]["now"] is None, r["done"]
+    assert r["finished"]["status"] == "Putting on page", r["finished"]   # two words (2026-11-05)
+    # Finished work is a compact row with no chip since 2026-11-05 (the maintainer: the work
+    # list was cluttered): no state word and no running line once it is on the page.
+    assert r["done"]["status"] in ("", "Done") and r["done"]["now"] is None, r["done"]
+    assert r["done"]["status"] != r["finished"]["status"], "on the page, it no longer says it is being put there"
     assert r["folded"], "finished work joins the fold a minute after it was on screen"
 
 
@@ -817,7 +822,8 @@ def test_work_claude_has_picked_up_says_so_with_a_clock_like_a_chat(run, pages):
     _clean(r)
     assert r["picked"]["status"] == "Starting" and r["spins"] == 1, r["picked"]
     assert r["picked"]["sentence"].startswith("Claude has picked this up"), r["picked"]
-    assert "Don't do it" in " ".join(r["picked"]["buttons"]), "not started yet: it can still be called off"
+    # "Stop Claude", not "Don't do it" (the maintainer, 2026-11-05: it read as ambiguous).
+    assert "Stop Claude" in " ".join(r["picked"]["buttons"]), "not started yet: it can still be called off"
     # One honest word for waiting work, its sentence saying when it was asked: "Waiting to
     # start", "Waiting for Claude to start." and "Asked just now." said three things and none
     # said when (the walk-through, 2026-11-03).
@@ -826,7 +832,9 @@ def test_work_claude_has_picked_up_says_so_with_a_clock_like_a_chat(run, pages):
     assert "files~resume-current=30s" in r["clocks"] and "search~1=1m 5s" in r["clocks"], r["clocks"]
     assert not any(c.startswith("prep~") for c in r["clocks"]), "nothing to time before Claude has it"
     assert "files~resume-current=35s" in r["after"] and "search~1=1m 10s" in r["after"], r["after"]
-    assert "1 running, 1 starting, 1 waiting their turn." in r["summary"], r["summary"]
+    # The count is the header pill's, never said again over the cards (the maintainer,
+    # 2026-11-05: "2 waiting" over "2 waiting for Claude.").
+    assert "1 running, 1 starting, 1 waiting their turn." not in r["summary"] and "Stop Claude" in r["summary"], r["summary"]
 
 
 def test_calling_off_work_never_sent_wakes_nobody(run, pages):
@@ -848,12 +856,14 @@ def test_stop_says_what_is_kept(run, pages):
     assert r["late"]["status"] == "No answer yet" and "No answer from Claude in 11 minutes" in r["late"]["sentence"], r["late"]
     assert not any("again" in b.lower() for b in r["unsent"]["buttons"] + r["late"]["buttons"]), "no Ask Claude again"
     assert len(r["rings"]) == 1 and "prep~int-larkspur-supply" in r["rings"][0] and "files~resume-current" in r["rings"][0], r["rings"]
-    assert r["sent"]["status"] in ("Waking Claude", "Sent") and r["sent"]["sentence"].startswith("Sent to Claude"), r["sent"]
+    # One short state, said once: "Waking Claude · 1m 4s" on its line, no chip saying it again
+    # (the maintainer, 2026-11-05).
+    assert not r["sent"]["status"] and r["sent"]["sentence"].startswith(("Waking Claude", "Starting in a moment")), r["sent"]
     assert set(r["bell"]["rung"]) >= {"prep~int-larkspur-supply", "files~resume-current"}
     assert r["running"]["stop_asked"] is True and r["running"]["status"] == "running"
     assert r["runningCard"]["status"] == "Stopping after this step"
-    assert "Stop" not in r["runningCard"]["buttons"]
-    assert "Stop" in r["runningBefore"], "running work has a Stop button of its own"
+    assert "Stop Claude" not in r["runningCard"]["buttons"]
+    assert "Stop Claude" in r["runningBefore"], "running work has a Stop Claude button of its own"
     assert r["queued"]["status"] == "stopped" and r["queued"]["stop_asked"] is True
     assert r["queuedCard"]["sentence"] == "Stopped. Anything already saved is kept."
 

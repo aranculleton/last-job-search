@@ -1412,6 +1412,16 @@ def carry_on() -> list[str]:
     return out
 
 
+def _week_ago() -> str:
+    """A week before today, by the person's clock, as the page's stamps are written: the
+    taps the start reads (a tap and its receipt are both newer than the tap)."""
+    try:
+        day = person.today()
+    except Exception:  # noqa: BLE001  no profile yet: the computer's day
+        day = dt.date.today()
+    return (day - dt.timedelta(days=7)).isoformat() + "T00:00:00Z"
+
+
 def start(on: str = "", tools: str = "", page_url: str = "", runner=None, work: str = "",
           data_current: bool = False) -> tuple[int, list[str]]:
     """(exit code, the lines a chat follows): what this chat does next, whatever the copy's
@@ -1652,14 +1662,21 @@ def start(on: str = "", tools: str = "", page_url: str = "", runner=None, work: 
         steps.append(f"{n}. {once}")
         n += 1
     if st["page"].get("url") and not work and not (data_current and not sync):
+        # The marks the person made on the page (applied, sent, set aside) ring nobody: the
+        # next chat to work on the search keeps them first, this one included, so the last
+        # week's taps and receipts are read with the screens (app_actions.MARKS).
+        week = _week_ago()
         steps.append(f"{n}. " + ("Unless the update check above just did it, b" if sync else "B") +
                      "ring the page's data up to date: read the page's screen, meta, addr and "
                      "work collections into a fresh folder in your scratchpad (ArtifactData "
                      f"query, url {st['page'].get('url')}, one for each, out_dir that folder, "
                      "limit 1000; the page's view is stored as screen, and view is an old name), "
+                     "and into the same folder actions where [[\"at\", \">=\", \"" + week +
+                     "\"]] and receipts where [[\"applied_at\", \">=\", \"" + week + "\"]], "
                      "then python3 tools/app.py view <your scratchpad>/view --dump <that "
-                     "folder> and send the batch it prints. Then carry on with what the person "
-                     "asked.")
+                     "folder> and send the batch it prints (where it first prints a claim for "
+                     "the person's marks, send that, then run it once more). Then carry on with "
+                     "what the person asked.")
     # "page to publish" only beside the steps that publish it: a chat that cannot publish was
     # told the page waited, with nothing to do about it (X-21).
     head = "app start: set up" + (", page to publish" if publishing else "")

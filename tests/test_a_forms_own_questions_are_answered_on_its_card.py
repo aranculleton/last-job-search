@@ -74,8 +74,9 @@ def test_the_box_queues_answers_for_that_application_and_the_card_says_so_at_onc
     work = [w for w in got["work"] if w.get("kind") == "form_answers"]
     assert len(work) == 1, got["work"]
     assert work[0]["args"]["item"] == DRAFT and work[0]["args"]["text"] == ASKED, work[0]["args"]
-    assert got["after"][2]["text"].startswith("Saved."), got["after"][2]["text"]
-    assert "Cancel" in got["after"][2]["text"]
+    # The line names its task, then its one state (the maintainer, 2026-11-05).
+    assert got["after"][2]["text"].startswith("Answers for the form · "), got["after"][2]["text"]
+    assert "Stop Claude" in got["after"][2]["text"]   # "Stop Claude" everywhere (2026-11-05)
 
 
 def test_each_state_is_said_on_the_card_and_done_only_once_the_answers_are_on_it(run, tmp_path):
@@ -95,8 +96,8 @@ def test_each_state_is_said_on_the_card_and_done_only_once_the_answers_are_on_it
         {"write": {"work/" + WID: failed}, "read": LINE},
     ], WIDE, model=m, seed=seed, clock=T)
     running, unshown, shown, copy_row, broke = (x for x in got["after"])
-    assert running["text"].startswith("Claude is on it: writing your answers"), running["text"]
-    assert running["count"] == 1 and "Cancel" in running["text"], "its spinner, and Cancel"
+    assert running["text"].startswith("Answers for the form · writing your answers"), running["text"]
+    assert running["count"] == 1 and "Stop Claude" in running["text"], "its spinner, and Stop Claude"
     assert "Finished: putting it on your page." in unshown["text"], unshown["text"]
     assert shown["text"].startswith("Done: 1 answer ready to copy.") and "Show it" in shown["text"], shown["text"]
     assert "Its research reaches the people it is written for." in copy_row["text"], "opened, with its answer"
@@ -108,11 +109,11 @@ def test_cancel_while_it_waits_takes_it_off_at_once_and_keeps_the_words(run, tmp
     seed = {"work/" + WID: _work("queued")}
     got = _go(run, tmp_path, [
         {"hash": "drafts", "read": LINE},
-        {"click": "Cancel: Answers for the form: Ellerwick Trust, Research Analyst", "count": "#main " + LINE},
+        {"click": "Stop Claude's work on Answers for the form: Ellerwick Trust, Research Analyst", "count": "#main " + LINE},
         {"more": DRAFT, "click": "Questions on the form: Ellerwick Trust, Research Analyst",
          "eval": "document.querySelector('dialog textarea').value"},
     ], PHONE, seed=seed, clock=T)
-    assert got["after"][0]["text"].startswith("Saved."), got["after"][0]["text"]
+    assert got["after"][0]["text"].startswith("Answers for the form · "), got["after"][0]["text"]
     assert got["after"][1]["count"] == 0, "called off before Claude began: gone at once"
     w = next(x for x in got["work"] if x.get("kind") == "form_answers")
     assert w["status"] == "stopped" and w["stop_asked"], w
@@ -123,7 +124,7 @@ def test_cancel_while_it_runs_says_stopping_then_stopped(run, tmp_path):
     seed = {"work/" + WID: _work(**RUNNING)}
     stopped = _work(**dict(RUNNING, status="stopped", stop_asked=True, finished_at=_at(0)))
     got = _go(run, tmp_path, [
-        {"hash": "drafts", "click": "Cancel: Answers for the form: Ellerwick Trust, Research Analyst", "read": LINE},
+        {"hash": "drafts", "click": "Stop Claude's work on Answers for the form: Ellerwick Trust, Research Analyst", "read": LINE},
         {"write": {"work/" + WID: stopped}, "read": LINE},
     ], WIDE, seed=seed, clock=T)
     assert got["after"][0]["text"] == "Stopping after this step.", got["after"][0]["text"]
@@ -143,7 +144,7 @@ def test_an_applied_card_and_a_drafted_found_card_take_the_form_too(run, tmp_pat
     ], WIDE, model=m, seed=seed, clock=T)
     applied, found = got["after"][1]["text"], got["after"][3]["text"]
     assert "Questions on the form" in applied and "Show it" in applied, applied
-    assert "Claude is on it: writing your answers" in found and "Questions on the form" in found, found
+    assert "Answers for the form · writing your answers" in found and "Questions on the form" in found, found
 
 
 def test_an_answer_is_kept_with_the_application_and_read_back_on_its_card(tmp_path):

@@ -103,7 +103,15 @@ AREA_ALIASES = {
     "question": "questions", "person": "people", "contacts": "people",
     "target": "targets", "employers": "targets", "companies": "targets",
     "job": "jobs", "roles": "jobs", "interviews": "interview",
+    # The page's own groups of rules, by the name of the thing each is about (the Tweak
+    # panels in templates/app/app.js, TWEAK): every one is accepted, so a rule kept from
+    # the page is never refused for its group's name (`--area brief` was, 2026-11-05).
+    # The brief has no area of its own; its rules are "other", which its panel reads.
+    "brief": "other", "briefs": "other", "prep": "interview", "preps": "interview",
 }
+# The page's rule groups (its Tweak panels), read by tests/test_the_reaction_check_reads_only_the_person.py
+# against the page itself, so a group the page adds is accepted here or that test fails.
+PAGE_GROUPS = ("resume", "letter", "message", "jobs", "prep", "brief")
 
 
 def area_of(word) -> str:
@@ -567,6 +575,28 @@ def _uses(text: str, phrase: str) -> bool:
     return False
 
 
+def _uses_itself(text: str, phrase: str) -> bool:
+    """`_uses`, with the phrase said as itself: never only its words scattered."""
+    low = str(text or "").lower()
+    return bool(re.search(r"(?<!\w)%s(?!\w)" % re.escape(str(phrase).lower()), low)) and \
+        _uses(text, phrase)
+
+
+def _where(text: str, phrase: str, around: int = 30) -> str:
+    """The words of `text` the check matched `phrase` against, a few either side: what a
+    clash compares, said with it."""
+    low = str(text or "").lower()
+    m = re.search(r"(?<!\w)%s(?!\w)" % re.escape(str(phrase).lower()), low)
+    if m is None:
+        words = sorted(_content(phrase))
+        m = next((x for w in words for x in [re.search(r"\b%s\b" % re.escape(w), low)] if x),
+                 None)
+    if m is None:
+        return " ".join(str(text or "").split())[:2 * around]
+    a, b = max(0, m.start() - around), min(len(text), m.end() + around)
+    return ("..." if a else "") + " ".join(str(text)[a:b].split()) + ("..." if b < len(text) else "")
+
+
 def _says(text: str, phrase: str) -> bool:
     """Does `text` say what `phrase` says: the phrase itself, or every word of it that
     carries meaning?"""
@@ -577,6 +607,9 @@ def _says(text: str, phrase: str) -> bool:
     return bool(words) and words <= _content(low)
 
 
+# The areas whose rules are about the words written (a message, a document, the voice of
+# both, an answer to a question): a ban in one is about what every other writes too.
+WRITTEN = {"voice", "messages", "documents", "questions", "interview"}
 # Settings that are lists a rule adds to, never one value two rules can set differently.
 _LISTS = re.compile(r"(?:DECLINED|EXCLUDED|EXCLUDE|BLOCKED|NEVER|AVOID|SKIP|TARGETS|WATCH|"
                     r"FOLLOW|NAMES|PHRASES|LIST)\b")
@@ -597,16 +630,24 @@ def conflicts(entry: dict, rows: list[dict] | None = None) -> list[tuple[int, di
         if r.get("status", "active") != "active" or r is entry:
             continue
         theirs = " ".join([r.get("rule") or "", r.get("said") or ""])
+        # Rules about different things (a rule about how quickly taps are done, and one about
+        # a follow-up's words) share a word by chance: "update" in the one was read as using
+        # the other's "never ask for an update" (2026-11-05). A phrase is matched in other
+        # words only between two rules about what is written (WRITTEN); else only as itself.
+        same = {str(r.get("area") or ""), str(entry.get("area") or "")}
+        uses = _uses if len(same) == 1 or same <= WRITTEN else _uses_itself
         why = ""
         for p in r.get("never_say") or ():
-            if _uses(mine, str(p)) and not any(_says(str(p), b) for b in bans):
-                why = f"it says never \"{p}\", and this one uses it"
+            if uses(mine, str(p)) and not any(_says(str(p), b) for b in bans):
+                why = (f"it says never \"{p}\", and this one uses it "
+                       f"(\"{_where(mine, str(p))}\")")
                 break
         if not why:
             for p in bans:
-                if _uses(theirs, p) and str(p).lower() not in {
+                if uses(theirs, p) and str(p).lower() not in {
                         str(x).lower() for x in r.get("never_say") or ()}:
-                    why = f"it uses \"{p}\", which this one says never to"
+                    why = (f"it uses \"{p}\" (\"{_where(theirs, p)}\"), which this one says "
+                           "never to")
                     break
         if not why:
             # Two rules that set one setting ("networking.py OPENER") differently ask which
@@ -1431,8 +1472,22 @@ _RELAYED = re.compile(r"\[Subagent hand-back\]|Another Claude session sent a mes
 # text (notice, card, receipt) quoted in it: all the app's words, never the person's (the
 # skill says a ring is "never the person's words"). A message that is such a ring is the app's
 # wholly; the doorbell line is dropped from any other. Only what the person typed is read.
-_PAGE_RING = re.compile(r"^\s*(?:\[app\]|artifact comment sent to claude)", re.I)
+# Claude Code heads such a turn "[Artifact comment sent to Claude]", in brackets, with the
+# comment's thread and the page's own text it was left on: "reads like" in that text was held
+# as the person's reaction (2026-11-05). The header and everything under it to the doorbell,
+# a blank line or the end is the page's, wherever it sits in the prompt (`_WRAPPER`).
+_PAGE_RING = re.compile(r"^\s*\[?\s*(?:\[app\]|artifact comment sent to claude)", re.I)
 _DOORBELL = re.compile(r"^[ \t]*\[app\][^\n]*$", re.I | re.M)
+_WRAPPER = re.compile(r"^[ \t]*\[?[ \t]*artifact comment sent to claude\b.*?"
+                      r"(?:^[ \t]*\[app\][^\n]*$|\n[ \t]*\n|\Z)", re.I | re.S | re.M)
+
+
+def own_words(text: str) -> str:
+    """Only what the person typed: the page's wrapper around a comment (`_WRAPPER`), its
+    doorbell lines, the harness's reminders, quoted and pasted text all taken out, in the
+    order the reaction and approval checks read it."""
+    t = _WRAPPER.sub(" ", str(text or ""))
+    return without_pasted(_LONG_QUOTE.sub(" ", _NOT_THEIRS.sub(" ", _DOORBELL.sub(" ", t))))
 _LONG_QUOTE = re.compile(r'"[^"\n]{80,}"|\u201c[^\u201d\n]{80,}\u201d')
 # "She replied: ..." introduces their words, not the person's.
 _THEIR_WORDS = re.compile(r"\b(?:replied|wrote back|responded|answered|said|says|wrote|messaged"
@@ -1577,7 +1632,7 @@ def approval(text: str) -> str:
         return ""
     if _RELAYED.search(t) or _PAGE_RING.search(t):
         return ""
-    t = without_pasted(_LONG_QUOTE.sub(" ", _NOT_THEIRS.sub(" ", _DOORBELL.sub(" ", t))))
+    t = own_words(t)
     cut = _THEIR_WORDS.search(t)
     if cut:
         t = t[:cut.start()]
@@ -1597,7 +1652,7 @@ def reaction(text: str) -> str:
         t = t.lstrip().split("\n", 1)[0]
     if _RELAYED.search(t) or _PAGE_RING.search(t):   # another agent's report, or the page's ring
         return ""
-    t = without_pasted(_LONG_QUOTE.sub(" ", _NOT_THEIRS.sub(" ", _DOORBELL.sub(" ", t))))
+    t = own_words(t)
     cut = _THEIR_WORDS.search(t)
     if cut:
         t = t[:cut.start()]

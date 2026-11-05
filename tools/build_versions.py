@@ -462,7 +462,7 @@ METHODS: dict[str, dict] = {
                   "tools/network/reply.py",
                   "tools/network/discovery.py", "tools/network/openalex.py", "tools/network/schema.py",
                   "tools/network/sources.py", "tools/network/why.py", "tools/network/export.py",
-                  "tools/network/surface.py",
+                  "tools/network/surface.py", "tools/network/inmail_pick.py",
                   ".claude/skills/networking/*", ".claude/commands/network.md",
                   ".claude/commands/reply.md"),
         "versions": (
@@ -562,8 +562,9 @@ METHODS: dict[str, dict] = {
             (77, "2026-11-05", False, "a message the download shows was sent earlier in a day goes before a reply already logged that day, and the tidy puts a day an older import misordered in the order sent, so nobody reads as owed a reply they answered; a check that passed is said as the documents and their length alone"),
             (78, "2026-11-05", False, "a contact closed or cleared by hand parks their draft as the page's stop does; a draft written before their newest message is set aside and never offered; a thank-you to a kind close sets no follow-up; a pasted conversation logs only their messages; the person's own address never reads as a request; a message plainly not the draft teaches no edit"),
             (79, "2026-11-05", False, "several messages answering one of theirs count once toward the limit of unanswered messages, and a reply drafted to their message is logged as an answer, never a chase; a booked call can be not confirmed yet; a resume asked for over 60 days ago with nothing from them since closes by itself and the brief says so once; a no answer owed mark is dated no earlier than the message it answers; dates and lines are read again on the next run, so nothing needs redoing"),
+            (80, "2026-11-05", False, "on a plan with InMail credits a people search decides by itself who is worth an InMail instead of a note (a recruiter or hiring leader at a target employer a request would reach badly, at most two a run, one credit kept back), keeps the note beside it to switch to, and asks for the balance LinkedIn shows once a week; nothing older needs redoing"),
         ),
-        "fingerprint": "8a9421cb78794da1",
+        "fingerprint": "8b3c6d05a0fe7034",
     },
     "network-notes": {
         "by": "network", "priority": 2, "applies": "queued_notes", "time": "~10 min",
@@ -722,8 +723,9 @@ METHODS: dict[str, dict] = {
             (32, "2026-11-05", False, "a helper that can make no scheduled task (chats nested too deep) leaves the brief and its chat where they are for the fresh helper to move, and every task call the tidy-up prints says what to do when it is refused so"),
             (33, "2026-11-05", False, "where the brief runs is read from the task listing, never the registry: a brief the registry already named the helper for, still firing in the old chat, is moved, and the plan says where it fires so a move is reported only once the listing shows it"),
             (34, "2026-11-05", False, "routines.py brief and the tidy-up check that the brief's task fires in the chat answering the page, and print the move where it still fires in a chat that handed the page on, never \"set up\" or \"nothing to tidy\" over it"),
+            (35, "2026-11-05", False, "the tidy-up knows a page helper by the page's own record of the chats that answered it as one, however it was started and whatever it is called: a finished old helper the person started from the page is put away, the live one kept"),
         ),
-        "fingerprint": "fa8700ff94561463",
+        "fingerprint": "d27d36bc670db72a",
     },
     "expand": {
         "by": "upgrade", "priority": 4, "time": "~15 min",
@@ -809,8 +811,11 @@ METHODS: dict[str, dict] = {
             (57, "2026-11-05", True, "a form's answers ready to copy are opened by the line that says so, Show it, where it said under More"),
             (58, "2026-11-05", True, "a question the quick answer fails or never answers goes to Claude, and one left unanswered when the page closed goes to Claude at the next visit"),
             (59, "2026-11-05", True, "a role marked applied leaves To apply at once, and Applied opens on today's and yesterday's as a filter, shown with Clear all"),
+            (60, "2026-11-05", False, "an InMail's card says why it was chosen and the credit it spends, clips its body with More, and switches to a connection note and back; a question asking for a number takes it in place, with the steps to find it under the question"),
+            (61, "2026-11-05", True, "a laptop's Brief fits its window in two rows, the privacy line and the tip on its last row; Stop Claude calls off Claude's work everywhere; Claude's work says one short state a card and finished work is one row that opens where it belongs; Dismiss on suggestions; a card's answer offers the draft it made and opens the people it names, shows its latest with Earlier, and a hidden one leaves a Show line; a pencil change is said once under the draft, New version only once it is there; nothing owed at an employer turned down stays in Next or To do; the chat bubble can be made bigger"),
+            (62, "2026-11-05", True, "a mark (applied, not applying, I sent it, set aside, put off) rings nobody and never makes the page say Claude is not listening: the next chat that works on the search keeps it first"),
         ),
-        "fingerprint": "3a981e43d781a50e",
+        "fingerprint": "a439dbee931d95ac",
     },
     "upskill": {
         "by": "upgrade", "priority": 4, "applies": "upskill_plans", "time": "~10 min",

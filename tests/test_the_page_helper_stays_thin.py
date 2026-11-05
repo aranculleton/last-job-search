@@ -315,7 +315,7 @@ def test_taps_made_while_the_work_ran_are_applied_before_the_batch_ends(ring):
     assert all(fake_db.apply(ring.db, b) for b in got["batches"])
     assert ring.stored("receipts", aid)["data"]["result"] == "ok"
     assert ring.tracker() != before
-    # Work asked for meanwhile is named once, for the helper to take before it ends.
+    # Work asked for meanwhile is named, for the helper to take before it ends.
     d, _ = read(ring, "r3", now="2026-10-25T18:05:00Z")
     assert all(R.land(ring, wake(ring, d, now="2026-10-25T18:05:00Z")))
     ring.queue("talk~late", kind="talk", asked_at="2026-10-25T18:06:00Z")
@@ -323,8 +323,68 @@ def test_taps_made_while_the_work_ran_are_applied_before_the_batch_ends(ring):
     said = [ln for ln in got.get("for_claude") or [] if ln.startswith("late: ")]
     assert len(said) == 1 and "talk~late" in said[0] and "app.py wake" in said[0], got
     assert all(fake_db.apply(ring.db, b) for b in got["batches"])
-    # Ended again with nothing new since: the item is not named a second time.
+    # Ended again without taking it, it is named again: a pass that ended on the first naming
+    # left two follow-ups queued for minutes (the maintainer's copy, 2026-11-05).
     got = end(ring, d, "2026-10-25T18:08:00Z")
+    said = [ln for ln in got.get("for_claude") or [] if ln.startswith("late: ")]
+    assert len(said) == 1 and "talk~late" in said[0], got
+    assert all(fake_db.apply(ring.db, b) for b in got["batches"])
+    # Taken (claimed by the wake that line names), it is named no more.
+    assert all(R.land(ring, wake(ring, d, now="2026-10-25T18:09:00Z")))
+    assert ring.stored("work", "talk~late")["data"]["claimed_by"] == R.CHAT
+    got = end(ring, d, "2026-10-25T18:10:00Z")
+    assert not [ln for ln in got.get("for_claude") or [] if ln.startswith("late: ")], got
+
+
+def test_follow_ups_tapped_while_a_pass_ran_are_taken_and_their_questions_are_on_their_cards(
+        ring):
+    """Two follow-ups queued while a pass of the helper ran sat on "starts in a moment" for
+    minutes after it ended; it said each waited on a question, but neither was taken and no
+    card asked anything (the maintainer's copy, 2026-11-05). The pass's end names them until
+    they are taken; taken, one command drafts them; and each that needs the person waits as a
+    question on its own card, its words where the card shows them."""
+    import fake_db
+    import subprocess
+    import app_state
+    import repo_files
+    # The person's own rule: no follow-up with nothing new to say, so code asks them instead.
+    with open(os.path.join(ring.profile, "networking.py"), "a", encoding="utf-8") as fh:
+        fh.write("\nPLAIN_NUDGE = False\n")
+    ids = app_state.nudges_due(ring.state, 2)
+    first, _ = read(ring, "r1")
+    wake(ring, first)
+    assert view(ring, first)[1]
+    d, _ = read(ring, "r2", now=LATER)
+    assert all(R.land(ring, wake(ring, d, now=LATER)))
+    # While that pass runs, the person taps Follow up on two people.
+    for n, cid in enumerate(ids):
+        ring.put("work", "follow_up~" + cid, {
+            "kind": "follow_up", "status": "queued", "to": "either", "title": "Follow up",
+            "asked_at": f"2026-10-25T18:0{2 + n}:00Z", "args": {"contact": cid}})
+    work = ["follow_up~" + cid for cid in ids]
+    for at in ("2026-10-25T18:05:00Z", "2026-10-25T18:06:00Z"):
+        got = end(ring, d, at)
+        said = [ln for ln in got.get("for_claude") or [] if ln.startswith("late: ")]
+        assert len(said) == 1 and all(w in said[0] for w in work), got
+        assert all(fake_db.apply(ring.db, b) for b in got["batches"])
+    said = wake(ring, d, now="2026-10-25T18:07:00Z")
+    assert all(R.land(ring, said)), said
+    assert f"app.py follow-ups \"{d}\"" in said, said
+    ran = subprocess.run([*repo_files.python_on_github(os.path.join(R.ROOT, "tools", "app.py")),
+                          "follow-ups", d, "--chat", R.CHAT, "--now", "2026-10-25T18:08:00Z",
+                          "--today", "2026-10-25"], env=ring.env(LJS_PAGE_MIRROR=ring.mirror),
+                         capture_output=True, encoding="utf-8", timeout=120)
+    assert ran.returncode == 0, ran.stdout + ran.stderr
+    assert "2 put to the person as a question" in ran.stdout, ran.stdout
+    for b in [ln for ln in ran.stdout.splitlines() if ln.endswith(".json")]:
+        assert fake_db.apply(ring.db, b), b
+    for w in work:
+        item = ring.stored("work", w)["data"]
+        assert item["status"] == "needs_you" and item["note"].startswith(
+            "What should the follow-up to "), item
+        assert item["needs"]["question"] == item["note"] and item["needs"]["work"] == w, item
+    # Nothing is left for the pass to take: its end names nothing.
+    got = end(ring, d, "2026-10-25T18:09:00Z")
     assert not [ln for ln in got.get("for_claude") or [] if ln.startswith("late: ")], got
 
 

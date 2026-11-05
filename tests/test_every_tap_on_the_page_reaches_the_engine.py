@@ -245,7 +245,7 @@ def test_the_bin_on_a_to_do_row_turns_the_employer_down_in_the_engine(run, tmp_p
 def test_a_suggestion_declined_is_not_offered_again(run, tmp_path):
     where = Search(str(tmp_path / "s"))
     got, rec = _round_trip(run, tmp_path, where, "nothanks", [
-        {"hash": "jobs", "click": "No thanks", "exact": False},
+        {"hash": "jobs", "click": "Dismiss this suggestion", "exact": False},  # "Dismiss" (2026-11-05)
     ])
     (a,) = [x for x in got["actions"] if x["action"] == "suggest.dismiss"]
     assert a["rev_seen"] and isinstance(a["value"], dict), a

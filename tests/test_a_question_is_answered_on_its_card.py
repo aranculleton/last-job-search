@@ -258,10 +258,12 @@ def test_finished_work_says_it_is_being_put_on_the_page_until_the_page_has_it(ru
     label = "(document.querySelector('[data-work=\"follow_up~wren\"] .state-word') || {}).textContent || ''"
     m = copy.deepcopy(_sample())
     before = _go(run, tmp_path, [{"hash": "todo", "eval": label}], WIDE, model=m, seed=dict(HEARD, **{"work/follow_up~wren": w}), clock=T)
-    assert before["after"][0]["eval"] == "Finished: putting it on your page", before["after"][0]["eval"]
+    # Two words at most on the chip (the maintainer, 2026-11-05).
+    assert before["after"][0]["eval"] == "Putting on page", before["after"][0]["eval"]
     m["made_at"] = "2026-10-25T08:59:30Z"
     after = _go(run, tmp_path, [{"hash": "todo", "eval": label}], WIDE, model=m, seed=dict(HEARD, **{"work/follow_up~wren": w}), clock=T)
-    assert after["after"][0]["eval"] == "Done", after["after"][0]["eval"]
+    # On the page: a compact finished row, no chip (the maintainer, 2026-11-05).
+    assert after["after"][0]["eval"] == "", after["after"][0]["eval"]
 
 
 def test_an_answer_shows_its_work_going_at_once_and_can_be_called_off_with_the_answer_kept(run, tmp_path):
@@ -270,14 +272,15 @@ def test_an_answer_shows_its_work_going_at_once_and_can_be_called_off_with_the_a
     what the person gave is kept."""
     seed = _asking({"key": "answer", "kind": "yesno"}, question="Did the call go ahead?")
     card = ("(() => { const c = document.querySelector('[data-work=\"follow_up~wren\"]'); if (!c) return null;"
-            " return {text: c.textContent, off: [...c.querySelectorAll('button')].map((b) => b.textContent).filter((t) => /Don.t do it|^Stop$/.test(t))}; })()")
+            " return {text: c.textContent, off: [...c.querySelectorAll('button')].map((b) => b.textContent).filter((t) => /Don.t do it|^Stop( Claude)?$/.test(t))}; })()")
     got = _go(run, tmp_path, [
         {"hash": "todo", "click": "Yes", "exact": True, "within": ASK, "eval": card},
-        {"click": "Don't do it: Follow up with Wren", "exact": True, "within": '[data-work="follow_up~wren"]', "eval": card},
+        {"click": "Stop Claude's work on Follow up with Wren", "exact": True, "within": '[data-work="follow_up~wren"]', "eval": card},
     ], WIDE, seed=seed, model=_no_questions(), clock=T)
     first = got["after"][0]["eval"]
     assert first and "Needs your answer" not in first["text"], first
-    assert first["off"] == ["Don't do it"], ("one way to call it off while it waits", first)
+    # "Stop Claude" (the maintainer, 2026-11-05: "Don't do it" was ambiguous).
+    assert first["off"] == ["Stop Claude"], ("one way to call it off while it waits", first)
     queued = [x for x in got["after"][0]["work"] if x.get("title") == "Follow up with Wren"][-1]
     assert queued["status"] == "queued", queued
     w = [x for x in got["work"] if x.get("title") == "Follow up with Wren"][-1]

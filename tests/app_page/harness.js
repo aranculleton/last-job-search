@@ -1172,7 +1172,7 @@ S.stop_unsent = async (a) => {
     "work/prep~int-larkspur-supply": {kind: "prep", title: "Interview prep: Larkspur Retail", to: "cloud", args: {}, asked_at: asked, asked_from: {tab: "t0"}, status: "queued", stages: [], stage: 0, steps: [], stop_asked: false, attempt: 1},
   }, fake: {canSend: "available"}});
   const {page, store} = o;
-  await page.locator(workSel("prep~int-larkspur-supply")).getByRole("button", {name: "Don't do it: Interview prep: Larkspur Retail"}).click();
+  await page.locator(workSel("prep~int-larkspur-supply")).getByRole("button", {name: "Stop Claude's work on Interview prep: Larkspur Retail"}).click();
   await turn(page, 8);
   const r = {rings: await page.evaluate(() => window.__calls.filter((c) => c.op === "sendToClaude").length), work: store.get("work/prep~int-larkspur-supply")};
   r.errors = o.errors;
@@ -1196,14 +1196,14 @@ S.stop = async (a) => {
   r.runningBefore = (await bar(page, "search~1")).buttons;
   // Any tap on the page sends what has not gone, and sends again what went unanswered: here,
   // the Stop on another card. Nobody is asked to send anything twice.
-  await page.locator(workSel("search~1")).getByRole("button", {name: "Stop: Finding jobs"}).click();
+  await page.locator(workSel("search~1")).getByRole("button", {name: "Stop Claude's work on Finding jobs"}).click();
   await turn(page, 8);
   r.rings = await page.evaluate(() => window.__calls.filter((c) => c.op === "sendToClaude").map((c) => c.text));
   r.sent = await bar(page, "prep~int-larkspur-supply");
   r.bell = store.get("meta/doorbell");
   r.running = store.get("work/search~1");
   r.runningCard = await bar(page, "search~1");
-  await page.locator(workSel("prep~int-larkspur-supply")).getByRole("button", {name: "Don't do it: Interview prep: Larkspur Retail"}).click();
+  await page.locator(workSel("prep~int-larkspur-supply")).getByRole("button", {name: "Stop Claude's work on Interview prep: Larkspur Retail"}).click();
   await turn(page, 6);
   r.queued = store.get("work/prep~int-larkspur-supply");
   r.queuedCard = await bar(page, "prep~int-larkspur-supply");
@@ -1935,7 +1935,8 @@ S.alerts = async (a) => {
   r.checksFix = await T(page, '#main [data-item="al:al-checks-app-quayside-demand"] .fix .btn');
   await goto(page, "drafts");
   r.suggest = await T(page, '#main [data-item="app-ellerwick-insight"] .suggest-text');
-  await page.getByRole("button", {name: /^No thanks: The posting asks for Tableau/}).click();
+  // "Dismiss", never "No thanks" (the maintainer, 2026-11-05).
+  await page.locator('#main [data-item="app-ellerwick-insight"]').getByRole("button", {name: "Dismiss this suggestion", exact: true}).click();
   await turn(page, 6);
   r.dismissed = actionAt(store, "actions/act~sg-near-app-ellerwick-insight-3f2a9c1d~suggest.dismiss");
   r.gone = (await page.$$('#main [data-item="app-ellerwick-insight"] .suggest')).length;

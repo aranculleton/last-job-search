@@ -308,7 +308,8 @@ def test_a_work_card_says_a_day_as_a_person_does_and_its_time_once(run, tmp_path
 def test_a_finished_follow_up_opens_the_person_in_contacts(run, tmp_path):
     done = dict(QUEUED, args={"contact": "p-wren"}, status="done", finished_at="2026-10-25T08:59:00.000Z",
                 result={"summary": "Closed, as you chose: no more messages to Wren."})
-    link = "Array.from(document.querySelectorAll('#rail [data-work=\"follow_up~2\"] a[data-k^=\"open:\"]')).map((a) => [a.getAttribute('data-k'), a.textContent])"
+    # The whole finished row opens the person (the maintainer, 2026-11-05: compact rows).
+    link = "Array.from(document.querySelectorAll('#rail [data-work=\"follow_up~2\"] a[data-k^=\"open:\"]')).map((a) => [a.getAttribute('data-k'), (a.getAttribute('aria-label') || a.textContent).split(':')[0]])"
     got = _go(run, tmp_path, [{"hash": "todo", "eval": link}], WIDE, seed=dict(HEARD, **{"work/follow_up~2": done}), clock=T)
     assert got["after"][0]["eval"] == [["open:contacts:p-wren", "Open in Contacts"]], got["after"][0]["eval"]
 
@@ -369,7 +370,8 @@ def test_a_card_being_changed_says_so(run, tmp_path):
     line = got["after"][0]["eval"]
     # Said in Claude's work words with Cancel (the review, 2026-11-05: "See it" alone had no way
     # to call it off).
-    assert line and line.strip().startswith("Claude changes this next") and "Cancel" in line, line
+    # Its task in a few words, then Stop Claude (the maintainer, 2026-11-05).
+    assert line and line.strip().startswith("Changing it next") and "Stop Claude" in line, line
 
 
 def test_a_refused_tap_with_nothing_asked_still_has_a_way_out(run, tmp_path):

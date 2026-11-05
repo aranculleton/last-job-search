@@ -22,6 +22,18 @@ make sense to somebody whose repo just received it.
 
 ### Added
 
+- **The Brief fits a laptop screen.** On a laptop the Brief is two rows of panels that fill the
+  window, with the privacy line and the tip on one last row, so it no longer scrolls at common
+  sizes; each list shows what fits and its "All" opens the rest, and News says "2 more".
+- **One way to stop Claude.** Wherever Claude is working on something, the faint red "Stop
+  Claude" calls it off, in place of "Don't do it", "Stop" and "Cancel".
+- **A card's answer offers what it made.** Under Claude's answer on a card, a message it wrote
+  or changed has its own Copy and "I sent it", and the people it names open them.
+- **Answers are never lost.** A long exchange on a card shows the latest, with "Earlier" for the
+  rest; a hidden one leaves "Claude answered ... · Show".
+- **A bigger chat bubble.** The chat bubble's new button makes it about twice the size, and the
+  page remembers the choice.
+
 - **Something else, on every card, answered under that card.** The last thing under a card's
   More opens a box right under it, so you can ask or tell Claude anything the buttons do not
   cover; Claude's answer shows under the same card, and none of it goes into the Chat.
@@ -38,6 +50,9 @@ make sense to somebody whose repo just received it.
   marked so when you give its day, and Coming up and the Brief say "Not confirmed yet".
 - **Old resume requests close by themselves.** Someone who asked for your resume over two
   months ago and has said nothing since leaves your list on their own; the brief says so once.
+- **InMails chosen for you on Premium.** A people search now picks, by itself, the few people worth one of your InMails (a recruiter or hiring leader at an employer you want, whom a connection request would reach badly), at most two a search and always keeping one back; never on a free plan.
+- **An InMail's card says why and what it costs.** It reads, for example, "InMail (suggested): a recruiter at a target employer, and a request would wait · uses 1 of your 4 InMails", shows a long InMail clipped with More, and "Write a connection note instead" switches that person to a note (and back while you have InMails left).
+- **A weekly question for your InMail count.** On Premium, once a week To do asks how many InMails LinkedIn shows you have left, with a number box and "Where do I find it?" steps underneath.
 
 ### Fixed
 
@@ -189,6 +204,25 @@ make sense to somebody whose repo just received it.
 - A contact marked as in conversation, or with a call booked, when nothing from them is logged now shows what the messages say instead (waiting on their reply, or connected with no reply yet), so the page no longer asks you to answer a reply that was never sent. The contact check lists each one as something to fix.
 - One role per employer on Jobs, whichever search found it. The best fit stays; any other role there is set aside ("Another role at <employer> is already on your list") with Bring back, and a role you added, kept, drafted or applied for always stays.
 - Strong roles at one employer no longer all score 100. A live contact or an earlier interview there is counted before the top of the scale, so those roles keep their order.
+- Marking something (applied, not applying, I sent it, set aside, put off) no longer wakes Claude or starts a new helper: the page shows it at once, and Claude keeps it the next time it works on your search. Such a mark never makes the page say Claude is not listening.
+- Work you ask for while Claude is busy is taken before it stops, every time, instead of waiting on "starts in a moment".
+- The daily tidy-up puts away an old page helper you started from the page yourself, whatever it is called, and keeps the one in use.
+- What you say is read on its own: the page's own words around a message from the page are never taken as your reaction.
+- A new rule is only said to clash with an older one about the same thing, and the check shows the words it compared.
+- A rule can be kept for any group your page shows, the brief included.
+
+### Fixed
+
+- The privacy line at the foot of the page opens as one tidy line, not a narrow block.
+- Nothing owed to someone at an employer you turned down stays in the Brief's Next or To do.
+- Claude's work is tidier: no repeated count, one short state a card, and finished work is one
+  short row that opens where it belongs (a person's in Contacts, never Jobs).
+- A suggestion's "No thanks" is now "Dismiss".
+- A change asked with the pencil is said once, under the message, and "New version" shows only
+  once the new words are there, with no doubled full stop.
+- "Also at" on a person's card no longer lists their own message.
+- The box under a card stays visible when the pointer is over the card.
+- A work line on a card names its task ("Answers for the form · waking Claude").
 
 ## [4.10.1] - 2026-11-05
 

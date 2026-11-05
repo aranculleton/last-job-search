@@ -295,6 +295,9 @@ JSON_FILES = {
     # The newest message of theirs a draft answered (state.save_answers): a snapshot of what
     # the draft was written against, the newer whole.
     "documents/network/*/draft.answers.json": {"whole": ("",), "newline": False},
+    # Why this person was given an InMail rather than a note, and the other message kept
+    # beside it (inmail_pick.py): a snapshot of one decision, the newer whole.
+    "documents/network/*/inmail.json": {"whole": ("",), "indent": 1},
     # ---- one application or interview process
     # The person's answer to a campaign chat (interview_pack.record_campaign), and what the
     # last build wrote into the living prep document (its built record): snapshots.

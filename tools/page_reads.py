@@ -405,13 +405,7 @@ def late_queries(dump: str, now: dt.datetime | None = None) -> list[dict]:
          "query": {"limit": LIMIT, "where": [["applied_at", ">=", cursor]]}},
         {"collection": "work", "query": {"limit": LIMIT, "where": [["asked_at", ">=", cursor]]}},
     ]
-    # The work this folder held already: the wake knew of it, so only what the late reads
-    # bring is named as come in meanwhile (app.py late_taps).
-    folder = os.path.join(dump, "work")
-    known = sorted(os.path.splitext(n)[0].replace("@", "~") for n in os.listdir(folder)
-                   if n.endswith(".json")) if os.path.isdir(folder) else []
-    p.update(late_asked=_stamp(now), late_cursor=cursor,
-             late_known=sorted(set(p.get("late_known") or []) | set(known)))
+    p.update(late_asked=_stamp(now), late_cursor=cursor)
     p.pop("late_done", None)
     _write(path, p)
     return queries
