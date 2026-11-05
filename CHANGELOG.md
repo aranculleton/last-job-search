@@ -22,6 +22,22 @@ make sense to somebody whose repo just received it.
 
 ### Changed
 
+- **A question is answered on its card, not in Chat.** When Claude could not book something
+  because it needs a day, the card now has a date picker (with the time beside it for an
+  interview or a call); a choice is a row of buttons, a yes or no is one tap, a number has a
+  number box. "Say it in Chat" is gone from these cards.
+- **Claude asks only when it must, with the right control.** When a piece of work needs you
+  mid-way, its card in To do and in Claude's work shows the words it is about and a control
+  for the answer (a date, a time, a few choices, yes or no, a number or a slider); your
+  answer carries the work on, and its card shows it going, with Don't do it while it waits.
+- **Add the time in Coming up is a time picker on the row.** It used to start a line in Chat.
+- **One bin on each To do card, and "Not done" said once.** A card Claude could not finish had
+  two bins side by side and said "Not done" twice.
+- **"Show 1 more" goes once it has shown them.** It stayed under To do after showing the card,
+  still saying "Show 1 more"; now it goes, and the first card it showed is where you are.
+- **Every button beside another looks like one.** A card's actions are one row of the same
+  rounded buttons: its next step stands out, everything else is the same soft grey button,
+  and More is one too. Links under the Brief's panels are buttons now as well.
 - **A profile read just after midnight is kept.** One queued on your page before midnight and read after it was turned away and never read again; it is kept now.
 - **A skill your profile holds now goes into your resume's bullets, not only the skills line.**
   When a posting names a skill you hold (BigQuery, deep learning) and no bullet mentions it,

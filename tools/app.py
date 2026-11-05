@@ -1605,7 +1605,8 @@ def cmd_done(a) -> int:
                              "stopped" if a.stopped else "done",
                              error=a.failed, links=_links(a.link), reply=reply, thread=a.thread,
                              chat_kind=a.kind or app_listen.chat_kind(), dump_dir=a.dump,
-                             chat=a.chat, question=a.question)
+                             chat=a.chat, question=a.question, about=a.about,
+                             answer=_answer(a))
     except (KeyError, ValueError) as e:
         print(f"app: not finished: {e.args[0] if e.args else e}", file=sys.stderr)
         return 2
@@ -1628,6 +1629,25 @@ def cmd_done(a) -> int:
             got["batches"] = list(got["batches"]) + queued["batches"]
     print(_dump(got), end="")
     return 0
+
+
+def _answer(a) -> dict | None:
+    """The kind of answer a --question needs, as `done` takes it: --answer <kind>, each
+    --choice "<value>=<words>" (or just its words), --min and --max for a number or a scale."""
+    if not a.answer:
+        return None
+    choices = []
+    for c in a.choice or []:
+        value, _, words = str(c).partition("=")
+        choices.append({"value": value.strip(), "label": (words or value).strip()})
+    out = {"kind": a.answer, "choices": choices}
+    for k in ("min", "max"):
+        v = getattr(a, k)
+        if v is not None:
+            out[k] = int(v) if float(v).is_integer() else v
+    if a.time_key:
+        out["time"] = a.time_key
+    return out
 
 
 def cmd_ask(a) -> int:
@@ -1833,7 +1853,23 @@ def main(argv=None) -> int:
     p.add_argument("--stopped", action="store_true", help="they tapped Stop: it stops here")
     p.add_argument("--question", default="",
                    help="it needs the person first: one plain question, asked on the page; "
-                        "their answer puts it back in the queue")
+                        "their answer puts it back in the queue. Only when it cannot be "
+                        "finished honestly without them (templates/app/DESIGN.md, \"Asking "
+                        "the person\")")
+    p.add_argument("--about", default="",
+                   help="with --question: the exact words of the draft or of their message "
+                        "it is about, shown quoted over it")
+    p.add_argument("--answer", default="", choices=("", "yesno", "choice", "date", "time",
+                                                    "number", "scale", "text"),
+                   help="with --question: the kind of answer, so the page draws its control "
+                        "(a Yes and a No, chips, a date picker, a time, a number, a slider); "
+                        "text only when nothing else fits")
+    p.add_argument("--choice", action="append", default=[],
+                   help="with --answer choice: \"<value>=<words>\", two to six of them")
+    p.add_argument("--min", type=float, default=None, help="with --answer number or scale")
+    p.add_argument("--max", type=float, default=None, help="with --answer number or scale")
+    p.add_argument("--time-key", dest="time_key", default="",
+                   help="with --answer date: ask the time beside the day")
     p.add_argument("--link", action="append", default=[],
                    help="\"<label>=<address>\" shown with it (more than one allowed)")
     p.add_argument("--chat", default="", help=CLAIMED_UNDER)

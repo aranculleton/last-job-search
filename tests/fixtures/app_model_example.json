@@ -1,7 +1,7 @@
 {
  "model": 1,
  "made_at": "2026-10-25T18:00:00Z",
- "rev": "c0cce7bb1cfe",
+ "rev": "e5359afb62d4",
  "app": {
   "version": "4.9.1",
   "url": null,
@@ -13,7 +13,7 @@
   ],
   "privacy": "Only you can open this page unless you share it. It holds first names, employers, your drafts and your setup answers, so keep it unshared.",
   "repo": "https://github.com/aranculleton/last-job-search",
-  "page": 25,
+  "page": 26,
   "not_saved": 0
  },
  "person": {
@@ -48,7 +48,7 @@
  ],
  "jobs": {
   "round": "r9",
-  "made_at": "2026-11-05T00:49:27Z",
+  "made_at": "2026-11-05T01:08:13Z",
   "met": false,
   "summary": "3 roles from the last search to look at, 1 of them scoring 75 or more. 3 left out, each with its reason.",
   "rows": [
@@ -862,7 +862,7 @@
    "when": "2026-10-28",
    "prep": {
     "path": "documents/applications/thornbury_bank_risk_analyst_thornbury/interview_prep.md",
-    "updated": "2026-11-05T00:49:27Z"
+    "updated": "2026-11-05T01:08:13Z"
    },
    "questions": 2,
    "all_day": true,
@@ -2971,6 +2971,46 @@
  },
  "hints": {
   "tweak": false
+ },
+ "refusal_asks": {
+  "outcome.interview": {
+   "key": "on",
+   "label": "Which day is it?",
+   "kind": "date",
+   "type": "date",
+   "time": "time"
+  },
+  "person.call_booked": {
+   "key": "on",
+   "label": "Which day is the call?",
+   "kind": "date",
+   "type": "date",
+   "time": "time"
+  },
+  "job.applied": {
+   "key": "on",
+   "label": "When did you apply?",
+   "kind": "date",
+   "type": "date"
+  },
+  "ready.applied": {
+   "key": "on",
+   "label": "When did you apply?",
+   "kind": "date",
+   "type": "date"
+  },
+  "due.snooze": {
+   "key": "until",
+   "label": "Until which day?",
+   "kind": "date",
+   "type": "date"
+  },
+  "brief.pause": {
+   "key": "until",
+   "label": "Until which day?",
+   "kind": "date",
+   "type": "date"
+  }
  },
  "pin": {
   "due": true

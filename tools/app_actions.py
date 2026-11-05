@@ -269,22 +269,105 @@ ACTIONS = {
 
 class Refused(Exception):
     """The action cannot apply: its receipt says why, in plain words. `ask`, where what is
-    missing is one value the person can give ({key, label, type}: the action's value key,
-    the words over its field, "date" or "text"), goes on the receipt, and the page shows the
-    field beside the reason: a refusal that asked "Which day is it?" gave nowhere to say it,
-    and the same empty tap went again (the audit, 2026-11-03)."""
+    missing is one value the person can give (`ask()`: the action's value key, the words
+    over its control and the kind of answer), goes on the receipt, and the page draws the
+    control that fits beside the reason: a refusal that asked "Which day is it?" gave nowhere
+    to say it, and the same empty tap went again (the audit, 2026-11-03); and a day typed
+    into a text box, or "Say it in Chat", was a chat turn for one tap (the maintainer,
+    2026-11-05: "surely that one we could just have a date picker")."""
 
     def __init__(self, message: str = "", ask: dict | None = None):
         super().__init__(message)
         self.ask = ask
 
 
-def _ask_day(key: str, label: str = "Which day?") -> dict:
-    return {"key": key, "label": label, "type": "date"}
+# The kinds of answer the page has a control for (templates/app/DESIGN.md, "Asking the
+# person"): a date picker (with a time beside it where `time` names the value's time key), a
+# time, a few choices as one row of chips, a yes and a no, a number, a slider for a scale
+# (`min` to `max`), or a line of text where words are the answer. A refused tap and a
+# question Claude asks (app.py done --question --answer <kind>) name one; the page draws it.
+ANSWER_KINDS = ("date", "time", "choice", "yesno", "number", "scale", "text")
+
+
+def ask(key: str, label: str, kind: str = "text", choices=(), time: str = "",
+        lo=None, hi=None) -> dict:
+    """What a refusal or a question needs, as the page reads it: {key, label, kind, type,
+    choices, time, min, max}. `choices` are (value, words) pairs for "choice" and "yesno";
+    `type` repeats the kind as pages before 4.10 read it ("date" or "text")."""
+    if kind not in ANSWER_KINDS:
+        raise ValueError(f"an answer is one of {', '.join(ANSWER_KINDS)}, not {kind!r}")
+    if kind == "yesno" and not choices:
+        choices = (("yes", "Yes"), ("no", "No"))
+    out = {"key": key, "label": label, "kind": kind, "type": "date" if kind == "date" else "text"}
+    if choices:
+        out["choices"] = [{"value": str(v), "label": str(w)} for v, w in choices][:6]
+    if time:
+        out["time"] = time
+    if lo is not None:
+        out["min"] = lo
+    if hi is not None:
+        out["max"] = hi
+    if kind == "scale":
+        out.setdefault("min", 1)
+        out.setdefault("max", 5)
+    return out
+
+
+def _ask_day(key: str, label: str = "Which day?", time: str = "") -> dict:
+    return ask(key, label, "date", time=time)
 
 
 def _ask_text(key: str, label: str) -> dict:
-    return {"key": key, "label": label, "type": "text"}
+    return ask(key, label, "text")
+
+
+def clean_ask(given) -> dict | None:
+    """An `ask` as a receipt or a work item may carry it: only its known fields, in their
+    shapes, or None. A kind a page has no control for is a line of text."""
+    if not isinstance(given, dict) or not str(given.get("key") or "").strip():
+        return None
+    kind = str(given.get("kind") or given.get("type") or "text")
+    kind = kind if kind in ANSWER_KINDS else "text"
+    out = {"key": str(given["key"]).strip()[:40], "label": str(given.get("label") or "")[:120],
+           "kind": kind, "type": "date" if kind == "date" else "text"}
+    choices = [c for c in given.get("choices") or [] if isinstance(c, dict)
+               and str(c.get("value") or "").strip()][:6]
+    if choices:
+        out["choices"] = [{"value": str(c["value"])[:80],
+                           "label": str(c.get("label") or c["value"])[:60]} for c in choices]
+    if kind == "yesno" and not choices:
+        out["choices"] = [{"value": "yes", "label": "Yes"}, {"value": "no", "label": "No"}]
+    elif kind == "choice" and len(choices) < 2:
+        out["kind"] = "text"
+    if str(given.get("time") or "").strip():
+        out["time"] = str(given["time"]).strip()[:40]
+    for k in ("min", "max"):
+        try:
+            if given.get(k) is not None:
+                out[k] = float(given[k]) if "." in str(given[k]) else int(given[k])
+        except (TypeError, ValueError):
+            pass
+    if out["kind"] == "scale":
+        out.setdefault("min", 1)
+        out.setdefault("max", 5)
+        if out["max"] <= out["min"]:
+            out["max"] = out["min"] + 4
+    return out
+
+
+# A refusal from before receipts named their answer (4.9 and earlier) still gets its
+# control: the answer each action's refusal asks for when it asks a question, which the page
+# reads only for a refused receipt with no answer of its own whose reason is a question. The
+# maintainer's To do held "Which day is it? Give it as 28 Oct." with "Say it in Chat" under
+# it (2026-11-05).
+OLD_REFUSAL_ASKS = {
+    "outcome.interview": _ask_day("on", "Which day is it?", time="time"),
+    "person.call_booked": _ask_day("on", "Which day is the call?", time="time"),
+    "job.applied": _ask_day("on", "When did you apply?"),
+    "ready.applied": _ask_day("on", "When did you apply?"),
+    "due.snooze": _ask_day("until", "Until which day?"),
+    "brief.pause": _ask_day("until", "Until which day?"),
+}
 
 
 # ------------------------------------------------------------------ the item index
@@ -1044,7 +1127,7 @@ def _stage_day(r: Run) -> str:
         return dt.date.fromisoformat(given[:10]).isoformat()
     except ValueError:
         raise Refused(f"{given} is not a day: give it as {r.day.isoformat()}.",
-                      ask=_ask_day("on", "Which day is it?")) from None
+                      ask=_ask_day("on", "Which day is it?", time="time")) from None
 
 
 def _stage_time(r: Run) -> tuple:
@@ -1070,7 +1153,7 @@ def _stage_time(r: Run) -> tuple:
     got = upcoming.call_time(said, home)
     if not got:
         raise Refused(f"The time \"{said}\" could not be read: write it like 14:30, 2pm, or "
-                      "10am ET.")
+                      "10am ET.", ask=ask("time", "What time is it?", "time"))
     if got.get("end") and not minutes:
         h1, m1 = (int(x) for x in got["time"].split(":"))
         h2, m2 = (int(x) for x in got["end"].split(":"))
@@ -2006,7 +2089,7 @@ def _search_set(r: Run) -> dict:
         v = float(m.group(0).replace(",", "")) if m else None
     if what == "pay" and not isinstance(v, (int, float)):
         raise Refused("Give the lowest pay you would take, as one number.",
-                      ask=_ask_text("value", "The lowest pay you would take"))
+                      ask=ask("value", "The lowest pay you would take", "number"))
 
     def one(change) -> dict:
         work = {"kind": "tweak", "args": {"target": {"id": "jobs", "output": "jobs"},
@@ -2879,7 +2962,9 @@ def _needs_answer(r: Run) -> dict:
             profile_upgrades.record_no(t["upgrade"], today=r.day)
             return {"note": profile_upgrades.NO_REPLY, "undo": None}
         if choice != "yes":
-            raise Refused("Yes or not now: which?")
+            raise Refused("Yes or not now: which?",
+                          ask=ask("value", "Set it up now?", "choice",
+                                  (("yes", "Yes"), ("no", "Not now"))))
         wid = "talk~upgrade~" + page_db.safe_id(t["upgrade"])
         if _on_its_way(r, wid):
             return {"note": "Already on its way.", "undo": None}
@@ -2896,13 +2981,18 @@ def _needs_answer(r: Run) -> dict:
         import learned
         choice = r.words("value")
         if choice not in ("later", "older", "both"):
-            raise Refused("The later one, both, or the earlier one: which?")
+            raise Refused("The later one, both, or the earlier one: which?",
+                          ask=ask("value", "Which to keep?", "choice",
+                                  (("later", "The later one"), ("both", "Both"),
+                                   ("older", "The earlier one"))))
         return {"note": learned.settle(choice, today=r.day.isoformat()), "undo": None}
     if t["kind"] == "offer":
         import learned
         choice = r.words("value")
         if choice not in ("keep", "switch"):
-            raise Refused("Keep yours, or try the new way: which?")
+            raise Refused("Keep yours, or try the new way: which?",
+                          ask=ask("value", "Which way?", "choice",
+                                  (("keep", "Keep yours"), ("switch", "Try the new way"))))
         learned.decide(int(t["n"]), choice, today=r.day.isoformat())
         return {"note": "Kept your way." if choice == "keep" else "Trying the new way.",
                 "undo": None}
@@ -3329,8 +3419,8 @@ def _receipt(result: str, note: str, by: str, now: dt.datetime, aid: str, act: d
     if result == "ok":
         out["undo"] = undo
         out["guard"] = guard_after
-    elif ask and ask.get("key"):
-        out["ask"] = {k: str(ask.get(k) or "") for k in ("key", "label", "type")}
+    elif clean_ask(ask):
+        out["ask"] = clean_ask(ask)
     return out
 
 

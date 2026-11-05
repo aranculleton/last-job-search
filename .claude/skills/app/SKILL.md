@@ -360,7 +360,16 @@ the next landing brings it in.
   `python3 tools/app.py done "$D" --work <id> --chat <the id it was claimed under> --question
   "<one plain question>"` (the item waits for them, its locks freed); the page asks it.
   Never wait in the chat. The person's answer comes back on the same item, queued again, in
-  `args.answers` under the question: take it with `next` and carry on.
+  `args.answers` under the question: take it with `next` and carry on. Ask only when the
+  work cannot be finished honestly without them (an unclear or ungrounded claim, a missing
+  fact, two readings of their message), never for a preference a default answers, and one
+  question at a time. Name the kind of answer so the page draws its control on the card
+  instead of a box to type in: `--answer yesno|choice|date|time|number|scale|text`, with
+  `--choice "<value>=<words>"` two to six times for a choice, `--min`/`--max` for a number
+  or a scale, `--time-key time` for a day that needs its time, and `--about "<the exact
+  words of the draft or their message it concerns>"`; text only when nothing else fits
+  (templates/app/DESIGN.md, "Asking the person"). A tap the engine refused with a question
+  says its kind on the receipt by itself (`ask`); never send the person to Chat for it.
 - Every move of a work item is an `app.py` command (`next`, `pin`, `done`, `ask`, `busy`),
   never a write by hand. Every write is pinned (`if_version`) except a create; one write at a
   time per document. A refused write names the record's current version: `python3

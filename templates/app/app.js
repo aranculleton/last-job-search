@@ -429,7 +429,7 @@
     if (!id) return null;
     const su = obj(M().setup);
     const up = obj(M().updates);
-    const pools = [jobRows(), readyItems(), messageItems(), dueItems(), peopleItems(), interviewItems(), needsItems(),
+    const pools = [jobRows(), readyItems(), messageItems(), dueItems(), peopleItems(), interviewItems(), arr(M().applications), needsItems(),
       arr(su.steps), arr(up.done), up.waiting ? [up.waiting] : [], arr(M().settings)];
     for (const list of pools) for (const x of list) if (x && txt(x.id) === id) return x.rev || null;
     return null;
@@ -1068,22 +1068,78 @@
     if (txt(obj(r).result) === "stale") return "Not done: " + days(note && !/changed since/i.test(note) ? note : "this changed since you saw it. Look again and choose once more.");
     return "Not done: " + days(note || "it could not be done. Try it once more, or say it in Chat.");
   }
-  // Where the engine says what it needs (a receipt's `ask`: the value's key, a label and its
-  // kind), the field to give it, which sends the same tap again with it filled in.
+  // What a refused tap needs, from the engine: the receipt's own `ask` (the value's key, a
+  // label, the kind of answer and its choices); for a refusal from before receipts named one,
+  // the engine's answer for that action (M().refusal_asks), where its reason is a question.
+  // "Which day is it? Give it as 28 Oct." had only "Say it in Chat" (the maintainer,
+  // 2026-11-05: "surely that one we could just have a date picker").
+  function refusalAsk(t, r) {
+    const own = obj(obj(r).ask);
+    if (txt(own.key)) return own;
+    const old = obj(obj(M().refusal_asks)[txt(obj(t.doc).action)]);
+    return txt(old.key) && /\?/.test(txt(obj(r).note)) ? old : null;
+  }
+  // The control that fits, which sends the same tap again with the answer filled in.
   function askFix(t, r, k) {
-    const a = obj(obj(r).ask);
-    const key = txt(a.key);
+    const a = refusalAsk(t, r);
     const prev = t.doc.value === null || t.doc.value === undefined ? {} : t.doc.value;
-    if (!key || typeof prev !== "object" || Array.isArray(prev)) return null;
-    const fid = "fix-" + seg(k);
-    const input = h("input", {id: fid, type: txt(a.type) === "date" ? "date" : "text", class: "fix-in", "data-k": "fix-in:" + k, maxlength: 2000});
-    return h("form", {class: "fix", "data-fix": t.id, onsubmit: (e) => {
+    if (!a || typeof prev !== "object" || Array.isArray(prev)) return null;
+    return answerControl(a, "fix:" + k, (got) => {
+      const vals = {[txt(a.key)]: got.value};
+      if (txt(a.time) && got.time) vals[txt(a.time)] = got.time;
+      act([{item: t.doc.item, action: t.doc.action, value: Object.assign({}, prev, vals), rev: revOf(t.doc.item) || t.doc.rev_seen}], (ACTION_WORDS[t.doc.action] || "Sent") + ": " + itemName(t.doc.item));
+    }, {form: {"data-fix": t.id}});
+  }
+  // One question, in its one soft grey box (DESIGN.md, "Asking the person"): the words it is
+  // about, quoted; the question; the control its answer needs. Any card draws it from a
+  // `needs` {question, about, answer}; `send` takes {value, time, words}.
+  function answerBox(needs, key, send) {
+    const n = obj(needs);
+    const a = Object.assign({label: ""}, obj(n.answer));
+    return h("div", {class: "ask-box", "data-k": "ask:" + key},
+      txt(n.about) ? h("blockquote", {class: "ask-about"}, clip(txt(n.about), 400)) : null,
+      txt(n.question) ? h("p", {class: "ask-q"}, txt(n.question)) : null,
+      answerControl(a, key, send));
+  }
+  // The control for one kind of answer (tools/app_actions.py ANSWER_KINDS): a date picker,
+  // with the time beside it where the answer has one; a time; a number; a slider for a scale;
+  // Yes and No, or a few choices, each sent in one tap; a line of text only when nothing else
+  // fits. Nothing is sent empty: an empty field takes the focus back.
+  const ANSWER_INPUT = {date: "date", time: "time", number: "number", scale: "range", text: "text"};
+  function answerControl(a, key, send) {
+    const o = arguments[3] || {};
+    const kind = txt(a.kind) || (txt(a.type) === "date" ? "date" : "text");
+    const label = txt(a.label);
+    const choices = arr(a.choices).map((c) => (c && typeof c === "object" ? {value: txt(c.value), label: txt(c.label) || txt(c.value)} : {value: txt(c), label: txt(c)})).filter((c) => c.value);
+    if ((kind === "choice" || kind === "yesno") && (choices.length || kind === "yesno")) {
+      const list = choices.length ? choices : [{value: "yes", label: "Yes"}, {value: "no", label: "No"}];
+      const lid = "ans-l-" + seg(key);
+      return h("div", Object.assign({class: "fix ask-choices", role: "group", "aria-labelledby": label ? lid : null}, o.form || {}),
+        label ? h("span", {class: "small", id: lid}, label) : null,
+        list.map((c) => btn(c.label, () => send({value: c.value, words: c.label}), {kind: "secondary", small: true, key: "fix-c:" + key + ":" + c.value})));
+    }
+    const fid = "ans-" + seg(key);
+    const type = ANSWER_INPUT[kind] || "text";
+    const lo = a.min !== undefined && a.min !== null ? a.min : kind === "scale" ? 1 : null;
+    const hi = a.max !== undefined && a.max !== null ? a.max : kind === "scale" ? 5 : null;
+    const input = h("input", {id: fid, type, class: "fix-in", "data-k": "fix-in:" + key, maxlength: type === "text" ? 2000 : null,
+      min: lo, max: hi, step: type === "number" || type === "range" ? "any" : null, inputmode: type === "number" ? "decimal" : null,
+      value: type === "range" ? String(Math.round(((Number(lo) || 0) + (Number(hi) || 0)) / 2)) : null});
+    if (type === "range") input.step = "1";
+    const shown = type === "range" ? h("output", {for: fid, class: "ask-scale-n"}, input.value) : null;
+    if (shown) input.addEventListener("input", () => { shown.textContent = input.value; });
+    const tid = fid + "-t";
+    const time = kind === "date" && txt(a.time) ? h("input", {id: tid, type: "time", class: "fix-in fix-time", "data-k": "fix-time:" + key, "aria-label": "Time, if you know it"}) : null;
+    return h("form", Object.assign({class: "fix", onsubmit: (e) => {
       e.preventDefault();
       const v = txt(input.value).trim();
       if (!v) { input.focus(); return; }
-      act([{item: t.doc.item, action: t.doc.action, value: Object.assign({}, prev, {[key]: v}), rev: revOf(t.doc.item) || t.doc.rev_seen}], (ACTION_WORDS[t.doc.action] || "Sent") + ": " + itemName(t.doc.item));
-    }}, h("label", {for: fid, class: "small"}, txt(a.label) || "Your answer"), input,
-      h("button", {type: "submit", class: "btn secondary small", "data-k": "fix-go:" + k}, "Send"));
+      const tv = time ? txt(time.value).trim() : "";
+      const words = kind === "date" ? (fmtDay(v) || v) + (tv ? " at " + tv : "") : v;
+      send({value: v, time: tv, words});
+    }}, o.form || {}), h("label", {for: fid, class: "small"}, label || "Your answer"), input, shown,
+      time ? [h("span", {class: "small muted", "aria-hidden": "true"}, "at"), time] : null,
+      h("button", {type: "submit", class: "btn primary small", "data-k": "fix-go:" + key}, "Send"));
   }
   // The thing a tap was about, by name, from whichever list holds it.
   function itemName(item) {
@@ -1111,25 +1167,21 @@
       if (needsItems().some((n) => n.id === d.item) || dueItems().some((x) => x.id === d.item)) continue;
       // Gone from the page altogether, with nothing asked: nothing is left to do about it.
       const name = itemName(d.item);
-      if (!name && !obj(r.ask).key) continue;
-      // Marked by what it was about, never "Setup" for an interview; and never a dead end: with
-      // no question to answer on it, it can be said in Chat or put away. A card from before
-      // refusals carried their question sat with no button at all (the maintainer, 2026-11-04:
-      // "doesn't seem to have any options").
+      if (!name && !refusalAsk({doc: d}, r)) continue;
+      // Marked by what it was about, never "Setup" for an interview. A question on it is
+      // answered on the card with the control its answer needs (askFix, in its line); with
+      // none, its bin puts it away. Its bin is To do's own (withHide): a second one of its own
+      // stood beside it, with "Not done" said in a pill and again in its line (the
+      // maintainer, 2026-11-05).
       const kind = /^(outcome|interview)\./.test(txt(d.action)) ? "interview" : /^(job|ready)\./.test(txt(d.action)) ? "application"
         : /^(msg|person|referral)\./.test(txt(d.action)) ? "message" : "setup";
       const title = name || ACTION_WORDS[d.action] || "Something you tapped";
-      out.push({key: "refused:" + id, kind, band: "answer", employer: null, tab: null, counts: true, node: () => {
-        const asked = !!txt(obj(r.ask).key);
-        return card("article", {class: "card todo", "aria-labelledby": "rf-" + seg(id), "data-item": "refused:" + id},
-          h("div", {class: "todo-top"}, kindMark(kind), stateWord("Not done", "bad"),
-            btn("", () => hideTodo("refused:" + id, title), {kind: "quiet icon-only", small: true, icon: "bin", key: "rf-bin:" + id, aria: "Put away: " + title})),
+      out.push({key: "refused:" + id, kind, band: "answer", employer: null, tab: null, counts: true, node: () =>
+        card("article", {class: "card todo", "aria-labelledby": "rf-" + seg(id), "data-item": "refused:" + id},
+          h("div", {class: "todo-top"}, kindMark(kind)),
           // Named by what it was about: "Interview booked" beside "Not done" said both.
           h("p", {class: "card-title", id: "rf-" + seg(id)}, title),
-          stateLine(d.item, "rf:" + id),
-          asked ? null : h("div", {class: "card-actions"}, btn("Say it in Chat", (e) => openDock({opener: e.currentTarget, text: title + ": "}),
-            {kind: "secondary", small: true, key: "rf-chat:" + id})));
-      }});
+          stateLine(d.item, "rf:" + id))});
     }
     return out;
   }
@@ -2399,7 +2451,7 @@
   function btn(label, onclick, o) {
     o = o || {};
     return h("button", {type: "button", class: "btn " + (o.kind || "secondary") + (o.small ? " small" : ""), "data-k": o.key || null,
-      disabled: o.disabled || null, "aria-pressed": o.pressed === undefined ? null : String(!!o.pressed),
+      disabled: o.disabled || null, "data-bin": o.icon === "bin" ? "1" : null, "aria-pressed": o.pressed === undefined ? null : String(!!o.pressed),
       "aria-label": o.aria || null, "aria-describedby": o.describedby || null, "data-primary": o.kind === "primary" ? "1" : null,
       // The one next step on the screen while it is open (the box a person just opened).
       "data-lead": o.lead ? "1" : null,
@@ -2999,10 +3051,14 @@
     }
     // Interviews within two weeks are cards of their own, the soonest at the top; what is
     // wrong with one (no prep yet) is said on that card and counted there.
+    // The soonest leads To do only when it is today or tomorrow, or has no prep yet: one three
+    // days off with its prep ready took the screen's one filled button from a thank-you two
+    // days late (the UX review, 2026-11-05).
     ivs.forEach((iv, i) => {
       const n = dayDiff(iv.when);
       const list = alertsOf(iv);
-      out.push({key: "iv:" + iv.id, kind: "interview", band: i === 0 ? "top" : n <= 7 ? "week" : "later", employer: txt(iv.company), due: dayOf(iv.when), item: iv.id,
+      const lead = i === 0 && (n <= 1 || !obj(iv.prep).updated);
+      out.push({key: "iv:" + iv.id, kind: "interview", band: lead ? "top" : n <= 7 ? "week" : "later", employer: txt(iv.company), due: dayOf(iv.when), item: iv.id,
         home: "interviews", weight: list.filter(alertCounts).length, counts: list.some(alertCounts), node: (ctx) => comingUp(iv, ctx)});
     });
     const sources = [];
@@ -3187,12 +3243,15 @@
   // week at once, with Undo.
   function withHide(i, node) {
     if (!node || !node.querySelector || i.stay) return node;
+    // A card that already has its own bin (with its own choices) keeps that one alone: two
+    // bins side by side stood on a card (the maintainer, 2026-11-05).
+    if (node.querySelector(":scope > .todo-top [data-bin], :scope > .card-actions [data-bin]")) return node;
     const top = node.querySelector(".todo-top");
     const title = (node.querySelector(".card-title, h3") || {}).textContent || "this";
     const cid = node.classList.contains("group-card") ? "" : txt(i.contact) || txt(obj(obj(i.need).about).contact);
     const p = cid ? personById(cid) : null;
     const hide = () => hideTodo(i.key, title);
-    const x = h("button", {type: "button", class: "btn quiet icon-only small hide-x", "data-k": "hide:" + i.key,
+    const x = h("button", {type: "button", class: "btn quiet icon-only small hide-x", "data-k": "hide:" + i.key, "data-bin": "1",
       "aria-label": p ? "Not " + txt(p.first_name) + "? Or hide this for a week" : "Hide for a week: " + title, title: p ? "Not " + txt(p.first_name) + "?" : "Hide for a week",
       onclick: () => (p ? askRemovePerson(txt(p.id), txt(p.first_name), txt(p.employer), p.rev, {hide}) : hide())}, icon("bin"));
     if (top) top.appendChild(x); else node.insertBefore(x, node.firstChild);
@@ -3291,9 +3350,17 @@
     const finish = settingUp || todoHidden({key: "you-finish"}) ? null : finishProfileCard();
     const finishNode = finish ? withHide({key: "you-finish"}, finish) : null;
     if (restN && finishNode) put(rest, finishNode);
-    if (restN) put(wrap, det("todo-rest", false, {class: "band-more"}, h("summary", {class: "band-more-sum"}, "Show " + (restN + (finishNode ? 1 : 0)) + " more"), rest));
+    // Its count is what it still folds: once opened the line goes (CSS) and the first card it
+    // showed takes the focus. "Show 1 more" stayed over the card it had shown (the
+    // maintainer, 2026-11-05: "it shows something else but still says show 1 more").
+    if (restN) put(wrap, det("todo-rest", false, {class: "band-more", ontoggle: (e) => {
+      const d = e.currentTarget;
+      const first = d.open && d.dataset.tapped ? d.querySelector("[data-card]") : null;
+      delete d.dataset.tapped;
+      if (first) first.focus({preventScroll: true});
+    }}, h("summary", {class: "band-more-sum", onclick: (e) => { e.currentTarget.parentElement.dataset.tapped = "1"; }}, "Show " + (restN + (finishNode ? 1 : 0)) + " more"), rest));
     else if (finishNode) put(wrap, finishNode);
-    if (soonCount) put(wrap, det("todo-soon", !shown && !top, {class: "band-more soon-more"}, h("summary", {class: "band-more-sum"}, "Coming up: " + soonCount + " not due yet"), soon));
+    if (soonCount) put(wrap, det("todo-soon", !shown && !top, {class: "band-more soon-more"}, h("summary", {class: "band-more-sum"}, "Not due yet (" + soonCount + ")"), soon));
     const hidden = dueItems().find((d) => txt(d.kind) === "hidden");
     if (!settingUp) put(wrap, hidden ? h("p", {class: "muted small hidden-note"}, txt(hidden.title) + ".") : null,
       hiddenFold(hiddenTodos(settingUp, every)), recentChanges(), tipLine("todo"));
@@ -3568,11 +3635,30 @@
   }
   function workTodo(id, w, ctx) {
     const hid = "wt-" + (ctx.where || "") + "-" + seg(id);
+    const box = workAnswerBox(id, w, "wt:" + (ctx.where || "") + ":" + id);
     return card("article", {class: "card todo", "aria-labelledby": hid, "data-item": "work:" + id},
       h("div", {class: "todo-top"}, kindMark(WORK_KIND[txt(w.kind)] || "setup")),
-      h("p", {class: "card-title", id: hid}, txt(w.title)),
-      h("p", {}, txt(w.note) || "It has a question for you."),
-      h("div", {class: "card-actions"}, btn("Answer", () => askWorkAnswer(id), {kind: "primary", small: true, key: "wt:" + (ctx.where || "") + ":" + id, aria: "Answer: " + txt(w.title)})));
+      h("p", {class: "card-title", id: hid}, workName(w)),
+      box || h("p", {}, txt(w.note) || "It has a question for you."),
+      box ? null : h("div", {class: "card-actions"}, btn("Answer", () => askWorkAnswer(id), {kind: "primary", small: true, key: "wt:" + (ctx.where || "") + ":" + id, aria: "Answer: " + txt(w.title)})));
+  }
+  // A question work stopped on, with the kind of answer it needs (`needs`, from app.py done
+  // --question --answer): its control on the card, answered in one tap, never a sheet or a
+  // chat (DESIGN.md, "Asking the person"). A long answer in words keeps its sheet.
+  function workAnswerBox(id, w, key) {
+    const n = obj(w.needs);
+    const kind = txt(obj(n.answer).kind);
+    if (!kind || kind === "text") return null;
+    return answerBox(Object.assign({}, n, {question: txt(n.question) || txt(w.note)}), key,
+      (got) => answerWork(id, got.value + (got.time ? " at " + got.time : ""), got.words));
+  }
+  // Work finished in the last few minutes whose result the page does not hold yet (its model
+  // was made before the finish): "Finished: putting it on your page", never "Done" over a
+  // card that still shows the old state (DESIGN.md, "Moving parts"). The next model says Done.
+  function notOnPageYet(w) {
+    const fin = tms(obj(w).finished_at);
+    const made = tms(M().made_at);
+    return fin !== null && made !== null && fin > made && now() - fin < 3 * 60000;
   }
   // A question work raised (status needs_you, the question in `note`): answered here, kept in
   // its args.answers under the question, and the work goes back to Claude to carry on.
@@ -3593,9 +3679,10 @@
     sheet({title: txt(w.title), intro: q, choices: choices.map((c, i) => ({label: c, key: "ans-" + i, run: () => { answerWork(id, c); }}))
       .concat([{label: "Something else", key: "ans-else", run: () => { setTimeout(free, 0); }}])});
   }
-  async function answerWork(id, text) {
+  async function answerWork(id, text, words) {
     const w = workDoc(id);
     if (!w || !text) return;
+    if (readOnlyTap()) return;
     const t0 = now();
     const db = await CAP.db;
     if (!db) return;
@@ -3604,8 +3691,10 @@
     // Back in the queue as a job of its own: the batch it was drafted with may have finished
     // long since, and a stale `with` named it (the audit, 2026-11-03).
     try { await db.doc("work/" + id).update({args, status: "queued", note: null, claimed_by: null, claimed_at: null, lease_until: null, with: null, answered_at: iso(), _v: nextV(workDoc(id))}); }
-    catch (e) { announce("Not sent. Try again."); return; }
-    announce("Sent. Claude carries on.");
+    catch (e) { toast({text: "Not sent. Try again.", bad: true, ids: []}); return; }
+    // Said at once where the person looks, with the way to its progress: the card it was on
+    // has gone from To do, and only a screen reader heard "Sent" (DESIGN.md, "Moving parts").
+    toast({text: "Sent" + (words ? ": " + clip(txt(words), 60) : "") + ". Claude carries on with " + quoted(workName(w)) + ".", ids: [], see: () => openWork(id), seeLabel: "See it"});
     ringNote([id], await toClaude([id], "work", t0));
     scheduleRender();
   }
@@ -5982,10 +6071,37 @@
     // No time known: nothing said, and its row in Coming up offers "Add the time" (upRow).
     return u.kind === "test" || u.kind === "deadline" ? "End of day" : u.kind === "event" ? "All day" : "";
   }
-  // The time of an interview or a call is the chat's to record (CLAUDE.md, "Records are yours
-  // to fix"): the person says it there in a line, already begun for them.
+  // The time of an interview or a call, given on its row: a time picker, sent to the engine
+  // as the same booking with its time (outcome.interview, person.call_booked). It was a line
+  // begun in Chat, a chat turn for one value (the maintainer, 2026-11-05: "the less things
+  // that can be done in chat the better").
+  // The rows a time was given on in this visit: each says Saved, then Done, under its title.
+  const upTimed = new Set();
+  function upTimeTarget(u) {
+    const g = obj(u.go);
+    if (u.kind === "interview" && txt(g.to) === "interviews") {
+      const iv = interviewItems().find((i) => i.id === txt(g.item));
+      return iv ? {item: iv.id, action: "outcome.interview", rev: iv.rev, value: Object.assign({stage: cap1(txt(iv.next_stage) || "Interview")}, txt(iv.with) ? {with: txt(iv.with)} : {})} : null;
+    }
+    if (u.kind === "call" && txt(g.to) === "contacts" && personById(txt(g.item))) {
+      const p = personById(txt(g.item));
+      return {item: p.id, action: "person.call_booked", rev: p.rev, value: {}};
+    }
+    return null;
+  }
   function addTimeBtn(u) {
-    return btn("Add the time", () => openDock({text: txt(u.title) + " on " + fmtDay(u.day) + " is at "}), {kind: "link", small: true, key: "up-time:" + u.id, aria: "Add the time: " + txt(u.title)});
+    if (!upTimeTarget(u)) return "";
+    return btn("Add the time", () => { S.upTime = u.id; scheduleRender(); }, {kind: "link", small: true, key: "up-time:" + u.id, aria: "Add the time: " + txt(u.title)});
+  }
+  function upTimeForm(u) {
+    const tg = S.upTime === u.id ? upTimeTarget(u) : null;
+    if (!tg) return null;
+    return answerControl({kind: "time", key: "time", label: "What time?"}, "up-time:" + u.id, (got) => {
+      S.upTime = null;
+      upTimed.add(u.id);
+      act([{item: tg.item, action: tg.action, value: Object.assign({}, tg.value, {on: txt(u.day), time: got.value}), rev: tg.rev}],
+        "Time added: " + txt(u.title) + ", " + fmtDay(u.day) + " at " + got.value);
+    });
   }
   // Tapping a row opens what it is: an interview its prep (the maintainer, 2026-11-02:
   // "clicking the calendar item for an interview opens prep"), a call its person, a closing
@@ -6036,7 +6152,8 @@
     const sub = [UP_WORDS[txt(u.kind)] || "", txt(u.note), txt(u.place)].filter(Boolean).join(" · ");
     return h("li", {class: "up-row", "data-item": u.id, "data-card": "1", tabindex: "-1"},
       h("span", {class: "up-when"}, upWhen(u) || (u.own || u.pending ? "" : addTimeBtn(u))),
-      h("span", {class: "up-main"}, h("span", {class: "up-title"}, upGo(u)), sub ? h("span", {class: "up-note small muted"}, sub) : null, prep),
+      h("span", {class: "up-main"}, h("span", {class: "up-title"}, upGo(u)), sub ? h("span", {class: "up-note small muted"}, sub) : null, prep,
+        upTimeForm(u), upTimed.has(u.id) ? stateLine(txt(obj(upTimeTarget(u)).item), "up:" + u.id) : null),
       h("span", {class: "up-acts"}, add, rm));
   }
   // The first week open; past that, folded behind one button once the list is long.
@@ -9812,7 +9929,7 @@
     // Its own chat stopped on a question to the person (tools/page_db.py mark_blocked): said
     // as that, never as a job that may have stopped (the stranger audit, X-7 and X-8).
     const blocked = (st === "running" || st === "claimed") && !!txt(w.blocked_at);
-    const label = p.stopping ? "Stopping after this step" : picked ? "Starting" : st === "queued" ? (unsent ? "Not sent yet" : late ? "No answer yet" : inLine ? (place.pos === 1 ? "Next" : "In line") : ahead ? (ahead.pos === 1 ? "Next" : "In line") : waking ? (freshHeartbeat() ? "Sent" : "Waking Claude") : "Waiting for Claude") : st === "running" || st === "claimed" ? (blocked ? "Waiting for you" : slow ? "May have stopped" : null) : WORK_WORDS[st] || cap1(st);
+    const label = p.stopping ? "Stopping after this step" : picked ? "Starting" : st === "queued" ? (unsent ? "Not sent yet" : late ? "No answer yet" : inLine ? (place.pos === 1 ? "Next" : "In line") : ahead ? (ahead.pos === 1 ? "Next" : "In line") : waking ? (freshHeartbeat() ? "Sent" : "Waking Claude") : "Waiting for Claude") : st === "running" || st === "claimed" ? (blocked ? "Waiting for you" : slow ? "May have stopped" : null) : st === "done" && notOnPageYet(w) ? "Finished: putting it on your page" : WORK_WORDS[st] || cap1(st);
     const tone = p.stopping ? "held" : {done: "ok", failed: "bad", stopped: "held", needs_you: "warn"}[st] || (blocked || slow || late || unsent ? "warn" : null);
     const cur = p.stages[Math.min(p.i, p.n - 1)];
     // The newest line Claude wrote on it, from after it was asked (or answered).
@@ -9866,7 +9983,7 @@
       // said by workSay
     } else if (st === "stopped") now1 = "Stopped. Anything already saved is kept.";
     else if (st === "failed") now1 = (typeof w.error === "string" ? w.error : txt(obj(w.error).plain)) || "It stopped part way. Anything already saved is kept.";
-    else if (st === "needs_you") now1 = txt(w.note) || "It has a question for you.";
+    else if (st === "needs_you") now1 = txt(obj(obj(w.needs).answer).kind) && txt(obj(obj(w.needs).answer).kind) !== "text" ? "" : txt(w.note) || "It has a question for you.";
     else if (st === "done") now1 = firstSentence(txt(obj(w.result).summary));
     // An update to the app is never stopped half way (the 3 November audit).
     // A batch is stopped, and tried again, from its first item, whose Stop names them all.
@@ -9895,16 +10012,19 @@
     // Work nobody has started yet can be called off in one plain tap: the small "Stop" at the
     // end of the time line went unseen, and a tap that queued a nudge looked unstoppable
     // (the maintainer, 2026-10-26).
-    if (st === "needs_you") put(cardEl, h("div", {class: "wc-actions"}, btn("Answer", () => askWorkAnswer(id), {kind: "primary", small: true, key: "wans:" + id, aria: "Answer: " + txt(w.title)})));
+    // A question with its kind of answer has its control here too (workAnswerBox), the same
+    // as on its To do card; one in words keeps Answer and its sheet.
+    const wbox = st === "needs_you" ? workAnswerBox(id, w, "wans:" + id) : null;
+    if (wbox) put(cardEl, wbox);
+    else if (st === "needs_you") put(cardEl, h("div", {class: "wc-actions"}, btn("Answer", () => askWorkAnswer(id), {kind: "primary", small: true, key: "wans:" + id, aria: "Answer: " + txt(w.title)})));
     if (slow && ACTIVE.has(st)) {
       put(cardEl, h("p", {class: "wc-warn tone-warn", "data-stall": "1"}, limitHit() ?
         "Claude has reached your plan's usage limit. This waits until it resets." :
         "It has not checked in for a while, so it may have stopped."));
     }
-    if (TERMINAL.has(st) && st !== "done") {
-      // Work that did not finish can be put away too, beside Try again (2026-10-30).
-      put(cardEl, h("div", {class: "wc-actions"}, btn("", () => { workSeenAt.set(id, 0); hiddenWork.add(id); scheduleRender(); }, {kind: "quiet icon-only", small: true, icon: "bin", key: "wput:" + id, aria: "Put away: " + txt(w.title)})));
-    }
+    // Work that did not finish can be put away too, beside Try again (2026-10-30), in the one
+    // row of its actions: its bin sat on a row of its own above Try again.
+    const putAway = TERMINAL.has(st) && st !== "done" ? btn("", () => { workSeenAt.set(id, 0); hiddenWork.add(id); scheduleRender(); }, {kind: "quiet icon-only", small: true, icon: "bin", key: "wput:" + id, aria: "Put away: " + txt(w.title)}) : null;
     if (st === "done") {
       if (!workSeenAt.has(id)) workSeenAt.set(id, now());
       const links = arr(obj(w.result).links).map((l) => safeUrl(l.url) ? h("a", {href: safeUrl(l.url), target: "_blank", rel: "noopener noreferrer"}, txt(l.label)) : null).filter(Boolean);
@@ -9918,7 +10038,10 @@
       const note = who ? messageItems().find((m) => txt(m.contact) === who && msgLive(m)) : null;
       const goTo = note || who ? "contacts" : WORK_HOME[w.kind];
       // Its bin puts it with the finished ones now, rather than in a minute (2026-10-30).
-      put(cardEl, h("div", {class: "wc-actions"}, goTo ? h("p", {onclick: () => workSeenAt.set(id, 0)}, tabLink(goTo, note ? note.id : who || null)) : null,
+      // Its way there is a pill in the row, never underlined text (DESIGN.md, Buttons).
+      const there = goTo ? tabLink(goTo, note ? note.id : who || null) : null;
+      if (there) there.addEventListener("click", () => workSeenAt.set(id, 0));
+      put(cardEl, h("div", {class: "wc-actions"}, there,
         btn("", () => { workSeenAt.set(id, 0); scheduleRender(); }, {kind: "quiet icon-only", small: true, icon: "bin", key: "wput:" + id, aria: "Put away: " + txt(w.title)})));
     }
     // "Claude has been told" says the doorbell rang; once Claude has the work, it says
@@ -9947,6 +10070,7 @@
       const out = openClaude("prefill:" + id, "btn quiet small");
       if (out) put(acts, out);
     }
+    if (putAway) put(acts, putAway);
     if (acts.childNodes.length) put(cardEl, acts);
     if (open) {
       put(cardEl, h("div", {class: "wc-more", id: "steps-" + seg(id)}, h("ol", {class: "wc-steps"}, p.stages.map((s, i) => {
@@ -11531,12 +11655,19 @@
       // read as hidden (the maintainer, 2026-10-26).
       h("ul", {class: "plain side-list side-foot"}, FOOT_NAV.map((id) => h("li", {}, h("a", {href: "#" + id, "data-k": "side:" + id, "aria-current": navOwner(S.section) === id ? "page" : null,
         title: mini ? labelOf(id) : null,
-        onclick: (e) => { e.preventDefault(); go(id, {focus: true}); }}, icon(id), h("span", {class: "side-label"}, labelOf(id)), navCount(id))))),
-      // Folding the menu to its icons is its last control: first in the menu, it took the
-      // first place and the first Tab stop after the header (the 3 November audit).
-      h("div", {class: "side-top side-end"},
-        h("button", {type: "button", class: "side-toggle", "data-k": "side-toggle", "aria-pressed": String(mini), title: mini ? "Show the names" : "Icons only",
-          onclick: () => { setPref("nav:mini", !mini); renderNav(); }}, icon(mini ? "side-show" : "side-hide"), h("span", {class: "side-label"}, mini ? "Show the names" : "Icons only")))]);
+        onclick: (e) => { e.preventDefault(); go(id, {focus: true}); }}, icon(id), h("span", {class: "side-label"}, labelOf(id)), navCount(id)))))]);
+    }
+    // Folding the menu to its icons is an icon beside the page's title, where such a control
+    // usually is and always in view on a short laptop screen; at the menu's foot it sat under
+    // a second divider and an empty block (the maintainer, 2026-11-05: "why's the spacing here
+    // weird"). Drawn only where the menu is (CSS).
+    const brand = $("brand");
+    if (brand && brand.parentNode) {
+      const t = h("button", {type: "button", class: "side-toggle top-fold", "data-k": "side-toggle", "aria-pressed": String(mini),
+        "aria-label": mini ? "Show the menu's names" : "Menu: icons only", title: mini ? "Show the names" : "Icons only",
+        onclick: () => { setPref("nav:mini", !mini); renderNav(); }}, icon(mini ? "side-show" : "side-hide"));
+      const had = brand.parentNode.querySelector(".top-fold");
+      if (had) had.replaceWith(t); else brand.insertAdjacentElement("afterend", t);
     }
     const tabs = $("tabs");
     if (tabs) {
@@ -11888,10 +12019,13 @@
   function demotePrimaries(roots, before) {
     const all = [];
     for (const root of roots || [$("main"), wide() ? $("rail") : null]) if (root) for (const b of root.querySelectorAll(".btn.primary")) all.push(b);
+    // One filled pill a screen; every other card's next step stays its next step, a soft
+    // pill in the semibold weight beside the rest at the regular one (the maintainer,
+    // 2026-11-05: "an immediate action like Draft this ... slightly different ... or bold").
     // The box a person just opened keeps its button filled: what they opened it for is the next
     // step, over the first card's (a "They replied" box under the fifth person, 2026-11-04).
     const lead = before ? null : all.find((b) => b.dataset.lead === "1");
-    all.forEach((b, i) => { if (lead ? b !== lead : (i > 0 || before)) { b.classList.remove("primary"); b.classList.add("secondary"); } });
+    all.forEach((b, i) => { if (lead ? b !== lead : (i > 0 || before)) { b.classList.remove("primary"); b.classList.add("secondary", "next"); } });
   }
   // One part of the page that throws never stops the rest: a single malformed item froze
   // every screen silently, taps and toasts included (robustness audit 6). The part says so.

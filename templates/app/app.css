@@ -184,17 +184,17 @@ bdi { unicode-bidi: isolate; }
 @media (hover: hover) { .side-list a:hover .count, .side-list a[aria-current="page"] .count { color: var(--ink); } }
 .side-label { margin-right: auto; }
 .count { font: 600 var(--t-sm) var(--font-data); color: var(--muted); }
-.side-foot { margin-top: 8px; padding-top: 8px; border-top: 1px solid var(--line); }
-/* Fold the menu to its icons: a quiet row at its top, under a rule like the one above Coming
-   up and Settings, the same height as a menu item. */
-.side-top { padding-bottom: 8px; border-bottom: 1px solid var(--line); margin-bottom: -12px; }
-.side-top .side-toggle { width: 100%; }
-.side-top.side-end { padding: 8px 0 0; margin: 12px 0 0; border-bottom: 0; border-top: 1px solid var(--line); }
+/* Settings last, under the one rule: 12px above the rule and 12px below it (the menu's own
+   gap is 20px), nothing after it (the maintainer, 2026-11-05: "why's the spacing here weird"). */
+.side .side-foot { margin-top: -8px; padding-top: 12px; border-top: 1px solid var(--line); }
+/* Fold the menu to its icons: an icon beside the page's title, only where the menu is. */
+.side-toggle.top-fold { display: none; }
 
 .side-toggle { display: flex; align-items: center; gap: 12px; min-height: var(--target); padding: 8px 12px; border: 0; border-radius: var(--r-sm); background: none; color: var(--muted); font: inherit; font-size: var(--t-sm); cursor: pointer; text-align: left; }
 @media (hover: hover) { .side-toggle:hover { background: var(--raised); color: var(--ink); } }
 .side-toggle:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }
 @media (min-width: 760px) {
+  .side-toggle.top-fold { display: inline-flex; flex: none; justify-content: center; min-height: 36px; padding: 8px; margin-left: 4px; }
   .nav-mini .shell { grid-template-columns: 56px minmax(0, 1fr); column-gap: 24px; }
   .nav-mini .side-list a, .nav-mini .side-toggle { justify-content: center; padding-inline: 8px; }
   .nav-mini .side .side-label { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
@@ -288,6 +288,34 @@ bdi { unicode-bidi: isolate; }
 .btn.filter[aria-pressed="true"] { background: var(--ink); color: var(--surface); border-color: var(--ink); }
 .btn.filter .n { font-family: var(--font-data); font-weight: 600; }
 .btn:disabled { opacity: 0.55; cursor: not-allowed; }
+/* A card's actions are one row of pills (DESIGN.md, "Buttons, links and taps"): one height,
+   radius and padding, the same gap. The one next step is the filled pill, semibold; every
+   other control in the row (a quiet or a link button, a link that acts) is the soft grey
+   pill at the regular weight, its edge 3:1 on the card; More is a soft pill too. Text
+   buttons beside pills read as clutter (the maintainer, 2026-11-05). */
+.btn.secondary { font-weight: 400; }
+:is(.card-actions, .wc-actions, .suggest-acts, .more-acts, .g-acts, .fix, .bp-foot) > :is(.btn, a):not(.icon-only),
+:is(.card-actions, .wc-actions, .suggest-acts, .g-acts) > details.more > .more-btn {
+  display: inline-flex; align-items: center; justify-content: center; gap: 8px; box-sizing: border-box;
+  min-height: 38px; margin: 0; padding: 8px 16px; border-radius: 999px; border: 1px solid var(--line-strong);
+  font-size: var(--t-sm); line-height: 1.2; text-decoration: none; text-align: center; cursor: pointer;
+}
+:is(.card-actions, .wc-actions, .suggest-acts, .more-acts, .g-acts, .fix, .bp-foot) > :is(.btn, a):not(.icon-only):not(.primary),
+:is(.card-actions, .wc-actions, .suggest-acts, .g-acts) > details.more > .more-btn {
+  background: var(--raised); color: var(--ink); font-weight: 400;
+}
+:is(.card-actions, .wc-actions, .suggest-acts, .more-acts, .g-acts, .fix, .bp-foot) > .btn.primary {
+  background: var(--accent); color: var(--accent-ink); border-color: var(--accent); font-weight: 600;
+}
+/* One filled pill a screen: each other card's next step is the soft pill, semibold. */
+.btn.secondary.next, :is(.card-actions, .wc-actions, .suggest-acts, .more-acts, .g-acts, .fix, .bp-foot) > .btn.next:not(.primary):not(.icon-only) { font-weight: 600; }
+@media (hover: hover) {
+  :is(.card-actions, .wc-actions, .suggest-acts, .more-acts, .g-acts, .fix, .bp-foot) > :is(.btn, a):not(.icon-only):not(.primary):hover,
+  :is(.card-actions, .wc-actions, .suggest-acts, .g-acts) > details.more > .more-btn:hover { background: var(--raised-hover); border-color: var(--line-strong); }
+  :is(.card-actions, .wc-actions, .suggest-acts, .more-acts, .g-acts, .fix, .bp-foot) > .btn.primary:hover { background: var(--accent-hover); border-color: var(--accent-hover); color: var(--accent-ink); }
+}
+/* More, wherever it is, is a soft pill. */
+.more-btn { background: var(--raised); border: 1px solid var(--line-strong); font-weight: 400; }
 .fbar, .seg { display: inline-flex; align-items: center; gap: 4px; min-height: 38px; font-weight: 600; font-size: var(--t-sm); }
 .filters { display: grid; gap: 12px; min-width: 0; }
 .fwrap { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
@@ -311,6 +339,19 @@ p.tone-bad, .note.tone-bad, .state.tone-bad { color: var(--st-failed); }
 /* What a refused tap needs, given in place: its label, its field and Send on one line. */
 .fix { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin-top: 8px; font-size: var(--t-sm); }
 .fix .fix-in { flex: 1 1 160px; min-width: 0; }
+.fix .fix-in[type="date"], .fix .fix-in[type="time"], .fix .fix-in[type="number"] { flex: 0 1 auto; width: auto; }
+.fix .fix-in[type="range"] { flex: 1 1 160px; accent-color: var(--accent); }
+.ask-scale-n { font-family: var(--font-data); font-weight: 600; min-width: 2ch; }
+/* Its words on a line of their own, the control and Send together under them. */
+.fix > label:first-child, .fix > span.small:first-child { flex-basis: 100%; }
+/* One question in its soft grey box: the words it is about quoted, the question, its control. */
+.ask-box { margin-top: 8px; padding: 12px; border-radius: var(--r); background: var(--sunk); }
+.ask-box > .fix { margin-top: 8px; }
+.ask-box > .fix:first-child { margin-top: 0; }
+.ask-about { margin: 0 0 8px; padding: 0 0 0 12px; font-size: var(--t-sm); color: var(--muted); font-style: normal; quotes: "\201C" "\201D"; }
+.ask-about::before { content: open-quote; }
+.ask-about::after { content: close-quote; }
+.ask-q { margin: 0; }
 .note { font-size: var(--t-sm); }
 .cost { font-size: var(--t-sm); color: var(--muted); display: inline-flex; align-items: center; gap: 4px; }
 .gauge { width: 14px; height: 12px; flex: none; }
@@ -412,8 +453,6 @@ details.send { border-top: 1px solid var(--line); }
 .after-list { margin-top: 8px; }
 .stack.jobs > .card.job.st-dismissed, .stack.jobs > .card.job.st-applied { background: var(--sunk); }
 @media (hover: hover) { .stack.jobs > .card.job:hover, ul.people > li.person:hover { background: var(--bg); } }
-.stack.jobs .card-actions .btn:not(.primary):not(.icon-only):not(.link), .people .card-actions .btn:not(.primary):not(.icon-only):not(.link), .list-panel .card-actions .btn:not(.primary):not(.icon-only):not(.link) { background: var(--sunk); border-color: transparent; }
-@media (hover: hover) { .stack.jobs .card-actions .btn:not(.primary):not(.icon-only):not(.link):hover, .people .card-actions .btn:not(.primary):not(.icon-only):not(.link):hover { background: var(--raised); } }
 /* The words to send, with Copy in the bubble's top corner, as on a code block: the words
    wrap round it, so it never covers them and the bubble keeps its width. */
 .sendbox { display: flow-root; }
@@ -1004,6 +1043,10 @@ a.navlink, .applylink, .btn.link, .fold .btn.link, .bp-foot a { text-decoration-
   a.name-link { position: relative; }
   a.name-link::after { content: ""; position: absolute; inset: 0 -13px; }
   .card-actions .btn.link, .controls .btn.link { margin-block: 0; }
+  :is(.card-actions, .wc-actions, .suggest-acts, .more-acts, .g-acts, .fix, .bp-foot) > :is(.btn, a):not(.icon-only) {
+    display: inline-flex; min-height: calc(36px * var(--tz)); padding: 8px 16px; margin-block: 0; line-height: 1.2; position: relative; }
+  :is(.card-actions, .wc-actions, .suggest-acts, .more-acts, .g-acts, .fix, .bp-foot) > :is(.btn, a):not(.icon-only)::after { content: ""; position: absolute; inset: calc(-4px * var(--tz)) 0; }
+  :is(.card-actions, .wc-actions, .suggest-acts, .g-acts) > details.more > .more-btn { min-height: calc(36px * var(--tz)); }
   a.back-link, a.bp-go { display: inline-flex; align-items: center; min-height: var(--target); min-width: var(--target); }
   a.bp-link { min-height: var(--target); }
   /* A Coming up title and the prep line under it are each a whole target of their own: an
@@ -1125,6 +1168,8 @@ dialog.work-sheet :is(select, input, textarea) { width: 100%; max-width: 100%; m
   border: 1px solid var(--line-strong); border-radius: 999px; font-weight: 600; font-size: var(--t-sm); }
 .band-more > summary::-webkit-details-marker { display: none; }
 .band-more[open] > summary { margin-bottom: 12px; }
+/* "Show N more" says what it still folds: once open it holds nothing back, so it goes. */
+.band-more:not(.soon-more)[open] > summary { display: none; }
 
 /* An opened setting reads as inside its row, a shade deeper, and each item in it is a block:
    its name and its state on one line, the state always at the right, the button under them.
@@ -1396,7 +1441,7 @@ body.has-fab .shell { padding-bottom: calc(var(--tabs-h) + env(safe-area-inset-b
 .brief-page strong, .brief-page b { font-weight: 600; }
 .bp-n { font-size: 1.375rem; font-weight: 700; line-height: 1.15; font-variant-numeric: tabular-nums; }
 .bp-l { font-size: var(--t-sm); color: var(--muted); overflow-wrap: normal; word-break: normal; hyphens: none; }
-.bp-foot { display: flex; flex-wrap: wrap; align-items: baseline; gap: 4px 16px; margin-top: auto; font-size: var(--t-sm); }
+.bp-foot { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin-top: auto; padding-top: 8px; font-size: var(--t-sm); }
 .bp-iv { display: flex; flex-direction: column; align-items: flex-start; gap: 4px; padding: 12px 16px; background: var(--surface); border: 1px solid var(--line); border-radius: var(--r-sm); }
 .bp-iv p { margin: 0; }
 .bp-iv-when { font-size: var(--t-sm); font-weight: 600; letter-spacing: 0.04em; text-transform: uppercase; color: var(--st-failed); }

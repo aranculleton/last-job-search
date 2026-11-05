@@ -362,7 +362,8 @@ def test_a_refused_tap_with_nothing_asked_still_has_a_way_out(run, tmp_path):
     """A tap refused before refusals carried their question sat in To do as "Setup ... Not
     done: Which day is it? Give it as 2026-10-28" with no button at all (the maintainer,
     2026-11-04: "doesn't seem to have any options"). It is marked by what it was about, its
-    day reads as a day, and it can be said in Chat or put away."""
+    day reads as a day, and its question is answered on the card with a date picker, or it is
+    put away with its one bin; never "Say it in Chat" (the maintainer, 2026-11-05)."""
     m = copy.deepcopy(_sample())
     app = m["applications"][0]
     aid = "act~" + app["id"] + "~outcome.interview~old"
@@ -371,10 +372,10 @@ def test_a_refused_tap_with_nothing_asked_still_has_a_way_out(run, tmp_path):
                           "receipts/" + aid: {"result": "conflict", "note": "Which day is it? Give it as 2026-10-28.",
                                               "applied_at": "2026-10-25T08:51:00Z", "by": "cloud-1"}})
     look = ("(() => { const c = document.querySelector('[data-item=\"refused:" + aid + "\"]'); if (!c) return null;"
-            " return [c.querySelector('.kind').textContent, c.textContent, !!c.querySelector('[data-k^=\"rf-bin:\"]'), !!c.querySelector('[data-k^=\"rf-chat:\"]')]; })()")
+            " return [c.querySelector('.kind').textContent, c.textContent, c.querySelectorAll('[data-bin]').length === 1, !!c.querySelector('input[type=date]')]; })()")
     got = _go(run, tmp_path, [{"hash": "todo", "eval": look}], WIDE, model=m, seed=seed, clock=T)
     card = got["after"][0]["eval"]
     assert card, "the refused tap has its card in To do"
-    kind, text, has_bin, has_chat = card
+    kind, text, one_bin, has_date = card
     assert kind != "Setup" and "2026-10-28" not in text and "28 Oct" in text, card
-    assert has_bin and has_chat, card
+    assert one_bin and has_date and "in Chat" not in text, card

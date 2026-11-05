@@ -16,8 +16,9 @@ next?" in its first lines, and nothing asks for a decision a default could make.
   (layout 1 to 3)
 - A long list opens on its first few and folds the rest one tap below ("Show 6 more"): To do
   five today, Drafts five, Contacts who has a message to send and who needs you. Never a
-  filter left on.
-  (layout 2, crowd tests)
+  filter left on. The fold's count is what it still holds: once tapped it goes, and its first
+  card takes the focus; "Show 1 more" never stays over what it showed. (layout 2, crowd tests,
+  fold test)
 - To do's five are what is late or due today first, then the questions; setting-up cards wait
   behind the fold. (tired-person tests)
 - To do holds only what there is to do. Someone who has not answered the person's limit of
@@ -38,7 +39,7 @@ next?" in its first lines, and nothing asks for a decision a default could make.
   (design test)
 - A card reads top down: its top line (a kind or a score, the title, a state pill, the bin),
   one line of facts, at most one block in a soft grey box (a question or a suggestion), then
-  its actions: one filled button at most, quiet ones beside it, More for the rest. (layout 7, 8)
+  its actions: one row of pills (Buttons, below). (layout 7, 8, action-row test)
 - A job card's line of facts says when it was posted and the pay where stated; why it scored
   what it did is the first line under More. A drafted role's card in Found opens its draft,
   where "I have applied" is; a closed one offers only setting it aside. (jobs page tests)
@@ -129,9 +130,41 @@ tests, `tests/test_contacts_is_one_page_with_each_persons_draft.py`)
 
 ## Buttons, links and taps
 
-- A filled button is the one next step; a secondary one is a soft grey pill; a quiet one is
-  underlined text. Links that act as controls have a grey underline; rose is for links inside
-  a sentence. (layout 7)
+- A card's actions are one row of pills, all one height, radius and padding, the same gap
+  between them. The one next step (Draft this, See the draft, Copy, Send) is the filled pill:
+  the accent fill with its own ink, semibold, once a screen (its first); every other card's
+  next step is the soft pill in the semibold weight. Every other action beside it is the soft
+  grey pill (the raised fill with its 3:1 edge, regular weight), and More is a soft pill too. At
+  most three before More: the next step and one or two others; rarer actions go under More,
+  and a duplicate or a dead button goes. Why: text buttons beside pills read as clutter and
+  as less tappable (the maintainer, 2026-11-05: "some things are just text buttons which
+  makes it look quite cluttered"), and one filled pill a screen, with each card's next step
+  in the semibold weight, says at a glance what to do.
+  (action-row test, layout 7)
+- Before any action goes on a card, in this order: is it needed at all (if not, it goes)? Can
+  the app do it by itself (then it does, and says so)? Can it merge with another (one
+  control)? Only then, where it lives: the card (the next step and at most two others), the
+  pencil, the bin's choices, or More (rare). A card's budget is one filled pill, two soft
+  pills, the pencil, the bin, and the gauge where Claude wakes; more means a step above was
+  skipped. Settings gets no new option for it: a default that suits nearly everyone is the
+  setting. (the maintainer, 2026-11-05: "we also don't want to clutter the page with buttons
+  and options and configurations by doing this, so be very smart about it"; action-row test)
+- Underlined text is only a link inside a sentence ("3 more: Show them", a name in a line),
+  never a control in a row of actions. Rose is for links inside a sentence. (action-row test)
+- More holds only what is genuinely rare for that card: five at most, a short list grouped by
+  kind with no long explanations. Never an action people use often, never a pencil or a way to
+  edit, never a fact that belongs on the card's line of facts or its "?"; a card with nothing
+  rare has no More, and anything nobody uses goes. (the maintainer, 2026-11-05: "shouldn't More
+  be for genuine additional features, not just burying EVERYTHING under there"; action-row test)
+- Every control that wakes Claude carries the gauge beside it: the same bars, size and place,
+  with its minutes shown, and its "?" or a long press says it in one line ("About 3 minutes of
+  Claude's time, from your Claude allowance"). A control that only runs code (marking sent, a
+  date, the bin, a word changed in place) has none, so what is free can be seen. The minutes
+  are the engine's, from this copy's own finished work of that kind and size where it has any,
+  and a button that starts several says the time for all of them. (the maintainer,
+  2026-11-05: the gauge "is meant to deter someone from spending tokens unnecessarily")
+- Text on a pill reads at 4.5:1 and a soft pill's edge at 3:1 against its card, in both looks;
+  every control shows its focus ring. (colour tests, layout 14)
 - On a phone everything is drawn small with a full-size tap area (44px), and hover styles
   apply only on devices that hover, so nothing needs two taps. (target probe, layout 14)
 - Three sizes: Smaller, Standard (the default), Larger.
@@ -164,6 +197,39 @@ tests, `tests/test_contacts_is_one_page_with_each_persons_draft.py`)
   card. (what-reaches-Claude tests, spaces-its-settings test)
 - A live update redraws only the card, panel or row that changed: the rest stays as it was
   drawn, so a phone scrolling fast never meets a blank page. (spaces-its-settings test)
+- A control on a card that starts work (an answer, a date, Send) never leaves the person
+  wondering, and every page helper uses the one work-state drawing (Claude's work cards),
+  never a second one: (1) the tap shows at once on that card ("Saved: in line, after ...",
+  "Waking Claude", "Claude is on it: <step>" with the spinner, a clock only after a few
+  seconds); (2) "Done" only once the result is on that card in the same redraw, and
+  "Finished: putting it on your page" while it is not yet, without a reload; (3) one quiet
+  Cancel on whatever is queued or running: queued goes at once, running says "Stopping" then
+  "Stopped", and what the person gave is kept; (4) only that card redraws, nothing jumps,
+  reduced motion is respected, and it reads the same after a reload; (5) a failure says why,
+  with Try again. (answers test, what-reaches-Claude tests)
+
+## Asking the person
+
+- Work asks the person something mid-way only when it cannot be finished honestly without
+  them: an unclear or ungrounded claim, a missing fact, two readings of their message. Never
+  for a preference a default answers. One question a card at a time, never a thread of
+  bubbles. (the maintainer, 2026-11-05: "only if it's absolutely necessary"; answers test)
+- The one shape, wherever it is asked: `needs: {question, about, work, answer: {kind,
+  choices, min, max, key, label, time}}`. `question` is one plain sentence; `about` the exact
+  words of the draft or of their message it concerns, shown quoted in a small block;
+  `work` the id of the work it resumes; `answer.kind` one of `yesno`, `choice`, `date`,
+  `time`, `number`, `scale` or `text`; `choices` two to six `{value, label}` for a choice;
+  `min` and `max` for a number or a scale; `time`, on a date, the key its time goes under
+  where one is needed. Text only when nothing else fits. A work item stopped for the person
+  carries it (`app.py done --question ... --about ... --answer <kind>`), and so may any item
+  a card draws; a tap the engine refused carries the same kinds as its receipt's `ask`
+  `{key, label, kind, choices, time}`.
+- The card shows it in its one soft grey box: the quote, the question, and the control that
+  fits (a row of chips for a few choices, Yes and No, a date picker with the time beside it
+  where one is needed, a slider for a scale, a number field, a line of text only when nothing
+  else fits). The answer goes straight to the engine and resumes that same work, which shows
+  its progress as above. Never "Say it in Chat" for something a control can answer; Chat is
+  for conversation. (answers test)
 
 ## Words and settings
 

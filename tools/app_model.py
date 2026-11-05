@@ -4775,6 +4775,10 @@ def build(today: dt.date | None = None, now: dt.datetime | None = None,
         except Exception:  # noqa: BLE001  no profile yet: no buttons, no usual
             model["tweaks"] = {"rows": tweak.table(), "buttons": [], "usual": {}, "rules": {}}
         model["hints"] = tweak.hints()
+        # The answer an older refusal (one with none of its own) asks for, by its action:
+        # the page draws that control under it, never "Say it in Chat" (2026-11-05).
+        import app_actions
+        model["refusal_asks"] = app_actions.OLD_REFUSAL_ASKS
         # Whether the page offers to pin itself now (app_listen.pin_due: never once pinned,
         # and a Not now is asked again a month later, three times at most).
         try:

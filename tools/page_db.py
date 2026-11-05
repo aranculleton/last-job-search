@@ -1405,14 +1405,17 @@ def search_unsaved(item: dict) -> str:
 def finish(db: dict, work_id: str, now: dt.datetime, out_dir: str, summary: str = "",
            status: str = "done", error: str = "", links=(), reply: str = "", thread: str = "",
            chat_kind: str = "cloud", dump_dir: str = "", chat: str = "",
-           question: str = "") -> dict:
+           question: str = "", about: str = "", answer: dict | None = None) -> dict:
     """The batch that finishes one work item (the app skill, step 5): the item `done` (or
     `failed`, with `error` in plain words, or `stopped` after their Stop), its one-sentence
     summary and links, pinned to the version read; each of its locks the dump holds, deleted
     and pinned; and with `reply`, the chat's answer in the thread,
     `talk/<thread>/messages/<id>` (`thread` defaults to the item's own, for work from the
     page's chat). With `question` the item goes to the person instead (`needs_you`, the
-    question in `note`), its locks freed; their answer puts it back in the queue.
+    question in `note`), its locks freed; their answer puts it back in the queue. `about`
+    (the exact words it concerns) and `answer` ({kind, choices, min, max, time}: the kind of
+    answer it needs, tools/app_actions.py ANSWER_KINDS) go with it as `needs`, and the page
+    draws the control that fits on the card (templates/app/DESIGN.md, "Asking the person").
     {work, status, thread, message, locks, batches}. Raises ValueError, in plain words, for a
     summary that will not do or a reply with no thread; KeyError for an item not in the dump
     or already finished."""
@@ -1451,8 +1454,20 @@ def finish(db: dict, work_id: str, now: dt.datetime, out_dir: str, summary: str 
         raise ValueError("which conversation is the answer for? Name its thread (--thread)")
     at = app_model.stamp(now)
     if status == "needs_you":
+        import app_actions
+        kind = clean = None
+        if answer:
+            clean = app_actions.clean_ask(dict(answer, key=answer.get("key") or "answer",
+                                               label=answer.get("label") or ""))
+            kind = clean["kind"] if clean else None
+        needs = {"question": question[:600], "about": " ".join(str(about or "").split())[:600],
+                 "work": work_id, "answer": clean or {"key": "answer", "label": "",
+                                                      "kind": "text", "type": "text"}}
         fields = {"status": status, "note": question[:600], "lease_until": None,
-                  "claimed_by": None, "asked_you_at": at}
+                  "claimed_by": None, "asked_you_at": at, "needs": needs,
+                  # The choices as pages before 4.10 read them: their words alone.
+                  "choices": [c["label"] for c in (clean or {}).get("choices") or []]
+                  if kind in ("choice", "yesno") else None}
     else:
         fields = {"status": status, "finished_at": at, "lease_until": None,
                   "result": {"summary": summary, "links": [dict(x) for x in links or ()]},
