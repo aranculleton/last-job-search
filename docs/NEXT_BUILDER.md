@@ -42,7 +42,7 @@ What 4.10.0 left is said below so a note that says "carry on" can be done withou
 - **The release lenses** gained the tired person (MAINTAINING.md "Releasing"): a reviewer who did not
   build a screen reads it; a button for what the app could do itself is a bug.
 
-## How 4.10.0 was built, and what to do differently
+## How 4.10.0 was built, and what it taught
 
 Notes 1 to 11 of 4 November and the maintainer's evening notes were built by helpers in worktrees,
 merged into a local integration branch and landed in three pull requests (169, 170, 171) and the
