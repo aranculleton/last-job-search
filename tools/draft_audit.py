@@ -78,7 +78,8 @@ LETTER_FIELDS = ("p1", "p2", "lead", "cl_bullets", "p4")
 RESUME_REQUIRED = tuple(k for k in REQUIRED if k not in LETTER_FIELDS)
 # What the drafter returns beside the draft, which is not prose anyone reads.
 NOT_PROSE = {"claim_map", "stretches", "posting", "research", "check_output", "pack_hash",
-             "corpus_hash", "residual_risks", "consented_skills", "declined_skills", "rulings",
+             "corpus_hash", "residual_risks", "consented_skills", "declined_skills",
+             "waiting_skills", "rulings",
              "research_hash",
              # The profile's own bullets with a yes named: held to the guard in
              # tools/bullet_rewording.py (nothing but the yes and a linking word added), and
@@ -698,14 +699,37 @@ def rule_findings(d: dict, pick: dict, posting: str, corpus: dict | None = None,
     # A resume bullet reworded to name a yes: this application's answers only, the same
     # facts and numbers, every tool the work used still named, nothing else added, and
     # work the skill plausibly belonged to (tools/bullet_rewording.py, the one copy).
+    # A held skill the posting names is the person's standing yes, guarded the same way.
     import bullet_rewording
+    yes_here = pick.get("skills_yes") or d.get("consented_skills") or []
+    no_here = pick.get("skills_no") or d.get("declined_skills") or []
+    company = str(d.get("company") or pick.get("company") or "")
     for p in bullet_rewording.problems(
-            d.get(bullet_rewording.FIELD),
-            pick.get("skills_yes") or d.get("consented_skills") or [],
-            pick.get("skills_no") or d.get("declined_skills") or []):
+            d.get(bullet_rewording.FIELD), yes_here, no_here,
+            bullet_rewording.held_named(posting, company)):
         findings.append(_finding("rewording:" + p["rule"],
                                  f"bullet_rewordings ({p['id']})" if p["id"] else "bullet_rewordings",
                                  p["text"], p["fix"]))
+    # A skill the person holds or said yes to, which the posting names, on the skills line
+    # alone while a bullet on this page could name it: written into the work, never asked.
+    # The page's bullets are the allocator's, which is code, so they are known now.
+    if posting.strip():
+        try:
+            import render_application as R
+            probe = dict(d, posting=posting)
+            probe.pop("jobs", None)
+            on_page = [b for j in R.jobs_for(probe) for b in j.get("bullets") or []]
+        except Exception:  # noqa: BLE001 - no page to read: nothing to say about it
+            on_page = []
+        missing, why = bullet_rewording.unplaced(posting, on_page, d.get(bullet_rewording.FIELD),
+                                                 yes_here, no_here, company)
+        # Filed under the resume's bullets, not bullet_rewordings: a rewording already there
+        # is not refused by it, and keeps its question for the model auditor.
+        for p in missing:
+            findings.append(_finding("rewording:" + p["rule"], "resume bullets", p["text"],
+                                     p["fix"]))
+        notes += [_finding("rewording:skills-line-only", "resume bullets",
+                           n.split(" stays")[0], n) for n in why]
     # A skill the posting names that the profile does not hold, which the person was asked
     # about: a no is named nowhere (check_claims reads it too, as a warning only).
     rendered = " ".join(s for _f, s in field_sentences(d)) + " " + str(d.get("tools") or "")
@@ -1013,8 +1037,9 @@ def grounding_flags(d: dict, pick: dict, posting: str, research: dict | None,
     return out
 
 
-def rewording_flags(d: dict, pick: dict, findings=()) -> list[dict]:
-    """One question per bullet reworded for a yes that the guard accepts: code has checked
+def rewording_flags(d: dict, pick: dict, findings=(), posting: str = "") -> list[dict]:
+    """One question per bullet reworded for a yes, or a held skill the posting names
+    (`posting`, else the draft's own), that the guard accepts: code has checked
     the numbers, the tools and the words, and that the skill's family, theme or bridge
     touches the work; whether the work plausibly involved it is the model auditor's
     ruling. One the guard refused is a finding already, and gets no flag."""
@@ -1023,7 +1048,11 @@ def rewording_flags(d: dict, pick: dict, findings=()) -> list[dict]:
     refused = {str(f.get("field") or "") for f in findings
                if str(f.get("rule") or "").startswith("rewording:")}
     out = []
-    yes = pick.get("skills_yes") or d.get("consented_skills") or []
+    yes = bullet_rewording.skill_names(pick.get("skills_yes") or d.get("consented_skills") or [])
+    folded = {y.casefold() for y in yes}
+    held = [h for h in bullet_rewording.held_named(posting or str(d.get("posting") or ""),
+                                                   str(d.get("company") or pick.get("company") or ""))
+            if h.casefold() not in folded]
     for r in rw if isinstance(rw, list) else []:
         if not isinstance(r, dict):
             continue
@@ -1031,14 +1060,20 @@ def rewording_flags(d: dict, pick: dict, findings=()) -> list[dict]:
         if not bid or f"bullet_rewordings ({bid})" in refused or "bullet_rewordings" in refused:
             continue
         orig = bullet_rewording.original(bid) or ""
-        added = [y for y in bullet_rewording.clean_names(yes)
+        added = [y for y in yes + held
                  if bullet_rewording.named(y, r.get("text")) and not bullet_rewording.named(y, orig)]
         why = "; ".join(bullet_rewording.related(y, bid) for y in added)
+        standing = [y for y in added if y in held]
+        # A held skill is the person's standing permission (skills.py), never an ungrounded
+        # claim: what is left to rule on is the work, as for a yes.
+        whose = (f" ({', '.join(standing)}: held in the profile, the person's standing yes, "
+                 "not an ungrounded claim)" if standing else "")
         out.append(_flag("reworded-bullet", f"bullet_rewordings ({bid})",
                          plain(r.get("text")),
                          f"the profile's {bid} at {bullet_rewording.employer(bid) or 'its employer'} "
-                         f"with {', '.join(added)} named for this application ({why}): rule "
-                         "whether that work plausibly involved it; if not, remove this rewording"))
+                         f"with {', '.join(added)} named for this application{whose} ({why}): "
+                         "rule only whether that work plausibly involved it; if not, remove "
+                         "this rewording"))
     return out
 
 
@@ -1052,7 +1087,7 @@ def mechanical(d: dict, pick: dict, posting: str, research: dict | None,
     flags = [] if broken else grounding_flags(d, pick, posting, research, evidence, facts)
     if not broken:
         flags += near_ends(d, corpus if corpus is not None else letter_corpus())
-        flags += rewording_flags(d, pick, findings)
+        flags += rewording_flags(d, pick, findings, posting)
     if not broken:
         findings += research_findings(d, pick, research)
         findings += copied_findings(d, research, posting)
@@ -1547,6 +1582,15 @@ def _rules_changed(round_dir: str, built: str) -> list[str]:
     return out
 
 
+def _held_here(d: dict, pick: dict, posting: str) -> list[str]:
+    """The held skills this posting names (bullet_rewording.held_named), less any yes."""
+    import bullet_rewording
+    yes = {y.casefold() for y in bullet_rewording.skill_names(pick.get("skills_yes") or [])}
+    return [h for h in bullet_rewording.held_named(posting, str(d.get("company")
+                                                               or pick.get("company") or ""))
+            if h.casefold() not in yes]
+
+
 def packet(round_dir: str, slug: str) -> str:
     """Everything the model auditor reads for one draft, and nothing else."""
     import draft_pack
@@ -1619,8 +1663,8 @@ def packet(round_dir: str, slug: str) -> str:
     rw = d.get("bullet_rewordings")
     if isinstance(rw, list) and rw:
         import bullet_rewording
-        lines += ["", "== RESUME BULLETS REWORDED FOR A YES (this resume only; the profile's "
-                      "own text first, then what this draft prints) =="]
+        lines += ["", "== RESUME BULLETS REWORDED FOR A YES OR A HELD SKILL (this resume only; "
+                      "the profile's own text first, then what this draft prints) =="]
         for r in rw:
             if not isinstance(r, dict):
                 continue
@@ -1629,10 +1673,13 @@ def packet(round_dir: str, slug: str) -> str:
             lines.append(f"    profile: {plain(bullet_rewording.original(bid) or '')}")
             lines.append(f"    reworded: {plain(r.get('text'))}")
         lines.append("Code has checked each: the same numbers, every tool the work used still "
-                     "named, only the yes and linking words added, and a tie between the skill "
-                     "and the work. Rule on each one's reworded-bullet flag: supported only "
-                     "where that work plausibly involved the skill; otherwise remove it from "
-                     "bullet_rewordings in your draft, and the profile's own bullet prints.")
+                     "named, only the skill and linking words added, and a tie between the skill "
+                     "and the work. A skill the profile holds (skills.py) named at an employer "
+                     "is the person's standing permission, never an ungrounded claim because "
+                     "the profile does not name it there. Rule on each one's reworded-bullet "
+                     "flag: supported only where that work plausibly involved the skill; "
+                     "otherwise remove it from bullet_rewordings in your draft, and the "
+                     "profile's own bullet prints.")
     lines += ["", "== THE DRAFT AS THE OBJECT YOU RETURN (in \"draft\": change only what you fix; "
               "a key you leave out is kept as it is here) ==",
               json_text({k: v for k, v in base.items() if k not in ("pack_hash", "research_hash")},
@@ -1676,7 +1723,10 @@ def packet(round_dir: str, slug: str) -> str:
         lines.append("Not verified: " + "; ".join(map(str, research["not_verified"])))
     lines += ["", "== THE PERSON'S ANSWERS AND RULES (theirs win) ==",
               f"Yes (their consent, not a defect): {', '.join(pick.get('skills_yes') or []) or 'none'}. "
-              f"No (a defect wherever named): {', '.join(pick.get('skills_no') or []) or 'none'}.",
+              f"No (a defect wherever named): {', '.join(pick.get('skills_no') or []) or 'none'}. "
+              f"Held and named by the posting (the person's standing yes, never asked, for "
+              f"the resume's bullets too): "
+              f"{', '.join(_held_here(d, pick, posting)) or 'none'}.",
               f"LOC: {draft_pack.location_line()}", f"AUTH: {draft_pack.auth_line()}"]
     taught = draft_pack.learned_rules()
     lines += [f"- {x}" for x in draft_pack.locale_lines() + draft_pack.person_rules()

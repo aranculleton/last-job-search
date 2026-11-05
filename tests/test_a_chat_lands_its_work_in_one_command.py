@@ -243,14 +243,19 @@ def test_two_chats_changing_the_same_rule_both_land_and_the_person_is_asked(copy
     assert code == 0 and "land: ready claude/chat-1" in out, out
     assert "profile/CLAUDE.md: both versions kept" in out
     shown = lambda rel: git(origin, "show", "claude/chat-1:" + rel).stdout  # noqa: E731
+    shown_at = lambda rev, rel: git(origin, "show", rev + ":" + rel).stdout  # noqa: E731
     rules = shown("profile/CLAUDE.md")
     assert "said the first way" in rules and "said the second way" in rules
     assert "<<<<" not in rules and ">>>>" not in rules
     assert profile_upgrades.CONFIRM.search(rules)
-    # A setting: this chat's kept, the other saved beside it, and the person asked.
+    # A setting: this chat's kept, the person asked, and the other in the saved history,
+    # never saved beside it in their folders (the maintainer, 2026-11-04).
     search = shown("profile/search.py")
     assert "SALARY_FLOOR = 60000" in search and profile_upgrades.CONFIRM.search(search)
-    assert "SALARY_FLOOR = 55000" in shown("profile/search.py.from-another-chat")
+    assert not [p for p in git(origin, "ls-tree", "-r", "--name-only", "claude/chat-1")
+                .stdout.split() if "from-another-chat" in p]
+    other_rev = search.split("git show ", 1)[1].split(":", 1)[0]
+    assert "SALARY_FLOOR = 55000" in shown_at(other_rev, "profile/search.py")
     compile(search, "search.py", "exec")
     # And the rest of the chat's work is on the branch the pull request takes to master.
     assert "Harrow Logistics" in shown("job_search_tracker.csv")
@@ -359,7 +364,12 @@ def test_a_branch_holding_only_older_copies_leaves_the_newer_ones_alone(copy, in
         assert fh.read() == newer_test
     with open(os.path.join(str(chat), PLAN), encoding="utf-8") as fh:
         assert fh.read() == newer_plan
-    assert _no_copies_beside(chat) == ["profile/search.py.from-another-chat"]
+    # The setting both truly changed: the other's copy is kept out of the person's folders
+    # (the maintainer, 2026-11-04), never beside it.
+    assert _no_copies_beside(chat) == []
+    import merge_state
+    assert [n for n in os.listdir(os.path.join(str(chat), merge_state.SPARE_DIR))
+            if n.startswith("profile__search.py.")]
     with open(os.path.join(str(chat), "profile", "search.py"), encoding="utf-8") as fh:
         assert "[CONFIRM: two of your chats changed this file" in fh.read()
     assert any(OWN_TEST in ln and "the newer one is kept" in ln for ln in said), said

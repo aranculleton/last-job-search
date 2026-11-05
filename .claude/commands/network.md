@@ -285,7 +285,8 @@ LinkedIn is never fetched from a session.
       page into its own context, the costliest part of a run, and the page reads them for
       nothing. The page reads each person's profile, then their Experience and Education
       pages, when it is open in the Claude desktop app, by itself; signing in and LinkedIn's
-      checks are its own to handle, on the page. Each read arrives as a `reading.done` action,
+      checks are its own to handle, on the page, once a day and without opening Claude's
+      browser by itself (`reading.py linkedin-check` says whether today's look is due). Each read arrives as a `reading.done` action,
       kept by `app.py apply` exactly as `reading.py read --source browser` keeps one, and every
       note waiting on those reads is queued as ONE piece of `network` work, `args.rewrite` with
       `args.contacts`: rewrite each from its reading (the verdict in 3 first), in one turn.

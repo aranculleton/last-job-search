@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
-"""A resume bullet reworded for one application, to name a skill the person said yes to.
+"""A resume bullet reworded for one application, to name a skill the person holds or said
+yes to.
 
 A yes from `tools/stage_picks.py consent` reached the skills line, and the summary or the
 letter where the posting asks for it, while the bullets came unchanged from
@@ -14,6 +15,17 @@ the real work plausibly involved it.
 
     "bullet_rewordings": [{"id": "BH_REPORT", "skill": "Looker",
                            "text": "Owned the Power BI and Looker service-level reporting ..."}]
+
+A skill the profile holds (skills.py ITEMS: deep learning, BigQuery) is the person's
+standing yes, so it gets the same: where the posting names a held skill by name and no
+bullet on the page names it, one to three of the chosen bullets are reworded to name it,
+with no question asked (the maintainer, 2026-11-04: "If I say yes to a skill, we aren't
+just dumping it at the bottom, we're integrating it into existing bullet points without
+needing to ask me exact specifics"). `held_named` says which, one skill at a time
+("PySpark" from "Apache Spark, PySpark"), and the code audit fails a resume where one sits
+on the skills line alone while a bullet on the page could take it (`unplaced`). Where no
+chosen bullet is work it plausibly belonged to, it stays on the skills line, and the audit
+says so as a note rather than forcing it into unrelated work.
 
 They apply to that application's resume and nothing else: `render_application.build()`
 uses the reworded text in place of the library's for that draft only, `tools/outreach.py`
@@ -30,14 +42,14 @@ again by the renderer, which uses no rewording that fails it:
   kept      every word of the original is still there, and every tool or skill it names
             (`vocabulary`): a tool used at a named employer is never replaced by the yes,
             only joined by it
-  added     the only words added are the consented skill's own and the linking words in
-            LINKING; the only skill added is one the person said yes to for this
-            application, and never one they said no to
+  added     the only words added are the skill's own and the linking words in LINKING;
+            the only skill added is one the person said yes to for this application or a
+            held one the posting names (`held_named`), and never one they said no to
   related   the work plausibly involved the skill (`related`, below)
   few       at most MAX_REWORDINGS, each a bullet the library holds, each once
 
-"Work it clearly had nothing to do with", made a rule (`related`). A consented skill
-belongs with a bullet when any of these holds, and with no other:
+"Work it clearly had nothing to do with", made a rule (`related`). A skill belongs with a
+bullet when any of these holds, and with no other:
 
   1. family   the skill is in a tool family (`bridges.FAMILIES`, which a profile extends in
               skills.py FAMILIES) and the bullet's text already names another member of
@@ -48,6 +60,11 @@ belongs with a bullet when any of these holds, and with no other:
               Snowflake, a cloud data warehouse, in a bullet tagged sql or cloud
   3. bridge   the profile's own bridge for the skill (skills.py BRIDGES) names in its
               `have` something the bullet's text names word for word
+  4. profile  the candidate profile names the skill in that employer's own section, a
+              bullet or its additional detail (`profile_work`): Google Analytics in a
+              growth bullet at the employer whose section says the work was done in
+              Google Analytics. What the person's own profile says they used somewhere is
+              always related to the work there.
 
 These are the tables the app already uses to say which tools stand in for each other and
 what each bullet is about, so the rule never needs a list of its own. A skill that none of
@@ -102,6 +119,43 @@ def named(name: str, text: str) -> bool:
 def clean_names(items) -> list[str]:
     return list(dict.fromkeys(re.sub(r"\s+", " ", str(x)).strip() for x in items or ()
                               if str(x).strip()))
+
+
+def skill_names(items) -> list[str]:
+    """Each single skill the names in `items` carry: a yes recorded under a grouped name
+    ("Apache Spark, PySpark") is each of its skills (skills_block.parts), so a bullet naming
+    one of them names a yes."""
+    import skills_block
+    return clean_names(p for x in clean_names(items) for p in skills_block.parts(x))
+
+
+def _squash(text: str) -> str:
+    return re.sub(r"[\s\-.]+", "", str(text or "")).casefold()
+
+
+def held_named(posting: str, company: str = "") -> list[str]:
+    """The skills the profile holds (skills.py ITEMS) that this posting names by name, one
+    skill at a time and as the profile spells it: "PySpark" where the item is "Apache
+    Spark, PySpark", "BigQuery" for a posting's "Big Query". Each is the person's standing
+    yes, so a bullet may be reworded to name it without asking.
+
+    Only a skill the posting writes counts. An item its pattern finds under a looser word
+    ("forecast" for demand forecasting, "stakeholders" for stakeholder reporting) is the
+    work the bullets already describe, not a name a screen looks for, and an item that is
+    also the employer's name (a company named after a tool) is not a skill mention."""
+    body = plain(posting)
+    if not body.strip():
+        return []
+    import skills_block
+    out = []
+    for _cat, item, pat in getattr(person.module("skills"), "ITEMS", ()):
+        rx = re.compile(pat, re.I)
+        found = [m.group(0) for m in rx.finditer(body) if m.group(0).strip()]
+        if not found or (company and rx.search(str(company))):
+            continue
+        out += [p for p in skills_block.parts(item)
+                if named(p, body) or any(_squash(f) == _squash(p) for f in found)]
+    return clean_names(out)
 
 
 def tokens(text: str) -> list[str]:
@@ -210,9 +264,64 @@ def _families(skill: str) -> list:
     return out
 
 
+_WORK: dict = {}
+
+
+def profile_work() -> dict:
+    """{employer key: [text, ...]}: what the candidate profile says the work at each
+    employer was, its bullets and their additional detail (draft_pack.facts, the reader
+    every fact id comes from), and never the resume library's trimmed copies. Read again
+    when the profile's file changes (its time and size)."""
+    import company_key
+    try:
+        where = person.path("01-candidate-profile.md")
+        st = os.stat(where)
+        stamp = (where, st.st_mtime_ns, st.st_size)
+    except (OSError, person.NoProfile):
+        return {}
+    if _WORK.get("stamp") != stamp:
+        import draft_pack
+        work: dict = {}
+        try:
+            facts = draft_pack.facts()
+        except Exception:      # a profile the reader cannot parse names nothing anywhere
+            facts = []
+        for f in facts:
+            if f.get("resume") or f.get("kind") not in ("bullet", "detail", "reserve"):
+                continue
+            work.setdefault(company_key.key(f.get("employer") or ""), []).append(f["text"])
+        _WORK.update(stamp=stamp, work=work)
+    return _WORK["work"]
+
+
+def _employer_name(bid: str) -> str:
+    """The employer a bullet is at, as roles.py names it: bullets.py LIB is keyed by role,
+    and an older title at one employer is "<employer> | <title>"."""
+    key = employer(bid)
+    try:
+        import allocate
+        return (allocate.BY_KEY.get(key) or {}).get("employer") or key
+    except Exception:          # no roles to read: the library's key is the employer
+        return key
+
+
+def _profile_names_it(skill: str, bid: str) -> str:
+    """The employer whose own section of the candidate profile names `skill`, when it is
+    the employer of bullet `bid`; else "". The skill is matched as check_claims grounds a
+    skill: any case, a space or a hyphen between words."""
+    import check_claims
+    import company_key
+    emp = _employer_name(bid)
+    if not emp or not str(skill or "").strip():
+        return ""
+    rx = check_claims.skill_pattern(skill)
+    texts = profile_work().get(company_key.key(emp), ())
+    return emp if any(rx.search(t) for t in texts) else ""
+
+
 def related(skill: str, bid: str) -> str:
     """Why the work bullet `bid` describes plausibly involved `skill`, or "" when nothing
-    ties them: the module docstring's three rules, in order."""
+    ties them: the module docstring's four rules, in order."""
     text = plain(original(bid) or "")
     if not text:
         return ""
@@ -233,24 +342,36 @@ def related(skill: str, bid: str) -> str:
             for have in e.get("have") or ():
                 if named(have, text):
                     return f"the profile's bridge for {skill} names {have}, which this work names"
+    emp = _profile_names_it(skill, bid)
+    if emp:
+        return f"the candidate profile names {skill} in the work at {emp}"
     return ""
 
 
-def candidates(posting: str, yes, budget: int = 12) -> list[dict]:
-    """[{"id", "employer", "text", "skills"}]: the bullets the allocator chooses for this
-    posting that a yes may be named in, each with the yes answers it is related to and does
-    not name already. What the drafting pack offers (tools/draft_pack.py)."""
+def candidates(posting: str, yes, budget: int = 12, held=None, company: str = "",
+               no=()) -> list[dict]:
+    """[{"id", "employer", "text", "skills", "held"}]: the bullets the allocator chooses
+    for this posting that a skill may be named in, each with the skills it is related to
+    and does not name already. `skills` is every one of them: the yes answers, and the held
+    skills the posting names (`held_named`, unless `held` is given) that no chosen bullet
+    names yet, which are also in `held`. What the drafting pack offers (tools/draft_pack.py)."""
     import allocate
-    yes = clean_names(yes)
-    if not yes:
+    yes = skill_names(yes)
+    alloc = allocate.allocate(posting or "", budget=budget)
+    page = [original(b) or "" for ids in alloc.values() for b in ids]
+    said = {x.casefold() for x in yes} | {x.casefold() for x in skill_names(no)}
+    held = [h for h in skill_names(held_named(posting, company) if held is None else held)
+            if h.casefold() not in said and not any(named(h, t) for t in page)]
+    if not (yes or held):
         return []
     out = []
-    for emp, ids in allocate.allocate(posting or "", budget=budget).items():
+    for emp, ids in alloc.items():
         for bid in ids:
             text = original(bid) or ""
-            fit = [y for y in yes if not named(y, text) and related(y, bid)]
+            fit = [y for y in yes + held if not named(y, text) and related(y, bid)]
             if fit:
-                out.append({"id": bid, "employer": emp, "text": plain(text), "skills": fit})
+                out.append({"id": bid, "employer": emp, "text": plain(text), "skills": fit,
+                            "held": [y for y in fit if y in held]})
     return out
 
 
@@ -263,30 +384,36 @@ def _problem(bid, rule, text, fix) -> dict:
 SHAPE = 'bullet_rewordings is a list of {"id": <bullet id>, "skill": <a yes>, "text": <the bullet>}'
 
 
-def check_one(bid: str, new: str, yes, no=(), skill=None) -> list[dict]:
+def check_one(bid: str, new: str, yes, no=(), skill=None, held=()) -> list[dict]:
     """What is wrong with rewording bullet `bid` as `new`, for an application whose yes
-    answers are `yes` and no answers `no`. [] when the guard accepts it."""
+    answers are `yes`, no answers `no`, and whose posting names the held skills `held`
+    (held_named). [] when the guard accepts it. A held skill is the person's standing yes:
+    it passes every other rule exactly as a yes does."""
     out = []
     old = original(bid)
     if old is None:
         return [_problem(bid, "unknown-bullet", bid, "no bullet in the profile has this id: "
                          "reword only a bullet the drafting pack lists")]
-    yes, no = clean_names(yes), clean_names(no)
+    no = clean_names(no)
+    nos = {x.casefold() for x in no}
+    yes = clean_names(skill_names(yes) + [h for h in skill_names(held) if h.casefold() not in nos])
     po, pn = plain(old), plain(new)
     if not yes:
         return [_problem(bid, "no-yes", pn, "a bullet is reworded only to name a skill the "
-                         "person said yes to for this application, and there is none: leave "
-                         "bullet_rewordings out")]
+                         "person said yes to for this application, or one they hold that the "
+                         "posting names, and there is none: leave bullet_rewordings out")]
     added = [y for y in yes if named(y, pn) and not named(y, po)]
     if skill:
-        for s in clean_names(skill if isinstance(skill, list) else [skill]):
+        for s in skill_names(skill if isinstance(skill, list) else [skill]):
             if s.casefold() not in {y.casefold() for y in yes}:
                 out.append(_problem(bid, "unconsented-skill", s, "the person did not say yes "
-                                    "to this for this application: name only a yes"))
+                                    "to this for this application, and it is not a skill "
+                                    "they hold that the posting names: name only one of those"))
     if not added:
         out.append(_problem(bid, "names-no-yes", pn, "it names none of the person's yes "
-                            "answers, which is all a rewording is for: name one, or leave the "
-                            "bullet out of bullet_rewordings"))
+                            "answers or the held skills the posting names, which is all a "
+                            "rewording is for: name one, or leave the bullet out of "
+                            "bullet_rewordings"))
     # Numbers: the same, every one.
     f_old, d_old = numbers(po, yes)
     f_new, d_new = numbers(pn, yes)
@@ -314,7 +441,8 @@ def check_one(bid: str, new: str, yes, no=(), skill=None) -> list[dict]:
         said_no = [x for x in no if _named_rx(x).search(pn)]
         rule, fix = (("declined-skill", "the person said no to claiming this: take it out")
                      if said_no else ("unconsented-skill", "the person did not say yes to this "
-                                      "for this application: name only a yes"))
+                                      "for this application, and it is not a skill they hold "
+                                      "that the posting names: name only one of those"))
         out.append(_problem(bid, rule, n, fix))
         flagged_words |= set(tokens(n))
     for x in no:
@@ -323,7 +451,9 @@ def check_one(bid: str, new: str, yes, no=(), skill=None) -> list[dict]:
                                 "this: take it out"))
             flagged_words |= set(tokens(x))
     t_old, t_new = set(tokens(po)), set(tokens(pn))
-    allowed = set(LINKING) | {w for y in yes for w in tokens(y)}
+    # The words of a skill the text names whole, never a word of one it does not: a held
+    # "data quality testing" lends no "testing" to a bullet that names only BigQuery.
+    allowed = set(LINKING) | {w for y in yes if named(y, pn) for w in tokens(y)}
     extra = sorted(t_new - t_old - allowed - flagged_words)
     if extra:
         out.append(_problem(bid, "words-added", ", ".join(extra), "a rewording adds the yes "
@@ -342,8 +472,9 @@ def check_one(bid: str, new: str, yes, no=(), skill=None) -> list[dict]:
     return out
 
 
-def problems(rewordings, yes=(), no=()) -> list[dict]:
-    """Everything the guard refuses in a draft's bullet_rewordings, [] when it accepts it."""
+def problems(rewordings, yes=(), no=(), held=()) -> list[dict]:
+    """Everything the guard refuses in a draft's bullet_rewordings, [] when it accepts it.
+    `held` is the held skills the posting names (held_named)."""
     if rewordings in (None, "", [], {}):
         return []
     if not isinstance(rewordings, list):
@@ -364,19 +495,21 @@ def problems(rewordings, yes=(), no=()) -> list[dict]:
             out.append(_problem(bid, "duplicate", bid, "one rewording a bullet"))
             continue
         seen.add(bid)
-        out += check_one(bid, r["text"], yes, no, r.get("skill"))
+        out += check_one(bid, r["text"], yes, no, r.get("skill"), held)
     return out
 
 
 def usable(a: dict) -> tuple[dict, list[str]]:
     """({bullet id: plain text}, [why each one left out]) for a draft about to be rendered:
     every rewording the guard accepts for this draft's own answers (consented_skills,
-    declined_skills), and none it refuses. The renderer uses these and nothing else, so a
-    draft.json edited by hand can never put an unguarded claim on the page."""
+    declined_skills) and the held skills its posting names, and none it refuses. The
+    renderer uses these and nothing else, so a draft.json edited by hand can never put an
+    unguarded claim on the page."""
     got = a.get(FIELD)
     if got in (None, "", [], {}):
         return {}, []
     yes, no = a.get("consented_skills") or [], a.get("declined_skills") or []
+    held = held_named(a.get("posting") or "", a.get("company") or "")
     if not isinstance(got, list):
         return {}, [f"{FIELD} is not a list, so none is used"]
     use, why = {}, []
@@ -389,7 +522,7 @@ def usable(a: dict) -> tuple[dict, list[str]]:
         if over:
             why.append(f"{bid} is not used: more than {MAX_REWORDINGS} bullets are reworded")
             continue
-        bad = check_one(bid, str(r.get("text") or ""), yes, no, r.get("skill")) \
+        bad = check_one(bid, str(r.get("text") or ""), yes, no, r.get("skill"), held) \
             if str(r.get("text") or "").strip() else [_problem(bid, "malformed", "", SHAPE)]
         if bad or bid in use:
             why.append(f"{bid} is not used, the profile's own bullet is: "
@@ -398,6 +531,55 @@ def usable(a: dict) -> tuple[dict, list[str]]:
             continue
         use[bid] = plain(r["text"])
     return use, why
+
+
+def unplaced(posting: str, bullets, rewordings=None, yes=(), no=(),
+             company: str = "") -> tuple[list[dict], list[str]]:
+    """(problems, notes) for each skill the person said yes to, or holds and the posting
+    names (held_named), that no bullet on this resume names, `bullets` being the ids the
+    page prints (read with this draft's rewordings the guard accepts).
+
+    A problem where a bullet on the page could take it (`related`) and the rewordings have
+    room: one already reworded is such a bullet, or fewer than MAX_REWORDINGS are used. The
+    skill would otherwise sit on the skills line alone, which is "dumping it at the bottom"
+    (the maintainer, 2026-11-04). A note, never a failure, where nothing can take it: no
+    bullet on the page is work the profile ties it to, or the rewordings are spent on
+    bullets that are not. Forcing it into unrelated work would be the claim the guard
+    exists to refuse, so there it stays on the skills line, and the note says why."""
+    ids = [str(b).strip() for b in bullets or () if str(b).strip()]
+    nos = {x.casefold() for x in clean_names(no)}
+    skills = [s for s in clean_names(skill_names(yes) + held_named(posting, company))
+              if s.casefold() not in nos]
+    if not ids or not skills:
+        return [], []
+    a = {FIELD: rewordings, "consented_skills": list(yes or ()), "declined_skills": list(no or ()),
+         "posting": posting, "company": company}
+    use, _why = usable(a)
+    page = {b: use.get(b) or plain(original(b) or "") for b in ids}
+    reworded = {str(r.get("id") or "").strip() for r in rewordings or ()
+                if isinstance(r, dict)} if isinstance(rewordings, list) else set()
+    room = len(reworded) < MAX_REWORDINGS
+    out, notes = [], []
+    for s in skills:
+        if any(named(s, t) for t in page.values()):
+            continue
+        takers = [b for b in ids if not named(s, original(b) or "") and related(s, b)]
+        open_ = [b for b in takers if room or b in reworded]
+        if open_:
+            out.append(_problem("", "skill-not-in-work", s,
+                                f"the posting names {s}, which the person holds or said yes "
+                                "to, and no bullet on this resume names it, so it sits on the "
+                                "skills line alone: without asking, name it in one to three of "
+                                f"these bullets, the work that plausibly used it ({', '.join(open_)}), "
+                                "in bullet_rewordings"))
+        elif takers:
+            notes.append(f"{s} stays on the skills line: {MAX_REWORDINGS} bullets are reworded "
+                         "already, and none of them is work it belongs to")
+        else:
+            notes.append(f"{s} stays on the skills line alone: no bullet on this resume is "
+                         "work the profile ties it to (its tool family, its themes, its "
+                         "bridges, or the profile naming it at that employer)")
+    return out, notes
 
 
 def main(argv=None) -> int:
@@ -412,7 +594,8 @@ def main(argv=None) -> int:
     for d in got if isinstance(got, list) else [got]:
         yes = args.yes if args.yes is not None else d.get("consented_skills") or []
         no = args.no if args.no is not None else d.get("declined_skills") or []
-        for p in problems(d.get(FIELD), yes, no):
+        held = held_named(d.get("posting") or "", d.get("company") or "")
+        for p in problems(d.get(FIELD), yes, no, held):
             bad += 1
             print(f"{d.get('company', '?')}: {p['id'] or FIELD}: [{p['rule']}] {p['text']}: {p['fix']}")
     if not bad:

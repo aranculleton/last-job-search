@@ -27,9 +27,12 @@ belongs to a different application.
     python3 tools/stage_picks.py general <dir> [--summary-file F] [--style S] [--role R]
                                        # a resume for no posting, no letter (general_resume.py)
 
-**Every skill a posting names that the profile does not hold is asked about first.**
-`stage` prints one short question per pick (`bridges.unheld_asked`), and nothing is
-drafted until `consent` records each answer. A yes puts it on this resume's skills line,
+**Every skill a posting names that the profile does not hold is the person's call.**
+`stage` prints one short question per pick (`bridges.unheld_asked`), and the answer is one
+shared record per skill (tools/skill_answers.py): one the person already gave, in any chat
+or on their page, is taken; one nobody has answered is put to them once, on their page, and
+the pick is drafted without the skill meanwhile, waiting on it (`skills_waiting`), never
+recorded as a no. `consent` records an answer they give. A yes puts it on this resume's skills line,
 named as the posting spells it, and lets the drafter name it in a few of this resume's
 bullets where the work plausibly used it (tools/bullet_rewording.py); a no keeps it off
 every document. Both travel with the
@@ -85,8 +88,9 @@ A pick is a 1-based rank in `06_shortlist.json`, or `Company::title words`.
                          the board's row (employer, title, place, links) fenced
                          after it: nothing a board wrote is above a fence
     picks.json           [{file, company, role, slug, abbr, ask_first}]: the picks
-                         nothing is waiting on. `consent` adds skills_yes and
-                         skills_no; `tools/draft_pack.py build` turns it into
+                         nothing is waiting on. `stage` and `consent` set skills_yes,
+                         skills_no and skills_waiting (the ones nobody has answered
+                         yet); `tools/draft_pack.py build` turns it into
                          draft_args.json, the workflow's args.
     held.json            the picks waiting on the person's answer, each with its
                          `hold` questions; `consent --draft` moves one to picks.json
@@ -553,10 +557,11 @@ def stage(round_dir: str, picks: list[str], rows: list[dict] | None = None,
             # posting (untrusted.unfence).
             fh.write("\n".join(head) + "\n" + untrusted.fence(r.get("desc") or "") + "\n"
                      + untrusted.fence(_row_text(r), label="shortlist row") + "\n")
-        staged.append({"file": path, "company": r["company"], "role": r["title"],
-                       "slug": s, "abbr": abbr, "ask_first": [x["skill"] for x in asks],
-                       "ask_beside": {x["skill"]: x["have"][:1] for x in asks if x["have"]},
-                       "posting_profile": prof, "hold": hold, **mine, **only})
+        staged.append(shared_answers({
+            "file": path, "company": r["company"], "role": r["title"], "slug": s, "abbr": abbr,
+            "ask_first": [x["skill"] for x in asks],
+            "ask_beside": {x["skill"]: x["have"][:1] for x in asks if x["have"]},
+            "posting_profile": prof, "hold": hold, **mine, **only}, today))
         apps_in.append(dict({k: v for k, v in r.items() if k != "desc"}, abbr=abbr, **mine,
                             **only))
     # One role per employer, unless the person said both.
@@ -720,6 +725,37 @@ def _fold(names) -> set[str]:
     return {str(n).strip().casefold() for n in names or () if str(n).strip()}
 
 
+def shared_answers(pick: dict, today=None) -> dict:
+    """Each skill the pick asks about, as the person's one shared answer has it
+    (tools/skill_answers.py): a yes or a no they already gave, in any chat or on their page, is
+    this pick's too, and one nobody has answered is put to them once, on their page, while the
+    pick waits on it (`skills_waiting`): drafted without the skill, never recorded as a no.
+    Drafting chats running at once each defaulted to "no" when they answered for themselves
+    (the maintainer, 2026-11-04)."""
+    import skill_answers
+    said = _fold(pick.get("skills_yes")) | _fold(pick.get("skills_no"))
+    for n in pick.get("ask_first") or []:
+        if n.casefold() in said:
+            continue
+        got = skill_answers.ask(n, pick.get("company") or "", pick.get("role") or "", day=today)
+        field = {"yes": "skills_yes", "no": "skills_no"}.get(got, "skills_waiting")
+        if n.casefold() not in _fold(pick.get(field)):
+            pick[field] = list(pick.get(field) or []) + [n]
+    return pick
+
+
+def waits_on(pick: dict) -> list[str]:
+    """The skills the pick is drafted without while the person has not answered: their
+    question is on the page, and nothing about them is recorded as a no."""
+    return [n for n in unanswered(pick) if n.casefold() in _fold(pick.get("skills_waiting"))]
+
+
+def blocked(pick: dict) -> list[str]:
+    """The skills nothing has been done about: neither answered nor put to the person. Only a
+    pick staged by hand, or before the shared answers, has any; staging again clears them."""
+    return [n for n in unanswered(pick) if n.casefold() not in _fold(pick.get("skills_waiting"))]
+
+
 def unanswered(pick: dict) -> list[str]:
     """The skills a pick still waits on the person for. A pick staged before this step
     has no ask_first at all, and is read from its posting so it cannot slip through."""
@@ -790,12 +826,15 @@ def profile_yes(yes=(), no=(), company: str = "", role: str = "", today=None) ->
 
 
 def consent(round_dir: str, which: str, yes=(), no=(), draft: bool = False,
-            skip: bool = False) -> dict:
+            skip: bool = False, ask=()) -> dict:
     """Record the person's answers for one pick, and return the pick.
 
-    `yes` and `no` are the skills answers, kept in picks.json (or held.json for a pick
-    still held). A yes and a no for the same skill is refused. A skill the posting names
-    that the tool did not list (one the session saw reading it) is taken as given.
+    `yes` and `no` are the skills answers the person gave, kept in picks.json (or held.json
+    for a pick still held) and in their one answer per skill (tools/skill_answers.py), which
+    every other pick and chat reads. A yes and a no for the same skill is refused. A skill
+    the posting names that the tool did not list (one the session saw reading it) is taken
+    as given. `ask` is such a skill nobody has answered yet: put to the person on their page
+    and drafted without meanwhile, never a no.
 
     `draft` answers the pick's held questions with "draft it": it moves to picks.json.
     When it was held as a second role at one employer, the others there still waiting
@@ -810,6 +849,16 @@ def consent(round_dir: str, which: str, yes=(), no=(), draft: bool = False,
     both = _fold(yes) & _fold(no)
     if both:
         raise SystemExit(f"consent: both yes and no for {', '.join(sorted(both))}")
+    import skill_answers
+    for n in [str(x).strip() for x in (*yes, *no, *ask) if str(x).strip()]:
+        # Every skill answered or asked about here is this application's: a yes given later,
+        # anywhere, redoes it (skill_answers.redo_due).
+        if n.casefold() not in _fold(p.get("ask_first")):
+            p["ask_first"] = list(p.get("ask_first") or []) + [n]
+        if n.casefold() in _fold(ask):
+            shared_answers(p)
+        else:
+            skill_answers.ask(n, p.get("company") or "", p.get("role") or "")
     spelled = {n.casefold(): n for n in p.get("ask_first") or []}
     for key, got in (("skills_yes", yes), ("skills_no", no)):
         other = "skills_no" if key == "skills_yes" else "skills_yes"
@@ -818,12 +867,22 @@ def consent(round_dir: str, which: str, yes=(), no=(), draft: bool = False,
         new = [spelled.get(str(n).strip().casefold(), str(n).strip()) for n in got if str(n).strip()]
         p[key] = list(dict.fromkeys(keep + new))
         p[other] = [n for n in p.get(other) or [] if n.casefold() not in _fold(got)]
+    p["skills_waiting"] = [n for n in p.get("skills_waiting") or []
+                           if n.casefold() not in _fold(yes) | _fold(no)]
     # Each yes is a fact about the person, so it goes where facts are: the candidate profile,
     # which every check grounds a claim in. Kept only in picks.json it was a claim a chat
     # made (CLAUDE.md, "grounded"), and check_claims.py refuses it.
     profile_yes([spelled.get(str(n).strip().casefold(), str(n).strip()) for n in yes
                  if str(n).strip()], [str(n).strip() for n in no if str(n).strip()],
                 p.get("company") or "", p.get("role") or "")
+    # And one answer per skill, for every application and every chat at once
+    # (tools/skill_answers.py): the next pick that asks takes it, and its question leaves the
+    # person's page.
+    for said, names in (("yes", yes), ("no", no)):
+        for n in names:
+            if str(n).strip():
+                skill_answers.record(spelled.get(str(n).strip().casefold(), str(n).strip()),
+                                     said, by="chat", profile=False)
     if draft and p in held:
         held.remove(p)
         p["answered"] = [q["id"] for q in p.get("hold") or []]
@@ -931,12 +990,16 @@ def assemble(round_dir: str, only=()) -> tuple[list[dict], list[str], list[str]]
         if unknown:
             raise SystemExit("assemble: no pick with slug " + ", ".join(sorted(unknown)))
         staged = [p for p in staged if p["slug"] in want]
-    waiting = [f"{p['company']}: {', '.join(unanswered(p))}" for p in staged if unanswered(p)]
+    waiting = [f"{p['company']}: {', '.join(blocked(p))}" for p in staged if blocked(p)]
     if waiting:
         raise SystemExit("assemble: the person has not been asked about every skill their "
                          "profile does not list, so nothing is assembled:\n  "
-                         + "\n  ".join(waiting) + "\nAsk them, record it with "
-                         "`stage_picks.py consent`, and draft again: the drafter needs the answers.")
+                         + "\n  ".join(waiting) + "\nStage the pick again (it puts each "
+                         "question to them on their page and drafts without the skill "
+                         "meanwhile), record an answer they give with `stage_picks.py "
+                         "consent`, and draft again. Never record a no they did not give.")
+    import skill_answers
+    shared = skill_answers.load()
     drafts, missing, rejected = [], [], []
     for p in staged:
         path = os.path.join(round_dir, f"audit_{p['slug']}.json")
@@ -989,10 +1052,19 @@ def assemble(round_dir: str, only=()) -> tuple[list[dict], list[str], list[str]]
         # documents' header: the skills line prints each yes, check_claims reads both.
         # A bullet reworded to name a yes (bullet_rewordings) is in `d` already, and the
         # renderer checks it against these answers again.
-        if p.get("skills_yes"):
-            d["consented_skills"] = list(p["skills_yes"])
-        if p.get("skills_no"):
-            d["declined_skills"] = list(p["skills_no"])
+        # A skill it was drafted without while nobody had answered takes the answer given since,
+        # in any chat or on the page: a yes prints on its skills line now, and one still open
+        # is kept on the draft as waiting, never as a no.
+        yes, no, open_ = list(p.get("skills_yes") or []), list(p.get("skills_no") or []), []
+        for n in waits_on(p):
+            said = skill_answers.answer(n, shared)
+            (yes if said == "yes" else no if said == "no" else open_).append(n)
+        if yes:
+            d["consented_skills"] = yes
+        if no:
+            d["declined_skills"] = no
+        if open_:
+            d["waiting_skills"] = open_
         if risks:
             # What an interviewer could still probe, which the audit found and nothing
             # kept: the kept draft carries it to the interview pack.
@@ -1037,13 +1109,21 @@ def _report(staged: list[dict], round_dir: str) -> None:
                 print(f"  [{p['slug']}] {q['question']}")
         print("Record each answer: python3 tools/stage_picks.py consent "
               f"{round_dir} <slug> --draft (draft it) or --skip (leave it)")
+    taken = [(p, n, a) for p in staged for a, field in (("yes", "skills_yes"), ("no", "skills_no"))
+             for n in p.get(field) or [] if n.casefold() in _fold(p.get("ask_first"))]
+    if taken:
+        print("\nAlready answered by the person, for every application: " + "; ".join(
+            f"[{p['slug']}] {n}: {a}" for p, n, a in taken))
     asks = [(p, question(p)) for p in staged if question(p)]
     if asks:
-        print("\nASK THE PERSON FIRST, before any drafting (each question as written; "
-              "why, only if they ask: " + WHY_ASK + "):")
+        print("\nTHE PERSON'S CALL (each question as written; why, only if they ask: " + WHY_ASK
+              + "). Each is on their page already, once for every application that asks it. "
+              "If they are in this chat, ask it here too. Drafting goes on meanwhile: the skill "
+              "stays off and the draft waits on their answer. Never answer for them, and never "
+              "record a no they did not give:")
         for p, q in asks:
             print(f"  [{p['slug']}] {q}")
-        print("Record each answer: python3 tools/stage_picks.py consent "
+        print("Record an answer they give: python3 tools/stage_picks.py consent "
               f"{round_dir} <slug> --yes <skill> ... --no <skill> ...")
     if len(held) == len(staged):
         print("\nNothing to draft yet: every pick waits on an answer above.")
@@ -1146,7 +1226,11 @@ def main() -> int:
     c.add_argument("round_dir")
     c.add_argument("pick", help="the slug or abbr stage printed, or the company")
     c.add_argument("--yes", nargs="*", default=[], help="skills they will claim and back up")
-    c.add_argument("--no", nargs="*", default=[], help="skills that stay off")
+    c.add_argument("--no", nargs="*", default=[],
+                   help="skills they said stay off (only the person's own no)")
+    c.add_argument("--ask", nargs="*", default=[],
+                   help="a skill the posting names that nobody has answered: put to them on "
+                        "their page, drafted without meanwhile")
     c.add_argument("--draft", action="store_true",
                    help="they answered the held questions with: draft it")
     c.add_argument("--skip", action="store_true", help="they said not to draft this pick")
@@ -1177,7 +1261,7 @@ def main() -> int:
         return 0 if all(r["verdict"] in ("pass", "fixed") for r in results) else 1
     if args.cmd == "consent":
         p = consent(args.round_dir, args.pick, args.yes, args.no, draft=args.draft,
-                    skip=args.skip)
+                    skip=args.skip, ask=args.ask)
         print(f"{p['company']}: yes {', '.join(p.get('skills_yes') or []) or '(none)'}; "
               f"no {', '.join(p.get('skills_no') or []) or '(none)'}")
         if p.get("status") == "skipped":
@@ -1185,9 +1269,15 @@ def main() -> int:
         elif p.get("hold"):
             print("held until they answer: " + " | ".join(q["question"] for q in p["hold"]))
         left = unanswered(p)
-        print(f"still to ask: {', '.join(left)}" if left else "nothing left to ask for this pick")
+        print(f"waiting on their answer (on their page; drafted without it meanwhile): "
+              f"{', '.join(left)}" if left else "nothing left to ask for this pick")
         for o in waiting(args.round_dir):
             print(f"still held: [{o['slug']}] {o['company']} | {o['role']}")
+        import skill_answers
+        line = skill_answers.redo_line([d for n in args.yes
+                                        for d in skill_answers.redo_due(n)])
+        if line:
+            print(line)
         return 0
     if args.cmd == "single" and args.for_contact and not args.posting_file:
         if str(args.role or "").strip():

@@ -20,7 +20,9 @@ and keeps every chat that is:
 - running, or used in the last two days (seven when it is waiting on the person), unless it
   ran one of the app's jobs and every work item it claimed has ended (done, failed or
   stopped) with none still going: a finished job's chat is put away at once, and the tidy-up
-  is due again as soon as such a job ends (`due`), so it does not wait for tomorrow;
+  is due again as soon as such a job ends (`due`), so it does not wait for tomorrow; or
+  unless it is an old page helper (HELPER_NAME, or the one the live helper took over from):
+  only the live one is ever kept, so the helper a hand-over replaced goes at once;
 - or holding work that is not on master yet: a branch it pushed that master does not hold.
   The day's update lands such a branch; the chat is archived once it has.
 
@@ -40,11 +42,20 @@ remembered (profile/tidy.json `runs`) until it is old enough to tidy.
     python3 tools/tidy.py plan --dump <dir> --sessions <file>... --triggers <file>...
                                [--details <file>...] [--chat <id>] [--today YYYY-MM-DD]
     python3 tools/tidy.py done [<session id>...] [--titles <json>]
+    python3 tools/tidy.py close <session id> --work <id> --dump <dir> --details <file>
+    python3 tools/tidy.py closed <session id>...     once archive_session has taken it
     python3 tools/tidy.py undo                       the calls that bring them all back
 
 `--sessions` takes what list_sessions returned (mine: true), every page; `--triggers` what
 list_triggers returned, every page; `--details` what get_session returned for each chat
 `plan` asks about. Pure code apart from one `git branch` read; it calls no tool itself.
+
+A big job's chat is closed as soon as it reports back (send_message: "Finished <id>, on
+master, in chat <its id>"), not at the next tidy-up: the chat that answers the page reads it
+with get_session and runs `close`, which names the archive_session call only for one of the
+app's own job chats on this copy whose job has ended and whose work is on master; `closed`
+records it with the title it has now. The daily tidy-up stays the way out for a job chat
+that never reported.
 """
 from __future__ import annotations
 
@@ -64,13 +75,33 @@ if _HERE not in sys.path:
 # person named themself is never one of these unless they copied the app's own words.
 # A chat a scheduled task starts carries a mark before its title ("⚡ Job search: morning
 # brief"), and without it in the pattern every such chat was read as the person's own and kept.
-APP_TITLE = re.compile(r"^(?:[^\w\s]{1,3}\s*)?Job search(?::\s*\S.{0,60}|\s+helper\b.{0,60})$",
+APP_TITLE = re.compile(r"^(?:[^\w\s]{1,3}\s*)?Job search(?::\s*\S.{0,60}|\s+(?:helper|page)\b.{0,60})$",
                        re.I)
+# The page's helper, under its name since 4.10 ("Job search page", app_listen.HELPER_CHAT_TITLE)
+# and every older one ("Job search helper", "... (finishing up)"). Only the live one, the chat
+# meta/listen names, is kept: the rest are put away as soon as their work is on master, never
+# kept for being used lately (the maintainer, 2026-11-04: at most two such chats, the person's
+# own and the live page helper; a heavy user's renewals had stacked up several).
+HELPER_NAME = re.compile(r"^(?:[^\w\s]{1,3}\s*)?Job search\s+(?:helper|page)\b", re.I)
+# Once after the update that brought that rule, the tidy-up is due even if it ran that day,
+# so the helpers left over from before are put away by themselves (`due`).
+SWEEP = "helpers-2026-11-04"
+# After a hand-over the helper it replaced is put away at once (`retiring`): asked again at a
+# check-in this long after the last try while it still runs or holds work not on master, for
+# a day; after that the daily tidy-up has it.
+RETIRE_AGAIN_S = 30 * 60
+RETIRE_FOR_S = 24 * 3600
 RUN_TITLE = "⚡ Job search: a scheduled run"
 IDLE_DAYS = 2           # quiet this long before it is tidied
 WAITING_DAYS = 7        # quiet this long when it was waiting on the person
 FILE = "tidy.json"      # in profile/: what was archived, so it can be brought back
 CHECKED = "ljs-tidy.json"   # in the git folder, never committed: the day it last ran
+# Also in the git folder: the chats `plan` or `close` named to archive, with their titles,
+# so `done` and `closed` record the real title without the chat copying it back through the
+# shell. Titles once came back only through `--titles '<json>'`, and on 3 November an
+# interview prep's chat was recorded with none: the next tidy-up took it for a chat of the
+# person's own and brought it back.
+PLANNED = "ljs-tidy-planned.json"
 SAY_DONE = ("Claude tidied away {n} old chat{s} it no longer used. Nothing in them was lost, "
             "and each can be brought back.")
 
@@ -89,6 +120,38 @@ def _git_dir() -> str:
 def _checked_path() -> str:
     d = _git_dir()
     return os.path.join(d, CHECKED) if d else ""
+
+
+def _planned_path() -> str:
+    d = _git_dir()
+    return os.path.join(d, PLANNED) if d else ""
+
+
+def _planned() -> dict:
+    """{session id: title} for the chats named to archive and not recorded yet."""
+    try:
+        with open(_planned_path(), encoding="utf-8") as fh:
+            got = json.load(fh)
+        return {str(k): str(v or "") for k, v in got.items()} if isinstance(got, dict) else {}
+    except (OSError, ValueError, AttributeError):
+        return {}
+
+
+def _plan_titles(titles: dict, drop=()) -> bool:
+    """Keep these titles until `done` or `closed` records them, dropping the ones it has.
+    False where there is no git folder to keep them in."""
+    path = _planned_path()
+    if not path:
+        return False
+    got = {k: v for k, v in _planned().items() if k not in set(drop)}
+    got.update({k: v for k, v in titles.items() if k and v})
+    try:
+        with open(path, "w", encoding="utf-8", newline="\n") as fh:
+            json.dump(got, fh, ensure_ascii=False)
+            fh.write("\n")
+    except OSError:
+        return False
+    return True
 
 
 def finished_jobs(db: dict, skip: str = "") -> dict:
@@ -112,11 +175,33 @@ def finished_jobs(db: dict, skip: str = "") -> dict:
     return {k: v for k, v in held.items() if v}
 
 
+def retiring(listener: dict | None, now: dt.datetime | None = None) -> str:
+    """The helper the chat that answers the page took it over from, while it is still to be
+    put away: one the app started (never the person's own chat), not recorded as archived yet,
+    within a day of the hand-over. "" when there is none."""
+    import app_model
+    mine = listener or {}
+    old = str(mine.get("took_from") or "")
+    if not (mine.get("took_from_helper") and old.startswith("session_")
+            and old != mine.get("chat")):
+        return ""
+    if old in {x.get("id") for x in archived()}:
+        return ""
+    since = app_model.parse_time(mine.get("since"))
+    if since is None:
+        return ""
+    if now is not None and (now - since).total_seconds() >= RETIRE_FOR_S:
+        return ""
+    return old
+
+
 def due(today: str = "", db: dict | None = None, skip: str = "",
-        listener: dict | None = None) -> bool:
-    """Is a tidy-up still to do? Once a day, and again when another chat's job has ended since
-    the last one (`db`: the page's records), so its chat is put away soon after, not at
-    tomorrow's. Never where it cannot be kept."""
+        listener: dict | None = None, now: dt.datetime | None = None) -> bool:
+    """Is a tidy-up still to do? Once a day; once more after the update that put away the
+    helpers left over from before (SWEEP); at once after a hand-over, and again every
+    RETIRE_AGAIN_S for a day while the helper it replaced is still there (given `now`); and
+    when another chat's job has ended since the last one (`db`: the page's records), so its
+    chat is put away soon after, not at tomorrow's. Never where it cannot be kept."""
     today = today or dt.date.today().isoformat()
     path = _checked_path()
     if not path:
@@ -126,7 +211,7 @@ def due(today: str = "", db: dict | None = None, skip: str = "",
             got = json.load(fh) or {}
     except (OSError, ValueError, AttributeError):
         return True
-    if got.get("checked") != today:
+    if got.get("checked") != today or got.get("sweep") != SWEEP:
         return True
     if db is None:
         return False
@@ -135,12 +220,13 @@ def due(today: str = "", db: dict | None = None, skip: str = "",
     if last is None:
         return False
     gone = {x.get("id") for x in archived()}
-    # A hand-over to a fresh helper: the app's own old one is archived at the next check-in,
-    # not tomorrow (its work and brief are judged by plan as ever).
+    # A hand-over to a fresh helper: the app's own old one is put away now, not tomorrow and
+    # not two quiet days on (its work and brief are judged by plan as ever). Still running, or
+    # its work not on master yet: asked again at a check-in half an hour on.
     mine = listener or {}
     since = app_model.parse_time(mine.get("since"))
-    if (mine.get("took_from_helper") and mine.get("took_from") not in gone
-            and since is not None and since > last):
+    if retiring(mine, now) and since is not None and (
+            since > last or (now is not None and (now - last).total_seconds() >= RETIRE_AGAIN_S)):
         return True
     for chat, at in finished_jobs(db, skip).items():
         t = app_model.parse_time(at)
@@ -155,7 +241,7 @@ def _mark_checked(today: str, now: str = "") -> None:
         return
     at = now or dt.datetime.now(dt.timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
     with open(path, "w", encoding="utf-8", newline="\n") as fh:
-        json.dump({"checked": today, "at": at}, fh)
+        json.dump({"checked": today, "at": at, "sweep": SWEEP}, fh)
         fh.write("\n")
 
 
@@ -172,6 +258,37 @@ def archived() -> list[dict]:
         return [a for a in got.get("archived") or [] if isinstance(a, dict)]
     except (OSError, ValueError, AttributeError):
         return []
+
+
+def _is_apps(title) -> bool:
+    return bool(APP_TITLE.match(str(title or "").strip()))
+
+
+def strangers(records: list[dict], live: dict) -> list[dict]:
+    """The chats an earlier tidy-up put away that are the person's own (the stranger audit,
+    X-4), to bring back once. `live` is {id: title} from today's list_sessions. One the app
+    made is never among them, by its title now or the one stored: an empty stored title is
+    not evidence of anything (3 November: an interview prep's chat recorded with no title was
+    taken for the person's own and brought back)."""
+    out = []
+    for x in records:
+        sid = str(x.get("id") or "")
+        if not sid or x.get("restored"):
+            continue
+        stored, now = str(x.get("title") or "").strip(), str(live.get(sid) or "").strip()
+        if _is_apps(stored) or _is_apps(now) or not (stored or now):
+            continue
+        out.append(x)
+    return out
+
+
+def brought_back_by_mistake(records: list[dict], live: dict) -> set[str]:
+    """The app's own chats an older tidy-up brought back for having no stored title: listed
+    again today under one of the app's titles. They are judged afresh like any other chat, so
+    a finished one is put away again (and recorded, this time, with its title)."""
+    return {str(x.get("id")) for x in records
+            if x.get("id") and x.get("restored") and not str(x.get("title") or "").strip()
+            and _is_apps(live.get(x.get("id")))}
 
 
 # ------------------------------------------------------------------ reading what the tools gave
@@ -246,6 +363,13 @@ def unmerged() -> set[str] | None:
     return {ln.strip().removeprefix("origin/") for ln in r.stdout.splitlines() if ln.strip()}
 
 
+def _after(stamp, since) -> bool:
+    """Is `stamp` later than `since`? False when either cannot be read."""
+    import app_model
+    a, b = app_model.parse_time(stamp), app_model.parse_time(since)
+    return a is not None and b is not None and a > b
+
+
 def _days_since(stamp: str, today: dt.date) -> float:
     try:
         at = dt.datetime.fromisoformat(str(stamp).replace("Z", "+00:00"))
@@ -291,10 +415,16 @@ def plan(chats: list[dict], triggers: list[dict], info: dict, reg: dict, listene
     home = brief_chat or (ops if setup == "ops_relay" else "")
     listed_ids = {s.get("id") for s in chats}
     titles = {s.get("id"): str(s.get("title") or "") for s in chats}
+    # The page's old helpers: every chat under a helper's name but the live one, and the one
+    # it took the page from. Never the person's own chat the page was taken from, whatever
+    # its title (X-4): a record that says so (one from before the flag says nothing).
+    theirs = str(listener.get("took_from") or "") if listener.get("took_from_helper") is False else ""
+    old_helpers = ({sid for sid, t in titles.items() if HELPER_NAME.match(t.strip())} | known) \
+        - live_ids - {theirs, ""}
 
     def retired(sid: str) -> bool:
         return bool(sid) and sid != helper and (
-            sid not in listed_ids or sid in known
+            sid not in listed_ids or sid in known or sid in old_helpers
             or bool(re.search(r"\bhelper\b", titles.get(sid, ""), re.I)))
 
     if (setup in ("chat_per_briefing", "ops_relay") and home and helper.startswith("session_")
@@ -367,6 +497,14 @@ def plan(chats: list[dict], triggers: list[dict], info: dict, reg: dict, listene
         # there is nothing to archive.
         out["keep"].append({"id": adopt, "title": "", "why": "the brief's chat is gone; the "
                                                             "brief moves to the helper"})
+    # The daily upkeep moves to the helper in this same run (made there, then the old one
+    # deleted), so the chat it was bound to is not kept for it.
+    up_calls = _upkeep_calls(reg, triggers, helper, listener, repo)
+    up = routines.upkeep_entry(reg) or {}
+    if up.get("trigger_id") and any(c.get("tool") == "delete_trigger" and
+                                    c["args"].get("trigger_id") == up["trigger_id"]
+                                    for c in up_calls):
+        moved_from |= {str((up.get("chat") or {}).get("session_id") or "")} - {"", helper}
     for s in chats:
         sid = s.get("id") or ""
         title = str(s.get("title") or "")
@@ -374,7 +512,7 @@ def plan(chats: list[dict], triggers: list[dict], info: dict, reg: dict, listene
             out["keep"].append({"id": sid, "title": title, "why": why})
         if sid in done_before:
             continue
-        if not (APP_TITLE.match(title) or sid in known):
+        if not (APP_TITLE.match(title) or sid in known) or sid == theirs:
             continue                                  # the person's own chat: never listed
         if sid in live_ids:
             keep("it answers the page" if sid == listener.get("chat") else "it is this chat")
@@ -388,13 +526,25 @@ def plan(chats: list[dict], triggers: list[dict], info: dict, reg: dict, listene
         if sid in campaigns:
             keep("a live process has its own chat here")
             continue
+        if sid in old_helpers and sid not in known and _after(s.get("created_at"),
+                                                               listener.get("since")):
+            # Started since the live helper took the page: a fresh one its renewal asked for,
+            # which may yet take it. Every helper from before was started earlier.
+            keep("a helper started since this one took the page, which may yet take it")
+            continue
+        if sid == brief_chat and sid != adopt and brief.get("trigger_id") and sid in old_helpers:
+            # Turned off or resting, the brief does not move (a working brief never does by
+            # itself either): its chat is kept, so it never comes back on in an archived one.
+            keep("the brief, turned off or resting, is bound to it")
+            continue
         status = str(s.get("session_status") or "") + " " + str(s.get("status_bucket") or "")
         if "RUNNING" in status or "WORKING" in status:
             keep("it is running")
             continue
         quiet = _days_since(s.get("updated_at") or s.get("created_at") or "", today)
         waits = "REQUIRES_ACTION" in status or "BLOCKED" in status
-        if (sid not in moved_from and sid not in jobs
+        # An old helper is never kept for being used lately: its renewal used it minutes ago.
+        if (sid not in moved_from and sid not in jobs and sid not in old_helpers
                 and quiet < (WAITING_DAYS if waits else IDLE_DAYS)):
             keep(f"used {quiet:.0f} day(s) ago")
             continue
@@ -416,7 +566,8 @@ def plan(chats: list[dict], triggers: list[dict], info: dict, reg: dict, listene
             continue
         why = ("the brief moved into the chat that answers the page" if sid == adopt else
                "the shortlist moved into the chat that answers the page" if sid in moved_from else
-               "a helper the page no longer uses" if sid in known or re.search(r"helper", title, re.I)
+               "a helper the page no longer uses" if sid in old_helpers or sid in known
+               or re.search(r"helper", title, re.I)
                else "a chat for one run or one job, finished")
         out["archive"].append({"id": sid, "title": title, "why": why})
     listed = {s.get("id") for s in chats}
@@ -428,7 +579,7 @@ def plan(chats: list[dict], triggers: list[dict], info: dict, reg: dict, listene
     if out["ask"]:
         out["brief"] = []                             # decided once every chat is read
         out["moves"] = []
-    out["upkeep"] = [] if out["ask"] else _upkeep_calls(reg, triggers, helper, listener, repo)
+    out["upkeep"] = [] if out["ask"] else up_calls
     # A brief that stays where it is, stored before its prompt said how to get a copy of the
     # files, is given that line, so it runs in whichever chat it lands in (routines.with_copy;
     # two days of no brief, 2026-10-31). Once: the line it gets is how it is found next time.
@@ -584,8 +735,11 @@ def run_plan(a) -> int:
         reg = {}
     # A chat of the person's own that an earlier tidy-up put away because a helper had taken
     # the page from it (the stranger audit, X-4): brought back once, before anything else.
-    wrong = [x for x in archived() if x.get("id") and not x.get("restored")
-             and not APP_TITLE.match(str(x.get("title") or ""))]
+    # Judged by the title it has now as well as the one stored, never by a missing one.
+    listed = sessions(_pages(a.sessions))
+    live = {s.get("id"): str(s.get("title") or "") for s in listed}
+    records = archived()
+    wrong = strangers(records, live)
     for x in wrong:
         print(f"restore {x['id']}: unarchive_session {json.dumps({'session_id': x['id']})} "
               f"({x.get('title') or 'a chat'}: a chat of the person's own, put away by mistake "
@@ -604,8 +758,7 @@ def run_plan(a) -> int:
         print("tidy: this copy's address is not known, so nothing is tidied today. "
               "python3 tools/tidy.py done")
         return 0
-    done = {x["id"] for x in archived()}
-    listed = sessions(_pages(a.sessions))
+    done = {x["id"] for x in archived()} - brought_back_by_mistake(records, live)
     runs, extra = run_chats(tasks, _remembered_runs(), done, {s.get("id") for s in listed})
     _remember_runs(runs)
     jobs: dict = {}
@@ -654,9 +807,13 @@ def run_plan(a) -> int:
         print(f"archive {c['id']}: {c['title']} ({c['why']})")
     if got["archive"]:
         ids = " ".join(c["id"] for c in got["archive"])
-        titles = json.dumps({c["id"]: c["title"] for c in got["archive"]}, ensure_ascii=False)
-        print(f"then: archive_session each, and python3 tools/tidy.py done <each one archived> "
-              f"--titles '{titles}' (all of them: {ids}); commit it")
+        titles = {c["id"]: c["title"] for c in got["archive"]}
+        # Kept here, so `done` records each real title from the ids alone: a title copied back
+        # through the shell was lost (an apostrophe in an employer's name ends the quoting).
+        kept = _plan_titles(titles)
+        more = "" if kept else f" --titles '{json.dumps(titles, ensure_ascii=False)}'"
+        print(f"then: archive_session each, and python3 tools/tidy.py done <each one archived>"
+              f"{more} (all of them: {ids}); commit it")
     else:
         print("tidy: nothing to tidy. python3 tools/tidy.py done")
     if a.verbose:
@@ -680,26 +837,102 @@ def _mark_restored(ids: list[str]) -> None:
         fh.write("\n")
 
 
-def run_done(ids: list[str], titles: dict, today: str) -> str:
-    """Record what was archived (profile/tidy.json) and that today's tidy-up ran."""
-    _mark_checked(today)
-    if not ids:
-        return "tidy: done for today"
+def _record(ids: list[str], titles: dict, today: str) -> None:
+    """Write the archived chats into profile/tidy.json, each with its real title: the one
+    given, else the one `plan` or `close` kept. One brought back by mistake before is put
+    away again under its old entry, its title filled in."""
+    planned = _planned()
     path = _record_path()
     try:
         with open(path, encoding="utf-8") as fh:
             got = json.load(fh)
     except (OSError, ValueError):
         got = {}
-    have = {a.get("id") for a in got.get("archived") or []}
-    got["archived"] = list(got.get("archived") or []) + [
-        {"id": i, "title": titles.get(i, ""), "on": today} for i in ids if i not in have]
+    rows = [a for a in got.get("archived") or [] if isinstance(a, dict)]
+    by_id = {a.get("id"): a for a in rows}
+    for i in dict.fromkeys(ids):
+        title = str(titles.get(i) or planned.get(i) or "")
+        row = by_id.get(i)
+        if row is None:
+            rows.append({"id": i, "title": title, "on": today})
+            by_id[i] = rows[-1]
+            continue
+        if row.get("restored"):
+            row.pop("restored", None)
+            row["on"] = today
+        if title and not str(row.get("title") or "").strip():
+            row["title"] = title
+    got["archived"] = rows
     os.makedirs(os.path.dirname(path), exist_ok=True)
     with open(path, "w", encoding="utf-8", newline="\n") as fh:
         json.dump(got, fh, indent=2, ensure_ascii=False)
         fh.write("\n")
+    _plan_titles({}, drop=ids)
+
+
+def run_done(ids: list[str], titles: dict, today: str) -> str:
+    """Record what was archived (profile/tidy.json) and that today's tidy-up ran."""
+    _mark_checked(today)
+    if not ids:
+        return "tidy: done for today"
+    _record(ids, titles, today)
     n = len(ids)
     return "tell them, if they are in this chat: " + SAY_DONE.format(n=n, s="" if n == 1 else "s")
+
+
+def close(sid: str, work: str, db: dict, info: dict, listener: dict, this_chat: str,
+          repo: str, branches: set[str] | None) -> tuple[str, str]:
+    """A big job's chat that reported back: ("archive", its title) when it is one of the app's
+    own job chats on this copy, its job (and every item claimed with it) has ended and its
+    work is on master; else ("keep", why). `info` is get_session's record of that chat, so the
+    title judged and recorded is the one it has now."""
+    import page_db
+    d = info.get(sid) or {}
+    title = str(d.get("title") or "").strip()
+    if not sid.startswith("session_") or not d:
+        return "keep", "get_session has not said what that chat is"
+    if sid in {listener.get("chat") or "", this_chat} - {""}:
+        return "keep", "it answers the page"
+    if not _is_apps(title):
+        return "keep", "it is not one of the app's own chats"
+    where = _repo_of(d)
+    if not where or where != repo.lower():
+        return "keep", "it works on another copy" if where else "its copy is not known"
+    items = {k: (v.get("data") or {}) for k, v in (db.get("work") or {}).items()
+             if k == work or str((v.get("data") or {}).get("with") or "") == work}
+    if work not in items:
+        return "keep", f"the page has no work item {work}"
+    going = [k for k, v in items.items() if str(v.get("status") or "") not in page_db.FINISHED]
+    if going:
+        return "keep", "its job is still going (" + ", ".join(sorted(going)) + ")"
+    own = _branches_of(d)
+    if own and branches is None:
+        return "keep", "git could not say whether its work is on master"
+    left = [b for b in own if branches is not None and b in branches]
+    if left:
+        return "keep", "its work is not on master yet (" + ", ".join(left) + ")"
+    return "archive", title
+
+
+def run_close(a) -> int:
+    import app_listen
+    import page_db
+    try:
+        db = page_db.load(a.dump)
+    except Exception:  # noqa: BLE001  no dump: nothing can be judged
+        db = {}
+    what, said = close(a.id, a.work, db, details(_pages(a.details)), _listener(a.dump),
+                       app_listen.this_chat(a.chat), _repo(), unmerged())
+    if what != "archive":
+        print(f"keep {a.id}: {said}. Leave it: the daily tidy-up puts it away once it can. "
+              "Say nothing about it.")
+        return 0
+    _plan_titles({a.id: said})
+    print(f"archive {a.id}: {said} (its job is finished, saved and on the page)")
+    print(f"then: archive_session {json.dumps({'session_id': a.id})}, and once it is taken, "
+          f"python3 tools/tidy.py closed {a.id}; commit it with this turn's work. Say nothing "
+          "about it.")
+    return 0
 
 
 def main(argv: list[str]) -> int:
@@ -720,8 +953,24 @@ def main(argv: list[str]) -> int:
     o.add_argument("ids", nargs="*")
     o.add_argument("--titles", default="{}")
     o.add_argument("--today", default="")
+    c = sub.add_parser("close")
+    c.add_argument("id")
+    c.add_argument("--work", required=True)
+    c.add_argument("--dump", required=True)
+    c.add_argument("--details", action="append", default=[])
+    c.add_argument("--chat", default="")
+    k = sub.add_parser("closed")
+    k.add_argument("ids", nargs="+")
+    k.add_argument("--today", default="")
     sub.add_parser("undo")
     a = ap.parse_args(argv)
+    if a.cmd == "close":
+        return run_close(a)
+    if a.cmd == "closed":
+        # Recorded, so `undo` can bring it back, without counting as today's tidy-up.
+        _record(a.ids, {}, a.today or dt.date.today().isoformat())
+        print("tidy: recorded; nothing to say")
+        return 0
     if a.cmd == "due":
         return 0 if due(a.today) else 1
     if a.cmd == "plan":

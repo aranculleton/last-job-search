@@ -758,6 +758,7 @@
         if (rec.state === "saved" && S.actions.has(id) && !next.has(id) && !S.receipts.has(id) && (next.size < 300 || txt(rec.doc.at) > oldest)) rec.state = "undone";
       }
       S.actions = next;
+      actionsSeen();
     });
     // The newest receipts: without an order the store sends the first 500 by id (db.d.ts).
     sub("receipts", db.collection("receipts").orderBy("applied_at", "desc").limit(500), (snap) => {
@@ -3618,15 +3619,17 @@
   // A card only the person can act on, outside this page (CONTRACT 6.4): a private copy, a
   // setting in this chat's cloud computer, a sign-in. One link that does it where there is
   // one (6.8), the registry's own dated steps, and Done, which has code look again.
+  // What the browser answered (the tab it opened), or null.
   async function openInAppBrowser(url, key, said) {
-    let ok = false;
+    let ok = false, got = null;
     try {
       const m = await remoteCap();
-      if (m) { const got = await within(m.callTool("host:claude_browser", "preview_start", {url}), 20000); ok = got !== "timeout"; }
+      if (m) { got = await within(m.callTool("host:claude_browser", "preview_start", {url}), 20000); ok = got !== "timeout"; }
     } catch (e) { ok = false; }
     S.notes.set("browser:" + key, ok ? {text: said || "Opened in the Claude app's browser, beside this page. Sign in there, then come back and tap Done.", tone: "ok"}
       : {text: "This works when the page is open in the Claude desktop app. There, tap it again; or follow the steps under More.", tone: "warn"});
     scheduleRender();
+    return ok ? got : null;
   }
   function setupNeedCard(n, ctx) {
     ctx = ctx || {};
@@ -8991,8 +8994,20 @@
   // have to close").
   const READING_TAB = "ljs:reading-tab";
   function rememberTab(t) { S.reading.tab = t; sset("local", READING_TAB, t === undefined ? null : JSON.stringify(t)); }
-  async function browserCall(cap, tool, want) {
+  function keptTab() {
     if (S.reading.tab === undefined) { try { const t = JSON.parse(sget("local", READING_TAB) || "null"); if (t !== null) S.reading.tab = t; } catch (e) { /* none kept */ } }
+    return S.reading.tab;
+  }
+  // The tab a call answered with (preview_start opens one and names it), or undefined.
+  function tabOf(got) {
+    const pay = obj(got).payload;
+    if (pay && typeof pay === "object") for (const k of Object.keys(pay)) if (/tab/i.test(k) && (typeof pay[k] === "number" || typeof pay[k] === "string")) return pay[k];
+    return undefined;
+  }
+  // `own`: the kept tab or nothing. A call on a tab that was closed fails rather than going to
+  // whichever tab the person is on.
+  async function browserCall(cap, tool, want, own) {
+    keptTab();
     S.reading.schemas = S.reading.schemas || {};
     if (!S.reading.schemas[tool]) {
       try { S.reading.schemas[tool] = obj(obj(await cap.describeTool(BROWSER, tool)).inputSchema); } catch (e) { S.reading.schemas[tool] = {}; }
@@ -9022,6 +9037,7 @@
       if (tabKey && !(e && e.retryable) && txt(obj(e).code) === "tool_error") {
         // The tab kept from before was closed: the call goes once more without it.
         rememberTab(undefined);
+        if (own) throw e;
         delete input[tabKey];
         got = await cap.callTool(BROWSER, tool, input);
       } else {
@@ -9030,8 +9046,8 @@
         got = await cap.callTool(BROWSER, tool, input);
       }
     }
+    if (tabOf(got) !== undefined) rememberTab(tabOf(got));
     const pay = obj(got).payload;
-    if (pay && typeof pay === "object") for (const k of Object.keys(pay)) if (/tab/i.test(k) && (typeof pay[k] === "number" || typeof pay[k] === "string")) rememberTab(pay[k]);
     return typeof pay === "string" ? pay : txt(obj(pay).text) || arr(obj(got).content).filter((c) => c.type === "text").map((c) => txt(c.text)).join("\n");
   }
   // The bin hides the card for a while; "Never" is the person's choice to paste profiles
@@ -9061,41 +9077,90 @@
         scheduleRender();
       }}))});
   }
-  // Opened in the Claude desktop app, the page checks LinkedIn by itself, once per opening,
-  // and reads the profiles queued for networking as they arrive: no button to find. Signed
-  // out, the panel says how to sign in. Elsewhere (a phone, a web browser) it reads nothing.
-  // Signed in, it is not checked again on this device for a week: the check loads a page in
-  // Claude's browser, and each opening of the page did it (2026-10-30). A read that meets the
-  // sign-in page still says so at once. Signed out, the page opens LinkedIn's sign-in itself,
-  // once a day, and says the tab can be closed once they are in.
-  const READING_OK = "ljs:reading-ok-until", SIGNIN_OPENED = "ljs:reading-signin-opened";
+  // Opened in the Claude desktop app, the page checks LinkedIn by itself, once a day, and
+  // reads the profiles queued for networking as they arrive: no button to find. Signed out,
+  // the panel says how to sign in, and Open LinkedIn there opens its sign-in. Elsewhere (a
+  // phone, a web browser) it reads nothing. A read that meets the sign-in page still says so
+  // at once.
+  // All of it out of the person's way: the page never opens a tab of Claude's browser by
+  // itself (preview_start, the one call that opens one, is only ever a tap), and it reads in
+  // the one tab it keeps. Reading belongs in the background, never the browser opening in
+  // front of the person (the maintainer, 2026-11-04): until then the page opened LinkedIn's
+  // sign-in itself once a day (2026-10-30), and that tab put the browser in front of them.
+  // Claude's browser keeps working while something else shows in the app's side panel or the
+  // panel is closed, and using it does not bring it back (Anthropic's built-in-browser skill);
+  // no call a page may make hides it or opens a tab out of sight.
+  // The day's check is kept where every opening reads it (checkToday): this search's own store
+  // and the engine's model, never only this device. Switching to another chat and back opens
+  // the page again, and with only this device's storage to go by, which the Claude app can
+  // hand back empty, it loaded LinkedIn in Claude's browser at every switch, though it had seen
+  // the person signed in five times that day (the maintainer, 2026-11-04). Seen signed in
+  // today, nothing opens LinkedIn to check again until tomorrow, on any opening or device.
+  // This device's week (READING_OK) still stands on top of it (2026-10-30).
+  const READING_OK = "ljs:reading-ok-until";
   const READING_OK_MS = 7 * 86400000;
   function readingOkHere() { const u = Date.parse(sget("local", READING_OK) || ""); return Number.isFinite(u) && u > now(); }
+  // The store's taps as they stood when the page opened: the day's check is read from them
+  // before anything is opened. Settled at the store's first answer, or when there is no store.
+  let actionsSeen = () => {};
+  const actionsIn = new Promise((r) => { actionsSeen = r; });
+  function onDay(at, day) { const t = tms(at); return t !== null && ymdIn(t, zone()) === day; }
+  const UNKEPT = (st) => st === "failed" || st === "unsaved" || st === "undone";
+  // Today's last look at LinkedIn, from any opening of this page in any chat, or from the
+  // engine (linkedin.reading.check, tools/network/reading.py linkedin_check): "passed" (seen
+  // signed in: a check that passed, or a profile read), "signed_out" (its sign-in page or one
+  // of its checks) or "due" (no look yet today, on the person's own day).
+  function checkToday() {
+    const day = todayIso();
+    let best = null;
+    const saw = (at, ok) => { const t = tms(at); if (t !== null && ymdIn(t, zone()) === day && (!best || t > best.t)) best = {t, ok}; };
+    const ck = obj(readingInfo().check);
+    if (txt(ck.state) === "passed" || txt(ck.state) === "signed-out") saw(txt(ck.at), txt(ck.state) === "passed");
+    for (const [id, d] of allActions()) {
+      const st = actionState(id);
+      if (UNKEPT(st)) continue;
+      if (d.action === "reader.checked") saw(txt(d.at), obj(d.value).ok === true);
+      else if (d.action === "reading.done" && st !== "refused") saw(txt(d.at), true);
+    }
+    return !best ? "due" : best.ok ? "passed" : "signed_out";
+  }
   let readingTried = false;
   async function autoReading() {
     if (readingTried) return;
     readingTried = true;
     if (!(await inDesktop())) { scheduleRender(); return; }
+    await within(actionsIn, CAP_WAIT_MS);
     const st = readingState();
     if (st === "off" || st === "paused" || (st !== "ready" && readingHidden())) { scheduleRender(); return; }
     if (st !== "ready") {
-      if (readingOkHere()) { S.reading.ok = true; scheduleRender(); }
-      else {
-        await openReading(true);
-        if (S.reading.panel === "sign_in" && sget("local", SIGNIN_OPENED) !== todayLocal()) {
-          sset("local", SIGNIN_OPENED, todayLocal());
-          openLinkedIn("bp-open");
-        }
+      const today = checkToday();
+      if (today === "passed") { S.reading.ok = true; scheduleRender(); }
+      else if (today === "signed_out") {
+        // Signed out at today's last look, here or in another chat: nothing is loaded to look
+        // again. The panel says how to sign in, and the tab this page keeps is read as it
+        // stands: signed in there since, that is the check.
+        S.reading.signedOut = true;
+        S.reading.panel = "sign_in";
+        await openReading(true, true);
       }
+      else if (readingOkHere()) { S.reading.ok = true; scheduleRender(); }
+      else await openReading(true);
     }
     maybeAutoRead();
   }
   function waitingReads() { return arr(readingInfo().queue).filter((q) => !effective(txt(q.id), ["reading.done"])); }
-  // Each person queued is tried once per opening: a read refused (signed out, a page that did
-  // not load) waits for the next opening, or for the person's own tap, never a loop.
+  // Someone queued whose read was tried today, from any opening (their reading.done in the
+  // store, whatever the engine made of it): read again tomorrow, or at the person's own tap.
+  // Their profile opened in Claude's browser at every switch back to the page (2026-11-04).
+  function readToday(q) {
+    const day = todayIso();
+    return actionsOn(txt(q.id)).some(([id, d]) => d.action === "reading.done" && onDay(d.at, day) && !UNKEPT(actionState(id)));
+  }
+  // Each person queued is tried once a day by itself: a read refused (signed out, a page that
+  // did not load) waits for tomorrow, for signing in, or for the person's own tap, never a loop.
   function maybeAutoRead() {
     if (!S.owner || S.reading.busy || S.reading.here !== true || readingState() !== "ready") return;
-    const fresh = waitingReads().filter((q) => !S.reading.tried.has(txt(q.id)));
+    const fresh = waitingReads().filter((q) => !S.reading.tried.has(txt(q.id)) && !readToday(q));
     if (fresh.length) readProfiles(fresh, "reading").catch(() => {});
   }
   // What LinkedIn showed, judged the way the networking code judges it (tools/network/reading.py
@@ -9133,19 +9198,24 @@
     S.reading.ok = false;
     sset("local", READING_OK, null);
     S.reading.signedOut = kind === "signin";
+    S.reading.sawOut = true;
     S.reading.panel = kind === "check" ? "check" : "sign_in";
-    if (readingInfo().ok !== false || kind === "check") act([{item: txt(readingInfo().id) || "linkedin-reader", action: "reader.checked", value: {ok: false, said: kind === "check" ? "LinkedIn asked to check it was them" : "signed out of LinkedIn", kind}, rev: txt(readingInfo().rev) || null}], kind === "check" ? "LinkedIn asked to check it's you" : "Signed out of LinkedIn");
+    // Told once per change, and once a day, so every other opening knows (checkToday).
+    if (readingInfo().ok !== false || kind === "check" || checkToday() !== "signed_out") act([{item: txt(readingInfo().id) || "linkedin-reader", action: "reader.checked", value: {ok: false, said: kind === "check" ? "LinkedIn asked to check it was them" : "signed out of LinkedIn", kind}, rev: txt(readingInfo().rev) || null}], kind === "check" ? "LinkedIn asked to check it's you" : "Signed out of LinkedIn");
   }
   // Back from signing in, or from LinkedIn's check (the page visible again, or focused): it
   // checks again by itself and reads what is waiting, so nobody presses Check it works (the
-  // maintainer, 2026-10-29). At most once every ten seconds.
+  // maintainer, 2026-10-29). At most once every ten seconds. It reads the tab this page keeps
+  // as it stands, and loads LinkedIn only once this visit met it signed out or opened its
+  // sign-in: a page opened again on a day already found signed out, and come back to from
+  // another chat, is not coming back from signing in (2026-11-04).
   let recheckAt = 0;
   async function recheckReading() {
     const p = S.reading.panel;
     if (p !== "sign_in" && p !== "check") return;
     if (now() - recheckAt < 10000) return;
     recheckAt = now();
-    await openReading(true);
+    await openReading(true, !(S.readingOpened || S.reading.sawOut));
     S.reading.tried.clear();
     maybeAutoRead();
   }
@@ -9193,9 +9263,12 @@
       noteFor("reads-taken"));
   }
   // Open LinkedIn in Claude's browser, and check it once the person is back.
+  // Its tab is the one this page keeps: back from signing in there, the check reads it as it
+  // stands, with nothing loaded again.
   function openLinkedIn(key) {
     S.readingOpened = true;
-    openInAppBrowser("https://www.linkedin.com/login", key, "LinkedIn's sign-in is open in Claude's browser. Sign in there, then close that tab: this page checks by itself when you come back.");
+    openInAppBrowser("https://www.linkedin.com/login", key, "LinkedIn's sign-in is open in Claude's browser. Sign in there, then close that tab: this page checks by itself when you come back.")
+      .then((got) => { if (tabOf(got) !== undefined) rememberTab(tabOf(got)); }).catch(() => {});
     scheduleRender();
   }
   function readingCard() {
@@ -9256,32 +9329,58 @@
         h("button", {type: "button", class: "btn quiet small", "data-k": "bp-close", "aria-label": r.panel === "run" ? "Close: the reading carries on" : "Close", onclick: () => { r.panel = null; scheduleRender(); }}, "Close")),
       body);
   }
-  // "Check it works": open the person's own LinkedIn feed in Claude's browser and read it.
+  // A LinkedIn page that shows the person signed in: their feed, or anyone's profile with
+  // LinkedIn's own signed-in controls on it. Read from a tab as it stands, so it must say it is
+  // LinkedIn: the kept tab may since show anything.
+  function signedInText(text) {
+    const t = txt(text);
+    if (!/linkedin/i.test(t) || pageKind(t) !== "profile" || /sign in|join now/i.test(t.slice(0, 400))) return false;
+    return /feed|start a post|home \| linkedin/i.test(t) || (t.match(LI_SIGNED_IN) || []).length >= 2;
+  }
+  // The tab this page keeps, read as it stands: nothing loads and nothing the person sees
+  // changes. No tab kept, or it was closed: "" and never the tab they are on. This is the only
+  // way out of sight Claude's browser gives a page: the tools a page may call are navigate,
+  // get_page_text, read_page and preview_start, with no list of tabs and no tab kept in the
+  // background (the artifact runtime's own list; code.claude.com/docs/en/desktop is silent).
+  async function peekTab(cap) {
+    if (keptTab() === undefined) return "";
+    try { return await browserCall(cap, "get_page_text", {}, true); } catch (e) { return ""; }
+  }
+  // "Check it works": the tab this page keeps, read as it stands, and only when that does not
+  // show the person signed in, their own LinkedIn feed loaded in Claude's browser and read.
   // Signed in, the card ticks itself off and the engine is told; signed out, the panel says
-  // how to sign in.
-  async function openReading(check) {
+  // how to sign in. `lookOnly`: the kept tab alone, nothing loaded (a page opened again on a day
+  // already checked, or come back to from another chat).
+  async function openReading(check, lookOnly) {
     const cap = await browserCap();
     // Never a tap that does nothing: where Claude has no browser here, the card says where it does.
     if (!cap || !(await inDesktop())) { S.reading.panel = "none"; S.reading.line = "This works in the Claude app on your computer, where Claude has a browser of its own."; scheduleRender(); return; }
     if (!check) { scheduleRender(); return; }
+    const was = S.reading.panel;
     S.reading.panel = "check-run";
     S.reading.at = "your LinkedIn feed";
     scheduleRender();
     try {
-      await browserCall(cap, "navigate", {url: "https://www.linkedin.com/feed/"});
-      const text = await browserCall(cap, "get_page_text", {});
+      let text = await peekTab(cap);
+      if (!signedInText(text)) {
+        if (lookOnly) { S.reading.panel = was; scheduleRender(); return; }
+        await browserCall(cap, "navigate", {url: "https://www.linkedin.com/feed/"});
+        text = await browserCall(cap, "get_page_text", {});
+      }
       const kind = pageKind(text);
       if (kind === "check") { readingStopped("check"); scheduleRender(); return; }
-      const signedIn = kind !== "signin" && /feed|start a post|home \| linkedin/i.test(text) && !/sign in|join now/i.test(text.slice(0, 400));
+      const signedIn = signedInText(text) || (kind !== "signin" && /feed|start a post|home \| linkedin/i.test(text) && !/sign in|join now/i.test(text.slice(0, 400)));
       S.reading.ok = signedIn;
       S.reading.signedOut = !signedIn;
+      if (!signedIn) S.reading.sawOut = true;
       sset("local", READING_OK, signedIn ? new Date(now() + READING_OK_MS).toISOString() : null);
       S.reading.panel = signedIn ? null : "sign_in";
       S.reading.line = signedIn ? "Ready: Claude can read LinkedIn profiles here." : null;
-      // Told once per change, and again when the engine's record has gone stale (two weeks
-      // with no read): never on every opening (contract audit, 2026-10-29).
+      // Told once per change, again when the engine's record has gone stale (two weeks with
+      // no read), and once a day, so every other opening knows today's look (checkToday):
+      // never on every opening (contract audit, 2026-10-29).
       const ri = readingInfo();
-      if (ri.ok !== signedIn || (signedIn && ri.page_reads !== true)) act([{item: txt(ri.id) || "linkedin-reader", action: "reader.checked", value: {ok: signedIn}, rev: txt(ri.rev) || null}], signedIn ? "Profile reading works" : "Not signed in to LinkedIn yet");
+      if (ri.ok !== signedIn || (signedIn && ri.page_reads !== true) || checkToday() !== (signedIn ? "passed" : "signed_out")) act([{item: txt(ri.id) || "linkedin-reader", action: "reader.checked", value: {ok: signedIn}, rev: txt(ri.rev) || null}], signedIn ? "Profile reading works" : "Not signed in to LinkedIn yet");
     } catch (e) {
       readingRefused(e);
     }
@@ -11873,7 +11972,7 @@
       setTimeout(() => { autoReading().catch(() => {}); }, 1500);
     });
     CAP.db.then((db) => {
-      if (!db) { S.flags.readOnly = true; viewsIn(); scheduleRender(); return; }
+      if (!db) { S.flags.readOnly = true; viewsIn(); actionsSeen(); scheduleRender(); return; }
       S.flags.live = true;
       DB = db;
       subscribe(db);

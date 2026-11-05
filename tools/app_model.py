@@ -767,6 +767,7 @@ def _needs_you(ctx: Ctx, targets: dict) -> list:
     try:
         out += _zone_question(ctx, targets)
         out += _profile_questions(ctx, targets)
+        out += _skill_questions(ctx, targets)
         sent = _sent_questions(ctx, targets)
         ctx._got["sent_questions"] = sent
         out += sent
@@ -782,6 +783,43 @@ def _needs_you(ctx: Ctx, targets: dict) -> list:
 
 TWEAK_OFFERS_MAX = 2
 UNCONFIRMED = "UNCONFIRMED"
+SKILL_ASKS_MAX = 5
+
+
+def _skill_questions(ctx: Ctx, targets: dict) -> list:
+    """Each skill postings asked about that the person has not answered yet
+    (tools/skill_answers.py), asked once for every application that asks it, oldest first:
+    drafting chats each asked their own and answered "no" for them (2026-11-04). Yes and No
+    weigh the same, and the answer is theirs for every application at once."""
+    try:
+        import skill_answers
+        asks = skill_answers.open_questions()
+    except Exception:  # noqa: BLE001  nothing asked yet
+        return []
+    out = []
+    for q in asks[:SKILL_ASKS_MAX]:
+        names = list(dict.fromkeys(str(x.get("company") or "").strip() for x in q["for"]
+                                   if str(x.get("company") or "").strip()))
+        if len(names) <= 2:
+            who = " and ".join(names)
+        else:
+            who = ", ".join(names[:2]) + " and " + (names[2] if len(names) == 3
+                                                    else f"{len(names) - 2} more")
+        qid = "q-skill-" + q["key"][:40]
+        item = {"id": qid, "kind": "consent",
+                "title": f"Can you claim {q['skill']} and back it up in an interview?",
+                "body": ((f"{who} {'asks' if len(names) == 1 else 'ask'} for it, and your "
+                          "profile doesn't list it. " if who else "A posting asks for it, and "
+                          "your profile doesn't list it. ")
+                         + "Resumes leave it off until you say. A yes puts it on the ones "
+                           "drafted today and on every one after; a no keeps it off them all."),
+                "options": [{"label": "Yes", "action": "needs.answer", "value": "yes"},
+                            {"label": "No", "action": "needs.answer", "value": "no"}],
+                "about": {"company": names[0]} if len(names) == 1 else {},
+                "rev": rev_of(qid, q["skill"], q.get("asked"), names)}
+        out.append(item)
+        targets[qid] = {"kind": "skill_ask", "skill": q["skill"], "rev": item["rev"]}
+    return out
 
 
 def _own_profile_card(ctx: Ctx, targets: dict) -> list:
@@ -1511,6 +1549,34 @@ def record_assets(pairs) -> list:
         json.dump(got, fh, indent=1, sort_keys=True)
         fh.write("\n")
     return done
+
+
+def files_missing(ctx=None) -> list:
+    """Drafted applications whose made PDFs the page's own file store lacks, in tracker order:
+    [{id, company, files: [names], paths: [repo paths]}]. A job's own chat cannot upload them
+    (Artifact is not among the tools it carries), so its finish queues one `files` item for
+    the chat that answers the page with all of these (page_db.queue_files)."""
+    import throttle
+    if ctx is None:
+        today, now = clock(None, None)
+        ctx = Ctx(today, now)
+    out = []
+    for row, rid in zip(ctx.tracker, ctx.tracker_ids):
+        if _status(row) not in throttle.UNSENT:
+            continue
+        names, paths = [], []
+        for col in ("cv_file", "cover_letter_file"):
+            tex = str(row.get(col) or "").strip()
+            if not tex:
+                continue
+            pdf = os.path.splitext(tex)[0] + ".pdf"
+            if os.path.isfile(person.state(*pdf.split("/"))) and not asset_for(pdf):
+                names.append(os.path.basename(pdf))
+                paths.append(pdf)
+        if names:
+            out.append({"id": rid, "company": str(row.get("company") or ""), "files": names,
+                        "paths": paths})
+    return out
 
 
 def _files(row) -> list:
@@ -4068,6 +4134,10 @@ def _linkedin(ctx: Ctx, targets: dict) -> dict:
                      "reads": int(pr.get("reads") or 0),
                      "queue": queue if setting == "browser" else [],
                      "setting": setting, "paused": paused, "paused_until": paused_until,
+                     # The day's sign-in check (reading.linkedin_check): passed today, the page
+                     # opens nothing to check again; it compares `on` with its own day.
+                     "check": {k: got for k, got in reading.linkedin_check(ctx.now).items()
+                               if k in ("state", "on", "at")},
                      "rev": rev_of("linkedin-reader", pr.get("checked_at"), pr.get("ok"),
                                    setting, paused)}
     targets["linkedin-reader"] = {"kind": "linkedin", "id": "linkedin-reader",
@@ -4606,7 +4676,8 @@ EMPTY = {
                             "files": [], "rev": "none"},
                  "reading": {"id": "linkedin-reader", "page_reads": False, "ok": None,
                              "checked_at": None, "last_read_at": None, "reads": 0,
-                             "queue": [], "rev": "none"}},
+                             "queue": [], "check": {"state": "due", "on": None, "at": None},
+                             "rev": "none"}},
     "learned": [], "help": {"tip": None, "tour": [], "off": False}, "resume": None,
     "search": None, "where": None, "schedule": None, "upcoming": [],
     "jobs": {"round": "", "made_at": None, "met": False, "summary": "No search has run yet.",

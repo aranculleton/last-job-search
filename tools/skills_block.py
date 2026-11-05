@@ -359,6 +359,38 @@ def _yes(consented):
     return list(dict.fromkeys(str(c).strip() for c in consented or () if str(c).strip()))
 
 
+def parts(item) -> list:
+    """The single skills an inventory item or a yes names: "Apache Spark, PySpark" is two,
+    "AWS (S3, Redshift)" three. A grouped item prints as one entry and is still each of
+    them, so a skill is looked for among these, never against the whole item."""
+    return [p for p in (x.strip() for x in re.split(r"[,()]", str(item or ""))) if p]
+
+
+def _dedupe(sel, order=()):
+    """No skill twice anywhere in the block. Read in page order (`order`, the lines' keys),
+    each item keeps only the single skills no earlier item showed, and an item left with
+    none is dropped: "Kubeflow, MLflow, model serving, MLflow" printed when a yes for
+    MLflow sat beside the grouped item that already named it, and "pandas, scikit-learn"
+    printed on two lines. An item that loses nothing prints exactly as the inventory wrote
+    it (its LaTeX included)."""
+    seen = set()
+    lines = list(order) + [c for c in sel if c not in order]
+    out = {}
+    for cat in lines:
+        if cat not in sel:
+            continue
+        kept = []
+        for item in sel[cat]:
+            ps = parts(item)
+            new = [p for p in ps if p.casefold() not in seen]
+            seen |= {p.casefold() for p in ps}
+            if not new:
+                continue
+            kept.append(item if len(new) == len(ps) else ", ".join(new))
+        out[cat] = kept
+    return out
+
+
 def _final(tools, context, posting="", company="", consented=(), max_tokens=None):
     """Tailor's picks first, context top-ups after, capped per line, the
     profile's pinned item guaranteed. The cap keeps the tooling line to one
@@ -381,7 +413,10 @@ def _final(tools, context, posting="", company="", consented=(), max_tokens=None
     # trimmed. Only their yes puts a skill the profile does not hold on the page.
     yes = _yes(consented)
     for name in yes:
-        if any(name.casefold() == i.casefold() for v in sel.values() for i in v):
+        # A yes the block already shows, alone or inside a grouped item ("PySpark" in
+        # "Apache Spark, PySpark"), is not printed a second time.
+        shown = {p.casefold() for v in sel.values() for i in v for p in parts(i)}
+        if all(p.casefold() in shown for p in parts(name)):
             continue
         line, after = _consent_line(name)
         items = sel.setdefault(line, [])
@@ -440,17 +475,16 @@ def _final(tools, context, posting="", company="", consented=(), max_tokens=None
         cat, i = weakest
         sel[cat].pop(i)
 
-    if not PINNED:
-        return sel
-    line, item = PINNED
-    if item not in sel.get(line, []):
-        sel.setdefault(line, [])
-        if len(sel[line]) >= MAX_PER_LINE.get(line, 6):
-            last = [i for i in range(len(sel[line])) if sel[line][i] not in yes]
-            if last:
-                sel[line].pop(last[-1])
-        sel[line].append(item)
-    return sel
+    if PINNED:
+        line, item = PINNED
+        if item not in sel.get(line, []):
+            sel.setdefault(line, [])
+            if len(sel[line]) >= MAX_PER_LINE.get(line, 6):
+                last = [i for i in range(len(sel[line])) if sel[line][i] not in yes]
+                if last:
+                    sel[line].pop(last[-1])
+            sel[line].append(item)
+    return _dedupe(sel, [cat for cat, _label in LABELS])
 
 
 # A skill the person said yes to is the posting's spelling, not an inventory item
@@ -533,9 +567,13 @@ def render(tools, context="", posting="", company="", consented=(), max_tokens=N
     """LaTeX for the Skills block."""
     sel = _final(tools, context, posting, company, consented, max_tokens=max_tokens)
     yes = set(_yes(consented))
+    # A yes the block shortened (_dedupe) is still the posting's spelling: escaped too.
+    yes_parts = {p for y in yes for p in parts(y)}
+    inventory = {item for _c, item, _p in ITEMS}
 
     def tex(i):
-        return tex_escape.text(i) if i in yes else i
+        mine = i in yes or (i not in inventory and all(p in yes_parts for p in parts(i)))
+        return tex_escape.text(i) if mine else i
     return "\n".join("\\blockline{%s}{%s}" % (tex_escape.text(label),
                                               ", ".join(tex(i) for i in sel[cat]))
                      for cat, label in _labels()

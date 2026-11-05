@@ -118,6 +118,18 @@ def pytest_sessionfinish(session, exitstatus):
         session.exitstatus = 1
 
 
+@pytest.fixture(autouse=True)
+def _no_skill_answered_yet():
+    """Every test starts with no skill answered. The person's one answer per skill
+    (tools/skill_answers.py) lives in the suite's one state folder, so a yes one test recorded
+    was the next test's answer before it asked."""
+    try:
+        os.remove(os.path.join(_state, "documents", "skill_answers.json"))
+    except OSError:
+        pass
+    yield
+
+
 @pytest.fixture
 def reload_limits():
     """_reload_limits, for a test that switches the plan: call it after, and again after

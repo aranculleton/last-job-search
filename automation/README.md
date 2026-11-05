@@ -166,10 +166,13 @@ The brief is never moved to a task that starts a new chat each run: such a run g
 your files and no way to fetch one, so it could only say it could not start.
 
 **Old chats tidy themselves away.** Before 4.3 the brief had a chat of its own, long work could
-start a child chat, and a replaced helper stayed in the list. Once a day the chat that answers
-the page archives the app's own chats it no longer uses: never one the person named, one a
-scheduled task that is on still uses, a live campaign's chat, one used in the last two days,
-or one whose work is not on master yet. A brief or shortlist that works where it is stays
+start a child chat, and a replaced helper stayed in the list. A big job's chat tells the chat
+that answers the page when its work is on master, and that chat archives it at once
+(`tidy.py close`). Once a day, and at once after a hand-over to a fresh helper, the chat that
+answers the page archives the app's own chats it no longer uses: never one the person named,
+one a scheduled task that is on still uses, a live campaign's chat, one used in the last two
+days (an old helper excepted: only the live one, "Job search page", is ever kept), or one
+whose work is not on master yet. A brief or shortlist that works where it is stays
 there; one whose chat no longer works (deleted, or a helper the page no longer uses) moves into
 the chat that answers the page (a new task on the same days and time, the old one turned off
 and kept). An archived chat is kept, read-only, and comes back on request (`python3

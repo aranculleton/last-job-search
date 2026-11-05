@@ -52,12 +52,15 @@ DOC_COLLECTION, DOC_ID = "meta", "listener"
 CACHE = "ljs-listener.json"            # in the git folder: what this checkout last saw
 # Work or a tap waiting this long after the listener last answered: nobody is answering.
 LAPSE_S = 10 * 60
-HELPER_TITLE = "Job search helper"
+HELPER_TITLE = "Job search helper"   # what the helper was called before 4.10; still the app's
 # The helper's own name in their list of chats, and what it says when it starts: the one
 # thing a person needs to know about it (the maintainer, 2026-10-29: "some quick way of
 # explaining what it's for ... even if the user deletes it it's fine it'll start up again").
-OLD_HELPER_TITLE = HELPER_TITLE + " (finishing up)"     # the helper a new one took the page from
-HELPER_CHAT_TITLE = HELPER_TITLE      # short: what it is for is said, never in its name
+# "Job search page" since 2026-11-04 (the maintainer: at most two such chats, the person's
+# own and the live page helper, with distinct titles): a heavy user's renewals had stacked up
+# several identical "Job search helper" chats. The tidy-up still knows the old name.
+HELPER_CHAT_TITLE = "Job search page"   # short: what it is for is said, never in its name
+OLD_HELPER_TITLE = HELPER_CHAT_TITLE + " (finishing up)"   # the helper a new one took over from
 # Said once in a chat that does not answer the page, the first time it starts (the
 # maintainer, 2026-10-29: a heads-up about a new chat, "DO NOT MAKE THIS PERSIST").
 SAY_OTHER_CHAT = ("Heads up: your page is looked after by {who}, so this chat leaves it alone. "
@@ -353,8 +356,9 @@ def decide(db: dict, chat: str, out_dir: str, now: dt.datetime | None = None,
             return {"role": "other", "batches": [], "record": rec,
                     "lines": ["listen: this chat does not answer the page, so it has nothing "
                               "to hand over"]}
-        new = {"chat": hand_to, "title": HELPER_TITLE, "kind": "cloud", "helper": True,
-               "since": at, "answered_at": None, "took_from": chat}
+        new = {"chat": hand_to, "title": HELPER_CHAT_TITLE, "kind": "cloud", "helper": True,
+               "since": at, "answered_at": None, "took_from": chat,
+               "took_from_helper": bool(rec.get("helper"))}
         w.add("set", DOC_COLLECTION, DOC_ID, new, if_version=version)
         _remember(new, now, confirmed=False)
         return {"role": "other", "record": new, "batches": w.save("listen"),
@@ -401,6 +405,14 @@ def decide(db: dict, chat: str, out_dir: str, now: dt.datetime | None = None,
         if renew:
             lines.append(renew_line(renew))
         fresh = {"answered_at": at, "watching": True, **({"helper": True} if helper else {})}
+        if (rec.get("helper") or helper) and chat.startswith("session_") and \
+                rec.get("title") != HELPER_CHAT_TITLE:
+            # A helper from before 4.10 is still "Job search helper", like every old one it
+            # replaced: it takes the live helper's own name once, so no two chats share one.
+            fresh["title"] = HELPER_CHAT_TITLE
+            lines.append(f"listen: name this chat in their list: set_session_title "
+                         f"(session_id {chat}, title \"{HELPER_CHAT_TITLE}\"), and say "
+                         "nothing about it.")
         if version is None:
             # Read only under its 4.2 name (page_db.load): the new record is made, whole.
             w.add("set", DOC_COLLECTION, DOC_ID, dict(rec, **fresh))
@@ -408,8 +420,7 @@ def decide(db: dict, chat: str, out_dir: str, now: dt.datetime | None = None,
             w.add("update", DOC_COLLECTION, DOC_ID, fresh, if_version=version)
         rec = dict(rec, **fresh)
         lines.append("listen: this chat answers the page. Send the batch below (it says this "
-                     "chat answered just now). If it is refused, another chat took the page "
-                     "over: read meta/listen again and run this once more.")
+                     "chat answered just now). " + CHECK_IN_REFUSED)
         lines.append(WATCH_LINE)
     elif take:
         new = {"chat": chat, "title": title or (HELPER_CHAT_TITLE if helper else "Job search"),
@@ -419,9 +430,8 @@ def decide(db: dict, chat: str, out_dir: str, now: dt.datetime | None = None,
                # puts away such a chat, never one the person writes in (X-4).
                "took_from_helper": bool(rec.get("helper"))}
         w.add("set", DOC_COLLECTION, DOC_ID, new, if_version=version)
-        lines.append("listen: this chat answers the page now. Send the batch below. If it is "
-                     "refused, another chat got there first: read meta/listen again and run "
-                     "this once more.")
+        lines.append("listen: this chat answers the page now. Send the batch below. "
+                     + CHECK_IN_REFUSED)
         # A chat watches only a page it published or one it asks to watch: one that took the
         # page and never asked heard nothing, and the page went deaf after every renewal and
         # every Wake Claude (the stranger audit, X-6).
@@ -432,8 +442,10 @@ def decide(db: dict, chat: str, out_dir: str, now: dt.datetime | None = None,
                          "python3 tools/app.py wake) so it starts now.")
         if rec.get("chat"):
             # Never archived from here: the chat it took from may still be writing the brief
-            # or saving the morning's work. The tidy-up puts old helpers away, and keeps a
-            # chat that is running or holds work not landed (X-27).
+            # or saving the morning's work. The tidy-up, due at once after a hand-over
+            # (tidy.retiring), puts an old helper away as soon as it has stopped and its work
+            # is on master, the brief moved here first; it keeps a chat that is running or
+            # holds work not landed (X-27), and tries again at a later check-in.
             lines.append("listen: the chat that answered before stops by itself: its next "
                          "check finds this one.")
         if helper and chat.startswith("session_"):
@@ -444,8 +456,8 @@ def decide(db: dict, chat: str, out_dir: str, now: dt.datetime | None = None,
         old = str(rec.get("chat") or "")
         if rec.get("helper") and old.startswith("session_") and old != chat:
             # Two chats called "Job search helper" side by side told nobody which was which:
-            # the app's own old helper is renamed at once (never a chat the person writes in),
-            # and the tidy-up is due again to archive it once its work is saved.
+            # the app's own old helper is renamed at once (never a chat the person writes in)
+            # for the minutes until the tidy-up, due now, archives it.
             lines.append(f"listen: name the chat that answered before, so the two can be told "
                          f"apart: set_session_title (session_id {old}, title "
                          f"\"{OLD_HELPER_TITLE}\"), and say nothing about it.")
@@ -463,6 +475,19 @@ def decide(db: dict, chat: str, out_dir: str, now: dt.datetime | None = None,
                           "watch: action watch, url <the page>, on: false."]}
     _remember(rec, now)
     return {"role": "listener", "lines": lines, "batches": w.save("listen"), "record": rec}
+
+
+# A refused check-in names the version the store holds. Most often another chat took the page;
+# but a record whose own stamp was written wrong once was read back wrong by every chat, and
+# "read again and run this once more" bounced on it for good (the maintainer, 4 November).
+# The version the refusal names is kept (page_db.note_version), so the next read, here or in
+# any new folder, is pinned to the store's own number, and the write that lands stamps the
+# record right again.
+CHECK_IN_REFUSED = ("If it is refused, keep the version the refusal names first: python3 "
+                    "tools/app.py version <this folder> meta/listen <that version> (a number "
+                    "stored wrong in the record is put right that way, never bounced on); then "
+                    "read meta/listen again and run this once more: another chat that took the "
+                    "page shows there.")
 
 
 # What a chat that answers the page asks for at every check-in: its watch, so a tap wakes it.
@@ -494,6 +519,73 @@ def renew_line(renew: dict) -> str:
             ". The new chat takes the page as it starts, and the work waiting with it; until "
             "then this one still answers, and its next check-in finds the new one and stops "
             "its watch.")
+
+
+# What a chat that may not draw the page's screens says, once, and does instead.
+VIEW_LEFT = ("view: another chat answers the page, so this chat leaves the page's screens to it "
+             "and wrote nothing to them; its own work items and receipts are all it writes. "
+             "Work this chat does for the person is its own once begun with python3 "
+             "tools/app.py ask \"$D\" --kind <kind> --title \"<a few plain words>\" --here "
+             "--chat <this chat's id> (the app skill, \"Work asked for in a chat\"), and then "
+             "this draws the page. Say nothing about it to the person.")
+# The scheduled brief's own page update (tools/brief.py passes the word, not a chat's id): the
+# day's news is its work, once a day, and where an older copy still runs it in a chat of its
+# own, nobody else would draw it.
+SCHEDULED = ("brief",)
+# How long after its own job finished a job's chat still draws the page: it does so once, at
+# its end, right after app.py done.
+OWN_JOB_S = 60 * 60
+
+
+def draws_screens(db: dict, chat: str, work: str = "",
+                  now: dt.datetime | None = None) -> tuple[bool, str]:
+    """Whether this chat writes the page's screens (`app.py view`), and what it says when not.
+
+    Only the chat that answers the page draws them, with two exceptions that keep a page from
+    going stale: a chat doing work of its own for the person (`work`, the job it was started
+    for, or work it began with `ask --here`, still going or finished within OWN_JOB_S), which
+    a job chat reports to the chat that started it, but no other chat hears of it), and
+    any chat while nobody answers the page (the first publish). Small work an old helper took
+    as the listener is not its own in this sense: it hands the page on with it. Every other
+    chat, an old helper after a hand-over above all, writes only its own work items and
+    receipts: during a hand-over the old and new helper both rewrote whole screens, and each
+    update bounced off the other's (the maintainer, 4 November)."""
+    import page_db
+    now = now or dt.datetime.now(dt.timezone.utc)
+    rec, _version = record(db)
+    who = str(rec.get("chat") or "")
+    mine = {c for c in (this_chat(""), this_chat(chat)) if c}
+    if not who or who in mine or chat in SCHEDULED:
+        return True, ""
+    # A chat that took the page in this wake, after the read: its own claim, kept in this
+    # copy, is newer than the record the read holds. Never the other way: an old helper's
+    # own record of itself is older than the one that took the page from it.
+    took = seen().get("listener") or {}
+    if str(took.get("chat") or "") in mine and str(took.get("since") or "") > \
+            str(rec.get("since") or ""):
+        return True, ""
+    jobs = db.get("work") or {}
+    own = [w for w in (work, _job_chat()) if w]
+    if any(page_db.safe_id(w) in jobs for w in own):
+        return True, ""
+    for doc in jobs.values():
+        d = doc.get("data") or {}
+        if not d.get("in_chat") or str(d.get("claimed_by") or "") not in mine:
+            continue
+        if str(d.get("status") or "") in page_db.ACTIVE:
+            return True, ""
+        done = _time(d.get("finished_at"))
+        if done is not None and (now - done).total_seconds() < OWN_JOB_S:
+            return True, ""
+    return False, VIEW_LEFT
+
+
+def _job_chat() -> str:
+    try:
+        import app_setup
+        return app_setup.job_chat()
+    except Exception:  # noqa: BLE001  no copy: no job
+        return ""
 
 
 def view_renewal(db: dict, chat: str, now: dt.datetime) -> list[str]:
@@ -887,7 +979,7 @@ def shape(code: int, lines: list[str], chat: str = "", listen: bool = False,
         got = seen()
         told = got.get("told") or {}
         if (chat or "?") not in told:
-            who = "your Job search helper chat" if (got.get("listener") or {}).get("helper") \
+            who = f"your {HELPER_CHAT_TITLE} chat" if (got.get("listener") or {}).get("helper") \
                 else "another of your chats"
             add.append("Another chat answers the person's page. This chat neither publishes it "
                        "nor watches it. Tell the person once, at the end of this reply, as it "

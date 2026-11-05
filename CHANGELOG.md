@@ -23,6 +23,33 @@ make sense to somebody whose repo just received it.
 ### Changed
 
 - **A profile read just after midnight is kept.** One queued on your page before midnight and read after it was turned away and never read again; it is kept now.
+- **A skill your profile holds now goes into your resume's bullets, not only the skills line.**
+  When a posting names a skill you hold (BigQuery, deep learning) and no bullet mentions it,
+  one to three of your own bullets are lightly reworded to name it where that work plausibly
+  used it, with the same achievement and numbers and without asking you. A resume that leaves
+  it on the skills line alone is held back until it is placed; where no bullet on the page is
+  work it fits, it stays on the skills line and the check says so.
+- **A skill goes where your own profile says you used it.** A tool your profile names at an
+  employer (in that job's bullets or its extra detail) can now be named in that employer's
+  bullets, where before it could only sit on the skills line.
+- **The skills line names each skill once.** A skill you said yes to that was already inside a
+  group on the line ("Apache Spark, PySpark") was printed a second time, sometimes on another
+  line; now every skill shows once, and a yes recorded under the group's name still reaches
+  the bullets. Applications not yet sent are made again so the repeat goes.
+- **A finished job's chat closes as soon as its work is saved.** The chat Claude starts for
+  an interview prep, a search or a batch of drafts now tells the chat looking after your page
+  when it is done: the results go on your page and the finished chat leaves your list
+  straight away, not two days later, so a chat still in your list is still working. One that
+  could not say so is put away at the next tidy-up once its work is saved. Nothing in it is
+  lost, and it can be brought back.
+- **There is only ever one "Job search page" chat beside your own.** The chat that looks
+  after your page is now called Job search page. When it hands over to a fresh one, the old
+  one is put away as soon as its work is saved, with your morning brief moved to the new one
+  first. The extra "Job search helper" chats left over from before are put away by
+  themselves after this update, each once its work is saved; your own chat is never touched.
+- **No two of Claude's chats share a name.** A second job like one still running gets "(2)"
+  after its name.
+
 - **Reply help no longer points at an old resume your rules forbid.** It offers a resume only if
   the app made and checked it and your own rules do not say never to send it; otherwise it says
   to make one for that person.
@@ -37,6 +64,28 @@ make sense to somebody whose repo just received it.
   tests.** When two chats changed the same document, the later one stays and nothing is left
   beside it; a save also clears the extra copies older versions left, and names any it could
   not tell apart in one line.
+- **Resumes drafted in a chat of their own reach your page by themselves.** That chat cannot
+  put files on your page, so when it finishes it asks the chat that looks after your page to
+  put up every draft's files at once; nobody uploads them by hand.
+- **Work you ask for in a chat shows in Claude's work on your page**, with its steps and its
+  result, like work asked on the page, instead of only a "busy" line.
+- **Two chats no longer overwrite each other's page updates.** Only the chat that looks after
+  your page redraws it (and a chat doing a job, once, for that job); a chat that handed your
+  page on leaves it alone, and no chat redraws a part another drew from newer work.
+- **One wrong number saved in your page no longer stops Claude checking in.** Claude now takes
+  the number your page's store itself gives and saves it right, instead of being turned away
+  every time after.
+- **Saving never mixes another chat's older version into what you have now.** When work an
+  earlier chat could not save is brought in, a file this chat changed keeps this chat's copy
+  whole, and an application this chat changed keeps its resume, letter and draft together as
+  you have them, so a resume and its PDF always match. If another chat had changed the same
+  application, Claude tells you once, and its version is kept in your saved history in case
+  you want it back. Anything only the other chat changed still comes in, and your profile
+  still keeps what you told either chat.
+- **No more "from-another-chat" copies anywhere in your folders.** When two chats changed the
+  same setting or note, this chat's version is kept, the other is kept in your saved history,
+  and nothing is put beside your files; a save clears the copies older versions left beside
+  notes and settings too, except one you are still being asked about.
 - **A recruiter at a recruitment agency is no longer hidden from Messages.** They were
   held as "an employer you turned down" because of the agency they work for, even when they
   had asked for your resume. Your bar now judges only where you would work; an employer you
@@ -47,10 +96,6 @@ make sense to somebody whose repo just received it.
 - **The number of unread messages on your page no longer grows.** Each tap used to leave a
   message that stayed unread in the Claude app; Claude now clears it when the work is done,
   and clears the ones already piled up, once, without asking. Profile upgrade: doorbells
-- **A chat for a big job is tidied away as soon as the job is done.** An interview prep, a
-  search or a batch of drafts no longer leaves its chat in your list for two more days: once
-  the work is finished and saved, Claude puts the chat away soon after. Nothing in it is lost
-  and it can be brought back.
 - **Tapping on your page no longer counts as you giving feedback.** The page's own notices and
   card text were sometimes read as if you had said them, which held up Claude's reply until
   it dismissed a reaction you never made. Only what you type is read now.
@@ -99,6 +144,28 @@ make sense to somebody whose repo just received it.
 
 ### Fixed
 
+- **A skill question you have not answered is never taken as a no.** When a posting asks for
+  a skill your profile does not list, Claude asks you once, on your page, for every
+  application that asks for it, and keeps your one answer for all of them. Two chats drafting
+  at the same time used to ask separately, and one with nobody to answer said no for you, so
+  one resume left a skill off that another had on two hours later. A draft made while you
+  have not answered leaves the skill off and waits on your answer. Your latest answer is the
+  one that counts, and a no you gave stays a no.
+- **Saying yes to a skill puts it on every resume drafted that day.** Each one made that day
+  for a posting that asks for it is made again with the skill on its skills line, by itself.
+- **"I've used it too" under Similar skills works.** Tapping it on a resume or letter puts the
+  skill on it and counts as your yes everywhere; before, the change was refused.
+- **LinkedIn no longer opens by itself.** Your page looks at whether you are signed in to
+  LinkedIn once a day, and once it has seen you signed in it does not look again until
+  tomorrow, however often you switch to another chat and back. It no longer opens LinkedIn's
+  sign-in page on its own either: if you are signed out, it says so, and Open LinkedIn opens
+  the sign-in when you choose. Profiles are read one after another in a single tab of Claude's
+  browser, and someone whose page did not load is tried again the next day, or straight away
+  with Read them, rather than every time the page opens.
+- **A finished chat no longer comes back to your list.** An interview prep's chat could be put
+  away one day and brought back the next, taken for a chat of your own. Claude now keeps each
+  chat's real name when it puts it away, and puts away again any of its chats brought back
+  like that.
 - **A search brings back only new jobs that pass every rule.** A job needing a language you
   do not speak, a staffing agency, a job with no score, and one already on your list, drafted
   or applied for are passed over and the next one taken, so asking for 20 brings 20 new ones

@@ -269,6 +269,80 @@ def test_a_profile_the_page_read_is_logged_as_a_computer_chats_read_is(page):
         "value": {"text": {"__delete__": True}}, "_v": wipe["if_version"] + 1}
 
 
+# Note 9 (the maintainer, 2026-11-04): once LinkedIn is seen signed in, nothing opens it to
+# look again that day, and switching chats never reopens it. The record is the page's own tap,
+# applied by whichever chat takes it (page_reader.json); the model gives every later opening of
+# the page the day's answer, and `reading.py linkedin-check` gives it to a chat.
+
+READING = os.path.join(ROOT, "tools", "network", "reading.py")
+
+
+def _check(page, now):
+    out = subprocess.run([sys.executable, READING, "linkedin-check", "--now", now], env=page.env(),
+                         capture_output=True, encoding="utf-8", cwd=ROOT, timeout=60)
+    assert out.returncode == 0, out.stdout + out.stderr
+    return out.stdout
+
+
+def test_a_check_that_passed_is_the_days_answer_for_every_chat_and_the_page(page):
+    assert page.model()["linkedin"]["reading"]["check"]["state"] == "due"
+    assert _check(page, NOW).startswith("due:")
+    aid = page.act("reader.checked", "linkedin-reader", value={"ok": True}, rev="")
+    assert page.apply()["ok"] == [aid], page.receipt(aid)
+    ck = page.model()["linkedin"]["reading"]["check"]
+    assert ck["state"] == "passed" and ck["on"] == NOW[:10] and ck["at"].startswith(NOW[:10]), ck
+    assert _check(page, NOW).startswith("passed: ")
+    assert _check(page, "2026-10-26T18:00:00Z").startswith("due:")        # tomorrow, once more
+
+
+def test_signed_out_at_the_days_last_look_is_said_and_opens_nothing(page):
+    page.act("reader.checked", "linkedin-reader", value={"ok": True}, rev="")
+    page.act("reader.checked", "linkedin-reader", value={"ok": False, "kind": "signin"}, rev="")
+    page.apply()
+    assert page.model()["linkedin"]["reading"]["check"]["state"] == "signed-out"
+    said = _check(page, NOW)
+    assert said.startswith("signed-out: ") and "Open nothing" in said
+
+
+def test_the_day_is_the_persons_own_not_the_computers(monkeypatch):
+    """A look at 7pm in Toronto is 23:00 UTC: at 9pm there it is still the same day, though the
+    UTC clock has moved on, and after midnight there it is due again. One clock, the person's."""
+    import datetime as dt
+    from zoneinfo import ZoneInfo
+    sys.path.insert(0, os.path.join(ROOT, "tools", "network"))
+    import person
+    import place
+    import reading
+    monkeypatch.setattr(person, "home_zone", lambda: ZoneInfo("America/Toronto"))
+    monkeypatch.setattr(place, "page_reads_record",
+                        lambda: {"ok": True, "checked_at": "2026-10-25T23:00:00Z"})
+    at = lambda s: dt.datetime.fromisoformat(s.replace("Z", "+00:00"))  # noqa: E731
+    got = reading.linkedin_check(at("2026-10-26T01:00:00Z"))
+    assert got["state"] == "passed" and got["on"] == "2026-10-25" == got["today"], got
+    assert reading.linkedin_check(at("2026-10-26T05:00:00Z"))["state"] == "due"
+    # A profile read today is a look too, even after a check found it signed out yesterday.
+    monkeypatch.setattr(place, "page_reads_record",
+                        lambda: {"ok": True, "checked_at": "2026-10-24T12:00:00Z",
+                                 "last_read_at": "2026-10-25T14:00:00Z"})
+    assert reading.linkedin_check(at("2026-10-25T20:00:00Z"))["state"] == "passed"
+
+
+def test_a_chat_told_to_open_the_feed_is_not_when_today_already_passed(monkeypatch, tmp_path, capsys):
+    """`reading.py signin --page` on text that cannot tell said to open LinkedIn's feed and
+    look: with the day already passed, it opens nothing."""
+    sys.path.insert(0, os.path.join(ROOT, "tools", "network"))
+    import reading
+    blank = tmp_path / "blank.txt"
+    blank.write_text("nothing to judge here\n", encoding="utf-8")
+    monkeypatch.setattr(reading, "linkedin_check", lambda now=None: {"state": "due"})
+    reading.main(["signin", "--page", str(blank)])
+    assert "linkedin.com/feed" in capsys.readouterr().out          # due: it says where to look
+    monkeypatch.setattr(reading, "linkedin_check", lambda now=None: {"state": "passed"})
+    assert reading.main(["signin", "--page", str(blank)]) == reading.EXIT["ok"]
+    said = capsys.readouterr().out
+    assert "linkedin.com/feed" not in said and "passed" in said, said
+
+
 def test_nothing_here_fetches_linkedin():
     for rel in ("tools/app_actions.py", "tools/app_model.py", "tools/network/export.py"):
         with open(os.path.join(ROOT, rel), encoding="utf-8") as fh:

@@ -202,9 +202,11 @@ ACTIONS = {
     "setting.set": (("setting",), "person.json, tips.py, networking.py LINKEDIN_PLAN and "
                     "PROFILE_READS",
                     "setting.set"),
-    "needs.answer": (("offer", "fact", "upgrade_ask", "rule_ask"),
+    "needs.answer": (("offer", "fact", "upgrade_ask", "rule_ask", "skill_ask"),
                      "learned.py decide; the profile at its mark; an update's question "
-                     "(profile_upgrades.py --no, or a chat to set it up); learned.py settle",
+                     "(profile_upgrades.py --no, or a chat to set it up); learned.py settle; "
+                     "a skill's one answer (skill_answers.record), a yes queuing work/tweak~ "
+                     "for each resume drafted today without it",
                      "needs.unanswer"),
     "needs.unanswer": (("fact",), "the profile: the mark put back", "needs.answer"),
     "setup.answer": (("setup_step",), "profile/setup_answers.json, read by /setup",
@@ -2463,9 +2465,13 @@ def _reading_done(r: Run) -> dict:
                                           "Sign in in Claude's browser and they are read again.",
                  reading.EXIT["check"]: "LinkedIn asked to check it's you, so reading stops for "
                                          "today. They are read again tomorrow.",
-                 reading.EXIT["unknown"]: "Their page did not load. They are read again next time.",
+                 # Again tomorrow, never at the next opening of the page: switching chats
+                 # and back opens it, and LinkedIn opened on their profile at every switch
+                 # (the maintainer, 2026-11-04). Read them on the page reads them at once.
+                 reading.EXIT["unknown"]: "Their page did not load. They are read again "
+                                           "tomorrow, or now with Read them.",
                  reading.EXIT["scroll"]: "Their Experience did not load. They are read again "
-                                          "next time."}
+                                          "tomorrow, or now with Read them."}
         if code in again:
             raise Refused(again[code])
         reading.page_read_done(cid)
@@ -2836,6 +2842,34 @@ def _fact_path(target: dict) -> str:
     return os.path.join(os.path.dirname(person.directory()), *str(target.get("file") or "").split("/"))
 
 
+def _skill_answer(r: Run, t: dict) -> dict:
+    """Their answer to a skill postings asked about, for every application at once
+    (tools/skill_answers.py), dated by the tap: an answer a chat took later stands over it.
+    A yes queues each resume drafted today without it, redone with it by itself."""
+    import skill_answers
+    choice = r.words("value").lower()
+    if choice not in skill_answers.ANSWERS:
+        raise Refused("Yes or no: which?")
+    skill = str(t.get("skill") or "")
+    if not skill_answers.record(skill, choice, by="page", at=r.at):
+        return {"note": f"You answered {skill} later in a chat, so that answer stands.",
+                "undo": None}
+    if choice == "no":
+        return {"note": f"Noted: {skill} stays off your resumes.", "undo": None}
+    due = skill_answers.redo_due(skill, today=r.day)
+    for d in due:
+        if _on_its_way(r, d["work"]):
+            continue
+        r.w.add("set", "work", d["work"], {
+            "kind": "tweak", "title": f"Resume for {d['company']}, with {d['skill']}",
+            "to": "either", "args": skill_answers.tweak_work(d)["args"],
+            "asked_at": app_model.stamp(r.at), "priority": 0, "status": "queued",
+            "stages": page_db.progress("tweak")["stages"], "stage": 0})
+    return {"note": f"Noted: you can claim {skill}." + (
+        f" Claude puts it on {'the resume' if len(due) == 1 else str(len(due)) + ' resumes'} "
+        "drafted today without it." if due else ""), "undo": None}
+
+
 def _needs_answer(r: Run) -> dict:
     t = r.target
     if t["kind"] == "upgrade_ask":
@@ -2856,6 +2890,8 @@ def _needs_answer(r: Run) -> dict:
             "stage": 0})
         return {"note": "Claude takes you through it next.",
                 "undo": {"action": "work.stop", "target": {"kind": "work", "id": wid}}}
+    if t["kind"] == "skill_ask":
+        return _skill_answer(r, t)
     if t["kind"] == "rule_ask":
         import learned
         choice = r.words("value")

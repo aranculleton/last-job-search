@@ -49,6 +49,7 @@ only through `fenced()`, as data, never as instructions.
     python3 tools/network/reading.py gate                          # may a browser page load go now
     python3 tools/network/reading.py new-computer --tools browser  # a computer's first run: sign-in, the download
     python3 tools/network/reading.py signin --page <file|->        # signed in? and the one line to say if not
+    python3 tools/network/reading.py linkedin-check                # passed, signed-out or due today
     python3 tools/network/reading.py resume --reason R             # lift a sign-out stop, on their word
     python3 tools/network/reading.py invitations <file|->          # the sent-invitations list, once
     python3 tools/network/reading.py people <file|-> --company C [--record]  # a people page, once
@@ -1234,6 +1235,60 @@ def signed_in_today(today: datetime.date | None = None) -> bool:
     day = (today or datetime.date.today()).isoformat()
     return any(isinstance(got, dict) and got.get("date") == day
                for got in (_json(person.state(*SIGNIN_FILE)), pace.load().get("signed_in")))
+
+
+# The day's sign-in check, one for every chat on this copy and every opening of the page. The
+# page checks LinkedIn when it opens in the Claude desktop app, and switching to another chat
+# and back opens it again: with nothing kept but this device's own storage, which the Claude
+# app can hand back empty, it loaded LinkedIn in Claude's browser at every switch, though it
+# had seen the person signed in five times that day (the maintainer, 2026-11-04). The record
+# is the page's own (documents/network/page_reader.json, kept by app_actions from its
+# reader.checked and reading.done taps), counted on the person's own day (person.today()), and
+# the page reads the same answer from the model and from its own store. Whatever says passed,
+# nothing opens LinkedIn to check again until tomorrow.
+CHECK_STATES = ("passed", "signed-out", "due")
+
+
+def _stamp(s):
+    """An aware time from a stamp the engine or the page wrote ("...Z" or with its offset)."""
+    s = str(s or "").strip()
+    if not s:
+        return None
+    try:
+        t = datetime.datetime.fromisoformat(s.replace("Z", "+00:00"))
+    except ValueError:
+        return None
+    return t if t.tzinfo else t.replace(tzinfo=datetime.timezone.utc)
+
+
+def linkedin_check(now: datetime.datetime | None = None) -> dict:
+    """{"state", "on", "at", "today"}: "passed" once LinkedIn was seen signed in today (a
+    check that passed, or a profile read), "signed-out" when the day's last look found its
+    sign-in page, "due" before any look today. `on` is the day of the last look, `at` its
+    stamp."""
+    import place
+    rec = place.page_reads_record()
+    day = person.today(now)
+    seen = [t for t in (_stamp(rec.get("checked_at")), _stamp(rec.get("last_read_at"))) if t]
+    last = max(seen) if seen else None
+    on = person.today(last) if last else None
+    state = "due" if on != day else "passed" if rec.get("ok") else "signed-out"
+    return {"state": state, "on": on.isoformat() if on else None,
+            "at": last.strftime("%Y-%m-%dT%H:%M:%SZ") if last else None,
+            "today": day.isoformat()}
+
+
+def check_line(got: dict) -> str:
+    """The one line `linkedin-check` prints: the state first, then what it means for Claude."""
+    if got["state"] == "passed":
+        return ("passed: LinkedIn was seen signed in today; nothing opens it to check again "
+                "until tomorrow, in any chat or on the page")
+    if got["state"] == "signed-out":
+        return ("signed-out: today's last look found LinkedIn's sign-in page; the page asks the "
+                "person to sign in and checks again by itself when they come back. Open nothing "
+                "here")
+    return ("due: no look at LinkedIn today yet; the page checks by itself, once, when it opens "
+            "in the Claude desktop app. No chat opens LinkedIn to check")
 
 
 def _keep(rel: tuple, key: str, rec) -> bool:
@@ -4962,6 +5017,11 @@ def main(argv: list | None = None) -> int:
                     help="they would rather not sign in today: read on signed out")
     si.add_argument("--browser", default="pane", choices=("pane", "chrome"),
                     help="the app's own browser, or theirs through Claude in Chrome")
+    lc = sub.add_parser("linkedin-check", help="whether LinkedIn's sign-in still needs a "
+                                               "look today: passed, signed-out or due, on the "
+                                               "person's own day, for every chat and the page")
+    lc.add_argument("--now", default="", help="the moment to answer for (a stamp, as the "
+                                              "page writes them); the clock when not given")
     nc = sub.add_parser("new-computer", help="the first run on a computer, and each run's "
                                              "start there: LinkedIn signed in, then its download")
     nc.add_argument("--tools", default="",
@@ -5208,6 +5268,10 @@ def main(argv: list | None = None) -> int:
                 print("signed-in: carry on")
                 return EXIT["ok"]
             if got is None:
+                if linkedin_check()["state"] == "passed":
+                    # Seen signed in today already: nothing is opened to look again.
+                    print("unknown: the text does not say, and " + check_line({"state": "passed"}))
+                    return EXIT["ok"]
                 print("unknown: the text does not say. Open https://www.linkedin.com/feed/ in "
                       "the browser and run this on its text")
                 return EXIT["unknown"]
@@ -5243,6 +5307,13 @@ def main(argv: list | None = None) -> int:
         for i, step in enumerate(signin_steps(), 1):
             print(f"  {i}. {step}")
         return EXIT["signin"]
+    if a.cmd == "linkedin-check":
+        # The first word is the answer: passed, signed-out or due. Each is an answer, not a
+        # failure, so each exits 0.
+        if a.now and _stamp(a.now) is None:
+            raise SystemExit(f"reading: --now {a.now!r} is not a time (2026-10-25T18:00:00Z)")
+        print(check_line(linkedin_check(_stamp(a.now))))
+        return EXIT["ok"]
     if a.cmd == "new-computer":
         for line in new_computer([t for t in a.tools.split(",") if t.strip()]):
             print(line)

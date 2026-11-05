@@ -79,9 +79,11 @@ def test_the_chat_that_answers_the_page_never_runs_or_waits_on_a_big_job():
     assert "`run_in_background: true`" in skill and "`isolation: \"worktree\"`" in skill
     assert "Never wait for either: go straight back to step 3" in skill
     # One writer of the page's view, so two chats never write it at once.
-    # A cloud chat cannot message another one, so a job's chat brings the page up to date
-    # itself; two writers are safe, each write pinned and drawn from master (2026-11-03).
+    # A job's chat reports back to the chat that started it (2026-11-04), and where its
+    # message cannot go, brings the page up to date itself; two writers are safe, each write
+    # pinned and drawn from master (2026-11-03).
     assert "brings the page up to date itself" in skill and "each write is" in skill
+    assert "A job's chat reports back" in skill and "tidy.py close" in skill
     assert "waited for, with the url" not in skill
     assert "never a new chat" not in skill
     head = _read(".claude/skills/app/SKILL.md").split("---", 2)[1]

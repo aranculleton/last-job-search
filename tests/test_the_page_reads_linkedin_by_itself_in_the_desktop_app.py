@@ -54,16 +54,66 @@ def test_signed_in_it_is_not_checked_again_on_this_device_for_a_week(run, page):
     assert again["browser"] == [] and again["state"]["ok"] is True and not again["errors"]
 
 
-def test_signed_out_it_opens_the_sign_in_itself_and_says_the_tab_can_be_closed(run, page):
-    r = run("reading", html=page, signedIn=False)
-    opened = [c for c in r["browser"] if c["tool"] == "preview_start"]
-    assert len(opened) == 1 and opened[0]["input"]["url"] == "https://www.linkedin.com/login", r["browser"]
+def test_signed_out_nothing_opens_by_itself_and_open_linkedin_opens_the_sign_in(run, page):
+    """From 2026-10-30 the page opened LinkedIn's sign-in itself once a day, and that tab put
+    Claude's browser in front of the person, where reading belongs in the background (the
+    maintainer, 2026-11-04). Signed out, the panel says how; their tap on Open LinkedIn opens
+    the sign-in, and says the tab can be closed."""
+    r = run("reading", html=page, signedIn=False, tap="bp-open")
+    assert not [c for c in r["browser"] if c["tool"] == "preview_start"], r["browser"]
+    assert r["state"]["panel"] == "sign_in" and "sign in" in r["panel"].lower()
+    opened = [c for c in r["browserAll"] if c["tool"] == "preview_start"]
+    assert len(opened) == 1 and opened[0]["input"]["url"] == "https://www.linkedin.com/login", r["browserAll"]
     assert "close that tab" in r["panel"], r["panel"]
-    assert r["stored"]["signinOpened"] and not r["stored"]["okUntil"]
-    # Once a day: opened already today (the page's own day), it waits for the person's tap.
-    again = run("reading", html=page, signedIn=False, look={"reading-signin-opened": r["stored"]["signinOpened"]})
-    assert not [c for c in again["browser"] if c["tool"] == "preview_start"], again["browser"]
-    assert again["state"]["panel"] == "sign_in"
+    assert not r["stored"]["okUntil"]
+
+
+# ------------------------------------------------------------- once a day, out of the way
+# Going from the pinned chat to another and back opens the page again, and each opening loaded
+# LinkedIn in Claude's browser to check, though it had seen the person signed in five times
+# that day (the maintainer, 2026-11-04, note 9). `noStorage`: this device's storage comes back
+# empty, as the Claude app can hand it back, so only the search's own store remembers.
+
+SAME_DAY, LATER, NEXT_DAY = "2026-10-25T09:00:00Z", "2026-10-25T15:00:00Z", "2026-10-26T09:00:00Z"
+
+
+def test_switching_to_another_chat_and_back_never_checks_linkedin_again_that_day(run, page):
+    r = run("reading", html=page, signedIn=True, noStorage=True, clock=SAME_DAY,
+            again=[{"clock": LATER, "backFrom": True},
+                   {"clock": "2026-10-25T21:00:00Z", "apply": True, "backFrom": True}])
+    assert [c["tool"] for c in r["browser"]][:2] == ["navigate", "get_page_text"], r["browser"]
+    for k in ("again0", "again1"):           # before a chat took the tap, and after
+        assert r[k]["browser"] == [] and r[k]["state"]["ok"] is True and not r[k]["errors"], r[k]
+    checks = [a for a in r["acts"] if a["action"] == "reader.checked"]
+    assert len(checks) == 1 and checks[0]["value"]["ok"] is True, checks
+
+
+def test_the_next_day_it_looks_once_more(run, page):
+    r = run("reading", html=page, signedIn=True, noStorage=True, clock=SAME_DAY,
+            again=[{"clock": NEXT_DAY, "apply": True}])
+    assert [c["tool"] for c in r["again0"]["browser"]][:2] == ["navigate", "get_page_text"], r["again0"]
+    assert r["again0"]["state"]["ok"] is True
+
+
+def test_signed_out_today_coming_back_from_another_chat_loads_nothing(run, page):
+    """Signed out at today's look, a later opening says so from the record and loads nothing:
+    no second look and no sign-in tab of its own, whatever coming back fires."""
+    r = run("reading", html=page, signedIn=False, noStorage=True, clock=SAME_DAY,
+            again=[{"clock": LATER, "backFrom": True}])
+    assert r["again0"]["browser"] == [], r["again0"]["browser"]
+    assert r["again0"]["state"]["panel"] == "sign_in" and r["again0"]["state"]["signedOut"] is True
+
+
+def test_back_from_signing_in_the_kept_tab_is_read_as_it_stands(run, page):
+    """The sign-in tab their tap opened is the one the page keeps: back from signing in there,
+    the check reads it as it is, with nothing loaded again."""
+    r = run("reading", html=page, signedIn=False, tap="bp-open", signInLater=True)
+    calls = r["browserAll"]
+    at = next(i for i, c in enumerate(calls) if c["tool"] == "preview_start")
+    after = calls[at + 1:]
+    assert after and after[0] == {"tool": "get_page_text", "input": {"tabId": 7}}, after
+    assert not [c for c in after if c["tool"] == "navigate"], after
+    assert r["state"]["ok"] is True
 
 
 def test_outside_the_app_it_never_touches_the_browser(run, page):
@@ -141,6 +191,21 @@ def test_without_the_tap_the_notes_wait_on_one_card(run, queued):
     r = run("reading", html=html, seed=seed, signedIn=True, canSend="available")
     assert "reads-taken" in r["cards"] and "reading-queue" not in r["cards"]
     assert "3 profiles read" in r["todo"]
+
+
+def test_a_profile_read_today_is_not_read_again_at_the_next_opening(run, queued):
+    """A chat refused one read (their page did not load). Every opening read them again, so
+    their profile opened in Claude's browser at each switch back to the page; now it is read
+    again tomorrow, or at once with Read them, which the queue card still offers."""
+    html, seed = queued
+    r = run("reading", html=html, seed=seed, signedIn=True, noStorage=True, clock=SAME_DAY,
+            again=[{"clock": LATER, "refuse": ["read-c2"], "backFrom": True}, {"clock": NEXT_DAY}])
+    assert len(_did(r, "reading.done")) >= 3
+    first = [c for c in r["again0"]["browser"] if "/in/" in c["input"].get("url", "")]
+    assert first == [], first
+    assert "reading-queue" in r["again0"]["cards"], r["again0"]["cards"]
+    went = [c["input"]["url"] for c in r["again1"]["browser"] if "/in/" in c["input"].get("url", "")]
+    assert went and all("example-person-two" in u for u in went), went
 
 
 def test_signed_out_half_way_it_stops_and_never_saves_the_sign_in_page(run, queued):

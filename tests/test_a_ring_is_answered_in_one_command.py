@@ -150,8 +150,12 @@ def test_a_tap_and_the_work_it_queues_are_answered_in_one_wake(ring):
     # draft it queued) go as one batch, taken whole or not at all; the draft's claim follows,
     # since a batch writes a document once.
     assert parts(said) == [[CHECK_IN, TAPS, APPLIED], [WORK]], said
-    assert "Refused: another chat took the page or holds something claimed here; read again " \
-           "into a new folder and wake once more" in sends(said)[0][1]
+    refused = sends(said)[0][1]
+    assert "Refused: another chat took the page or holds something claimed here" in refused
+    assert "read again into a new folder and wake once more" in refused
+    # A record stamped wrong is put right by the version the refusal names, never bounced on
+    # (the maintainer, 4 November).
+    assert f"python3 tools/app.py version \"{d}\" <collection>/<doc id> <that version>" in refused
     assert all(land(ring, said)), said
     assert ring.stored("receipts", aid)["data"]["result"] == "ok"
     # The draft the tap queued is claimed in the same wake, pinned to the version its own
