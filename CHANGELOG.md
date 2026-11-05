@@ -22,6 +22,11 @@ make sense to somebody whose repo just received it.
 
 ### Added
 
+- **A calmer page that does more by itself.** Contacts is one page, with each person's draft on
+  their card and a box under them for what they sent; Jobs is one list of the jobs you might apply
+  to; To do shows one card for each thing to do and each person; Claude fixes what it can without
+  asking you to press anything, shows what it is doing on the card itself, and asks only when it
+  must, with a button or a date, not a chat. The bin is now the trash.
 - **Questions on the form.** When an application form asks more than your CV and letter answer
   ("why us?", "why this role?", "a time you used a tool"), paste the questions under that
   application's More, on its draft or once it is sent. Claude writes each answer from your
