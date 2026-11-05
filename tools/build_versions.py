@@ -260,10 +260,17 @@ METHODS: dict[str, dict] = {
     "drafts": {
         "by": "upgrade", "priority": 2, "applies": "unsent_drafts", "time": "~5 min",
         "gives": "applications not yet sent re-rendered and re-checked by the current build",
-        "run": "for each tracker row still at `drafted`, python3 tools/fit_to_page.py "
-               "documents/applications/<slug>/draft.json, then tools/verify_batch.sh on them; "
-               "never one already sent",
+        # All of it in code: each unsent application made again and checked, the version
+        # kept on each that passes, a redraft or a To do card for each that fails, the
+        # tracker put right, and the method recorded only once every one has passed. Said
+        # as a sentence for an agent, it rendered 17, three failed, and it was recorded done
+        # with nothing made for the three (the maintainer, 2026-11-05).
+        "run": "python3 tools/remake_drafts.py, which never touches one already sent; say the "
+               "one line it prints, if any, and nothing else",
+        "records": True,
+        "check": "remake_drafts.pending",
         "files": ("templates/*.py", "templates/README.md", "tools/render_application.py", "tools/bullet_rewording.py",
+                  "tools/remake_drafts.py",
                   "tools/fit_to_page.py",
                   "tools/posting_profile.py", "tools/draft_pack.py", "tools/draft_audit.py",
                   "tools/draft_cost.py",
@@ -361,8 +368,10 @@ METHODS: dict[str, dict] = {
             (67, "2026-11-05", True, "a skill the profile holds that the posting names goes into one to three of the resume's own bullets, lightly reworded with the same numbers and never asked about, and the check holds back a resume that leaves it, or a yes, on the skills line alone where a bullet could take it; a tool the profile names at an employer can be named in that employer's bullets; the skills line names each skill once, a yes inside a grouped item included, so unsent applications are made again to take the repeat out"),
             (68, "2026-11-05", False, "a skill question nobody answered is never a no: the answer is one record per skill that every chat and application reads (tools/skill_answers.py), the later answer winning, a question still open put to the person once on their page while the draft goes on without the skill, waiting on it, and a yes redoing every resume drafted that day with it; a draft with no skill waiting renders and is checked as before, so nothing made before needs making again"),
             (69, "2026-11-05", False, "the runbook lists reading.py linkedin-check; no document changes"),
+            (70, "2026-11-05", True, "a resume drafted alone, or a draft missing its letter, has its summary checked like any other and is made once both checks pass, and the tracker names a letter only where one was written; a reworded bullet the check passed is printed whenever the resume is made again, even without the posting beside it; a sentence ends after a name in capitals (AWS., SQL.) and never after an initial (U.S.), so a summary is cut where it should be and no sentence shows as unchecked; the drafting steps and the check read a research fact the same way, so a draft is never held back for a mismatch that was not there; unsent applications are made again"),
+            (71, "2026-11-05", True, "making unsent applications again is done by the app's own code: each is checked, the newest version is kept only on the ones that pass, one that fails is given its own way forward by itself (its copied part rewritten, or one To do card where only you can settle it), a letter breaking its own rules now counts as failing on its record, and a tracker row naming a letter for an application with none is put right; this is recorded done only when every one has passed, so applications an earlier run left failing are made again and handed on"),
         ),
-        "fingerprint": "d2f5040675f4b80d",
+        "fingerprint": "15501a776f3a2d29",
     },
     "interview": {
         "by": "upgrade", "priority": 2, "applies": "live_interviews", "time": "~15 min",

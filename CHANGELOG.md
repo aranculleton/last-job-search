@@ -89,6 +89,24 @@ make sense to somebody whose repo just received it.
   it first" are under More, with when you first wrote to them and how many messages each way.
   The card itself says only the latest exchange ("You wrote 2 Nov", "They replied 3 Nov"), and
   "Overdue" in its corner when a follow-up is late.
+- **An application made again after an update is only counted as done once it passes.**
+  When the app remakes your unsent applications with its newest checks, each one that passes
+  is marked done; each that fails is sorted out by itself: a part that copied the posting is
+  rewritten for you, and anything only you can settle becomes one To do card naming it. You
+  hear about it in one line at most. Applications an earlier remake left failing are made
+  again and handed on the same way, and a tracker row naming a cover letter for an
+  application without one is put right.
+- **A resume drafted on its own gets every check a resume gets.** Its summary is checked for
+  wording, claims and what backs each sentence, as on any application, and once both checks
+  pass it is made; your tracker names a cover letter only where one was written.
+- **A reworded bullet that passed the check is the one printed.** Remaking an application
+  without its posting beside it could print your original bullet instead of the reworded one
+  the check had passed; both now read the same answers.
+- **A sentence ending in a name in capitals is read as ending.** "AWS." or "SQL." no longer
+  runs into the next sentence, so a summary is cut in the right place and no sentence is shown
+  as unchecked; "U.S." still never ends one.
+- **A draft is no longer held back for a research mismatch that was not there.** The drafting
+  steps and the check now read each researched fact the same way, so the two always agree.
 - **Reply help no longer points at an old resume your rules forbid.** It offers a resume only if
   the app made and checked it and your own rules do not say never to send it; otherwise it says
   to make one for that person.

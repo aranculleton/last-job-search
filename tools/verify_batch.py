@@ -163,11 +163,14 @@ def _unaudited(entry: dict) -> list:
     return out
 
 
-def _batch_flags(abbr: str, entry: dict, general: bool) -> list:
+def _batch_flags(abbr: str, entry: dict, general: bool, loaded: dict | None = None,
+                 batch=()) -> list:
     """The whole-batch checks, read for one application's documents: CLAIMS for an error
     check_claims.py finds in its resume or letter, NUMBERS for a figure check_numbers.py
-    cannot ground in its resume, letter or summary. Read here, in this process, so each
-    application's record carries its own; a check that cannot run says nothing."""
+    cannot ground in its resume, letter or summary, LETTERS for a rule its letter breaks
+    (tools/audit_letters.py) and VOICE for wording its letter must never carry. Read here,
+    in this process, so each application's record carries its own; a check that cannot
+    run says nothing."""
     out = []
     try:
         import check_claims
@@ -188,6 +191,23 @@ def _batch_flags(abbr: str, entry: dict, general: bool) -> list:
             out.append("NUMBERS")
     except Exception:  # noqa: BLE001
         pass
+    if general:
+        return out
+    # The letter's own checks, read for this letter: they failed the whole batch and left
+    # "flags": [] on the application, so a letter copying the posting was recorded as passing
+    # and a rerun of the drafts took it as made (the maintainer, 2026-11-05). `loaded` is
+    # the draft with its posting, read back as the letters check reads it.
+    try:
+        import remake_drafts
+        d = loaded if isinstance(loaded, dict) and loaded else entry
+        if remake_drafts.letter_flags(d, batch):
+            out.append("LETTERS")
+    except Exception:  # noqa: BLE001
+        pass
+    tex = docpaths.letter_tex(abbr)
+    if os.path.isfile(tex) and _run([os.path.join(TOOLS, "voice_check.py"), "--soft-ok",
+                                     tex])[0] != 0:
+        out.append("VOICE")
     return out
 
 
@@ -234,10 +254,22 @@ def _say(text):
     sys.stdout.flush()
 
 
-def _record(entry: dict, flags: list, resume_pages, letter_pages, letter: bool) -> None:
+def _drafts_version() -> int:
+    """The drafts method's version these checks ran under (tools/build_versions.py)."""
+    try:
+        import build_versions
+        return build_versions.current("drafts")
+    except Exception:  # noqa: BLE001  no version known: 0, never checked by it
+        return 0
+
+
+def _record(entry: dict, flags: list, resume_pages, letter_pages, letter: bool,
+            checked: bool = True) -> None:
     """This application's checks, kept beside it as verify.json for the page's "the checks
-    that ran" (FUNCTIONS_SPEC 1.3): each flag this run raised, the pages, the day. A run
-    that cannot place the application (no company or role) keeps nothing."""
+    that ran" (FUNCTIONS_SPEC 1.3): each flag this run raised, the pages, the day, the
+    drafts version it ran under and whether it passed (no flag, and every check ran). A
+    run that cannot place the application (no company or role) keeps nothing. What a
+    rerun of the drafts treats as made by a version (tools/remake_drafts.py)."""
     if not entry.get("company") or not entry.get("role"):
         return
     try:
@@ -251,7 +283,8 @@ def _record(entry: dict, flags: list, resume_pages, letter_pages, letter: bool) 
             json.dump({"at": dt.datetime.now(dt.timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ"),
                        "abbr": entry.get("abbr"), "flags": flags,
                        "pages": {"resume": resume_pages,
-                                 "letter": letter_pages if letter else None}},
+                                 "letter": letter_pages if letter else None},
+                       "drafts": _drafts_version(), "passed": not flags and checked},
                       fh, indent=1)
             fh.write("\n")
     except Exception:  # noqa: BLE001  a record that cannot be kept never fails the checks
@@ -505,8 +538,16 @@ def main(argv=None) -> int:
     # Each application's record says what the whole-batch checks found on its own documents
     # too: a claim, a number or a letter the batch failed on, with "flags": [] beside it, read
     # on the page as checked and clean (2026-11-03).
+    try:
+        from fit_to_page import load
+        with_posting = {x.get("abbr"): x for x in load(drafts)[0] if isinstance(x, dict)}
+    except Exception:  # noqa: BLE001  no posting to read back: the letter is read as it is
+        with_posting = {}
+    lettered = [x for x in with_posting.values() if docpaths.has_letter(x)]
     for a, (entry, flags, rp_, cp_, has_letter) in records.items():
-        _record(entry, flags + _batch_flags(a, entry, a in general), rp_, cp_, has_letter)
+        _record(entry, flags + _batch_flags(a, entry, a in general, with_posting.get(a),
+                                            lettered),
+                rp_, cp_, has_letter, checked=not (skipped or design_skipped))
     if skipped:
         _say("=== SPACING CHECK SKIPPED ===")
         _say("pypdf is not available, so words run together were NOT checked on any document.")

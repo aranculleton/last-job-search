@@ -773,6 +773,7 @@ def _needs_you(ctx: Ctx, targets: dict) -> list:
         out += sent
         out += _own_profile_card(ctx, targets)
         out += _tweak_offers(ctx, targets)
+        out += _remade_cards(ctx, targets)
     except person.NoProfile:
         pass
     ups = app_setup.upgrade_questions(targets)
@@ -913,6 +914,39 @@ def _tweak_offers(ctx: Ctx, targets: dict) -> list:
                 "about": {"tweak_offer": o["id"]}, "rev": rev_of(qid, o["line"], o["times"])}
         out.append(item)
         targets[qid] = {"kind": "tweak_offer", "id": o["id"], "rev": item["rev"]}
+    return out
+
+
+def _remade_cards(ctx: Ctx, targets: dict) -> list:
+    """An unsent application the drafts rerun made again that failed in a way only the
+    person can settle (tools/remake_drafts.py, its remake.json): one To do card naming it,
+    with the app's own way forward, until it passes. One that a redraft can put right is
+    queued instead, and has no card (remake_drafts.page_work)."""
+    try:
+        import remake_drafts
+        cards = remake_drafts.todo_cards()
+    except Exception:  # noqa: BLE001  nothing remade to read: no card
+        return []
+    rows = {rid: row for row, rid in zip(ctx.tracker, ctx.tracker_ids)}
+    out = []
+    for c in cards:
+        row = rows.get(c["app"])
+        if row is None:
+            continue
+        why = c["why"][:1].upper() + c["why"][1:] if c["why"] else "A check did not pass"
+        item = {"id": c["id"], "kind": "suggest",
+                "title": f"{c['company']}: made again with the newest checks, and it did "
+                         "not pass",
+                "body": f"{why}. It is not sent until it passes.",
+                "options": [{"label": "Make it again",
+                             "work": {"kind": "draft", "id": f"draft~{c['app']}",
+                                      "args": {"company": c["company"], "role": c["role"],
+                                               "application": c["app"], "redo": True}}},
+                            {"label": "Not applying", "action": "ready.not_applying"}],
+                "about": {"company": c["company"], "role": c["role"]},
+                "rev": rev_of(c["id"], c["why"], c["version"])}
+        out.append(item)
+        targets[c["id"]] = dict(_row_target(row, c["app"]), rev=item["rev"])
     return out
 
 
@@ -1740,6 +1774,8 @@ VERIFY_WORDS = {
     "UNAUDITED": "a sentence was changed after the checks read it",
     "CLAIMS": "something on it breaks your own rules or is not in your profile",
     "NUMBERS": "a number on it is not in your profile",
+    "LETTERS": "the cover letter breaks one of the letter's rules",
+    "VOICE": "the cover letter has wording it must never carry",
 }
 VERIFY_PASSED = ("one page each", "jobs in date order", "text an applicant tracking system "
                  "reads cleanly", "your contact details in the text", "every line of the "

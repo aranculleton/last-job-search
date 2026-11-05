@@ -1944,6 +1944,15 @@ def _method_check(name: str):
         late = B.behind(name)
         if not late or not B.applies(name):
             return ""
+        hook = B.METHODS[name].get("check")
+        if hook:
+            # A method that keeps a version on each thing it made (the drafts rerun keeps one
+            # on each application) says itself whether anything is left for it: nothing,
+            # once each failure has been handed its way forward (tools/remake_drafts.py).
+            import importlib
+            mod, fn = hook.rsplit(".", 1)
+            if not getattr(importlib.import_module(mod), fn)():
+                return ""
         if name == "page" and _page_published():
             # The sync's own lines bring a published page up to date at once (say_page,
             # app_listen.after_update). Listed here as well, it started a background agent
@@ -1971,7 +1980,9 @@ def _method_upgrades() -> tuple:
             continue
         rerun = [v for v in m["versions"] if v[2]]
         instant = m["by"] == "instant"
-        run = m["run"] if instant else (
+        # A method whose own command records what passed (`records`) is never recorded by
+        # hand after it: that is how one was marked done with three failures left.
+        run = m["run"] if instant or m.get("records") else (
             f"{m['run']}, alone, on what is already there; then "
             f"python3 tools/build_versions.py record {name}")
         out.append(Upgrade(

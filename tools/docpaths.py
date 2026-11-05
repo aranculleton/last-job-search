@@ -91,6 +91,25 @@ def has_letter(draft: dict | None) -> bool:
     return not (d.get("general") or d.get(RESUME_ONLY))
 
 
+LETTER_FIELDS = ("p1", "p2", "lead", "cl_bullets", "p4")
+
+
+def writes_letter(draft: dict | None) -> bool:
+    """Whether a drafted application has a letter to name: has_letter, and, for a draft (an
+    object carrying a summary), a letter field with words in it. A letterless draft not
+    marked resume-only still had its letter named in the tracker, and the file found on
+    disk from an earlier render passed the check (the maintainer, 2026-11-05). A pick or a
+    staging record carries no letter fields, and is answered by has_letter alone."""
+    if not has_letter(draft):
+        return False
+    d = draft if isinstance(draft, dict) else {}
+    if "summary" not in d:
+        return True
+    return any(str((x.get("text") if isinstance(x, dict) else x) or "").strip()
+               for k in LETTER_FIELDS
+               for x in (d.get(k) if isinstance(d.get(k), list) else [d.get(k)]))
+
+
 def made(rel: str) -> bool:
     """Whether a document the tracker would name (its repo-relative path, as cv_file and
     cover_letter_file store it) is on disk: its .tex or its .pdf."""

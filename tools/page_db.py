@@ -1751,6 +1751,21 @@ def work_id(kind: str, now: dt.datetime) -> str:
         random.choice(string.ascii_lowercase + string.digits) for _ in range(4))
 
 
+def queued(kind: str, title: str, args: dict, now: dt.datetime) -> dict:
+    """A work item's fields, queued with no one asking, as `ask` writes one: the kind's own
+    stages, its usual place to run. What the drafts rerun queues for an application it
+    made again and that failed (tools/remake_drafts.py, through tools/app.py view)."""
+    import app_model
+    if kind not in WORK_KINDS:
+        raise ValueError(f"there is no kind of work {kind!r}")
+    return {"kind": kind, "title": " ".join(str(title or "").split())[:140],
+            "to": "cloud" if WORK_KINDS[kind]["to"] == "cloud" else "either",
+            "args": dict(args or {}), "asked_at": app_model.stamp(now),
+            "asked_from": {"tab": "chat"}, "priority": 0, "status": "queued",
+            "stages": progress(kind)["stages"], "stage": 0, "stage_at": None, "steps": [],
+            "claimed_by": None, "claimed_at": None, "stop_asked": False, "attempt": 1}
+
+
 def ask(db: dict, kind: str, title: str, now: dt.datetime, out_dir: str, args: dict | None = None,
         to: str = "", chat_id: str = "", item_id: str = "", dump_dir: str = "",
         here: bool = False, chat_kind: str = "cloud") -> dict:

@@ -654,3 +654,4 @@ Westerdale Grocers          # invented: an employer in tests/test_a_find_more_se
 Yarrowfield Analytics       # invented: an employer in tests/test_a_find_more_search_leaves_no_failing_row_on_the_page.py
 Zennor Data                 # invented: an employer in tests/test_a_find_more_search_leaves_no_failing_row_on_the_page.py
 Bramblecote Staffing        # invented: an agency, the same test
+Brightwater Freight     # invented employer, tests/test_a_rerun_records_only_what_passed.py

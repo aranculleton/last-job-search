@@ -274,6 +274,18 @@ def cmd_view(a) -> int:
                                          "model": model["model"], **stamp, **_published()},
               if_version=old["version"] if old else None)
     batches = w.save("view") if w.entries else []
+    # A redraft the drafts rerun handed out (tools/remake_drafts.py) goes on the work list by
+    # itself, once: read against the page's own work list, and sent in a batch of its own,
+    # so a refusal can never hold back the screens (each is a create, which the store refuses
+    # for an id it holds). Without a dump of the page there is nothing to read it against,
+    # and nothing is queued.
+    if a.dump:
+        try:
+            import remake_drafts
+            batches = list(batches) + remake_drafts.page_writes(
+                db, os.path.join(a.out_dir, "remade"), now)
+        except Exception:  # noqa: BLE001  nothing remade to read: nothing to queue
+            pass
     lines = app_listen.view_renewal(db, a.chat, now)
     # A yes the person gave, in another chat or on the page, that a resume drafted today still
     # leaves off: this chat redoes it, unasked (tools/skill_answers.py). Work already on its way

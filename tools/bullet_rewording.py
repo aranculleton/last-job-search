@@ -284,7 +284,11 @@ def profile_work() -> dict:
         work: dict = {}
         try:
             facts = draft_pack.facts()
-        except Exception:      # a profile the reader cannot parse names nothing anywhere
+        except Exception as e:  # a profile the reader cannot parse names nothing anywhere
+            # Said, never silent: the rule then ties nothing, and the audit and the render
+            # would both refuse what the profile places, which is the safe side.
+            print(f"bullet_rewording: the candidate profile could not be read for where "
+                  f"each skill was used ({e}); that rule ties nothing", file=sys.stderr)
             facts = []
         for f in facts:
             if f.get("resume") or f.get("kind") not in ("bullet", "detail", "reserve"):
@@ -499,6 +503,33 @@ def problems(rewordings, yes=(), no=(), held=()) -> list[dict]:
     return out
 
 
+def held_all() -> list[str]:
+    """Every single skill the profile holds (skills.py ITEMS), as it spells them."""
+    import skills_block
+    return clean_names(p for _c, item, _p in getattr(person.module("skills"), "ITEMS", ())
+                       for p in skills_block.parts(item))
+
+
+def answers(a: dict, pick: dict | None = None, posting: str | None = None) -> tuple:
+    """(yes, no, held): what a draft's rewordings are judged against, the one reading the
+    code audit (tools/draft_audit.py) and the renderer (usable, through fit_to_page and
+    render_application) both take. The answers are the pick's where it has them, else the
+    draft's own (assemble copies one into the other); `held` is the held skills the posting
+    names, and with no posting text to hand (a kept draft.json re-rendered without its
+    job_posting.md) every held skill, since holding one is the person's yes whatever the
+    posting. The audit refused nothing the render then took, but the render refused a held
+    skill the audit had passed, and printed the profile's own bullet (the maintainer,
+    2026-11-05: the two checks disagreed)."""
+    pick = pick if isinstance(pick, dict) else {}
+    a = a if isinstance(a, dict) else {}
+    yes = list(pick.get("skills_yes") or a.get("consented_skills") or [])
+    no = list(pick.get("skills_no") or a.get("declined_skills") or [])
+    text = str((a.get("posting") if posting is None else posting) or "")
+    company = str(a.get("company") or pick.get("company") or "")
+    held = held_named(text, company) if text.strip() else held_all()
+    return yes, no, held
+
+
 def usable(a: dict) -> tuple[dict, list[str]]:
     """({bullet id: plain text}, [why each one left out]) for a draft about to be rendered:
     every rewording the guard accepts for this draft's own answers (consented_skills,
@@ -508,8 +539,7 @@ def usable(a: dict) -> tuple[dict, list[str]]:
     got = a.get(FIELD)
     if got in (None, "", [], {}):
         return {}, []
-    yes, no = a.get("consented_skills") or [], a.get("declined_skills") or []
-    held = held_named(a.get("posting") or "", a.get("company") or "")
+    yes, no, held = answers(a)
     if not isinstance(got, list):
         return {}, [f"{FIELD} is not a list, so none is used"]
     use, why = {}, []
@@ -592,9 +622,9 @@ def main(argv=None) -> int:
         got = json.load(fh)
     bad = 0
     for d in got if isinstance(got, list) else [got]:
-        yes = args.yes if args.yes is not None else d.get("consented_skills") or []
-        no = args.no if args.no is not None else d.get("declined_skills") or []
-        held = held_named(d.get("posting") or "", d.get("company") or "")
+        d_yes, d_no, held = answers(d)
+        yes = args.yes if args.yes is not None else d_yes
+        no = args.no if args.no is not None else d_no
         for p in problems(d.get(FIELD), yes, no, held):
             bad += 1
             print(f"{d.get('company', '?')}: {p['id'] or FIELD}: [{p['rule']}] {p['text']}: {p['fix']}")

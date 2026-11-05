@@ -82,8 +82,10 @@ The session asks it with its other questions. A redo also follows every rule
 
 - Never edit an app-owned file, the tracker, the contact book or the threads, and nothing
   in `documents/` except what a `method-*` upgrade's `run` names (an unsent draft
-  re-rendered, a live interview's pack written beside the old one). Nothing sent is ever
-  touched.
+  re-rendered, a live interview's pack written beside the old one) or its own command
+  changes (`tools/remake_drafts.py` puts right a tracker row naming a letter no draft has).
+  Nothing sent is ever touched. A `run` with no `record` at its end records itself, only
+  for what passed: never record it by hand.
 - Never send, submit or post anything.
 - Never switch off a portal or narrow the search on your own: an upgrade adds what is
   missing; a change of the person's mind is theirs to make.
