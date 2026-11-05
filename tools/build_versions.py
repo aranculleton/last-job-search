@@ -754,8 +754,9 @@ METHODS: dict[str, dict] = {
             (27, "2026-11-05", True, "Find jobs can draft every one as it is found, as one job: its card counts them, \"2 of 5 drafted\" (a count says its own word)"),
             (28, "2026-11-05", True, "a bin's choices are whole above its foot, or scroll clear of it with a fade saying there is more, and Cancel is a soft pill; the gauge is beside every control that wakes Claude and says this copy's own minutes for that kind of work, from its finished work; a booked interview or call is moved from its Coming up row with its pencil; a double tap on Try again is one write in Firefox too"),
             (29, "2026-11-05", True, "Contacts round two: a draft that breaks the person's rules is fixed by Claude by itself, queued by the engine with no tap, its line on the card (Claude is fixing it), and offered as ready only once it passes; no Fix it button; the pencil sits beside Copy, the words changed in place (what is copied and logged as sent) or Claude asked to change them (Shorter, Warmer, More formal, or in their words); what wakes Claude carries its cost; More holds only what is rare; when you first wrote is on their page; the header is one short line with Paste a message beside Find people"),
+            (30, "2026-11-05", True, "a message being changed with the pencil says so on its card until the new words are there; a control that wakes Claude names its kind so its gauge is drawn"),
         ),
-        "fingerprint": "39318cdc22bce8e2",
+        "fingerprint": "f5303baa9766fcae",
     },
     "upskill": {
         "by": "upgrade", "priority": 4, "applies": "upskill_plans", "time": "~10 min",
@@ -792,6 +793,8 @@ KEEPS_NOTHING: dict[str, str] = {
     "tools/local_path.py": "finds the tools a computer installed (bun, TeX) for the session that "
                            "runs; keeps nothing",
     "tools/local_path.sh": "the same, for the shell scripts; keeps nothing",
+    "tools/file_clock.py": "reads the clock files are stamped with, to measure a file's age; "
+                           "the file it writes for that is removed at once, so it keeps nothing",
     "tools/network/own_profile.py": "looks over the person's own LinkedIn profile when due; its "
                                     "one record, documents/network/own_profile_review.json, is "
                                     "kept by the own-profile-review upgrade and by `due`",

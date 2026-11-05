@@ -187,12 +187,18 @@ OLD_DAYS = 7
 def old_unsaved(root: str = ROOT, days: int = OLD_DAYS, now: float | None = None) -> list[str]:
     """The files unsaved in this checkout that were last written more than `days` days ago.
     A week: every landing and the daily brief save what is here, so a file still unsaved
-    after a week was held back for a reason, or is the person's own edit from long ago."""
-    import time
+    after a week was held back for a reason, or is the person's own edit from long ago.
+    Measured on the files' own clock (file_clock; `now` is a now on it): on Python's, moved
+    on 400 days, a note written that moment was "over a week old" (2026-11-05)."""
+    files = plain_files(root)
+    if not files:
+        return []
+    import file_clock
+    at = file_clock.now(root) if now is None else now
     out = []
-    for rel in plain_files(root):
+    for rel in files:
         try:
-            if (now or time.time()) - os.path.getmtime(os.path.join(root, rel)) > days * 86400:
+            if file_clock.age(os.path.join(root, rel), at) > days * 86400:
                 out.append(rel)
         except OSError:
             pass

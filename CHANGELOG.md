@@ -163,6 +163,9 @@ make sense to somebody whose repo just received it.
   resume's PDF again while your work is being saved, that one file is skipped and saved next
   time, and everything else is saved as usual. Only if a file that is still there could not
   be saved does Claude tell you, once.
+- **How old a file is comes from the file itself.** Where a computer's clock and its files'
+  disagree (a shared or network folder, say), a note written a minute ago is no longer called
+  a week old, and a shortlist just saved is no longer called unsaved.
 - **After your work is saved, nothing is left looking unsaved.** The copy of your work on
   GitHub is brought level with the one in the chat, so Claude no longer stops to push it
   again by hand.

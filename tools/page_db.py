@@ -1449,7 +1449,7 @@ LEAVES = ("done", "failed", "stopped", "needs_you")
 STOPPED_SAID = "Stopped, as you asked."
 
 
-# A file's time and a claim's are both this computer's clock, read a moment apart.
+# A file's age and a claim's, each on its own clock (file_clock), read a moment apart.
 SAVED_SLACK_S = 120
 
 
@@ -1466,12 +1466,17 @@ def search_unsaved(item: dict) -> str:
     except person.NoProfile:
         return ""
     since = app_model.parse_time(item.get("claimed_at") or item.get("asked_at"))
+    # The round's age on the files' clock, the claim's on Python's, and only the two ages
+    # compared: a file's time against a claim's time mixed the two, and with Python's clock
+    # moved on a shortlist saved a minute ago read as saved before the search (2026-11-05).
     try:
-        written = os.path.getmtime(newest) if newest else None
+        import file_clock
+        saved_ago = file_clock.age(newest) if newest else None
     except OSError:
-        written = None
-    if written is None or (since is not None
-                           and written < since.timestamp() - SAVED_SLACK_S):
+        saved_ago = None
+    claimed_ago = (dt.datetime.now(dt.timezone.utc) - since).total_seconds() if since else None
+    if saved_ago is None or (claimed_ago is not None
+                             and saved_ago > claimed_ago + SAVED_SLACK_S):
         return ("the search's shortlist is not saved yet, so Jobs would show nothing new: "
                 "wait for run_round.py to end (it saves the shortlist as it ends), then finish")
     return ""

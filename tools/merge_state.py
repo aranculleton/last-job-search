@@ -1493,13 +1493,22 @@ def _spare(root: str, path: str, blob: str) -> str:
 
 
 def tidy_spares(root: str, now: float | None = None) -> None:
-    """Remove what SPARE_DIR holds past SPARE_DAYS. Never raises."""
-    import time
+    """Remove what SPARE_DIR holds past SPARE_DAYS, its age on the files' own clock
+    (file_clock; `now` is a now on it). Never raises."""
     base = os.path.join(root, SPARE_DIR)
     try:
-        for n in os.listdir(base):
+        names = os.listdir(base)
+        if not names:
+            return
+        try:
+            import file_clock
+            at = file_clock.now(base) if now is None else now
+        except ImportError:  # the driver alone, without the app's folder: Python's clock
+            import time
+            at = time.time() if now is None else now
+        for n in names:
             f = os.path.join(base, n)
-            if (now or time.time()) - os.path.getmtime(f) > SPARE_DAYS * 86400:
+            if at - os.path.getmtime(f) > SPARE_DAYS * 86400:
                 os.remove(f)
     except OSError:
         pass

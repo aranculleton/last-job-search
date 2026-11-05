@@ -131,10 +131,13 @@ def test_the_next_chat_is_told_of_work_waiting_since_an_earlier_day(tmp_path, mo
     a, b = _copies(tmp_path)
     _git(b, "switch", "-q", "-c", "claude/earlier-chat")
     (b / "job_search_tracker.csv").write_text("company\nKestrel Mutual\nLarkspur Retail\n")
+    # Two days ago on the clock a commit's age is read on (a fixed day turned a week old on
+    # the calendar, and 400 days old with the clock moved on).
+    import time
     subprocess.run(["git", "-C", str(b), "commit", "-qam", "unlanded"], check=True,
                    env=dict(os.environ, GIT_AUTHOR_NAME="t", GIT_AUTHOR_EMAIL="t@example.com",
                             GIT_COMMITTER_NAME="t", GIT_COMMITTER_EMAIL="t@example.com",
-                            GIT_COMMITTER_DATE="2026-10-30T09:00:00"))
+                            GIT_COMMITTER_DATE="@%d +0000" % (time.time() - 2 * 86400)))
     _git(b, "push", "-q", "origin", "claude/earlier-chat")
     _here(monkeypatch, a)
     monkeypatch.setenv("LJS_PROFILE", str(a / "profile"))
