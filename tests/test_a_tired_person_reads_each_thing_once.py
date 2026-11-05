@@ -81,21 +81,23 @@ def _two_follow_ups():
     return m, ppl
 
 
-def test_a_checklist_row_is_hidden_for_a_week_from_its_bin_and_has_no_not_now(run, tmp_path):
+def test_a_checklist_row_is_put_off_from_its_bin_and_has_no_not_now(run, tmp_path):
+    """Its bin puts it off to a day in the engine, Tomorrow and Next week first, on every
+    device: hiding it on this device alone left it due everywhere else (the UX review,
+    2026-11-05, A7)."""
     m, ppl = _two_follow_ups()
     row = "!!document.querySelector('#main .group-card [data-item=\"due-nudge-%s\"]')" % ppl[0]["id"]
-    hidden = "(document.querySelector('#main .todo-hidden') || {}).textContent || ''"
     got = _go(run, tmp_path, [
         {"hash": "todo", "eval": "[" + row + ", [...document.querySelectorAll('#main .group-card .g-row button')].map((b) => b.textContent)]"},
         {"open": "fgbin:todo:due-nudge-%s" % ppl[0]["id"], "read": "dialog[open]"},
-        {"click": "Hide this for a week", "exact": True, "within": "dialog", "eval": "[" + row + ", " + hidden + "]"},
+        {"click": "Tomorrow", "exact": True, "within": "dialog", "eval": row},
     ], PHONE, model=m, clock=T)
     there, buttons = got["after"][0]["eval"]
     assert there and "Not now" not in buttons, buttons
-    assert "Hide this for a week" in got["after"][1]["text"], got["after"][1]["text"]
-    gone, line = got["after"][2]["eval"]
-    assert not gone and line.startswith("1 hidden this week"), (gone, line)
-    assert not got["actions"], "hiding is this device's own, nothing for Claude"
+    assert "Tomorrow" in got["after"][1]["text"] and "Hide this for a week" not in got["after"][1]["text"], got["after"][1]["text"]
+    assert not got["after"][2]["eval"], "it leaves the card at once"
+    a = [x for x in got["actions"] if x["action"] == "due.snooze"]
+    assert a and a[-1]["item"] == "due-nudge-%s" % ppl[0]["id"] and a[-1]["value"] == {"until": "2026-10-26"}, got["actions"]
 
 
 def test_the_linkedin_card_offers_one_button_at_a_time_in_the_order_they_are_done(run, tmp_path):

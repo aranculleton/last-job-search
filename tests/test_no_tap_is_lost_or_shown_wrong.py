@@ -164,9 +164,10 @@ def test_an_undo_in_another_window_takes_the_saved_line_off_this_one(run, tmp_pa
         {"hash": "todo", "tab": 0},
         {"hash": "todo", "tab": 1},
         {"tab": 0, "click": DONE},
-        # The other window takes it back from its list of recent changes.
-        {"tab": 1, "tap": "details.recent > summary"},
-        {"tab": 1, "click": "Undo", "within": "details.recent", "exact": True},
+        # The other window takes it back from what To do says was done today (it replaced
+        # Recent changes, the UX review, 2026-11-05).
+        {"tab": 1, "click": "Show Done today (1)", "exact": True},
+        {"tab": 1, "click": "Undo", "within": ".todo-done-list", "exact": True},
         {"tab": 0, "run": 1000, "eval": states},
     ], tabs=2)
     assert _mine(s[-1]) == []
@@ -260,10 +261,10 @@ def test_a_feed_that_keeps_failing_backs_off_and_is_never_shown_as_connected(run
 
 def test_hiding_a_card_with_storage_refused_hides_it_and_says_on_this_device(run, tmp_path):
     html = _page(tmp_path)
-    s = _script(run, html, [{"hash": "todo"}, {"click": "Hide for a week: Thank-you note after your Harbourline Bank"}], noStorage=True)
+    s = _script(run, html, [{"hash": "todo"}, {"click": "Hide for a week: Data Analyst, Payments at Copperleaf Pay"}], noStorage=True)
     assert any("on this device" in t for t in s[-1]["toasts"]), s[-1]["toasts"]
-    assert "11 things need you now" in s[0]["main"]
-    assert "10 things need you now" in s[-1]["main"], s[-1]["main"][:200]
+    assert "10 things today" in s[0]["main"], s[0]["main"][:200]
+    assert "9 things today" in s[-1]["main"], s[-1]["main"][:200]
 
 
 # ------------------------------------------------------------------ 15. a long name

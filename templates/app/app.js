@@ -3166,7 +3166,9 @@
       // A checklist of 25 follow-ups is 25 things to do, counted so (2026-11-03: the summary
       // said one); the same warning on several drafts is one thing, fixed once.
       keep.push({key: "grp:" + k, kind: list[0].kind, band: list[0].band, employer: null, due, late: list.some((i) => i.late), tab: null,
-        counts: counted.length > 0, n: alerts ? 1 : counted.length, weight: alerts ? (counted.length ? 1 : 0) : counted.reduce((n, i) => n + weightOf(i), 0),
+        // One card is one thing to do, however many rows it holds: it says its own "2 of 8
+        // done" (DESIGN.md, counts; the UX review, 2026-11-05).
+        counts: counted.length > 0, n: 1, weight: alerts ? (counted.length ? 1 : 0) : counted.reduce((n, i) => n + weightOf(i), 0),
         rows: list, node: (ctx) => (alerts ? alertGroup(list, ctx) : g === "sent" ? sentGroup(list, ctx) : dueGroup(list, ctx, g))});
     }
     return keep;
@@ -3228,6 +3230,9 @@
       !applications().length && !needsItems().length && !dueItems().length && !Object.keys(obj(obj(m.done).counts)).length;
   }
   const TODO_FIRST = 5;     // To do shows this many first; the rest wait behind one fold
+  // Cards that help Claude do more and ask nothing of today (renderTodo's last line).
+  const HELP_KEYS = new Set(["reading", "export"]);
+  function settingUpNow() { const su = obj(M().setup); return !!txt(su.state) && txt(su.state) !== "done"; }
   // Anything on To do can be hidden for a week (the maintainer, 2026-10-29: everything shown
   // can be acted on or hidden). Kept on this device; it comes back after the week.
   const HIDE_KEY = "ljs:hidden";
@@ -3286,6 +3291,12 @@
   // are some Xs and some bins?"). On a card about one person it asks the person's usual
   // choices, with hiding the card for a week among them; on any other card it hides it for a
   // week at once, with Undo.
+  // A dated row put off to a day, in the engine (due.snooze): it leaves To do at once and
+  // comes back that day, on every device.
+  function laterChoices(d) {
+    const go = (n, words) => act([{item: d.id, action: "due.snooze", value: {until: addDays(todayIso(), n)}, rev: d.rev}], words + ": " + txt(d.title));
+    return [{label: "Tomorrow", key: "later-1", run: () => go(1, "Tomorrow")}, {label: "Next week", key: "later-7", run: () => go(7, "Next week")}];
+  }
   function withHide(i, node) {
     if (!node || !node.querySelector || i.stay) return node;
     // A card that already has its own bin (with its own choices) keeps that one alone: two
@@ -3297,14 +3308,25 @@
     const p = cid ? personById(cid) : null;
     const hide = () => hideTodo(i.key, title);
     const x = h("button", {type: "button", class: "btn quiet icon-only small hide-x", "data-k": "hide:" + i.key, "data-bin": "1",
-      "aria-label": p ? "Not " + txt(p.first_name) + "? Or hide this for a week" : "Hide for a week: " + title, title: p ? "Not " + txt(p.first_name) + "?" : "Hide for a week",
-      onclick: () => (p ? askRemovePerson(txt(p.id), txt(p.first_name), txt(p.employer), p.rev, {hide}) : hide())}, icon("bin"));
+      "aria-label": p ? "Not " + txt(p.first_name) + "? Or later" : i.d ? "Later: " + title : "Hide for a week: " + title, title: p ? "Not " + txt(p.first_name) + "?" : i.d ? "Later" : "Hide for a week",
+      onclick: () => {
+        const later = i.d ? laterChoices(i.d) : null;
+        if (p) return askRemovePerson(txt(p.id), txt(p.first_name), txt(p.employer), p.rev, later ? {hide, later} : {hide});
+        if (later) return sheet({title: "Later?", intro: "It comes back on To do that day.", choices: later});
+        return hide();
+      }}, icon("bin"));
     if (top) top.appendChild(x); else node.insertBefore(x, node.firstChild);
     return node;
   }
   function renderTodo() {
+    const doneN = doneToday().length;
     const every = todoItems();
-    const all = every.filter((i) => !todoHidden(i));
+    // What helps Claude do more but asks nothing today (finish your profile, let Claude read
+    // profiles, a LinkedIn download not due): one uncounted line at the end, "Help Claude do
+    // more (N)", never cards among today's things (the UX review, 2026-11-05).
+    const helpOnly = (i) => HELP_KEYS.has(i.key) && !i.counts && !settingUpNow();
+    const helps = every.filter((i) => !todoHidden(i) && helpOnly(i));
+    const all = every.filter((i) => !todoHidden(i) && !helpOnly(i));
     const n = todayCounts(all);
     const week = all.filter((i) => i.band === "week").length;
     const soonN = all.filter((i) => i.band === "week" || i.band === "later").length;
@@ -3324,10 +3346,11 @@
       // Five to start with, not seventy-six at once (the maintainer, 2026-10-29: "this volume
       // immediately led to decision paralysis"): the rest of today's wait behind one fold, and
       // what is not due yet behind another.
-      sum = nWord(n, "thing needs", "things need") + " you now.";
+      sum = nWord(n, "thing", "things") + " today" + (doneN ? " · " + doneN + " of " + (doneN + n) + " done" : "") + ".";
     }
     else if (all.length) {
-      sum = "Nothing needs you now." + (week ? " " + week + " this week." : "");
+      // Everything for today done here: said so, with what is next below (the UX review).
+      sum = (doneN ? "All done for today: " + nWord(doneN, "thing", "things") + " done." : "Nothing needs you now.") + (week ? " " + week + " this week." : "");
       if (!week) {
         const next = all.filter((i) => i.band === "later" || i.band === "top").sort((a, b) => txt(a.due || "9999").localeCompare(txt(b.due || "9999")))[0];
         // A day gone by is said as late, never "on Sat 24 Oct" the day after (2026-11-02).
@@ -3393,8 +3416,7 @@
     // Hideable for a week like every other card: the gaps stay listed in Your profile. With
     // today's things folded, it waits at the end of the fold with them.
     const finish = settingUp || todoHidden({key: "you-finish"}) ? null : finishProfileCard();
-    const finishNode = finish ? withHide({key: "you-finish"}, finish) : null;
-    if (restN && finishNode) put(rest, finishNode);
+    const helpNodes = helps.map((i) => withHide(i, i.node({where: "todo", section: "todo"}))).concat(finish ? [withHide({key: "you-finish"}, finish)] : []);
     // Its count is what it still folds: once opened the line goes (CSS) and the first card it
     // showed takes the focus. "Show 1 more" stayed over the card it had shown (the
     // maintainer, 2026-11-05: "it shows something else but still says show 1 more").
@@ -3403,12 +3425,13 @@
       const first = d.open && d.dataset.tapped ? d.querySelector("[data-card]") : null;
       delete d.dataset.tapped;
       if (first) first.focus({preventScroll: true});
-    }}, h("summary", {class: "band-more-sum", onclick: (e) => { e.currentTarget.parentElement.dataset.tapped = "1"; }}, "Show " + (restN + (finishNode ? 1 : 0)) + " more"), rest));
-    else if (finishNode) put(wrap, finishNode);
+    }}, h("summary", {class: "band-more-sum", onclick: (e) => { e.currentTarget.parentElement.dataset.tapped = "1"; }}, "Show " + restN + " more"), rest));
     if (soonCount) put(wrap, det("todo-soon", !shown && !top, {class: "band-more soon-more"}, h("summary", {class: "band-more-sum"}, "Not due yet (" + soonCount + ")"), soon));
+    if (helpNodes.length) put(wrap, det("todo-help", false, {class: "band-more soon-more help-more"}, h("summary", {class: "band-more-sum"}, "Help Claude do more (" + helpNodes.length + ")"),
+      h("div", {class: "stack todo-help"}, helpNodes)));
     const hidden = dueItems().find((d) => txt(d.kind) === "hidden");
     if (!settingUp) put(wrap, hidden ? h("p", {class: "muted small hidden-note"}, txt(hidden.title) + ".") : null,
-      hiddenFold(hiddenTodos(settingUp, every)), recentChanges(), tipLine("todo"));
+      hiddenFold(hiddenTodos(settingUp, every)), doneTodayFold(), tipLine("todo"));
     return wrap;
   }
   // The to-dos that belong to one section, at its top: the same items, done in either place.
@@ -3592,8 +3615,8 @@
           draft ? seeDraftBtn(draft, "fgdraft:" + where + ":" + d.id, "secondary") :
           btn(words.row, () => askDue(d), {small: true, key: "fgdo:" + where + ":" + d.id, aria: words.row + ": " + title}),
           // Its bin: the person's choices, and hiding this one row for a week.
-          cid && !marked ? btn("", () => askRemovePerson(cid, name.replace(/ at .*$/, ""), employerIn(title) || "", null, {hide: () => hideTodo("due:" + d.id, title)}),
-            {kind: "quiet icon-only", small: true, icon: "bin", key: "fgbin:" + where + ":" + d.id, aria: "Not " + name + "? Or hide this for a week"}) : null));
+          cid && !marked ? btn("", () => askRemovePerson(cid, name.replace(/ at .*$/, ""), employerIn(title) || "", null, {hide: () => hideTodo("due:" + d.id, title), later: laterChoices(d)}),
+            {kind: "quiet icon-only", small: true, icon: "bin", key: "fgbin:" + where + ":" + d.id, aria: "Not " + name + "? Or later"}) : null));
     };
     // Drafted messages: the card's one filled button opens Contacts, where the people with a
     // message drafted come first, on the first of them. Drafting them
@@ -3604,7 +3627,8 @@
         costEl({state: WORK_COST[kind] === undefined ? 1 : WORK_COST[kind]}, kind, "fgc-" + where + "-" + seg(g) + "-" + band, open.length)] : null;
     // "25 late" read as 25 days: the chip says how many are overdue.
     return card("article", {class: "card todo group-card", "aria-labelledby": hid, "data-item": "grp:" + g + ":" + band},
-      h("div", {class: "todo-top"}, kindMark(dueKind(ds[0])), late ? h("span", {class: "chip tone-warn"}, late + " overdue") : null),
+      h("div", {class: "todo-top"}, kindMark(dueKind(ds[0])), h("span", {class: "todo-state"}, late ? h("span", {class: "chip tone-warn"}, late + " overdue") : null,
+        h("span", {class: "chip tone-plain", "data-k": "grp-done:" + hid}, gone.length + " of " + ds.length + " done"))),
       h("p", {class: "card-title", id: hid}, ds.length > gone.length ? words.title(ds.length - gone.length) : plural(gone.length, "thing", "things") + " done"),
       words.sub && ds.length > gone.length ? h("p", {class: "small muted"}, words.sub) : null,
       left.length ? groupRows("fg:" + where + ":" + g + ":" + band, left.map(row)) : null,
@@ -4768,7 +4792,15 @@
     const msg = messageItems().find((m) => m.id === item);
     const setting = arr(M().settings).find((s) => setId(s) === item);
     if (d.action === "undo") { const was = S.actions.get(txt(d.undoes)); const n = itemName(was ? was.item : item); return "Changed back" + (n ? ": " + n : ""); }
-    if (need) return "Answered “" + txt(need.title) + "”: " + txt(typeof d.value === "string" ? d.value : "");
+    if (need) {
+      // The answer as the person chose it: a button's own words, or the value's words; an
+      // answer that was not plain text was dropped (the UX review, 2026-11-05).
+      const v = d.value;
+      const opt = arr(need.options).find((o) => (!txt(obj(o).action) || txt(obj(o).action) === txt(d.action))
+        && (obj(o).value === undefined || JSON.stringify(obj(o).value) === JSON.stringify(v)));
+      const said = opt ? txt(obj(opt).label) : typeof v === "string" ? v : v && typeof v === "object" ? txt(v.label || v.text || v.answer || v.value || v.on || "") : "";
+      return "Answered “" + txt(need.title) + "”" + (said ? ": " + said : "");
+    }
     if (job) name = txt(job.company) + ", " + txt(job.title);
     else if (app) name = txt(app.company) + ", " + txt(app.role);
     else if (msg) name = "the message to " + txt(msg.first_name);
@@ -4779,6 +4811,41 @@
     // nothing of who or where (the audit, 2026-11-03).
     else name = itemName(item);
     return (ACTION_WORDS[d.action] || "Changed") + (name ? ": " + name : "");
+  }
+  // What the person finished today on this page, newest first, one row an item: the tap's
+  // latest, each in grey with its Undo while Claude has not done it and Change back where the
+  // chat left one, and nothing where only a chat could take it back. It replaced "Recent
+  // changes", a log of every tap, on To do (the UX review, 2026-11-05).
+  function doneToday() {
+    const day = todayIso();
+    const seen = new Set();
+    const out = [];
+    // To do's own things: its dated rows, its questions, the messages it sends and the people its
+    // bins answer for.
+    const mine = new Set([...dueItems(), ...needsItems(), ...messageItems(), ...peopleItems()].map((x) => txt(obj(x).id)).filter(Boolean));
+    for (const [id, d] of [...allActions()].sort((a, b) => txt(b[1].at).localeCompare(txt(a[1].at)))) {
+      if (txt(d.action) === "undo" || seen.has(txt(d.item)) || !mine.has(txt(d.item))) continue;
+      const at = tms(d.at);
+      if (at === null || ymdIn(at, zone()) !== day) continue;
+      const st = actionState(id);
+      if (!["saving", "saved", "claimed", "applied"].includes(st)) continue;
+      seen.add(txt(d.item));
+      out.push([id, d, st]);
+    }
+    return out;
+  }
+  function doneTodayFold() {
+    const rows = doneToday();
+    if (!rows.length) return null;
+    const st = listState("todo:done");
+    const words = "Done today (" + rows.length + ")";
+    return [h("p", {class: "fold todo-done"}, h("span", {}, words + ": "),
+      btn(st.open ? "Hide" : "Show", () => { st.open = !st.open; scheduleRender(); }, {kind: "link", key: "fold:done", aria: (st.open ? "Hide " : "Show ") + words})),
+      st.open ? h("ul", {class: "plain recent-list todo-done-list"}, rows.map(([id, d, s]) => {
+        const back = undoButton({id, doc: d, state: s}, "done:" + id);
+        return h("li", {class: "is-marked"}, h("span", {}, describeAction(d)), h("span", {class: "muted small"}, " " + ago(d.at)),
+          back && !(back.classList && back.classList.contains("hint")) ? [" ", back] : null);
+      })) : null];
   }
   // Everything tapped lately, each with its Undo until Claude has done it, and Change back
   // after that where the chat left a way back.
@@ -5085,7 +5152,9 @@
     // taps to put one thing away (the walk-through, 2026-11-03).
     sheet({title: "Not " + who + "?", intro: "Nothing is sent either way. You can change your mind in Contacts.",
       choices: [extra.skip ? {label: "Not now: set this note aside", key: "skip", run: () => extra.skip()} : null,
-        extra.hide ? {label: "Hide this for a week", key: "week", run: () => extra.hide()} : null,
+        // A dated row is put off in the engine itself, to a day: Tomorrow and Next week first,
+        // never hidden on this device alone (the UX review, 2026-11-05).
+        ...(extra.later ? extra.later : [extra.hide ? {label: "Hide this for a week", key: "week", run: () => extra.hide()} : null]),
         // Someone who has not written back can be let go: no more chasing, and a reply from
         // them opens it again (2026-11-03: a row's own "Let it go" changed nothing to see).
         extra.letGo ? {label: "Let it go: they have not replied", key: "letgo", run: () => extra.letGo()} : null,
@@ -9662,6 +9731,7 @@
     if (st === "ready" || st === "off" || st === "paused") return null;
     if (!arr(M().people).length) return null;
     if (readingHidden()) return null;
+    if (st === "desktop") return null;
     return {key: "reading", kind: "setup", band: "later", employer: null, tab: "contacts", counts: false, node: () => readingCard()};
   }
   function readsTakenCard(ids) {

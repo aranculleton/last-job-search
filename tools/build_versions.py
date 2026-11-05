@@ -755,8 +755,9 @@ METHODS: dict[str, dict] = {
             (28, "2026-11-05", True, "a bin's choices are whole above its foot, or scroll clear of it with a fade saying there is more, and Cancel is a soft pill; the gauge is beside every control that wakes Claude and says this copy's own minutes for that kind of work, from its finished work; a booked interview or call is moved from its Coming up row with its pencil; a double tap on Try again is one write in Firefox too"),
             (29, "2026-11-05", True, "Contacts round two: a draft that breaks the person's rules is fixed by Claude by itself, queued by the engine with no tap, its line on the card (Claude is fixing it), and offered as ready only once it passes; no Fix it button; the pencil sits beside Copy, the words changed in place (what is copied and logged as sent) or Claude asked to change them (Shorter, Warmer, More formal, or in their words); what wakes Claude carries its cost; More holds only what is rare; when you first wrote is on their page; the header is one short line with Paste a message beside Find people"),
             (30, "2026-11-05", True, "a message being changed with the pencil says so on its card until the new words are there; a control that wakes Claude names its kind so its gauge is drawn"),
+            (31, "2026-11-05", True, "To do counts cards, a checklist one with its own x of N done; it says how far today has gone and when all is done; Done today replaces Recent changes; a row is put off to tomorrow or next week in the engine from its bin; help that asks nothing today is one line at the end, and a computer-only card is not shown on a phone"),
         ),
-        "fingerprint": "f5303baa9766fcae",
+        "fingerprint": "e68a59a942e9aadd",
     },
     "upskill": {
         "by": "upgrade", "priority": 4, "applies": "upskill_plans", "time": "~10 min",

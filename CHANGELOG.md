@@ -22,6 +22,17 @@ make sense to somebody whose repo just received it.
 
 ### Changed
 
+- **To do counts cards, not people.** Its badge and summary count the cards due today; a card
+  listing several people counts as one and says "2 of 8 done". The summary says how far today
+  has gone ("3 of 9 done"), and "All done for today" once nothing is left.
+- **"Done today" in place of "Recent changes".** One line at the end of To do lists what you
+  finished today, each with its Undo or Change back where there is one, and an answer in the
+  words you chose.
+- **Put a row off until tomorrow or next week.** Its bin offers Tomorrow and Next week first,
+  and the row comes back that day on every device, not only this one.
+- **Help that asks nothing today waits at the end.** Finishing your profile, letting Claude
+  read profiles and a LinkedIn download not yet due are one line, "Help Claude do more", and a
+  card only the computer can act on is not shown on a phone.
 - **A bin's last choice is never cut in half.** Where its choices fit, they all show above
   Cancel; where they do not, the list scrolls with a soft fade saying there is more, and its
   last choice comes fully clear of the foot. Cancel is a rounded button like the rest.

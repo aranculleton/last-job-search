@@ -259,8 +259,12 @@ tests, `tests/test_contacts_is_one_page_with_each_persons_draft.py`)
 - Where a person stands, what is owed, who the person's own rules keep back and every count
   of them are the engine's one answer (`app_model.standing`): the page renders them and never
   works them out again. A message that breaks the person's rules is never offered as ready.
-- Counts agree: a tab, a summary and a badge count the same things, a checklist of people a
-  thing for each person, and a button that starts several says the time for all of them.
+- Counts agree: a tab, a summary and a badge count the same things, and they count cards:
+  To do's badge is its late or due-today cards, a checklist card is one with its own "2 of 8
+  done", and a button that starts several says the time for all of them. Counting a checklist
+  of 25 people as 25 made a calm screen read as an emergency (the UX review, 2026-11-05).
+  To do says how far today has gone ("3 of 9 done today") and, once nothing is left, that it
+  is all done and what comes next.
 - Nothing asks what a default answers. A choice becomes a setting only where people really
   differ, and work goes where it can run without anyone choosing (one chat answers the page;
   only the brief needs the cloud). (place and routing tests)
