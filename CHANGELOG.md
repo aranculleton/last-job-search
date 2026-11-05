@@ -26,6 +26,9 @@ make sense to somebody whose repo just received it.
   while it was still finishing, and nothing rang the new helper again before the next morning, so
   "(finishing up)" chats stayed all day; after two hand-overs in an hour there were two. The new
   helper now asks for its own check-in half an hour on, one at a time, for a day.
+- **An old chat that will not close yet is tried again, never handed to you.** Archiving the
+  helper a hand-over replaced was refused while it was still finishing, and the page chat said
+  "you can archive it yourself"; it now says nothing and tries again at that check-in.
 
 ## [4.10.1] - 2026-11-05
 

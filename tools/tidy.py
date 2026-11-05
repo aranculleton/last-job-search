@@ -940,8 +940,9 @@ def run_plan(a) -> int:
         now = dt.datetime.now(dt.timezone.utc)
     elif now is not None and not a.today:
         today = now.date()
+    me = app_listen.this_chat(a.chat)
     got = plan(listed + extra, tasks, details(_pages(a.details)), reg,
-               listener, app_listen.this_chat(a.chat), repo, today,
+               listener, me, repo, today,
                _campaign_chats(), unmerged(), done, jobs, now=now, on_github=on_github())
     if got["ask"]:
         print("tidy: read these chats first, each with get_session, and run this again with "
@@ -986,6 +987,14 @@ def run_plan(a) -> int:
         more = "" if kept else f" --titles '{json.dumps(titles, ensure_ascii=False)}'"
         print(f"then: archive_session each, and python3 tools/tidy.py done <each one archived>"
               f"{more} (all of them: {ids}); commit it")
+        # One refused (still finishing its last turn, most often) is tried again by a check-in,
+        # never handed to the person: the live helper told them "you can archive it yourself"
+        # (the maintainer's live run, 2026-11-05).
+        print("then: an archive_session that is refused is left as it is, never mentioned and "
+              "never asked of the person; " + (
+                  f"if one is, send_later {json.dumps({'delay_minutes': RECHECK_MIN, 'message': RECHECK})} "
+                  "once, and that check-in tries again"
+                  if me and me == listener.get("chat") else "the next tidy-up tries again"))
     else:
         print("tidy: nothing to tidy. python3 tools/tidy.py done")
     stamp = now or dt.datetime.combine(today, dt.time(12), tzinfo=dt.timezone.utc)

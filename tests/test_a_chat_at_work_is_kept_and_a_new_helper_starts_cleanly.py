@@ -219,3 +219,15 @@ def test_the_upgrade_prompt_names_the_whole_no_command():
     said = P.block([(ask, "a question")])
     assert "`python3 tools/profile_upgrades.py --no <id>` records it" in said, said
     assert "and `--no <id>` records it" not in said
+
+
+def test_an_archive_refused_is_tried_again_never_handed_to_the_person(copy, tmp_path, monkeypatch):
+    """The live helper's archive of the chat it took over from was refused (it was still
+    finishing), and it told the person "you can archive it yourself" (the maintainer's live
+    run, 2026-11-05). The plan says a refused archive is never mentioned, and from the live
+    helper it asks for one check-in that tries again."""
+    said = _tidy(copy, tmp_path, monkeypatch, listed="idle", told="idle",
+                 used="2026-11-01T08:00:00Z", once=False)
+    assert f"archive {DESK}" in said, said
+    line = next(ln for ln in said.splitlines() if "refused" in ln)
+    assert "never asked of the person" in line and '"delay_minutes": 31' in line, line
