@@ -374,8 +374,11 @@ JSON_NAMES = {
                      "ljs-applied.json", "ljs-place.json", "ljs-tidy.json",
                      "ljs-reactions.json", "ljs-upgrades-listed.json", "ljs_own_tests.json",
                      ".reactions.json", "ljs-no-page.json", "ljs-page-held.json",
-                     "ljs-job-chats.json",
+                     "ljs-job-chats.json", "ljs-tidy-planned.json", "ljs-versions.json",
                      "ljs-save-held.json"), _GITDIR),
+    # A dump folder's own note of each record's stamp as read (page_db._keep_read_stamp):
+    # written into the chat's scratch folder beside the dump, never into the person's files.
+    ".read-stamps.json": "a page dump folder's note of each record's stamp as read, in the chat's scratch folder; never committed",
     **dict.fromkeys(("claude_surfaces.json", "public_names.json", "removed_names.json",
                      "rule_map.json", "remote.json", "design_draft.json",
                      "tools/leak_scan.py: **.json", "tools/markets.py: *.json",
