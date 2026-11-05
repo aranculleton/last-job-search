@@ -8488,7 +8488,13 @@
     return workInline(id, w, {key: "form:" + a.id, item: a, done: (x) => {
       if (!formShown(a, x)) return null;
       const n = arr(obj(x.result).questions).length;
-      return n ? "Done: " + nWord(n, "answer", "answers") + " ready to copy, under More." : "Done" + (txt(obj(x.result).summary) ? ": " + lc1(firstSentence(txt(obj(x.result).summary))) : ".");
+      // The answers are in the card's details, "To copy": the line opens them there, where it
+      // said "under More" and More held only the box to ask again (the maintainer, 2026-11-05:
+      // "wheres the answer to the question i requested").
+      return n ? ["Done: " + nWord(n, "answer", "answers") + " ready to copy. ", btn(n === 1 ? "Show it" : "Show them", () => {
+        openState.set("det:info:app:" + a.id, true); openState.set("det:copy:" + a.id, true); scheduleRender();
+        setTimeout(() => { const c = document.querySelector('[data-k="det:copy:' + a.id + '"]'); if (c) { try { c.scrollIntoView({block: "center"}); } catch (e) { /* gone */ } } }, 60);
+      }, {kind: "link", key: "form-show:" + a.id})] : "Done" + (txt(obj(x.result).summary) ? ": " + lc1(firstSentence(txt(obj(x.result).summary))) : ".");
     }});
   }
   // The answers to copy into the form: a draft's note to the hiring manager and every answer
