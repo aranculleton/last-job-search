@@ -56,7 +56,7 @@ CASES = {
 
 
 @pytest.fixture
-def excel_at_oakmere(held):
+def excel_at_oakmere(held):  # noqa: F811  the fixture, imported above
     prof = held / "01-candidate-profile.md"
     text = prof.read_text(encoding="utf-8")
     at = text.index("- Automated the weekly stock-cover report")

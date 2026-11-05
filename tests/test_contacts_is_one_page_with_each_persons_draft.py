@@ -141,7 +141,7 @@ def test_ten_replies_pasted_in_a_row_each_show_on_their_own_card(run, page, mode
               " spin: !!g.querySelector('.spin')}; } return out; })()")
     boxes = "document.querySelectorAll('#main .reply-box').length"
     # Claude, played: every tap applied, the first reply running, the rest waiting their turn.
-    work, receipts = {}, {}
+    work = {}
     for i, p in enumerate(ten):
         work["work/reply~" + p["id"]] = {
             "kind": "reply", "title": "Reply to " + p["first_name"], "to": "either", "args": {"contact": p["id"]},
