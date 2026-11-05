@@ -40,6 +40,7 @@ make sense to somebody whose repo just received it.
 - **Icons only is its own section at the top of the side menu**, a row like the others under one
   rule, as Settings is at the bottom.
 - **A long job title fills its line before it wraps**, in Firefox as well.
+- **The README's first picture is the Brief in light and dark**, the rest in light.
 
 ## [4.10.0] - 2026-11-05
 

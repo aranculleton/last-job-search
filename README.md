@@ -8,10 +8,10 @@ private page. It never sends anything for you.
 [![CI](https://github.com/aranculleton/last-job-search/actions/workflows/ci.yml/badge.svg)](https://github.com/aranculleton/last-job-search/actions/workflows/ci.yml)
 
 <p align="center">
-  <img src="docs/images/page-brief-a4d405c1.png" width="720"
-       alt="The Brief: today's most pressing thing with what matters about it, the next three things to do, who is waiting on you, the best new jobs, news with what to do with each item, and your numbers by week">
+  <img src="docs/images/page-brief-light-dark-1689c131.png" width="720"
+       alt="The Brief, its left half in light and its right half in dark: today's most pressing thing, the next three things to do, who is waiting on you, the best new jobs, news with what to do with each item, and your numbers by week">
   <br>
-  <sub><b>The Brief</b>: your day at a glance</sub>
+  <sub><b>The Brief</b>: your day at a glance, in light or dark</sub>
 </p>
 
 ## What you need
@@ -37,18 +37,18 @@ No resume yet? Say "build one with me". [START_HERE.md](START_HERE.md) has each 
 
 <p align="center">
   <img src="docs/images/page-demo-83fb6f28.gif" width="720"
-       alt="A walk through the page: the Brief, To do, Jobs, Contacts, Chat, Coming up, then an interview prep opened">
+       alt="A walk through the page: the Brief, To do, Jobs, Contacts, Coming up, Chat and Settings">
   <br>
   <sub>A walk through the page. Every name is made up.</sub>
 </p>
 
 <p align="center">
-  <img src="docs/images/page-contacts-3757cba8.png" width="62%"
-       alt="Contacts on a computer in dark mode: who needs you first, with Claude's work alongside">
+  <img src="docs/images/page-contacts-fc1ee272.png" width="62%"
+       alt="Contacts on a computer: who needs you first, each person's latest draft on their card">
   &nbsp;
   <img src="docs/images/page-coming-up-phone-6ea2dd10.png" width="18%" alt="Coming up on a phone">
   <br>
-  <sub>Contacts in dark mode (light or dark, your choice), and Coming up on a phone</sub>
+  <sub>Contacts on a computer, and Coming up on a phone</sub>
 </p>
 
 ## What you do
