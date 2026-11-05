@@ -81,7 +81,7 @@ runs in the cloud.
 ## Then use your page
 
 Everything is on it. Tap **Find jobs**, **Draft this** on a job you like, **Find people**,
-and **I heard back** when you do; tweak or bin anything that's off, and it remembers. Anything
+and **I heard back** when you do; tweak or trash anything that's off, and it remembers. Anything
 else, ask in **Chat** there. Updates arrive by themselves; nothing of yours is sent back.
 
 If something goes wrong, see [HELP.md](HELP.md), or tell Claude what you see.

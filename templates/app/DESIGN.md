@@ -47,6 +47,11 @@ next?" in its first lines, and nothing asks for a decision a default could make.
   messages is never a card there, nor counted. In Contacts they wait below the fold with the
   others who need nothing, their row saying to leave it unless they write back, with Close.
   (contacts rules test)
+- Every screen is the whole width, as the Brief is: its column fills the space between the
+  side menu and Claude's work and narrows only as they take room (the menu's names shown, the
+  work panel open) or the window does. No screen sits in a narrow column of its own; card text
+  keeps its own measure. The side menu opens on "Icons only", its own section above the
+  screens under one rule, as Settings is below them. (layout and menu tests)
 - Claude's work has one button on every screen, the pill in the header. On a wide screen it
   opens and closes the panel on the right, as the menu's "Icons only" folds, remembered on the
   device (open beside every screen but the Brief until the person chooses); narrower, it opens

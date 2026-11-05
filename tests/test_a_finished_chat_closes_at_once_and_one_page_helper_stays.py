@@ -389,3 +389,83 @@ def test_the_live_helper_is_called_job_search_page_and_takes_the_name_once(copy,
                  "Job search helper (finishing up)"):
         assert tidy.APP_TITLE.match(name) and tidy.HELPER_NAME.match(name), name
     assert not tidy.HELPER_NAME.match("Job search: Interview prep: Larkspur Retail, Data Analyst")
+
+
+# ------------------------------------------- the maintainer's live run, 5 November (4.10.1)
+
+OWN = "session_EXAMPLEPERSONSCHAT"
+OLD = "session_EXAMPLEOLDHELPER"
+OPS_REG = {"setup": "ops_relay", "timezone": "Europe/London",
+           "ops_session": {"id": "session_EXAMPLEOPSCHAT"},
+           "routines": [{"key": "morning_brief", "name": "Job search: morning brief",
+                         "trigger_id": "trig_EXAMPLELEFTBRIEF",
+                         "cron": "CRON_TZ=Europe/London 56 7 * * *",
+                         "prompt_file": routines.BRIEF_FILE}]}
+
+
+def _live_run(this_chat, now=dt.datetime(2026, 11, 5, 9, 30, tzinfo=dt.timezone.utc)):
+    """The sidebar that morning: the person's own chat called "Job search helper" like the
+    helpers, the helper a hand-over replaced still running the brief (remade there after the
+    hand-over, the registry naming no chat for it), and the live helper."""
+    seed = {"origin": "claude_code_mcp_seed"}
+    chats = [dict(_chat(OWN, "Job search helper", updated="2026-11-05T08:20:00Z"),
+                  origin="desktop_app"),
+             dict(_chat(OLD, "Job search helper (finishing up)", updated="2026-11-05T08:44:00Z"),
+                  **seed),
+             dict(_chat(LIVE, "Job search helper", updated="2026-11-05T00:24:00Z"), **seed)]
+    triggers = [{"id": "trig_EXAMPLELEFTBRIEF", "persistent_session_id": OLD, "enabled": True,
+                 "prompt": "Scheduled run: morning brief."},
+                {"id": "trig_EXAMPLEOWNBRIEF", "persistent_session_id": OWN, "enabled": False}]
+    listener = {"chat": LIVE, "helper": True, "since": "2026-11-05T00:09:00Z",
+                "took_from": OLD, "took_from_helper": True}
+    info = {c["id"]: _detail(c["id"], c["title"]) for c in chats}
+    return tidy.plan(chats, triggers, info, OPS_REG, listener, this_chat, REPO, TODAY, set(),
+                     set(), set(), now=now)
+
+
+def test_a_chat_they_started_goes_only_once_it_is_an_old_helper_they_have_left():
+    """The chat they set up in answered the page first and carries the helper's name; once it
+    has handed the page on it is an old helper ("we have 3 when we should have 1"), put away
+    once they have not used it for an hour, never while they are in it. A chat of theirs that
+    never had the helper's name is never listed, from any chat."""
+    for here in (LIVE, OLD):
+        got = _live_run(here)
+        assert {c["id"]: c["why"] for c in got["archive"]}.get(OWN) == \
+            "a helper the page no longer uses", here
+    soon = _live_run(LIVE, now=dt.datetime(2026, 11, 5, 9, 0, tzinfo=dt.timezone.utc))
+    assert {c["id"]: c["why"] for c in soon["keep"]}[OWN] == "they used it in the last hour"
+    assert OWN not in {c["id"] for c in _live_run(OWN)["archive"]}     # never from itself
+    mine = dict(_chat("session_EXAMPLEMYNOTES", "Job search: my own notes",
+                      updated="2026-10-01T08:00:00Z"), origin="desktop_app")
+    got = tidy.plan([mine], [], {mine["id"]: _detail(mine["id"])}, {}, {"chat": LIVE}, LIVE,
+                    REPO, TODAY, set(), set(), set())
+    assert got["archive"] == [] and got["keep"] == []
+    assert tidy.person_started({"origin": "desktop_app"})
+    assert not tidy.person_started({"origin": "claude_code_mcp_seed"})
+    assert not tidy.person_started({})               # a listing that does not say: as before
+
+
+def test_a_brief_left_in_the_helper_a_hand_over_replaced_moves_and_that_helper_goes():
+    """The brief's task fired into the helper a hand-over replaced while the registry named no
+    chat for it, so that helper was kept for good ("a scheduled task that is on runs in it").
+    The task says where the brief runs: it moves into the live helper, the copy made for the
+    old one is deleted, and the old helper is put away."""
+    for here in (LIVE, OWN):
+        got = _live_run(here)
+        assert got["ask"] == []
+        gone = {c["id"]: c["why"] for c in got["archive"]}
+        assert gone[OLD] == "the brief moved into the chat that answers the page", here
+        calls = got["brief"]
+        assert calls[0]["tool"] == "create_trigger"
+        assert calls[0]["args"]["persistent_session_id"] == LIVE
+        assert "routines.py record --session " + LIVE in calls[1]["run"]
+        assert calls[2]["tool"] == "delete_trigger"
+        assert calls[2]["args"] == {"trigger_id": "trig_EXAMPLELEFTBRIEF"}
+    # Run from the old helper itself (the brief's own run): the brief moves now, and the chat
+    # is kept only until a tidy-up from another chat puts it away.
+    got = _live_run(OLD)
+    assert [c["tool"] for c in got["brief"] if "tool" in c] == ["create_trigger", "delete_trigger"]
+    assert {c["id"]: c["why"] for c in got["keep"]}[OLD] == "it is this chat"
+    # Used moments ago, it is kept, and so is the brief in it, until a later tidy-up.
+    soon = _live_run(LIVE, now=dt.datetime(2026, 11, 5, 8, 50, tzinfo=dt.timezone.utc))
+    assert OLD not in {c["id"] for c in soon["archive"]} and soon["brief"] == []

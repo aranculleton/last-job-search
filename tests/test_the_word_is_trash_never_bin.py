@@ -31,3 +31,15 @@ def test_no_sentence_a_person_reads_says_bin():
                                               "tools/app_actions.py", "tools/app_model.py")
              for ln, t in _sentences(p)]
     assert not found, "\n".join(found)
+
+
+def test_the_guides_a_person_reads_say_trash_too():
+    """The README still said "the bin" after 4.10.0 (the maintainer, 2026-11-05): the guides a
+    person reads say it as the page does, every line but a path or a command."""
+    found = []
+    for p in ("README.md", "START_HERE.md", "HELP.md"):
+        with open(os.path.join(ROOT, p), encoding="utf-8") as fh:
+            for ln, line in enumerate(fh, 1):
+                if BIN.search(line) and not NOT_WORDS.search(line) and "-bin-" not in line:
+                    found.append(f"{p}:{ln}: {line.strip()[:90]}")
+    assert not found, "\n".join(found)

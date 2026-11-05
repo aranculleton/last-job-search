@@ -701,8 +701,9 @@ METHODS: dict[str, dict] = {
             (22, "2026-11-04", False, "the chat of a big job (an interview prep, a search, a batch of drafts) is put away soon after its job ends, not after two quiet days: the tidy-up is due again when such a job finishes, and archives its chat once its work is saved; a helper the page was taken from is renamed to finishing up at once and archived at the next check-in"),
             (23, "2026-11-05", False, "a big job's chat reports back to the chat that started it once its work is on master, and that chat puts the results on the page and archives it at once (tidy.py close and closed), the daily tidy-up kept for one that never reported; the tidy-up keeps each archived chat's real title itself, never through the shell, judges a chat it put away before by the title it has now, never brings one back for an empty stored title, and puts away again one of the app's chats an older tidy-up brought back by mistake; the live page helper is called Job search page, every older helper (Job search helper, finishing up) is put away as soon as its work is on master, never kept for being used lately, the brief moved into the live helper first (made, recorded, the old one turned off) and a chat holding a brief that is off kept for it; the first tidy-up after this update runs even if the day's already ran, so the helpers left over from before go by themselves; after a hand-over the tidy-up runs at once and again half an hour on, for a day, while the old helper still runs or holds unsaved work"),
             (24, "2026-11-05", False, "the tidy-up never puts away a chat still at work: running or working by the sessions list's status or get_session's (a listing trimmed to status is read), an old helper used in the last ten minutes or waiting on the person, any task that is on firing into it (a one-time reminder as much as the brief) unless this same tidy-up moves that task, or a branch GitHub does not hold yet while it was used in the last two days; a brief bound to a chat kept for any of these stays where it is"),
+            (25, "2026-11-05", False, "a chat you started yourself is never put away by the tidy-up, whatever its title; a brief whose task still runs in the helper a hand-over replaced moves into the live helper, and that old helper is put away"),
         ),
-        "fingerprint": "04c1d1c8edf5094f",
+        "fingerprint": "4f06b3c68230ea0b",
     },
     "expand": {
         "by": "upgrade", "priority": 4, "time": "~15 min",
@@ -772,8 +773,9 @@ METHODS: dict[str, dict] = {
             (41, "2026-11-05", True, "a burst of live writes is folded into the next frame again, so a card shows its new state as soon as it is written"),
             (42, "2026-11-05", True, "away from the desktop app the page is not drawn again a second and a half after opening unless that changed what it says; a Tweak panel opened on a wide screen shows at once, without waiting for the next redraw"),
             (43, "2026-11-05", True, "what a late capability changes is drawn once it settles"),
+            (44, "2026-11-05", False, "Icons only is its own section at the top of the side menu, a row like the others under one rule"),
         ),
-        "fingerprint": "7ed6d6de13ea0340",
+        "fingerprint": "43552a06cfdf5784",
     },
     "upskill": {
         "by": "upgrade", "priority": 4, "applies": "upskill_plans", "time": "~10 min",

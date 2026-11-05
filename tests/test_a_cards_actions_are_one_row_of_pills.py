@@ -115,13 +115,17 @@ def test_a_link_inside_a_sentence_stays_a_link(run, tmp_path):
 MENU = r"""(() => {
   const side = document.getElementById('side');
   const lists = [...side.children];
-  const main = side.querySelector('.side-list:not(.side-foot)'), foot = side.querySelector('.side-foot');
+  const main = side.querySelector('.side-main'), foot = side.querySelector('.side-foot'), head = side.querySelector('.side-head');
   const last = [...main.querySelectorAll('li')].pop().getBoundingClientRect();
   const rule = foot.getBoundingClientRect();
   const first = foot.querySelector('li').getBoundingClientRect();
-  const s = getComputedStyle(foot);
+  const s = getComputedStyle(foot), hs = getComputedStyle(head);
+  const fold = head.querySelector('li').getBoundingClientRect(), hrule = head.getBoundingClientRect().bottom;
+  const next = main.querySelector('li').getBoundingClientRect();
   return {above: Math.round(rule.top - last.bottom), below: Math.round(first.top - rule.top - parseFloat(s.borderTopWidth)),
-    after: lists.slice(lists.indexOf(foot) + 1).length, rules: lists.filter((e) => parseFloat(getComputedStyle(e).borderTopWidth) > 0).length};
+    after: lists.slice(lists.indexOf(foot) + 1).length, rules: lists.filter((e) => parseFloat(getComputedStyle(e).borderTopWidth) > 0).length,
+    first: lists.indexOf(head), headAbove: Math.round(hrule - parseFloat(hs.borderBottomWidth) - fold.bottom),
+    headBelow: Math.round(next.top - hrule)};
 })()"""
 
 
@@ -134,3 +138,5 @@ def test_the_menu_foot_is_one_rule_with_equal_space_round_it_and_settings_last(r
         assert r["after"] == 0 and r["rules"] == 1, ("Settings is last, under the one rule", r)
         # On the 8, 12, 16 scale as the page draws it (its text size can scale it by a pixel).
         assert abs(r["above"] - r["below"]) <= 1 and any(abs(r["above"] - g) <= 1 for g in (8, 12, 16)), ("the same space above and below the rule, on the scale", r)
+        # Icons only is the menu's first section, under its own rule with the same space round it.
+        assert r["first"] == 0 and abs(r["headAbove"] - r["headBelow"]) <= 1 and abs(r["headAbove"] - r["above"]) <= 1, ("Icons only, its own section", r)

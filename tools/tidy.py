@@ -11,7 +11,8 @@ archive (archive_session: the chat is kept, read-only, and unarchive_session bri
 and keeps every chat that is:
 
 - not one the app made: its title is not one the app gives its chats, and it is not a helper
-  the page recorded as answering before;
+  the page recorded as answering before; nor one the person started (list_sessions' origin),
+  unless it carries the helper's name, has handed the page on and has not been used for an hour;
 - not on this copy (get_session names the copy each chat works on; unknown is kept);
 - the chat that answers the page, or this chat;
 - bound to a scheduled task that is on (the job round, an older ops chat that relays to the
@@ -84,8 +85,23 @@ APP_TITLE = re.compile(r"^(?:[^\w\s]{1,3}\s*)?Job search(?::\s*\S.{0,60}|\s+(?:h
 # own and the live page helper; a heavy user's renewals had stacked up several).
 HELPER_NAME = re.compile(r"^(?:[^\w\s]{1,3}\s*)?Job search\s+(?:helper|page)\b", re.I)
 # Once after the update that brought that rule, the tidy-up is due even if it ran that day,
-# so the helpers left over from before are put away by themselves (`due`).
-SWEEP = "helpers-2026-11-04"
+# so the helpers left over from before are put away by themselves (`due`). Moved on with
+# 4.10.1, so the helper a brief was left in is put away, the brief moved first, that same day.
+SWEEP = "helpers-2026-11-05"
+# A chat the person started (the Claude app, the web, a phone) says so in list_sessions'
+# `origin`; every chat the app starts is started by another chat (this origin). One of theirs is
+# never put away, unless it carries the helper's name: the chat they set up in answers the page
+# first and is named so, and once it has handed the page on it is an old helper like the rest,
+# put away once they have not used it for STARTED_QUIET_S (the maintainer, 2026-11-05: "we have
+# 3 when we should have 1", two of them "literally identical"; two only during a hand-over).
+APP_ORIGINS = ("claude_code_mcp_seed",)
+STARTED_QUIET_S = 60 * 60
+
+
+def person_started(s: dict) -> bool:
+    """Did the person start this chat themself? Only where the listing says so."""
+    origin = str((s or {}).get("origin") or "")
+    return bool(origin) and origin not in APP_ORIGINS
 # After a hand-over the helper it replaced is put away at once (`retiring`): asked again at a
 # check-in this long after the last try while it still runs or holds work not on master, for
 # a day; after that the daily tidy-up has it.
@@ -483,13 +499,30 @@ def plan(chats: list[dict], triggers: list[dict], info: dict, reg: dict, listene
     # it took the page from. Never the person's own chat the page was taken from, whatever
     # its title (X-4): a record that says so (one from before the flag says nothing).
     theirs = str(listener.get("took_from") or "") if listener.get("took_from_helper") is False else ""
+    started = {s.get("id") for s in chats if person_started(s)}
+    started_helpers = {sid for sid in started if HELPER_NAME.match(titles.get(sid, "").strip())}
+    mine_only = started - started_helpers             # theirs, never a helper: never listed
     old_helpers = ({sid for sid, t in titles.items() if HELPER_NAME.match(t.strip())} | known) \
-        - live_ids - {theirs, ""}
+        - live_ids - mine_only - {theirs, ""}
 
     def retired(sid: str) -> bool:
         return bool(sid) and sid != helper and (
             sid not in listed_ids or sid in known or sid in old_helpers
             or bool(re.search(r"\bhelper\b", titles.get(sid, ""), re.I)))
+
+    def old_helper(sid: str) -> bool:
+        """One of the app's helpers the page no longer uses, this chat included."""
+        return bool(sid) and sid != helper and sid not in mine_only and sid != theirs and (
+            sid in known or bool(HELPER_NAME.match(titles.get(sid, "").strip())))
+
+    # Where the brief runs is where its task fires: a registry that names no chat, or the ops
+    # chat, while the task wakes an old helper (the maintainer's live run, 2026-11-05: a brief
+    # remade in the helper a hand-over had just replaced) kept that helper for good.
+    live_brief = next((t for t in triggers if brief.get("trigger_id")
+                       and t.get("id") == brief.get("trigger_id")), None) or {}
+    fired_in = str(live_brief.get("session") or live_brief.get("persistent_session_id") or "")
+    if fired_in and fired_in != home and fired_in in listed_ids and old_helper(fired_in):
+        home = fired_in
 
     if (setup in ("chat_per_briefing", "ops_relay") and home and helper.startswith("session_")
             and home != helper and not brief.get("off") and not reg.get("pause")
@@ -582,7 +615,7 @@ def plan(chats: list[dict], triggers: list[dict], info: dict, reg: dict, listene
             out["keep"].append({"id": sid, "title": title, "why": why})
         if sid in done_before:
             continue
-        if not (APP_TITLE.match(title) or sid in known) or sid == theirs:
+        if not (APP_TITLE.match(title) or sid in known) or sid == theirs or sid in mine_only:
             continue                                  # the person's own chat: never listed
         if sid in live_ids:
             keep("it answers the page" if sid == listener.get("chat") else "it is this chat")
@@ -620,6 +653,9 @@ def plan(chats: list[dict], triggers: list[dict], info: dict, reg: dict, listene
             # a hand-over), but never put away while it is still in use or waiting on them.
             keep("it was in use moments ago" if not waits else "it is waiting on the person")
             continue
+        if sid in started_helpers and _ago_s(last, now) < STARTED_QUIET_S:
+            keep("they used it in the last hour")
+            continue
         if (sid not in moved_from and sid not in jobs and sid not in old_helpers
                 and quiet < (WAITING_DAYS if waits else IDLE_DAYS)):
             keep(f"used {quiet:.0f} day(s) ago")
@@ -653,8 +689,12 @@ def plan(chats: list[dict], triggers: list[dict], info: dict, reg: dict, listene
                else "a chat for one run or one job, finished")
         out["archive"].append({"id": sid, "title": title, "why": why})
     listed = {s.get("id") for s in chats}
-    if adopt and adopt in listed and not any(a["id"] == adopt for a in out["archive"]):
-        out["brief"] = []                             # its chat is kept: the brief stays put
+    if adopt and adopt in listed and not any(a["id"] == adopt for a in out["archive"]) \
+            and not (adopt == this_chat and old_helper(adopt)):
+        # Its chat is kept: the brief stays put. Not where it is an old helper running this
+        # very tidy-up (the brief's own run): the brief moves now and the next tidy-up, from
+        # another chat, puts this one away; else it stayed for good.
+        out["brief"] = []
     if rchat in moved_from and rchat in listed and not any(a["id"] == rchat for a in out["archive"]):
         out["moves"] = []                             # its chat is kept: the round stays put
     out["ask"] = list(dict.fromkeys(out["ask"]))
