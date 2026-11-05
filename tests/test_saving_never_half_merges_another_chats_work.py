@@ -69,7 +69,7 @@ def _application_on_master(copy):
     origin, chat, other = _stranger(copy)
     write(other, TEX, _resume("Python, SQL", "\\item The first bullet."))
     write(other, PDF, "%PDF the first render\n")
-    write(other, LETTER, "Dear Alder Freight, the first letter.\n")
+    write(other, LETTER, "Dear hiring team at Alder Freight, the first letter.\n")
     write(other, LETTER_PDF, "%PDF the first letter\n")
     write(other, DRAFT, _draft("the first summary"))
     write(other, PREP, "# Prep\n\nNothing yet.\n")
@@ -91,7 +91,7 @@ def test_an_application_this_chat_changed_keeps_every_file_as_this_chat_has_it(c
     git(other, "switch", "-q", "-c", "claude/other-chat", "master")
     write(other, TEX, _resume("Python, SQL", "\\item An older bullet, put back."))
     write(other, PDF, "%PDF the other chat's render\n")
-    write(other, LETTER, "Dear Alder Freight, the other chat's letter.\n")
+    write(other, LETTER, "Dear hiring team at Alder Freight, the other chat's letter.\n")
     write(other, LETTER_PDF, "%PDF the other chat's letter\n")
     write(other, DRAFT, _draft("the other chat's summary"))
     write(other, PREP, "# Prep\n\nThe other chat's prep for the first call.\n")
@@ -112,7 +112,7 @@ def test_an_application_this_chat_changed_keeps_every_file_as_this_chat_has_it(c
     assert _shown(origin, TEX) == mine
     assert _shown(origin, PDF) == "%PDF this chat's render\n"
     assert _shown(origin, DRAFT) == _draft("the first summary")
-    assert _shown(origin, LETTER) == "Dear Alder Freight, the first letter.\n"
+    assert _shown(origin, LETTER) == "Dear hiring team at Alder Freight, the first letter.\n"
     assert _shown(origin, LETTER_PDF) == "%PDF the first letter\n"
     assert "The other chat's prep" in _shown(origin, PREP)
     assert "Lindenmoor" in _shown(origin, "profile/stories.md")
