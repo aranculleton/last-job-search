@@ -894,7 +894,7 @@
     "outcome.interview": "Interview booked", "outcome.rejected": "Marked as not this time", "outcome.offer": "Offer recorded",
     "outcome.withdrawn": "Marked as withdrawn", "outcome.no_response": "Marked as no reply", "msg.received": "Their reply logged",
     "person.status": "Changed", "person.stop": "Stopped", "referral.agreed": "Referral recorded", "referral.ended": "Referral ended",
-    "tweak.undo": "Changed back", "consent.yes": "Noted", "consent.no": "Noted",
+    "tweak.undo": "Changed back", "consent.yes": "Noted", "consent.no": "Noted", "job.edit": "Changed",
   };
   function receiptOk(r) { return !r || !r.result || r.result === "ok"; }
   function actionState(id) {
@@ -2482,6 +2482,148 @@
     return det("more:" + key, false, {class: "more"}, h("summary", {class: "more-btn", "data-k": "more-sum:" + key}, "More", h("span", {class: "sr-only"}, ": " + about)),
       h("div", {class: "more-panel"}, parts));
   }
+  // A Jobs card's More in two parts: the toggle, in the card's actions row beside its other
+  // buttons, and the panel, drawn under that row. Opened inside the row, the panel took the
+  // row's whole width and left "More" alone on a line of its own (the maintainer, 2026-11-04:
+  // "this needs a lot of polish especially the more options"). A row of buttons with none in
+  // it is not a part; one button alone is shown in More's place, as more() does.
+  // `keep`: a rare action stays under More even alone, so a card's row keeps to its budget of
+  // pills (the maintainer, 2026-11-05: one filled, two soft at most).
+  function moreSplit(key, about, kids, keep) {
+    const parts = arr(kids).flat().filter((x) => x && !(x.nodeType === 1 && x.classList.contains("more-acts") && !x.children.length));
+    if (!parts.length) return {toggle: null, panel: null};
+    if (!keep && parts.length === 1 && parts[0].nodeType === 1) {
+      const only = parts[0];
+      const inner = only.classList && only.classList.contains("more-acts") ? [...only.children] : [only];
+      if (inner.length === 1 && /^(BUTTON|A)$/.test(inner[0].tagName)) { inner[0].setAttribute("data-more", "1"); return {toggle: inner[0], panel: null}; }
+    }
+    const k = "det:more:" + key;
+    const pid = "mp-" + seg(key);
+    const panel = h("div", {class: "more-panel m-rows", id: pid, hidden: !(openState.has(k) && openState.get(k))}, parts);
+    const toggle = det("more:" + key, false, {class: "more split", ontoggle: (e) => { panel.hidden = !e.currentTarget.open; }},
+      h("summary", {class: "more-btn", "data-k": "more-sum:" + key, "aria-controls": pid,
+        // Shown with the tap itself, not a task later: the toggle event follows the click.
+        onclick: (e) => { panel.hidden = !!e.currentTarget.parentElement.open; }}, "More", h("span", {class: "sr-only"}, ": " + about)));
+    return {toggle, panel};
+  }
+  // A card's details, the rows about it, in a small fold of their own, opened from the end of
+  // its line of facts ("Why" where it has a score, else "Details"): More keeps only what is
+  // rare (the maintainer, 2026-11-05: "More is for genuinely rare actions only").
+  function infoFold(key, rows) {
+    const list = arr(rows).flat().filter(Boolean);
+    if (!list.length) return {panel: null, toggle: () => null};
+    const k = "det:info:" + key;
+    const pid = "if-" + seg(key);
+    const open = openState.get(k) === true;
+    const panel = h("div", {class: "more-panel m-rows info-panel", id: pid, hidden: !open}, list);
+    const flip = (e) => { const now = !(openState.get(k) === true); openState.set(k, now); panel.hidden = !now; e.currentTarget.setAttribute("aria-expanded", String(now)); };
+    return {panel, toggle: (label, aria) => [" · ", h("button", {type: "button", class: "btn link info-toggle", "aria-expanded": String(open), "aria-controls": pid,
+      "aria-label": aria || null, "data-k": "info:" + key, onclick: flip}, label)]};
+  }
+  // The pencil beside the resume or the letter on a draft's card: the one Tweak panel, its
+  // quick choices, what to change in words and its cost, opened in place. Never "Edit" under
+  // More (2026-11-05).
+  function docPencil(a, output) {
+    const b = tweakButton(output, a, output === "letter" ? "Edit the letter" : "Edit the " + noun());
+    if (b) b.classList.add("icon-only", "quiet");
+    return b;
+  }
+  // The pencil on a job's line of facts: its title, pay and place as the person corrects them,
+  // in place, saved at once (job.edit, code only: no gauge). What a search read can be wrong
+  // (the maintainer, 2026-11-05).
+  function jobPencil(r) {
+    const key = "job:" + r.id;
+    const open = S.penOpen.has(key);
+    return btn("", () => { if (S.penOpen.has(key)) S.penOpen.delete(key); else S.penOpen.add(key); scheduleRender(); },
+      {kind: "quiet icon-only", small: true, icon: "tweak", key: "jobpen:" + r.id, pressed: open, aria: (open ? "Done changing " : "Change the details of ") + txt(r.company) + ", " + txt(r.title)});
+  }
+  function jobPen(r) {
+    const key = "job:" + r.id;
+    if (!S.penOpen.has(key)) return null;
+    const pay = payStated(r) ? txt(obj(r.pay).text) : "";
+    const fields = [["title", "Title", txt(r.title)], ["pay", "Pay", pay], ["place", "Place", txt(r.place)]].map(([k, label, v]) => {
+      const fid = "jp-" + k + "-" + seg(r.id);
+      return h("div", {class: "jp-field"}, h("label", {for: fid}, label), h("input", {id: fid, type: "text", class: "pen-ask", "data-k": "jp:" + k + ":" + r.id, maxlength: 200, value: v}));
+    });
+    const save = () => {
+      const val = {};
+      for (const k of ["title", "pay", "place"]) { const el = $("jp-" + k + "-" + seg(r.id)); const v = el ? txt(el.value).trim() : ""; const was = k === "title" ? txt(r.title) : k === "pay" ? pay : txt(r.place); if (v && v !== was) val[k] = v; }
+      S.penOpen.delete(key);
+      if (Object.keys(val).length) act([{item: r.id, action: "job.edit", value: val, rev: r.rev}], "Changed: " + txt(r.company));
+      else scheduleRender();
+    };
+    return h("div", {class: "pen-tell job-pen", "data-job-pen": r.id}, fields,
+      h("div", {class: "opts"}, btn("Save", save, {kind: "secondary", small: true, key: "jpsave:" + r.id, aria: "Save the details of " + txt(r.company) + ", " + txt(r.title)})));
+  }
+  // One row of a Jobs card's More: a short label and what it says, in one size and one tone
+  // (the maintainer, 2026-11-04: "mixed type sizes and tones and no structure"). A line of
+  // words is a paragraph; nothing to say is no row.
+  function mRow(label, body, cls) {
+    const kids = (Array.isArray(body) ? body : [body]).flat().filter((x) => x !== null && x !== undefined && x !== false && x !== "");
+    if (!kids.length) return null;
+    return h("div", {class: "m-row" + (cls ? " " + cls : "")}, h("p", {class: "m-label"}, label),
+      h("div", {class: "m-body"}, kids.map((x) => (typeof x === "string" ? h("p", {}, x) : x))));
+  }
+  // A long title breaks after its slashes ("Analyst/Consultant/Senior Consultant"), never in
+  // the middle of a word.
+  function breakable(t) { return txt(t).split("/").flatMap((x, i) => (i ? ["/", h("wbr"), x] : [x])); }
+  // A score's reasons, its match and its watch-out apart (the engine's `reasons`): run
+  // together, "Why 100: ... Asks for a graduate degree" read as a contradiction (2026-11-04).
+  // A model from before them has `why`, the match then the gap.
+  function jobReasons(r) {
+    if (r.reasons && typeof r.reasons === "object") return {good: txt(r.reasons.good), watch: txt(r.reasons.watch)};
+    const w = arr(r.why).map(txt).filter(Boolean).map((x) => x.replace(/\.?$/, "."));
+    return {good: w[0] || "", watch: w[1] || ""};
+  }
+  // Where the posting is and whether it is still open, for More's "The posting".
+  function postingWords(ap) {
+    const a = obj(ap);
+    if (!safeUrl(a.url)) return "";
+    const where = {employer: "On the employer's own site", board: "On a job site", linkedin: "On LinkedIn", aggregator: "On a listing site"}[txt(a.kind)] || "";
+    const st = txt(a.status);
+    const when = a.checked_at ? " " + ago(a.checked_at) : a.checked_on ? " on " + fmtDay(a.checked_on) : "";
+    const said = st === "open" ? "Still open, checked" + when + "." : st === "closed" ? "It has closed." : "Not checked yet: it is checked before you apply.";
+    return (where ? where + ". " : "") + said;
+  }
+  function postingRow(ap) {
+    const said = postingWords(ap);
+    return said ? mRow("The posting", said) : null;
+  }
+  // "Also at <employer>" under a Jobs card's More: the other roles, drafts and people there,
+  // a line for each kind, each link naming what it opens ("your draft for <role>"), a long
+  // line cut to its first few with "and N more" (the maintainer, 2026-11-04: "your draft,
+  // your draft" and a run-on of roles, drafts, messages and people). The card's own role
+  // and its own draft are never "also" there, and a role with its draft listed is the draft.
+  const ALSO_SHOWN = 3;
+  function alsoAt(company, item, own) {
+    const c = txt(company);
+    const rel = item && item.related && typeof item.related === "object" ? item.related : null;
+    if (!c || !rel) return null;
+    const mine = new Set(arr(own).map(txt).filter(Boolean));
+    const byId = (list, id) => list.find((x) => txt(x.id) === id) || null;
+    const ids = (k) => arr(rel[k]).map(txt).filter((id) => id && !mine.has(id));
+    const key = (sec, id) => "rel:" + txt(item.id) + ":" + sec + ":" + id;
+    const drafts = ids("ready").map((id) => byId(readyItems(), id)).filter((a) => a && !mine.has(txt(a.job)));
+    const drafted = new Set(drafts.map((a) => txt(a.job)).concat(drafts.map((a) => txt(a.id))).filter(Boolean));
+    const roles = ids("jobs").map((id) => byId(jobRows(), id)).filter((j) => j && !drafted.has(txt(j.id)) && !drafted.has(txt(j.draft)));
+    const msgs = ids("messages").map((id) => messageById(id)).filter(Boolean);
+    const noted = new Set(msgs.map((m) => txt(m.contact)));
+    const people = ids("people").filter((id) => !noted.has(id)).map((id) => byId(peopleItems(), id)).filter(Boolean);
+    const ivs = ids("interviews").map((id) => byId(allInterviews(), id)).filter(Boolean);
+    const groups = [
+      ["Roles", roles.map((j) => itemLink("jobs", j.id, txt(j.title), key("jobs", j.id))), 0],
+      ["Drafts", drafts.map((a) => itemLink("drafts", a.id, "your draft for " + txt(a.role), key("ready", a.id))), 0],
+      ["People", msgs.map((m) => itemLink("drafts-messages", m.id, (txt(m.kind) === "first_note" ? "the note to " : "the message to ") + txt(m.first_name), key("messages", m.id)))
+        .concat(people.map((p) => itemLink("contacts", p.id, txt(p.first_name), key("people", p.id)))), Number(item.people_more) || 0],
+      ["Interviews", ivs.map((i) => itemLink("interviews", i.id, "your interview" + (txt(i.role) ? " for " + txt(i.role) : ""), key("interviews", i.id))), 0],
+    ].filter(([, links, extra]) => links.length || extra);
+    if (!groups.length) return null;
+    return mRow(["Also at ", h("bdi", {}, c)], groups.map(([label, links, extra]) => {
+      const left = Math.max(0, links.length - ALSO_SHOWN) + extra;
+      return h("p", {class: "also"}, h("span", {class: "m-sub"}, label + ": "), links.slice(0, ALSO_SHOWN).map((l, i) => [i ? ", " : null, l]),
+        left ? (links.length ? " and " : "") + left + " more" : null);
+    }), "related");
+  }
   // An interview's format is a word, or an object a chat wrote ({kind, label, ...}): never
   // "[object Object]" on the card (the maintainer, 2026-10-26).
   function formatWord(f) {
@@ -2525,29 +2667,22 @@
     announce(RUN_WORDS[kind] + " already: it is in Claude's work.");
     return true;
   }
-  function applyLink(ap, key, label) {
+  // `pill`: drawn as a soft grey pill beside a card's other buttons, never underlined words
+  // among them (the maintainer, 2026-11-05: "some things are just text buttons which makes it
+  // look quite cluttered").
+  function applyLink(ap, key, label, pill, step) {
     const a = obj(ap);
     const url = safeUrl(a.url);
     // A posting pasted as text has no link, and never will: "yet" promised one (journeys 16).
     if (!url) return h("span", {class: "muted small"}, "No link to the posting");
-    return h("a", {href: url, target: "_blank", rel: "noopener noreferrer", "data-k": key, class: "applylink"}, label || "See the posting", h("span", {class: "sr-only"}, " (opens in a new tab)"));
+    return h("a", {href: url, target: "_blank", rel: "noopener noreferrer", "data-k": key, class: step ? "btn primary small applylink" : pill ? "btn secondary small applylink" : "applylink", "data-primary": step ? "1" : null},
+      label || "See the posting", h("span", {class: "sr-only"}, " (opens in a new tab)"));
   }
   // Where an apply button goes, in its own words: "Apply on their site" opened LinkedIn
   // (2026-11-03).
   function applyWhere(ap) {
     const kind = txt(obj(ap).kind) || (/^https?:\/\/([a-z0-9-]+\.)*linkedin\.com\//i.test(txt(obj(ap).url)) ? "linkedin" : "");
     return {linkedin: "Apply on LinkedIn", board: "Apply on the job site", aggregator: "Apply on the listing site"}[kind] || "Apply on their site";
-  }
-  function linkHint(ap) {
-    const a = obj(ap);
-    if (!safeUrl(a.url)) return null;
-    const where = {employer: "on the employer's own site", board: "on a job site", linkedin: "on LinkedIn", aggregator: "on a listing site"}[txt(a.kind)] || "";
-    const st = txt(a.status);
-    const when = a.checked_at ? " " + ago(a.checked_at) : a.checked_on ? " on " + fmtDay(a.checked_on) : "";
-    // One line about the link, under More: a second one there said again that it was not
-    // checked yet (the walk-through, 2026-11-03).
-    const said = st === "open" ? "still open, checked" + when : st === "closed" ? "it has closed" : "not checked yet; it is checked before you apply";
-    return h("p", {class: "hint"}, "The posting" + (where ? " is " + where : "") + ": " + said + ".");
   }
   function selBox(set, id, name, onChange) {
     const cid = "sel-" + seg(id);
@@ -2589,12 +2724,29 @@
   function jobsSwitch(cur) {
     // The same count as Jobs' summary ("3 to look at"): a tab saying "Found 4" over it counted
     // a role already drafted (the walk-through, 2026-11-03).
-    const n = {found: jobRows().filter(jobToLook).length,
-      drafts: readyItems().filter(readyLive).length};
-    return segmented("Jobs", [["found", "Found" + (n.found ? " " + n.found : "")], ["drafts", "Drafts" + (n.drafts ? " " + n.drafts : "")], ["applied", "Applied"]], cur, (v) => {
-      if (v === "drafts") { setPref("drafts:view", "apps"); go("drafts", {focus: false, keepScroll: false}); return; }
-      setPref("jobs:tab", v === "applied" ? "applied" : "new"); S.sel.jobs.clear(); go("jobs", {focus: false});
+    // One list of the jobs you might apply to, each at its own stage, and Applied: a drafted
+    // job stood in Found and again in Drafts, "Drafts 29" beside "Found 7", and acting on one
+    // meant flipping between them (the maintainer, 2026-11-05).
+    const n = toApplyCount();
+    return segmented("Jobs", [["found", "To apply" + (n ? " " + n : "")], ["applied", "Applied"]], cur === "drafts" ? "found" : cur, (v) => {
+      setPref("jobs:tab", v === "applied" ? "applied" : "new"); setPref("drafts:view", "apps"); S.sel.jobs.clear(); go("jobs", {focus: false});
     }, "jobsw");
+  }
+  // What "To apply" counts, everywhere it is said: every draft still to send, and every job
+  // still to look at (jobToLook), never one twice.
+  function toApplyCount() { return readyItems().filter(readyLive).length + jobRows().filter(jobToLook).length; }
+  // A job's draft, where it is one to show in the list in the job's place: still to send, or
+  // sent today, so its mark can be undone where it was made.
+  function draftInList(a) {
+    if (!a) return false;
+    if (readyLive(a)) return true;
+    const ago = daysSince(a.applied_on || a.sent_on);
+    return (ago === null && !!settledAction(a.id)) || (ago !== null && ago <= 1);
+  }
+  function listDraft(r) {
+    if (r && r.__draft) return r.__draft;
+    const d = sameDraft(r);
+    return draftInList(d) ? d : null;
   }
   // o: {items, name, render, live(it), fold(it), foldLabel(n), sort(a, b), chips: [{key, label,
   // options: [[value, label, test]]}], search(it), empty(), box(kids)}. Anything live shows
@@ -2765,7 +2917,8 @@
       const cid = "cost-" + seg((ctx.where || "") + "-" + a.id);
       // A cost is said only where the fix uses Claude; a free fix needs no label.
       const paid = Number(obj(a.cost).state) > 0;
-      fix = h("span", {class: "fix"}, btn(txt(ac.label), () => runAction(ac, ctx.item), {small: true, key: "fix:" + (ctx.where || "") + ":" + a.id, describedby: paid ? cid : null}),
+      // A fix that wakes Claude carries the gauge, beside its cost where it says one.
+      fix = h("span", {class: "fix"}, btn(txt(ac.label), () => runAction(ac, ctx.item), {small: true, wakes: ac.type === "work" ? txt(ac.kind) || true : null, key: "fix:" + (ctx.where || "") + ":" + a.id, describedby: paid ? cid : null}),
         paid ? costEl(a.cost, ac.type === "work" ? ac.kind : null, cid) : null);
     }
     return h("div", {class: "alert tone-" + (ALERT_TONE[txt(a.kind)] || "warn"), "data-alert": a.id},
@@ -2798,7 +2951,7 @@
     else if (ac.type) {
       const cid = "cost-" + seg((ctx.where || "") + "-" + sg.id);
       const paid = Number(obj(sg.cost).state) > 0;
-      use = h("span", {class: "fix"}, btn(txt(ac.label) || "Use", () => runAction(ac, ctx.item), {small: true, key: "use:" + (ctx.where || "") + ":" + sg.id, describedby: paid ? cid : null}),
+      use = h("span", {class: "fix"}, btn(txt(ac.label) || "Use", () => runAction(ac, ctx.item), {small: true, wakes: ac.type === "work" ? txt(ac.kind) || true : null, key: "use:" + (ctx.where || "") + ":" + sg.id, describedby: paid ? cid : null}),
         paid ? costEl(sg.cost, ac.type === "work" ? ac.kind : null, cid) : null);
     }
     return h("div", {class: "suggest", "data-suggest": sg.id},
@@ -2891,14 +3044,16 @@
     const ids = arr(obj(r.related).interviews);
     return interviewItems().find((i) => ids.includes(i.id) && !isPast(i.when)) || null;
   }
-  function warmNote(r) {
+  // `quiet`: the line under More, where the card's face says it no other way.
+  function warmNote(r, quiet) {
     const text = txt(r.warm);
     if (!text) return null;
     const who = warmPerson(r);
     const name = who ? txt(who.first_name) : "";
-    const body = !who ? text : text.indexOf(name) === 0 ? [itemLink("contacts", who.id, name, "warm:" + r.id), text.slice(name.length)]
-      : [text, " ", itemLink("contacts", who.id, "Open " + name, "warm:" + r.id)];
-    return h("p", {class: "warm"}, h("span", {class: "warm-k"}, "Before you apply: "), h("span", {class: "warm-t"}, body));
+    const key = (quiet ? "warm-more:" : "warm:") + r.id;
+    const body = !who ? text : text.indexOf(name) === 0 ? [itemLink("contacts", who.id, name, key), text.slice(name.length)]
+      : [text, " ", itemLink("contacts", who.id, "Open " + name, key)];
+    return h("p", {class: quiet ? "warm-line" : "warm"}, h("span", {class: "warm-t"}, body));
   }
 
   // ------------------------------------------------------------------ To do: what needs the person, from every part
@@ -4723,11 +4878,17 @@
     })) : h("p", {class: "muted"}, "Nobody else is waiting on you."),
       navLink("contacts", "Everyone in Contacts"), {icon: "contacts", w: 4}));
     const searching = [...allWork()].some(([, w]) => w.kind === "search" && ACTIVE.has(w.status));
-    put(grid, briefPanel("jobs", "Jobs", best.length ? h("ul", {class: "plain bp-list", "data-fit": "2,3,2"}, best.slice(0, 5).map((r) => h("li", {},
+    // What is owed leads: drafts made and not yet sent, the same count as Drafts' own, opening
+    // them; then the new finds; "Nothing new" only when there is neither (the maintainer,
+    // 2026-11-05: "Nothing new to look at." over 29 drafts not yet sent).
+    const toSend = readyItems().filter(readyLive).length;
+    const sendLine = toSend ? h("p", {class: "bp-lead bp-send"}, h("a", {href: "#drafts", class: "bp-text bp-link", "data-k": "bp-drafts",
+      onclick: (e) => { e.preventDefault(); setPref("drafts:view", "apps"); go("drafts", {focus: true}); }}, h("strong", {}, nWord(toSend, "draft", "drafts") + " ready to apply"))) : null;
+    put(grid, briefPanel("jobs", "Jobs", [sendLine, best.length ? h("ul", {class: "plain bp-list", "data-fit": "2,3,2"}, best.slice(0, 5).map((r) => h("li", {},
       h("a", {href: "#jobs/" + r.id, class: "bp-text bp-link", "data-k": "bp-job:" + r.id, onclick: (e) => { e.preventDefault(); go("jobs", {focus: true, item: r.id}); }},
         h("strong", {}, txt(r.title)), h("span", {class: "bp-at"}, txt(r.company))),
       r.score != null ? h("span", {class: "bp-score tone-" + (txt(r.band) || "plain"), title: SCORE_MEANS}, String(r.score)) : null)))
-      : h("p", {class: "muted"}, searching ? "Searching now." : "Nothing new to look at."),
+      : searching ? h("p", {class: "muted"}, "Searching now.") : toSend ? null : h("p", {class: "muted"}, "Nothing new to look at.")],
       [best.length ? navLink("jobs", "All " + best.length + " new") : null,
         !searching ? h("button", {type: "button", class: "btn link", "data-k": "bp-search", onclick: () => askSearch()}, "Find jobs") : null],
       {icon: "jobs", w: 4}));
@@ -4927,6 +5088,13 @@
     if (d <= OLD_POSTING_DAYS) return "Posted " + d + " days ago";
     return "Posted " + (d > 365 ? "over a year" : Math.round(d / 30) + " months") + " ago";
   }
+  // "found today", "found yesterday", "found 2 Nov": the engine's day the job was first found.
+  function foundWords(r) {
+    const n = r.found_days;
+    if (n === null || n === undefined || n === "" || !isFinite(Number(n))) return "";
+    const d = Math.max(0, Math.round(Number(n)));
+    return d === 0 ? "found today" : d === 1 ? "found yesterday" : fmtDayMonth(r.found_on) ? "found " + fmtDayMonth(r.found_on) : "found " + d + " days ago";
+  }
   const posted = (r, n) => r.posted_days !== undefined && r.posted_days !== null && Number(r.posted_days) <= n;
   function jobChips() {
     return [{key: "score", label: "How well it fits you", options: [["75", "Strong, 75 and up", (r) => Number(r.score) >= 75], ["60", "Good, 60 and up", (r) => Number(r.score) >= 60]]},
@@ -4952,59 +5120,79 @@
     return s === "match" ? (a, b) => (closed(a) - closed(b)) || base(a, b) : (a, b) => (asks(a) - asks(b)) || (closed(a) - closed(b)) || base(a, b);
   }
   const SET_ASIDE_WHY = [["pay", "Pay"], ["place", "Place"], ["field", "Not my field"], ["employer", "Employer"], ["other", "Other"]];
-  function renderJobs(where) {
+  function renderJobs(where, drafts) {
     const jb = jobsBlock();
     const rows = jobRows();
     let tab = txt(pref("jobs:tab", "new"));
-    if (!JOB_TABS.some(([k]) => k === tab)) tab = "new";
+    if (!JOB_TABS.some(([k]) => k === tab) || drafts) tab = "new";
     if (tab === "applied") return renderApplied(where);
     const selecting = !!S.selecting;
     // A role put in the bin leaves the list at once, its Undo in the toast and then under
     // "set aside" (the maintainer, 2026-11-03: "its not OBVIOUS i deleted it"); one marked
     // applied stays, marked, until it is in Applied.
     const aside = tab === "new" ? rows.filter((r) => jobStatus(r) === "dismissed") : [];
-    const inThis = rows.filter((r) => ((inTab(jobStatus(r), tab) && !(tab !== "new" && jobPending(r))) || (tab === "new" && jobPending(r))) && aside.indexOf(r) < 0);
+    // A posting that has closed is not one to look at (jobToLook, the summary's count): it
+    // waits under the list, one tap away, as what was set aside does, never among the roles to
+    // look at with a red note of its own (2026-11-05).
+    const shut = tab === "new" ? rows.filter((r) => txt(obj(r.apply).status) === "closed" && inTab(jobStatus(r), tab) && !jobPending(r) && aside.indexOf(r) < 0) : [];
+    const found = rows.filter((r) => ((inTab(jobStatus(r), tab) && !(tab !== "new" && jobPending(r))) || (tab === "new" && jobPending(r))) && aside.indexOf(r) < 0 && shut.indexOf(r) < 0);
+    // Each job once, at its own stage: a drafted one is its draft's card, with the job's
+    // score, facts and reasons; a draft with no job in the list (an older search's, a resume
+    // made for someone) is a card of its own. Drafts first, then the finds by fit.
+    const shown = new Set(found.map(listDraft).filter(Boolean).map((a) => a.id));
+    const loose = tab === "new" ? readyItems().filter((a) => draftInList(a) && !shown.has(a.id) && !rows.some((r) => sameDraft(r) === a && found.indexOf(r) >= 0))
+      .map((a) => ({id: a.id, company: a.company, title: a.role, place: a.place, status: "ready", score: null, __draft: a})) : [];
+    const inThis = found.concat(loose);
     const searching = [...allWork()].find(([id, w]) => w.kind === "search" && ACTIVE.has(w.status));
-    const again = h("button", {type: "button", class: "btn link", "data-k": "search-again", onclick: () => askSearch()}, "Search again");
-    const addJob = h("button", {type: "button", class: "btn link", "data-k": "add-job", onclick: () => askAddJob()}, "Add a job");
     const sp = searching ? progress(searching[1]) : null;
     // A search Claude has not begun waits, and says so: never "Claude is on it" (2026-11-03).
     const searchWaits = searching && searching[1].status === "queued" && !(pickedUp(searching[1]) > 0);
-    let small = searching ? [(searchWaits ? "A search is waiting for Claude." : sp.over || sp.lapsed ? "Searching now. Claude is on it." : "Searching now, about " + plural(Math.max(1, Math.round(sp.leftS / 60)), "minute", "minutes") + " left.") + " · ", addJob] :
-      jb.made_at ? ["Searched " + ago(jb.made_at) + " · ", addJob] : [addJob];
-    small = small.concat([" · ", resumeLink()]);
-    if (jb.met === false && rows.length && !searching) small = ["Fewer good matches than usual. "].concat(small || []);
+    // What Claude is doing is the header's work pill and each card's own line, never a line
+    // here; Add a job and your resume are soft pills beside Find jobs, as Contacts' Paste a
+    // message beside Find people (2026-11-05). The line under the summary says when it searched.
+    let small = searching || !jb.made_at ? null : "Searched " + ago(jb.made_at) + ".";
+    if (jb.met === false && rows.length && !searching) small = "Fewer good matches than usual." + (small ? " " + small : "");
     let sum;
     if (!rows.length && !jb.made_at) sum = "No search yet.";
     else if (tab === "new") {
+      // The same two numbers as the tab and the menu: drafts to send, and jobs to look at.
       const live = inThis.filter(jobToLook);
+      const send = readyItems().filter(readyLive);
       const strong = live.filter((r) => txt(r.band) === "strong").length;
-      const ask = live.filter((r) => jobQuestions(r).length).length;
+      const ask = live.filter((r) => jobQuestions(r).length).length + send.filter((a) => readyQuestions(a).length).length;
+      const fix = send.filter((a) => alertsOf(a).some((x) => x.kind === "checks") && !draftUnmade(a) && !readyQuestions(a).length).length;
       const soon = live.filter((r) => r.deadline && dayDiff(r.deadline) !== null && dayDiff(r.deadline) >= 0 && dayDiff(r.deadline) <= 7).length;
-      sum = live.length ? live.length + " to look at" + (strong ? ", " + strong + " strong" : "") + "." +
-        (ask ? " " + nWord(ask, "needs", "need") + " your answer." : soon ? " " + nWord(soon, "closes", "close") + " this week." : "") : "Nothing new to look at.";
+      // A draft never made is still to make, never a fix (the walk-through, 2026-11-03).
+      const toMake = send.filter((a) => draftUnmade(a) && !readyQuestions(a).length).length;
+      const parts = [send.length ? send.length + " to send" + (toMake ? ", " + toMake + " still to make" : "") : "", live.length ? live.length + " to look at" + (strong ? ", " + strong + " strong" : "") : ""].filter(Boolean);
+      sum = parts.length ? cap1(parts.join(", ")) + "." +
+        (ask ? " " + nWord(ask, "needs", "need") + " your answer." : fix ? " " + nWord(fix, "needs", "need") + " a fix first." : soon ? " " + nWord(soon, "closes", "close") + " this week." : "") : "Nothing new to look at.";
     } else {
       const ivs = inThis.filter((r) => relatedInterview(r)).length;
       const nudge = inThis.filter((r) => dueItems().some((d) => txt(d.kind) === "follow_up" && employerIn(d.title) === txt(r.company))).length;
       sum = inThis.length ? nWord(inThis.length, "applied", "applied") + (ivs ? ", " + ivs + " with an interview booked" : "") + (nudge ? ", " + nudge + " due a follow-up" : "") + "."
         : "Nothing applied yet. Roles you apply to move here.";
     }
-    // Where a search starts is never a hunt (the maintainer, 2026-10-26): its button heads Jobs.
-    const findBtn = searching || !rows.length ? null : btn("Find jobs", () => askSearch(), {small: true, key: "head-find-jobs", icon: "k-search"});
-    const wrap = h("section", {class: "sec", "aria-labelledby": "h-jobs" + (where ? "-" + where : "")}, screenHead("jobs", "Jobs", sum, small, where, findBtn));
+    const wrap = h("section", {class: "sec", "aria-labelledby": "h-jobs" + (where ? "-" + where : "")},
+      screenHead("jobs", "Jobs", sum, small, where, jobsHeadTools(rows), {quiet: true}));
     if (!rows.length) {
       put(wrap, empty("No shortlist yet.", "Claude searches your job sites, scores every posting and lists the best here.",
         h("div", {class: "card-actions"}, runBtn("search", "Find jobs", askSearch, {kind: "primary", small: true, key: "find-jobs-empty"}))));
       put(wrap, filteredBlock());
       return wrap;
     }
-    const lo = {items: inThis, name: "jobs", one: "job", many: "jobs", chips: tab === "dismissed" ? [] : jobChips(), sort: jobSort(),
+    // Drafts first: one needing your answer or a fix, then those ready to send, then one being
+    // written, then the finds by the sort chosen.
+    const stage = (r) => { const d = listDraft(r); if (d) return readyLive(d) ? (readyQuestions(d).length || alertsOf(d).some((x) => x.kind === "checks") ? 0 : 1) : 2; const st = jobStatus(r); return st === "asking" ? 0 : st === "drafting" ? 3 : 4; };
+    const bySort = jobSort();
+    const lo = {items: inThis, name: "jobs", one: "job", many: "jobs", chips: tab === "dismissed" ? [] : jobChips(), sort: (a, b) => (stage(a) - stage(b)) || bySort(a, b),
+
       sorts: tab === "new" ? [["match", "Best match"], ["closing", "Closing soonest"], ["newest", "Newest"]] : [], sortPref: "jobs:sort",
       search: (r) => [r.company, r.title, r.place].join(" "), searchLabel: "Employer or role",
-      live: (r) => Number(r.score) >= 60 || jobPending(r),
-      fold: tab === "new" ? (r) => Number(r.score) < 60 && !jobPending(r) : null, foldLabel: (k) => k + " below 60", foldShow: "Show the rest",
+      live: (r) => Number(r.score) >= 60 || jobPending(r) || !!listDraft(r),
+      fold: tab === "new" ? (r) => Number(r.score) < 60 && !jobPending(r) && !listDraft(r) : null, foldLabel: (k) => k + " below 60", foldShow: "Show the rest",
       empty: () => empty(tab === "new" ? "Nothing new" : "Nothing applied yet", tab === "new" ? "The next search brings more." : "Roles you apply to move here."),
-      render: jobCard, box: (kids) => h("div", {class: "stack jobs"}, kids)};
+      render: (r) => { const d = listDraft(r); return d ? readyCard(d) : jobCard(r); }, box: (kids) => h("div", {class: "stack jobs"}, kids)};
     const key = "jobs:" + tab;
     const f = listFacets(key, lo);
     const menu = listMenu("jobs", "the jobs list", [
@@ -5015,27 +5203,50 @@
     put(wrap, controlRow([jobsSwitch("found"), h("span", {class: "grow"}), filterButton(key, lo, f), menu]));
     put(wrap, activeFilters(key, lo, f));
     const onCards = new Set(inThis.flatMap((r) => jobQuestions(r).map((n) => "need:" + n.id)));
+    for (const a of inThis.map(listDraft).filter(Boolean)) for (const q of readyQuestions(a)) onCards.add("need:" + q.id);
     put(wrap, tabTodos("jobs", onCards));
+    put(wrap, tabTodos("drafts", onCards));
+    // One Select several for the whole list: a draft's card takes its box too, its mark
+    // ready.applied beside a find's job.applied (2026-11-05).
+    S.selectingReady = selecting;
     const list = listView(key, lo);
     const visibleIds = [...list.querySelectorAll(".card.job")].map((x) => x.getAttribute("data-item"));
     for (const id of [...S.sel.jobs]) if (visibleIds.indexOf(id) < 0) S.sel.jobs.delete(id);
     if (selecting && visibleIds.length > 1) put(wrap, selectAll(S.sel.jobs, visibleIds, "Select all " + visibleIds.length + " shown", "jobs"));
     put(wrap, list);
+    // Your resume for when nobody named a role: after the jobs, which are what the list is for.
+    const cvCard = tab === "new" ? generalResumeCard() : null;
+    if (cvCard) put(wrap, h("div", {class: "after-list"}, cvCard));
+    if (shut.length) {
+      const st = listState("jobs:closed");
+      put(wrap, h("p", {class: "fold"}, h("span", {}, shut.length + " closed: "),
+        btn(st.open ? "Hide" : "Show", () => { st.open = !st.open; scheduleRender(); }, {kind: "link", key: "fold:closed", aria: (st.open ? "Hide " : "Show ") + shut.length + " closed"})));
+      if (st.open) put(wrap, h("div", {class: "stack jobs"}, shut.map(jobCard)));
+    }
     if (aside.length) {
       const st = listState("jobs:aside");
       put(wrap, h("p", {class: "fold"}, h("span", {}, aside.length + " set aside: "),
         btn(st.open ? "Hide" : "Show", () => { st.open = !st.open; scheduleRender(); }, {kind: "link", key: "fold:aside", aria: (st.open ? "Hide " : "Show ") + aside.length + " set aside"})));
       if (st.open) put(wrap, h("div", {class: "stack jobs"}, aside.map(jobCard)));
     }
-    const n = S.sel.jobs.size;
+    const shownDrafts = [...list.querySelectorAll(".card.app")].map((x) => x.getAttribute("data-item"));
+    for (const id of [...S.sel.ready]) if (shownDrafts.indexOf(id) < 0) S.sel.ready.delete(id);
+    const pickedDrafts = readyItems().filter((a) => S.sel.ready.has(a.id) && readyLive(a));
+    const n = S.sel.jobs.size + pickedDrafts.length;
     const picked = rows.filter((r) => S.sel.jobs.has(r.id));
     const draftable = picked.filter((r) => jobStatus(r) === "new" && obj(r.apply).status !== "closed");
+    const markAll = () => confirmApplied(picked.concat(pickedDrafts), () => {
+      act(picked.map((r) => ({item: r.id, action: "job.applied", value: {on: todayIso()}, rev: r.rev}))
+        .concat(pickedDrafts.map((a) => ({item: a.id, action: "ready.applied", value: {on: todayIso()}, rev: a.rev}))), "Marked " + plural(n, "role", "roles") + " as applied");
+      S.sel.jobs.clear(); S.sel.ready.clear();
+    });
     if (selecting) {
       put(wrap, bulkBar(n, [
+        pickedDrafts.length && !picked.length ? btn("Mark " + n + " as applied", markAll, {kind: "primary", small: true, key: "bulk-ready-applied"}) : null,
         draftable.length ? btn("Draft " + draftable.length, () => confirmApplied(draftable, () => askDraft(draftable), "draft"), {kind: "primary", small: true, key: "bulk-draft"}) : null,
-        tab !== "applied" ? btn("Mark " + n + " as applied", () => confirmApplied(picked, () => { act(picked.map((r) => ({item: r.id, action: "job.applied", value: {on: todayIso()}, rev: r.rev})), "Marked " + plural(n, "role", "roles") + " as applied"); S.sel.jobs.clear(); }), {small: true, key: "bulk-applied"}) : null,
+        tab !== "applied" && picked.length ? btn("Mark " + n + " as applied", markAll, {small: true, key: "bulk-applied"}) : null,
         tab !== "dismissed" ? btn("Set " + n + " aside", () => { act(picked.map((r) => ({item: r.id, action: "job.dismiss", rev: r.rev})), "Set " + plural(n, "role", "roles") + " aside"); S.sel.jobs.clear(); }, {small: true, key: "bulk-dismiss"}) : null,
-      ], () => { S.sel.jobs.clear(); scheduleRender(); }));
+      ], () => { S.sel.jobs.clear(); S.sel.ready.clear(); scheduleRender(); }));
     }
     put(wrap, filteredBlock());
     return wrap;
@@ -5049,23 +5260,35 @@
     const pending = jobPending(r);
     const live = st !== "applied" && st !== "dismissed";
     const about = txt(r.company) + ", " + txt(r.title);
-    // Pay where it is stated, and nothing where it is not: "Pay not stated" stood on nearly
-    // every card (the walk-through, 2026-11-03).
-    const facts = payStated(r) ? [h("span", {}, money(obj(r.pay).text))] : [];
-    const dot = () => (facts.length ? facts.push(" · ") : null);
+    // One line of facts: the employer, the town (the engine's short form: "Toronto", never
+    // "Toronto, Ontario, Canada"), how it is worked, when it was posted, the pay where stated
+    // and a closing date. On two lines, the employer and place, then the day, read as two
+    // things (the maintainer, 2026-11-04).
+    const place = txt(r.place_short !== undefined && r.place_short !== null ? r.place_short : r.place);
+    const style = REMOTE(r) && !place.toLowerCase().includes(REMOTE(r)) ? cap1(txt(r.remote)) : "";
+    const facts = [h("bdi", {class: "co"}, txt(r.company))];
+    const fact = (x, cls) => facts.push(" · ", h("span", {class: "fact" + (cls ? " " + cls : "")}, x));
+    if (place) fact(place);
+    if (style) fact(style);
     // When it was posted, on every card: the filter offered "Posted this week" over cards
     // that never said when (2026-11-03). A posting up for months says so in amber: one 515
     // days old went to drafting with nothing to question it (2026-10-30).
     const pd = postedWords(r.posted_days);
-    if (pd) { dot(); facts.push(h("span", {class: Number(r.posted_days) > OLD_POSTING_DAYS ? "soon" : null}, pd)); }
+    if (pd) fact(pd, Number(r.posted_days) > OLD_POSTING_DAYS ? "soon" : null);
+    // When it was found, beside when it was posted: searches run more than once, and a role
+    // surfaced weeks ago may be one to put away (the maintainer, 2026-11-05).
+    const fd = foundWords(r);
+    if (fd) fact(pd ? fd : cap1(fd));
+    // Pay where it is stated, and nothing where it is not: "Pay not stated" stood on nearly
+    // every card (the walk-through, 2026-11-03).
+    if (payStated(r)) fact(money(obj(r.pay).text));
     // The face says what decides a look: pay and a closing date. Whether the posting was
-    // checked lately is one line under More (the maintainer, 2026-10-29: "it just gives you
-    // info badly"), linkHint's.
+    // checked lately is a row under More (the maintainer, 2026-10-29: "it just gives you
+    // info badly"), "The posting".
     if (r.deadline) {
       const d = dayDiff(r.deadline);
       const soon = d !== null && d <= 7;
-      dot();
-      facts.push(h("span", {class: soon ? "soon" : null}, "Closes " + fmtDay(r.deadline) + (soon && d >= 0 ? " (" + relDay(r.deadline) + ")" : "")));
+      fact("Closes " + fmtDay(r.deadline) + (soon && d >= 0 ? " (" + relDay(r.deadline) + ")" : ""), soon ? "soon" : null);
     }
     const ref = referralAt(r.company, r);
     const draft = () => (ref ? confirmApplied([r], () => askDraft([r]), "draft") : askDraft([r]));
@@ -5077,7 +5300,7 @@
     let primary = null;
     if (pending || asks.length) primary = null;
     else if (st === "new" && !closed && ref) primary = itemLink("contacts", ref.id, "Ask " + txt(ref.first_name) + " first", "askfirst:" + r.id);
-    else if (st === "new" && !closed) primary = btn("Draft this", draft, {kind: "primary", small: true, key: "draft:" + r.id, aria: "Draft this: " + about});
+    else if (st === "new" && !closed) primary = btn("Draft this", draft, {kind: "primary", small: true, wakes: "draft", key: "draft:" + r.id, aria: "Draft this: " + about});
     else if (st === "ready") primary = btn("See the draft", () => { const a = readyItems().find((x) => (r.draft ? x.id === txt(r.draft) : txt(x.company) === txt(r.company))); go("drafts", {focus: !a, drafts: "apps", item: a ? a.id : null}); }, {kind: "primary", small: true, key: "seeready:" + r.id, aria: "See the draft: " + about});
     else if (st === "drafting") primary = btn("See its progress", openWork, {small: true, key: "seework:" + r.id, aria: "See its progress: " + about});
     else if (st === "asking") primary = btn("Answer", () => askWorkAnswer(draftWorkId(r)), {kind: "primary", small: true, key: "answer:" + r.id, aria: "Answer Claude's question: " + about});
@@ -5092,35 +5315,57 @@
     const lastTry = workDoc(draftWorkId(r));
     const failedNote = st === "new" && lastTry && lastTry.status === "failed"
       ? h("p", {class: "state tone-bad"}, "The last draft did not finish" + (txt(lastTry.error) ? ": " + clip(txt(lastTry.error), 160).replace(/\.?$/, ".") : ".") + " Draft this asks again.") : null;
+    const closedAlert = closed && live && !alertsOf(r).some((a) => a.kind === "closed") ? alertLine({id: "page-closed-" + r.id, kind: "closed", text: "This posting has closed.", why: "Its own site no longer lists it."}, {}) : null;
+    // The card's one soft grey box: its question, else its closed note, else its first alert
+    // or its suggestion.
+    const face = asks.length ? asks.slice(0, 1).map((n) => questionBlock(n, {where: "jobs", item: r.id}))
+      : closedAlert ? [closedAlert] : [cardNotes(r, {where: "jobs", section: "jobs", item: r.id, linked: ref && st === "new" ? ref.id : null}, live && !pending)].filter(Boolean);
+    // The warm route is said one way, in that box: as the card's suggestion, with Write to and
+    // No thanks, where there is one; else in a box of its own where the card has no other.
+    // A rose line beside the boxes read as different advice (the maintainer, 2026-11-05).
+    // Otherwise, and after No thanks, it is a line under More.
+    // A draft that stopped on a question asks it here, in the box, in place of the rest.
+    const asking = st === "asking" && workDoc(draftWorkId(r)) ? jobNeedsBox(draftWorkId(r), workDoc(draftWorkId(r))) : null;
+    if (asking) { face.splice(0, face.length, asking); primary = null; }
+    const warmSg = obj(suggestOf(r)).kind === "warm" ? suggestOf(r) : null;
+    const warmBox = live && !pending && !closed && !face.length && !(warmSg && effective(warmSg.id, ["suggest.dismiss"])) ? warmNote(r) : null;
+    const warmMore = live && !closed && !warmBox && !(warmSg && suggestionShown(warmSg)) ? warmNote(r, true) : null;
+    // More: why it scored what it did first, its watch-out apart, then what is worth knowing,
+    // the skills, the posting and what else there is at the employer, each a labelled row,
+    // then the rarer actions (the maintainer, 2026-11-04).
+    const reasons = jobReasons(r);
     const extra = pending ? [] : [
-      arr(r.why).length && r.score != null ? h("p", {class: "why"}, h("span", {class: "muted"}, "Why " + txt(r.score) + ": "), arr(r.why).map(txt).join(". ").replace(/\.?$/, ".")) : null,
-      live ? nearLine(r) : null,
-      arr(r.notes).length ? h("ul", {class: "notes"}, arr(r.notes).map((x) => h("li", {}, txt(x)))) : null,
-      moreAlerts(r, {where: "jobs", section: "jobs", item: r.id}, asks.length > 0),
-      linkHint(r.apply),
-      st === "applied" ? h("p", {}, applyLink(r.apply, "apply2:" + r.id)) : null,
-      relatedLinks(r.company, r.id, r),
+      r.score != null ? mRow("Why it scored " + txt(r.score), reasons.good, "why") : null,
+      mRow("Watch out", reasons.watch, "watch"),
+      mRow("Worth knowing", [warmMore, moreAlerts(r, {where: "jobs", section: "jobs", item: r.id}, asks.length > 0)].concat(arr(r.notes).map(txt))),
+      live ? mRow("Skills", nearWords(r)) : null,
+      st === "applied" ? null : postingRow(r.apply),
+      alsoAt(r.company, r, [r.id, r.draft, obj(sameDraft(r)).id]),
       h("div", {class: "more-acts"},
         (st === "new" && !closed && (ref || asks.length)) ? btn("Draft this", draft, {small: true, key: "draft2:" + r.id, aria: "Draft this: " + about}) : null,
         // The resume without a letter: the one choice where drafting is asked.
-        (st === "new" && !closed) ? btn("Draft the " + noun() + " only", draftAlone, {kind: "quiet", small: true, key: "draftalone:" + r.id, aria: "Draft the " + noun() + " only: " + about}) : null,
+        st === "applied" && safeUrl(obj(r.apply).url) ? applyLink(r.apply, "apply2:" + r.id, null, true) : null,
+        st === "ready" && sameDraft(r) && readyLive(sameDraft(r)) ? formButton(sameDraft(r)) : null,
+        (st === "new" && !closed) ? btn("Draft the " + noun() + " only", draftAlone, {small: true, wakes: "draft", key: "draftalone:" + r.id, aria: "Draft the " + noun() + " only: " + about}) : null,
         // A closed posting has nothing left to ask about, look into or apply to: setting it
         // aside is all it offers (2026-11-03).
         live && !closed && !ref && warmPerson(r) && !(suggestionShown(suggestOf(r)) && obj(suggestOf(r)).kind === "warm") ? btn("Ask " + txt(warmPerson(r).first_name) + " for a referral for this role", () => askReferral(warmPerson(r), r), {small: true, key: "askref:" + r.id}) : null,
-        live && !closed && !peopleAt(r).length ? runBtn("network", "Find people at " + txt(r.company), () => findPeople(r.company), {kind: "quiet", small: true, key: "find:" + r.id, one: true}) : null,
+        live && !closed && !peopleAt(r).length ? runBtn("network", "Find people at " + txt(r.company), () => findPeople(r.company), {small: true, wakes: "network", key: "find:" + r.id, one: true}) : null,
         // Where a referral has already led to a recruiter's call, there is no cold application.
         live && !closed && st !== "ready" && !referredProcess(r) ? btn("I have applied", markApplied, {small: true, key: "applied:" + r.id, aria: "I have applied: " + about}) : null,
-        st === "applied" ? btn("Not applied after all", () => act([{item: r.id, action: "job.not_applied", rev: r.rev}], "Marked as not applied: " + txt(r.company)), {kind: "quiet", small: true, key: "notapplied:" + r.id}) : null),
+        st === "applied" ? btn("Not applied after all", () => act([{item: r.id, action: "job.not_applied", rev: r.rev}], "Marked as not applied: " + txt(r.company)), {small: true, key: "notapplied:" + r.id}) : null),
     ];
     const word = iv ? ["Interview " + fmtDay(iv.when), "info"] : nudge ? ["Follow-up due", "warn"] : st === "applied" ? [null, null] : JOB_STATUS[st] || [null, null];
-    const closedAlert = closed && live && !alertsOf(r).some((a) => a.kind === "closed") ? alertLine({id: "page-closed-" + r.id, kind: "closed", text: "This posting has closed.", why: "Its own site no longer lists it."}, {}) : null;
     const dismissing = pending && st === "dismissed" ? effective(r.id, ["job.dismiss"]) : null;
     const given = dismissing && txt(obj(dismissing.doc.value).why || "");
     // Why is asked once, in the bin's own sheet, never again on the card.
     const why = dismissing && given ? null : null;
     const scoreWords = "Fit " + txt(r.score) + " out of 100" + (band ? ", " + band : "");
-    const place = txt(r.place);
-    const style = REMOTE(r) && !place.toLowerCase().includes(REMOTE(r)) ? cap1(txt(r.remote)) : "";
+    // The rows about the job are its details, a fold of their own from the end of its line of
+    // facts ("Why": the score is already beside the title, and a card holds 30 words at most);
+    // More is the last part, the rarer actions (2026-11-05).
+    const fold = infoFold("job:" + r.id, extra.slice(0, -1));
+    const m = moreSplit("job:" + r.id, about, extra.slice(-1), true);
     const notesTone = asks.length ? "warn" : closedAlert ? "bad" : alertsOf(r).length && live && !pending ? (ALERT_TONE[txt(alertsOf(r)[0].kind)] || "warn") : word[1] && word[1] !== "ok" && word[1] !== "info" ? word[1] : null;
     return card("article", {class: "card job st-" + seg(st) + (pending ? " is-marked" : "") + (S.selecting ? " selecting" : "") + (notesTone ? " edge-" + notesTone : ""), "aria-labelledby": hid, "data-item": r.id},
       S.selecting && live ? selBox(S.sel.jobs, r.id, about, scheduleRender) : null,
@@ -5128,16 +5373,18 @@
         // The number is a small badge beside the title, coloured by how strong a fit it is: a
         // column of its own pushed every line in (the maintainer, 2026-10-29: "the indents").
         h("div", {class: "job-top"}, h("span", {class: "score-pill tone-" + bandTone, "aria-hidden": "true", title: SCORE_MEANS + (band ? " This one is " + band + "." : "")}, txt(r.score)),
-          h("h3", {id: hid}, txt(r.title)), h("span", {class: "top-end"}, stateWord(word[0], word[1]),
+          h("h3", {id: hid}, breakable(r.title)), h("span", {class: "top-end"}, stateWord(word[0], word[1]),
           live && !pending ? btn("", () => askRemoveJob(r), {kind: "quiet icon-only", small: true, key: "bin:" + r.id, icon: "bin", aria: "Not for me: " + about}) : null)),
         h("p", {class: "sr-only"}, scoreWords),
-        h("p", {class: "org"}, h("bdi", {}, txt(r.company)), [place, style].filter(Boolean).map((x) => " · " + x).join("")),
-        facts.length ? h("p", {class: "facts"}, facts) : null,
+        h("p", {class: "facts"}, facts, r.score != null ? fold.toggle("Why", "Why it scored " + txt(r.score) + ": " + about) : fold.toggle("Details", "Details: " + about),
+          live && !pending ? jobPencil(r) : null),
+        live && !pending ? jobPen(r) : null,
+        fold.panel,
         failedNote,
-        closed || (suggestionShown(suggestOf(r)) && obj(suggestOf(r)).kind === "warm") ? null : warmNote(r),
-        asks.length ? asks.slice(0, 1).map((n) => questionBlock(n, {where: "jobs", item: r.id})) :
-          [closedAlert, closedAlert ? null : cardNotes(r, {where: "jobs", section: "jobs", item: r.id, linked: ref && st === "new" ? ref.id : null}, live && !pending)],
-        pending ? null : h("div", {class: "card-actions"}, primary, st === "applied" ? null : applyLink(r.apply, "apply:" + r.id), more("job:" + r.id, about, extra)),
+        face, warmBox,
+        st === "ready" && sameDraft(r) ? formLine(sameDraft(r)) : null,
+        pending ? null : h("div", {class: "card-actions"}, primary, st === "applied" ? null : applyLink(r.apply, "apply:" + r.id, null, true), m.toggle),
+        pending ? null : m.panel,
         why, stateLine(r.id, "job:" + r.id)));
   }
   // The bin on a job: why it goes, asked once, so the right thing happens (the maintainer,
@@ -5479,77 +5726,9 @@
   // Drafts is the applications to send, a view of Jobs: the messages to send are on each
   // person's card in Contacts (2026-11-04).
   function draftsView() { return "apps"; }
-  function renderDrafts(where) {
-    const apps = readyItems();
-    const appsWaiting = apps.filter(readyLive);
-    // A draft never made is "still to make", never "a fix" (the walk-through, 2026-11-03: the
-    // summary said "1 needs a fix first" over a card saying "Not made yet").
-    const toMake = appsWaiting.filter((a) => draftUnmade(a) && !readyQuestions(a).length).length;
-    const fix = appsWaiting.filter((a) => (alertsOf(a).some((x) => x.kind === "checks") && !draftUnmade(a)) || readyQuestions(a).length).length;
-    // Applications to send are a view of Jobs, and count only the writing this view shows;
-    // messages are written on each person's card in Contacts ("Claude is writing 1 more."
-    // stood over Messages for an application, 2026-11-03).
-    const writing = [...allWork()].filter(([, w]) => ["draft", "resume_for_contact"].includes(txt(w.kind)) && ACTIVE.has(w.status)).length;
-    const head = appsWaiting.length ? nWord(appsWaiting.length, "application", "applications") + " to send." + (toMake ? " " + toMake + " still to make." : "") + (fix ? " " + nWord(fix, "needs", "need") + " a fix first." : "") : "No application waiting to send.";
-    const wrap = h("section", {class: "sec", "aria-labelledby": "h-drafts" + (where ? "-" + where : "")},
-      screenHead("drafts", "Jobs", head, writing ? "Claude is writing " + writing + " more." : null, where));
-    // A resume made for a contact is sent to them, never marked applied with the others.
-    const canSelect = appsWaiting.filter((a) => !a.for_contact).length > 1;
-    put(wrap, controlRow([jobsSwitch("drafts"),
-      h("span", {class: "grow"}),
-      canSelect ? listMenu("drafts", "the drafts", [[S.selectingReady ? "Done selecting" : "Select several", () => { S.selectingReady = !S.selectingReady; if (!S.selectingReady) S.sel.ready.clear(); scheduleRender(); }, "select"]]) : null]));
-    const onCards = new Set(apps.flatMap((a) => readyQuestions(a).map((n) => "need:" + n.id)));
-    put(wrap, tabTodos("drafts", onCards));
-    put(wrap, draftApps(apps));
-    return wrap;
-  }
-  function draftApps(items) {
-    const box = h("div", {class: "drafts-apps"});
-    if (!items.length) {
-      put(box, empty("Nothing drafted yet.", "Pick a role in Jobs and tap Draft this.",
-        h("div", {class: "card-actions"}, btn("Go to Jobs", () => go("jobs", {focus: true}), {kind: "primary", small: true, key: "drafts-go-jobs"}))));
-      return box;
-    }
-    const waiting = items.filter(readyLive);
-    // Files not on the page yet: each card's own one filled button, "Get my files ready", says
-    // so (readyCard). A line over the list said it again, and More said it a third time (the
-    // walk-through, 2026-11-03).
-    const ids = waiting.filter((a) => !a.for_contact).map((a) => a.id);
-    for (const id of [...S.sel.ready]) if (ids.indexOf(id) < 0) S.sel.ready.delete(id);
-    if (S.selectingReady && ids.length > 1) put(box, selectAll(S.sel.ready, ids, "Select all " + ids.length + " not yet sent", "ready"));
-    const first = (a) => (alertsOf(a).some((x) => x.kind === "checks") || readyQuestions(a).length ? 0 : 1);
-    // Drafts is what is still to send. One sent lives in Jobs, Applied and in Progress; it
-    // stays here only on the day it was marked, so the mark can be undone in place (the
-    // maintainer, 2026-10-26: "why does drafts have a bunch of things that say applied?").
-    const sentAgo = (a) => daysSince(a.applied_on || a.sent_on);
-    const gone = items.filter((a) => !readyLive(a) && !(sentAgo(a) === null && settledAction(a.id)) && !(sentAgo(a) !== null && sentAgo(a) <= 1));
-    items = items.filter((a) => gone.indexOf(a) < 0);
-    put(box, listView("drafts:apps", {items, name: "applications", live: readyLive, render: readyCard, box: (kids) => h("div", {class: "stack list-panel"}, kids),
-      first: 5, firstLabel: (k) => plural(k, "more ready to send", "more ready to send"),
-      search: (a) => [a.company, a.role, a.place].join(" "),
-      fold: (a) => !readyLive(a) && daysSince(a.applied_on || a.sent_on) !== null && daysSince(a.applied_on || a.sent_on) > 14,
-      foldLabel: (k) => k + " sent",
-      sort: (a, b) => ((readyLive(a) ? 0 : 1) - (readyLive(b) ? 0 : 1)) || (first(a) - first(b))}));
-    // Your resume for when nobody named a role: after the applications, which are what Drafts
-    // is for, never between the page's first lines and them.
-    // Its own card, 8px below the list like every card, not touching the last one (2026-11-02).
-    const cvCard = generalResumeCard();
-    if (cvCard) put(box, h("div", {class: "after-list"}, cvCard));
-    // Where the sent ones went, with no count of its own beside Applied's (2026-11-03).
-    if (gone.length) put(box, h("p", {class: "muted small"}, "Drafts you have sent are in ",
-      h("a", {href: "#jobs", class: "navlink", "data-k": "drafts-to-applied", onclick: (e) => { e.preventDefault(); setPref("jobs:tab", "applied"); go("jobs", {focus: true}); }}, "Applied"), "."));
-    const n = S.sel.ready.size;
-    if (S.selectingReady) {
-      put(box, bulkBar(n, [btn("Mark " + n + " as applied", () => {
-        const picked = items.filter((a) => S.sel.ready.has(a.id));
-        confirmApplied(picked, () => {
-          act(picked.map((a) => ({item: a.id, action: "ready.applied", value: {on: todayIso()}, rev: a.rev})), "Marked " + plural(n, "application", "applications") + " as applied");
-          S.sel.ready.clear();
-        });
-      }, {kind: "primary", small: true, key: "bulk-ready-applied"})], () => { S.sel.ready.clear(); scheduleRender(); }));
-    }
-    return box;
-  }
+  // Applications to send are cards in Jobs' one list, in their jobs' places: Drafts is that
+  // list, opened at them (2026-11-05: a drafted job stood in Found and again in Drafts).
+  function renderDrafts(where) { return renderJobs(where, true); }
   async function getFiles(a, files) {
     for (const f of files) await download(f, "dl:" + a.id);
   }
@@ -5584,69 +5763,107 @@
     // Made, but not on the page yet: getting them here is the card's one filled button, never
     // a line under More while "Apply on their site" stood on its face (the walk-through,
     // 2026-11-03). Where a check needs a fix first, the fix is filled and this is beside it.
-    const getReady = live && !asks.length && missing && !gettingFiles ? btn("Get my files ready", () => askFiles(a), {kind: checkAlert ? "secondary" : "primary", small: true, key: "files:" + a.id,
-      aria: "Get my files ready: " + about}) : null;
-    const getBtn = asks.length || !made.length || made.length < files.length ? null : missing ? getReady : btn(fileWord, () => getFiles(a, files), {kind: checkAlert || !live ? "secondary" : "primary", small: true, key: "dl:" + a.id,
+    // Files not on the page yet are put there by Claude by itself (the view queues them, page_db
+    // queue_files): never "Get my files ready" to tap. The card says so while it happens and
+    // offers the files once they are there (the maintainer, 2026-11-05).
+    const getBtn = asks.length || !made.length || made.length < files.length || missing ? null : btn(fileWord, () => getFiles(a, files), {small: true, key: "dl:" + a.id,
       aria: fileWord + ": " + files.map((f) => txt(f.name)).join(" and ")});
-    const filesFirst = !!getReady && !checkAlert;
+    const filesWork = live && missing ? filesWorkFor(a) : null;
+    const filesId = filesWork ? ([...allWork()].find(([, w]) => w === filesWork) || ["files~" + seg(a.id)])[0] : "";
+    const filesLine = filesWork ? workInline(filesId, filesWork, {key: "files:" + a.id, lead: "Claude is putting your files on your page"}) : null;
+    // A check with its fix in hand is Claude's to make again, by itself (the view queues it):
+    // never "Make it again" to tap. The card says Claude is making it again, in the words of its
+    // card in Claude's work ("Make it"), with the work's own progress; one only the person can
+    // settle is a To do card (tools/remake_drafts.py).
+    const fixAc = checkAlert ? obj(checkAlert.action) : {};
+    const fixWork = txt(fixAc.id) ? workDoc(txt(fixAc.id)) : null;
+    const selfFix = live && !asks.length && fixAc.type === "work" && txt(fixAc.kind) === "draft" && !(fixWork && TERMINAL.has(txt(fixWork.status)));
+    const fixLine = !selfFix ? null : fixWork ? workInline(txt(fixAc.id), fixWork, {key: "fix:" + a.id, lead: "Claude is making it again"})
+      : h("div", {class: "work-inline", role: "status"}, h("p", {class: "wi-text"}, h("span", {class: "dot tone-plain is-waiting", "aria-hidden": "true"}), " " + cap1(txt(checkAlert.text).replace(/[.\s]+$/, "")) + ": Claude makes it again next."));
     let primary = null;
-    if (!live || asks.length) primary = null;
-    else if (checkAlert) {
-      const ac = obj(checkAlert.action);
-      const paid = Number(obj(checkAlert.cost).state) > 0;
-      primary = workBusy(txt(ac.id)) ? chip("Being fixed", "info") : h("span", {class: "fix"}, btn(txt(ac.label) || "Fix this", () => runAction(ac, a.id), {kind: "primary", small: true, key: "fixprimary:" + a.id, describedby: paid ? "cost-p-" + seg(a.id) : null}),
-        paid ? costEl(checkAlert.cost, ac.kind, "cost-p-" + seg(a.id)) : null);
-    }
+    if (!live || asks.length || checkAlert) primary = null;
+    // More as labelled rows, as on a Found card (2026-11-04): the files, the checks, the
+    // skills, what to copy, what is worth knowing, the posting and what else is at the
+    // employer, then one row of the rarer actions.
+    const acts = [
+      live && !forWho ? formButton(a) : null,
+      // Asked for again only by the person, once Claude's own try is over.
+      live && checkAlert && fixWork && TERMINAL.has(txt(fixWork.status)) ? btn(txt(fixAc.label) || "Make it again", () => runAction(fixAc, a.id), {small: true, key: "fixagain:" + a.id, wakes: "draft"}) : null,
+      live && (checkAlert || asks.length) && !(sameJob(a) && referredProcess(sameJob(a))) ? btn("I have applied", markApplied, {small: true, key: "rapplied2:" + a.id, aria: "I have applied: " + about}) : null,
+      st === "applied" ? btn("Not applied after all", () => act([{item: a.id, action: "ready.not_applied", rev: a.rev}], "Marked as not applied: " + txt(a.company)), {small: true, key: "rnot:" + a.id}) : null].filter(Boolean);
+    const tw = null;
+    const entry = null;
+    // The job it is for, where Jobs has it: its fit, when it was posted and found, and why it
+    // scored what it did, so the one card in the list says all of it (2026-11-05).
+    const j = sameJob(a);
+    const jr = j ? jobReasons(j) : {good: "", watch: ""};
+    // What the job's own card would have said (a referral hold, a closing date) and the draft
+    // does not: said here, once.
+    const jobAlerts = j ? alertsOf(j).filter((x) => !alertsOf(a).some((y) => y.kind === x.kind)) : [];
     const extra = [
-      live ? nearLine(a) : null,
-      h("ul", {class: "plain file-names"}, files.map((f) => h("li", {}, h("span", {class: "file-kind"}, f.kind === "letter" ? "Cover letter" : Noun()), ": ", h("bdi", {class: "file-name"}, txt(f.name)), f.pages ? ", " + plural(Number(f.pages), "page", "pages") : ""))),
+      j && j.score != null ? mRow("Why it scored " + txt(j.score), jr.good, "why") : null,
+      j ? mRow("Watch out", jr.watch, "watch") : null,
+      mRow("Files", files.map((f) => h("p", {}, h("span", {class: "file-kind"}, f.kind === "letter" ? "Cover letter" : Noun()), ": ", h("bdi", {class: "file-name"}, txt(f.name)), f.pages ? ", " + plural(Number(f.pages), "page", "pages") : ""))
+        .concat(!letter.length ? ["No cover letter for this one."] : [])),
       // The checks' own words are on the card's face where it shows them; here only otherwise.
-      checks.line && !(live && !checkAlert && !asks.length) ? h("p", {class: "small"}, (checks.passed ? "Checked: " : "Checks: ") + txt(checks.line) + ".") : null,
-      !letter.length ? h("p", {class: "small muted"}, "No cover letter for this one.") : null,
-      toCopy || toFill ? det("copy:" + a.id, false, {class: "send"}, h("summary", {}, toCopy ? "Also to copy (" + toCopy + ")" + (toFill ? ", " + toFill + " yours to answer" : "") : nWord(toFill, "question", "questions") + " yours to answer"),
-        out.text ? h("div", {class: "copy-one"}, h("p", {class: "card-title"}, "Note to " + (txt(out.to) || "the hiring manager")),
-          h("p", {class: "sendtext", id: outId}, txt(out.text)), copyButton(txt(out.text), "Copy note to " + (txt(out.to) || "the hiring manager"), "copy:" + outId, outId), noteFor("copy:" + outId)) : null,
-        screen.length ? h("dl", {class: "qa"}, screen.map((qa, i) => {
-          const qid = "qa-" + seg(a.id) + "-" + i;
-          if (qa.fill || !txt(qa.a)) return h("div", {}, h("dt", {}, txt(qa.q)), h("dd", {class: "muted"}, "Yours to answer: Claude did not know this one."));
-          return h("div", {}, h("dt", {}, txt(qa.q)), h("dd", {}, h("span", {id: qid, class: "sendtext"}, txt(qa.a)), " ",
-            copyButton(txt(qa.a), "Copy answer: " + clip(txt(qa.q), 40), "copy:" + qid, qid), noteFor("copy:" + qid),
-            txt(qa.why) ? h("p", {class: "small muted"}, txt(qa.why)) : null));
-        })) : null) : null,
-      moreAlerts(a, {where: "drafts", section: "drafts", item: a.id}, asks.length > 0, fixOut ? fixOut.id : null),
-      linkHint(a.apply),
-      relatedLinks(a.company, a.id, a),
-      live ? tweakSlot([["resume", "Edit the " + noun()]].concat(letter.length ? [["letter", "Edit the letter"]] : []), a) : null,
-      h("div", {class: "more-acts"},
-        live && (checkAlert || asks.length) ? btn("I have applied", markApplied, {kind: "quiet", small: true, key: "rapplied2:" + a.id, aria: "I have applied: " + about}) : null,
-        st === "applied" ? btn("Not applied after all", () => act([{item: a.id, action: "ready.not_applied", rev: a.rev}], "Marked as not applied: " + txt(a.company)), {kind: "quiet", small: true, key: "rnot:" + a.id}) : null),
+      checks.line && !(live && !checkAlert && !asks.length) ? mRow(checks.passed ? "Checked" : "Checks", txt(checks.line).replace(/\.?$/, ".")) : null,
+      live ? mRow("Skills", nearWords(a)) : null,
+      copyRow(a, out),
+      mRow("Worth knowing", moreAlerts(a, {where: "drafts", section: "drafts", item: a.id}, asks.length > 0, fixOut ? fixOut.id : null)),
+      postingRow(a.apply),
+      alsoAt(a.company, a, [a.id, a.job]),
     ];
+    const fold = infoFold("app:" + a.id, extra);
+    const m = moreSplit("app:" + a.id, about, [h("div", {class: "more-acts"}, acts)], true);
     // A draft never made says so once, in its own line ("Not made yet: the CV and the
     // letter."), never "Needs a fix" in its corner as well (the walk-through, 2026-11-03).
-    const word = !live ? (st === "applied" ? ["Applied", "ok"] : ["Not applying", "plain"]) : asks.length ? ["Needs your answer", "warn"] : checkAlert ? (draftUnmade(a) ? [null, "warn"] : ["Needs a fix", "warn"]) : gettingFiles ? ["Getting files ready", "info"] : [null, null];
+    const word = !live ? (st === "applied" ? ["Applied", "ok"] : ["Not applying", "plain"]) : asks.length ? ["Needs your answer", "warn"] : selfFix && fixWork && ACTIVE.has(txt(fixWork.status) || "queued") ? ["Being made again", "info"] : checkAlert ? (draftUnmade(a) ? [null, "warn"] : [null, null]) : [null, null];
     const edge = live && word[1] && word[1] !== "ok" && word[1] !== "info" ? " edge-" + word[1] : live && alertsOf(a).length ? edgeOf(alertsOf(a)) : "";
     return card("article", {class: "card app st-" + seg(st) + (S.selectingReady ? " selecting" : "") + edge, "aria-labelledby": hid, "data-item": a.id},
       S.selectingReady && live && !a.for_contact ? selBox(S.sel.ready, a.id, about, scheduleRender) : null,
       h("div", {class: "app-main"},
-        h("div", {class: "job-top"}, h("h3", {id: hid}, txt(a.role)), h("span", {class: "top-end"}, stateWord(word[0], word[1]),
+        h("div", {class: "job-top"}, j && j.score != null ? h("span", {class: "score-pill tone-" + ({strong: "ok", good: "info"}[txt(j.band)] || "plain"), "aria-hidden": "true", title: SCORE_MEANS}, txt(j.score)) : null,
+          h("h3", {id: hid}, breakable(a.role)), h("span", {class: "top-end"}, stateWord(word[0], word[1]),
           live && !forWho ? btn("", () => askRemoveDraft(a), {kind: "quiet icon-only", small: true, icon: "bin", key: "dbin:" + a.id, aria: "Not sending: " + about}) : null)),
         // Pay where it is known; "Pay not stated" on nearly every card said nothing (2026-11-03).
-        h("p", {class: "org"}, h("bdi", {}, txt(a.company)), [txt(a.place), !a.pay || a.pay === "not stated" ? "" : money(a.pay)].filter(Boolean).map((x) => " · " + x).join("")),
+        j && j.score != null ? h("p", {class: "sr-only"}, "Fit " + txt(j.score) + " out of 100") : null,
+        h("p", {class: "facts"}, h("bdi", {class: "co"}, txt(a.company)), [txt(a.place_short !== undefined && a.place_short !== null ? a.place_short : a.place),
+          j ? postedWords(j.posted_days) : "", j ? (postedWords(j.posted_days) ? foundWords(j) : cap1(foundWords(j))) : "",
+          !a.pay || a.pay === "not stated" ? "" : money(a.pay)].filter(Boolean).map((x) => [" · ", h("span", {class: "fact"}, x)]),
+          fold.toggle(j && j.score != null ? "Why" : "Details", j && j.score != null ? "Why it scored " + txt(j.score) + ": " + about : "Details: " + about)),
+        fold.panel,
         forWho ? h("p", {class: "meta"}, (txt(a.route) === "portal" ? "For the portal, naming " : "Made for ") + txt(forWho.first_name) + (txt(a.route) === "portal" ? " as your referrer." : ", who asked for it.")) : null,
-        ref && live && !alertsOf(a).some((x) => x.kind === "referral_hold") ? h("p", {class: "warm"}, itemLink("contacts", ref.id, txt(ref.first_name), "warmapp:" + a.id), " has put your name forward here: ask before you apply yourself.") : null,
-        live ? (asks.length ? questionBlock(asks[0], {where: "drafts", item: a.id}) : cardNotes(a, {where: "drafts", section: "drafts", item: a.id, bare: true}, true)) : null,
-        fixOut ? alertLine(fixOut, {where: "drafts", section: "drafts", item: a.id}) : null,
+        ref && live && !alertsOf(a).concat(jobAlerts).some((x) => x.kind === "referral_hold") ? h("p", {class: "warm"}, itemLink("contacts", ref.id, txt(ref.first_name), "warmapp:" + a.id), " has put your name forward here: ask before you apply yourself.") : null,
+        live ? (asks.length ? questionBlock(asks[0], {where: "drafts", item: a.id}) : fixLine || cardNotes(a, {where: "drafts", section: "drafts", item: a.id, bare: true}, true)
+          || (jobAlerts.length ? alertLine(jobAlerts[0], {where: "jobs", section: "jobs", item: j.id}) : null)) : null,
+        live ? filesLine : null,
+        fixOut ? alertLine(fixOut, {where: "drafts", section: "drafts", item: a.id, bare: true}) : null,
+        live ? formLine(a) : null,
         // What was checked, in its own words ("Made, right length: CV 1 page, letter 1 page"):
         // "✓ Checked" said nothing of what (the walk-through, 2026-11-03). No "?" needed.
-        live && !checkAlert && !asks.length && checks.passed && checks.line ? h("p", {class: "checks"}, h("span", {"aria-hidden": "true"}, "✓ "), txt(checks.line).replace(/\.$/, "")) : null,
+        // What was checked, with the pencil beside the resume and the letter it names.
+        // Each pencil beside its own document's words, where the engine gives them ("CV 1 page ✎
+        // letter 1 page ✎"), the two kept together so a pencil never wraps onto a line alone, and
+        // the pencil itself parts them (a dot between was left alone at the end of a phone's
+        // line): two side by side at the end said nothing of which was which.
+        live && !checkAlert && !asks.length && checks.passed && checks.line ? h("p", {class: "checks"}, h("span", {"aria-hidden": "true"}, "✓ "),
+          !forWho && txt(checks.lead) && arr(checks.parts).length
+            ? [txt(checks.lead), arr(checks.parts).map((p) => [h("span", {class: "doc-part"}, h("span", {class: "doc-words"}, txt(obj(p).words)),
+              txt(obj(p).kind) === "letter" ? (letter.length ? docPencil(a, "letter") : null) : txt(obj(p).kind) === "resume" ? docPencil(a, "resume") : null)])]
+            : [txt(checks.line).replace(/\.$/, ""), !forWho ? [docPencil(a, "resume"), letter.length ? docPencil(a, "letter") : null] : null]) : null,
+        live ? tweakResult(a) : null,
         live && !checkAlert && !asks.length && !checks.passed && checks.line ? h("p", {class: "checks tone-warn"}, txt(checks.line)) : null,
         noteFor("dl:" + a.id), noteFor("files:" + a.id),
-        h("div", {class: "card-actions"}, primary, getBtn,
-          // Where to apply, on the card itself: files, then the employer's site, then I have applied.
-          // With the files still to come, those wait quietly beside the one filled button.
-          live && !forWho && safeUrl(obj(a.apply).url) ? applyLink(a.apply, "rapply:" + a.id, applyWhere(a.apply)) : null,
-          live && !checkAlert && !asks.length ? (forWho ? sentToBtn(a, forWho, getBtn) : btn("I have applied", markApplied, {kind: getBtn ? (filesFirst ? "link" : "secondary") : gettingFiles ? "secondary" : "primary", small: true, key: "rapplied:" + a.id, aria: "I have applied: " + about})) : null,
-          more("app:" + a.id, about, extra)),
+        h("div", {class: "card-actions"}, primary,
+          // The next step is where to apply, a pill opening the posting; then I have applied, and
+          // the files once they are on the page (2026-11-05).
+          live && !forWho && safeUrl(obj(a.apply).url) ? applyLink(a.apply, "rapply:" + a.id, applyWhere(a.apply), true, !checkAlert && !asks.length) : null,
+          // Where a referral has already led to a recruiter's call there is no cold application,
+          // on a draft's card as on its job's (2026-11-05).
+          live && !checkAlert && !asks.length ? (forWho ? sentToBtn(a, forWho, getBtn) : j && referredProcess(j) ? null : btn("I have applied", markApplied, {kind: safeUrl(obj(a.apply).url) ? "secondary" : "primary", small: true, key: "rapplied:" + a.id, aria: "I have applied: " + about})) : null,
+          forWho ? null : getBtn,
+          m.toggle),
+        m.panel,
         stateLine(a.id, "ready:" + a.id)));
   }
   // The message drafted to someone, on their card under their name: open, and folded by a tap
@@ -7288,8 +7505,149 @@
         args: {v: 1, target: tweakTarget(txt(obj(obj(w.args).target).output) || "resume", item), changes: [{p: "back", v: id}], back: id, text: null, keep: null, cost: {state: 1, writes: [], est_s: 45}}}], {ring: canRing()}),
       {kind: "link", key: "tweak-back:" + item.id}));
   }
+  // ------------------------------------------------------------------ work said on the card that asked for it
+
+  // A piece of work on the card that asked for it, in the words its card in Claude's work
+  // uses (workSay), never a second set: saved and where it waits, waking Claude, Claude on it
+  // with its step, its spinner and, from a few seconds in, its clock; Stopping, then
+  // Stopped; why it failed, with Try again; Done only once its result is on this card, and
+  // "Finished: putting it on your page" until then. Cancel on all of it while it waits or
+  // runs: waiting, it goes at once. Only this line is redrawn as it moves (the clock's tick,
+  // `data-work-inline`). (The maintainer, 2026-11-05: an inline box "must show progress
+  // smoothly and never leave them wondering".)
+  function workInline(id, w, o) {
+    o = o || {};
+    const st = txt(w.status) || "queued";
+    const key = (o.key || "wi") + ":" + id;
+    const title = txt(w.title);
+    const p = progress(w);
+    const box = (cls, kids, tail) => h("div", {class: "work-inline st-" + seg(st) + (cls ? " " + cls : ""), role: "status", "data-work-inline": id, "data-phase": phaseOf(w, p)},
+      h("p", {class: "wi-text"}, kids), tail ? h("span", {class: "wi-acts"}, tail) : null);
+    const cancel = () => btn("Cancel", () => stopWork(id), {kind: "quiet", small: true, key: key + ":cancel", aria: "Cancel: " + title});
+    if (st === "done") {
+      const said = o.done ? o.done(w) : "Done.";
+      return box("tone-ok", said || [h("span", {class: "spin", "aria-hidden": "true"}), " Finished: putting it on your page."]);
+    }
+    if (st === "stopped") {
+      // Called off before Claude began: it is gone at once, as nothing was done.
+      if (!w.claimed_at && !w.stage_at) return null;
+      return box("", w.stop_asked ? "Stopped. Nothing more is done on it." : "This stopped part way. Anything already saved is kept.",
+        (Number(w.attempt) || 1) < 3 && !w.stop_asked ? btn("Try again", () => retryWork(id), {small: true, key: key + ":again"}) : null);
+    }
+    if (st === "failed") {
+      const why = typeof w.error === "string" ? w.error : txt(obj(w.error).plain);
+      return box("tone-bad", "Claude could not finish this" + (why ? ": " + why.replace(/\.?$/, ".") : "."),
+        (Number(w.attempt) || 1) < 3 ? btn("Try again", () => retryWork(id), {small: true, key: key + ":again", aria: "Try again: " + title}) : null);
+    }
+    if (st === "needs_you") return jobNeedsBox(id, w) || box("tone-warn", txt(w.note) || "It has a question for you.", btn("Answer", () => askWorkAnswer(id), {small: true, key: key + ":answer"}));
+    const ws = workSay(id, w);
+    if (ws.p.stopping) return box("", [h("span", {class: "spin", "aria-hidden": "true"}), " Stopping after this step."]);
+    if (ws.unsent) return box("tone-warn", ws.now1, [btn("Send to Claude", () => sendNow([id]), {small: true, key: key + ":send"}), cancel()]);
+    const going = (st === "running" || st === "claimed") && !ws.slow;
+    const clock = (going || ws.picked || ws.waking) && !(Number(obj(w.count).total) > 0)
+      ? h("span", {class: "wi-clock muted", "data-step": "1"}, clockText(stepSeconds(ws.v, st === "queued", undefined, ws.p.sentAt))) : null;
+    const mark = going || ws.picked ? h("span", {class: "spin", "aria-hidden": "true"}) : h("span", {class: "dot tone-plain is-waiting", "aria-hidden": "true"});
+    // Its clock follows its words, so no full stop between them ("writing your answers · 1m").
+    // `o.lead`: what the work is for, where the card says it ("Claude is making it again").
+    const words = going || ws.picked ? (o.lead || "Claude is on it: " + lc1(txt(ws.now1).replace(/[.\s]+$/, ""))) :
+      st === "queued" ? (o.lead ? o.lead + ". " : "Saved. ") + ws.now1 : ws.now1;
+    return box(ws.slow || ws.late ? "tone-warn" : "", [mark, " ", words, clock], cancel());
+  }
+
+  // The rare question a run stopped on, in the card's one soft grey box, drawn the app's one
+  // way (workAnswerBox, DESIGN.md "Asking the person"): the words it is about, the question and
+  // the control its answer needs, answered in one tap; an answer in words keeps the run's own
+  // Answer (the maintainer, 2026-11-05: only if it is absolutely necessary).
+  function jobNeedsBox(id, w) {
+    const n = obj(w.needs);
+    const q = txt(n.question) || txt(w.note);
+    if (!q) return null;
+    return workAnswerBox(id, w, "jobask:" + id) || h("div", {class: "ask-box", "data-k": "jobask:" + id},
+      txt(n.about) ? h("blockquote", {class: "ask-about"}, clip(txt(n.about), 400)) : null,
+      h("p", {class: "ask-q"}, q),
+      h("div", {class: "opts"}, btn("Answer", () => askWorkAnswer(id), {small: true, key: "jobask-btn:" + id, aria: "Answer: " + q})));
+  }
+
+  // ------------------------------------------------------------------ the form's own questions
+
+  // A form asks more than the resume and the letter answer: "why us?", "why this role?", "an
+  // example of when you used X". One box on the application's card takes them, or what to
+  // change in either document, and Claude answers each from the profile and the posting,
+  // kept with the application under the card's "To copy" (the maintainer, 2026-11-05).
+  function formWork(itemId) {
+    const list = [...allWork()].filter(([, w]) => txt(w.kind) === "form_answers" && txt(obj(w.args).item) === txt(itemId))
+      .sort((a, b) => txt(b[1].asked_at).localeCompare(txt(a[1].asked_at)));
+    return list[0] || null;
+  }
+  const qaKey = (q) => txt(q).toLowerCase().replace(/[^a-z0-9]+/g, " ").trim();
+  // The answers a finished run wrote, all on this card already: then it is Done.
+  function formShown(a, w) {
+    const asked = arr(obj(w.result).questions).map(qaKey).filter(Boolean);
+    const have = new Set(arr(a.screening).map((qa) => qaKey(qa.q)));
+    return asked.every((q) => have.has(q));
+  }
+  function askForm(a) {
+    const last = formWork(a.id);
+    // Called off, or not finished: their words wait in the box for them (2026-11-05).
+    const kept = last && txt(last[1].status) !== "done" ? txt(obj(last[1].args).text) : "";
+    sheet({title: "Questions on the form",
+      intro: "Paste the form's own questions (why this employer, why this role, a time you used a tool), or say what to change in your " + noun() + " or letter. Claude writes each answer from your profile and the posting and keeps it with this application. Your " + noun() + " and letter change only where you ask.",
+      cost: costLine("form_answers"),
+      fields: [{id: "text", type: "text", long: true, label: "Questions on the form, or changes to your " + noun() + " or letter", required: true, max: 8000, value: kept}],
+      submit: "Ask Claude",
+      onSubmit: (v) => {
+        const text = txt(v.text).trim();
+        if (!text) return;
+        requestWork([{id: "form_answers~" + seg(a.id).slice(0, 60) + "~" + hash10(text), kind: "form_answers", title: "Answers for the form: " + txt(a.company) + ", " + txt(a.role || a.title),
+          args: {item: txt(a.id), slug: txt(a.slug) || null, company: txt(a.company), role: txt(a.role || a.title), text}}]);
+      }});
+  }
+  function formButton(a) {
+    return btn("Questions on the form", () => askForm(a), {small: true, wakes: "form_answers", key: "form:" + a.id, aria: "Questions on the form: " + txt(a.company) + ", " + txt(a.role || a.title)});
+  }
+  // The run on the card's face while it waits or runs, and for a day once it is done.
+  function formLine(a) {
+    const got = formWork(a.id);
+    if (!got) return null;
+    const [id, w] = got;
+    if (txt(w.status) === "done" && now() - finishedAt(w) > DAY) return null;
+    return workInline(id, w, {key: "form:" + a.id, item: a, done: (x) => {
+      if (!formShown(a, x)) return null;
+      const n = arr(obj(x.result).questions).length;
+      return n ? "Done: " + nWord(n, "answer", "answers") + " ready to copy, under More." : "Done" + (txt(obj(x.result).summary) ? ": " + lc1(firstSentence(txt(obj(x.result).summary))) : ".");
+    }});
+  }
+  // The answers to copy into the form: a draft's note to the hiring manager and every answer
+  // its folder holds, each with its Copy; one opened by a run just done.
+  function copyRow(a, out) {
+    out = obj(out);
+    const outId = "out-" + seg(a.id);
+    const screen = arr(a.screening);
+    const toCopy = (out.text ? 1 : 0) + screen.filter((qa) => !qa.fill && txt(qa.a)).length;
+    const toFill = screen.filter((qa) => qa.fill || !txt(qa.a)).length;
+    if (!toCopy && !toFill) return null;
+    const run = formWork(a.id);
+    const fresh = !!run && txt(run[1].status) === "done" && now() - finishedAt(run[1]) <= DAY && formShown(a, run[1]);
+    return mRow("To copy", det("copy:" + a.id, fresh, {class: "send"}, h("summary", {}, toCopy ? (toCopy === 1 ? "Show it" : "Show all " + toCopy) + (toFill ? ", and " + nWord(toFill, "question", "questions") + " yours to answer" : "") : "Show " + nWord(toFill, "question", "questions") + " yours to answer"),
+      out.text ? h("div", {class: "copy-one"}, h("p", {class: "card-title"}, "Note to " + (txt(out.to) || "the hiring manager")),
+        h("p", {class: "sendtext", id: outId}, txt(out.text)), copyButton(txt(out.text), "Copy note to " + (txt(out.to) || "the hiring manager"), "copy:" + outId, outId), noteFor("copy:" + outId)) : null,
+      screen.length ? h("dl", {class: "qa"}, screen.map((qa, i) => {
+        const qid = "qa-" + seg(a.id) + "-" + i;
+        if (qa.fill || !txt(qa.a)) return h("div", {}, h("dt", {}, txt(qa.q)), h("dd", {class: "muted"}, "Yours to answer: Claude did not know this one."));
+        return h("div", {}, h("dt", {}, txt(qa.q)), h("dd", {}, h("span", {id: qid, class: "sendtext"}, txt(qa.a)), " ",
+          copyButton(txt(qa.a), "Copy answer: " + clip(txt(qa.q), 40), "copy:" + qid, qid), noteFor("copy:" + qid),
+          txt(qa.why) ? h("p", {class: "small muted"}, txt(qa.why)) : null));
+      })) : null));
+  }
+
   // A posting rarely names exactly what someone holds: the near matches the engine found, in
   // one line on the card (the Tweak panel has a line each, with "I've used it too").
+  // The engine's own sentence (`near_words`); a model from before it is said here.
+  function nearWords(item) {
+    if (typeof item.near_words === "string") return item.near_words;
+    const p = nearLine(item);
+    return p ? p.textContent : "";
+  }
   function nearLine(item) {
     // The near suggestion on this item already says it, with its button: never twice.
     const sg = obj(item.suggest);
@@ -7908,21 +8266,32 @@
     const primary = !live ? null : iv && !isPast(iv.when) ? btn(obj(iv.prep).updated ? "Read your prep" : "Prepare me", () => (obj(iv.prep).updated ? openDetail("interview", iv.id) : askPrep(iv)), {kind: "primary", small: true, key: "recprep:" + a.id, aria: (obj(iv.prep).updated ? "Read your prep for " : "Prepare me for ") + txt(a.company)})
       : nudge ? btn("Draft the follow-up", () => askDue(nudge), {kind: "primary", small: true, key: "recnudge:" + a.id, aria: "Draft the follow-up: " + about}) : null;
     const job = jobRows().find((r) => txt(r.id) === txt(a.job)) || null;
+    // More as labelled rows, as on a Found card (2026-11-04): how it has gone so far, the
+    // posting and what else is at the employer, then one row of the rarer actions.
     const extra = [
-      arr(a.stages).length ? h("ol", {class: "plain timeline"}, arr(a.stages).map((s) => h("li", {}, h("span", {class: "muted"}, s.date || s.on ? fmtDay(s.date || s.on) + ": " : ""), txt(s.label || s.name), s.scheduled ? " (booked)" : ""))) : null,
-      nudge && obj(nudge.done).action ? h("div", {class: "more-acts"}, btn("Follow-up sent", () => act([{item: nudge.id, action: txt(obj(nudge.done).action), value: {on: todayIso()}, rev: nudge.rev}], "Follow-up marked as sent: " + txt(a.company)), {small: true, key: "recdone:" + a.id})) : null,
-      job || a.apply ? h("p", {}, applyLink(job ? job.apply : a.apply, "recapply:" + a.id)) : null,
-      relatedLinks(a.company, a.id, a),
-      live ? h("div", {class: "more-acts"}, btn("Not applied after all", () => act([{item: job ? job.id : a.id, action: job ? "job.not_applied" : "ready.not_applied", rev: job ? job.rev : a.rev}], "Marked as not applied: " + txt(a.company)), {kind: "quiet", small: true, key: "recnot:" + a.id})) : null,
+      arr(a.stages).length ? mRow("So far", h("ol", {class: "plain timeline"}, arr(a.stages).map((s) => h("li", {}, h("span", {class: "muted"}, s.date || s.on ? fmtDay(s.date || s.on) + ": " : ""), txt(s.label || s.name), s.scheduled ? " (booked)" : "")))) : null,
+      copyRow(a),
+      alsoAt(a.company, a, [a.id, a.job]),
+      h("div", {class: "more-acts"},
+        live ? formButton(a) : null,
+        safeUrl(obj(job ? job.apply : a.apply).url) ? applyLink(job ? job.apply : a.apply, "recapply:" + a.id, null, true) : null,
+        nudge && obj(nudge.done).action ? btn("Follow-up sent", () => act([{item: nudge.id, action: txt(obj(nudge.done).action), value: {on: todayIso()}, rev: nudge.rev}], "Follow-up marked as sent: " + txt(a.company)), {small: true, key: "recdone:" + a.id}) : null,
+        live ? btn("Not applied after all", () => act([{item: job ? job.id : a.id, action: job ? "job.not_applied" : "ready.not_applied", rev: job ? job.rev : a.rev}], "Marked as not applied: " + txt(a.company)), {small: true, key: "recnot:" + a.id}) : null),
     ];
+    const fold = infoFold("rec:" + a.id, extra.slice(0, -1));
+    const m = moreSplit("rec:" + a.id, about, extra.slice(-1), true);
     return card("article", {class: "card app-record" + (tone === "warn" ? " edge-warn" : ""), "aria-labelledby": hid, "data-item": a.id},
-      h("div", {class: "job-top"}, h("h3", {id: hid}, txt(a.role)), h("span", {class: "top-end"}, stateWord(word, tone),
+      h("div", {class: "job-top"}, h("h3", {id: hid}, breakable(a.role)), h("span", {class: "top-end"}, stateWord(word, tone),
         live ? btn("", () => askEndApplication(a, "your application to " + txt(a.company)), {kind: "quiet icon-only", small: true, icon: "bin", key: "recbin:" + a.id, aria: "It is over: " + about}) : null)),
-      h("p", {class: "org"}, h("bdi", {}, txt(a.company)), a.referrer ? [" · Referred by ", itemLink("contacts", txt(obj(a.referrer).contact || obj(a.referrer).id), txt(obj(a.referrer).first_name), "recref:" + a.id)] : null),
-      nextLine ? h("p", {class: "meta"}, nextLine) : null,
+      // One line of facts, as on a Found card: the employer, who referred you, and what is next.
+      h("p", {class: "facts"}, h("bdi", {class: "co"}, txt(a.company)), a.referrer ? [" · ", h("span", {class: "fact"}, "Referred by ", itemLink("contacts", txt(obj(a.referrer).contact || obj(a.referrer).id), txt(obj(a.referrer).first_name), "recref:" + a.id))] : null,
+        nextLine ? [" · ", h("span", {class: "fact next"}, nextLine)] : null, fold.toggle("Details", "Details: " + about)),
+      fold.panel,
+      live ? formLine(a) : null,
       h("div", {class: "card-actions"}, primary,
         live ? btn("I heard back", () => heardBack(a), {kind: primary ? "secondary" : "primary", small: true, key: "heard:" + a.id, aria: "I heard back: " + about}) : null,
-        more("rec:" + a.id, about, extra)),
+        m.toggle),
+      m.panel,
       stateLine(a.id, "rec:" + a.id));
   }
 
@@ -8288,6 +8657,17 @@
     const kept = points.filter((pt) => quotesAnswer(pt, answer));
     return {band, kept, dropped: points.length - kept.length, next: lines.filter((l) => !/^[-*•]/.test(l) && !/\b(Strong|Solid|Gap)\b/.test(l)).join(" ")};
   }
+  // Jobs' header tools, the same on both its tabs: Find jobs, where a search starts (never a
+  // hunt: the maintainer, 2026-10-26), then Add a job and your resume as soft pills beside it,
+  // as Contacts' Paste a message beside Find people. Never a small underlined line, and never a
+  // line about Claude's work: the header's pill and each card say that (2026-11-05).
+  function jobsHeadTools(rows) {
+    const findBtn = !arr(rows).length ? null : runBtn("search", "Find jobs", () => askSearch(), {small: true, key: "head-find-jobs", icon: "k-search", wakes: "search"});
+    const addJob = h("button", {type: "button", class: "btn secondary small", "data-k": "add-job", onclick: () => askAddJob()}, "Add a job");
+    const cv = resumeLink();
+    if (cv) cv.className = "btn secondary small";
+    return h("div", {class: "head-tools"}, findBtn, addJob, cv);
+  }
   // Jobs, Applied: every application, from any round or from outside the app, each a record
   // with its next step and "I heard back".
   function renderApplied(where) {
@@ -8304,7 +8684,7 @@
     const sum = live.length ? live.length + " still open" + (booked ? ", " + booked + " with an interview booked" : "") +
       (undated ? ", " + nWord(undated, "interview", "interviews") + " with no day yet" : "") + (nudge ? ", " + nudge + " due a follow-up" : "") + "."
       : "Nothing applied yet. Roles you apply to move here.";
-    const wrap = h("section", {class: "sec", "aria-labelledby": "h-jobs" + (where ? "-" + where : "")}, screenHead("jobs", "Jobs", sum, [resumeLink()], where));
+    const wrap = h("section", {class: "sec", "aria-labelledby": "h-jobs" + (where ? "-" + where : "")}, screenHead("jobs", "Jobs", sum, null, where, jobsHeadTools(jobRows()), {quiet: true}));
     const lo = {items, name: "applications", one: "application", many: "applications", live: appLive, remote: "applications",
       fold: (a) => !appLive(a) && daysSince(a.last || a.applied_on) !== null && daysSince(a.last || a.applied_on) > 30, foldLabel: (k) => k + " earlier, finished",
       sort: (a, b) => {
@@ -11761,7 +12141,7 @@
   function count(id) {
     switch (id) {
       case "todo": return todoBadge();
-      case "jobs": return jobRows().filter(jobToLook).length;
+      case "jobs": return toApplyCount();
       case "drafts": return readyItems().filter(readyLive).length + messageItems().filter((m) => msgLive(m) && !settledAction(m.id, ["msg.sent", "msg.skip"])).length;
       case "contacts": return dueItems().filter((d) => dueKind(d) === "message" && dayDiff(d.due) !== null && dayDiff(d.due) <= 0).length;
       default: return 0;
@@ -11929,7 +12309,7 @@
       const at = lastAnswerAt();
       return at && !chatShown() && at > txt(pref("chat:seen", "")) ? h("span", {class: "navdot"}, h("span", {class: "sr-only"}, " new answer")) : null;
     }
-    if (id === "jobs") n = jobRows().filter(jobToLook).length;
+    if (id === "jobs") n = toApplyCount();
     else if (id === "drafts") n = readyItems().filter(readyLive).length + messageItems().filter((m) => !settledAction(m.id, ["msg.sent", "msg.skip"]) && msgStatus(m) === "to_send").length;
     // Coming up: the one number its screen and the Brief also say (2026-10-29: a count that
     // differs between two places reads as a bug).
@@ -12467,6 +12847,17 @@
 
   function tick() {
     const t = now();
+    // A line on the card that asked for the work: its clock, or the line redrawn when its
+    // phase moves.
+    for (const el of document.querySelectorAll("[data-work-inline]")) {
+      const id = el.getAttribute("data-work-inline");
+      const w = workDoc(id);
+      if (!w) continue;
+      const p = progress(w, t);
+      if (el.getAttribute("data-phase") !== phaseOf(w, p)) { liveRender(); return; }
+      const sc = el.querySelector("[data-step]");
+      if (sc) sc.textContent = clockText(stepSeconds(w, p.status === "queued", t, p.sentAt));
+    }
     for (const el of document.querySelectorAll("[data-work]")) {
       const id = el.getAttribute("data-work");
       const w = workDoc(id);

@@ -272,7 +272,8 @@ def test_a_job_from_an_earlier_search_stays_two_weeks_or_while_kept(search):
                                        "-6 stated 5+ years against 4 held"]}])
     m = search.model()
     rows = m["jobs"]["rows"]
-    assert rows[0]["why"] == ["SQL and Python asked and held", "Stated 5+ years against 4 held"]
+    assert rows[0]["why"] == ["SQL and Python asked and held", "Asks for 5+ years; you have 4"]
+    assert rows[0]["reasons"] == {"good": "SQL and Python asked and held.", "watch": "Asks for 5+ years; you have 4."}
     earlier = [r for r in rows if r["from_round"] == "r8"]
     assert earlier and all("From an earlier search." in r["notes"] for r in earlier)
     assert "more from earlier searches" in m["jobs"]["summary"]
@@ -330,3 +331,21 @@ def test_no_day_yet_never_wipes_a_day_already_booked(search):
     md = next(os.path.join(folder, d, "outcome.md") for d in os.listdir(folder)
               if d.startswith("larkspur_retail_senior"))
     assert "- [ ] Phone screen (scheduled 2026-10-30, with the recruiter)" in open(md, encoding="utf-8").read()
+
+
+def test_a_jobs_own_details_are_corrected_on_its_card_and_undone(search):
+    """What the search read about a posting can be wrong (a title cut short, pay it missed, a
+    place spelled out): the person corrects it with the pencil on the card, code only, kept with
+    the posting; its Undo puts back what was there (the maintainer, 2026-11-05)."""
+    job = next(r for r in search.model()["jobs"]["rows"] if r["company"] == "Brindle Hart Logistics")
+    aid = search.act("job.edit", job["id"], value={"title": "Senior Demand Planner", "pay": "GBP 50,000", "place": "Leeds"},
+                     rev=job["rev"])
+    assert search.apply()["ok"] == [aid], search.receipt(aid)
+    now = next(r for r in search.model()["jobs"]["rows"] if r["company"] == "Brindle Hart Logistics")
+    assert (now["title"], now["pay"]["text"], now["place"]) == ("Senior Demand Planner", "GBP 50,000", "Leeds")
+    assert now["kept"], "a posting the person corrected stays on the list"
+    undo = search.receipt(aid)["undo"]
+    bid = search.act(undo["action"], now["id"], value=undo["value"], rev=now["rev"])
+    assert search.apply()["ok"] == [bid], search.receipt(bid)
+    back = next(r for r in search.model()["jobs"]["rows"] if r["company"] == "Brindle Hart Logistics")
+    assert back["title"] == job["title"] and back["place"] == job["place"]

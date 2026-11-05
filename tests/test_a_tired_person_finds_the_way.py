@@ -164,7 +164,9 @@ def test_a_draft_that_needs_a_fix_says_so_on_its_card_with_its_state_by_the_titl
     card = got["after"][0]["text"]
     r = got["after"][0]["eval"]
     assert not r["folded"], "the failed check is on the card, not folded into More"
-    assert "the CV runs to a second page by two lines" in card and "Make it again" in card, card
+    # What Claude can do by itself is never a button (2026-11-05): the failed check is said on
+    # the card, and Claude makes it again once its question is answered.
+    assert "the CV runs to a second page by two lines" in card and "Make it again" not in card, card
     assert "Two answers about Quayside Foods" in card, "its question stays first"
     assert r["onRow"] or (r["atStart"] and r["gap"] <= 8), ("the state stays by the title, never pushed off to the right below it", r)
 

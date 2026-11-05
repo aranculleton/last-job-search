@@ -192,6 +192,51 @@ def no_screen(dump: str, db: dict) -> str:
             "run this again with --dump that folder.")
 
 
+def self_fixes(db: dict | None, model: dict, out_dir: str, now, dump_dir: str = "") -> list[str]:
+    """The batches that queue, once each, what a draft on the page needs and Claude can do
+    with no one asking: its remake where a check failed with a fix Claude makes (the checks
+    alert's own `draft` work, its `redo`; never one the drafts rerun handed to the person,
+    tools/remake_drafts.py's "todo"), and one `files` item for the drafts whose PDFs the page
+    lacks that no files work has ever covered (page_db.queue_files). Each id is a create the
+    store refuses twice, so a view run again queues nothing more."""
+    import app_model
+    import page_db
+    if db is None:
+        return []
+    work = db.get("work") or {}
+    try:
+        import remake_drafts
+        theirs = {c["app"] for c in remake_drafts.todo_cards()}
+    except Exception:  # noqa: BLE001  no rerun record: none is the person's
+        theirs = set()
+    w = page_db.Writes(out_dir)
+    for item in model.get("ready") or []:
+        if item.get("status") != "drafted" or item.get("id") in theirs:
+            continue
+        for al in item.get("alerts") or []:
+            act = al.get("action") or {}
+            wid = page_db.safe_id(str(act.get("id") or ""))
+            if al.get("kind") != "checks" or act.get("type") != "work" or act.get("kind") != "draft" \
+                    or not wid or wid in work:
+                continue
+            w.add("set", "work", wid, page_db.queued("draft", act.get("title") or "",
+                                                     dict(act.get("args") or {}, auto=True), now),
+                  if_version=None)
+    out = w.save("self") if w.entries else []
+    ever = set()
+    for d in work.values():
+        x = d.get("data") or {}
+        if x.get("kind") == "files":
+            args = x.get("args") if isinstance(x.get("args"), dict) else {}
+            ever |= {str(i) for i in args.get("applications") or []} | {str(args.get("application") or "")}
+    missing = [x for x in app_model.files_missing() if str(x.get("id") or "") not in ever]
+    if missing:
+        q = page_db.queue_files(db, missing, now, os.path.join(out_dir, "files"), dump_dir=dump_dir)
+        if q:
+            out = out + list(q["batches"])
+    return out
+
+
 def cmd_view(a) -> int:
     """The model as one document a section (`view/<section>`, in parts when it is too big for
     one: page_db.split) plus `meta/current` (stored as `meta/now`), so an open page updates live with no republish.
@@ -364,6 +409,15 @@ def cmd_view(a) -> int:
             batches = list(batches) + remake_drafts.page_writes(
                 db, os.path.join(a.out_dir, "remade"), now)
         except Exception:  # noqa: BLE001  nothing remade to read: nothing to queue
+            pass
+    # What a draft needs that Claude can do by itself is queued by itself, once: a check
+    # with its fix in hand made again, and the PDFs the page lacks put on it. Never "Make it
+    # again" or "Get my files ready" for the person to tap (the maintainer, 2026-11-05).
+    if a.dump:
+        try:
+            batches = list(batches) + self_fixes(db, model, os.path.join(a.out_dir, "self"), now,
+                                                 dump_dir=a.dump)
+        except Exception:  # noqa: BLE001  nothing to read it against: nothing queued
             pass
     lines = app_listen.view_renewal(db, a.chat, now)
     # A yes the person gave, in another chat or on the page, that an unsent resume still
@@ -1780,7 +1834,7 @@ def cmd_done(a) -> int:
                              error=a.failed, links=_links(a.link), reply=reply, thread=a.thread,
                              chat_kind=a.kind or app_listen.chat_kind(), dump_dir=a.dump,
                              chat=a.chat, question=a.question, about=a.about,
-                             answer=_answer(a))
+                             answer=_answer(a), answered=a.answered)
     except (KeyError, ValueError) as e:
         print(f"app: not finished: {e.args[0] if e.args else e}", file=sys.stderr)
         return 2
@@ -2091,6 +2145,9 @@ def main(argv=None) -> int:
                    help="\"<label>=<address>\" shown with it (more than one allowed)")
     p.add_argument("--chat", default="", help=CLAIMED_UNDER)
     p.add_argument("--kind", default="", choices=("", "cloud", "computer"))
+    p.add_argument("--answered", action="append", default=[],
+                   help="a form's question answered (form_answers), in the form's own words: "
+                        "its card says Done once each is on it (more than one allowed)")
     p.add_argument("--out", default="", help="where the batch goes (default <dump>/out)")
     p.add_argument("--left-out", dest="left_out", default="",
                    help="a draft stopped because the job is not one they can take: why, in "

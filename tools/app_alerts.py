@@ -52,7 +52,9 @@ WORK_COST = {"search": 2, "draft": 3, "resume_for_contact": 3, "prep": 3, "netwo
              # The page's new code built and published by the listener: no drafting.
              "republish": 1,
              # A change to their own profile, and a fresh resume made from it.
-             "profile": 2}
+             "profile": 2,
+             # A form's own questions answered from the profile and the posting.
+             "form_answers": 2}
 
 SUGGEST_PER_DAY = 3
 PAUSE_AFTER = 3
@@ -262,7 +264,9 @@ def for_ready(ctx, item: dict, row: dict, folder: str) -> tuple[list, dict | Non
     checks = item["checks"]
     if not checks["passed"]:
         again = "Make it" if checks["line"].startswith("Not made yet") else "Make it again"
-        out.append(alert("checks", rid, checks["line"] + ".",
+        # One full stop: a line the verify step wrote ends with its own, and "read it.."
+        # reached the card (the maintainer, 2026-11-05).
+        out.append(alert("checks", rid, str(checks["line"]).rstrip(". ") + ".",
                          "Both documents are made and read back at the right length before "
                          "anything is sent.",
                          work("draft", again, f"{again}: {company}",

@@ -7,7 +7,7 @@ next?" in its first lines, and nothing asks for a decision a default could make.
 
 ## Places
 
-- Seven places: **Brief** (the home screen), **To do**, **Jobs** (Found, Drafts, Applied),
+- Seven places: **Brief** (the home screen), **To do**, **Jobs** (To apply, Applied),
   **Contacts** (one list, each person with what to send them), **Coming up** and **Chat**
   together in the side menu, and **Settings** alone at its foot. Five sit in the phone's tab
   bar (Brief, To do, Jobs, Contacts, Chat); To do alone carries a coloured badge, and Chat a
@@ -40,9 +40,35 @@ next?" in its first lines, and nothing asks for a decision a default could make.
 - A card reads top down: its top line (a kind or a score, the title, a state pill, the bin),
   one line of facts, at most one block in a soft grey box (a question or a suggestion), then
   its actions: one row of pills (Buttons, below). (layout 7, 8, action-row test)
-- A job card's line of facts says when it was posted and the pay where stated; why it scored
-  what it did is the first line under More. A drafted role's card in Found opens its draft,
-  where "I have applied" is; a closed one offers only setting it aside. (jobs page tests)
+- Jobs is one list of the jobs you might apply to, each once at its own stage, and Applied beside
+  it. A drafted job stood in Found and again in Drafts, and acting on it meant flipping tabs: now a
+  drafted job is its draft's card, carrying the job's fit and reasons, a job being drafted shows
+  its progress, and a find offers Draft this; drafts first, then finds by fit; the tab, the
+  summary, the menu and the Brief count the same two things, drafts to send and jobs to look at.
+  A posting that has closed waits under the list ("1 closed: Show"). (jobs page tests)
+- Jobs' header is the same on both tabs: its title, its one short line and when it searched, with
+  Find jobs and then "Add a job" and your resume as soft pills beside it, as Contacts'. What
+  Claude is doing is the header's work pill and each card's own line, never a line here.
+  (going-on tests)
+- A Jobs card says its facts on one line (the employer, the town, never its region and country,
+  when it was posted and found, the pay where stated) ending with its details fold: "Why"
+  where it has a score, else "Details", short labelled rows in one size and one tone (why it
+  scored, a watch-out apart, worth knowing, skills, the posting, "Also at" the employer by kind,
+  each link naming what it opens). More holds only the rare actions; a card with none has no More.
+  (jobs page tests, layout 16)
+- A Jobs card's actions are the one row of pills of Buttons, below: one filled next step, two soft
+  pills at most, then More. A pencil beside the resume's words and one beside the letter's ("CV 1
+  page ✎ letter 1 page ✎", the engine's own parts, kept on one line each) open the Tweak panel; the
+  pencil at the end of a job's facts corrects its title, pay or place, code only. What Claude can
+  do by itself is never a button: a draft's remake after a check with its fix in hand, and its
+  files, are queued by the view, and the card says what Claude is doing. Every control that wakes
+  Claude carries the gauge; the sweep tags each control Claude-waking or code-only. A warm route
+  is said one way, in the card's soft grey box. (layout 7, 8; sweep test; jobs page tests)
+- A form's own questions, and changes to a resume or letter, go in the one box under a draft's
+  or an application's More ("Questions on the form"); the answers come back on that card, each
+  with its Copy. Work a card asked for is said on that card in the words of its card in
+  Claude's work, with Cancel while it waits or runs, why it failed with Try again, and Done only
+  once its result is on the card. (form questions tests)
 - A state is a small tinted pill in words a person uses, never a code word: ok green, info
   blue, warn amber, bad red, held violet, waiting grey. (status audit, colour tests)
 - A To do row whose message is already drafted says "Draft ready" and its one button opens

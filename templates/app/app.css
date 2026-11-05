@@ -400,6 +400,35 @@ details.more[open] { flex-basis: 100%; }
 details.more[open] > .more-btn::before { transform: rotate(-135deg) translateY(-1px); }
 @media (hover: hover) { .more-btn:hover { background: var(--raised); } }
 .more-panel { display: grid; gap: 12px; padding: 12px 2px 4px; border-top: 1px solid var(--line); margin-top: 8px; }
+/* A Jobs card's More: its toggle stays in the actions row, its panel opens under the row as
+   labelled rows in one size and one tone, the label beside its words on a wide screen and
+   above them on a phone (the maintainer, 2026-11-04). */
+details.more.split[open] { flex-basis: auto; }
+.more-panel.m-rows { gap: 12px; margin-top: 4px; font-size: var(--t-sm); color: var(--ink); }
+.more-panel.m-rows * { font-size: inherit; }
+.m-row { display: grid; gap: 2px; min-width: 0; }
+.m-label { margin: 0; color: var(--muted); font-weight: 600; }
+.m-body { display: grid; gap: 4px; min-width: 0; }
+.m-body p, .m-body ol, .m-body ul { margin: 0; }
+.m-sub { color: var(--muted); }
+.m-rows .more-alerts { display: grid; gap: 4px; }
+.m-rows .alert-text { font-weight: 400; }
+.m-rows .more-acts { gap: 8px 12px; }
+.m-rows :is(.file-kind, .file-name) { font-weight: 400; color: inherit; }
+.m-rows details.send { border-top: 0; }
+.m-rows details.send > summary { padding: 0; }
+@media (min-width: 760px) and (pointer: fine) { .m-rows details.send > summary { min-height: 24px; } }
+/* The rarer actions under More are the soft grey pills of the card's own row. */
+.m-rows .more-acts .btn.secondary { background: var(--sunk); border-color: transparent; }
+@media (hover: hover) { .m-rows .more-acts .btn.secondary:hover { background: var(--raised); } }
+@media (min-width: 760px) { .m-row { grid-template-columns: 10rem minmax(0, 1fr); column-gap: 16px; align-items: baseline; } }
+
+/* Work said on the card that asked for it: one line, its mark (a spinner while Claude is on
+   it, a breathing dot while it waits), its words and its clock, Cancel at its end. */
+.work-inline { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 12px; font-size: var(--t-sm); color: var(--ink); }
+.work-inline .wi-text { margin: 0; flex: 1 1 16rem; min-width: 0; }
+.work-inline .wi-text > .spin, .work-inline .wi-text > .dot { display: inline-block; width: 12px; height: 12px; vertical-align: -1px; }
+.work-inline .wi-acts { display: inline-flex; align-items: center; gap: 8px; }
 
 /* ------------------------------------------------------------------ jobs */
 .card.job { grid-template-columns: minmax(0, 1fr); row-gap: 8px; align-items: start; }
@@ -407,7 +436,11 @@ details.more[open] > .more-btn::before { transform: rotate(-135deg) translateY(-
 /* The top line stays one line at the usual sizes; at very large text the state and the bin
    drop below the title instead of pushing the card past the screen's edge. */
 .card.job .job-top { justify-content: flex-start; flex-wrap: wrap; align-items: baseline; }
-.card.job .job-top h3 { flex: 1 1 0; min-width: 8ch; overflow-wrap: anywhere; }
+.card.job .job-top h3 { flex: 1 1 0; min-width: 8ch; overflow-wrap: break-word; }
+.card.job .job-top h3, .card.app .job-top h3, .card.app-record .job-top h3 { text-wrap: pretty; }
+/* The bin reaches above and below the top line without making it taller, so a card with a
+   state pill keeps its facts as close under the title as one without. */
+@media (min-width: 760px) { :is(.card.job, .card.app, .card.app-record) .top-end .icon-only { margin-block: -8px; } }
 /* A job's number: a small badge, green for a strong fit, blue for a good one, grey below. */
 .score-pill { flex: none; min-width: 32px; padding: 2px 8px; border-radius: 999px; text-align: center; font: 600 var(--t-sm)/1.4 var(--font-data);
   font-variant-numeric: tabular-nums; background: var(--st-waiting-bg); color: var(--st-waiting); cursor: help; }
@@ -416,12 +449,22 @@ details.more[open] > .more-btn::before { transform: rotate(-135deg) translateY(-
 .card.job .job-main { display: grid; gap: 4px; min-width: 0; }
 .card.job.st-dismissed, .card.job.st-applied { background: var(--sunk); box-shadow: none; }
 .facts { font-size: var(--t-sm); color: var(--muted); }
+.facts .co { color: var(--ink); }
 .facts .soon { color: var(--ink); font-weight: 600; }
 .warm { background: var(--st-running-bg); color: var(--st-running); border-radius: var(--r-sm); padding: 12px 12px; }
 .warm a { color: inherit; font-weight: 600; }
 .warm-k { font-weight: 600; }
 .notes { margin: 0; padding-left: 20px; color: var(--muted); }
 .applylink { font-weight: 600; display: inline-flex; align-items: center; min-height: 38px; }
+/* A suggestion's action, the time it takes and No thanks sit on one line, centred: its button
+   was pushed 8px below the others by a fix's own top margin (2026-11-04). */
+.suggest-acts > .fix { margin-top: 0; }
+/* On a Jobs card the suggestion is lighter than the card's own actions: smaller words, and a
+   soft white pill with no edge. */
+:is(.card.job, .card.app) .suggest { padding: 8px 12px; gap: 4px; }
+:is(.card.job, .card.app) .suggest-text { font-size: var(--t-sm); }
+:is(.card.job, .card.app) .suggest-acts { gap: 4px 12px; }
+:is(.card.job, .card.app) .suggest .btn.secondary { background: var(--surface); border-color: transparent; }
 .filtered { border: 1px solid var(--line); border-radius: var(--r); background: var(--surface); padding: 4px 16px 12px; }
 .wc-more summary { cursor: pointer; font-size: var(--t-sm); font-weight: 600; color: var(--muted); min-height: 36px; display: flex; align-items: center; }
 .filtered summary, .gone summary, details.send summary, .chart summary, .recent summary, .brief summary {
@@ -685,6 +728,10 @@ textarea { width: 100%; resize: vertical; line-height: 1.45; }
 .warm { background: none; color: var(--ink); padding: 0; font-size: var(--t-sm); }
 .warm a { color: var(--link); }
 .warm-k { font-weight: 600; color: var(--st-held); }
+/* On a Jobs card the warm route is the card's one soft grey box, as its suggestion is, its
+   name a quiet ink link: a rose line beside the boxes read as other advice (2026-11-05). */
+:is(.card.job, .card.app) .warm { background: var(--sunk); padding: 8px 12px; border-radius: var(--r-sm); }
+:is(.card.job, .card.app) .warm a, .m-rows .warm-line a { color: var(--ink); text-decoration-color: var(--line-strong); }
 /* A question on a card: the question, its reason quietly under it, its answers. */
 .question { display: grid; gap: 4px; padding: 12px; border-radius: var(--r-sm); background: var(--sunk); }
 .q-text { font-weight: 600; }
@@ -868,6 +915,17 @@ p.count.tone-warn { color: var(--st-overdue); }
 .sendbox > .btn.bubble-pen { float: right; margin: 4px 4px 0 0; }
 .sendbox > textarea.pen-text { display: block; width: 100%; font: inherit; color: var(--ink); border: 1px solid var(--line-strong); }
 .pen-tell { display: grid; gap: 8px; }
+/* A job's details, corrected in place: each field its label above it. */
+.job-pen .jp-field { display: grid; gap: 2px; font-size: var(--t-sm); }
+/* "Why 84" and the pencil keep the line of facts one line: words in its own type, the
+   pencil drawn inside the line's height and reaching its target past it. */
+.facts .info-toggle { font: inherit; font-weight: 600; }
+/* A document's words and its pencil keep together: a pencil alone on a line named nothing. */
+.checks .doc-part { white-space: nowrap; }
+@media (min-width: 760px) and (pointer: fine) {
+  .facts .info-toggle { display: inline; min-height: 0; padding: 0 2px; }
+  .facts .btn.icon-only, .checks .btn.icon-only { min-height: 0; padding: 2px 8px; margin-block: -4px; vertical-align: middle; }
+}
 .pen-tell .pen-ask { width: 100%; }
 .wave { display: grid; gap: 12px; }
 .wave-head { display: grid; gap: 4px; }
@@ -1320,6 +1378,11 @@ body.has-fab .shell { padding-bottom: calc(var(--tabs-h) + env(safe-area-inset-b
   .card.job { row-gap: 4px; }
   .card.job { position: relative; }
   .card.job .job-top h3 { flex: 1 1 0; }
+  /* A job's bin in the corner and its state under the title, as a draft's: beside a state
+     pill the title had a third of the line (2026-11-04). */
+  .card.job .top-end .icon-only { position: absolute; top: 4px; right: 4px; }
+  .card.job .job-top:has(.top-end .icon-only) h3 { padding-right: 44px; }
+  .card.job .top-end:has(.state-word) { margin-left: 0; flex-basis: 100%; }
   /* A person's bin in the corner; their state stays under the name, where it reads. */
   .person { position: relative; }
   .person .top-end .icon-only { position: absolute; top: 4px; right: 4px; }

@@ -78,15 +78,19 @@ def test_a_people_run_going_turns_find_people_into_what_is_going_and_never_start
 
 
 def test_a_search_going_takes_find_jobs_off_jobs_and_says_it_is_searching(run, tmp_path):
+    """Find jobs is the search going ("Finding jobs") while it runs, and the header carries no
+    line of its own about it: the work pill and the button say it (2026-11-05)."""
     got = _go(run, tmp_path, [{"hash": "jobs", "read": "#main .sec-head", "eval": PLAIN}], PHONE,
               seed={"work/search~1": _work("search", "Finding jobs")}, clock=T)
-    assert got["after"][0]["eval"] == 0 and "Searching now" in got["after"][0]["text"], got["after"][0]["text"]
+    head = got["after"][0]["text"]
+    assert got["after"][0]["eval"] == 0 and "Finding jobs" in head, head
+    assert "Searching now" not in head and "Claude is on it" not in head, head
     assert [w["kind"] for w in got["work"]] == ["search"]
 
 
+# Jobs left this list on 2026-11-05: its header says nothing of Claude's work (below).
 @pytest.mark.parametrize("screen,kind,title", [
     ("interviews", "prep", "Prep for the second interview"),
-    ("jobs", "draft", "Drafts for 2 roles"),
 ])
 def test_each_screen_says_when_claude_is_working_on_it(run, tmp_path, screen, kind, title):
     count = "document.querySelectorAll('#main .running-here').length"
@@ -96,6 +100,26 @@ def test_each_screen_says_when_claude_is_working_on_it(run, tmp_path, screen, ki
     assert here["eval"] == 1 and "Claude is on it: " + title + "." in here["text"], here["text"][:400]
     assert "See how it is going" in here["text"]
     assert elsewhere["eval"] == 0, "the line is on the screen whose work it is, nowhere else"
+
+
+TOOLS = """[document.querySelectorAll('#main .running-here').length,
+  [...document.querySelectorAll('#main .sec-head .head-tools .btn')].map((b) => [b.textContent.replace(/\\s+/g, ' ').trim(), b.classList.contains('link')]),
+  document.querySelectorAll('#main .sec-head .sum-small .btn.link').length]"""
+
+
+@pytest.mark.parametrize("tab", ["To apply", "Applied"])
+def test_jobs_header_says_nothing_of_claudes_work_and_its_tools_are_pills(run, tmp_path, tab):
+    """Jobs' header, on both its tabs, carried "Claude is on it: ..." under the summary and a
+    small underlined line ("Add a job · Your CV"): the header's work pill and each card's own
+    line say what Claude is doing, and Add a job and your CV are soft pills beside Find jobs, as
+    Contacts' Paste a message beside Find people (the maintainer, 2026-11-05)."""
+    got = _go(run, tmp_path, [{"hash": "jobs", "click": tab, "read": "#main .sec-head", "eval": TOOLS}], PHONE,
+              seed={"work/draft~1": _work("draft", "Drafts for 2 roles")}, clock=T)
+    lines, tools, links = got["after"][0]["eval"]
+    head = got["after"][0]["text"]
+    assert lines == 0 and "Claude is on it" not in head and "See how it is going" not in head, head
+    assert [t for t, _ in tools][-2:] == ["Add a job", "Your CV"] and not any(link for _, link in tools), tools
+    assert links == 0, ("no small underlined line under the summary", head)
 
 
 def test_contacts_says_claude_is_working_on_a_reply_on_that_persons_card(run, tmp_path):

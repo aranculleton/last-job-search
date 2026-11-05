@@ -424,6 +424,8 @@ function budgetProbe() {
   const controls = (root, viewOnly) => [...root.querySelectorAll(CTRL)].filter((el) => shown(el) && (!viewOnly || inView(el)));
   const main = document.getElementById("main");
   const chrome = ["top", "foot"].map((id) => document.getElementById(id)).filter(Boolean).reduce((a, e) => a + wordsIn(e, false), 0);
+  // A Jobs card keeps its own next step filled, one a card, held by each card's own count
+  // (DESIGN.md, "Buttons"); the rest of a screen has one.
   const filled = [...document.querySelectorAll(".btn.primary")].filter((b) => shown(b) && inView(b) && !b.closest("dialog")).length;
   const cards = [...main.querySelectorAll("[data-card]")].filter(shown).map((c) => {
     const cs = controls(c, false);
@@ -596,7 +598,22 @@ function layoutMeasure() {
     return {spread: tops.length ? Math.max(...tops) - Math.min(...tops) : 0, scroll: c.scrollWidth - c.clientWidth, n: kids.length};
   });
   const inView = (e) => { const r = e.__drawnRect(); return r.bottom > 0 && r.top < innerHeight && r.right > 0 && r.left < innerWidth; };
+  // A Jobs card (Found, Drafts, Applied) keeps its own next step filled, one a card; the rest
+  // of a screen has one (DESIGN.md, "Buttons").
+  const OWN_STEP = ".card.job, .card.app:not(.quiet-card), .card.app-record";
   const primary = [...document.querySelectorAll(".btn.primary")].filter((e) => vis(e) && inView(e) && !e.closest("dialog:not([open])")).length;
+  // The lines a card's facts take under its title: the employer's line and the line of facts
+  // are one line (DESIGN.md, "Cards and lists").
+  const lines = (els) => {
+    const tops = [];
+    for (const el of els) {
+      const r = document.createRange();
+      r.selectNodeContents(el);
+      for (const b of r.getClientRects()) if (b.width > 0 && b.height > 0) tops.push(b.top);
+    }
+    tops.sort((x, y) => x - y);
+    return tops.reduce((n, t, i) => n + (i && t - tops[i - 1] > 4 ? 1 : 0), tops.length ? 1 : 0);
+  };
   const qPrimary = [...main.querySelectorAll(".btn.answer.primary")].filter(vis).length;
   const cards = [...main.querySelectorAll("[data-card]")].filter(vis).map((c) => {
     const closed = (e) => !e.closest("details:not([open])") || e.matches("summary");
@@ -607,12 +624,15 @@ function layoutMeasure() {
       // checked" target are parts of their own line, not actions.
       // A More holding one action shows that action in its place (4.3): it fills the More's
       // slot, not a button's.
-      buttons: own("button, a.btn").filter((b) => !b.closest("summary, .suggest, .alert, .warm, .g-row") && !b.classList.contains("answer") && !b.classList.contains("q") && !b.classList.contains("icon-only") && !b.hasAttribute("data-more")).length,
+      // A card's details fold ("Why", "Details") opens it as a summary does: not an action.
+      buttons: own("button, a.btn").filter((b) => !b.closest("summary, .suggest, .alert, .warm, .g-row") && !b.classList.contains("answer") && !b.classList.contains("q") && !b.classList.contains("icon-only") && !b.classList.contains("info-toggle") && !b.hasAttribute("data-more")).length,
       // A checklist card's rows are its items, each with its own one action beside its bin
       // (DESIGN.md, "Many of one small thing"): counted a row at a time, never as the card's.
       rowButtons: Math.max(0, ...own(".g-row").map((r) => [...r.querySelectorAll("button, a.btn")].filter((b) => vis(b) && !b.classList.contains("icon-only")).length)),
       // A person's name that opens them is the card's title, not one of its links.
-      links: own("a:not(.btn)").filter((x) => !x.closest(".suggest, .alert, .warm") && !x.classList.contains("name-link")).length, more: own("details.more, details.more-menu, summary.more-btn, [data-more]").length};
+      links: own("a:not(.btn)").filter((x) => !x.closest(".suggest, .alert, .warm") && !x.classList.contains("name-link")).length, more: own("details.more, details.more-menu, summary.more-btn, [data-more]").length,
+      own: c.matches(OWN_STEP), primary: own(".btn.primary, .btn.next").length,
+      factLines: c.matches(OWN_STEP) ? lines(own(":scope > .job-main > .org, :scope > .job-main > .facts, :scope > .app-main > .org, :scope > .app-main > .facts, :scope > .org, :scope > .facts, :scope > .meta")) : 0};
   });
   const named = [...main.querySelectorAll("button, a, input, select, summary")].filter(vis).map(name).filter(Boolean);
   const dupNames = named.filter((n, i) => named.indexOf(n) !== i);
@@ -633,7 +653,8 @@ function layoutMeasure() {
     words: e.innerText.trim().split(/\s+/).filter(Boolean).length}));
   return {first: f ? Math.round(f.__drawnRect().top + scrollY) : null, firstWhat: f ? String(f.className).slice(0, 40) : null,
     blocks, here: main.querySelectorAll(".here").length, activeFilters: main.querySelectorAll(".active-filters").length,
-    summaries: summaries.map((e) => e.textContent.replace(/\s+/g, " ").trim()), summaryFirst: !!afterTitle && afterTitle.classList.contains("summary"),
+    // The summary's own words: the controls beside it (Find jobs and its pills) are not part of it.
+    summaries: summaries.map((e) => (e.querySelector(".sum-words") || e).textContent.replace(/\s+/g, " ").trim()), summaryFirst: !!afterTitle && afterTitle.classList.contains("summary"),
     summarySentence: summaries[0] ? ((summaries[0].firstElementChild || summaries[0]).textContent || "").trim() : "",
     controls, primary, qPrimary, cards, dupNames: [...new Set(dupNames)], dupItems: [...new Set(dupItems)],
     pairs: [...pairs], pairWhere, weights: [...weights], tones: [...tones], empties, overflow: document.documentElement.scrollWidth - document.documentElement.clientWidth};
@@ -708,7 +729,7 @@ S.layout = async (a) => {
     }
     await goto(page, "drafts-applications");
     await openMore(page, a.tweakItem);
-    out.sheets.tweak = await sheetCheck(page, "tweak-sheet", async () => { const b = page.locator('[data-item="' + a.tweakItem + '"] .tweak-entry button').first(); if (!(await b.count())) return null; const k = await b.getAttribute("data-k"); await b.click(); return k; });
+    out.sheets.tweak = await sheetCheck(page, "tweak-sheet", async () => { const b = page.locator('[data-item="' + a.tweakItem + '"] .tweak-entry button, [data-item="' + a.tweakItem + '"] [data-k^="tweak:resume"]').first(); if (!(await b.count())) return null; const k = await b.getAttribute("data-k"); await b.click(); return k; });
     await goto(page, "todo");
     out.sheets.work = await sheetCheck(page, "work-sheet", async () => { const b = page.locator("#pill").first(); if (!(await b.count()) || !(await b.isVisible())) return null; const k = await b.getAttribute("data-k"); await b.click(); return k; });
   }
@@ -1311,7 +1332,7 @@ S.referral = async (a) => {
   const o = await open({html: a.html, hash: "jobs"});
   const {page, store} = o;
   const card = page.locator('#main [data-item="r12-3"]');
-  const r = {alert: await T(page, '#main [data-item="r12-3"] .alert-text'), primary: await T(page, '#main [data-item="r12-3"] .card-actions > a.btn.primary, #main [data-item="r12-3"] .card-actions > a.btn')};
+  const r = {alert: await T(page, '#main [data-item="r12-3"] .alert-text'), primary: await T(page, '#main [data-item="r12-3"] .card-actions > a.btn.primary, #main [data-item="r12-3"] .card-actions > a.btn.next')};
   await openMore(page, "r12-3");
   await card.getByRole("button", {name: "I have applied: Copperleaf Pay, Data Analyst, Payments"}).click();
   await turn(page, 3);
@@ -1329,7 +1350,9 @@ S.referral = async (a) => {
   r.toast = await page.$$eval(".toast", (x) => x.map((e) => e.textContent));
   r.work = store.list("work/");
   // The warm note on another role links to the person it names.
-  r.warmLink = await page.$eval('#main [data-item="r12-2"] .warm a', (x) => x.getAttribute("href")).catch(() => null);
+  // Beside the card's question, the warm route is a line under More (2026-11-05).
+  await openMore(page, "r12-2");
+  r.warmLink = await page.$eval('#main [data-item="r12-2"] .warm-line a', (x) => x.getAttribute("href")).catch(() => null);
   r.errors = o.errors;
   await o.ctx.close();
   return r;
@@ -1800,12 +1823,15 @@ S.downloads = async (a) => {
   r.noLetter = await T(page, '#main .card.app[aria-labelledby="app-app-quayside-demand"] .muted.small');
   r.askButtons = await T(page, '#main .card.app[aria-labelledby="app-app-quayside-demand"] button');
   r.primary = await T(page, '#main .card.app[aria-labelledby="app-app-quayside-demand"] .card-actions .btn[data-primary]');
-  // Files not on the page yet: the card's own "Get my files ready", never a line over the
-  // list as well (2026-11-03).
+  // Files not on the page yet are put there by Claude by itself: no button to tap, and the
+  // card says so once the upload is on its way (2026-11-05).
   r.filesLine = await T(page, "#main .files-line");
-  await page.locator('[data-k="files:app-quayside-demand"]').first().click();
+  r.fixLine = await T(page, '#main .card.app[aria-labelledby="app-app-quayside-demand"] .work-inline');
+  store.chat("work/files~app-quayside-demand", {kind: "files", title: "Make the files downloadable: Quayside Foods", to: "either", status: "queued",
+    args: {application: "app-quayside-demand", applications: ["app-quayside-demand"], files: ["Morgan_Ellis_CV_Quayside.pdf"]},
+    asked_at: new Date().toISOString(), stages: [], stage: 0, stage_at: null, steps: [], claimed_by: null, claimed_at: null, stop_asked: false, attempt: 1});
   await turn(page, 8);
-  r.work = store.get("work/files~app-quayside-demand");
+  r.filesGoing = await T(page, '#main .card.app[aria-labelledby="app-app-quayside-demand"] .work-inline');
   r.errors = o.errors;
   await o.ctx.close();
   return r;
@@ -1846,10 +1872,9 @@ S.bulk = async (a) => {
   r.actions = store.list("actions/").map((p) => store.get(p));
   r.after = await page.$$eval("#main .card.job.is-marked h3", (x) => x.map((e) => e.textContent));
   r.focus = await page.evaluate(() => document.activeElement.tagName + ":" + (document.activeElement.id || ""));
-  await goto(page, "drafts");
-  await menuPick(page, "Select several");
-  await turn(page, 3);
-  await page.getByLabel("Select all 2 not yet sent").check();
+  // The drafts are in the same list, with their own boxes in the same Select (2026-11-05).
+  await page.getByLabel("Select Ellerwick Trust, Research Analyst").check();
+  await page.getByLabel("Select Quayside Foods, Demand Planning Analyst").check();
   await turn(page, 4);
   await page.getByRole("button", {name: "Mark 2 as applied"}).click();
   await turn(page, 8);
@@ -1865,6 +1890,9 @@ S.bulk = async (a) => {
 S.alerts = async (a) => {
   const o = await open({html: a.html, hash: "jobs"});
   const {page, store} = o;
+  // A posting that has closed waits under the list, one tap away (2026-11-05).
+  await page.getByRole("button", {name: "Show 1 closed"}).click();
+  await turn(page, 4);
   const r = {closed: await T(page, '#main [data-item="r12-5"] .alert-text'), cost: await T(page, '#main [data-item="r12-5"] .alert .cost')};
   await page.locator('#main [data-item="r12-5"] .alert').getByRole("button", {name: "Set it aside"}).click();
   await turn(page, 6);
@@ -2227,7 +2255,8 @@ S.keyboard = async (a) => {
   await page.keyboard.press("Enter");
   await turn(page, 4);
   let found = false;
-  for (let i = 0; i < 40 && !found; i++) {
+  // The drafts come first in Jobs' one list (2026-11-05), so the first find is further down.
+  for (let i = 0; i < 90 && !found; i++) {
     await page.keyboard.press("Tab");
     // A sheet opened from the keyboard: the bin's (Draft this drafts at once, 2026-11-03).
     found = await page.evaluate(() => (document.activeElement.getAttribute("aria-label") || "") === "Not for me: Harbourline Bank, Pricing Analyst");
@@ -2352,7 +2381,10 @@ S.crowd = async (a) => {
 // starting to doubt even some of the buttons work"). A link to another site is checked for a
 // real address instead of followed.
 S.sweep = async (a) => {
-  const out = {dead: [], errors: [], unclickable: [], badLinks: [], tapped: 0, perSection: {}};
+  // `tags`: each control as it showed itself and as it acted: [section, key, "claude" where it
+  // carries the gauge (data-wakes) or "code", whether the tap queued work, whether it opened a
+  // sheet] (the maintainer, 2026-11-05: what costs Claude's time can be seen).
+  const out = {dead: [], errors: [], unclickable: [], badLinks: [], tapped: 0, perSection: {}, tags: []};
   const keysOn = (page) => page.evaluate(() => {
     const vis = (e) => e.getClientRects().length > 0 && e.checkVisibility({visibilityProperty: true}) && !e.closest("details:not([open]) > :not(summary)");
     // What is already chosen (the switch's own place, a pressed answer) and what is switched
@@ -2397,9 +2429,12 @@ S.sweep = async (a) => {
         try { await el.scrollIntoViewIfNeeded({timeout: 2000}); }
         catch (e) { if (!/not attached|detached/i.test(String(e.message || e))) throw e; await turn(page, 3); el = page.locator('#main [data-k="' + k + '"]').first(); await el.scrollIntoViewIfNeeded({timeout: 2000}); }
         const b2 = await snap(page);
+        const wakes = await el.evaluate((e) => (e.closest("[data-wakes]") ? "claude" : "code"));
+        const workBefore = o.store.list("work/").length;
         await el.click({timeout: 3000});
         await turn(page, 5);
         const after = await snap(page);
+        out.tags.push([id, k, wakes, o.store.list("work/").length > workBefore, after.dialogs > b2.dialogs]);
         // Focus counts only where it moved somewhere else (an empty Send puts it in the box);
         // the tapped control taking focus itself is not something happening.
         const moved = chose || after.h !== b2.h || after.hash !== b2.hash || after.dialogs !== b2.dialogs || after.calls !== b2.calls || after.opened !== b2.opened || (after.focus !== b2.focus && after.focus !== k && after.focus !== "BODY");
@@ -2696,8 +2731,10 @@ S.more_contrast = async (a) => {
 S.persist = async (a) => {
   const o = await open({html: a.html, hash: "drafts", tabs: 1});
   const {page, store, ctx} = o;
-  await openMore(page, "app-ellerwick-insight");
-  await page.getByText("Also to copy (4)").click();
+  // What to copy is in the draft's details, a fold from its line of facts (2026-11-05).
+  await page.locator('[data-k="info:app:app-ellerwick-insight"]').first().click();
+  await turn(page, 3);
+  await page.getByText("Show all 4").click();
   await turn(page, 3);
   // Select the note's words, as a person copying it by hand would.
   await page.evaluate(() => { const el = document.getElementById("out-app-ellerwick-insight"); const r = document.createRange(); r.selectNodeContents(el); const s = window.getSelection(); s.removeAllRanges(); s.addRange(r); });

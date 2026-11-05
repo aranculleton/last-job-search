@@ -426,7 +426,8 @@ def test_a_resume_asked_for_is_made_for_that_person_and_logged_with_its_file(run
 def test_a_referral_led_screen_with_no_application_names_the_referrer(run, tmp_path, vp):
     got = _go(run, tmp_path, [
         {"hash": "interviews/int-copperleaf-payments", "read": '[data-item="int-copperleaf-payments"]'},
-        {"hash": "jobs", "more": "r12-3", "read": '[data-item="r12-3"]'},
+        # Copperleaf's role is drafted, so in Jobs' one list it is its draft's card (2026-11-05).
+        {"hash": "jobs", "read": '[data-item="app-copperleaf-payments"]'},
     ], vp)
     card = got["after"][0]["text"]
     # Safari's engine leaves the space before a name link out of innerText, though it lays
@@ -437,15 +438,18 @@ def test_a_referral_led_screen_with_no_application_names_the_referrer(run, tmp_p
 
 def test_the_warm_route_on_a_job_opens_the_person_and_back_returns(run, tmp_path, vp):
     got = _go(run, tmp_path, [
-        {"hash": "jobs", "click": "Juno", "role": "link", "within": "[data-item=\"r12-2\"] .warm"},
+        # Beside the card's question, the warm route is a line in its details, from "Why"
+        # (2026-11-05).
+        {"hash": "jobs", "click": "Why it scored 79: Larkspur Retail, Supply Chain Data Analyst"},
+        {"click": "Juno", "role": "link", "within": "[data-item=\"r12-2\"] .warm-line"},
         {"eval": "history.back(), 0", "until": "location.hash !== '#contacts/larkspur_retail_castellan'"},
     ], vp)
-    assert got["after"][0]["hash"] == "#contacts/larkspur_retail_castellan"
-    assert got["after"][1]["hash"] == "#jobs"
+    assert got["after"][1]["hash"] == "#contacts/larkspur_retail_castellan"
+    assert got["after"][2]["hash"] == "#jobs"
 
 
 def test_links_are_the_model_s_own_so_spelling_differences_still_join(run, tmp_path, vp):
-    got = _go(run, tmp_path, [{"hash": "jobs", "more": "r12-2", "read": '[data-item="r12-2"]'}], vp)
+    got = _go(run, tmp_path, [{"hash": "jobs", "click": "Why it scored 79: Larkspur Retail, Supply Chain Data Analyst", "read": '[data-item="r12-2"]'}], vp)
     assert "Kit" in got["after"][0]["text"], "Kit at Larkspur Retail Ltd is linked from the Larkspur Retail role"
 
 
@@ -463,6 +467,8 @@ def test_changing_your_mind_keeps_the_reason_and_brings_things_back(run, tmp_pat
         {"click": "See the jobs left out as", "exact": False,
          "within": ".f-rule:has-text('Needs a driving licence')"},
         {"click": "Bring back Transport Planning Analyst at Fernhill Freight"},
+        # A closed posting waits under the list, one tap away (2026-11-05).
+        {"click": "Show 1 closed"},
         {"click": "Set it aside", "exact": True},
     ], vp)
     d = [a for a in got["actions"] if a["action"] == "job.dismiss"]

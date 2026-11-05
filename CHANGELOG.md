@@ -20,8 +20,51 @@ make sense to somebody whose repo just received it.
 
 ## [Unreleased]
 
+### Added
+
+- **Questions on the form.** When an application form asks more than your CV and letter answer
+  ("why us?", "why this role?", "a time you used a tool"), paste the questions under that
+  application's More, on its draft or once it is sent. Claude writes each answer from your
+  profile and the posting and puts it on the card, ready to copy, kept with the application. An
+  example you asked for is marked as a draft for you to check. Say what to change in your CV or
+  letter in the same box and it goes to that document; nothing else about them changes. The
+  card says where it stands as it goes, with Cancel while it waits or runs.
+- **Jobs is one list.** Found and Drafts are one list of the jobs you might apply to, each job
+  once at its own stage: a drafted job shows where to apply and "I have applied" right on its
+  card, with its score and why; one being written shows how it is going; the rest offer Draft
+  this. Drafts come first. Applied stays its own place.
+- **Claude fixes a draft and puts its files on your page by itself.** No more "Make it again" or
+  "Get my files ready": the card says Claude is making it again, or putting your files on the
+  page, and the files are there to get once they are.
+- **The pencil.** The pencil beside your CV and letter opens the changes you can ask for; the one
+  at the end of a job's line corrects its title, pay or place if the search read them wrong.
+- **What costs Claude's time shows.** Every button that wakes Claude carries the small gauge
+  with its minutes; everything else costs nothing.
+- **More is only for the rare.** A job's details open from "Why" at the end of its line; More
+  keeps the rare actions, and a card with none has no More. Add a job and your CV are buttons
+  beside Find jobs on both of Jobs' tabs, and the header no longer has a line about what Claude
+  is doing: the card it is working on says so.
+- **Each job says when it was found**, beside when it was posted ("Posted 5 days ago · found
+  today"), so a role surfaced weeks ago is easy to spot and put away.
+
 ### Changed
 
+- **The Jobs cards are calmer.** Each says its facts on one line, with the town alone
+  ("Toronto", never "Toronto, Ontario, Canada"). More stays beside the buttons and opens into
+  short labelled rows: why it scored what it did, what to watch out for, what is worth knowing,
+  the skills, the posting, and what else there is at that employer, grouped and each link saying
+  what it opens. Every button is a pill, and each card's next step stands out the same
+  way on every card. A contact who can help you is said once, in the grey box. A posting that has closed
+  waits under the list.
+- **The Brief's Jobs tile leads with what you owe.** Drafts made and not yet sent come first
+  ("12 drafts ready to apply", opening them), then new finds; it says "Nothing new" only when
+  there is neither.
+- **A draft that needs checking again says so plainly, once.** "It was changed after it was
+  last checked." replaces a line about the checks that ended in two full stops.
+- **A score's reasons read plainly.** The good reasons and the watch-outs are said apart, and the
+  scorer's own phrasing is put in plain words ("Asks for 5+ years; you have 4").
+- **A note about an unanswered message names who has it**, so it no longer seems to contradict a
+  box saying someone else there replied.
 - **What a search left out is sorted by the rule that left it out.** Instead of one long
   list, each rule gets one line in plain words ("Not your field: 5,183", "Needs French:
   2,100"), with when it last left something out and three examples. Open one to search its

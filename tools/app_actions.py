@@ -145,6 +145,8 @@ ACTIONS = {
     "job.keep": (("job",), "documents/rounds/kept/jobs.json: on the list past later searches",
                  "job.unkeep"),
     "job.unkeep": (("job",), "documents/rounds/kept/jobs.json: off it again", "job.keep"),
+    "job.edit": (("job",), "documents/rounds/kept/jobs.json: the posting's title, pay or place "
+                           "as the person corrected it, kept with the posting", "job.edit"),
     "person.call_booked": (("person", "message"), "state.py set --status call_booked, the "
                                                   "call's day as its next action",
                            "person.status"),
@@ -627,6 +629,7 @@ def _sent_row(target: dict):
 # (FUNCTIONS_SPEC 4.1). A bare ISO day is "on" wherever the action takes a day.
 BARE = {
     "job.dismiss": "why", "job.bring_back": "why", "job.applied": "on", "job.keep": "why",
+    "job.edit": "title",
     "ready.applied": "on", "msg.sent": "text", "msg.received": "text", "msg.skip": "why",
     "msg.unskip": "why", "person.stop": "why", "person.status": "status",
     "person.call_booked": "on", "setting.set": "value", "needs.answer": "value",
@@ -1049,6 +1052,47 @@ def _job_keep(r: Run, keep: bool = True) -> dict:
     return {"note": (f"Kept: {t.get('title')} stays on your list after the next search."
                      if keep else f"{t.get('title')} is no longer kept."),
             "undo": {"action": "job.unkeep" if keep else "job.keep", "target": dict(t)}}
+
+
+JOB_FIELDS = ("title", "pay", "place")
+
+
+def _job_edit(r: Run) -> dict:
+    """A posting's title, pay or place as the person corrected it on its card: kept with the
+    posting in the kept list, so the list and every later search show it so. Code only; its
+    Undo puts back what was there (`restore`)."""
+    t = r.target
+    if not t.get("url"):
+        raise Refused("This posting has no link to keep your change by.")
+    v = r.value if isinstance(r.value, dict) else {}
+    got = app_model.kept_jobs()
+    before = got.get(t["url"])
+    rec = dict(before) if isinstance(before, dict) else {
+        "round": t.get("round"), "rank": t.get("rank"), "title": t.get("title", ""),
+        "company": t.get("company", ""), "kept_on": r.day.isoformat(),
+        "why": "you corrected its details"}
+    was = dict(rec.get("edit") or {}) if isinstance(rec.get("edit"), dict) else None
+    if "restore" in v:
+        back = v.get("restore")
+        if isinstance(back, dict) and back:
+            rec["edit"] = {k: str(back[k]) for k in JOB_FIELDS if back.get(k)}
+        else:
+            rec.pop("edit", None)
+    else:
+        change = {k: " ".join(str(v.get(k) or "").split())[:200] for k in JOB_FIELDS
+                  if str(v.get(k) or "").strip()}
+        if not change:
+            raise Refused("Nothing to change: give its title, its pay or its place.")
+        rec["edit"] = dict(was or {}, **change)
+    got[t["url"]] = rec
+    path = _kept_path()
+    os.makedirs(os.path.dirname(path), exist_ok=True)
+    with open(path, "w", encoding="utf-8", newline="\n") as fh:
+        json.dump(got, fh, indent=1, ensure_ascii=False, sort_keys=True)
+        fh.write("\n")
+    said = ", ".join(f"{k} {rec['edit'][k]}" for k in JOB_FIELDS if (rec.get("edit") or {}).get(k))
+    return {"note": f"Changed: {said}." if said else "Put back as the search found it.",
+            "undo": {"action": "job.edit", "target": dict(t), "value": {"restore": was}}}
 
 
 # ---- the tracker
@@ -3517,6 +3561,7 @@ HANDLERS = {
     "profile.pasted": _profile_pasted, "process.register": _process_register,
     "ready.sent_to_contact": _ready_sent_to_contact,
     "job.add": _job_add, "job.keep": _job_keep, "job.unkeep": lambda r: _job_keep(r, keep=False),
+    "job.edit": _job_edit,
     "person.call_booked": _call_booked, "referral.agreed": _referral_agreed,
     "referral.ended": _referral_ended, "due.snooze": _due_snooze,
     "msg.skip": _msg_skip, "msg.unskip": _msg_unskip, "person.stop": _person_stop,

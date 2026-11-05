@@ -1,7 +1,7 @@
 {
  "model": 1,
  "made_at": "2026-10-25T18:00:00Z",
- "rev": "bb336ed9dc08",
+ "rev": "34b2b304845b",
  "app": {
   "version": "4.9.1",
   "url": null,
@@ -13,7 +13,7 @@
   ],
   "privacy": "Only you can open this page unless you share it. It holds first names, employers, your drafts and your setup answers, so keep it unshared.",
   "repo": "https://github.com/aranculleton/last-job-search",
-  "page": 33,
+  "page": 34,
   "not_saved": 0
  },
  "person": {
@@ -48,7 +48,7 @@
  ],
  "jobs": {
   "round": "r9",
-  "made_at": "2026-11-05T03:21:01Z",
+  "made_at": "2026-11-05T03:22:08Z",
   "met": false,
   "summary": "3 roles from the last search to look at, 1 of them scoring 75 or more. 3 left out, each with its reason.",
   "rows": [
@@ -61,6 +61,7 @@
     "title": "Demand Planning Analyst",
     "place": "Manchester (hybrid)",
     "remote": "hybrid",
+    "place_short": "Manchester (hybrid)",
     "pay": {
      "text": "not stated",
      "stated": false,
@@ -68,6 +69,8 @@
      "at_target": null
     },
     "posted_days": null,
+    "found_on": null,
+    "found_days": null,
     "near": [],
     "deadline": null,
     "warm": null,
@@ -83,6 +86,10 @@
      }
     },
     "why": [],
+    "reasons": {
+     "good": "",
+     "watch": ""
+    },
     "from_round": null,
     "added": false,
     "kept": false,
@@ -101,6 +108,7 @@
     "rev": "87ef0632d185",
     "alerts": [],
     "suggest": null,
+    "near_words": "",
     "related": {},
     "draft": null
    },
@@ -113,6 +121,7 @@
     "title": "Claims Forecasting Analyst",
     "place": "Manchester",
     "remote": "",
+    "place_short": "Manchester",
     "pay": {
      "text": "not stated",
      "stated": false,
@@ -120,6 +129,8 @@
      "at_target": null
     },
     "posted_days": null,
+    "found_on": null,
+    "found_days": null,
     "near": [],
     "deadline": null,
     "warm": null,
@@ -135,6 +146,10 @@
      }
     },
     "why": [],
+    "reasons": {
+     "good": "",
+     "watch": ""
+    },
     "from_round": null,
     "added": false,
     "kept": false,
@@ -151,6 +166,7 @@
     "rev": "57412b9f3011",
     "alerts": [],
     "suggest": null,
+    "near_words": "",
     "related": {
      "ready": [
       "app-kestrel_mutual_claims_forecasting_analyst"
@@ -173,6 +189,7 @@
     "title": "Inventory Analyst",
     "place": "Remote, UK",
     "remote": "remote",
+    "place_short": "Remote, UK",
     "pay": {
      "text": "not stated",
      "stated": false,
@@ -180,6 +197,8 @@
      "at_target": null
     },
     "posted_days": null,
+    "found_on": null,
+    "found_days": null,
     "near": [],
     "deadline": null,
     "warm": null,
@@ -195,6 +214,10 @@
      }
     },
     "why": [],
+    "reasons": {
+     "good": "",
+     "watch": ""
+    },
     "from_round": null,
     "added": false,
     "kept": false,
@@ -213,6 +236,7 @@
     "rev": "f5d2c60a102e",
     "alerts": [],
     "suggest": null,
+    "near_words": "",
     "related": {},
     "draft": null
    },
@@ -225,6 +249,7 @@
     "title": "Supply Analyst",
     "place": "Leeds",
     "remote": "",
+    "place_short": "Leeds",
     "pay": {
      "text": "not stated",
      "stated": false,
@@ -232,6 +257,8 @@
      "at_target": null
     },
     "posted_days": null,
+    "found_on": null,
+    "found_days": null,
     "near": [],
     "deadline": null,
     "warm": "Juno at Larkspur Retail has replied to you: ask them first.",
@@ -247,6 +274,10 @@
      }
     },
     "why": [],
+    "reasons": {
+     "good": "",
+     "watch": ""
+    },
     "from_round": null,
     "added": false,
     "kept": false,
@@ -287,6 +318,7 @@
      "since": "2026-10-25",
      "rev": "2bc575fd9c93"
     },
+    "near_words": "",
     "related": {
      "people": [
       "larkspur_retail_castellan"
@@ -478,6 +510,8 @@
     }
    ],
    "suggest": null,
+   "near_words": "",
+   "place_short": "",
    "related": {
     "people": [
      "fernhill_freight_halloway"
@@ -523,6 +557,17 @@
    "checks": {
     "passed": true,
     "line": "Made, right length: CV 1 page, letter 1 page",
+    "lead": "Made, right length: ",
+    "parts": [
+     {
+      "kind": "resume",
+      "words": "CV 1 page"
+     },
+     {
+      "kind": "letter",
+      "words": "letter 1 page"
+     }
+    ],
     "verify": null
    },
    "outreach": {
@@ -548,6 +593,8 @@
    "tweaks_done": [],
    "alerts": [],
    "suggest": null,
+   "near_words": "",
+   "place_short": "Manchester",
    "related": {
     "jobs": [
      "r9-2"
@@ -919,7 +966,7 @@
    "when": "2026-10-28",
    "prep": {
     "path": "documents/applications/thornbury_bank_risk_analyst_thornbury/interview_prep.md",
-    "updated": "2026-11-05T03:21:01Z"
+    "updated": "2026-11-05T03:22:08Z"
    },
    "questions": 2,
    "all_day": true,
@@ -1487,6 +1534,8 @@
     "outcome.withdrawn"
    ],
    "rev": "16a35d81a7da",
+   "slug": "thornbury_bank_risk_analyst_thornbury",
+   "screening": [],
    "apply": {
     "url": "https://jobs.example/thornbury/risk",
     "kind": "employer",

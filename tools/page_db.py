@@ -604,6 +604,11 @@ STAGES = {
     # The page's own code changed: the listener alone builds it and publishes it
     # (tools/app_listen.py; `already` closes it with nothing published).
     "republish": [("build", "Building the new page", 20), ("publish", "Putting it up", 20)],
+    # An application form's own questions, pasted on its card ("Why us?", "An example of
+    # when you used X"): answered from the profile and the posting and kept with the
+    # application (tools/form_answers.py); never the resume or the letter.
+    "form_answers": [("read", "Reading the questions", 20), ("write", "Writing your answers", 60),
+                     ("check", "Checking every fact", 30), ("save", "Saving them with the application", 15)],
 }
 # Where each kind runs by default, where it can run, and whether it is a heavy job (a whole
 # session of its own) that counts against the cap.
@@ -626,6 +631,7 @@ WORK_KINDS = {
     "own_profile": {"to": "either", "can": ("cloud", "computer"), "heavy": False},
     "republish": {"to": "either", "can": ("cloud", "computer"), "heavy": False},
     "profile": {"to": "either", "can": ("cloud", "computer"), "heavy": False},
+    "form_answers": {"to": "either", "can": ("cloud", "computer"), "heavy": False},
 }
 assert set(STAGES) == set(WORK_KINDS)
 # Three big jobs at once on one computer (a search, a networking run and an interview prep, the
@@ -1517,7 +1523,8 @@ def search_unsaved(item: dict, work_id: str = "") -> str:
 def finish(db: dict, work_id: str, now: dt.datetime, out_dir: str, summary: str = "",
            status: str = "done", error: str = "", links=(), reply: str = "", thread: str = "",
            chat_kind: str = "cloud", dump_dir: str = "", chat: str = "",
-           question: str = "", about: str = "", answer: dict | None = None) -> dict:
+           question: str = "", about: str = "", answer: dict | None = None,
+           answered=()) -> dict:
     """The batch that finishes one work item (the app skill, step 5): the item `done` (or
     `failed`, with `error` in plain words, or `stopped` after their Stop), its one-sentence
     summary and links, pinned to the version read; each of its locks the dump holds, deleted
@@ -1588,6 +1595,11 @@ def finish(db: dict, work_id: str, now: dt.datetime, out_dir: str, summary: str 
         fields = {"status": status, "finished_at": at, "lease_until": None,
                   "result": {"summary": summary, "links": [dict(x) for x in links or ()]},
                   "error": error or None}
+        # A form's questions answered, as the form asked them: the card that asked says Done
+        # once each is on it, and "Finished: putting it on your page" until then.
+        said = [" ".join(str(q).split())[:300] for q in answered or () if str(q).strip()]
+        if said:
+            fields["result"]["questions"] = said
     w = Writes(out_dir)
     mid = ""
     if str(reply or "").strip():

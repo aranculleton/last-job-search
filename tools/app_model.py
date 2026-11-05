@@ -1220,34 +1220,85 @@ def kept_jobs() -> dict:
 def why_of(fit_why) -> list[str]:
     """Two short reasons for a score, from the round's own fit reasons: the strongest match
     and the strongest gap, each without its points."""
+    r = reasons_of(fit_why)
+    return [x.rstrip(".") for x in (r["good"], r["watch"]) if x]
+
+
+def reasons_of(fit_why) -> dict:
+    """The score's reasons as More says them, apart: `good`, the strongest match, and
+    `watch`, the strongest gap, each one plain sentence or "". Run together ("Why 100:
+    Matches your skills ... Asks for a graduate degree") a gap read as a contradiction of
+    the 100 (the maintainer, 2026-11-04)."""
     plus, minus = [], []
     for w in fit_why or ():
         m = re.match(r"^\s*([+-])\s*(\d+)\s+(.*)$", str(w))
         if not m:
             continue
         (plus if m.group(1) == "+" else minus).append((int(m.group(2)), m.group(3).strip()))
-    out = []
-    for group in (plus, minus):
+    out = {"good": "", "watch": ""}
+    for key, group in (("good", plus), ("watch", minus)):
         if group:
             text = max(group)[1]
             text = re.split(r";", text)[0].strip()
             for rx, plain in _WHY_PLAIN:
                 text = rx.sub(plain, text)
-            out.append(text[:1].upper() + text[1:120])
+            text = " ".join(text.split()).strip(" ,")
+            if text:
+                out[key] = (text[:1].upper() + text[1:120]).rstrip(".") + "."
     return out
 
 
 # The score's reasons as the card says them: the scorer writes for the chat ("core match",
 # "live contact at this employer (...), so this is not a cold application").
 _WHY_PLAIN = [
+    (re.compile(r"\s*\(softened from [^)]*\)", re.I), ""),
     (re.compile(r"^core match: ", re.I), "matches your skills: "),
     (re.compile(r"^live contact at this employer \(([^)]*)\).*$", re.I), r"you know \1 there"),
     (re.compile(r"^they interviewed you before \(([^)]*)\)$", re.I), r"they interviewed you before, for \1"),
+    # "with no other way in" read as a riddle (2026-11-04).
     (re.compile(r"^graduate degree stated without an equivalence route.*$", re.I),
-     "asks for a graduate degree, with no other way in"),
+     "asks for a graduate degree, and does not say experience can stand in for one"),
     (re.compile(r"^(senior|mid|junior)[^,]*, the band the profile holds$", re.I),
      r"\1, the level you are at"),
+    (re.compile(r"^stated (\d+)\+ years(?:, a [^,]*)?(?: against (\d+) held)?.*$", re.I),
+     lambda m: f"asks for {m.group(1)}+ years" + (f"; you have {m.group(2)}" if m.group(2) else "")),
+    (re.compile(r"^(\d+)\+ years (?:wanted|demanded) in a domain not worked \(([^)]*)\).*$", re.I),
+     r"asks for \1+ years in \2, which you have not worked in"),
+    (re.compile(r"^junior, new-grad or student posting.*$", re.I), "a junior or graduate role, below your level"),
+    (re.compile(r"^location flagged: ", re.I), ""),
 ]
+
+
+def short_place(place) -> str:
+    """A posting's place as a card's one line of facts says it: the town alone where the
+    posting adds its region and country ("Toronto, Ontario, Canada" is "Toronto", the
+    maintainer, 2026-11-04), and a place that starts with how it is worked ("Remote, UK")
+    kept whole."""
+    s = " ".join(str(place or "").split())
+    parts = [x.strip() for x in s.split(",") if x.strip()]
+    if len(parts) < 2 or re.fullmatch(r"(?i)remote|hybrid|on[- ]?site|anywhere|various", parts[0]):
+        return s
+    how = re.search(r"\(([^)]*)\)\s*$", parts[-1])
+    head = parts[0]
+    return head + (f" ({how.group(1)})" if how and how.group(1).lower() not in head.lower() else "")
+
+
+def near_words(item: dict, noun: str = "resume") -> str:
+    """The near matches on a job or a draft in one plain sentence for its More, or "" when
+    there are none, or when the card's own suggestion already offers the one there is."""
+    sg = item.get("suggest") or {}
+    offered = str(sg.get("text") or "").lower() if sg.get("kind") == "near" else ""
+    near = [n for n in item.get("near") or [] if isinstance(n, dict) and n.get("asked") and n.get("have")
+            and not (offered and str(n["asked"]).lower() in offered)]
+    if not near:
+        return ""
+    if len(near) > 1:
+        return (f"It asks for {len(near)} tools you have close matches for; your {noun} "
+                "names yours.")
+    one = near[0]
+    if one.get("yes"):
+        return f"It asks for {one['asked']}, which you said you have used."
+    return f"It asks for {one['asked']}. You have {one['have']}, so your {noun} names {one['have']}."
 
 
 def job_rev(url: str, company: str, title: str, status: str) -> str:
@@ -1320,6 +1371,10 @@ def _jobs(ctx: Ctx, targets: dict) -> dict:
     raw = raw if isinstance(raw, list) else list(raw.values()) if isinstance(raw, dict) else []
     rows = []
     kept = {norm(u) for u in kept_jobs()}
+    # A posting's title, pay or place as the person corrected it on its card (job.edit), kept
+    # with the posting in the kept list: what the search read was wrong (2026-11-05).
+    corrected = {norm(u): k.get("edit") for u, k in kept_jobs().items()
+                 if isinstance(k, dict) and isinstance(k.get("edit"), dict)}
     window = run_round._job_age_days()
     import added_jobs
     found = ([("added", n, r) for n, r in enumerate(added_jobs.load(), 1)]
@@ -1366,6 +1421,11 @@ def _jobs(ctx: Ctx, targets: dict) -> dict:
             status = "new"
         place = str(r.get("location") or "")
         pay = str(r.get("salary") or r.get("pay") or "").strip()
+        fixed = corrected.get(norm(url)) if url else None
+        if fixed:
+            title = str(fixed.get("title") or title)
+            place = str(fixed.get("place") or place)
+            pay = str(fixed.get("pay") or pay)
         notes = []
         if (earlier or added) and status not in ("new", "ready"):
             continue               # decided since: an earlier search's row stays there
@@ -1383,8 +1443,7 @@ def _jobs(ctx: Ctx, targets: dict) -> dict:
             notes.append("You applied here before and never heard back: check before "
                          "applying again.")
         if r.get("outreach_pending_note"):
-            notes.append("Someone here has your message and has not replied: applying is "
-                         "fine, a second message is not.")
+            notes.append(_pending_words(_waiting_at(ctx, company)))
         jid = f"{rname}-{rank}"
         top, at_target = _pay_top(pay)
         # Counted to today: the posting's own date where the search read one, else its age
@@ -1401,6 +1460,9 @@ def _jobs(ctx: Ctx, targets: dict) -> dict:
             posted = gate if posted is None else max(posted, gate)
         if posted is None:
             posted = app_lists.ago(r.get("first_seen"), ctx.today)
+        # Never the search file's own time, which a fresh copy of the files moves.
+        found = found_on(r, entry)
+        found = min(found, ctx.today) if found else None   # never "found" after today
         # Past the person's own search window, a posting nobody has decided on leaves the list
         # by itself, counted to today from its own date: the week rule hung on a chat
         # remembering to clear it, measured from the day it was found (2026-11-03).
@@ -1426,9 +1488,15 @@ def _jobs(ctx: Ctx, targets: dict) -> dict:
                      else "from this search")
         item = {"id": jid, "rank": rank, "score": score, "band": _band(score),
                 "company": company, "title": title, "place": place, "remote": _remote(place),
+                "place_short": short_place(place),
                 "pay": {"text": pay or "not stated", "stated": bool(pay), "top": top,
                         "at_target": at_target},
                 "posted_days": posted,
+                # The day it was first found, for "found today" on its card: searches run more
+                # than once, and one surfaced weeks ago may be one to put away (the
+                # maintainer, 2026-11-05).
+                "found_on": found.isoformat() if found else None,
+                "found_days": (ctx.today - found).days if found else None,
                 # The tools it asks for that the person holds one of the same kind for (fit.py
                 # near_matches, kept by the round), for "Asked for Tableau, you have Power BI".
                 "near": [{"asked": str(x.get("asked") or ""), "have": str(x.get("have") or "")}
@@ -1438,6 +1506,7 @@ def _jobs(ctx: Ctx, targets: dict) -> dict:
                                "args": {"round": rname, "rank": rank, "url": url,
                                         "company": company, "title": title}},
                 "why": [scrub(w, ctx.names) for w in why_of(r.get("fit_why"))],
+                "reasons": {k: scrub(v, ctx.names) for k, v in reasons_of(r.get("fit_why")).items()},
                 "from_round": rname if earlier else None,
                 "added": added,
                 "kept": norm(url) in kept if url else False,
@@ -1447,6 +1516,7 @@ def _jobs(ctx: Ctx, targets: dict) -> dict:
                                     else []) if str(q).strip()],
                 "rev": job_rev(url, company, title, status)}
         _card(ctx, targets, item, "for_job")
+        item["near_words"] = near_words(item, _noun())
         rows.append(item)
         targets[jid] = {"kind": "job", "round": rname, "rank": rank, "url": url,
                         "company": company, "title": title, "place": place,
@@ -1476,6 +1546,59 @@ def _jobs(ctx: Ctx, targets: dict) -> dict:
     return {"round": name, "made_at": stamp(made) if made else None, "met": met,
             "summary": summary,
             "rows": rows, "filtered": filtered}
+
+
+def found_on(row: dict, seen: dict | None = None, ran: dt.date | None = None) -> dt.date | None:
+    """The day a job was first found: the earliest of the day the searches first saw its
+    posting (the round's `first_seen`, the seen list's own) and the day the person added it,
+    else `ran`, a day its search is known to have run, or None."""
+    days = [_date(str(x or "")[:10]) for x in (row.get("first_seen"), (seen or {}).get("first_seen"),
+                                               row.get("added_on"))]
+    days = [d for d in days if d]
+    return min(days) if days else ran
+
+
+def _noun() -> str:
+    """What the person calls the document: resume, or CV (person.json `documents.noun`)."""
+    try:
+        return str(person.get("documents.noun", "resume") or "resume")
+    except person.NoProfile:
+        return "resume"
+
+
+def _waiting_at(ctx: Ctx, company: str) -> list:
+    """The people at `company` who have the person's message and have not replied, from
+    the contact book as it stands (throttle.pending_outreach, the round's own reading of
+    it), less anyone who has replied since."""
+    from company_key import key
+    import throttle
+
+    def make():
+        try:
+            return throttle.pending_outreach(rows=ctx.contacts, live=ctx.live)
+        except Exception:  # noqa: BLE001  no book, no names: the note says "someone"
+            return {}
+    return ctx._once("pending_outreach", make).get(key(company)) or []
+
+
+def _pending_words(waiting) -> str:
+    """Who has the person's message and has not replied, by first name, for a job at their
+    employer: "Someone here" sat beside a box saying someone there had replied, and the two
+    read as one person said two ways (the maintainer, 2026-11-04)."""
+    names = []
+    for q in waiting if isinstance(waiting, list) else []:
+        n = first_name(q.get("name")) if isinstance(q, dict) else ""
+        if n and n not in names:
+            names.append(n)
+    if not names:
+        return ("Someone here has your message and has not replied: applying is fine, a "
+                "second message is not.")
+    if len(names) == 1:
+        return (f"{names[0]} has your message and has not replied: applying is fine, a "
+                "second message is not.")
+    who = (" and ".join(names) if len(names) == 2 else ", ".join(names[:2])
+           + (f" and {names[2]}" if len(names) == 3 else f" and {len(names) - 2} more"))
+    return f"{who} have your message and have not replied: applying is fine, a second message is not."
 
 
 def _no_rules(row) -> str:
@@ -1751,8 +1874,13 @@ def _checks(files, expect_resume: int, noun: str = "resume") -> dict:
     unread = [f["kind"] for f in files if f["pages"] is None]
     if unread:
         return {"passed": True, "line": "Made; page count not read here"}
-    return {"passed": True, "line": "Made, right length: " + ", ".join(
-        f"{said[f['kind']]} {f['pages']} page{'s' if f['pages'] != 1 else ''}" for f in files)}
+    # Each document's own words as well as the line, so the page sets the pencil for the resume
+    # beside "CV 1 page" and the letter's beside "letter 1 page": two pencils side by side at the
+    # end of the line said nothing of which was which (2026-11-05).
+    parts = [{"kind": f["kind"], "words": f"{said[f['kind']]} {f['pages']} page{'s' if f['pages'] != 1 else ''}"}
+             for f in files]
+    lead = "Made, right length: "
+    return {"passed": True, "line": lead + ", ".join(p["words"] for p in parts), "lead": lead, "parts": parts}
 
 
 # verify_batch.py's flags, said plainly; anything else is said as "a check failed".
@@ -1770,7 +1898,9 @@ VERIFY_WORDS = {
     "ROUNDTRIP": "a line of the draft is missing from the PDF's text",
     "NO_PINNED_SKILL": "the skill you always show is missing", "SKILLPARENS":
     "the skills line has brackets", "DUPBULLET": "a bullet is there twice",
-    "UNAUDITED": "a sentence was changed after the checks read it",
+    # Said as a person would: "a sentence was changed after the checks read it" asked them
+    # to picture the pipeline (2026-11-05).
+    "UNAUDITED": "it was changed after it was last checked",
     "CLAIMS": "something on it breaks your own rules or is not in your profile",
     "NUMBERS": "a number on it is not in your profile",
     "LETTERS": "the cover letter breaks one of the letter's rules",
@@ -1916,6 +2046,8 @@ def _ready(ctx: Ctx, targets: dict) -> list:
         item["near"] = _near(folder, draft)
         item["tweaks_done"] = _tweaks_done(folder, os.path.join(folder, "draft.json"))
         _card(ctx, targets, item, "for_ready", row, folder)
+        item["near_words"] = near_words(item, _noun())
+        item["place_short"] = short_place(item.get("place"))
         out.append(item)
         targets[rid] = dict(_row_target(row, rid), rev=item["rev"])
     out.sort(key=lambda i: (i["status"] != "drafted", i["company"].lower(), i["role"].lower()))
@@ -3536,6 +3668,14 @@ def _applications(ctx: Ctx, targets: dict) -> list:
                 "followed_up": len(re.findall(r"followed up \d{4}-\d{2}-\d{2}",
                                               str(row.get("notes") or ""))),
                 "heard": list(HEARD.get(st, ())), "rev": ""}
+        # Its folder's answers to the form, as on its draft: an applied card says what the
+        # form was told, and a form's own questions asked after it went land there too
+        # (form_answers, 2026-11-05).
+        import outreach
+        folder = outreach.app_folder(row.get("company"), row.get("role") or "")
+        if os.path.isdir(folder):
+            item["slug"] = os.path.basename(folder)
+            item["screening"] = _screening(folder)
         # The posting it went to, so an applied card links to it with no job row left.
         link = _link_on_row(row, {})
         if link.get("url") or link.get("apply_url"):

@@ -96,6 +96,8 @@ WORK = {
     "evaluate": "apply", "own_profile": "outreach",
     # A change to their own profile: every resume is built from it, so it is grounding work.
     "profile": "apply",
+    # A form's own questions: an employer reads every answer, so it is application work.
+    "form_answers": "apply",
 }
 # The model picker's aliases (code.claude.com/docs/en/model-config, "Model aliases"), which
 # follow the newest model of each tier, so nothing here names a version.
