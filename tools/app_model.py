@@ -61,6 +61,9 @@ SECTIONS = ("app", "person", "needs_you", "jobs", "ready", "messages", "due", "p
 # The page shows every live contact, then the rest by recency up to a size budget
 # (tools/app_lists.py PEOPLE_BYTES); the whole book is in the page's database for "Show".
 DUE_MAX = 100
+# The rows a left-out group shows before "See them" (tools/rules_view.py FIRST): kept under
+# its old name for a person's own tests.
+FILTERED_PER_GROUP = 20
 # An application sent this recently stays under Drafts, ticked, so the tick can
 # be seen and undone where it was made.
 RECENT_APPLIED_DAYS = 14
