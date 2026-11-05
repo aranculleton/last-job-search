@@ -770,8 +770,9 @@ METHODS: dict[str, dict] = {
             (39, "2026-11-05", True, "a job being drafted says how its draft is going with Cancel and stays in To apply; a job's question is on its own card; the Brief counts drafts being made apart; put off is not done; who needs you is one count; follow-ups on applications are one card; every control that wakes Claude shows its gauge and every card keeps to its budget; switches are whole-row taps; the foot keeps to the column"),
             (40, "2026-11-05", True, "a job you added shows at the top of Jobs while Claude scores it, with its work line and Cancel"),
             (41, "2026-11-05", True, "a burst of live writes is folded into the next frame again, so a card shows its new state as soon as it is written"),
+            (42, "2026-11-05", True, "away from the desktop app the page is not drawn again a second and a half after opening unless that changed what it says; a Tweak panel opened on a wide screen shows at once, without waiting for the next redraw"),
         ),
-        "fingerprint": "0c79255a5c838125",
+        "fingerprint": "6c6e0d60ba41895b",
     },
     "upskill": {
         "by": "upgrade", "priority": 4, "applies": "upskill_plans", "time": "~10 min",

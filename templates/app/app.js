@@ -7679,6 +7679,11 @@
     if (wide()) {
       const rail = $("rail");
       rail.replaceChildren(panel);
+      // The rail is shown at once, as the next draw would show it (drawPage: an open panel
+      // holds the rail): a rail hidden for having nothing to show stayed hidden, its panel
+      // with it, until something else drew the page again (2026-11-05).
+      const shell = $("shell");
+      if (shell) shell.classList.remove("no-rail");
       const first = panel.querySelector("button, input, textarea");
       if (first) first.focus();
     } else {
@@ -10514,7 +10519,11 @@
   async function autoReading() {
     if (readingTried) return;
     readingTried = true;
-    if (!(await inDesktop())) { scheduleRender(); return; }
+    // Away from the desktop app the page is drawn again only if knowing that changed what it
+    // says: the redraw it always made, a second and a half after opening, landed among a
+    // chat's writes as a full redraw of a big screen that changed nothing (2026-11-05).
+    const was = readingState();
+    if (!(await inDesktop())) { if (readingState() !== was) scheduleRender(); return; }
     await within(actionsIn, CAP_WAIT_MS);
     const st = readingState();
     if (st === "off" || st === "paused" || (st !== "ready" && readingHidden())) { scheduleRender(); return; }

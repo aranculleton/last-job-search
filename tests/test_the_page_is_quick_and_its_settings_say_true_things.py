@@ -329,9 +329,19 @@ def test_the_briefs_usual_is_only_rules_about_the_brief(run, tmp_path):
                      "said": "", "on": "2026-10-20", "retired": False, "rev": "l1"},
                     {"id": "learned-2", "area": "other", "rule": "The brief leads with interviews", "say": "The brief leads with interviews",
                      "said": "", "on": "2026-10-21", "retired": False, "rev": "l2"}]
-    got = _go(run, tmp_path, [{"hash": "brief", "click": "Edit the brief", "read": ".tweak-panel"}], WIDE, model=m)
-    panel = got["after"][0]["text"]
+    # The rules kept sit under "Keeping 1 rule of yours", opened as a person opens it: the panel
+    # was read whole only while it was hidden in the rail (2026-11-05).
+    got = _go(run, tmp_path, [{"hash": "brief", "click": "Edit the brief"}, {"open": "tweak-usual", "read": ".tweak-panel"}], WIDE, model=m)
+    panel = got["after"][1]["text"]
     assert "Keeping 1 rule of yours" in panel and "The brief leads with interviews" in panel and "Answer the question" not in panel, panel
+
+
+def test_a_tweak_panel_opened_on_a_wide_screen_shows_at_once(run, tmp_path):
+    # Opened once the page had settled, the panel went into a rail hidden for having nothing to
+    # show and stayed hidden until something else drew the page (2026-11-05).
+    shown = "(() => { const p = document.querySelector('.tweak-panel'); return !!(p && p.getClientRects().length); })()"
+    got = _go(run, tmp_path, [{"hash": "brief", "wait": 2500}, {"click": "Edit the brief", "eval": shown}], WIDE)
+    assert got["after"][1]["eval"] is True
 
 
 # ------------------------------------------------------------------ 15, 16, 17, 21: reach and focus

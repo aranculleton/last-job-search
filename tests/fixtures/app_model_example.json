@@ -1,7 +1,7 @@
 {
  "model": 1,
  "made_at": "2026-10-25T18:00:00Z",
- "rev": "3a3cadb6c3b4",
+ "rev": "b0d123595b56",
  "app": {
   "version": "4.10.0",
   "url": null,
@@ -13,7 +13,7 @@
   ],
   "privacy": "Only you can open this page unless you share it. It holds first names, employers, your drafts and your setup answers, so keep it unshared.",
   "repo": "https://github.com/aranculleton/last-job-search",
-  "page": 41,
+  "page": 42,
   "not_saved": 0
  },
  "person": {
@@ -48,7 +48,7 @@
  ],
  "jobs": {
   "round": "r9",
-  "made_at": "2026-11-05T06:53:15Z",
+  "made_at": "2026-11-05T07:21:00Z",
   "met": false,
   "summary": "3 roles from the last search to look at, 1 of them scoring 75 or more. 3 left out, each with its reason.",
   "rows": [
@@ -966,7 +966,7 @@
    "when": "2026-10-28",
    "prep": {
     "path": "documents/applications/thornbury_bank_risk_analyst_thornbury/interview_prep.md",
-    "updated": "2026-11-05T06:53:15Z"
+    "updated": "2026-11-05T07:21:00Z"
    },
    "questions": 2,
    "all_day": true,
