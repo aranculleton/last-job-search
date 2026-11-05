@@ -1621,13 +1621,27 @@ def cmd_wake(a) -> int:
             shown = with_item(chosen)
             # Finishing it writes the item, its locks and this chat's heartbeat, which this
             # folder does not see: the next item is taken from a new read.
-            what = (f"do it here, now, as step 4's row says for a {chosen['kind']}" if not also
-                    else f"do each here, now, in order (the one under next:, then each also:), "
-                         f"as step 4's row says for its kind; they are {len(also) + 1} items, "
-                         "every one claimed in this pass")
+            # Every follow-up claimed here is one run of one command, in code: never the
+            # networking skill or a draft by hand each (the maintainer, 2026-11-05).
+            ups = [c for c in [chosen] + also if c.get("kind") == "follow_up"]
+            n_ups = sum(1 + len(c.get("with") or []) for c in ups)
+            run_ups = (f"python3 tools/app.py follow-ups \"{a.dump}\" --chat {chat}, which "
+                       f"drafts the {n_ups} follow-up{'s' if n_ups != 1 else ''} claimed here in "
+                       "code and finishes them in one batch (load no skill for them), and do "
+                       "what it prints")
+            if not also and ups:
+                what = "run " + run_ups
+            else:
+                what = (f"do it here, now, as step 4's row says for a {chosen['kind']}" if not also
+                        else f"do each here, now, in order (the one under next:, then each "
+                             f"also:), as step 4's row says for its kind; they are "
+                             f"{len(also) + 1} items, every one claimed in this pass" +
+                             (f"; for the follow-ups, one run: {run_ups}" if ups else ""))
             then.append(f"then: once {'its claim is' if not also else 'their claims are'} "
                         f"accepted, {what}. Its claim marks it running at its first "
-                        "stage, so no progress pin follows; finish it as step 5 says." + (
+                        "stage, so no progress pin follows; " + (
+                            "it finishes them itself." if not also and ups else
+                            "finish it as step 5 says.") + (
                             " More is waiting: then read again into a new folder and wake "
                             "once more (step 3 again)." if more else ""))
         else:
@@ -1966,6 +1980,159 @@ def cmd_search_drafts(a) -> int:
     return 0
 
 
+FOLLOW_UP_DONE = "Your follow-up to {first} is ready to send."
+FOLLOW_UP_NONE = "No follow-up is owed to {first} now."
+FOLLOW_UP_ASK = "What should the follow-up to {first} say? I could not write one: {why}."
+
+
+def _next_dir(base: str) -> str:
+    n = 1
+    while os.path.exists(os.path.join(base, str(n))):
+        n += 1
+    return os.path.join(base, str(n))
+
+
+def follow_ups(dump: str, chat: str, now, today: str, out_dir: str,
+               written: list | None = None) -> dict:
+    """Every follow-up this chat holds (claimed together, `with` one another: page_db
+    next_item), drafted in one run: code drafts each (followup_drafts.drafts, the gate
+    included), keeps each clean draft where Messages shows it and finishes those items, all in
+    one batch. What code could not write is left `to_write`, with one context block for all of
+    it; `written` ([{"id": <contact id>, "text"}]) is what the chat wrote for those, gated the
+    same way, kept and finished. One needing the person is put to them as a question; an
+    application's or an interview's is left `by_hand` (/outcome Step 2b).
+    {done, to_write, asked, by_hand, refused, context, batches}."""
+    import followup_drafts
+    import page_db
+    db = page_db.load(dump)
+    held = sorted(((str(d["data"].get("asked_at") or ""), wid) for wid, d in
+                   (db.get("work") or {}).items()
+                   if d["data"].get("kind") == "follow_up"
+                   and str(d["data"].get("status") or "") in page_db.ACTIVE
+                   and str(d["data"].get("claimed_by") or "") == chat))
+    out = {"done": [], "to_write": [], "asked": [], "by_hand": [], "refused": [],
+           "context": "", "batches": []}
+    if not held:
+        return out
+    with followup_drafts.FoldersOnce():
+        items, contacts, threads, tracker = followup_drafts.load(today)
+        got = followup_drafts.drafts(items, contacts, threads, tracker, today)
+        by_contact = {str(i.get("contact_id") or ""): i for i in got if i.get("half") == "contact"}
+        names = {str(c.get("contact_id") or "").strip(): str(c.get("name") or "")
+                 for c in contacts}
+        passed: dict = {}
+        if written:
+            checked = followup_drafts.check(written, contacts, threads, today, got)
+            followup_drafts.keep_checked(checked, contacts)
+            passed = {c["id"]: c for c in checked if c["ok"]}
+            out["refused"] = [{"id": c["id"], "findings": c["findings"]}
+                              for c in checked if not c["ok"]]
+        finishes: list[dict] = []
+        keep = []
+        for _at, wid in held:
+            item = db["work"][wid]["data"]
+            args = item.get("args") if isinstance(item.get("args"), dict) else {}
+            cid = str(args.get("contact_id") or args.get("contact") or "")
+            if not cid:
+                out["by_hand"].append(wid)
+                continue
+            import app_model
+            first = app_model.first_name(names.get(cid) or "") or "them"
+            due = by_contact.get(cid)
+            d = (due or {}).get("draft") or {}
+            answered = item.get("answers") or args.get("answers")
+            if cid in passed:
+                finishes.append({"work": wid, "summary": FOLLOW_UP_DONE.format(first=first)})
+            elif due is None or d.get("status") == "none":
+                finishes.append({"work": wid, "summary": FOLLOW_UP_NONE.format(first=first)})
+            elif d.get("status") == "ready" and not answered:
+                keep.append(due)
+                finishes.append({"work": wid, "summary": FOLLOW_UP_DONE.format(first=first)})
+            elif d.get("status") == "write" and d.get("who") == "you" and not answered:
+                why = " ".join(str(d.get("why") or "").split()).rstrip(".")
+                finishes.append({"work": wid, "question": FOLLOW_UP_ASK.format(
+                    first=first, why=why or "nothing on file to follow up on")})
+            else:
+                # Advise flagged code's draft, a reply is owed, or the person answered a
+                # question about it: written here, from the thread, in one go with the rest.
+                if d.get("status") == "check":
+                    keep.append(due)
+                out["to_write"].append({"work": wid, "contact": cid,
+                                        **({"answers": answered} if answered else {})})
+        followup_drafts.keep_drafted(keep)
+        if out["to_write"]:
+            out["context"] = followup_drafts.context(
+                [t["contact"] for t in out["to_write"]], contacts, threads, today, got)
+    entries: list[dict] = []
+    for f in finishes:
+        res = page_db.finish(page_db.load(dump), f["work"], now,
+                             os.path.join(out_dir, "each", f["work"].replace("~", "@")),
+                             summary=f.get("summary", ""), chat=chat, dump_dir=dump,
+                             question=f.get("question", ""),
+                             answer={"kind": "text"} if f.get("question") else None)
+        for path in res["batches"]:
+            with open(path, encoding="utf-8") as fh:
+                entries += json.load(fh)
+        out["asked" if f.get("question") else "done"].append(f["work"])
+    if entries:
+        w = page_db.Writes(out_dir)
+        w.entries = entries
+        out["batches"] = w.save("follow-ups")
+    return out
+
+
+def cmd_follow_ups(a) -> int:
+    """Every follow-up this chat holds, drafted and finished in one run (follow_ups)."""
+    import app_listen
+    import app_model
+    import app_setup
+    import person
+    _, now = app_model.clock(a.today, a.now)
+    today = a.today or person.today(now).isoformat()
+    chat = app_listen.this_chat(a.chat)
+    written = None
+    if a.written:
+        try:
+            raw = sys.stdin.read() if a.written == "-" else open(a.written, encoding="utf-8").read()
+            written = json.loads(raw)
+            written = written if isinstance(written, list) else [written]
+        except (OSError, ValueError) as e:
+            print(f"app: --written is a JSON list of {{\"id\": \"<contact id>\", \"text\": "
+                  f"\"...\"}}: {e}", file=sys.stderr)
+            return 2
+    out_dir = a.out or _next_dir(os.path.join(a.dump, "follow-ups"))
+    got = follow_ups(a.dump, chat, now, today, out_dir, written=written)
+    url = app_setup.page_record().get("url") or "<the page>"
+    said = [f"follow-ups: {len(got['done'])} finished, each draft on its person's card in "
+            f"Messages; {len(got['asked'])} put to the person as a question; "
+            f"{len(got['to_write'])} to write here; {len(got['by_hand'])} by hand."]
+    if got["batches"]:
+        said.append(f"send each as one ArtifactData batch (url {url}, its entries as writes), "
+                    "in order:")
+        said += got["batches"]
+    for r in got["refused"]:
+        said.append(f"refused, write it again: {r['id']}: " + "; ".join(r["findings"]))
+    if got["to_write"]:
+        said.append(
+            f"then: write these {len(got['to_write'])} in one go, from what is below (an "
+            "`answers` is what the person said on the page), and pass them all at once: "
+            f"python3 tools/app.py follow-ups \"{a.dump}\" --chat {chat} --written - with "
+            "[{\"id\": \"<contact id>\", \"text\": \"...\"}] on its input. It gates each, keeps "
+            "the ones that pass on their cards and finishes them.")
+        said += [f"to write: {t['contact']} (work {t['work']})" + (
+            f", their answer: {json.dumps(t['answers'], ensure_ascii=False)}"
+            if t.get("answers") else "") for t in got["to_write"]]
+        said.append(got["context"].rstrip("\n"))
+    for wid in got["by_hand"]:
+        said.append(f"by hand: {wid}, an application's or an interview's follow-up: /outcome "
+                    "Step 2b, then its own app.py done.")
+    if got["done"] or got["asked"]:
+        said.append(f"last: once for all of them, python3 tools/app.py view \"{a.dump}/view\" "
+                    f"--dump \"{a.dump}\" --chat {chat}, and send its batch (step 5).")
+    print("\n".join(said))
+    return 0
+
+
 def cmd_ask(a) -> int:
     """Work queued from something said in a chat, as the page's own Ask queues it, so no chat
     writes a work item by hand. `next` takes it like any other."""
@@ -2207,6 +2374,15 @@ def main(argv=None) -> int:
                    help="the round has ended: the search has found all it will")
     p.add_argument("--out", default="", help="where the batch goes (default <dump>/out)")
     clocked(p)
+    p = sub.add_parser("follow-ups", help="every follow-up this chat holds, drafted in code "
+                                          "and finished in one batch")
+    p.add_argument("dump")
+    p.add_argument("--chat", required=True, help=CLAIMED_UNDER)
+    p.add_argument("--written", default="",
+                   help="what this chat wrote for those code could not: a JSON list of "
+                        "{id, text}, or - for what comes in")
+    p.add_argument("--out", default="", help="where the batch goes (default <dump>/follow-ups)")
+    clocked(p)
     p = sub.add_parser("ask", help="work queued from a chat message, as the page queues it")
     p.add_argument("dump")
     p.add_argument("--kind", required=True, help="the kind of work (app.py progress <kind>)")
@@ -2238,6 +2414,7 @@ def main(argv=None) -> int:
             "files-saved": cmd_files_saved, "propose": cmd_propose, "listen": cmd_listen,
             "republish": cmd_republish, "pinned": cmd_pinned, "told": cmd_told, "doorbells": cmd_doorbells, "done": cmd_done,
             "ask": cmd_ask, "wake": cmd_wake, "version": cmd_version, "search-drafts": cmd_search_drafts,
+            "follow-ups": cmd_follow_ups,
             "answer": cmd_answer}[a.cmd](a)
 
 

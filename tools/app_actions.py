@@ -1453,8 +1453,8 @@ def _thread_lock(wait: float = 30.0):
             except OSError:
                 continue
             if time.time() - start > wait:
-                raise Refused("Another chat is writing your messages right now: try again "
-                              "in a minute.") from None
+                raise Refused("Your messages are being written right now: try again in a "
+                              "minute.") from None
             time.sleep(0.05)
     try:
         yield
@@ -3141,7 +3141,7 @@ def _skill_answer(r: Run, t: dict) -> dict:
         raise Refused("Yes or no: which?")
     skill = str(t.get("skill") or "")
     if not skill_answers.record(skill, choice, by="page", at=r.at):
-        return {"note": f"You answered {skill} later in a chat, so that answer stands.",
+        return {"note": f"You answered {skill} since, so that answer stands.",
                 "undo": None}
     if choice == "no":
         return {"note": f"Noted: {skill} stays off your resumes.", "undo": None}
@@ -3222,7 +3222,7 @@ def _needs_answer(r: Run) -> dict:
                                      "answer": answer},
             "asked_at": app_model.stamp(r.at), "priority": 0, "status": "queued",
             "stages": page_db.progress("talk")["stages"], "stage": 0})
-        return {"note": "Your chat writes it in.", "undo": None}
+        return {"note": "Claude writes it into your profile next.", "undo": None}
     import profile_upgrades
     text = app_model.read_text(path)
     hit = next((m for m in profile_upgrades.CONFIRM.finditer(text)
@@ -3304,7 +3304,7 @@ def _needs_unanswer(r: Run) -> dict:
     at, answer, mark = int(r.value.get("at") or 0), str(r.value.get("answer") or ""), \
         str(r.value.get("mark") or "")
     if not answer or text[at:at + len(answer)] != answer:
-        raise Refused("Your profile has changed there since: say so in a chat.")
+        raise Refused("Your profile has changed there since: ask Claude to change it.")
     with open(path, "w", encoding="utf-8", newline="") as fh:
         fh.write(text[:at] + mark + text[at + len(answer):])
     return {"note": "The question is back.",
@@ -3470,9 +3470,9 @@ def _setup_done(r: Run) -> dict:
     if key == "job-sites":
         got = app_setup.check_job_sites(r.day.isoformat())
         if got.get("blocked"):
-            raise Refused("This chat still can't reach " + ", ".join(got["blocked"][:3])
+            raise Refused("Claude still can't reach " + ", ".join(got["blocked"][:3])
                           + ". It can take a minute after the change: try Done again shortly.")
-        return {"note": "This chat reaches the job sites now.", "undo": None}
+        return {"note": "Claude reaches the job sites now.", "undo": None}
     if key == "copy":
         return {"note": "Open a chat on your new copy and say \"set me up\". This page "
                         "carries on there.", "undo": None}
@@ -3533,7 +3533,7 @@ def _upgrade_undo(r: Run) -> dict:
     code, out = _git("revert", "--no-edit", sha)
     if code:
         _git("revert", "--abort")
-        raise Refused("It could not be taken back by itself: say so in a chat.")
+        raise Refused("It could not be taken back by itself: ask Claude to take it back.")
     code, new = _git("rev-parse", "HEAD")
     return {"note": "Taken back.",
             "undo": {"action": "upgrade.undo", "target": {"kind": "upgrade",
@@ -3698,11 +3698,11 @@ def _one(aid: str, act: dict, index: Index, db: dict, w, chat: str, zone: str,
         prior = done.get(first) or ((db.get("receipts") or {}).get(first) or {}).get("data")
         undo = (prior or {}).get("undo")
         if not prior or prior.get("result") != "ok" or not undo:
-            return _receipt("conflict", "There is nothing to undo there: say so in a chat.",
+            return _receipt("conflict", "There is nothing to undo there: ask Claude for what you want.",
                             chat, now, aid, act)
         target = dict(undo.get("target") or {})
         if prior.get("guard") and guard(target) != prior["guard"]:
-            return _receipt("stale", "It has changed since: say what you want in a chat.",
+            return _receipt("stale", "It has changed since: ask Claude for what you want.",
                             chat, now, aid, act)
         shown = act
         act = dict(act, action=undo["action"], value=undo.get("value") or {})
@@ -3756,7 +3756,7 @@ def _one(aid: str, act: dict, index: Index, db: dict, w, chat: str, zone: str,
         # inverse that exists has no time limit: it runs while the guard still holds. A Change
         # back is itself the way back: the note under it read as a dead end (journeys 22).
         # Nor where nothing changed: there is nothing to take back (`nothing_new`).
-        out["undo_note"] = "Only a chat can take this back: say so in a chat."
+        out["undo_note"] = "To take this back, ask Claude."
     if shown is not act:
         out["ran"] = name
     return out
@@ -3768,13 +3768,29 @@ def _claimed_by_other(act: dict, chat: str, now: dt.datetime) -> bool:
     return bool(by) and by != chat and until is not None and until > now
 
 
+def handed_over(db: dict, chat: str) -> set:
+    """The chat that answered the page before this one and handed it to it (meta/listener's
+    `handed_by`), when this chat answers it now. A tap such a chat claimed is
+    this chat's: the old helper is put away at the takeover, and its claim held "I sent it"
+    taps out of every wake until it ran out, with nothing to ring again (the maintainer's
+    copy, 2026-11-05)."""
+    doc = (db.get("meta") or {}).get("listener")
+    rec = (doc or {}).get("data") or {}
+    if not chat or str(rec.get("chat") or "") != chat:
+        return set()
+    return {str(rec.get("handed_by") or "")} - {"", chat}
+
+
 def pending(db: dict, chat: str, now: dt.datetime) -> list[tuple[str, dict, int | None]]:
     """(id, action, version) of every action with no receipt, oldest first, leaving out
-    those another chat has claimed and is still within its claim."""
+    those another chat has claimed and is still within its claim, unless that chat handed
+    the page to this one (handed_over)."""
     receipts = db.get("receipts") or {}
+    gone = handed_over(db, chat)
     out = []
     for aid, doc in (db.get("actions") or {}).items():
-        if aid in receipts or _claimed_by_other(doc["data"], chat, now):
+        if aid in receipts or (_claimed_by_other(doc["data"], chat, now)
+                               and str(doc["data"].get("claimed_by") or "") not in gone):
             continue
         at = app_model.parse_time(doc["data"].get("at"))
         out.append((at.timestamp() if at else 0.0, aid, doc))

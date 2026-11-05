@@ -33,6 +33,9 @@ make sense to somebody whose repo just received it.
 
 ### Fixed
 
+- **"Draft all" for your follow-ups is one quick job, not one per person.** Follow-ups asked for together are taken together and written in one go, so nine follow-ups take a handful of steps instead of dozens.
+- **"I sent it" is always taken in.** A tap made just as Claude's daily fresh start on your page happened sat waiting; it is now taken in on Claude's next look.
+- **Your page no longer sends you to another chat.** Where a tap cannot do something, the page now asks Claude, who does it right there, and nothing on it talks about chats.
 - **Someone you had already answered no longer shows as waiting on you.** Bringing in your
   LinkedIn download added some messages a second time when only their apostrophes differed
   (curly against straight), so an old message could land after your reply and a new reply was

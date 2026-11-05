@@ -238,6 +238,75 @@ def test_two_not_this_person_taps_get_their_receipts_in_the_pass_that_applies_th
     assert not [p for p in parts(again) if TAPS in p or APPLIED in p], again
 
 
+def _sent_rows(ring, cid):
+    import csv
+    with open(os.path.join(ring.state, "network_threads.csv"), encoding="utf-8") as fh:
+        return [r for r in csv.DictReader(fh) if r["contact_id"] == cid
+                and r["direction"] in ("out", "outbound")]
+
+
+@pytest.mark.parametrize("second", ["same folder", "new read"])
+def test_i_sent_it_is_claimed_and_applied_by_wake(ring, second):
+    """"I sent it" taps were applied only by running app.py apply by hand, never by `wake`
+    (the maintainer's copy, 2026-11-05). The tap changes the copy, so the first wake claims it
+    and the next applies it, whether that is the same folder again (as it says) or a new read
+    on the next ring: logged once, with its receipt."""
+    model = json.loads(ring.run("model", "--now", NOW))
+    msg = next(m for m in model["messages"] if m["contact"] == "kestrel_mutual_ansgar")
+    before = len(_sent_rows(ring, "kestrel_mutual_ansgar"))
+    aid = ring.act("msg.sent", msg["id"])
+    d = ring.read("wake1")
+    said = ring.wake(d)
+    assert parts(said) == [[CHECK_IN, TAPS]], said
+    assert all(land(ring, said)), said
+    said = ring.wake(d if second == "same folder" else ring.read("wake2"))
+    assert APPLIED in [w for p in parts(said) for w in p], said
+    assert TAPS not in [w for p in parts(said) for w in p], said
+    assert all(land(ring, said)), said
+    assert ring.stored("receipts", aid)["data"]["result"] == "ok", ring.stored("receipts", aid)
+    assert len(_sent_rows(ring, "kestrel_mutual_ansgar")) == before + 1
+    again = ring.wake(ring.read("wake3"))
+    assert not [p for p in parts(again) if TAPS in p or APPLIED in p], again
+    assert len(_sent_rows(ring, "kestrel_mutual_ansgar")) == before + 1
+
+
+def test_a_tap_the_helper_before_claimed_is_taken_by_the_one_it_handed_to(ring):
+    """The page handed to a fresh helper, the old one put away at the takeover: an "I sent
+    it" it had claimed was held out of every wake until its claim ran out, with nothing to
+    ring again, and only app.py apply by hand later took it (the maintainer's copy,
+    2026-11-05). The chat it was handed to claims it and applies it; a claim by any other chat
+    is still left to it."""
+    model = json.loads(ring.run("model", "--now", NOW))
+    msg = next(m for m in model["messages"] if m["contact"] == "kestrel_mutual_ansgar")
+    aid = ring.act("msg.sent", msg["id"])
+    doc = ring.stored("actions", aid)
+    ring.put("actions", aid, dict(doc["data"], claimed_by="session_EXAMPLEOLD",
+                                  claimed_until="2026-10-25T18:08:00Z", _v=2), version=2)
+    listen = ring.stored("meta", "listen")
+    ring.put("meta", "listen", dict(listen["data"], took_from="session_EXAMPLEOLD",
+                                    handed_by="session_EXAMPLEOLD", _v=listen["version"] + 1),
+             version=listen["version"] + 1)
+    d = ring.read("wake1")
+    said = ring.wake(d)
+    assert parts(said)[0] == [CHECK_IN, TAPS], said
+    assert all(land(ring, said)), said
+    said = ring.wake(d)
+    assert all(land(ring, said)), said
+    assert ring.stored("receipts", aid)["data"]["result"] == "ok"
+    assert len(_sent_rows(ring, "kestrel_mutual_ansgar")) == 1
+    # Not handed over by it: its claim stands.
+    listen = ring.stored("meta", "listen")
+    ring.put("meta", "listen", dict(listen["data"], handed_by=None, _v=listen["version"] + 1),
+             version=listen["version"] + 1)
+    other = ring.act("person.stop", "fernhill_freight_halloway",
+                     value={"why": "not the right person", "scope": "person"})
+    doc = ring.stored("actions", other)
+    ring.put("actions", other, dict(doc["data"], claimed_by="session_EXAMPLEOLD",
+                                    claimed_until="2026-10-25T18:08:00Z", _v=2), version=2)
+    said = ring.wake(ring.read("wake2"))
+    assert not [p for p in parts(said) if TAPS in p or APPLIED in p], said
+
+
 def test_a_tap_applied_whose_receipt_never_landed_is_receipted_not_claimed_again(ring):
     aid = ring.act("person.stop", "kestrel_mutual_ansgar",
                    value={"why": "not the right person", "scope": "person"})

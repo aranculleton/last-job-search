@@ -119,7 +119,8 @@ page, so never ask it again):
 | evaluate | /apply Step 1 on `args.url` or `args.text`, then `added_jobs.py add <row.json>`; with `applied_on`, `confirm.py applied --new`; with `contact` (who sent it), that person is the job's referral route: `network/state.py set <contact> --next-action "apply via <first name>'s referral" --note "sent <role> at <employer>"`, never by hand, and `result.summary` says who it is linked to; with `draft: true`, once it is scored queue its `draft` work as tapping Draft does (`app_actions.py` `_job_draft`); with `from_name` (someone not in the contact book), add "sent by <name>" to the role's notes |
 | general_resume | `stage_picks.py general` |
 | prep | `/interview` for `args.interview`; with `args.contact`, `network/prep.py "<contact>"`; `args.note` is what they typed |
-| network, reply, follow_up | `/network` (`args.count`: how many people this run brings back at most, 5 when not given; `args.note`: what the person typed about this run, an employer, a team or a kind of person, followed like any instruction of theirs; `args.company`: one employer's own Find people; `args.rewrite`: that contact's waiting note, rewritten on the profile just read), `/reply` (`args.received` names their logged message, and with none it is their latest one in the log; `args.want`, what they want to say back, in their words; `args.update`, news for a referrer; `args.kind: thank_you` a thank-you, `args.kind: referral_ask` with `args.job` the referral ask for that one role, `compose.referral_ask()`), the networking skill. A `follow_up` with `args.application` (or `args.interview`) is an application's or an interview's follow-up: `/outcome` Step 2b, never the networking skill |
+| network, reply | `/network` (`args.count`: how many people this run brings back at most, 5 when not given; `args.note`: what the person typed about this run, an employer, a team or a kind of person, followed like any instruction of theirs; `args.company`: one employer's own Find people; `args.rewrite`: that contact's waiting note, rewritten on the profile just read), `/reply` (`args.received` names their logged message, and with none it is their latest one in the log; `args.want`, what they want to say back, in their words; `args.update`, news for a referrer; `args.kind: thank_you` a thank-you, `args.kind: referral_ask` with `args.job` the referral ask for that one role, `compose.referral_ask()`), the networking skill |
+| follow_up | follow-ups queued together are claimed together (`with` one another), and one run does them all: `python3 tools/app.py follow-ups "$D" --chat <your chat id>` drafts each in code, gated, keeps it where Messages shows it and finishes them in one batch. What code could not write comes back in one context block: write those in one go and pass them back with `--written -`. No skill is loaded and nothing is drafted one by one. One with `args.application` (or `args.interview`) is an application's or an interview's follow-up: `/outcome` Step 2b, never the networking skill |
 | own_profile | `network/own_profile.py check` |
 | profile | the change in `args` (`part`: job, skills, education, certificates or fill; `change`: add, edit or remove), made the way `/setup` writes that part: `01-candidate-profile.md` first, then `roles.py`, `bullets.py`, `skills.py` and the summary in `profile/CLAUDE.md` to match. Only what the person gave goes in, in their words and with their numbers; a job added gets its resume lines written from `args.text`, and anything unclear is asked in the work's thread, never guessed. A removal takes it out everywhere. Then `stage_picks.py general` for a fresh resume; `result.summary` says what changed |
 | brief | the brief's prompt; with `args.setup: true`, turning the brief on in this chat, not running it: `list_triggers` (every page), `python3 tools/routines.py brief --triggers <each page>`, and the calls it prints, which bind the task to this chat so no chat is made (automation/README.md, "For Claude") |
@@ -358,6 +359,16 @@ the next landing brings it in.
 
 ## Rules that hold everywhere
 
+- **This chat does whatever the page asks, here.** Everything the app's commands do is
+  its to do: a draft rewritten (`reply.py finish`, the networking skill), a rule changed or a
+  reaction kept (`learned.py record`), a record corrected (`network/state.py`,
+  `interview_pack.py book`), a profile fact (`profile` work). It does what was asked and says
+  in one line what changed. It never sends the person anywhere else to have it done, and never
+  says it cannot do it from here (the maintainer, 2026-11-05: "YOU'RE NOT MEANT TO USE THE
+  MAIN CHAT FOR ANYTHING").
+- **The page never mentions chats, helpers or sessions.** Nothing the person reads there (an
+  answer in a thread, a summary, a question) says "the main chat", "your chat", "this chat",
+  "another chat", "the helper" or "finishing up": Claude did it, or Claude will.
 - Nothing about another person goes into the database but a first name and an employer,
   except `reach/<contact>`, owner-only, which `app.py view` writes. Their words leave it
   with the receipt that kept them. `app.py check` fails a model that holds an address.
