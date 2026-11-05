@@ -241,6 +241,17 @@ tests, `tests/test_contacts_is_one_page_with_each_persons_draft.py`)
   edit, never a fact that belongs on the card's line of facts or its "?"; a card with nothing
   rare has no More, and anything nobody uses goes. (the maintainer, 2026-11-05: "shouldn't More
   be for genuine additional features, not just burying EVERYTHING under there"; action-row test)
+- More's toggle stays in its row beside the card's other pills, open or shut, and its panel
+  opens under the row, on every card. Its buttons are one row of pills that wraps only at the
+  panel's width, never a line a kind; a note or a link in a sentence follows them. Why: opened
+  inside the row it took the whole width and dropped below "I sent it", and a row a kind left
+  one button alone on a line (the maintainer, 2026-11-05). (More test)
+- The last thing under every live card's More is **Something else**: it opens the Chat with
+  "About <the card>:" begun, and what is sent from it goes to Claude as work about that card
+  (`args.about` on the talk), never a quick answer. It is the way to tell Claude anything the
+  card's buttons do not cover, so it is not counted in More's five and carries no gauge: only
+  sending wakes Claude. (the maintainer, 2026-11-05: "there should be a 'something else' button
+  if i need to feed back"; More test)
 - Every control that wakes Claude carries the gauge beside it: the same bars, size and place,
   with its minutes shown, and its "?" or a long press says it in one line ("About 3 minutes of
   Claude's time, from your Claude allowance"). A control that only runs code (marking sent, a
