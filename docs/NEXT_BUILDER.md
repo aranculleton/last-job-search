@@ -67,6 +67,11 @@ release. What cost time:
   tests/test_jobs_and_drafts_on_the_page_say_what_is_true.py::test_a_long_title_fills_its_line_before_it_wraps
   (0.67 of the line). Chromium and Safari pass. Firefox is not installed in a cloud chat; the
   Everywhere run on the release branch says whether the page fixes changed it.
+- **Everywhere's page variants** (German, far time zones, Mac and Windows type with French) fail
+  tests/test_the_page_is_quick_and_its_settings_say_true_things.py::test_ten_documents_a_chat_writes_at_once_draw_the_page_a_few_times_not_ten
+  with four or five long tasks of 75 to 120 ms against three. It is marked timing and passes timed
+  alone in the main run and here; the variants time it beside other tests. Look at whether
+  tools/everywhere.sh runs the timing tests alone, as ci.yml does.
 - **A live chat** has not run the new find-and-draft-all job, the job chat's send_message report and
   close, or the form-questions box end to end; their tests play Claude's side.
 - **The LinkedIn reads**: a page cannot hide Claude's browser pane or open a tab out of sight (the
