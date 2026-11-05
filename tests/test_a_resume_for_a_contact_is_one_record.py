@@ -369,7 +369,7 @@ def test_the_guidance_says_which_resume_and_how_to_log_it(repo):
     assert "which_resume" not in reply.guidance("calendar_link", "https://calendly.com/x/30")
 
 
-def test_an_old_hand_made_or_forbidden_resume_is_never_offered(repo):
+def test_an_old_hand_made_or_forbidden_resume_is_never_offered(repo, tmp_path, monkeypatch):
     """Reply guidance pointed at a hand-made ..._CURRENT_2026-09.pdf the person's rules forbid
     whenever someone asked for "your resume" (2026-11-04). Only the app's own checked file
     is offered; with none, the guidance says to make one."""
@@ -384,21 +384,28 @@ def test_an_old_hand_made_or_forbidden_resume_is_never_offered(repo):
     assert docpaths.resume_to_offer() == "documents/cv/Morgan_Ellis_CV_current.pdf"
     assert "(documents/cv/Morgan_Ellis_CV_current.pdf)" in reply.guidance(
         "send_resume", "send it to quillon@example.com")["which_resume"]
+    import shutil
     import person
-    profile = Path(person.path("CLAUDE.md"))
-    profile.parent.mkdir(parents=True, exist_ok=True)
-    kept = profile.read_text(encoding="utf-8") if profile.exists() else None
-    profile.write_text("Do not send Morgan_Ellis_CV_current.pdf to anyone.\n", encoding="utf-8")
+    # The person's own rule, written into a copy of their profile: in the app the profile is
+    # profile.example itself, and a test never changes the checkout it runs in (on Windows the
+    # file put back afterwards came back with other line ends, 2026-11-05).
+    copy = tmp_path / "profile"
+    shutil.copytree(person.directory(), copy)
+    was = os.environ.get(person.ENV)
+    monkeypatch.setenv(person.ENV, str(copy))
+    person.reset()
     try:
+        (copy / "CLAUDE.md").write_text("Do not send Morgan_Ellis_CV_current.pdf to anyone.\n",
+                                        encoding="utf-8")
         assert docpaths.resume_to_offer() == ""
         assert "make one for them" in reply.guidance(
             "send_resume", "send it to quillon@example.com")["which_resume"]
     finally:
-        # Put the file back as it was: in the app it is profile.example/CLAUDE.md itself.
-        if kept is None:
-            profile.unlink()
+        if was is None:
+            monkeypatch.delenv(person.ENV, raising=False)
         else:
-            profile.write_text(kept, encoding="utf-8")
+            monkeypatch.setenv(person.ENV, was)
+        person.reset()
 
 
 def test_passing_a_cv_on_is_not_a_no():
