@@ -978,7 +978,7 @@ def _main(argv=None) -> int:
         # the draft waiting for them, an application's in today's pack, which Messages reads.
         shown = keep_checked(res, contacts)
         if shown:
-            print("in Messages: " + ", ".join(shown))
+            print("on their cards in Contacts: " + ", ".join(shown))
         if a.pack or any(r["ok"] and r["id"].startswith("app:") for r in res):
             path = add_to_pack(a.today, res, got, contacts)
             print("pack: %s" % (local_path.rel(path, person.state()) if path else "nothing to write"))
@@ -1003,7 +1003,7 @@ def _main(argv=None) -> int:
               file=sys.stderr)
         shown = keep_drafted(got)
         if shown:
-            print("in Messages: " + ", ".join(shown), file=sys.stderr)
+            print("on their cards in Contacts: " + ", ".join(shown), file=sys.stderr)
     if a.json:
         print(json.dumps(_json_safe(got), indent=1, ensure_ascii=False))
     else:

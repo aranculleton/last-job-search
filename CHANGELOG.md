@@ -94,10 +94,17 @@ make sense to somebody whose repo just received it.
   tap Draft my reply. You can do the next one straight away: each card says where its reply
   stands (waiting, next, in line, Claude is on it), and Claude's reply appears on that same
   card, ready to copy. This holds after a reload too.
-- **Fewer buttons on a contact's card.** Editing the message, their profile link and "I changed
-  it first" are under More, with when you first wrote to them and how many messages each way.
-  The card itself says only the latest exchange ("You wrote 2 Nov", "They replied 3 Nov"), and
-  "Overdue" in its corner when a follow-up is late.
+- **A message that breaks your rules is fixed by itself.** Too long for LinkedIn, a phrase that
+  reads machine-written, asking for a job: Claude rewrites it without you tapping anything,
+  the card says "Claude is fixing it", and you get Copy and I sent it once it passes.
+- **The pencil on a message.** It sits beside Copy: change the words where they are, or tell
+  Claude what to change (Shorter, Warmer, More formal). Anything that uses Claude shows how
+  much beside its button.
+- **Fewer buttons on a contact's card.** Only rare things are under More, such as their profile
+  link. The card says only the latest exchange ("You wrote 2 Nov", "They replied 3 Nov"); when
+  you first wrote and how many messages each way are on their page; and "Overdue" in its
+  corner when a follow-up is late. Contacts' header is one short line, with Paste a message
+  beside Find people.
 - **An application made again after an update is only counted as done once it passes.**
   When the app remakes your unsent applications with its newest checks, each one that passes
   is marked done; each that fails is sorted out by itself: a part that copied the posting is

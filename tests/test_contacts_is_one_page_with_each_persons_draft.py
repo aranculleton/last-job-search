@@ -14,13 +14,14 @@ Every person and employer here is invented (the book of
 """
 from __future__ import annotations
 
+import json
 import os
 import sys
 
 import pytest
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
-from test_contacts_show_only_what_the_persons_rules_allow import APP, Book, NOW, PHONE, WIDE  # noqa: E402
+from test_contacts_show_only_what_the_persons_rules_allow import APP, Book, NOW, PHONE, WIDE, fixed  # noqa: E402
 
 CLOCK = "2026-10-25T18:30:00Z"
 SHOTS = os.environ.get("LJS_SHOTS", "")
@@ -85,13 +86,13 @@ def test_contacts_is_one_page_and_each_card_carries_its_draft(run, page, model, 
     """No People and Messages switch; Rafe's reply is on his card, open, with Copy and I sent
     it; rare things are under More; the old Messages address opens Contacts on his card."""
     rafe = "kestrel_foods_thorne"
-    got = run("engine", html=page, viewport=vp, clock=CLOCK, shots="contacts-" + ("phone" if vp is PHONE else "wide") if SHOTS else None, steps=[
+    got = run("engine", html=page, viewport=vp, clock=CLOCK, seed=fixed(model), shots="contacts-" + ("phone" if vp is PHONE else "wide") if SHOTS else None, steps=[
         {"hash": "contacts", "shot": "top"},
         {"hash": "contacts", "read": _card(rafe),
          "eval": "(() => { const c = document.querySelector('%s'); const d = c.querySelector('details.pdraft');"
                  " return {open: !!(d && d.open), face: [...c.querySelectorAll('.card-actions > .btn, .card-actions > a')].map((b) => b.textContent.trim()),"
                  " more: [...c.querySelectorAll('details.more .more-panel button, details.more .more-panel a')].map((b) => b.textContent.trim()),"
-                 " first: document.querySelector('#main ul.people > li').dataset.item,"
+                 " first: document.querySelector('#main ul.people > li').dataset.item, pen: !!c.querySelector('.sendbox [data-k=\"pen:msg-kestrel_foods_thorne\"]'),"
                  " tabs: !!document.querySelector('[data-k^=\"contsw\"]') }; })()" % _card(rafe)},
         {"hash": "drafts-messages/msg-" + rafe, "until": "location.hash === '#contacts/%s'" % rafe},
         {"hash": "contacts", "click": "I sent it: the message to Rafe", "read": _card(rafe)},
@@ -104,9 +105,9 @@ def test_contacts_is_one_page_and_each_card_carries_its_draft(run, page, model, 
     card, probe = got["after"][1]["text"], got["after"][1]["eval"]
     assert probe["open"] and not probe["tabs"], probe
     assert "Your reply" in card and "Thanks Rafe." in card and "Copy" in card and "I sent it" in card, card
-    # The edit, the profile link and the words changed are behind More, never on the face.
-    assert any(t.startswith("Edit or rewrite it") for t in probe["more"]), probe
-    assert not any(t.startswith("Edit") for t in probe["face"]), probe["face"]
+    # The pencil is on the draft itself, beside Copy; More holds no editing (2026-11-04).
+    assert probe["pen"], probe
+    assert not any(t.startswith(("Edit", "I sent these words")) for t in probe["more"]), probe["more"]
     # People with a message drafted come first, as the engine orders them.
     assert probe["first"] in _drafted(model), probe["first"]
     # The old address of a message lands on its person in Contacts.
@@ -226,18 +227,22 @@ def test_the_engine_says_the_latest_exchange_and_how_it_began(model):
     assert never["exchange"] is None, never["exchange"]
 
 
-def test_a_card_says_the_latest_exchange_and_its_more_how_it_began(run, page):
+def test_a_card_says_the_latest_exchange_and_its_more_how_it_began(run, page):  # "?" since round two
     """'They replied 19 Oct' on Rafe's card, 'You wrote 15 Oct' on Ash's; 'First wrote' and the
     counts only under More; a late follow-up says Overdue in its corner, never 'days late'."""
     got = run("engine", html=page, viewport=PHONE, clock=CLOCK, steps=[
         {"hash": "contacts", "read": _card("kestrel_foods_thorne")},
-        {"hash": "contacts", "more": "kestrel_foods_thorne", "read": _card("kestrel_foods_thorne") + " details.more .more-panel"},
+        {"hash": "contacts", "open": "pname:row:kestrel_foods_thorne", "eval": "document.querySelector('dialog [data-k=\"pex:kestrel_foods_thorne\"]').textContent"},
+        {"eval": "(document.querySelectorAll('dialog[open]').forEach((d) => d.close()), 1)"},
         {"hash": "contacts", "read": _card("thornbury_bank_brook")},
         {"hash": "contacts", "read": "#main"},
     ])
     assert not got["errors"], got["errors"]
-    rafe, more, ash, everyone = (x["text"] for x in got["after"])
+    rafe, _, _, ash, everyone = (x["text"] for x in got["after"])
+    more = got["after"][1]["eval"]
     face = rafe.split("More", 1)[0]
+    # How it began is on their page, with the conversation: never More, never a "?" on every
+    # card (2026-11-04).
     assert "They replied 19 Oct" in face and "First wrote" not in face, face
     assert "First wrote 1 Oct. 1 message from you, 1 from them." in more, more
     assert "You wrote 15 Oct" in ash and "no reply" not in ash, ash
@@ -334,7 +339,7 @@ def test_a_reply_that_cannot_be_written_honestly_asks_one_question_on_the_card(r
     needs = {"question": "Which day suits you for the call?", "about": "What would you like to know?",
              "answer": {"kind": "choice", "choices": ["Thursday", "Friday"]}}
     work = dict(_reply_work("needs_you", note="Which day suits you for the call?", needs=needs), args={"contact": rafe}, title="Reply to Rafe")
-    box = "(() => { const c = document.querySelector('%s'); return [c.querySelectorAll('.question.needs, .sendtext').length, !!c.querySelector('details.pdraft')]; })()" % _card(rafe)
+    box = "(() => { const c = document.querySelector('%s'); return [c.querySelectorAll('.ask-box, .sendtext').length, !!c.querySelector('details.pdraft')]; })()" % _card(rafe)
     got = run("engine", html=page, viewport=PHONE, clock=CLOCK, seed={"work/reply~" + rafe: work}, steps=[
         {"hash": "contacts", "read": _card(rafe), "eval": box},
         {"click": "Thursday", "within": _card(rafe), "read": _card(rafe)},
@@ -347,3 +352,82 @@ def test_a_reply_that_cannot_be_written_honestly_asks_one_question_on_the_card(r
     w = next(x for x in got["after"][1]["work"] if x["id"] == "reply~" + rafe)
     assert w["status"] == "queued" and "Thursday" in w["args"]["answers"].values(), w
     assert "Which day suits you" not in got["after"][1]["text"], "answered, the question goes"
+
+
+# ------------------------------------------------------------------ fixed by itself, and the pencil
+
+ZOE = "rook_health_quarry"
+
+
+def test_a_draft_that_breaks_a_rule_has_its_fix_queued_with_no_tap(book, model, tmp_path):
+    """The maintainer, 2026-11-04, over a 328-of-300 note with a Fix it button: "why not fix it
+    autonomously?" The engine says what to fix, and the view queues it, asked by nobody."""
+    import glob
+    import json as _json
+    zoe = next(m for m in model["messages"] if m["contact"] == ZOE)
+    fix = zoe["fix"]
+    assert fix["must"] and "it asks them for a job" in fix["reasons"], fix
+    dump, out = tmp_path / "dump", tmp_path / "out"
+    dump.mkdir()
+    book.run(APP, "view", str(out), "--now", NOW, "--dump", str(dump))
+    queued = {}
+    for f in glob.glob(str(out / "files" / "work" / "*.json")):
+        with open(f, encoding="utf-8") as fh:
+            body = _json.load(fh)
+        queued[body["args"]["target"]["id"]] = body
+    w = queued.get(zoe["id"])
+    assert w and w["kind"] == "tweak" and w["status"] == "queued" and w["args"]["auto"] is True, queued.keys()
+    assert "it asks them for a job" in w["args"]["text"] and not any("PDF" in s["name"] for s in w["stages"]), w
+    # Asked once: the same draft and reasons are never queued again.
+    dump2, out2 = tmp_path / "dump2", tmp_path / "out2"
+    (dump2 / "work").mkdir(parents=True)
+    (dump2 / "work" / (fix["work"] + ".json")).write_text(_json.dumps({"data": dict(w, status="queued"), "version": 1}), encoding="utf-8")
+    book.run(APP, "view", str(out2), "--now", NOW, "--dump", str(dump2))
+    again = [f for f in glob.glob(str(out2 / "files" / "work" / "*.json")) if ZOE in f]
+    assert not again, again
+
+
+def test_the_card_says_claude_is_fixing_it_and_offers_it_only_once_fixed(run, page, model):
+    zoe = next(m for m in model["messages"] if m["contact"] == ZOE)
+    wid = zoe["fix"]["work"]
+    line = "(() => { const g = document.querySelector('%s .going'); return g ? g.innerText.replace(/\\s+/g, ' ').trim() : ''; })()" % _card(ZOE)
+    running = {"kind": "tweak", "title": "Fix the note to Zoe", "to": "either", "status": "running", "claimed_by": "cloud-1",
+               "claimed_at": "2026-10-25T18:29:30Z", "lease_until": "2026-10-25T20:00:00Z", "asked_at": "2026-10-25T18:29:00Z",
+               "args": {"v": 1, "target": {"id": zoe["id"], "output": "message", "contact": ZOE}, "auto": True, "text": zoe["fix"]["text"]},
+               "stages": [{"name": "Changing it", "est_s": 45}], "stage": 0, "stage_at": "2026-10-25T18:29:30Z"}
+    got = run("engine", html=page, viewport=PHONE, clock=CLOCK, seed={"work/" + wid: running}, steps=[
+        {"hash": "contacts", "read": _card(ZOE), "eval": line}])
+    assert not got["errors"], got["errors"]
+    assert got["after"][0]["eval"].startswith("Claude is fixing it · It asks them for a job"), got["after"][0]["eval"]
+    assert "I sent it" not in got["after"][0]["text"] and "Fix it" not in got["after"][0]["text"], got["after"][0]["text"]
+    # Tried as often as it may and still breaking a rule: said, with the pencil to change it.
+    tried = {"work/" + wid: dict(running, status="done"), "work/" + wid.rsplit("~", 1)[0] + "~older": dict(running, status="done")}
+    got = run("engine", html=page, viewport=PHONE, clock=CLOCK, seed=tried, steps=[{"hash": "contacts", "read": _card(ZOE)}])
+    card = got["after"][0]["text"]
+    assert "Claude could not fix this by itself: it asks them for a job. Change it with the pencil." in card and "I sent it" not in card, card
+
+
+def test_the_pencil_changes_the_words_in_place_or_asks_claude(run, page, model):
+    """The pencil beside Copy (2026-11-04): the words changed in place are what is copied and
+    logged as sent; "Shorter" asks Claude, its line on the card."""
+    rafe = "kestrel_foods_thorne"
+    new = "Thanks Rafe, I'd love to hear how the planning team works."
+    got = run("engine", html=page, viewport=PHONE, clock=CLOCK, seed=fixed(model), steps=[
+        {"hash": "contacts", "open": "pen:msg-" + rafe},
+        {"eval": "(() => { const t = document.querySelector('[data-k=\"pentext:msg-%s\"]'); t.value = %s; t.dispatchEvent(new Event('input', {bubbles: true})); return 1; })()" % (rafe, json.dumps(new))},
+        {"click": "Copy message to Rafe", "clip": True},
+        {"click": "I sent it: the message to Rafe"},
+    ])
+    assert not got["errors"], got["errors"]
+    assert got["after"][2]["clip"] == new, got["after"][2]["clip"]
+    sent = next(a for a in got["actions"] if a["action"] == "msg.sent")
+    assert sent["value"]["text"] == new, sent
+    got = run("engine", html=page, viewport=PHONE, clock=CLOCK, seed=fixed(model), steps=[
+        {"hash": "contacts", "open": "pen:msg-" + rafe, "count": _card(rafe) + " .pen-tell .cost"},
+        {"click": "Shorter: ask Claude to change the message to Rafe", "read": _card(rafe)},
+    ])
+    assert not got["errors"], got["errors"]
+    assert got["after"][0]["count"] == 1, "what wakes Claude carries its cost"
+    w = [x for x in got["after"][1]["work"] if x.get("kind") == "tweak" and not x["args"].get("auto")]
+    assert w and w[0]["args"]["text"] == "Make it shorter." and w[0]["args"]["target"]["contact"] == rafe, w
+    assert "Make it shorter" in got["after"][1]["text"] and "Cancel" in got["after"][1]["text"], got["after"][1]["text"]

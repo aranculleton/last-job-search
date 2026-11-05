@@ -89,15 +89,34 @@ tests, `tests/test_contacts_is_one_page_with_each_persons_draft.py`)
   "Done" over nothing. One that failed says why, with Try again. Why: nobody is left
   wondering, and nothing they pasted is lost.
 - On the card's face only what is done every time: the name, its state, the trash; one line
-  of facts, the latest exchange only ("You wrote 2 Nov", "They replied 3 Nov"), with
+  of facts, the latest exchange only ("You wrote 2 Nov", "They replied 3 Nov"; when you
+  first wrote and how many messages each way, the engine's `exchange`, are on their page), with
   "Overdue" in the corner only when a follow-up or the message is late; the draft with Copy
-  in its corner (a subject's Copy an icon at its line's end); then one row of pills: "I sent
-  it" (filled once copied) or the one owed step, "They replied", and More. With a message on
-  the card, "They replied" waits under More. The rest is behind More: edit or rewrite the
-  message, their profile link, "I changed it first", why them, a call booked, they sent me a
-  job, the referral, read their profile, when you first wrote and how many messages each
-  way (the engine's `exchange`). Why: five buttons a card read as five jobs, and three dates
-  a card as none.
+  and the pencil in its corner (a subject's Copy an icon at its line's end); then one row of
+  pills: one filled (I sent it once copied, or the one owed step), at most two soft ones
+  ("They replied"), and More. With a message on the card, "They replied" waits under More.
+  Why: five buttons a card read as five jobs, and three dates a card as none.
+- More is for what is rare, a handful at most: their profile link, a call booked, they sent
+  me a job, the referral, read their profile, Claude's ideas and notes. Never editing (the
+  pencil), never the card's facts (its line), and no More on a card with nothing
+  rare. Why: More became a drawer of everything, so nothing in it was found.
+- The pencil changes the draft in place: the words edited where they are (what Copy copies
+  and I sent it logs), and one small field, "or tell Claude what to change", with Shorter,
+  Warmer and More formal, each queuing the change with the card's line. Why: a slight edit is
+  the commonest change, and it was buried under More.
+- A draft that fails a check with a clear fix (too long for the channel, a phrase that reads
+  machine-written, asking them for a job, a rule of theirs) is fixed by Claude by itself: the
+  engine finds it (`app_model.message_fix`) and the view queues the fix with no tap; the card
+  says "Claude is fixing it: <why>" and offers the draft as ready only once it passes. Never a
+  Fix it button. Tried twice and still failing, it says so, with the pencil to change it. A
+  fact only the person knows is asked through the one rare question. Why: where there is
+  clearly a recommended option, the app does it.
+- What wakes Claude carries its cost beside it (the gauge: "Draft my reply", "Ask Claude",
+  the chips, "Draft the follow-up"); what only the page does (I sent it, an edit in place,
+  the trash) carries none, and wakes nothing. (`data-wakes` marks the first kind.)
+- The header is its title and one short line, "4 to send · 8 need you", with Find people and
+  "Paste a message" (a message from someone not on the list) as soft pills beside it. What
+  Claude is doing is the header's work pill and each card's own line, never a third line.
 - Rarely, Claude cannot write a reply honestly without asking (their message is unclear, a
   claim it cannot ground). Then the card asks one question in its one soft grey box, in place
   of the draft until answered: the words it is about as a small quote, the question, and a tap

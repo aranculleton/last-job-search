@@ -339,9 +339,9 @@ def test_every_section_full_shows_its_items_in_plain_words(run, pages):
     assert "put your name forward here" not in drafts, "the referrer's own resume carries no hold"
     # Drafts are a view of Jobs: its switch, Found, Drafts and Applied (4.3).
     assert "Found" in drafts and "Applied" in drafts
-    # Each message on its person's card; the week's first notes against the limit in the summary.
+    # Each message on its person's card, and one short summary line (2026-11-04).
     msgs = r["contacts"]["text"]
-    assert "3 sent this week of about 20." in msgs and "7 messages to send." in msgs, msgs[:400]
+    assert "7 to send · " in msgs and "sent this week" not in msgs, msgs[:400]
     assert "LinkedIn InMail" in msgs and "Subject:" in msgs, msgs[:400]
     assert "Every application" in r["progress"]["text"] and "earlier, finished" in r["progress"]["text"]
     settings = r["settings"]["text"]

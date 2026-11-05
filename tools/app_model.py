@@ -2186,6 +2186,39 @@ def message_blocks(text: str, mtype: str, contact: dict, today=None) -> list[dic
     return out[:4]
 
 
+# How many times Claude fixes a draft by itself before the card says it could not: twice for
+# a draft that breaks the person's rules (never offered as ready until it passes), once for
+# one that only reads better changed (offered as it is after).
+FIX_TRIES = {"must": 2, "may": 1}
+
+
+def message_fix(item: dict) -> dict | None:
+    """What Claude fixes in a draft by itself, the moment the check finds it, with no tap (the
+    maintainer, 2026-11-04: "if there is clearly a recommended option ... we just do it
+    autonomously"): {"work" (the tweak's own id), "reasons", "text" (what to change), "must"
+    (it breaks the person's rules, so it is not ready until fixed)}. None when it passes, or
+    when it waits for their profile to be read, which no rewrite fixes. `app.py view` queues
+    it; a fact only the person knows is asked through the work's one question (`needs`)."""
+    if item.get("hold"):
+        return None
+    must = [b["said"] for b in item.get("blocked") or [] if b.get("said")]
+    may = []
+    for w in item.get("warnings") or []:
+        said = str((w.get("said") or w.get("words") or w.get("text") or "") if isinstance(w, dict) else w)
+        # What Claude already judged and kept is never rewritten again.
+        if said and not said.lower().startswith("claude left this as it is"):
+            may.append(said.rstrip("."))
+    reasons = must + [x for x in may if x not in must]
+    if not reasons:
+        return None
+    import page_db
+    key = rev_of(reasons, item.get("rev"))[:10]
+    return {"work": page_db.safe_id(f"tweak~{item['id']}~fix~{key}"), "reasons": reasons,
+            "must": bool(must),
+            "text": ("Rewrite it so it keeps my rules: " if must else
+                     "Rewrite it so it reads as I would write it: ") + "; ".join(reasons) + "."}
+
+
 def draft_limit(contact: dict, status: str, text: str = "") -> tuple[str, str, int | None]:
     """(what a draft waiting for this contact is, the composer's kind it is checked as, the
     most characters it may run to), read from their status now: the one answer the page
@@ -2263,6 +2296,7 @@ def _messages(ctx: Ctx, targets: dict) -> list:
         item["parts"] = parts.load(cid, text) is not None
         item["tweaks_done"] = _tweaks_done(os.path.dirname(f), f)
         item["paste"] = _paste(cid, item["first_name"], raw) if kind == "first_note" else None
+        item["fix"] = message_fix(item)
         _card(ctx, targets, item, "for_message")
         out.append(item)
         targets[mid] = {"kind": "message", "contact": cid, "text": body, "subject": subject,

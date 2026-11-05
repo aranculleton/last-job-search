@@ -140,6 +140,36 @@ def _published() -> dict:
         return {}
 
 
+def fix_work(messages: list, have: dict, now) -> list:
+    """(work id, fields) for each draft's fix not yet asked for: the tweak the page's own Fix it
+    asked for until 2026-11-04, now queued by the engine (app_model.message_fix)."""
+    import app_model
+    import page_db
+    out = []
+    for m in messages:
+        fix = m.get("fix") or {}
+        wid = fix.get("work")
+        if not wid or wid in have:
+            continue
+        mine = page_db.safe_id(f"tweak~{m['id']}~fix~")
+        if sum(1 for k in have if k.startswith(mine)) >= app_model.FIX_TRIES["must" if fix.get("must") else "may"]:
+            continue
+        what = "note" if m.get("kind") == "first_note" else "message"
+        target = {"id": m["id"], "output": "message", "rev": m.get("rev")}
+        if m.get("employer"):
+            target["company"] = m["employer"]
+        if m.get("contact"):
+            target["contact"] = m["contact"]
+        out.append((wid, {"kind": "tweak", "title": f"Fix the {what} to {m.get('first_name') or 'them'}",
+                          "to": "either", "args": {"v": 1, "target": target, "changes": [],
+                                                   "text": fix["text"], "keep": None, "auto": True},
+                          "asked_at": app_model.stamp(now), "asked_from": {"tab": "engine"},
+                          "priority": 0, "status": "queued", "stage": 0, "stage_at": None,
+                          "stages": [x for x in page_db.progress("tweak")["stages"]
+                                     if "PDF" not in x["name"]],
+                          "steps": [], "claimed_by": None, "claimed_at": None,
+                          "stop_asked": False, "attempt": 1}))
+    return out
 def no_screen(dump: str, db: dict) -> str:
     """The line `view` stops with when its dump holds none of the page's `screen` documents
     while the page has some, else "". The page has them once it was drawn under the new
@@ -293,6 +323,12 @@ def cmd_view(a) -> int:
     for doc_id, old in sorted(have.items()):
         if doc_id not in page_db.addr_docs(reach):
             w.add("delete", "addr", doc_id, if_version=old["version"])
+    # A draft that fails a check with a clear fix is fixed by Claude by itself, the moment the
+    # check finds it: its tweak queued here, with no tap (the maintainer, 2026-11-04). Never a
+    # second time for the same draft and reasons, and only so many tries a draft.
+    if a.dump:
+        for doc_id, fields in fix_work(model.get("messages") or [], db.get("work") or {}, now):
+            w.add("set", "work", doc_id, fields)
     old = (db.get("meta") or {}).get("current") if db else None
     # Who wrote it, by this session's own id where there is one: the brief passed the word
     # "brief", which no listener rule could compare with a chat (engine audit, 2026-11-03).

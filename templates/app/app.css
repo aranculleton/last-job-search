@@ -857,8 +857,11 @@ p.count.tone-warn { color: var(--st-overdue); }
 .going { display: flex; align-items: center; flex-wrap: wrap; gap: 4px; }
 .going .dot { width: 10px; height: 10px; }
 .going-word { font-weight: 600; }
-/* The words a question is about, as a small quote above it. */
-.needs-about { margin: 0; padding-left: 8px; color: var(--muted); font-style: italic; }
+/* The pencil beside Copy in the bubble's corner; changed in place, the words are a field. */
+.sendbox > .btn.bubble-pen { float: right; margin: 4px 4px 0 0; }
+.sendbox > textarea.pen-text { display: block; width: 100%; font: inherit; color: var(--ink); border: 1px solid var(--line-strong); }
+.pen-tell { display: grid; gap: 8px; }
+.pen-tell .pen-ask { width: 100%; }
 .wave { display: grid; gap: 12px; }
 .wave-head { display: grid; gap: 4px; }
 .wave-group { display: grid; gap: 8px; }

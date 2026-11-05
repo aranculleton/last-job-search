@@ -165,7 +165,7 @@ messages (ArtifactData `query`, collection `talk/<thread>/messages`, `out_dir: $
   the reply from that, then run `python3 tools/network/reply.py finish <contact id>
   --draft-file - --work <id> --dump "$D"` with the draft on its input. It refuses while the
   draft check finds anything or a reaction of theirs is unrecorded, saves the draft where
-  Messages shows it, and writes this item's finishing batch with the draft in the thread in
+  the person's card in Contacts shows it, and writes this item's finishing batch with the draft in the thread in
   full, ready to copy. Send that batch before anything is saved. Nothing is ever sent.
 - **Someone proposed a time for a call** ("how about 2pm ET Thursday?"): `reply.py
   prepare` logs their message; record the call booked on that day with `network/state.py

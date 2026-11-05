@@ -237,6 +237,8 @@
     copyBox: new Map(),
     // Contacts: the people whose "They replied" box is open (its words are kept as drafts).
     replyOpen: new Set(),
+    // Contacts: the drafts open under the pencil, their words changed in place.
+    penOpen: new Set(),
     reach: new Map(),
     // Claude's browser (flow B): whether this device has read a LinkedIn page through it.
     reading: {ok: false, tried: new Set()},
@@ -2492,10 +2494,12 @@
   function btn(label, onclick, o) {
     o = o || {};
     return h("button", {type: "button", class: "btn " + (o.kind || "secondary") + (o.small ? " small" : ""), "data-k": o.key || null,
-      disabled: o.disabled || null, "data-bin": o.icon === "bin" ? "1" : null, "data-wakes": o.wakes || null, "data-times": o.wakes && o.times > 1 ? String(o.times) : null, "aria-pressed": o.pressed === undefined ? null : String(!!o.pressed),
+      disabled: o.disabled || null, "data-bin": o.icon === "bin" ? "1" : null, "data-wakes": o.wakes === true ? "1" : (o.wakes || null), "data-times": o.wakes && o.times > 1 ? String(o.times) : null, "aria-pressed": o.pressed === undefined ? null : String(!!o.pressed),
       "aria-label": o.aria || null, "aria-describedby": o.describedby || null, "data-primary": o.kind === "primary" ? "1" : null,
       // The one next step on the screen while it is open (the box a person just opened).
       "data-lead": o.lead ? "1" : null,
+      // `data-wakes` above: the kind of work a control wakes Claude for (gaugeWakers draws its
+      // gauge), or "1" where the card draws its own cost beside it; every other is code only.
       // A button that is only an icon says what it does under the pointer too, not only to a
       // screen reader (the calendar-with-a-plus was found by nobody, 2026-11-02).
       title: !label && o.aria ? o.aria : null, onclick}, o.icon ? [icon(o.icon), label] : label);
@@ -5463,41 +5467,68 @@
         stateLine(a.id, "ready:" + a.id)));
   }
   // The message drafted to someone, on their card under their name: open, and folded by a tap
-  // on its heading (Contacts is one page, the maintainer, 2026-11-04). Copy sits in the
-  // bubble's top corner, as on a code block (2026-10-29); what breaks the person's own rules is
-  // never offered as ready (2026-11-03).
+  // on its heading (Contacts is one page, the maintainer, 2026-11-04). Copy and the pencil sit
+  // in the bubble's top corner, as on a code block (2026-10-29). A draft that fails a check is
+  // fixed by Claude by itself (app_model.message_fix, queued with no tap): never offered as
+  // ready while it breaks the person's rules, and never a Fix button (2026-11-04).
   const DRAFT_WORD = {first_note: "Your note", follow_up: "Your follow-up", reply: "Your reply", thank_you: "Your thank-you", referral_ask: "Your referral ask"};
+  const PEN_CHIPS = [["Shorter", "Make it shorter."], ["Warmer", "Make it warmer."], ["More formal", "Make it more formal."]];
+  // Where its fix stands: "going" (asked, or being made), "failed" (tried as often as it may,
+  // or called off), or null (nothing to fix, or what is left only reads better changed).
+  function fixState(m) {
+    const fix = obj(m.fix);
+    if (!txt(fix.work)) return null;
+    const pre = txt(fix.work).replace(/~fix~[^~]*$/, "~fix~");
+    const all = [...allWork()].filter(([id]) => id.indexOf(pre) === 0);
+    const cur = all.find(([id]) => id === txt(fix.work));
+    if (cur && ACTIVE.has(txt(cur[1].status) || "queued")) return "going";
+    const tries = all.length;
+    if (!cur && tries < (fix.must ? 2 : 1)) return "going";
+    return fix.must ? "failed" : null;
+  }
   function draftParts(m, o) {
     o = o || {};
     const tid = "msgt-" + seg(m.id);
     const what = m.kind === "first_note" ? "note" : "message";
+    const name = txt(m.first_name);
+    const parts = msgParts(m);
+    // Changed here with the pencil: what is copied and logged as sent is these words.
+    const penKey = "changed:" + m.id;
+    const pen = S.penOpen.has(m.id);
+    const edited = txt(draftGet(penKey));
+    const body = edited || parts.body;
     const copied = S.copied.has(m.id);
     const cn = S.notes.get("copy:" + tid);
     const fresh = !!(cn && cn.text === "Copied." && cn.until > now());
-    const parts = msgParts(m);
-    const name = txt(m.first_name);
     const copyName = "Copy " + (parts.subject ? "message" : what + " to " + name);
-    const copyBtn = h("button", {type: "button", class: "btn small copy bubble-copy" + (copied ? "" : " primary"), "data-k": "copy:" + tid, "data-primary": copied ? null : "1",
-      "aria-label": copied ? null : copyName, onclick: () => { S.copied.add(m.id); copyText(parts.body, (parts.subject ? "message" : what) + " to " + name, "copy:" + tid, tid); }},
-      icon("copy"), copied ? (fresh ? "Copied" : "Copy again") : "Copy");
-    const sentNow = (text) => act([{item: m.id, action: "msg.sent", value: msgSentValue(m, text), rev: m.rev}], "Marked as sent: " + name);
-    const warnings = arr(m.warnings).map((x) => (typeof x === "string" ? x : txt(obj(x).said) || txt(obj(x).words) || txt(obj(x).text))).filter(Boolean)
-      .map((w) => cap1(txt(plainDates(w)).replace(/^Claude left this as it is:\s*/i, "").replace(/\.$/, "")));
-    // Where they live is not on record, so the person's own rule about where people are cannot
-    // be checked: said before anything new goes (2026-11-03).
-    if (m.where_unknown === true) warnings.push("Where they live is not on record: check their profile before you send");
-    const blocked = arr(m.blocked).map((x) => cap1(txt(obj(x).said) || txt(x))).filter(Boolean);
-    // Written before their profile was read: a stand-in, never sent as it stands (X-53).
+    const fixing = fixState(m);
     const held = txt(m.hold);
+    // Not ready: written before their profile was read (X-53), or a fix still to come.
+    const ready = !held && !fixing;
+    const copyBtn = h("button", {type: "button", class: "btn small copy bubble-copy" + (copied ? "" : " primary"), "data-k": "copy:" + tid, "data-primary": copied ? null : "1",
+      "aria-label": copied ? null : copyName, onclick: () => { S.copied.add(m.id); copyText(txt(draftGet(penKey)) || parts.body, (parts.subject ? "message" : what) + " to " + name, "copy:" + tid, tid); }},
+      icon("copy"), copied ? (fresh ? "Copied" : "Copy again") : "Copy");
+    // The pencil: the words changed in place, or Claude asked to change them.
+    const penBtn = btn("", () => { if (S.penOpen.has(m.id)) S.penOpen.delete(m.id); else S.penOpen.add(m.id); scheduleRender(); },
+      {kind: "quiet icon-only", small: true, icon: "tweak", key: "pen:" + m.id, aria: (pen ? "Done changing the " : "Change the ") + what + " to " + name, pressed: pen});
+    penBtn.classList.add("bubble-pen");
+    const sentNow = (text) => act([{item: m.id, action: "msg.sent", value: msgSentValue(m, text), rev: m.rev}], "Marked as sent: " + name);
     // Copy first, filled, then I sent it is: the order the work is done in.
-    const sentBtn = blocked.length || held ? null : btn("I sent it", () => sentNow(parts.body),
-      {kind: copied ? "primary" : "secondary", small: true, key: "sent:" + m.id, aria: "I sent it: the " + what + " to " + name});
-    const fixBtn = blocked.length ? btn("Fix it", () => requestWork([{id: "tweak~" + seg(m.id) + "~rules~" + hash10(blocked.join("|") + "|" + txt(m.rev)), kind: "tweak", to: "either",
-      title: "Fix the " + what + " to " + name, args: {v: 1, target: tweakTarget("message", m), changes: [], text: "Rewrite it so it keeps my rules: " + blocked.join("; ") + ".", keep: null},
-      stages: STAGES.tweak.filter((x) => !/PDF/.test(x[0])).map((x) => ({name: x[0], est_s: x[1]}))}]),
-      {kind: "primary", small: true, key: "fix:" + m.id, aria: "Fix the " + what + " to " + name}) : null;
+    const sentBtn = ready ? btn("I sent it", () => { const t = txt(draftGet(penKey)); draftSet(penKey, null); S.penOpen.delete(m.id); sentNow(t || parts.body); },
+      {kind: copied ? "primary" : "secondary", small: true, key: "sent:" + m.id, aria: "I sent it: the " + what + " to " + name}) : null;
     const sid = "msgs-" + seg(m.id);
     const heading = (DRAFT_WORD[txt(m.type)] || DRAFT_WORD[txt(m.kind)] || "Your message") + (CHANNEL[txt(m.channel)] ? " · " + CHANNEL[txt(m.channel)] : "");
+    const area = pen ? h("textarea", {id: tid, class: "sendtext big pen-text", rows: 5, "data-k": "pentext:" + m.id, "aria-label": "The " + what + " to " + name + ", to change",
+      oninput: (e) => { draftSet(penKey, e.target.value); const c = $("cnt-" + seg(m.id)); const w = countWords(m, e.target.value.length); if (c && w) { c.textContent = w.text; c.className = "count tone-" + w.tone; } }}, body) : null;
+    const askId = "pa-" + seg(m.id);
+    const askField = pen ? h("input", {id: askId, type: "text", class: "pen-ask", "data-k": "penask:" + m.id, maxlength: 300, placeholder: "or tell Claude what to change"}) : null;
+    const askClaude = (words) => {
+      if (!txt(words)) return;
+      S.penOpen.delete(m.id);
+      requestWork([{id: "tweak~" + seg(m.id) + "~" + stamp(), kind: "tweak", to: "either", title: "Change the " + what + " to " + name,
+        args: {v: 1, target: tweakTarget("message", m), changes: [], text: txt(words), keep: null},
+        stages: STAGES.tweak.filter((x) => !/PDF/.test(x[0])).map((x) => ({name: x[0], est_s: x[1]}))}]);
+    };
     const box = det("draft:" + m.id, true, {class: "pdraft", "data-msg": m.id},
       h("summary", {class: "pdraft-sum", "data-k": "draft-sum:" + m.id}, heading, h("span", {class: "sr-only"}, " to " + name)),
       // The subject's own Copy is an icon at the end of its line, as the bubble's is in its
@@ -5506,28 +5537,31 @@
         h("button", {type: "button", class: "btn secondary small copy icon-only", "data-k": "copy:" + sid, "aria-label": "Copy subject", title: "Copy subject",
           onclick: () => copyText(parts.subject, "subject", "copy:" + sid, sid)}, icon("copy"))) : null,
       parts.subject ? noteFor("copy:" + sid) : null,
-      h("div", {class: "sendbox"}, blocked.length || held ? null : copyBtn, h("p", {class: "sendtext big", id: tid}, parts.body)),
+      h("div", {class: "sendbox"}, ready ? copyBtn : null, penBtn, pen ? area : h("p", {class: "sendtext big", id: tid}, body)),
+      pen ? h("div", {class: "pen-tell"}, h("label", {class: "sr-only", for: askId}, "Or tell Claude what to change"), askField,
+        h("div", {class: "opts"}, PEN_CHIPS.map(([l, t]) => btn(l, () => askClaude(t), {kind: "answer", small: true, key: "penchip:" + m.id + ":" + l, aria: l + ": ask Claude to change the " + what + " to " + name, wakes: true})),
+          btn("Ask Claude", () => askClaude(askField.value), {kind: "secondary", small: true, key: "pengo:" + m.id, aria: "Ask Claude to change the " + what + " to " + name, wakes: true}),
+          costEl({state: WORK_COST.tweak === undefined ? 1 : WORK_COST.tweak}, "tweak", "cost-pen-" + seg(m.id)))) : null,
       held ? h("p", {class: "small hint-line msg-check msg-held", "data-k": "held:" + m.id}, "Not ready to send: " + lc1(held) + ".") : null,
-      charCount(m, parts.body),
-      // What breaks a rule, in words; what Claude could not fix itself, its first reason said and
-      // the rest behind the "?" (2026-11-03).
-      blocked.length ? h("p", {class: "small hint-line msg-check msg-blocked"}, "Not ready to send: " + lc1(blocked[0]) + ".",
-        blocked.length > 1 ? hintQ("blk:" + m.id, blocked.slice(1).join(". "), "What else") : null)
-      : warnings.length ? h("p", {class: "small hint-line msg-check"}, "Read it once before you send it: " + lc1(warnings[0]) + ".",
-        warnings.length > 1 ? hintQ("chk:" + m.id, warnings.slice(1).join(". "), "What else") : null) : null,
-      noteFor("copy:" + tid), tweakResult(m));
-    // Rare, so under More: edit or rewrite it, their profile link, the words changed before
-    // sending, why them and Claude's ideas (the maintainer, 2026-11-04: fewer, smarter buttons).
-    const extra = [tweakButton("message", m, "Edit or rewrite it"), openLink(m),
-      m.why && !o.noWhy ? h("p", {class: "why"}, h("span", {class: "muted"}, "Why them: "), txt(m.why)) : null,
+      h("span", {id: "cnt-" + seg(m.id), class: "cnt-wrap"}, charCount(m, body)),
+      // Where they live is not on record, so the person's own rule about where people are cannot
+      // be checked (2026-11-03): a fact of the card, never a fix.
+      m.where_unknown === true ? h("p", {class: "small hint-line msg-check"}, "Where they live is not on record: check their profile before you send.") : null,
+      fixing === "failed" ? h("p", {class: "small hint-line msg-check msg-blocked"}, "Claude could not fix this by itself: " + lc1(txt(arr(obj(m.fix).reasons)[0])) + ". Change it with the pencil.") : null,
+      noteFor("copy:" + tid),
+      // A change asked with the pencil, or a fix Claude queued itself: the card says it is
+      // being changed and where it waits, until the new words are on it (2026-11-04).
+      tweakResult(m));
+    // Rare, so under More: their profile link, Claude's ideas, its notes, reading their profile
+    // (2026-11-04: More is for what is rare, never editing, never the card's facts).
+    const extra = [openLink(m),
       held ? null : cardNotes(m, {where: "contacts", section: "contacts", item: m.id}, true),
       moreAlerts(m, {where: "contacts", section: "contacts", item: m.id}),
-      blocked.length || held ? null : changedBox(m, "changed:" + m.id, sentNow),
       txt(m.kind) === "first_note" && txt(m.contact) ? pasteProfileBtn({id: m.contact, contact: m.contact, first_name: m.first_name, rev: revOf(txt(m.contact))}, "paste:" + m.id) : null];
     // A note held for their profile has no Copy: Claude's suggestion (read it first) is its next
     // step, so it stays on the card's face.
     const notes = held ? cardNotes(m, {where: "contacts", section: "contacts", item: m.id}, true) : null;
-    return {box, notes, act: blocked.length ? fixBtn : sentBtn, extra, blocked: blocked.length > 0, line: stateLine(m.id, "msg:" + m.id)};
+    return {box, notes, act: sentBtn, extra, blocked: fixing === "failed", fixing: fixing === "going", line: stateLine(m.id, "msg:" + m.id)};
   }
   // "To Juno at Acme", or "To Juno" where no employer is on file: never a dangling "at".
   function toWho(m) {
@@ -5635,16 +5669,12 @@
     // One number each, counted from the engine's own answer for each person, so the summary,
     // its filters and To do agree (2026-11-03: 311 follow-ups here, 24 in To do).
     const drafted = items.filter((p) => p.__msg || personDraft(p));
-    const notes = drafted.filter((p) => !p.__msg && txt(personDraft(p).kind) === "first_note").length;
     const need = people.filter((p) => g(p) === "now").length;
-    const owe = people.filter((p) => g(p) === "now" && (obj(p.owed).reply === true || txt(obj(p.owed).kind) === "reply" || personGotHere(p))).length;
-    const follow = people.filter((p) => g(p) === "follow").length;
-    const sends = drafted.length ? nWord(drafted.length, "message", "messages") + " to send. " : "";
-    const sum = (!total && !lone.length ? "No contacts yet." : sends + (need ? nWord(need, "needs", "need") + " you" + (owe ? ", " + (owe === 1 ? "one of them a reply" : owe + " of them replies") : "") + "."
-      : drafted.length ? "Nobody else is waiting on you." : "Nobody is waiting on you.")) + (total && follow ? " " + plural(follow, "follow-up", "follow-ups") + " you could send." : "")
-      // The week's first notes against the plan's limit, where notes are waiting to go: a
-      // sentence of its own, so the summary reads in short ones.
-      + (notes && budgetLine(0) ? " First notes: " + lc1(budgetLine(0)) : "");
+    // One short line of what matters (the maintainer, 2026-11-04: the header was "quite
+    // cluttered"): what is written to send, and who needs you. The follow-ups, the replies
+    // among them and the week's first notes are each on their cards, and in To do.
+    const sum = !total && !lone.length ? "No contacts yet."
+      : [drafted.length ? drafted.length + " to send" : "", need ? nWord(need, "needs", "need") + " you" : ""].filter(Boolean).join(" · ") || "Nobody is waiting on you.";
     const front = contactsFront(items);
     const anyUp = items.some(front) && front !== personLive;
     // People with a message drafted first, then who needs you, in the engine's own order
@@ -5666,8 +5696,12 @@
     const many = f && f.items.length > 8;   // search by name or employer as soon as the list is more than a glance
     const wrap = h("section", {class: "sec", "aria-labelledby": "h-contacts" + (where ? "-" + where : "")},
       // Got a message? is the summary's small line, as Jobs' Add a job is: one block, not two.
-      screenHead("contacts", "Contacts", sum, phoneNow() ? null : gotMessage(where), where, h("div", {class: "head-tools"},
-        runBtn("network", "Find people", () => askFindPeople(), {small: true, key: "head-find-people", icon: "k-search"}))));
+      // A message from someone not on the list: one soft pill beside Find people. What Claude
+      // is doing is the header's work pill and each card's own line, never a third line here.
+      screenHead("contacts", "Contacts", sum, null, where, h("div", {class: "head-tools"},
+        runBtn("network", "Find people", () => askFindPeople(), {small: true, key: "head-find-people", icon: "k-search"}),
+        btn("Paste a message", (e) => openDock({opener: e.currentTarget, text: "Help me reply to this message: "}), {small: true, key: "got-msg" + (where ? ":" + where : ""),
+          aria: picsOn() ? "Paste a message or a screenshot someone sent you" : "Paste a message someone sent you"})), {quiet: true}));
     if (!items.length) {
       put(wrap, empty("Who could refer you?", "Someone inside who refers you beats applying cold. Find people looks at the employers you want."));
       return wrap;
@@ -5677,7 +5711,6 @@
     put(wrap, activeFilters("contacts", lo, f));
     put(wrap, listView("contacts", lo));
     // On a phone the list comes first; the way in for a message someone sent follows it.
-    if (phoneNow()) put(wrap, gotMessage(where));
     put(wrap, exportFootLink());
     return wrap;
   }
@@ -5688,7 +5721,9 @@
     const cid = txt(p.id);
     let best = null;
     for (const [id, w] of allWork()) {
-      if (!PERSON_WORK.has(txt(w.kind)) || txt(obj(w.args).contact) !== cid) continue;
+      const k = txt(w.kind);
+      const hers = PERSON_WORK.has(k) ? txt(obj(w.args).contact) === cid : k === "tweak" && txt(obj(obj(w.args).target).contact) === cid && txt(obj(obj(w.args).target).output) === "message";
+      if (!hers) continue;
       if (live !== false && !ACTIVE.has(txt(w.status) || "queued")) continue;
       if (!best || txt(w.asked_at) > txt(best[1].asked_at)) best = [id, w];
     }
@@ -5714,7 +5749,14 @@
       // Its question is asked in the card's box (needsBox): the line only says so.
       if (ws.st === "needs_you") return {work: w[0], words: "Needs your answer", line: "", spin: false, tone: "warn"};
       const running = ws.st === "running" || ws.st === "claimed" || ws.picked;
-      const words = ws.label || "Claude is on it";
+      // A change to their message: "Claude is fixing it: too long for a LinkedIn note", or
+      // "Claude is changing it: make it shorter".
+      const tweak = txt(w[1].kind) === "tweak";
+      const auto = tweak && obj(w[1].args).auto === true;
+      const why = tweak ? (auto ? txt(arr(obj(messageById(txt(obj(obj(w[1].args).target).id))).fix && obj(messageById(txt(obj(obj(w[1].args).target).id)).fix).reasons)[0]) : txt(obj(w[1].args).text).replace(/[.\s]+$/, "")) : "";
+      const words = tweak && running ? (auto ? "Claude is fixing it" : "Claude is changing it") : ws.label || "Claude is on it";
+      if (tweak) return {work: w[0], words, line: why ? cap1(why) + (running ? clockText(ws.p.inStageS) : "") : ws.now1, spin: running && !ws.slow, tone: ws.tone,
+        cancel: ws.p.stopping ? null : () => stopWork(w[0])};
       // "Next · after “Reply to Brin”", never "Next · Next, after ...": the word once.
       const said = txt(ws.now1).replace(new RegExp("^" + words.replace(/[.*+?^${}()|[\]\\]/g, "\\$&") + ",?\\s+", "i"), "");
       const line = (said === txt(ws.now1) ? said : cap1(said)) + (running && !ws.p.stopping ? clockText(ws.p.inStageS) : "");
@@ -5782,23 +5824,20 @@
   }
   function needsBox(p, id, w) {
     const n = Object.keys(obj(w.needs)).length ? obj(w.needs) : {question: txt(w.note) || "Claude has a question about this reply.", answer: {kind: "text"}};
-    const card = {item: txt(p.id), work: id, where: "contacts", answer: (v) => answerWork(id, String(v))};
-    if (typeof renderNeeds === "function") return renderNeeds(card, n);
-    const a = obj(n.answer);
-    const kind = txt(a.kind) || "text";
+    const kind = txt(obj(n.answer).kind) || "text";
+    // The page's one shape for a question (answerBox): the quote, the question, its control.
+    if (kind !== "text") return answerBox(Object.assign({}, n, {question: txt(n.question) || txt(w.note)}), "pneeds:" + id,
+      (got) => answerWork(id, got.value + (got.time ? " at " + got.time : ""), got.words));
+    // An answer in words: a short field in the same box, sent as it is.
     const qid = "nq-" + seg(id);
-    const choices = kind === "yesno" ? ["Yes", "No"] : kind === "choice" ? arr(a.choices).map(txt).filter(Boolean) : [];
     const fid = "nf-" + seg(id);
-    const field = choices.length ? null : h("input", {id: fid, class: "needs-field", "data-k": "nf:" + id, "aria-labelledby": qid,
-      type: ["number", "scale"].includes(kind) ? "number" : kind === "date" ? "date" : kind === "time" ? "time" : "text",
-      min: a.min === undefined ? null : String(a.min), max: a.max === undefined ? null : String(a.max)});
-    return h("div", {class: "question needs", "data-needs": id},
-      txt(n.about) ? h("blockquote", {class: "needs-about small"}, txt(n.about)) : null,
-      h("p", {class: "q-text", id: qid}, h("span", {class: "sr-only"}, "Needs your answer: "), txt(n.question)),
-      h("div", {class: "opts", role: "group", "aria-labelledby": qid},
-        choices.map((c, i) => btn(c, () => answerWork(id, c), {kind: "answer", small: true, key: "nq:" + id + ":" + i})),
-        field, field ? btn("Send", () => { const v = txt(field.value).trim(); if (v) answerWork(id, v); }, {kind: "primary", small: true, key: "nq-go:" + id, aria: "Send your answer"}) : null));
+    const field = h("input", {id: fid, type: "text", class: "needs-field", "data-k": "nf:" + id, "aria-labelledby": qid, maxlength: 600});
+    return h("div", {class: "ask-box", "data-k": "ask:pneeds:" + id},
+      txt(n.about) ? h("blockquote", {class: "ask-about"}, clip(txt(n.about), 400)) : null,
+      h("p", {class: "ask-q", id: qid}, txt(n.question)),
+      h("div", {class: "opts"}, field, btn("Send", () => { const v = txt(field.value).trim(); if (v) answerWork(id, v); }, {kind: "primary", small: true, key: "nq-go:" + id, aria: "Send your answer", wakes: true})));
   }
+
   // Their reply already kept (logged here or by a chat): drafting it never asks for it again.
   function replyKept(p) {
     if (personGotHere(p)) return true;
@@ -5841,7 +5880,8 @@
       kept ? h("p", {class: "small muted"}, "Claude answers " + name + "'s last message, which is already kept.") : null,
       area,
       h("div", {class: "card-actions"},
-        btn("Draft my reply", go, {kind: "primary", small: true, key: "rbgo:" + cid, aria: "Draft my reply to " + name, lead: true}),
+        btn("Draft my reply", go, {kind: "primary", small: true, key: "rbgo:" + cid, aria: "Draft my reply to " + name, lead: true, wakes: true}),
+        costEl({state: WORK_COST.reply === undefined ? 1 : WORK_COST.reply}, "reply", "cost-rb-" + seg(cid)),
         btn("Cancel", () => { S.replyOpen.delete(cid); draftSet(k, null); scheduleRender(); }, {kind: "secondary", small: true, key: "rbno:" + cid, aria: "Cancel the reply to " + name})),
       noteFor("rbgo:" + cid));
   }
@@ -5920,8 +5960,17 @@
     const ex = obj(p.exchange);
     if (!txt(ex.first_on) || dayDiff(ex.first_on) === null) return null;
     const out = Number(ex.out) || 0, inn = Number(ex.in) || 0;
-    return h("p", {class: "muted small", "data-k": "pex:" + p.id}, (txt(ex.first) === "them" ? "They first wrote " : "First wrote ") + fmtDayMonth(ex.first_on) + ". " +
-      nWord(out, "message", "messages") + " from you, " + inn + " from them.");
+    return (txt(ex.first) === "them" ? "They first wrote " : "First wrote ") + fmtDayMonth(ex.first_on) + ". " +
+      nWord(out, "message", "messages") + " from you, " + inn + " from them";
+  }
+  // The cost beside an owed button that wakes Claude (a follow-up, a thank-you, a call prep);
+  // what only the page does (Close, Done, the box's opening) carries none.
+  const OWED_COST = {follow_up: "follow_up", thanks: "reply", prep: "prep"};
+  function owedCost(p, owed, busy) {
+    const kind = OWED_COST[txt(obj(p.owed).kind)];
+    if (!owed || busy || !kind || owed.tagName !== "BUTTON") return null;
+    owed.setAttribute("data-wakes", "1");
+    return costEl({state: WORK_COST[kind] === undefined ? 1 : WORK_COST[kind]}, kind, "cost-o-" + seg(p.id));
   }
   function personRow(p) {
     const pm = personMessage(p.id);
@@ -5946,7 +5995,7 @@
     const w2 = due ? workDoc(txt(due.action).replace(/^work:/, "") + "~due~" + seg(due.id)) : workDoc(txt(o.id));
     // Their reply (or a follow-up) being written: the card says where it stands, in Claude's
     // work words, and offers nothing that would ask for it twice.
-    const going = closedHere ? null : personGoing(p);
+    const going = closedHere ? null : personGoing(p) || (d && d.fixing ? {words: "Waiting for Claude", line: "It fixes this by itself: " + lc1(txt(arr(obj(draft.fix).reasons)[0])) + ".", spin: false, tone: null} : null);
     // The rare question its reply stopped on, in place of the draft until answered.
     const asking = closedHere ? null : personAsking(p);
     const busy = !going && w2 && ACTIVE.has(w2.status);
@@ -5989,7 +6038,7 @@
     // Rare, so under More: the message's own (edit or rewrite, their profile link, words changed
     // before sending, why them), then the person's (a call, a job they sent, a referral).
     const extra = [d && theyReplied ? h("div", {class: "more-acts"}, theyReplied) : null, d ? h("div", {class: "more-acts"}, d.extra) : null, h("div", {class: "more-acts"}, personActions(p, p.id, false)), relatedLinks(p.employer, p.id, p),
-      exchangeHistory(p) || (p.last ? h("p", {class: "muted small"}, "Last in touch " + fmtDayMonth(p.last)) : null)];
+      ];
     const step = stepWords(p.next);
     const ex = exchangeWords(p);
     // With the message on the card, the line says only the latest exchange: the draft's
@@ -6023,10 +6072,13 @@
         // friend reads as that friend's introduction (2026-10-30).
         txt(p.came_through) ? h("p", {class: "small muted"}, "Came through " + txt(p.came_through)) : null,
         referralLine(p),
-        going ? goingLine(p, going) : nextLine ? h("p", {class: "meta"}, nextLine) : null,
+        going ? goingLine(p, going) : nextLine ? h("p", {class: "meta"}, nextLine,
+          // The call's day is theirs to correct: the pencil beside it, as on a draft.
+          st === "call_booked" && callDay ? [" ", btn("", () => askCall(p), {kind: "quiet icon-only", small: true, icon: "tweak", key: "pcallpen:" + p.id, aria: "Change the call with " + name})] : null,
+          null) : null,
         asking ? needsBox(p, asking[0], asking[1]) : d ? d.box : null, d && !asking ? d.notes : null,
         box ? replyBox(p) : null,
-        h("div", {class: "card-actions"}, owed, d ? null : theyReplied, more("person:" + p.id, whoAt(name, p.employer), extra)),
+        h("div", {class: "card-actions"}, owed, owedCost(p, owed, going || box), d ? null : theyReplied, more("person:" + p.id, whoAt(name, p.employer), extra)),
         noteFor("reply:" + p.id), due ? stateLine(due.id, "pdue:" + p.id) : null, d ? d.line : done1 ? stateLine(done1.id, "msg:" + done1.id) : null,
         going ? null : stateLine(p.id, "person:" + p.id)));
   }
@@ -7097,8 +7149,9 @@
     return h("p", {class: "sum-small running-here", "data-running": String(going.length)}, on.length ? h("span", {class: "spin", "aria-hidden": "true"}) : h("span", {class: "dot tone-plain is-waiting", "aria-hidden": "true"}), " ",
       h("span", {}, words + ". "), btn("See how it is going", () => openWork(), {kind: "link", key: "running:" + id + (where ? ":" + where : "")}));
   }
-  function screenHead(id, title, sum, small, where, tool) {
-    const running = runningHere(id, where);
+  // o.quiet: no line of its own for Claude's work (each card says its own, Contacts 2026-11-04).
+  function screenHead(id, title, sum, small, where, tool, o) {
+    const running = o && o.quiet ? null : runningHere(id, where);
     const part = !where && tourSteps().some((t) => t[0] === id);
     // The "?" sits at the end of the summary line: the title is hidden under a phone's own
     // top bar, and a "?" on a line of its own looked broken.
@@ -7995,6 +8048,9 @@
       // real ones, and tapping one did nothing (2026-11-02).
       h("p", {class: "d-steps"}, steps.map(([l, done], i) => [i ? h("span", {class: "d-sep", "aria-hidden": "true"}, " · ") : null,
         h("span", {class: done ? "d-step done" : "d-step muted"}, l, done ? [h("span", {"aria-hidden": "true"}, " ✓"), h("span", {class: "sr-only"}, " (done)")] : h("span", {class: "sr-only"}, " (not yet)"))])),
+      // How it began, where their conversation is: on the card it was a "?" on every person,
+      // past the three a first screen may have (2026-11-04).
+      exchangeHistory(p) ? h("p", {class: "small muted", "data-k": "pex:" + p.id}, exchangeHistory(p) + ".") : null,
       // The card's one button, then the same list the row's More has (personActions), and the
       // bin's own sheet for not writing to them again: one place to stop, never a second route.
       h("div", {class: "card-actions wrap"}, owed,

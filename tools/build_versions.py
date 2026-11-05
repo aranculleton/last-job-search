@@ -551,8 +551,9 @@ METHODS: dict[str, dict] = {
             (72, "2026-11-04", False, "a short thank-you is no longer refused for sharing their name, their employer or thank with what they wrote, and a note naming no place is no longer warned that it named the wrong one"),
             (73, "2026-11-04", False, "nobody at their limit of unanswered messages, closed, set aside or gone cold is given a date by any writer (state.put_next), so a follow-up run never brings them back as owed; the check before anyone is shown reads their limit from the same place (state.at_limit); nothing to redo"),
             (74, "2026-11-05", False, "the networking skill and /network say the page looks at LinkedIn once a day and opens nothing by itself, with reading.py linkedin-check for whether today's look is due; nothing to redo"),
+            (75, "2026-11-05", False, "the app skill and /reply say a draft is shown on the person's card in Contacts, and followup_drafts prints where; nothing made before changes"),
         ),
-        "fingerprint": "10ec6de0feb877bb",
+        "fingerprint": "e5353e4aa54cd121",
     },
     "network-notes": {
         "by": "network", "priority": 2, "applies": "queued_notes", "time": "~10 min",
@@ -752,8 +753,9 @@ METHODS: dict[str, dict] = {
             (26, "2026-11-05", True, "a question is answered on its card with the control its answer needs: a refused day with a date picker and its time, a choice as chips, a yes or no in one tap, a number, a slider, never Say it in Chat; a question Claude stops on shows the words it is about, quoted, and its control on its To do card and in Claude's work, and the answer carries the work on; Coming up adds a missing time with a time picker on its row; a card has one bin and says Not done once; Show N more goes once it has shown them; a card's actions are one row of pills, the next step semibold, More a pill, and the Brief's tile links are pills too; the menu folds to its icons from beside the page's title, Settings last under one rule; finished work says Finished: putting it on your page until the page has it; an interview leads To do only when it is today or tomorrow or has no prep; the fold of what is not due yet is Not due yet (N)"),
             (27, "2026-11-05", True, "Find jobs can draft every one as it is found, as one job: its card counts them, \"2 of 5 drafted\" (a count says its own word)"),
             (28, "2026-11-05", True, "a bin's choices are whole above its foot, or scroll clear of it with a fade saying there is more, and Cancel is a soft pill; the gauge is beside every control that wakes Claude and says this copy's own minutes for that kind of work, from its finished work; a booked interview or call is moved from its Coming up row with its pencil; a double tap on Try again is one write in Firefox too"),
+            (29, "2026-11-05", True, "Contacts round two: a draft that breaks the person's rules is fixed by Claude by itself, queued by the engine with no tap, its line on the card (Claude is fixing it), and offered as ready only once it passes; no Fix it button; the pencil sits beside Copy, the words changed in place (what is copied and logged as sent) or Claude asked to change them (Shorter, Warmer, More formal, or in their words); what wakes Claude carries its cost; More holds only what is rare; when you first wrote is on their page; the header is one short line with Paste a message beside Find people"),
         ),
-        "fingerprint": "84612d357395eb1b",
+        "fingerprint": "39318cdc22bce8e2",
     },
     "upskill": {
         "by": "upgrade", "priority": 4, "applies": "upskill_plans", "time": "~10 min",

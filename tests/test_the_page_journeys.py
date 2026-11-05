@@ -311,16 +311,17 @@ def test_an_email_opens_in_the_mail_app_with_subject_and_body_filled(run, tmp_pa
 
 
 def test_a_wave_of_first_notes_is_on_each_persons_card_with_the_week_s_budget(run, tmp_path, vp):
-    """Each first note on its person's card, and the week's count against the limit once, in
-    Contacts' summary (one page since 2026-11-04)."""
+    """Each first note on its person's card (one page since 2026-11-04), and the week's count
+    against the limit once, on To do's one card for the wave."""
     notes = ("copperleaf_pay_ash", "larkspur_retail_ltd_kit", "quayside_foods_rafe")
     got = _go(run, tmp_path, [
         {"hash": "contacts", "read": "#main .sec-head",
          "eval": "[%s].map((id) => !!document.querySelector('#main [data-item=\"' + id + '\"] details.pdraft[open]'))" % ", ".join("'%s'" % n for n in notes)},
-        {"hash": "todo", "count": '#main [data-item^="wave:"]'},
+        {"hash": "todo", "count": '#main [data-item^="wave:"]', "read": '#main [data-item^="wave:"]'},
         {"click": "Open them in Contacts", "until": "location.hash.startsWith('#contacts')"},
     ], vp)
-    assert "3 sent this week of about 20." in got["after"][0]["text"], got["after"][0]["text"]
+    assert "sent this week" not in got["after"][0]["text"], got["after"][0]["text"]
+    assert "3 sent this week of about 20." in got["after"][1]["text"], got["after"][1]["text"]
     assert got["after"][0]["eval"] == [True, True, True], got["after"][0]["eval"]
     assert got["after"][1]["count"] == 1, "one card for the wave in To do, never one a note"
     assert got["after"][2]["hash"].startswith("#contacts/"), got["after"][2]["hash"]
