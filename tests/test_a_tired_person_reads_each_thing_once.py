@@ -57,7 +57,8 @@ def test_a_message_marked_sent_leaves_its_card_with_its_one_undo_in_the_toast(ru
 
 
 def test_a_question_answered_in_to_do_leaves_it_with_its_undo_in_the_toast(run, tmp_path):
-    q = "!!document.querySelector('#main [data-item=\"q-larkspur-data-looker\"]')"
+    # Asked on the quick answers card, one question at a time (the UX review, 2026-11-05).
+    q = "!!document.querySelector('#main [data-item=\"quick\"][data-q=\"q-larkspur-data-looker\"]')"
     got = _go(run, tmp_path, [
         {"hash": "todo", "eval": q},
         {"click": "Yes, I have", "eval": "[" + q + ", " + TOASTS + "]"},
@@ -73,7 +74,9 @@ def test_a_question_answered_in_to_do_leaves_it_with_its_undo_in_the_toast(run, 
 def _two_follow_ups():
     m = _sample()
     nudge = next(d for d in m["due"] if d["kind"] == "nudge")
-    ppl = [p for p in m["people"] if p["status"] != "closed" and not any(x.get("contact") == p["id"] for x in m["messages"])][:2]
+    # People with nothing else on To do: someone with another row is one card of their own.
+    ppl = [p for p in m["people"] if p["status"] != "closed" and not any(x.get("contact") == p["id"] for x in m["messages"])
+           and not any(d.get("contact") == p["id"] for d in m["due"])][:2]
     m["due"] = [d for d in m["due"] if d["kind"] != "nudge"] + [
         dict(nudge, id="due-nudge-%s" % p["id"], contact=p["id"], item=None, title="Follow up with %s at %s" % (p["first_name"], p["employer"]),
              context="Analyst at %s" % p["employer"], work={"kind": "follow_up", "id": "follow_up~%s" % p["id"], "args": {"contact": p["id"]}},

@@ -431,6 +431,7 @@ function budgetProbe() {
     const cs = controls(c, false);
     return {item: c.getAttribute("data-item"), words: wordsIn(c, false, true), controls: cs.length,
       answers: cs.filter((b) => b.classList.contains("answer")).length, icons: cs.filter((b) => b.classList.contains("icon-only") || b.classList.contains("q")).length, names: cs.filter((b) => b.classList.contains("name-link")).length, filled: cs.filter((b) => b.classList.contains("primary")).length,
+      rows: cs.filter((b) => b.closest(".g-row") && !b.classList.contains("icon-only") && !b.classList.contains("name-link")).length,
       alerts: c.querySelectorAll(".alert, .suggest").length,
       labels: cs.map((b) => (b.getAttribute("aria-label") || b.textContent || "").replace(/\s+/g, " ").trim().slice(0, 24))};
   });
@@ -917,7 +918,8 @@ S.action_receipt = async (a) => {
   const ids2 = store.list("actions/").filter((x) => x !== ids[0]);
   store.chat("receipts/" + ids2[0].split("/")[1], {applied_at: new Date().toISOString(), by: "cloud-1", result: "conflict", note: "Answered differently on your phone."});
   await turn(page, 6);
-  const refused = await one(page, '#main [data-item="q-larkspur-data-looker"] .state');
+  // Asked on its own card, or as the quick answers' question (the UX review, 2026-11-05).
+  const refused = await one(page, '#main :is([data-item="q-larkspur-data-looker"], [data-q="q-larkspur-data-looker"]) .state');
   const result = {ids, doc, saved, toast, focusAfter, done, back, moved, movedBefore, refused, errors: o.errors};
   await o.ctx.close();
   return result;
@@ -1941,7 +1943,9 @@ S.busy = async (a) => {
       const n = a.querySelector(".navcount");
       if (n) counts[a.getAttribute("data-k").split(":")[1]] = n.firstChild.textContent;
     }
-    return {groups, counts, hidden: t(document.querySelector("#main .hidden-note")), text: document.getElementById("main").innerText, sum: t(document.querySelector("#main .sum")),
+    const q = document.querySelector('#main [data-item="quick"]');
+    return {groups, counts, quick: q ? {title: t(q.querySelector(".card-title")), at: t(q.querySelector('[data-k^="qa-at:"]'))} : null,
+      hidden: t(document.querySelector("#main .hidden-note")), text: document.getElementById("main").innerText, sum: t(document.querySelector("#main .sum")),
       gauge: document.querySelectorAll("#main .cost .gauge").length};
   });
   await goto(page, "settings");
@@ -1972,7 +1976,7 @@ S.todo = async (a) => {
     return {bands, first: first ? title(first) : null, summary: (document.querySelector("#main .summary") || {}).textContent,
       soon: [...document.querySelectorAll("#main .soon .card-title")].map((x) => x.textContent),
       chips: document.querySelectorAll("#main .fbar button, #main .chips button").length,
-      filled: [...document.querySelectorAll("#main .need .btn.primary")].length, answers: [...document.querySelectorAll("#main .need .btn.answer")].length,
+      filled: [...document.querySelectorAll("#main :is(.need, .quick-card) .btn.primary")].length, answers: [...document.querySelectorAll("#main :is(.need .btn.answer, .quick-card .ask-choices .btn)")].length,
       dueButtons: Object.fromEntries([...document.querySelectorAll("#main .due-row")].map((c) => [title(c), [...c.querySelectorAll(".card-actions button")].map((b) => b.textContent)]))};
   });
   await goto(page, "jobs");
@@ -2177,6 +2181,9 @@ async function interviewCards(page) {
 S.mock = async (a) => {
   const o = await open({html: a.html, hash: "interviews", fake: {sample: {reply: "First question: tell me about a forecast you built."}}});
   await interviewCards(o.page);
+  // Under the card's More, as on To do (one set of an interview's actions, 2026-11-05).
+  await o.page.$$eval("#main details.more:not([open])", (ds) => ds.forEach((d) => { d.open = true; }));
+  await turn(o.page, 2);
   await o.page.getByRole("button", {name: "Practise with Claude for Larkspur Retail"}).click();
   await o.page.waitForTimeout(50);
   await turn(o.page, 10);

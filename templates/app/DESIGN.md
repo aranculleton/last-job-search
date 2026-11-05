@@ -13,14 +13,36 @@ next?" in its first lines, and nothing asks for a decision a default could make.
   bar (Brief, To do, Jobs, Contacts, Chat); To do alone carries a coloured badge, and Chat a
   small grey dot while an answer waits unseen. (layout 6, nav order test; contacts rules test)
 - Each screen: its title, one plain summary line, at most three blocks before the first item.
-  (layout 1 to 3)
+  A way to somewhere else (the new jobs, Start again, Paste a message) is a soft pill beside
+  the summary, never an underlined line under it; what Claude is doing is the header's work
+  pill and each card's own line, never a line of the header. (layout 1 to 3, one-card tests)
 - A long list opens on its first few and folds the rest one tap below ("Show 6 more"): To do
   five today, Drafts five, Contacts who has a message to send and who needs you. Never a
   filter left on. The fold's count is what it still holds: once tapped it goes, and its first
   card takes the focus; "Show 1 more" never stays over what it showed. (layout 2, crowd tests,
   fold test)
 - To do's five are what is late or due today first, then the questions; setting-up cards wait
-  behind the fold. (tired-person tests)
+  behind the fold. The small questions (a yes or a no, a choice of a few) are one card, "4 quick
+  answers", always among the five: one question at a time in its grey box with "1 of 4", each
+  answered with its own control (answerBox), the next there the moment it is answered.
+  (tired-person tests, quick answers test)
+- One card an act and one card a person. A person is never on three cards: their follow-up,
+  what they asked for and a job's "ask them before you apply" are one card for them, led by
+  what they asked, the referral its grey box, its Done finishing all of it. A referral with no
+  row about them, a closed posting, and a draft Claude is fixing are never To do cards: they
+  are notes on their own cards (the job's, the draft's). A closed posting is set aside by
+  itself, with Bring back under Set aside. (one-card tests)
+- To do never offers a fix: a draft or a message that fails a check with a clear fix is fixed
+  by Claude by itself, queued by the engine (`app_model.message_fix`, `tools/app.py`
+  `self_fixes`), its own card saying so. One Claude tried and could not fix is said on To do
+  with no button, its own card offering it again. Only a fact only the person knows is asked,
+  as that work's one question. (one-card tests)
+- An item's actions are defined once, for every card that shows it (`ivActs` for an
+  interview, `canSayReplied` and `theyRepliedBtn` for a person): To do offers what Coming up
+  and Contacts offer for the same item, with the same names ("Read your prep" everywhere). An
+  interview's card: its next step and Add to calendar; Practise with Claude, Update my prep and
+  a new day under More; they said no and I withdrew in its bin.
+  (one-card tests)
 - To do holds only what there is to do. Someone who has not answered the person's limit of
   messages is never a card there, nor counted. In Contacts they wait below the fold with the
   others who need nothing, their row saying to leave it unless they write back, with Close.
@@ -71,13 +93,17 @@ next?" in its first lines, and nothing asks for a decision a default could make.
   once its result is on the card. (form questions tests)
 - A state is a small tinted pill in words a person uses, never a code word: ok green, info
   blue, warn amber, bad red, held violet, waiting grey. (status audit, colour tests)
-- A To do row whose message is already drafted says "Draft ready" and its one button opens
-  the draft, never drafts it again; two or more drafted are one card, "N messages ready to
-  send", a row a person opening their draft and one button opening Contacts at the drafted
-  people. (drafted messages tests)
-- Many of one small thing are one checklist card, a row an item: each row has one action of
-  its own beside its bin, and the card's own actions keep to the card's anatomy above.
-  (layout 8)
+- Every message drafted and waiting is one card, "Messages to send (N)": the drafted
+  replies and follow-ups, the week's first notes and the ones to check first together, a row a
+  person, each opening their draft in Contacts, and one button opening Contacts. A row Claude
+  is fixing says so; one only the person can settle says "Check first". N is the engine's one
+  count (`app_model.to_send`), the same as Contacts' "N to send". Why: three cards (drafted,
+  first notes, to check) said one thing, and their counts disagreed with Contacts. (drafted
+  messages tests)
+- Many of one small thing are one checklist card, a row an item: each row has its own next
+  step and Done beside its bin, the bin keeping the rest (They replied, Tomorrow, Next week,
+  the person's choices), and the card's own actions keep to the card's anatomy above.
+  (layout 8, one-card tests)
 - One "?" a card at most, after the last word of its line, and no more than three on a first
   screen. (design test, budget test)
 

@@ -1477,6 +1477,11 @@ def _jobs(ctx: Ctx, targets: dict) -> dict:
         mine = added or (url and norm(url) in kept) or bool(r.get("brought_back")) \
             or (entry is not None and str(entry.get("status") or "").lower() == "lifted")
         why = cut(r) if status == "new" and not mine else ""
+        # A posting the employer's own board no longer lists is set aside by itself, with its
+        # way back under Set aside: a card asking to set it aside was one more thing to do
+        # about nothing (the UX review, 2026-11-05). Brought back, it stays (lifted).
+        if not why and status == "new" and not mine and apply_link(r).get("status") == "closed":
+            why = CLOSED_WHY
         if why:
             left.append((rname, rank, r, why))
             if earlier:
@@ -1619,7 +1624,10 @@ def left_out(today: dt.date, now: dt.datetime | None = None) -> list[tuple[str, 
 
 
 # A hard rule's reason as a job's card says it: the rule in the person's words, then why.
-_LEFT_WORDS = (("candidate's bar: ", "It does not clear your employer bar: "),
+# A posting found closed is left out like a rule's cut, its note in plain words.
+CLOSED_WHY = "closed: the employer's own board no longer lists it"
+_LEFT_WORDS = (("closed: ", "The posting has closed: "),
+               ("candidate's bar: ", "It does not clear your employer bar: "),
                ("place: ", "Not where you can work: "), ("screen: ", "The posting rules you out: "))
 
 
@@ -2348,6 +2356,20 @@ def message_fix(item: dict) -> dict | None:
             "must": bool(must),
             "text": ("Rewrite it so it keeps my rules: " if must else
                      "Rewrite it so it reads as I would write it: ") + "; ".join(reasons) + "."}
+
+
+def to_send(messages: list) -> dict:
+    """The messages drafted and waiting for the person to send, counted once: one a person
+    (each has one draft at a time) and one for each message with nobody on the list (an
+    application's follow-up). {"n", "ids"}: Contacts' header ("4 to send") and To do's one
+    card ("Messages to send (4)") both draw it, and say the same number (the UX review,
+    2026-11-05: Contacts counted every draft, To do the drafted rows and a wave card apart).
+    The ids are every message in order, so a page can leave out one sent there before a chat
+    has caught up."""
+    seen: set = set()
+    for m in messages or []:
+        seen.add(str(m.get("contact") or "") or "msg:" + str(m.get("id") or ""))
+    return {"n": len(seen), "ids": [str(m.get("id") or "") for m in messages or []]}
 
 
 def draft_limit(contact: dict, status: str, text: str = "") -> tuple[str, str, int | None]:
@@ -5055,6 +5077,8 @@ def build(today: dt.date | None = None, now: dt.datetime | None = None,
             model[name] = json.loads(json.dumps(EMPTY.get(name)))
     if "people_count" in ctx._got:
         model["people_count"] = ctx._got["people_count"]
+    if isinstance(model.get("messages"), list):
+        model["to_send"] = to_send(model["messages"])
     if only is None and ctx._got.get("lists"):
         import app_lists
         model["lists"] = {}

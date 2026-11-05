@@ -350,14 +350,17 @@ def for_message(ctx, item: dict) -> tuple[list, dict | None]:
         a["cost"] = cost(WORK_COST["network"])
         out.append(a)
     if item.get("limit") and item["chars"] > item["limit"]:
-        out.append(alert("too_long", mid, f"{item['chars']} characters: over the "
-                         f"{item['limit']} a {_CHANNEL.get(item['channel'], 'message')} "
-                         "allows.", "LinkedIn refuses a note over its limit; it cuts nothing.",
-                         work("tweak", "Shorten it", f"Shorten the note to {item['first_name']}",
-                              {"target": {"id": mid, "output": "message",
-                                          "contact": item["contact"], "rev": item["rev"]},
-                               "text": f"Under {item['limit']} characters."},
-                              f"tweak~{mid}~limit")))
+        a = alert("too_long", mid, f"{item['chars']} characters: over the "
+                  f"{item['limit']} a {_CHANNEL.get(item['channel'], 'message')} "
+                  "allows.", "LinkedIn refuses a note over its limit; it cuts nothing.",
+                  work("tweak", "Shorten it", f"Shorten the note to {item['first_name']}",
+                       {"target": {"id": mid, "output": "message",
+                                   "contact": item["contact"], "rev": item["rev"]},
+                        "text": f"Under {item['limit']} characters."},
+                       f"tweak~{mid}~limit"))
+        # Shortened by Claude by itself (app_model.message_fix): no Shorten it to press.
+        a["auto"] = bool(item.get("fix"))
+        out.append(a)
     return out, (_works_suggest(ctx, item) if item["kind"] == "first_note" else None)
 
 

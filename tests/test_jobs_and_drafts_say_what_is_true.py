@@ -94,6 +94,9 @@ def page(tmp_path_factory):
              silent_application_note="APPLIED HERE ALREADY and never heard back",
              outreach_pending_note="Applying is fine, this is not a warm route. A message is "
                                    "already out and unanswered: Wren Halloway. Do not send another."),
+        # Its employer's own board no longer lists it: set aside by itself (the UX review).
+        _row(5, "Ottergate Foods", "Supply Analyst", url="https://ottergate.example/careers/5",
+             link_check="closed: no longer on the employer's own board, checked 2026-10-24 09:00 UTC"),
     ])
     tracker = os.path.join(st, "job_search_tracker.csv")
     with open(tracker, encoding="utf-8", newline="") as fh:
@@ -352,6 +355,27 @@ class _Ctx:
                  "company": "Larkspur Retail", "next_action": "", "notes": ""}]
 
 
+def test_a_closed_posting_is_set_aside_by_itself_with_its_way_back(page):
+    """The UX review, 2026-11-05: a card asking to set a closed posting aside was one more
+    thing to do about nothing. It is set aside by itself, saying why, with Bring back under
+    Set aside (the search's own left-out rows, which Bring back marks lifted)."""
+    _, m = page
+    r = _job(m, "Ottergate Foods")
+    assert r and r["status"] == "dismissed" and r["apply"]["status"] == "closed", r
+    assert any("The posting has closed" in n for n in r["notes"]), r["notes"]
+    assert not r.get("alerts"), "nothing to do about it"
+    assert not app_model.to_look_at(r)
+
+
+def test_the_messages_to_send_are_counted_once_by_the_engine(page):
+    """Contacts counted every draft and To do its drafted rows and a wave card apart (the UX
+    review, 2026-11-05): one count, one a person, for both."""
+    _, m = page
+    got = m["to_send"]
+    assert got["ids"] == [x["id"] for x in m["messages"]]
+    assert got["n"] == len({x.get("contact") or "msg:" + x["id"] for x in m["messages"]})
+    two = app_model.to_send([{"id": "a", "contact": "c1"}, {"id": "b", "contact": "c1"}, {"id": "c", "contact": ""}])
+    assert two == {"n": 2, "ids": ["a", "b", "c"]}, "one a person, and one for a message with nobody on the list"
 def test_a_failed_check_is_said_once_with_one_full_stop_in_a_persons_words(tmp_path):
     """"A sentence was changed after the checks read it.." reached a draft's card (the
     maintainer, 2026-11-05): the verify step's line ends with its own full stop."""

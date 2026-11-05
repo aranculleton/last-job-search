@@ -221,8 +221,12 @@ def test_every_section_shows_the_engines_items_in_plain_words(run, built):
     # What Juno asked for leads, with its button, and the one day it is about (the walk-through,
     # 2026-11-03: "Reply to Juno" with "Draft a reply" over a request for the CV).
     assert "Juno at Larkspur Retail asked for your CV" in t["todo"] and "Make a CV for Juno" in t["todo"], t["todo"]
-    assert "asked 12 Sep" in t["todo"] and "first wrote" not in t["todo"] and "Not made yet" in t["todo"]
-    assert "Operations Analyst at Fernhill Freight" in t["todo"], "a draft's To do card names its employer"
+    # A draft never made is Claude's to make by itself (tools/app.py self_fixes): said on its
+    # card in Drafts, never a To do (the UX review, 2026-11-05).
+    assert "asked 12 Sep" in t["todo"] and "first wrote" not in t["todo"] and "Not made yet" not in t["todo"] and "Not made yet" in t["drafts"]
+    # Its referral is a note (said on Wren's card) and its files are Claude's to make: no To do
+    # card of its own (the UX review, 2026-11-05).
+    assert "Operations Analyst at Fernhill Freight" not in t["todo"] and "Operations Analyst" in t["drafts"], t["todo"]
     # Its line of facts ends with its details fold, "Why" (2026-11-05): the score is beside the title.
     assert "Brindle Hart Logistics · Manchester (hybrid) · Why" in t["jobs"] and "Hybrid" not in t["jobs"], "hybrid is said once"
     assert "Juno at Larkspur Retail replied to you on 12 Sep" in t["jobs"] and "Write to Juno" in t["jobs"]
@@ -365,8 +369,11 @@ def test_the_private_copy_link_is_githubs_own_form_with_private_chosen(run, buil
 def test_one_card_an_item_however_many_things_are_wrong_and_no_button_twice(run, built):
     got = _go(run, built, "rich", hashes=["todo", "drafts"])
     todo, drafts = got["texts"]["todo"], got["texts"]["drafts"]
-    assert todo.count("Operations Analyst") == 1, "the referral and the missing files are one card"
-    assert "Wren has put your name forward at Fernhill Freight" in todo and "Not made yet" in todo
+    # A referral in flight is a note on the draft's own card, and on its person's card in To do
+    # where they have a row there, never a card of its own; files never made are Claude's to
+    # make by itself, said on the draft's card (the UX review, 2026-11-05).
+    assert todo.count("Wren has put your name forward at Fernhill Freight") == 1, "said once, in Wren's own card's grey box"
+    assert "Not made yet" not in todo and "Not made yet" in drafts
     assert "has put your name forward here: ask before" not in drafts, "the engine's alert says it once"
     assert "The posting asks for Looker; you have Power BI" in drafts
     assert "Confirm the call time" in todo or "Tam" in todo

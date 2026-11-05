@@ -65,7 +65,9 @@ def test_a_thing_done_is_counted_as_done_today_and_listed_with_its_way_back(run,
     ], WIDE, model=m, clock=T)
     before, after, listed = got["after"][0]["eval"], got["after"][1]["eval"], got["after"][2]["eval"]
     n0 = _today(before["sum"])
-    assert n0 and re.search(r"%d things? today · 1 of %d done" % (n0 - 1, n0), after["sum"]), (before["sum"], after["sum"])
+    # One of four quick answers given: its card stays for the other three, so the cards left
+    # today stay as they were and the answer is one thing done.
+    assert n0 and re.search(r"%d things? today · 1 of %d done" % (n0, n0 + 1), after["sum"]), (before["sum"], after["sum"])
     assert "Recent changes" not in got["after"][2]["text"], "one line of what was done, never a log of every tap"
     assert listed.startswith("Answered") and ": Yes" in listed and "Undo" in listed, listed
     assert "Only a chat can take this back" not in listed

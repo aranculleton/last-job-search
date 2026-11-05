@@ -313,18 +313,19 @@ def test_an_email_opens_in_the_mail_app_with_subject_and_body_filled(run, tmp_pa
 
 def test_a_wave_of_first_notes_is_on_each_persons_card_with_the_week_s_budget(run, tmp_path, vp):
     """Each first note on its person's card (one page since 2026-11-04), and the week's count
-    against the limit once, on To do's one card for the wave."""
+    against the limit once, on To do's one card of messages to send (the UX review,
+    2026-11-05: the wave is rows of it, never a card of its own)."""
     notes = ("copperleaf_pay_ash", "larkspur_retail_ltd_kit", "quayside_foods_rafe")
     got = _go(run, tmp_path, [
         {"hash": "contacts", "read": "#main .sec-head",
          "eval": "[%s].map((id) => !!document.querySelector('#main [data-item=\"' + id + '\"] details.pdraft[open]'))" % ", ".join("'%s'" % n for n in notes)},
-        {"hash": "todo", "count": '#main [data-item^="wave:"]', "read": '#main [data-item^="wave:"]'},
-        {"click": "Open them in Contacts", "until": "location.hash.startsWith('#contacts')"},
+        {"hash": "todo", "count": '#main [data-item^="wave:"]', "read": '#main [data-item="grp:send"]'},
+        {"click": "Open Contacts at the people with a message to send", "until": "location.hash.startsWith('#contacts')"},
     ], vp)
     assert "sent this week" not in got["after"][0]["text"], got["after"][0]["text"]
     assert "3 sent this week of about 20." in got["after"][1]["text"], got["after"][1]["text"]
     assert got["after"][0]["eval"] == [True, True, True], got["after"][0]["eval"]
-    assert got["after"][1]["count"] == 1, "one card for the wave in To do, never one a note"
+    assert got["after"][1]["count"] == 0, "the wave is rows of the messages card, never a card of its own"
     assert got["after"][2]["hash"].startswith("#contacts/"), got["after"][2]["hash"]
 
 
@@ -480,10 +481,15 @@ def test_changing_your_mind_keeps_the_reason_and_brings_things_back(run, tmp_pat
 
 
 def test_an_unconfirmed_send_is_asked_as_a_question(run, tmp_path, vp):
+    # Asked on the quick answers card, one at a time (the UX review, 2026-11-05): here the
+    # only question, so it is the one showing.
+    m = _sample()
+    m["needs_you"] = [n for n in m["needs_you"] if n["id"] == "q-sent-fernhill_freight_halloway"]
+    q = '[data-q="q-sent-fernhill_freight_halloway"]'
     got = _go(run, tmp_path, [
-        {"hash": "todo", "read": '[data-item="q-sent-fernhill_freight_halloway"]', "eval": "[...document.querySelectorAll('[data-item=\"q-sent-fernhill_freight_halloway\"] .opts button')].map((b) => b.className)"},
+        {"hash": "todo", "read": q, "eval": "[...document.querySelectorAll('" + q + " .ask-choices button')].map((b) => b.className)"},
         {"click": "Yes, it went"},
-    ], vp)
+    ], vp, model=m)
     assert "Did your note to Wren go?" in got["after"][0]["text"]
     classes = got["after"][0]["eval"]
     assert len(classes) == 2 and len(set(classes)) == 1, "two answers of equal weight"

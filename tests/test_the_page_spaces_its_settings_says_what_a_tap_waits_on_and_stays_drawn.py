@@ -333,8 +333,9 @@ def test_a_run_of_like_work_is_one_card_with_its_count(run, tmp_path):
 
 def test_a_card_of_notes_to_check_says_what_it_is(run, tmp_path):
     """Four notes held for an unread profile made a To do card titled with the warning alone,
-    over a list of names (the maintainer, 2026-11-04: "idk what the bottom one is"). Its title
-    says what it is, the reason sits under it, and its link says where they are."""
+    over a list of names (the maintainer, 2026-11-04: "idk what the bottom one is"). They are
+    rows of the one card of messages to send (the UX review, 2026-11-05): its title says what it
+    is, each held row says "Check first" and why, and its button opens Contacts."""
     m = copy.deepcopy(_sample())
     held = [x for x in m["messages"] if x.get("kind") == "first_note"][:2]
     assert len(held) == 2
@@ -350,8 +351,8 @@ def test_a_card_of_notes_to_check_says_what_it_is(run, tmp_path):
     cards = got["after"][0]["eval"]
     assert cards, "the held notes make a card in To do"
     title, text = cards[0]
-    assert title.startswith("2 messages to check before you send"), title
-    assert "Written before their profile was read: read it first." in text and "Open in Contacts" in text, text
+    assert title.startswith("Messages to send ("), title
+    assert text.count("Check first") == 2 and "Written before their profile was read: read it first" in text and "Open Contacts" in text, text
 
 
 def test_a_card_being_changed_says_so(run, tmp_path):

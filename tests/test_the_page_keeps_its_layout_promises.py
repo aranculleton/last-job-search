@@ -185,12 +185,13 @@ def test_8_a_closed_card_has_one_state_one_alert_two_buttons_one_link_and_more(l
     found = set()
     for _, s, v, _ in _sections(layouts):
         for c in v["cards"]:
-            # A checklist's row is held to one action of its own (its bin aside), and its
-            # buttons are the row's, never the card's (2026-11-04: drafted messages, one card).
-            # A Jobs card's actions are one row of pills, three at most before More (2026-11-05:
-            # "See the posting" a pill beside "See the draft", never underlined words).
+            # A checklist's row is held to its own next step and Done (its bin aside), and its
+            # buttons are the row's, never the card's (2026-11-04: drafted messages, one card;
+            # 2026-11-05: Done on every row). A Jobs card's actions are one row of pills, three
+            # at most before More (2026-11-05: "See the posting" a pill beside "See the draft",
+            # never underlined words).
             if c["states"] > 1 or c["alerts"] + c["suggests"] > 1 or c["buttons"] > (3 if c.get("own") else 2) or c["links"] > 1 or c["more"] > 1 \
-                    or c.get("rowButtons", 0) > 1:
+                    or c.get("rowButtons", 0) > 2:
                 found.add((8, s, c["item"]))
     new, gone = _gaps(found, 8, vp)
     assert not new, ("cards over the anatomy", new)

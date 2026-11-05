@@ -49,6 +49,24 @@ make sense to somebody whose repo just received it.
 
 ### Changed
 
+- **One card for every message to send.** The drafted replies and follow-ups, the week's first
+  notes and the ones to check first are one card in To do, "Messages to send (7)", a row a
+  person opening their draft, with the same number Contacts shows in "7 to send".
+- **One card a person.** Someone you owe a follow-up who also asked for your CV, and who has
+  put your name forward for a job, is one card in To do, the referral in its grey box, and its
+  Done finishes all of it.
+- **Small questions are one card.** Yes or no and short choices are "4 quick answers", one
+  question at a time with "1 of 4", among the first five things in To do.
+- **Done on every checklist row.** A row of a checklist has its next step and Done; its bin
+  has They replied, Tomorrow, Next week and the person's choices.
+- **To do never asks you to fix something Claude can fix.** A draft or a message Claude is
+  fixing by itself is not on To do at all, and one it could not fix is said there with no
+  button. A closed posting is set aside by itself, with Bring back under Set aside; a referral
+  in flight is a note on the job's card, not something to do.
+- **An interview offers the same things everywhere.** To do's card has Read your prep,
+  Practise with Claude, Add to calendar, a new day and its bin's choices, as in Coming up.
+- **Headers are one line.** To do's way to the new jobs is a soft pill beside its summary, and
+  Coming up no longer has a line of its own for what Claude is doing.
 - **The Jobs cards are calmer.** Each says its facts on one line, with the town alone
   ("Toronto", never "Toronto, Ontario, Canada"). More stays beside the buttons and opens into
   short labelled rows: why it scored what it did, what to watch out for, what is worth knowing,

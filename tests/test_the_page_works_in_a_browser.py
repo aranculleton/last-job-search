@@ -224,14 +224,22 @@ def pages(tmp_path_factory):
     # drafted again, so it is never a row of a "Draft all" (2026-11-02).
     ppl = [p for p in busy["people"] if p["status"] != "closed" and not any(m["contact"] == p["id"] for m in busy["messages"])][:3]
     nudge = next(d for d in busy["due"] if d["kind"] == "nudge")
-    busy["due"] = [d for d in busy["due"] if d["kind"] != "nudge"] + [
+    # Their other rows left out: one person with two rows is one card of their own (the UX
+    # review, 2026-11-05), never a row of this checklist.
+    mine = {p["id"] for p in ppl}
+    # Nor a referral in flight with one of them, which would make theirs a card of its own.
+    for r in busy["jobs"]["rows"]:
+        r["alerts"] = [a for a in r.get("alerts") or [] if a["kind"] != "referral_hold"]
+    busy["due"] = [d for d in busy["due"] if d["kind"] != "nudge" and d.get("contact") not in mine] + [
         dict(nudge, id="due-nudge-%s" % p["id"], contact=p["id"], item=None, title="Follow up with %s at %s" % (p["first_name"], p["employer"]),
              context="Analyst at %s" % p["employer"], work={"kind": "follow_up", "id": "follow_up~%s" % p["id"], "args": {"contact": p["id"]}},
              rev="bn%d" % i) for i, p in enumerate(ppl)] + [
-        # Like items are grouped by what they ask (2026-10-30): eight replies owed. And two
-        # people at their limit of two unanswered messages, as a list written before To do
-        # stopped listing them (2026-11-04): the page never shows them. Invented names.
-        *[dict(nudge, id="due-reply-%d" % i, kind="reply", action="work:reply", contact=ppl[i % 3]["id"], item=None,
+        # Like items are grouped by what they ask (2026-10-30): eight replies owed, to eight
+        # people the list does not hold (each one person is one card of their own, the UX
+        # review, 2026-11-05). And two people at their limit of two unanswered messages, as a
+        # list written before To do stopped listing them (2026-11-04): the page never shows
+        # them. Invented names.
+        *[dict(nudge, id="due-reply-%d" % i, kind="reply", action="work:reply", contact="busy-reply-%d" % i, item=None,
                title="Reply to %s" % name, context="", work={"kind": "reply", "id": "reply~r%d" % i, "args": {"contact": ppl[i % 3]["id"]}},
                rev="br%d" % i)
           for i, name in enumerate(("Ines", "Joel", "Kemi", "Lior", "Mara", "Noor", "Otto", "Pia"))],
@@ -282,7 +290,9 @@ def test_the_owner_sees_the_page_and_anyone_else_sees_only_a_private_notice(run,
     assert own["brand"] == "Morgan’s job search"
     # One card, one thing (4.3): today's To do cards that still need the person, the number
     # To do's own summary leads with.
-    assert own["title"] == "(11) Morgan’s job search", "four answers, the things due today or late, and the alerts, a card each"
+    # The cards due today or late, one each: the thank-you two days late, the messages to send,
+    # Tamsin's one card, and the quick answers (the four questions are one card).
+    assert own["title"] == "(4) Morgan’s job search", own["title"]
     assert own["conn"] == "live" and own["pulse"].startswith("Connected.")
     assert own["overflow"]["sw"] <= own["overflow"]["cw"]
     for fake in ({"owner": False}, {"noClaude": True}, {"caps": []}):
@@ -489,13 +499,14 @@ def test_to_do_groups_by_when_then_by_employer_in_the_order_things_are_done(run,
         for g in b["groups"]:
             assert g["employer"] is None or len(g["titles"]) >= 2, ("an employer heads only two or more", b["band"], g)
     answer = next(b for b in r["bands"] if b["band"] == "Needs your answer")["groups"]
-    assert answer[0]["employer"] == "Fernhill Freight" and len(answer[0]["titles"]) == 2, "one employer's two questions together"
+    # The small questions are one card, asked one at a time (the UX review, 2026-11-05).
+    assert [g["titles"] for g in answer] == [["4 quick answers"]], answer
     late = next(b for b in r["bands"] if b["band"] == "Due or late")["groups"]
     # The late things first: the follow-up and the thank-you, both two days late. The
-    # follow-up is on one card with the reply also drafted (2026-11-04: drafted messages are
-    # one card; tests/test_to_do_says_a_message_is_drafted_and_batches_them.py holds its rows).
+    # follow-up is a row of the one card of messages to send (the UX review, 2026-11-05;
+    # tests/test_to_do_says_a_message_is_drafted_and_batches_them.py holds its rows).
     assert sorted(g["titles"][0] for g in late[:2]) == [
-        "2 messages ready to send", "Thank-you note after your Harbourline Bank first interview"], "the late things first"
+        "Messages to send (7)", "Thank-you note after your Harbourline Bank first interview"], "the late things first"
     titles = [t for b in r["bands"] for g in b["groups"] for t in g["titles"]]
     assert "Prepare for the Larkspur Retail phone screen" not in titles, "the interview's own card is its prep, never a second card"
     assert "Thank-you note after your Harbourline Bank first interview" in titles
@@ -505,9 +516,9 @@ def test_to_do_groups_by_when_then_by_employer_in_the_order_things_are_done(run,
     # drafts it again (2026-11-02), and no card of its own offers to.
     assert "Reply to Juno at Larkspur Retail" not in r["dueButtons"], r["dueButtons"]
     assert all("Done" in b for b in r["dueButtons"].values()), "every due row can be marked done"
-    assert titles.count("3 first notes ready to send") == 1, "a wave of first notes is one card"
+    assert not [t for t in titles if "first notes ready to send" in t], "the week's first notes are rows of the messages card"
     assert r["chips"] == 0, "no kind chips on To do"
-    assert r["filled"] == 0 and r["answers"] >= 8, "a question never fills one of its answers"
+    assert r["filled"] == 0 and r["answers"] >= 2, "a question never fills one of its answers"
     assert r["jobsQuestion"] and "Have you used Looker?" in r["jobsQuestion"], "Jobs asks its question on the role's own card"
     # Her reply is on her card in Contacts (2026-11-04): Copy, then I sent it, never drafted again.
     assert r["juno"]["state"] in ("Replied: your turn", "Overdue") and "I sent it" in r["juno"]["buttons"], r["juno"]
@@ -522,7 +533,9 @@ def test_an_alert_is_a_line_with_one_button_and_a_suggestion_can_be_declined_for
     assert r["cost"] == [], "a free fix says no cost on the card"
     assert r["fixed"]["action"] == "job.dismiss" and r["fixed"]["item"] == "r12-5"
     assert r["suggest"] and " ".join(r["suggest"][0].split()).startswith("Suggestion: The posting asks for Tableau")
-    assert r["checksFix"] == ["Make it again"], "a failed check is a To do card with its fix, while the draft asks its question"
+    # A failed check with a clear fix is made again by Claude by itself: To do offers no fix
+    # (the UX review, 2026-11-05).
+    assert r["checksFix"] == [], "no Make it again on To do"
     assert r["dismissed"]["action"] == "suggest.dismiss" and r["dismissed"]["value"] == {"kind": "near"}
     assert r["gone"] == 0 and any("not be suggested again" in t for t in r["toast"])
     assert r["back"] == 1, "No thanks can be undone"
@@ -1272,7 +1285,9 @@ def test_every_screen_keeps_to_the_simplicity_budgets(run, pages, viewport, sche
             # 2026-10-26) is not one of its actions, as an answer is not, nor its "?" (the
             # maintainer, 2026-10-29: "just explainers or ?"), nor a person's name that opens them (the maintainer, 2026-10-29: "why cant i click
             # his name").
-            others = c["controls"] - c["answers"] - c.get("icons", 0) - c.get("names", 0)
+            # A checklist row's own next step and Done are the row's, as an item's own card's
+            # are (DESIGN.md, checklists): the card's budget is its own row of actions.
+            others = c["controls"] - c["answers"] - c.get("icons", 0) - c.get("names", 0) - c.get("rows", 0)
             if not c["alerts"]:
                 assert others <= BUDGET["card_controls"], (sid, c)
             assert c["filled"] <= 1, (sid, c)
@@ -1326,22 +1341,28 @@ def test_a_busy_week_is_a_few_checklists_not_a_card_each(run, pages):
     # the chip says how many are overdue ("25 late" read as 25 days), and a checklist of people
     # is that many things to do in To do's count.
     assert not any("Not now" in row["buttons"] for g in r["groups"].values() for row in g["rows"]), r["groups"]
-    assert all(g["chip"] == "" or g["chip"].endswith(" overdue") for g in r["groups"].values()), [g["chip"] for g in r["groups"].values()]
+    # Its first chip says how many are overdue, or, with none, how many are done.
+    assert all(g["chip"] == "" or g["chip"].endswith(" overdue") or re.fullmatch(r"\d+ of \d+ done", g["chip"]) for g in r["groups"].values()), [g["chip"] for g in r["groups"].values()]
     reply = r["groups"]["grp:work~reply:now"]
     n = int(re.match(r"Reply to (\d+) people$", reply["title"]).group(1))      # the sample's own, and eight
     assert n >= 8 and len(reply["rows"]) == 5, reply
     assert reply["fold"].startswith("%d more" % (n - 5)) and "Draft all %d" % n in reply["actions"], reply
     # Drafting them all takes each one's time, added up: "Draft all 25" said one draft's minutes.
     assert int(re.match(r"(\d+)", reply["cost"]).group(1)) >= n or reply["cost"].startswith("about"), reply["cost"]
-    assert int(re.match(r"(\d+)", r["sum"]).group(1)) >= len(follow["rows"]) + n, ("a checklist of people counts each person", r["sum"])
+    # A checklist is one card however many people are on it (DESIGN.md, counts: the UX review,
+    # 2026-11-05, counted 25 people as 25 and a calm screen read as an emergency).
+    assert int(re.match(r"(\d+)", r["sum"]).group(1)) < len(follow["rows"]) + n, ("a checklist is one card", r["sum"])
     # Nothing to do is not a To do (the maintainer, 2026-11-04): people at their limit of
     # unanswered messages are left alone, in Contacts, never a card or a row here.
     assert not [k for k in r["groups"] if k.startswith("grp:leave")], r["groups"]
     assert "No reply to 2 messages" not in r["text"] and "answered two messages" not in r["text"]
-    sent = r["groups"]["grp:sent"]
-    assert sent["title"].startswith("Did these notes go?") and len(sent["rows"]) == 2 and "They all went" in sent["actions"]
-    warn = [g for k, g in r["groups"].items() if k.startswith("grp:read_first")]
-    assert len(warn) == 1 and warn[0]["title"].startswith("3 messages to check before you send"), r["groups"]  # what the card is, its reason under it (2026-11-04)
+    # The two "Did your note go?" are among the quick answers, one at a time (the UX review,
+    # 2026-11-05), never a checklist of their own.
+    assert "grp:sent" not in r["groups"] and r["quick"]["title"].endswith("quick answers"), (r["groups"].keys(), r["quick"])
+    # The three to check before they go are rows of the one messages card, each saying so.
+    send = r["groups"]["grp:send"]
+    assert not [k for k in r["groups"] if k.startswith("grp:read_first")], r["groups"]
+    assert send["title"].startswith("Messages to send") and sum("Written before their profile was read" in w for w in send["who"]) == 3, send
     assert "4 follow-ups at employers you turned down not shown." in r["hidden"]
     assert "Nudge" not in r["text"], "a follow-up is called a follow-up"
     assert "Turn on the new reading pace?" not in r["text"], "questions from updates wait in Settings"

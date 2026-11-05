@@ -1124,6 +1124,7 @@
     return h("div", {class: "ask-box", "data-k": "ask:" + key},
       txt(n.about) ? h("blockquote", {class: "ask-about"}, clip(txt(n.about), 400)) : null,
       txt(n.question) ? h("p", {class: "ask-q"}, txt(n.question)) : null,
+      txt(n.note) ? h("p", {class: "small muted ask-note"}, txt(n.note)) : null,
       answerControl(a, key, send));
   }
   // The control for one kind of answer (tools/app_actions.py ANSWER_KINDS): a date picker,
@@ -2911,7 +2912,15 @@
     // No button that goes where the card already is, or where its own first button goes.
     const same = ac.type === "go" && (((resolveSection(ac.to) || {}).section === ctx.section && (!ac.item || txt(ac.item) === txt(ctx.item))) ||
       (ctx.linked && txt(ac.item) === txt(ctx.linked)));
-    if (ctx.bare) fix = null;
+    // A fix Claude makes by itself (the engine's `auto`): said in place of its button, and the
+    // button offered only once it has tried as often as it may, and never on To do.
+    const it = a.auto ? readyItems().find((x) => txt(x.id) === txt(ctx.item)) || messageById(ctx.item) : null;
+    const fs = it ? fixState(it) : null;
+    // In the fix's own words where it has them ("the CV runs to a second page"), never "one
+    // check needs you" over work Claude is doing.
+    const why = it ? lc1(txt(arr(obj(it.fix).reasons)[0]) || txt(plainDates(a.text))).replace(/\.$/, "") + "." : "";
+    const said = fs === "going" ? "Claude is fixing it: " + why : fs === "failed" ? "Claude tried twice and it still fails: " + why : null;
+    if (ctx.bare || fs === "going" || (fs === "failed" && ctx.section === "todo")) fix = null;
     else if (ac.type === "work" && workBusy(txt(ac.id))) fix = chip("On its way", "info");
     else if (ac.type && ac.label && !same) {
       const cid = "cost-" + seg((ctx.where || "") + "-" + a.id);
@@ -2923,7 +2932,7 @@
     }
     return h("div", {class: "alert tone-" + (ALERT_TONE[txt(a.kind)] || "warn"), "data-alert": a.id},
       // Why it matters waits behind a "?": the line and its fix are what the card needs.
-      h("div", {class: "alert-body"}, h("div", {class: "hint-line"}, h("p", {class: "alert-text"}, h("span", {class: "sr-only"}, (ALERT_FIX.has(txt(a.kind)) && !/^Not made yet\b/.test(txt(a.text)) ? "Needs fixing:" : "Note:") + "\u00a0"), plainDates(a.text)),
+      h("div", {class: "alert-body"}, h("div", {class: "hint-line"}, h("p", {class: "alert-text"}, h("span", {class: "sr-only"}, (ALERT_FIX.has(txt(a.kind)) && !/^Not made yet\b/.test(txt(a.text)) && fs !== "going" ? "Needs fixing:" : "Note:") + "\u00a0"), said || plainDates(a.text)),
         a.why ? hintQ("why:" + (ctx.where || "") + ":" + a.id, txt(plainDates(a.why)).replace(/\.$/, ""), "Why: " + clip(txt(plainDates(a.text)), 60)) : null), fix));
   }
   // Three No thanks of one kind in 30 days pause that kind here too, as the engine does.
@@ -3164,7 +3173,26 @@
   function jobLive(r) { const st = jobStatus(r); return st !== "applied" && st !== "dismissed"; }
   function readyLive(a) { const st = readyStatus(a); return st !== "applied" && st !== "not_applying"; }
   function msgLive(m) { return msgStatus(m) === "to_send"; }
-  function alertCounts(a) { const ac = obj(a.action); return !(ac.type === "work" && workBusy(txt(ac.id))); }
+  // A closed posting (set aside by itself) and a referral in flight (said on that person's card)
+  // are notes on their own cards, never things to do (the UX review, 2026-11-05).
+  const NOTE_ALERTS = new Set(["closed", "referral_hold"]);
+  function alertCounts(a) { const ac = obj(a.action); return !NOTE_ALERTS.has(txt(a.kind)) && !(ac.type === "work" && workBusy(txt(ac.id))); }
+  // What reaches To do from a card's alerts: never a note, and never a fix Claude is making by
+  // itself (the engine's `auto`, queued with no tap): only once it has tried as often as it may.
+  function todoAlert(a, item) { return !NOTE_ALERTS.has(txt(a.kind)) && autoFix(a, item) !== "going"; }
+  // Where Claude's own fix of an item stands: a message's (its `fix`, app_model.message_fix), or
+  // a draft's remake where a check failed, queued by the view (tools/app.py self_fixes): "going"
+  // until it ends, "failed" once it has, null for what Claude does not fix by itself.
+  function autoFix(a, item) {
+    const ac = obj(a.action);
+    if (txt(a.kind) === "checks" && ac.type === "work" && txt(ac.kind) === "draft") {
+      const w = workDoc(txt(ac.id));
+      return w && TERMINAL.has(txt(w.status)) ? "failed" : "going";
+    }
+    return a.auto && item ? fixState(item) : null;
+  }
+  // Whoever a referral in flight is with, from its note: the person the job's card names.
+  function holdContact(a) { const ac = obj(a.action); return txt(a.contact) || (ac.type === "go" && txt(ac.to) === "people" ? txt(ac.item) : ""); }
 
   // Every to-do, wherever it lives: {key, kind, band, employer, due, late, tab, counts, node(ctx)}.
   // A person put in the bin, or their employer with them: every To do row about them goes at
@@ -3195,35 +3223,47 @@
     return (cid, co, kind) => !!cid && (ids.has(cid) || (other.has(cid) && kind !== "reply")
       || (!!co && cos.has(txt(co).toLowerCase()) && unwritten(cid)));
   }
-  function todoItems() {
+  // `o.each`: every question a card of its own, as Jobs and Drafts show theirs at their top
+  // (tabTodos); To do asks the small ones on one card.
+  function todoItems(o) {
+    const each = !!(o && o.each);
     const out = [];
     const stopped = stoppedPeople();
     const ivs = interviewItems().filter((i) => !isPast(i.when) && dayDiff(i.when) !== null && dayDiff(i.when) <= 14)
       .sort((a, b) => txt(a.when).localeCompare(txt(b.when)));
     const ivCompanies = new Set(ivs.map((i) => txt(i.company)));
+    // The small yes-or-no and choice questions: one card, one question at a time ("1 of 4"),
+    // never a card each (the UX review, 2026-11-05). Those answered here count as done in it.
+    const quick = [];
+    let quickDone = 0;
     for (const n of needsItems()) {
       // Answered: off To do at once, its Undo in the toast; a refused answer brings it back
       // with what went wrong (2026-11-03: "Yes, I applied" left the card up, saying "Saved").
-      if (effective(n.id)) continue;
+      if (effective(n.id)) { if (quickNeed(n)) quickDone++; continue; }
       // Questions from updates live in Settings, never in To do (the maintainer, 2026-10-26).
       if (needKind(n) === "update") continue;
       if (stopped(txt(obj(n.about).contact) || txt(n.contact), txt(obj(n.about).company))) continue;
       // "Did your note go?" is answered once the note is marked sent in Messages: asking again
       // left a question for something already done (the walk-through, 2026-11-02).
       if (/^q-sent-/.test(txt(n.id)) && sentHere(personMessage(txt(obj(n.about).contact) || txt(n.contact)))) continue;
-      out.push({key: "need:" + n.id, kind: needKind(n), band: "answer", employer: txt(obj(n.about).company) || null, tab: needTab(n), need: n,
-        group: /^q-sent-/.test(txt(n.id)) ? "sent" : null,
-        counts: !effective(n.id), node: (ctx) => (txt(n.kind) === "setup" ? setupNeedCard(n, ctx) : needCard(n, ctx))});
+      const it = {key: "need:" + n.id, kind: needKind(n), band: "answer", employer: txt(obj(n.about).company) || null, tab: needTab(n), need: n,
+        counts: true, node: (ctx) => (txt(n.kind) === "setup" ? setupNeedCard(n, ctx) : needCard(n, ctx))};
+      // One hidden for a week waits with the other hidden cards, a card of its own there.
+      if (!each && quickNeed(n) && !todoHidden(it)) quick.push({id: n.id, kind: it.kind, need: n}); else out.push(it);
     }
     // Connection requests nobody accepted are never a To do card: nothing about them needs
     // the person, and a count of them only discouraged (the maintainer, 2026-10-29). Each
     // still says so on its own contact row.
-    for (const extra of [listenTodo(), waveTodo(), exportTodo(), readingTodo()].concat(refusedTodos())) if (extra) out.push(extra);
+    for (const extra of [listenTodo(), exportTodo(), readingTodo()].concat(refusedTodos())) if (extra) out.push(extra);
     for (const [id, w] of allWork()) {
       if (txt(w.status) !== "needs_you") continue;
-      out.push({key: "work:" + id, kind: WORK_KIND[txt(w.kind)] || "setup", band: "answer", employer: txt(obj(w.args).company) || employerIn(w.title),
-        tab: null, counts: true, node: (ctx) => workTodo(id, w, ctx)});
+      const it = {key: "work:" + id, kind: WORK_KIND[txt(w.kind)] || "setup", band: "answer", employer: txt(obj(w.args).company) || employerIn(w.title),
+        tab: null, counts: true, node: (ctx) => workTodo(id, w, ctx)};
+      if (!each && quickWork(w) && !todoHidden(it)) quick.push({id, kind: it.kind, w}); else out.push(it);
     }
+    // Every message drafted and waiting is one card, "Messages to send (N)" (sendTodo): its
+    // due rows are its rows, never cards of their own.
+    const sendDue = [];
     for (const d of dueItems()) {
       if (PENDING_KINDS.has(txt(d.kind))) continue;   // one card for all of them (withdrawTodo)
       // Someone at their limit of unanswered messages: nothing to do but leave them, so never
@@ -3245,9 +3285,12 @@
       const n = dayDiff(d.due);
       const late = Number(d.overdue_days) > 0 || (n !== null && n < 0);
       if (txt(d.kind) === "hidden") continue;     // said once, under the bands (hiddenLine)
-      out.push({key: "due:" + d.id, kind: dueKind(d), band: n === null ? "later" : n <= 0 ? "now" : n <= 7 ? "week" : "later",
+      const it = {key: "due:" + d.id, kind: dueKind(d), band: n === null ? "later" : n <= 0 ? "now" : n <= 7 ? "week" : "later",
         employer: company || null, due: d.due, late, tab: dueTab(d), contact: dueContact(d), counts: (late || (n !== null && n <= 0)) && !effective(d.id, ["due.done", "due.snooze"]), node: (ctx) => dueRow(d, ctx),
-        d, group: dueGroupKey(d)});
+        d, group: dueGroupKey(d)};
+      // A draft set aside here (in touch another way) leaves the row to stand on its own: a
+      // reply they are owed stays (msgStopped keeps a reply).
+      if (dueDraft(d) && !msgStopped(dueDraft(d))) sendDue.push(it); else out.push(it);
     }
     // Interviews within two weeks are cards of their own, the soonest at the top; what is
     // wrong with one (no prep yet) is said on that card and counted there.
@@ -3264,18 +3307,144 @@
     const sources = [];
     for (const r of jobRows()) if (jobLive(r)) sources.push([r, "application", txt(r.company), "jobs"]);
     for (const a of readyItems()) if (readyLive(a)) sources.push([a, "application", txt(a.company), "drafts"]);
-    for (const m of messageItems()) if (msgLive(m)) sources.push([m, "message", txt(m.employer), "drafts-messages"]);
-    // One card an item, however many things are wrong with it; each still counts.
+    // A referral in flight is said on its person's card where they have one here (personTodos).
+    const holds = new Map();
+    for (const [item] of sources) for (const a of alertsOf(item)) {
+      const cid = txt(a.kind) === "referral_hold" ? holdContact(a) : "";
+      if (cid) { if (!holds.has(cid)) holds.set(cid, []); holds.get(cid).push(Object.assign({}, a, {on: item})); }
+    }
+    // One card an item, however many things are wrong with it; each still counts. A message's
+    // own are said on its row of the messages card.
     for (const [item, kind, employer, home] of sources) {
-      const list = alertsOf(item);
+      const list = alertsOf(item).filter((a) => todoAlert(a, item));
       if (!list.length) continue;
       out.push({key: "al:" + list[0].id, kind, band: "now", employer: employer || null, tab: null, home, item: item.id,
         weight: list.filter(alertCounts).length, counts: list.some(alertCounts), node: (ctx) => alertTodo(list, item, home, ctx),
         alerts: list, it: item, group: "alert~" + txt(list[0].kind) + "~" + home});
     }
+    personTodos(out, holds);
+    const send = sendTodo(sendDue);
+    if (send) out.push(send);
+    if (quick.length) {
+      const cur = quick[0];
+      // Its bin hides the question showing for a week, the next one taking its place; on a
+      // question about someone ("Did your note to Wren go?") it offers that person's choices.
+      out.push({key: "quick", hideKey: (cur.need ? "need:" : "work:") + cur.id, hideTitle: cur.need ? txt(cur.need.title) : workName(cur.w), need: cur.need || null,
+        kind: cur.kind, band: "answer", employer: null, tab: null, counts: true, quick: true, node: (ctx) => quickCard(quick, quickDone, ctx)});
+    }
     // A row hidden for a week from its bin leaves its group, and waits with the other hidden
     // cards at the end of To do (hiddenFold), a card of its own there.
     return groupTodos(out.filter((i) => !todoHidden(i))).concat(out.filter(todoHidden));
+  }
+  // A question a tap or two answers: Yes or No, or a choice of a few, each an answer of its own
+  // (never one that opens a form or starts work). The quick answers card asks them one by one.
+  function quickNeed(n) {
+    if (txt(n.kind) === "setup" || needKind(n) === "update") return false;
+    const ops = arr(n.options);
+    return ops.length >= 2 && ops.length <= 4 && ops.every((op) => txt(op.action) && !op.work && txt(op.input) !== "text" && txt(op.label).length <= 40);
+  }
+  function quickWork(w) { const k = txt(obj(obj(w.needs).answer).kind); return k === "yesno" || k === "choice"; }
+  // One card a person (the UX review, 2026-11-05: someone was on three cards at once): their
+  // follow-up, what they asked for and a job's "ask them before you apply" become one card,
+  // led by what they asked, the referral its grey box and Done for all of it. A referral with
+  // no row about them is no To do at all: its job's card says it.
+  function personTodos(out, holds) {
+    const by = new Map();
+    for (const i of out) {
+      if (!i.d || !i.contact || !isPerson(i.contact)) continue;
+      if (!by.has(i.contact)) by.set(i.contact, []);
+      by.get(i.contact).push(i);
+    }
+    const BAND = {now: 0, week: 1, later: 2};
+    const rank = (i) => (dueAsk(i.d) ? 0 : txt(i.d.kind) === "reply" ? 1 : 2);
+    for (const [cid, list] of by) {
+      const hs = holds.get(cid) || [];
+      if (list.length < 2 && !hs.length) continue;
+      list.sort((a, b) => (BAND[a.band] ?? 3) - (BAND[b.band] ?? 3) || rank(a) - rank(b) || (b.late ? 1 : 0) - (a.late ? 1 : 0) || txt(a.due || "9999").localeCompare(txt(b.due || "9999")));
+      for (const i of list) out.splice(out.indexOf(i), 1);
+      const lead = list[0];
+      const ds = list.map((i) => i.d);
+      out.push(Object.assign({}, lead, {key: "person:" + cid, group: null, ds, late: list.some((i) => i.late), counts: list.some((i) => i.counts),
+        node: (ctx) => dueRow(lead.d, Object.assign({}, ctx, {also: ds.slice(1), holds: hs}))}));
+    }
+  }
+  // The messages drafted and waiting to go, one a person: the engine's one count
+  // (model.to_send, app_model.to_send), less what was sent or set aside on this page before
+  // Claude caught up. Contacts' header ("4 to send") and To do's card both say this number.
+  function sendList(all) {
+    const ids = obj(M().to_send).ids;
+    const src = Array.isArray(ids) ? ids.map(messageById).filter(Boolean) : messageItems();
+    const seen = new Set();
+    const out = [];
+    for (const m of src) {
+      if ((!all && !msgLive(m)) || msgStopped(m)) continue;
+      const k = txt(m.contact) || "msg:" + txt(m.id);
+      if (seen.has(k)) continue;
+      seen.add(k);
+      out.push(m);
+    }
+    return out;
+  }
+  // The drafted messages, the week's first notes and the ones to check first, as one card
+  // (the UX review, 2026-11-05: three cards said one thing): a row a person, each opening
+  // their draft in Contacts, a flagged one saying "Check first", and one button for Contacts.
+  function sendTodo(dueRows) {
+    const left = sendList();
+    if (!left.length) return null;
+    const flagged = left.some((m) => alertsOf(m).some((a) => alertCounts(a) && todoAlert(a, m)));
+    return {key: "send", kind: "message", band: "now", employer: null, tab: "contacts", due: dueRows.map((i) => txt(i.due)).filter(Boolean).sort()[0] || null,
+      late: dueRows.some((i) => i.late), counts: dueRows.some((i) => i.counts) || flagged, node: (ctx) => sendCard(left, dueRows.map((i) => i.d), ctx)};
+  }
+  const SEND_KIND = {first_note: "First note", reply: "Your reply", follow_up: "Your follow-up", thank_you: "Your thank-you", referral_ask: "Your referral ask"};
+  function sendCard(left, ds, ctx) {
+    const where = (ctx && ctx.where) || "";
+    const hid = "send-" + where;
+    // Sent or set aside here: out of the list at once, and counted in the card's own "x of N".
+    const gone = sendList(true).filter((m) => !msgLive(m)).length;
+    const late = ds.filter((d) => Number(d.overdue_days) > 0 || (dayDiff(d.due) !== null && dayDiff(d.due) < 0)).length;
+    const notes = left.filter((m) => txt(m.kind) === "first_note").length;
+    const row = (m) => {
+      const d = ds.find((x) => dueMessage(x) === m) || null;
+      const cid = isPerson(txt(m.contact)) ? txt(m.contact) : "";
+      const p = cid ? personById(cid) : null;
+      const name = whoAt(p ? p.first_name : m.first_name, p ? p.employer : m.employer);
+      const fs = fixState(m);
+      const flag = alertsOf(m).find((a) => todoAlert(a, m));
+      const why = fs === "going" ? "Claude is fixing it: " + lc1(txt(arr(obj(m.fix).reasons)[0])) : flag ? txt(plainDates(flag.text)).replace(/\.$/, "") : d ? cap1(dueWho(d)) : SEND_KIND[txt(m.kind)] || "Your message";
+      const skip = txt(m.kind) === "first_note" ? () => act([{item: m.id, action: "msg.skip", rev: m.rev}], "Set aside: the note to " + txt(m.first_name)) : null;
+      return h("li", {class: "g-row", "data-item": d ? d.id : m.id},
+        h("div", {class: "g-main"}, h("p", {class: "g-name"}, cid ? personName(cid, name, "send:" + m.id) : h("bdi", {}, name),
+          fs === "going" ? [" ", chip("Claude is fixing it", "info")] : flag || fs === "failed" ? [" ", chip("Check first", "warn")] : null),
+          why ? h("p", {class: "muted small"}, why) : null, d ? stateLine(d.id, "send:" + where + ":" + d.id) : null),
+        h("div", {class: "g-acts"}, seeDraftBtn(m, "send:" + where + ":" + m.id, "secondary"),
+          cid ? btn("", () => askRemovePerson(cid, txt(p ? p.first_name : m.first_name), txt(p ? p.employer : m.employer), null, Object.assign({skip, replied: p && canSayReplied(p) ? () => logReply(p) : null}, d ? {later: laterChoices(d), hide: () => hideTodo("due:" + d.id, txt(d.title))} : {})),
+            {kind: "quiet icon-only", small: true, icon: "bin", key: "sendbin:" + where + ":" + m.id, aria: "Not " + name + "?"}) : null));
+    };
+    return card("article", {class: "card todo group-card send-card", "aria-labelledby": hid, "data-item": "grp:send"},
+      h("div", {class: "todo-top"}, kindMark("message"), h("span", {class: "todo-state"}, late ? h("span", {class: "chip tone-warn"}, late + " overdue") : null,
+        h("span", {class: "chip tone-plain", "data-k": "grp-done:" + hid}, gone + " of " + (gone + left.length) + " done"))),
+      h("p", {class: "card-title", id: hid}, "Messages to send (" + left.length + ")"),
+      // The week's first notes against the week's usual number, where there are any.
+      notes ? h("p", {class: "small muted"}, budgetLine(0) || "Copy each one and send it on LinkedIn.") : null,
+      groupRows("send:" + where, left.map(row)),
+      h("div", {class: "card-actions"}, btn("Open Contacts", () => go("contacts", {focus: true, item: left[0].id}), {kind: "primary", small: true, key: "send-open:" + where, aria: "Open Contacts at the people with a message to send"})));
+  }
+  // The quick answers, one at a time: the question in the card's one grey box with the control
+  // its answer needs (answerBox), the next one there the moment it is answered.
+  function quickCard(list, done, ctx) {
+    const where = (ctx && ctx.where) || "";
+    const cur = list[0];
+    const total = list.length + done;
+    const hid = "qa-" + where;
+    const n = cur.need;
+    const box = n ? answerBox({question: txt(n.title), note: txt(n.body), answer: {kind: "choice", choices: arr(n.options).map((op, i) => ({value: String(i), label: txt(op.label)}))}},
+      "qa:" + where + ":" + n.id, (got) => answerNeed(n, arr(n.options)[Number(got.value)]))
+      : answerBox(Object.assign({}, obj(cur.w.needs), {question: txt(obj(cur.w.needs).question) || txt(cur.w.note), note: workName(cur.w)}), "qa:" + where + ":" + cur.id,
+        (got) => answerWork(cur.id, got.value + (got.time ? " at " + got.time : ""), got.words));
+    return card("article", {class: "card todo quick-card", "aria-labelledby": hid, "data-item": "quick", "data-q": cur.id},
+      h("div", {class: "todo-top"}, kindMark(cur.kind), h("span", {class: "todo-state"}, h("span", {class: "chip tone-plain", "data-k": "qa-at:" + where}, (done + 1) + " of " + total))),
+      h("p", {class: "card-title", id: hid}, nWord(total, "quick answer", "quick answers")),
+      box, n ? stateLine(n.id, "qa:" + where + ":" + n.id) : null);
   }
   // Which like items a due row is grouped with, two or more in a band making one checklist
   // card (the maintainer, 2026-10-30: "a lot of them seem similar and a lot seem unique ...
@@ -3324,7 +3493,7 @@
         // One card is one thing to do, however many rows it holds: it says its own "2 of 8
         // done" (DESIGN.md, counts; the UX review, 2026-11-05).
         counts: counted.length > 0, n: 1, weight: alerts ? (counted.length ? 1 : 0) : counted.reduce((n, i) => n + weightOf(i), 0),
-        rows: list, node: (ctx) => (alerts ? alertGroup(list, ctx) : g === "sent" ? sentGroup(list, ctx) : dueGroup(list, ctx, g))});
+        rows: list, node: (ctx) => (alerts ? alertGroup(list, ctx) : dueGroup(list, ctx, g))});
     }
     return keep;
   }
@@ -3449,7 +3618,10 @@
   // A dated row put off to a day, in the engine (due.snooze): it leaves To do at once and
   // comes back that day, on every device.
   function laterChoices(d) {
-    const go = (n, words) => act([{item: d.id, action: "due.snooze", value: {until: addDays(todayIso(), n)}, rev: d.rev}], words + ": " + txt(d.title));
+    // A person's card puts off every row it holds (personTodos).
+    const ds = Array.isArray(d) ? d : [d];
+    d = ds[0];
+    const go = (n, words) => act(ds.map((x) => ({item: x.id, action: "due.snooze", value: {until: addDays(todayIso(), n)}, rev: x.rev})), words + ": " + txt(d.title));
     return [{label: "Tomorrow", key: "later-1", run: () => go(1, "Tomorrow")}, {label: "Next week", key: "later-7", run: () => go(7, "Next week")}];
   }
   function withHide(i, node) {
@@ -3461,11 +3633,12 @@
     const title = (node.querySelector(".card-title, h3") || {}).textContent || "this";
     const cid = node.classList.contains("group-card") ? "" : txt(i.contact) || txt(obj(obj(i.need).about).contact);
     const p = cid ? personById(cid) : null;
-    const hide = () => hideTodo(i.key, title);
+    const what = i.hideTitle || title;
+    const hide = () => hideTodo(i.hideKey || i.key, what);
     const x = h("button", {type: "button", class: "btn quiet icon-only small hide-x", "data-k": "hide:" + i.key, "data-bin": "1",
-      "aria-label": p ? "Not " + txt(p.first_name) + "? Or later" : i.d ? "Later: " + title : "Hide for a week: " + title, title: p ? "Not " + txt(p.first_name) + "?" : i.d ? "Later" : "Hide for a week",
+      "aria-label": p ? "Not " + txt(p.first_name) + "? Or later" : i.d ? "Later: " + what : "Hide for a week: " + what, title: p ? "Not " + txt(p.first_name) + "?" : i.d ? "Later" : "Hide for a week",
       onclick: () => {
-        const later = i.d ? laterChoices(i.d) : null;
+        const later = i.d ? laterChoices(i.ds || i.d) : null;
         if (p) return askRemovePerson(txt(p.id), txt(p.first_name), txt(p.employer), p.rev, later ? {hide, later} : {hide});
         if (later) return sheet({title: "Later?", intro: "It comes back on To do that day.", choices: later});
         return hide();
@@ -3523,7 +3696,12 @@
     }
     const paused = pausedUntil();
     if (paused && !settingUp) { sum = "You are taking a break until " + fmtDay(paused) + "."; small = btn("Start again", () => act([{item: txt(obj(M().search).id) || "search-settings", action: "brief.resume", value: null, rev: txt(obj(M().search).rev) || null}], "Your search carries on"), {kind: "link", key: "resume-top"}); }
-    const wrap = h("section", {class: "sec", "aria-labelledby": "h-todo"}, screenHead("todo", "To do", sum, small));
+    // One line (the UX review, 2026-11-05): what is next joins the summary, and a way to
+    // somewhere (the new jobs, Start again) is a soft pill beside it, as on Contacts.
+    let pill = null;
+    if (small && small.tagName === "BUTTON") { small.className = "btn secondary small"; pill = h("div", {class: "head-tools"}, small); small = null; }
+    if (small) { sum = [sum, " ", small]; small = null; }
+    const wrap = h("section", {class: "sec", "aria-labelledby": "h-todo"}, screenHead("todo", "To do", sum, null, null, pill));
     if (setup) put(wrap, setup);
     for (const f of all.filter((i) => i.band === "first")) put(wrap, withHide(f, f.node({where: "todo", section: "todo"})));
     // The brief has a page of its own now; To do is only what to do.
@@ -3544,21 +3722,26 @@
     let restN = 0;
     let soonCount = 0;
     const order = settingUp ? BANDS : TODAY_FIRST.map((b) => BANDS.find(([k]) => k === b));
+    // The quick answers are always among the first five: what comes before them leaves it room.
+    const quick = settingUp ? null : all.find((i) => i.quick) || null;
     for (const [band, label] of order) {
-      const items = all.filter((i) => i.band === band);
-      if (!items.length || settingUp && band !== "answer") continue;
+      const items = all.filter((i) => i.band === band && i !== quick);
+      const quickHere = !!quick && band === quick.band;
+      if ((!items.length && !quickHere) || settingUp && band !== "answer") continue;
       const today = settingUp || band === "answer" || band === "now";
       const box = h("section", {class: "band", "aria-labelledby": "band-" + band}, h("h3", {class: "group", id: "band-" + band}, label));
       const restBox = h("section", {class: "band", "aria-labelledby": "band-rest-" + band}, h("h3", {class: "group", id: "band-rest-" + band}, label));
       let here = 0;
       let there = 0;
+      if (quickHere) { put(box, h("div", {class: "todo-group"}, h("div", {class: "stack"}, withHide(quick, quick.node({where: "todo", section: "todo"}))))); shown++; here++; }
+      const room = () => TODO_FIRST - (quick && !quickHere && band !== "answer" && order.findIndex(([k]) => k === band) < order.findIndex(([k]) => k === quick.band) ? 1 : 0);
       for (const g of bandGroups(items)) {
         // An employer's name heads its items only where it has two or more in the band; one
         // item already names its employer.
         const head = g.list.length > 1 && g.key.startsWith("e:") ? h("h4", {class: "todo-employer"}, h("bdi", {}, g.title)) : null;
         const node = h("div", {class: "todo-group" + (head ? " by-employer" : "")}, head, h("div", {class: "stack"}, g.list.map((i) => withHide(i, i.node({where: "todo", section: "todo"})))));
         const setupOnly = !settingUp && g.list.every((i) => i.kind === "setup");
-        if (today && (settingUp || shown < TODO_FIRST) && !setupOnly) { put(box, node); shown += g.list.length; here++; } else { put(restBox, node); there += g.list.length; }
+        if (today && (settingUp || shown < room()) && !setupOnly) { put(box, node); shown += g.list.length; here++; } else { put(restBox, node); there += g.list.length; }
       }
       if (here) put(wrap, box);
       if (there && today) { put(rest, restBox); restN += there; }
@@ -3592,7 +3775,7 @@
   // The to-dos that belong to one section, at its top: the same items, done in either place.
   function tabTodos(tab, onCards) {
     const covered = onCards || new Set();
-    const items = todoItems().filter((i) => i.tab === tab && !covered.has(i.key));
+    const items = todoItems({each: true}).filter((i) => i.tab === tab && !covered.has(i.key));
     if (!items.length) return null;
     const order = {answer: 0, now: 1, week: 2, later: 3};
     items.sort((a, b) => (order[a.band] - order[b.band]) || itemSort(a, b));
@@ -3604,20 +3787,55 @@
     ctx = ctx || {};
     const hid = "soon-" + (ctx.where || "") + "-" + seg(iv.id);
     const has = !!obj(iv.prep).updated;
-    const w = workDoc("prep~" + seg(iv.id));
-    const busy = w && ACTIVE.has(w.status);
     const list = alertsOf(iv);
+    const k = (ctx.where || "") + ":" + iv.id;
+    const acts = ivActs(iv, k, {calKey: "soon-cal:" + k});
     return card("article", {class: "card todo soon" + edgeOf(list), "aria-labelledby": hid, "data-item": "soon:" + iv.id},
-      h("div", {class: "todo-top"}, kindMark("interview"), stateWord(relWhen(iv.when), dayDiff(iv.when) <= 1 ? "warn" : null)),
+      // Where it is in Coming up, in its top line as on an alert's card: More keeps to what is rare.
+      h("div", {class: "todo-top"}, kindMark("interview"), stateWord(relWhen(iv.when), dayDiff(iv.when) <= 1 ? "warn" : null),
+        ctx.where === "todo" ? h("span", {class: "todo-open"}, tabLink("interviews", iv.id)) : null, acts.bin),
       h("p", {class: "card-title", id: hid}, cap1(txt(iv.next_stage) || "Interview") + " with ", h("bdi", {}, txt(iv.company))),
       h("p", {class: "meta"}, [fmtWhen(iv.when), has ? "Prep ready" : "No prep yet"].filter(Boolean).join(" · ")),
       list.length ? alertLine(list[0], {where: "soon", section: "todo", item: iv.id, bare: true}) : null,
-      h("div", {class: "card-actions"},
-        busy ? btn("See its progress", openWork, {small: true, key: "soonwork:" + iv.id}) :
-          has ? btn("Read your prep", () => openDetail("interview", iv.id), {kind: "primary", small: true, key: "soonmock:" + iv.id, aria: "Read your prep for " + txt(iv.company) + " (from To do)"}) :
-            btn("Prepare me", () => askPrep(iv), {kind: "primary", small: true, key: "soonprep:" + iv.id, aria: "Prepare me for " + txt(iv.company) + " (from To do)"}),
-        calButton(iv, "soon-cal:" + (ctx.where || "") + ":" + iv.id),
-        tabLink("interviews", iv.id)));
+      // The same actions as its card in Coming up (ivActs), and its bin the same choices.
+      h("div", {class: "card-actions"}, acts.main, more("soon:" + k, txt(iv.company), [h("div", {class: "more-acts"}, acts.more), acts.tweak])));
+  }
+  // An interview's actions, defined once for every card that shows it (its card in Coming up,
+  // its card in To do), with the same names everywhere (the UX review, 2026-11-05: To do
+  // offered less than Coming up for the same interview). `main`: the next step (I heard back,
+  // Choose the day, See its progress, Read your prep, Prepare me) and Add to calendar; `more`:
+  // Practise with Claude (on the prep's own page too), Update my prep and a new day or time;
+  // `bin`: they said no, I withdrew, it was moved.
+  function ivActs(iv, k, o) {
+    o = o || {};
+    const prep = obj(iv.prep);
+    const w = workDoc("prep~" + seg(iv.id));
+    const busy = w && ACTIVE.has(w.status);
+    const has = !!prep.updated;
+    const stale = has && !!prep.stale;
+    const gone = isPast(iv.when);
+    const offer = ivOffer(iv);
+    const offered = !gone && !offer ? arr(iv.offered) : [];
+    const what = lc1(txt(iv.next_stage) || "interview");
+    const read = (kind) => btn("Read your prep", () => openDetail("interview", iv.id), {kind, small: true, key: "read:" + k, aria: "Read your prep for your " + what + " with " + txt(iv.company)});
+    const prepBtn = (kind) => btn(has ? "Update my prep" : "Prepare me", () => askPrep(iv), {kind, small: true, key: "prep:" + k, aria: (has ? "Update my prep for " : "Prepare me for ") + txt(iv.company)});
+    const bin = IV_OVER[txt(iv.status)] ? null : btn("", () => askEndApplication(iv, "the " + what + " with " + txt(iv.company), gone ? null : () => askMoved(iv)),
+      {kind: "quiet icon-only", small: true, icon: "bin", key: "ivbin:" + k, aria: "Not going ahead: " + txt(iv.company)});
+    if (bin) bin.setAttribute("data-bin", "1");
+    if (gone) {
+      return {main: [btn("I heard back", () => heardBack(ivApplication(iv)), {kind: "primary", small: true, key: "ivheard:" + k, aria: "I heard back from " + txt(iv.company)}),
+        has ? read("quiet") : null], more: [], bin};
+    }
+    const main = [];
+    if (offered.length) main.push(btn("Choose the day", () => chooseDay(iv), {kind: "primary", small: true, key: "ivday:" + k, aria: "Choose the day: " + txt(iv.company)}));
+    main.push(busy ? btn("See its progress", openWork, {small: true, key: "ivwork:" + k}) : has && !stale ? read(offered.length ? "secondary" : "primary") : prepBtn(offered.length || (has && !stale) ? "secondary" : "primary"));
+    main.push(calButton(iv, o.calKey || "ivcal:" + k));
+    const moreActs = [!busy && has && !offer && !offered.length ? btn("Practise with Claude", () => startMock(iv), {kind: "secondary", small: true, key: "mock:" + k, aria: "Practise with Claude for " + txt(iv.company)}) : null,
+      has && !busy ? prepBtn("secondary") : null,
+      offered.length || offer ? null : btn(dayOf(iv.when) && !timeOf(iv.when) ? "Add the time" : "New day", () => askMoved(iv), {kind: "secondary", small: true, key: "ivmoved:" + k, aria: "A new day or time: " + txt(iv.company)})];
+    return {main: main.filter(Boolean).slice(0, 2), more: moreActs.filter(Boolean), bin,
+      // Its prep changed in words, under More, where the prep is.
+      tweak: has && !busy ? tweakSlot("prep", iv, "Edit the prep") : null};
   }
   // An interview into the person's calendar, in words, wherever the interview is: a small
   // calendar icon on Coming up's rows was all there was, and people missed it (2026-11-02).
@@ -3632,19 +3850,31 @@
 
   // A question never steers its answer: every option has the same weight, and the one chosen
   // can be changed or undone until Claude has done it.
+  // One way to answer a question, wherever it is asked (its card, the quick answers): a line of
+  // words in a sheet, work started, or the answer sent; "It went" offers another day in its
+  // toast, as it was logged on the day it was due (journeys audit 14).
+  function answerNeed(n, op) {
+    op = obj(op);
+    if (txt(op.input) === "text") {
+      sheet({title: txt(n.title), intro: txt(n.body) || null, fields: [{id: "words", type: "text", long: true, label: txt(op.label), required: true, max: 500}], submit: "Save",
+        onSubmit: (v) => { act([{item: n.id, action: txt(op.action), value: v.words, rev: n.rev}], "Answered: " + txt(n.title)); }});
+      return;
+    }
+    if (op.work) { requestWork([Object.assign({id: txt(obj(op.work).kind) + "~" + seg(n.id)}, obj(op.work))]); return; }
+    const value = op.value === undefined ? (/\.answer$/.test(txt(op.action)) ? txt(op.label) : null) : op.value;
+    const another = txt(op.action) === "msg.sent" ? {seeLabel: "Another day?", see: () => {
+      const last = effective(n.id, ["msg.sent"]);
+      sheet({title: "When did it go?", intro: txt(n.title).replace(/^Did your note to /, "Your note to ").replace(/ go\?$/, "."), submit: "Save",
+        fields: [{id: "on", type: "date", label: "The day", required: true, value: txt(obj(op.value).on) || todayIso()}],
+        onSubmit: (v) => { if (last) undo([last.id]); act([{item: n.id, action: "msg.sent", value: Object.assign({}, obj(op.value), {on: v.on || todayIso()}), rev: n.rev}], "It went on " + fmtDay(v.on || todayIso()) + ": " + txt(n.title)); }});
+    }} : undefined;
+    act([{item: txt(op.item) || n.id, action: txt(op.action), value, rev: op.item ? revOf(txt(op.item)) || n.rev : n.rev}], "Answered: " + txt(op.label), another);
+  }
   function needCard(n, ctx) {
     ctx = ctx || {};
     const chosen = effective(n.id);
     const hid = "need-" + (ctx.where || "x") + "-" + seg(n.id);
-    const answer = (op) => {
-      if (txt(op.input) === "text") {
-        sheet({title: txt(n.title), intro: txt(n.body) || null, fields: [{id: "words", type: "text", long: true, label: txt(op.label), required: true, max: 500}], submit: "Save",
-          onSubmit: (v) => { act([{item: n.id, action: txt(op.action), value: v.words, rev: n.rev}], "Answered: " + txt(n.title)); }});
-        return;
-      }
-      if (op.work) { requestWork([Object.assign({id: txt(obj(op.work).kind) + "~" + seg(n.id)}, obj(op.work))]); return; }
-    act([{item: txt(op.item) || n.id, action: txt(op.action), value: op.value === undefined ? (/\.answer$/.test(txt(op.action)) ? txt(op.label) : null) : op.value, rev: op.item ? revOf(txt(op.item)) || n.rev : n.rev}], "Answered: " + txt(op.label));
-    };
+    const answer = (op) => answerNeed(n, op);
     const hints = arr(n.options).filter((op) => txt(op.hint)).map((op) => h("li", {}, h("strong", {}, txt(op.label)), ": " + txt(op.hint)));
     return card("article", {class: "card todo need kind-" + seg(n.kind) + (chosen ? " is-answered" : ""), "aria-labelledby": hid, "data-item": n.id, "data-k": "card:" + (ctx.where || "") + ":" + n.id},
       h("div", {class: "todo-top"}, kindMark(needKind(n)), ctx.where === "todo" && needTab(n) ? h("span", {class: "todo-open"}, tabLink(needTab(n), needItem(n))) : null),
@@ -3769,8 +3999,12 @@
         h("div", {class: "g-acts"}, busy(d) ? btn("See it", openWork, {small: true, kind: "quiet", key: "fgsee:" + where + ":" + d.id}) :
           draft ? seeDraftBtn(draft, "fgdraft:" + where + ":" + d.id, "secondary") :
           btn(words.row, () => askDue(d), {small: true, key: "fgdo:" + where + ":" + d.id, aria: words.row + ": " + title}),
-          // Its bin: the person's choices, and hiding this one row for a week.
-          cid && !marked ? btn("", () => askRemovePerson(cid, name.replace(/ at .*$/, ""), employerIn(title) || "", null, {hide: () => hideTodo("due:" + d.id, title), later: laterChoices(d)}),
+          // Done beside it (DESIGN.md, checklists: the row's own next step and Done): a
+          // follow-up sent some other way was only ever put off, never finished, from here.
+          obj(d.done).action && !marked && !busy(d) ? btn("Done", () => act([{item: d.id, action: txt(d.done.action), value: {on: todayIso()}, rev: d.rev}], "Done: " + title),
+            {small: true, key: "fgdone:" + where + ":" + d.id, aria: "Done: " + title}) : null,
+          // Its bin: They replied, the person's choices, and putting this row off.
+          cid && !marked ? btn("", () => { const p = personById(cid); askRemovePerson(cid, name.replace(/ at .*$/, ""), employerIn(title) || "", null, {hide: () => hideTodo("due:" + d.id, title), later: laterChoices(d), replied: p && canSayReplied(p) ? () => logReply(p) : null}); },
             {kind: "quiet icon-only", small: true, icon: "bin", key: "fgbin:" + where + ":" + d.id, aria: "Not " + name + "? Or later"}) : null));
     };
     // Drafted messages: the card's one filled button opens Contacts, where the people with a
@@ -3800,42 +4034,6 @@
     return [h("ul", {class: "plain g-rows"}, cut ? rows.slice(0, GROUP_FIRST) : rows),
       cut ? h("p", {class: "fold"}, h("span", {}, cut + " more: "),
         btn("Show them", () => { openState.set("grp:" + key, true); scheduleRender(); }, {kind: "link", key: "grpmore:" + key})) : null];
-  }
-  // "Did your note go?" asked of several people: one checklist.
-  function sentGroup(list, ctx) {
-    const where = (ctx && ctx.where) || "";
-    const ns = list.map((i) => i.need);
-    const hid = "sg-" + where;
-    const yes = (n) => obj(arr(n.options)[0]);
-    const not = (n) => obj(arr(n.options)[1]);
-    // "It went" logs the day it was due, and the toast offers another day: it was logged as
-    // sent today, and the next follow-up counted from the wrong day (journeys audit 14).
-    const answer = (n, op, word) => act([{item: n.id, action: txt(op.action), value: op.value === undefined ? (/\.answer$/.test(txt(op.action)) ? txt(op.label) : null) : op.value, rev: n.rev}],
-      word + ": " + txt(n.title), txt(op.action) === "msg.sent" ? {seeLabel: "Another day?", see: () => {
-        const last = effective(n.id, ["msg.sent"]);
-        sheet({title: "When did it go?", intro: txt(n.title).replace(/^Did your note to /, "Your note to ").replace(/ go\?$/, "."), submit: "Save",
-          fields: [{id: "on", type: "date", label: "The day", required: true, value: txt(obj(op.value).on) || todayIso()}],
-          onSubmit: (v) => { if (last) undo([last.id]); act([{item: n.id, action: "msg.sent", value: Object.assign({}, obj(op.value), {on: v.on || todayIso()}), rev: n.rev}], "It went on " + fmtDay(v.on || todayIso()) + ": " + txt(n.title)); }});
-      }} : undefined);
-    const left = ns.filter((n) => !effective(n.id));
-    const row = (n) => {
-      const who = txt(n.title).replace(/^Did your note to /, "").replace(/ go\?$/, "");
-      const co = txt(obj(n.about).company);
-      const cid = txt(obj(n.about).contact) || txt(n.contact);
-      const ch = effective(n.id);
-      return h("li", {class: "g-row" + (ch ? " is-marked" : ""), "data-item": n.id},
-        h("div", {class: "g-main"}, h("p", {class: "g-name"}, personName(cid, who, "sg:" + n.id), co ? h("span", {class: "muted"}, " at ", h("bdi", {}, co)) : null), stateLine(n.id, "need:" + where + ":" + n.id)),
-        h("div", {class: "g-acts", role: "group", "aria-label": "Did your note to " + who + " go?"},
-          btn("It went", () => answer(n, yes(n), "It went"), {kind: "answer", small: true, pressed: ch ? ch.doc.action === yes(n).action : false, key: "sgy:" + where + ":" + n.id, aria: "It went: " + who}),
-          not(n).action ? btn("Not yet", () => answer(n, not(n), "Not yet"), {kind: "answer", small: true, pressed: ch ? ch.doc.action === not(n).action : false, key: "sgn:" + where + ":" + n.id, aria: "Not yet: " + who}) : null,
-          cid ? btn("", () => askRemovePerson(cid, who, co, null), {kind: "quiet icon-only", small: true, icon: "bin", key: "sgbin:" + where + ":" + n.id, aria: "Not " + who + "?"}) : null));
-    };
-    return card("article", {class: "card todo group-card", "aria-labelledby": hid, "data-item": "grp:sent"},
-      h("div", {class: "todo-top"}, kindMark("message")),
-      h("p", {class: "card-title", id: hid}, "Did these notes go?", hintQ("sentwhy:" + where, "LinkedIn does not tell the app when a note goes from its own pages, so it asks", "Why it asks")),
-      groupRows("sg:" + where, ns.map(row)),
-      left.length > 1 ? h("div", {class: "card-actions"}, btn("They all went", () => act(left.map((n) => ({item: n.id, action: txt(yes(n).action), value: yes(n).value, rev: n.rev})), "Marked " + left.length + " notes as sent"),
-        {small: true, key: "sg-all:" + where})) : null);
   }
   // The same warning on several drafts: one line, who it is about, and where to fix it.
   function alertGroup(list, ctx) {
@@ -4122,8 +4320,15 @@
     // so the corner says only that it is overdue.
     const pw = dueWhen(d);
     const chipWords = late && pw ? "Overdue" : when;
-    const doneBtn = done.action && !busy ? btn(txt(done.label) || "Done", () => act([{item: d.id, action: txt(done.action), value: {on: todayIso()}, rev: d.rev}], "Done: " + txt(d.title)),
+    // A person's card holds every row about them (personTodos): its Done finishes all of them.
+    const rows = [d].concat(arr(ctx.also)).filter((x) => obj(x.done).action);
+    const doneBtn = done.action && !busy ? btn(txt(done.label) || "Done", () => act(rows.map((x) => ({item: x.id, action: txt(obj(x.done).action), value: {on: todayIso()}, rev: x.rev})), "Done: " + txt(d.title)),
       {kind: hasWork ? "secondary" : "primary", small: true, pressed: marked, key: "duedone:" + (ctx.where || "") + ":" + d.id, aria: (txt(done.label) || "Done") + ": " + txt(d.title)}) : null;
+    // Waiting on them: They replied, as on their card in Contacts (one set of actions a person).
+    const who = isPerson(dueContact(d)) ? personById(dueContact(d)) : null;
+    const replied = who && !busy && !draft && canSayReplied(who) ? theyRepliedBtn(who, "duereplied:" + (ctx.where || "") + ":" + d.id, () => logReply(who)) : null;
+    // A referral in flight at an employer they are on: the one grey box, never a card of its own.
+    const hold = arr(ctx.holds)[0] || null;
     // "Not today" and "Next week" under More went: the bin hides a card for a week, one way to
     // put a thing off (the walk-through, 2026-11-03).
     // Its message drafted: the row says so in its state pill, and its one button opens the draft
@@ -4134,13 +4339,15 @@
       h("div", {class: "todo-top"}, kindMark(dueKind(d)), draft ? h("span", {class: "todo-state"}, chip("Draft ready", "ok"), dateEl) : dateEl),
       h("p", {class: "card-title", id: hid}, title),
       dueWho(d) ? h("p", {class: "muted small due-context"}, cap1(dueWho(d))) : null,
+      hold ? h("div", {class: "ask-box hold-box", "data-k": "hold:" + (ctx.where || "") + ":" + d.id},
+        h("p", {class: "ask-q"}, plainDates(hold.text), hold.why ? hintQ("holdwhy:" + (ctx.where || "") + ":" + d.id, txt(plainDates(hold.why)).replace(/\.$/, ""), "Why: " + clip(txt(plainDates(hold.text)), 60)) : null)) : null,
       h("div", {class: "card-actions"},
         txt(d.sub) === "choose" && interviewItems().find((i) => i.id === txt(d.item)) ? btn("Choose the day", () => chooseDay(interviewItems().find((i) => i.id === txt(d.item))), {kind: "primary", small: true, key: "dueday:" + (ctx.where || "") + ":" + d.id}) :
         busy ? btn("See its progress", openWork, {small: true, key: "duesee:" + (ctx.where || "") + ":" + d.id}) :
           draft ? seeDraftBtn(draft, "duedraft:" + (ctx.where || "") + ":" + d.id) :
           asked && asked.ask.doc ? askBtn(asked.p, asked.ask, "dueask:" + (ctx.where || "") + ":" + d.id) :
           hasWork ? btn(dueLabel(d, kind), () => askDue(d), {kind: "primary", small: true, key: "duework:" + (ctx.where || "") + ":" + d.id, aria: dueLabel(d, kind) + ": " + txt(d.title), wakes: kind}) : null,
-        doneBtn, ctx.where === "todo" ? tabLink(dueTab(d), dueTab(d) === "contacts" ? (dueContact(d) || null) : (txt(d.item) || null)) : null,
+        doneBtn, replied, ctx.where === "todo" && !replied ? tabLink(dueTab(d), dueTab(d) === "contacts" ? (dueContact(d) || null) : (txt(d.item) || null)) : null,
         asked && asked.ask.doc && hasWork ? more("due:" + (ctx.where || "") + ":" + d.id, title, [h("div", {class: "more-acts"},
           btn(dueLabel(d, kind), () => askDue(d), {kind: "quiet", small: true, key: "duework:" + (ctx.where || "") + ":" + d.id, aria: dueLabel(d, kind) + ": " + txt(d.title)}))]) : null),
       noteFor("duework:" + d.id), stateLine(d.id, "due:" + (ctx.where || "") + ":" + d.id));
@@ -4256,7 +4463,9 @@
     return card("article", {class: "card todo", "aria-labelledby": hid, "data-item": "al:" + list[0].id},
       h("div", {class: "todo-top"}, kindMark(home === "interviews" ? "interview" : home === "drafts-messages" ? "message" : "application"), h("span", {class: "todo-open"}, tabLink(home, item.id))),
       h("p", {class: "card-title", id: hid}, title),
-      list.map((a) => alertLine(a, {where: ctx.where, section: ctx.section, item: item.id})));
+      // What Claude tried to fix by itself and could not is said, never a fix button here: its
+      // own card (Drafts, Contacts) offers it again.
+      list.map((a) => alertLine(a, {where: ctx.where, section: ctx.section, item: item.id, bare: !!autoFix(a, item)})));
   }
   // ------------------------------------------------------------------ Brief
   // The page's front: what matters today at a glance, in panels that fit one laptop screen
@@ -5402,7 +5611,8 @@
     // Each choice its own button, done at once: a list to pick from and then "Done" took two
     // taps to put one thing away (the walk-through, 2026-11-03).
     sheet({title: "Not " + who + "?", intro: "Nothing is sent either way. You can change your mind in Contacts.",
-      choices: [extra.skip ? {label: "Not now: set this note aside", key: "skip", run: () => extra.skip()} : null,
+      choices: [extra.replied ? {label: "They replied", key: "replied", run: () => { setTimeout(extra.replied, 0); }} : null,
+        extra.skip ? {label: "Not now: set this note aside", key: "skip", run: () => extra.skip()} : null,
         // A dated row is put off in the engine itself, to a day: Tomorrow and Next week first,
         // never hidden on this device alone (the UX review, 2026-11-05).
         ...(extra.later ? extra.later : [extra.hide ? {label: "Hide this for a week", key: "week", run: () => extra.hide()} : null]),
@@ -6068,7 +6278,8 @@
     const g = (p) => (p.__msg ? "now" : gs.get(p) || personGroup(p));
     // One number each, counted from the engine's own answer for each person, so the summary,
     // its filters and To do agree (2026-11-03: 311 follow-ups here, 24 in To do).
-    const drafted = items.filter((p) => p.__msg || personDraft(p));
+    // What is written to send: the engine's one count, To do's "Messages to send" the same.
+    const drafted = sendList();
     const need = people.filter((p) => g(p) === "now").length;
     // One short line of what matters (the maintainer, 2026-11-04: the header was "quite
     // cluttered"): what is written to send, and who needs you. The follow-ups, the replies
@@ -6286,6 +6497,17 @@
       noteFor("rbgo:" + cid));
   }
   function callPast(p) { const d = txt(obj(p.call).day || obj(p.call).on); return !!d && dayDiff(d) !== null && dayDiff(d) < 0; }
+  // Written to and waiting on them: "They replied" is theirs to say, wherever their card is
+  // (Contacts opens the box under them; To do the same paste in a sheet, logReply). One test,
+  // one name, so the two screens never offer different things (the UX review, 2026-11-05).
+  function canSayReplied(p) {
+    const st = txt(p.status);
+    const wrote = typeof p.wrote === "boolean" ? p.wrote : st !== "not_contacted";
+    return !personGotHere(p) && !personClosedHere(p) && (personSentHere(p) || ["waiting", "talking", "follow", "leave"].includes(personGroup(p))) && wrote && st !== "replied_needs_response";
+  }
+  function theyRepliedBtn(p, key, open, kind) {
+    return btn("They replied", open, {kind: kind || "secondary", small: true, key, aria: "They replied: paste what " + txt(p.first_name) + " sent"});
+  }
   // The engine's one button for a person (p.owed), as a button: it does what the line above it
   // says, and only that (2026-11-03: "Draft the follow-up" under "Send the referral ask").
   // `reply`: what drafting a reply does here (on a card, the box under the person).
@@ -6425,11 +6647,11 @@
     const callDay = txt(call.day || call.on);
     // Waiting on them, the one thing likely to happen next is the card's main button: "They
     // replied", which opens the box under them (the maintainer, 2026-11-04).
-    const replyOut = !got && !closedHere && !going && !box && (sent || ["waiting", "talking", "follow", "leave"].includes(g)) && (typeof p.wrote === "boolean" ? p.wrote : st !== "not_contacted") && st !== "replied_needs_response";
+    const replyOut = !going && !box && canSayReplied(p);
     // A card's actions are one row of pills: the next step filled, the rest soft (2026-11-04).
     // With a message on the card, Copy and I sent it are its row, and They replied (they wrote
     // again before it went) waits under More.
-    const theyReplied = replyOut ? btn("They replied", replyHere, {kind: owed || d ? "secondary" : "primary", small: true, key: "plog:" + p.id, aria: "They replied: paste what " + name + " sent"}) : null;
+    const theyReplied = replyOut ? theyRepliedBtn(p, "plog:" + p.id, replyHere, owed || d ? "secondary" : "primary") : null;
     // Let it go: one of the trash's answers for someone who has not written back, never a row of
     // buttons of its own (2026-11-03: "Let it go" changed nothing that could be seen).
     const letGo = ["waiting", "leave"].includes(g) && !sent ? () => act([{item: p.id, action: "person.status", value: {status: "gone_cold", why: "no reply, let go on the page"}, rev: p.rev}], "Let go: " + name) : null;
@@ -6806,6 +7028,7 @@
       const rel = relDay(next.when);
       sum = plural(ahead.length, "interview", "interviews") + " coming up" + (rel ? ", the next " + rel : "") + ".";
       const unprepped = ahead.filter((i) => !obj(i.prep).updated || obj(i.prep).stale).length;
+      // Joined to the summary's one line (the UX review, 2026-11-05).
       small = unprepped ? plural(unprepped, "interview has", "interviews have") + " no prep yet." : "Your prep is ready for each one.";
     }
     // Two views, so neither buries the other (the maintainer, 2026-11-02: "if you have loads
@@ -6819,8 +7042,12 @@
       sum = plural(up.length, "thing", "things") + " booked or due, the next " + (dayDiff(first.day) === 0 ? "today" : dayWords(first.day)) + ".";
     } else if (!next) sum = "Nothing booked.";
     const none = !items.length && !up.length;
-    const tools = none ? null : h("div", {class: "head-tools"}, btn("Add something", () => askAddSomething(), {small: true, key: "up-add"}));
-    const wrap = h("section", {class: "sec", "aria-labelledby": "h-interviews" + (where ? "-" + where : "")}, screenHead("interviews", "Coming up", sum, small, where, tools));
+    // One line and its tools, as on Contacts: what Claude is doing is the header's work pill and
+    // each card's own line, never a line here; the interviews to hear back from a soft pill.
+    const heard = items.filter((i) => past(i) && !ivEnd(i) && (daysSince(i.when) === null || daysSince(i.when) <= 14)).length;
+    const tools = none ? null : h("div", {class: "head-tools"}, btn("Add something", () => askAddSomething(), {small: true, key: "up-add"}),
+      heard && up.length && items.length ? btn(plural(heard, "to hear back from", "to hear back from"), () => { setPref("up:view", "interviews"); render(); }, {small: true, key: "up-heard", aria: "See the interviews you are waiting to hear back from"}) : null);
+    const wrap = h("section", {class: "sec", "aria-labelledby": "h-interviews" + (where ? "-" + where : "")}, screenHead("interviews", "Coming up", small ? [sum, " ", small] : sum, null, where, tools, {quiet: true}));
     if (none) {
       put(wrap, empty("Your interviews and calls show here", "Interviews, calls, tests and closing days, by day, each a tap from your calendar.",
         btn("Add something", () => askAddSomething(), {kind: "secondary", small: true, key: "iv-empty-chat"})));
@@ -6882,31 +7109,20 @@
     const ref = obj(iv.referrer);
     const offer = ivOffer(iv);
     const offered = !gone && !offer ? arr(iv.offered) : [];
-    const read = btn("Read your prep", () => openDetail("interview", iv.id), {kind: "primary", small: true, key: "read:" + iv.id, aria: "Read your prep for your " + lc1(txt(iv.next_stage) || "interview") + " with " + txt(iv.company)});
-    const mock = offer ? null : btn("Practise with Claude", () => startMock(iv), {kind: "secondary", small: true, key: "mock:" + iv.id, aria: "Practise with Claude for " + txt(iv.company)});
-    const prepBtn = btn(has ? "Update my prep" : "Prepare me", () => askPrep(iv), {kind: (has && !stale) || offered.length ? "secondary" : "primary", small: true, key: "prep:" + iv.id, aria: (has ? "Update my prep for " : "Prepare me for ") + txt(iv.company)});
+    const acts = ivActs(iv, iv.id);
     return card("article", {class: "card interview" + edgeOf(list), "aria-labelledby": hid, "data-item": iv.id},
       h("div", {class: "job-top"}, h("h3", {id: hid}, offer ? "Your offer from " : cap1(txt(iv.next_stage) || "Interview") + " with ", h("bdi", {}, txt(iv.company))),
         // The bin is on what is still live: one that ended has nothing left to end.
-        h("span", {class: "top-end"}, ivPill(iv), IV_OVER[txt(iv.status)] ? null :
-          btn("", () => askEndApplication(iv, "the " + lc1(txt(iv.next_stage) || "interview") + " with " + txt(iv.company), gone ? null : () => askMoved(iv)), {kind: "quiet icon-only", small: true, icon: "bin", key: "ivbin:" + iv.id, aria: "Not going ahead: " + txt(iv.company)}))),
+        h("span", {class: "top-end"}, ivPill(iv), acts.bin)),
       offer ? null : h("p", {class: "when"}, offered.length ? "They offer " + daysWords(offered) + (txt(iv.reply_by) ? " · tell them by " + fmtDay(iv.reply_by) : "")
         : [(gone ? fmtDay(iv.when) : fmtWhen(iv.when)) || "No day yet", formatWord(iv.format)].filter(Boolean).join(" · ")),
       // Whether the prep is ready is said only of what is still to come: "No prep yet" under
       // an interview that ended weeks ago asked for work nobody needs (2026-11-03).
       h("p", {class: "meta"}, [txt(iv.role), gone || iv.past ? "" : stale ? "Prep is for an earlier plan of rounds" : has ? "Prep ready" : "No prep yet"].filter(Boolean).join(" · "), ref.id || ref.contact ? [" · Referred by ", itemLink("contacts", txt(ref.contact || ref.id), txt(ref.first_name), "ivref:" + iv.id)] : null),
       list.length ? alertLine(list[0], {where: "interviews", section: "interviews", item: iv.id, bare: true}) : null,
-      gone ? (() => {
-        const app = ivApplication(iv);
-        return h("div", {class: "card-actions"}, btn("I heard back", () => heardBack(app), {kind: "primary", small: true, key: "ivheard:" + iv.id, aria: "I heard back from " + txt(iv.company)}),
-          has ? btn("Read your prep", () => openDetail("interview", iv.id), {kind: "quiet", small: true, key: "read:" + iv.id}) : null);
-      })() : h("div", {class: "card-actions"},
-        offered.length ? btn("Choose the day", () => chooseDay(iv), {kind: "primary", small: true, key: "ivday:" + iv.id, aria: "Choose the day: " + txt(iv.company)}) : null,
-        busy ? btn("See its progress", openWork, {small: true, key: "ivwork:" + iv.id}) : has && !stale ? (offered.length ? btn("Read your prep", () => openDetail("interview", iv.id), {kind: "secondary", small: true, key: "read:" + iv.id}) : read) : prepBtn,
-        !busy && has ? mock : null,
+      gone ? h("div", {class: "card-actions"}, acts.main) : h("div", {class: "card-actions"}, acts.main,
         more("iv:" + iv.id, txt(iv.company), [has ? h("p", {class: "small muted"}, "Prep updated " + ago(prep.updated) + ".") : null, relatedLinks(iv.company, iv.id, iv),
-          busy ? null : h("div", {class: "more-acts"}, has ? prepBtn : null),
-          has && !busy ? tweakSlot("prep", iv, "Edit the prep") : null])),
+          h("div", {class: "more-acts"}, acts.more), acts.tweak])),
       stateLine(iv.id, "iv:" + iv.id));
   }
 
@@ -7897,6 +8113,9 @@
   function timeOf(s) { if (!txt(s) || isDateOnly(s)) return ""; const t = tms(s); return t === null ? "" : clockWords(t); }
   function todoWhat(i) {
     const id = i.key.slice(i.key.indexOf(":") + 1);
+    // A person's one card is what leads it; the messages card its messages.
+    if (i.d && !i.key.startsWith("due:")) return lc1(txt(i.d.title));
+    if (i.key === "send") return "your messages to send";
     if (i.key.startsWith("due:")) { const d = dueItems().find((x) => x.id === id); return d ? lc1(txt(d.title)) : "something due"; }
     if (i.key.startsWith("iv:")) { const v = allInterviews().find((x) => x.id === id); return v ? lc1(txt(v.next_stage) || "interview") + " with " + txt(v.company) : "an interview"; }
     if (i.key.startsWith("need:")) { const n = needsItems().find((x) => x.id === id); return n ? lc1(txt(n.title)) : "a question"; }
@@ -8702,17 +8921,6 @@
     put(wrap, activeFilters(key, lo, f));
     put(wrap, listView(key, lo));
     return wrap;
-  }
-  // To do holds one card for a wave of first notes, never one a note.
-  function waveTodo() {
-    const wave = messageItems().filter((m) => txt(m.wave) && txt(m.kind) === "first_note" && msgLive(m) && !settledAction(m.id, ["msg.sent", "msg.skip"]));
-    if (!wave.length) return null;
-    return {key: "wave:" + txt(wave[0].wave), kind: "message", band: "now", employer: null, tab: "contacts", counts: false,
-      node: () => card("article", {class: "card todo", "aria-labelledby": "wave-todo", "data-item": "wave:" + txt(wave[0].wave)},
-        h("div", {class: "todo-top"}, kindMark("message")),
-        h("p", {class: "card-title", id: "wave-todo"}, nWord(wave.length, "first note", "first notes") + " ready to send"),
-        h("p", {class: "meta"}, budgetLine(wave.length) || "Copy each one and send it on LinkedIn."),
-        h("div", {class: "card-actions"}, btn("Open them", () => go("contacts", {focus: true, item: txt(wave[0].id)}), {kind: "primary", small: true, key: "wave-open", aria: "Open them in Contacts"})))};
   }
   // "8 notes ready. 3 sent this week of about 20."
   function budgetLine(ready) {

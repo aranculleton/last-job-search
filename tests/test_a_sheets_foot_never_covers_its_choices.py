@@ -54,7 +54,7 @@ def test_every_choice_in_add_something_shows_whole_above_the_foot(run, tmp_path,
 # dark, on a laptop) and a phone: all fit above the foot, or the list scrolls with a fade
 # saying so and, scrolled to its end, its last choice whole above the foot. Cancel is a
 # soft pill, never underlined text (DESIGN.md, "Buttons, links and taps").
-BINS = [("todo", "Not Wren? Or later"), ("jobs", "Not for me: Harbourline Bank, Pricing Analyst"),
+BINS = [("todo", "Not Wren at Fernhill Freight?"), ("jobs", "Not for me: Harbourline Bank, Pricing Analyst"),
         ("drafts", "Not sending: Quayside Foods, Demand Planning Analyst")]
 SIZES = [{"width": 1000, "height": 630}, {"width": 1280, "height": 700}, PHONE, {"width": 1000, "height": 420}, {"width": 375, "height": 520}]
 SCROLLED = r"""(() => {

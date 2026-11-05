@@ -49,8 +49,17 @@ FOCUS = ("(() => { const d = document.querySelector('#main details.band-more:not
          " return !!d && !!a && d.contains(a) && a.hasAttribute('data-card'); })()")
 
 
+def _busier():
+    # More than five cards today: three applications' follow-ups due, each a card of its own.
+    m = _sample()
+    for i, co in enumerate(("Ottergate Foods", "Wexmoor Lending", "Quillfield Retail")):
+        m["due"].append({"id": "due-more-%d" % i, "kind": "follow_up", "title": "Follow up on the %s Planner application" % co, "due": "2026-10-25",
+                         "overdue_days": 0, "action": "work:follow_up", "company": co, "done": {"action": "due.done", "label": "Done"}, "rev": "dm%d" % i})
+    return m
+
+
 def test_show_n_more_goes_once_it_has_shown_them_and_its_first_card_takes_the_focus(run, tmp_path, vp):
-    got = _go(run, tmp_path, [{"hash": "todo", "eval": FOLD}, {"eval": FOCUS}], vp, clock=T)
+    got = _go(run, tmp_path, [{"hash": "todo", "eval": FOLD}, {"eval": FOCUS}], vp, model=_busier(), clock=T)
     r = got["after"][0]["eval"]
     assert r, "To do folds the rest of today behind one line"
     assert r["before"]["shown"] and r["before"]["text"].startswith("Show "), r
@@ -139,6 +148,13 @@ def test_a_refusal_naming_a_choice_is_answered_in_one_tap(run, tmp_path):
 # ------------------------------------------------------------------ a question Claude asked, with its kind
 
 
+def _no_questions():
+    # No other question first: the work's own is the one the quick answers card shows.
+    m = _sample()
+    m["needs_you"] = []
+    return m
+
+
 def _asking(answer, question="Which day did they offer?", about=""):
     w = {"kind": "follow_up", "title": "Follow up with Wren", "to": "cloud", "args": {}, "asked_at": "2026-10-25T08:40:00.000Z",
          "status": "needs_you", "note": question, "asked_you_at": "2026-10-25T08:45:00.000Z",
@@ -146,7 +162,10 @@ def _asking(answer, question="Which day did they offer?", about=""):
     return dict(HEARD, **{"work/follow_up~wren": w})
 
 
-ASK_CARD = ("(() => { const c = document.querySelector('#main [data-item=\"work:follow_up~wren\"]'); if (!c) return null;"
+# A yes or no, or a choice, is asked on the quick answers card (data-q, the UX review,
+# 2026-11-05); a day or a scale on its own card.
+ASK = '#main :is([data-item="work:follow_up~wren"], [data-q="follow_up~wren"])'
+ASK_CARD = ("(() => { const c = document.querySelector('" + ASK.replace("'", "\\'") + "'); if (!c) return null;"
             " return {text: c.textContent, quote: (c.querySelector('.ask-about') || {}).textContent || '', chips: [...c.querySelectorAll('.ask-choices button')].map((b) => b.textContent),"
             " date: !!c.querySelector('input[type=date]'), range: !!c.querySelector('input[type=range]'), answerBtn: [...c.querySelectorAll('button')].some((b) => b.textContent === 'Answer')}; })()")
 
@@ -156,9 +175,9 @@ def test_a_question_with_choices_is_chips_on_its_card_and_resumes_the_work(run, 
                    question="This line says you led the team. Keep it?", about="I led the pricing team at Harbourline")
     got = _go(run, tmp_path, [
         {"hash": "todo", "eval": ASK_CARD},
-        {"click": "Take it out", "exact": True, "within": '#main [data-item="work:follow_up~wren"]',
+        {"click": "Take it out", "exact": True, "within": ASK,
          "eval": "[...document.querySelectorAll('[data-toast]')].map((t) => t.textContent).join(' | ')"},
-    ], vp, seed=seed, clock=T)
+    ], vp, seed=seed, model=_no_questions(), clock=T)
     card = got["after"][0]["eval"]
     assert card and card["chips"] == ["Keep it", "Take it out"], card
     assert "I led the pricing team at Harbourline" in card["quote"], ("the words it is about, quoted", card)
@@ -253,9 +272,9 @@ def test_an_answer_shows_its_work_going_at_once_and_can_be_called_off_with_the_a
     card = ("(() => { const c = document.querySelector('[data-work=\"follow_up~wren\"]'); if (!c) return null;"
             " return {text: c.textContent, off: [...c.querySelectorAll('button')].map((b) => b.textContent).filter((t) => /Don.t do it|^Stop$/.test(t))}; })()")
     got = _go(run, tmp_path, [
-        {"hash": "todo", "click": "Yes", "exact": True, "within": '#main [data-item="work:follow_up~wren"]', "eval": card},
+        {"hash": "todo", "click": "Yes", "exact": True, "within": ASK, "eval": card},
         {"click": "Don't do it: Follow up with Wren", "exact": True, "within": '[data-work="follow_up~wren"]', "eval": card},
-    ], WIDE, seed=seed, clock=T)
+    ], WIDE, seed=seed, model=_no_questions(), clock=T)
     first = got["after"][0]["eval"]
     assert first and "Needs your answer" not in first["text"], first
     assert first["off"] == ["Don't do it"], ("one way to call it off while it waits", first)

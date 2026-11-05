@@ -1117,6 +1117,8 @@ a.navlink, .applylink, .btn.link, .fold .btn.link, .bp-foot a { text-decoration-
      through its sides, so the line around it does not move (2026-11-03). */
   a.name-link { position: relative; }
   a.name-link::after { content: ""; position: absolute; inset: 0 -13px; }
+  /* A name heading a checklist row reads from its start when it wraps, never centred. */
+  .g-name a.name-link { text-align: start; }
   .card-actions .btn.link, .controls .btn.link { margin-block: 0; }
   :is(.card-actions, .wc-actions, .suggest-acts, .more-acts, .g-acts, .fix, .bp-foot, .sheet-actions) > :is(.btn, a):not(.icon-only) {
     display: inline-flex; min-height: calc(36px * var(--tz)); padding: 8px 16px; margin-block: 0; line-height: 1.2; position: relative; }

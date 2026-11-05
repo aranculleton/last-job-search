@@ -606,7 +606,8 @@ def test_i_sent_it_is_done_in_contacts_to_do_and_the_brief_at_once(run, tmp_path
         {"click": "I sent it", "within": juno},
         {"hash": "contacts", "read": "#main .sec-head"},
         {"open": "fold:contacts", "read": juno},
-        {"hash": "todo", "count": '[data-item="due-juno-reply"]', "eval": BADGE},
+        {"hash": "todo", "count": '[data-item="due-juno-reply"]',
+         "eval": "[" + BADGE + ", (document.querySelector('[data-item=\"grp:send\"] [data-k^=\"grp-done:\"]') || {}).textContent || '']"},
         {"hash": "brief", "read": "#main .bp-next", "eval": "(document.querySelector('#main .bp-people') || {}).textContent || ''"},
     ], vp, clock=T)
     assert _one(got, "msg.sent")["item"] == "msg-juno-1"
@@ -614,8 +615,11 @@ def test_i_sent_it_is_done_in_contacts_to_do_and_the_brief_at_once(run, tmp_path
     assert "one of them a reply" not in got["after"][4]["text"], got["after"][4]["text"]
     row = got["after"][5]["text"]
     assert "Message sent" in row and "Replied: your turn" not in row and "Draft a reply" not in row, row
-    assert got["after"][6]["count"] == 0, "To do no longer asks for the reply"
-    assert got["after"][6]["eval"] == got["after"][0]["eval"] - 1, (got["after"][0]["eval"], got["after"][6]["eval"])
+    assert got["after"][6]["count"] == 0, "To do no longer asks for the reply: its row goes at once"
+    # The badge counts cards (DESIGN.md, counts): the reply was a row of "Messages to send",
+    # which still holds the others, so the badge stays and the card's own count moves.
+    badge, done = got["after"][6]["eval"]
+    assert badge == got["after"][0]["eval"] and done == "1 of 7 done", (got["after"][0]["eval"], badge, done)
     assert "Juno" not in got["after"][7]["text"] and "Juno" not in got["after"][7]["eval"], got["after"][7]
 
 
@@ -671,7 +675,9 @@ ALERT_WORDS = "[...document.querySelectorAll('#main [data-alert]')].map((a) => [
 def test_a_screen_reader_hears_note_before_what_is_not_a_fix(run, tmp_path):
     got = _go(run, tmp_path, [{"hash": "jobs", "eval": ALERT_WORDS}, {"hash": "todo", "eval": ALERT_WORDS}], PHONE, clock=T)
     said = dict(got["after"][0]["eval"] + got["after"][1]["eval"])
-    assert said["al-closed-r12-5"] == "Note:" and said["al-referral_hold-r12-3"] == "Note:", said
+    # A closed posting is a note where it is shown; it is no To do card (the UX review,
+    # 2026-11-05), so To do may not show it at all.
+    assert said.get("al-closed-r12-5", "Note:") == "Note:" and said["al-referral_hold-r12-3"] == "Note:", said
     assert all(v == "Needs fixing:" for k, v in said.items() if k.startswith("al-checks-")), said
 
 

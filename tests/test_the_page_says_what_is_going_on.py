@@ -88,9 +88,10 @@ def test_a_search_going_takes_find_jobs_off_jobs_and_says_it_is_searching(run, t
     assert [w["kind"] for w in got["work"]] == ["search"]
 
 
-# Jobs left this list on 2026-11-05: its header says nothing of Claude's work (below).
+# Jobs and Coming up left this list on 2026-11-05: their headers say nothing of Claude's
+# work (below).
 @pytest.mark.parametrize("screen,kind,title", [
-    ("interviews", "prep", "Prep for the second interview"),
+    ("profile", "profile", "A change to your profile"),
 ])
 def test_each_screen_says_when_claude_is_working_on_it(run, tmp_path, screen, kind, title):
     count = "document.querySelectorAll('#main .running-here').length"
@@ -134,10 +135,20 @@ def test_contacts_says_claude_is_working_on_a_reply_on_that_persons_card(run, tm
     assert lines == 0 and said.strip().startswith("Claude is on it"), (lines, said)
 
 
+def test_coming_up_has_no_line_of_its_own_for_claudes_work(run, tmp_path):
+    """As Contacts (2026-11-04): the header's work pill and each row's own line say what Claude
+    is doing, never a third line of the header (the UX review, 2026-11-05)."""
+    count = "document.querySelectorAll('#main .running-here').length"
+    got = _go(run, tmp_path, [{"hash": "interviews", "eval": count}], PHONE,
+              seed={"work/prep~int-harbourline-risk": _work("prep", "Prep for the second interview")}, clock=T)
+    assert got["after"][0]["eval"] == 0, got["after"][0]["text"][:300]
+    assert "Preparing your prep" in got["after"][0]["text"], "its own row says it"
+
+
 def test_two_things_running_on_one_screen_are_counted_and_finished_work_is_not(run, tmp_path):
-    seed = {"work/prep~1": _work("prep", "Prep one"), "work/thank_you~1": _work("thank_you", "A thank-you", status="queued"),
-            "work/prep~2": _work("prep", "Prep two", status="done", finished_at=T)}
-    got = _go(run, tmp_path, [{"hash": "interviews", "eval": "document.querySelector('#main .running-here').getAttribute('data-running')"}],
+    seed = {"work/profile~1": _work("profile", "A change"), "work/profile~2": _work("profile", "Another change", status="queued"),
+            "work/profile~3": _work("profile", "A third", status="done", finished_at=T)}
+    got = _go(run, tmp_path, [{"hash": "profile", "eval": "document.querySelector('#main .running-here').getAttribute('data-running')"}],
               PHONE, seed=seed, clock=T)
     # "Claude is on it" only for work Claude has begun (2026-11-03): the thank-you not yet picked
     # up waits, and says so, still counted.
@@ -147,15 +158,16 @@ def test_two_things_running_on_one_screen_are_counted_and_finished_work_is_not(r
 def test_the_bin_on_a_to_do_row_takes_the_row_away_as_it_is_chosen(run, tmp_path, vp):
     # The bin on "Did your note to ... go?" said the employer was not wanted and the row stayed
     # until a chat applied it (the maintainer, 2026-10-29): it goes, with the person's other rows.
-    row = "document.querySelector('#main [data-item=\"q-sent-fernhill_freight_halloway\"]')"
+    # Asked first of the quick answers here, so its card's bin is hers (2026-11-05).
+    row = "document.querySelector('#main [data-q=\"q-sent-fernhill_freight_halloway\"]')"
     due = "document.querySelector('#main [data-item=\"due-fernhill-nudge\"]')"
     got = _go(run, tmp_path, [
         {"hash": "todo", "eval": "[!!" + row + ", !!" + due + "]"},
-        {"click": "Not Wren?", "within": "#main [data-item=\"q-sent-fernhill_freight_halloway\"]"},
+        {"click": "Not Wren?", "within": "#main [data-q=\"q-sent-fernhill_freight_halloway\"]"},
         # The choice is the tap that does it (2026-11-03); the next step only reads.
         {"click": "Not interested in Fernhill Freight any more", "within": "dialog"},
         {"ready": "!" + row + " && !" + due, "eval": "[!!" + row + ", !!" + due + "]"},
-    ], vp, clock=T)
+    ], vp, model=_sent_first(_sample()), clock=T)
     assert got["after"][0]["eval"] == [True, True], "the row and its follow-up were there to bin"
     assert got["after"][3]["eval"] == [False, False]
     a = _one(got, "person.stop")
@@ -163,19 +175,27 @@ def test_the_bin_on_a_to_do_row_takes_the_row_away_as_it_is_chosen(run, tmp_path
     assert a["value"]["scope"] == "employer" and a["value"]["employer"] == "Fernhill Freight", a["value"]
 
 
+def _sent_first(model):
+    # "Did your note to Wren go?" first of the quick answers, so it is the one showing.
+    model["needs_you"].sort(key=lambda n: not n["id"].startswith("q-sent-"))
+    return model
+
+
 def test_the_bin_for_one_person_leaves_the_rest_of_their_employer(run, tmp_path):
-    row = "document.querySelector('#main [data-item=\"q-sent-fernhill_freight_halloway\"]')"
+    row = "document.querySelector('#main [data-q=\"q-sent-fernhill_freight_halloway\"]')"
+    title = "(document.querySelector('#main [data-item=\"quick\"] .card-title') || {}).textContent || ''"
     got = _go(run, tmp_path, [
         {"hash": "todo"},
-        {"click": "Not Wren?", "within": "#main [data-item=\"q-sent-fernhill_freight_halloway\"]"},
+        {"click": "Not Wren?", "within": "#main [data-q=\"q-sent-fernhill_freight_halloway\"]"},
         # The choice is the tap that does it (2026-11-03); the next step only reads.
         {"click": "Don't contact Wren", "within": "dialog"},
-        {"ready": "!" + row},
-    ], PHONE, clock=T)
+        {"ready": "!" + row, "eval": title},
+    ], PHONE, model=_sent_first(_sample()), clock=T)
     a = _one(got, "person.stop")
     assert a["value"]["scope"] == "person", a["value"]
-    # The application question about the same employer is not the person's, so it stays.
-    assert "Did you apply to Fernhill Freight?" in got["after"][3]["text"]
+    # The application question about the same employer is not the person's, so it stays: three
+    # quick answers left of four ("Did you apply to Fernhill Freight?" among them).
+    assert got["after"][3]["eval"] == "3 quick answers", got["after"][3]["eval"]
 
 
 def test_contacts_counts_only_who_needs_the_person_and_the_follow_ups_apart(run, tmp_path):
@@ -207,13 +227,15 @@ def test_contacts_counts_only_who_needs_the_person_and_the_follow_ups_apart(run,
 
 
 def _q(item):
-    return "!!document.querySelector('#main [data-item=\"" + item + "\"]')"
+    # A question is on the quick answers card by its id (data-q); a row by its own.
+    at = "data-q" if item.startswith("q-") else "data-item"
+    return "!!document.querySelector('#main [" + at + "=\"" + item + "\"]')"
 
 
 def _fernhill():
     # Two more rows at the employer: one for a person nobody has written to yet, one for a
     # person already in a conversation; and a reply owed to the person whose row is binned.
-    model = _sample()
+    model = _sent_first(_sample())
     base = next(d for d in model["due"] if d["id"] == "due-fernhill-nudge")
     model["people"].append({"id": "fernhill_freight_tamsin", "first_name": "Tamsin", "employer": "Fernhill Freight",
                             "status": "not_contacted", "rev": "p-tamsin"})
@@ -228,7 +250,7 @@ def _bin(choice):
     rows = "[" + ", ".join(_q(i) for i in ["q-sent-fernhill_freight_halloway", "due-fernhill-nudge", "due-fernhill-tamsin",
                                            "due-fernhill-odile", "due-fernhill-reply"]) + "]"
     return [{"hash": "todo", "eval": rows},
-            {"click": "Not Wren?", "within": "#main [data-item=\"q-sent-fernhill_freight_halloway\"]"},
+            {"click": "Not Wren?", "within": "#main [data-q=\"q-sent-fernhill_freight_halloway\"]"},
             # The choice is the tap that does it (2026-11-03); the next step only reads.
             {"click": choice, "within": "dialog"},
             {"ready": _q("q-sent-fernhill_freight_halloway")[1:], "eval": rows}]
@@ -238,7 +260,9 @@ def test_the_bin_for_an_employer_keeps_the_rows_of_people_already_in_conversatio
     # The chat closes only the people there nobody has written to yet (app_actions), so the
     # page hides only theirs: a colleague already written to keeps their rows.
     got = _go(run, tmp_path, _bin("Not interested in Fernhill Freight any more"), PHONE, model=_fernhill(), clock=T)
-    assert got["after"][0]["eval"] == [True] * 5, got["after"][0]["eval"]
+    # The reply owed to Wren is the same draft as her follow-up: one row for her on the messages
+    # card (one row a person, 2026-11-05), under the follow-up's id.
+    assert got["after"][0]["eval"] == [True, True, True, True, False], got["after"][0]["eval"]
     assert got["after"][3]["eval"] == [False, False, False, True, False], got["after"][3]["eval"]
 
 
