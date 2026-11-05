@@ -239,8 +239,13 @@ it is.
   (`run_round.hard_rules`, the one path every row a search brings back goes through) passes
   over a row failing a hard rule (no score, the search window, the candidate's bar with a
   staffing agency, the screen's hard cuts such as a language, a ruling, or a job the person
-  already has: applied, drafted, added, kept or still on their list) and takes the next, and says how many it found when it runs out (`shortlist: found 7 of the 10
-  asked for`): pass that on. A row you find fails a rule the round could not see is ruled out
+  already has: applied, drafted, added, kept or still on their list; a place outside theirs, the
+  location gate's own fail; an employer judged to clear none of their bar) and takes the next, and says how many it found when it runs out (`shortlist: found 7 of the 10
+  asked for`): pass that on. **What it rules out is off the page already**: the round writes each
+  as a ruling with its plain reason and puts it on its left-out list, where Bring back undoes it,
+  and checks the jobs still on Jobs from earlier searches the same way (`left out: N ...`); the
+  page's Found list is read with the same function (`run_round.page_rules`), so a row failing a
+  hard rule never shows as a find. Nothing is cleared by hand. A row you find fails a rule the round could not see is ruled out
   with `python3 tools/exclude.py add <url> --title "<title>" --company "<company>" --reason
   "<why>"`, then `python3 tools/run_round.py --out <the round's folder> --recut --show <N>`
   cuts the round again and refills it. Never drop a row from the table by hand: it leaves the
@@ -273,7 +278,10 @@ it is.
 
 ### Step 5.5: Stop at the shortlist
 
-The run ends at the table. Nothing is drafted unasked, and nothing is drafted before the
+The run ends at the table, unless the person asked for every one drafted (the page's Find jobs,
+"Draft every one as it is found", `args.draft`): then the search's own chat drafts each job as it
+is found, as the steps that chat is given say (`app.py search-drafts`, from `tools/app.py`
+`job_steps`). Nothing is drafted unasked, and nothing is drafted before the
 already-applied question ("The rules every search keeps", items 5 and 6, at the top of this
 skill). Ask once:
 > "Which of these should I take forward? And have you already applied to any of them?"

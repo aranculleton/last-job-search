@@ -798,6 +798,30 @@ def _dismiss_rule(why: str, t: dict) -> str:
     return f"Not this posting: {what}. Their words: {why}"
 
 
+def _keep_left_out(t: dict, why: str, day) -> bool:
+    """A job the page left out by the search's own rules (app_model.left_out) before any ruling
+    was written for it, brought back: the person's word recorded where the page reads it, its
+    posting marked lifted in seen_jobs.json, so the rules never leave it out again. False when
+    the page does not leave it out."""
+    import app_model
+    import exclude
+    from lookup_score import norm
+    u = norm(str(t.get("url") or ""))
+    if not u or not any(norm(str(row.get("url") or "")) == u
+                        for _n, _k, row, _w in app_model.left_out(day)):
+        return False
+    path = person.state("job_scraper", "seen_jobs.json")
+    data = exclude.load_seen(path)
+    key = next((k for k, e in data["seen"].items()
+                if isinstance(e, dict) and norm(str(e.get("url") or k)) == u), u)
+    entry = data["seen"].setdefault(key, {})
+    entry.update({"url": entry.get("url") or t["url"], "title": entry.get("title") or
+                  t.get("title", ""), "company": entry.get("company") or t.get("company", ""),
+                  "status": "lifted", "lifted_date": day.isoformat(), "lifted_because": why})
+    exclude.save_seen(data, path)
+    return True
+
+
 def _job_bring_back(r: Run) -> dict:
     import exclude
     t = r.target
@@ -839,7 +863,7 @@ def _job_bring_back(r: Run) -> dict:
                 "undo": {"action": "job.dismiss", "target": new}, "target_after": new}
     lifted = exclude.lift(urls=[t["url"]], why=why, today=r.day.isoformat(),
                           path=person.state("job_scraper", "seen_jobs.json"))
-    if not lifted:
+    if not lifted and not _keep_left_out(t, why, r.day):
         raise Refused("It was not ruled out, so there is nothing to bring back.")
     try:
         import learned

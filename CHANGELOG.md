@@ -38,6 +38,17 @@ make sense to somebody whose repo just received it.
 - **Every button beside another looks like one.** A card's actions are one row of the same
   rounded buttons: its next step stands out, everything else is the same soft grey button,
   and More is one too. Links under the Brief's panels are buttons now as well.
+- **A search never leaves a job you can't take on your Jobs list.** Jobs is checked with the
+  same rules the search uses: a role somewhere you can't work, an employer you turned down or
+  that clears none of your bar, a staffing agency, a language you don't have, or a second copy
+  of a role you already drafted, applied to or have on the list. What a search rules out is
+  taken off in the same step, each with its reason under "left out", where Bring back puts it
+  back. Jobs from earlier searches are checked again too, so ones already on your page go by
+  themselves the next time it updates.
+- **"Find jobs and draft them all" is one job.** Find jobs can now draft every one as it is
+  found (up to 25): you start it once, one card shows "2 of 5 drafted", and each draft is in
+  Drafts as soon as it is written. A draft that stops because the job turns out to be one you
+  can't take also takes that job off Jobs.
 - **A profile read just after midnight is kept.** One queued on your page before midnight and read after it was turned away and never read again; it is kept now.
 - **A skill your profile holds now goes into your resume's bullets, not only the skills line.**
   When a posting names a skill you hold (BigQuery, deep learning) and no bullet mentions it,

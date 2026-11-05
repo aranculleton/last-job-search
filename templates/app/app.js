@@ -2210,8 +2210,13 @@
       fields: [{id: "size", type: "radio", label: "How many to bring back", value: "10",
         options: [["10", "The best 10 (recommended)"], ["25", "The best 25"], ["0", "Every one that fits, up to 60"]],
         hint: "The search takes the same time either way: this is how many you will look through."},
+        // Find and draft in one go (the maintainer, 2026-11-05): one job, each draft written as
+        // its job is found, the card counting "2 of 10 drafted" (tools/page_db.py search_drafts).
+        {id: "draft", type: "radio", label: "Then", value: "look",
+          options: [["look", "Let me choose which to draft (recommended)"], ["draft", "Draft every one as it is found"]],
+          hint: "Drafting every one writes a " + noun() + " and letter for each, up to 25, while the search goes on."},
         {id: "note", type: "text", label: "Anything different this time?", max: 300}], submit: "Start the search",
-      onSubmit: (v) => { requestWork([{kind: "search", title: "Finding jobs", args: {note: v.note || null, size: Number(v.size || 10)}, slot: false}]); }});
+      onSubmit: (v) => { const all = v.draft === "draft"; requestWork([{kind: "search", title: all ? "Finding jobs and drafting them" : "Finding jobs", args: Object.assign({note: v.note || null, size: Number(v.size || 10)}, all ? {draft: true} : {}), slot: false}]); }});
   }
   function askContactResume(p) {
     const at = jobRows().filter((r) => arr(obj(p.related).jobs).includes(r.id));
@@ -9939,7 +9944,7 @@
     if (st === "running" || st === "claimed") {
       const c = obj(w.count);
       now1 = lastStep && tms(lastStep.at) && tms(v.stage_at) && tms(lastStep.at) >= tms(v.stage_at) ? txt(lastStep.text) : cur ? cur.name : "Working";
-      if (Number(c.total) > 0) now1 += ", " + Number(c.done || 0) + " of " + Number(c.total) + " done";
+      if (Number(c.total) > 0) now1 += ", " + Number(c.done || 0) + " of " + Number(c.total) + " " + (txt(c.word) || "done");
       if (lead) now1 = now1.replace(/[.\s]+$/, "") + ". Drafted in one go with " + clipWords(txt(lead.title).replace(/^Draft(ing)?:?\s*/i, ""), 40) + ".";
     } else if (picked) {
       now1 = "Claude has picked this up";

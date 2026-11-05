@@ -1106,6 +1106,18 @@ def tracker_match(ctx: Ctx, company, title) -> dict | None:
 _tracker_match = tracker_match  # the module's own name for it; other modules call tracker_match
 
 
+def _tracker_by_link(ctx: Ctx, url) -> dict | None:
+    """The tracker's row whose posting link (`source`) is this one, or None."""
+    from lookup_score import norm
+    u = norm(str(url or ""))
+    if not u:
+        return None
+    by = ctx._once("tracker_by_link", lambda: {
+        norm(str(r.get("source") or "")): r for r in ctx.tracker
+        if str(r.get("source") or "").startswith("http")})
+    return by.get(u)
+
+
 def _warm(ctx: Ctx, company) -> str | None:
     from company_key import key
     _, warm, holds = ctx.network
@@ -1279,6 +1291,12 @@ def _jobs(ctx: Ctx, targets: dict) -> dict:
     import added_jobs
     found = ([("added", n, r) for n, r in enumerate(added_jobs.load(), 1)]
              + [(name, rank, r) for rank, r in enumerate(raw, 1)] + _earlier_rows(ctx, path))
+    try:
+        cut = run_round.page_rules(ctx.today)
+    except Exception as e:  # noqa: BLE001  the rules unreadable: the list as the search left it
+        print(f"app: Jobs is shown without its rules read again ({e})", file=sys.stderr)
+        cut = _no_rules
+    left = ctx._got.setdefault("jobs_left_out", [])
     for rname, rank, r in found:
         if not isinstance(r, dict):
             continue
@@ -1289,7 +1307,9 @@ def _jobs(ctx: Ctx, targets: dict) -> dict:
         url = r.get("url") or ""
         company, title = str(r.get("company") or ""), str(r.get("title") or "")
         entry = ctx.seen.get(norm(url) or url) if url else None
-        tracked = _tracker_match(ctx, company, title)
+        # By the employer and the role, else by the posting's own link: the role applied to
+        # under a title the board has changed since read "Draft this" (2026-11-05).
+        tracked = _tracker_match(ctx, company, title) or _tracker_by_link(ctx, url)
         st = _status(tracked) if tracked else ""
         # Ruled out by the person, or by a chat that found it is not one they can take (a draft
         # stopped on where the job is open): either way it leaves the list and its counts. One
@@ -1354,6 +1374,23 @@ def _jobs(ctx: Ctx, targets: dict) -> dict:
         if status == "new" and not added and posted is not None and posted > window \
                 and not (url and norm(url) in kept):
             continue
+        # The search's own hard rules, read down the list (run_round.page_rules, the one
+        # function its shortlist is cut by): a row failing one now is never a fresh find. A
+        # "find 20 more" left 18 of 37 to clear by hand, US-based, failing the bar, or a copy
+        # of a role drafted or applied for (2026-11-05). What the person chose stays: a job
+        # they added, kept or brought back, and one they took off a ruling.
+        mine = added or (url and norm(url) in kept) or bool(r.get("brought_back")) \
+            or (entry is not None and str(entry.get("status") or "").lower() == "lifted")
+        why = cut(r) if status == "new" and not mine else ""
+        if why:
+            left.append((rname, rank, r, why))
+            if earlier:
+                continue               # an earlier search's row: it stays with that search
+            status = "dismissed"
+            notes.append(left_words(why))
+        elif status in ("new", "ready", "applied"):
+            cut.note(r, "you added it" if added else f"from search {rname}" if earlier
+                     else "from this search")
         item = {"id": jid, "rank": rank, "score": score, "band": _band(score),
                 "company": company, "title": title, "place": place, "remote": _remote(place),
                 "pay": {"text": pay or "not stated", "stated": bool(pay), "top": top,
@@ -1406,6 +1443,40 @@ def _jobs(ctx: Ctx, targets: dict) -> dict:
     return {"round": name, "made_at": stamp(made) if made else None, "met": met,
             "summary": summary,
             "rows": rows, "filtered": filtered}
+
+
+def _no_rules(row) -> str:
+    """No rule read: every row as the search left it."""
+    return ""
+
+
+_no_rules.note = lambda row, where="": None
+
+
+def left_out(today: dt.date, now: dt.datetime | None = None) -> list[tuple[str, int, dict, str]]:
+    """(round, rank, row, why) for every row a search found that the page's Found list leaves
+    out by the search's own hard rules (run_round.page_rules), as _jobs reads them: the one
+    answer a round takes off the list with (run_round.leave_out)."""
+    ctx = Ctx(today, now or dt.datetime.now(dt.timezone.utc))
+    _jobs(ctx, {})
+    return list(ctx._got.get("jobs_left_out") or [])
+
+
+# A hard rule's reason as a job's card says it: the rule in the person's words, then why.
+_LEFT_WORDS = (("candidate's bar: ", "It does not clear your employer bar: "),
+               ("place: ", "Not where you can work: "), ("screen: ", "The posting rules you out: "))
+
+
+def left_words(why: str) -> str:
+    """The note on a job the search's own rules left out, in plain words."""
+    text = " ".join(str(why or "").split())
+    for head, said in _LEFT_WORDS:
+        if text.startswith(head):
+            text = said + text[len(head):]
+            break
+    else:
+        text = text[:1].upper() + text[1:]
+    return "Left out: " + text.rstrip(".")[:240] + "."
 
 
 def to_look_at(r: dict) -> bool:

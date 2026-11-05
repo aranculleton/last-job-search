@@ -627,3 +627,30 @@ Harrowgate Insurance        # invented: an employer in tests/test_a_search_bring
 Brightpath Staffing         # invented: an agency, the same test
 Apache Spark        # a product: the data processing engine
 Apache Kafka        # a product: the event streaming platform
+Alderbank Freight           # invented: an employer in tests/test_a_find_more_search_leaves_no_failing_row_on_the_page.py
+Brookvale Grocers           # invented: an employer in tests/test_a_find_more_search_leaves_no_failing_row_on_the_page.py
+Cinderford Logistics        # invented: an employer in tests/test_a_find_more_search_leaves_no_failing_row_on_the_page.py
+Coldharbour Recruitment Staffing # invented: an employer in tests/test_a_find_more_search_leaves_no_failing_row_on_the_page.py
+Eastholme Foods             # invented: an employer in tests/test_a_find_more_search_leaves_no_failing_row_on_the_page.py
+Farrowdale Supply           # invented: an employer in tests/test_a_find_more_search_leaves_no_failing_row_on_the_page.py
+Galeworth Systems           # invented: an employer in tests/test_a_find_more_search_leaves_no_failing_row_on_the_page.py
+Hollinsway Labs             # invented: an employer in tests/test_a_find_more_search_leaves_no_failing_row_on_the_page.py
+Ivybridge Studio            # invented: an employer in tests/test_a_find_more_search_leaves_no_failing_row_on_the_page.py
+Juniper Gaming Group        # invented: an employer in tests/test_a_find_more_search_leaves_no_failing_row_on_the_page.py
+Kettlewell Foods            # invented: an employer in tests/test_a_find_more_search_leaves_no_failing_row_on_the_page.py
+Lowfold Haulage             # invented: an employer in tests/test_a_find_more_search_leaves_no_failing_row_on_the_page.py
+Marchbank Retail            # invented: an employer in tests/test_a_find_more_search_leaves_no_failing_row_on_the_page.py
+Marlpit Software            # invented: an employer in tests/test_a_find_more_search_leaves_no_failing_row_on_the_page.py
+Netherby Grocers            # invented: an employer in tests/test_a_find_more_search_leaves_no_failing_row_on_the_page.py
+Oakhurst Freight            # invented: an employer in tests/test_a_find_more_search_leaves_no_failing_row_on_the_page.py
+Pendleford Supply           # invented: an employer in tests/test_a_find_more_search_leaves_no_failing_row_on_the_page.py
+Quarrybank Foods            # invented: an employer in tests/test_a_find_more_search_leaves_no_failing_row_on_the_page.py
+Ravensworth Retail          # invented: an employer in tests/test_a_find_more_search_leaves_no_failing_row_on_the_page.py
+Stonebridge Logistics       # invented: an employer in tests/test_a_find_more_search_leaves_no_failing_row_on_the_page.py
+Thornaby Foods              # invented: an employer in tests/test_a_find_more_search_leaves_no_failing_row_on_the_page.py
+Underhill Haulage           # invented: an employer in tests/test_a_find_more_search_leaves_no_failing_row_on_the_page.py
+Vellacott Supply            # invented: an employer in tests/test_a_find_more_search_leaves_no_failing_row_on_the_page.py
+Westerdale Grocers          # invented: an employer in tests/test_a_find_more_search_leaves_no_failing_row_on_the_page.py
+Yarrowfield Analytics       # invented: an employer in tests/test_a_find_more_search_leaves_no_failing_row_on_the_page.py
+Zennor Data                 # invented: an employer in tests/test_a_find_more_search_leaves_no_failing_row_on_the_page.py
+Bramblecote Staffing        # invented: an agency, the same test

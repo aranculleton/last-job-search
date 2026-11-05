@@ -547,7 +547,27 @@ def job_steps(chosen: dict, claimer: str, url: str, session: bool = True,
              f"--work {wid} --chat {claimer} --stage scrape --log <the round's folder>/round.log, "
              "and send its batch, so the page shows how many job sites are done and how long "
              "is left.")
-    done = f"its app.py done with --work {wid} --chat {claimer}"
+    if kind == "search" and chosen.get("draft_all"):
+        # One job, not two searches and 13 chats run by hand (the maintainer, 2026-11-05): the
+        # search drafts each job as it is found, in this chat, the drafts written together.
+        draft = work_row("draft")
+        step(f"This search drafts every job it finds, {chosen['draft_all']} at most, in this "
+             "chat, each as it is found. Each time one of its shortlists is saved (the round's "
+             "log says \"shortlist summary:\"; a wider round saves its own), and once more with "
+             f"--last after its --recut: python3 tools/app.py search-drafts \"$D\" --work {wid} "
+             f"--chat {claimer}, and send its batch. It queues a draft of each job that passes "
+             "every rule, claimed with this search (its card counts them, \"2 of 5 drafted\"), and "
+             "stops a draft not begun whose job fails a rule now, taking the next. Draft what it "
+             "queued at once, while the search goes on, all of them in one run, as the app "
+             f"skill's table says for a draft: {draft.rstrip('.')}. Pin this search alone (--stage "
+             "draft). As each draft's documents are made and checked, finish it on its own "
+             f"(app.py done --work <its id> --chat {claimer}; one that stops because the job is "
+             "not one they can take: --left-out \"<why, plain>\"), send its batch and bring the "
+             "page up to date (the finish step below), so it is in Drafts at once. The search "
+             "finishes by itself with its last draft; never app.py done it yourself.")
+    done = (f"each draft's own app.py done, with --chat {claimer}: {wid} finishes with the last"
+            if kind == "search" and chosen.get("draft_all")
+            else f"its app.py done with --work {wid} --chat {claimer}")
     # A draft's PDFs: this chat cannot upload (Artifact is not among its tools), so its
     # app.py done queues one `files` item for the chat that answers the page, and nothing is
     # uploaded here (the maintainer, 4 November).
@@ -1599,6 +1619,25 @@ def cmd_done(a) -> int:
         if not reply:
             print("app: the answer file is empty", file=sys.stderr)
             return 2
+    left = " ".join(str(getattr(a, "left_out", "") or "").split())
+    if left:
+        # A draft that stops because the job is not one they can take (where it is open, a hard
+        # rule): the job leaves Jobs in the same step, ruled out with its reason, so the Brief and
+        # Jobs stop counting it. Left to a second command, it stayed in "10 jobs to look at"
+        # (2026-10-30) and a search's drafting left 18 of 37 to clear by hand (2026-11-05).
+        item = ((db.get("work") or {}).get(page_db.safe_id(a.work)) or {}).get("data") or {}
+        args = item.get("args") if isinstance(item.get("args"), dict) else {}
+        if not args.get("url"):
+            print("app: not finished: --left-out is for a job's draft, and this one names no "
+                  "posting to take off Jobs", file=sys.stderr)
+            return 2
+        import exclude
+        import person
+        exclude.add(str(args["url"]), left, title=str(args.get("title") or ""),
+                    company=str(args.get("company") or ""), basis="rules",
+                    today=now.date().isoformat(), path=person.state("job_scraper",
+                                                                    "seen_jobs.json"))
+        a.stopped, a.summary = True, a.summary or f"Not drafted: {left.rstrip('.')}."
     try:
         got = page_db.finish(db, a.work, now, a.out or os.path.join(a.dump, "out"),
                              summary=a.summary, status="failed" if a.failed else
@@ -1648,6 +1687,49 @@ def _answer(a) -> dict | None:
     if a.time_key:
         out["time"] = a.time_key
     return out
+
+
+def cmd_search_drafts(a) -> int:
+    """A search that drafts what it finds: a draft of each job on Jobs now that passes every
+    rule, up to the number asked for, claimed with the search so this chat drafts them
+    together (page_db.search_drafts); a draft not begun whose job fails a rule now stopped and
+    the next taken. Run each time one of the search's shortlists is saved, and with --last
+    once the round has ended."""
+    import app_model
+    import page_db
+    from lookup_score import norm
+    today, now = app_model.clock(a.today, a.now)
+    db = page_db.load(a.dump)
+    ctx = app_model.Ctx(today, now)
+    jobs = app_model._jobs(ctx, {})
+    rows = [dict(r["draft_work"]["args"]) for r in jobs["rows"]
+            if app_model.to_look_at(r) and not r.get("from_round") and not r.get("added")]
+    listed = {norm(str(r["draft_work"]["args"].get("url") or "")) for r in jobs["rows"]
+              if r["status"] in ("new", "ready", "applied")}
+    # Why a job left Jobs, in plain words: a ruling on it, the newest search's left-out list,
+    # or the page's own read of the rules.
+    why = {k: str(e.get("exclusion_reason") or "") for k, e in ctx.seen.items()
+           if str(e.get("status") or "").lower() == "excluded"}
+    try:
+        import filtered
+        newest = os.path.splitext(os.path.basename(app_model.newest_round()))[0]
+        for e in (filtered.load(newest).get("filtered") or []) if newest else ():
+            if isinstance(e, dict) and e.get("url"):
+                why.setdefault(norm(str(e["url"])), str(e.get("reason") or ""))
+    except SystemExit:
+        pass                       # no left-out list for it: the rulings and the page say why
+    why.update({norm(str(row.get("url") or "")): w
+                for _n, _k, row, w in ctx._got.get("jobs_left_out") or []})
+    left = {u: app_model.left_words(w)[len("Left out: "):] for u, w in why.items() if u and w}
+    try:
+        got = page_db.search_drafts(db, a.work, rows, now, a.out or os.path.join(a.dump, "out"),
+                                    chat=a.chat, left=left, last=a.last, dump_dir=a.dump,
+                                    listed=listed)
+    except (KeyError, ValueError) as e:
+        print(f"app: no drafts queued: {e.args[0] if e.args else e}", file=sys.stderr)
+        return 2
+    print(_dump(got), end="")
+    return 0
 
 
 def cmd_ask(a) -> int:
@@ -1875,7 +1957,19 @@ def main(argv=None) -> int:
     p.add_argument("--chat", default="", help=CLAIMED_UNDER)
     p.add_argument("--kind", default="", choices=("", "cloud", "computer"))
     p.add_argument("--out", default="", help="where the batch goes (default <dump>/out)")
+    p.add_argument("--left-out", dest="left_out", default="",
+                   help="a draft stopped because the job is not one they can take: why, in "
+                        "plain words; the job leaves Jobs, ruled out with that reason")
     p.add_argument("--now", default=None)
+    p = sub.add_parser("search-drafts", help="a search that drafts what it finds: a draft of "
+                                             "each job that passes every rule, claimed with it")
+    p.add_argument("dump")
+    p.add_argument("--work", required=True, help="the search's work id")
+    p.add_argument("--chat", default="", help=CLAIMED_UNDER)
+    p.add_argument("--last", action="store_true",
+                   help="the round has ended: the search has found all it will")
+    p.add_argument("--out", default="", help="where the batch goes (default <dump>/out)")
+    clocked(p)
     p = sub.add_parser("ask", help="work queued from a chat message, as the page queues it")
     p.add_argument("dump")
     p.add_argument("--kind", required=True, help="the kind of work (app.py progress <kind>)")
@@ -1906,7 +2000,7 @@ def main(argv=None) -> int:
             "start": cmd_start, "published": cmd_published, "resume-saved": cmd_resume_saved,
             "files-saved": cmd_files_saved, "propose": cmd_propose, "listen": cmd_listen,
             "republish": cmd_republish, "pinned": cmd_pinned, "told": cmd_told, "doorbells": cmd_doorbells, "done": cmd_done,
-            "ask": cmd_ask, "wake": cmd_wake, "version": cmd_version,
+            "ask": cmd_ask, "wake": cmd_wake, "version": cmd_version, "search-drafts": cmd_search_drafts,
             "answer": cmd_answer}[a.cmd](a)
 
 
