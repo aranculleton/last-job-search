@@ -65,18 +65,23 @@ release. What cost time:
   tests/test_the_page_keeps_its_layout_promises.py::test_16_a_jobs_cards_facts_are_one_line_on_a_wide_screen
   (a job card's facts wrap to two or three lines) and
   tests/test_jobs_and_drafts_on_the_page_say_what_is_true.py::test_a_long_title_fills_its_line_before_it_wraps
-  (0.67 of the line). Chromium and Safari pass. Firefox is not installed in a cloud chat; the
-  Everywhere run on the release branch says whether the page fixes changed it.
-- **Everywhere's page variants** (German, far time zones, Mac and Windows type with French) fail
+  (0.67 of the line). Chromium and Safari pass. Both still failed on the released commit, so
+  the page fixes did not change them. Firefox is not installed in a cloud chat.
+- **Everywhere's page variants** (German, far time zones, Mac and Windows type with French) failed
   tests/test_the_page_is_quick_and_its_settings_say_true_things.py::test_ten_documents_a_chat_writes_at_once_draw_the_page_a_few_times_not_ten
-  with four or five long tasks of 75 to 120 ms against three. It is marked timing and passes timed
-  alone in the main run and here; the variants time it beside other tests. Look at whether
+  during the build (four or five long tasks against three) and passed on the released commit, after
+  the page stopped redrawing every reading tick. If it comes back, look at whether
   tools/everywhere.sh runs the timing tests alone, as ci.yml does.
-- **Windows' computer-chat run** on the release branch failed one race test once:
+- **Windows' computer-chat run** failed one race test once during the build:
   tests/test_a_message_goes_out_by_hand_and_is_logged_once.py::test_two_chats_logging_the_same_send_at_once_write_one_row
   (the first chat's tap came back conflict and the second's ok, where the test expects the other
-  order). It passed on master's Windows run before; look at whether it pins an order two chats at
-  once cannot promise.
+  order). It passed on the released commit; if it fails again, look at whether it pins an order two
+  chats at once cannot promise.
+- **The newest Python** (3.14, in suite everywhere) failed
+  tests/test_a_judgement_is_kept_whole_and_read_for_its_own_employer.py::test_judgements_made_at_once_are_all_kept
+  once on the released commit with BrokenPipeError, from its pool of 12 processes; the six other
+  variants passed it. Python 3.14 starts pool processes a new way on Linux (forkserver); look at
+  whether the test should name its start method or use fewer processes.
 - **A live chat** has not run the new find-and-draft-all job, the job chat's send_message report and
   close, or the form-questions box end to end; their tests play Claude's side.
 - **The LinkedIn reads**: a page cannot hide Claude's browser pane or open a tab out of sight (the
