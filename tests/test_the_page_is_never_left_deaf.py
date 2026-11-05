@@ -272,7 +272,8 @@ def test_a_hand_over_renames_the_old_helper_and_makes_the_tidy_due(copy, monkeyp
     own = {"chat": "session_PERSONSOWN", "kind": "cloud", "helper": False,
            "since": "2026-11-03T08:00:00Z", "answered_at": "2026-11-04T16:00:00Z"}
     old = dict(own, chat="session_EXAMPLEHELPERA", helper=True)
-    rename = "session_id session_EXAMPLEHELPERA, title \"Job search helper (finishing up)\""
+    # Since 4.10 the live helper is "Job search page", so the one finishing up is named after it.
+    rename = "session_id session_EXAMPLEHELPERA, title \"Job search page (finishing up)\""
     took = app_listen.decide(_db(old), "session_EXAMPLEHELPERB", str(copy.root) + "/a", NOW,
                              listen=True, helper=True)
     assert any(rename in ln for ln in took["lines"]), took["lines"]

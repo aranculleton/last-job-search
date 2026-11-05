@@ -24,7 +24,10 @@ once a turn, after its answer is out, and makes only the GitHub calls it prints:
    is never brought in: one line says so, and it stays where it is. So is a branch whose
    own newest work is more than OLD_DAYS (7) old: named once to the person, in plain words.
    Files unsaved in this checkout itself and over a week old are saved (they are the files
-   as they stand) and named once the same way.
+   as they stand) and named once the same way. What a branch brought in never half-merges
+   this chat's work (merge_in): a file this chat changed keeps this chat's whole copy, and
+   an application this chat changed (its resume, letter and draft) keeps every file of it as
+   this chat has it; the other chat's versions stay in the saved history.
 4. Nothing ahead of origin/master: "land: nothing to land", exit 0, and no check is run.
 5. ./tools/ci_local.sh --quick. Not green: its failing lines, exit 1.
 6. git push -u origin HEAD, a network failure retried four times (2, 4, 8 and 16 s).
@@ -690,25 +693,224 @@ def _driver(root: str) -> None:
         pass
 
 
-def merge_in(root: str, ref: str) -> tuple[bool, list[str]]:
+# An application's documents are made together, from one draft: its resume and its letter
+# (cv/ and cover_letters/, the .tex and the .pdf made from it) and, in its folder, the draft
+# they were rendered from and what was made with it. Merged file by file, line by line, an
+# older chat's bullets came back into a newer resume's .tex beside a .pdf made without them,
+# and that chat's draft.json and letters came in with no word (the maintainer, 2026-11-04).
+# So an application both sides changed comes whole from one side: this chat's, when it is
+# another chat's branch being brought in and this chat changed it; else the side that changed
+# it last. The posting, the interview prep, the outcome and the person's own answers in the
+# folder are not made from the draft, and merge as any other file.
+APP_FOLDER = "documents/applications/"
+APP_DOCS = ("cv/", "cover_letters/")
+MADE = ("draft.json", "drafts.json", "cost.json", "verify.json", "tweaks.json", "outreach.md",
+        "screening_answers.md")
+MADE_EXT = (".tex", ".pdf")
+_DOC_ABBR = re.compile(r"_(?:Resume|CV|Cover_Letter)_([A-Za-z0-9_]+)$")
+
+
+def _key(text: str) -> str:
+    return re.sub(r"[^a-z0-9]+", "", str(text or "").lower())
+
+
+def _draft(root: str, rev: str, folder: str) -> dict:
+    """The draft an application's folder holds at `rev` ({} when none can be read)."""
+    r = _git(root, "show", "%s:%s%s/draft.json" % (rev, APP_FOLDER, folder))
+    try:
+        d = json.loads(r.stdout) if r.returncode == 0 else {}
+    except ValueError:
+        return {}
+    if isinstance(d, list):
+        d = d[0] if d and isinstance(d[0], dict) else {}
+    return d if isinstance(d, dict) else {}
+
+
+def units(root: str, paths, revs: tuple[str, ...]) -> tuple[dict[str, str], dict[str, str]]:
+    """({path: application}, {application: its employer, where a draft names it}) for each of
+    `paths` that is one of an application's made documents. A resume and a letter are known
+    by the abbreviation their names end in, which the application's draft.json names (read at
+    each of `revs`); a folder with no draft is known by its name."""
+    import personal_paths
+    paths = [p for p in paths if personal_paths.is_personal(p)]
+
+    def folder_of(p: str) -> tuple[str, str]:
+        rest = p[len(APP_FOLDER):] if p.startswith(APP_FOLDER) else ""
+        f, _, name = rest.partition("/")
+        return (f, name) if f and name and "/" not in name else ("", "")
+
+    drafts: dict[str, dict] = {}
+
+    def draft(f: str) -> dict:
+        if f not in drafts:
+            drafts[f] = next((d for d in (_draft(root, rev, f) for rev in revs) if d), {})
+        return drafts[f]
+
+    for p in paths:
+        if folder_of(p)[0]:
+            draft(folder_of(p)[0])
+    named = sorted({str(d.get("abbr") or "") for d in drafts.values()} - {""}, key=len,
+                   reverse=True)
+    out: dict[str, str] = {}
+    for p in paths:
+        top, _, name = p.partition("/")
+        if top + "/" not in APP_DOCS or "/" in name or not name:
+            continue
+        stem = name.split(".", 1)[0]
+        abbr = next((a for a in named if stem.endswith("_" + a)), "")
+        m = _DOC_ABBR.search(stem)
+        out[p] = _key(abbr or (m.group(1) if m else "")) or "doc:" + stem
+    docs = set(out.values())
+    homes: dict[str, str] = {}
+    for p in paths:
+        f, name = folder_of(p)
+        if not f or (name not in MADE and not name.endswith(MADE_EXT)):
+            continue
+        out[p] = (_key(draft(f).get("abbr")) or
+                  next((k for k in docs if f == k or f.endswith("_" + k)), "") or "folder:" + f)
+        homes.setdefault(out[p], f)
+    # A resume and a letter whose folder neither side changed: their folder, for the employer.
+    if docs - set(homes):
+        listed = _git(root, "ls-tree", "--name-only", "HEAD", APP_FOLDER).stdout.splitlines()
+        for k in docs - set(homes):
+            hit = [f[len(APP_FOLDER):] for f in listed
+                   if f[len(APP_FOLDER):] == k or f.endswith("_" + k)]
+            if len(hit) == 1:
+                homes[k] = hit[0]
+    employer = {k: str(draft(f).get("company") or "") for k, f in homes.items()}
+    return out, {k: v for k, v in employer.items() if v}
+
+
+def _changed(root: str, a: str, b: str) -> list[str]:
+    r = _git(root, "diff", "--name-only", "--no-renames", "-z", a, b)
+    return [p for p in r.stdout.split("\0") if p] if r.returncode == 0 else []
+
+
+def _row_merged(root: str, paths) -> set[str]:
+    """The paths the row-by-row driver merges (.gitattributes merge=ljs-state): both chats'
+    rows are kept there, so neither side's whole file is ever taken over the other's."""
+    paths = list(paths)
+    if not paths:
+        return set()
+    r = _git(root, "check-attr", "-z", "merge", "--", *paths)
+    parts = r.stdout.split("\0")
+    return {parts[i] for i in range(0, len(parts) - 2, 3) if parts[i + 2] == "ljs-state"}
+
+
+def _last(root: str, rng: str, paths) -> int:
+    got = _git(root, "log", "-1", "--format=%ct", rng, "--", *paths).stdout.strip()
+    return int(got) if got.isdigit() else 0
+
+
+def _held(root: str, ref: str, mine) -> tuple[dict[str, str], list[str]]:
+    """({path: the side whose whole copy is kept, "HEAD" or ref}, lines for Claude) for a
+    merge of `ref` into HEAD, decided before git merges a line of it.
+
+    - An application both sides changed: every made document of it from one side (units):
+      this chat's where `mine` (the files this chat's own commits changed) names one of its
+      files, else the side that changed it last; this side on a tie.
+    - With `mine` (another chat's branch being brought in), a file outside any application
+      that this chat changed and the branch changed too: this chat's whole file, never a line
+      merge of the two. The person's own profile is the exception (what they told either
+      chat is kept, and a clash is settled with them asked: merge_state.settle), and so is a
+      state file the driver merges row by row, where both chats' rows are kept."""
+    base = _git(root, "merge-base", "HEAD", ref).stdout.strip()
+    if not base:
+        return {}, []
+    ours, theirs = _changed(root, base, "HEAD"), _changed(root, base, ref)
+    if not theirs:
+        return {}, []
+    mine = set(mine or ())
+    unit, employer = units(root, set(ours) | set(theirs), ("HEAD", ref))
+    held: dict[str, str] = {}
+    said: list[str] = []
+    for app in sorted({unit[p] for p in theirs if p in unit}):
+        here = [p for p in ours if unit.get(p) == app]
+        there = [p for p in theirs if unit.get(p) == app]
+        if not here:
+            continue
+        everything = sorted(set(here) | set(there))
+        ours_too = any(p in mine for p in here)
+        if ours_too:
+            side = "HEAD"
+        elif _last(root, base + ".." + ref, there) > _last(root, base + "..HEAD", here):
+            side = ref
+        else:
+            side = "HEAD"
+        for p in everything:
+            held[p] = side
+        if ours_too:
+            who = employer.get(app)
+            line = ("%s: an application both chats changed; this chat's is kept whole (%s), and "
+                    "none of %s's files for it came in (they stay in the saved history)"
+                    % (app, ", ".join(everything), ref))
+            # Only a document they would see: a check's own record changing is no news.
+            if any(not p.endswith(("/cost.json", "/verify.json")) for p in there):
+                line += (". Tell the person once: \"Another of your chats had also changed "
+                         "your %s; the one you have now is kept, and the other is saved in "
+                         "case you want it back.\"" % (("application to " + who) if who
+                                                       else "application"))
+            said.append(line)
+        else:
+            said.append("%s: an application both sides changed; the later one is kept, every "
+                        "file of it from %s (%s)" % (app, "this side" if side == "HEAD" else ref,
+                                                     ", ".join(everything)))
+    if mine:
+        row = _row_merged(root, theirs)
+        whole = sorted(p for p in theirs if p in mine and p not in held and p not in row
+                       and not p.startswith("profile/"))
+        for p in whole:
+            held[p] = "HEAD"
+        if whole:
+            said.append("this chat's whole copy kept of %d file(s) %s also changed (%s), with "
+                        "nothing of the other's merged into it; the other's stay in the saved "
+                        "history" % (len(whole), ref, ", ".join(whole)))
+    return held, said
+
+
+def _take(root: str, path: str, side: str) -> bool:
+    """`path` as `side` has it, in the merge under way: its copy, or gone where it has none."""
+    if _git(root, "cat-file", "-e", "%s:%s" % (side, path)).returncode == 0:
+        return _git(root, "checkout", side, "--", path).returncode == 0
+    r = _git(root, "rm", "-q", "-f", "--ignore-unmatch", "--", path)
+    full = os.path.join(root, path)
+    if os.path.isfile(full):
+        os.remove(full)
+    return r.returncode == 0
+
+
+def merge_in(root: str, ref: str, mine=None) -> tuple[bool, list[str]]:
     """git merge --no-edit <ref>, with every conflicted file of the person's settled
     (merge_state.settle) and the merge committed. (merged, lines for Claude). Not merged: the
-    merge is aborted and nothing has changed."""
+    merge is aborted and nothing has changed.
+
+    An application both sides changed comes whole from one side, and with `mine` (the files
+    this chat's own commits changed, given when another chat's branch is brought in) a file
+    this chat changed keeps this chat's whole copy (_held): a line merge of the two is never
+    made under a line that says one was kept."""
     import merge_state
     _driver(root)
-    r = _git(root, "merge", "--no-edit", ref)
-    if r.returncode == 0:
-        return True, []
+    held, told = _held(root, ref, mine)
+    if not held:
+        r = _git(root, "merge", "--no-edit", ref)
+        if r.returncode == 0:
+            return True, []
+    else:
+        r = _git(root, "merge", "--no-edit", "--no-commit", "--no-ff", ref)
     if _git(root, "rev-parse", "-q", "--verify", "MERGE_HEAD").returncode != 0:
+        if r.returncode == 0:
+            return True, []
         return False, ["%s could not be merged: %s" % (ref, _said(r))]
+    bad = [p for p, side in sorted(held.items()) if not _take(root, p, side)]
     done, left = merge_state.settle(root)
+    left = bad + left
     still = [p for p in _git(root, "diff", "--name-only", "--diff-filter=U").stdout.splitlines()
              if p]
     if not left and not still:
         c = _git(root, "commit", "--no-edit", "-q")
         if c.returncode == 0:
-            return True, ["two chats changed the same file at once (%s): %s" % (ref, d)
-                          for d in done]
+            return True, told + ["two chats changed the same file at once (%s): %s" % (ref, d)
+                                 for d in done]
         left = ["the commit: " + _said(c)]
     _git(root, "merge", "--abort")
     return False, ["a conflict in %s" % ", ".join(left or still)]
@@ -789,8 +991,11 @@ def _land(root: str, message: str, check, sleep) -> int:
         refs, left = _chat_branches(root)
         for ref, (days, files) in left.items():
             print("land: " + left_line(ref, days, files, root))
+        # What this chat changed itself keeps this chat's whole copy over theirs (_held).
+        own = _own(root, "HEAD") if refs else None
+        mine = set(own[0]) if own else set()
         for ref in refs:
-            ok, said = merge_in(root, ref)
+            ok, said = merge_in(root, ref, mine=mine)
             if ok:
                 print("land: brought in work that waited on %s" % ref)
             for ln in said:

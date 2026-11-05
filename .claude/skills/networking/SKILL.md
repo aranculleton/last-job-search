@@ -291,6 +291,12 @@ stops a read (LinkedIn's own signals; the app sets no limit of its own):
   stops at LinkedIn's first check (the day's reads stop, `reading.stop`) or a sign-in page
   (the page asks the person to sign in, and checks again by itself when they come back).
   Never call this route safe.
+- **Out of the person's way, once a day.** The page looks at LinkedIn's sign-in once a day
+  and opens nothing of Claude's browser by itself: it reads in the one tab it keeps, and a
+  tab opens only at the person's own tap (Open LinkedIn, to sign in). Whether today's look is
+  still due is code, never memory: `python3 tools/network/reading.py linkedin-check` prints
+  passed, signed-out or due on the person's own day, for every chat and the page alike. A
+  chat opens LinkedIn for none of them (the maintainer, 2026-11-04).
 - **Their public work** (a talk, an article, a podcast, code, a quote in the press, their
   posts as a search engine shows them), never a people-search or data-broker site.
 - A headline's "at <phrase>" is never the employer when the card or Experience names another

@@ -244,6 +244,123 @@ def test_a_claim_keeps_the_chats_busy_line_and_never_writes_the_work_id(search):
     assert beat["busy"] is None
 
 
+def test_work_begun_in_a_chat_is_on_the_work_list_as_that_chats_own(search):
+    """Work asked for in a chat showed only as a busy line, so the person could not see what
+    ran or what was done (the maintainer, 4 November). `ask --here` makes it a work item like
+    one asked on the page: claimed by that chat, running at its first stage, pinned and
+    finished there, and never started again by another chat when it goes quiet."""
+    import datetime as dt
+    got = json.loads(search.run("ask", search.dump, "--kind", "search", "--title",
+                                "Analyst roles near Leeds", "--here", "--chat", "session_ASKED",
+                                "--now", NOW))
+    wid = got["work"]
+    entry, body = _writes(got["batches"])[("work", wid)]
+    assert entry["op"] == "set" and "if_version" not in entry
+    assert body["status"] == "running" and body["claimed_by"] == "session_ASKED"
+    assert body["in_chat"] is True and body["stage"] == 0 and body["stage_at"] == NOW
+    assert body["claimed_at"] == NOW and body["lease_until"] == _stamp(NOW, 30)
+    assert [s["key"] for s in body["stages"]] == [k for k, _n, _s in page_db.STAGES["search"]]
+    # The page's one-at-a-time rule holds for it as for any search.
+    r = _app(search, "ask", search.dump, "--kind", "search", "--title", "More roles",
+             "--here", "--chat", "session_ASKED", "--now", NOW)
+    assert r.returncode == 2 and "one at a time" in r.stderr
+    # Its own chat pins it and finishes it, as a job's chat does.
+    got = json.loads(search.run("pin", search.dump, "--work", wid, "--chat", "session_ASKED",
+                                "--stage", "scrape", "--line", "Searching the job sites",
+                                "--now", LATER))
+    assert got["stage"] == 1 and got["batches"]
+    # Gone quiet: no chat takes it to start again (the person is in that chat) ...
+    db = page_db.load(search.dump)
+    quiet = app_model.parse_time(LATER) + dt.timedelta(minutes=45)
+    assert page_db.next_item(db, "cloud", quiet) is None
+    assert page_db.stranded(db, quiet) == []
+    # ... and a lease and as long again with no word ends it, saying so plainly.
+    later = app_model.parse_time(LATER) + dt.timedelta(minutes=61)
+    assert page_db.stranded(db, later) == [wid]
+    ended = page_db.fail_stranded(db, later, os.path.join(search.dump, "stranded"))
+    _, body = _writes(ended["batches"])[("work", wid)]
+    assert body["status"] == "failed" and body["error"] == page_db.CHAT_STRANDED_SAID
+    # Finished by its chat, it shows its result like any other.
+    got = json.loads(search.run("done", search.dump, "--work", wid, "--chat", "session_ASKED",
+                                "--summary", "Your shortlist of ten roles is ready.",
+                                "--failed", "The job sites did not answer.", "--now", LATER))
+    _, body = _writes(got["batches"])[("work", wid)]
+    assert body["status"] == "failed" and body["result"]["summary"]
+    # The chat that answers the page, taking it once it is put back in the queue, owns it.
+    item = dict(page_db.load(search.dump)["work"][wid]["data"], status="queued")
+    search.put("work", wid, item, version=9)
+    claim = page_db.claim(page_db.load(search.dump), {"work": wid, "version": 9, "locks": []},
+                          "cloud-1", "cloud", app_model.parse_time(LATER),
+                          os.path.join(search.dump, "claim"))
+    _, body = _writes(claim)[("work", wid)]
+    assert body["in_chat"] == {"__delete__": True}
+    # A chat whose id is not known cannot begin it.
+    with pytest.raises(ValueError, match="this chat's id is not known"):
+        page_db.ask(page_db.load(search.dump), "prep", "Kestrel Mutual prep",
+                    app_model.parse_time(NOW), os.path.join(search.dump, "nobody"), here=True)
+    # The skill says to use it for work, and the busy line for an answer only.
+    skill = " ".join(_read(".claude/skills/app/SKILL.md").split())
+    assert "Work asked for in a chat is on the page's work list too" in skill
+    assert "--here --chat <your chat id>" in skill and "never for work" in skill
+
+
+def test_a_drafts_finish_queues_its_files_for_the_chat_that_answers_the_page(search, monkeypatch):
+    """A draft run in a chat of its own could not put its PDFs on the page (Artifact is not
+    among its tools), so the chat that started it uploaded each by hand (the maintainer, 4
+    November). Its `app.py done` now queues one `files` item, the page's own "Get my files
+    ready", for every draft whose files the page lacks, for the chat that answers the page."""
+    for wid in ("draft~1", "draft~2"):
+        search.put("work", wid, dict(_w("draft"), status="running", claimed_by="cloud-1",
+                                     claimed_at=NOW), version=3)
+    got = json.loads(search.run("done", search.dump, "--work", "draft~1", "--chat", "cloud-1",
+                                "--summary", "Your Kestrel Mutual application is ready.",
+                                "--now", LATER))
+    fid = "files~" + "app-kestrel_mutual_claims_forecasting_analyst"
+    assert got["files"] == {"work": fid,
+                            "applications": ["app-kestrel_mutual_claims_forecasting_analyst"]}
+    writes = _writes(got["batches"])
+    assert writes[("work", "draft~1")][1]["status"] == "done"
+    entry, body = writes[("work", fid)]
+    assert entry["op"] == "set" and "if_version" not in entry
+    assert body["kind"] == "files" and body["status"] == "queued" and body["asked_from"]
+    assert body["args"]["application"] == "app-kestrel_mutual_claims_forecasting_analyst"
+    assert body["args"]["paths"] == ["cv/Morgan_Ellis_CV_Kestrel.pdf",
+                                     "cover_letters/Morgan_Ellis_Cover_Letter_Kestrel.pdf"]
+    assert body["args"]["files"] == ["Morgan_Ellis_CV_Kestrel.pdf",
+                                     "Morgan_Ellis_Cover_Letter_Kestrel.pdf"]
+    assert body["title"] == "Make the files downloadable: Kestrel Mutual"
+    # The listener takes it as light work, here: it can upload.
+    db = page_db.load(search.dump)
+    assert db["work"][fid]["data"]["status"] == "queued"
+    # The batch's next posting finishes in the same folder: the files work already covers it.
+    got = json.loads(search.run("done", search.dump, "--work", "draft~2", "--chat", "cloud-1",
+                                "--summary", "Your second application is ready.",
+                                "--now", LATER))
+    assert "files" not in got and ("work", fid) not in _writes(got["batches"])
+    # Once the page holds them, a draft's finish queues nothing.
+    for k, v in (("LJS_PROFILE", search.profile), ("LJS_STATE", search.state),
+                 ("LJS_COPY", "private")):
+        monkeypatch.setenv(k, v)
+    assert [x["id"] for x in app_model.files_missing()] == \
+        ["app-kestrel_mutual_claims_forecasting_analyst"]
+    app_model.record_assets([("cv/Morgan_Ellis_CV_Kestrel.pdf", "a" * 32),
+                             ("cover_letters/Morgan_Ellis_Cover_Letter_Kestrel.pdf", "b" * 32)])
+    assert app_model.files_missing() == []
+    # Work that makes no files queues none; a draft that failed queues none.
+    search.put("work", "talk~1", dict(_w("talk"), status="running", claimed_by="cloud-1"),
+               version=2)
+    got = json.loads(search.run("done", search.dump, "--work", "talk~1", "--chat", "cloud-1",
+                                "--summary", "Answered in the chat.", "--now", LATER))
+    assert "files" not in got
+    # A job's own chat is told its files go up by themselves, and to upload nothing.
+    chosen = {"work": "draft~3", "kind": "draft", "title": "Kestrel Mutual",
+              "stages": page_db.progress("draft")["stages"]}
+    steps = " ".join(app.job_steps(chosen, "cloud-1", PAGE))
+    assert "upload nothing here" in steps and "--work draft~3 (it takes master first" in steps
+    skill = " ".join(_read(".claude/skills/app/SKILL.md").split())
+    assert "nobody uploads by hand" in skill and "`args.paths` names them" in skill
+
+
 # ------------------------------------------------------------------ a big job runs elsewhere
 
 def test_a_big_job_is_never_run_by_the_chat_that_answers_the_page(monkeypatch):
@@ -269,9 +386,13 @@ def test_a_big_job_is_never_run_by_the_chat_that_answers_the_page(monkeypatch):
         said = call["prompt"]
         assert f"--work {kind}~1" in said and "app.py pin" in said and PAGE in said
         assert "Never publish, watch or answer the page" in said
-        # A cloud chat cannot message another one: it brings the page up to date itself
-        # (2026-11-03: a search's ten jobs sat off the page).
-        assert "send_message" not in said and "tools/app.py view" in said and PAGE in said
+        # Landed, it reports back to the chat that started it (2026-11-04), which puts the
+        # results on the page and archives it; only where that message cannot go does it
+        # bring the page up to date itself (2026-11-03: a search's ten jobs sat off the page).
+        assert "send_message, session_id listener-1" in said and "in chat <your own id>" in said
+        assert said.index("land your work on master") < said.index("send_message, session_id")
+        assert said.index("send_message, session_id") < said.index("tools/app.py view")
+        assert "tools/app.py view" in said and PAGE in said
         # Landed first, then drawn from master; the page's documents are stored as "screen".
         assert said.index("land your work on master") < said.index("tools/app.py view")
         assert "collections screen, meta, addr and work" in said

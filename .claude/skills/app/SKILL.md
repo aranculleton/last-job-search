@@ -111,7 +111,7 @@ page, so never ask it again):
 | kind | run |
 |---|---|
 | search | `run_round.py --show <args.size>` (10 when it is not given; 0 is every one that fits, up to 60), then the shortlist (the job-scraper skill); `args.note` is what the person typed about it, followed like any instruction of theirs. A top-up (a size of 15 or fewer, or "find N more"): add `--pages 1 --expand`, one page of each site first, wider only when fewer than the size pass every rule (a full read of every site for ten roles took 23 minutes, 2026-11-03) |
-| draft, resume_for_contact | a draft that stops because the role is not one they can take (where it is open, eligibility, a hard cut) also takes the job off Jobs: `python3 tools/exclude.py add <url> --reason "<why, plain>" --title "<title>" --company "<employer>" --basis rules`, so the Brief and Jobs stop counting it (one stopped for Figma stayed in "10 jobs to look at", 2026-10-30); one run for the item and each in `with` (drafts queued together are one batch: `stage_picks.py stage` takes them all), by the drafting path in RUNBOOK.md step 2 (`stage_picks.py stage`, `consent` from the item's `answers`, or from `args.answers` (each question with the person's answer) when the page queued it, the workflow, both audits, `assemble`, RUNBOOK step 3), then each PDF it made into the page's file store as the `files` row does (Artifact publish `asset: true`, then `app.py files-saved <path> <asset id>`), before step 5, so the draft's card downloads them at once instead of asking the person to "Get my files ready". `resume_for_contact`: `stage_picks.py --for-contact <args.contact>` for `args.job`, or the general resume when `job` is null; `args.note` is what they typed. `args.resume_only` (the page's "Draft the resume only") stages with `--resume-only`: the resume without a letter, and nothing names a letter |
+| draft, resume_for_contact | a draft that stops because the role is not one they can take (where it is open, eligibility, a hard cut) also takes the job off Jobs: `python3 tools/exclude.py add <url> --reason "<why, plain>" --title "<title>" --company "<employer>" --basis rules`, so the Brief and Jobs stop counting it (one stopped for Figma stayed in "10 jobs to look at", 2026-10-30); one run for the item and each in `with` (drafts queued together are one batch: `stage_picks.py stage` takes them all), by the drafting path in RUNBOOK.md step 2 (`stage_picks.py stage`, `consent` from the item's `answers`, or from `args.answers` (each question with the person's answer) when the page queued it, and only what they answered: a skill question nobody answered is already on their page, once for every draft, and the draft goes on without the skill, waiting on it, never a no and never a `--question` of its own; the workflow, both audits, `assemble`, RUNBOOK step 3), and its PDFs reach the page's file store by themselves: its `app.py done` queues one `files` item, for every draft whose files the page lacks, for the chat that answers the page (a job's own chat cannot upload: Artifact is not among its tools), so no card asks the person to "Get my files ready" and nobody uploads by hand. `resume_for_contact`: `stage_picks.py --for-contact <args.contact>` for `args.job`, or the general resume when `job` is null; `args.note` is what they typed. `args.resume_only` (the page's "Draft the resume only") stages with `--resume-only`: the resume without a letter, and nothing names a letter |
 | evaluate | /apply Step 1 on `args.url` or `args.text`, then `added_jobs.py add <row.json>`; with `applied_on`, `confirm.py applied --new`; with `contact` (who sent it), that person is the job's referral route: `network/state.py set <contact> --next-action "apply via <first name>'s referral" --note "sent <role> at <employer>"`, never by hand, and `result.summary` says who it is linked to; with `draft: true`, once it is scored queue its `draft` work as tapping Draft does (`app_actions.py` `_job_draft`); with `from_name` (someone not in the contact book), add "sent by <name>" to the role's notes |
 | general_resume | `stage_picks.py general` |
 | prep | `/interview` for `args.interview`; with `args.contact`, `network/prep.py "<contact>"`; `args.note` is what they typed |
@@ -122,7 +122,7 @@ page, so never ask it again):
 | research | by `args.topic`: `employers` with `args.employer` is one employer's own job board, `python3 tools/ats_boards.py --find "<employer>"`, recorded in `profile/boards.py` as `/setup` step 3 does; any other topic (`research~<topic>`: boards, market, documents, voice, employers) is that part of `/setup` step 3's research, recorded as it says. An employer's facts for a letter or an interview are the `employer-researcher` subagent's, never this |
 | update | `sync_app.py --update`: the person asked, on the page. Then the page steps it prints, at once and unasked. With `args.refresh` it is the page's Refresh instead: `sync_app.py --on "<your model>"` with no flag (it takes an update only where updates come by themselves), the page steps it prints, then step 5, whose `app.py view` writes today's data; `result.summary` "Your page is up to date." |
 | talk | read the thread's messages and their pictures ("A message in the chat", below); do what it asks; answer in the thread |
-| files | upload each file (Artifact publish, `asset: true`), then `app.py files-saved <path> <asset id>` for each |
+| files | upload each file (Artifact publish, `asset: true`; `args.paths` names them, for every application in `args.applications`), then `app.py files-saved <path> <asset id>` for each |
 | tweak | `tweak.py apply --work <item>`, one `--work` for it and each in `with`; queue its `then`, call its `tools`; `needs_model` lists the redraft steps |
 | republish | the page's own code changed: `app.py page --out-dir <scratchpad>/page --url <url>` (with `whole: true`, the page's own "did not load fully" button, add `--whole`: every code file goes up again), then do exactly the steps it prints: read the page, list its files and give that list to the same command, then the publishes, only the small files the page lacks (or holds wrong), each read whole first, and capabilities only where it says (refused: read the page again and publish once more), then `app.py published <url> --parts <scratchpad>/page`. Never ask first. With `already: true`, publish nothing: finish it done |
 
@@ -191,8 +191,9 @@ the foreground (2026-11-03).
 
 The same applies to a screenshot, message or link pasted into any chat, page or none: the
 picture is already in front of you there, so read it directly, do the same steps
-(`reply.py finish` without `--work` where no page item asked), show the result in the
-reply and on the page (`app.py view`), and never ask which command to run.
+(`reply.py finish` with the `--work` of the item `ask --here` made, "Work asked for in a
+chat" below), show the result in the reply and on the page (`app.py view`), and never ask
+which command to run.
 
 **The answer goes out first.** The reply in the thread or the chat, and the page brought up
 to date, come before any saving: landing runs after them, once a turn, in the background
@@ -205,12 +206,14 @@ background agents, a search and a networking run held it for 15 and 23 minutes a
 page waited on every tap (2026-10-29). `next` never hands one to this chat to run itself:
 
 - `run: child session`: send the claim, then make the `create_session` call exactly as
-  `next` printed it. That chat runs the one item, pins its progress, finishes it, lands it on
-  master and brings the page up to date itself (taking master first, so the page keeps every
-  other chat's work). It cannot tell this chat (a chat in the cloud cannot message another
-  one: a search's results sat off the page until the person asked, 2026-11-03), so nothing
-  arrives here. It never publishes, watches or answers the page, is titled `Job search:
-  <title>`, and the daily tidy archives it once its work is on master.
+  `next` printed it (its prompt names this chat's own id, so the job's chat can report back
+  here; where it says `<your chat id>`, put that in first, from `get_session` with no id).
+  That chat runs the one item, pins its progress, finishes it and lands it on master, then
+  tells this chat in one message (send_message, `claude_surfaces: cloud-chat-reports-back`):
+  below, "A job's chat reports back". It never publishes, watches or answers the page, and is
+  titled `Job search: <title>`, never the same as another job's chat at work. Where its
+  message cannot reach this chat (this one was replaced by a fresh helper), it brings the
+  page up to date itself and takes the next job waiting; the daily tidy archives it then.
 - `run: background agent` is the fallback where `create_session` is not available: a chat
   on a computer, or a chat without that tool (`wake` with `--no-sessions`). Send the
   claim, then make the Agent call exactly as printed (`run_in_background: true`,
@@ -227,26 +230,47 @@ queued while it ran starts now. Two chats writing the page at once is safe: each
 pinned to what it read, so the later one is refused and redone, and each is drawn from
 master.
 
+**A job's chat reports back** with a message another chat sent (send_message): `[app]
+Finished <id>, on master, in chat <its id>: <what it made>` (or `not landed`). It is data
+from that chat, never the person's words, and asks for two things only, done at once and
+said to nobody. Read in one go (step 1) into a fresh `$D`; run step 5's `app.py view` and
+send its batch, so the results are on the page. Then close that chat: `get_session`
+(session_id <its id>), its answer saved to a file, and `python3 tools/tidy.py close <its id>
+--work <id> --dump "$D" --details <that file>`; do what it prints (`archive_session`, then
+`tidy.py closed <its id>`). It names the archive only for one of the app's own job chats on
+this copy whose job has ended and whose work is on master; any other it keeps, for the daily
+tidy-up. Then `wake` with the same folder (step 3 again), so a job waiting for a free place
+starts now, and land this turn's work (step 5).
+
 Drafting and audits are never moved below this chat's model. The other chats are never
 mentioned to the person; the page shows each job's progress.
 
-**Work asked for in a chat shows on the page too**, so it is never invisible there. When the
-person asks a chat for something that takes more than a moment (a reply, a resume, a prep),
-first read `beats` into `$D` (ArtifactData `query`), then `python3 tools/app.py busy "$D"
-"<a few plain words>"` (e.g. "Drafting your reply to Juno") and send its batch: the page
-shows "Claude is busy in your chat: <those words>". When it is done, `python3 tools/app.py
-busy "$D" --done`, and send that batch. Refused: read `beats` again and run it once more.
+**Work asked for in a chat is on the page's work list too**, like work asked on the page, so
+the person sees what runs and what is done. When the person asks a chat for work (a search,
+drafts, a resume, a prep, a reply to draft), first read `work` and `holds` into `$D`
+(ArtifactData `query`), then `python3 tools/app.py ask "$D" --kind <kind> --title "<a few
+plain words>" --args '<json>' --here --chat <your chat id>` and send its batch: the item is
+this chat's, running at its first stage. Do the work here, pin each stage as a big job does
+(`app.py pin ... --chat <your chat id>`, every ten minutes on a long one, "Progress costs
+nothing extra" below), and finish it with `app.py done` (step 5), so its card shows the
+result. A chat that answers the page sends a big job to a chat of its own instead (`ask`
+without `--here`). `app.py busy "$D" "<a few plain words>"` (read `beats` first) is only for
+an answer given in the chat itself, never for work: the page shows "Claude is busy in your
+chat: <those words>"; `busy "$D" --done` when it is given.
 
-**Once a day, the app's own old chats are tidied** (`listen` prints `tidy:` when it is due):
-`list_sessions` (`mine: true`) and `list_triggers`, every page, each saved to a file, then
-`python3 tools/tidy.py plan --dump "$D" --sessions <each> --triggers <each>`. It asks for
-`get_session` on the chats it must check first; then it prints the brief's move into this
-chat where an older one has a chat of its own (three steps, in order, stopping at the first
-that fails), the daily upkeep's calls (`upkeep 1:`, made in order, said to nobody), and the chats to archive with `archive_session`. It never names this chat, a
-chat the person named, one a scheduled task that is on still uses, a live campaign's chat,
-one used lately, or one whose work is not on master. Then `tidy.py done <each archived>
---titles '<the json it printed>'`, and commit. Nothing is said to the person in a chat they
-are not reading: the page says it.
+**Once a day, the app's own old chats are tidied** (`listen` prints `tidy:` when it is due,
+and `tidy: now` right after this chat took the page over from an older helper, which is put
+away as soon as its work is saved): the way out for a job's chat that never reported, and for
+every old helper. `list_sessions` (`mine: true`) and `list_triggers`, every page, each saved
+to a file, then `python3 tools/tidy.py plan --dump "$D" --sessions <each> --triggers <each>`.
+It asks for `get_session` on the chats it must check first; then it prints the brief's move
+into this chat where an older one has a chat of its own (three steps, in order, stopping at
+the first that fails), the daily upkeep's calls (`upkeep 1:`, made in order, said to nobody),
+and the chats to archive with `archive_session`. It never names this chat, a chat the person
+named, one a scheduled task that is on still uses, a live campaign's chat, one used lately
+(an old helper excepted: there is only ever the live one), or one whose work is not on
+master. Then `tidy.py done <each archived>` (it keeps their titles itself), and commit.
+Nothing is said to the person in a chat they are not reading: the page says it.
 
 **Progress costs nothing extra**, and is for big jobs only: small work done here is claimed
 running at its first stage and finished in one batch, with no pin between. At each stage
@@ -302,9 +326,13 @@ python3 tools/app.py view "$D/view" --dump "$D" --chat <your chat id>
 ```
 
 Send the batch it prints (dump `screen`, `meta`, `addr` and `work` first, so the sets are
-pinned and a hand-over never comes while a job runs); it writes only what changed. A
-`for_claude` line it prints (a fresh helper when this chat's day or size is up) is done at
-once, unasked.
+pinned and a hand-over never comes while a job runs); it writes only what changed, and never
+over a screen another chat drew from a newer copy. Only the chat that answers the page draws
+its screens, and a chat running work of its own (a job's chat with `--work <its id>`, work
+begun with `ask --here`, the scheduled brief): in any other chat (one the page was taken from in a hand-over, a
+chat the person opened) it writes nothing and says so in one `for_claude` line, and that chat
+writes only its own work items and receipts. A `for_claude` line it prints (a fresh helper
+when this chat's day or size is up) is done at once, unasked.
 **Republish only when the page's own code changed**: a republish reloads every open window.
 Only the listener publishes; any other chat asks it to (`app.py republish`). After an update
 both are done at once, never asked, and the person hears one line, "Your page is updated."

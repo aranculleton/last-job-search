@@ -65,19 +65,21 @@ export const meta = {
 if (!args || !args.today || !args.round_dir || !Array.isArray(args.picks)) {
   throw new Error('draft-applications needs args {today, round_dir, picks[]}; stage with tools/stage_picks.py and build the pack with tools/draft_pack.py first')
 }
-// Every skill a posting names that the profile does not hold is the person's call, asked
-// before anything is drafted (tools/stage_picks.py prints the question; `consent` records
-// the answer). Nothing is spent on a pick still waiting, and a pick staged before this
-// step (no ask_first) is staged again.
-const said = (p) => [...(p.skills_yes || []), ...(p.skills_no || [])].map(x => String(x).toLowerCase())
+// Every skill a posting names that the profile does not hold is the person's call
+// (tools/stage_picks.py prints the question; tools/skill_answers.py keeps one answer per
+// skill for every chat). One nobody has answered yet is put to them once, on their page, and
+// the pick is drafted without it meanwhile (skills_waiting): never a no they did not give. A
+// pick with a skill neither answered nor waiting, or staged before this step (no ask_first),
+// is staged again.
+const said = (p) => [...(p.skills_yes || []), ...(p.skills_no || []), ...(p.skills_waiting || [])].map(x => String(x).toLowerCase())
 const waiting = args.picks.filter(p => !Array.isArray(p.ask_first)
   || p.ask_first.some(n => !said(p).includes(String(n).toLowerCase())))
 if (waiting.length) {
-  throw new Error('Ask the person first, before any drafting, about the skills their profile does not list: '
-    + waiting.map(p => `${p.company} (${Array.isArray(p.ask_first) ? p.ask_first.filter(n => !said(p).includes(String(n).toLowerCase())).join(', ') : 'staged before this step: run tools/stage_picks.py stage again'})`).join('; ')
-    + '. Record each answer with python3 tools/stage_picks.py consent <round_dir> <slug> --yes ... --no ..., then build the pack again (python3 tools/draft_pack.py build <round_dir>) and run this with the new draft_args.json.')
+  throw new Error('Stage these again first, so each skill their profile does not list is put to the person: '
+    + waiting.map(p => `${p.company} (${Array.isArray(p.ask_first) ? p.ask_first.filter(n => !said(p).includes(String(n).toLowerCase())).join(', ') : 'staged before this step'})`).join('; ')
+    + '. Run python3 tools/stage_picks.py stage again (it takes any answer they gave and marks the rest as waiting on them), record an answer they give with python3 tools/stage_picks.py consent <round_dir> <slug> --yes ... --no ..., never a no they did not give, then build the pack again (python3 tools/draft_pack.py build <round_dir>) and run this with the new draft_args.json.')
 }
-const answers = (p) => `Yes (they will claim these and can back them up: each goes on the resume's skills line by itself, and the summary or letter may name it where the posting asks for it): ${(p.skills_yes || []).join(', ') || 'none'}. No (never named anywhere in the documents or the note): ${(p.skills_no || []).join(', ') || 'none'}.`
+const answers = (p) => `Yes (they will claim these and can back them up: each goes on the resume's skills line by itself, and the summary or letter may name it where the posting asks for it): ${(p.skills_yes || []).join(', ') || 'none'}. No (never named anywhere in the documents or the note): ${(p.skills_no || []).join(', ') || 'none'}. A skill the profile holds that the posting names is theirs already: never ask about it, and where no resume bullet names it, name it in one to three of them (bullet_rewordings) where that work plausibly used it.` + ((p.skills_waiting || []).length ? ` Not answered yet (left off everywhere, as a no is, until they answer; it is not a no): ${p.skills_waiting.join(', ')}.` : '')
 const today = args.today
 const scratch = args.round_dir
 // The person's repository, wherever its container put it. A fixed path sent every
@@ -164,7 +166,9 @@ const DRAFT_PROPS = {
     sentence: { type: 'string' }, why: { type: 'string' } }, required: ['sentence', 'why'] } },
   pack_hash: { type: 'string' },
   research_hash: { type: 'string' },
-  // Optional: a few of the allocated resume bullets with a yes named, for this resume only
+  // A few of the allocated resume bullets with a yes, or a held skill the posting names,
+  // named, for this resume only: written without asking wherever the brief lists bullets
+  // for a held skill, since the code audit fails one left on the skills line alone
   // (section 1 of the pack; tools/bullet_rewording.py is the guard the audit runs).
   bullet_rewordings: { type: 'array', items: { type: 'object', properties: {
     id: { type: 'string' }, skill: { type: 'string' }, text: { type: 'string' } },

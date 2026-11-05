@@ -188,6 +188,16 @@ TWEAKS = (
     _row("P5", ("page",), "Jobs list", "choice", ("to_look_at", "applied"), 0, "page", ""),
 )
 BY_P = {r["p"]: r for r in TWEAKS}
+# The changes that put a skill the person said yes to on a draft: code alone (the skills line
+# and the documents' header), never a row of the panel.
+YES_CHANGES = ("yes", "near")
+YES_ROW = {"p": "yes", "outputs": ("resume", "letter"), "label": "A skill you can claim",
+           "control": "", "values": (), "state": 1, "how": "consent", "hint": "", "fields": (),
+           "model": ()}
+
+
+def _row_of(p: str) -> dict:
+    return YES_ROW if p in YES_CHANGES else BY_P[p]
 
 # TWEAKS.md section 4: what is never offered, as words no row's label, value or hint may
 # carry, and settings no value may reach. The tests hold the table to it.
@@ -347,6 +357,17 @@ def check(work: dict, where: dict | None = None) -> list[dict]:
         if p.startswith("custom:"):
             out.append({"p": p, "v": v, "row": {"how": "redraft", "state": 2, "fields": (),
                                                 "label": "Your button"}})
+            continue
+        if p in YES_CHANGES:
+            # A skill the person says they can claim: "I've used Tableau too" on the panel
+            # ("near"), or a yes given since this draft was made, redone by itself ("yes",
+            # tools/skill_answers.py). Refused as no change at all before 2026-11-04.
+            import skill_answers
+            if output not in ("resume", "letter"):
+                raise Refused("A skill goes on a resume or a letter.")
+            if not skill_answers.key(skill_answers.named(v)):
+                raise Refused("Which skill: none was named.")
+            out.append({"p": p, "v": v, "row": YES_ROW})
             continue
         row = BY_P.get(p)
         if row is None or output not in row["outputs"]:
@@ -1398,6 +1419,12 @@ def apply(work: dict, today: dt.date | None = None) -> dict:
             if first["status"] in ("refused", "failed"):
                 return first
             p = dict(p, changes=[c for c in p["changes"] if c not in code])
+        yes = [c for c in p["changes"] if c["p"] in YES_CHANGES]
+        if yes and where["output"] in ("resume", "letter"):
+            # A yes asked with a rewrite goes on the draft first, so the rewrite is of the draft
+            # that carries it (the panel's "I've used Tableau too" beside a wording change).
+            _apply_code(where, dict(p, changes=yes))
+            p = dict(p, changes=[c for c in p["changes"] if c not in yes])
         return stage(work, where, p, today)
     if where["output"] in ("jobs", "brief", "interview"):
         return _apply_settings(work, where, p)
@@ -1435,7 +1462,7 @@ def apply(work: dict, today: dt.date | None = None) -> dict:
 
 
 def _apply_code(where: dict, p: dict) -> list[str]:
-    changes = [dict(c, row=BY_P[c["p"]]) for c in p["changes"]]
+    changes = [dict(c, row=_row_of(c["p"])) for c in p["changes"]]
     if where["output"] == "message":
         return [_message(where, changes)]
     apps, read_in = _load_draft(where)
@@ -1459,8 +1486,31 @@ def _apply_code(where: dict, p: dict) -> list[str]:
             said.append(f"{c['v']} skills on the line")
         elif how == "letter_length":
             said.append(_letter_length(d, c["v"]))
+        elif how == "consent":
+            said.append(_claim(d, c["v"]))
     _save_draft(where, apps, read_in)
     return said
+
+
+def _claim(d: dict, v) -> str:
+    """A skill the person said yes to, on this draft: its skills line and the documents'
+    header carry it (render_application, check_claims), and it is off the no and the waiting
+    lists. The yes is theirs for every application (tools/skill_answers.py), so it is recorded
+    there and in the candidate profile, where every claim check grounds a skill."""
+    import skill_answers
+    skill = skill_answers.named(v)
+    k = skill_answers.key(skill)
+    d["consented_skills"] = [s for s in d.get("consented_skills") or []
+                             if skill_answers.key(s) != k] + [skill]
+    for field in ("declined_skills", "waiting_skills"):
+        rest = [s for s in d.get(field) or [] if skill_answers.key(s) != k]
+        if rest:
+            d[field] = rest
+        else:
+            d.pop(field, None)
+    skill_answers.record(skill, "yes", by="page", company=d.get("company") or "",
+                         role=d.get("role") or "")
+    return f"{skill} on your skills line"
 
 
 LETTER_WORDS = {"short": 205, "standard": 230}

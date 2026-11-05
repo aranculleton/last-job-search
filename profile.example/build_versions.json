@@ -8,8 +8,8 @@
     "version": 5
   },
   "drafts": {
-    "date": "2026-11-04",
-    "version": 66
+    "date": "2026-11-05",
+    "version": 69
   },
   "expand": {
     "date": "2026-10-15",
@@ -29,15 +29,15 @@
   },
   "network-notes": {
     "date": "2026-11-05",
-    "version": 39
+    "version": 40
   },
   "networking": {
-    "date": "2026-11-04",
-    "version": 73
+    "date": "2026-11-05",
+    "version": 74
   },
   "page": {
-    "date": "2026-11-04",
-    "version": 23
+    "date": "2026-11-05",
+    "version": 24
   },
   "prep-docs": {
     "date": "2026-11-03",
@@ -48,8 +48,8 @@
     "version": 13
   },
   "routines": {
-    "date": "2026-11-04",
-    "version": 22
+    "date": "2026-11-05",
+    "version": 23
   },
   "screening": {
     "date": "2026-11-04",
@@ -60,7 +60,7 @@
     "version": 12
   },
   "upskill": {
-    "date": "2026-10-15",
+    "date": "2026-10-21",
     "version": 5
   },
   "voice": {

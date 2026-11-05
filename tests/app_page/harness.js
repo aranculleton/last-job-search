@@ -1606,12 +1606,18 @@ S.wake = async (a) => {
 // Reading LinkedIn in the desktop app: the page checks by itself when it opens there, and
 // says how to sign in when signed out (2026-10-29).
 S.reading = async (a) => {
-  const o = await open({html: a.html, hash: a.hash || "todo", seed: a.seed || {}, model: a.model, look: a.look, fake: {canSend: a.canSend || "no_session", mcp: {browser: {inApp: a.inApp !== false, signedIn: !!a.signedIn, askFirst: !!a.askFirst, signInLater: !!a.signInLater, signOutAfter: a.signOutAfter || 0, check: a.check || 0, declined: !!a.declined, slowSections: !!a.slowSections}}}});
+  const o = await open({html: a.html, hash: a.hash || "todo", seed: a.seed || {}, model: a.model, look: a.look, noStorage: !!a.noStorage, clock: a.clock, fake: {canSend: a.canSend || "no_session", mcp: {browser: {inApp: a.inApp !== false, signedIn: !!a.signedIn, askFirst: !!a.askFirst, signInLater: !!a.signInLater, signOutAfter: a.signOutAfter || 0, check: a.check || 0, declined: !!a.declined, slowSections: !!a.slowSections}}}});
   await o.page.waitForTimeout(2500);
   // Until the page has finished reading (each page that draws late adds a moment).
   await o.page.waitForFunction(() => { const s = window.LJS.state().reading; return !s.busy && s.panel !== "run" && s.panel !== "check-run"; }, null, {timeout: 30000}).catch(() => {});
   await turn(o.page, 8);
   const r = {browser: (await calls(o.page)).filter((c) => c.cap === "mcp" && c.server === "host:claude_browser").map((c) => ({tool: c.tool, input: c.input})), errors: o.errors};
+  if (a.tap) {
+    // The person's own tap on the page (a button by its data-k), before anything else.
+    await o.page.click('[data-k="' + a.tap + '"]');
+    await o.page.waitForTimeout(800);
+    await turn(o.page, 8);
+  }
   if (a.signInLater) {
     // The person signs in in Claude's browser and comes back to the page.
     await o.page.evaluate(() => { window.__ljsBrowser.signedIn = true; window.dispatchEvent(new Event("focus")); });
@@ -1620,6 +1626,9 @@ S.reading = async (a) => {
     await turn(o.page, 8);
   }
   r.panel = await o.page.evaluate(() => { const p = document.querySelector(".browser-panel"); return p ? p.textContent : ""; });
+  // Every call this opening made, the tap's and the coming back's included.
+  r.browserAll = (await calls(o.page)).filter((c) => c.cap === "mcp" && c.server === "host:claude_browser").map((c) => ({tool: c.tool, input: c.input}));
+  r.notes = await o.page.evaluate(() => (document.querySelector("#main") || document.body).textContent + " " + ((document.querySelector(".browser-panel") || {}).textContent || ""));
   r.state = await o.page.evaluate(() => { const s = window.LJS.state(); return {ok: s.reading.ok, signedOut: s.reading.signedOut, panel: s.reading.panel}; });
   r.acts = [...o.store.docs.entries()].filter(([p]) => p.startsWith("actions/")).map(([p, d]) => ({id: p.slice(8), action: d.data.action, value: d.data.value}));
   r.line = await o.page.evaluate(() => window.LJS.state().reading.line || "");
@@ -1642,6 +1651,34 @@ S.reading = async (a) => {
     r.acts = [...o.store.docs.entries()].filter(([p]) => p.startsWith("actions/")).map(([p, d]) => ({id: p.slice(8), action: d.data.action, value: d.data.value, item: d.data.item}));
   }
   await o.ctx.close();
+  // Then to another chat and back: the Claude app opens the page again, on the same store,
+  // with this device's storage as the app hands it back (`again.look`, or nothing at all with
+  // `noStorage`). With `apply` a chat applied every tap in between; `refuse` lists the items
+  // whose reading.done it refused (their page did not load), the rest applied.
+  for (const [n, g] of (a.again || []).entries()) {
+    for (const p of (g.apply || g.refuse) ? o.store.list("actions/") : []) {
+      const d = o.store.get(p);
+      if (o.store.get("receipts/" + p.slice(8))) continue;
+      const refused = (g.refuse || []).indexOf(d.item) >= 0;
+      o.store.chat("receipts/" + p.slice(8), {applied_at: new Date().toISOString(), by: "cloud-1", result: refused ? "refused" : "ok", note: refused ? "Their page did not load." : ""});
+    }
+    const o2 = await open({html: a.html, hash: a.hash || "todo", store: o.store, look: g.look, noStorage: !!a.noStorage, clock: g.clock || a.clock, fake: {canSend: a.canSend || "no_session", mcp: {browser: {inApp: true, signedIn: g.signedIn === undefined ? !!a.signedIn : !!g.signedIn}}}});
+    await o2.page.waitForTimeout(2500);
+    await o2.page.waitForFunction(() => { const s = window.LJS.state().reading; return !s.busy && s.panel !== "run" && s.panel !== "check-run"; }, null, {timeout: 30000}).catch(() => {});
+    await turn(o2.page, 8);
+    if (g.backFrom) {
+      // Looked at again, as coming back from another chat makes it (the page shown, focused).
+      await o2.page.evaluate(() => { window.dispatchEvent(new Event("focus")); document.dispatchEvent(new Event("visibilitychange")); });
+      await o2.page.waitForTimeout(1500);
+      await turn(o2.page, 8);
+    }
+    const got = {browser: (await calls(o2.page)).filter((c) => c.cap === "mcp" && c.server === "host:claude_browser").map((c) => ({tool: c.tool, input: c.input})), errors: o2.errors};
+    got.state = await o2.page.evaluate(() => { const s = window.LJS.state(); return {ok: s.reading.ok, signedOut: s.reading.signedOut, panel: s.reading.panel}; });
+    got.cards = await o2.page.evaluate(() => [...document.querySelectorAll("#main [data-item]")].map((e) => e.getAttribute("data-item")));
+    r["again" + n] = got;
+    await o2.ctx.close();
+  }
+  r.acts = [...o.store.docs.entries()].filter(([p]) => p.startsWith("actions/")).map(([p, d]) => ({id: p.slice(8), action: d.data.action, value: d.data.value, item: d.data.item, at: d.data.at}));
   return r;
 };
 

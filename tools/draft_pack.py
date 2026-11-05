@@ -788,12 +788,14 @@ rewords a chosen one and chooses nothing):
 - stretches: [{"sentence", "why"}] for each sentence that frames its evidence further
   than the cited text says (rule 6's "flag it" zone); [] when none. A reported stretch
   goes to the model auditor; a hidden one is a defect.
-- bullet_rewordings: optional; leave it out unless the posting section lists resume
-  bullets you may reword. [{"id", "skill", "text"}]: at most {max_rewordings} of those
-  bullets, each only where the work plausibly used that yes, the bullet copied word for
-  word in plain text with the skill added and joined by a linking word (in, on, with,
-  using, and). Every number and every tool kept; nothing else added or taken out. It
-  changes this resume only, never the profile. Not in claim_map. [code]
+- bullet_rewordings: leave it out unless the posting section lists resume bullets you
+  may reword; each skill listed there goes into one to three of them, never asked about
+  (the code audit fails one left on the skills line alone).
+  [{"id", "skill", "text"}]: at most {max_rewordings} of those bullets, each only where
+  the work plausibly used that skill (a yes, or one the profile holds), the bullet copied
+  word for word in plain text with the skill added and joined by a linking word (in, on,
+  with, using, and). Every number and every tool kept; nothing else added or taken out.
+  It changes this resume only, never the profile. Not in claim_map. [code]
 Body words across p1 + p2 + lead + p4 + the three bullet texts: 200 to 250.
 Keep the posting's words in sentences about them (cite POSTING) and the candidate's in
 sentences about the candidate: "I built claims forecasts" from a posting about claims is
@@ -1036,8 +1038,11 @@ def posting_brief(pick: dict) -> str:
              named(pick).strip(),
              f"The person's answers about skills the profile does not list. Yes (each goes on "
              f"this resume's skills line; the summary or letter may name it where the posting "
-             f"asks, and a resume bullet listed below may name it): {yes}. No (never named "
-             f"anywhere): {no}."]
+             f"asks, and the resume bullets listed below name it): {yes}. No (never named "
+             f"anywhere): {no}."
+             + (" Not answered yet (left off everywhere, as a no is, until they answer; "
+                "it is not a no): " + ", ".join(pick["skills_waiting"]) + "."
+                if pick.get("skills_waiting") else "")]
     import docpaths
     if not docpaths.has_letter(pick):
         lines.append(RESUME_ONLY_LINE)
@@ -1055,21 +1060,33 @@ def posting_brief(pick: dict) -> str:
 
 
 def rewording_lines(pick: dict, posting: str) -> list[str]:
-    """The resume bullets a yes may be named in (bullet_rewordings), with the yes each may
-    take: the allocator's choice for this posting, kept to the bullets the guard would let
-    the skill into (tools/bullet_rewording.py). [] with no yes answers."""
+    """The resume bullets a yes, or a held skill the posting names that no chosen bullet
+    names, may be named in (bullet_rewordings), with the skills each may take: the
+    allocator's choice for this posting, kept to the bullets the guard would let the skill
+    into (tools/bullet_rewording.py). [] when there is no such skill."""
     import bullet_rewording
     yes = pick.get("skills_yes") or []
-    if not yes:
-        return []
-    got = bullet_rewording.candidates(posting, yes)
+    held = [h for h in bullet_rewording.held_named(posting, pick.get("company") or "")
+            if h.casefold() not in {y.casefold() for y in bullet_rewording.skill_names(yes)}]
+    got = bullet_rewording.candidates(posting, yes, held=held, company=pick.get("company") or "",
+                                      no=pick.get("skills_no") or [])
+    standing = sorted({h for c in got for h in c.get("held") or []}, key=str.casefold)
     if not got:
+        if not yes:
+            return []
         return ["Resume bullets you may reword for a yes: none. Nothing the allocator chose "
                 "for this posting is work a yes plausibly belongs to, so leave "
                 "bullet_rewordings out: each yes is on the skills line already."]
-    out = [f"Resume bullets you may reword for a yes (bullet_rewordings: at most "
-           f"{bullet_rewording.MAX_REWORDINGS}, only where the work plausibly used it; the "
-           "same words with the skill added; a bullet the page has no room for is not used):"]
+    out = [f"Resume bullets you may reword for a yes or a held skill (bullet_rewordings: at "
+           f"most {bullet_rewording.MAX_REWORDINGS}, only where the work plausibly used it; "
+           "the same words with the skill added; a bullet the page has no room for is not "
+           "used; each skill below goes into at least one of them, without asking):"]
+    if standing:
+        out.append(f"Held in the profile and named by the posting, on no chosen bullet yet: "
+                   f"{', '.join(standing)}. The profile holding it is the person's yes, so "
+                   "never ask: name each in one to three of the bullets below that list it, "
+                   "where that work plausibly used it. Left on the skills line alone, the "
+                   "code audit fails it.")
     out += [f"- {c['id']} ({c['employer']}; may name {', '.join(c['skills'])}): {c['text']}"
             for c in got]
     return out

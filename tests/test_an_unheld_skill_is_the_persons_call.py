@@ -56,18 +56,30 @@ def test_staging_asks_one_short_question_and_nothing_is_assembled_until_it_is_an
     # Updated 2026-10-25: the record below has neither audit in it, which assemble now
     # refuses (tests/test_every_draft_sent_gets_the_model_audit.py); what this test reads
     # is the person's answers, so the audit gate is set aside here.
+    # Updated 2026-11-04: a question nobody has answered is put to the person on their page
+    # and the pick waits on it, drafted without the skill, never recorded as a no
+    # (tests/test_a_skill_question_is_never_answered_no_for_them.py). What still stops
+    # assembly is a skill neither answered nor put to them: a pick written by hand.
     monkeypatch.setattr(stage_picks, "_held_back", lambda *a, **k: "")
     p = _stage(tmp_path)
     assert {"Looker", "Spark", "SAP ABAP"} <= set(p["ask_first"])
     q = stage_picks.question(p)
     assert q.startswith("Kestrel Mutual asks for Looker (you list Power BI)")
     assert len(stage_picks.question(dict(p, ask_first=["Looker"])).split()) <= 40
+    assert set(p["skills_waiting"]) == set(p["ask_first"]) and not p.get("skills_no")
     (tmp_path / f"audit_{p['slug']}.json").write_text(
         json.dumps({"verdict": "pass", "draft": DRAFT, "changes": [], "residual_risks": []}),
         encoding="utf-8")
+    picks = tmp_path / "picks.json"
+    staged = json.loads(picks.read_text(encoding="utf-8"))
+    picks.write_text(json.dumps([dict(staged[0], skills_waiting=[])]), encoding="utf-8")
     with pytest.raises(SystemExit) as e:
         stage_picks.assemble(str(tmp_path))
     assert "Looker" in str(e.value) and "consent" in str(e.value)
+    picks.write_text(json.dumps(staged), encoding="utf-8")
+    drafts, _, _ = stage_picks.assemble(str(tmp_path))
+    assert set(drafts[0]["waiting_skills"]) == set(p["ask_first"])
+    assert "declined_skills" not in drafts[0] and "consented_skills" not in drafts[0]
     rest = [n for n in p["ask_first"] if n != "Looker"]
     got = stage_picks.consent(str(tmp_path), p["slug"], yes=["looker"], no=rest)
     assert got["skills_yes"] == ["Looker"] and stage_picks.question(got) == ""
@@ -134,8 +146,10 @@ def test_the_workflow_will_not_draft_a_pick_still_waiting():
                encoding="utf-8").read()
     node = subprocess.run(["node", "--version"], capture_output=True) if shutil.which("node") \
         else subprocess.CompletedProcess(["node"], 127)
+    # Updated 2026-11-04: a pick waiting on the person (skills_waiting) is drafted without
+    # the skill; one with a skill neither answered nor put to them is still refused.
     if node.returncode != 0:
-        assert "Ask the person first" in src and "skills_yes" in src
+        assert "Stage these again first" in src and "skills_waiting" in src
         return
     harness = """
 const src = require('fs').readFileSync(process.argv[1], 'utf8').replace(/^export const meta/m, 'const meta');
@@ -148,12 +162,13 @@ const run = async (picks) => {
   await run([{file: 'f', company: 'A', slug: 'a', ask_first: ['Looker']}]),
   await run([{file: 'f', company: 'A', slug: 'a'}]),
   await run([{file: 'f', company: 'A', slug: 'a', ask_first: ['Looker'], skills_no: ['looker']}]),
+  await run([{file: 'f', company: 'A', slug: 'a', ask_first: ['Looker'], skills_waiting: ['Looker']}]),
 ].join(' ')))();
 """
     out = subprocess.run(["node", "-e", harness,
                           os.path.join(ROOT, ".claude", "workflows", "draft-applications.js")],
                          capture_output=True, text=True, encoding="utf-8", errors="replace", check=True).stdout.strip()
-    assert out == "threw threw ran"
+    assert out == "threw threw ran ran"
 
 
 def test_a_rendered_resume_and_letter_carry_the_answers_and_pass_the_check(tmp_path, monkeypatch):

@@ -178,6 +178,15 @@ JSON_FILES = {
     # What the person booked that the app did not know of (upcoming.add): one entry each,
     # known by its id, so the page and a chat adding one each on the same day keep both.
     "documents/upcoming.json": {"lists": {"events": ("id",)}, "indent": 2},
+    # The person's one answer per skill a posting asked about (skill_answers.ask, record): a
+    # record a skill. Its answer is dated and kept whole from the side that answered later, so
+    # two chats that each took an answer keep the later one; the applications that asked are
+    # every one either side named, the later day standing; it was first asked on the earlier.
+    "documents/skill_answers.json": {
+        "whole": ("skills/*/answer",), "stamps": ("at",),
+        "lists": {"skills/*/for": {"key": ("company", "role"), "keep": True}},
+        "dated": {"skills/*/asked": "earlier", "skills/*/for/#/day": "later"},
+        "indent": 1, "sort": "all"},
     # The findings the person read and kept (profile_consistency.keep): only ever added to.
     "profile/consistency_reviewed.json": {
         "lists": {"reviewed": {"key": ("file", "fact", "said", "sentence"), "keep": True}},
@@ -1343,9 +1352,12 @@ def merge(base: str, ours: str, theirs: str, path: str, later=None,
 #   app, and a copy beside it was left by the dozen (a report from a person's copy,
 #   2026-11-04). The person's own test (profile/tests/) is the same, but the other chat's
 #   version is kept in SPARE_DIR, out of their folders, which the app tidies;
-# - anything else: this side's version in place (the row merge's other rows kept), and the
-#   other side's whole file beside it as <file>.from-another-chat, saved with the rest; a
-#   profile .py also gets the [CONFIRM: ...] line, as a comment;
+# - anything else: this side's whole file, nothing of the other's merged into it, and the
+#   other side's whole file in the saved history (the merge's other parent) and in SPARE_DIR
+#   on this computer, never beside the person's files: a <file>.from-another-chat copy was
+#   saved into their folders, and "this chat's version kept" was said of a line merge of the
+#   two (the maintainer, 2026-11-04). A profile .py also gets the [CONFIRM: ...] line, as a
+#   comment, with where Claude finds the other version under it;
 # - a file one side removed and the other changed: the changed one is kept.
 #
 # Never an app file: a conflict there is left as it was, for the caller to stop on.
@@ -1354,9 +1366,9 @@ SIDE = ".from-another-chat"
 _TEXT = (".md", ".txt")
 ASK_BOTH = ("[CONFIRM: two of your chats changed this part at the same time, and both "
             "versions are kept below: which one stays]")
-ASK_SIDE = ("[CONFIRM: two of your chats changed this file at the same time; the later "
-            "version is kept here and the other is saved beside it as {name}: which one "
-            "stays]")
+ASK_SIDE = ("[CONFIRM: two of your chats changed this file at the same time; this chat's "
+            "version is kept here, and Claude can show you the other one: which one stays]")
+SHOW_OTHER = "# The other chat's version, for Claude: git show {ref}:{path}"
 
 
 def _g(root: str, *args: str, text: bool = True):
@@ -1486,14 +1498,6 @@ def tidy_spares(root: str, now: float | None = None) -> None:
         pass
 
 
-def _side_path(root: str, path: str) -> str:
-    side, n = path + SIDE, 1
-    while os.path.exists(os.path.join(root, side)):
-        n += 1
-        side = f"{path}{SIDE}-{n}"
-    return side
-
-
 _WRITTEN = re.compile(r"^Written (\d{4}-\d{2}-\d{2})\b", re.M)
 
 
@@ -1585,29 +1589,22 @@ def settle(root: str) -> tuple[list[str], list[str]]:
                 done.append(f"{p}: both versions kept, and the person is asked which "
                             "stays (a To do on the page)")
             else:
-                side = _side_path(root, p)
-                if marked:
-                    kept, _n = _blocks(text, "ours")
-                    other, _n = _blocks(text, "theirs")
-                    with open(full, "w", encoding="utf-8", newline="") as fh:
-                        fh.write(kept)
-                    with open(os.path.join(root, side), "w", encoding="utf-8",
-                              newline="") as fh:
-                        fh.write(other)
-                else:
-                    _g(root, "checkout", "--ours", "--", p)
-                    blob = _g(root, "cat-file", "blob", stages["3"], text=False).stdout
-                    with open(os.path.join(root, side), "wb") as fh:
-                        fh.write(blob)
+                # This chat's whole file: the clashing lines resolved its way with the other
+                # side's other lines merged in was said as "this chat's version kept", and
+                # was neither. The other side's whole file is in the saved history (the
+                # merge's other parent) and in SPARE_DIR here, never beside the person's own.
+                _g(root, "checkout", "--ours", "--", p)
+                spare = _spare(root, p, stages["3"])
+                other = _g(root, "rev-parse", "-q", "--verify", "MERGE_HEAD").stdout.strip()[:12]
                 if p.startswith("profile/") and p.endswith(".py"):
                     with open(full, encoding="utf-8", newline="") as fh:
                         body = fh.read()
-                    ask = ASK_SIDE.format(name=os.path.basename(side))
                     with open(full, "w", encoding="utf-8", newline="") as fh:
-                        fh.write("# " + ask + "\n" + body)
-                _g(root, "add", "-f", "--", side)
-                done.append(f"{p}: this chat's version kept, and the other saved beside "
-                            f"it as {side}")
+                        fh.write("# " + ASK_SIDE + "\n" + SHOW_OTHER.format(
+                            ref=other or "MERGE_HEAD", path=p) + "\n" + body)
+                done.append(f"{p}: this chat's whole version kept, nothing of the other's "
+                            f"merged into it; the other's is in the saved history "
+                            f"({other or 'the merge'}:{p}) and in {spare} on this computer")
         r = _g(root, "add", "-f", "--", p)
         if r.returncode != 0:
             done.pop()
@@ -1615,15 +1612,28 @@ def settle(root: str) -> tuple[list[str], list[str]]:
     return done, left
 
 
-_COPY_PLACES = ("documents/", "cv/", "cover_letters/", "profile/tests/")
+def _still_asked(beside: str, copy_name: str) -> bool:
+    """The file beside a copy still asks the person which of the two stays: a [CONFIRM: ...]
+    line an older settle wrote naming the copy. Left for the person, who is asked already."""
+    try:
+        with open(beside, encoding="utf-8") as fh:
+            text = fh.read()
+    except (OSError, UnicodeDecodeError):
+        return False
+    return any("[CONFIRM" in ln and copy_name in ln for ln in text.splitlines())
 
 
 def clear_old_copies(root: str) -> tuple[list[str], list[str]]:
-    """Clear the *.from-another-chat copies an older version left beside the person's
-    documents and own tests, once: where the file beside one is identical, or was changed
-    later than the copy was made. (cleared, undecided): any copy where the copy is the later
-    one or has no file beside it is left, named. Never raises."""
+    """Clear the *.from-another-chat copies an older version left beside the person's files
+    (documents, their own tests, and since 2026-11-04 anywhere in their folders, as a settle
+    saved one beside a setting or a note), once: where the file beside one is identical, or
+    was changed as late or later than the copy was made. (cleared, undecided): any copy where
+    the copy is the later one or has no file beside it is left, named. One the file beside it
+    still asks the person about (a [CONFIRM: ...] naming it) is left and not named: the
+    question is on the page already, and once it is answered the next save clears the copy.
+    Never raises."""
     import local_path
+    import personal_paths
     cleared: list[str] = []
     undecided: list[str] = []
     try:
@@ -1634,15 +1644,17 @@ def clear_old_copies(root: str) -> tuple[list[str], list[str]]:
                     continue
                 full = os.path.join(full_dir, n)
                 rel = local_path.rel(full, root)
-                if not rel.startswith(_COPY_PLACES):
+                base_rel = rel[:rel.index(SIDE)]
+                if not personal_paths.is_personal(base_rel):
                     continue
                 beside = os.path.join(full_dir, n.split(SIDE)[0])
                 if not os.path.isfile(beside):
                     undecided.append(rel)
                     continue
+                if _still_asked(beside, n):
+                    continue
                 with open(full, "rb") as a, open(beside, "rb") as b:
                     same = a.read() == b.read()
-                base_rel = rel[:rel.index(SIDE)]
                 def last(path, disk):
                     got = _g(root, "log", "-1", "--format=%ct", "--", path).stdout.strip()
                     return int(got) if got.isdigit() else int(os.path.getmtime(disk))

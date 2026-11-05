@@ -56,13 +56,18 @@ the move was complete.
 5. **The person's answers.** A skill the profile does not hold that they said yes to for this
    application (the brief, or the document's header line "Claimed with the candidate's yes")
    is their consent, not a grounding defect. One they said no to, named anywhere, is a defect.
-6. **A resume bullet reworded for a yes** (`bullet_rewordings` in the draft, for this resume
-   only) is the profile's own bullet with that skill named. Code has refused any that change
-   a number, drop or replace a tool the work used, add anything but the yes and a linking
-   word, or name a skill whose tool family, theme or bridge does not touch that work
-   (`tools/bullet_rewording.py`). Yours is the judgment left: whether that work plausibly
-   involved the skill. Keep it only then; otherwise remove it, and the profile's own bullet
-   prints.
+6. **A resume bullet reworded for a yes or a held skill** (`bullet_rewordings` in the draft,
+   for this resume only) is the profile's own bullet with that skill named. A skill the
+   profile holds (`skills.py` `ITEMS`) that the posting names is the person's standing yes:
+   named at an employer whose section of the profile never mentions it, it is their
+   permission, not an ungrounded claim, so never fail or remove it for that. Code has refused
+   any rewording that changes a number, drops or replaces a tool the work used, adds anything
+   but the skill and a linking word, or names a skill whose tool family, theme or bridge does
+   not touch that work and that the profile does not name at that employer
+   (`tools/bullet_rewording.py`), and code fails a resume that leaves such a skill on the
+   skills line alone while a bullet could take it. Yours is the judgment left: whether that
+   work plausibly involved the skill. Keep it only then; otherwise remove it, and the
+   profile's own bullet prints.
 
 ## Audit a fixed version
 

@@ -284,6 +284,21 @@
       "ui_sensitive": false
     },
     {
+      "id": "cloud-chat-reports-back",
+      "claim": "A cloud chat that another started with create_session can send that chat a message with send_message: it arrives there as a new turn, marked as sent by the other chat and not typed by the person. So a job's chat reports back once its work is landed, and the chat that started it puts the results on the page and archives it with archive_session, which takes it off the sidebar's list (kept, and it can be brought back). An archived chat cannot accept new messages, so the job's chat sends before it is archived, and a message to a chat archived meanwhile (a helper replaced by a fresh one) is refused: then the job's chat brings the page up to date itself. code.claude.com documents a project's threads reporting back to their conversation, not a chat started this way: the app rests on the tool's own description and on a run seen to do it.",
+      "sources": [
+        {"url": "tool:send_message", "quote": "the target can reply with its own send_message, which arrives here as a new turn."},
+        {"url": "https://code.claude.com/docs/en/claude-projects", "quote": "Each is a separate session with its own context window that does one piece of work and reports back to the conversation when it finishes."},
+        {"url": "https://code.claude.com/docs/en/claude-code-on-the-web", "quote": "Archive a session to remove it from the sidebar's session list."},
+        {"url": "https://code.claude.com/docs/en/claude-code-on-the-web", "quote": "is archived and cannot accept new messages"},
+        {"url": "observed:2026-11-04", "quote": "helpers can send_message the chat that started them, and tonight's did"}
+      ],
+      "status": "observed",
+      "verified_on": "2026-11-05",
+      "verified_against": "observed: on 2026-11-04 a job's cloud chat sent the chat that started it a message, which arrived there as a new turn (the maintainer); the send_message and create_session tools' own descriptions in Claude Code 2.1.318, read 2026-11-05; code.claude.com/docs/en/claude-code-on-the-web (Archive sessions; Errors when sending to a cloud session) and claude-projects (threads report back) read 2026-11-05, neither of which documents one chat messaging another outside a project. It replaces the app's older note that a cloud chat could not message another back.",
+      "ui_sensitive": false
+    },
+    {
       "id": "cli-cloud",
       "claim": "claude --cloud starts a cloud chat from a terminal. It needs the terminal version of Claude Code, installed apart from the desktop app and signed in to the same claude.ai account, and it refuses to run without an interactive terminal: Claude cannot run it from its own shell, only the person can, in theirs.",
       "how": "in a terminal on your computer, in the folder {name}, run claude --cloud",
